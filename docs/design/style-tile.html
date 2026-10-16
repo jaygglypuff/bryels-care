@@ -1,0 +1,1283 @@
+<title>Bryel's Care Design Direction</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* ==========================================================================
+   Bryel's Care ERP + CRM : design direction style tile (Gate 0)
+   Tokens are the binding set from docs/ux-system.md section 2.
+   Rule: no colour literal appears outside the three token blocks below.
+   ========================================================================== */
+
+/* ---------- Tokens: light (default) ---------- */
+:root {
+  color-scheme: light;
+
+  /* Brand ramp (botanical green), constant across themes */
+  --green-50: #EEF6F0;
+  --green-100: #D8ECDE;
+  --green-200: #B3D9BE;
+  --green-300: #86C19A;
+  --green-400: #57A574;
+  --green-500: #2F8A54;
+  --green-600: #28804B;
+  --green-700: #23703F;
+  --green-800: #1B5A33;
+  --green-900: #0F321E;
+
+  /* Surfaces and text */
+  --bg: #F6F5F1;
+  --surface: #FFFFFF;
+  --surface-2: #F1F0EB;
+  --border: #E6E4DD;
+  --border-strong: #C9C6BC;
+  --fg: #1C1B18;
+  --fg-2: #5B5951;
+  --fg-muted: #6F6C63;
+  --fg-inverse: #F6F5F1;
+  --cta: #1C1B18;
+  --primary: #28804B;
+  --primary-hover: #1B5A33;
+  --primary-text: #23703F;
+  --primary-soft: #D8ECDE;
+  --primary-soft-fg: #0F321E;
+  --on-primary: #FFFFFF;
+  --ring: #23703F;
+  --scrim: rgba(28, 27, 24, .45);
+
+  /* Semantic status */
+  --status-success-bg: #DDF3E4; --status-success-fg: #14532D; --status-success-border: #9FD4B2; --status-success-icon: #1E8449;
+  --status-warning-bg: #FDEFCF; --status-warning-fg: #6B4400; --status-warning-border: #F0CF7D; --status-warning-icon: #B97A00;
+  --status-danger-bg: #FBE1E1; --status-danger-fg: #8A1C1C; --status-danger-border: #F0A6A6; --status-danger-icon: #C62828;
+  --status-info-bg: #DCEBFA; --status-info-fg: #1C4A80; --status-info-border: #A9CBF0; --status-info-icon: #2A78D6;
+  --status-neutral-bg: #ECEAE3; --status-neutral-fg: #45423A; --status-neutral-border: #D3D0C7; --status-neutral-icon: #7D7A70;
+
+  /* Risk states */
+  --risk-quarantined-bg: #FDE9CF; --risk-quarantined-fg: #703D00; --risk-quarantined-border: #F2BE7A; --risk-quarantined-icon: var(--risk-quarantined-fg);
+  --risk-qa-hold-bg: #EAE3FA; --risk-qa-hold-fg: #43307A; --risk-qa-hold-border: #C9BBEF; --risk-qa-hold-icon: var(--risk-qa-hold-fg);
+  --risk-expired-bg: #ECE7E0; --risk-expired-fg: #514738; --risk-expired-border: #CFC7B8; --risk-expired-icon: var(--risk-expired-fg);
+  --risk-recalled-bg: #FBE1E1; --risk-recalled-fg: #8A1C1C; --risk-recalled-border: #E07070; --risk-recalled-icon: var(--status-danger-icon);
+  --risk-rejected-bg: #F9E1E8; --risk-rejected-fg: #7A1F3A; --risk-rejected-border: #EAA7BC; --risk-rejected-icon: var(--risk-rejected-fg);
+  --risk-sync-pending-bg: #DCEBFA; --risk-sync-pending-fg: #1C4A80; --risk-sync-pending-border: #A9CBF0; --risk-sync-pending-icon: var(--status-info-icon);
+  --risk-approval-required-bg: #D6EFEC; --risk-approval-required-fg: #114B47; --risk-approval-required-border: #9BD6CF; --risk-approval-required-icon: var(--risk-approval-required-fg);
+
+  /* Chart palette */
+  --chart-1: #2F8A54; --chart-2: #2A78D6; --chart-3: #EB6834; --chart-4: #6250D6; --chart-5: #EDA100; --chart-6: #E87BA4;
+  --seq-1: #7BBB90; --seq-2: #57A574; --seq-3: #2F8A54; --seq-4: #23703F; --seq-5: #1B5A33;
+  --viz-good: var(--status-success-icon); --viz-bad: var(--status-danger-icon); --viz-warn: var(--status-warning-icon); --viz-neutral: var(--fg-muted);
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px rgba(28, 27, 24, .06);
+  --shadow-2: 0 4px 12px rgba(28, 27, 24, .08), 0 1px 2px rgba(28, 27, 24, .06);
+  --shadow-3: 0 12px 32px rgba(28, 27, 24, .14);
+
+  /* Non-colour tokens */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+  --radius-xs: 6px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 20px; --radius-full: 999px;
+  --dur-fast: 120ms; --dur-base: 180ms; --dur-slow: 260ms;
+  --ease-standard: cubic-bezier(.2, 0, 0, 1);
+  --font: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* ---------- Tokens: dark, following the OS unless the user picked light ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121311; --surface: #1B1D1A; --surface-2: #23261F; --border: #2E312B; --border-strong: #4A4E45;
+    --fg: #EDEBE4; --fg-2: #B8B5AA; --fg-muted: #8F8C81; --fg-inverse: #1C1B18; --cta: #EDEBE4;
+    --primary: #5FB27E; --primary-hover: #6BBE8A; --primary-text: #8BD0A3; --primary-soft: #1C3A28; --primary-soft-fg: #B6E6C6; --on-primary: #0F2A1A;
+    --ring: #8BD0A3; --scrim: rgba(0, 0, 0, .6);
+    --status-success-bg: #1C3A28; --status-success-fg: #B6E6C6; --status-success-border: #2F6B45; --status-success-icon: #5FB27E;
+    --status-warning-bg: #3E2E0C; --status-warning-fg: #F3D592; --status-warning-border: #6B4F12; --status-warning-icon: #E0A63A;
+    --status-danger-bg: #44201F; --status-danger-fg: #F5B5B5; --status-danger-border: #7A3634; --status-danger-icon: #E57373;
+    --status-info-bg: #1B2E45; --status-info-fg: #B3D1F3; --status-info-border: #2F4E78; --status-info-icon: #5A9BE6;
+    --status-neutral-bg: #2A2D27; --status-neutral-fg: #D5D2C8; --status-neutral-border: #45493F; --status-neutral-icon: #9A978C;
+    --risk-quarantined-bg: #43300F; --risk-quarantined-fg: #F4CF94; --risk-quarantined-border: #7A5A1F;
+    --risk-qa-hold-bg: #2E2648; --risk-qa-hold-fg: #CFC3F0; --risk-qa-hold-border: #574A8A;
+    --risk-expired-bg: #302C25; --risk-expired-fg: #CFC7B8; --risk-expired-border: #5A5447;
+    --risk-recalled-bg: #44201F; --risk-recalled-fg: #F5B5B5; --risk-recalled-border: #B04444;
+    --risk-rejected-bg: #3F1F2A; --risk-rejected-fg: #F0B8C8; --risk-rejected-border: #7A3C52;
+    --risk-sync-pending-bg: #1B2E45; --risk-sync-pending-fg: #B3D1F3; --risk-sync-pending-border: #2F4E78;
+    --risk-approval-required-bg: #163531; --risk-approval-required-fg: #A9DDD6; --risk-approval-required-border: #2C6B63;
+    --chart-1: #43A668; --chart-2: #3987E5; --chart-3: #D95926; --chart-4: #9085E9; --chart-5: #C98500; --chart-6: #D55181;
+    --seq-1: #1B5A33; --seq-2: #23703F; --seq-3: #2F8A54; --seq-4: #57A574; --seq-5: #86C19A;
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow-2: 0 4px 12px rgba(0, 0, 0, .5);
+    --shadow-3: 0 12px 32px rgba(0, 0, 0, .6);
+  }
+}
+
+/* ---------- Tokens: dark, explicitly chosen by the user ---------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121311; --surface: #1B1D1A; --surface-2: #23261F; --border: #2E312B; --border-strong: #4A4E45;
+  --fg: #EDEBE4; --fg-2: #B8B5AA; --fg-muted: #8F8C81; --fg-inverse: #1C1B18; --cta: #EDEBE4;
+  --primary: #5FB27E; --primary-hover: #6BBE8A; --primary-text: #8BD0A3; --primary-soft: #1C3A28; --primary-soft-fg: #B6E6C6; --on-primary: #0F2A1A;
+  --ring: #8BD0A3; --scrim: rgba(0, 0, 0, .6);
+  --status-success-bg: #1C3A28; --status-success-fg: #B6E6C6; --status-success-border: #2F6B45; --status-success-icon: #5FB27E;
+  --status-warning-bg: #3E2E0C; --status-warning-fg: #F3D592; --status-warning-border: #6B4F12; --status-warning-icon: #E0A63A;
+  --status-danger-bg: #44201F; --status-danger-fg: #F5B5B5; --status-danger-border: #7A3634; --status-danger-icon: #E57373;
+  --status-info-bg: #1B2E45; --status-info-fg: #B3D1F3; --status-info-border: #2F4E78; --status-info-icon: #5A9BE6;
+  --status-neutral-bg: #2A2D27; --status-neutral-fg: #D5D2C8; --status-neutral-border: #45493F; --status-neutral-icon: #9A978C;
+  --risk-quarantined-bg: #43300F; --risk-quarantined-fg: #F4CF94; --risk-quarantined-border: #7A5A1F;
+  --risk-qa-hold-bg: #2E2648; --risk-qa-hold-fg: #CFC3F0; --risk-qa-hold-border: #574A8A;
+  --risk-expired-bg: #302C25; --risk-expired-fg: #CFC7B8; --risk-expired-border: #5A5447;
+  --risk-recalled-bg: #44201F; --risk-recalled-fg: #F5B5B5; --risk-recalled-border: #B04444;
+  --risk-rejected-bg: #3F1F2A; --risk-rejected-fg: #F0B8C8; --risk-rejected-border: #7A3C52;
+  --risk-sync-pending-bg: #1B2E45; --risk-sync-pending-fg: #B3D1F3; --risk-sync-pending-border: #2F4E78;
+  --risk-approval-required-bg: #163531; --risk-approval-required-fg: #A9DDD6; --risk-approval-required-border: #2C6B63;
+  --chart-1: #43A668; --chart-2: #3987E5; --chart-3: #D95926; --chart-4: #9085E9; --chart-5: #C98500; --chart-6: #D55181;
+  --seq-1: #1B5A33; --seq-2: #23703F; --seq-3: #2F8A54; --seq-4: #57A574; --seq-5: #86C19A;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, .5);
+  --shadow-3: 0 12px 32px rgba(0, 0, 0, .6);
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+img, svg, video, .aspect { max-width: 100%; }
+svg { display: inline-block; vertical-align: middle; }
+h1, h2, h3, h4, p, figure, ul, ol { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+a { color: var(--primary-text); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.btn-primary:focus-visible, .btn-cta:focus-visible, .btn-destructive:focus-visible, .chip:focus-visible, .tile-cta:focus-visible, .nav-item.active:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ring);
+}
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ic-16 { width: 16px; height: 16px; }
+.ic-24 { width: 24px; height: 24px; }
+.ic-28 { width: 28px; height: 28px; }
+
+/* Type roles (docs/ux-system.md 2.8) */
+.display { font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -.01em; }
+.h1 { font-size: 22px; line-height: 28px; font-weight: 600; }
+.h2 { font-size: 18px; line-height: 24px; font-weight: 600; }
+.h3 { font-size: 16px; line-height: 24px; font-weight: 600; }
+.body { font-size: 15px; line-height: 22px; }
+.body-strong { font-size: 15px; line-height: 22px; font-weight: 500; }
+.small { font-size: 13px; line-height: 18px; }
+.caption { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-2); }
+.data { font-size: 14px; line-height: 20px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.data-lg { font-size: 20px; line-height: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hero { font-size: 36px; line-height: 40px; font-weight: 600; letter-spacing: -.01em; }
+.mono { font-family: var(--mono); font-size: 13px; line-height: 18px; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--fg-muted); }
+.fg-2 { color: var(--fg-2); }
+@media (min-width: 768px) {
+  .display { font-size: 32px; line-height: 40px; }
+  .h1 { font-size: 24px; line-height: 32px; }
+  .h2 { font-size: 20px; line-height: 28px; }
+  .body, .body-strong { font-size: 14px; line-height: 20px; }
+  .hero { font-size: 40px; line-height: 44px; }
+}
+
+/* Page wrapper */
+.page { max-width: 1280px; margin-inline: auto; padding-inline: clamp(16px, 4vw, 24px); padding-block: 24px 80px; }
+.page > * { min-width: 0; }
+.sec { margin-top: 48px; scroll-margin-top: 16px; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: 16px; }
+.sec-head h2 { font-size: 20px; line-height: 28px; font-weight: 600; }
+.sec-head p { font-size: 14px; color: var(--fg-2); max-width: 70ch; }
+.sub { margin-top: 24px; }
+.sub h3 { font-size: 16px; line-height: 24px; font-weight: 600; margin-bottom: 12px; }
+.note { font-size: 13px; line-height: 18px; color: var(--fg-muted); margin-top: 10px; }
+
+/* Hero header */
+.hero-head { display: grid; gap: 16px; }
+.hero-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.wordmark { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; }
+.mark { width: 28px; height: 28px; border-radius: 8px; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; font-size: 12px; font-weight: 700; letter-spacing: 0; }
+.lede { font-size: 16px; line-height: 24px; color: var(--fg-2); max-width: 72ch; }
+.toc { display: flex; flex-wrap: wrap; gap: 8px; }
+.toc a { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-full); background: var(--surface); color: var(--fg); font-size: 14px; font-weight: 500; }
+.toc a:hover { background: var(--surface-2); text-decoration: none; }
+
+/* Cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 20px; min-width: 0; }
+.card-sm { border-radius: var(--radius-lg); padding: 16px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.card-head h3, .card-head .h2 { font-size: 16px; line-height: 24px; font-weight: 600; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+.grid-2 > *, .grid-3 > * { min-width: 0; }
+.stack { display: grid; gap: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.row > * { min-width: 0; }
+
+/* Swatches */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 118px), 1fr)); gap: 12px; }
+.swatch { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--surface); min-width: 0; }
+.swatch-color { height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-end; padding: 6px 8px; font-weight: 600; font-size: 13px; }
+.swatch-meta { padding: 8px 10px; font-size: 12px; line-height: 16px; }
+.swatch-name { display: block; font-weight: 500; overflow-wrap: anywhere; }
+.swatch-value { display: block; font-family: var(--mono); color: var(--fg-muted); font-size: 11px; margin-top: 2px; }
+.swatch-pair .swatch-color { border: 0; }
+.swatch-pair .swatch-color { border-bottom: 1px solid var(--border); }
+
+/* Type scale table */
+.type-row { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 8px 16px; align-items: baseline; padding: 12px 0; border-top: 1px solid var(--border); }
+.type-row:first-child { border-top: 0; padding-top: 0; }
+.type-spec { font-size: 12px; line-height: 16px; color: var(--fg-muted); }
+.type-spec strong { display: block; color: var(--fg-2); font-weight: 500; font-size: 13px; }
+.type-sample { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .type-row { grid-template-columns: 1fr; } }
+
+/* Spacing and radii */
+.space-row { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.space-row .lbl { width: 124px; flex: none; color: var(--fg-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.space-bar { height: 16px; max-width: 100%; background: var(--primary-soft); border: 1px solid var(--green-300); border-radius: 4px; }
+.radii { display: flex; flex-wrap: wrap; gap: 16px; }
+.radius-box { width: 72px; height: 72px; max-width: 100%; background: var(--surface-2); border: 1px solid var(--border-strong); display: grid; place-items: center; font-size: 12px; color: var(--fg-2); text-align: center; line-height: 1.2; }
+
+/* Buttons (docs/ux-system.md 5.23) */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: var(--radius-sm); border: 1px solid transparent; font-size: 14px; font-weight: 500; line-height: 1; white-space: nowrap; transition: background-color var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard); }
+.btn-primary { background: var(--primary); color: var(--on-primary); }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-cta { background: var(--cta); color: var(--fg-inverse); }
+.btn-secondary { background: var(--surface); color: var(--fg); border-color: var(--border-strong); }
+.btn-secondary:hover { background: var(--surface-2); }
+.btn-ghost { background: transparent; color: var(--primary-text); }
+.btn-ghost:hover { background: var(--primary-soft); }
+.btn-destructive { background: var(--status-danger-icon); color: var(--surface); }
+.btn-operator { min-height: 56px; font-size: 18px; border-radius: var(--radius-md); padding: 0 20px; width: 100%; }
+.btn-sm { min-height: 36px; padding: 0 12px; font-size: 13px; }
+.btn-block { width: 100%; }
+.btn[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+.icon-btn { position: relative; width: 36px; height: 36px; flex: none; border-radius: var(--radius-full); border: 1px solid var(--border); background: var(--surface); display: inline-grid; place-items: center; color: var(--fg-2); }
+.icon-btn-sm { width: 28px; height: 28px; border-color: transparent; }
+.icon-btn-plain { border-color: transparent; background: transparent; }
+.badge { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--radius-full); background: var(--status-danger-icon); color: var(--surface); font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; border: 2px solid var(--surface); box-sizing: content-box; }
+
+/* Fields (docs/ux-system.md 5.8) */
+.field { display: grid; gap: 6px; min-width: 0; }
+.field-label { font-size: 13px; line-height: 18px; font-weight: 500; color: var(--fg-2); display: flex; justify-content: space-between; gap: 8px; }
+.field-label .req { font-weight: 400; color: var(--fg-muted); }
+.input { display: flex; align-items: stretch; min-height: 48px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); overflow: hidden; }
+.input:focus-within { border-color: var(--ring); outline: 2px solid var(--ring); outline-offset: 2px; }
+.input input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--fg); font: inherit; font-size: 16px; font-variant-numeric: tabular-nums; padding: 0 12px; outline: none; }
+.input input::placeholder { color: var(--fg-muted); }
+.input .unit { display: flex; align-items: center; padding: 0 12px; border-left: 1px solid var(--border); color: var(--fg-2); font-size: 14px; font-weight: 500; background: var(--surface-2); white-space: nowrap; }
+.input-lg input { font-size: 24px; font-weight: 600; min-height: 56px; }
+.input-lg .unit { font-size: 16px; }
+.help { font-size: 13px; line-height: 18px; color: var(--fg-muted); }
+.help-error { color: var(--status-danger-fg); display: flex; gap: 6px; align-items: flex-start; }
+.input-error { border-color: var(--status-danger-icon); }
+
+/* Chips and banners (docs/ux-system.md 5.10) */
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 8px; border: 1px solid; border-radius: var(--radius-full); font-size: 13px; font-weight: 500; line-height: 1; white-space: nowrap; vertical-align: middle; max-width: 100%; }
+.chip-sm { height: 24px; font-size: 12px; padding: 0 8px 0 6px; }
+.chip .ic { width: 16px; height: 16px; }
+.chip[data-state="released"], .chip[data-state="success"] { background: var(--status-success-bg); color: var(--status-success-fg); border-color: var(--status-success-border); }
+.chip[data-state="released"] .ic, .chip[data-state="success"] .ic { color: var(--status-success-icon); }
+.chip[data-state="warning"] { background: var(--status-warning-bg); color: var(--status-warning-fg); border-color: var(--status-warning-border); }
+.chip[data-state="warning"] .ic { color: var(--status-warning-icon); }
+.chip[data-state="danger"] { background: var(--status-danger-bg); color: var(--status-danger-fg); border-color: var(--status-danger-border); }
+.chip[data-state="danger"] .ic { color: var(--status-danger-icon); }
+.chip[data-state="info"] { background: var(--status-info-bg); color: var(--status-info-fg); border-color: var(--status-info-border); }
+.chip[data-state="info"] .ic { color: var(--status-info-icon); }
+.chip[data-state="neutral"] { background: var(--status-neutral-bg); color: var(--status-neutral-fg); border-color: var(--status-neutral-border); }
+.chip[data-state="neutral"] .ic { color: var(--status-neutral-icon); }
+.chip[data-state="quarantined"] { background: var(--risk-quarantined-bg); color: var(--risk-quarantined-fg); border-color: var(--risk-quarantined-border); }
+.chip[data-state="quarantined"] .ic { color: var(--risk-quarantined-icon); }
+.chip[data-state="qa-hold"] { background: var(--risk-qa-hold-bg); color: var(--risk-qa-hold-fg); border-color: var(--risk-qa-hold-border); }
+.chip[data-state="qa-hold"] .ic { color: var(--risk-qa-hold-icon); }
+.chip[data-state="expired"] { background: var(--risk-expired-bg); color: var(--risk-expired-fg); border-color: var(--risk-expired-border); }
+.chip[data-state="expired"] .ic { color: var(--risk-expired-icon); }
+.chip[data-state="recalled"] { background: var(--risk-recalled-bg); color: var(--risk-recalled-fg); border-color: var(--risk-recalled-border); border-width: 2px; }
+.chip[data-state="recalled"] .ic { color: var(--risk-recalled-icon); }
+.chip[data-state="rejected"] { background: var(--risk-rejected-bg); color: var(--risk-rejected-fg); border-color: var(--risk-rejected-border); }
+.chip[data-state="rejected"] .ic { color: var(--risk-rejected-icon); }
+.chip[data-state="sync-pending"] { background: var(--risk-sync-pending-bg); color: var(--risk-sync-pending-fg); border-color: var(--risk-sync-pending-border); }
+.chip[data-state="sync-pending"] .ic { color: var(--risk-sync-pending-icon); }
+.chip[data-state="approval-required"] { background: var(--risk-approval-required-bg); color: var(--risk-approval-required-fg); border-color: var(--risk-approval-required-border); }
+.chip[data-state="approval-required"] .ic { color: var(--risk-approval-required-icon); }
+.chip-plain { background: var(--surface); color: var(--fg-2); border-color: var(--border-strong); }
+
+.banner { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid; border-left-width: 4px; border-radius: var(--radius-md); min-width: 0; }
+.banner .ic { margin-top: 1px; }
+.banner-body { display: grid; gap: 2px; min-width: 0; flex: 1; font-size: 14px; line-height: 20px; }
+.banner-body strong { font-weight: 600; }
+.banner-action { margin-left: auto; flex: none; }
+.banner[data-state="quarantined"] { background: var(--risk-quarantined-bg); color: var(--risk-quarantined-fg); border-color: var(--risk-quarantined-border); border-left-color: var(--risk-quarantined-icon); }
+.banner[data-state="qa-hold"] { background: var(--risk-qa-hold-bg); color: var(--risk-qa-hold-fg); border-color: var(--risk-qa-hold-border); border-left-color: var(--risk-qa-hold-icon); }
+.banner[data-state="expired"] { background: var(--risk-expired-bg); color: var(--risk-expired-fg); border-color: var(--risk-expired-border); border-left-color: var(--risk-expired-icon); }
+.banner[data-state="recalled"] { background: var(--risk-recalled-bg); color: var(--risk-recalled-fg); border-color: var(--risk-recalled-border); border-width: 2px; border-left-width: 4px; border-left-color: var(--risk-recalled-icon); }
+.banner[data-state="sync-pending"] { background: var(--risk-sync-pending-bg); color: var(--risk-sync-pending-fg); border-color: var(--risk-sync-pending-border); border-left-color: var(--risk-sync-pending-icon); }
+.banner[data-state="approval-required"] { background: var(--risk-approval-required-bg); color: var(--risk-approval-required-fg); border-color: var(--risk-approval-required-border); border-left-color: var(--risk-approval-required-icon); }
+.banner[data-state="warning"] { background: var(--status-warning-bg); color: var(--status-warning-fg); border-color: var(--status-warning-border); border-left-color: var(--status-warning-icon); }
+.banner[data-state="info"] { background: var(--status-info-bg); color: var(--status-info-fg); border-color: var(--status-info-border); border-left-color: var(--status-info-icon); }
+.banner .btn-secondary { background: var(--surface); color: var(--fg); }
+@media (max-width: 480px) { .banner { flex-wrap: wrap; } .banner-action { margin-left: 32px; } }
+
+/* KPI card and charts (docs/ux-system.md 5.12) */
+.kpi { display: grid; gap: 8px; align-content: start; }
+.kpi-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; min-height: 32px; }
+.kpi-value { font-size: 36px; line-height: 40px; font-weight: 600; letter-spacing: -.01em; }
+.kpi-value small { font-size: 16px; font-weight: 500; color: var(--fg-2); letter-spacing: 0; margin-left: 4px; }
+.kpi-delta { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; line-height: 18px; font-weight: 500; color: var(--fg-2); }
+.kpi-delta[data-tone="good"] { color: var(--status-success-fg); }
+.kpi-delta[data-tone="bad"] { color: var(--status-danger-fg); }
+.kpi-delta[data-tone="warn"] { color: var(--status-warning-fg); }
+.kpi-foot { font-size: 12px; line-height: 16px; color: var(--fg-muted); }
+.spark { width: 100%; height: auto; display: block; overflow: visible; }
+.spark-area { fill: var(--chart-1); fill-opacity: .1; }
+.spark-line { fill: none; stroke: var(--chart-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.spark-dot { fill: var(--chart-1); stroke: var(--surface); stroke-width: 2; }
+.spark-axis { stroke: var(--border); stroke-width: 1; }
+.meter { height: 8px; background: var(--primary-soft); border-radius: var(--radius-full); overflow: hidden; }
+.meter > i { display: block; height: 100%; background: var(--primary); border-radius: var(--radius-full); }
+.meter-text { display: flex; justify-content: space-between; font-size: 12px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.donut { width: 160px; height: 160px; max-width: 100%; }
+.donut-track { fill: none; stroke: var(--surface-2); stroke-width: 18; }
+.donut-seg { fill: none; stroke-width: 18; }
+.donut-centre { fill: var(--fg); font-weight: 600; font-size: 28px; letter-spacing: -.01em; }
+.donut-centre-lbl { fill: var(--fg-muted); font-size: 11px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+.legend { display: grid; gap: 6px; width: 100%; font-size: 13px; }
+.legend li { display: grid; grid-template-columns: 12px auto 1fr auto; gap: 8px; align-items: center; }
+.legend .sw { width: 12px; height: 12px; border-radius: 3px; }
+.legend .ic { width: 14px; height: 14px; }
+.legend .val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+
+/* Approval card (docs/ux-system.md 5.15) */
+.parties { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px; }
+.party { display: flex; gap: 10px; align-items: center; background: var(--surface-2); border-radius: var(--radius-md); padding: 12px; min-width: 0; }
+.party div { min-width: 0; }
+.party .who { font-weight: 500; font-size: 14px; overflow-wrap: anywhere; }
+.party .role { font-size: 12px; color: var(--fg-muted); }
+.avatar { width: 32px; height: 32px; flex: none; border-radius: 50%; background: var(--primary-soft); color: var(--primary-soft-fg); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+.avatar-sm { width: 24px; height: 24px; font-size: 10px; border: 2px solid var(--surface); }
+.avatars { display: flex; }
+.avatars .avatar + .avatar { margin-left: -6px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); gap: 12px; }
+.fact { min-width: 0; }
+.fact .caption { display: block; margin-bottom: 2px; }
+.fact .v { font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+/* ==========================================================================
+   Desktop frame (owner overview)
+   ========================================================================== */
+.frame-desktop { border: 1px solid var(--border-strong); border-radius: var(--radius-xl); overflow-x: auto; background: var(--bg); box-shadow: var(--shadow-1); }
+.app { min-width: 1140px; display: grid; grid-template-columns: 240px minmax(0, 1fr); }
+.nav { background: var(--surface); border-right: 1px solid var(--border); padding: 16px 12px; display: flex; flex-direction: column; gap: 2px; }
+.nav-brand { display: flex; align-items: center; gap: 10px; padding: 6px 10px 18px; font-weight: 600; font-size: 15px; }
+.nav-group { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; border-radius: var(--radius-sm); color: var(--fg-2); font-size: 14px; font-weight: 500; width: 100%; text-align: left; }
+.nav-group:hover { background: var(--surface-2); }
+.nav-group .ic { color: var(--fg-muted); }
+.nav-group .chev { margin-left: auto; width: 16px; height: 16px; }
+.nav-group[aria-expanded="true"] { color: var(--fg); }
+.nav-items { display: grid; gap: 2px; padding: 2px 0 6px; }
+.nav-item { display: flex; align-items: center; height: 36px; padding: 0 12px 0 40px; border-radius: var(--radius-full); font-size: 14px; color: var(--fg-2); width: 100%; text-align: left; }
+.nav-item:hover { background: var(--surface-2); }
+.nav-item.active { background: var(--cta); color: var(--fg-inverse); font-weight: 500; }
+.nav-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); display: grid; gap: 8px; }
+.nav-user { display: flex; gap: 10px; align-items: center; padding: 6px 10px; }
+.nav-user div { min-width: 0; font-size: 13px; line-height: 18px; }
+.nav-user .role { color: var(--fg-muted); font-size: 12px; }
+.nav-sync { display: flex; align-items: center; gap: 8px; padding: 0 10px; font-size: 12px; color: var(--fg-muted); }
+.nav-sync .ic { color: var(--status-success-icon); width: 16px; height: 16px; }
+
+.main { min-width: 0; display: flex; flex-direction: column; }
+.topbar { height: 64px; display: flex; align-items: center; gap: 12px; padding: 0 24px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.topbar .h1 { white-space: nowrap; }
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-full); background: var(--surface); font-size: 14px; font-weight: 500; white-space: nowrap; }
+.pill .ic { width: 16px; height: 16px; color: var(--fg-muted); }
+.search { flex: 1; min-width: 0; max-width: 340px; margin-left: auto; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; background: var(--surface-2); border-radius: var(--radius-full); color: var(--fg-muted); font-size: 14px; }
+.search span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search .ic { width: 16px; height: 16px; }
+.kbd { font-family: var(--mono); font-size: 11px; line-height: 16px; border: 1px solid var(--border-strong); border-radius: 4px; padding: 0 5px; color: var(--fg-2); background: var(--surface); }
+.sync-chip { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: var(--radius-full); background: var(--status-success-bg); color: var(--status-success-fg); border: 1px solid var(--status-success-border); font-size: 13px; font-weight: 500; white-space: nowrap; }
+.sync-chip .ic { width: 16px; height: 16px; color: var(--status-success-icon); }
+
+.content { padding: 24px; display: grid; gap: 16px; }
+.content-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.content-head .meta { font-size: 13px; color: var(--fg-muted); }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.col { background: var(--surface-2); border-radius: var(--radius-md); padding: 10px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.col-head { display: flex; justify-content: space-between; align-items: center; padding: 2px 6px 4px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-2); }
+.col-head .count { font-weight: 500; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.bcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px; display: grid; gap: 6px; min-width: 0; }
+.bcard-id { font-family: var(--mono); font-size: 13px; line-height: 18px; }
+.bcard-title { font-size: 14px; line-height: 20px; font-weight: 500; }
+.bcard-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; line-height: 16px; color: var(--fg-muted); }
+.bcard-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; }
+.bcard-foot .ok { color: var(--status-success-icon); }
+.progress { height: 4px; background: var(--primary-soft); border-radius: 2px; overflow: hidden; }
+.progress > i { display: block; height: 100%; background: var(--primary); border-radius: 2px; }
+.row-2 { display: grid; grid-template-columns: minmax(0, 1fr) 272px; gap: 16px; }
+
+.table-wrap { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 18px; }
+.table th { text-align: left; font-size: 11px; line-height: 16px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-2); padding: 8px 10px; background: var(--surface-2); border-bottom: 1px solid var(--border-strong); white-space: nowrap; }
+.table td { padding: 9px 8px; border-top: 1px solid var(--border); vertical-align: middle; }
+.table .date { white-space: nowrap; }
+.table tbody tr:first-child td { border-top: 0; }
+.table tbody tr:hover td { background: var(--green-50); }
+:root[data-theme="dark"] .table tbody tr:hover td { background: var(--surface-2); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .table tbody tr:hover td { background: var(--surface-2); } }
+.table .num { text-align: right; font-weight: 500; white-space: nowrap; }
+.table .mono { white-space: nowrap; }
+.table .warn { color: var(--status-warning-fg); font-weight: 500; }
+.table .bad { color: var(--status-danger-fg); font-weight: 500; }
+
+/* ==========================================================================
+   Phone frames
+   ========================================================================== */
+.phones { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; align-items: flex-start; }
+.phone-fig { width: min(360px, 100%); display: grid; gap: 10px; }
+.phone-fig figcaption { font-size: 13px; line-height: 18px; color: var(--fg-2); text-align: center; }
+.phone { width: 100%; height: 720px; border: 1px solid var(--border-strong); border-radius: 28px; background: var(--bg); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-2); font-size: 15px; line-height: 22px; }
+.ph-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px 10px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.ph-head .ttl { flex: 1; min-width: 0; }
+.ph-head .ttl strong { display: block; font-size: 17px; line-height: 22px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ph-head .ttl span { display: block; font-size: 12px; line-height: 16px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ph-main { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 16px; display: grid; gap: 12px; align-content: start; }
+.ph-main > * { min-width: 0; }
+.ph-action { padding: 12px 16px; background: var(--surface); border-top: 1px solid var(--border); box-shadow: var(--shadow-1); }
+.ph-tabs { display: grid; grid-template-columns: repeat(5, 1fr); height: 56px; background: var(--surface); border-top: 1px solid var(--border); }
+.tab { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; line-height: 12px; color: var(--fg-muted); min-width: 0; }
+.tab.active { color: var(--primary-text); font-weight: 500; }
+.tab .badge { top: 4px; right: auto; left: calc(50% + 4px); }
+.sync-dot { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--fg-muted); white-space: nowrap; }
+.sync-dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--status-success-icon); display: inline-block; }
+
+.greet { display: grid; gap: 8px; }
+.greet .display { font-size: 26px; line-height: 32px; }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tile { min-height: 104px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 10px; text-align: left; min-width: 0; width: 100%; }
+.tile .ic { color: var(--primary-text); }
+.tile-verb { font-size: 16px; line-height: 20px; font-weight: 600; }
+.tile-count { font-size: 13px; line-height: 16px; color: var(--fg-2); display: block; margin-top: 2px; }
+.tile-cta { background: var(--cta); color: var(--fg-inverse); border-color: var(--cta); }
+.tile-cta .ic, .tile-cta .tile-count { color: var(--fg-inverse); }
+.list { display: grid; }
+.list-row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 0; border-top: 1px solid var(--border); width: 100%; text-align: left; }
+.list-row:first-child { border-top: 0; }
+.list-row > div { flex: 1; min-width: 0; }
+.list-row .t { font-size: 15px; line-height: 20px; font-weight: 500; }
+.list-row .s { font-size: 13px; line-height: 18px; color: var(--fg-muted); }
+.list-row .chev { color: var(--fg-muted); }
+
+.stepper { display: grid; gap: 6px; }
+.step-label { display: flex; justify-content: space-between; font-size: 13px; line-height: 18px; color: var(--fg-2); }
+.step-label strong { color: var(--fg); font-weight: 600; }
+.kv { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.kv > div { min-width: 0; }
+.kv .caption { display: block; margin-bottom: 2px; }
+.kv .v { font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.readout { font-size: 24px; line-height: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.scan-ok { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--status-success-border); background: var(--status-success-bg); color: var(--status-success-fg); border-radius: var(--radius-sm); font-size: 14px; line-height: 18px; }
+.scan-ok .ic { color: var(--status-success-icon); }
+.scan-ok div { min-width: 0; }
+.scan-ok .mono { display: block; }
+.blocked { display: grid; gap: 4px; }
+.blocked-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 12px; border-radius: var(--radius-sm); background: var(--surface-2); color: var(--fg-muted); font-size: 14px; line-height: 18px; }
+.blocked-row .ic { width: 16px; height: 16px; }
+.blocked-row span { flex: 1; min-width: 0; }
+.blocked-row em { font-style: normal; font-size: 12px; white-space: nowrap; }
+.sign { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); min-height: 52px; }
+.sign div { flex: 1; min-width: 0; font-size: 14px; line-height: 18px; }
+.sign .s { color: var(--fg-muted); font-size: 12px; }
+.sign .ic { color: var(--status-success-icon); }
+.identity { display: grid; gap: 4px; }
+.identity .id { font-family: var(--mono); font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -.01em; overflow-wrap: anywhere; }
+
+/* Adapt / change lists */
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+.compare ol { display: grid; gap: 10px; counter-reset: item; }
+.compare li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; font-size: 14px; line-height: 20px; }
+.compare li::before { counter-increment: item; content: counter(item); width: 24px; height: 24px; border-radius: 50%; background: var(--surface-2); color: var(--fg-2); font-size: 12px; font-weight: 600; display: grid; place-items: center; }
+.compare .card-head .ic { color: var(--primary-text); }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-check-circle" viewBox="0 0 24 24"><path d="M22 11.1V12a10 10 0 1 1-5.9-9.1"/><path d="m9 11 3 3L22 4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-pause-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M10 15V9M14 15V9"/></symbol>
+  <symbol id="i-calendar-x" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M10 14l4 4M14 14l-4 4"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-octagon-alert" viewBox="0 0 24 24"><path d="M7.9 2h8.2L22 7.9v8.2L16.1 22H7.9L2 16.1V7.9z"/><path d="M12 8v4M12 16h.01"/></symbol>
+  <symbol id="i-x-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></symbol>
+  <symbol id="i-cloud-upload" viewBox="0 0 24 24"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="M12 12v9M16 16l-4-4-4 4"/></symbol>
+  <symbol id="i-cloud-check" viewBox="0 0 24 24"><path d="M17.5 19a4.5 4.5 0 0 0 .5-9 7 7 0 0 0-13.6 2A4 4 0 0 0 6 19z"/><path d="m9 14 2 2 4-4"/></symbol>
+  <symbol id="i-user-check" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/></symbol>
+  <symbol id="i-alert-triangle" viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+  <symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-scan-line" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/></symbol>
+  <symbol id="i-list-checks" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4M3 7l2 2 4-4M13 6h8M13 12h8M13 18h8"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 12 10 5 10-5M2 17l10 5 10-5"/></symbol>
+  <symbol id="i-factory" viewBox="0 0 24 24"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M17 18h1M12 18h1M7 18h1"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M10 2v7.5L4.2 19.5A1.5 1.5 0 0 0 5.5 22h13a1.5 1.5 0 0 0 1.3-2.5L14 9.5V2M8.5 2h7M7 16h10"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></symbol>
+  <symbol id="i-package-check" viewBox="0 0 24 24"><path d="m16 16 2 2 4-4"/><path d="M21 10V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l2-1.1"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.6 2.6 21.4 11.4a2 2 0 0 1 0 2.8l-7.2 7.2a2 2 0 0 1-2.8 0L2.6 12.6A2 2 0 0 1 2 11.2V4a2 2 0 0 1 2-2h7.2a2 2 0 0 1 1.4.6"/><path d="M7 7h.01"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.1 2.1h2l2.6 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L22 6H5.1"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></symbol>
+  <symbol id="i-coins" viewBox="0 0 24 24"><circle cx="8" cy="8" r="6"/><path d="M18.1 11a6 6 0 1 1-7.1 7.1M7 6h1v4M16.7 13.1l.7.7-2.8 2.8"/></symbol>
+  <symbol id="i-bar-chart" viewBox="0 0 24 24"><path d="M3 3v18h18M18 17V9M13 17V5M8 17v-3"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-arrow-up-right" viewBox="0 0 24 24"><path d="M7 17 17 7M7 7h10v10"/></symbol>
+  <symbol id="i-arrow-down-right" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7v10H7"/></symbol>
+  <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7M19 12H5"/></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24"><path d="m16 16.5 3-9.5 3 9.5a4.5 4.5 0 0 1-6 0M2 16.5 5 7l3 9.5a4.5 4.5 0 0 1-6 0M7 21h10M12 3v18M3 7h18"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2M15 18H9M19 18h2a1 1 0 0 0 1-1v-3.7a1 1 0 0 0-.3-.7l-3.4-3.4a1 1 0 0 0-.7-.2H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1"/></symbol>
+  <symbol id="i-clipboard-check" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></symbol>
+  <symbol id="i-printer" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+  <symbol id="i-map-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.8 9.8 0 0 0-6.7 2.8L3 8"/><path d="M3 3v5h5M3 12a9 9 0 0 0 9 9 9.8 9.8 0 0 0 6.7-2.8L21 16"/><path d="M16 16h5v5"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 22V4a2 2 0 0 1 2-2h11l-2 5 2 5H6"/></symbol>
+  <symbol id="i-box-move" viewBox="0 0 24 24"><path d="M21 10V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l1-.6"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/><path d="M19 15v6M16 18l3 3 3-3"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM5 19l.7 1.8L7.5 21.5l-1.8.7L5 24l-.7-1.8-1.8-.7 1.8-.7z"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></symbol>
+</svg>
+
+<div class="page">
+
+  <!-- ===================================================================
+       1. Header
+       =================================================================== -->
+  <header class="hero-head">
+    <div class="hero-top">
+      <span class="wordmark"><span class="mark" aria-hidden="true">BC</span>Bryel's Care</span>
+      <button type="button" class="btn btn-secondary btn-sm theme-toggle" aria-live="polite">
+        <svg class="ic ic-16" aria-hidden="true"><use href="#i-sun"/></svg>
+        <span class="theme-label">Theme: system</span>
+      </button>
+    </div>
+    <h1 class="display">Bryel's Care ERP + CRM: design direction (Gate 0)</h1>
+    <p class="lede">A calm, warm-neutral workspace with a restrained botanical green, one dark call-to-action per screen, pastel status chips with dark text, and risk states that are unmistakable by icon, label, colour and border, built from 360 px phones up to the owner's desktop.</p>
+    <nav class="toc" aria-label="Sections">
+      <a href="#tokens">Tokens</a>
+      <a href="#components">Components</a>
+      <a href="#desktop">Desktop: Owner overview</a>
+      <a href="#mobile">Phone: Operator mode</a>
+      <a href="#reference">Reference: adapt and change</a>
+    </nav>
+    <p class="note">Review on an iPad and a phone; the theme toggle switches between system, light and dark. All people, customers, lots, batches and numbers are fictional. Identifiers are illustrative; real formats come from numbering rules (docs/PRD.md A-PRD-04). Token names and values are those in docs/ux-system.md section 2; this page has no second palette.</p>
+  </header>
+
+  <!-- ===================================================================
+       2. Tokens
+       =================================================================== -->
+  <section class="sec" id="tokens" aria-labelledby="tokens-h">
+    <div class="sec-head">
+      <h2 id="tokens-h">Tokens</h2>
+      <p>Every colour is a CSS variable defined once for light and once for dark. Values shown update with the theme. Brand hex is a proposal derived from the mark on the BMR (A-UX-03) and can be swapped without touching components.</p>
+    </div>
+
+    <div class="sub">
+      <h3>Primary ramp (botanical green)</h3>
+      <div class="swatches">
+        <div class="swatch" data-token="--green-50"><div class="swatch-color" style="background:var(--green-50);color:var(--green-900)">50</div><div class="swatch-meta"><span class="swatch-name">--green-50</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--green-100"><div class="swatch-color" style="background:var(--green-100);color:var(--green-900)">100</div><div class="swatch-meta"><span class="swatch-name">--green-100</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--green-200"><div class="swatch-color" style="background:var(--green-200);color:var(--green-900)">200</div><div class="swatch-meta"><span class="swatch-name">--green-200</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--green-300"><div class="swatch-color" style="background:var(--green-300);color:var(--green-900)">300</div><div class="swatch-meta"><span class="swatch-name">--green-300</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--green-400"><div class="swatch-color" style="background:var(--green-400);color:var(--green-900)">400</div><div class="swatch-meta"><span class="swatch-name">--green-400</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--green-500"><div class="swatch-color" style="background:var(--green-500);color:var(--green-50)">500</div><div class="swatch-meta"><span class="swatch-name">--green-500</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--green-600"><div class="swatch-color" style="background:var(--green-600);color:var(--green-50)">600</div><div class="swatch-meta"><span class="swatch-name">--green-600 (primary)</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--green-700"><div class="swatch-color" style="background:var(--green-700);color:var(--green-50)">700</div><div class="swatch-meta"><span class="swatch-name">--green-700 (links, ring)</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--green-800"><div class="swatch-color" style="background:var(--green-800);color:var(--green-50)">800</div><div class="swatch-meta"><span class="swatch-name">--green-800 (hover)</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--green-900"><div class="swatch-color" style="background:var(--green-900);color:var(--green-50)">900</div><div class="swatch-meta"><span class="swatch-name">--green-900 (chip text)</span><span class="swatch-value"></span></div></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>Neutrals and semantic surfaces</h3>
+      <div class="swatches">
+        <div class="swatch" data-token="--bg"><div class="swatch-color" style="background:var(--bg);color:var(--fg)">Aa</div><div class="swatch-meta"><span class="swatch-name">--bg</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--surface"><div class="swatch-color" style="background:var(--surface);color:var(--fg)">Aa</div><div class="swatch-meta"><span class="swatch-name">--surface</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--surface-2"><div class="swatch-color" style="background:var(--surface-2);color:var(--fg)">Aa</div><div class="swatch-meta"><span class="swatch-name">--surface-2</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--border"><div class="swatch-color" style="background:var(--border);color:var(--fg)">Aa</div><div class="swatch-meta"><span class="swatch-name">--border</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--border-strong"><div class="swatch-color" style="background:var(--border-strong);color:var(--fg)">Aa</div><div class="swatch-meta"><span class="swatch-name">--border-strong</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--fg"><div class="swatch-color" style="background:var(--fg);color:var(--fg-inverse)">Aa</div><div class="swatch-meta"><span class="swatch-name">--fg</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--fg-2"><div class="swatch-color" style="background:var(--fg-2);color:var(--fg-inverse)">Aa</div><div class="swatch-meta"><span class="swatch-name">--fg-2</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--fg-muted"><div class="swatch-color" style="background:var(--fg-muted);color:var(--fg-inverse)">Aa</div><div class="swatch-meta"><span class="swatch-name">--fg-muted</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--cta"><div class="swatch-color" style="background:var(--cta);color:var(--fg-inverse)">Aa</div><div class="swatch-meta"><span class="swatch-name">--cta (one per page)</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--primary"><div class="swatch-color" style="background:var(--primary);color:var(--on-primary)">Aa</div><div class="swatch-meta"><span class="swatch-name">--primary</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--primary-text"><div class="swatch-color" style="background:var(--surface);color:var(--primary-text)">Link</div><div class="swatch-meta"><span class="swatch-name">--primary-text</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--primary-soft"><div class="swatch-color" style="background:var(--primary-soft);color:var(--primary-soft-fg)">Aa</div><div class="swatch-meta"><span class="swatch-name">--primary-soft</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--ring"><div class="swatch-color" style="background:var(--surface);box-shadow:inset 0 0 0 2px var(--ring)"></div><div class="swatch-meta"><span class="swatch-name">--ring (focus)</span><span class="swatch-value"></span></div></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>Semantic status (bg, fg, border, icon)</h3>
+      <div class="swatches">
+        <div class="swatch" data-token="--status-success-bg"><div class="swatch-color" style="background:var(--status-success-bg);color:var(--status-success-fg);border:1px solid var(--status-success-border)"><svg class="ic ic-16" aria-hidden="true" style="color:var(--status-success-icon);margin-right:6px"><use href="#i-check-circle"/></svg>Success</div><div class="swatch-meta"><span class="swatch-name">--status-success-*</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--status-warning-bg"><div class="swatch-color" style="background:var(--status-warning-bg);color:var(--status-warning-fg);border:1px solid var(--status-warning-border)"><svg class="ic ic-16" aria-hidden="true" style="color:var(--status-warning-icon);margin-right:6px"><use href="#i-alert-triangle"/></svg>Warning</div><div class="swatch-meta"><span class="swatch-name">--status-warning-*</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--status-danger-bg"><div class="swatch-color" style="background:var(--status-danger-bg);color:var(--status-danger-fg);border:1px solid var(--status-danger-border)"><svg class="ic ic-16" aria-hidden="true" style="color:var(--status-danger-icon);margin-right:6px"><use href="#i-octagon-alert"/></svg>Danger</div><div class="swatch-meta"><span class="swatch-name">--status-danger-*</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--status-info-bg"><div class="swatch-color" style="background:var(--status-info-bg);color:var(--status-info-fg);border:1px solid var(--status-info-border)"><svg class="ic ic-16" aria-hidden="true" style="color:var(--status-info-icon);margin-right:6px"><use href="#i-info"/></svg>Info</div><div class="swatch-meta"><span class="swatch-name">--status-info-*</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--status-neutral-bg"><div class="swatch-color" style="background:var(--status-neutral-bg);color:var(--status-neutral-fg);border:1px solid var(--status-neutral-border)"><svg class="ic ic-16" aria-hidden="true" style="color:var(--status-neutral-icon);margin-right:6px"><use href="#i-circle"/></svg>Neutral</div><div class="swatch-meta"><span class="swatch-name">--status-neutral-*</span><span class="swatch-value"></span></div></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3>Risk states (dedicated tokens; chip and banner share them)</h3>
+      <div class="swatches">
+        <div class="swatch" data-token="--risk-quarantined-bg"><div class="swatch-color" style="background:var(--risk-quarantined-bg);color:var(--risk-quarantined-fg);border:1px solid var(--risk-quarantined-border)">Quarantined</div><div class="swatch-meta"><span class="swatch-name">--risk-quarantined-*</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--risk-qa-hold-bg"><div class="swatch-color" style="background:var(--risk-qa-hold-bg);color:var(--risk-qa-hold-fg);border:1px solid var(--risk-qa-hold-border)">QA Hold</div><div class="swatch-meta"><span class="swatch-name">--risk-qa-hold-*</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--risk-expired-bg"><div class="swatch-color" style="background:var(--risk-expired-bg);color:var(--risk-expired-fg);border:1px solid var(--risk-expired-border)">Expired</div><div class="swatch-meta"><span class="swatch-name">--risk-expired-*</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--risk-recalled-bg"><div class="swatch-color" style="background:var(--risk-recalled-bg);color:var(--risk-recalled-fg);border:2px solid var(--risk-recalled-border)">Recalled</div><div class="swatch-meta"><span class="swatch-name">--risk-recalled-* (2 px)</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--risk-rejected-bg"><div class="swatch-color" style="background:var(--risk-rejected-bg);color:var(--risk-rejected-fg);border:1px solid var(--risk-rejected-border)">Rejected</div><div class="swatch-meta"><span class="swatch-name">--risk-rejected-*</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--risk-sync-pending-bg"><div class="swatch-color" style="background:var(--risk-sync-pending-bg);color:var(--risk-sync-pending-fg);border:1px solid var(--risk-sync-pending-border)">Sync Pending</div><div class="swatch-meta"><span class="swatch-name">--risk-sync-pending-*</span><span class="swatch-value"></span></div></div>
+        <div class="swatch" data-token="--risk-approval-required-bg"><div class="swatch-color" style="background:var(--risk-approval-required-bg);color:var(--risk-approval-required-fg);border:1px solid var(--risk-approval-required-border)">Approval</div><div class="swatch-meta"><span class="swatch-name">--risk-approval-required-*</span><span class="swatch-value"></span></div></div>
+      </div>
+      <p class="note">Chart palette: --chart-1 to --chart-6 (categorical, fixed order), --seq-1 to --seq-5 (one-hue ramp), --viz-good / --viz-bad / --viz-warn / --viz-neutral (only when a series means good or bad). The donut below uses the viz set.</p>
+    </div>
+
+    <div class="grid-2 sub">
+      <div class="card">
+        <div class="card-head"><h3>Type scale (Inter, fallback Segoe UI, Roboto, Helvetica Neue, Arial)</h3></div>
+        <div>
+          <div class="type-row"><div class="type-spec"><strong>display</strong>28/36 phone, 32/40 desktop, 600</div><div class="type-sample display">Good morning, Rhea</div></div>
+          <div class="type-row"><div class="type-spec"><strong>h1</strong>22/28, 24/32, 600</div><div class="type-sample h1">Owner overview</div></div>
+          <div class="type-row"><div class="type-spec"><strong>h2</strong>18/24, 20/28, 600</div><div class="type-sample h2">Near-expiry lots</div></div>
+          <div class="type-row"><div class="type-spec"><strong>h3</strong>16/24, 600</div><div class="type-sample h3">Ingredient 1 of 5</div></div>
+          <div class="type-row"><div class="type-spec"><strong>body / body-strong</strong>15/22 phone, 14/20 desktop, 400 / 500</div><div class="type-sample body">Scan the Coconut Oil lot, read the weight from the scale, then confirm. <span class="body-strong">The checker signs on the same device.</span></div></div>
+          <div class="type-row"><div class="type-spec"><strong>small</strong>13/18, 400</div><div class="type-sample small">Received 02 Oct 2026 from Laguna Oleo Supply (fictional)</div></div>
+          <div class="type-row"><div class="type-spec"><strong>caption</strong>12/16, 500, uppercase, +0.04em</div><div class="type-sample caption">Target weight</div></div>
+          <div class="type-row"><div class="type-spec"><strong>data / data-lg</strong>14/20 500, 20/24 600, tabular</div><div class="type-sample"><span class="data">3,723.2 g</span> &nbsp; <span class="data-lg">17,600 g</span></div></div>
+          <div class="type-row"><div class="type-spec"><strong>hero</strong>36/40 phone, 40/44 desktop, 600</div><div class="type-sample hero">54</div></div>
+          <div class="type-row"><div class="type-spec"><strong>mono</strong>13/18, system monospace</div><div class="type-sample mono">ACS-2026-0012 · RM-2026-0171 · BX-0421</div></div>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card">
+          <div class="card-head"><h3>Spacing scale (4 px base)</h3></div>
+          <div class="stack" style="gap:8px">
+            <div class="space-row"><span class="lbl">--space-1 · 4</span><i class="space-bar" style="width:var(--space-1)"></i></div>
+            <div class="space-row"><span class="lbl">--space-2 · 8</span><i class="space-bar" style="width:var(--space-2)"></i></div>
+            <div class="space-row"><span class="lbl">--space-3 · 12</span><i class="space-bar" style="width:var(--space-3)"></i></div>
+            <div class="space-row"><span class="lbl">--space-4 · 16</span><i class="space-bar" style="width:var(--space-4)"></i></div>
+            <div class="space-row"><span class="lbl">--space-5 · 20</span><i class="space-bar" style="width:var(--space-5)"></i></div>
+            <div class="space-row"><span class="lbl">--space-6 · 24</span><i class="space-bar" style="width:var(--space-6)"></i></div>
+            <div class="space-row"><span class="lbl">--space-8 · 32</span><i class="space-bar" style="width:var(--space-8)"></i></div>
+            <div class="space-row"><span class="lbl">--space-10 · 40</span><i class="space-bar" style="width:var(--space-10)"></i></div>
+            <div class="space-row"><span class="lbl">--space-12 · 48</span><i class="space-bar" style="width:var(--space-12)"></i></div>
+            <div class="space-row"><span class="lbl">--space-16 · 64</span><i class="space-bar" style="width:var(--space-16)"></i></div>
+          </div>
+          <p class="note">Card padding 16 (phone) / 20 (desktop). Page gutter 16 at 360 px, 24 at 768 px, 32 at 1280 px. Card gap 12 / 16.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Radii and borders</h3></div>
+          <div class="radii">
+            <div class="radius-box" style="border-radius:var(--radius-xs)">xs<br>6</div>
+            <div class="radius-box" style="border-radius:var(--radius-sm)">sm<br>8</div>
+            <div class="radius-box" style="border-radius:var(--radius-md)">md<br>12</div>
+            <div class="radius-box" style="border-radius:var(--radius-lg)">lg<br>16</div>
+            <div class="radius-box" style="border-radius:var(--radius-xl)">xl<br>20</div>
+            <div class="radius-box" style="border-radius:var(--radius-full)">full</div>
+          </div>
+          <p class="note">Hairline 1 px --border on every card; --border-strong on inputs and meaningful dividers. Elevation only on sticky bars (1), popovers (2) and dialogs (3). Focus ring 2 px --ring, offset 2 px.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================
+       3. Components
+       =================================================================== -->
+  <section class="sec" id="components" aria-labelledby="components-h">
+    <div class="sec-head">
+      <h2 id="components-h">Components</h2>
+      <p>Samples from the inventory in docs/ux-system.md section 5. Buttons here are visual samples; nothing posts.</p>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head"><h3>Buttons</h3><span class="small muted">44 px min; 52 to 56 px in operator mode</span></div>
+        <div class="stack">
+          <div class="row">
+            <button type="button" class="btn btn-primary">Save receipt</button>
+            <button type="button" class="btn btn-cta">Post receipt</button>
+            <button type="button" class="btn btn-secondary">Print labels</button>
+            <button type="button" class="btn btn-ghost">Scan again</button>
+            <button type="button" class="btn btn-destructive">Void draft</button>
+          </div>
+          <button type="button" class="btn btn-cta btn-operator"><svg class="ic ic-24" aria-hidden="true"><use href="#i-check"/></svg>Confirm weight</button>
+          <p class="note">Primary green for the main constructive action; the dark --cta fill is used once per page for the most important, usually posting, action. Destructive is never the default focused button and always opens a confirm dialog with a reason.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Inputs with units</h3><span class="small muted">label above, unit suffix, tabular figures</span></div>
+        <div class="stack">
+          <div class="field">
+            <label class="field-label" for="f-weight">Actual weight <span class="req">Required</span></label>
+            <div class="input"><input id="f-weight" type="text" inputmode="decimal" value="3,719.8" aria-describedby="f-weight-help"><span class="unit">g</span></div>
+            <div class="help" id="f-weight-help">Target 3,723.2 g · tolerance range 3,704.6 to 3,741.8 g</div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="f-qty">Quantity to move</label>
+            <div class="input"><input id="f-qty" type="text" inputmode="decimal" value="18.5"><span class="unit">kg</span></div>
+          </div>
+          <div class="field">
+            <label class="field-label" for="f-price">Unit price</label>
+            <div class="input input-error"><input id="f-price" type="text" inputmode="decimal" placeholder="0.00" aria-invalid="true" aria-describedby="f-price-err"><span class="unit">PHP</span></div>
+            <div class="help help-error" id="f-price-err"><svg class="ic ic-16" aria-hidden="true"><use href="#i-octagon-alert"/></svg><span>Enter a unit price, or choose "Use contract price".</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card sub">
+      <div class="card-head"><h3>Status chips</h3><span class="small muted">icon + label + colour + border; screen readers hear the state family</span></div>
+      <div class="row">
+        <span class="chip" data-state="released"><svg class="ic" aria-hidden="true"><use href="#i-check-circle"/></svg>Released<span class="sr-only">, released state</span></span>
+        <span class="chip" data-state="quarantined"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>Quarantined<span class="sr-only">, blocked state</span></span>
+        <span class="chip" data-state="qa-hold"><svg class="ic" aria-hidden="true"><use href="#i-pause-circle"/></svg>QA Hold<span class="sr-only">, blocked state</span></span>
+        <span class="chip" data-state="expired"><svg class="ic" aria-hidden="true"><use href="#i-calendar-x"/></svg>Expired<span class="sr-only">, blocked state</span></span>
+        <span class="chip" data-state="recalled"><svg class="ic" aria-hidden="true"><use href="#i-octagon-alert"/></svg>Recalled<span class="sr-only">, blocked state</span></span>
+        <span class="chip" data-state="rejected"><svg class="ic" aria-hidden="true"><use href="#i-x-circle"/></svg>Rejected<span class="sr-only">, blocked state</span></span>
+        <span class="chip" data-state="sync-pending"><svg class="ic" aria-hidden="true"><use href="#i-cloud-upload"/></svg>Sync Pending<span class="sr-only">, pending state</span></span>
+        <span class="chip" data-state="approval-required"><svg class="ic" aria-hidden="true"><use href="#i-user-check"/></svg>Approval Required<span class="sr-only">, approval state</span></span>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <span class="chip chip-sm" data-state="warning"><svg class="ic" aria-hidden="true"><use href="#i-alert-triangle"/></svg>Near expiry</span>
+        <span class="chip chip-sm" data-state="info"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg>In process</span>
+        <span class="chip chip-sm" data-state="neutral"><svg class="ic" aria-hidden="true"><use href="#i-circle"/></svg>Planned</span>
+        <span class="chip chip-sm" data-state="danger"><svg class="ic" aria-hidden="true"><use href="#i-octagon-alert"/></svg>Out of tolerance</span>
+        <span class="small muted">24 px chips for tables; 28 px on cards.</span>
+      </div>
+    </div>
+
+    <div class="stack sub">
+      <div class="banner" data-state="quarantined" role="status">
+        <svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>
+        <div class="banner-body"><strong>Quarantined: issue, consume and ship are blocked</strong><span>Lot RM-2026-0171 (Acapulco Extract) is waiting for incoming inspection. Only moves within the quarantine area, label printing and an inspection request are allowed.</span></div>
+        <button type="button" class="btn btn-secondary btn-sm banner-action">Request inspection</button>
+      </div>
+      <div class="banner" data-state="recalled" role="alert">
+        <svg class="ic" aria-hidden="true"><use href="#i-octagon-alert"/></svg>
+        <div class="banner-body"><strong>Recalled: do not use or ship</strong><span>Recall case RC-26-00002 covers this lot. Report to QA is required before any other action.</span></div>
+        <button type="button" class="btn btn-secondary btn-sm banner-action">Report to QA</button>
+      </div>
+      <div class="banner" data-state="sync-pending" role="status">
+        <svg class="ic" aria-hidden="true"><use href="#i-cloud-upload"/></svg>
+        <div class="banner-body"><strong>Saved on this device</strong><span>3 changes will sync when you're back online. Rows wear the Sync Pending chip until the server confirms.</span></div>
+        <button type="button" class="btn btn-secondary btn-sm banner-action">View queue</button>
+      </div>
+    </div>
+
+    <div class="grid-2 sub">
+      <article class="card kpi">
+        <div class="kpi-head"><span class="caption">Orders this week</span><button type="button" class="icon-btn icon-btn-sm" aria-label="Definition of Orders this week"><svg class="ic ic-16" aria-hidden="true"><use href="#i-info"/></svg></button></div>
+        <div class="kpi-value">54</div>
+        <div class="kpi-delta" data-tone="good"><svg class="ic ic-16" aria-hidden="true"><use href="#i-arrow-up-right"/></svg>+9 % vs last week</div>
+        <svg class="spark" viewBox="0 0 240 48" role="img" aria-label="Orders per week for the last 12 weeks, from 41 to 54"><line class="spark-axis" x1="4" y1="42" x2="236" y2="42"/><polygon class="spark-area" points="4,42 4.0,35.2 25.1,30.1 46.2,38.6 67.3,25.0 88.4,19.9 109.5,26.7 130.5,16.5 151.6,21.6 172.7,11.4 193.8,18.2 214.9,21.6 236.0,13.1 236,42"/><polyline class="spark-line" points="4.0,35.2 25.1,30.1 46.2,38.6 67.3,25.0 88.4,19.9 109.5,26.7 130.5,16.5 151.6,21.6 172.7,11.4 193.8,18.2 214.9,21.6 236.0,13.1"/><circle class="spark-dot" cx="236" cy="13.1" r="4"/></svg>
+        <div class="kpi-foot">Confirmed sales orders, order date in week · Updated 09:41 · All sites · This week</div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <h3>Purchase order approval</h3>
+          <span class="chip chip-sm" data-state="approval-required"><svg class="ic" aria-hidden="true"><use href="#i-user-check"/></svg>Approval Required</span>
+        </div>
+        <div class="stack">
+          <div><span class="mono">PO-26-00118</span> · Coconut Oil 200 kg · Laguna Oleo Supply (fictional)</div>
+          <div class="parties">
+            <div class="party"><span class="avatar" aria-hidden="true">MS</span><div><div class="who">Mara Santos</div><div class="role">Requester · Procurement · 15 Oct 2026 16:20</div></div></div>
+            <div class="party"><span class="avatar" aria-hidden="true">DR</span><div><div class="who">Dino Reyes</div><div class="role">Approver · Site Manager, Site A</div></div></div>
+          </div>
+          <div class="facts">
+            <div class="fact"><span class="caption">Amount</span><div class="v">PHP 38,400.00</div></div>
+            <div class="fact"><span class="caption">Threshold</span><div class="v">PHP 25,000.00</div></div>
+            <div class="fact"><span class="caption">Reason</span><div class="v">Stock below minimum</div></div>
+          </div>
+          <div class="row">
+            <button type="button" class="btn btn-primary">Approve</button>
+            <button type="button" class="btn btn-secondary">Reject with reason</button>
+          </div>
+          <p class="note">Requester and approver are always different people (ADR-005). The threshold is configuration (A-PROC-13), shown so the approver knows why this landed with them.</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================================================================
+       4. Desktop frame: Owner overview
+       =================================================================== -->
+  <section class="sec" id="desktop" aria-labelledby="desktop-h">
+    <div class="sec-head">
+      <h2 id="desktop-h">Desktop: Owner overview</h2>
+      <p>1,140 px app shell inside a scrollable frame. Persistent left navigation with collapsible groups, top bar with site selector, search, action centre, sync status and user menu. The only dark element on a dashboard is the active navigation pill.</p>
+    </div>
+
+    <div class="frame-desktop" role="img" aria-label="Desktop mockup of the Owner overview page">
+      <div class="app">
+        <nav class="nav" aria-label="Modules">
+          <div class="nav-brand"><span class="mark" aria-hidden="true">BC</span>Bryel's Care</div>
+          <button type="button" class="nav-group" aria-expanded="true"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg>Home<svg class="ic chev" aria-hidden="true"><use href="#i-chevron-down"/></svg></button>
+          <div class="nav-items">
+            <button type="button" class="nav-item active" aria-current="page">Overview</button>
+            <button type="button" class="nav-item">Action centre</button>
+            <button type="button" class="nav-item">My tasks</button>
+          </div>
+          <button type="button" class="nav-group" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg>Inventory<svg class="ic chev" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+          <button type="button" class="nav-group" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-factory"/></svg>Production<svg class="ic chev" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+          <button type="button" class="nav-group" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-flask"/></svg>Quality<svg class="ic chev" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+          <button type="button" class="nav-group" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-package"/></svg>Packaging &amp; Dispatch<svg class="ic chev" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+          <button type="button" class="nav-group" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-tag"/></svg>Sales / CRM<svg class="ic chev" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+          <button type="button" class="nav-group" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-cart"/></svg>Procurement<svg class="ic chev" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+          <button type="button" class="nav-group" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-users"/></svg>HR<svg class="ic chev" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+          <button type="button" class="nav-group" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-coins"/></svg>Finance<svg class="ic chev" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+          <button type="button" class="nav-group" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-bar-chart"/></svg>Reports<svg class="ic chev" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+          <button type="button" class="nav-group" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg>Administration<svg class="ic chev" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+          <div class="nav-foot">
+            <div class="nav-user"><span class="avatar" aria-hidden="true">AV</span><div><div>Ana Villanueva</div><div class="role">Owner/Director · All sites</div></div></div>
+            <div class="nav-sync"><svg class="ic" aria-hidden="true"><use href="#i-cloud-check"/></svg>Synced · 09:41</div>
+          </div>
+        </nav>
+
+        <div class="main">
+          <header class="topbar">
+            <span class="h1">Owner overview</span>
+            <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-map-pin"/></svg>All sites<svg class="ic" aria-hidden="true"><use href="#i-chevron-down"/></svg></span>
+            <div class="search"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><span>Search lots, boxes, batches, orders, customers</span><span class="kbd">Ctrl K</span></div>
+            <button type="button" class="icon-btn" aria-label="Action centre, 4 unread"><svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg><span class="badge" aria-hidden="true">4</span></button>
+            <span class="sync-chip"><svg class="ic" aria-hidden="true"><use href="#i-cloud-check"/></svg>Synced</span>
+            <button type="button" class="avatar" aria-label="User menu: Ana Villanueva">AV</button>
+          </header>
+
+          <div class="content">
+            <div class="content-head">
+              <span class="meta">Updated 09:41 · All sites · This week (12 to 18 Oct 2026) · Every number drills into its report</span>
+              <span class="pill"><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg>This week<svg class="ic" aria-hidden="true"><use href="#i-chevron-down"/></svg></span>
+            </div>
+
+            <div class="kpis">
+              <article class="card kpi">
+                <div class="kpi-head"><span class="caption">Orders this week</span><button type="button" class="icon-btn icon-btn-sm" aria-label="Definition of Orders this week"><svg class="ic ic-16" aria-hidden="true"><use href="#i-info"/></svg></button></div>
+                <div class="kpi-value">54</div>
+                <div class="kpi-delta" data-tone="good"><svg class="ic ic-16" aria-hidden="true"><use href="#i-arrow-up-right"/></svg>+9 % vs last week</div>
+                <svg class="spark" viewBox="0 0 240 48" role="img" aria-label="Orders per week, last 12 weeks"><line class="spark-axis" x1="4" y1="42" x2="236" y2="42"/><polygon class="spark-area" points="4,42 4.0,35.2 25.1,30.1 46.2,38.6 67.3,25.0 88.4,19.9 109.5,26.7 130.5,16.5 151.6,21.6 172.7,11.4 193.8,18.2 214.9,21.6 236.0,13.1 236,42"/><polyline class="spark-line" points="4.0,35.2 25.1,30.1 46.2,38.6 67.3,25.0 88.4,19.9 109.5,26.7 130.5,16.5 151.6,21.6 172.7,11.4 193.8,18.2 214.9,21.6 236.0,13.1"/><circle class="spark-dot" cx="236" cy="13.1" r="4"/></svg>
+                <div class="kpi-foot">Updated 09:41 · All sites</div>
+              </article>
+              <article class="card kpi">
+                <div class="kpi-head"><span class="caption">Production output vs plan</span><button type="button" class="icon-btn icon-btn-sm" aria-label="Definition of Production output vs plan"><svg class="ic ic-16" aria-hidden="true"><use href="#i-info"/></svg></button></div>
+                <div class="kpi-value">412<small>of 480 kg</small></div>
+                <div class="kpi-delta" data-tone="warn"><svg class="ic ic-16" aria-hidden="true"><use href="#i-alert-triangle"/></svg>86 % of plan, 2 batches to go</div>
+                <div class="meter" role="img" aria-label="412 of 480 kilograms, 86 percent"><i style="width:85.8%"></i></div>
+                <div class="meter-text"><span>0 kg</span><span>plan 480 kg</span></div>
+                <div class="kpi-foot">Released output, mass basis · Updated 09:41</div>
+              </article>
+              <article class="card kpi">
+                <div class="kpi-head"><span class="caption">Stock at FEFO risk</span><button type="button" class="icon-btn icon-btn-sm" aria-label="Definition of Stock at FEFO risk"><svg class="ic ic-16" aria-hidden="true"><use href="#i-info"/></svg></button></div>
+                <div class="kpi-value">7<small>lots</small></div>
+                <div class="kpi-delta" data-tone="warn"><svg class="ic ic-16" aria-hidden="true"><use href="#i-arrow-up-right"/></svg>+2 vs last week · 3 expire within 14 days</div>
+                <svg class="spark" viewBox="0 0 240 48" role="img" aria-label="Lots at FEFO risk per week, last 12 weeks"><line class="spark-axis" x1="4" y1="42" x2="236" y2="42"/><polygon class="spark-area" points="4,42 4.0,32.3 25.1,27.4 46.2,27.4 67.3,37.1 88.4,32.3 109.5,22.6 130.5,27.4 151.6,17.7 172.7,22.6 193.8,27.4 214.9,27.4 236.0,17.7 236,42"/><polyline class="spark-line" points="4.0,32.3 25.1,27.4 46.2,27.4 67.3,37.1 88.4,32.3 109.5,22.6 130.5,27.4 151.6,17.7 172.7,22.6 193.8,27.4 214.9,27.4 236.0,17.7"/><circle class="spark-dot" cx="236" cy="17.7" r="4"/></svg>
+                <div class="kpi-foot">Expiry within 30 days, released stock · Updated 09:41</div>
+              </article>
+              <article class="card kpi">
+                <div class="kpi-head"><span class="caption">QA holds</span><button type="button" class="icon-btn icon-btn-sm" aria-label="Definition of QA holds"><svg class="ic ic-16" aria-hidden="true"><use href="#i-info"/></svg></button></div>
+                <div class="kpi-value">2<small>open</small></div>
+                <div class="kpi-delta" data-tone="good"><svg class="ic ic-16" aria-hidden="true"><use href="#i-arrow-down-right"/></svg>−1 vs last week · oldest 3 days</div>
+                <svg class="spark" viewBox="0 0 240 48" role="img" aria-label="Open QA holds per week, last 12 weeks"><line class="spark-axis" x1="4" y1="42" x2="236" y2="42"/><polygon class="spark-area" points="4,42 4.0,21.6 25.1,28.4 46.2,14.8 67.3,21.6 88.4,28.4 109.5,28.4 130.5,21.6 151.6,35.2 172.7,28.4 193.8,21.6 214.9,21.6 236.0,28.4 236,42"/><polyline class="spark-line" points="4.0,21.6 25.1,28.4 46.2,14.8 67.3,21.6 88.4,28.4 109.5,28.4 130.5,21.6 151.6,35.2 172.7,28.4 193.8,21.6 214.9,21.6 236.0,28.4"/><circle class="spark-dot" cx="236" cy="28.4" r="4"/></svg>
+                <div class="kpi-foot">Open QualityHold records · Updated 09:41</div>
+              </article>
+            </div>
+
+            <section class="card" aria-labelledby="board-h">
+              <div class="card-head"><h3 id="board-h">Production board</h3><a href="#desktop" class="small">Open board</a></div>
+              <div class="board">
+                <div class="col">
+                  <div class="col-head"><span>Planned</span><span class="count">2</span></div>
+                  <article class="bcard">
+                    <div class="bcard-id">ACS-2026-0014</div>
+                    <div class="bcard-title">Acapulco Soap · 17.6 kg</div>
+                    <div class="bcard-meta"><span>Line 1</span><span>Starts 19 Oct</span></div>
+                    <div class="bcard-foot"><div class="avatars"><span class="avatar avatar-sm" aria-hidden="true">RM</span><span class="avatar avatar-sm" aria-hidden="true">JD</span></div><span class="chip chip-sm" data-state="neutral"><svg class="ic" aria-hidden="true"><use href="#i-circle"/></svg>Planned</span></div>
+                  </article>
+                  <article class="bcard">
+                    <div class="bcard-id">GBS-2026-0005</div>
+                    <div class="bcard-title">Guava Bar Soap · 17.6 kg</div>
+                    <div class="bcard-meta"><span>Line 1</span><span>Starts 20 Oct</span></div>
+                    <div class="bcard-foot"><div class="avatars"><span class="avatar avatar-sm" aria-hidden="true">LP</span></div><span class="chip chip-sm" data-state="neutral"><svg class="ic" aria-hidden="true"><use href="#i-circle"/></svg>Planned</span></div>
+                  </article>
+                </div>
+                <div class="col">
+                  <div class="col-head"><span>In process</span><span class="count">2</span></div>
+                  <article class="bcard">
+                    <div class="bcard-id">ACS-2026-0012</div>
+                    <div class="bcard-title">Acapulco Soap · 17.6 kg</div>
+                    <div class="bcard-meta"><span>Line 1</span><span>Step 2 of 7 · Weighing</span></div>
+                    <div class="progress" role="img" aria-label="Step 2 of 7"><i style="width:28.6%"></i></div>
+                    <div class="bcard-foot"><div class="avatars"><span class="avatar avatar-sm" aria-hidden="true">RM</span><span class="avatar avatar-sm" aria-hidden="true">JD</span></div><span class="small muted">Started 08:15</span></div>
+                  </article>
+                  <article class="bcard">
+                    <div class="bcard-id">AHL-2026-0003</div>
+                    <div class="bcard-title">Aloe Hand Lotion · 40 L</div>
+                    <div class="bcard-meta"><span>Line 2</span><span>Step 4 of 9 · Emulsifying</span></div>
+                    <div class="progress" role="img" aria-label="Step 4 of 9"><i style="width:44.4%"></i></div>
+                    <div class="bcard-foot"><div class="avatars"><span class="avatar avatar-sm" aria-hidden="true">LP</span></div><span class="small muted">Started 07:40</span></div>
+                  </article>
+                </div>
+                <div class="col">
+                  <div class="col-head"><span>Awaiting QC</span><span class="count">2</span></div>
+                  <article class="bcard">
+                    <div class="bcard-id">ACS-2026-0011</div>
+                    <div class="bcard-title">Acapulco Soap · 17.6 kg</div>
+                    <div class="bcard-meta"><span>Line 1</span><span>Sampled 15 Oct</span></div>
+                    <div class="bcard-foot"><div class="avatars"><span class="avatar avatar-sm" aria-hidden="true">NQ</span></div><span class="chip chip-sm" data-state="approval-required"><svg class="ic" aria-hidden="true"><use href="#i-user-check"/></svg>Approval Required</span></div>
+                  </article>
+                  <article class="bcard">
+                    <div class="bcard-id">GBS-2026-0004</div>
+                    <div class="bcard-title">Guava Bar Soap · 17.6 kg</div>
+                    <div class="bcard-meta"><span>Line 1</span><span>Sampled 16 Oct</span></div>
+                    <div class="bcard-foot"><div class="avatars"><span class="avatar avatar-sm" aria-hidden="true">NQ</span></div><span class="chip chip-sm" data-state="quarantined"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>Quarantined</span></div>
+                  </article>
+                </div>
+                <div class="col">
+                  <div class="col-head"><span>Released</span><span class="count">2</span></div>
+                  <article class="bcard">
+                    <div class="bcard-id">ACS-2026-0010</div>
+                    <div class="bcard-title">Acapulco Soap · 17.6 kg</div>
+                    <div class="bcard-meta"><span>Line 1</span><span>Released 14 Oct</span></div>
+                    <div class="bcard-foot"><div class="avatars"><span class="avatar avatar-sm" aria-hidden="true">NQ</span></div><span class="chip chip-sm" data-state="released"><svg class="ic" aria-hidden="true"><use href="#i-check-circle"/></svg>Released</span></div>
+                  </article>
+                  <article class="bcard">
+                    <div class="bcard-id">AHL-2026-0002</div>
+                    <div class="bcard-title">Aloe Hand Lotion · 40 L</div>
+                    <div class="bcard-meta"><span>Line 2</span><span>Released 13 Oct</span></div>
+                    <div class="bcard-foot"><div class="avatars"><span class="avatar avatar-sm" aria-hidden="true">NQ</span></div><span class="chip chip-sm" data-state="released"><svg class="ic" aria-hidden="true"><use href="#i-check-circle"/></svg>Released</span></div>
+                  </article>
+                </div>
+              </div>
+            </section>
+
+            <div class="row-2">
+              <section class="card" aria-labelledby="exp-h">
+                <div class="card-head"><h3 id="exp-h">Near-expiry lots</h3><span class="small muted">Sorted by expiry · 30-day window · <a href="#desktop">Table view</a></span></div>
+                <div class="table-wrap">
+                  <table class="table">
+                    <thead><tr><th scope="col">Lot</th><th scope="col">Material</th><th scope="col">Expiry</th><th scope="col" class="num">Qty</th><th scope="col">Location</th><th scope="col">Status</th></tr></thead>
+                    <tbody>
+                      <tr><th scope="row" class="mono">RM-2026-0149</th><td>33.33% Lye Solution</td><td class="bad date">09 Oct 2026</td><td class="num">4.9 kg</td><td class="mono">WH1-H-01</td><td><span class="chip chip-sm" data-state="expired"><svg class="ic" aria-hidden="true"><use href="#i-calendar-x"/></svg>Expired</span></td></tr>
+                      <tr><th scope="row" class="mono">RM-2026-0158</th><td>Coconut Oil</td><td class="warn date">24 Oct 2026</td><td class="num">18.5 kg</td><td class="mono">WH1-A-03</td><td><span class="chip chip-sm" data-state="released"><svg class="ic" aria-hidden="true"><use href="#i-check-circle"/></svg>Released</span></td></tr>
+                      <tr><th scope="row" class="mono">RM-2026-0171</th><td>Acapulco Extract</td><td class="warn date">28 Oct 2026</td><td class="num">1.2 kg</td><td class="mono">WH1-Q-01</td><td><span class="chip chip-sm" data-state="quarantined"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>Quarantined</span></td></tr>
+                      <tr><th scope="row" class="mono">RM-2026-0163</th><td>6% Green in Oil</td><td class="date">02 Nov 2026</td><td class="num">0.6 kg</td><td class="mono">WH1-H-02</td><td><span class="chip chip-sm" data-state="qa-hold"><svg class="ic" aria-hidden="true"><use href="#i-pause-circle"/></svg>QA Hold</span></td></tr>
+                      <tr><th scope="row" class="mono">RM-2026-0140</th><td>Palm Oil</td><td class="date">05 Nov 2026</td><td class="num">42.0 kg</td><td class="mono">WH2-B-07</td><td><span class="chip chip-sm" data-state="released"><svg class="ic" aria-hidden="true"><use href="#i-check-circle"/></svg>Released</span></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="card" aria-labelledby="donut-h">
+                <div class="card-head"><h3 id="donut-h">Order fulfilment</h3></div>
+                <div class="donut-wrap">
+                  <svg class="donut" viewBox="0 0 160 160" role="img" aria-label="Order fulfilment this week: 54 orders, 38 on time, 5 late, 11 open">
+                    <circle class="donut-track" cx="80" cy="80" r="58"/>
+                    <g transform="rotate(-90 80 80)">
+                      <circle class="donut-seg" cx="80" cy="80" r="58" style="stroke:var(--viz-good)" stroke-dasharray="254.45 109.98" stroke-dashoffset="0"/>
+                      <circle class="donut-seg" cx="80" cy="80" r="58" style="stroke:var(--viz-bad)" stroke-dasharray="31.74 332.68" stroke-dashoffset="-256.45"/>
+                      <circle class="donut-seg" cx="80" cy="80" r="58" style="stroke:var(--viz-neutral)" stroke-dasharray="72.23 292.19" stroke-dashoffset="-290.19"/>
+                    </g>
+                    <text class="donut-centre" x="80" y="80" text-anchor="middle" dominant-baseline="central">54</text>
+                    <text class="donut-centre-lbl" x="80" y="104" text-anchor="middle">orders</text>
+                  </svg>
+                  <ul class="legend">
+                    <li><span class="sw" style="background:var(--viz-good)"></span><svg class="ic" aria-hidden="true"><use href="#i-check-circle"/></svg><span>On time</span><span class="val">38 · 70 %</span></li>
+                    <li><span class="sw" style="background:var(--viz-bad)"></span><svg class="ic" aria-hidden="true"><use href="#i-octagon-alert"/></svg><span>Late</span><span class="val">5 · 9 %</span></li>
+                    <li><span class="sw" style="background:var(--viz-neutral)"></span><svg class="ic" aria-hidden="true"><use href="#i-circle"/></svg><span>Open</span><span class="val">11 · 20 %</span></li>
+                  </ul>
+                  <div class="kpi-foot">Promised date vs shipped date · Updated 09:41 · <a href="#desktop">Table</a></div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">Below 1024 px the left navigation becomes a 72 px icon rail; on phones it becomes the bottom tab bar and a Menu drawer. The board becomes a snap carousel and the table becomes a card list (docs/ux-system.md sections 3 and 4).</p>
+  </section>
+
+  <!-- ===================================================================
+       5. Mobile frames: operator mode
+       =================================================================== -->
+  <section class="sec" id="mobile" aria-labelledby="mobile-h">
+    <div class="sec-head">
+      <h2 id="mobile-h">Phone: Operator mode</h2>
+      <p>360 × 720 frames. Verbs people use, one sticky primary action within thumb reach, 44 px targets or larger, no horizontal scroll. Risk states appear before any action is offered.</p>
+    </div>
+
+    <div class="phones">
+
+      <!-- Frame A: Operator home -->
+      <figure class="phone-fig">
+        <div class="phone" role="img" aria-label="Phone mockup: operator home">
+          <div class="ph-head">
+            <div class="ttl"><strong>Home</strong><span>Warehouse Operator</span></div>
+            <span class="chip chip-sm chip-plain"><svg class="ic" aria-hidden="true"><use href="#i-map-pin"/></svg>Site A · WH1</span>
+            <span class="sync-dot"><i aria-hidden="true"></i>Synced</span>
+          </div>
+          <div class="ph-main">
+            <div class="greet">
+              <div class="display">Good morning, Rhea</div>
+              <div class="small fg-2">Thursday 16 Oct 2026 · 6 tasks waiting</div>
+            </div>
+            <div class="tiles">
+              <button type="button" class="tile"><svg class="ic ic-24" aria-hidden="true"><use href="#i-inbox"/></svg><span><span class="tile-verb">Receive Materials</span><span class="tile-count">2 expected today</span></span></button>
+              <button type="button" class="tile tile-cta"><svg class="ic ic-24" aria-hidden="true"><use href="#i-scale"/></svg><span><span class="tile-verb">Weigh Batch</span><span class="tile-count">ACS-2026-0012 in process</span></span></button>
+              <button type="button" class="tile"><svg class="ic ic-24" aria-hidden="true"><use href="#i-box-move"/></svg><span><span class="tile-verb">Move Box</span><span class="tile-count">3 pending</span></span></button>
+              <button type="button" class="tile"><svg class="ic ic-24" aria-hidden="true"><use href="#i-package-check"/></svg><span><span class="tile-verb">Pack Order</span><span class="tile-count">2 to pack</span></span></button>
+              <button type="button" class="tile"><svg class="ic ic-24" aria-hidden="true"><use href="#i-truck"/></svg><span><span class="tile-verb">Dispatch Shipment</span><span class="tile-count">1 ready</span></span></button>
+              <button type="button" class="tile"><svg class="ic ic-24" aria-hidden="true"><use href="#i-clipboard-check"/></svg><span><span class="tile-verb">Count Stock</span><span class="tile-count">12 locations</span></span></button>
+            </div>
+            <div class="card card-sm">
+              <div class="caption" style="margin-bottom:6px">Continue where you left off</div>
+              <button type="button" class="list-row"><svg class="ic" aria-hidden="true" style="color:var(--primary-text)"><use href="#i-scale"/></svg><div><div class="t">Weigh Batch · ACS-2026-0012</div><div class="s">Step 2 of 7 · Ingredient 1 of 5</div></div><svg class="ic chev" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+            </div>
+            <div class="card card-sm">
+              <div class="caption" style="margin-bottom:6px">Needs your attention</div>
+              <button type="button" class="list-row"><div><div class="t">RM-2026-0171 · Acapulco Extract</div><div class="s">Inspection requested 09:12 · WH1-Q-01</div></div><span class="chip chip-sm" data-state="quarantined"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>Quarantined</span></button>
+              <button type="button" class="list-row"><div><div class="t">Move BX-0421 to WH1-A-03</div><div class="s">Saved on this device at 09:38</div></div><span class="chip chip-sm" data-state="sync-pending"><svg class="ic" aria-hidden="true"><use href="#i-cloud-upload"/></svg>Sync Pending</span></button>
+            </div>
+          </div>
+          <nav class="ph-tabs" aria-label="Primary">
+            <button type="button" class="tab active" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg>Home</button>
+            <button type="button" class="tab"><svg class="ic" aria-hidden="true"><use href="#i-scan-line"/></svg>Scan</button>
+            <button type="button" class="tab"><svg class="ic" aria-hidden="true"><use href="#i-list-checks"/></svg>Tasks<span class="badge" aria-hidden="true">6</span><span class="sr-only">, 6 open</span></button>
+            <button type="button" class="tab"><svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg>Alerts<span class="badge" aria-hidden="true">2</span><span class="sr-only">, 2 unread</span></button>
+            <button type="button" class="tab"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg>Menu</button>
+          </nav>
+        </div>
+        <figcaption>Operator home: six task tiles, the most urgent assigned task as the single dark tile, bottom tabs Home / Scan / Tasks / Alerts / Menu.</figcaption>
+      </figure>
+
+      <!-- Frame B: Scan result for a lot -->
+      <figure class="phone-fig">
+        <div class="phone" role="img" aria-label="Phone mockup: scan result for a quarantined lot">
+          <div class="ph-head">
+            <button type="button" class="icon-btn icon-btn-plain" aria-label="Back"><svg class="ic" aria-hidden="true"><use href="#i-arrow-left"/></svg></button>
+            <div class="ttl"><strong>Scan result</strong><span>Site A · WH1</span></div>
+            <span class="sync-dot"><i aria-hidden="true"></i>Synced</span>
+          </div>
+          <div class="ph-main">
+            <div class="card card-sm stack">
+              <div class="identity">
+                <span class="caption">Lot</span>
+                <div class="id">RM-2026-0171</div>
+                <div class="body-strong">Acapulco Extract · MAT-0043</div>
+                <div class="small fg-2">Laguna Botanicals (fictional) · lot LB-7712</div>
+              </div>
+              <div><span class="chip" data-state="quarantined"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>Quarantined<span class="sr-only">, blocked state</span></span></div>
+              <div class="kv">
+                <div><span class="caption">Expiry</span><div class="v">28 Oct 2026 · 12 days</div></div>
+                <div><span class="caption">Location</span><div class="v mono">WH1-Q-01</div><div class="small fg-2">Quarantine area</div></div>
+                <div><span class="caption">On hand</span><div class="v">1.2 kg</div></div>
+                <div><span class="caption">Available</span><div class="v">0 kg</div></div>
+              </div>
+            </div>
+            <div class="banner" data-state="quarantined" role="status">
+              <svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>
+              <div class="banner-body"><strong>Quarantined</strong><span>Issue, consume and ship are blocked until QA releases this lot.</span></div>
+            </div>
+            <div class="stack" style="gap:8px">
+              <div class="caption">Allowed actions</div>
+              <button type="button" class="btn btn-secondary btn-block"><svg class="ic" aria-hidden="true"><use href="#i-box-move"/></svg>Move within quarantine</button>
+              <button type="button" class="btn btn-secondary btn-block"><svg class="ic" aria-hidden="true"><use href="#i-printer"/></svg>Print label</button>
+            </div>
+            <div class="blocked">
+              <div class="caption">Blocked while quarantined</div>
+              <div class="blocked-row" aria-disabled="true"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg><span>Issue to production</span><em>Needs QA release</em></div>
+              <div class="blocked-row" aria-disabled="true"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg><span>Reserve for a batch</span><em>Needs QA release</em></div>
+              <div class="blocked-row" aria-disabled="true"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg><span>Ship</span><em>Needs QA release</em></div>
+            </div>
+            <div class="row" style="justify-content:space-between">
+              <button type="button" class="btn btn-ghost btn-sm"><svg class="ic ic-16" aria-hidden="true"><use href="#i-refresh"/></svg>Scan again</button>
+              <button type="button" class="btn btn-ghost btn-sm"><svg class="ic ic-16" aria-hidden="true"><use href="#i-flag"/></svg>Not what you expected?</button>
+            </div>
+          </div>
+          <div class="ph-action">
+            <button type="button" class="btn btn-cta btn-operator"><svg class="ic ic-24" aria-hidden="true"><use href="#i-flask"/></svg>Request inspection</button>
+          </div>
+          <nav class="ph-tabs" aria-label="Primary">
+            <button type="button" class="tab"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg>Home</button>
+            <button type="button" class="tab active" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-scan-line"/></svg>Scan</button>
+            <button type="button" class="tab"><svg class="ic" aria-hidden="true"><use href="#i-list-checks"/></svg>Tasks<span class="badge" aria-hidden="true">6</span></button>
+            <button type="button" class="tab"><svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg>Alerts<span class="badge" aria-hidden="true">2</span></button>
+            <button type="button" class="tab"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg>Menu</button>
+          </nav>
+        </div>
+        <figcaption>Scan result: identity, status, risk banner, then only the actions the server allows. Blocked actions are listed with the reason and are never tappable.</figcaption>
+      </figure>
+
+      <!-- Frame C: Weigh step -->
+      <figure class="phone-fig">
+        <div class="phone" role="img" aria-label="Phone mockup: weigh step for Coconut Oil">
+          <div class="ph-head">
+            <button type="button" class="icon-btn icon-btn-plain" aria-label="Back"><svg class="ic" aria-hidden="true"><use href="#i-arrow-left"/></svg></button>
+            <div class="ttl"><strong>Weigh Batch</strong><span>ACS-2026-0012 · Acapulco Soap</span></div>
+            <button type="button" class="icon-btn icon-btn-plain" aria-label="Work instruction for this step"><svg class="ic" aria-hidden="true"><use href="#i-help"/></svg></button>
+          </div>
+          <div class="ph-main">
+            <div class="stepper">
+              <div class="step-label"><span><strong>Step 2 of 7</strong> · Weighing</span><span>Ingredient 1 of 5</span></div>
+              <div class="progress" role="img" aria-label="Step 2 of 7"><i style="width:28.6%"></i></div>
+            </div>
+            <div class="card card-sm stack">
+              <div>
+                <div class="h3">Coconut Oil</div>
+                <div class="small fg-2">INCI Cocos Nucifera (Coconut) Oil · MAT-0012</div>
+              </div>
+              <div class="scan-ok" role="status">
+                <svg class="ic" aria-hidden="true"><use href="#i-check-circle"/></svg>
+                <div><span class="mono">RM-2026-0158</span>Lot scanned · FEFO pick · expires 24 Oct 2026</div>
+              </div>
+              <div class="kv">
+                <div><span class="caption">Target</span><div class="readout">3,723.2 g</div></div>
+                <div><span class="caption">Tolerance</span><div class="v">±0.5 % · 3,704.6 to 3,741.8 g</div></div>
+              </div>
+              <div class="small" role="status" style="display:flex;gap:6px;align-items:flex-start;color:var(--status-warning-fg)">
+                <svg class="ic ic-16" aria-hidden="true" style="color:var(--status-warning-icon);margin-top:1px"><use href="#i-alert-triangle"/></svg>
+                <span><strong>Placeholder tolerance.</strong> Needs process-owner approval before production use (A-PRD-18).</span>
+              </div>
+              <div class="field">
+                <label class="field-label" for="w-actual">Actual weight <span class="req">Required</span></label>
+                <div class="input input-lg"><input id="w-actual" type="text" inputmode="decimal" value="3,719.8" aria-describedby="w-actual-state"><span class="unit">g</span></div>
+                <div id="w-actual-state"><span class="chip" data-state="success"><svg class="ic" aria-hidden="true"><use href="#i-check-circle"/></svg>Within tolerance · −3.4 g (−0.09 %)</span></div>
+              </div>
+              <div class="small fg-2">Scale SC-01 · calibration due 30 Nov 2026</div>
+            </div>
+            <div class="stack" style="gap:8px">
+              <div class="sign"><span class="avatar" aria-hidden="true">RM</span><div>Rhea Mendoza<div class="s">Operator · signed in</div></div><svg class="ic" aria-hidden="true"><use href="#i-check-circle"/></svg></div>
+              <div class="sign"><span class="avatar" aria-hidden="true">JD</span><div>Jun Dela Cruz<div class="s">Checker · signed on this device 09:42</div></div><svg class="ic" aria-hidden="true"><use href="#i-check-circle"/></svg></div>
+            </div>
+          </div>
+          <div class="ph-action">
+            <button type="button" class="btn btn-cta btn-operator"><svg class="ic ic-24" aria-hidden="true"><use href="#i-check"/></svg>Confirm weight</button>
+          </div>
+        </div>
+        <figcaption>Weigh step: scan the lot, read the weight, confirm. Out of tolerance swaps the primary action for "Request exception"; a wrong lot blocks with the expected material shown.</figcaption>
+      </figure>
+
+    </div>
+  </section>
+
+  <!-- ===================================================================
+       6. Reference: what we adapt and what we change
+       =================================================================== -->
+  <section class="sec" id="reference" aria-labelledby="reference-h">
+    <div class="sec-head">
+      <h2 id="reference-h">What we adapt from the reference and what we change</h2>
+      <p>The reference is the Dribbble "Customer Journey CRM Dashboard" (docs/source/ui-inspiration.md). It is third-party work, used as a direction, not copied.</p>
+    </div>
+    <div class="compare">
+      <div class="card">
+        <div class="card-head"><h3>We adopt</h3><svg class="ic" aria-hidden="true"><use href="#i-check-circle"/></svg></div>
+        <ol>
+          <li>One page title, cards as the unit of layout, whitespace instead of dividers.</li>
+          <li>Card radius 16 to 20 px, hairline borders, elevation only on overlays and sticky actions.</li>
+          <li>The solid dark pill for the active navigation item, and the dark tile for the one strongest action.</li>
+          <li>The stage-board pattern for the Production board (batches by state) and the Order board.</li>
+          <li>Avatar rows with count badges for assignee load and approval queues.</li>
+          <li>Donut and sparkline KPIs with clear legends, each paired with a table that drills down.</li>
+          <li>Pastel-filled status chips with dark text and a leading icon.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>We change</h3><svg class="ic" aria-hidden="true"><use href="#i-swap"/></svg></div>
+        <ol>
+          <li>Botanical green primary instead of black; black (--cta) is reserved for the single most important action and the active pill.</li>
+          <li>Warm off-white surfaces instead of cool grey, plus a dark theme that keeps every chip at 7:1 or better.</li>
+          <li>The persistent left navigation with collapsible groups replaces the top-bar pill menu; the thin icon rail survives only as the tablet rail.</li>
+          <li>Operators get fewer, larger targets (44 px minimum, 52 to 56 px in operator mode) and card lists instead of wide tables on phones; owners and supervisors keep dense tables on desktop.</li>
+          <li>Risk states are unmistakable: icon + label + colour + border, and a striped banner wherever a state blocks the primary action. Never colour alone.</li>
+          <li>Nothing decorative that costs touch space at 360 px; connectors, floating avatars and ornamental rails are dropped on phones.</li>
+          <li>Every page carries loading, empty, error, success, permission-denied and offline/sync states, which the reference does not show.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var btn = document.querySelector('.theme-toggle');
+  var label = btn ? btn.querySelector('.theme-label') : null;
+  var iconUse = btn ? btn.querySelector('use') : null;
+  var order = ['system', 'light', 'dark'];
+  var key = 'bc-design-theme';
+
+  function current() { return root.getAttribute('data-theme') || 'system'; }
+
+  function paintSwatches() {
+    var cs = getComputedStyle(root);
+    var nodes = document.querySelectorAll('[data-token]');
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      var out = el.querySelector('.swatch-value');
+      if (!out) continue;
+      var v = cs.getPropertyValue(el.getAttribute('data-token')).trim();
+      out.textContent = v ? v.toUpperCase() : '';
+    }
+  }
+
+  function apply(mode) {
+    if (mode === 'system') { root.removeAttribute('data-theme'); } else { root.setAttribute('data-theme', mode); }
+    if (label) { label.textContent = 'Theme: ' + mode; }
+    if (iconUse) { iconUse.setAttribute('href', mode === 'dark' ? '#i-moon' : (mode === 'light' ? '#i-sun' : '#i-monitor')); }
+    try { localStorage.setItem(key, mode); } catch (e) { /* storage may be unavailable; ignore */ }
+    paintSwatches();
+  }
+
+  var saved = 'system';
+  try { saved = localStorage.getItem(key) || 'system'; } catch (e) { /* ignore */ }
+  if (order.indexOf(saved) === -1) { saved = 'system'; }
+  apply(saved);
+
+  if (btn) {
+    btn.addEventListener('click', function () {
+      var next = order[(order.indexOf(current()) + 1) % order.length];
+      apply(next);
+    });
+  }
+
+  if (window.matchMedia) {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    var onChange = function () { paintSwatches(); };
+    if (mq.addEventListener) { mq.addEventListener('change', onChange); } else if (mq.addListener) { mq.addListener(onChange); }
+  }
+})();
+</script>
