@@ -202,8 +202,11 @@ pre-commit (lint-staged), GitHub Actions CI (lint, typecheck, unit, integration,
 `/api/health` and readiness at `/api/ready`), `worker` (pg-boss consumer, same image,
 `pnpm start:worker`), managed PostgreSQL, and an S3-compatible bucket for files. Environments:
 development (local), staging, production, each with its own database and secrets. Migrations
-run as a pre-deploy command. Backups: Railway Postgres backups plus a scheduled logical dump
-to the bucket; restore is rehearsed before go-live (see `docs/deployment-railway.md`).
+run as the `web` service's pre-deploy command; the `worker` does not migrate and waits until
+the schema version is current before consuming jobs. Service configuration is expressed as
+Railway Infrastructure as Code (`.railway/railway.ts`), not the deprecated `railway.json`.
+Backups: Railway Postgres backups plus a scheduled encrypted logical dump to the bucket;
+restore is rehearsed before go-live (see `docs/deployment-railway.md`).
 
 ## ADR-015 pg-boss for background jobs (Phase 2)
 
@@ -214,8 +217,11 @@ keyed. Revisit only if queue throughput exceeds what Postgres comfortably serves
 ## ADR-016 PDF generation (Phase 3, proposed)
 
 **Decision (proposed).** Documents (BMR, dispensing sheet, labels, DR, pick list) are
-HTML/CSS templates rendered by headless Chromium in the worker. The same template drives
-on-screen preview and print. Template versions are stored; generated PDFs are stored in the
+rendered by code-defined HTML/CSS renderers in the application, configured by versioned JSON
+template definitions stored in `document_template_versions` (section selection, labels,
+options, page settings). Free-form HTML is never stored in or executed from the database
+(see `docs/reports-and-templates.md` A-RPT-01). Rendering happens in headless Chromium in the
+worker; the same renderer drives on-screen preview and print. Generated PDFs are stored in the
 bucket with template version, source record revision, generator and reprint reason.
 Alternative kept open: `@react-pdf/renderer` if Chromium memory on Railway proves
 problematic. Final call at the start of Phase 3.

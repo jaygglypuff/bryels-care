@@ -6,7 +6,7 @@ identity and sites, master data, inventory and scanning, procurement, production
 Manufacturing Records, quality and traceability, packaging and dispatch, sales/CRM, HR and
 attendance, operational finance, analytics, and a future customer portal.
 
-**Status: Phase 0 (discovery and architecture) delivered, awaiting Gate 0 approval.**
+**Status: Phase 0 (discovery and architecture) delivered; awaiting Gate 0 approval.**
 No product code exists yet by design; the brief requires architecture, data model and
 permission design to be reviewed before sensitive modules are implemented.
 
@@ -23,12 +23,14 @@ permission design to be reviewed before sensitive modules are implemented.
 
 | Document | Purpose |
 |---|---|
+| `docs/gate-0-report.md` | The Phase 0 report for the owner: the eight items the brief requires and the decisions requested at Gate 0 |
 | `docs/PRD.md` | Vision, actors, domains, MVP, phased roadmap, facts vs assumptions, discovery questions, glossary |
 | `docs/process-maps.md` | As-is and to-be workflows for the eight core flows, exception paths, approval gates |
 | `docs/architecture.md` | Component map, module boundaries, API conventions, security boundaries, jobs, offline |
 | `docs/decision-log.md` | Architecture decision records with alternatives and status |
 | `docs/data-model.md` | ERD, entities, keys, indexes, constraints, ledger invariants, migration strategy |
 | `docs/permissions-matrix.md` | Role × action × site-scope matrix and sensitive-field rules |
+| `docs/security.md` | Threat model, session policy, application controls, audit catalogue, retention |
 | `docs/ux-system.md` | Navigation, responsive behaviour, design tokens, component rules, states, accessibility |
 | `docs/design/style-tile.html` | Static visual direction: tokens, shell, owner dashboard, operator scan screen |
 | `docs/offline-sync.md` | Cached data, command queue, idempotency, conflicts, retry policy |

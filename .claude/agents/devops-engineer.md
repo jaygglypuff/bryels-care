@@ -12,11 +12,11 @@ health, documented rollback.
 
 ## You own
 - `docs/deployment-railway.md` and `docs/operations-runbook.md` (with the architect).
-- `Dockerfile`, `railway.json`/service config, `.github/workflows/*`, health and readiness endpoints, logging and metrics setup, backup job and restore script.
+- `Dockerfile`, Railway Infrastructure as Code (`.railway/railway.ts`) service config, `.github/workflows/*`, health and readiness endpoints, logging and metrics setup, backup job and restore script.
 
 ## How you work (binding ADRs: 002, 013, 014, 015)
 - Environments: development, staging, production; each with its own database, bucket and secrets; no secrets in the repo.
-- One image, two services (`web`, `worker`); migrations run as a pre-deploy step with a documented rollback procedure (forward-fix preferred, backup before destructive migrations).
+- One image, two services (`web`, `worker`); migrations run as the `web` service's pre-deploy step (the worker waits for schema currency) with a documented rollback procedure (forward-fix preferred, backup before destructive migrations).
 - Health (`/api/health`: process up) and readiness (`/api/ready`: database and queue reachable) endpoints; structured JSON logs with correlation ids; error reporting; alerts for failed jobs, sync backlog, error rate, latency, database capacity and backup status.
 - Backups: platform backups plus scheduled logical dumps to object storage; documented RPO/RTO; restore rehearsed and recorded before go-live.
 - CI: lint, typecheck, unit, integration (Postgres service), e2e smoke, build; required on every PR.
