@@ -230,8 +230,12 @@ problematic. Final call at the start of Phase 3.
 
 **Decision.** Default label symbology is QR Code (dense, phone-camera friendly, survives
 curved containers); Code 128 is available per label template for linear scanners. Encoded
-payload is a short typed identifier (`BC:LOT:<number>`, `BC:BOX:<id>`, `BC:LOC:<code>`), never a
-URL with internal data. Scanning uses the browser `BarcodeDetector` API where available and
+payload is a short typed identifier, never a URL with internal data. Payload types:
+`BC:LOT:<lot-number>`, `BC:BOX:<box-id>`, `BC:LOC:<location-code>`, `BC:MAT:<material-code>`,
+`BC:SKU:<sku-code>`, `BC:EQP:<equipment-code>` (equipment and scales; accepted 2026-10-16 from
+process-maps A-PROC-42) and `BC:DOC:<document-number>` (printed documents; see
+`docs/security.md`). Grammar and resolution rules are in `docs/data-model.md` section 9.
+EAN-13 for consumer units is a later-phase option, not a Phase 2 symbology. Scanning uses the browser `BarcodeDetector` API where available and
 ZXing as fallback; keyboard-wedge scanners are supported by a focused input listener.
 
 ## ADR-018 Offline strategy (Phase 7, groundwork earlier)
