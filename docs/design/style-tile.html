@@ -325,7 +325,7 @@ a:hover { text-decoration: underline; }
 .banner[data-state="warning"] { background: var(--status-warning-bg); color: var(--status-warning-fg); border-color: var(--status-warning-border); border-left-color: var(--status-warning-icon); }
 .banner[data-state="info"] { background: var(--status-info-bg); color: var(--status-info-fg); border-color: var(--status-info-border); border-left-color: var(--status-info-icon); }
 .banner .btn-secondary { background: var(--surface); color: var(--fg); }
-@media (max-width: 480px) { .banner { flex-wrap: wrap; } .banner-action { margin-left: 32px; } }
+@media (max-width: 480px) { .banner { flex-wrap: wrap; } .banner-body { flex: 1 1 100%; } .banner-action { margin-left: 32px; } }
 
 /* KPI card and charts (docs/ux-system.md 5.12) */
 .kpi { display: grid; gap: 8px; align-content: start; }
