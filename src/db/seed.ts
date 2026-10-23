@@ -61,10 +61,12 @@ async function main() {
     [nfd.id, whN.id, "FG-01", "Finished goods bay", "storage"],
     [nfd.id, whN.id, "SHP", "Dispatch bay", "shipping"],
     [nfd.id, whN.id, "REJ", "Rejected goods cage", "rejected"],
+    [nfd.id, whN.id, "HLD-01", "QA hold cage", "hold"],
     [rvs.id, whR.id, "RCV", "Receiving dock", "receiving"],
     [rvs.id, whR.id, "QUA-01", "Quarantine cage", "quarantine"],
     [rvs.id, whR.id, "FG-01", "Finished goods racks", "storage"],
     [rvs.id, whR.id, "SHP", "Dispatch bay", "shipping"],
+    [rvs.id, whR.id, "REJ", "Rejected goods cage", "rejected"],
   ];
   const locs = await db
     .insert(s.locations)
