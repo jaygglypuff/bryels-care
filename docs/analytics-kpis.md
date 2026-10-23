@@ -374,7 +374,7 @@ WHERE t.site_id = ANY($site_ids) AND t.to_state = 'confirmed' AND s.first_dispat
 | KPI-PRO-04 | Price variance | (PO line `unit_amount` − `supplier_materials.unit_price`) / `unit_price`, weighted by qty (supplier-price permission) | `purchase_orders.approved_at` | Sup, M | `purchase_order_lines`, `supplier_materials` | mv15 | `/procurement/orders/{id}` | A | 6 |
 | KPI-PRO-05 | Open POs; overdue expected receipts | PO lines with `qty_received_base < qty_base` on orders in (sent, partially_received); overdue when `expected_date` < today | as-of | S, Sup, M | `purchase_order_lines`, `purchase_orders` | live | `/procurement/expected-receipts?overdue=1` | A | 6 |
 | KPI-PRO-06 | Incoming rejection rate per supplier | incoming inspections `outcome = 'fail'` / reviewed incoming inspections, joined to the receipt line's supplier | `reviewed_at` | Sup, M | `inspections`, `goods_receipt_lines`, `goods_receipts` | mv15 | `/quality/inspections?kind=incoming&supplier=` | A | 3 |
-| KPI-PRO-07 | Reorder suggestions reviewed | suggestions accepted / suggestions produced in period; stockouts that occurred on items with an unactioned suggestion | suggestion `created_at` | S, M | `reorder_suggestions` (pending, 8.3) | night | `/procurement/reorder` | A | 6 |
+| KPI-PRO-07 | Reorder suggestions reviewed | suggestions accepted / suggestions produced in period; stockouts that occurred on items with an unactioned suggestion | suggestion `created_at` | S, M | `reorder_suggestions` (`docs/data-model.md` §3.4; written by job `procurement.reorder_suggest`) | night | `/procurement/reorder` | A | 6 |
 
 ```sql
 -- R-PRO-01
@@ -775,7 +775,7 @@ defined there and this document reads them as sources; "pending" rows are accept
 | `equipment_uses.exception_approved_by`, `deviation_id` | `docs/process-maps.md` W13-04 names `EquipmentUse.exception`; KPI-OPS-15 | 3.5 `equipment_uses` | applied |
 | `shift_assignments.production_line_id` | KPI-OPS-11 labour coverage per line | 3.8 `shift_assignments` | applied |
 | `packs` verification outcome | W08 "pack verification failures" KPI | 3.7 `packs.verification_failure_count` (projection) + `pack_verification_scans` | applied; KPI to be catalogued in 2.5 in the Phase 3 revision |
-| `reorder_suggestions` | KPI-PRO-07; brief module 4 | 13.7 | pending |
+| `reorder_suggestions` | KPI-PRO-07; brief module 4 | 3.4 `reorder_suggestions` (P6, `public`; job `procurement.reorder_suggest`) | applied |
 | `dispositions.qty_base_at_decision` | rejected quantity per disposition (KPI-QUA-05) without reconstructing balances | 3.6 `dispositions` | applied |
 | `stock_movements.unit_cost_amount` at posting | period valuation and count-variance value that ties to the ledger (KPI-INV-08, INV-12 over time) | 3.3 `stock_movements` (A-DM-34) | applied |
 | `sync_commands.replayed_at` | KPI-INV-15 (Phase 7) | 11.2 `sync_commands` | applied |

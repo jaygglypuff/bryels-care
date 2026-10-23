@@ -103,23 +103,23 @@ minimum the last two years; QA may extend (Q-QA-09).
 
 ```mermaid
 flowchart TD
-  L0[0 Configuration: sites, warehouses, locations, lines, equipment, UOMs, reason codes, numbering rules, settings] --> L1[1 Users, roles, site assignments]
-  L0 --> L2[2 Materials, UOM conversions]
-  L0 --> L3[3 Products, SKUs, packaging config]
-  L2 --> L4[4 Suppliers, approved materials, supplier prices]
-  L3 --> L5[5 Customers, addresses, contacts, requirements, price lists]
-  L2 --> L6[6 Formulas, routings, instructions: entered and approved]
+  L0["0 Configuration: sites, warehouses, locations, lines, equipment, UOMs, reason codes, numbering rules, settings"] --> L1["1 Users, roles, site assignments"]
+  L0 --> L2["2 Materials, UOM conversions"]
+  L0 --> L3["3 Products, SKUs, packaging config"]
+  L2 --> L4["4 Suppliers, approved materials, supplier prices"]
+  L3 --> L5["5 Customers, addresses, contacts, requirements, price lists"]
+  L2 --> L6["6 Formulas, routings, instructions: entered and approved"]
   L3 --> L6
-  L3 --> L7[7 Legacy documents: BMR scans indexed]
-  L2 --> L8[8 Opening stock: lots, containers, receipt movements]
+  L3 --> L7["7 Legacy documents: BMR scans indexed"]
+  L2 --> L8["8 Opening stock: lots, containers, receipt movements"]
   L3 --> L8
   L4 --> L8
   L7 --> L8
-  L8 --> L9[9 Labels printed and verified by scan]
-  L8 --> L10[10 QA opening disposition]
-  L10 --> L11[11 Open sales orders, then open POs and AR/AP if Phase 6]
-  L1 --> L12[12 Employees and clock ids, Phase 5 only]
-  L11 --> L13[13 Acceptance checks MC-01..MC-16, sign-offs, go-live]
+  L8 --> L9["9 Labels printed and verified by scan"]
+  L8 --> L10["10 QA opening disposition"]
+  L10 --> L11["11 Open sales orders, then open POs and AR/AP if Phase 6"]
+  L1 --> L12["12 Employees and clock ids, Phase 5 only"]
+  L11 --> L13["13 Acceptance checks MC-01..MC-16, sign-offs, go-live"]
   L9 --> L13
   L12 --> L13
 ```
@@ -276,7 +276,7 @@ story: `docs/backlog.md`, platform epic, Phase 2 Should.
 4. **Encoding.** A clerk types the sheets into the `opening_stock` template; a second person checks 100 % of rows against
    the sheets before upload (P5).
 5. **Load and label.** After posting, the label batch prints one label per container (`LabelJob`); the tagging team
-   affixes labels and scans each on the verification screen, which stamps `containers.label_verified_at/label_verified_by` (columns requested in §14; `containers.status` is unchanged) and lists the rest.
+   affixes labels and scans each on the verification screen, which stamps `containers.verified_at`, `verified_by` and `verification_scan_payload` (`docs/data-model.md` §3.3; `containers.status` is unchanged) and lists the rest.
    Target: 100 % of lots labelled, ≥ 99 % of containers verified before go-live (MC-06).
 6. **Unknown items.** Items that cannot be identified are counted into the hold location as `UNKNOWN-nn`, photographed,
    and resolved by the site manager and QA after go-live (W03 exception "item found with no label").
@@ -298,7 +298,7 @@ Checks are run by the principal-architect and the qa-test-engineer; evidence is 
 | MC-03 | Quantity reconciliation | Per material and SKU, Σ `on_hand_base` of opening lots = Σ count-sheet quantities in base unit, exact to 6 decimals |
 | MC-04 | Ledger and projection | `inventory.reconcile` reports zero differences after load (`docs/data-model.md` §5.6) |
 | MC-05 | Cross-check to spreadsheets | Variance report per item vs the frozen S-01 sheets; every variance above the site threshold has a reason code and the site manager's sign-off (A-MIG-02) |
-| MC-06 | Labels | 100 % of opening lots have a `LabelJob`; ≥ 99 % of containers have `label_verified_at` set by scan (§14); the remainder listed with location |
+| MC-06 | Labels | 100 % of opening lots have a `LabelJob`; ≥ 99 % of containers have `containers.verified_at` set by scan (§10 step 5); the remainder listed with location |
 | MC-07 | Quality status | No opening lot without a `Disposition` row from the QA bulk disposition; lots past expiry are `expired`; `on_hold` lots carry a reason |
 | MC-08 | FEFO | For 10 sampled materials with several lots, the allocation recommendation returns the earliest-expiry released lot (A-PRD-16) |
 | MC-09 | Uniqueness | No duplicate codes, lot numbers, container numbers or legacy numbers within an entity |
@@ -321,7 +321,7 @@ Checks are run by the principal-architect and the qa-test-engineer; evidence is 
 | 3 | QA confirmed the opening-status rules (§7 row 7.9, A-MIG-06) and is available on T0 for the bulk disposition | QA sign-off |
 | 4 | Location labels affixed and scan-verified; hardware tested per site: scanners, label and A4 printers, devices signed in (R-39) | verification report, device checklist |
 | 5 | Users invited and signed in once; MFA enrolled for privileged roles | identity report |
-| 6 | Pre-load backup procedure and restore point agreed (`docs/deployment-railway.md`); hypercare roster and support contact named (R-47) | devops sign-off, roster |
+| 6 | Pre-load restore point and cutover maintenance procedure agreed (`docs/operations-runbook.md` §17a.2, rehearsed at R2 as MC-14); hypercare roster and support contact named (R-47) | devops sign-off, roster |
 | 7 | Cutover log forms printed; freeze communicated to customers and suppliers whose deliveries are affected | communication record |
 | 8 | Owner go decision | signed checklist |
 
@@ -343,21 +343,23 @@ complete; the clerk encodes and a second checker verifies the file (§10 step 4)
 
 ```mermaid
 flowchart LR
-  A[Pre-load backup + restore point] --> B[Delta master data import]
-  B --> C[Opening stock import: validate]
-  C --> D{Rejects or holds?}
-  D -- yes --> E[Custodian fixes file or accepts hold]
+  A["Read-only mode on, pre-load backup + restore point<br/>(runbook 17a.2)"] --> B["Delta master data import"]
+  B --> C["Opening stock import: validate"]
+  C --> D{"Rejects or holds?"}
+  D -- yes --> E["Custodian fixes file or accepts hold"]
   E --> C
-  D -- no --> F[Post opening receipts]
-  F --> G[Print labels, affix, verify scan]
-  F --> H[QA bulk disposition]
-  G --> I[Open sales orders import, submit, confirm]
+  D -- no --> F["Post opening receipts"]
+  F --> G["Print labels, affix, verify scan"]
+  F --> H["QA bulk disposition"]
+  G --> I["Open sales orders import, submit, confirm"]
   H --> I
-  I --> J[Acceptance checks MC-01..MC-16]
+  I --> J["Acceptance checks MC-01..MC-16"]
 ```
 
 Loads run through the wizard or the §9.4 loader with `MIGRATION_WINDOW_OPEN=true`; the devops-engineer closes the window
-as soon as MC-16 passes.
+as soon as MC-16 passes. The pre-load backup and restore point, the application read-only maintenance mode for the load
+window (settings key `platform.maintenance.read_only`, A-DEP-21, with a role allow-list for the cutover team) and the
+opening and closing of the window follow `docs/operations-runbook.md` §17a.2, the single operator procedure.
 
 ### 12.5 Verify and go-live (T0, evening)
 
@@ -383,8 +385,8 @@ as soon as MC-16 passes.
 | Decision point | Trigger | Action | Data handling |
 |---|---|---|---|
 | Before posting opening stock | Delta master-data import fails MC-01/02/09/10 and cannot be fixed within 2 hours | Stop; keep the system in its configured state; re-plan T0 | Nothing to reverse; master data loaded at T-14 was signed and stays |
-| After posting, before go-live declaration | Any MC check failing without an approved fix inside the window (MC-13) | Declare rollback; restore the pre-load backup (database and bucket prefix) on production; verify the restored ledger reconciles; reopen spreadsheets for editing (version noted); re-plan within 7 days | Restore is the clean path because no live transactions exist yet; the attempt's files and error reports are kept |
-| After go-live, first 24 hours | A defect blocks posting at a site, or opening quantities are wrong for a whole zone | The devops-engineer sets `MAINTENANCE_MODE=1` on `web` (`docs/deployment-railway.md` §11: 503 for everything except `/api/health`) for the duration of the fix; fix forward: `platform.import_job.void` reverses the affected opening receipts and a corrected file is loaded; live movements since go-live are kept | No restore (it would lose live postings); reversals keep the trail |
+| After posting, before go-live declaration | Any MC check failing without an approved fix inside the window (MC-13) | Declare rollback; restore the pre-load backup (database and bucket prefix) on production per `docs/operations-runbook.md` §17a.2 step 5 (`MAINTENANCE_MODE=1` on `web` for the restore only; read-only maintenance mode stays on until the new T0); verify the restored ledger reconciles; reopen spreadsheets for editing (version noted); re-plan within 7 days | Restore is the clean path because no live transactions exist yet; the attempt's files and error reports are kept |
+| After go-live, first 24 hours | A defect blocks posting at a site, or opening quantities are wrong for a whole zone | `system_admin` switches on the application read-only maintenance mode (`platform.maintenance.read_only`, allow-list limited to the fix team; `docs/operations-runbook.md` §17a.2) for the duration of the fix; `MAINTENANCE_MODE=1` (full 503) is not used because no restore is performed; fix forward: `platform.import_job.void` reverses the affected opening receipts and a corrected file is loaded; live movements since go-live are kept | No restore (it would lose live postings); reversals keep the trail |
 | After 24 hours | Any data issue | Normal corrections: reversal plus replacement with reason (ADR-006), re-count through W03, audited master-data edits | No rollback |
 
 The Owner/Director is told of a rollback decision within 30 minutes; sites return to the frozen spreadsheets and paper
@@ -397,11 +399,11 @@ cutover log until the new T0. Rolling back on a met trigger is not a failure; go
 | `legacy_number text` (nullable, indexed, unique per organization and entity where the source guarantees uniqueness) on materials, products, skus, suppliers, customers, inventory_lots, sales_orders, purchase_orders, employees; `material_aliases(material_id, alias, source)` | `docs/data-model.md` §3.2, §3.3, §9.6 | database-architect | Applied (`docs/data-model.md` §9.6, §14.3; also on goods_receipts, delivery_receipts, invoices, batches) |
 | `legacy_documents` table: `document_number`, `legacy_number`, `legacy_kind` (bmr, dr, invoice, test_record, other), `product_id`, `formula_number`, batch size qty set, `start_date`, `end_date`, `expiry_date`, `disposition`, `qa_name`, `remarks`, `file_attachment_id`, `std +site?` | `docs/data-model.md` §3.10 | database-architect | Applied (`docs/data-model.md` §3.10, rule `LDOC` §9.2, A-DM-09) |
 | `goods_receipts.receipt_kind` with `opening_balance` allowing a null supplier; reason codes `opening_balance`, `expiry_unknown`, `import_voided`, `legacy_release`; `reason_codes.applies_to` extended with `receipt` and `disposition`; `import_mappings.import_kind` extended with the (new) kinds of §9.2 | `docs/data-model.md` §3.2 to §3.4, §3.10 | database-architect | Applied (`docs/data-model.md` §3.2 `reason_codes`, §3.4 `goods_receipts`, §3.10 `import_mappings`, §14.3) |
-| `goods_receipt_lines.count_sheet_ref text` (nullable) so the opening lot keeps its count-sheet reference without using `legacy_number` (§6); `containers.label_verified_at ts` and `containers.label_verified_by uuid → users` (nullable, set only by the verification scan; `containers.status` unchanged) for §10 step 5 and MC-06 | `docs/data-model.md` §3.3, §3.4 | database-architect | Requested |
-| Bulk disposition screen for `qa_qc` (filter lots, one disposition with reason, re-authentication); label verification scan screen (stamps `label_verified_at/by`, remaining list); command-line loader and `MIGRATION_WINDOW_OPEN` guard (§9.4) | `docs/backlog.md` E-2-07 (US-2-23 to US-2-26), conditional on Q-MIG-13 | product-manager with quality-regulatory-specialist, frontend-engineer, backend-engineer, devops-engineer | Added (`docs/backlog.md` E-2-07); US-2-25 AC2 still says the void sets lots `rejected` and must follow §9.3 |
-| Pre-load backup and restore point procedure; cutover maintenance mode | `docs/deployment-railway.md`, `docs/operations-runbook.md` | devops-engineer | Partly in place: `MAINTENANCE_MODE` exists (`docs/deployment-railway.md` §11, runbook restore procedure); the pre-load backup and restore point as a named cutover step is still to be written |
-| Rehearsal and acceptance checks as test procedures | `docs/testing.md` | qa-test-engineer | Not yet written: `docs/testing.md` lists only "migration rehearsal" under Phase 9; MC-01 to MC-16 are not test procedures there |
-| Opening-balance goods receipt and legacy document shown on the stock card and lot page | `docs/reports-and-templates.md` | warehouse-procurement-specialist | Not yet written (stock card §9 does not yet mention the opening receipt or the legacy document link; backlog US-2-26 covers the lot page) |
+| `goods_receipt_lines.count_sheet_ref text` (nullable) so the opening lot keeps its count-sheet reference without using `legacy_number` (§6); `containers.verified_at ts`, `containers.verified_by uuid → users` and `containers.verification_scan_payload text` (nullable, all three or none, set only by the verification scan; `containers.status` unchanged) for §10 step 5 and MC-06 | `docs/data-model.md` §3.3, §3.4 | database-architect | Applied (`docs/data-model.md` §3.3 `containers`, §3.4 `goods_receipt_lines` with `counted_by`/`checked_by`, §14.3) |
+| Bulk disposition screen for `qa_qc` (filter lots, one disposition with reason, re-authentication); label verification scan screen (stamps `containers.verified_at/verified_by`, remaining list); command-line loader and `MIGRATION_WINDOW_OPEN` guard (§9.4) | `docs/backlog.md` E-2-07 (US-2-23 to US-2-26), conditional on Q-MIG-13 | product-manager with quality-regulatory-specialist, frontend-engineer, backend-engineer, devops-engineer | Added (`docs/backlog.md` E-2-07); US-2-25 AC2 still says the void sets lots `rejected` and must follow §9.3 |
+| Pre-load backup and restore point procedure; cutover maintenance mode | `docs/deployment-railway.md`, `docs/operations-runbook.md` | devops-engineer | Applied (`docs/operations-runbook.md` §17a.2: restore point, read-only maintenance mode `platform.maintenance.read_only` for the load window, `MAINTENANCE_MODE=1` for restores only; `docs/deployment-railway.md` §9.1 points to it) |
+| Rehearsal and acceptance checks as test procedures | `docs/testing.md` | qa-test-engineer | Applied (`docs/testing.md` §9.16, MC-01 to MC-16) |
+| Opening-balance goods receipt and legacy document shown on the stock card and lot page | `docs/reports-and-templates.md` | warehouse-procurement-specialist | Applied (`docs/reports-and-templates.md` §9 stock card row: opening receipt line and `legacy_documents` link; backlog US-2-26 covers the lot page) |
 
 ## 15. Assumptions (A-MIG-nn)
 

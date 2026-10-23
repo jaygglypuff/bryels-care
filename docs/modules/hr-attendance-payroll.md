@@ -618,7 +618,7 @@ stateDiagram-v2
 | `EmployeePayComponentAssignment` (`employee_pay_component_assignments`) | `employee_id`, `pay_component_id`, `amount` or `percent`, `effective_from/to`, `remaining_balance_amount` (loans), `reference`, `approved_by` | recurring allowances and deductions; a loan is a fixed-amount deduction with balance tracking, nothing more |
 | `payroll_periods`, `payroll_lines`, `payslips`, `payroll_approvals`, `payroll_period_state_transitions` (exist) | see `docs/data-model.md` §3.8 | `payroll_lines.rule_reference` = `component code @ rule-set version @ table version` so every amount is explainable |
 
-### 8.4 Computation run (worker job, one transaction per employee, idempotent per run)
+### 8.4 Computation run (worker job `hr.payroll.compute` in `docs/architecture.md` §8, one transaction per employee, idempotent per run)
 
 1. Build the employee list in scope at lock (status `active`/`on_leave`, site in scope) and
    resolve `EmployeeCompensation`; missing → employee listed with `excluded_reason` required
@@ -723,9 +723,8 @@ record outside scope is a 404.
 
 ### 9.3 Audit events used (`module.entity.event` per `docs/data-model.md` §8.1; additions marked)
 
-Names are the three-segment form the `audit_events.action` CHECK accepts; the two-segment
-names of `docs/security.md` §5 are re-keyed by its owner and every name is registered in
-`src/lib/audit.ts`. Existing: `hr.employee.created/updated`,
+Names are the three-segment form the `audit_events.action` CHECK accepts; `docs/security.md`
+§5 uses the same names and every name is registered in `src/lib/audit.ts`. Existing: `hr.employee.created/updated`,
 `hr.employee.personal_data_viewed/personal_data_changed`,
 `hr.attendance_import.uploaded/approved/posted/reversed`, `hr.attendance_event.corrected`,
 `hr.attendance_event.correction_approved`, `hr.leave_request.approved`,
@@ -826,10 +825,10 @@ provenance rules.
 
 | Kind | Item | Owner | Reason |
 |---|---|---|---|
-| Permission | `hr.overtime.view`, `hr.overtime.create`, `hr.overtime.void` (N/S, P6) — accepted by the architect, added to `docs/permissions-matrix.md` §2.9 alongside `hr.overtime.approve` | security-engineer | §6.2 pre-approval requests |
-| Permission naming | `docs/process-maps.md` W10 uses `hr.attendance_import.edit`, `hr.attendance_correction.create/approve`; the catalogue names are `hr.attendance_exception.edit`, `hr.attendance_event.edit/approve` | hr-payroll-specialist (process-maps edit), security-engineer | consistency |
+| Permission (applied) | `hr.overtime.view`, `hr.overtime.create`, `hr.overtime.void` (N/S, P6) are in `docs/permissions-matrix.md` §2.9 alongside `hr.overtime.approve` | security-engineer | §6.2 pre-approval requests |
+| Permission naming (applied) | `docs/process-maps.md` W10-04 and W10-07 use the catalogue names `hr.attendance_exception.edit` and `hr.attendance_event.edit/approve` | hr-payroll-specialist (process-maps edit), security-engineer | consistency |
 | Entities | `EmployeeContact`, `EmployeeTimeClockAlias`, `Skill`, `EmployeeSkill`, `ShiftPattern`, `ShiftBreakWindow`, `LeaveType`, `LeaveBalance`, `AttendanceDaySummary` (+ classes), `PayComponent`, `PayrollRuleSet`/`PayrollRuleValue`, `StatutoryTable`/`StatutoryTableBracket`, `EmployeeCompensation`, `EmployeePayComponentAssignment`, `PayrollRun`, `ExportLayout`, `attendance_import_state_transitions` (`OvertimeRequest` already exists as `overtime_requests`) | database-architect, product-manager (glossary) | §2–§10 |
 | Columns / enum values (still pending; import/row/exception enum values, `attendance_events.voided_*`, `payroll_periods.period_kind/payment_confirmed_at/payment_reference` and `payroll_lines.corrects_payroll_line_id` are already in `docs/data-model.md` §3.8) | `attendance_imports.is_historical`, `rerun_of_import_id`, counters `rows_out_of_sequence`, `rows_site_mismatch`, `rows_inactive_employee`; `attendance_import_rows.direction_inferred`; proposal columns on `attendance_exceptions` (`proposed_occurred_at`, `proposed_event_kind`, `requested_by`, `request_reason`, `evidence_attachment_id`); `shift_assignments.status`, `rest_weekdays`, `pattern_code`; `shifts.window_before_minutes/window_after_minutes/is_default_for_site` and break windows; rule-set `validated_by/at/validation_note`; `payroll_periods.payroll_rule_set_id` (arrives with `payroll_rule_sets`); `payroll_lines.superseded_by_run_id` | database-architect | §3, §4, §5, §8 |
-| Audit events | listed in §9.3 as additions; the two-segment names in `docs/security.md` §5 (`hr.*`, `documents.generated/downloaded`, `platform.export_created`, `platform.import_posted`) re-keyed to the `module.entity.event` names of §9.3 | security-engineer | §9.3 |
+| Audit events (applied) | `docs/security.md` §5 now uses the three-segment `module.entity.event` names of §9.3 (`hr.attendance_import.uploaded`, `hr.attendance_rule_set.*`, `hr.payroll_rule_set.*`, `documents.generated_document.*`, `platform.export.created`, `platform.import_job.posted`) | security-engineer | §9.3 |
 | Settings keys | `hr.employee.auto_deactivate_user_on_separation`, `hr.employee.on_leave_threshold_days`, `hr.employee.government_id_types`, `hr.import.identifier_grace_days`, `hr.import.max_future_minutes`, `hr.import.max_age_days`, `hr.import.require_second_reviewer`, `hr.calendar.holiday_kinds`, `hr.payroll.computation_enabled`, `hr.payroll.qualified_reviewer_user_ids`, `platform.imports.require_approval` | backend-engineer (`src/lib/settings.ts`) | §2, §4, §8 |
 | Glossary terms | mapping profile, punch, pairing, work date, minute class, time summary, rule set version, qualified reviewer, parallel run, supplementary period, payment confirmation | product-manager | `docs/PRD.md` §12 |

@@ -201,7 +201,7 @@ the history stays traceable; only the pending rows still require data-model work
 |---|---|---|---|
 | `invoices`, `credit_notes` | states `submitted`, `approved` | submit/approve are explicit transitions, not inferred from `approval` columns | applied (§3.9, §6.10) |
 | `supplier_bills` | states `submitted`, `posted`, `disputed`; `bill_kind in ('bill','credit','charge')`; `replaces_document_id` | SoD needs approve ≠ post; supplier credits (W04-09) and landed-cost charge bills need a kind | applied (§3.9) |
-| `payment_records` | states `draft`, `cancelled`; `recorded` is the "pending reconciliation" state | above-threshold payments need a pre-posting state; one name for the webhook-created state | applied (§3.9); `docs/permissions-matrix.md` §7 still says `pending_reconciliation` (§10.3) |
+| `payment_records` | states `draft`, `cancelled`; `recorded` is the "pending reconciliation" state | above-threshold payments need a pre-posting state; one name for the webhook-created state | applied (§3.9); `docs/permissions-matrix.md` §7 no longer uses `pending_reconciliation` (applied, §10.3) |
 | `expense_claims` | state `posted`; `claim_kind in ('claim','request')` (A-FIN-22) | `finance.expense_claim.post` and posting type `expense` exist | applied (§3.9) |
 | `financial_postings` | `bill_post` fires at `posted`, not at approval | posting happens at `posted` | applied (§3.9 `posting_type`) |
 | `numbering_rules` | codes `BILL`, `CN`, `EXP`, `COST`, `RCN`; `is_gapless` on `INV` only (A-DM-05) | §2.7 | applied (§9.1, §9.2, §14.1) |
@@ -563,4 +563,4 @@ For the accountant:
 | Columns | pending rows of §2.10 (`costing_runs`, `costing_run_lines`) | estimate and actual side by side; correcting runs |
 | Jobs (pg-boss) | `finance.period_maintenance`, `finance.statements`, `finance.overdue_scan`, `finance.costing.compute`, `finance.accountant_export`, `finance.provider.process_event` (P8) | §3, §4, §6, §7 |
 | Glossary (`docs/PRD.md` §12) | Posting date, Period lock, Three-way match, Landed cost, Open item, Statement of account, Payment application, Costing run, Overhead pool, Provider event | shared vocabulary |
-| Doc alignment | `docs/permissions-matrix.md` §7 "`pending_reconciliation`" → `recorded` | consistency |
+| Doc alignment | `docs/permissions-matrix.md` §7 "`pending_reconciliation`" → `recorded` (applied; the matrix uses `recorded`) | consistency |

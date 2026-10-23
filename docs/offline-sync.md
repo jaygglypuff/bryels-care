@@ -42,8 +42,8 @@ The app detects connectivity by actual request success, not only `navigator.onLi
 
 | Workflow | Offline policy | What is validated locally | What the server re-validates on replay | Conflict handling |
 |---|---|---|---|---|
-| View assigned tasks, work instructions, cached product/lot data | **Cached read** when previously synced and permitted | nothing (read-only) | n/a | Show "data as of <time>" badge |
-| Scan box/lot/location and create a movement request | **Queueable** (`movement_request`) if site policy allows (default: allowed for warehouse_operator on registered devices, A-OFF-03) | identity exists in cache, destination is a valid location, status not blocked *as cached*, quantity ≤ cached balance | stock exists, lot status, scope, duplicate key, negative stock policy, container lineage | rejected command goes to the device's **conflict list** and the site's **conflict review queue**; nothing is posted |
+| View assigned tasks, work instructions, help guides (`help_guides`, FR-platform-16), cached product/lot data | **Cached read** when previously synced and permitted | nothing (read-only) | n/a | Show "data as of <time>" badge |
+| Scan box/lot/location and create a movement request | **Queueable** (`movement_request`) if site policy allows (default: allowed for warehouse_operator on registered devices, A-OFF-03) | identity exists in cache, destination is a valid location, status not blocked *as cached*, quantity ≤ cached balance | stock exists, lot status, scope, duplicate key, non-negative balance (database CHECK, ADR-006), container lineage | rejected command goes to the device's **conflict list** and the site's **conflict review queue**; nothing is posted |
 | Dispensing / weighing capture | **Queueable** (`dispensing`) only on a registered device with a pre-assigned work order whose batch is `materials_staged` or `in_process` and whose formula revision and tolerances are cached (A-OFF-04) | material/lot matches BOM line, within tolerance, operator and checker present, equipment id valid | batch state, lot status, tolerance, operator ≠ checker, approvals, equipment calibration status | out-of-tolerance or wrong-lot captures are never auto-accepted: the server stores the capture as a `dispense_records` row with `is_within_tolerance = false`, posts no consumption, opens a `deviations` stub and sets `batch_materials.status` to `exception`, exactly as online (`docs/data-model.md` §11.5); a `sync_conflicts` row with reason `out_of_tolerance` or `wrong_lot` points the reviewer at it |
 | Line clearance and process-step checklist ticks | **Queueable** (`process_steps`) on the same conditions as dispensing | step order prerequisites as cached | batch state, step prerequisites, required readings present | conflict queue |
 | Stock count entries (blind) | **Queueable** (`stock_count`) on registered devices for an open count plan | count plan open as cached | count plan still open, line not already counted by another device (dual entries kept, variance shown) | duplicates become recount candidates; a line replayed after the count closed is rejected with reason `count_closed` |
@@ -173,6 +173,7 @@ created for re-apply or amend) and `escalated_entity_type` / `escalated_entity_i
 | Work orders, batches, formula revisions, tolerances, instructions | assigned to device/user | on assignment and each sync | until batch closed + 7 days |
 | Count plans | open plans for assigned sites | each sync | until plan closed |
 | Tasks, notifications | user | each sync | 7 days |
+| Help guides (published versions, `help_guides`, FR-platform-16) | organization | each sync | 30 days |
 | Dashboards | user, snapshot | on view while online | 24 h, badge shows age |
 
 ## 8. User experience requirements

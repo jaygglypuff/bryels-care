@@ -269,19 +269,19 @@ Design starts at 360 px and adds, never subtracts. Nothing core needs more than 
 
 ```mermaid
 flowchart LR
-  subgraph Desktop_lg_up[Desktop 1024px+]
-    LN[Left nav 240px<br/>collapsible groups] --- TB[Top bar: title, site selector,<br/>search, action centre, sync, user]
-    TB --- CT[Content: cards, tables, boards]
+  subgraph Desktop_lg_up["Desktop 1024px+"]
+    LN["Left nav 240px<br/>collapsible groups"] --- TB["Top bar: title, site selector,<br/>search, action centre, sync, user"]
+    TB --- CT["Content: cards, tables, boards"]
   end
-  subgraph Tablet_md[Tablet 768-1023px]
-    RL[Icon rail 72px<br/>expands on tap] --- TB2[Top bar]
-    TB2 --- CT2[Content]
+  subgraph Tablet_md["Tablet 768-1023px"]
+    RL["Icon rail 72px<br/>expands on tap"] --- TB2["Top bar"]
+    TB2 --- CT2["Content"]
   end
-  subgraph Phone_xs[Phone 360-767px]
-    HB[Compact header: back/title,<br/>site chip, sync dot] --- CT3[Content: cards and lists]
-    CT3 --- SA[Sticky primary action]
-    SA --- BT[Bottom tabs: Home, Scan,<br/>Tasks, Alerts, Menu]
-    BT -. Menu .-> DR[Drawer: full module list]
+  subgraph Phone_xs["Phone 360-767px"]
+    HB["Compact header: back/title,<br/>site chip, sync dot"] --- CT3["Content: cards and lists"]
+    CT3 --- SA["Sticky primary action"]
+    SA --- BT["Bottom tabs: Home, Scan,<br/>Tasks, Alerts, Menu"]
+    BT -. Menu .-> DR["Drawer: full module list"]
   end
 ```
 
@@ -321,7 +321,10 @@ customers, materials within scope; a scanned payload pasted here resolves like a
 **notifications / action centre** (bell with unread count; opens a panel grouped by
 approvals, exceptions, alerts, sync); **sync status** (chip: Synced / Syncing / Offline ·
 n pending / Failed n / Conflicts n; tap opens the sync queue); **user menu** (profile,
-theme, density, help and quick guides, sign out).
+theme, density, help and quick guides, sign out). "Help and quick guides" opens the
+guide for the current screen (FR-platform-16 in `docs/PRD.md`): versioned, organization-wide
+`help_guides` records authored with `platform.help_guide.admin` (reading needs no
+permission) and cached for offline reading (`docs/offline-sync.md` §7).
 
 ### 3.3 Tablet (768 to 1023 px)
 
@@ -622,7 +625,7 @@ refetch, error, permission denied, offline (read) with data timestamp; scanner: 
 | Wrong material or lot | Scanning a lot that does not match the ingredient line: banner "This is Palm Oil, not Coconut Oil. Scan the Coconut Oil lot." with the expected material code; no way to proceed without a supervisor exception. |
 | Checker sign-off | Second person signs on the same device: tap "Sign as checker", enter their PIN or scan their badge (A-UX-08); the record stores both users and times. The checker cannot be the operator. |
 | Offline | Only the workflows allowed in `docs/offline-sync.md` are available; everything else shows "Needs a connection". Pending items wear the Sync Pending chip until the server confirms. |
-| Help | A "?" on every step opens the work instruction revision snapshot for that batch (read-only), not the latest revision. |
+| Help | A "?" on every screen opens the help guide for that screen (`help_guides`, FR-platform-16; available offline). On a batch step it falls back to the work instruction revision snapshot for that batch (read-only), not the latest revision. |
 
 ---
 
@@ -946,8 +949,9 @@ only sampling capture queues (`docs/process-maps.md` 6).
 
 ### 9.14 Deviations / CAPA and traceability / recall explorer
 
-Phase 3 for deviations, CAPA and the genealogy explorer; Phase 4 for complaints and recall
-cases. Behaviour is W07 in `docs/process-maps.md`; states are those of `docs/data-model.md`
+Phase 3 for deviations and the genealogy explorer; Phase 4 for complaints and the recall
+explorer (read-only); Phase 6 for CAPA and recall cases (FR-quality-07, FR-quality-08 in
+`docs/PRD.md`; backlog US-4-17, US-6-18). Behaviour is W07 in `docs/process-maps.md`; states are those of `docs/data-model.md`
 (`deviations`, `capas`, `complaints`, `recall_cases`).
 
 - **Raise deviation** (phone, tablet or desktop; any role with `quality.deviation.create`;
@@ -961,12 +965,12 @@ cases. Behaviour is W07 in `docs/process-maps.md`; states are those of `docs/dat
   `investigating`, `closed`), severity chip, linked records; tabs Investigation (root
   cause, impact assessment with "Find affected": other batches that used the same lots,
   equipment or operator, via the genealogy query), Containment (holds placed from here,
-  9.13), CAPA (linked cards), Documents, History. Primary action by state: `open` → "Start
+  9.13), CAPA (linked cards; Phase 6), Documents, History. Primary action by state: `open` → "Start
   investigation"; `investigating` → "Close deviation" (`quality.deviation.approve`; closer ≠
   raiser; requires resolution, the disposition of affected stock recorded in 9.13 and an
   effectiveness check date; open CAPA needs a written justification). Batch-linked
   deviations print in the BMR annex (9.12).
-- **CAPA** (desktop): list with CAPA-26-004, source (`deviation`, `complaint`, `audit`,
+- **CAPA** (Phase 6; desktop): list with CAPA-26-004, source (`deviation`, `complaint`, `audit`,
   `change_control`, `other`), owner avatar, due date (overdue in danger and in the Action
   centre), state chip (`open`, `in_progress`, `verification`, `closed`). Detail: root
   cause, corrective action, preventive action, action items each with owner and due date,
@@ -982,9 +986,9 @@ cases. Behaviour is W07 in `docs/process-maps.md`; states are those of `docs/dat
   (DR-26-00042), boxes, quantity (sensitive; `owner_director` sees every site, others their
   scope). Actions: "Export trace" (`quality.genealogy.export`, reason logged, point-in-time
   stamp on every page), "Place hold on selected" (9.13), "Start recall case"
-  (`quality.recall_case.create`; pre-fills affected lots, boxes, shipments and customers).
+  (Phase 6; `quality.recall_case.create`; pre-fills affected lots, boxes, shipments and customers).
   Scanning `BC:LOT:` or `BC:BOX:` anywhere in the explorer re-roots the tree. Online-only.
-- **Recall case** (desktop; `quality.recall_case.*`): header RC-2026-01, kind (`recall`,
+- **Recall case** (Phase 6; desktop; `quality.recall_case.*`): header RC-2026-01, kind (`recall`,
   `withdrawal`, `mock`), state chip (`open`, `notifying`, `recovering`, `closed`), approval
   card (`qa_qc` proposes, `owner_director` approves, two decisions recorded). Panels: scope
   (lots and boxes, "Mark recalled" bulk action `quality.recall_case.admin` that writes
@@ -1064,7 +1068,7 @@ not built around a different screen. "Restricted-data rule" refers to
 | Supplier lot documents | W01; `procurement.supplier_lot_document.*` | 2 | tablet, desktop | "Attach document" | — |
 | Reorder suggestions | W04; `docs/analytics-kpis.md` 6.5; `procurement.reorder_suggestion.*` | 6 | desktop | "Accept into request" / "Dismiss" (reason) | drivers in words on every row; never creates an order by itself |
 | Employee list / detail | `docs/modules/hr-attendance-payroll.md`; W10 | 5 | desktop | "New employee" | personal fields behind `hr.employee_personal_data.view` with lock icons; exports are R with re-authentication |
-| Shifts and assignments | `hr.shift.*`, `hr.shift_assignment.*` | 5 | desktop | "Assign shift" (approval for changes) | — |
+| Shifts and assignments | `hr.shift.*`, `hr.shift_assignment.*` | 6 | desktop | "Assign shift" (approval for changes) | — |
 | Leave | `hr.leave_request.*` | 6 | phone (self-service), desktop (approve) | "Request leave" / "Approve" | own requests only unless `hr.leave_request.view` |
 | Exception review (after 9.9) | W10; `hr.attendance_exception.*` | 5 | desktop | "Resolve" (correction proposed, approved by a different user) | punch detail for hr_payroll and own-site site_manager only |
 | Time summaries | `docs/modules/hr-attendance-payroll.md` | 5 | desktop | "Export" (R) | aggregated by default; per-person detail restricted as above |
@@ -1075,7 +1079,7 @@ not built around a different screen. "Restricted-data rule" refers to
 | Document templates | ADR-016; `documents.template.*`; `docs/reports-and-templates.md` | 2 (labels), 3 to 4 (BMR, DR) | desktop | "Approve version" | preview with components 5.18 and 5.19; test page per template |
 | Approval rules | `docs/permissions-matrix.md` 5.2; `approval_rules` | 1 | desktop | "Save rule" (re-authentication; approval by a second administrator where the registry requires it) | — |
 | Numbering rules | `docs/data-model.md` 9; `platform.numbering_rule.admin` | 1 | desktop | "Save" with a preview of the next number | future numbers only, never retroactive |
-| Integrations | `docs/security.md` 2.11; brief item 31; `platform.integration.admin` | 6 (email, storage, time-clock, accounting), 8 (payment) | desktop | "Test connection" | one card per adapter with Configured / Setup required / Error and the last check time; an unconfigured adapter renders the Setup required state and every dependent button elsewhere is disabled with the reason (section 6), never a fake success; secrets are write-only fields that are never displayed or returned by the API (only the variable name and "set / not set"); rotation replaces, never reveals |
+| Integrations | `docs/security.md` 2.11; brief item 31; `platform.integration.admin` | 5 (email, FR-platform-06), 6 (storage, time-clock, accounting), 8 (payment) | desktop | "Test connection" | one card per adapter with Configured / Setup required / Error and the last check time; an unconfigured adapter renders the Setup required state and every dependent button elsewhere is disabled with the reason (section 6), never a fake success; secrets are write-only fields that are never displayed or returned by the API (only the variable name and "set / not set"); rotation replaces, never reveals |
 | System health | `platform.diagnostics.view`; `docs/deployment-railway.md` | 1 (Health, Backups, Variables cards), 5 (rest) | desktop | "Run checks" | health booleans, queue depth, sync backlog, versions, backup status; environment values never rendered |
 
 ---
