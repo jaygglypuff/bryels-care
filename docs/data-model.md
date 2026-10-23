@@ -560,7 +560,7 @@ Types: `num6` = `numeric(18,6)`, `money` = `numeric(18,4)`, `pct` = `numeric(9,4
 | `password_hash` | text | yes | argon2id (ADR-004) | null for `system` and invited users |
 | `display_name`, `given_name`, `family_name` | text | no / yes / yes | | |
 | `kind` | text | no | ck in (`person`,`system`) | `system` cannot sign in |
-| `status` | text | no | ck in (`invited`,`active`,`locked`,`deactivated`) | lifecycle (ADR-004) |
+| `status` | text | no | ck in (`invited`,`active`,`locked`,`deactivated`,`system`) | lifecycle (ADR-004); `system` = the organization's one system actor (ADR-029): never signs in, no assignments, hidden from user administration, attributes scheduled work in FK columns |
 | `locale`, `timezone` | text | yes | | overrides organization defaults |
 | `failed_login_count`, `locked_until` | int / ts | no / yes | default 0 | lockout policy in `docs/security.md` |
 | `password_changed_at`, `last_login_at`, `deactivated_at`, `anonymised_at` | ts | yes | | rows are never deleted (FK targets); `anonymised_at` marks a retention anonymisation (§12.4) |
@@ -954,7 +954,7 @@ Business owners: boxes, counts, adjustments and reservations now work as describ
 | Item | As built | Why / follow-up |
 |---|---|---|
 | `inventory_balances` key | Still `(lot_id, location_id)`; no `container_id`, `reserved_base`, `allocated_base` | Owned by the ledger stream. Box contents live in `container_contents` and must never exceed the balance of their lot at the box location; the box page flags a mismatch. Reserved and allocated quantities are computed from `stock_reservations` and `stock_allocations`. |
-| Movements carry the box | `stock_movements.meta.containerId` (plus `correlationId`, `reversalOfId` for undo) | `postMovement` has no `container_id` / `reversal_of_id` / `correlation_id` parameters yet; move to columns when the ledger adds them. |
+| Movements carry the box | `stock_movements.meta.containerId`; undo and every multi-row command use the real `reversal_of_id` and `correlation_id` columns (Wave 1 integration) | No `container_id` column yet. A supervisor reversal (`inventory.movement.void`) of a movement that carries a box is refused: the box is moved back (or adjusted) through its own flow so box and ledger stay in step. |
 | Split / merge / repack | Lineage rows and content changes only; no ledger rows, because stock does not change location and balances are not container-keyed | Becomes `transfer` movements with source `container_operation` once balances carry `container_id`. |
 | `inventory_lots.origin_lot_id` | Added (inter-site re-lot) | US-2-14 AC2. |
 | Movement type `issue` | Added to `MovementType` (inter-site issue at the source site) | §5.1. |
@@ -962,12 +962,12 @@ Business owners: boxes, counts, adjustments and reservations now work as describ
 | `stock_counts.status` | Adds `approved` between variance approval and posting (`planned → in_progress → counted ⇄ recount → [pending_approval →] approved → posted`, any pre-posted → `cancelled`) | `pending_approval` means step 1 approved, waiting for the second approver. |
 | `stock_count_entries` | New append-only table: every count and recount with counter and time | "Original counts never erased"; the line keeps the final quantity and variance. Recounter ≠ any earlier counter of the line; approver ≠ any counter of the count. |
 | `stock_count_scopes` | Locations only (no material class / ABC scope yet) | W03-01 finer scopes later. |
-| `stock_approval_decisions` | Interim append-only decisions for `stock_adjustment` and `stock_count` | Fold into the platform `approval_decisions` table when it exists. Thresholds come from `inventory_settings`, not yet from `approval_rules`. |
+| Approval decisions | Stored in the shared `approval_decisions` table (record types `stock_adjustment`, `stock_count`), ADR-028; the interim `stock_approval_decisions` table was dropped before any deployment | `cycle` numbers approval rounds: a count sent back to recount starts the next cycle, so the same approver can decide again. Thresholds come from the platform `settings` keys, not yet from `approval_rules`. |
 | `stock_adjustments` | `requires_second_approval`, `value_unknown`, cancel and reject columns; lines may carry a found-stock new lot (created at posting on QA hold) | A-DM-32. |
 | `stock_reservations` | `reservation_number` (rule `RSV`), `demand_reference`; demand types add `batch` and `manual` | Sales allocation ignores reservations of the order being allocated and converts them. |
 | `allocation_rules` | New: FEFO/FIFO per default, material kind, material, product or customer, optional minimum shelf life | Precedence customer > product/material > material kind > default > built-in FEFO. |
-| `inventory_settings` | New interim key/value settings (organization or site) | Until the platform `settings` table and `src/lib/settings.ts` exist; keys in `src/modules/inventory/policy.ts`. |
-| V-FREEZE | Enforced by scan-move, the lot move page, undo, adjustments and inter-site transfer (`assertLocationsNotFrozen`) | Not yet enforced inside `postMovement` for production and dispatch postings. |
+| Inventory settings | Keys live in the platform `settings` table and the registry `src/lib/settings.ts` (ADR-028); the interim `inventory_settings` table was dropped before any deployment | Same keys and defaults; `src/modules/inventory/policy.ts` keeps the inventory helpers (`getInventorySetting`, `effectiveInventorySettings`). |
+| V-FREEZE | Enforced inside `postMovement` for every movement type and caller (`src/modules/inventory/freeze.ts`), so production, dispatch, receiving and reversals are covered; scan-move, put-away, undo, adjustments and inter-site check it first for a clearer message | Only the freezing count's own posting is exempt (`freezeExemptCountId`). Location holds are enforced by put-away, scan-move, the lot move page and inter-site transfer (`assertHoldAllowsMove`). |
 
 ### 3.4 Procurement
 
@@ -1553,7 +1553,7 @@ the effective routing revision and the finished-product inspection plan.
 | `inspection_plans`, `inspection_plan_tests` | As §3.6 with `is_placeholder` (fictional content pending QA review) and CHECKs: incoming → material, other kinds → product; numeric test needs unit and min or max | `sku_id` is `product_id` (SKUs are products in the MVP) |
 | `equipment`, `equipment_service_records`, `equipment_state_transitions`, `downtime_events` | As §3.1 and §6.11; `line_label` text until `production_lines` exist | `capacity_uom` text; `certificate_attachment_id` not added |
 | `equipment_override_requests` | New: the CX-CAL request (reason, availability reasons at request, time box, status `pending_approval, approved, rejected, cancelled`), two decisions in `approval_decisions` (`equipment_override`) | `equipment_uses` (Wave 2) will reference the approved request; the deviation is opened by Wave 2 |
-| `approval_decisions` | As §3.1 without `approval_rule_id` (no `approval_rules` table yet); `uq (record_type, record_id, step, decided_by)`; append-only by trigger | Policy steps are typed data in `src/modules/masterdata/approval-policy.ts` (A-PRD-37) |
+| `approval_decisions` | As §3.1 without `approval_rule_id` (no `approval_rules` table yet) plus `cycle int NOT NULL DEFAULT 1` (approval round); `uq (record_type, record_id, cycle, step, decided_by)`; append-only by trigger; shared with inventory documents (ADR-028) | Policy steps are typed data in `src/modules/masterdata/approval-policy.ts` (A-PRD-37) |
 | Custom SQL | `src/db/sql/w1d.sql` (canonical), applied as the Drizzle custom migration `0002_w1d_custom_sql` (`drizzle-kit generate --custom`, verbatim copy, drift-tested): GiST exclusion of overlapping approved ranges (formula, routing, work instruction, inspection plan code), `tg_*_parent_draft` triggers on child rows, immutability of approved/retired/rejected revisions, append-only `approval_decisions` and `equipment_state_transitions`, `tg_batches_freeze_revisions` | Hand-written custom migration in the normal `pnpm db:migrate` path |
 | Batch snapshot | `batches.formula_snapshot` keeps its name and gains `schemaVersion: "bom_snapshot/v2"`, `routing`, `inspectionPlan`, per line `targetQtyG`, `toleranceAbsG`, `scaling`, `phaseCode`, per step `area`, `workInstruction` (text frozen), `parameters`, `checklistItems` | The column is not renamed to `bom_snapshot` to keep the MVP readers working |
 
@@ -2875,10 +2875,10 @@ still differs from §3. Differences are deliberate MVP simplifications, listed s
 
 Disposition values written by these flows: `hold` (hold placed, retest due), `hold_lifted` (hold lifted,
 lot back to its pre-hold status, A-W1B-05), `reject` (hold lifted as rejected), `expire` (nightly job
-`inventory.expiry_check`, system actor `system@bryels-care.invalid`, users.status `system`), `release`
+`inventory.expiry_check`, the organization's system actor `system@bryels-care.invalid` with users.status `system`, ADR-029), `release`
 (release on receipt). Audit events: `procurement.goods_receipt.created/updated/posted/cancelled/reversed/
 discrepancy_recorded/supplier_linked`, `procurement.goods_receipt_line.discrepancy_approved`,
-`inventory.inventory_lot.created`, `inventory.stock_movement.posted` (put-away),
+`inventory.inventory_lot.created`, `inventory.stock_movement.posted` (one per movement, written by `postMovement`),
 `inventory.stock_movement.held_stock_issued`, `quality.hold.placed/state_changed/lifted`,
 `quality.disposition.expired/held` (job), `documents.file_attachment.uploaded/downloaded/removed`,
 `masterdata.supplier.created/updated`, `platform.export.created`.

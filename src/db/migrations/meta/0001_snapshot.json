@@ -1,5 +1,5 @@
 {
-  "id": "e612dcea-f553-42ce-99e0-b9e840580aad",
+  "id": "ce7acf7d-1377-46ea-b912-8997bebb1528",
   "prevId": "2932f606-0ed2-4b46-a4cd-4f73064c1a16",
   "version": "7",
   "dialect": "postgresql",
@@ -2064,192 +2064,6 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.approval_decisions": {
-      "name": "approval_decisions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "record_type": {
-          "name": "record_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "record_id": {
-          "name": "record_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "step": {
-          "name": "step",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "decision": {
-          "name": "decision",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "decided_by": {
-          "name": "decided_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "decided_at": {
-          "name": "decided_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "approval_decisions_step_user_uq": {
-          "name": "approval_decisions_step_user_uq",
-          "columns": [
-            {
-              "expression": "record_type",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "record_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "step",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "decided_by",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "approval_decisions_record_idx": {
-          "name": "approval_decisions_record_idx",
-          "columns": [
-            {
-              "expression": "record_type",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "record_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "approval_decisions_organization_id_organizations_id_fk": {
-          "name": "approval_decisions_organization_id_organizations_id_fk",
-          "tableFrom": "approval_decisions",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "approval_decisions_site_id_sites_id_fk": {
-          "name": "approval_decisions_site_id_sites_id_fk",
-          "tableFrom": "approval_decisions",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "approval_decisions_decided_by_users_id_fk": {
-          "name": "approval_decisions_decided_by_users_id_fk",
-          "tableFrom": "approval_decisions",
-          "tableTo": "users",
-          "columnsFrom": [
-            "decided_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "approval_decisions_decision_ck": {
-          "name": "approval_decisions_decision_ck",
-          "value": "\"approval_decisions\".\"decision\" in ('approved', 'rejected', 'returned')"
-        },
-        "approval_decisions_step_ck": {
-          "name": "approval_decisions_step_ck",
-          "value": "\"approval_decisions\".\"step\" >= 1"
-        }
-      },
       "isRLSEnabled": false
     },
     "public.downtime_events": {
@@ -11196,191 +11010,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.stock_approval_decisions": {
-      "name": "stock_approval_decisions",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "record_type": {
-          "name": "record_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "record_id": {
-          "name": "record_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "step": {
-          "name": "step",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "decision": {
-          "name": "decision",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "decided_by": {
-          "name": "decided_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "decided_at": {
-          "name": "decided_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "stock_approval_decisions_record_idx": {
-          "name": "stock_approval_decisions_record_idx",
-          "columns": [
-            {
-              "expression": "record_type",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "record_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "stock_approval_decisions_uq": {
-          "name": "stock_approval_decisions_uq",
-          "columns": [
-            {
-              "expression": "record_type",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "record_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "step",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "decided_by",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "decision",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "stock_approval_decisions_organization_id_organizations_id_fk": {
-          "name": "stock_approval_decisions_organization_id_organizations_id_fk",
-          "tableFrom": "stock_approval_decisions",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "stock_approval_decisions_site_id_sites_id_fk": {
-          "name": "stock_approval_decisions_site_id_sites_id_fk",
-          "tableFrom": "stock_approval_decisions",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "stock_approval_decisions_decided_by_users_id_fk": {
-          "name": "stock_approval_decisions_decided_by_users_id_fk",
-          "tableFrom": "stock_approval_decisions",
-          "tableTo": "users",
-          "columnsFrom": [
-            "decided_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "ck_stock_approval_decisions_type": {
-          "name": "ck_stock_approval_decisions_type",
-          "value": "\"stock_approval_decisions\".\"record_type\" in ('stock_adjustment','stock_count')"
-        },
-        "ck_stock_approval_decisions_decision": {
-          "name": "ck_stock_approval_decisions_decision",
-          "value": "\"stock_approval_decisions\".\"decision\" in ('approved','rejected')"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.stock_count_counters": {
       "name": "stock_count_counters",
       "schema": "",
@@ -12566,112 +12195,6 @@
           "value": "(\"allocation_rules\".\"scope\" = 'default' and num_nonnulls(\"allocation_rules\".\"material_kind\", \"allocation_rules\".\"material_id\", \"allocation_rules\".\"product_id\", \"allocation_rules\".\"customer_id\") = 0)\n       or (\"allocation_rules\".\"scope\" = 'material_kind' and \"allocation_rules\".\"material_kind\" is not null and num_nonnulls(\"allocation_rules\".\"material_id\", \"allocation_rules\".\"product_id\", \"allocation_rules\".\"customer_id\") = 0)\n       or (\"allocation_rules\".\"scope\" = 'material' and \"allocation_rules\".\"material_id\" is not null and num_nonnulls(\"allocation_rules\".\"material_kind\", \"allocation_rules\".\"product_id\", \"allocation_rules\".\"customer_id\") = 0)\n       or (\"allocation_rules\".\"scope\" = 'product' and \"allocation_rules\".\"product_id\" is not null and num_nonnulls(\"allocation_rules\".\"material_kind\", \"allocation_rules\".\"material_id\", \"allocation_rules\".\"customer_id\") = 0)\n       or (\"allocation_rules\".\"scope\" = 'customer' and \"allocation_rules\".\"customer_id\" is not null and num_nonnulls(\"allocation_rules\".\"material_kind\", \"allocation_rules\".\"material_id\") = 0)"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.inventory_settings": {
-      "name": "inventory_settings",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "value": {
-          "name": "value",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "inventory_settings_organization_id_organizations_id_fk": {
-          "name": "inventory_settings_organization_id_organizations_id_fk",
-          "tableFrom": "inventory_settings",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "inventory_settings_site_id_sites_id_fk": {
-          "name": "inventory_settings_site_id_sites_id_fk",
-          "tableFrom": "inventory_settings",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "inventory_settings_updated_by_users_id_fk": {
-          "name": "inventory_settings_updated_by_users_id_fk",
-          "tableFrom": "inventory_settings",
-          "tableTo": "users",
-          "columnsFrom": [
-            "updated_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "inventory_settings_uq": {
-          "name": "inventory_settings_uq",
-          "nullsNotDistinct": true,
-          "columns": [
-            "organization_id",
-            "site_id",
-            "key"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.stock_reservations": {
@@ -14706,6 +14229,209 @@
         "print_stations_code_ck": {
           "name": "print_stations_code_ck",
           "value": "\"print_stations\".\"code\" ~ '^[A-Z0-9][A-Z0-9._-]{0,63}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.approval_decisions": {
+      "name": "approval_decisions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "record_type": {
+          "name": "record_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "record_id": {
+          "name": "record_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "step": {
+          "name": "step",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "cycle": {
+          "name": "cycle",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "decision": {
+          "name": "decision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decided_by": {
+          "name": "decided_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "approval_decisions_step_user_uq": {
+          "name": "approval_decisions_step_user_uq",
+          "columns": [
+            {
+              "expression": "record_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "record_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "cycle",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "step",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "decided_by",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "approval_decisions_record_idx": {
+          "name": "approval_decisions_record_idx",
+          "columns": [
+            {
+              "expression": "record_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "record_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "approval_decisions_organization_id_organizations_id_fk": {
+          "name": "approval_decisions_organization_id_organizations_id_fk",
+          "tableFrom": "approval_decisions",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "approval_decisions_site_id_sites_id_fk": {
+          "name": "approval_decisions_site_id_sites_id_fk",
+          "tableFrom": "approval_decisions",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "approval_decisions_decided_by_users_id_fk": {
+          "name": "approval_decisions_decided_by_users_id_fk",
+          "tableFrom": "approval_decisions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "decided_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "approval_decisions_decision_ck": {
+          "name": "approval_decisions_decision_ck",
+          "value": "\"approval_decisions\".\"decision\" in ('approved', 'rejected', 'returned')"
+        },
+        "approval_decisions_step_ck": {
+          "name": "approval_decisions_step_ck",
+          "value": "\"approval_decisions\".\"step\" >= 1"
+        },
+        "approval_decisions_cycle_ck": {
+          "name": "approval_decisions_cycle_ck",
+          "value": "\"approval_decisions\".\"cycle\" >= 1"
         }
       },
       "isRLSEnabled": false

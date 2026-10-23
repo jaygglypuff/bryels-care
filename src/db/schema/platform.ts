@@ -161,3 +161,37 @@ export const workerHeartbeats = pgTable("worker_heartbeats", {
   queueDepth: integer("queue_depth"),
   migrationsCurrent: boolean("migrations_current").notNull().default(true),
 });
+
+/**
+ * One row per approval-step decision on any approvable record (docs/data-model.md §3.1): master
+ * data revisions (W1D) and inventory documents (stock_adjustment, stock_count; W1C), ADR-028.
+ * Append-only (trigger in src/db/sql/w1d.sql): never updated or deleted. The record's own
+ * approved_by holds the final step. `cycle` counts approval rounds of a record that can go back
+ * for rework (a stock count sent to recount starts cycle 2); a user decides a given step of a
+ * record once per cycle.
+ */
+export const approvalDecisions = pgTable(
+  "approval_decisions",
+  {
+    id: id(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    siteId: uuid("site_id").references(() => sites.id),
+    recordType: text("record_type").notNull(),
+    recordId: uuid("record_id").notNull(),
+    step: integer("step").notNull().default(1),
+    cycle: integer("cycle").notNull().default(1),
+    /** approved | rejected | returned */
+    decision: text("decision").notNull(),
+    decidedBy: uuid("decided_by").notNull().references(() => users.id),
+    decidedAt: timestamp("decided_at", { withTimezone: true }).notNull().defaultNow(),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("approval_decisions_step_user_uq").on(t.recordType, t.recordId, t.cycle, t.step, t.decidedBy),
+    index("approval_decisions_record_idx").on(t.recordType, t.recordId),
+    check("approval_decisions_decision_ck", sql`${t.decision} in ('approved', 'rejected', 'returned')`),
+    check("approval_decisions_step_ck", sql`${t.step} >= 1`),
+    check("approval_decisions_cycle_ck", sql`${t.cycle} >= 1`),
+  ],
+);

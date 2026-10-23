@@ -2,7 +2,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { containerContents, containerLineage, containers, inventorySettings } from "@/db/schema";
+import { containerContents, containerLineage, containers, settings } from "@/db/schema";
 import { containerLineageGraph, createBox, getContainer, mergeBoxes, repackBox, splitBox, setBoxStatus } from "@/modules/inventory/containers";
 import { describeBoxForScan, describeLocationForScan } from "@/modules/inventory/moves-scan-cards";
 import { resetTestDatabase } from "../../support/db";
@@ -67,12 +67,12 @@ describe("containers", () => {
   });
 
   it("allows mixed lots when the setting is on", async () => {
-    await db.insert(inventorySettings).values({ organizationId: w.orgId, key: "inventory.container.allow_mixed_lots", value: true });
+    await db.insert(settings).values({ organizationId: w.orgId, scope: "organization", key: "inventory.container.allow_mixed_lots", value: true });
     const a = await boxOf("3");
     const b = await boxOf("2");
     const m = await mergeBoxes(w.wh, { containerIds: [a.box.id, b.box.id], idempotencyKey: key() });
     expect((await contentOf(m.id)).length).toBe(2);
-    await db.delete(inventorySettings).where(eq(inventorySettings.key, "inventory.container.allow_mixed_lots"));
+    await db.delete(settings).where(eq(settings.key, "inventory.container.allow_mixed_lots"));
   });
 
   it("container.repack_preserves_history: original → intermediate → final box is traceable both ways", async () => {

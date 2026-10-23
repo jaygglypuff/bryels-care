@@ -2,8 +2,8 @@
  * Production engineering master data (Wave 1 stream W1D; backlog E-3-01, E-3-02):
  * routings and their revisions, routing steps with parameters and checklist items, work
  * instructions, inspection plans and tests, the equipment register with service records,
- * state transitions, downtime and controlled-override requests, and the generic
- * approval_decisions ledger used by multi-step approvals (docs/data-model.md §3.1, §3.2, §3.6, §4).
+ * state transitions, downtime and controlled-override requests (docs/data-model.md §3.2, §3.6, §4).
+ * The generic approval_decisions ledger lives in ./platform.ts.
  *
  * Every limit, specification and step stored here is configuration entered and approved by the
  * company's process owners and QA; seed values are fictional placeholders.
@@ -16,34 +16,7 @@ import { formulaRevisions, materials, products } from "./masterdata";
 
 const VERSION_STATUS_CK = `('draft', 'pending_approval', 'approved', 'rejected', 'retired')`;
 
-/**
- * One row per approval-step decision on any approvable record (docs/data-model.md §3.1).
- * Append-only: the service never updates or deletes rows. The record's own approved_by holds the
- * final step. A user decides a given step of a record once.
- */
-export const approvalDecisions = pgTable(
-  "approval_decisions",
-  {
-    id: id(),
-    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
-    siteId: uuid("site_id").references(() => sites.id),
-    recordType: text("record_type").notNull(),
-    recordId: uuid("record_id").notNull(),
-    step: integer("step").notNull().default(1),
-    /** approved | rejected | returned */
-    decision: text("decision").notNull(),
-    decidedBy: uuid("decided_by").notNull().references(() => users.id),
-    decidedAt: timestamp("decided_at", { withTimezone: true }).notNull().defaultNow(),
-    note: text("note"),
-    createdAt: createdAt(),
-  },
-  (t) => [
-    uniqueIndex("approval_decisions_step_user_uq").on(t.recordType, t.recordId, t.step, t.decidedBy),
-    index("approval_decisions_record_idx").on(t.recordType, t.recordId),
-    check("approval_decisions_decision_ck", sql`${t.decision} in ('approved', 'rejected', 'returned')`),
-    check("approval_decisions_step_ck", sql`${t.step} >= 1`),
-  ],
-);
+// approval_decisions moved to ./platform.ts (shared by master data and inventory documents, ADR-028).
 
 /* ------------------------------------------------------------------ work instructions */
 

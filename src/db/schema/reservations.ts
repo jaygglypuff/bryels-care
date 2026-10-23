@@ -92,22 +92,3 @@ export const allocationRules = pgTable(
     ),
   ],
 );
-
-/**
- * Inventory policy settings (organization- or site-scoped key/value). Keys and defaults live in
- * src/modules/inventory/policy.ts; a missing row means the registry default applies. Interim home
- * until the platform settings table (data-model §3.1) ships.
- */
-export const inventorySettings = pgTable(
-  "inventory_settings",
-  {
-    id: id(),
-    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
-    siteId: uuid("site_id").references(() => sites.id),
-    key: text("key").notNull(),
-    value: jsonb("value").notNull(),
-    updatedBy: uuid("updated_by").references(() => users.id),
-    updatedAt: updatedAt(),
-  },
-  (t) => [unique("inventory_settings_uq").on(t.organizationId, t.siteId, t.key).nullsNotDistinct()],
-);

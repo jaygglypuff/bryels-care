@@ -38,7 +38,7 @@ export {
   type HoldResolution,
   type HeldIssuePurpose,
 } from "./holds";
-export { runExpiryCheck, runExpiryCheckAll, systemContext } from "./holds-expiry";
+export { runExpiryCheck } from "./holds-expiry";
 // Wave 1 W1C: scan-move, undo, containers, counts, adjustments, reservations and FEFO/FIFO
 export { scanMove, undoMove, interSiteTransfer, looseQty, boxedQty, listRecentTransfers, listSiteLocations, type MoveResult, type ScanMoveInput, type UndoResult } from "./moves";
 export { describeBoxForScan, describeLocationForScan, describeLotForScan, type ScanCard } from "./moves-scan-cards";
@@ -59,7 +59,7 @@ export {
   candidatesFor,
   recommendableItems,
 } from "./reservations";
-export { getInventorySetting, effectiveInventorySettings, INVENTORY_SETTINGS } from "./policy";
+export { getInventorySetting, effectiveInventorySettings, INVENTORY_SETTING_KEYS } from "./policy";
 export { editLotAttributes, expiryAlerts, listLocationsWithStock, getLocationDetail } from "./lots-admin";
 export { postMovements, lockLots } from "./ledger";
 export { reverseMovement, getMovementDetail, correctionLocations, REVERSIBLE_MOVEMENT_TYPES, REVERSAL_CONFIRMATION_WORD, type ReverseMovementInput } from "./reversal";

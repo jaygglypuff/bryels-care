@@ -2,7 +2,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { containers, inventoryLots, inventorySettings, stockMovements, transferRequests } from "@/db/schema";
+import { containers, inventoryLots, settings, stockMovements, transferRequests } from "@/db/schema";
 import { createBox } from "@/modules/inventory/containers";
 import { scanMove, undoMove, interSiteTransfer } from "@/modules/inventory/moves";
 import { createReservation } from "@/modules/inventory/reservations";
@@ -124,12 +124,12 @@ describe("undo of own move (US-2-28)", () => {
     const { r } = await freshMove();
     await expectDomain(undoMove(w.wh2, { transferId: r.transferId, sessionId: SESSION }), "state");
     await expectDomain(undoMove(w.wh, { transferId: r.transferId, sessionId: OTHER_SESSION }), "state");
-    await db.insert(inventorySettings).values({ organizationId: w.orgId, key: "settings.ux.undo_window_seconds", value: 0 });
+    await db.insert(settings).values({ organizationId: w.orgId, scope: "organization", key: "settings.ux.undo_window_seconds", value: 0 });
     try {
       const e = await expectDomain(undoMove(w.wh, { transferId: r.transferId, sessionId: SESSION }), "state");
       expect(e.details?.offerReversalRequest).toBe(true);
     } finally {
-      await db.delete(inventorySettings).where(and(eq(inventorySettings.organizationId, w.orgId), eq(inventorySettings.key, "settings.ux.undo_window_seconds")));
+      await db.delete(settings).where(and(eq(settings.organizationId, w.orgId), eq(settings.key, "settings.ux.undo_window_seconds")));
     }
     const rev = await db.select().from(stockMovements).where(and(eq(stockMovements.sourceDocumentId, r.transferId), eq(stockMovements.movementType, "reversal")));
     expect(rev).toHaveLength(0);

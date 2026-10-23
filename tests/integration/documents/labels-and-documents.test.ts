@@ -42,7 +42,8 @@ import {
   updateDraftDefinition,
   voidLabelJob,
 } from "@/modules/documents";
-import { handler as renderHandler, code as renderCode } from "@/modules/documents/jobs/render";
+import { documentsRenderJob, renderGeneratedDocument } from "@/modules/documents/jobs/render";
+import { enqueueJob, runJob } from "@/modules/platform/jobs";
 import { decideLot } from "@/modules/quality";
 import { resetTestDatabase } from "../../support/db";
 
@@ -195,15 +196,20 @@ describe("generated documents (US-2-11)", () => {
     expect(e.message).toMatch(/PDF rendering isn't set up/);
   });
 
-  it("the documents.render job handler is idempotent and renders a pending row", async () => {
-    expect(renderCode).toBe("documents.render");
+  it("the documents.render job is registered, idempotent and renders a pending row", async () => {
+    expect(documentsRenderJob.code).toBe("documents.render");
     const [d] = await db.select().from(generatedDocuments).where(eq(generatedDocuments.id, docId));
-    expect(await renderHandler({ generatedDocumentId: docId })).toMatchObject({ status: "ready", changed: false });
+    // Through the job runner (on behalf of the requesting user): a ready row is left unchanged.
+    const { job } = await enqueueJob(db, managerNfd, documentsRenderJob, { generatedDocumentId: docId });
+    expect(job.idempotencyKey).toBe(`documents.render:${docId}`);
+    expect(await runJob(job.id)).toMatchObject({ status: "succeeded", result: { status: "ready", changed: false } });
     // Simulate a row the worker has not rendered yet.
     await db.update(generatedDocuments).set({ status: "rendering", checksumSha256: null }).where(eq(generatedDocuments.id, docId));
-    expect(await renderHandler({ generatedDocumentId: docId })).toMatchObject({ status: "ready", changed: true });
+    expect(await renderGeneratedDocument(managerNfd, { generatedDocumentId: docId })).toMatchObject({ status: "ready", changed: true });
     const [after] = await db.select().from(generatedDocuments).where(eq(generatedDocuments.id, docId));
     expect(after.checksumSha256).toBe(d.checksumSha256); // deterministic render of the frozen dataset
+    // An unknown (or out-of-scope) document fails permanently instead of retrying.
+    await expectDomain(renderGeneratedDocument(managerNfd, { generatedDocumentId: randomUUID() }), "not_found");
   });
 });
 

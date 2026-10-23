@@ -1,9 +1,10 @@
 import "server-only";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { auditEvents, rolePermissions, roles, sites, userSiteAssignments, users } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
+import { SYSTEM_USER_STATUS } from "@/lib/auth/system";
 
 /**
  * User and role administration read models (MVP: read-only except unlocking a locked account).
@@ -67,7 +68,9 @@ export type UserListRow = {
 export async function listUsers(ctx: AuthContext): Promise<UserListRow[]> {
   ctx.require("identity.user.view");
   const visible = await visibleUserIds(ctx);
-  const where = visible === null ? eq(users.organizationId, ctx.organizationId) : and(eq(users.organizationId, ctx.organizationId), inArray(users.id, visible.length ? visible : ["00000000-0000-0000-0000-000000000000"]));
+  // The system actor (status `system`, ADR-029) is not a person: never listed, never administered.
+  const people = and(eq(users.organizationId, ctx.organizationId), ne(users.status, SYSTEM_USER_STATUS));
+  const where = visible === null ? people : and(people, inArray(users.id, visible.length ? visible : ["00000000-0000-0000-0000-000000000000"]));
   const rows = await db
     .select({ id: users.id, email: users.email, displayName: users.displayName, status: users.status, lastLoginAt: users.lastLoginAt })
     .from(users)
@@ -112,7 +115,7 @@ export async function getUser(ctx: AuthContext, userId: string): Promise<UserDet
       updatedAt: users.updatedAt,
     })
     .from(users)
-    .where(and(eq(users.id, userId), eq(users.organizationId, ctx.organizationId)))
+    .where(and(eq(users.id, userId), eq(users.organizationId, ctx.organizationId), ne(users.status, SYSTEM_USER_STATUS)))
     .limit(1);
   if (!u) throw new DomainError("not_found", "User not found.");
   const all = await assignmentsFor([u.id]);
@@ -182,7 +185,7 @@ export async function unlockUser(ctx: AuthContext, userId: string, reason: strin
     const [u] = await tx
       .select({ id: users.id, email: users.email, status: users.status, failedLoginCount: users.failedLoginCount })
       .from(users)
-      .where(and(eq(users.id, userId), eq(users.organizationId, ctx.organizationId)))
+      .where(and(eq(users.id, userId), eq(users.organizationId, ctx.organizationId), ne(users.status, SYSTEM_USER_STATUS)))
       .for("update")
       .limit(1);
     if (!u) throw new DomainError("not_found", "User not found.");

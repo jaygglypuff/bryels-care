@@ -2,14 +2,17 @@ import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { auditEvents, dispositions, goodsReceiptLines, inventoryLots, qualityHolds, suppliers, users } from "@/db/schema";
+import { auditEvents, dispositions, goodsReceiptLines, inventoryLots, notifications, qualityHolds, suppliers, users } from "@/db/schema";
 import type { AuthContext, SiteRef } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { ROLE_BUNDLES } from "@/lib/permissions";
 import { assertLotUsable } from "@/modules/inventory/ledger";
 import { getHold, issueHeldStock, liftHold, listHolds, markHoldInvestigating, placeHold } from "@/modules/inventory/holds";
 import { runExpiryCheck } from "@/modules/inventory/holds-expiry";
-import { handler as expiryHandler, expiryCheckJob } from "@/modules/inventory/jobs/expiry-check";
+import { inventoryExpiryCheckJob } from "@/modules/inventory/jobs/expiry-check";
+import { appJobRegistry } from "@/modules/platform/job-handlers";
+import { enqueueJob, runJob, systemContext } from "@/modules/platform/jobs";
+import { listUsers } from "@/modules/identity/users";
 import { transferStock } from "@/modules/inventory/movements";
 import { receiveAndPost } from "@/modules/inventory/receiving";
 import { putAwayLot, putAwayOptions } from "@/modules/inventory/receiving-putaway";
@@ -200,11 +203,45 @@ describe("expiry job (expiry_job.sets_expired)", () => {
     expect(await status(sameDay.id)).toBe("quarantine");
   });
 
-  it("exports the job handler for the registry and validates its payload", async () => {
-    expect(expiryCheckJob.code).toBe("inventory.expiry_check");
-    await expect(expiryHandler({ asOf: "not-a-date" })).rejects.toThrow();
-    await expect(expiryHandler({ organizationId: orgId, unknown: 1 })).rejects.toThrow();
-    const out = await expiryHandler({ organizationId: orgId });
-    expect(out[0].organizationId).toBe(orgId);
+  it("is a registered scheduled job (00:15 Asia/Manila) that validates its payload and runs as the system actor", async () => {
+    expect(appJobRegistry().get("inventory.expiry_check")).toBe(inventoryExpiryCheckJob);
+    expect(inventoryExpiryCheckJob.schedule).toMatchObject({ cron: "15 0 * * *", tz: "Asia/Manila" });
+    const sys = await systemContext(orgId, inventoryExpiryCheckJob);
+    await expectDomain(enqueueJob(db, sys, inventoryExpiryCheckJob, { asOf: "not-a-date", trigger: "schedule" } as never), "validation");
+    await expectDomain(enqueueJob(db, sys, inventoryExpiryCheckJob, { asOf: future(0), trigger: "schedule", unknown: 1 } as never), "validation");
+    const expiring = await receiveLot("QUA-01");
+    await db.update(inventoryLots).set({ expiresOn: future(1) }).where(eq(inventoryLots.id, expiring.id));
+    const { job } = await enqueueJob(db, sys, inventoryExpiryCheckJob, inventoryExpiryCheckJob.schedule!.payload(new Date(Date.now() + 2 * 86_400_000)));
+    const out = await runJob(job.id);
+    expect(out.status).toBe("succeeded");
+    expect(await status(expiring.id)).toBe("expired");
+    const [ev] = await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, expiring.id), eq(auditEvents.action, "quality.disposition.expired")));
+    expect(ev).toMatchObject({ actorId: null, actorLabel: "system:inventory.expiry_check", correlationId: job.correlationId });
+  });
+
+  it("expiring_lot: lots with stock entering a near-expiry bucket notify the site's site_manager and qa_qc once per bucket (US-2-16 AC1)", async () => {
+    const lot = await receiveLot("QUA-01");
+    await db.update(inventoryLots).set({ expiresOn: future(20) }).where(eq(inventoryLots.id, lot.id));
+    const r1 = await runExpiryCheck({ organizationId: orgId });
+    expect(r1.expiring).toContainEqual({ lotNumber: lot.lotNumber, bucketDays: 30 });
+    const notes = await db.select().from(notifications).where(and(eq(notifications.kind, "expiring_lot"), eq(notifications.entityId, lot.id)));
+    const recipients = new Set(notes.map((n) => n.recipientUserId));
+    expect(recipients.has(qa.userId)).toBe(true);
+    expect(recipients.has(wh.userId)).toBe(false);
+    expect(notes.every((n) => n.siteId === nfd.id && n.link === "/inventory/lots/expiry")).toBe(true);
+    const r2 = await runExpiryCheck({ organizationId: orgId });
+    expect(r2.expiring.some((e) => e.lotNumber === lot.lotNumber)).toBe(true);
+    expect(await db.select().from(notifications).where(and(eq(notifications.kind, "expiring_lot"), eq(notifications.entityId, lot.id)))).toHaveLength(notes.length);
+  });
+
+  it("the system actor is one users row per organization, cannot sign in and is hidden from user administration", async () => {
+    const rows = await db.select().from(users).where(eq(users.email, "system@bryels-care.invalid"));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe("system");
+    const sys = await systemContext(orgId, inventoryExpiryCheckJob);
+    expect(sys.userId).toBe(rows[0].id);
+    expect(sys.actorLabel).toBe("system:inventory.expiry_check");
+    const list = await listUsers(owner);
+    expect(list.some((u) => u.email === "system@bryels-care.invalid")).toBe(false);
   });
 });

@@ -1,19 +1,3 @@
-CREATE TABLE "approval_decisions" (
-	"id" uuid PRIMARY KEY NOT NULL,
-	"organization_id" uuid NOT NULL,
-	"site_id" uuid,
-	"record_type" text NOT NULL,
-	"record_id" uuid NOT NULL,
-	"step" integer DEFAULT 1 NOT NULL,
-	"decision" text NOT NULL,
-	"decided_by" uuid NOT NULL,
-	"decided_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"note" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "approval_decisions_decision_ck" CHECK ("approval_decisions"."decision" in ('approved', 'rejected', 'returned')),
-	CONSTRAINT "approval_decisions_step_ck" CHECK ("approval_decisions"."step" >= 1)
-);
---> statement-breakpoint
 CREATE TABLE "downtime_events" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"organization_id" uuid NOT NULL,
@@ -555,21 +539,6 @@ CREATE TABLE "stock_adjustments" (
 	CONSTRAINT "ck_stock_adjustments_sod" CHECK ("stock_adjustments"."approved_by" is null or ("stock_adjustments"."approved_by" <> "stock_adjustments"."submitted_by" and "stock_adjustments"."approved_by" <> "stock_adjustments"."created_by"))
 );
 --> statement-breakpoint
-CREATE TABLE "stock_approval_decisions" (
-	"id" uuid PRIMARY KEY NOT NULL,
-	"organization_id" uuid NOT NULL,
-	"site_id" uuid NOT NULL,
-	"record_type" text NOT NULL,
-	"record_id" uuid NOT NULL,
-	"step" integer DEFAULT 1 NOT NULL,
-	"decision" text NOT NULL,
-	"decided_by" uuid NOT NULL,
-	"decided_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"note" text,
-	CONSTRAINT "ck_stock_approval_decisions_type" CHECK ("stock_approval_decisions"."record_type" in ('stock_adjustment','stock_count')),
-	CONSTRAINT "ck_stock_approval_decisions_decision" CHECK ("stock_approval_decisions"."decision" in ('approved','rejected'))
-);
---> statement-breakpoint
 CREATE TABLE "stock_count_counters" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"stock_count_id" uuid NOT NULL,
@@ -677,17 +646,6 @@ CREATE TABLE "allocation_rules" (
        or ("allocation_rules"."scope" = 'material' and "allocation_rules"."material_id" is not null and num_nonnulls("allocation_rules"."material_kind", "allocation_rules"."product_id", "allocation_rules"."customer_id") = 0)
        or ("allocation_rules"."scope" = 'product' and "allocation_rules"."product_id" is not null and num_nonnulls("allocation_rules"."material_kind", "allocation_rules"."material_id", "allocation_rules"."customer_id") = 0)
        or ("allocation_rules"."scope" = 'customer' and "allocation_rules"."customer_id" is not null and num_nonnulls("allocation_rules"."material_kind", "allocation_rules"."material_id") = 0))
-);
---> statement-breakpoint
-CREATE TABLE "inventory_settings" (
-	"id" uuid PRIMARY KEY NOT NULL,
-	"organization_id" uuid NOT NULL,
-	"site_id" uuid,
-	"key" text NOT NULL,
-	"value" jsonb NOT NULL,
-	"updated_by" uuid,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "inventory_settings_uq" UNIQUE NULLS NOT DISTINCT("organization_id","site_id","key")
 );
 --> statement-breakpoint
 CREATE TABLE "stock_reservations" (
@@ -889,6 +847,24 @@ CREATE TABLE "print_stations" (
 	CONSTRAINT "print_stations_code_ck" CHECK ("print_stations"."code" ~ '^[A-Z0-9][A-Z0-9._-]{0,63}$')
 );
 --> statement-breakpoint
+CREATE TABLE "approval_decisions" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"site_id" uuid,
+	"record_type" text NOT NULL,
+	"record_id" uuid NOT NULL,
+	"step" integer DEFAULT 1 NOT NULL,
+	"cycle" integer DEFAULT 1 NOT NULL,
+	"decision" text NOT NULL,
+	"decided_by" uuid NOT NULL,
+	"decided_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"note" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "approval_decisions_decision_ck" CHECK ("approval_decisions"."decision" in ('approved', 'rejected', 'returned')),
+	CONSTRAINT "approval_decisions_step_ck" CHECK ("approval_decisions"."step" >= 1),
+	CONSTRAINT "approval_decisions_cycle_ck" CHECK ("approval_decisions"."cycle" >= 1)
+);
+--> statement-breakpoint
 CREATE TABLE "background_jobs" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"organization_id" uuid NOT NULL,
@@ -1076,9 +1052,6 @@ ALTER TABLE "stock_movements" ADD COLUMN "correlation_id" uuid;--> statement-bre
 ALTER TABLE "batch_materials" ADD COLUMN "tolerance_abs_g" numeric(18, 6);--> statement-breakpoint
 ALTER TABLE "batches" ADD COLUMN "routing_revision_id" uuid NOT NULL;--> statement-breakpoint
 ALTER TABLE "batches" ADD COLUMN "inspection_plan_id" uuid;--> statement-breakpoint
-ALTER TABLE "approval_decisions" ADD CONSTRAINT "approval_decisions_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "approval_decisions" ADD CONSTRAINT "approval_decisions_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "approval_decisions" ADD CONSTRAINT "approval_decisions_decided_by_users_id_fk" FOREIGN KEY ("decided_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "downtime_events" ADD CONSTRAINT "downtime_events_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "downtime_events" ADD CONSTRAINT "downtime_events_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "downtime_events" ADD CONSTRAINT "downtime_events_equipment_id_equipment_id_fk" FOREIGN KEY ("equipment_id") REFERENCES "public"."equipment"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -1211,9 +1184,6 @@ ALTER TABLE "stock_adjustments" ADD CONSTRAINT "stock_adjustments_approved_by_us
 ALTER TABLE "stock_adjustments" ADD CONSTRAINT "stock_adjustments_rejected_by_users_id_fk" FOREIGN KEY ("rejected_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "stock_adjustments" ADD CONSTRAINT "stock_adjustments_posted_by_users_id_fk" FOREIGN KEY ("posted_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "stock_adjustments" ADD CONSTRAINT "stock_adjustments_cancelled_by_users_id_fk" FOREIGN KEY ("cancelled_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "stock_approval_decisions" ADD CONSTRAINT "stock_approval_decisions_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "stock_approval_decisions" ADD CONSTRAINT "stock_approval_decisions_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "stock_approval_decisions" ADD CONSTRAINT "stock_approval_decisions_decided_by_users_id_fk" FOREIGN KEY ("decided_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "stock_count_counters" ADD CONSTRAINT "stock_count_counters_stock_count_id_stock_counts_id_fk" FOREIGN KEY ("stock_count_id") REFERENCES "public"."stock_counts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "stock_count_counters" ADD CONSTRAINT "stock_count_counters_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "stock_count_entries" ADD CONSTRAINT "stock_count_entries_stock_count_id_stock_counts_id_fk" FOREIGN KEY ("stock_count_id") REFERENCES "public"."stock_counts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -1243,9 +1213,6 @@ ALTER TABLE "allocation_rules" ADD CONSTRAINT "allocation_rules_material_id_mate
 ALTER TABLE "allocation_rules" ADD CONSTRAINT "allocation_rules_product_id_products_id_fk" FOREIGN KEY ("product_id") REFERENCES "public"."products"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "allocation_rules" ADD CONSTRAINT "allocation_rules_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "allocation_rules" ADD CONSTRAINT "allocation_rules_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "inventory_settings" ADD CONSTRAINT "inventory_settings_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "inventory_settings" ADD CONSTRAINT "inventory_settings_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "inventory_settings" ADD CONSTRAINT "inventory_settings_updated_by_users_id_fk" FOREIGN KEY ("updated_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "stock_reservations" ADD CONSTRAINT "stock_reservations_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "stock_reservations" ADD CONSTRAINT "stock_reservations_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "stock_reservations" ADD CONSTRAINT "stock_reservations_lot_id_inventory_lots_id_fk" FOREIGN KEY ("lot_id") REFERENCES "public"."inventory_lots"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -1288,6 +1255,9 @@ ALTER TABLE "label_templates" ADD CONSTRAINT "label_templates_approved_by_users_
 ALTER TABLE "print_stations" ADD CONSTRAINT "print_stations_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "print_stations" ADD CONSTRAINT "print_stations_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "print_stations" ADD CONSTRAINT "print_stations_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "approval_decisions" ADD CONSTRAINT "approval_decisions_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "approval_decisions" ADD CONSTRAINT "approval_decisions_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "approval_decisions" ADD CONSTRAINT "approval_decisions_decided_by_users_id_fk" FOREIGN KEY ("decided_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "background_jobs" ADD CONSTRAINT "background_jobs_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "background_jobs" ADD CONSTRAINT "background_jobs_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "background_jobs" ADD CONSTRAINT "background_jobs_requested_by_users_id_fk" FOREIGN KEY ("requested_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -1303,8 +1273,6 @@ ALTER TABLE "settings" ADD CONSTRAINT "settings_organization_id_organizations_id
 ALTER TABLE "settings" ADD CONSTRAINT "settings_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "settings" ADD CONSTRAINT "settings_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "settings" ADD CONSTRAINT "settings_updated_by_users_id_fk" FOREIGN KEY ("updated_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE UNIQUE INDEX "approval_decisions_step_user_uq" ON "approval_decisions" USING btree ("record_type","record_id","step","decided_by");--> statement-breakpoint
-CREATE INDEX "approval_decisions_record_idx" ON "approval_decisions" USING btree ("record_type","record_id");--> statement-breakpoint
 CREATE INDEX "downtime_site_started_idx" ON "downtime_events" USING btree ("site_id","started_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "downtime_one_open_uq" ON "downtime_events" USING btree ("equipment_id") WHERE "downtime_events"."ended_at" is null;--> statement-breakpoint
 CREATE UNIQUE INDEX "equipment_org_code_uq" ON "equipment" USING btree ("organization_id","code");--> statement-breakpoint
@@ -1358,8 +1326,6 @@ CREATE INDEX "transfer_requests_container_idx" ON "transfer_requests" USING btre
 CREATE UNIQUE INDEX "stock_adjustment_lines_uq" ON "stock_adjustment_lines" USING btree ("stock_adjustment_id","line_no");--> statement-breakpoint
 CREATE UNIQUE INDEX "stock_adjustments_org_number_uq" ON "stock_adjustments" USING btree ("organization_id","adjustment_number");--> statement-breakpoint
 CREATE INDEX "stock_adjustments_site_status_idx" ON "stock_adjustments" USING btree ("site_id","status");--> statement-breakpoint
-CREATE INDEX "stock_approval_decisions_record_idx" ON "stock_approval_decisions" USING btree ("record_type","record_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "stock_approval_decisions_uq" ON "stock_approval_decisions" USING btree ("record_type","record_id","step","decided_by","decision");--> statement-breakpoint
 CREATE UNIQUE INDEX "stock_count_counters_uq" ON "stock_count_counters" USING btree ("stock_count_id","user_id");--> statement-breakpoint
 CREATE INDEX "stock_count_entries_line_idx" ON "stock_count_entries" USING btree ("stock_count_line_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "stock_count_entries_idem_uq" ON "stock_count_entries" USING btree ("stock_count_id","idempotency_key") WHERE "stock_count_entries"."idempotency_key" is not null;--> statement-breakpoint
@@ -1386,6 +1352,8 @@ CREATE INDEX "label_jobs_station_status_idx" ON "label_jobs" USING btree ("print
 CREATE INDEX "label_jobs_entity_idx" ON "label_jobs" USING btree ("entity_type","entity_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "label_templates_org_code_uq" ON "label_templates" USING btree ("organization_id","code");--> statement-breakpoint
 CREATE UNIQUE INDEX "print_stations_site_code_uq" ON "print_stations" USING btree ("site_id","code");--> statement-breakpoint
+CREATE UNIQUE INDEX "approval_decisions_step_user_uq" ON "approval_decisions" USING btree ("record_type","record_id","cycle","step","decided_by");--> statement-breakpoint
+CREATE INDEX "approval_decisions_record_idx" ON "approval_decisions" USING btree ("record_type","record_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "background_jobs_idem_uq" ON "background_jobs" USING btree ("organization_id","idempotency_key");--> statement-breakpoint
 CREATE INDEX "background_jobs_status_idx" ON "background_jobs" USING btree ("status","run_after");--> statement-breakpoint
 CREATE INDEX "background_jobs_kind_idx" ON "background_jobs" USING btree ("job_kind","created_at");--> statement-breakpoint

@@ -14,7 +14,7 @@ import {
   products,
   stockAdjustmentLines,
   stockAdjustments,
-  stockApprovalDecisions,
+  approvalDecisions,
   users,
 } from "@/db/schema";
 import { audit } from "@/lib/audit";
@@ -206,15 +206,15 @@ export async function approveAdjustment(ctx: AuthContext, id: string, note?: str
     assertNotOwn(a, ctx);
     const decisions = await tx
       .select()
-      .from(stockApprovalDecisions)
-      .where(and(eq(stockApprovalDecisions.recordType, "stock_adjustment"), eq(stockApprovalDecisions.recordId, a.id), eq(stockApprovalDecisions.decision, "approved")));
+      .from(approvalDecisions)
+      .where(and(eq(approvalDecisions.recordType, "stock_adjustment"), eq(approvalDecisions.recordId, a.id), eq(approvalDecisions.decision, "approved")));
     const step = decisions.some((d) => d.step === 1) ? 2 : 1;
     if (step === 2) {
       const role = await getInventorySetting(tx, a.organizationId, null, "inventory.adjustment.second_step_role");
       if (!ctx.roleCodes.includes(role)) throw new DomainError("forbidden", `This adjustment is above the approval threshold; the second approval needs the ${role.replace(/_/g, " ")} role.`);
       if (decisions.some((d) => d.decidedBy === ctx.userId)) throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: the second approval must come from a different person than the first.");
     }
-    await tx.insert(stockApprovalDecisions).values({ organizationId: a.organizationId, siteId: a.siteId, recordType: "stock_adjustment", recordId: a.id, step, decision: "approved", decidedBy: ctx.userId, note: note?.trim() || null });
+    await tx.insert(approvalDecisions).values({ organizationId: a.organizationId, siteId: a.siteId, recordType: "stock_adjustment", recordId: a.id, step, decision: "approved", decidedBy: ctx.userId, note: note?.trim() || null });
     const final = step === 2 || !a.requiresSecondApproval;
     if (final) {
       adjustmentMachine.assert(a.status, "approved", `Adjustment ${a.adjustmentNumber}`);
@@ -243,9 +243,9 @@ export async function rejectAdjustment(ctx: AuthContext, id: string, reason: str
     assertNotOwn(a, ctx);
     const [{ steps }] = await tx
       .select({ steps: sql<number>`count(*)::int` })
-      .from(stockApprovalDecisions)
-      .where(and(eq(stockApprovalDecisions.recordType, "stock_adjustment"), eq(stockApprovalDecisions.recordId, a.id), eq(stockApprovalDecisions.decision, "approved")));
-    await tx.insert(stockApprovalDecisions).values({ organizationId: a.organizationId, siteId: a.siteId, recordType: "stock_adjustment", recordId: a.id, step: steps + 1, decision: "rejected", decidedBy: ctx.userId, note: reason.trim() });
+      .from(approvalDecisions)
+      .where(and(eq(approvalDecisions.recordType, "stock_adjustment"), eq(approvalDecisions.recordId, a.id), eq(approvalDecisions.decision, "approved")));
+    await tx.insert(approvalDecisions).values({ organizationId: a.organizationId, siteId: a.siteId, recordType: "stock_adjustment", recordId: a.id, step: steps + 1, decision: "rejected", decidedBy: ctx.userId, note: reason.trim() });
     await tx.update(stockAdjustments).set({ status: "rejected", rejectedBy: ctx.userId, rejectedAt: new Date(), rejectionReason: reason.trim(), updatedAt: new Date() }).where(eq(stockAdjustments.id, a.id));
     await audit(tx, ctx, {
       action: "inventory.stock_adjustment.rejected",
@@ -454,11 +454,11 @@ export async function getAdjustment(ctx: AuthContext, id: string) {
     .where(eq(stockAdjustmentLines.stockAdjustmentId, a.id))
     .orderBy(asc(stockAdjustmentLines.lineNo));
   const decisions = await db
-    .select({ step: stockApprovalDecisions.step, decision: stockApprovalDecisions.decision, byId: stockApprovalDecisions.decidedBy, by: users.displayName, at: stockApprovalDecisions.decidedAt, note: stockApprovalDecisions.note })
-    .from(stockApprovalDecisions)
-    .innerJoin(users, eq(users.id, stockApprovalDecisions.decidedBy))
-    .where(and(eq(stockApprovalDecisions.recordType, "stock_adjustment"), eq(stockApprovalDecisions.recordId, a.id)))
-    .orderBy(asc(stockApprovalDecisions.decidedAt));
+    .select({ step: approvalDecisions.step, decision: approvalDecisions.decision, byId: approvalDecisions.decidedBy, by: users.displayName, at: approvalDecisions.decidedAt, note: approvalDecisions.note })
+    .from(approvalDecisions)
+    .innerJoin(users, eq(users.id, approvalDecisions.decidedBy))
+    .where(and(eq(approvalDecisions.recordType, "stock_adjustment"), eq(approvalDecisions.recordId, a.id)))
+    .orderBy(asc(approvalDecisions.decidedAt));
   const people = await db.select({ id: users.id, name: users.displayName }).from(users).where(inArray(users.id, [a.createdBy, a.submittedBy, a.approvedBy, a.postedBy].filter((x): x is string => !!x)));
   const name = (uid: string | null) => people.find((p) => p.id === uid)?.name ?? null;
   const own = a.createdBy === ctx.userId || a.submittedBy === ctx.userId;

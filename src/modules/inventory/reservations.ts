@@ -404,6 +404,41 @@ export async function expireReservations(q: DbOrTx, siteId: string) {
   return rows.length;
 }
 
+/**
+ * Scheduled reservation expiry (job `inventory.reservation_expiry`, US-2-20): every active
+ * reservation of the context's sites whose TTL elapsed becomes `expired` (reason `ttl_elapsed`),
+ * one audit event `inventory.stock_reservation.expired` each. Idempotent: a second run finds nothing.
+ */
+export async function expireDueReservations(ctx: AuthContext): Promise<{ expired: number; reservations: string[] }> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .update(stockReservations)
+      .set({ status: "expired", releasedAt: sql`now()`, releasedReason: "ttl_elapsed" })
+      .where(
+        and(
+          eq(stockReservations.organizationId, ctx.organizationId),
+          inArray(stockReservations.siteId, ctx.allowedSiteIds),
+          eq(stockReservations.status, "active"),
+          lte(stockReservations.expiresAt, sql`now()`),
+        ),
+      )
+      .returning({ id: stockReservations.id, number: stockReservations.reservationNumber, siteId: stockReservations.siteId, expiresAt: stockReservations.expiresAt });
+    for (const r of rows) {
+      await audit(tx, ctx, {
+        action: "inventory.stock_reservation.expired",
+        entityType: "stock_reservation",
+        entityId: r.id,
+        entityNumber: r.number,
+        siteId: r.siteId,
+        reason: "ttl_elapsed",
+        before: { status: "active", expiresAt: r.expiresAt },
+        after: { status: "expired" },
+      });
+    }
+    return { expired: rows.length, reservations: rows.map((r) => r.number) };
+  });
+}
+
 /** Marks a demand's active reservations as converted (sales allocation took the stock). */
 export async function convertReservationsForDemands(q: DbOrTx, demandIds: string[]) {
   if (demandIds.length === 0) return 0;

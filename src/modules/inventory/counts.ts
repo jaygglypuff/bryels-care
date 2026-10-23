@@ -12,7 +12,7 @@ import {
   materials,
   products,
   rolePermissions,
-  stockApprovalDecisions,
+  approvalDecisions,
   stockCountCounters,
   stockCountEntries,
   stockCountLines,
@@ -458,6 +458,18 @@ export async function recordRecount(ctx: AuthContext, input: { lineId: string; q
 export type ApproveCountInput = { lines: Record<string, { reasonCode: string; note?: string | null }>; note?: string | null };
 
 /**
+ * Approval round of a count (approval_decisions.cycle): 1, plus one for every rejection that sent
+ * lines back to recount, so the same approver can decide again after a recount.
+ */
+async function countApprovalCycle(tx: Tx, countId: string) {
+  const [r] = await tx
+    .select({ n: sql<number>`count(*)::int` })
+    .from(approvalDecisions)
+    .where(and(eq(approvalDecisions.recordType, "stock_count"), eq(approvalDecisions.recordId, countId), eq(approvalDecisions.decision, "rejected")));
+  return 1 + Number(r?.n ?? 0);
+}
+
+/**
  * W03-07: variance approval. The approver may not be any counter (SoD). Step 1 needs a reason code
  * on every variant line not auto-approved; a line above the second-step threshold needs a second
  * approval by the configured role (default owner_director) from a different user.
@@ -491,7 +503,7 @@ export async function approveCount(ctx: AuthContext, countId: string, input: App
         if (l.isUnlabelled || new Decimal(l.varianceQtyBase ?? 0).isZero()) return false;
         return l.variancePct === null || new Decimal(l.variancePct).gt(secondPct);
       });
-      await tx.insert(stockApprovalDecisions).values({ organizationId: c.organizationId, siteId: c.siteId, recordType: "stock_count", recordId: c.id, step: 1, decision: "approved", decidedBy: ctx.userId, note: input.note?.trim() || null });
+      await tx.insert(approvalDecisions).values({ organizationId: c.organizationId, siteId: c.siteId, recordType: "stock_count", recordId: c.id, cycle: await countApprovalCycle(tx, c.id), step: 1, decision: "approved", decidedBy: ctx.userId, note: input.note?.trim() || null });
       const next: CountStatus = needsSecond ? "pending_approval" : "approved";
       countMachine.assert(c.status, next, `Count ${c.countNumber}`);
       await tx
@@ -521,12 +533,12 @@ export async function approveCount(ctx: AuthContext, countId: string, input: App
     if (!ctx.roleCodes.includes(role)) throw new DomainError("forbidden", `The second approval of this count needs the ${role.replace(/_/g, " ")} role.`);
     const [first] = await tx
       .select()
-      .from(stockApprovalDecisions)
-      .where(and(eq(stockApprovalDecisions.recordType, "stock_count"), eq(stockApprovalDecisions.recordId, c.id), eq(stockApprovalDecisions.step, 1), eq(stockApprovalDecisions.decision, "approved")))
-      .orderBy(desc(stockApprovalDecisions.decidedAt))
+      .from(approvalDecisions)
+      .where(and(eq(approvalDecisions.recordType, "stock_count"), eq(approvalDecisions.recordId, c.id), eq(approvalDecisions.cycle, await countApprovalCycle(tx, c.id)), eq(approvalDecisions.step, 1), eq(approvalDecisions.decision, "approved")))
+      .orderBy(desc(approvalDecisions.decidedAt))
       .limit(1);
     if (first?.decidedBy === ctx.userId) throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: the second approval must come from a different person than the first.");
-    await tx.insert(stockApprovalDecisions).values({ organizationId: c.organizationId, siteId: c.siteId, recordType: "stock_count", recordId: c.id, step: 2, decision: "approved", decidedBy: ctx.userId, note: input.note?.trim() || null });
+    await tx.insert(approvalDecisions).values({ organizationId: c.organizationId, siteId: c.siteId, recordType: "stock_count", recordId: c.id, cycle: await countApprovalCycle(tx, c.id), step: 2, decision: "approved", decidedBy: ctx.userId, note: input.note?.trim() || null });
     countMachine.assert(c.status, "approved", `Count ${c.countNumber}`);
     await tx.update(stockCounts).set({ status: "approved", approvedBy: ctx.userId, approvedAt: new Date(), updatedAt: new Date() }).where(eq(stockCounts.id, c.id));
     await audit(tx, ctx, {
@@ -561,7 +573,7 @@ export async function rejectCountLines(ctx: AuthContext, countId: string, input:
       .set({ lineStatus: "recount_required", varianceReasonCode: null, autoApproved: false })
       .where(inArray(stockCountLines.id, rejectable.map((l) => l.id)));
     const step = c.status === "pending_approval" ? 2 : 1;
-    await tx.insert(stockApprovalDecisions).values({ organizationId: c.organizationId, siteId: c.siteId, recordType: "stock_count", recordId: c.id, step, decision: "rejected", decidedBy: ctx.userId, note: input.note.trim() }).onConflictDoNothing();
+    await tx.insert(approvalDecisions).values({ organizationId: c.organizationId, siteId: c.siteId, recordType: "stock_count", recordId: c.id, cycle: await countApprovalCycle(tx, c.id), step, decision: "rejected", decidedBy: ctx.userId, note: input.note.trim() }).onConflictDoNothing();
     await tx.update(stockCounts).set({ status: "recount", requiresSecondApproval: false, updatedAt: new Date() }).where(eq(stockCounts.id, c.id));
     await audit(tx, ctx, {
       action: "inventory.stock_count.variance_rejected",
@@ -732,11 +744,11 @@ export async function getCount(ctx: AuthContext, countId: string) {
     .where(eq(stockCountEntries.stockCountId, c.id))
     .orderBy(asc(stockCountEntries.countedAt));
   const decisions = await db
-    .select({ step: stockApprovalDecisions.step, decision: stockApprovalDecisions.decision, by: users.displayName, at: stockApprovalDecisions.decidedAt, note: stockApprovalDecisions.note })
-    .from(stockApprovalDecisions)
-    .innerJoin(users, eq(users.id, stockApprovalDecisions.decidedBy))
-    .where(and(eq(stockApprovalDecisions.recordType, "stock_count"), eq(stockApprovalDecisions.recordId, c.id)))
-    .orderBy(asc(stockApprovalDecisions.decidedAt));
+    .select({ step: approvalDecisions.step, decision: approvalDecisions.decision, by: users.displayName, at: approvalDecisions.decidedAt, note: approvalDecisions.note })
+    .from(approvalDecisions)
+    .innerJoin(users, eq(users.id, approvalDecisions.decidedBy))
+    .where(and(eq(approvalDecisions.recordType, "stock_count"), eq(approvalDecisions.recordId, c.id)))
+    .orderBy(asc(approvalDecisions.decidedAt));
   const [wh] = c.warehouseId ? await db.select({ code: warehouses.code, name: warehouses.name }).from(warehouses).where(eq(warehouses.id, c.warehouseId)) : [];
 
   const outLines = lines.map((l) => {

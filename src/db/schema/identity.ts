@@ -30,7 +30,7 @@ export const users = pgTable(
     email: text("email").notNull(),
     displayName: text("display_name").notNull(),
     passwordHash: text("password_hash").notNull(),
-    /** invited | active | locked | deactivated */
+    /** invited | active | locked | deactivated | system (the organization's system actor, ADR-029: never signs in, hidden from user admin) */
     status: text("status").notNull().default("active"),
     failedLoginCount: integer("failed_login_count").notNull().default(0),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),

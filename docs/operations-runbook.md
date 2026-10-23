@@ -276,7 +276,8 @@ times is dead-lettered and raises the failed-jobs alert (`docs/deployment-railwa
 | `analytics.scheduled_report`, `analytics.snapshot_kpis`, `analytics.reconcile_kpis` | recipient lost permission (dropped, listed in audit), query timeout | fix recipients; narrow filters |
 | `platform.notification_dispatch` (in-app and email) | `EMAIL_PROVIDER=none`, SMTP rejected | configure provider; retry |
 | `inventory.reconcile` | none expected; differences are not failures | section 9 |
-| `inventory.expiry_scan` (expiry and FEFO risk) | long run | retry off-peak |
+| `inventory.expiry_check` (expiry, retest holds and expiring-lot alerts) | long run | retry off-peak; idempotent per business day |
+| `inventory.reservation_expiry` (reservation TTL) | many reservations | runs every 15 min; a retry is harmless |
 | `platform.partition_maintenance` | partition exists | safe to retry; if the audit `DEFAULT` partition is non-empty, incident S2 |
 | `platform.retention_sweep` | legal hold on a row in the sweep set | expected: held rows are skipped and listed; no action unless the list is unexpected |
 | `platform.metrics_sample`, `platform.alerts_evaluate` | database busy | retry; if repeated, capacity incident |

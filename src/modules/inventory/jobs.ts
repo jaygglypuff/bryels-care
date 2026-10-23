@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { defineJob } from "@/modules/platform/job-definition";
 import { type RebuildPayload, type ReconcilePayload, rebuildBalances, rebuildKeysHash, runReconciliation } from "./reconciliation";
+import { expireDueReservations } from "./reservations";
+
+export { inventoryExpiryCheckJob } from "./jobs/expiry-check";
 
 const manilaDate = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
 
@@ -37,4 +40,20 @@ export const inventoryRebuildBalancesJob = defineJob<RebuildPayload>({
   maxAttempts: 3,
   run: (run, payload) => rebuildBalances(run, payload),
   summarize: (p) => ({ siteId: p.siteId, reconciliationRunId: p.reconciliationRunId, lots: p.lotIds ? p.lotIds.length : "all", reason: p.reason }),
+});
+
+/**
+ * `inventory.reservation_expiry` (US-2-20): every 15 minutes, reservations past their TTL
+ * (setting `inventory.reservation.ttl_hours`) become `expired` so the stock is available again.
+ * Key `(quarter-hour)`; runs as the system actor.
+ */
+export const inventoryReservationExpiryJob = defineJob<{ asOf: string }>({
+  code: "inventory.reservation_expiry",
+  title: "Expire reservations past their time limit",
+  description: "Marks active stock reservations whose time-to-live has elapsed as expired (audited) so the stock is available again.",
+  payload: z.object({ asOf: z.iso.datetime() }).strict(),
+  keyTuple: (p) => [p.asOf.slice(0, 16)],
+  systemPermissions: ["inventory.reservation.view", "inventory.reservation.void"],
+  schedule: { cron: "*/15 * * * *", tz: "Asia/Manila", payload: (now) => ({ asOf: now.toISOString() }) },
+  run: (run) => expireDueReservations(run.ctx),
 });

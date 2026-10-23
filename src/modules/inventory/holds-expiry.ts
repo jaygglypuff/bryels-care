@@ -1,10 +1,13 @@
 import "server-only";
-import { and, asc, eq, inArray, lt, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
-import { db } from "@/db/client";
-import { dispositions, inventoryLots, organizations, sites, users } from "@/db/schema";
+import { db, type Tx } from "@/db/client";
+import { dispositions, inventoryBalances, inventoryLots, materials, products } from "@/db/schema";
 import { audit } from "@/lib/audit";
-import { AuthContext } from "@/lib/auth/context";
+import { systemContext } from "@/lib/auth/system";
+import { getSetting } from "@/lib/settings";
+// Direct import (not the platform index): the platform runtime imports the job registry, which imports this module.
+import { notifyUsers, usersWithRoles } from "@/modules/platform/notifications";
 
 /**
  * Nightly expiry check (US-2-10 AC2, A-DM-21, A-PROC-36). Runs as the system actor:
@@ -14,30 +17,17 @@ import { AuthContext } from "@/lib/auth/context";
  * Idempotent: a second run on the same day finds nothing to do. Concurrent runs serialize on an advisory lock.
  */
 
-export const SYSTEM_ACTOR_EMAIL = "system@bryels-care.invalid";
+/** Job code; the system actor's audit label is `system:inventory.expiry_check`. */
+export const EXPIRY_CHECK_JOB_CODE = "inventory.expiry_check";
 
-/** The organization's system actor (users row with status 'system'; it can never sign in). */
-export async function systemActorId(organizationId: string): Promise<string> {
-  const [u] = await db.select({ id: users.id }).from(users).where(and(eq(users.organizationId, organizationId), eq(users.email, SYSTEM_ACTOR_EMAIL))).limit(1);
-  if (u) return u.id;
-  const [created] = await db
-    .insert(users)
-    .values({ organizationId, email: SYSTEM_ACTOR_EMAIL, displayName: "System (scheduled jobs)", passwordHash: "!", status: "system" })
-    .onConflictDoNothing()
-    .returning({ id: users.id });
-  if (created) return created.id;
-  const [again] = await db.select({ id: users.id }).from(users).where(and(eq(users.organizationId, organizationId), eq(users.email, SYSTEM_ACTOR_EMAIL))).limit(1);
-  return again.id;
-}
-
-/** An AuthContext for the system actor over every active site of the organization (job use only). */
-export async function systemContext(organizationId: string, jobCode: string): Promise<AuthContext> {
-  const actor = await systemActorId(organizationId);
-  const siteRows = await db.select({ id: sites.id, code: sites.code, name: sites.name }).from(sites).where(and(eq(sites.organizationId, organizationId), eq(sites.isActive, true))).orderBy(asc(sites.code));
-  return new AuthContext(actor, organizationId, `system:${jobCode}`, SYSTEM_ACTOR_EMAIL, ["system"], new Set<string>(), siteRows, siteRows[0]?.id ?? "");
-}
-
-export type ExpiryCheckResult = { asOf: string; expired: { lotNumber: string; from: string }[]; retestHeld: { lotNumber: string }[] };
+export type ExpiryCheckResult = {
+  asOf: string;
+  expired: { lotNumber: string; from: string }[];
+  retestHeld: { lotNumber: string }[];
+  /** US-2-16 AC1: lots that entered a near-expiry bucket and the number of new in-app notifications. */
+  expiring: { lotNumber: string; bucketDays: number }[];
+  notificationsCreated: number;
+};
 
 const manilaDate = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
 
@@ -45,10 +35,10 @@ const manilaDate = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Asia/
  * Runs the check for one organization. `asOf` defaults to today in Asia/Manila; a lot expiring on `asOf`
  * is still usable that day. `onBehalfOf` records the user who triggered an on-demand run.
  */
-export async function runExpiryCheck(opts: { organizationId: string; asOf?: string; onBehalfOf?: string | null }): Promise<ExpiryCheckResult> {
+export async function runExpiryCheck(opts: { organizationId: string; asOf?: string; onBehalfOf?: string | null; correlationId?: string | null }): Promise<ExpiryCheckResult> {
   const asOf = opts.asOf ?? manilaDate(new Date());
   if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf)) throw new Error("asOf must be YYYY-MM-DD");
-  const ctx = await systemContext(opts.organizationId, "inventory.expiry_check");
+  const ctx = await systemContext(opts.organizationId, { code: EXPIRY_CHECK_JOB_CODE }, { onBehalfOf: opts.onBehalfOf ?? null, correlationId: opts.correlationId ?? null });
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"inventory.expiry_check:" + opts.organizationId}))`);
     const expiring = await tx
@@ -57,7 +47,7 @@ export async function runExpiryCheck(opts: { organizationId: string; asOf?: stri
       .where(and(eq(inventoryLots.organizationId, opts.organizationId), lt(inventoryLots.expiresOn, asOf), inArray(inventoryLots.qualityStatus, ["quarantine", "released", "on_hold"])))
       .orderBy(asc(inventoryLots.id))
       .for("update");
-    const result: ExpiryCheckResult = { asOf, expired: [], retestHeld: [] };
+    const result: ExpiryCheckResult = { asOf, expired: [], retestHeld: [], expiring: [], notificationsCreated: 0 };
     for (const lot of expiring) {
       await tx.insert(dispositions).values({ id: uuidv7(), organizationId: opts.organizationId, siteId: lot.siteId, subjectType: "lot", subjectId: lot.id, decision: "expire", fromStatus: lot.qualityStatus, toStatus: "expired", reason: `Expiry date ${lot.expiresOn} passed (expiry check as of ${asOf}).`, decidedBy: ctx.userId });
       await tx.update(inventoryLots).set({ qualityStatus: "expired" }).where(eq(inventoryLots.id, lot.id));
@@ -94,14 +84,62 @@ export async function runExpiryCheck(opts: { organizationId: string; asOf?: stri
       });
       result.retestHeld.push({ lotNumber: lot.lotNumber });
     }
+    await notifyExpiringLots(tx, opts.organizationId, asOf, result);
     return result;
   });
 }
 
-/** Runs the check for every organization (the scheduled job has no tenant in its payload). */
-export async function runExpiryCheckAll(opts: { asOf?: string; onBehalfOf?: string | null } = {}) {
-  const orgs = await db.select({ id: organizations.id }).from(organizations);
-  const out: (ExpiryCheckResult & { organizationId: string })[] = [];
-  for (const o of orgs) out.push({ organizationId: o.id, ...(await runExpiryCheck({ organizationId: o.id, ...opts })) });
-  return out;
+/**
+ * US-2-16 AC1: `expiring_lot` in-app notifications to the site's site_manager and qa_qc for lots with
+ * stock that expire within a configured bucket (setting `inventory.expiry.alert_days`, A-KPI-03).
+ * Deduplicated per lot and bucket, so a lot is announced once when it enters 90, 60 and 30 days.
+ */
+async function notifyExpiringLots(tx: Tx, organizationId: string, asOf: string, result: ExpiryCheckResult) {
+  const buckets = [...(await getSetting(tx, organizationId, "inventory.expiry.alert_days"))].sort((a, b) => a - b);
+  const horizon = buckets.at(-1);
+  if (!horizon) return;
+  const lots = await tx
+    .select({
+      id: inventoryLots.id,
+      siteId: inventoryLots.siteId,
+      lotNumber: inventoryLots.lotNumber,
+      expiresOn: inventoryLots.expiresOn,
+      daysLeft: sql<number>`(${inventoryLots.expiresOn} - ${asOf}::date)::int`,
+      itemName: sql<string>`coalesce(${materials.name}, ${products.name})`,
+    })
+    .from(inventoryLots)
+    .leftJoin(materials, eq(materials.id, inventoryLots.materialId))
+    .leftJoin(products, eq(products.id, inventoryLots.productId))
+    .where(
+      and(
+        eq(inventoryLots.organizationId, organizationId),
+        inArray(inventoryLots.qualityStatus, ["quarantine", "released", "on_hold"]),
+        gte(inventoryLots.expiresOn, asOf),
+        sql`${inventoryLots.expiresOn} <= ${asOf}::date + ${horizon}::int`,
+        sql`exists (select 1 from ${inventoryBalances} b where b.lot_id = ${inventoryLots.id} and b.qty_base > 0)`,
+      ),
+    )
+    .orderBy(asc(inventoryLots.expiresOn), asc(inventoryLots.lotNumber));
+  for (const lot of lots) {
+    const bucket = buckets.find((b) => lot.daysLeft <= b)!;
+    const recipients = await usersWithRoles(tx, organizationId, ["site_manager", "qa_qc"], lot.siteId);
+    const created = await notifyUsers(
+      tx,
+      recipients,
+      {
+        organizationId,
+        siteId: lot.siteId,
+        kind: "expiring_lot",
+        severity: bucket <= buckets[0] ? "warning" : "info",
+        title: `Lot ${lot.lotNumber} expires in ${lot.daysLeft} day${lot.daysLeft === 1 ? "" : "s"}`,
+        body: `${lot.itemName ?? "Item"} lot ${lot.lotNumber} expires on ${lot.expiresOn} (within ${bucket} days). Use it first or plan its disposition.`,
+        entityType: "inventory_lot",
+        entityId: lot.id,
+        link: "/inventory/lots/expiry",
+        dedupeKey: `expiring_lot:${lot.id}:${bucket}`,
+      },
+    );
+    result.expiring.push({ lotNumber: lot.lotNumber, bucketDays: bucket });
+    result.notificationsCreated += created.length;
+  }
 }

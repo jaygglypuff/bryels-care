@@ -3,9 +3,10 @@ import { and, desc, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-
 import { uuidv7 } from "uuidv7";
 import { ZodError } from "zod";
 import { db, type DbOrTx } from "@/db/client";
-import { backgroundJobs, sites } from "@/db/schema";
+import { backgroundJobs } from "@/db/schema";
 import { audit } from "@/lib/audit";
-import { AuthContext, buildContextForUser } from "@/lib/auth/context";
+import { type AuthContext, buildContextForUser } from "@/lib/auth/context";
+import { systemContext } from "@/lib/auth/system";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
 import { type AnyJobDefinition, type BackgroundJobRow, type JobDefinition, type JobRegistry } from "./job-definition";
@@ -14,9 +15,6 @@ import { notifyRoles } from "./notifications";
 
 export const JOB_STATUSES = ["queued", "running", "succeeded", "failed", "cancelled"] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
-
-/** Nil id used by pure system contexts: any write that tries to attribute a row to it fails its FK loudly. */
-export const SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000";
 
 const SECRET_KEY_RE = /pass|secret|token|cookie|session|hash|signature|credential|api[_-]?key/i;
 
@@ -40,22 +38,8 @@ function zodMessage(e: ZodError) {
   return e.issues.map((i) => `${i.path.join(".") || "payload"}: ${i.message}`).join("; ");
 }
 
-/**
- * A context for a job no user triggered (scheduled work): every active site of the organization,
- * only the permissions the job declares, actor `system:<code>`.
- */
-export async function systemContext(organizationId: string, def: Pick<AnyJobDefinition, "code" | "systemPermissions">, correlationId?: string) {
-  const siteRows = await db
-    .select({ id: sites.id, code: sites.code, name: sites.name })
-    .from(sites)
-    .where(and(eq(sites.organizationId, organizationId), eq(sites.isActive, true)))
-    .orderBy(sites.code);
-  if (siteRows.length === 0) throw new DomainError("not_found", "The organization has no active site.");
-  return new AuthContext(SYSTEM_USER_ID, organizationId, `System (${def.code})`, "", [], new Set(def.systemPermissions ?? []), siteRows, siteRows[0].id, {
-    actor: { kind: "system", code: def.code, onBehalfOf: null },
-    correlationId: correlationId ?? null,
-  });
-}
+/** A context for a job no user triggered (scheduled work): the organization's system actor (src/lib/auth/system.ts). */
+export { systemContext };
 
 export type EnqueueOptions = {
   siteId?: string | null;
@@ -180,7 +164,7 @@ export async function runJob(jobId: string, opts: { registry?: JobRegistry; now?
   if (!parsed.success) return finalizeFailure(job, `Payload rejected before execution: ${zodMessage(parsed.error)}`, now);
 
   const options = { actor: { kind: "system" as const, code: def.code, onBehalfOf: job.requestedBy }, correlationId: job.correlationId };
-  const ctx = job.requestedBy ? await buildContextForUser(job.requestedBy, job.siteId, options) : await systemContext(job.organizationId, def, job.correlationId);
+  const ctx = job.requestedBy ? await buildContextForUser(job.requestedBy, job.siteId, options) : await systemContext(job.organizationId, def, { correlationId: job.correlationId });
   if (!ctx) return finalizeFailure(job, "The user who started this job no longer has access; it was not run.", now);
   if (job.siteId && !ctx.allowedSiteIds.includes(job.siteId)) return finalizeFailure(job, "The user who started this job no longer has access to its site; it was not run.", now);
 

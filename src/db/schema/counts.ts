@@ -38,7 +38,7 @@ export const stockCounts = pgTable(
     releasedBy: uuid("released_by").references(() => users.id),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     submittedBy: uuid("submitted_by").references(() => users.id),
-    /** Final approval (the last required step). Step decisions are in stock_approval_decisions. */
+    /** Final approval (the last required step). Step decisions are in approval_decisions (record_type stock_count). */
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     approvedBy: uuid("approved_by").references(() => users.id),
     approvalNote: text("approval_note"),
@@ -219,31 +219,5 @@ export const stockAdjustmentLines = pgTable(
       "ck_stock_adjustment_lines_lot",
       sql`${t.lotId} is not null or (${t.direction} = 'increase' and num_nonnulls(${t.newLotMaterialId}, ${t.newLotProductId}) = 1)`,
     ),
-  ],
-);
-
-/**
- * Append-only approval decisions for inventory documents (stock_adjustment, stock_count). Mirrors
- * the planned platform approval_decisions table (data-model §3.1) until it exists.
- */
-export const stockApprovalDecisions = pgTable(
-  "stock_approval_decisions",
-  {
-    id: id(),
-    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
-    siteId: uuid("site_id").notNull().references(() => sites.id),
-    recordType: text("record_type").notNull(),
-    recordId: uuid("record_id").notNull(),
-    step: integer("step").notNull().default(1),
-    decision: text("decision").notNull(),
-    decidedBy: uuid("decided_by").notNull().references(() => users.id),
-    decidedAt: timestamp("decided_at", { withTimezone: true }).notNull().defaultNow(),
-    note: text("note"),
-  },
-  (t) => [
-    index("stock_approval_decisions_record_idx").on(t.recordType, t.recordId),
-    uniqueIndex("stock_approval_decisions_uq").on(t.recordType, t.recordId, t.step, t.decidedBy, t.decision),
-    check("ck_stock_approval_decisions_type", sql`${t.recordType} in ('stock_adjustment','stock_count')`),
-    check("ck_stock_approval_decisions_decision", sql`${t.decision} in ('approved','rejected')`),
   ],
 );

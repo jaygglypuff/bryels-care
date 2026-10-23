@@ -99,6 +99,8 @@ async function main() {
     ["auditor@bryels-care.test", "Lea Fernandez", "auditor", ["org"]],
   ];
   const U: Record<string, string> = {};
+  // The organization's system actor (ADR-029; src/lib/auth/system.ts): attributed scheduled work, never signs in.
+  await db.insert(s.users).values({ organizationId: O, email: "system@bryels-care.invalid", displayName: "System (scheduled jobs)", passwordHash: "!", status: "system" });
   for (const [email, displayName, role, scope] of people) {
     const [u] = await db.insert(s.users).values({ organizationId: O, email, displayName, passwordHash: pw }).returning();
     U[email.split("@")[0]] = u.id;

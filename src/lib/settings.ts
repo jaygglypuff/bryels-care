@@ -34,6 +34,30 @@ export const SETTINGS = {
   "platform.export.max_rows": { scopes: ["organization"], schema: z.number().int().min(1).max(1_000_000), default: 50_000, assumption: "A-PM-17" },
   /** US-2-03: attempts before a job is dead-lettered (first run plus retries). */
   "platform.jobs.max_attempts": { scopes: ["organization"], schema: z.number().int().min(1).max(20), default: 5, assumption: "A-W1A-02" },
+
+  // Inventory policy (W1C; formerly the interim `inventory_settings` table, ADR-028). Same keys and defaults.
+  /** Toast undo window for an operator's own stock move; 0 disables undo (A-UX-15). */
+  "settings.ux.undo_window_seconds": { scopes: ["organization"], schema: z.number().int().min(0).max(3600), default: 60, assumption: "A-UX-15" },
+  /** Same box/lot + destination scanned again by the same user within this window answers "Already moved" (V-DUP). */
+  "inventory.move.duplicate_window_seconds": { scopes: ["organization"], schema: z.number().int().min(0).max(86_400), default: 300, assumption: "A-W1C-01" },
+  /** A counted line whose |variance| exceeds this % of expected (or any variance when expected is 0) needs a blind recount by a different counter. */
+  "inventory.count.recount_threshold_pct": { scopes: ["organization", "site"], schema: z.number().min(0).max(100), default: 2, assumption: "A-PROC-12, A-PM-15" },
+  /** Lines with |variance| ≤ this % are auto-approved. 0 = every non-zero variance needs approval. */
+  "inventory.count.auto_approve_variance_pct": { scopes: ["organization", "site"], schema: z.number().min(0).max(100), default: 0, assumption: "A-PROC-12" },
+  /** Any line with |variance| above this % needs a second approval step by the role below. */
+  "inventory.count.second_step_variance_pct": { scopes: ["organization", "site"], schema: z.number().min(0).max(100), default: 2, assumption: "A-PM-15" },
+  "inventory.count.second_step_role": { scopes: ["organization"], schema: z.string().min(1), default: "owner_director", assumption: "A-PM-15" },
+  /** Adjustments whose value exceeds this amount (PHP) need a second approval step. */
+  "inventory.adjustment.second_step_value": { scopes: ["organization", "site"], schema: z.number().min(0), default: 20000, assumption: "A-PRD-21, A-PM-15" },
+  /** When a line has no unit cost the value is unknown; true = treat as above the threshold. */
+  "inventory.adjustment.unknown_value_requires_second_step": { scopes: ["organization", "site"], schema: z.boolean(), default: false, assumption: "A-W1C-02" },
+  "inventory.adjustment.second_step_role": { scopes: ["organization"], schema: z.string().min(1), default: "owner_director", assumption: "A-PM-15" },
+  /** Default reservation time-to-live in hours. */
+  "inventory.reservation.ttl_hours": { scopes: ["organization", "site"], schema: z.number().min(1).max(24 * 365), default: 72, assumption: "A-W1C-03" },
+  /** Mixed lots per box (off by default). */
+  "inventory.container.allow_mixed_lots": { scopes: ["organization"], schema: z.boolean(), default: false, assumption: "A-PROC-22" },
+  /** Near-expiry buckets in days: Expiry alerts page and `expiring_lot` notifications (US-2-16). */
+  "inventory.expiry.alert_days": { scopes: ["organization"], schema: z.array(z.number().int().min(1).max(3650)).min(1).max(6), default: [30, 60, 90] as number[], assumption: "A-KPI-03" },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS;
