@@ -45,30 +45,32 @@ migration. Its canonical source is `src/db/sql/w1d.sql`; the migration is a verb
 | `pnpm test` | Integration tests against a real Postgres (`TEST_DATABASE_URL`, default `postgres://postgres@localhost:5432/bryels_test`) |
 | `pnpm db:generate` | Generate a SQL migration from schema changes (review before committing) |
 | `pnpm db:migrate` / `pnpm db:seed` / `pnpm db:reset` | Apply migrations / load demo data / wipe and reload demo data |
-| `pnpm worker` | Background worker (pg-boss): nightly stock reconciliation, balance rebuilds; health on `PORT` (default 3001) |
+| `pnpm worker` | Background worker (pg-boss): reconciliation, expiry check, reservation expiry, balance rebuilds, document renders; health on `PORT` (default 3001) |
 | `pnpm api:contract` | Regenerate `docs/api/v1-contract.json` from `src/lib/api/contract.ts` (a test fails when it is stale) |
 
-Environment variables: `DATABASE_URL` (required), `DATABASE_MIGRATION_URL` (optional separate
-migration role), `APP_ORIGIN` (public URL, used for origin checks), `ALLOW_DEMO_SEED` (`true`
-only on demo and staging environments; never in production), `PDF_RENDERER` (optional,
-default `disabled`: documents and labels print through the browser print dialog from their
-recorded dataset; stored PDF files show a "setup required" state until a PDF engine ships,
-see `src/modules/documents/config.ts`).
+Environment variables (the full per-service table is `docs/deployment-railway.md` §4):
 
-File attachments (supplier CoA, delivery photos; `docs/security.md` §4.6, §4.8):
-
-| Variable | Use |
-|---|---|
-| `FILE_STORAGE` | `local` (development: files under `FILE_STORAGE_DIR`, default `./.data/files`, excluded from version control, never served statically) or `s3` (staging/production: private S3-compatible bucket, e.g. the Railway Bucket). Unset = uploads show "File storage isn't set up" and nothing is stored |
-| `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE` | Bucket settings when `FILE_STORAGE=s3` (Railway: `${{Bucket.ENDPOINT}}` etc., path style `false`; MinIO: `true`) |
-| `FILE_URL_SECRET` | 32+ random characters; signs the 5-minute, user-bound download links. Required in production (a per-process secret is used in development) |
+| Variable | Service | Use |
+|---|---|---|
+| `DATABASE_URL` | web, worker | Required. Runtime database role |
+| `DATABASE_MIGRATION_URL` | web (pre-deploy) | Optional separate migration role; falls back to `DATABASE_URL` |
+| `APP_ORIGIN` | web | Public URL, used for Origin checks on mutating requests |
+| `ALLOW_DEMO_SEED` | web | `true` only on demo and staging environments; never in production |
+| `FILE_STORAGE` | web | `local` (development: files under `FILE_STORAGE_DIR`, default `./.data/files`, excluded from version control, never served statically) or `s3` (staging/production: private S3-compatible bucket, e.g. the Railway Bucket). Unset = uploads (supplier CoA, delivery photos) show "File storage isn't set up" and nothing is stored (ADR-027) |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE` | web | Bucket settings when `FILE_STORAGE=s3` (Railway: `${{Bucket.ENDPOINT}}` etc., path style `false`; MinIO: `true`) |
+| `FILE_URL_SECRET` | web | 32+ random characters; signs the 5-minute, user-bound download links (`docs/security.md` §4.8). Required in production; development uses a per-process secret |
+| `PDF_RENDERER` | web, worker | Optional, default `disabled`: documents and labels print through the browser print dialog from their recorded dataset; "Download PDF" shows a "setup required" state until a PDF engine ships (ADR-026, `src/modules/documents/config.ts`). `chromium` is reserved for that engine |
+| `WORKER_CONCURRENCY` | worker | Parallel deliveries per job queue, default `2` |
+| `PORT` | web, worker | Set by Railway; the worker serves `/api/health` and `/api/ready` on it (default 3001 locally) |
 
 Custom SQL: after migrating a database that already holds MVP receipts (not a fresh one), run
-`src/db/sql/w1b.sql` once to mark those receipts as posted. The nightly expiry check is the job
-`inventory.expiry_check` (`src/modules/inventory/jobs/expiry-check.ts`), wired by the job registry.
+`src/db/sql/w1b.sql` once to mark those receipts as posted.
 
-only on demo and staging environments; never in production). Worker: `WORKER_CONCURRENCY`
-(default 2) and `PORT` (health and readiness, default 3001).
+Background jobs (`docs/architecture.md` §8, ADR-025) run in the worker: `inventory.reconcile`
+(01:00 Asia/Manila), `inventory.expiry_check` (00:15 Asia/Manila: expiry, retest holds and
+`expiring_lot` alerts), `inventory.reservation_expiry` (every 15 min), and on demand
+`inventory.rebuild_balances` and `documents.render`. Scheduled jobs act as the organization's
+system actor (ADR-029).
 
 ## Deploy to Railway (demo or staging)
 
@@ -80,8 +82,10 @@ only on demo and staging environments; never in production). Worker: `WORKER_CON
    and serves on `$PORT`; Railway checks `/api/health`. `/api/ready` reports database status.
 4. Generate a public domain in the service's Networking settings and sign in with a demo account.
 5. Add a second service from the same repository named `worker`: same `DATABASE_URL`, **Custom
-   Start Command** `pnpm worker`, no public domain. It runs queued and nightly jobs; Admin →
+   Start Command** `pnpm worker`, no public domain. It runs queued and scheduled jobs; Admin →
    Diagnostics shows its heartbeat (`docs/deployment-railway.md` §2.3).
+6. For file uploads add a Railway **Bucket** and set `FILE_STORAGE=s3`, the `S3_*` references
+   and `FILE_URL_SECRET` on the app service (table above).
 
 The full production topology (bucket, backups, staging/production separation) is in
 `docs/deployment-railway.md` and arrives with later phases.

@@ -31,6 +31,12 @@ Entries are numbered `ADR-nnn` and never deleted; a superseded entry points to i
 | ADR-021 | Payroll is import-first and reporting-first; payroll calculation gated behind qualified review | Proposed (Gate 0) | 2026-10-12 |
 | ADR-022 | Postgres row-level security as defense in depth | Deferred (evaluate end of Phase 2) | 2026-10-12 |
 | ADR-023 | Phase 0 reconciliation decisions (Pack in inventory, audit naming, idempotency scope, device table, finance postings without GL, negative stock) | Proposed (Gate 0) | 2026-10-16 |
+| ADR-024 | Brand palette, recreated logo and Dribbble-style shell | Accepted | 2026-10-23 |
+| ADR-025 | Worker as a second Railway service from the same image, pg-boss with an outbox table | Accepted (Wave 1 as built; confirm at G2) | 2026-10-23 |
+| ADR-026 | Phase 2 documents and labels print from the browser; no stored PDFs yet (amends ADR-016) | Accepted for Phase 2 (ADR-016 final call stays at G2) | 2026-10-23 |
+| ADR-027 | File storage: S3-compatible private bucket behind an adapter, downloads through signed user-bound links | Accepted (Wave 1 as built) | 2026-10-23 |
+| ADR-028 | One settings store and one approval-decision ledger shared by all modules | Accepted (Wave 1 integration) | 2026-10-23 |
+| ADR-029 | One system actor per organization (users row with status `system`) for scheduled work | Accepted (Wave 1 integration) | 2026-10-23 |
 
 ---
 
@@ -345,3 +351,107 @@ still enforces every permission (ADR-005). The recreated logo is a placeholder f
 official vector artwork (assumption A-PRD-36). Contrast (WCAG AA): white on `--brand-600` is 5.3:1, `--brand-600`
 text on the page background `--bg` is 4.7:1, `--fg` on `--lime-400` is 8.2:1; light green
 (2.0:1 against white) is never used for text or as the only carrier of meaning.
+
+## ADR-025 Worker as a second Railway service from the same image
+
+**Status.** Accepted (Wave 1 as built), 2026-10-23. Refines ADR-014 and ADR-015; confirm at G2.
+
+**Decision.**
+1. Background work runs in a `worker` service built from the same image as `web`, started with
+   `pnpm worker` (`src/worker.ts`; later `node dist/worker.js`). No public domain, one replica,
+   same `DATABASE_URL`. It serves `/api/health` and `/api/ready` on `PORT`, waits until the
+   bundled migrations are applied (it never migrates), writes a `worker_heartbeats` row every
+   30 s and drains on `SIGTERM`.
+2. pg-boss (schema `pgboss`) delivers and schedules; our `background_jobs` table is the source
+   of truth and the outbox: commands insert the row inside their own transaction, the worker
+   relays it to pg-boss after commit, so a rolled-back command never runs a job.
+3. Jobs are `defineJob(...)` definitions listed in `src/modules/platform/job-handlers.ts` and in
+   the registry table of `docs/architecture.md` §8 (a unit test keeps them in step). Wave 1
+   registers `inventory.reconcile`, `inventory.rebuild_balances`, `inventory.expiry_check`,
+   `inventory.reservation_expiry` and `documents.render`.
+
+**Why.** One image keeps build, scan and rollback simple; Postgres-backed queues avoid another
+managed service; the outbox prevents "job ran for a command that rolled back".
+
+**Alternatives.** Jobs inside the web process (lost on redeploy, competes with requests);
+Redis-backed queue (another service and failure mode).
+
+**Consequences.** Without the worker service nothing breaks in the request path, but scheduled
+work (expiry, reservation lapse, reconciliation) stops; Diagnostics shows the missing heartbeat.
+The worker needs CREATE on the database for the `pgboss` schema on first start.
+
+## ADR-026 Phase 2 prints from the browser; no stored PDFs yet (amends ADR-016)
+
+**Status.** Accepted for Phase 2, 2026-10-23. Amends ADR-016; ADR-016's final engine call stays at G2.
+
+**Decision.** Generated documents and labels are rendered by the code-defined renderers from a
+frozen dataset and a pinned template version, numbered, hashed (sha256) and audited, and printed
+through the browser print dialog at the template's `@page` size (labels one per page, hash-checked
+before printing). No PDF file is stored in Phase 2. `PDF_RENDERER=disabled` (default) makes
+"Download PDF" show a setup-required state; `chromium` is reserved for the Phase 3 engine
+(`WITH_CHROMIUM=1` image). The `documents.render` job uses the same render function for retries.
+
+**Why.** Headless Chromium adds a large image layer and memory pressure on Railway before any
+document needs to be stored; browser print already produces exact label and A4 output.
+
+**Consequences.** Printed output is reproducible from the stored dataset and hash, but there is
+no stored PDF artefact to attach or e-mail until the engine ships (US-2-11 marked Partial).
+
+## ADR-027 S3-compatible bucket storage with signed, user-bound links
+
+**Status.** Accepted (Wave 1 as built), 2026-10-23. Implements the storage part of ADR-014.
+
+**Decision.** Files go through one adapter (`src/lib/storage`): `FILE_STORAGE=local` for
+development (disk under `FILE_STORAGE_DIR`, never served statically) and `FILE_STORAGE=s3` for
+staging and production (private S3-compatible bucket such as the Railway Bucket, SigV4 without an
+SDK). Object keys are opaque (`org/<org>/<attachment>`); uploads are type-sniffed, size-capped and
+metadata-stripped. Downloads use application links signed with `FILE_URL_SECRET` that are bound
+to the requesting user and expire after 5 minutes; redeeming one needs that user's signed-in
+session and re-checks site scope, then local files stream and bucket files answer with a
+60-second presigned redirect, always as an attachment. Unset storage shows "File storage isn't set up" and stores nothing.
+
+**Consequences.** Each environment needs a bucket, the `S3_*` variables and a 32+ character
+`FILE_URL_SECRET` (`docs/deployment-railway.md` §4). A leaked link is useless to another user and
+for long.
+
+## ADR-028 One settings store and one approval-decision ledger
+
+**Status.** Accepted (Wave 1 integration), 2026-10-23.
+
+**Decision.**
+1. All configurable values live in the platform `settings` table with the typed registry
+   `src/lib/settings.ts` (zod schema, default, scopes, assumption id per key; site row beats
+   organization row beats the default; an invalid stored value falls back to the default). W1C's
+   interim `inventory_settings` table is dropped; its keys and defaults moved unchanged
+   (`src/modules/inventory/policy.ts` keeps the inventory helpers).
+2. All multi-step approval decisions are rows in the append-only `approval_decisions` table
+   (master data revisions, equipment overrides, stock adjustments, stock counts). W1C's interim
+   `stock_approval_decisions` is dropped. A new `cycle` column numbers approval rounds, so a
+   record sent back for rework (a count rejected to recount) can be decided again by the same
+   approvers; uniqueness is `(record_type, record_id, cycle, step, decided_by)`.
+
+**Why.** Two stores for the same concept would drift and be reported twice; nothing was
+deployed, so the interim tables could be removed without a data migration.
+
+**Consequences.** `approval_rules` (data-model §3.1) still does not exist; step policies are typed
+configuration (A-PRD-37). A settings administration screen is still to be built.
+
+## ADR-029 One system actor per organization
+
+**Status.** Accepted (Wave 1 integration), 2026-10-23. Refines `docs/architecture.md` §8 rule 4.
+
+**Decision.** Each organization has one `users` row with status `system`
+(`system@bryels-care.invalid`, created by the seed or on first use by `src/lib/auth/system.ts`).
+It can never sign in (status is not `active`, the password hash matches nothing, no role
+assignments) and is hidden from user administration. Scheduled jobs with no triggering user run
+with `systemContext`: user id = the system user (so NOT NULL foreign keys such as
+`dispositions.decided_by` and `stock_movements.posted_by` are satisfied), only the permissions
+the job declares, every active site. Audit rows of a system context carry `actor_id` null,
+`actor_label` `system:<job code>` and `on_behalf_of` the triggering user when there is one.
+
+**Alternatives.** A nil UUID context (W1A; fails every NOT NULL foreign key loudly); nullable
+actor columns on domain tables (weakens accountability everywhere).
+
+**Consequences.** Reports that group by person must exclude status `system`; the user list and
+user detail already do.
+

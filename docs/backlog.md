@@ -498,9 +498,16 @@ Phase 7 can replay it (ADR-018).
 
 ### 4.1 Phase 2 Inventory MVP
 
+> **Wave 1 delivery (2026-10-23).** Each card below carries a *Delivery status* line: Done, Partial
+> (with the gap) or Not started. Wave 1 built E-2-01 to E-2-06 and E-3-01/E-3-02 in five parallel
+> streams (W1A ledger/jobs/exports/API, W1B receiving, W1E documents/labels/scan, W1C moves/boxes/
+> counts/adjustments/reservations, W1D engineering master data and equipment) and one integration
+> pass (shared settings, approvals and system actor; cross-stream guards; ADR-025 to ADR-029).
+
 #### E-2-01 Stock ledger core and jobs
 
 #### US-2-01 Stock movement ledger, balance projection and posting pipeline (L, Must) — FR-inventory-02, FR-inventory-09 (projection), AC-11 (posting), ADR-006
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1A). Balances stay keyed by (lot, location); box contents are kept by the box commands (`docs/data-model.md` §3.3 interim notes), not by `postMovement`. V-FREEZE is enforced inside `postMovement` (integration).
 **As** the backend-engineer **I want** `postMovement` to write an immutable `stock_movements` row and update `inventory_balances` and `container_contents` in one transaction with deterministic locking **so that** concurrent scans can never double-issue or drive stock negative.
 - Permissions: `inventory.movement.post`, `inventory.movement.view`, `inventory.balance.view` · Entities: `stock_movements`, `inventory_balances`, `inventory_lots`, `container_contents`, `transfer_requests` (source for scan moves), numbering `MOV`
 - AC1 Given balance 10 g and two concurrent issues of 8 g, When posted, Then exactly one succeeds, one is 409 `STOCK_INSUFFICIENT`, the balance is 2 and one ledger row exists; lock order keys → lots → balances → numbering rule holds over 200 randomised interleavings with no deadlock.
@@ -509,12 +516,14 @@ Phase 7 can replay it (ADR-018).
 - States: n/a (service) · Audit: `inventory.stock_movement.posted` · Depends: → US-1-13, → US-1-19, → US-1-20 · Tests: `concurrency.double_issue_prevented`, `concurrency.deadlock_free`, `ledger.projection.updated_in_transaction`, `stock.negative.*`, `uom.entered_and_base_stored`, `inventory.operator_movement_types`; `docs/testing.md` §4.1, §4.3, §4.14
 
 #### US-2-02 Reversal and replacement of posted movements (S, Must) — FR-inventory-02 (corrections), ADR-006
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1A). A movement that moved or changed a box is corrected through the box flow, not by a bare reversal (integration guard).
 **As** a site_manager **I want** to correct a wrong posting by reversal plus replacement with a reason **so that** history stays complete and balances return to truth.
 - Permissions: `inventory.movement.void` (S) · Entities: `stock_movements` (`reversal_of_id`, partial unique)
 - AC1 Given a posted transfer, When voided with a reason code, Then a `reversal` row linked to the original is posted after the same validations (409 if the stock has since moved), balances return to pre-posting, the original is byte-identical, and the replacement carries the reversal's `correlation_id`; a second reversal of the same row is 409.
 - States: confirm dialog with typed confirmation (ux §5.16) · Audit: `inventory.stock_movement.reversed` (sensitive) · Depends: → US-2-01 · Tests: `ledger.reversal.*`; `docs/testing.md` §4.2
 
 #### US-2-03 Background jobs, in-app notifications and diagnostics Jobs card (M, Must) — FR-platform-05, FR-platform-06 (in-app), ADR-015
+- **Delivery status (Wave 1, 2026-10-23):** Partial (W1A). Registry, outbox, worker, retry/dead-letter, Jobs card, in-app notifications and audit as `system:<code>` are done. Gap: `platform.metrics_sample` and `platform.alerts_evaluate` (AC2, depends on US-1-25) are not built; email delivery not configured.
 **As** a system_admin **I want** pg-boss jobs registered in `background_jobs` with retry, dead-letter, retry/cancel controls and in-app notifications **so that** slow work runs in the worker and failures are visible, never silent.
 - Permissions: `platform.job.view`, `platform.job.admin`; notifications self-service · Entities: `background_jobs`, `notifications`, `reconciliation_runs`; job codes from the registry in `docs/architecture.md` §8 (e.g. `platform.notification_dispatch` for in-app delivery, `platform.import_job.process` registered for the Phase 5 wizard and the US-2-25 loader)
 - AC1 Given a job that fails 5 times, When retried with backoff, Then it is dead-lettered, raises a `critical` notification to system_admin and appears on the Jobs card with payload summary (no secrets), attempts, last error and `correlationId`; `platform.job.admin` retry/cancel writes `platform.background_job.retried/cancelled`; retried jobs never duplicate a posting (idempotency key per job).
@@ -522,12 +531,14 @@ Phase 7 can replay it (ADR-018).
 - States: standard; action-centre panel lists notifications with acknowledge · Audit: `platform.background_job.retried/cancelled` · Depends: → US-1-05 · Tests: `jobs.context_rebuilt`, `jobs.payload_validated`, `jobs.dead_letter`, `audit.job_actor`; runbook §6
 
 #### US-2-04 Nightly ledger reconciliation and projection rebuild (S, Must) — FR-inventory-02, R-15
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1A): nightly `inventory.reconcile` (01:00 Asia/Manila) and audited `inventory.rebuild_balances`.
 **As** a system_admin **I want** the `inventory.reconcile` job to compare ledger and projection nightly and report differences **so that** drift is found, never auto-fixed.
 - Permissions: `platform.job.view`; `inventory.balance.admin` (S, P2; system_admin and site_manager, A-PM-19) to enqueue `inventory.rebuild_balances` · Entities: `reconciliation_runs`, `inventory_balances`
 - AC1 Given 500 random postings across two sites, When the reconciliation query of `docs/data-model.md` §5.6 runs, Then zero rows; given an injected mismatch, Then a `critical` notification to system_admin and the site's site_manager, a `reconciliation_runs` row with the report file, and nothing corrected; the rebuild job recomputes projection rows from the ledger for a key set and is audited.
 - States: Reconciliation diagnostics card (L E X D) · Audit: `inventory.inventory_balance.rebuilt` · Depends: → US-2-03 · Tests: `ledger.projection.matches_ledger`; runbook §9
 
 #### US-2-05 Availability, lot balances and stock card report (M, Must) — FR-inventory-09, FR-inventory-13, FR-documents-09 (stock card)
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1A).
 **As** a warehouse_operator **I want** to see on-hand, reserved, allocated, blocked and available per lot and location, and a stock card per lot **so that** I trust what the screen says before I move anything.
 - Permissions: `inventory.balance.view`, `inventory.movement.view` (+ `.export`) · Entities: `inventory_balances`, `stock_movements`; document kind `stock_card`
 - AC1 Given lots covering every status with reservations and allocations, When availability is queried with `$as_of`, Then SQL and the pure function agree and `available = on_hand − reserved − allocated − quarantined − on_hold − expired − recalled − rejected` (A-DM-23); a Site B balance never contributes to a Site A query.
@@ -537,12 +548,14 @@ Phase 7 can replay it (ADR-018).
 #### E-2-02 Receiving (W01)
 
 #### US-2-06 Supplier basics (S, Must) — FR-masterdata-10
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1B).
 **As** procurement **I want** suppliers with contacts, terms, lead time and quality status **so that** a receipt names an active supplier; the full approved-material list arrives in Phase 6.
 - Permissions: `masterdata.supplier.{view,create,edit,export}` · Entities: `suppliers`, `supplier_materials` (table created; approval flows Phase 6)
 - AC1 Given a supplier with `quality_status = suspended`, When a receipt line names it, Then the line is blocked until procurement or qa_qc resolves (V-ASL); contacts are organization-wide master data; export writes `platform.export.created`.
 - States: standard · Audit: `masterdata.supplier.created/updated` · Depends: → US-1-13 · Tests: `authz.*` (masterdata.supplier)
 
 #### US-2-07 Unplanned goods receipt: draft, lines, discrepancies, posting (L, Must) — FR-inventory-01 (unplanned), FR-procurement-01, AC-11, W01-01..06, A-PRD-15, A-PROC-26
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1B). Receipt labels go through label jobs and the print station (US-2-12).
 **As** a warehouse_operator **I want** to receive a delivery on my phone, line by line, and post it once **so that** each line becomes a traceable lot in quarantine with one receipt movement and labels queued.
 - Permissions: `procurement.goods_receipt.{view,create,post,export}`, `procurement.goods_receipt.void` (S), `procurement.receipt_discrepancy.approve` (S) · Entities: `goods_receipts` (`receipt_kind` normal/opening_balance), `goods_receipt_lines`, `inventory_lots`, `stock_movements`, `label_jobs`; numbering `GR`, `LOT`
 - AC1 Given a draft with a scanned `BC:MAT`, quantity and unit (V-UOM), supplier lot, dates (V-EXP flags past expiry as reject candidate), photos, When Post is tapped, Then in one transaction each line creates an `inventory_lots` row in `quarantine` (or `released` only when `requires_incoming_inspection = false`), a `receipt` movement into the receiving location, a label job per container, and the receipt becomes `posted`; a double tap or reload-and-repost returns the original result and nothing doubles (AC-11).
@@ -551,6 +564,7 @@ Phase 7 can replay it (ADR-018).
 - States: standard + S (printer not set up) · Audit: `procurement.goods_receipt.posted/reversed`, `procurement.goods_receipt_line.discrepancy_approved`, `inventory.inventory_lot.created` · Depends: → US-2-01, → US-2-06, → US-2-12 · Tests: `procurement.receipt_creates_lot_only_on_post`, `idempotency.*`, `procurement.discrepancy_approve_not_receiver`, `procurement.receipt_void_requires_void_permission`, `ledger.reversal.receipt_with_lot`; `docs/testing.md` §9.2
 
 #### US-2-08 Supplier lot documents and file attachments (M, Must) — FR-documents-12, FR-procurement-01
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1B). Needs `FILE_STORAGE` (local or `s3`) and `FILE_URL_SECRET` per environment; without them uploads show "File storage isn't set up" (ADR-027).
 **As** a warehouse_operator **I want** to photograph the CoA and attach it to the receipt line **so that** QA finds the certificate on the lot.
 - Permissions: `documents.file_attachment.{view,create,export,void}`, `procurement.supplier_lot_document.{view,create}` · Entities: `file_attachments`, `supplier_lot_documents`
 - AC1 Given an upload, When the declared type, extension and sniffed type disagree, or the size exceeds the cap (images 10 MB, PDFs 25 MB), Then 422; images are re-encoded with metadata stripped; objects live under `org/<uuid>/<uuid>` in the private bucket; downloads use 5-minute user-bound signed URLs and write `documents.file_attachment.downloaded`.
@@ -558,12 +572,14 @@ Phase 7 can replay it (ADR-018).
 - States: standard; upload progress; S when storage unconfigured · Audit: `documents.file_attachment.uploaded/removed/downloaded` · Depends: → US-2-07 · Tests: `upload.*`, `files.no_direct_access`, `documents.signed_url_*`; `docs/security.md` §2.5, §4.6, §4.8
 
 #### US-2-09 Put-away and status-location rules (S, Must) — FR-inventory-10, W01-08, V-LOC
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1B). Put-away also refuses a location frozen by a stock count (V-FREEZE, integration).
 **As** a warehouse_operator **I want** to scan the lot label and the destination **so that** quarantined stock can only land in quarantine-class locations.
 - Permissions: `inventory.movement.post` · Entities: `transfer_requests` (`put_away`), `stock_movements`
 - AC1 Given a quarantined lot, When moved to a released-stock bin, Then 409 V-LOC with allowed locations suggested; to a `quarantine` location it posts; a location inside an active count is 409 V-FREEZE; a `blocked` location is refused.
 - States: scanner states (O N) · Audit: `inventory.stock_movement.posted` · Depends: → US-2-07, → US-2-13 · Tests: `stock.blocked.location_class`, `concurrency.count_freeze_blocks_posting`
 
 #### US-2-10 Lot disposition, holds and expiry job (M, Must) — FR-quality-01, FR-quality-02 (lot), FR-inventory-12, AC-12 (status), A-PM-18, A-PROC-36, `docs/ux-system.md` §9.13
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1B + integration): `inventory.expiry_check` is a scheduled job, daily 00:15 Asia/Manila, as the organization's system actor (ADR-029).
 **As** qa_qc **I want** to release, reject or hold a lot with one recorded decision, and the system to expire lots automatically **so that** only released, unexpired stock is ever available.
 - Permissions: `quality.disposition.{view,create,approve}` (approve R, qa_qc only), `quality.hold.{view,create,approve}`, `inventory.held_stock_issue.approve` (R) · Entities: `dispositions` (ledger), `quality_holds`, `inventory_lots.quality_status`, `inventory_balances` re-keyed
 - AC1 Given a quarantined lot, When qa_qc approves a `release` disposition with re-auth, Then the lot and all its balance rows change status in one transaction, a label reprint job is queued (`labels.reprint_on_status_change`), and `quality.disposition.approved` (restricted) is written; owner_director and warehouse_operator are 403 (`quality.disposition_only_qa`); `inventory.lot.edit` with a status field is 422.
@@ -574,6 +590,7 @@ Phase 7 can replay it (ADR-018).
 #### E-2-03 Documents, labels and scanning infrastructure
 
 #### US-2-11 Document templates, generated documents and worker rendering pipeline (L, Must) — FR-documents-10, FR-documents-11, ADR-016 pipeline, A-RPT-01
+- **Delivery status (Wave 1, 2026-10-23):** Partial (W1E). Templates, approval, frozen datasets, sha256, reprint and the `documents.render` job are done. Gap: no stored PDF; documents print from the browser and "Download PDF" shows the setup-required state until a PDF renderer is deployed (ADR-026 amends ADR-016).
 **As** the backend-engineer **I want** versioned template definitions bound to code renderers, a `generated_documents` lifecycle and a worker PDF job **so that** every later document (labels now, BMR and DR later) is versioned, hashed, previewable and reprintable under control.
 - Permissions: `documents.template.{view,create,edit,submit,approve,void}`, `documents.generated_document.{view,create,export,void}`, `documents.reprint.create` · Entities: `document_templates`, `document_template_versions`, `generated_documents`, `file_attachments`; numbering `DOC`
 - AC1 Given a template version, When approved by a user other than the submitter, Then it becomes effective and the renderer id in `definition` must exist in code (free HTML is rejected by schema); generation renders from a frozen dataset in the worker, stores the PDF with sha256 and page count, allocates a `DOC` number and writes `documents.generated_document.generated`.
@@ -581,6 +598,7 @@ Phase 7 can replay it (ADR-018).
 - States: preview L X S; reprint dialog V · Audit: `documents.generated_document.generated/downloaded/reprinted/superseded` · Depends: → US-2-03, → US-2-08 · Tests: `documents.reprint_requires_reason`, `documents.reprint_audit`, `documents.hash_recorded`, `documents.generated_scoped_by_source_record`, T-06; `docs/testing.md` §2.2
 
 #### US-2-12 Label templates, label jobs, print station and reprint (L, Must) — FR-inventory-04, FR-inventory-05 (symbology), FR-masterdata-11, FR-documents-10, ADR-017, A-PRD-05
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1E). Labels print from the browser at the template's page size, hash-checked (ADR-026).
 **As** a warehouse_operator **I want** raw-material, location and sample labels printed at the configured size with a QR the phone can read **so that** every container is identifiable by scan.
 - Permissions: `masterdata.label_template.{view,create,edit,approve}`, `inventory.label_job.{view,create}`, `documents.reprint.create` · Entities: `label_templates` (`applies_to`, `symbology`, media mm, `fields`), `label_jobs` (status, printed_by, voided_*), print station page
 - AC1 Given an approved label template 100 × 50 mm QR, When a receipt posts, Then one `label_jobs` row per container (`copies`, idempotency key) is queued, rendered one label per page with `@page` size and margin 0, payload `BC:LOT:<lot_number>` (grammar-checked, never a URL), human-readable fields of `docs/reports-and-templates.md` §8.3 including "status at print" and "scan to verify", template code/version footer; the QR round-trips in CI.
@@ -589,6 +607,7 @@ Phase 7 can replay it (ADR-018).
 - States: standard + S · Audit: `documents.label_job.printed/reprinted/voided`, `masterdata.label_template.approved` · Depends: → US-2-11 [HW] · Tests: `label.payload_minimal`, `scan.payload_grammar`, T-01..T-07 (G2 manual on company printers); `docs/testing.md` §2.2
 
 #### US-2-13 Scan input, payload grammar and scan result card (M, Must) — FR-inventory-03, FR-inventory-05, W02-01..02, ADR-017
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1E + integration): box, location (count freeze, QA hold, move here) and equipment scans resolve with the Wave 1 data.
 **As** a warehouse_operator **I want** to scan with the camera, a keyboard-wedge scanner or by typing and see identity, status and only the actions I may take **so that** I never guess what a container is.
 - Permissions: `inventory.lot.view`, `inventory.container.view`, `masterdata.location.view` (server decides `allowed_actions[]`) · Entities: scan resolution per `docs/data-model.md` §9.5
 - AC1 Given a payload matching `^BC:(LOT|BOX|LOC|MAT|SKU|EQP|DOC):[A-Z0-9][A-Z0-9._-]{0,63}$`, When scanned, Then the scoped lookup returns the card (identity, status chip, expiry with days remaining, quantities, locations, allowed actions with reasons for disallowed ones); any other string is "Not recognised"; a Site B lot scanned at Site A is "No lot matches this code at Site A" with no fields; lookups are limited to 120/min per session.
@@ -598,6 +617,7 @@ Phase 7 can replay it (ADR-018).
 #### E-2-04 Scan, move and containers (W02)
 
 #### US-2-14 Scan-to-move with idempotent posting (M, Must) — FR-inventory-03, FR-inventory-10, AC-16 (move part), W02-03
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1C). Location holds are enforced on scan-to-move, the lot move page and inter-site transfers (integration).
 **As** a warehouse_operator **I want** scan source → quantity → scan destination → confirm **so that** a move posts once even if I tap twice or my connection drops.
 - Permissions: `inventory.movement.post`, `inventory.intersite_transfer.post` (S, both sites) · Entities: `transfer_requests` (`scan_move`, `inter_site`), `stock_movements`
 - AC1 Given a scanned box and destination, When confirmed, Then one `transfer` movement with `container_id` posts, the box location updates, the read-back toast names box, contents and destination with movement number; the same box and destination scanned again within seconds or after a reload returns "Already moved to … at … by you" and nothing posts (AC-16).
@@ -605,6 +625,7 @@ Phase 7 can replay it (ADR-018).
 - States: 3-step guided flow with sticky confirm; O queued state prepared (P7) · Audit: `inventory.stock_movement.posted` · Depends: → US-2-13, → US-2-09 · Tests: `idempotency.*`, `inventory.intersite_transfer_needs_both_sites`, e2e `flows/inventory/scan-move.spec.ts`; `docs/testing.md` §9.7 steps 1 to 3
 
 #### US-2-28 Undo of the actor's own stock move within the undo window (S, Must) — FR-inventory-02 (corrections), FR-inventory-03, ADR-006, `docs/ux-system.md` §5.17, A-UX-15
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1C). Undo posts linked `reversal` rows with the real `reversal_of_id` and `correlation_id` columns (integration).
 **As** a warehouse_operator **I want** an "Undo" on the move toast for a short time **so that** a wrong scan is corrected at once without a supervisor, while the ledger keeps both rows.
 - Permissions: `inventory.movement.post` (own movement, inside the window); afterwards only `inventory.movement.void` (S, US-2-02) · Entities: `stock_movements` (`reversal_of_id`), `idempotency_keys`; setting `settings.ux.undo_window_seconds` (default 60); reason `undo_by_actor`
 - AC1 Given a scan-move, put-away or box placement posted by the user, When the success response returns, Then it carries `undo: { until, command }` (`docs/architecture.md` §6) only for actions in the ux §5.17 matrix, and the client shows "Undo" only when that field is present.
@@ -613,12 +634,14 @@ Phase 7 can replay it (ADR-018).
 - States: toast with countdown; O (undo is Online-only; offline only "Remove from queue" applies, Phase 7) · Audit: `inventory.stock_movement.reversed` · Depends: → US-2-14, → US-2-02, → US-1-19 · Tests: `ledger.reversal.*`, `idempotency.*`; `docs/testing.md` §4.2: `ledger.reversal.undo_window`, `ledger.reversal.undo_refused_after_later_movement`
 
 #### US-2-15 Containers: create, split, merge, repack with lineage; box labels (M, Must) — FR-inventory-07 (materials), AC-16 (box card), W02-04..06
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1C). Split, merge and repack write lineage and contents only (no ledger rows) until balances carry `container_id`.
 **As** a warehouse_operator **I want** boxes with unique ids whose contents, status and history are known **so that** a split or repack never loses where the stock came from.
 - Permissions: `inventory.container.{view,create,edit,export}`, `inventory.label_job.create` · Entities: `containers`, `container_contents`, `container_lineage` (ledger); numbering `BOX`
 - AC1 Given a box of 100 units, When split 60/40, Then two `container_lineage` rows, children inherit lot and status, movements carry `container_id`, and child labels print; merging a `released` and an `on_hold` box is 409; mixed lots per box only when the SKU allows (A-PROC-22); a repack is traceable from original to final box.
 - States: standard; box card shows lineage link · Audit: `inventory.container.split/merged/repacked`, `documents.label_job.printed` · Depends: → US-2-14, → US-2-12 · Tests: `container.lineage.split`, `container.lineage.merge_status_mismatch`, `container.repack_preserves_history`; `docs/testing.md` §9.7 step 4
 
 #### US-2-16 Lot detail, lots and locations lists, expiry alerts (M, Must) — FR-inventory-12 (alerts), FR-inventory-03, `docs/ux-system.md` §9.4
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1C + integration): `expiring_lot` notifications are sent by the `inventory.expiry_check` job, deduplicated per lot and bucket.
 **As** a site_manager **I want** lot and location lists with filters and an expiry alert list **so that** near-expiry and blocked stock is visible before it is a problem.
 - Permissions: `inventory.lot.{view,export}`, `inventory.lot.edit` (S: dates and supplier lot with reason, never status), `masterdata.location.view` · Entities: `inventory_lots`, `inventory_balances`, `notifications` (`expiring_lot`)
 - AC1 Given lots expiring within 30/60/90 days (A-KPI-03), When the nightly scan runs, Then `expiring_lot` notifications (deduplicated) reach the site's site_manager and qa_qc and the Expiry alerts page lists them; lot detail shows tabs Movements / Documents / Genealogy and server-provided allowed actions; an attribute edit requires a reason and writes `inventory.inventory_lot.attributes_changed`.
@@ -627,12 +650,14 @@ Phase 7 can replay it (ADR-018).
 #### E-2-05 Counts, adjustments, reservations (W03)
 
 #### US-2-17 Stock count plan, release and freeze (M, Must) — FR-inventory-08, W03-01..02
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1C). V-FREEZE now holds for every posting, including production, dispatch and receiving.
 **As** a site_manager **I want** to plan a blind cycle or full count and release it **so that** expected quantities are frozen and nothing moves in the counted locations until the count is done.
 - Permissions: `inventory.stock_count.{view,create,submit,export}` · Entities: `stock_counts`, `stock_count_lines` (expected snapshot), count sheet document (blind)
 - AC1 Given a released count, When any movement touches a scoped location, Then 409 V-FREEZE until the count is posted or cancelled (cancel by site_manager with reason, audited); the blind count sheet prints locations and items without quantities.
 - States: standard · Audit: `inventory.stock_count.released/cancelled` · Depends: → US-2-05 · Tests: `concurrency.count_freeze_blocks_posting`, `statemachine.*` (stock count)
 
 #### US-2-18 Count capture, recount, variance approval and posting (L, Must) — FR-inventory-08, FR-inventory-11 (variance), W03-03..08, A-PRD-21, A-PROC-12
+- **Delivery status (Wave 1, 2026-10-23):** Partial (W1C). Capture, blind recount by a different counter, two-step variance approval and posting are done (decisions in the shared `approval_decisions`, ADR-028). Gap: no photo on found/unlabelled lines.
 **As** a warehouse_operator **I want** to scan a location and its lots and type counts; **as** a site_manager **I want** to approve variances and post adjustments **so that** the original counts are never erased.
 - Permissions: `inventory.stock_count.submit` (counter), `inventory.stock_count.approve` (S), `inventory.stock_count.post` (S) · Entities: `stock_count_lines` (count, recount by a different user), `stock_movements` (`adjustment`, source `stock_count`), `approval_rules` (`stock_count_variance`)
 - AC1 Given a counted line with variance above the threshold, When a recount is entered by the same counter, Then 409 `SEPARATION_OF_DUTIES`; by a different counter it is stored alongside the first count; the approver cannot be any counter; found and unlabelled items are recorded as such with photo and go `on_hold` after resolution (W03 exception).
@@ -640,26 +665,30 @@ Phase 7 can replay it (ADR-018).
 - States: count screen "12 of 40 locations", keypad; variance review table · Audit: `inventory.stock_count.variance_approved/posted` · Depends: → US-2-17, → US-1-14 · Tests: `count.original_retained`, `count.adjustment_links_count`, `sod.count.recounter_not_counter`; `docs/ux-system.md` §9.6
 
 #### US-2-19 Stock adjustments as approvable documents (M, Must) — FR-inventory-11, A-DM-32, A-PRD-21
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1C). Decisions in the shared `approval_decisions` (ADR-028).
 **As** a warehouse_operator **I want** to draft an adjustment (found, lost, damaged) that a site_manager approves before it posts **so that** no stock changes without a second person.
 - Permissions: `inventory.adjustment.{create,submit}`, `inventory.adjustment.approve` (S), `inventory.adjustment.post` (S), `inventory.lot.create` (S, paired with an adjustment) · Entities: `stock_adjustments`, `stock_adjustment_lines`; numbering `ADJ`; `approval_rules` (`stock_adjustment`)
 - AC1 Given a submitted adjustment, When the submitter approves, Then 409; when a site_manager approves and the value is above the threshold, Then an owner_director second step is required; posting writes one movement per line with the header reason and `inventory.stock_adjustment.submitted/approved/posted`; an unapproved adjustment can never post.
 - States: standard; A banner · Audit: `inventory.stock_adjustment.submitted/approved/posted` · Depends: → US-1-14, → US-2-01 · Tests: `inventory.adjustment_post_requires_approval`, `authz.sod.approve_own`, `authz.threshold.rule_evaluation`
 
 #### US-2-20 Reservations and FEFO/FIFO recommendation (M, Must) — FR-inventory-06 (recommend), FR-inventory-09 (reservations), A-PRD-16, A-DM-22
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1C + integration): scheduled `inventory.reservation_expiry` job (every 15 min, audited).
 **As** a production_planner **I want** stock reserved for a demand and the system to recommend the lot to use **so that** the earliest-expiring released lot is always proposed.
 - Permissions: `inventory.reservation.{view,create,void}`, `inventory.allocation.{view,create,void}` · Entities: `stock_reservations`, `stock_allocations`, `src/modules/inventory/services/fefo.ts`
 - AC1 Given candidate lots, When the recommendation runs, Then earliest expiry first (tie: manufacture date, created, lot number), FIFO by `received_at` when the item has no expiry, blocked statuses excluded with a reason the card shows, the rule configurable per material class, SKU and customer, and the recommendation equals what allocation would pick; reservations are lot- and location-specific with a TTL setting.
-- States: standard · Audit: `inventory.stock_reservation.created/released` · Depends: → US-2-05 · Tests: `fefo.*`, `fifo.when_no_expiry`, `fefo.rule_per_class_and_customer`, `fefo.recommendation_matches_allocation`; `docs/testing.md` §4.4
+- States: standard · Audit: `inventory.stock_reservation.created/released/expired` (expired by the `inventory.reservation_expiry` job) · Depends: → US-2-05 · Tests: `fefo.*`, `fifo.when_no_expiry`, `fefo.rule_per_class_and_customer`, `fefo.recommendation_matches_allocation`; `docs/testing.md` §4.4
 
 #### E-2-06 Exports and idempotent command API
 
 #### US-2-21 Export layer with scope, masking, neutralisation and audit (S, Must) — FR-platform-11, A-PM-17
+- **Delivery status (Wave 1, 2026-10-23):** Partial (W1A). Scope, masking, neutralisation, CSV/XLSX and audit are done; above the 50,000-row cap the request is refused with a narrowing message. Gap: the background export job for larger extracts.
 **As** an auditor **I want** CSV/XLSX exports that contain exactly what the screen shows for my scope **so that** a file can never carry another site's rows or a formula injection.
 - Permissions: module `.export` strings; R exports need re-auth · Entities: `file_attachments` (kind `export`)
 - AC1 Given an export with a Site B filter by a Site A user, When run, Then only Site A rows, header block (generated-at, by, site filter, markers), cells starting with `= + - @ \t \r` prefixed with `'`, XLSX cells string-typed, 50,000-row cap with a background job above it, and `platform.export.created` with filters, row count, format and hash.
 - States: progress; S/large-export notice · Audit: `platform.export.created` · Depends: → US-1-13 · Tests: `export.formula_neutralized`, `authz.cross_site.export`, `authz.sensitive_fields.masked`; `docs/security.md` §4.7
 
 #### US-2-22 `/api/v1` command contract designed for offline replay (S, Must) — FR-inventory-14 (groundwork), FR-platform-12, ADR-018
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1A).
 **As** the principal-architect **I want** every Phase 2 command to accept a client UUIDv7 id, idempotency key, `siteId`, device id and client timestamp in a documented envelope **so that** Phase 7 can replay queued commands without redesign.
 - Permissions: per command · Entities: `idempotency_keys`; `docs/architecture.md` §6 conventions
 - AC1 Given the OpenAPI-style contract document, When a command is added, Then the `docs-sync` job requires its schema, idempotency flag and offline eligibility flag (`docs/process-maps.md` §6) to be listed; typed client `src/lib/api` is generated; breaking changes require `/api/v2`.
@@ -668,18 +697,21 @@ Phase 7 can replay it (ADR-018).
 #### E-2-07 Early go-live enablement (conditional on Q-MIG-13; otherwise Phase 5/9)
 
 #### US-2-23 QA bulk disposition screen (M, Should → Must if early go-live) — `docs/data-migration-plan.md` §5 step 10, §14, MC-07, `docs/ux-system.md` §9.13 (bulk disposition)
+- **Delivery status (Wave 1, 2026-10-23):** Not started (not in Wave 1).
 **As** qa_qc **I want** to filter opening lots and apply one disposition with reason `legacy_release` to the selection after re-authentication **so that** thousands of migrated lots are released by a QA decision, not by the loader.
 - Permissions: `quality.disposition.approve` (R) · Entities: `dispositions` (one row per lot), `inventory_lots`, `label_jobs`
 - AC1 Given a filter (site, warehouse, material class, status, expiry range), When qa_qc applies `release` with reason to n lots, Then n disposition rows post in batches inside transactions, lots past expiry are refused (stay `expired`), each lot's balances re-key, reprint jobs queue per `labels.reprint_on_status_change`, and `quality.disposition.approved` is written per lot with the bulk correlation id; a progress state shows done/remaining and failures per lot.
 - States: L X D V; progress · Audit: `quality.disposition.approved` · Depends: → US-2-10, [Q-MIG-13], [Q-MIG-05] · Tests: `quality.disposition_only_qa`, MC-07 on staging R1
 
 #### US-2-24 Label verification scan screen (S, Should → Must if early go-live) — `docs/data-migration-plan.md` §10 step 5, MC-06
+- **Delivery status (Wave 1, 2026-10-23):** Not started (not in Wave 1).
 **As** a warehouse_operator **I want** to scan each newly labelled container and see the remaining list **so that** the count-and-tag team knows when every container in a zone is verified.
 - Permissions: `inventory.container.edit`, `inventory.label_job.view` · Entities: `containers` (`verified_at`, `verified_by`, `verification_scan_payload`; `docs/data-model.md` §3.3), `label_jobs`
 - AC1 Given the containers of an opening receipt, When each `BC:BOX`/`BC:LOT` label is scanned, Then the container's `verified_at`/`verified_by`/`verification_scan_payload` are set (container state unchanged), the remaining list per location shrinks, a scan of an unknown or other-site code is "not found at your site", and the zone summary shows verified %, target ≥ 99 % (MC-06).
 - States: scanner states; progress · Audit: `inventory.container.verified` · Depends: → US-2-15, → US-2-12 · Tests: `authz.cross_site.scan`; MC-06
 
 #### US-2-25 Command-line migration loader with `MIGRATION_WINDOW_OPEN` guard (L, Should → Must if early go-live) — FR-platform-14, `docs/data-migration-plan.md` §9.4, A-MIG-08, R-08
+- **Delivery status (Wave 1, 2026-10-23):** Not started (not in Wave 1).
 **As** the devops-engineer **I want** `pnpm migrate:load --kind <kind> --file <path> --site <code> --mapping <code> [--dry-run|--post] --as <email>` using the Phase 5 import engine **so that** master data and opening stock load through the same validated, audited path before the wizard UI exists.
 - Permissions: the named user's `platform.import_job.{create,submit,post}` (catalogued P5, pulled forward) plus the entity `create`/`post` permissions; `pnpm migrate:approve <job>` by a second person · Entities: `import_mappings`, `import_jobs`, `import_job_rows` (tables pulled from P5), `goods_receipts.receipt_kind = opening_balance`, `material_aliases`
 - AC1 Given a file and mapping, When run with `--dry-run` (default), Then rows are validated per §7 and deduplicated per §8 of the migration plan, an error file is written, nothing posts; with `--post` and a recorded second-person approval, Then entities are created in chunks of 500 inside transactions, opening receipts post as ledger movements with `source_document_type = goods_receipt`, re-running the same checksum creates nothing new, and `platform.import_job.posted` carries counts.
@@ -687,6 +719,7 @@ Phase 7 can replay it (ADR-018).
 - States: CLI output; diagnostics Imports card · Audit: `platform.import_job.posted/reversed` · Depends: → US-2-07, → US-2-21, [Q-MIG-13] · Tests: `import.duplicates_flagged`, `import.row_cap`, `audit.import_events`, MC-01..MC-04, MC-09, MC-16 on staging R1
 
 #### US-2-26 Opening-balance receipts and legacy document index on the lot page (S, Should → Must if early go-live) — A-PRD-30, A-DM-09, MC-12
+- **Delivery status (Wave 1, 2026-10-23):** Not started (not in Wave 1).
 **As** qa_qc **I want** the opening receipt and the scanned legacy BMR to open from a migrated lot **so that** history is attached, not re-keyed.
 - Permissions: `procurement.goods_receipt.view`, `documents.file_attachment.view` · Entities: `legacy_documents` (numbering `LDOC`), `goods_receipts` (`opening_balance`, null supplier), `inventory_lots.legacy_number`
 - AC1 Given a migrated finished-goods lot, When its page opens, Then the stock card shows the opening receipt as the first line and the Documents tab lists the `legacy_documents` row (indexed header fields, verified by a second person) with a signed download; legacy numbers are searchable and never appear in scan payloads.
@@ -695,6 +728,7 @@ Phase 7 can replay it (ADR-018).
 #### E-2-08 Platform refinements: in-app help, assignment sub-scopes, read-only maintenance mode
 
 #### US-2-27 In-app help and quick guides for receive, move and count (M, Should) — FR-platform-16, `docs/ux-system.md` §3.2, §7
+- **Delivery status (Wave 1, 2026-10-23):** Not started (not in Wave 1).
 **As** a warehouse_operator **I want** a "?" on the receive, move and count screens that opens a short guide for the step I am on without leaving it **so that** I finish the task correctly without calling a supervisor.
 - Permissions: reading needs none (any signed-in user); `platform.help_guide.admin` (S, P2) to author and publish · Entities: `help_guides` (organization-wide, versioned, screen/workflow key, optional link to `work_instruction_revisions` from Phase 3; `docs/data-model.md`)
 - AC1 Given a published guide for the screen key, When "?" (operator mode) or Help in the user menu is opened, Then a sheet shows the guide (text and images) over the task and closing it returns to the same step with entered values intact; a screen without a guide shows the empty state "No guide for this screen yet", never a dead link.
@@ -703,6 +737,7 @@ Phase 7 can replay it (ADR-018).
 - States: sheet L E X O; editor L X V D · Audit: `platform.help_guide.updated`, `platform.help_guide.published` · Depends: → US-1-08, ⇢ US-2-07, ⇢ US-2-14, ⇢ US-2-18 · Tests: `authz.*` (platform.help_guide); `docs/testing.md` §4.17: `help.guide_versioned`; to add: e2e help sheet keeps step state on both viewports. Each later phase adds guides for its screens; SOP mapping and training are US-9-08.
 
 #### US-2-29 Warehouse sub-scope on site assignments (M, Should) — FR-identity-03 (sub-scope), `docs/permissions-matrix.md` §4.4, A-PM-13
+- **Delivery status (Wave 1, 2026-10-23):** Not started (not in Wave 1).
 **As** a system_admin **I want** to limit a warehouse_operator's write access to the warehouses they work in **so that** a person at a large site cannot post stock in another warehouse of the same site.
 - Permissions: `identity.site_assignment.admin` (R) · Entities: `user_site_assignments.scope` (jsonb, Phase 2 column per matrix §4.4)
 - AC1 Given an assignment with `{"warehouseIds": [W1]}`, When the user posts a movement, count, receipt, container or label job at a location of warehouse W2 at the same site, Then the request is refused as out of scope (404 `NOT_FOUND`, matrix §1) and nothing is written; at W1 it succeeds; reads stay site-wide while `scope.enforce_on_read` is off.
@@ -710,6 +745,7 @@ Phase 7 can replay it (ADR-018).
 - States: standard (assignment grid gains a scope column) · Audit: `identity.site_assignment.scope_changed` · Depends: → US-1-18, → US-2-01 · Tests: `authz.cross_site.*` (inventory); `docs/testing.md` §5.2: `authz.subscope.warehouse_write`
 
 #### US-2-30 Read-only maintenance mode with role allow-list and banner (S, Should → Must before any cutover; pull forward) — A-DEP-21, `docs/operations-runbook.md` §17a.2, `docs/deployment-railway.md` §9.1, `docs/data-migration-plan.md` §13
+- **Delivery status (Wave 1, 2026-10-23):** Not started (not in Wave 1).
 **As** the devops-engineer **I want** an application read-only mode in which only allow-listed roles can write **so that** nobody posts stock while the cutover load runs, without taking the application down.
 - Permissions: `platform.settings.admin` (R, re-auth) changes the key (US-1-19) · Entities: settings key `platform.maintenance.read_only` (`{enabled, allowed_role_codes}`, P2; `docs/data-model.md` §3.1 settings registry)
 - AC1 Given the mode enabled with an allow-list, When a user whose roles are outside the list submits any mutating command (API, server action or job enqueue on their behalf), Then the service refuses it before any write and every page shows the banner "Read-only for maintenance"; reads, sign-in, `/api/health` and `/api/ready` keep working; allow-listed roles (for example the loader user of US-2-25 and qa_qc for US-2-23) write normally.
@@ -723,6 +759,7 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 #### E-3-01 Versioned formulas, routings, instructions, inspection plans (W12)
 
 #### US-3-01 Formulas, revisions and BOM lines with mandatory tolerance and two-step approval (L, Must) — FR-masterdata-05, FR-masterdata-13, W12-01..05, A-PM-05, A-DM-17
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1D, Wave 1).
 **As** a production_planner **I want** to draft a formula revision (batch size, lines with quantity, tolerance, phase, scaling, checker flag, expected yield, effective date) that qa_qc and a site_manager/owner approve **so that** a batch can only use an approved, effective revision.
 - Permissions: `masterdata.formula.{view,create,edit,submit}`, `masterdata.formula.approve` (R, two steps per `approval_rules` `formula_revision`), `masterdata.formula.void`, `masterdata.formula.export` (S) · Entities: `formulas`, `formula_revisions` (`ver`), `bom_lines`, `approval_decisions`
 - AC1 Given a draft line without exactly one of `tolerance_pct`/`tolerance_abs_base`, When saved, Then 422; given the Acapulco lines, Then the sum 17,600.1 g is shown unrounded next to batch size 17,600 g with the rounding note (F-06); child rows are editable only while the revision is `draft` (trigger).
@@ -730,12 +767,14 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 - States: standard; redline comparison vs current · Audit: `masterdata.formula_revision.submitted/approved/retired` · Depends: → US-1-22, → US-1-23, → US-1-14 · Tests: `masterdata.revision_child_edit_after_draft_rejected`, `masterdata.formula_percentages_hidden_from_operator`, `authz.sod.approve_own`, `statemachine.*` (version); `docs/testing.md` §5.2
 
 #### US-3-02 Routings, steps, parameters, checklist items and work instructions (L, Must) — FR-masterdata-06, FR-masterdata-13, A-PROC-07, A-PROC-32
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1D, Wave 1).
 **As** a production_planner **I want** routing revisions whose steps carry kind, area, checker requirement, equipment class, parameters with limits, checklist items and an instruction revision **so that** the 7-step soap BMR and a lotion route are configuration, not code.
 - Permissions: `masterdata.routing.{view,create,edit,submit}`, `masterdata.routing.approve` (R), `masterdata.work_instruction.{view,create,submit}`, `masterdata.work_instruction.approve` (S) · Entities: `routings`, `routing_revisions`, `routing_steps` (`area`), `routing_step_parameters`, `routing_step_checklist_items`, `work_instructions`, `work_instruction_revisions`
 - AC1 Given the seeded soap routing, When approved, Then steps 1–7 map to `line_clearance(weighing)`, `dispensing`, `line_clearance(production)`, `process` sub-steps, `line_clearance(packaging)`, `packaging`, `transfer`; parameters define unit, min/target/max and required flag; a routing-only sequencing change may be approved by site_manager, quality-relevant changes need qa_qc (A-PROC-41).
 - States: standard · Audit: `masterdata.routing_revision.approved`, `masterdata.work_instruction_revision.approved` · Depends: → US-3-01, → US-1-20 · Tests: `statemachine.*` (version), `authz.*` (masterdata.routing)
 
 #### US-3-03 Inspection plans and tests (M, Must) — FR-quality-03 (plans), A-PROC-20
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1D, Wave 1). Seeded plans are placeholders flagged for QA review.
 **As** qa_qc **I want** versioned inspection plans (incoming, in-process, finished product) with tests, methods, specifications and sampling instructions **so that** inspections are created from a controlled plan and nothing is asserted by the system.
 - Permissions: `quality.inspection_plan.{view,create,edit}`, `quality.inspection_plan.approve` (S) · Entities: `inspection_plans` (`ver`), `inspection_plan_tests`; `materials.default_inspection_plan_id`, `formula_revisions.inspection_plan_id`
 - AC1 Given a plan test, When `value_kind = numeric`, Then unit and at least one of min/max are required; approval by a second qa_qc user; seed plans are labelled fictional.
@@ -744,6 +783,7 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 #### E-3-02 Equipment gate (W13)
 
 #### US-3-04 Equipment service records, derived availability, blocking rule and override (M, Should) — FR-masterdata-14, FR-production-07, W13, A-DM-28
+- **Delivery status (Wave 1, 2026-10-23):** Done (W1D, Wave 1). The nightly `production.equipment_status` job is not built yet; availability is derived on read.
 **As** a production_operator **I want** a scale or mixer past its calibration or cleaning to be unselectable, with a controlled exception **so that** weighing never happens on untrusted equipment without a recorded decision.
 - Permissions: `masterdata.equipment.edit` (service records), `production.equipment_use.create`, `production.equipment_override.approve` (R: two-person rule, site_manager approves and qa_qc co-approves through `approval_decisions`, A-PROC-23) · Entities: `equipment_service_records`, `equipment_state_transitions`, `downtime_events`, `equipment_uses`, `BC:EQP` labels
 - AC1 Given `blocking_rule = block` and a calibration due date in the past, When the scale is selected at dispensing, Then refused with reasons; `warn` records the reasons on `equipment_uses` and alerts the site_manager; an override needs a site_manager approval and a qa_qc co-approval (both other than the operator, recorded in `approval_decisions`), a reason, and opens a deviation (CX-CAL); a failed calibration keeps the equipment blocked until a qa_qc review (`reviewed_by ≠ performed_by`).

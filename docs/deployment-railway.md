@@ -149,10 +149,14 @@ repository root and the worker runs the TypeScript sources directly:
 | Variables | `DATABASE_URL` (same runtime role as web; needs CREATE on the database for the `pgboss` schema on first start, or create it once as the migration role), `WORKER_CONCURRENCY` (default 2), `PORT` (set by Railway) |
 | Draining | on `SIGTERM` the relay stops, pg-boss stops gracefully (50 s), then exit 0; set the worker's draining time to 60 s |
 
-Railway setup: add a second service from the same repository (Dockerfile builder), set its
+Railway setup (ADR-025): add a second service from the same repository (Dockerfile builder), set its
 **Custom Start Command** to `pnpm worker`, give it the same `DATABASE_URL` reference, no public
-domain, one replica. Without this service nothing breaks, but queued jobs (reconciliation,
-rebuilds) never run and Admin → Diagnostics shows "The worker is not running".
+domain, one replica. Registered jobs as of Wave 1: `inventory.reconcile` (01:00 Asia/Manila),
+`inventory.expiry_check` (00:15 Asia/Manila), `inventory.reservation_expiry` (every 15 min),
+`inventory.rebuild_balances` and `documents.render` (on demand). Without this service nothing
+breaks in the request path, but these jobs never run (lots are not expired or put on retest hold
+automatically, reservations do not lapse, no reconciliation) and Admin → Diagnostics shows "The
+worker is not running".
 
 ## 3. Railway service configuration
 
@@ -244,10 +248,11 @@ variable (`docs/architecture.md` section 12).
 | `MIGRATION_WINDOW_OPEN` | plain | db-migrate | x | x | – | `true` | unset | unset | `true` lets the opening-balance loader and `opening_balance` import jobs run against production (`docs/data-migration-plan.md` A-MIG-08); set only for the cutover window of section 9.1 and removed when check MC-16 passes; the change is logged in the runbook change log |
 | `SESSION_SECRET`, `SESSION_SECRET_PREVIOUS` | secret | auth | x | x | – | fixed dev value | generated | generated | `_PREVIOUS` holds the old key during the 24 h rotation window |
 | `CSRF_SECRET`, `CSRF_SECRET_PREVIOUS` | secret | auth | x | – | – | " | " | " | |
-| `FILE_URL_SECRET` | secret | auth | x | x | – | " | " | " | signed application download URLs (`docs/security.md` 4.8) |
+| `FILE_URL_SECRET` | secret | auth | x | x | – | unset (per-process dev secret) | generated, 32+ characters | generated, 32+ characters | signs the 5-minute, user-bound application download links (`docs/security.md` 4.8, ADR-027); required when `NODE_ENV=production` (downloads show "setup required" without it) |
 | `DATA_ENCRYPTION_KEY`, `DATA_ENCRYPTION_KEY_PREVIOUS` | secret | auth | x | x | – | `k1:<base64>` | `k1:<base64>` | `k1:<base64>` | `keyid:base64(32 bytes)`; ciphertexts store the key id so rotation is a re-encrypt job |
 | `AUTH_PEPPER` | secret | auth | x | – | – | unset | unset | unset | off by default (A-SEC-02) |
 | `AUTH_BREACH_CHECK` | plain | auth | x | – | – | `offline` | `offline` | `offline` | `hibp` enables the online check (A-SEC-04) |
+| `FILE_STORAGE`, `FILE_STORAGE_DIR` | plain | storage | x | – | – | `local`, `./.data/files` | `s3`, unset | `s3`, unset | storage adapter (`src/lib/storage`, ADR-027): `local` = files on disk (development only, never served statically), `s3` = private bucket via the `S3_*` variables; unset = uploads show "File storage isn't set up" and nothing is stored |
 | `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_FORCE_PATH_STYLE` | plain | storage | x | x | x | MinIO values | `${{Bucket.ENDPOINT}}`, `${{Bucket.BUCKET}}`, `${{Bucket.REGION}}`, `false` | same | Railway Buckets expose `ENDPOINT`, `BUCKET`, `REGION`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY` and use virtual-hosted URLs **(verified 2026-10-16)** |
 | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | secret | storage | x | x | x | MinIO values | `${{Bucket.ACCESS_KEY_ID}}`, `${{Bucket.SECRET_ACCESS_KEY}}` | same | |
 | `BACKUP_ENCRYPTION_PUBLIC_KEY` | plain | backup | – | – | x | test key | staging `age1…` | production `age1…` | public half only; private key offline with the owner and the operations contact (`docs/security.md` section 6) |
@@ -256,8 +261,8 @@ variable (`docs/architecture.md` section 12).
 | `BACKUP_OFFSITE_ACCESS_KEY_ID`, `BACKUP_OFFSITE_SECRET_ACCESS_KEY` | secret | backup | – | – | x | unset | " | " | write-only credentials for the offsite bucket |
 | `EMAIL_PROVIDER`, `EMAIL_FROM` | plain | mail | x | x | – | `none` | `smtp`, `noreply@<domain>` | same | adapter; `none` renders "setup required" |
 | `SMTP_URL` | secret | mail | x | x | – | unset | staging credentials | production credentials | Phase 5 |
-| `WORKER_CONCURRENCY` | plain | worker | – | x | – | `2` | `4` | `4` | per queue class |
-| `PDF_RENDERER`, `PUPPETEER_EXECUTABLE_PATH` | plain | worker | – | x | – | `disabled` | `disabled` → `chromium` (Phase 3) | same | ADR-016 |
+| `WORKER_CONCURRENCY` | plain | worker | – | x | – | `2` | `4` | `4` | pg-boss `localConcurrency` per job queue (default 2 when unset) |
+| `PDF_RENDERER`, `PUPPETEER_EXECUTABLE_PATH` | plain | worker | x | x | – | `disabled` | `disabled` → `chromium` (Phase 3) | same | ADR-026 (amends ADR-016): Phase 2 prints from the browser and stores no PDF; `chromium` is reserved for the Phase 3 engine (`WITH_CHROMIUM=1` image) and has no effect until it ships |
 | `ALERT_WEBHOOK_URL` | secret | observability | – | x | – | unset | optional | optional | chat-tool webhook for alerts (A-DEP-10) |
 | `MAINTENANCE_MODE` | plain | base | x | – | – | unset | unset | unset | `1` makes `web` answer 503 with a maintenance page for everything except `/api/health`; used during restores and the cutover rollback (section 9.1, `docs/operations-runbook.md` §17a.2). The read-only mode used during the cutover load window and hypercare is an application setting, not this variable (A-DEP-21) |
 | `PAYMONGO_SECRET_KEY`, `PAYMONGO_WEBHOOK_SECRET` | secret | payments | x | x | – | unset | sandbox | live | Phase 8; sandbox and live never coexist (`docs/security.md` 4.11) |
