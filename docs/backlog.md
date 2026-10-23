@@ -4,7 +4,7 @@
 |---|---|
 | Status | Phase 0 draft for Gate 0 review (`docs/team-charter.md`, G0) |
 | Owner | product-manager (structure agreed with principal-architect; accountable: principal-architect) |
-| Sources | `docs/source/master-brief.md`; `docs/PRD.md` (FR ids, AC-10..AC-23, §10 roadmap, §11 Slice 1 and S1-01..S1-15); `docs/decision-log.md` (ADR-001..022); `docs/team-charter.md` (gates); `docs/architecture.md`; `docs/data-model.md` (§13.6 Slice 1 tables, §14 assumptions); `docs/permissions-matrix.md` (permission catalogue §2, SoD §5, tests §8); `docs/security.md` (§3, §4, §5, §8); `docs/process-maps.md` (W01–W13, V-*/CX-* catalogue); `docs/ux-system.md` (§2, §3, §5, §6, §9); `docs/offline-sync.md`; `docs/reports-and-templates.md`; `docs/testing.md` (test ids, §9 procedures); `docs/deployment-railway.md` (§2, §3, §14); `docs/operations-runbook.md`; `docs/analytics-kpis.md`; `docs/modules/hr-attendance-payroll.md`; `docs/modules/finance.md`; `docs/risk-register.md`; `docs/data-migration-plan.md` (§9.4, §14) |
+| Sources | `docs/source/master-brief.md`; `docs/PRD.md` (FR ids, AC-10..AC-23, §10 roadmap, §11 Slice 1 and S1-01..S1-15); `docs/decision-log.md` (ADR-001..023); `docs/team-charter.md` (gates); `docs/architecture.md`; `docs/data-model.md` (§13.6 Slice 1 tables, §14 assumptions); `docs/permissions-matrix.md` (permission catalogue §2, SoD §5, tests §8); `docs/security.md` (§3, §4, §5, §8); `docs/process-maps.md` (W01–W13, V-*/CX-* catalogue); `docs/ux-system.md` (§2, §3, §5, §6, §9); `docs/offline-sync.md`; `docs/reports-and-templates.md`; `docs/testing.md` (test ids, §9 procedures); `docs/deployment-railway.md` (§2, §3, §14); `docs/operations-runbook.md`; `docs/analytics-kpis.md`; `docs/modules/hr-attendance-payroll.md`; `docs/modules/finance.md`; `docs/risk-register.md`; `docs/data-migration-plan.md` (§9.4, §14) |
 | Related | `docs/PRD.md` §6 (requirements), §8 (acceptance criteria), §12 (glossary) |
 
 Plain-language summary for owners: this is the ordered list of work the team will build, phase by
@@ -23,7 +23,7 @@ configuration entered and validated by the company's qualified people.
 | Id | Meaning |
 |---|---|
 | `E-<phase>-<nn>` | Epic: a group of stories with one goal and one piece of gate evidence (section 2) |
-| `US-<phase>-<nn>` | User story; numbered in recommended implementation order within the phase. Phase 1b hardening stories keep the `US-1-` prefix and carry phase "1b" |
+| `US-<phase>-<nn>` | User story; numbered in recommended implementation order within the phase. Phase 1b hardening stories keep the `US-1-` prefix and carry phase "1b". Stories added after the first numbering take the next free number and are listed inside the epic they belong to (ids are never reused or renumbered); a story split before it starts keeps its id with a letter suffix (`US-5-11a`..`d`) |
 | `W01`..`W13`, `V-*`, `CX-*`, `G-Wnn-x` | Workflows, blocking validations, controlled exceptions and approval gates from `docs/process-maps.md` |
 | `S1-nn`, `AC-nn`, `FR-<module>-nn` | Slice 1 tests and acceptance criteria (`docs/PRD.md` §11.3, §8), functional requirements (`docs/PRD.md` §6) |
 | `R-nn`, `A-<doc>-nn`, `Q-*` | Risks (`docs/risk-register.md`), assumptions and owner questions in the document named by the prefix |
@@ -90,20 +90,20 @@ No placeholder buttons: an unconfigured integration renders the **S** state, nev
 
 ### 1.6 Vocabulary rules
 
-- Roles and permission strings come only from `docs/permissions-matrix.md` §2. A string that is not in
-  the catalogue is written *in italics with "(gap)"* and listed in section 7.3 for the security engineer.
+- Roles and permission strings come only from `docs/permissions-matrix.md` §2. Every string this
+  backlog cites is catalogued there (the round-1 gaps are closed); a new string needed by a later
+  story is added to the catalogue in the same change as the story card, never invented in code.
 - Audit event names follow `module.entity.event` (`docs/data-model.md` §8.1); where `docs/security.md` §5
   still uses the two-segment form, the mapping table in §8.1 applies.
-- Entity, table and state names come from `docs/data-model.md` §3 and §6; the Slice 1 tables are the 30
+- Entity, table and state names come from `docs/data-model.md` §3 and §6; the Slice 1 tables are the 32
   listed in §13.6.
 - Scan payloads follow ADR-017: `BC:LOT`, `BC:BOX`, `BC:LOC`, `BC:MAT`, `BC:SKU`, `BC:EQP`, `BC:DOC`.
-- Pack permissions are `inventory.pack.{view,create,submit,approve}` (architect decision; the matrix row
-  `sales.pack.*` is superseded).
+- Pack permissions are `inventory.pack.{view,create,submit,approve}` (`docs/permissions-matrix.md` §2.3, P3).
 
 ### 1.7 Priority and phasing
 
 Must / Should / Later follow `docs/PRD.md` §6. The MVP for go-live is Phases 1 to 4 (gates G1 to G4).
-If the owner chooses an early go-live after G4 (R-08, Q-MIG-13), epic E-2-07 and the Phase 9 items
+If the owner chooses an early go-live after G4 (R-08, Q-MIG-13), epic E-2-07, US-2-30 and the Phase 9 items
 marked "pull forward" in section 5.5 become Must.
 
 ---
@@ -115,10 +115,10 @@ marked "pull forward" in section 5.5 become Must.
 | Phase | Gate | Exit criteria | Epics |
 |---|---|---|---|
 | 1 Foundation | G1 | Permission tests pass; staging deploy works; basic mobile layout and operational shell approved | E-1-01..E-1-10 |
-| 2 Inventory MVP | G2 | End-to-end receive → label → move → count flow tested; concurrency and multi-site isolation verified | E-2-01..E-2-07 |
+| 2 Inventory MVP | G2 | End-to-end receive → label → move → count flow tested; concurrency and multi-site isolation verified | E-2-01..E-2-08 |
 | 3 Production + BMR | G3 | Run a representative soap batch in staging with traceability and printable record reviewed by production/QA | E-3-01..E-3-07 |
 | 4 Packaging + fulfilment + CRM | G4 | Order-to-shipment flow reconciles stock and every shipped box is traceable | E-4-01..E-4-05 |
-| 5 Reporting + imports | G5 | KPIs reconcile to source data; attendance import validated against representative time-clock files | E-5-01..E-5-06 |
+| 5 Reporting + imports | G5 | KPIs reconcile to source data; attendance import validated against representative time-clock files | E-5-01..E-5-07 |
 | 6 Procurement + HR/finance | G6 | Qualified business owners validate calculations and approvals; sensitive access tests pass | E-6-01..E-6-07 |
 | 7 Offline/PWA hardening | G7 | Offline acceptance tests pass on representative phones/tablets; conflicts are visible and recoverable | E-7-01..E-7-04 |
 | 8 Customer portal + payment | G8 | Security review, sandbox payment tests, idempotency and failure/refund tests pass | E-8-01..E-8-03 |
@@ -128,9 +128,9 @@ marked "pull forward" in section 5.5 become Must.
 
 | Epic | Goal (plain language) | Gate evidence | Depends on | Risks |
 |---|---|---|---|---|
-| E-1-01 Repository, tooling, CI | One repository where every change is linted, type-checked and tested before merge (ADR-013) | S1-15; `authz-coverage` and `migrations` jobs required | G0 approval of ADR-001..014 | R-09, R-42, R-43, R-48 |
+| E-1-01 Repository, tooling, CI | One repository where every change is linted, type-checked and tested before merge (ADR-013) | S1-15; `authz-coverage` and `migrations` jobs required | G0 approval of ADR-001..014, 019..021, 023 | R-09, R-42, R-43, R-48 |
 | E-1-02 Environments and deployment | Staging on Railway from documented steps; health, readiness, backups, external monitor (ADR-014) | S1-08; `docs/deployment-railway.md` §14 checklist complete | E-1-01; Railway plan and region (A-DEP-01..03) | R-36, R-23, R-37 |
-| E-1-03 Data foundation | Migrations from zero for the 30 Slice 1 tables; fictional seed with a production guard (ADR-003, ADR-009, ADR-010) | S1-09, S1-10, S1-12, S1-13 | E-1-01 | R-16, R-17 |
+| E-1-03 Data foundation | Migrations from zero for the 32 Slice 1 tables; fictional seed with a production guard (ADR-003, ADR-009, ADR-010) | S1-09, S1-10, S1-12, S1-13 | E-1-01 | R-16, R-17 |
 | E-1-04 Identity and sessions | Sign in and out, invitations, password reset, lockout, session listing and revocation, device-class timeouts (ADR-004) | S1-05, S1-06, S1-14 | E-1-03 | R-20, R-27 |
 | E-1-05 Authorization framework and audit | AuthContext, scoped repositories, separation of duties, approval rules, append-only audit with viewer (ADR-005, ADR-006) | S1-01..S1-04; AC-10 framework; AC-22 | E-1-03, E-1-04 | R-14, R-13 |
 | E-1-06 Administration | Users, roles, site assignments, settings, numbering rules, approval rules administered without engineers | S1-04, S1-11, S1-13 | E-1-05 | R-07, R-49 |
@@ -138,13 +138,14 @@ marked "pull forward" in section 5.5 become Must.
 | E-1-08 Master data basics | Sites, warehouses, locations, lines, equipment register, UOM and conversions, products, SKUs, materials, reason codes | S1-12; seeded structure visible per site | E-1-05, E-1-07 | R-16, R-49 |
 | E-1-09 Observability and diagnostics (Phase 1 part) | Structured logs with correlation ids, error reporting adapter, diagnostics cards Health, Backups, Variables (FR-platform-09 split) | S1-08; diagnostics shows no secrets | E-1-02, E-1-05 | R-36, R-47 |
 | E-1-10 Phase 1b hardening | TOTP for privileged roles, custom roles, quick-switch PIN evaluation (ADR-004, A-PRD-34) | FR-identity-06 tests; owner decision on PIN | E-1-04, E-1-06 | R-27, R-20 |
-| E-2-01 Stock ledger core and jobs | Append-only movements, balance projection, locking, idempotency, reversal, reconciliation, pg-boss, in-app notifications (ADR-006, ADR-015) | AC-11 idempotency; `ledger.*`, `concurrency.*` green | E-1-03, E-1-05 | R-11, R-15, R-41 |
+| E-2-01 Stock ledger core and jobs | Append-only movements, balance projection, locking, idempotency, reversal, reconciliation, pg-boss, in-app notifications (ADR-006, ADR-015) | AC-11 idempotency; `ledger.*`, `concurrency.*` green; ADR-022 (RLS) evaluated at the end of Phase 2 and the adopt/defer decision recorded in `docs/decision-log.md` (final confirmation US-9-05) | E-1-03, E-1-05 | R-11, R-15, R-41 |
 | E-2-02 Receiving (W01) | Unplanned receipt to labelled lot in quarantine with documents and put-away | AC-11; 9.2 manual procedure | E-2-01, E-2-03 | R-12, R-46 |
 | E-2-03 Documents, labels and scanning infrastructure | Template versions, generated documents, label jobs, print station, scan input with payload grammar (ADR-016 pipeline, ADR-017) | T-01..T-07; label QR round trip | E-2-01; printers and scanners [HW] | R-39, R-45, R-44 |
-| E-2-04 Scan, move and containers (W02) | Scan anything, see status and allowed actions, move safely, split/merge/repack with lineage | AC-16 box part; 9.7 steps 1 to 4 | E-2-03 | R-26, R-11 |
+| E-2-04 Scan, move and containers (W02) | Scan anything, see status and allowed actions, move safely, undo an own move within the window, split/merge/repack with lineage | AC-16 box part; 9.7 steps 1 to 4 | E-2-03 | R-26, R-11 |
 | E-2-05 Counts, adjustments, reservations (W03) | Blind counts with recount and approval, adjustment documents, reservations and FEFO/FIFO recommendation | `count.*`, `fefo.*`; 9.6 screen walk-through | E-2-01, E-2-04 | R-12, R-18 |
 | E-2-06 Exports and idempotent command API | Scoped exports with formula neutralisation and audit; `/api/v1` command contract designed for replay (ADR-018 groundwork) | `export.formula_neutralized`; `authz.cross_site.export` | E-2-01 | R-14, R-11 |
 | E-2-07 Early go-live enablement (conditional) | QA bulk disposition, label verification scan, command-line loader with `MIGRATION_WINDOW_OPEN`, opening-balance receipts, legacy document index | MC-06, MC-07, MC-16 on staging R1 | E-2-02, E-2-04; [Q-MIG-13] | R-08, R-12, R-51 |
+| E-2-08 Platform refinements: in-app help, assignment sub-scopes, read-only maintenance mode | A "?" on every operator screen opens a short versioned guide without leaving the task (FR-platform-16); write access limited to listed warehouses where the site wants it (FR-identity-03 sub-scope); an application read-only mode for the cutover load window (A-DEP-21) | help sheet e2e on both viewports; `authz.subscope.warehouse_write`; read-only mode refuses writes outside the allow-list | E-1-06, E-1-07, E-2-01 | R-26, R-14 |
 | E-3-01 Versioned formulas, routings, instructions, inspection plans (W12) | Effective-dated revisions with two approvals; tolerance per line; nothing approved by the author | `batch.snapshot.*`, `masterdata.revision_child_edit_after_draft_rejected` | E-1-08 | R-04, R-13 |
 | E-3-02 Equipment gate (W13) | Service records, derived availability, blocking rule, controlled override | `production.equipment_override_requires_approver` | E-1-08 | R-28 |
 | E-3-03 Planning: work orders, batches, board, staging (W05-01..05) | Work order to batch with frozen revisions, reservations, staging by scan, dispensing sheet | AC-13; 9.4 | E-3-01, E-2-05 | R-04, R-13 |
@@ -162,8 +163,9 @@ marked "pull forward" in section 5.5 become Must.
 | E-5-03 Action centre, notification rules, escalation | One queue for approvals, exceptions, alerts; escalation after configured delay | FR-platform-07/08 tests | E-2-01 | R-46 |
 | E-5-04 Import wizard and master-data imports | Upload → map → validate → review → post for every import kind of `docs/data-migration-plan.md` §9.2 | `import.*` tests; MC-01, MC-02 | E-2-06 | R-12, R-22 |
 | E-5-05 Employees and attendance import (W10) | Employee directory and personal data, attendance import with exceptions, corrections, exception report, time summaries | AC-19; 9.10 | E-5-04; time-clock files [Q-A-06] | R-05, R-21 |
-| E-5-06 Full diagnostics and access report | Remaining diagnostics cards, weekly access-and-exceptions report | `diagnostics.no_secrets`; report delivered | E-1-09, E-5-02 | R-47 |
-| E-6-01 Procurement (W04) | Supplier master and approved list, PR/PO with thresholds, expected and partial receipts, supplier returns, performance, reorder suggestions | `procurement.*` tests; W04 walk-through | E-2-02, E-5-03 | R-35 |
+| E-5-06 Full diagnostics and access report | Phase 5 diagnostics cards (Database, Imports, Alerts, Errors, Integrations), weekly access-and-exceptions report | `diagnostics.no_secrets`; report delivered | E-1-09, E-5-02 | R-47 |
+| E-5-07 Demand-to-production planning | Production plan from confirmed orders, min-stock and (later) forecast, showing availability and shortages; plan lines become work orders with reservations (FR-production-13) | plan line creates a work order with reserved materials | E-3-03, E-4-02 | R-04 |
+| E-6-01 Procurement (W04) | Supplier master and approved list, PR/PO with thresholds, expected and partial receipts, supplier returns with approval, performance, reorder suggestions, forecast assumptions (Later) | `procurement.*` tests; W04 walk-through | E-2-02, E-5-03 | R-35 |
 | E-6-02 HR shifts, calendars, rules, leave, overtime | Shifts and assignments, holiday calendars, effective-dated rule sets validated by HR, leave and overtime approvals | `hr.*` tests; rule set approved by reviewer | E-5-05; [Q-A-05] | R-06, R-32 |
 | E-6-03 Payroll support (gated, ADR-021) | Period lifecycle to approval in staging; computation off until reviewer sign-off; payslips and payment export after | `hr.payroll.computation_gate`; parallel run reconciles | E-6-02; reviewer named | R-32, R-06 |
 | E-6-04 Finance receivables, payables, expenses (ADR-020) | Invoices from shipments, bills with three-way match, payments, credit notes, expense claims with limits | `finance.*` tests; accountant validates one month of registers | E-4-04, E-6-01; [Q-A-04] | R-06, R-32 |
@@ -180,7 +182,7 @@ marked "pull forward" in section 5.5 become Must.
 | E-9-01 Security and load testing | Penetration test, load test at A-PRD-12 volumes, rate limits engage | §11.2 pass; findings fixed or accepted | all go-live phases | R-24, R-25 |
 | E-9-02 Backup, restore, monitoring, incident | Restore drill within RTO, alerts routed, incident process agreed | AC-23 restore part; `restore_drills` row | E-1-02 | R-36, R-23 |
 | E-9-03 Data migration rehearsals and cutover | R1, R2, T0 load with MC-01..MC-16, rollback rehearsed | MC checks pass | E-5-04 (or E-2-07) | R-12, R-17, R-51 |
-| E-9-04 SOPs, training, go-live checklist, hypercare | Quick guides, training, support roster, hypercare exit | checklist signed | all | R-26, R-30, R-47 |
+| E-9-04 SOPs, training, go-live checklist, hypercare | Quick guides, training, support roster, hypercare exit (`docs/operations-runbook.md` §2.9, §17a) | checklist signed | all | R-26, R-30, R-47 |
 
 ### 2.3 Dependency sketch
 
@@ -193,7 +195,8 @@ flowchart LR
   E105 --> E201[E-2-01 ledger] --> E202[E-2-02 receiving]
   E201 --> E203[E-2-03 docs + labels + scan] --> E204[E-2-04 scan + move] --> E205[E-2-05 counts]
   E201 --> E206[E-2-06 exports + API]
-  E202 --> E207[E-2-07 early go-live, conditional]
+  E202 --> E207["E-2-07 early go-live, conditional"]
+  E106 --> E208[E-2-08 help + sub-scopes + read-only mode]
   E108 --> E301[E-3-01 revisions] --> E303[E-3-03 planning] --> E304[E-3-04 execution] --> E305[E-3-05 QA release]
   E108 --> E302[E-3-02 equipment gate] --> E304
   E203 --> E306[E-3-06 BMR] 
@@ -212,7 +215,7 @@ flowchart LR
 
 ## 3. Phase 1 Foundation, Slice 1 (detailed, in implementation order)
 
-Scope and exclusions are fixed by `docs/PRD.md` §11.1 and §11.2. Tables are the 30 of
+Scope and exclusions are fixed by `docs/PRD.md` §11.1 and §11.2. Tables are the 32 of
 `docs/data-model.md` §13.6 (`0000_extensions_and_functions` to `0004_grants`); Phase 1b adds
 `0005_mfa`. Site scope only (no warehouse/department/line sub-scopes), no MFA in Slice 1a, no
 stock, documents, jobs or email. Gate G1 evidence is the S1-01..S1-15 set (`docs/testing.md` §9.15)
@@ -241,7 +244,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 ### 3.2 E-1-03 Data foundation
 
 #### US-1-03 Database connection, migration runner and Slice 1 migrations (L, Must) — FR-platform-03 (table), ADR-002, ADR-003, ADR-009, ADR-010, S1-09
-**As** the database-architect **I want** the five Slice 1 migration files applied by an idempotent, advisory-locked runner using the migration role **so that** the 30 Slice 1 tables exist identically in every environment and the runtime role can never alter ledgers.
+**As** the database-architect **I want** the five Slice 1 migration files applied by an idempotent, advisory-locked runner using the migration role **so that** the 32 Slice 1 tables exist identically in every environment and the runtime role can never alter ledgers.
 - Permissions: none (deploy-time) · Entities: all tables of `docs/data-model.md` §13.6; functions `uuid_generate_v7()`, `forbid_mutation()`, `format_document_number()`; roles `bc_migrate`, `bc_app`, `bc_readonly`, `bc_backup` via `scripts/db/bootstrap-roles.sql`
 - AC1 Given an empty PostgreSQL 16 database, When `pnpm db:migrate` runs, Then `0000`..`0004` apply in order inside one transaction each, each file and hash is recorded in `drizzle.__drizzle_migrations`, and a second run is a no-op that exits 0 (S1-09); `drizzle-kit check` reports no drift.
 - AC2 Given a changed hash on an already-applied file, When the runner starts, Then it aborts before applying anything and exits non-zero naming the file.
@@ -310,7 +313,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 
 #### US-1-10 Sign in, sign out, lockout and rate limiting (M, Must) — FR-identity-01, FR-identity-05, AC-22, S1-06
 **As** any user **I want** to sign in with email and password and sign out **so that** every action is attributed to me; **as** the system **I must** lock accounts after repeated failures and never reveal whether an email exists.
-- Permissions: self-service; `identity.user.admin` to unlock · Entities: `users`, `sessions`; Postgres token-bucket table for rate limits (`docs/security.md` §4.5)
+- Permissions: self-service; `identity.user.admin` to unlock · Entities: `users`, `sessions`; `rate_limit_buckets` (Postgres token buckets, `docs/security.md` §4.5)
 - AC1 Given valid credentials for an `active` user, When they sign in, Then argon2id verification (A-SEC-01) succeeds, a new 32-byte token is issued as `__Host-bc_session; HttpOnly; Secure; SameSite=Lax; Path=/`, only `sha256(token)` is stored with `ip`, `user_agent`, `device_label`, `idle_expires_at`, `absolute_expires_at`, `last_login_at` is set and `identity.session.login_succeeded` is written; a pre-login session id is never reused (`session.rotate_on_login`).
 - AC2 Given a wrong password, an unknown email, a `locked` or a `deactivated` account, When sign-in is attempted, Then the response is the generic "Sign-in failed" with constant-time comparison and a dummy hash for unknown users (timing variance < 50 ms over 50 samples), no session is created, and `identity.session.login_failed` records the failure category (S1-06).
 - AC3 Given 10 failures in 15 minutes for one account, When the 11th attempt arrives, Then the account is `locked` with `locked_until` (doubling to 24 h), the user is notified by email when the adapter is configured (otherwise logged), `identity.user.locked` is written, and an admin unlock writes `identity.user.unlocked`; per-IP limits 20/min and 200/h return 429 with `Retry-After` using `TRUSTED_PROXY_HEADER` for the client IP.
@@ -319,7 +322,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 
 #### US-1-11 Invitation acceptance and password reset (M, Must) — FR-identity-01, ADR-004 §3.8
 **As** an invited person **I want** to set my password from a single-use link **so that** my account becomes active without anyone knowing my password; **as** a user **I want** a self-service reset that signs out every other device.
-- Permissions: `identity.invitation.create` (send/resend, US-1-16 issues it); acceptance and reset need no permission · Entities: `invitations`, `password_reset_tokens`, `users`, `sessions`
+- Permissions: `identity.invitation.create` (send/resend, US-1-16 issues it); acceptance and reset need no permission · Entities: `invitations`, `password_reset_tokens`, `password_history`, `users`, `sessions`
 - AC1 Given an invitation token (32 bytes, sha256 stored, 72 h), When the invitee opens the GET link and posts the form with a password meeting `docs/security.md` §3.2 (≥ 12, ≤ 128, not in the offline breach list, not containing email local part, name or "bryel"), Then the user moves `invited → active`, the token is marked used, assignments from the invitation are created in the same transaction, and a resend invalidates the previous token.
 - AC2 Given "Forgot password", When requested, Then the response is identical whether or not the account exists, at most 3 requests per account per hour, the token lives 30 minutes and is single use, the newest token invalidates older ones, and on success all other sessions are revoked, the user is emailed (or the send is logged when `EMAIL_PROVIDER=none`), `identity.user.password_reset_completed` is written, and the last 5 hashes reject reuse.
 - AC3 Given a token in a URL, When any request logs, Then the logger redacts `token`, `code`, `password`, `secret`, `authorization`, `cookie` and 20+ character base64url values; tokens never appear in audit payloads.
@@ -337,7 +340,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 
 #### US-1-13 AuthContext, authorize, scoped repositories and the command pipeline (L, Must) — FR-identity-02, FR-identity-04, FR-identity-07, FR-platform-12, AC-10 (framework), AC-22, S1-01, S1-02, ADR-005, ADR-008
 **As** the backend-engineer **I want** every server action, route handler and job to run the same pipeline (parse → AuthContext → authorize → idempotency → transact → audit → result) with repositories that only accept a site set **so that** a user can never see or change another site's rows by changing a URL, body, query or header.
-- Permissions: the framework for all strings; `masterdata.location.{view,create}` used by S1-01/S1-02 (catalogued P2; needed in Slice 1, see §7.3) · Entities: `user_site_assignments`, `role_permissions`, `permissions`, `idempotency_keys`; `src/lib/auth/context.ts` shape per `docs/permissions-matrix.md` §1.1
+- Permissions: the framework for all strings; `masterdata.location.{view,create}` used by S1-01/S1-02 (N, P1, `docs/permissions-matrix.md` §2.2) · Entities: `user_site_assignments`, `role_permissions`, `permissions`, `idempotency_keys`; `src/lib/auth/context.ts` shape per `docs/permissions-matrix.md` §1.1
 - AC1 Given a warehouse_operator assigned to Site A only, When they open `/sites/<site-b-id>/locations` or call `GET /api/v1/locations?siteId=<site-b>`, Then the page shows **N**, the API returns 404 `NOT_FOUND` (or an empty scoped list for the query form) with no Site B fields, and `identity.authorization.denied` is written with permission, site and entity (S1-01).
 - AC2 Given the same user, When they `POST /api/v1/locations` with Site B in the body, Then the service rejects before any write with 404 or 422 `SITE_NOT_ALLOWED` and the Site B location count is unchanged (S1-02); setting `activeSiteId` to B by cookie or header is ignored.
 - AC3 Given any mutating request, When it lacks a matching `Origin`/`Sec-Fetch-Site`, uses a non-JSON body on a JSON endpoint, or omits the anti-CSRF token on a form post, Then it is 403 `ORIGIN_MISMATCH`/`csrf.form_token_required`; Zod `.strict()` rejects unknown keys and `status` fields; ids come from the path; list endpoints enforce pagination (max 200); error envelopes carry `{code, message, requestId}` and never a stack.
@@ -347,21 +350,21 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 
 #### US-1-14 Separation of duties, approval rules and setting change requests (M, Must) — FR-identity-04, FR-platform-04 (approval), S1-03, A-PM-14, A-PM-15
 **As** the owner_director **I want** approval thresholds and the requester-not-approver rule to be data evaluated by one shared service **so that** every module from Phase 2 onward approves the same way and nobody approves their own submission.
-- Permissions: `platform.approval_rule.view`, `platform.approval_rule.admin` (owner, restricted); `platform.settings.admin` with SoD for setting change approval (*`platform.settings.approve` does not exist (gap)*, `docs/data-model.md` §14.3) · Entities: `approval_rules`, `approval_decisions`, `setting_change_requests`, `settings`
-- AC1 Given a site_manager who submitted a `setting_change_requests` row for a key flagged `requires_approval`, When they attempt to approve it, Then 409 `SEPARATION_OF_DUTIES` is returned, `identity.authorization.denied` is written, and a different site_manager (or system_admin) can approve, which writes the setting, `approval_decisions`, `platform.setting.changed` and marks the request `applied` in one transaction (S1-03).
+- Permissions: `platform.approval_rule.view`, `platform.approval_rule.admin` (owner, restricted); `platform.settings.admin` (R) to submit `setting_change_requests`; `platform.settings.approve` (R, P1; owner_director or a second system_admin, never a site_manager; SoD on `setting_change_requests.submitted_by`/`approved_by`, `docs/permissions-matrix.md` §2.12) · Entities: `approval_rules`, `approval_decisions`, `setting_change_requests`, `settings`
+- AC1 Given a system_admin who submitted a `setting_change_requests` row for a key flagged `requires_approval`, When they attempt to approve it, Then 409 `SEPARATION_OF_DUTIES` is returned and `identity.authorization.denied` is written; a site_manager attempting the approval gets 403 `PERMISSION_DENIED` (no `platform.settings.*` grant); an owner_director or a second system_admin holding `platform.settings.approve` can approve, which writes the setting, `approval_decisions`, `platform.setting_change_request.approved` and `platform.setting.changed` and marks the request `applied` in one transaction (S1-03).
 - AC2 Given `approval_rules` rows for a record type and site, When `evaluate(recordType, siteId, basisValue, date)` runs, Then site-specific rules beat organization-wide, matching rows are ordered by `step`, each step needs `required_count` distinct users holding the role or permission at the site, escalation roles may approve after `escalation_after_hours`, no matching rule means the base `.approve` permission suffices, and the evaluation is audited as `platform.approval_rule.evaluated` with rule ids.
 - AC3 Given the default rules of `docs/permissions-matrix.md` §5.2 seeded, When amounts around each threshold are evaluated with an injected clock, Then the correct step list results (`authz.threshold.rule_evaluation`); editing a rule requires re-authentication and writes `platform.approval_rule.changed` with before/after.
 - AC4 Given a record type with `approval?` columns, When setting `approvals.sod.<record_type>` is `false`, Then the service skips the SoD check for that type only; mandatory types keep the database CHECK (`A-DM-31`).
-- States: standard; **A** banner on records awaiting approval · Audit: `platform.approval_rule.changed`, `platform.approval_rule.evaluated`, `platform.setting.changed`, `identity.authorization.denied` · Depends: → US-1-13 · Tests: `authz.sod.approve_own`, `authz.sod.other_approver_ok`, `authz.threshold.rule_evaluation`, `settings.versioned`, `platform.settings_admin_restricted`; `docs/testing.md` §5.1, §9.15 S1-03
+- States: standard; **A** banner on records awaiting approval · Audit: `platform.approval_rule.changed`, `platform.approval_rule.evaluated`, `platform.setting_change_request.approved`, `platform.setting.changed`, `identity.authorization.denied` · Depends: → US-1-13 · Tests: `authz.sod.approve_own`, `authz.sod.other_approver_ok`, `authz.sod.site_manager_cannot_approve_settings`, `authz.threshold.rule_evaluation`, `settings.versioned`, `platform.settings_admin_restricted`; `docs/testing.md` §5.1, §9.15 S1-03
 
 #### US-1-15 Audit event writer and audit log viewer (M, Must) — FR-identity-08, FR-platform-02, S1-04, ADR-006
 **As** an auditor **I want** an append-only audit log with filters and export **so that** who did what, when, where and why can be verified without anyone being able to change it.
 - Permissions: `platform.audit.view`, `platform.audit.export` · Entities: `audit_events` (12 monthly partitions + default partition), `src/lib/audit.ts`
 - AC1 Given any auditable command, When it commits, Then exactly one `audit_events` row with actor, `actor_kind`, session, `action` (three segments, CHECK), entity type/id/number, site, `correlation_id`, `request_id`, reason, redacted before/after, `data_class`, IP and user agent is written in the same transaction; a failed command leaves no audit row.
-- AC2 Given a system_admin adding `inventory.adjustment.approve` to the site_manager role (US-1-17), When the audit viewer is filtered by entity type `roles`, Then the row shows actor, time, role, before and after permission sets with the sensitivity of each added permission (S1-04).
+- AC2 Given a system_admin moving a fixture user from `warehouse_operator` to `site_manager` at `NFD` (US-1-18), When the audit viewer is filtered by entity type `user_site_assignments`, Then the `identity.site_assignment.revoked` and `identity.site_assignment.granted` rows show actor, time, user, site and before/after role, and the user's next request is authorized with the new role (S1-04 part b; part a, seeded roles read-only, is US-1-17 AC2).
 - AC3 Given an auditor at desktop and a site_manager on a phone, When they open the audit log, Then the table (desktop) or card list (phone) shows time, actor, action, entity link, site, reason and correlation id with filters by date, actor, entity type, action and site; rows are limited to allowed sites and to entity types the viewer may view; restricted payloads are redacted unless the viewer holds the entity's restricted view permission; export requires `platform.audit.export`, a logged reason, and writes `platform.export.created`.
 - AC4 Given a direct `UPDATE`/`DELETE` on `audit_events` as `bc_app`, When attempted, Then it fails; the `DEFAULT` partition count is sampled and any row raises an alert (US-1-27); no password, token, secret or file content ever appears in a payload.
-- States: standard (list) · Audit: self (viewer reads) + `platform.export.created` · Depends: → US-1-13 · Tests: `audit.required_fields`, `audit.same_transaction`, `audit.emitted_for_catalogue`, `audit.authz_denied_written`, `identity.role_permission_change_audited`, e2e `flows/identity/audit-viewer.spec.ts`; `docs/testing.md` §4.17, §9.15 S1-04
+- States: standard (list) · Audit: self (viewer reads) + `platform.export.created` · Depends: → US-1-13 · Tests: `audit.required_fields`, `audit.same_transaction`, `audit.emitted_for_catalogue`, `audit.authz_denied_written`, `identity.assignment_change_audited_and_effective`, e2e `flows/identity/audit-viewer.spec.ts`; `docs/testing.md` §4.17, §9.15 S1-04
 
 ### 3.7 E-1-06 Administration
 
@@ -374,17 +377,17 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - States: standard; detail tabs profile, status, sessions, assignments, audit · Audit: `identity.user.created/updated/locked/unlocked/deactivated/reactivated`, `identity.invitation.sent/revoked`, `platform.export.created` · Depends: → US-1-11, → US-1-15 · Tests: `identity.deactivated_denied_every_request`, `identity.no_self_grant`, `authz.role_escalation.missing_permission` (identity); `docs/testing.md` §5.2, runbook §2.1, §2.7
 
 #### US-1-17 Roles and permission catalogue administration (M, Must) — FR-identity-02, S1-04
-**As** a system_admin **I want** to see every role's permission bundle against the catalogue and change a bundle with a reason **so that** access is understood and every change is recorded with before and after.
+**As** a system_admin **I want** to see every role's permission bundle against the catalogue, with the seeded roles shown as read-only templates **so that** access is understood and no seeded bundle drifts; bundle changes are made on clones (US-1-29, Phase 1b; `docs/operations-runbook.md` §2.3).
 - Permissions: `identity.role.view`, `identity.role.admin` (R: re-auth; adding S/R permissions audited with sensitivity) · Entities: `roles`, `permissions`, `role_permissions`
 - AC1 Given the Roles screen, When opened, Then the matrix view (module.entity.action × role) with search renders from `permissions` and `role_permissions`, and the code catalogue equals `docs/permissions-matrix.md` §2 (`authz-coverage`).
-- AC2 Given a system_admin with re-authentication, When they add `inventory.adjustment.approve` to `site_manager` with a change reason, Then `role_permissions` changes, `identity.role.updated` records before/after sets with each added permission's sensitivity, `permissions_version` bumps so live sessions refresh within 60 s, and the change is visible in the audit viewer (S1-04).
+- AC2 Given a system_admin with re-authentication, When they try to add `inventory.adjustment.approve` to the seeded `site_manager` role (`is_system = true`) through the API, Then the service rejects the change, `role_permissions` is unchanged, `permissions_version` does not bump and `identity.authorization.denied` is written; the screen shows seeded roles as read-only templates with no edit control (the clone action arrives with US-1-29) (S1-04 part a; part b is US-1-15 AC2).
 - AC3 Given system_admin, When any attempt grants `system_admin` quality release, finance posting, payroll or approval-rule permissions, Then the screen refuses and the service rejects (`docs/security.md` §2.11); SoD warnings appear when one role would both submit and approve a record type.
-- States: standard · Audit: `identity.role.updated`, `identity.owner_break_glass` (owner use) · Depends: → US-1-15 · Tests: `identity.role_permission_change_audited`, `authz.role_escalation.custom_role_sensitivity`; `docs/testing.md` §9.15 S1-04. Open: whether seeded roles are editable or only clones (runbook §2.3 says read-only) — §7.1 item 9
+- States: standard · Audit: `identity.role.updated` (Phase 1b clones, US-1-29), `identity.role.owner_break_glass` (owner use), `identity.authorization.denied` · Depends: → US-1-15 · Tests: `identity.seeded_role_read_only`, `authz.role_escalation.custom_role_sensitivity` (Phase 1b, with US-1-29); `docs/testing.md` §9.15 S1-04. Seeded roles are read-only templates; changes are made on a clone (US-1-29, runbook §2.3; decided at Gate 0 review, §7.1 item 9)
 
 #### US-1-18 Site assignments and site switcher (M, Must) — FR-identity-03 (site), S1-11, A-PM-12
 **As** a system_admin **I want** to grant roles per site with validity dates **so that** each person holds exactly the access their job needs; **as** a user with several sites I want to switch the site I am looking at.
 - Permissions: `identity.site_assignment.view`, `identity.site_assignment.admin` (R); self-service switcher · Entities: `user_site_assignments`, `sessions.active_site_id`
-- AC1 Given the site × role grid of a user, When an admin adds a row (site, role, `valid_from`, optional `valid_to`), Then the assignment is created, `identity.site_assignment.granted` written, the cached context refreshes within 60 s; `site_id = NULL` is rejected (422 and CHECK) for any role but owner_director, system_admin, auditor (`identity.org_wide_only_three_roles`); site_manager cannot grant (`identity.site_manager_cannot_grant`).
+- AC1 Given the site × role grid of a user, When an admin adds a row (site, role, `valid_from`, optional `valid_to`), Then the assignment is created, `identity.site_assignment.granted` written, `permissions_version` bumps and the user's next request uses the new assignment (S1-04 part b); `site_id = NULL` is rejected (422 and CHECK) for any role but owner_director, system_admin, auditor (`identity.org_wide_only_three_roles`); site_manager cannot grant (`identity.site_manager_cannot_grant`).
 - AC2 Given an owner_director with an organization-wide assignment, When they open the switcher, Then every active site plus "All sites" is listed; given a warehouse_operator assigned to Site A only, Then only Site A is listed and the switcher is hidden; switching re-scopes lists, writes `?site=` and confirms when a form is dirty (S1-11).
 - AC3 Given a revoked assignment, When `valid_to` passes or the row is revoked, Then `identity.site_assignment.revoked` is written and the next request after the cache window denies the site; offline clients (Phase 7) receive `PERMISSIONS_CHANGED`.
 - States: standard · Audit: `identity.site_assignment.granted/revoked/scope_changed` · Depends: → US-1-16 · Tests: `identity.site_switcher_lists_allowed_sites`, `identity.org_wide_only_three_roles`, `identity.site_manager_cannot_grant`, e2e `flows/identity/site-switcher.spec.ts`; `docs/testing.md` §5.2, §9.15 S1-11
@@ -401,7 +404,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 
 #### US-1-20 Organization structure: sites, departments, warehouses, locations, lines, equipment register (L, Must) — FR-masterdata-07, FR-masterdata-14 (register fields)
 **As** a system_admin **I want** to maintain the physical structure of the company **so that** every operational record from Phase 2 has a site, warehouse and location to belong to, and special locations exist before stock arrives.
-- Permissions: `masterdata.{site,department,warehouse,production_line}.view/admin`, `masterdata.site.admin` (R), `masterdata.location.{view,create,edit,admin}` (catalogued P2, used here, §7.3), `masterdata.equipment.{view,admin}` · Entities: `sites`, `departments`, `warehouses`, `locations`, `production_lines`, `equipment`
+- Permissions: `masterdata.{site,department,warehouse,production_line}.view/admin`, `masterdata.site.admin` (R), `masterdata.location.{view,create,edit}` (N, P1), `masterdata.location.admin` (S, P1) (`docs/permissions-matrix.md` §2.2), `masterdata.equipment.{view,admin}` · Entities: `sites`, `departments`, `warehouses`, `locations`, `production_lines`, `equipment`
 - AC1 Given a warehouse, When created, Then the admin is prompted to designate the special locations (`receiving`, `staging`, `quarantine`, `hold`, `rejected`, `recall`) and a validation lists which are still missing; `masterdata.location.special_designated` is written per designation; location codes are organization-unique and match `^[A-Z0-9][A-Z0-9._-]{0,63}$` (future `BC:LOC`).
 - AC2 Given a site code, When saved, Then it matches `^[A-Z0-9]{1,6}$` (numbering `{SITE}` token), timezone defaults to the organization's, and `masterdata.site.changed` records before/after; sites and locations are deactivated, never deleted; a location that will hold stock cannot be deactivated once Phase 2 balances exist (service check prepared now).
 - AC3 Given a site_manager at Site A, When they list locations with `?siteId=B`, Then only Site A rows; equipment records carry code (organization-unique for `BC:EQP`), kind, line, `blocking_rule` default `block` (A-DM-28), calibration/maintenance/cleaning fields; changing `blocking_rule` writes `masterdata.equipment.blocking_rule_changed`.
@@ -442,7 +445,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 
 #### US-1-25 Structured logging, correlation ids, error reporting adapter, rate-limit store (S, Must) — FR-platform-01 (logs), NFR observability
 **As** the devops-engineer **I want** pino JSON logs with `requestId`, `userId`, `siteId`, `module`, `command`, duration and outcome, an error-reporting adapter and a Postgres token-bucket limiter **so that** an incident can be traced from alert to audit row to log line.
-- Permissions: none · Entities: rate-limit table; `ERROR_REPORTING_DSN`, `LOG_LEVEL`, `LOG_FORMAT`, `RELEASE`, `RAILWAY_*` fields on every line
+- Permissions: none · Entities: `rate_limit_buckets`; `metrics_samples` (Phase 1: written by the `platform.metrics_sample` job and directly by web replicas from the first staging deploy, `docs/architecture.md` §8); `ERROR_REPORTING_DSN`, `LOG_LEVEL`, `LOG_FORMAT`, `RELEASE`, `RAILWAY_*` fields on every line
 - AC1 Given a request with `X-Request-Id`, When processed, Then the id is echoed in the response and present on every log line and audit row of that request; without it one is generated; redaction covers tokens, passwords, cookies, authorization headers and auth endpoint bodies.
 - AC2 Given an unexpected exception, When thrown, Then the adapter reports it with release, environment, service, `requestId`, module, command and no cookies, headers, bodies or query strings; expected `err(...)` results are never reported; an unset DSN disables reporting with a log line, not a failure.
 - AC3 Given the authenticated API limit of 600/min per session, When exceeded, Then 429 with `Retry-After`; limits are configurable (A-SEC-14) and the login limits of US-1-10 share the store.
@@ -452,7 +455,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 **As** a system_admin **I want** a diagnostics page with the Health, Backups and Variables cards **so that** Gate 1 evidence and the first incident triage need no database access, and no secret ever renders.
 - Permissions: `platform.diagnostics.view` (owner_director, system_admin) · Entities: `worker_heartbeats`, `backup_runs`; readiness payload; allow-listed variable names per service
 - AC1 Given the page, When opened, Then Health shows web/worker ready, release, uptime, worker heartbeat age and migrations current; Backups shows last successful dump time and age, offsite copy ok, last restore drill (empty until Phase 9) and next due; Variables shows allow-listed variable **names** present or missing per service; values and connection strings never appear (`diagnostics.no_secrets`).
-- AC2 Given a user without the permission, When they open `/admin/diagnostics`, Then **D**; the remaining cards (Database, Jobs, Imports, Sync, Reconciliation, Alerts, Errors, Integrations) render as **S** "Available in Phase 2/5/7" placeholders that say so, never fake data.
+- AC2 Given a user without the permission, When they open `/admin/diagnostics`, Then **D**; the remaining cards render as **S** states that name their phase, never fake data: Jobs and Reconciliation "Available in Phase 2" (US-2-03, US-2-04), Database, Imports, Alerts, Errors and Integrations "Available in Phase 5" (US-5-13), Sync "Available in Phase 7" (US-7-06) (`docs/PRD.md` FR-platform-09).
 - States: L X D S · Audit: n/a (read) · Depends: → US-1-05, → US-1-13 · Tests: `diagnostics.no_secrets`, `authz.role_escalation.missing_permission` (platform); runbook §17
 
 #### US-1-27 Gate 1 evidence pack, documentation sync and README (S, Must) — AC-22, AC-23 (deploy), S1-07, S1-15
@@ -499,9 +502,9 @@ Phase 7 can replay it (ADR-018).
 
 #### US-2-01 Stock movement ledger, balance projection and posting pipeline (L, Must) — FR-inventory-02, FR-inventory-09 (projection), AC-11 (posting), ADR-006
 **As** the backend-engineer **I want** `postMovement` to write an immutable `stock_movements` row and update `inventory_balances` and `container_contents` in one transaction with deterministic locking **so that** concurrent scans can never double-issue or drive stock negative.
-- Permissions: `inventory.movement.post`, `inventory.movement.view`, `inventory.balance.view`; `inventory.negative_balance.post` (granted to nobody) · Entities: `stock_movements`, `inventory_balances`, `inventory_lots`, `container_contents`, `transfer_requests` (source for scan moves), numbering `MOV`
+- Permissions: `inventory.movement.post`, `inventory.movement.view`, `inventory.balance.view` · Entities: `stock_movements`, `inventory_balances`, `inventory_lots`, `container_contents`, `transfer_requests` (source for scan moves), numbering `MOV`
 - AC1 Given balance 10 g and two concurrent issues of 8 g, When posted, Then exactly one succeeds, one is 409 `STOCK_INSUFFICIENT`, the balance is 2 and one ledger row exists; lock order keys → lots → balances → numbering rule holds over 200 randomised interleavings with no deadlock.
-- AC2 Given a posting that fails after the ledger insert (injected), When rolled back, Then no ledger row, no balance change and no audit row remain; `ck_stock_movements_locations` enforces from/to per type; `CHECK (on_hand_base >= 0)` holds even under direct SQL.
+- AC2 Given a posting that fails after the ledger insert (injected), When rolled back, Then no ledger row, no balance change and no audit row remain; `ck_stock_movements_locations` enforces from/to per type; `CHECK (on_hand_base >= 0)` holds even under direct SQL; negative balances are rejected by this constraint and no permission or setting bypasses it (ADR-006 as amended).
 - AC3 Given a production_operator, When they post a `transfer` whose source or destination is not a production location, Then 403 per `role_movement_types` (A-PM-06); quantities store entered and base units.
 - States: n/a (service) · Audit: `inventory.stock_movement.posted` · Depends: → US-1-13, → US-1-19, → US-1-20 · Tests: `concurrency.double_issue_prevented`, `concurrency.deadlock_free`, `ledger.projection.updated_in_transaction`, `stock.negative.*`, `uom.entered_and_base_stored`, `inventory.operator_movement_types`; `docs/testing.md` §4.1, §4.3, §4.14
 
@@ -513,14 +516,14 @@ Phase 7 can replay it (ADR-018).
 
 #### US-2-03 Background jobs, in-app notifications and diagnostics Jobs card (M, Must) — FR-platform-05, FR-platform-06 (in-app), ADR-015
 **As** a system_admin **I want** pg-boss jobs registered in `background_jobs` with retry, dead-letter, retry/cancel controls and in-app notifications **so that** slow work runs in the worker and failures are visible, never silent.
-- Permissions: `platform.job.view`, `platform.job.admin`; notifications self-service · Entities: `background_jobs`, `notifications`, `metrics_samples`, `reconciliation_runs`
+- Permissions: `platform.job.view`, `platform.job.admin`; notifications self-service · Entities: `background_jobs`, `notifications`, `reconciliation_runs`; job codes from the registry in `docs/architecture.md` §8 (e.g. `platform.notification_dispatch` for in-app delivery, `platform.import_job.process` registered for the Phase 5 wizard and the US-2-25 loader)
 - AC1 Given a job that fails 5 times, When retried with backoff, Then it is dead-lettered, raises a `critical` notification to system_admin and appears on the Jobs card with payload summary (no secrets), attempts, last error and `correlationId`; `platform.job.admin` retry/cancel writes `platform.background_job.retried/cancelled`; retried jobs never duplicate a posting (idempotency key per job).
-- AC2 Given a job triggered by a user, When it runs, Then it rebuilds an AuthContext from the user's current assignments and writes audit rows as `system:<job>` with `on_behalf_of`; payloads are Zod-validated before execution; `platform.metrics_sample` and `platform.alerts_evaluate` run every 5 min with deduplication.
+- AC2 Given a job triggered by a user, When it runs, Then it rebuilds an AuthContext from the user's current assignments and writes audit rows as `system:<job>` with `on_behalf_of`; payloads are Zod-validated before execution; `platform.alerts_evaluate` runs every 5 min after `platform.metrics_sample` (Phase 1, US-1-25) with deduplication.
 - States: standard; action-centre panel lists notifications with acknowledge · Audit: `platform.background_job.retried/cancelled` · Depends: → US-1-05 · Tests: `jobs.context_rebuilt`, `jobs.payload_validated`, `jobs.dead_letter`, `audit.job_actor`; runbook §6
 
 #### US-2-04 Nightly ledger reconciliation and projection rebuild (S, Must) — FR-inventory-02, R-15
 **As** a system_admin **I want** the `inventory.reconcile` job to compare ledger and projection nightly and report differences **so that** drift is found, never auto-fixed.
-- Permissions: `platform.job.view`; *`inventory.balance.admin` (gap: proposed to enqueue `inventory.rebuild_balances`)* · Entities: `reconciliation_runs`, `inventory_balances`
+- Permissions: `platform.job.view`; `inventory.balance.admin` (S, P2; system_admin and site_manager, A-PM-19) to enqueue `inventory.rebuild_balances` · Entities: `reconciliation_runs`, `inventory_balances`
 - AC1 Given 500 random postings across two sites, When the reconciliation query of `docs/data-model.md` §5.6 runs, Then zero rows; given an injected mismatch, Then a `critical` notification to system_admin and the site's site_manager, a `reconciliation_runs` row with the report file, and nothing corrected; the rebuild job recomputes projection rows from the ledger for a key set and is audited.
 - States: Reconciliation diagnostics card (L E X D) · Audit: `inventory.inventory_balance.rebuilt` · Depends: → US-2-03 · Tests: `ledger.projection.matches_ledger`; runbook §9
 
@@ -560,7 +563,7 @@ Phase 7 can replay it (ADR-018).
 - AC1 Given a quarantined lot, When moved to a released-stock bin, Then 409 V-LOC with allowed locations suggested; to a `quarantine` location it posts; a location inside an active count is 409 V-FREEZE; a `blocked` location is refused.
 - States: scanner states (O N) · Audit: `inventory.stock_movement.posted` · Depends: → US-2-07, → US-2-13 · Tests: `stock.blocked.location_class`, `concurrency.count_freeze_blocks_posting`
 
-#### US-2-10 Lot disposition, holds and expiry job (M, Must) — FR-quality-01, FR-quality-02 (lot), FR-inventory-12, AC-12 (status), A-PM-18, A-PROC-36
+#### US-2-10 Lot disposition, holds and expiry job (M, Must) — FR-quality-01, FR-quality-02 (lot), FR-inventory-12, AC-12 (status), A-PM-18, A-PROC-36, `docs/ux-system.md` §9.13
 **As** qa_qc **I want** to release, reject or hold a lot with one recorded decision, and the system to expire lots automatically **so that** only released, unexpired stock is ever available.
 - Permissions: `quality.disposition.{view,create,approve}` (approve R, qa_qc only), `quality.hold.{view,create,approve}`, `inventory.held_stock_issue.approve` (R) · Entities: `dispositions` (ledger), `quality_holds`, `inventory_lots.quality_status`, `inventory_balances` re-keyed
 - AC1 Given a quarantined lot, When qa_qc approves a `release` disposition with re-auth, Then the lot and all its balance rows change status in one transaction, a label reprint job is queued (`labels.reprint_on_status_change`), and `quality.disposition.approved` (restricted) is written; owner_director and warehouse_operator are 403 (`quality.disposition_only_qa`); `inventory.lot.edit` with a status field is 422.
@@ -600,6 +603,14 @@ Phase 7 can replay it (ADR-018).
 - AC1 Given a scanned box and destination, When confirmed, Then one `transfer` movement with `container_id` posts, the box location updates, the read-back toast names box, contents and destination with movement number; the same box and destination scanned again within seconds or after a reload returns "Already moved to … at … by you" and nothing posts (AC-16).
 - AC2 Given an inter-site transfer, When posted by a user holding `inventory.movement.post` at both sites, Then an `issue` at A and a `receipt` at B creating a lot with `origin_lot_id` share one `correlation_id`; without rights at both sites it is 403.
 - States: 3-step guided flow with sticky confirm; O queued state prepared (P7) · Audit: `inventory.stock_movement.posted` · Depends: → US-2-13, → US-2-09 · Tests: `idempotency.*`, `inventory.intersite_transfer_needs_both_sites`, e2e `flows/inventory/scan-move.spec.ts`; `docs/testing.md` §9.7 steps 1 to 3
+
+#### US-2-28 Undo of the actor's own stock move within the undo window (S, Must) — FR-inventory-02 (corrections), FR-inventory-03, ADR-006, `docs/ux-system.md` §5.17, A-UX-15
+**As** a warehouse_operator **I want** an "Undo" on the move toast for a short time **so that** a wrong scan is corrected at once without a supervisor, while the ledger keeps both rows.
+- Permissions: `inventory.movement.post` (own movement, inside the window); afterwards only `inventory.movement.void` (S, US-2-02) · Entities: `stock_movements` (`reversal_of_id`), `idempotency_keys`; setting `settings.ux.undo_window_seconds` (default 60); reason `undo_by_actor`
+- AC1 Given a scan-move, put-away or box placement posted by the user, When the success response returns, Then it carries `undo: { until, command }` (`docs/architecture.md` §6) only for actions in the ux §5.17 matrix, and the client shows "Undo" only when that field is present.
+- AC2 Given Undo tapped inside the window by the same actor, session and device while online, When the undo command runs with idempotency key `undo:<movement_id>`, Then a linked `reversal` movement back to the source lot/location posts after the same validations, `inventory.stock_movement.reversed` is written with reason `undo_by_actor`, a repeated tap returns the stored result, and the toast names both movement numbers with no further undo.
+- AC3 Given a later movement, reservation, allocation, count line or status change touching the lot, box or location, or the window elapsed, or a different user or session, When undo is attempted, Then it is refused (409 with the reason), nothing is edited or deleted, and the toast offers "Request reversal" (US-2-02).
+- States: toast with countdown; O (undo is Online-only; offline only "Remove from queue" applies, Phase 7) · Audit: `inventory.stock_movement.reversed` · Depends: → US-2-14, → US-2-02, → US-1-19 · Tests: `ledger.reversal.*`, `idempotency.*`; to add to `docs/testing.md` §4.2: `ledger.reversal.undo_window`, `ledger.reversal.undo_refused_after_later_movement`
 
 #### US-2-15 Containers: create, split, merge, repack with lineage; box labels (M, Must) — FR-inventory-07 (materials), AC-16 (box card), W02-04..06
 **As** a warehouse_operator **I want** boxes with unique ids whose contents, status and history are known **so that** a split or repack never loses where the stock came from.
@@ -656,23 +667,23 @@ Phase 7 can replay it (ADR-018).
 
 #### E-2-07 Early go-live enablement (conditional on Q-MIG-13; otherwise Phase 5/9)
 
-#### US-2-23 QA bulk disposition screen (M, Should → Must if early go-live) — `docs/data-migration-plan.md` §5 step 10, §14, MC-07
+#### US-2-23 QA bulk disposition screen (M, Should → Must if early go-live) — `docs/data-migration-plan.md` §5 step 10, §14, MC-07, `docs/ux-system.md` §9.13 (bulk disposition)
 **As** qa_qc **I want** to filter opening lots and apply one disposition with reason `legacy_release` to the selection after re-authentication **so that** thousands of migrated lots are released by a QA decision, not by the loader.
 - Permissions: `quality.disposition.approve` (R) · Entities: `dispositions` (one row per lot), `inventory_lots`, `label_jobs`
 - AC1 Given a filter (site, warehouse, material class, status, expiry range), When qa_qc applies `release` with reason to n lots, Then n disposition rows post in batches inside transactions, lots past expiry are refused (stay `expired`), each lot's balances re-key, reprint jobs queue per `labels.reprint_on_status_change`, and `quality.disposition.approved` is written per lot with the bulk correlation id; a progress state shows done/remaining and failures per lot.
 - States: L X D V; progress · Audit: `quality.disposition.approved` · Depends: → US-2-10, [Q-MIG-13], [Q-MIG-05] · Tests: `quality.disposition_only_qa`, MC-07 on staging R1
 
-#### US-2-24 Label verification scan screen (S, Should → Must if early go-live) — `docs/data-migration-plan.md` §10.5, MC-06
+#### US-2-24 Label verification scan screen (S, Should → Must if early go-live) — `docs/data-migration-plan.md` §10 step 5, MC-06
 **As** a warehouse_operator **I want** to scan each newly labelled container and see the remaining list **so that** the count-and-tag team knows when every container in a zone is verified.
-- Permissions: `inventory.container.edit`, `inventory.label_job.view` · Entities: `containers` (`verified_at/by`, *columns to confirm with the database architect*), `label_jobs`
-- AC1 Given the containers of an opening receipt, When each `BC:BOX`/`BC:LOT` label is scanned, Then the container is marked verified with user and time, the remaining list per location shrinks, a scan of an unknown or other-site code is "not found at your site", and the zone summary shows verified %, target ≥ 99 % (MC-06).
+- Permissions: `inventory.container.edit`, `inventory.label_job.view` · Entities: `containers` (`verified_at`, `verified_by`, `verification_scan_payload`; `docs/data-model.md` §3.3), `label_jobs`
+- AC1 Given the containers of an opening receipt, When each `BC:BOX`/`BC:LOT` label is scanned, Then the container's `verified_at`/`verified_by`/`verification_scan_payload` are set (container state unchanged), the remaining list per location shrinks, a scan of an unknown or other-site code is "not found at your site", and the zone summary shows verified %, target ≥ 99 % (MC-06).
 - States: scanner states; progress · Audit: `inventory.container.verified` · Depends: → US-2-15, → US-2-12 · Tests: `authz.cross_site.scan`; MC-06
 
 #### US-2-25 Command-line migration loader with `MIGRATION_WINDOW_OPEN` guard (L, Should → Must if early go-live) — FR-platform-14, `docs/data-migration-plan.md` §9.4, A-MIG-08, R-08
 **As** the devops-engineer **I want** `pnpm migrate:load --kind <kind> --file <path> --site <code> --mapping <code> [--dry-run|--post] --as <email>` using the Phase 5 import engine **so that** master data and opening stock load through the same validated, audited path before the wizard UI exists.
 - Permissions: the named user's `platform.import_job.{create,submit,post}` (catalogued P5, pulled forward) plus the entity `create`/`post` permissions; `pnpm migrate:approve <job>` by a second person · Entities: `import_mappings`, `import_jobs`, `import_job_rows` (tables pulled from P5), `goods_receipts.receipt_kind = opening_balance`, `material_aliases`
 - AC1 Given a file and mapping, When run with `--dry-run` (default), Then rows are validated per §7 and deduplicated per §8 of the migration plan, an error file is written, nothing posts; with `--post` and a recorded second-person approval, Then entities are created in chunks of 500 inside transactions, opening receipts post as ledger movements with `source_document_type = goods_receipt`, re-running the same checksum creates nothing new, and `platform.import_job.posted` carries counts.
-- AC2 Given `APP_ENV=production` without `MIGRATION_WINDOW_OPEN=true`, When the loader starts, Then it refuses and exits non-zero; `--as` requires interactive re-authentication; `platform.import_job.void` reverses an opening job with reason `import_voided` and sets created lots `rejected`.
+- AC2 Given `APP_ENV=production` without `MIGRATION_WINDOW_OPEN=true`, When the loader starts, Then it refuses and exits non-zero; `--as` requires interactive re-authentication; `platform.import_job.void` reverses an opening job with reason `import_voided` by posting reversal movements only, leaving the created lots at zero balance; any lot status change needs a separate qa_qc disposition (`docs/data-migration-plan.md` §9.3).
 - States: CLI output; diagnostics Imports card · Audit: `platform.import_job.posted/reversed` · Depends: → US-2-07, → US-2-21, [Q-MIG-13] · Tests: `import.duplicates_flagged`, `import.row_cap`, `audit.import_events`, MC-01..MC-04, MC-09, MC-16 on staging R1
 
 #### US-2-26 Opening-balance receipts and legacy document index on the lot page (S, Should → Must if early go-live) — A-PRD-30, A-DM-09, MC-12
@@ -680,6 +691,30 @@ Phase 7 can replay it (ADR-018).
 - Permissions: `procurement.goods_receipt.view`, `documents.file_attachment.view` · Entities: `legacy_documents` (numbering `LDOC`), `goods_receipts` (`opening_balance`, null supplier), `inventory_lots.legacy_number`
 - AC1 Given a migrated finished-goods lot, When its page opens, Then the stock card shows the opening receipt as the first line and the Documents tab lists the `legacy_documents` row (indexed header fields, verified by a second person) with a signed download; legacy numbers are searchable and never appear in scan payloads.
 - States: standard · Audit: `documents.file_attachment.downloaded` · Depends: → US-2-07, → US-2-16 · Tests: MC-12; `authz.cross_site.url` (legacy_documents)
+
+#### E-2-08 Platform refinements: in-app help, assignment sub-scopes, read-only maintenance mode
+
+#### US-2-27 In-app help and quick guides for receive, move and count (M, Should) — FR-platform-16, `docs/ux-system.md` §3.2, §7
+**As** a warehouse_operator **I want** a "?" on the receive, move and count screens that opens a short guide for the step I am on without leaving it **so that** I finish the task correctly without calling a supervisor.
+- Permissions: reading needs none (any signed-in user); `platform.help_guide.admin` (S, P2) to author and publish · Entities: `help_guides` (organization-wide, versioned, screen/workflow key, optional link to `work_instruction_revisions` from Phase 3; `docs/data-model.md`)
+- AC1 Given a published guide for the screen key, When "?" (operator mode) or Help in the user menu is opened, Then a sheet shows the guide (text and images) over the task and closing it returns to the same step with entered values intact; a screen without a guide shows the empty state "No guide for this screen yet", never a dead link.
+- AC2 Given an author with `platform.help_guide.admin`, When a guide is edited, Then a new draft version is created and `platform.help_guide.updated` is written; a second holder of the permission (never the author) publishes it, writing `platform.help_guide.published`, and the previous version stays readable in the history; a user without the permission gets 403 on edit (`docs/data-model.md` `help_guides`).
+- AC3 Given a guide response, When served, Then it carries version and `updated_at` so the Phase 7 reference cache (US-7-01; `docs/offline-sync.md` cached-read set) stores published versions; until then the sheet shows the O state "Help needs a connection".
+- States: sheet L E X O; editor L X V D · Audit: `platform.help_guide.updated`, `platform.help_guide.published` · Depends: → US-1-08, ⇢ US-2-07, ⇢ US-2-14, ⇢ US-2-18 · Tests: `authz.*` (platform.help_guide); to add to `docs/testing.md`: `help.guide_versioned`, e2e help sheet keeps step state on both viewports. Each later phase adds guides for its screens; SOP mapping and training are US-9-08.
+
+#### US-2-29 Warehouse sub-scope on site assignments (M, Should) — FR-identity-03 (sub-scope), `docs/permissions-matrix.md` §4.4, A-PM-13
+**As** a system_admin **I want** to limit a warehouse_operator's write access to the warehouses they work in **so that** a person at a large site cannot post stock in another warehouse of the same site.
+- Permissions: `identity.site_assignment.admin` (R) · Entities: `user_site_assignments.scope` (jsonb, Phase 2 column per matrix §4.4)
+- AC1 Given an assignment with `{"warehouseIds": [W1]}`, When the user posts a movement, count, receipt, container or label job at a location of warehouse W2 at the same site, Then the request is refused as out of scope (404 `NOT_FOUND`, matrix §1) and nothing is written; at W1 it succeeds; reads stay site-wide while `scope.enforce_on_read` is off.
+- AC2 Given a scope change, When saved, Then `identity.site_assignment.scope_changed` records before/after, `permissions_version` bumps and the user's next request applies it; an absent key means the whole site; the line (P3) and department (P5) sub-scopes reuse the same column in their phases.
+- States: standard (assignment grid gains a scope column) · Audit: `identity.site_assignment.scope_changed` · Depends: → US-1-18, → US-2-01 · Tests: `authz.cross_site.*` (inventory); to add to `docs/testing.md`: `authz.subscope.warehouse_write`
+
+#### US-2-30 Read-only maintenance mode with role allow-list and banner (S, Should → Must before any cutover; pull forward) — A-DEP-21, `docs/operations-runbook.md` §17a.2, `docs/deployment-railway.md` §9.1, `docs/data-migration-plan.md` §13
+**As** the devops-engineer **I want** an application read-only mode in which only allow-listed roles can write **so that** nobody posts stock while the cutover load runs, without taking the application down.
+- Permissions: `platform.settings.admin` (R, re-auth) changes the key (US-1-19) · Entities: settings key `platform.maintenance.read_only` (`{enabled, allowed_role_codes}`, P2; `docs/data-model.md` §3.1 settings registry)
+- AC1 Given the mode enabled with an allow-list, When a user whose roles are outside the list submits any mutating command (API, server action or job enqueue on their behalf), Then the service refuses it before any write and every page shows the banner "Read-only for maintenance"; reads, sign-in, `/api/health` and `/api/ready` keep working; allow-listed roles (for example the loader user of US-2-25 and qa_qc for US-2-23) write normally.
+- AC2 Given the toggle, When changed, Then `platform.setting.changed` records before/after and the cutover record cites its audit event id (runbook §17a.2); the mode is distinct from `MAINTENANCE_MODE=1` (full 503, restores only), which this story does not change.
+- States: banner on every page; forms show X with the maintenance message · Audit: `platform.setting.changed` · Depends: → US-1-19, → US-1-13 · Tests: to add to `docs/testing.md`: `platform.read_only_mode_blocks_writes`, `platform.read_only_mode_allow_list`
 
 ### 4.2 Phase 3 Production + BMR
 
@@ -710,8 +745,8 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 
 #### US-3-04 Equipment service records, derived availability, blocking rule and override (M, Should) — FR-masterdata-14, FR-production-07, W13, A-DM-28
 **As** a production_operator **I want** a scale or mixer past its calibration or cleaning to be unselectable, with a controlled exception **so that** weighing never happens on untrusted equipment without a recorded decision.
-- Permissions: `masterdata.equipment.edit` (service records), `production.equipment_use.create`, `production.equipment_override.approve` (R: site_manager, QA notified) · Entities: `equipment_service_records`, `equipment_state_transitions`, `downtime_events`, `equipment_uses`, `BC:EQP` labels
-- AC1 Given `blocking_rule = block` and a calibration due date in the past, When the scale is selected at dispensing, Then refused with reasons; `warn` records the reasons on `equipment_uses` and alerts the site_manager; an override needs an approver other than the operator, a reason and opens a deviation; a failed calibration keeps the equipment blocked until a qa_qc review (`reviewed_by ≠ performed_by`).
+- Permissions: `masterdata.equipment.edit` (service records), `production.equipment_use.create`, `production.equipment_override.approve` (R: two-person rule, site_manager approves and qa_qc co-approves through `approval_decisions`, A-PROC-23) · Entities: `equipment_service_records`, `equipment_state_transitions`, `downtime_events`, `equipment_uses`, `BC:EQP` labels
+- AC1 Given `blocking_rule = block` and a calibration due date in the past, When the scale is selected at dispensing, Then refused with reasons; `warn` records the reasons on `equipment_uses` and alerts the site_manager; an override needs a site_manager approval and a qa_qc co-approval (both other than the operator, recorded in `approval_decisions`), a reason, and opens a deviation (CX-CAL); a failed calibration keeps the equipment blocked until a qa_qc review (`reviewed_by ≠ performed_by`).
 - States: standard; equipment card with due dates · Audit: `production.equipment_use.override_approved`, `masterdata.equipment.serviced` · Depends: → US-1-20, → US-3-13 · Tests: `production.equipment_override_requires_approver`; W13 walk-through
 
 #### E-3-03 Planning: work orders, batches, board, staging (W05-01..05)
@@ -778,23 +813,23 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 
 #### E-3-05 QA release and genealogy (W06)
 
-#### US-3-14 Inspections, sampling and append-only test results (M, Must) — FR-quality-03, FR-quality-10, W06-01..03, A-PROC-34
+#### US-3-14 Inspections, sampling and append-only test results (M, Must) — FR-quality-03, FR-quality-10, W06-01..03, A-PROC-34, `docs/ux-system.md` §9.13
 **As** qa_qc **I want** to sample a lot or batch and enter results against the plan's specifications with attachments **so that** evidence is complete and corrections are appended, never overwritten.
 - Permissions: `quality.inspection.{view,create,submit}`, `quality.test_result.{view,create}`, `quality.test_result.void` (correction), `quality.test_result.export` (S) · Entities: `inspections`, `test_results` (supersedes, correction reason), sample label, `stock_movements` (consumption, reason `sample`)
 - AC1 Given a result entered wrongly, When corrected, Then a new row supersedes the original with a reason, the original stays visible struck through on screen and in the BMR annex, and `quality.test_result.corrected` is written; a unit not matching the specification is 422; sampling posts a consumption movement with reason `sample`.
 - States: standard; inspection queue with due time · Audit: `quality.test_result.recorded/corrected`, `quality.inspection.sampled` · Depends: → US-3-03, → US-3-13 · Tests: `quality.test_result_void_appends`, `statemachine.*` (inspection)
 
-#### US-3-15 Review and batch disposition (M, Must) — FR-quality-04, FR-quality-05 (block), W06-04..06, A-PROC-29, A-PROC-35
+#### US-3-15 Review and batch disposition (M, Must) — FR-quality-04, FR-quality-05 (block), W06-04..06, A-PROC-29, A-PROC-35, `docs/ux-system.md` §9.13
 **As** qa_qc **I want** a second QA user to review results and the BMR and then disposition the batch and its lot **so that** release is a recorded decision by someone who did not run or test the batch.
 - Permissions: `quality.inspection.approve` (reviewer ≠ performer), `quality.disposition.approve` (R), `quality.conditional_release.approve` (R, second qa_qc) · Entities: `inspections.reviewed_by`, `dispositions` (`conditions`, `review_date`), `batches.disposition_id`, `approval_decisions`
 - AC1 Given results and review complete, When the batch is `quarantined` and qa_qc approves `release`, Then lot and batch change status together, open deviations block release unless closed or waived with approval, the decider cannot be the result-entry user or the step-7 operator, a failed test blocks `release` without a documented OOS deviation, and a `conditional_release` needs a second qa_qc user plus conditions and a review date; the FG label reprint job queues with status `RELEASED`.
 - States: standard; disposition form with reason required except for release · Audit: `quality.inspection.reviewed`, `quality.disposition.approved` · Depends: → US-3-14, → US-2-10 · Tests: `sod.results.reviewer_not_tester`, `sod.disposition.decider_not_result_entry`, `quality.conditional_release_two_qa_users`, `quality.disposition_only_qa`; `docs/testing.md` §9.6 step 3
 
-#### US-3-16 Genealogy explorer to finished lot (M, Must) — FR-quality-09 (to finished lot), `docs/data-model.md` §10
+#### US-3-16 Genealogy explorer to finished lot (M, Must) — FR-quality-09 (to finished lot), `docs/data-model.md` §10, `docs/ux-system.md` §9.14 (traceability explorer)
 **As** qa_qc **I want** forward and reverse trace from any supplier lot, lot or batch **so that** an incoming problem finds every batch it touched in seconds.
 - Permissions: `quality.genealogy.view`, `quality.genealogy.export` (S) · Entities: view `lot_genealogy_edges`, recursive queries (depth 20, A-DM-10)
 - AC1 Given the seed data, When a forward trace runs from a supplier lot, Then receipt → storage → batch → output lot nodes return within 2 s, rows outside the user's sites are hidden, the trace carries an "as of" timestamp and export writes `platform.export.created`.
-- States: L E X D; graph collapses to an indented list on phones · Audit: `quality.genealogy.traced`, `platform.export.created` · Depends: → US-3-13 · Tests: `genealogy.forward_and_backward`
+- States: L E X D; graph collapses to an indented list on phones · Audit: `quality.genealogy.viewed`, `platform.export.created` · Depends: → US-3-13 · Tests: `genealogy.forward_and_backward`
 
 #### E-3-06 BMR and production documents
 
@@ -813,7 +848,7 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 
 #### US-3-19 Batch closure and controlled reopen/amend (M, Must) — FR-production-09 (amendment), W05-20..21, A-PM-07
 **As** a site_manager **I want** to close a batch once reconciliation, deviations and documents are complete, and to reopen only with QA co-approval and a reason **so that** a closed record is final yet correctable with a full trail.
-- Permissions: `production.batch.approve` (closure), `production.batch.admin` (R, reopen: site_manager + qa_qc via `approval_rules` `batch_reopen`) · Entities: `batches` (`closed_at`, `reopen_count`), `batch_state_transitions`, `generated_documents` (BMR `CONTROLLED COPY`, `AMENDED rev n`)
+- Permissions: `production.batch.approve` (closure), `production.batch.admin` (R, reopen: held by site_manager; qa_qc co-approves through `approval_decisions` under `approval_rules` `batch_reopen`, A-PM-07) · Entities: `batches` (`closed_at`, `reopen_count`), `batch_state_transitions`, `generated_documents` (BMR `CONTROLLED COPY`, `AMENDED rev n`)
 - AC1 Given open deviations or an unreviewed paper page, When closure is attempted, Then 409 with the blocking items listed; on closure the final BMR is enqueued and reservations released; a reopen needs two approvals, keeps revision ids, increments `reopen_count`, regenerates the BMR as `AMENDED rev n` and supersedes the previous document.
 - States: standard; confirm dialogs · Audit: `production.batch.closed/reopened/amended` · Depends: → US-3-18 · Tests: `production.reopen_requires_two_approvals`, `batch.snapshot.reopen_keeps_revisions`
 
@@ -825,10 +860,10 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 
 #### E-3-07 Deviations and holds (W07 part)
 
-#### US-3-21 Deviations from any step, containment holds and closure (M, Must) — FR-production-08, FR-quality-05, W07-01..05
+#### US-3-21 Deviations from any step, containment holds and closure (M, Must) — FR-production-08, FR-quality-05, W07-01..05, `docs/ux-system.md` §9.14
 **As** anyone on the floor **I want** to raise a deviation from the step, lot or batch I am looking at **so that** QA can contain, investigate and close it with a decision that blocks release until done.
 - Permissions: `quality.deviation.{view,create,submit}`, `quality.deviation.approve` (close, S, ≠ raiser), `quality.deviation.export`, `quality.hold.create` · Entities: `deviations` (numbering `DEV`), `quality_holds`, links to batch/lot/dispense/step
-- AC1 Given CX-TOL, CX-CAL, a failed in-process check, a yield out of range or a reconciliation mismatch, When approved or detected, Then a deviation is created automatically with references; severity is set by qa_qc; closure requires root cause and resolution and a user other than the raiser; the BMR section I lists deviations and exception approvals.
+- AC1 Given CX-TOL, CX-CAL, a failed in-process check, a yield out of range or a reconciliation mismatch, When approved or detected, Then a deviation is created automatically with references; severity is set by qa_qc; closure requires root cause and resolution and a user other than the raiser; the BMR section I lists deviations and exception approvals; CAPA links and recall cases are Phase 6 (US-6-18), so the CAPA tab shows the **S** state until then.
 - States: standard; raise sheet pre-filled from context · Audit: `quality.deviation.opened/closed`, `quality.hold.placed/lifted` · Depends: → US-3-10, → US-2-10 · Tests: `quality.hold_lift_not_creator`, deviation-blocks-release integration test
 
 ### 4.3 Phase 4 Packaging + fulfilment + CRM
@@ -878,7 +913,7 @@ Gate G4 runs order → pick → pack → ship on staging with every shipped box 
 
 #### E-4-03 Boxing (W08)
 
-#### US-4-07 Packs: boxing from batch output or packaging order, box labels, checker verification, boxing note (L, Must) — FR-inventory-07 (finished goods), FR-sales-05, FR-sales-07, FR-production-12 (boxing), AC-16 (finished goods), W08-01..06, A-DM-29, A-PROC-38
+#### US-4-07 Packs: boxing from batch output or packaging order, box labels, checker verification, boxing note (L, Must) — FR-inventory-07 (finished goods), FR-sales-05, FR-sales-07, FR-production-12 (boxing), AC-16 (finished goods), W08-01..06, A-DM-29, A-PROC-38, `docs/ux-system.md` §9.7a
 **As** a production_operator **I want** to scan the finished lot, confirm units per box, print the box label and have a checker verify the boxes **so that** every box knows its contents, lot, packer and location.
 - Permissions: `inventory.pack.{view,create,submit,approve}` (approve = checker ≠ packer), `inventory.container.create`, `inventory.label_job.create`, `documents.generated_document.create` · Entities: `packs` (`config_snapshot`), `pack_verification_scans`, `containers`, `container_contents`, boxing note (`boxing_note`, variants batch/order)
 - AC1 Given a pack started from a batch, When a box is created, Then units per box come from the customer requirement (approved revision) or the SKU default, the box inherits the lot's status (quarantined boxes allowed at batch boxing), the last partial box prints `PARTIAL`, and the box label carries `BC:BOX`, SKU, lot, expiry, units, packed date, packer initials and customer marks.
@@ -907,7 +942,7 @@ Gate G4 runs order → pick → pack → ship on staging with every shipped box 
 
 #### US-4-11 Pack verification against the order and over-shipment exception (M, Must) — FR-sales-06 (verification), AC-17 (block), W09-07, A-PRD-24, A-PROC-15
 **As** a warehouse_operator **I want** scanned boxes verified against ordered quantities with carrier, tracking and weights captured **so that** over-shipment or a forbidden partial shipment is stopped before the truck.
-- Permissions: `inventory.pack.approve` (verifier ≠ picker where configured), `sales.shipment.{view,create,edit}`, `sales.over_shipment.approve` (R: site_manager ≠ order creator) · Entities: `shipments` (`over_shipment_approved_by`), `packs`
+- Permissions: `inventory.pack.approve` (checker ≠ packer, mandatory; `packs.checked_by <> packed_by`), `sales.shipment.{view,create,edit}`, `sales.over_shipment.approve` (R: site_manager ≠ order creator) · Entities: `shipments` (`over_shipment_approved_by`), `packs`
 - AC1 Given 10 boxes allocated, When an 11th is scanned, Then 409 `OVER_SHIPMENT` and the box is not added; a site_manager approval with reason and customer reference allows it with a badge on shipment and DR and `sales.shipment.over_shipment_approved` (restricted); a partial shipment for a customer requiring full shipment is 409 (CX-SHIP); shipment moves `picked → packed`, order `picking → packed`.
 - States: tablet flow; A banner · Audit: `sales.shipment.packed`, `sales.shipment.over_shipment_approved` · Depends: → US-4-10 · Tests: `shipment.over_allocated_rejected`, `shipment.over_ordered_rejected`, `shipment.over_with_approval`, `shipment.partial_allowed_unless_customer_full`, `authz.exception.over_shipment`
 
@@ -932,7 +967,7 @@ Gate G4 runs order → pick → pack → ship on staging with every shipped box 
 
 #### E-4-05 Complaints, returns and trace to customer (W07, W09-11)
 
-#### US-4-15 Complaints linked to shipment, lot and batch (S, Should) — FR-quality-06, FR-sales-10, W07-06
+#### US-4-15 Complaints linked to shipment, lot and batch (S, Should) — FR-quality-06, FR-sales-10, W07-06, `docs/ux-system.md` §9.14
 **As** sales_cs **I want** to log a complaint from the label's lot or box **so that** QA starts the reverse trace from a verified record.
 - Permissions: `quality.complaint.{view,create,submit}`, `quality.complaint.approve` (close) · Entities: `complaints` (numbering `CMP`)
 - AC1 Given a lot or box id, When entered, Then it is validated against shipments to that customer when known; closure needs qa_qc; internal notes never reach customer-facing documents.
@@ -944,36 +979,41 @@ Gate G4 runs order → pick → pack → ship on staging with every shipped box 
 - AC1 Given approved return lines, When posted, Then `return` movements land in the returns/quarantine location, the shipment moves `delivered → returned` (partial allowed), and QA disposition follows W06; credit notes wait for Phase 6.
 - States: scanner states · Audit: `sales.customer_return.posted` · Depends: → US-4-12, → US-2-10 · Tests: `statemachine.*` (shipment), `stock.blocked.location_class`
 
-#### US-4-17 Genealogy forward to customer and recall explorer (read) (S, Must) — FR-quality-09 (to customer), FR-quality-08 (explorer), W07-07
+#### US-4-17 Genealogy forward to customer and recall explorer (read) (S, Must) — FR-quality-09 (to customer), FR-quality-08 (explorer), W07-07, `docs/ux-system.md` §9.14
 **As** qa_qc **I want** the trace to continue from finished lot to box, shipment and customer, and in reverse from a complaint **so that** a recall list is a query, not a binder search.
 - Permissions: `quality.genealogy.view`, `quality.genealogy.export` (S) · Entities: `lot_genealogy_edges` extended with pack, shipment and customer edges
 - AC1 Given a complaint's lot, When traced in reverse, Then batches, sibling batches sharing input lots, boxes, shipments and customers list within 2 s for seed data, scoped to the user's sites (owner sees all); the recall case workflow itself is Phase 6 (E-6-06).
-- States: L E X D · Audit: `quality.genealogy.traced`, `platform.export.created` · Depends: → US-3-16, → US-4-12 · Tests: `genealogy.forward_and_backward` (full chain)
+- States: L E X D · Audit: `quality.genealogy.viewed`, `platform.export.created` · Depends: → US-3-16, → US-4-12 · Tests: `genealogy.forward_and_backward` (full chain)
 
 ---
 
 ## 5. Phases 5 to 9: epics with key stories
 
-Key stories are listed as one row each: id, title (size, priority), requirements, and the acceptance criteria that define done. Full cards are written when the phase is planned (after the preceding gate), using the same template as section 3. Permissions and audit names follow §1.6.
+Key stories are listed as one row each: id, title (size, priority), requirements, and the acceptance criteria that define done. Full cards are written when the phase is planned (after the preceding gate), using the same template as section 3. Permissions and audit names follow §1.6. Screen specifications: `docs/ux-system.md` §9.15 (Owner trends, exceptions, forecast assumptions: US-5-16, US-5-06, US-6-20) and the §9.16 outline specs, which the design sprint before each phase expands (supplier, PR/PO, expected receipts, reorder suggestions: E-6-01; employee list, exception review, time summaries: US-5-10, US-5-11d, US-5-12; shifts, leave, payroll: E-6-02, E-6-03; finance screens: E-6-04, E-6-05; integrations: US-5-05, US-5-13; system health: US-1-26, US-5-13).
 
 ### 5.1 Phase 5 Reporting + imports
 
 | Story | Requirements | Acceptance criteria (Given/When/Then) |
 |---|---|---|
 | **E-5-01** US-5-01 KPI definitions, snapshots and reconciliation jobs (L, Must) | FR-analytics-05, AC-21, `docs/analytics-kpis.md` §1, §4 | Given the `perf` seed month, When `analytics.snapshot_kpis` and `analytics.reconcile_kpis` run with the fixed clock, Then every owner KPI snapshot equals its R-query recomputation exactly (`decimal.js`), a mismatch raises a `critical` notification, and each KPI exposes definition, calculation, time basis, sources, refresh time and label (A/E/F/O). Tests: `analytics.kpi.reconciles_to_source` per KPI. |
-| US-5-02 Owner overview and site comparison (M, Must) | FR-analytics-01, FR-analytics-07, `docs/ux-system.md` §9.2, A-KPI-18 | Given owner_director, When the overview opens for "All sites", Then KPI-OWN-01..14 tiles show value, delta, sparkline/meter, "Updated HH:MM · scope · period" and drill to the source list that is the R-query; given a site_manager with two sites, Then only those two compare (`analytics.owner_dashboard_filters_to_allowed_sites`); finance tiles appear only with `analytics.financial_kpi.view` and are labelled Estimate before Phase 6 (A-KPI-10). Permission `analytics.owner_dashboard.view`. |
+| US-5-02 Owner overview and site comparison (M, Must) | FR-analytics-01, FR-analytics-07, `docs/ux-system.md` §9.2, A-KPI-18 | Given owner_director, When the overview opens for "All sites", Then KPI-OWN-01..14 tiles show value, delta, sparkline/meter, "Updated HH:MM · scope · period" and drill to the source list that is the R-query; given a site_manager with two sites, Then only those two compare (`analytics.owner_dashboard_filters_to_allowed_sites`); finance tiles appear only with `analytics.financial_kpi.view` (S, P5) and are labelled Estimate before Phase 6 (A-KPI-10). Permission `analytics.owner_dashboard.view`. |
 | US-5-03 Operations, inventory, quality and sales dashboards (L, Should) | FR-analytics-02, FR-analytics-03, FR-analytics-04 | Given `analytics.dashboard.view`, When a dashboard opens, Then KPI-OPS-*, KPI-INV-*, KPI-QUA-*, KPI-SAL-* tiles render per `docs/analytics-kpis.md` §3 with the "Table" toggle, stale badge when an MV refresh failed, and totals equal to the ledger projection for inventory. |
+| US-5-16 Trends page with KPI picker, comparison and table twin (M, Should) | FR-analytics-01, FR-analytics-02, `docs/ux-system.md` §9.15 (Trends), `docs/analytics-kpis.md` §1.2, §2 | Given `analytics.dashboard.view` (cross-site only with `analytics.owner_dashboard.view`), When up to six KPIs are picked with a period, comparison and grain, Then each series shows its value label chip (Actual or Estimate; estimates dashed), "Updated HH:MM · {scope}" and a definition tooltip, the table twin equals the chart data, a point drills to the source report in the same scope, "Save view" stores the selection and "Schedule" needs `analytics.scheduled_report.create` (US-5-05); "All sites" appears only for organization-wide roles. Tests: `analytics.owner_dashboard_filters_to_allowed_sites` (trends), e2e trends page on both viewports. |
 | **E-5-02** US-5-04 Report registry, PDF/CSV/XLSX output and report library (M, Must) | FR-analytics-06, FR-documents-09 (reports) | Given a report code, When run with filters, Then output carries title, filters, generated-at/by, data freshness, KPI footnotes, value labels, row count and truncation notice (A-RPT-18); exports use US-2-21 rules. Permissions `analytics.report.view/export/admin`. |
 | US-5-05 Scheduled reports with recipient re-check and email adapter (M, Must) | FR-analytics-06, FR-platform-06 (email), A-PRD-25, A-PROC-40 | Given a schedule, When the worker runs it, Then an AuthContext is rebuilt per recipient, one file per distinct permission set and site scope, recipients who lost permission are skipped and logged and the owner notified, delivery is in-app plus email through the adapter (SPF/DKIM set up), and `report_runs` records counts. Tests: `reports.recipient_recheck`, `jobs.revoked_user_report_skipped`. |
-| **E-5-03** US-5-06 Action centre with approvals, exceptions, alerts, sync tabs (M, Must) | FR-platform-07 | Given pending approvals, late work orders, low stock, expiring lots, failed imports, holds, unacknowledged DRs, unshipped orders, When the panel opens, Then items are grouped with record number, site, age and primary action; items clear when `resolved_at` is set by the underlying record; acknowledgement is audited. |
+| **E-5-03** US-5-06 Action centre with approvals, exceptions, alerts, sync tabs (M, Must) | FR-platform-07 | Given pending approvals, late work orders, low stock, expiring lots, failed imports, holds, unacknowledged DRs, unshipped orders, When the panel opens, Then items are grouped with record number, site, age and primary action; items clear when `resolved_at` is set by the underlying record; acknowledgement is audited; the Exceptions tab also opens as a full page grouped by kind and per site for owner roles (`docs/ux-system.md` §9.15 Exceptions). |
 | US-5-07 Notification rules and escalation (M, Should) | FR-platform-08 | Given a rule with owner, severity and escalation delay, When an item is unacknowledged past the delay, Then it escalates to the configured role and the audit trail records acknowledgement and resolution notes. Permission `platform.notification_rule.admin`. |
 | **E-5-04** US-5-08 Import wizard: upload → mapping → validation → review → post (L, Must) | FR-platform-10, `docs/data-migration-plan.md` §9.1–9.3, A-MIG-16 | Given a file for any import kind of §9.2, When the four steps run, Then the original file and checksum are retained, mapping versions are saved and reused, every row has a result, duplicates (tiers 1–3) and rejects are listed with an error file, posting runs in the worker in chunks of 500 and is resumable, a re-run of the same file creates nothing new, and `platform.import_job.posted` carries counts. Tests: `import.*`, MC-01, MC-02. |
 | US-5-09 Master-data and opening-stock import kinds (M, Must) | FR-platform-14, migration plan §7, §8 | Given the `materials`, `skus`, `suppliers`, `customers`, `price_lists`, `locations`, `legacy_documents`, `opening_stock`, `open_sales_orders`, `equipment` kinds, When validated, Then the §7 rules and §8 duplicate decisions apply exactly and the loader of US-2-25 (if built) and the wizard share one engine. |
 | **E-5-05** US-5-10 Employee directory and personal data with masking (M, Must) | FR-hr-01, FR-hr-08, `docs/modules/hr-attendance-payroll.md` §2 | Given `hr.employee.view` without `hr.employee_personal_data.view`, When a record opens, Then personal, government-id and bank fields are absent with `_masked`; viewing personal fields writes `hr.employee.personal_data_viewed`; exports omit ids and bank details unless confirmed and audited; separation deactivates the linked user (A-HR-03). Tests: `hr.mask.personal_fields`, `hr.employee_export_excludes_ids_and_bank`, `hr.admin.no_payroll_read`. |
-| US-5-11 Attendance import wizard, exception queue, corrections and exception report (XL → split: upload/mapping; preview/exceptions; post/report; corrections) (Must) | FR-hr-02, FR-hr-03, AC-19, W10, `docs/modules/hr-attendance-payroll.md` §4 | Given the representative anonymised time-clock file, When imported, Then the original file (restricted) and checksum are kept, per-row results (ok, duplicate, unknown employee, missing punch, out of range, invalid, inactive, out of sequence, site mismatch) are shown, no bulk accept exists for ambiguous kinds, rows still ambiguous never post, posting creates immutable `attendance_events` with idempotency key = import id, the exception report lists everything not posted, a same-checksum re-upload needs a reason, rollback is blocked inside a locked payroll period, and a correction is requested by a site_manager and approved by a different `hr_payroll` user as an appended event. Tests: `hr.import.file_retained`, `hr.import.duplicate_across_files`, `hr.attendance_correction_not_self`, `import.requires_approval`; `docs/testing.md` §9.10. |
+| US-5-11a Attendance import: upload, mapping profile and parse (M, Must) | FR-hr-02, AC-19, W10, `docs/modules/hr-attendance-payroll.md` §4, `docs/ux-system.md` §9.9 | Given the representative anonymised time-clock file, When uploaded and a mapping profile chosen, Then the original file (restricted) and checksum are kept, `hr.attendance_import.parse` runs in the worker, and a same-checksum re-upload needs a reason. Tests: `hr.import.file_retained`. |
+| US-5-11b Attendance import: preview and exception queue (M, Must) | FR-hr-02, FR-hr-03, AC-19, HR §4 | Given a parsed import, When previewed, Then per-row results (ok, duplicate, unknown employee, missing punch, out of range, invalid, inactive, out of sequence, site mismatch) are shown, no bulk accept exists for ambiguous kinds and rows still ambiguous never post. Tests: `hr.import.duplicate_across_files`, `import.duplicates_flagged`. |
+| US-5-11c Attendance import: post and exception report (M, Must) | FR-hr-02, FR-hr-03, AC-19, HR §4, FR-documents-09 (exception report) | Given a reviewed import, When posted (`hr.attendance_import.post`), Then immutable `attendance_events` are created with idempotency key = import id, the exception report lists everything not posted, and rollback is blocked inside a locked payroll period. Tests: `import.requires_approval`, `hr.import.*`; `docs/testing.md` §9.10. |
+| US-5-11d Attendance corrections with approval (M, Must) | FR-hr-03, AC-19, W10-07, `docs/ux-system.md` §9.16 (Exception review) | Given a posted event that is wrong, When a site_manager requests a correction (an `attendance_exceptions` row in `requested`, `hr.attendance_event.edit`), Then a different `hr_payroll` user approves it (`hr.attendance_event.approve`) as an appended event (`hr.attendance_event.correction_approved`), the original stays, and self-approval is 409. Tests: `hr.attendance_correction_not_self`. |
 | US-5-12 Time summaries labelled "computed under rule set vX, not for pay" (M, Must) | FR-hr-04, §7 | Given posted events and the single draft rule set, When summaries compute, Then they are visible to `hr_payroll` only, reconcile to events (§7.3), and are never shown as pay. |
-| **E-5-06** US-5-13 Full diagnostics page (Database, Jobs, Imports, Reconciliation, Alerts, Errors, Integrations) (M, Must) | FR-platform-09 (Phase 5 part) | Given `platform.diagnostics.view`, When opened, Then all cards of runbook §17 render booleans, counts, names and versions only (`diagnostics.no_secrets`); Integrations shows configured / setup required per adapter. |
+| **E-5-06** US-5-13 Full diagnostics page: Database, Imports, Alerts, Errors and Integrations cards (M, Must) | FR-platform-09 (Phase 5 part) | Given `platform.diagnostics.view`, When opened, Then the Phase 5 cards join Health, Backups, Variables (Phase 1, US-1-26) and Jobs, Reconciliation (Phase 2, US-2-03, US-2-04) and render booleans, counts, names and versions only (`diagnostics.no_secrets`); Integrations shows configured / setup required per adapter; the Sync card stays **S** until Phase 7 (US-7-06). |
 | US-5-14 Weekly access-and-exceptions report (S, Must) | `docs/security.md` §5, §2.11 | Given the week, When generated, Then role grants, restricted-permission use, controlled exceptions, reprints by kind and S/R exports are listed for the owner, delivered per A-PRD-25. |
+| **E-5-07** US-5-15 Production plan from confirmed orders and forecast with availability and reservations (M, Should) | FR-production-13, W05-01, A-PROC-30, `docs/data-model.md` `production_plans`, `production_plan_lines` | Given confirmed sales orders, min-stock rules and (once FR-analytics-08 is scheduled) approved forecast overrides for a period, When a production_planner builds a plan (`production.production_plan.{view,create,edit}`), Then each line shows demand by source (forecast lines carry the Forecast label), on hand, reserved, open work orders and material availability with shortages; the optional approval gate (`production.production_plan.approve`, off by default, A-PROC-30; approver ≠ submitter, A-PM-14) applies when on; converting a plan line creates a `work_orders` row linked by `production_plan_line_id` whose release reserves materials by FEFO (US-3-05); nothing is created automatically. Tests: `authz.sod.approve_own` (production_plan); to add to `docs/testing.md`: `production.plan_line_creates_work_order_with_reservations`. |
 
 ### 5.2 Phase 6 Procurement + HR/finance scope
 
@@ -981,22 +1021,24 @@ Key stories are listed as one row each: id, title (size, priority), requirements
 |---|---|---|
 | **E-6-01** US-6-01 Supplier master, approved-material list, prices, lead times, MOQ (M, Must) | FR-procurement-02, W04-11, V-ASL | Given a PO line for a supplier/material pair not approved or a `suspended` supplier, When added, Then 422 V-ASL; ASL changes by qa_qc are audited; prices visible only with `masterdata.supplier_price.view`. Tests: `procurement.asl_blocks_line`, `procurement.po_prices_hidden_from_warehouse`. |
 | US-6-02 Purchase requests and purchase orders with thresholds, send and state machine (L, Must) | FR-procurement-03, W04-02..06, A-PM-15, A-PROC-13 | Given a PR/PO, When approved by its submitter, Then 409; above threshold a second step by owner_director; `sent` generates the PO PDF (role titles on the supplier copy); states follow `docs/data-model.md` §6.4. Tests: `authz.sod.approve_own`, `statemachine.*` (PO). |
-| US-6-03 Expected receipts, PO-based receipts, partial receipts, over-delivery approval, supplier returns (M, Must) | FR-inventory-01 (PO), W01-02..03, W04-07..09 | Given a PO line, When received, Then `qty_received_base` updates and the PO moves `sent → partially_received → received`; over-delivery above tolerance needs `procurement.receipt_discrepancy.approve`; a supplier return posts an `issue` only for `rejected` lots or with QA approval. |
+| US-6-03 Expected receipts, PO-based receipts, partial receipts, over-delivery approval (M, Must) | FR-inventory-01 (PO), W01-02..03, W04-07..08 | Given a PO line, When received, Then `qty_received_base` updates and the PO moves `sent → partially_received → received`; over-delivery above tolerance needs `procurement.receipt_discrepancy.approve`. Supplier returns are US-6-21. |
+| US-6-21 Supplier returns: draft, approve, post (M, Must) | FR-procurement-03, W01-11, W04-09, `docs/data-model.md` `supplier_returns`, `supplier_return_lines` | Given a draft return (`procurement.supplier_return.create`) for lots of one supplier, When a line names a lot that is not `rejected`, Then it is refused until a qa_qc disposition makes it `rejected` (W04-09); when submitted, Then approval by a different user (`procurement.supplier_return.approve`, S, P6; approver ≠ creator) is required, and posting (`procurement.supplier_return.post`, poster ≠ approver) writes one `issue` movement per line with `source_document_type = supplier_return` in one transaction with idempotency key, numbering `SRT`, the expected credit linked to the supplier bill dispute; viewing needs `procurement.supplier_return.view` (N, P6). Tests: `authz.sod.approve_own` (supplier_return), `ledger.*` (issue), `statemachine.*` (supplier return). |
 | US-6-04 Supplier performance and reorder suggestions with drivers (M, Should) | FR-procurement-04, FR-procurement-05, KPI-PRO-* | Given suggestions, When listed, Then each shows on hand, reserved, open POs, lead time, safety stock, expiry risk and the explanation; nothing is ordered automatically; accepting creates a PR. |
+| US-6-20 Forecast assumptions and overrides (L, Later until FR-analytics-08 is scheduled) | FR-analytics-08, `docs/ux-system.md` §9.15 (Forecast assumptions), `docs/analytics-kpis.md` §6 | Given `analytics.forecast.view`, When the page opens, Then the banner "Forecasts are estimates, not actuals." shows, each SKU × site row names method, history length, backtest WAPE/MAE/bias and the next-period forecast with its band, and a SKU failing sufficiency shows the sufficiency text with no number; an override (`analytics.forecast.edit`: value, period, required reason) stays `submitted` in `forecast_overrides` until a different user approves (`analytics.forecast.approve`), the original forecast stays visible, and a forecast or override is never labelled Actual, shown in a hero KPI card or turned into an automatic order or reservation. Tests: `authz.sod.approve_own` (forecast_override); KPI label tests of `docs/analytics-kpis.md` §6. |
 | **E-6-02** US-6-05 Shifts, assignments, patterns, holiday calendars, rest days (M, Should) | FR-masterdata-12, FR-hr-05, HR §3 | Given an assignment overlapping another, When saved, Then refused (GiST); non-HR proposals need approval (A-HR-07); no holiday dates are seeded (A-HR-08); edits inside a locked payroll period are blocked. |
 | US-6-06 Attendance rule sets, effective-dated, validated by the reviewer; daily evaluation (L, Should) | FR-hr-06, HR §5 | Given a rule-set version, When approved without `validated_by`, Then summaries stay HR-only; the evaluation job is idempotent per employee/date/version and recomputes only when a version or correction lands. |
-| US-6-07 Leave and overtime requests with supervisor approval (M, Should) | FR-hr-05, HR §6, *`hr.overtime.{view,create,void}` (gap)* | Given a request, When the employee approves their own, Then 409; escalation to `hr_payroll` after 48 h; approvals audited `hr.leave_request.approved`, `hr.overtime_request.approved`. |
+| US-6-07 Leave and overtime requests with supervisor approval (M, Should) | FR-hr-05, HR §6, `hr.overtime.{view,create}` (N, P6), `hr.overtime.{approve,void}` (S, P6) | Given a request, When the employee approves their own, Then 409; escalation to `hr_payroll` after 48 h; approvals audited `hr.leave_request.approved`, `hr.overtime_request.approved`. |
 | **E-6-03** US-6-08 Payroll period lifecycle to `approved` in staging with computation gate (L, Later until reviewer sign-off) | FR-hr-07, ADR-021, HR §8 | Given any §8.1 gate item false, When compute runs, Then it fails naming the item and writes nothing (`hr.payroll.computation_gate`); no numeric rate exists in code (`hr.payroll.no_hardcoded_rates`); submit ≠ approve; computation stays off in production until the parallel run reconciles (A-HR-20). |
 | US-6-09 Payslips, payment export and corrections (M, Later) | FR-hr-07, HR §8.6–8.8 | Given an approved and posted period, When payslips generate, Then they are restricted documents (re-auth to view/export), payment files follow a bank-provided layout and corrections are supplementary lines, never edits. |
 | **E-6-04** US-6-10 Invoices from dispatched shipments: draft, submit, approve, issue, statement (L, Must) | FR-finance-02, FR-finance-07, finance §3.1 | Given a shipment not `dispatched`, When an invoice is created, Then 422; issue allocates a gapless `INV` number inside the posting, refuses a locked period (409 `PERIOD_LOCKED`), and the sales order moves `shipped → invoiced`; a failed posting consumes no number (`numbering.rollback_no_consume_gapless`). |
 | US-6-11 Supplier bills with three-way match, dispute, approval, posting (L, Must) | FR-finance-02, finance §3.2, A-FIN-08 | Given variances beyond tolerance, When submitted, Then `disputed` until a PO amendment, supplier credit or approved variance; bills without PO allowed only for configured categories and always `finance` approval. |
-| US-6-12 Payments inbound/outbound with applications, credit notes, expense claims with limits (L, Must/Should) | FR-finance-02, FR-finance-03, finance §3.1–3.3, *`finance.payment_record.approve` (gap)* | Given a claim over the threshold, When approved by the claimant or by the first approver alone, Then 409; posting above threshold needs a poster ≠ approver (A-PM-10); payments apply oldest-due-first by default. |
+| US-6-12 Payments inbound/outbound with applications, credit notes, expense claims with limits (L, Must/Should) | FR-finance-02, FR-finance-03, finance §3.1–3.3, `finance.payment_record.approve` (S, P6) | Given a claim over the threshold, When approved by the claimant or by the first approver alone, Then 409; posting above threshold needs a poster ≠ approver (A-PM-10); payments apply oldest-due-first by default. |
 | **E-6-05** US-6-13 Accounting periods and locks (S, Must) | FR-finance-07 | Given a locked period, When any posting or reversal dates into it, Then 409; unlock needs `finance.period_lock.void` with finance + owner approval (`finance.period_unlock_two_approvals`). |
 | US-6-14 Tax configuration as reviewed data (M, Must) | FR-finance-06, finance §5 | Given a tax row, When saved without `reviewed_by`, Then it is not effective; posted documents snapshot the rate; no rate exists in code or production seed. |
 | US-6-15 Bank/cash statement reconciliation via the import wizard (M, Should) | FR-finance-04, finance §6.4, A-FIN-23 | Given a statement, When auto-matched on amount, reference and date window, Then unmatched lines are listed; completion needs every line matched, manual or explained. |
-| US-6-16 Costing runs, estimate vs actual, lot cost history (L, Should) | FR-finance-05, finance §4, *`finance.costing_config.admin` (gap)* | Given closed batches in a period, When the run computes, Then every element carries `estimate` or `actual`, labour shows `not recorded` rather than zero when untimed, overhead fallback is flagged, and `final` runs are immutable (corrections supersede). |
-| US-6-17 Accountant export profiles, registers and reconciliation report (M, Must) | FR-finance-08, finance §6, *`finance.accountant_export.admin` (gap)* | Given a profile and period, When exported (re-auth), Then every register total ties to `financial_postings` in the reconciliation report, unmapped account combinations block the export, and the run record stores hash and counts. |
-| **E-6-06** US-6-18 CAPA, change control and recall case with two approvals and bulk recalled marking (L, Should) | FR-quality-07, FR-quality-08, W07-04, W07-08..10 | Given a recall case, When approved by qa_qc then owner_director, Then affected lots and containers are marked `recalled` in bulk (`quality.recall_case.admin`), shipments of those lots are blocked (V-REC), and closure requires the shipped − returned − accounted reconciliation. Tests: `quality.recall_two_approvals`. |
+| US-6-16 Costing runs, estimate vs actual, lot cost history (L, Should) | FR-finance-05, finance §4, `finance.costing_config.admin` (R, P6) | Given closed batches in a period, When the run computes, Then every element carries `estimate` or `actual`, labour shows `not recorded` rather than zero when untimed, overhead fallback is flagged, and `final` runs are immutable (corrections supersede). |
+| US-6-17 Accountant export profiles, registers and reconciliation report (M, Must) | FR-finance-08, finance §6, `finance.accountant_export.admin` (R, P6) | Given a profile and period, When exported (re-auth), Then every register total ties to `financial_postings` in the reconciliation report, unmapped account combinations block the export, and the run record stores hash and counts. |
+| **E-6-06** US-6-18 CAPA, change control and recall case with two approvals and bulk recalled marking (L, Should) | FR-quality-07, FR-quality-08, W07-04, W07-08..10, `docs/ux-system.md` §9.14 (CAPA, recall case) | Given a recall case, When approved by qa_qc then owner_director, Then affected lots and containers are marked `recalled` in bulk (`quality.recall_case.admin`), shipments of those lots are blocked (V-REC), and closure requires the shipped − returned − accounted reconciliation. Tests: `quality.recall_two_approvals`. |
 | **E-6-07** US-6-19 Preventive maintenance plans, maintenance work orders, spare parts (Later) | FR-production-15, A-DM-30 | Not scheduled; requires owner-approved scope and an ADR. |
 
 ### 5.3 Phase 7 Offline/PWA hardening
@@ -1008,7 +1050,7 @@ Key stories are listed as one row each: id, title (size, priority), requirements
 | US-7-03 Authorization snapshot, expired session and revoked permission handling (M, Must) | §6, `docs/security.md` §2.9 | Given a snapshot older than 12 h or an expired session, When a new offline command is attempted, Then blocked; given a permission revoked while offline, When reconnecting, Then `PERMISSIONS_CHANGED` and queued commands go to conflicts (`offline.permission_revoked_while_offline`, `offline.auth_snapshot_too_old`). |
 | US-7-04 Offline dispensing and count capture on registered devices (L, Should) | A-OFF-03, A-OFF-04, §3 | Given a registered device with a pre-assigned batch, When a dispense is captured offline, Then local checks run on cached data, the server re-validates lot status, tolerance and SoD on replay, and an out-of-tolerance capture becomes `pending_review` with a deviation stub, never auto-accepted (`offline.dispense_capture_rules`, `offline.count_plan_closed`). |
 | **E-7-03** US-7-05 Conflict review queue and resolution each way (M, Must) | §5, AC-20 | Given a rejected replay, When a site_manager resolves, Then re-apply creates a new audited command, discard needs a reason, escalation creates a deviation or adjustment, and the original is never applied silently (`offline.conflict_resolved_each_way`, `offline.dependency_failed`); permission `platform.sync_conflict.approve`. |
-| US-7-06 Device registrations, sync status UI, logout cache clearing (M, Must) | §6, §8, `docs/security.md` §3.5 | Given logout with pending commands, When confirmed, Then the user sees the list, discard is audited `platform.sync_command.outbox_discarded`, IndexedDB is empty and the next user on the shared device sees nothing (`offline.logout_clears_cache`); the sync chip shows pending/failed/conflict counts. |
+| US-7-06 Device registrations, sync status UI, logout cache clearing (M, Must) | §6, §8, `docs/security.md` §3.5 | Given logout with pending commands, When confirmed, Then the user sees the list, discard is audited `platform.sync_command.discarded`, IndexedDB is empty and the next user on the shared device sees nothing (`offline.logout_clears_cache`); the sync chip shows pending/failed/conflict counts and the diagnostics Sync card (FR-platform-09 Phase 7 part) shows sync backlog and conflict counts without secrets. |
 | **E-7-04** US-7-07 Offline acceptance on the company's devices (M, Must) | AC-20, `docs/testing.md` §6, §9.11 | Given D1 and D3 on the floor, When the §9.11 scenarios run, Then every `offline.*` row is green in CI and recorded manually with screen recordings; clock skew flag threshold is one agreed value (Q-TST-04). |
 
 ### 5.4 Phase 8 Customer portal + payment
@@ -1018,7 +1060,7 @@ Key stories are listed as one row each: id, title (size, priority), requirements
 | **E-8-01** US-8-01 Portal tenants, users, sessions, invitations with separate boundary (L, Must) | FR-sales-12, ADR-011, `docs/permissions-matrix.md` §7 | Given a portal user, When they request another tenant's order or document id, Then 404; internal endpoints reject the portal cookie with 401; portal lockout is 5 attempts; permissions `sales.portal_user.admin`, `sales.portal_catalog.admin`. Tests: `authz.portal.tenant_isolation`, `portal.auth.lockout`, `portal.ratelimit`. |
 | **E-8-02** US-8-02 Approved catalogue, order placement, status, documents, reorder (L, Must) | FR-sales-12 | Given a portal order, When submitted, Then it enters as `SalesOrder` `submitted` with `source = portal` and the internal approval rules apply; the portal never exposes internal notes, other customers, stock locations, batch records, costs or employee names. |
 | **E-8-03** US-8-03 Payment provider adapter, verified webhooks, idempotent events, PaymentRecord from verified events only (L, Must) | FR-sales-13, FR-finance-09, finance §7 | Given a webhook, When the signature is invalid, replayed or the amount mismatches, Then rejected/ignored/flagged and no order is marked paid; a PaymentRecord is created only from a verified event or server-side status query, never from the redirect. Tests: `webhook.*`, `payments.no_card_fields`. |
-| US-8-04 Refund requests, approval and payout reconciliation (M, Must) | finance §7, *`finance.refund.create` (gap)* | Given a refund, When requested, Then `finance.refund.approve` by a different user precedes the adapter call; payout files reconcile fees and net to inbound records (`payments.refund_audit`, `finance.provider.payout_reconciles`). |
+| US-8-04 Refund requests, approval and payout reconciliation (M, Must) | finance §7, `finance.refund.create` (S, P8) | Given a refund, When requested, Then `finance.refund.approve` by a different user precedes the adapter call; payout files reconcile fees and net to inbound records (`payments.refund_audit`, `finance.provider.payout_reconciles`). |
 
 ### 5.5 Phase 9 Production readiness (items marked "pull forward" move ahead of an early go-live)
 
@@ -1028,11 +1070,11 @@ Key stories are listed as one row each: id, title (size, priority), requirements
 | US-9-02 Independent penetration test and findings closure (M, Must; pull forward) | `docs/security.md` §8.2 | Given findings, When triaged, Then each is fixed or accepted by the owner in `docs/risk-register.md` §6 with expiry; TOTP enforced for all privileged users; no shared accounts. |
 | **E-9-02** US-9-03 Restore drill within RTO and backup key custody (M, Must; pull forward) | AC-23, `docs/deployment-railway.md` §10 | Given the newest production dump from the offsite bucket, When decrypted with the offline key and restored to a scratch database, Then row counts match the manifest, reconciliation is zero, `migrate --check` is current, a PDF downloads, and the `restore_drills` row records measured RPO/RTO ≤ 24 h / 4 h. |
 | US-9-04 Alert routing, external monitor, incident process and runbook sign-off (S, Must) | `docs/deployment-railway.md` §8.3, runbook §12 | Given each alert of §8.3, When simulated, Then it reaches the configured route; the incident severities and on-call hours are agreed with the owner (A-OPS-01, A-OPS-02). |
-| US-9-05 Retention policies confirmed and loaded; legal hold tested; RLS decision recorded (M, Must) | `docs/security.md` §7, ADR-022 | Given owner-confirmed values, When loaded into `retention_policies` with `confirmed_by`, Then the sweep jobs respect legal holds; ADR-022 is marked adopted or deferred with reason. |
+| US-9-05 Retention policies confirmed and loaded; legal hold tested; RLS decision confirmed (M, Must) | `docs/security.md` §7, ADR-022 | Given owner-confirmed values, When loaded into `retention_policies` with `confirmed_by`, Then the sweep jobs respect legal holds; the ADR-022 decision taken at the end of Phase 2 (E-2-01 gate evidence) is confirmed or revisited with reason. |
 | **E-9-03** US-9-06 Migration rehearsals R1 and R2 with MC-01..MC-16 (L, Must; pull forward) | FR-platform-14, migration plan §11 | Given the latest files, When R1 runs on staging, Then reject rate < 10 % with owners for each rejection; When R2 runs on a restored copy, Then all MC checks pass or have approved fixes and load plus verify ≤ the cutover window. |
-| US-9-07 Count-and-tag pilot, location labels, cutover T0 and rollback decision points (L, Must; pull forward) | migration plan §10, §12, §13 | Given T0, When the pre-load backup exists and `MIGRATION_WINDOW_OPEN=true`, Then loads post opening receipts, labels print and are verified ≥ 99 %, QA bulk-dispositions, open orders are confirmed by Sales, MC checks pass, the window is closed, and sign-offs are attached; a failed check inside the window triggers the §13 rollback. |
-| **E-9-04** US-9-08 Quick guides, SOP mapping, training plan and operator feedback loop (M, Must) | R-26, R-30, brief Phase 9 | Given each operator task, When the quick guide is opened from "?", Then it matches the shipped flow; training attendance per role is recorded. |
-| US-9-09 Go-live checklist, support roster, hypercare and exit review (M, Must) | charter G9, migration plan §12.6 | Given go-live, When hypercare runs for 14 days, Then daily reconciliation is clean for 5 consecutive days, adoption metrics meet R-26 triggers, open issues ≤ 5 minor, and the support handover is signed by the owner. |
+| US-9-07 Count-and-tag pilot, location labels, cutover T0 and rollback decision points (L, Must; pull forward) | migration plan §10, §12, §13 | Given T0, When the pre-load backup exists, `platform.maintenance.read_only` is on (US-2-30) and `MIGRATION_WINDOW_OPEN=true`, Then loads post opening receipts, labels print and are verified ≥ 99 %, QA bulk-dispositions, open orders are confirmed by Sales, MC checks pass, the window is closed, and sign-offs are attached; a failed check inside the window triggers the §13 rollback. |
+| **E-9-04** US-9-08 Quick guides, SOP mapping, training plan and operator feedback loop (M, Must) | R-26, R-30, brief Phase 9, FR-platform-16 (SOP mapping), `docs/operations-runbook.md` §2.9 | Given each operator task, When the quick guide (`help_guides`, US-2-27) is opened from "?", Then it matches the shipped flow and names the SOP it maps to; training attendance per role is recorded. |
+| US-9-09 Go-live checklist, support roster, hypercare and exit review (M, Must) | charter G9, migration plan §12.6, `docs/operations-runbook.md` §17a.1 | Given go-live, When hypercare runs for 14 days, Then daily reconciliation is clean for 5 consecutive days, adoption metrics meet R-26 triggers, open issues ≤ 5 minor, and the support handover is signed by the owner. |
 
 ---
 
@@ -1043,7 +1085,7 @@ Key stories are listed as one row each: id, title (size, priority), requirements
 | FR | Stories | FR | Stories |
 |---|---|---|---|
 | FR-identity-01 | US-1-10, US-1-11, US-1-16 | FR-identity-02 | US-1-13, US-1-17, US-1-29 |
-| FR-identity-03 | US-1-08, US-1-18 (site); sub-scopes P2 refinement in US-2-01 (`role_movement_types`), later P3/P5 | FR-identity-04 | US-1-13, US-1-14 |
+| FR-identity-03 | US-1-08, US-1-18 (site); US-2-29 (warehouse sub-scope, P2; line P3 and department P5 reuse `user_site_assignments.scope`) | FR-identity-04 | US-1-13, US-1-14 |
 | FR-identity-05 | US-1-10, US-1-12 | FR-identity-06 | US-1-28 |
 | FR-identity-07 | US-1-02, US-1-13 | FR-identity-08 | US-1-15 (+ every module's audit rows) |
 | FR-masterdata-01 | US-1-22 | FR-masterdata-02 | US-4-02 |
@@ -1053,7 +1095,7 @@ Key stories are listed as one row each: id, title (size, priority), requirements
 | FR-masterdata-09 | US-4-01 | FR-masterdata-10 | US-2-06 |
 | FR-masterdata-11 | US-2-12 | FR-masterdata-12 | US-6-05 |
 | FR-masterdata-13 | US-3-01, US-3-02, US-3-06 | FR-masterdata-14 | US-1-20 (fields), US-3-04 |
-| FR-inventory-01 | US-2-07 (unplanned), US-6-03 (PO) | FR-inventory-02 | US-2-01, US-2-02, US-2-04 |
+| FR-inventory-01 | US-2-07 (unplanned), US-6-03 (PO) | FR-inventory-02 | US-2-01, US-2-02, US-2-04, US-2-28 (undo) |
 | FR-inventory-03 | US-2-13, US-2-14, US-2-16 | FR-inventory-04 | US-2-12 |
 | FR-inventory-05 | US-2-12, US-2-13 | FR-inventory-06 | US-2-20 (recommend), US-3-10 (issue), US-4-09 (allocate) |
 | FR-inventory-07 | US-2-15 (materials), US-4-07 (finished goods) | FR-inventory-08 | US-2-17, US-2-18 |
@@ -1061,14 +1103,14 @@ Key stories are listed as one row each: id, title (size, priority), requirements
 | FR-inventory-11 | US-2-18, US-2-19 | FR-inventory-12 | US-2-10, US-2-16 |
 | FR-inventory-13 | US-2-05 | FR-inventory-14 | US-2-22 (groundwork), US-7-01..US-7-07 |
 | FR-procurement-01 | US-2-07, US-2-08 | FR-procurement-02 | US-6-01 |
-| FR-procurement-03 | US-6-02, US-6-03 | FR-procurement-04 | US-6-04 |
+| FR-procurement-03 | US-6-02, US-6-03, US-6-21 (supplier returns) | FR-procurement-04 | US-6-04 |
 | FR-procurement-05 | US-6-04 | FR-production-01 | US-3-05, US-3-06 |
 | FR-production-02 | US-3-06, US-3-10..US-3-13 | FR-production-03 | US-3-05, US-3-08 |
 | FR-production-04 | US-3-10 | FR-production-05 | US-3-11 |
 | FR-production-06 | US-3-09 | FR-production-07 | US-3-04 |
 | FR-production-08 | US-3-11, US-3-21 | FR-production-09 | US-3-13, US-3-19 |
 | FR-production-10 | US-3-13 | FR-production-11 | US-3-07 |
-| FR-production-12 | US-3-12 (step), US-4-07 (boxing) | FR-production-13 | Phase 5 planning story to be added with E-5-01 (demand-to-plan; Should) |
+| FR-production-12 | US-3-12 (step), US-4-07 (boxing) | FR-production-13 | US-5-15 |
 | FR-production-14 | US-3-13 | FR-production-15 | US-6-19 (Later) |
 | FR-quality-01 | US-2-10 | FR-quality-02 | US-2-10 (lot), US-3-11, US-3-21 (batch) |
 | FR-quality-03 | US-3-03, US-3-14 | FR-quality-04 | US-3-15 |
@@ -1077,7 +1119,7 @@ Key stories are listed as one row each: id, title (size, priority), requirements
 | FR-quality-09 | US-3-16, US-4-17 | FR-quality-10 | US-3-14 |
 | FR-documents-01 | US-3-17 | FR-documents-02..06 | US-3-17, US-3-18 |
 | FR-documents-07 | US-3-18 | FR-documents-08 | US-3-20 |
-| FR-documents-09 | US-2-05 (stock card), US-3-08 (dispensing sheet, traveler), US-4-07 (boxing note), US-4-10 (pick list), US-4-12 (DR), US-5-04 (reports), US-5-11 (exception report), US-6-02 (PO), US-6-10 (invoice) | FR-documents-10 | US-2-11, US-2-12 |
+| FR-documents-09 | US-2-05 (stock card), US-3-08 (dispensing sheet, traveler), US-4-07 (boxing note), US-4-10 (pick list), US-4-12 (DR), US-5-04 (reports), US-5-11c (exception report), US-6-02 (PO), US-6-10 (invoice) | FR-documents-10 | US-2-11, US-2-12 |
 | FR-documents-11 | US-2-11 | FR-documents-12 | US-2-08 |
 | FR-sales-01 | US-4-01, US-4-06 | FR-sales-02 | US-4-05 |
 | FR-sales-03 | US-4-02, US-4-03, US-4-05 | FR-sales-04 | US-4-04 |
@@ -1086,26 +1128,26 @@ Key stories are listed as one row each: id, title (size, priority), requirements
 | FR-sales-09 | US-4-12, US-4-13 | FR-sales-10 | US-4-06, US-4-15 |
 | FR-sales-11 | not scheduled (A-PRD-23) | FR-sales-12 | US-8-01, US-8-02 |
 | FR-sales-13 | US-8-03, US-8-04 | FR-hr-01 | US-5-10 |
-| FR-hr-02 | US-5-11 | FR-hr-03 | US-5-11 |
+| FR-hr-02 | US-5-11a, US-5-11b, US-5-11c | FR-hr-03 | US-5-11b, US-5-11c, US-5-11d |
 | FR-hr-04 | US-5-12 | FR-hr-05 | US-6-05, US-6-07 |
 | FR-hr-06 | US-6-06 | FR-hr-07 | US-6-08, US-6-09 |
-| FR-hr-08 | US-5-10, US-5-11 | FR-finance-01 | decided in Phase 0 (ADR-020); Q-FIN-01 |
+| FR-hr-08 | US-5-10, US-5-11a | FR-finance-01 | decided in Phase 0 (ADR-020); Q-FIN-01 |
 | FR-finance-02 | US-6-10, US-6-11, US-6-12 | FR-finance-03 | US-6-12 |
 | FR-finance-04 | US-6-15 | FR-finance-05 | US-6-16 |
 | FR-finance-06 | US-6-14 | FR-finance-07 | US-6-10, US-6-13 |
 | FR-finance-08 | US-6-17 | FR-finance-09 | US-8-03, US-8-04 |
-| FR-analytics-01 | US-5-02 | FR-analytics-02 | US-5-03 |
+| FR-analytics-01 | US-5-02, US-5-16 | FR-analytics-02 | US-5-03, US-5-16 |
 | FR-analytics-03 | US-5-03 | FR-analytics-04 | US-5-03 |
 | FR-analytics-05 | US-5-01 | FR-analytics-06 | US-5-04, US-5-05 |
-| FR-analytics-07 | US-5-02 | FR-analytics-08 | Later (Phase 6+; `docs/analytics-kpis.md` §6) |
+| FR-analytics-07 | US-5-02 | FR-analytics-08 | US-6-20 (Later, Phase 6+; `docs/analytics-kpis.md` §6) |
 | FR-platform-01 | US-1-05, US-1-25 | FR-platform-02 | US-1-15 |
 | FR-platform-03 | US-1-19 | FR-platform-04 | US-1-14, US-1-19 |
 | FR-platform-05 | US-2-03 | FR-platform-06 | US-2-03 (in-app), US-5-05 (email) |
 | FR-platform-07 | US-5-06 | FR-platform-08 | US-5-07 |
-| FR-platform-09 | US-1-26 (Phase 1: Health, Backups, Variables), US-5-13 (rest) | FR-platform-10 | US-5-08, US-5-09 (loader US-2-25 if early go-live) |
+| FR-platform-09 | US-1-26 (Phase 1: Health, Backups, Variables), US-2-03, US-2-04 (Phase 2: Jobs, Reconciliation), US-5-13 (Phase 5: Database, Imports, Alerts, Errors, Integrations), US-7-06 (Phase 7: Sync) | FR-platform-10 | US-5-08, US-5-09 (loader US-2-25 if early go-live) |
 | FR-platform-11 | US-2-21 | FR-platform-12 | US-1-07 (typed client), US-1-13, US-2-22, adapters in US-1-25, US-5-05, US-8-03 |
 | FR-platform-13 | US-7-02, US-7-03, US-7-05, US-7-06 | FR-platform-14 | US-2-25, US-2-26, US-5-09, US-9-06, US-9-07 |
-| FR-platform-15 | US-1-04 | | |
+| FR-platform-15 | US-1-04 | FR-platform-16 | US-2-27 (receive, move, count; extended every phase), US-9-08 (SOP mapping, training) |
 
 ### 6.2 Acceptance criteria → stories and tests
 
@@ -1120,12 +1162,12 @@ Key stories are listed as one row each: id, title (size, priority), requirements
 | AC-16 box scan and idempotent move | US-2-13, US-2-14, US-2-15 (box), US-4-07 (finished goods), US-7-02 (offline repeat) | `container.lineage.*`, `idempotency.*`, `scan.payload_grammar`, e2e `flows/inventory/scan-move.spec.ts`, `offline.duplicate_scan_same_box` | §9.7 at G2/G4/G7 |
 | AC-17 over-shipment and reconciliation | US-4-09, US-4-11, US-4-12 | `shipment.*`, `fefo.*`, `ledger.projection.matches_ledger`, `authz.exception.over_shipment`, `sales.pricing_masked_on_pick_pack_dr` | §9.8 at G4 |
 | AC-18 BMR PDF | US-3-17, US-3-18 | PDF text/visual checks §2.2, `documents.reprint_audit`, `documents.hash_recorded`, `documents.qr_requires_auth`, `jobs.pdf_queue_limit`, T-08..T-11 | §9.9 at G3 (printed BMR initialled by production and QA) |
-| AC-19 attendance import | US-5-11, US-5-10 | `import.duplicates_flagged`, `import.requires_approval`, `import.values_only`, `import.rejects_macro`, `import.row_cap`, `hr.attendance_correction_not_self`, `hr.personal_data_*`, `hr.import.*`, `export.formula_neutralized` | §9.10 at G5 |
+| AC-19 attendance import | US-5-11a..US-5-11d, US-5-10 | `import.duplicates_flagged`, `import.requires_approval`, `import.values_only`, `import.rejects_macro`, `import.row_cap`, `hr.attendance_correction_not_self`, `hr.personal_data_*`, `hr.import.*`, `export.formula_neutralized` | §9.10 at G5 |
 | AC-20 offline commands | US-7-01..US-7-07 | all `offline.*` rows of §6 | §9.11 at G7 |
 | AC-21 KPI reconciliation | US-5-01, US-5-02 | `analytics.kpi.reconciles_to_source` (per KPI), `analytics.owner_dashboard_filters_to_allowed_sites`, dashboard p95 | §9.12 at G5 |
 | AC-22 permission coverage | US-1-02, US-1-13 and every story's negative set | `authz-coverage` job, §5.1 common set, §5.2 module additions | §9.13 at every gate |
 | AC-23 deployment and restore | US-1-05, US-1-06 (deploy), US-9-03 (restore drill) | `migrations.apply_from_zero_and_noop`, `health.ready_reflects_database`, `seed.guard_production` | §9.14 at G1 (steps 1 to 2) and G9 (steps 3 to 4) |
-| S1-01..S1-15 | US-1-13 (01, 02), US-1-14 (03), US-1-15/US-1-17 (04), US-1-12 (05, 14), US-1-10 (06), US-1-08 (07), US-1-05 (08), US-1-03 (09), US-1-04 (10), US-1-18 (11), US-1-21 (12), US-1-19 (13), US-1-02 (15) | per `docs/testing.md` §9.15 | G1 |
+| S1-01..S1-15 | US-1-13 (01, 02), US-1-14 (03), US-1-17/US-1-15/US-1-18 (04), US-1-12 (05, 14), US-1-10 (06), US-1-08 (07), US-1-05 (08), US-1-03 (09), US-1-04 (10), US-1-18 (11), US-1-21 (12), US-1-19 (13), US-1-02 (15) | per `docs/testing.md` §9.15 | G1 |
 
 ---
 
@@ -1138,16 +1180,16 @@ recorded; the item lists the stories that would change.
 
 | # | Decision | Default if unanswered | Stories affected |
 |---|---|---|---|
-| 1 | Approve ADR-001..014, 019..021 (`docs/decision-log.md`) | none; Phase 1 cannot start | all |
+| 1 | Approve ADR-001..014, 019..021, 023 (`docs/decision-log.md`) | none; Phase 1 cannot start | all |
 | 2 | Q-A-01 sites, warehouses, lines, cross-site roles; Q-A-09 locale | A-PRD-02, A-PRD-01 | US-1-04, US-1-20 |
 | 3 | Q-A-08 numbering conventions and whether legacy numbers continue | A-PRD-04 defaults, legacy kept in `legacy_number` | US-1-19, US-2-26 |
 | 4 | Q-A-03 devices, scanners, printers; are floor devices shared (Q-OFF-02) | A-PRD-05..08; shared | US-1-12 (timeouts), US-1-30, US-2-12, US-2-13 |
 | 5 | Session timeouts and MFA roles (Q-B-16, A-SEC-08..10, A-PRD-34) | 12 h / 1 h idle; 7 d / 24 h absolute; TOTP for R holders | US-1-12, US-1-28 |
 | 6 | Railway plan, region, domain, DNS, operations contact and backup key holder (A-DEP-01..03, A-DEP-15; security §9 q1) | Pro plan, Singapore, two projects | US-1-06, US-9-03 |
 | 7 | Brand assets (logo, colours, typeface) (A-UX-03) | derived green, Inter | US-1-07 |
-| 8 | Permission for setting-change approval: add `platform.settings.approve` or keep `platform.settings.admin` with SoD (data-model §14.3) | `platform.settings.admin` + SoD | US-1-14, US-1-19 |
-| 9 | May seeded role bundles be edited (S1-04 wording) or only cloned (runbook §2.3)? | editable with reason by `identity.role.admin`; clones in 1b | US-1-17, US-1-29 |
-| 10 | Catalogue phase of `masterdata.location.*` (P2 in the matrix, needed by S1-01/02) | treated as P1 | US-1-13, US-1-20 |
+| 8 | Resolved: setting-change approval uses `platform.settings.approve` (R, P1; owner_director or a second system_admin; `docs/permissions-matrix.md` §2.12) | decided at Gate 0 review | US-1-14, US-1-19 |
+| 9 | Resolved: seeded roles are read-only templates; changes are made on clones (US-1-29, Phase 1b; runbook §2.3); S1-04 tests the read-only rule and an audited assignment change (`docs/testing.md` §9.15) | decided at Gate 0 review | US-1-15, US-1-17, US-1-18, US-1-29 |
+| 10 | Resolved: `masterdata.location.*` is catalogued P1 (`docs/permissions-matrix.md` §2.2) | decided at Gate 0 review | US-1-13, US-1-20 |
 
 ### 7.2 Before Phases 2 to 4
 
@@ -1155,9 +1197,9 @@ recorded; the item lists the stories that would change.
 |---|---|---|---|
 | 2 | Q-MIG-13 early go-live after G4 (R-08) | no | E-2-07 (US-2-23..26), pull-forward items of §5.5 |
 | 2 | Quarantine on receipt and auto-release classes (Q-B-06, A-PRD-15); FEFO/FIFO per class and customer (Q-B-07) | quarantine all; FEFO when expiry exists | US-2-07, US-2-10, US-2-20 |
-| 2 | Negative stock policy (Q-B-08); adjustment and count thresholds (Q-B-09, A-PM-15) | never; site_manager approves all | US-2-01, US-2-18, US-2-19 |
+| 2 | Adjustment and count thresholds (Q-B-09, A-PM-15). Negative stock (Q-B-08) is decided: never, enforced by the database constraint (ADR-006 as amended, ADR-023 item 6); allowing it would need a new ADR | site_manager approves all | US-2-18, US-2-19 |
 | 2 | Label sizes, symbology, printer models, print station placement (Q-B-10, Q-RPT-W01/W02); Wi-Fi survey (Q-A-02) | QR; 50×30, 100×50, 100×150 mm | US-2-12, US-2-13 [HW] |
-| 2 | Who resolves reconciliation differences and the owner-notification threshold (A-OPS-06); `inventory.balance.admin` permission | system_admin + site_manager; PHP 20,000 | US-2-04 |
+| 2 | Owner-notification threshold for reconciliation differences (A-OPS-06); resolvers are decided (`inventory.balance.admin`, system_admin + site_manager, A-PM-19) | PHP 20,000 | US-2-04 |
 | 3 | Approved formulas, tolerances, routings, parameters, curing, yield basis (Q-PR-01..12, Q-B-01..05) | fictional seed; go-live blocked without approval (R-04) | US-3-01, US-3-02, US-3-10, US-3-13 |
 | 3 | Checker policy and site_manager as checker (Q-B-11, Q-PR-07); overdue calibration block vs exception (Q-PR-12) | conductor ≠ checker; block | US-3-09, US-3-10, US-3-04 |
 | 3 | ADR-016 renderer decision; hybrid paper steps and controlled record (Q-QA-05, Q-RPT-Q01) | Chromium in worker; electronic primary | US-3-17, US-3-18, US-3-20 |
@@ -1170,11 +1212,10 @@ recorded; the item lists the stories that would change.
 
 | Phase | Decision | Default | Stories affected |
 |---|---|---|---|
-| 5 | Representative time-clock files (Q-A-06, Q-HR-01/02/07); one-person HR SoD (Q-HR-10) | mapping layer absorbs the layout; uploader may post | US-5-11 |
+| 5 | Representative time-clock files (Q-A-06, Q-HR-01/02/07); one-person HR SoD (Q-HR-10) | mapping layer absorbs the layout; uploader may post | US-5-11a..US-5-11d |
 | 5 | Owner's first five numbers and refresh (Q-OW-01); external report recipients (Q-OW-02); finance tiles at go-live; email provider (security §9 q5) | A-KPI-18; internal only; Estimate label; SMTP | US-5-02, US-5-05 |
 | 6 | Finance and payroll scope (Q-A-04, Q-A-05, Q-FIN-01); accountant and payroll reviewer named (Q-FIN-02, Q-HR-11); thresholds (Q-FIN-04) | operational finance; import-first payroll; A-PM-15 | E-6-02..E-6-05 |
 | 6 | Tax configuration source, official invoice document, export layout (Q-FIN-03, Q-FIN-09..12) | accountant enters; "Billing invoice" label | US-6-10, US-6-14, US-6-17 |
-| 6 | Missing permission strings to add to the catalogue: `finance.payment_record.approve`, `finance.costing_config.admin`, `finance.accountant_export.admin`, `hr.overtime.{view,create,void}`; confirm `inventory.pack.*` row and `inventory.balance.admin` | written as gaps in this document | US-2-04, US-4-07, US-6-07, US-6-12, US-6-16, US-6-17 |
 | 7 | Exact offline task list and dead zones (Q-A-02, Q-OFF-01); managed tablets (Q-OFF-03); clock-skew threshold (Q-TST-04) | movement requests and dispensing on registered devices; 10 min | US-7-02, US-7-04, US-7-07 |
 | 8 | Portal wanted, for which customers, which payment methods (Q-C-03, Q-FIN-08); penetration test budget (Q-RISK-02) | deferred | E-8-01..E-8-03, US-9-02 |
 | 9 | Retention periods and privacy officer (Q-B-18, Q-HR-17, security §9 q3); RPO/RTO (Q-B-20); cutover day and sequencing (Q-MIG-06/07); support hours (A-OPS-01) | placeholders; 24 h / 4 h; same T0 for all sites | US-9-03, US-9-05, US-9-06, US-9-07, US-9-09 |
@@ -1182,5 +1223,6 @@ recorded; the item lists the stories that would change.
 ### 7.4 Follow-ups owned by this document's author
 
 - `docs/PRD.md` §12 glossary: add the terms requested by the data model, HR and finance documents (pack verification scan, legacy number, legal hold, retention policy, setting change request, transfer request, stock adjustment document, paper record page, checklist item, downtime event, approval decision, mapping profile, punch, pairing, work date, minute class, time summary, rule set version, qualified reviewer, parallel run, supplementary period, payment confirmation, posting date, period lock, three-way match, landed cost, open item, statement of account, payment application, costing run, overhead pool, provider event) and the entities `LegacyDocument`, `MaterialAlias`, `OvertimeRequest`, `StockAdjustment`, `TransferRequest`, `Pack`.
-- `docs/PRD.md` §6.12: split FR-platform-09 into Phase 1 (Health, Backups, Variables cards) and Phase 5 (remaining cards), as reflected in US-1-26 and US-5-13.
+- Done: `docs/PRD.md` FR-platform-09 phases (1 Health/Backups/Variables, 2 Jobs/Reconciliation, 5 Database/Imports/Errors/Alerts/Integrations, 7 Sync) match US-1-26, US-2-03, US-2-04, US-5-13 and US-7-06.
+- `docs/testing.md`: add the test ids this backlog marks "to add" (US-2-27, US-2-28, US-2-29, US-2-30, US-5-15).
 - `docs/risk-register.md`: link Managed-band risks to the epics above (R-08 → E-2-07, R-11 → E-2-01, R-04 → E-3-01, R-39 → E-2-03).
