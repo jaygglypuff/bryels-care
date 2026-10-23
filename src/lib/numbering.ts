@@ -10,6 +10,7 @@ const RULES: Record<string, { prefix: string; width: number; period: "YY" | "YYM
   SO: { prefix: "SO", width: 5, period: "YY" },
   DR: { prefix: "DR", width: 5, period: "YY" },
   MOV: { prefix: "MOV", width: 6, period: "YY" },
+  DOC: { prefix: "DOC", width: 7, period: "YY" }, // W1E: generated documents, organization scope (A-RPT-03)
 };
 
 function periodKey(kind: "YY" | "YYMM" | "", now = new Date()): string {

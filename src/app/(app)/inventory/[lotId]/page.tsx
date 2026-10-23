@@ -76,7 +76,7 @@ export default async function LotPage({ params, searchParams }: { params: Promis
     const reason = onHand.lte(0) ? "No stock left in this lot." : !canMoveSomewhere ? "No other allowed location at this site." : undefined;
     actions.push({ key: "move", label: "Move stock", href: `/inventory/${lot.id}/move`, icon: <ArrowRightLeft size={16} />, reason });
   }
-  if (ctx.can("inventory.label.print")) actions.push({ key: "label", label: "Print label", href: `/print/lot-label/${lot.id}`, icon: <Printer size={16} />, newTab: true });
+  if (ctx.can("inventory.label_job.create")) actions.push({ key: "label", label: "Print label", href: `/labels/new?entityType=inventory_lot&entityId=${lot.id}`, icon: <Printer size={16} /> }); // W1E: label jobs
   if (ctx.can("quality.genealogy.view")) actions.push({ key: "trace", label: "Genealogy", href: `/quality/trace?lot=${encodeURIComponent(lot.lotNumber)}`, icon: <Share2 size={16} /> });
   const blocked = usable ? [] : [
     { label: lot.itemKind === "product" ? "Allocate / ship" : "Issue to production", reason: `blocked while the lot is ${expired && lot.qualityStatus === "released" ? "expired" : STATUS_WORDS[lot.qualityStatus] ?? lot.qualityStatus}.` },

@@ -8,6 +8,13 @@
       "when": 1792754661183,
       "tag": "0000_mvp_core",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792762790262,
+      "tag": "0001_smiling_devos",
+      "breakpoints": true
     }
   ]
 }

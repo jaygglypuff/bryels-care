@@ -40,7 +40,10 @@ Demo accounts (password `demo1234`, all fictional): `owner@`, `admin@`, `manager
 
 Environment variables: `DATABASE_URL` (required), `DATABASE_MIGRATION_URL` (optional separate
 migration role), `APP_ORIGIN` (public URL, used for origin checks), `ALLOW_DEMO_SEED` (`true`
-only on demo and staging environments; never in production).
+only on demo and staging environments; never in production), `PDF_RENDERER` (optional,
+default `disabled`: documents and labels print through the browser print dialog from their
+recorded dataset; stored PDF files show a "setup required" state until a PDF engine ships,
+see `src/modules/documents/config.ts`).
 
 ## Deploy to Railway (demo or staging)
 
@@ -60,7 +63,9 @@ The full production topology (worker, bucket, backups, staging/production separa
 | Path | Contents |
 |---|---|
 | `src/app/(app)/` | Authenticated pages per module (thin server components and server actions) |
-| `src/app/print/` | Print layouts: lot labels, Batch Manufacturing Record, delivery receipt |
+| `src/app/print/` | Print layouts: label jobs (`print/labels`), generated documents (`print/documents`), Batch Manufacturing Record, delivery receipt |
+| `src/modules/documents/` | Template versions, code renderers (`renderers/`), generated documents, label templates, label jobs, print stations, reprint control; job handler `jobs/render.ts` (`documents.render`) |
+| `src/modules/scan/`, `src/lib/scan/` | Scan payload grammar (ADR-017, shared by server and client) and the scan result card service |
 | `src/modules/<module>/` | Domain services: permission and site checks, transactions, audit |
 | `src/modules/inventory/ledger.ts` | The stock ledger: every stock change goes through `postMovement` |
 | `src/db/schema/`, `src/db/migrations/` | Drizzle schema (MVP subset of `docs/data-model.md`) and SQL migrations |

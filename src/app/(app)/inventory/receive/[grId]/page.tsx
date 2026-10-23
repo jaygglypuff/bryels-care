@@ -26,8 +26,8 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
   }
   const actions = (
     <>
-      {ctx.can("inventory.label.print") && (
-        <LinkButton href={`/print/lot-label/receipt/${gr.id}`} target="_blank" variant={posted ? "cta" : "secondary"} size="lg">
+      {ctx.can("inventory.label_job.create") && (
+        <LinkButton href={`/print/lot-label/receipt/${gr.id}`} variant={posted ? "cta" : "secondary"} size="lg">
           <Printer size={18} /> Print labels ({gr.lines.length})
         </LinkButton>
       )}

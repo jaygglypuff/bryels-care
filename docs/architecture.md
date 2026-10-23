@@ -283,7 +283,7 @@ Failed jobs are visible in the admin diagnostics view with retry controls
 Templates are versioned records (`document_template_versions`) whose `definition` is a
 versioned JSON configuration (schema `document_template/v1`: renderer id and version, dataset,
 page settings, section selection, labels, options). The HTML/CSS is produced by code-defined
-renderers in `src/modules/documents/renderers/<kind>/v<n>.tsx`; **no HTML is stored in or
+renderers in `src/modules/documents/renderers/<id>-v<n>.ts` (`docs/reports-and-templates.md` §1.4.1); **no HTML is stored in or
 executed from the database** (ADR-016 as amended, `docs/reports-and-templates.md` §1.2,
 A-RPT-01). Generation enqueues `documents.render` (§8), which renders the definition against a
 frozen snapshot of the source record revision, stores the PDF in the bucket, and records

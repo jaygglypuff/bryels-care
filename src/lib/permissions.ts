@@ -45,6 +45,25 @@ export const PERMISSIONS = [
   "sales.shipment.view",
   // analytics
   "analytics.dashboard.view",
+  // Wave 1 W1E: documents, labels and scanning (E-2-03; docs/permissions-matrix.md §3.2, §3.3, §3.7)
+  "documents.template.view",
+  "documents.template.create",
+  "documents.template.edit",
+  "documents.template.submit",
+  "documents.template.approve",
+  "documents.template.void",
+  "documents.generated_document.view",
+  "documents.generated_document.create",
+  "documents.generated_document.export",
+  "documents.generated_document.void",
+  "documents.reprint.create",
+  "documents.print_station.admin",
+  "masterdata.label_template.view",
+  "masterdata.label_template.create",
+  "masterdata.label_template.edit",
+  "masterdata.label_template.approve",
+  "inventory.label_job.view",
+  "inventory.label_job.create",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -63,6 +82,12 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
       "masterdata.material.create",
       "masterdata.product.create",
       "masterdata.customer.create",
+      // Wave 1 W1E
+      "documents.template.create",
+      "documents.template.edit",
+      "masterdata.label_template.create",
+      "masterdata.label_template.edit",
+      "documents.print_station.admin",
     ],
   },
   site_manager: {
@@ -78,6 +103,18 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
       "production.batch.submit",
       "production.dispense_record.approve",
       "sales.sales_order.approve",
+      // Wave 1 W1E
+      "documents.template.create",
+      "documents.template.edit",
+      "documents.template.submit",
+      "documents.generated_document.create",
+      "documents.generated_document.export",
+      "documents.generated_document.void",
+      "documents.reprint.create",
+      "masterdata.label_template.create",
+      "masterdata.label_template.edit",
+      "inventory.label_job.create",
+      "documents.print_station.admin",
     ],
   },
   production_operator: {
@@ -96,6 +133,15 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
       "production.dispense_record.approve",
       "production.batch.submit",
       "inventory.label.print",
+      // Wave 1 W1E
+      "documents.template.view",
+      "documents.generated_document.view",
+      "documents.generated_document.create",
+      "documents.generated_document.export",
+      "documents.reprint.create",
+      "masterdata.label_template.view",
+      "inventory.label_job.view",
+      "inventory.label_job.create",
     ],
   },
   warehouse_operator: {
@@ -114,6 +160,15 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
       "sales.shipment.view",
       "sales.allocation.post",
       "sales.shipment.post",
+      // Wave 1 W1E
+      "documents.template.view",
+      "documents.generated_document.view",
+      "documents.generated_document.create",
+      "documents.generated_document.export",
+      "documents.reprint.create",
+      "masterdata.label_template.view",
+      "inventory.label_job.view",
+      "inventory.label_job.create",
     ],
   },
   qa_qc: {
@@ -123,6 +178,15 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
       ...VIEW_ALL.filter((p) => !p.startsWith("identity.") && !p.startsWith("platform.")),
       "quality.disposition.approve",
       "quality.test_result.create",
+      // Wave 1 W1E
+      "documents.template.approve",
+      "documents.template.void",
+      "documents.generated_document.create",
+      "documents.generated_document.export",
+      "documents.generated_document.void",
+      "documents.reprint.create",
+      "masterdata.label_template.approve",
+      "inventory.label_job.create",
     ],
   },
   sales_cs: {
@@ -138,7 +202,14 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
       "masterdata.product.view",
       "inventory.lot.view",
       "analytics.dashboard.view",
+      // Wave 1 W1E
+      "documents.template.view",
+      "documents.generated_document.view",
+      "documents.generated_document.create",
+      "documents.generated_document.export",
+      "documents.reprint.create",
+      "masterdata.label_template.view",
     ],
   },
-  auditor: { name: "Auditor (read-only)", orgWide: true, permissions: VIEW_ALL },
+  auditor: { name: "Auditor (read-only)", orgWide: true, permissions: [...VIEW_ALL, "documents.generated_document.export"] },
 };
