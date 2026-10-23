@@ -549,7 +549,8 @@ async function postInTx(tx: Tx, ctx: AuthContext, gr: typeof goodsReceipts.$infe
       sourceDocumentId: gr.id,
       sourceDocumentNumber: receiptNumber,
       idempotencyKey: `gr:${gr.id}:${lineNo}`,
-      meta: { qtyEntered: l.qtyEntered.toString(), uomEntered: l.uomEntered, correlationId },
+      correlationId,
+      meta: { qtyEntered: l.qtyEntered.toString(), uomEntered: l.uomEntered },
     });
     const documentMissing = l.mat.requiresCoa && !(await lineHasCoa(tx, row.id));
     await tx
@@ -688,6 +689,7 @@ export async function reverseReceipt(ctx: AuthContext, input: { receiptId: strin
           sourceDocumentNumber: gr.receiptNumber ?? undefined,
           reason,
           reversalOfId: line.stockMovementId,
+          correlationId: gr.correlationId ?? undefined,
           idempotencyKey: `gr-reversal:${gr.id}:${line.lineNo ?? line.id}`,
         });
         reversed.push({ lotNumber, qty: line.qtyBase, location: locationCode, movementId: movement.id });

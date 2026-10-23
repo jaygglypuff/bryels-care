@@ -8,6 +8,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
 import { heldLocations, resolveLocationRef, resolveLotRef } from "./holds";
+import { assertLocationsNotFrozen } from "./freeze";
 import { postMovement } from "./ledger";
 import { allowedDestinationKinds, isUuid } from "./lots";
 
@@ -15,7 +16,7 @@ import { allowedDestinationKinds, isUuid } from "./lots";
  * Put-away (W01-08, US-2-09): scan the lot label, then the destination location. Status-location rule
  * V-LOC: a lot may only land in location kinds allowed for its quality status (allowedDestinationKinds,
  * A-INV-MVP-02): quarantined and held lots only in quarantine/hold locations. A location under an open QA
- * hold is refused. V-FREEZE (active stock count) is enforced by the stock-count module once it exists.
+ * hold is refused. V-FREEZE: a location inside a running stock count is refused (freeze.ts).
  */
 
 /** What the put-away screen shows after the lot scan: where the stock is and where it may go. */
@@ -106,6 +107,8 @@ export async function putAwayLot(ctx: AuthContext, input: PutAwayInput) {
       }
     }
     if (from.locationId === to.id) throw new DomainError("validation", `The lot is already at ${to.code}.`, { field: "location" });
+    // V-FREEZE (US-2-17): a running stock count freezes its locations; checked here for a clear message (postMovement enforces it too).
+    await assertLocationsNotFrozen(tx, [from.locationId, to.id]);
     if (heldIds.has(from.locationId) && !["quarantine", "hold", "rejected"].includes(to.kind)) {
       throw new DomainError("blocked_lot", `Stock in ${from.code} is under a QA hold and can only move to a quarantine, hold or rejected location.`, { rule: "V-LOC" });
     }
@@ -131,14 +134,6 @@ export async function putAwayLot(ctx: AuthContext, input: PutAwayInput) {
       reason: "Put-away",
       idempotencyKey: key,
       meta: { fromCode: from.code, toCode: to.code, scanned: { lot: input.lotRef.startsWith("BC:"), location: input.locationRef.startsWith("BC:") } },
-    });
-    await audit(tx, ctx, {
-      action: "inventory.stock_movement.posted",
-      entityType: "stock_movement",
-      entityId: movement.id,
-      entityNumber: number,
-      siteId: lot.siteId,
-      after: { kind: "put_away", lotNumber: lot.lotNumber, status: lot.qualityStatus, qtyBase: qty.toString(), baseUom: lot.baseUom, from: from.code, to: to.code },
     });
     return { movementId: movement.id, number, lotNumber: lot.lotNumber, replayed: false };
   });

@@ -7,6 +7,7 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
+import { assertLocationsNotFrozen } from "./freeze";
 
 export type MovementType = "receipt" | "issue" | "transfer" | "consumption" | "output" | "adjustment" | "return" | "shipment" | "reversal";
 
@@ -26,6 +27,11 @@ export type PostMovementInput = {
   correlationId?: string;
   /** For movementType "reversal" only (reversal.ts, receipt reversal US-2-07): the movement it reverses. */
   reversalOfId?: string;
+  /**
+   * Stock count posting only (counts.ts postCount): that count's own freeze does not block its
+   * adjustment rows. Every other posting is refused while a count freezes either location (V-FREEZE).
+   */
+  freezeExemptCountId?: string;
   meta?: Record<string, unknown>;
 };
 
@@ -122,8 +128,9 @@ export async function lockLots(tx: Tx, lotIds: string[]) {
 
 /**
  * Posts one immutable stock movement and updates the balance projection in the same transaction
- * (ADR-006). Order: lot lock → idempotency re-check → validation → balance locks (location id
- * order) → projection update → ledger insert → audit `inventory.stock_movement.posted`.
+ * (ADR-006). Order: lot lock → idempotency re-check → validation (incl. V-FREEZE, location share
+ * locks) → balance locks (location id order) → projection update → ledger insert → audit
+ * `inventory.stock_movement.posted` (the only audit row per movement; callers add document-level events).
  * Balances never go negative (this check plus the database CHECK). A repeated idempotency key
  * returns the original movement. Callers check the command permission; this function checks site
  * scope, locations, quantities and the role movement-type rule.
@@ -158,6 +165,8 @@ export async function postMovement(tx: Tx, ctx: AuthContext, input: PostMovement
     throw new DomainError("validation", "Locations must belong to the lot's site.");
   }
   await assertRoleMayPost(tx, ctx, lot.siteId, input.movementType, { from: fromLoc?.kind, to: toLoc?.kind });
+  // V-FREEZE for every movement type and every caller (W1C counts): shares the location rows with a count release.
+  await assertLocationsNotFrozen(tx, locIds, { exceptCountId: input.freezeExemptCountId });
   const entered = checkEntered(qty, lot.baseUom, input.entered);
 
   if (locIds.length) {
@@ -242,6 +251,8 @@ export async function postMovement(tx: Tx, ctx: AuthContext, input: PostMovement
       toLocationId: movement.toLocationId,
       sourceDocumentType: movement.sourceDocumentType,
       reversalOfId: movement.reversalOfId,
+      // Caller context (box, location codes, counted quantities…) so the one audit row per movement is self-explanatory.
+      ...(input.meta ? { meta: input.meta } : {}),
     },
   });
   return { movement, replayed: false };

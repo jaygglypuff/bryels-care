@@ -370,18 +370,10 @@ export async function postAdjustment(ctx: AuthContext, id: string, idempotencyKe
         sourceDocumentNumber: a.adjustmentNumber,
         reason: a.reasonCode + (a.reasonNote ? `: ${a.reasonNote}` : ""),
         idempotencyKey: `${key}:${l.lineNo}`,
-        meta: { correlationId, containerId: l.containerId, lineNo: l.lineNo, direction: l.direction },
+        correlationId,
+        meta: { containerId: l.containerId, lineNo: l.lineNo, direction: l.direction },
       });
       await tx.update(stockAdjustmentLines).set({ stockMovementId: movement.id }).where(eq(stockAdjustmentLines.id, l.id));
-      await audit(tx, ctx, {
-        action: "inventory.stock_movement.posted",
-        entityType: "stock_movement",
-        entityId: movement.id,
-        entityNumber: a.adjustmentNumber,
-        siteId: a.siteId,
-        reason: a.reasonCode,
-        after: { type: "adjustment", direction: l.direction, qtyBase: qty.toString(), correlationId },
-      });
       movements.push(movement.id);
     }
     await tx.update(stockAdjustments).set({ status: "posted", postedBy: ctx.userId, postedAt: new Date(), correlationId, idempotencyKey: key, updatedAt: new Date() }).where(eq(stockAdjustments.id, a.id));

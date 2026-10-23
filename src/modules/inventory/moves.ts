@@ -32,7 +32,8 @@ import { fmtDateTime } from "@/lib/qty";
 import { postMovement } from "./ledger";
 import { allowedDestinationKinds, isUuid } from "./lots";
 import { claimIdempotencyKey, storeIdempotentResult } from "./command-kit";
-import { assertLocationsNotFrozen } from "./counts";
+import { assertLocationsNotFrozen } from "./freeze";
+import { assertHoldAllowsMove } from "./holds";
 import { getInventorySetting } from "./policy";
 
 /** Statuses of a box that may be moved, split or merged. */
@@ -262,6 +263,7 @@ export async function scanMove(ctx: AuthContext, input: ScanMoveInput): Promise<
       throw new DomainError("validation", `${to.code} is at another site. Use an inter-site transfer, which needs stock-move rights at both sites.`, { rule: "inter_site" });
     }
     for (const lot of lots) await assertDestinationAllowed(tx, lot, to);
+    await assertHoldAllowsMove(tx, from, to);
     await assertLocationsNotFrozen(tx, [from.id, to.id]);
 
     if (!box) {
@@ -315,7 +317,8 @@ export async function scanMove(ctx: AuthContext, input: ScanMoveInput): Promise<
         sourceDocumentNumber: number,
         reason: input.reason?.trim() || undefined,
         idempotencyKey: `${key}:${lineNo}`,
-        meta: { containerId: box?.id ?? null, containerNumber: box?.containerNumber ?? null, correlationId, fromCode: from.code, toCode: to.code },
+        correlationId,
+        meta: { containerId: box?.id ?? null, containerNumber: box?.containerNumber ?? null, fromCode: from.code, toCode: to.code },
       });
       await tx.insert(transferRequestLines).values({
         transferRequestId: tr.id,
@@ -326,15 +329,6 @@ export async function scanMove(ctx: AuthContext, input: ScanMoveInput): Promise<
         toLocationId: to.id,
         qtyBase: spec.qty.toString(),
         issueMovementId: movement.id,
-      });
-      await audit(tx, ctx, {
-        action: "inventory.stock_movement.posted",
-        entityType: "stock_movement",
-        entityId: movement.id,
-        entityNumber: number,
-        siteId,
-        reason: input.reason?.trim() || null,
-        after: { type: "transfer", lotNumber: lot.lotNumber, qtyBase: spec.qty.toString(), baseUom: lot.baseUom, from: from.code, to: to.code, box: box?.containerNumber ?? null, correlationId },
       });
     }
     if (box) await tx.update(containers).set({ currentLocationId: to.id, updatedAt: new Date() }).where(eq(containers.id, box.id));
@@ -444,7 +438,9 @@ export async function undoMove(ctx: AuthContext, input: { transferId: string; se
         sourceDocumentNumber: tr.transferNumber,
         reason: "undo_by_actor",
         idempotencyKey: `undo:${line.issueMovementId}`,
-        meta: { reversalOfId: line.issueMovementId, containerId: line.containerId, correlationId: tr.correlationId },
+        reversalOfId: line.issueMovementId!,
+        correlationId: tr.correlationId ?? undefined,
+        meta: { containerId: line.containerId },
       });
       reversalIds.push(movement.id);
       await tx.update(transferRequestLines).set({ reversalMovementId: movement.id }).where(eq(transferRequestLines.id, line.id));
@@ -521,6 +517,7 @@ export async function interSiteTransfer(ctx: AuthContext, input: InterSiteInput)
     if (from.siteId !== lot.siteId) throw new DomainError("validation", "The source location is not at this lot's site.");
     if (to.siteId !== input.toSiteId || !to.isActive) throw new DomainError("validation", "Choose an active location at the destination site.");
     await assertDestinationAllowed(tx, { ...lot, siteId: input.toSiteId }, to);
+    await assertHoldAllowsMove(tx, from, to);
     await assertLocationsNotFrozen(tx, [from.id, to.id]);
     if (lot.baseUom === "pcs" && !qty.isInteger()) throw new DomainError("validation", "This lot is counted in pieces; enter a whole number.");
     const loose = await looseQty(tx, lot.id, from.id);
@@ -567,7 +564,7 @@ export async function interSiteTransfer(ctx: AuthContext, input: InterSiteInput)
         completedAt: sql`now()`,
       })
       .returning();
-    const meta = { correlationId, fromSite: lot.siteId, toSite: input.toSiteId, fromCode: from.code, toCode: to.code };
+    const meta = { fromSite: lot.siteId, toSite: input.toSiteId, fromCode: from.code, toCode: to.code };
     const issue = await postMovement(tx, ctx, {
       movementType: "issue",
       lotId: lot.id,
@@ -578,6 +575,7 @@ export async function interSiteTransfer(ctx: AuthContext, input: InterSiteInput)
       sourceDocumentNumber: number,
       reason: input.reason.trim(),
       idempotencyKey: `${key}:issue`,
+      correlationId,
       meta: { ...meta, destinationLotId: destLot.id },
     });
     const receipt = await postMovement(tx, ctx, {
@@ -590,6 +588,7 @@ export async function interSiteTransfer(ctx: AuthContext, input: InterSiteInput)
       sourceDocumentNumber: number,
       reason: input.reason.trim(),
       idempotencyKey: `${key}:receipt`,
+      correlationId,
       meta: { ...meta, originLotId: lot.id },
     });
     await tx.insert(transferRequestLines).values({
@@ -611,20 +610,6 @@ export async function interSiteTransfer(ctx: AuthContext, input: InterSiteInput)
       siteId: input.toSiteId,
       after: { originLotId: lot.id, originLotNumber: lot.lotNumber, qualityStatus: destLot.qualityStatus, transfer: number },
     });
-    for (const [m, site] of [
-      [issue.movement, lot.siteId],
-      [receipt.movement, input.toSiteId],
-    ] as const) {
-      await audit(tx, ctx, {
-        action: "inventory.stock_movement.posted",
-        entityType: "stock_movement",
-        entityId: m.id,
-        entityNumber: number,
-        siteId: site,
-        reason: input.reason.trim(),
-        after: { type: m.movementType, qtyBase: qty.toString(), baseUom: lot.baseUom, correlationId },
-      });
-    }
     const result = { transferId: tr.id, transferNumber: number, destinationLotId: destLot.id, destinationLotNumber: lotNumber };
     await storeIdempotentResult(tx, ctx.organizationId, key, body, result);
     return { ...result, replayed: false };

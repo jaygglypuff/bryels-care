@@ -51,39 +51,9 @@ export const countMachine = stateMachine<CountStatus>(
 
 const QTY_RE = /^\d{1,12}(\.\d{1,6})?$/;
 
-/**
- * V-FREEZE: refuses a posting that touches a location inside a released, not yet posted or
- * cancelled count. Takes a share lock on the location rows so a concurrent release (which locks
- * them for update before snapshotting) and a posting serialize.
- */
-export async function assertLocationsNotFrozen(tx: Tx, locationIds: string[], opts: { exceptCountId?: string } = {}) {
-  const ids = [...new Set(locationIds.filter(Boolean))].sort();
-  if (ids.length === 0) return;
-  await tx.select({ id: locations.id }).from(locations).where(inArray(locations.id, ids)).orderBy(asc(locations.id)).for("share");
-  const rows = await tx
-    .select({ countNumber: stockCounts.countNumber, countId: stockCounts.id, code: locations.code })
-    .from(stockCountScopes)
-    .innerJoin(stockCounts, eq(stockCounts.id, stockCountScopes.stockCountId))
-    .innerJoin(locations, eq(locations.id, stockCountScopes.locationId))
-    .where(and(inArray(stockCountScopes.locationId, ids), inArray(stockCounts.status, [...COUNT_FROZEN_STATUSES])));
-  const hit = rows.find((r) => r.countId !== opts.exceptCountId);
-  if (hit) {
-    throw new DomainError("conflict", `V-FREEZE: location ${hit.code} is frozen by stock count ${hit.countNumber}. Nothing can move in or out until the count is posted or cancelled.`, {
-      rule: "V-FREEZE",
-      countNumber: hit.countNumber,
-    });
-  }
-}
+import { activeCountsForLocations, assertLocationsNotFrozen } from "./freeze";
 
-/** Active counts freezing any of the given locations (for location cards and the scan page). */
-export async function activeCountsForLocations(q: Tx | typeof db, locationIds: string[]) {
-  if (locationIds.length === 0) return [];
-  return q
-    .select({ locationId: stockCountScopes.locationId, countId: stockCounts.id, countNumber: stockCounts.countNumber, status: stockCounts.status })
-    .from(stockCountScopes)
-    .innerJoin(stockCounts, eq(stockCounts.id, stockCountScopes.stockCountId))
-    .where(and(inArray(stockCountScopes.locationId, locationIds), inArray(stockCounts.status, [...COUNT_FROZEN_STATUSES])));
-}
+export { assertLocationsNotFrozen, activeCountsForLocations };
 
 async function lockCount(tx: Tx, ctx: AuthContext, countId: string) {
   if (!isUuid(countId)) throw new DomainError("not_found", "Stock count not found in your sites.");
@@ -649,18 +619,11 @@ export async function postCount(ctx: AuthContext, countId: string, idempotencyKe
         sourceDocumentNumber: c.countNumber,
         reason: l.varianceReasonCode ?? (l.autoApproved ? "count_auto_approved" : "count_variance"),
         idempotencyKey: `${key}:${l.id}`,
+        // The count's own freeze does not block its adjustments; any other count's freeze does.
+        freezeExemptCountId: c.id,
         meta: { stockCountLineId: l.id, expected: l.expectedQtyBase, counted: l.finalQtyBase, balanceAtPosting: current.toString() },
       });
       await tx.update(stockCountLines).set({ adjustmentMovementId: movement.id }).where(eq(stockCountLines.id, l.id));
-      await audit(tx, ctx, {
-        action: "inventory.stock_movement.posted",
-        entityType: "stock_movement",
-        entityId: movement.id,
-        entityNumber: c.countNumber,
-        siteId: c.siteId,
-        reason: movement.reason,
-        after: { type: "adjustment", direction: delta.gt(0) ? "increase" : "decrease", qtyBase: delta.abs().toString() },
-      });
       count++;
     }
     await tx.update(stockCounts).set({ status: "posted", postedAt: new Date(), postedBy: ctx.userId, updatedAt: new Date() }).where(eq(stockCounts.id, c.id));

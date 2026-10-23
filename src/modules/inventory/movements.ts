@@ -10,7 +10,8 @@ import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
 import { postMovement, type MovementType } from "./ledger";
 import { allowedDestinationKinds, isUuid } from "./lots";
-import { assertLocationsNotFrozen } from "./counts";
+import { assertLocationsNotFrozen } from "./freeze";
+import { assertHoldAllowsMove } from "./holds";
 import { looseQty } from "./moves";
 
 export const MOVEMENT_TYPES: MovementType[] = ["receipt", "issue", "transfer", "consumption", "output", "adjustment", "shipment", "reversal"];
@@ -123,6 +124,7 @@ export async function transferStock(ctx: AuthContext, input: TransferInput) {
     if (lot.baseUom === "pcs" && !qty.isInteger()) throw new DomainError("validation", "This lot is counted in pieces; enter a whole number.");
 
     // W1C: counts freeze locations (V-FREEZE) and boxed stock moves only with its box.
+    await assertHoldAllowsMove(tx, from, to);
     await assertLocationsNotFrozen(tx, [from.id, to.id]);
     const loose = await looseQty(tx, lot.id, from.id);
     if (loose.lt(qty)) {

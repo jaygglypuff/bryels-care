@@ -104,6 +104,30 @@ export async function assertLocationNotHeld(q: Tx | typeof db, location: { id: s
   if (held) throw new DomainError("blocked_lot", `Location ${location.code} is blocked by QA hold ${held.holdNumber}; stock cannot be moved into it.`, { rule: "V-LOC", holdNumber: held.holdNumber });
 }
 
+/** Location kinds that may receive stock leaving a location under an open hold (segregation only). */
+export const HELD_STOCK_DESTINATION_KINDS = ["quarantine", "hold", "rejected"] as const;
+
+/**
+ * Location-hold rules for any move between two locations (V-LOC, US-2-10 AC3), shared by put-away,
+ * scan-to-move, the lot move page and inter-site transfers:
+ * - the destination must not be under an open QA hold;
+ * - stock in a held location may leave only to a quarantine, hold or rejected location.
+ */
+export async function assertHoldAllowsMove(
+  q: Tx | typeof db,
+  from: { id: string; code: string; siteId: string },
+  to: { id: string; code: string; siteId: string; kind: string },
+) {
+  await assertLocationNotHeld(q, to);
+  const heldFrom = (await heldLocations(q, from.siteId)).find((h) => h.locationId === from.id);
+  if (heldFrom && !(HELD_STOCK_DESTINATION_KINDS as readonly string[]).includes(to.kind)) {
+    throw new DomainError("blocked_lot", `Stock in ${from.code} is under QA hold ${heldFrom.holdNumber} and can only move to a quarantine, hold or rejected location.`, {
+      rule: "V-LOC",
+      holdNumber: heldFrom.holdNumber,
+    });
+  }
+}
+
 async function writeTransition(tx: Tx, ctx: AuthContext, hold: { id: string; siteId: string }, from: string | null, to: string, reason: string | null) {
   await tx.insert(qualityHoldStateTransitions).values({ organizationId: ctx.organizationId, siteId: hold.siteId, qualityHoldId: hold.id, fromState: from, toState: to, actorId: ctx.userId, reason });
 }

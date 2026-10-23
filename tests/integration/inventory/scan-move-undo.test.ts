@@ -111,7 +111,8 @@ describe("undo of own move (US-2-28)", () => {
     expect(rev.movementType).toBe("reversal");
     expect(rev.reason).toBe("undo_by_actor");
     expect(rev.idempotencyKey).toBe(`undo:${orig.id}`);
-    expect((rev.meta as { reversalOfId: string }).reversalOfId).toBe(orig.id);
+    expect(rev.reversalOfId).toBe(orig.id);
+    expect(rev.correlationId).toBe(orig.correlationId);
     const [origAfter] = await db.select().from(stockMovements).where(eq(stockMovements.id, orig.id));
     expect(origAfter).toEqual(orig);
     expect(await onHand(lot.id, a01.id)).toBe("500");
@@ -161,7 +162,7 @@ describe("inter-site transfer (US-2-14 AC2)", () => {
     });
     const mv = await db.select().from(stockMovements).where(eq(stockMovements.sourceDocumentId, r.transferId));
     expect(mv.map((m) => m.movementType).sort()).toEqual(["issue", "receipt"]);
-    const corr = new Set(mv.map((m) => (m.meta as { correlationId: string }).correlationId));
+    const corr = new Set(mv.map((m) => m.correlationId));
     expect(corr.size).toBe(1);
     const [dest] = await db.select().from(inventoryLots).where(eq(inventoryLots.id, r.destinationLotId));
     expect(dest.originLotId).toBe(lot.id);

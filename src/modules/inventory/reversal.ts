@@ -87,6 +87,18 @@ export async function reverseMovement(ctx: AuthContext, input: ReverseMovementIn
     }
     const [already] = await tx.select({ id: stockMovements.id }).from(stockMovements).where(eq(stockMovements.reversalOfId, original.id)).limit(1);
     if (already) throw new DomainError("conflict", "This movement has already been reversed.");
+    // A movement that moved or changed a box (W1C) also changed the box's location or contents; a bare
+    // ledger reversal would leave the box record wrong, so the box is corrected through its own flow.
+    const boxId = (original.meta as { containerId?: string | null } | null)?.containerId;
+    if (boxId) {
+      throw new DomainError(
+        "state",
+        original.movementType === "adjustment"
+          ? "This adjustment changed a box's contents. Correct it with a new stock adjustment on the same box (with a reason) instead."
+          : "This movement moved a box. Move the box back with scan-to-move (or undo it within the undo window) so the box and the ledger stay in step.",
+        { rule: "box_movement", containerId: boxId },
+      );
+    }
 
     const correlationId = uuidv7();
     const { movement: reversal } = await postMovement(tx, ctx, {
