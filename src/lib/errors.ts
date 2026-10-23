@@ -10,7 +10,9 @@ export type ErrorCode =
   | "insufficient_stock"
   | "blocked_lot"
   | "out_of_tolerance"
-  | "setup_required";
+  | "setup_required"
+  | "reauth_required"
+  | "too_large";
 
 export class DomainError extends Error {
   constructor(
@@ -35,6 +37,8 @@ export const HTTP_STATUS: Record<ErrorCode, number> = {
   blocked_lot: 409,
   out_of_tolerance: 422,
   setup_required: 503,
+  reauth_required: 401,
+  too_large: 413,
 };
 
 export type ActionState = { ok: boolean; message?: string; fieldErrors?: Record<string, string> } | null;

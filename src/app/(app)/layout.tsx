@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { batches, inventoryLots } from "@/db/schema";
 import { requireContext } from "@/lib/auth/context";
 import { ROLE_BUNDLES } from "@/lib/permissions";
+import { unreadNotificationCount } from "@/modules/platform";
 import { NAV, QUICK_ACTIONS } from "./nav";
 import { Shell } from "./shell";
 import { signOut, switchSite } from "./actions";
@@ -20,6 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const nav = NAV.map((g) => ({ ...g, items: g.items.filter((i) => i.planned || !i.permission || ctx.can(i.permission)) })).filter((g) => g.items.length > 0);
   const quickActions = QUICK_ACTIONS.filter((q) => !q.permission || ctx.can(q.permission));
   const qaCount = ctx.can("quality.disposition.view") ? await openQaCount(ctx.currentSiteId) : null;
+  const unreadCount = await unreadNotificationCount(ctx);
   return (
     <Shell
       nav={nav}
@@ -28,6 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       sites={ctx.allowedSites}
       currentSiteId={ctx.currentSiteId}
       qaCount={qaCount}
+      unreadCount={unreadCount}
       switchSite={switchSite}
       signOut={signOut}
     >

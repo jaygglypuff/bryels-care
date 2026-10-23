@@ -133,6 +133,15 @@ export const PERMISSIONS = [
   "masterdata.label_template.approve",
   "inventory.label_job.view",
   "inventory.label_job.create",
+  // Wave 1 W1A: ledger core, jobs, exports (docs/permissions-matrix.md §2.3, §2.12)
+  "inventory.balance.view",
+  "inventory.balance.export",
+  "inventory.balance.admin",
+  "inventory.movement.export",
+  "inventory.movement.void",
+  "platform.job.view",
+  "platform.job.admin",
+  "platform.diagnostics.view",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -456,4 +465,22 @@ const W1E_GRANTS: Record<string, readonly Permission[]> = {
 };
 for (const [role, grants] of Object.entries(W1E_GRANTS)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+
+// Wave 1 W1A: role grants for ledger core, jobs and exports (docs/permissions-matrix.md §2.3, §2.12).
+const W1A_GRANTS: Record<string, readonly Permission[]> = {
+  system_admin: ["platform.job.admin", "inventory.balance.admin"],
+  site_manager: ["inventory.movement.void", "inventory.movement.export", "inventory.balance.export", "inventory.balance.admin"],
+  // A-PM-06: posts only consumption/output/production-area transfers (setting inventory.role_movement_types)
+  production_operator: ["inventory.movement.post", "inventory.balance.view"],
+  warehouse_operator: ["inventory.balance.view", "inventory.balance.export", "inventory.movement.export"],
+  sales_cs: ["inventory.balance.view"],
+  auditor: ["inventory.balance.export", "inventory.movement.export"],
+};
+for (const [role, grants] of Object.entries(W1A_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+// Diagnostics (worker, jobs, reconciliation) are for system administrators, not every view-all role.
+for (const role of ["site_manager", "auditor"]) {
+  ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => p !== "platform.diagnostics.view");
 }

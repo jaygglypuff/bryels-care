@@ -103,7 +103,8 @@ src/
     db.ts                   connection, transaction helper
     result.ts               ok/err result type and error codes
     idempotency.ts          idempotency key storage and replay
-    jobs.ts                 job registry: job codes, payload schemas, idempotency key builders (section 8)
+    export.ts               export layer: scope, masking, formula neutralisation, row cap, audit (US-2-21)
+    settings.ts             typed settings registry with defaults (job registry: modules/platform, section 8.1)
     audit.ts                audit event writer
     state-machine.ts        typed transition tables
     money.ts, quantity.ts   decimal helpers, UOM conversion
@@ -177,6 +178,21 @@ Exports use the same scoped queries, so a CSV can never contain another site's r
 
 ## 6. API conventions (`/api/v1`)
 
+- Contract in code (US-2-22): `src/lib/api/contract.ts` lists every command and query with its
+  payload schema, permission, idempotent flag and offline eligibility (`docs/process-maps.md`
+  §6); `pnpm api:contract` writes `docs/api/v1-contract.json` and a test fails when it is stale.
+  The server pipeline is `src/lib/api/server.ts` (`commandRoute`, `queryRoute`), the typed
+  client `src/lib/api/client.ts`. Route files are one line each.
+- Command envelope (ADR-018 groundwork): `POST` body
+  `{ commandId: <client UUIDv7>, siteId, deviceId?, clientCreatedAt?, payload }` (strict) plus
+  header `Idempotency-Key: <uuid>` (required for every idempotent command, `422
+  IDEMPOTENCY_KEY_REQUIRED` otherwise). The key, user, request hash, command id, device id and
+  client time are stored in `idempotency_keys`; a repeat returns the stored response with
+  `Idempotent-Replayed: true`; same key with another body or user → `422
+  IDEMPOTENCY_KEY_REUSED`; a concurrent duplicate → `409 IDEMPOTENCY_IN_PROGRESS`.
+- Error codes: `PERMISSION_DENIED` 403, `NOT_FOUND` 404, `VALIDATION` 422,
+  `STOCK_INSUFFICIENT` 409, `STOCK_NOT_ELIGIBLE` 409, `INVALID_STATE` 409, `CONFLICT` 409,
+  `EXPORT_TOO_LARGE` 413, `REAUTH_REQUIRED` 401, `UNAUTHENTICATED` 401.
 - JSON only; `Content-Type: application/json`; responses wrapped as
   `{ ok: true, data }` or `{ ok: false, error: { code, message, details } }`.
 - Commands are `POST /api/v1/<module>/<entity>/<verb>` (e.g. `POST /api/v1/inventory/movements/post`), queries are `GET` with filters. Verbs mirror the permission action where possible.
@@ -221,8 +237,10 @@ nowhere else may a new code be introduced. Rules:
 1. A job code is `<module>.<job_name>`; `job_name` is lower snake case and may itself be
    `entity.verb` (pattern `^[a-z]+\.[a-z_]+(\.[a-z_]+)?$`, for example `inventory.reconcile`,
    `finance.costing.compute`). The owning module is the first segment.
-2. `src/lib/jobs.ts` is the code registry: one entry per code with its payload Zod schema,
-   idempotency key builder and queue class. Enqueuing a code that is not registered fails.
+2. The code registry is the list returned by `jobDefinitions()` in `src/modules/platform/job-handlers.ts`
+   (implemented in Phase 2, US-2-03; this replaces the earlier `src/lib/jobs.ts` plan). Each
+   entry is built with `defineJob` (contract below): payload Zod schema, idempotency key tuple,
+   handler, optional schedule. Enqueuing or running a code that is not in the list fails.
    `background_jobs.job_kind` (`docs/data-model.md` §3.10) stores the code; the runbook
    (`docs/operations-runbook.md` §6) and the diagnostics page show the same code.
 3. The idempotency key is `<code>:<key tuple>`; pg-boss `singletonKey` carries the same value
@@ -277,6 +295,46 @@ request budget, through a new row here.
 
 Failed jobs are visible in the admin diagnostics view with retry controls
 (`docs/operations-runbook.md` §6).
+
+### 8.1 Job contract (implemented, US-2-03)
+
+Adding a job takes one file and two lines; no platform file changes:
+
+```ts
+// src/modules/<module>/jobs/<name>.ts (or src/modules/<module>/jobs.ts)
+import { z } from "zod";
+import { defineJob } from "@/modules/platform/job-definition"; // no runtime deps: safe from any module
+
+export const documentsRenderJob = defineJob<{ generatedDocumentId: string }>({
+  code: "documents.render",                       // must be a row of the table above
+  title: "Render a document",
+  description: "Renders a generated_documents row to PDF.",
+  payload: z.object({ generatedDocumentId: z.uuid() }).strict(),
+  keyTuple: (p) => [p.generatedDocumentId],      // key = "documents.render:<id>" (rule 3)
+  run: async ({ ctx, job, idempotencyKey, asOf }, p) => { /* call the module service with ctx */ return { pages: 3 }; },
+  // optional: schedule: { cron: "0 1 * * *", tz: "Asia/Manila", payload: (now) => ({ ... }) },
+  //           systemPermissions: [...]  (scheduled jobs: what the system context may do)
+  //           maxAttempts, retryDelaySeconds, timeoutSeconds, summarize
+});
+```
+
+then in `src/modules/platform/job-handlers.ts` add the import line and the list entry.
+
+| Piece | Where | Behaviour |
+|---|---|---|
+| Enqueue | `enqueueJob(txOrDb, ctx, def, payload, { siteId? })` in `src/modules/platform/jobs.ts` | validates the payload (Zod) and the site scope, inserts a `background_jobs` row in the caller's transaction (the outbox), deduplicates on `(organization_id, idempotency_key)` and returns `{ job, created }`; a rolled-back command never runs a job |
+| Relay | `src/worker.ts` every 2 s | sends queued rows to pg-boss (`id` new, `singletonKey` = idempotency key, `startAfter` = `run_after`) and records `pgboss_job_id` |
+| Run | `runJob(jobId)` | claims the row (`queued → running`, attempts + 1), validates the payload again, rebuilds the context: `system:<code>` on behalf of `requested_by` with that user's **current** roles and sites (`buildContextForUser`), or a pure system context with `systemPermissions` for scheduled jobs; runs the handler; records `succeeded` + result |
+| Failure | `runJob` | `DomainError`, invalid payload, unregistered code or lost access → `failed` at once; other errors → back to `queued` with backoff (pg-boss retries) until `max_attempts` (setting `platform.jobs.max_attempts`, default 5), then `failed`, `dead_lettered_at` and a `critical` in-app notification to `system_admin` |
+| Retry / cancel | `retryJob` / `cancelJob` (`platform.job.admin`) | audited `platform.background_job.retried` / `.cancelled`; the idempotency key is unchanged, so a handler that already posted replays instead of posting twice |
+| Schedules | worker start | `boss.schedule(code, cron, { scheduled: true }, { tz })`; a tick creates the keyed row per organization and runs it |
+| Audit | `src/lib/audit.ts` | job writes carry `actor_label = system:<code>`, `on_behalf_of` = requester, `correlation_id` = the job's |
+| Tests | `tests/integration/platform/jobs.test.ts` | build a test registry with `createJobRegistry([...jobDefinitions(), testJob])` and call `enqueueJob`/`runJob` directly with `{ registry }` (no pg-boss) |
+
+Registered in Phase 2 so far: `inventory.reconcile` (nightly 01:00 Asia/Manila, all sites;
+on demand per site) and `inventory.rebuild_balances`. `platform.notification_dispatch` is not
+registered yet: in-app notifications are written directly by `notifyUsers`/`notifyRoles`
+(`src/modules/platform/notifications.ts`); the job is registered when email delivery arrives.
 
 ## 9. Documents and printing
 

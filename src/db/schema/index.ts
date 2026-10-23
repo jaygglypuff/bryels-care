@@ -13,3 +13,4 @@ export * from "./transfers";
 export * from "./counts";
 export * from "./reservations";
 export * from "./documents";
+export * from "./platform";

@@ -61,3 +61,17 @@ export {
 } from "./reservations";
 export { getInventorySetting, effectiveInventorySettings, INVENTORY_SETTINGS } from "./policy";
 export { editLotAttributes, expiryAlerts, listLocationsWithStock, getLocationDetail } from "./lots-admin";
+export { postMovements, lockLots } from "./ledger";
+export { reverseMovement, getMovementDetail, correctionLocations, REVERSIBLE_MOVEMENT_TYPES, REVERSAL_CONFIRMATION_WORD, type ReverseMovementInput } from "./reversal";
+export {
+  findLedgerDifferences,
+  requestReconciliation,
+  requestBalanceRebuild,
+  listReconciliationRuns,
+  getReconciliationRun,
+  type LedgerDifference,
+} from "./reconciliation";
+export { inventoryReconcileJob, inventoryRebuildBalancesJob } from "./jobs";
+export { availabilityRows, availabilityTotals, computeAvailability, bucketOf, manilaToday, type AvailabilityRow } from "./availability";
+export { getStockCard, type StockCard } from "./stock-card";
+export { availabilityExport, stockCardExport } from "./exports";

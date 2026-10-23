@@ -261,6 +261,12 @@ times is dead-lettered and raises the failed-jobs alert (`docs/deployment-railwa
 3. Jobs are idempotent and keyed, so a retry never duplicates a posting; if a retry would be
    unsafe for business reasons (for example the batch has since been reopened), cancel.
 4. Never re-run a job's effect by hand with SQL.
+5. As built (Phase 2, US-2-03): Admin → Diagnostics (`/admin/diagnostics`). The **Worker** card
+   shows each worker's last heartbeat; "The worker is not running" means queued jobs wait — check
+   the Railway `worker` service (start command `pnpm worker`). The **Jobs** card filters by status,
+   shows attempts, last error, correlation id and a payload summary (secret-like keys masked), and
+   offers Retry (failed or cancelled) and Cancel (queued or failed) to `platform.job.admin`. A
+   dead-lettered job also arrives as a critical notification in the bell of every `system_admin`.
 
 | Job code (`docs/architecture.md` 8 registry) | Typical failure | Action |
 |---|---|---|
@@ -357,10 +363,15 @@ notification to `system_admin` and the site's `site_manager` and is handled as i
    cost or touches a released finished-goods lot (A-OPS-06).
 5. Re-run `inventory.reconcile` on demand and confirm zero rows.
 
-Note for the architect: `reconciliation_runs` is catalogued (`docs/data-model.md` 3.10), but
-the job `inventory.rebuild_balances` and the permission that may enqueue it (suggested
-`inventory.balance.admin`, sensitivity S) are still missing from the `docs/architecture.md` 8
-job registry and `docs/permissions-matrix.md`; see section 21 item 4.
+As built (Phase 2, US-2-04): Admin → Diagnostics → **Stock reconciliation** card lists the runs;
+"Report" opens the differences (lot, location, ledger, balance table, difference). A holder of
+`inventory.balance.admin` (`system_admin`, `site_manager`) can **Run now** for the current site
+and, on a run with differences at that site, **Queue rebuild** with a mandatory reason. The rebuild
+runs in the worker on behalf of the requester, writes a `rebuild` run with before/after per key and
+the audit event `inventory.inventory_balance.rebuilt` (actor `system:inventory.rebuild_balances`).
+The lot's stock card also flags any ledger-versus-projection difference on its closing line.
+Containers, reservations and the quality-status query are not reconciled yet (the MVP balance key
+is lot × location with the status on the lot).
 
 ## 10. Document reprint control
 

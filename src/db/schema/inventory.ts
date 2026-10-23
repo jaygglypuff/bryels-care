@@ -1,4 +1,4 @@
-import { check, date, index, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, check, date, index, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { QTY, createdAt, id } from "./_common";
 import { organizations, sites, users } from "./identity";
@@ -59,8 +59,10 @@ export const inventoryBalances = pgTable(
 );
 
 /**
- * Immutable stock ledger. movementType: receipt | transfer | consumption | output | adjustment |
- * shipment | reversal. Corrections are reversals that link to the original.
+ * Immutable stock ledger. movementType: receipt | issue | transfer | consumption | output |
+ * adjustment | return | shipment | reversal. Corrections are reversals that link to the original
+ * (one reversal per row at most) plus an optional replacement sharing the reversal's correlation id.
+ * ck_stock_movements_locations encodes which side(s) each type moves (docs/data-model.md §5.1).
  */
 export const stockMovements = pgTable(
   "stock_movements",
@@ -74,11 +76,18 @@ export const stockMovements = pgTable(
     toLocationId: uuid("to_location_id").references(() => locations.id),
     qtyBase: numeric("qty_base", QTY).notNull(),
     baseUom: text("base_uom").notNull(),
+    /** Quantity and unit as entered by the user (ADR-010); equal to the base pair when entered in base. */
+    qtyEntered: numeric("qty_entered", QTY),
+    enteredUom: text("entered_uom"),
+    /** Lot quality status when the row was posted (stock card, exception evidence). */
+    qualityStatusAtPosting: text("quality_status_at_posting"),
+    /** Groups a reversal with its replacement (and any rows of one correction). */
+    correlationId: uuid("correlation_id"),
     sourceDocumentType: text("source_document_type"),
     sourceDocumentId: uuid("source_document_id"),
     sourceDocumentNumber: text("source_document_number"),
     reason: text("reason"),
-    reversalOfId: uuid("reversal_of_id"),
+    reversalOfId: uuid("reversal_of_id").references((): AnyPgColumn => stockMovements.id),
     idempotencyKey: text("idempotency_key"),
     postedBy: uuid("posted_by").notNull().references(() => users.id),
     postedAt: timestamp("posted_at", { withTimezone: true }).notNull().defaultNow(),
@@ -88,6 +97,28 @@ export const stockMovements = pgTable(
     index("movements_lot_idx").on(t.lotId),
     index("movements_site_time_idx").on(t.siteId, t.postedAt),
     uniqueIndex("movements_idem_uq").on(t.organizationId, t.idempotencyKey),
+    uniqueIndex("movements_reversal_of_uq").on(t.reversalOfId).where(sql`${t.reversalOfId} is not null`),
+    index("movements_correlation_idx").on(t.correlationId),
+    check("ck_stock_movements_qty_positive", sql`${t.qtyBase} > 0`),
+    check(
+      "ck_stock_movements_type",
+      sql`${t.movementType} in ('receipt','issue','transfer','consumption','output','adjustment','return','shipment','reversal')`,
+    ),
+    check(
+      "ck_stock_movements_locations",
+      sql`case ${t.movementType}
+        when 'receipt' then ${t.fromLocationId} is null and ${t.toLocationId} is not null
+        when 'output' then ${t.fromLocationId} is null and ${t.toLocationId} is not null
+        when 'return' then ${t.fromLocationId} is null and ${t.toLocationId} is not null
+        when 'issue' then ${t.fromLocationId} is not null and ${t.toLocationId} is null
+        when 'consumption' then ${t.fromLocationId} is not null and ${t.toLocationId} is null
+        when 'shipment' then ${t.fromLocationId} is not null and ${t.toLocationId} is null
+        when 'transfer' then ${t.fromLocationId} is not null and ${t.toLocationId} is not null and ${t.fromLocationId} <> ${t.toLocationId}
+        when 'adjustment' then (${t.fromLocationId} is null) <> (${t.toLocationId} is null)
+        when 'reversal' then ${t.reversalOfId} is not null and (${t.fromLocationId} is not null or ${t.toLocationId} is not null)
+        else false end`,
+    ),
+    check("ck_stock_movements_reversal_link", sql`(${t.movementType} = 'reversal') = (${t.reversalOfId} is not null)`),
   ],
 );
 

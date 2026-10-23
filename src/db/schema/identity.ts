@@ -101,6 +101,10 @@ export const auditEvents = pgTable(
     organizationId: uuid("organization_id").notNull().references(() => organizations.id),
     siteId: uuid("site_id").references(() => sites.id),
     actorId: uuid("actor_id").references(() => users.id),
+    /** Non-user actor, e.g. `system:inventory.reconcile` for background jobs (architecture §8 rule 4). */
+    actorLabel: text("actor_label"),
+    /** The user a system actor acted for (job triggered by that user). */
+    onBehalfOf: uuid("on_behalf_of").references(() => users.id),
     action: text("action").notNull(),
     entityType: text("entity_type").notNull(),
     entityId: uuid("entity_id"),
@@ -137,6 +141,16 @@ export const idempotencyKeys = pgTable(
     key: text("key").notNull(),
     command: text("command").notNull(),
     result: jsonb("result"),
+    /** /api/v1 commands (data-model §11.4): who sent it and a hash of the canonical input. */
+    userId: uuid("user_id").references(() => users.id),
+    requestHash: text("request_hash"),
+    responseCode: integer("response_code"),
+    /** Offline-replay envelope (ADR-018): client UUIDv7 command id, device id, client clock. */
+    clientCommandId: uuid("client_command_id"),
+    deviceId: text("device_id"),
+    clientCreatedAt: timestamp("client_created_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("idempotency_org_key_uq").on(t.organizationId, t.key)],

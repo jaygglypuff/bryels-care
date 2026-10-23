@@ -24,6 +24,8 @@ type Props = {
   sites: { id: string; code: string; name: string }[];
   currentSiteId: string;
   qaCount: number | null;
+  /** Open, unread in-app notifications of the signed-in user (US-2-03). */
+  unreadCount: number;
   switchSite: (fd: FormData) => Promise<void>;
   signOut: () => Promise<void>;
   children: React.ReactNode;
@@ -36,7 +38,7 @@ function matchLen(pathname: string, href: string) {
   return -1;
 }
 
-export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, switchSite, signOut, children }: Props) {
+export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, unreadCount, switchSite, signOut, children }: Props) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   useEffect(() => setDrawer(false), [pathname]);
@@ -111,14 +113,12 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
             <Link href="/inventory/scan" className="hidden size-10 place-items-center rounded-full bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg sm:grid" aria-label="Scan or search" title="Scan or search">
               <ScanLine size={18} />
             </Link>
-            {qaCount !== null && (
-            <Link href="/quality" className="relative grid size-10 place-items-center rounded-full bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg" aria-label={`QA queue, ${qaCount} open`} title="QA queue">
+            <Link href="/notifications" className="relative grid size-10 place-items-center rounded-full bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg" aria-label={`Notifications, ${unreadCount} unread${qaCount ? `; QA queue ${qaCount} open` : ""}`} title="Notifications">
               <Bell size={18} />
-              {qaCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full bg-[#c62828] px-1 text-[10px] font-semibold leading-[18px] text-white">{qaCount}</span>
+              {unreadCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full bg-[#c62828] px-1 text-[10px] font-semibold leading-[18px] text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>
               )}
             </Link>
-            )}
             <details className="relative">
               <summary className="grid size-10 cursor-pointer list-none place-items-center rounded-full bg-lime-100 text-[13px] font-semibold text-brand ring-2 ring-white" style={{ background: "var(--lime-200)", color: "var(--brand-800)" }} aria-label="Account">
                 {initials}

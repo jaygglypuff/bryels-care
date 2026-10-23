@@ -45,6 +45,8 @@ migration. Its canonical source is `src/db/sql/w1d.sql`; the migration is a verb
 | `pnpm test` | Integration tests against a real Postgres (`TEST_DATABASE_URL`, default `postgres://postgres@localhost:5432/bryels_test`) |
 | `pnpm db:generate` | Generate a SQL migration from schema changes (review before committing) |
 | `pnpm db:migrate` / `pnpm db:seed` / `pnpm db:reset` | Apply migrations / load demo data / wipe and reload demo data |
+| `pnpm worker` | Background worker (pg-boss): nightly stock reconciliation, balance rebuilds; health on `PORT` (default 3001) |
+| `pnpm api:contract` | Regenerate `docs/api/v1-contract.json` from `src/lib/api/contract.ts` (a test fails when it is stale) |
 
 Environment variables: `DATABASE_URL` (required), `DATABASE_MIGRATION_URL` (optional separate
 migration role), `APP_ORIGIN` (public URL, used for origin checks), `ALLOW_DEMO_SEED` (`true`
@@ -65,6 +67,9 @@ Custom SQL: after migrating a database that already holds MVP receipts (not a fr
 `src/db/sql/w1b.sql` once to mark those receipts as posted. The nightly expiry check is the job
 `inventory.expiry_check` (`src/modules/inventory/jobs/expiry-check.ts`), wired by the job registry.
 
+only on demo and staging environments; never in production). Worker: `WORKER_CONCURRENCY`
+(default 2) and `PORT` (health and readiness, default 3001).
+
 ## Deploy to Railway (demo or staging)
 
 1. Create a Railway project, add a **PostgreSQL** service, and add a service from this GitHub
@@ -74,8 +79,11 @@ Custom SQL: after migrating a database that already holds MVP receipts (not a fr
 3. Deploy. On start the container applies migrations, loads the demo data if allowed and empty,
    and serves on `$PORT`; Railway checks `/api/health`. `/api/ready` reports database status.
 4. Generate a public domain in the service's Networking settings and sign in with a demo account.
+5. Add a second service from the same repository named `worker`: same `DATABASE_URL`, **Custom
+   Start Command** `pnpm worker`, no public domain. It runs queued and nightly jobs; Admin →
+   Diagnostics shows its heartbeat (`docs/deployment-railway.md` §2.3).
 
-The full production topology (worker, bucket, backups, staging/production separation) is in
+The full production topology (bucket, backups, staging/production separation) is in
 `docs/deployment-railway.md` and arrives with later phases.
 
 ## Code map

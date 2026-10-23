@@ -35,6 +35,12 @@ export function entityHref(entityType: string, entityId: string | null): string 
       return `/sales/${entityId}`;
     case "user":
       return `/admin/users/${entityId}`;
+    case "stock_movement":
+      return `/inventory/movements/${entityId}`;
+    case "background_job":
+      return `/admin/diagnostics?job=${entityId}#jobs`;
+    case "reconciliation_run":
+      return `/admin/diagnostics?run=${entityId}#reconciliation`;
     default:
       return null;
   }

@@ -34,6 +34,8 @@ export type AuditRow = {
   siteId: string | null;
   actorName: string | null;
   actorEmail: string | null;
+  /** `system:<job code>` when a background job acted (on behalf of the user in onBehalfOf). */
+  actorLabel: string | null;
   reason: string | null;
   before: unknown;
   after: unknown;
@@ -86,6 +88,7 @@ export async function listAuditEvents(
       siteId: auditEvents.siteId,
       actorName: users.displayName,
       actorEmail: users.email,
+      actorLabel: auditEvents.actorLabel,
       reason: auditEvents.reason,
       before: auditEvents.before,
       after: auditEvents.after,
