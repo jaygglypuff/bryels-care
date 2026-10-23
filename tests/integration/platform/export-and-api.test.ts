@@ -69,7 +69,8 @@ describe("export layer", () => {
     const file = await runExport(wh, def, { siteId: kit.nfd.id }, "csv");
     const text = csvText(file.body);
     expect(text).not.toContain("68.00");
-    expect(text).not.toContain('"Unit price"\r');
+    // The table header row lists only the visible column.
+    expect(text).toContain('\r\n"Code"\r\n');
     expect(text).toContain('"Masked columns","Unit price"');
     expect(text).toContain(`"'=HYPERLINK(""x"")"`);
     expect(file.maskedColumns).toEqual(["Unit price"]);

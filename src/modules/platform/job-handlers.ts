@@ -7,16 +7,21 @@
 import { inventoryRebuildBalancesJob, inventoryReconcileJob } from "@/modules/inventory/jobs";
 import { type AnyJobDefinition, type JobRegistry, createJobRegistry } from "./job-definition";
 
-export const JOB_DEFINITIONS: AnyJobDefinition[] = [
-  inventoryReconcileJob,
-  inventoryRebuildBalancesJob,
-  // Wave 1 integrator: add other streams' jobs here (e.g. documents.render, inventory.expiry_scan).
-];
+/**
+ * A function, not a constant: job modules import the platform runtime, which imports this file, so
+ * the list is read at call time (after every module has finished loading), never at import time.
+ */
+export function jobDefinitions(): AnyJobDefinition[] {
+  return [
+    inventoryReconcileJob,
+    inventoryRebuildBalancesJob,
+    // Wave 1 integrator: add other streams' jobs here (e.g. documents.render, inventory.expiry_scan).
+  ];
+}
 
 let registry: JobRegistry | null = null;
 
-/** Lazily built so module import order (and import cycles through job modules) never matters. */
 export function appJobRegistry(): JobRegistry {
-  registry ??= createJobRegistry(JOB_DEFINITIONS);
+  registry ??= createJobRegistry(jobDefinitions());
   return registry;
 }

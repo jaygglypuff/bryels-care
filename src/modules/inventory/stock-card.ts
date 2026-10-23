@@ -84,7 +84,7 @@ export async function getStockCard(ctx: AuthContext, f: { lotId: string; from: s
     : sql`case when ${stockMovements.toLocationId} is not null then ${stockMovements.qtyBase} else 0 end - case when ${stockMovements.fromLocationId} is not null then ${stockMovements.qtyBase} else 0 end`;
   const [{ opening, ledgerNow }] = await db
     .select({
-      opening: sql<string>`coalesce(sum(${deltaSql}) filter (where ${stockMovements.postedAt} < ${start}), 0)::text`,
+      opening: sql<string>`coalesce(sum(${deltaSql}) filter (where ${stockMovements.postedAt} < ${start.toISOString()}::timestamptz), 0)::text`,
       ledgerNow: sql<string>`coalesce(sum(${deltaSql}), 0)::text`,
     })
     .from(stockMovements)

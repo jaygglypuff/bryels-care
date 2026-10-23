@@ -13,7 +13,7 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { postMovement } from "@/modules/inventory/ledger";
 import { createJobRegistry, defineJob } from "@/modules/platform/job-definition";
-import { JOB_DEFINITIONS } from "@/modules/platform/job-handlers";
+import { jobDefinitions } from "@/modules/platform/job-handlers";
 import { cancelJob, enqueueJob, getJob, listJobs, retryJob, runJob } from "@/modules/platform/jobs";
 import { resetTestDatabase } from "../../support/db";
 import { asUser, expectCode, type Kit, loadKit, loc, makeLot, onHand } from "../../support/kit";
@@ -56,7 +56,7 @@ const whoAmIJob = defineJob<{ tag: string }>({
   },
 });
 
-const registry = createJobRegistry([...JOB_DEFINITIONS, failingJob, postingJob, whoAmIJob]);
+const registry = createJobRegistry([...jobDefinitions(), failingJob, postingJob, whoAmIJob]);
 
 let kit: Kit;
 let admin: AuthContext;
@@ -106,7 +106,7 @@ describe("jobs.dead_letter", () => {
       keyTuple: (p) => [p.note],
       run: async () => ({}),
     });
-    const reg = createJobRegistry([...JOB_DEFINITIONS, secretJob]);
+    const reg = createJobRegistry([...jobDefinitions(), secretJob]);
     const { job } = await enqueueJob(db, admin, secretJob, { token: "abc123", note: "hello" }, { registry: reg });
     const item = (await listJobs(admin)).find((j) => j.id === job.id)!;
     expect(item.payloadSummary).toEqual({ token: "•••", note: "hello" });

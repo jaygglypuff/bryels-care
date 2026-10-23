@@ -33,9 +33,12 @@ beforeAll(async () => {
   owner = await asUser(kit, "owner@bryels-care.test", "owner_director", [kit.nfd, kit.rvs]);
 });
 
+let runSeq = 0;
+/** On-demand runs are keyed per minute; each call here uses its own (fictional) minute so it really runs. */
 async function reconcileNow() {
   const ctx = await systemContext(kit.orgId, inventoryReconcileJob);
-  const { job } = await enqueueJob(db, ctx, inventoryReconcileJob, { siteId: null, asOf: new Date().toISOString(), trigger: "manual" });
+  const asOf = new Date(Date.UTC(2026, 0, 1, 0, runSeq++)).toISOString();
+  const { job } = await enqueueJob(db, ctx, inventoryReconcileJob, { siteId: null, asOf, trigger: "manual" });
   const out = await runJob(job.id);
   expect(out.status).toBe("succeeded");
   return (out as { result: { runId: string; differencesCount: number; status: string } }).result;

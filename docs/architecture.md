@@ -237,7 +237,7 @@ nowhere else may a new code be introduced. Rules:
 1. A job code is `<module>.<job_name>`; `job_name` is lower snake case and may itself be
    `entity.verb` (pattern `^[a-z]+\.[a-z_]+(\.[a-z_]+)?$`, for example `inventory.reconcile`,
    `finance.costing.compute`). The owning module is the first segment.
-2. The code registry is the list `JOB_DEFINITIONS` in `src/modules/platform/job-handlers.ts`
+2. The code registry is the list returned by `jobDefinitions()` in `src/modules/platform/job-handlers.ts`
    (implemented in Phase 2, US-2-03; this replaces the earlier `src/lib/jobs.ts` plan). Each
    entry is built with `defineJob` (contract below): payload Zod schema, idempotency key tuple,
    handler, optional schedule. Enqueuing or running a code that is not in the list fails.
@@ -329,7 +329,7 @@ then in `src/modules/platform/job-handlers.ts` add the import line and the list 
 | Retry / cancel | `retryJob` / `cancelJob` (`platform.job.admin`) | audited `platform.background_job.retried` / `.cancelled`; the idempotency key is unchanged, so a handler that already posted replays instead of posting twice |
 | Schedules | worker start | `boss.schedule(code, cron, { scheduled: true }, { tz })`; a tick creates the keyed row per organization and runs it |
 | Audit | `src/lib/audit.ts` | job writes carry `actor_label = system:<code>`, `on_behalf_of` = requester, `correlation_id` = the job's |
-| Tests | `tests/integration/platform/jobs.test.ts` | build a test registry with `createJobRegistry([...JOB_DEFINITIONS, testJob])` and call `enqueueJob`/`runJob` directly with `{ registry }` (no pg-boss) |
+| Tests | `tests/integration/platform/jobs.test.ts` | build a test registry with `createJobRegistry([...jobDefinitions(), testJob])` and call `enqueueJob`/`runJob` directly with `{ registry }` (no pg-boss) |
 
 Registered in Phase 2 so far: `inventory.reconcile` (nightly 01:00 Asia/Manila, all sites;
 on demand per site) and `inventory.rebuild_balances`. `platform.notification_dispatch` is not

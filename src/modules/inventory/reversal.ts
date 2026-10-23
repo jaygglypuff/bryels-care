@@ -191,7 +191,14 @@ export async function getMovementDetail(ctx: AuthContext, movementId: string) {
   const conds = [eq(stockMovements.reversalOfId, row.m.id)];
   if (row.m.reversalOfId) conds.push(eq(stockMovements.id, row.m.reversalOfId));
   if (row.m.correlationId) conds.push(eq(stockMovements.correlationId, row.m.correlationId));
-  const related = (await base().where(and(eq(stockMovements.lotId, row.m.lotId), or(...conds)))).filter((r) => r.m.id !== row.m.id);
+  let related = (await base().where(and(eq(stockMovements.lotId, row.m.lotId), or(...conds)))).filter((r) => r.m.id !== row.m.id);
+  // The original carries no correlation id; its correction group is the reversal's (reversal + replacement).
+  const groupIds = [...new Set(related.map((r) => r.m.correlationId).filter((x): x is string => !!x && x !== row.m.correlationId))];
+  if (groupIds.length) {
+    const more = await base().where(and(eq(stockMovements.lotId, row.m.lotId), inArray(stockMovements.correlationId, groupIds)));
+    for (const r of more) if (r.m.id !== row.m.id && !related.some((x) => x.m.id === r.m.id)) related = [...related, r];
+  }
+  related.sort((a, b) => a.m.postedAt.getTime() - b.m.postedAt.getTime());
   const reversedBy = related.find((r) => r.m.reversalOfId === row.m.id) ?? null;
   return {
     ...row,
