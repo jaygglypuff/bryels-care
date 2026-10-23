@@ -38,6 +38,7 @@ export function LocationKindChip({ kind }: { kind: string }) {
 
 export const MOVEMENT_LABEL: Record<string, string> = {
   receipt: "Receipt",
+  issue: "Issue (inter-site out)",
   transfer: "Transfer",
   consumption: "Consumption",
   output: "Production output",

@@ -28,6 +28,8 @@ export const inventoryLots = pgTable(
     qualityStatus: text("quality_status").notNull().default("quarantine"),
     /** Batch that produced this lot (finished goods and intermediates). */
     sourceBatchId: uuid("source_batch_id"),
+    /** Lot this one was re-lotted from (inter-site transfer, US-2-14 AC2); a genealogy edge. */
+    originLotId: uuid("origin_lot_id"),
     baseUom: text("base_uom").notNull(),
     createdBy: uuid("created_by").references(() => users.id),
     createdAt: createdAt(),

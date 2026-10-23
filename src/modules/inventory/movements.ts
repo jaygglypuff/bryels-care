@@ -3,15 +3,17 @@ import { and, desc, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
-import { inventoryLots, locations, materials, products, shipments, stockMovements, users } from "@/db/schema";
+import { inventoryBalances, inventoryLots, locations, materials, products, shipments, stockMovements, users } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
 import { postMovement, type MovementType } from "./ledger";
 import { allowedDestinationKinds, isUuid } from "./lots";
+import { assertLocationsNotFrozen } from "./counts";
+import { looseQty } from "./moves";
 
-export const MOVEMENT_TYPES: MovementType[] = ["receipt", "transfer", "consumption", "output", "adjustment", "shipment", "reversal"];
+export const MOVEMENT_TYPES: MovementType[] = ["receipt", "issue", "transfer", "consumption", "output", "adjustment", "shipment", "reversal"];
 
 const fromLoc = alias(locations, "from_loc");
 const toLoc = alias(locations, "to_loc");
@@ -69,6 +71,10 @@ export function documentHref(m: { sourceDocumentType: string | null; sourceDocum
       return `/sales/${m.sourceDocumentId}`;
     case "shipment":
       return m.shipmentOrderId ? `/sales/${m.shipmentOrderId}` : null;
+    case "stock_count":
+      return `/inventory/counts/${m.sourceDocumentId}`;
+    case "stock_adjustment":
+      return `/inventory/adjustments/${m.sourceDocumentId}`;
     default:
       return null;
   }
@@ -115,6 +121,16 @@ export async function transferStock(ctx: AuthContext, input: TransferInput) {
     if (!from) throw new DomainError("validation", "The source location is not a location of this lot's site.");
     if (!to || !to.isActive) throw new DomainError("validation", "The destination location is not an active location of this lot's site.");
     if (lot.baseUom === "pcs" && !qty.isInteger()) throw new DomainError("validation", "This lot is counted in pieces; enter a whole number.");
+
+    // W1C: counts freeze locations (V-FREEZE) and boxed stock moves only with its box.
+    await assertLocationsNotFrozen(tx, [from.id, to.id]);
+    const loose = await looseQty(tx, lot.id, from.id);
+    if (loose.lt(qty)) {
+      const [bal] = await tx.select({ q: inventoryBalances.qtyBase }).from(inventoryBalances).where(and(eq(inventoryBalances.lotId, lot.id), eq(inventoryBalances.locationId, from.id)));
+      if (new Decimal(bal?.q ?? 0).gte(qty)) {
+        throw new DomainError("insufficient_stock", `Only ${loose.toString()} ${lot.baseUom} of lot ${lot.lotNumber} is loose at ${from.code}; the rest is in boxes, so move the box instead.`);
+      }
+    }
 
     const kinds = allowedDestinationKinds(lot.qualityStatus, lot.expiresOn);
     if (!kinds.includes(to.kind)) {

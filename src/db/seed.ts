@@ -419,6 +419,7 @@ async function main() {
   await seedW1D(db, { O, U, sites: { NFD: nfd.id, RVS: rvs.id }, roleRows, passwordHash: pw });
 
   await seedReceivingW1B(db);
+  await (await import("./seeds/w1c")).seedW1C(db);
   console.log(`Seeded demo organization with ${mats.length} materials, ${counters.LOT} lots, ${counters.BATCH} batches, ${counters.SO} orders.`);
   await client.end();
 }

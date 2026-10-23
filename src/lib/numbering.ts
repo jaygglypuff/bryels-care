@@ -11,6 +11,12 @@ const RULES: Record<string, { prefix: string; width: number; period: "YY" | "YYM
   DR: { prefix: "DR", width: 5, period: "YY" },
   MOV: { prefix: "MOV", width: 6, period: "YY" },
   QH: { prefix: "QH", width: 4, period: "YY" }, // Wave 1 W1B: quality holds (data-model §9.2)
+  // Wave 1 W1C: boxes, transfers, counts, adjustments, reservations (data-model §9.2)
+  BOX: { prefix: "BX", width: 8, period: "" },
+  TR: { prefix: "TR", width: 6, period: "YY" },
+  CNT: { prefix: "CNT", width: 4, period: "YY" },
+  ADJ: { prefix: "ADJ", width: 5, period: "YY" },
+  RSV: { prefix: "RSV", width: 6, period: "YY" },
 };
 
 function periodKey(kind: "YY" | "YYMM" | "", now = new Date()): string {
