@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/* Design tokens from docs/ux-system.md §2 and docs/design/style-tile.html (light theme for the MVP). */
+:root {
+  --green-50: #eef6f0; --green-100: #d8ecde; --green-200: #b3d9be; --green-300: #86c19a; --green-400: #57a574;
+  --green-500: #2f8a54; --green-600: #28804b; --green-700: #23703f; --green-800: #1b5a33; --green-900: #0f321e;
+  --bg: #f6f5f1; --surface: #ffffff; --surface-2: #f1f0eb; --border: #e6e4dd; --border-strong: #c9c6bc;
+  --fg: #1c1b18; --fg-2: #5b5951; --fg-muted: #6f6c63; --cta: #1c1b18;
+  --primary: #28804b; --primary-hover: #1b5a33; --primary-text: #23703f; --primary-soft: #d8ecde; --ring: #23703f;
+  --ok-bg: #ddf3e4; --ok-fg: #14532d; --ok-bd: #9fd4b2;
+  --warn-bg: #fdefcf; --warn-fg: #6b4400; --warn-bd: #f0cf7d;
+  --bad-bg: #fbe1e1; --bad-fg: #8a1c1c; --bad-bd: #f0a6a6;
+  --info-bg: #dcebfa; --info-fg: #1c4a80; --info-bd: #a9cbf0;
+  --neu-bg: #eceae3; --neu-fg: #45423a; --neu-bd: #d3d0c7;
+  --q-bg: #fde9cf; --q-fg: #703d00; --q-bd: #f2be7a;
+  --hold-bg: #eae3fa; --hold-fg: #43307a; --hold-bd: #c9bbef;
+  --exp-bg: #ece7e0; --exp-fg: #514738; --exp-bd: #cfc7b8;
+  --rej-bg: #f9e1e8; --rej-fg: #7a1f3a; --rej-bd: #eaa7bc;
+  --appr-bg: #d6efec; --appr-fg: #114b47; --appr-bd: #9bd6cf;
+  --font: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-muted: var(--fg-muted);
+  --color-cta: var(--cta);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-text: var(--primary-text);
+  --color-primary-soft: var(--primary-soft);
+  --color-ring: var(--ring);
+  --font-sans: var(--font);
+  --font-mono: var(--mono);
+  --radius-card: 16px;
+}
+
+html, body { background: var(--bg); color: var(--fg); font-family: var(--font); }
+body { font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+.tabular { font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 6px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* Print layouts (BMR, labels, delivery receipt). */
+@media print {
+  .no-print { display: none !important; }
+  html, body { background: #fff; }
+  .print-page { box-shadow: none !important; border: none !important; margin: 0 !important; padding: 0 !important; }
+}
