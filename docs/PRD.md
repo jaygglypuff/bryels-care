@@ -93,7 +93,7 @@ Every assumption below is a default the team will build unless the owner says ot
 | A-PRD-01 | Locale (ADR-019) | Philippines; Asia/Manila; PHP; metric (g, kg, mL, L, pcs); dates `DD MMM YYYY`; English UI | PayMongo and "night differential" point to the Philippines | Timezone per site, currency per organization, date format per user | Yes | 1 |
 | A-PRD-02 | Number of sites | Seed and sizing assume 2 to 3 physical sites, each with at least one warehouse and one production line; the model supports any number | Brief says "multi-site" without a count | Yes (data) | Yes | 1 |
 | A-PRD-03 | Product families and routes | Two example routes in seed data: bar soap (lye solution preparation, mixing, moulding/cutting, curing hold, packaging) and lotion (heating, mixing/emulsifying, cooling, filling, packaging). Both are placeholders until process owners approve real routings | Brief lists these as examples only | Yes (Routing/RoutingRevision) | Yes (Production) | 3 |
-| A-PRD-04 | Lot/batch/box numbering | Defaults in `numbering_rules`: batch `B-{SITE}-{YYMMDD}-{SEQ3}`, lot `L-{YYMM}-{SEQ5}`, box `BX-{SEQ8}`, PO/SO/DR/GR `{TYPE}-{YY}-{SEQ5}`; legacy paper numbers kept in a `legacy_number` field | Current rules unknown | Yes (per site and document type) | Yes | 1 |
+| A-PRD-04 | Lot/batch/box numbering | Defaults in `numbering_rules` (`docs/data-model.md` §9.1; one `{SEQ}` token, zero-padded to `sequence_width`): batch `B-{SITE}-{YYMMDD}-{SEQ}` (width 3, site scope), lot `L-{YYMM}-{SEQ}` (width 5), box `BX-{SEQ}` (width 8), PO/SO/DR/GR `<PREFIX>-{YY}-{SEQ}` (width 5, for example `GR-{YY}-{SEQ}`); legacy paper numbers kept in a `legacy_number` field | Current rules unknown | Yes (per site and document type) | Yes | 1 |
 | A-PRD-05 | Printers | A4 laser/inkjet for documents through browser print or PDF; thermal label printers driven by browser printing of label-sized PDFs (default label sizes 50×30 mm and 100×50 mm); no vendor printer language (for example ZPL) in MVP | Hardware unknown | Label sizes per template | Yes (IT) | 2 |
 | A-PRD-06 | Scanners | Phone/tablet camera first; USB/Bluetooth keyboard-wedge scanners supported; no rugged terminals | Brief asks for camera plus keyboard-like scanners | Symbology per label template (ADR-017) | Yes (IT) | 2 |
 | A-PRD-07 | Scales | Operator reads the scale and types the weight; the scale is selected or scanned as equipment and recorded on the DispenseRecord; no scale data integration in MVP | No integration requirement stated | Adapter later | Yes (Production) | 3 |
@@ -102,7 +102,7 @@ Every assumption below is a default the team will build unless the owner says ot
 | A-PRD-10 | Accounting software | External system kept by the accountant; no general ledger in this product (ADR-020); exports in an accountant-defined CSV/XLSX layout | Brief: do not replace accounting without approved scope | Export layouts | Yes (Accountant) | 6 |
 | A-PRD-11 | Payroll software | None or spreadsheet; import-first and reporting-first (ADR-021); no pay computation before qualified sign-off | Brief: phase payroll carefully | Rule catalogue | Yes (HR, Accountant) | 6 |
 | A-PRD-12 | Users and volumes (sizing) | ≤60 named users, ≤25 concurrent; ≤300 SKUs; ≤500 materials; ≤200 new lots/month; ≤2,000 stock movements/day; ≤100 batches/month; ≤20 shipments/day | Typical for a small/mid manufacturer; needed for performance targets | n/a | Yes (Owner) | 1, 9 |
-| A-PRD-13 | Retention | All records kept online through go-live plus 2 years; archive policy default 7 years for batch, quality and finance records; employee data per HR policy. Values validated by qualified reviewers | Brief: retention subject to law and policy | Per record class | Yes (Owner, QA, Accountant) | 9 |
+| A-PRD-13 | Retention | All records kept online through go-live plus 2 years; archive defaults per record class are defined once in `docs/security.md` §7 (A-SEC-24 to A-SEC-31): quality and batch records 5 years after batch expiry with a 7-year minimum, finance and payroll 10 years, employee data employment + 5 years, attendance import files 3 years. Values validated by qualified reviewers | Brief: retention subject to law and policy | Per record class (`retention_policies`) | Yes (Owner, QA, Accountant) | 9 |
 | A-PRD-14 | Electronic sign-off | A sign-off is an authenticated user action with password (or MFA) re-entry, stored as an attestation with actor, time and record revision. It is not a validated regulated e-signature; paper hybrid allowed where SOPs require | Brief: e-records need formal validation before reliance | Re-auth requirement per step type | Yes (QA) | 3 |
 | A-PRD-15 | Receipt quality status | Every received lot starts in `quarantine` until qa_qc releases it; material classes (for example packaging) can be configured to auto-release | Brief: inspection state on receipt | Per material class | Yes (QA) | 2 |
 | A-PRD-16 | Allocation rule | FEFO when the lot has an expiry or retest date, FIFO otherwise | Brief | Per product/material class and per customer | Yes | 2 |
@@ -110,20 +110,20 @@ Every assumption below is a default the team will build unless the owner says ot
 | A-PRD-18 | Dispensing tolerance | No system default. Each formula line must carry a tolerance (absolute or percent) entered by the process owner; seed values are fictional | Never invent quality values | Per FormulaRevision line | Yes (Production, QA) | 3 |
 | A-PRD-19 | Batch size basis | Batch size is the total theoretical input mass (17,600 g on the sample equals the sum of inputs); expected yield is a percent of batch size or an absolute output quantity, per formula | Matches the sample BMR | Per FormulaRevision | Yes (Production) | 3 |
 | A-PRD-20 | Two-person verification | Dispensing lines and checklist steps need a conductor and a different checker, as on the paper BMR | BMR photo | Per routing step | Yes (QA) | 3 |
-| A-PRD-21 | Approval thresholds | All stock adjustments and count variances need site_manager approval; expense and PO thresholds are set in Phase 6 | Safe default | Threshold rules are data | No (informed) | 2 |
+| A-PRD-21 | Approval thresholds | All stock adjustments and count variances need site_manager approval; placeholder amounts for PO, expense, adjustment and finance-document thresholds are the A-PM-15 defaults in `docs/permissions-matrix.md` §5.2 (PHP 50,000 PO; 5,000 expense; 20,000 adjustment; 100,000 finance documents), enforced when each module ships (Phase 2 inventory, 6 procurement and finance) | Safe default | Threshold rules are data | No (informed) | 2 |
 | A-PRD-22 | Language | English UI with plain-language operator labels; a second language only if requested | Brief is in English | i18n keys from Phase 1 | Yes | 1 |
 | A-PRD-23 | Sales model | B2B/wholesale accounts with repeat orders; no lead/opportunity pipeline in MVP; quotations are Should | Brief: pipeline only if relevant | Pipeline can be enabled later | Yes (Owner, Sales) | 4 |
 | A-PRD-24 | Shipping policy | Partial shipments allowed; over-shipment blocked without site_manager approval | Brief | Per customer | No (informed) | 4 |
 | A-PRD-25 | Notification channels | In-app from Phase 2; email via provider adapter from Phase 5; no SMS/chat until consent and policy exist | Brief | Provider adapter | No (informed) | 5 |
-| A-PRD-26 | Sessions on shared devices | Shorter idle timeout on floor devices than office devices; values in `docs/security.md` | Shared floor devices | Per device class | Yes | 1 |
+| A-PRD-26 | Sessions on shared devices | Idle timeouts per `docs/security.md` §3.4 are role-based (12 h standard, 1 h for holders of a restricted permission; A-SEC-08/09); every operator screen has an explicit sign-out and sign-out clears local caches. A shorter timeout per device class is an open question (`docs/security.md` §9 Q2) that would need `device_registrations` (Phase 7) | Shared floor devices | Per role (`session.idle_minutes`, `session.idle_minutes_privileged`) | Yes | 1 |
 | A-PRD-27 | Intermediates | Prepared solutions (lye solution, colourant in oil) are intermediate materials with their own batch, lot and expiry, dispensed like any material | BMR photo lists them as ingredients | Per material (type = intermediate) | Yes (Production) | 3 |
 | A-PRD-28 | Expiry basis | Finished-goods expiry = batch completion date + product shelf life; basis switchable to release date | Common practice; value per product | Per Product | Yes (QA) | 3 |
-| A-PRD-29 | Rounding | Quantities stored to 4 decimals; displayed to the UOM's precision (g: 1 decimal); totals computed from unrounded lines; printed totals rounded per template setting | Sample BMR prints 17,600 for a 17,600.1 sum | Per UOM and template | Yes (QA, Production) | 3 |
+| A-PRD-29 | Rounding | Quantities stored as `numeric(18,6)` and money as `numeric(18,4)` (`docs/data-model.md` A-DM-01); displayed to the UOM's precision (g: 1 decimal) and money to 2 decimals; totals computed from unrounded lines; printed totals rounded per template setting | Sample BMR prints 17,600 for a 17,600.1 sum | Per UOM and template | Yes (QA, Production) | 3 |
 | A-PRD-30 | Data migration | Opening balances and active lots loaded as opening receipts at go-live; historical paper BMRs attached as scans, not re-keyed | Brief: document migration; details in `docs/data-migration-plan.md` | n/a | Yes (Owner) | 9 |
 | A-PRD-31 | Customer requirements | Customer-specific labels, carton counts and certificates exist and are modelled as CustomerRequirement records; none known yet | Brief | Data | Yes (Sales) | 4 |
 | A-PRD-32 | Time-clock export | CSV or XLSX with employee identifier, timestamp and in/out flag; mapping layer absorbs other layouts | Unknown format | Mapping versions | Yes (HR, IT) | 5 |
 | A-PRD-33 | Backup objectives | RPO 24 h (daily logical dump plus platform backups), RTO 4 h; see `docs/deployment-railway.md` | Brief: define with company | Env/platform settings | Yes (Owner, IT) | 9 |
-| A-PRD-34 | MFA scope | TOTP required for owner_director, system_admin, finance, hr_payroll and qa_qc from Phase 1b; optional for others | ADR-004 | Per role | Yes | 1 |
+| A-PRD-34 | MFA scope | TOTP mandatory from Phase 1b for owner_director, system_admin and any user holding a restricted (R) permission (`docs/security.md` §3.7, `docs/permissions-matrix.md` A-PM-02); optional for everyone else | ADR-004 | Restricted flag per permission | Yes | 1 |
 
 ---
 
@@ -158,21 +158,21 @@ The brief's fifteen functional modules map onto twelve code modules
 
 | Brief module | Code module(s) | Key entities | First delivery | Notes |
 |---|---|---|---|---|
-| 1 Identity, roles, sites, governance | identity, platform (audit) | Organization, Site, Department, User, Role, Permission, UserSiteAssignment, Session, AuditEvent | Phase 1 | Approval thresholds and separation of duties are platform services used by every module |
-| 2 Master data and configuration | masterdata | Product, Sku, Uom, UomConversion, Material, Supplier, Customer, CustomerRequirement, Formula, FormulaRevision, BomLine, Routing, RoutingRevision, RoutingStep, WorkInstructionRevision, LabelTemplate, Warehouse, Location, ProductionLine, Equipment, NumberingRule | Phase 1 (basics), 3 (formulas/routings), 4 (customers) | Effective-dated revisions from day one |
-| 3 Inventory, warehouse, scanning | inventory, documents (labels) | InventoryLot, InventoryBalance, StockMovement, StockReservation, StockAllocation, StockCount, StockCountLine, Container, ContainerContent, LabelJob | Phase 2 | Scan-to-action shell lives in `src/ui` and is reused by production and sales |
+| 1 Identity, roles, sites, governance | identity, platform (audit, approvals) | Organization, Site, Department, User, Role, Permission, UserSiteAssignment, Session, AuditEvent, ApprovalRule, ApprovalDecision | Phase 1 | Approval thresholds and separation of duties are platform services used by every module |
+| 2 Master data and configuration | masterdata | Product, Sku, Uom, UomConversion, Material, Supplier, Customer, CustomerRequirement, Formula, FormulaRevision, BomLine, Routing, RoutingRevision, RoutingStep, WorkInstructionRevision, LabelTemplate, Warehouse, Location, ProductionLine, Equipment, ReasonCode, MaterialAlias | Phase 1 (basics), 2 (material aliases), 3 (formulas/routings), 4 (customers) | Effective-dated revisions from day one |
+| 3 Inventory, warehouse, scanning | inventory, documents (labels) | InventoryLot, InventoryBalance, StockMovement, StockReservation, StockAllocation, StockCount, StockCountLine, StockAdjustment, TransferRequest, Container, ContainerContent, ContainerLineage, Pack, PackVerificationScan, LabelJob | Phase 2 (Pack and PackVerificationScan from 3) | Scan-to-action shell lives in `src/ui` and is reused by production and sales |
 | 4 Procurement and suppliers | procurement, masterdata (Supplier) | PurchaseRequest, PurchaseOrder, PurchaseOrderLine, GoodsReceipt, GoodsReceiptLine, SupplierLotDocument | Phase 2 (unplanned receipts, supplier lot documents), 6 (PR/PO) | GoodsReceipt belongs to procurement; posting goes through inventory |
 | 5 Production planning and execution | production | ProductionPlan, WorkOrder, Batch, BatchMaterial, DispenseRecord, ProcessStepRecord, EquipmentUse, BatchOutput, YieldRecord, ScrapReworkRecord, Deviation | Phase 3 | ProductionPlan from demand in Phase 5 |
 | 6 Quality and traceability | quality | InspectionPlan, Inspection, TestResult, QualityHold, Capa, ChangeControl, Complaint, RecallCase, Disposition | Phase 2 (lot holds and release), 3 (inspections, dispositions, deviations), 4 (complaints, returns, recall explorer), 6 (CAPA, change control) | Genealogy is a query across inventory, production and sales |
-| 7 BMR and document generation | documents | DocumentTemplate, DocumentTemplateVersion, GeneratedDocument, FileAttachment | Phase 2 (labels, attachments), 3 (BMR, dispensing sheet) | Rendering per ADR-016 |
-| 8 Packaging, boxing, dispatch, delivery documents | sales (Pick, Pack, Shipment, DeliveryReceipt), inventory (Container), documents | Pick, Pack, Shipment, DeliveryReceipt, Container, ContainerContent | Phase 4 | Shipment posting is an inventory command |
+| 7 BMR and document generation | documents | DocumentTemplate, DocumentTemplateVersion, GeneratedDocument, FileAttachment, LegacyDocument | Phase 2 (labels, attachments, legacy documents), 3 (BMR, dispensing sheet) | Rendering per ADR-016 |
+| 8 Packaging, boxing, dispatch, delivery documents | inventory (Pack, PackVerificationScan, Container), sales (Pick, Shipment, DeliveryReceipt), documents | Pack, PackVerificationScan, Container, ContainerContent, Pick, Shipment, DeliveryReceipt | Phase 3 (Pack from batch output), 4 (Pick, Shipment, DeliveryReceipt) | Pack lives in inventory (`docs/data-model.md` A-DM-29; permissions `inventory.pack.{view,create,submit,approve}`); shipment posting is an inventory command |
 | 9 Sales, CRM, portal | sales | Quote, SalesOrder, SalesOrderLine, CustomerReturn; portal tenant (Phase 8) | Phase 4; portal Phase 8 | Pricing fields are sensitive (permissions matrix) |
 | 10 Finance and accounting support | finance | Invoice, SupplierBill, PaymentRecord, CreditNote, ExpenseClaim, CostingRun, Reconciliation, JournalEntry (only if GL approved) | Phase 6 | Scope per ADR-020 |
-| 11 HR, attendance, shifts, payroll | hr | Employee, Shift, ShiftAssignment, AttendanceImport, AttendanceEvent, AttendanceException, LeaveRequest, PayrollPeriod, PayrollLine, Payslip, PayrollApproval | Phase 5 (employees, import), 6 (rules, payroll support) | Scope per ADR-021 |
+| 11 HR, attendance, shifts, payroll | hr | Employee, Shift, ShiftAssignment, AttendanceImport, AttendanceEvent, AttendanceException, LeaveRequest, OvertimeRequest, PayrollPeriod, PayrollLine, Payslip, PayrollApproval | Phase 5 (employees, import), 6 (rules, leave and overtime, payroll support) | Scope per ADR-021 |
 | 12 Analytics, forecasting, dashboards | analytics | KPI definitions, ScheduledReport, reporting views | Phase 5 | Catalogue in `docs/analytics-kpis.md` |
-| 13 Notifications, tasks, monitoring | platform (notifications, jobs, settings) | Notification, BackgroundJob, ScheduledReport | Phase 1 (health), 2 (jobs, in-app), 5 (action center, email, diagnostics) | |
-| 14 Maintenance, equipment, calibration | masterdata (Equipment), production (EquipmentUse, blocking rules) | Equipment, EquipmentUse | Phase 3 (register, calibration dates, blocking), later (PM plans, downtime, spares) | No separate module; added if maintenance scope grows |
-| 15 Import/export and integration | platform (imports, files, numbering), `/api/v1` | ImportJob, FileAttachment, NumberingRule, SyncCommand, SyncConflict | Phase 1 (API, numbering), 2 (exports), 5 (import wizard), 7 (sync) | Provider adapters: email, storage, payment, time-clock, accounting |
+| 13 Notifications, tasks, monitoring | platform (notifications, jobs, settings) | Notification, BackgroundJob, ScheduledReport, Setting, SettingChangeRequest | Phase 1 (health, settings, diagnostics cards Health/Backups/Variables), 2 (jobs, in-app), 5 (action center, email, full diagnostics) | Action Center and diagnostics per FR-platform-07 and FR-platform-09; settings changes that require approval go through SettingChangeRequest (S1-03) |
+| 14 Maintenance, equipment, calibration | masterdata (Equipment), production (EquipmentUse, EquipmentServiceRecord, DowntimeEvent, blocking rules) | Equipment, EquipmentUse, EquipmentServiceRecord, DowntimeEvent | Phase 1 (register), 3 (service records, downtime events, derived availability, blocking), later (PM plans, maintenance work orders, spares; A-DM-30) | No separate module; added if maintenance scope grows |
+| 15 Import/export and integration | platform (imports, files, numbering), `/api/v1` | ImportJob, FileAttachment, NumberingRule, SyncCommand, SyncConflict, DeviceRegistration | Phase 1 (API, numbering), 2 (exports), 5 (import wizard), 7 (sync, device registrations) | Provider adapters: email, storage, payment, time-clock, accounting |
 
 ---
 
@@ -311,7 +311,7 @@ delivery and a one-line acceptance hint; full acceptance criteria live in `docs/
 | FR-production-04 | Dispensing/weighing: target, tolerance, actual, UOM, scale (equipment), operator, checker, material lot scan, tare/gross/net where needed, timestamp, sign-off; wrong material/lot and out-of-tolerance blocked unless a controlled exception is approved | Must | 3 | AC-14 |
 | FR-production-05 | Process parameters: units, limits, actuals, timestamp, equipment, operator, review status; step completion depends on required checks and prerequisites | Must | 3 | Step with unmet prerequisite cannot complete |
 | FR-production-06 | Line clearance records (weighing area, production area) with conductor and checker; configurable per routing | Must | 3 | Dispensing blocked until weighing-area clearance signed |
-| FR-production-07 | Equipment cleaning/maintenance/calibration status and changeover; configurable blocking with auditable exception | Should | 3 | Overdue calibration blocks scale selection when rule is `block` |
+| FR-production-07 | Equipment cleaning/maintenance/calibration status and changeover: service records (EquipmentServiceRecord: cleaning, calibration, maintenance, repair, qualification), equipment state transitions and downtime events (DowntimeEvent) per line or equipment; availability is derived from them; configurable blocking with auditable exception | Should | 3 | Overdue calibration blocks scale selection when rule is `block`; equipment history lists its service records and downtime |
 | FR-production-08 | WIP holds, rework, scrap and deviations raised from any step | Must | 3 | Deviation links to batch and step; hold blocks progress |
 | FR-production-09 | Yield: expected vs actual, variance, batch reconciliation, finished quantity, disposition; controlled amendment and reopen with audit | Must | 3 | AC-15 |
 | FR-production-10 | Consumption and output post atomically into the stock ledger with lot genealogy (BatchMaterial, BatchOutput) | Must | 3 | Output lot traces to every consumed lot |
@@ -319,16 +319,16 @@ delivery and a one-line acceptance hint; full acceptance criteria live in `docs/
 | FR-production-12 | Packaging and label component reconciliation (issued, used, damaged, returned) | Must | 4 | Reconciliation variance outside tolerance raises deviation |
 | FR-production-13 | Demand-to-production: production plan from sales orders and forecast with availability and reservations | Should | 5 | Plan line creates work order with reserved materials |
 | FR-production-14 | Intermediates (prepared solutions) produced as their own batch and dispensed as materials (A-PRD-27) | Must | 3 | Lye solution batch appears as a lot on the soap BMR |
-| FR-production-15 | Preventive maintenance plans, downtime log, maintenance work orders, spare parts, service records, responsible technician | Later | 6+ | Equipment history visible |
+| FR-production-15 | Preventive maintenance plans, maintenance work orders, spare parts, responsible technician (service records and downtime events ship in FR-production-07; `docs/data-model.md` A-DM-30) | Later | 6+ | PM plan due dates appear in the Action Center |
 
 ### 6.6 quality
 
 | ID | Requirement | Priority | Phase | Acceptance hint |
 |---|---|---|---|---|
-| FR-quality-01 | Lot disposition: quarantine, release, reject, on_hold, recalled; only qa_qc (or configured role) may release | Must | 2 | Warehouse operator cannot release |
+| FR-quality-01 | Lot disposition: decisions release, reject, hold, conditional_release and recall (Disposition) move the lot between the quality statuses quarantine, released, on_hold, rejected and recalled (`expired` is set by the expiry job); only qa_qc (or configured role) may release | Must | 2 | Warehouse operator cannot release |
 | FR-quality-02 | Quality holds on lot, batch, box or location with reason, owner and release | Must | 2 (lot), 3 (batch) | Held stock excluded from availability |
 | FR-quality-03 | Inspections: incoming, in-process, finished product; sampling plans, test methods, specifications, acceptance criteria, results with units, attachments, reviewer, approval | Must | 3 (incoming minimal in 2) | Out-of-spec result cannot be approved as pass |
-| FR-quality-04 | Batch disposition: release, reject, conditional hold, rework approved; only authorised roles | Must | 3 | Batch `released` only by qa_qc with sign-off |
+| FR-quality-04 | Batch disposition: release, reject, conditional_release (with conditions and review date), rework; only authorised roles | Must | 3 | Batch `released` only by qa_qc with sign-off |
 | FR-quality-05 | Deviations with investigation, root cause and linkage to batch/lot/step | Must | 3 | Open deviation blocks batch release unless closed or waived with approval |
 | FR-quality-06 | Complaints and customer returns with linkage to shipment, lot and batch | Should | 4 | Complaint opens reverse trace |
 | FR-quality-07 | CAPA and change control workflows | Should | 6 | CAPA cannot close without effectiveness check |
@@ -357,7 +357,7 @@ delivery and a one-line acceptance hint; full acceptance criteria live in `docs/
 
 | ID | Requirement | Priority | Phase | Acceptance hint |
 |---|---|---|---|---|
-| FR-sales-01 | Accounts, contacts, order history, open orders, shipments, complaints, agreed requirements (customer 360); pricing and financial fields restricted by role | Must | 4 | sales_cs without `sales.pricing.view` sees no prices |
+| FR-sales-01 | Accounts, contacts, order history, open orders, shipments, complaints, agreed requirements (customer 360); pricing and financial fields restricted by role | Must | 4 | sales_cs without `sales.price_list.view` sees no prices |
 | FR-sales-02 | Sales order state machine from the shared vocabulary with credit/approval check, controlled cancellation and reversal | Must | 4 | Order above credit limit stops at `pending_approval` |
 | FR-sales-03 | Customer-specific pricing, MOQ, lead time, packaging/label/artwork version, documentation, credit terms, ship-to, notes applied at order entry | Must | 4 | Order below MOQ warns or blocks per customer setting |
 | FR-sales-04 | Quotations convertible to orders; repeat order from history | Should | 4 | Reorder copies lines and current pricing |
@@ -423,13 +423,14 @@ delivery and a one-line acceptance hint; full acceptance criteria live in `docs/
 | FR-platform-06 | Notifications: in-app from Phase 2, email adapter from Phase 5; other channels only after consent and policy | Must | 2 / 5 | Approval request notifies approver |
 | FR-platform-07 | Action center: pending approvals, late work orders, low stock, expiring lots, failed imports, sync conflicts, quality holds, overdue maintenance, complaints, unshipped orders | Must | 5 (approvals from 2) | Items clear when resolved |
 | FR-platform-08 | Recurring checks and escalation rules: owner, due date, severity, acknowledgement, resolution notes, audit | Should | 5 | Unacknowledged item escalates after configured time |
-| FR-platform-09 | Monitoring: API and worker health, failed jobs, error rates, latency, storage, database capacity, sync backlog, backup status; admin diagnostics view without secrets | Must | 1 (health), 5 (diagnostics) | Diagnostics page shows no environment values |
+| FR-platform-09 | Monitoring: API and worker health, failed jobs, error rates, latency, storage, database capacity, sync backlog, backup status; admin diagnostics view without secrets | Must | 1 (health endpoints; diagnostics cards Health, Backups, Variables), 5 (Database, Jobs, Imports, Reconciliation, Sync, Errors, Alerts, Integrations cards) | Diagnostics page shows no environment values; Phase 1 cards are Gate 1 evidence (`docs/deployment-railway.md` §14, `docs/operations-runbook.md` §17) |
 | FR-platform-10 | CSV/XLSX import wizard: preview, mapping, validation, duplicate detection, error file, resumable processing, audit | Must | 5 (master data imports Should in 1) | Re-running an import does not duplicate rows |
 | FR-platform-11 | Exports of reports, master data and transactions by permission; spreadsheet formula injection protection | Must | 2 | Cell starting with `=` is escaped |
 | FR-platform-12 | Versioned internal API (`/api/v1`) with typed client; provider adapters for email, storage, payment, time-clock import, accounting export | Must | 1 (API), as needed | Breaking change requires `/api/v2` |
 | FR-platform-13 | Offline sync infrastructure: SyncCommand outbox, replay with idempotency, SyncConflict review queue, sync status UI (`docs/offline-sync.md`) | Later | 7 | AC-20 |
 | FR-platform-14 | Data migration tooling per `docs/data-migration-plan.md`: identifier generation, duplicate reconciliation, sign-off | Must | 9 (plan in 0) | Migration rehearsal recorded |
 | FR-platform-15 | Fictional seed data for development and staging; production data never overwritten | Must | 1 | Seed refuses to run against production |
+| FR-platform-16 | In-app help and quick guides (brief: Global screens): a per-screen help entry (user menu and the operator-mode `?`) opens a short task guide (text and images) for the current workflow without leaving the task; guides are versioned, organization-wide content records (`help_guides`, edited with `platform.help_guide.admin`), cached for offline reading, and on a batch step link to the work-instruction revision snapshot; content authored by site managers with the ux-ui-designer and mapped to SOPs in Phase 9 | Should | 2 (receive, move, count), extended every phase; SOP mapping and training 9 | Every operator-mode screen has a help entry that opens without leaving the task; a guide edit creates a new version and is audited |
 
 ---
 
@@ -595,7 +596,7 @@ Indicative sequencing:
 | Master data basics | UOM and conversions, sites, warehouses, locations (with special locations), products and SKUs (basic fields), materials (basic fields), reason codes, numbering rules, settings |
 | Migrations and seed | Migrations from zero; fictional seed (two sites, warehouses, locations, users per role, a few products and materials); seed guard against production |
 | CI | GitHub Actions: lint, typecheck, unit, integration against Postgres service, Playwright smoke at 360 px and desktop; permission negative tests mandatory |
-| Health | `/api/health` and `/api/ready`; structured logs with correlation id |
+| Health and diagnostics | `/api/health` and `/api/ready`; structured logs with correlation id; admin diagnostics page with the Health, Backups and Variables cards only (names and booleans, never values; FR-platform-09 Phase 1 part, `platform.diagnostics.view`) |
 | Staging deploy | Documented deploy from `docs/deployment-railway.md`; health checks green; seed loaded |
 
 ### 11.2 Explicitly not in Slice 1
@@ -612,7 +613,7 @@ Indicative sequencing:
 
 | # | Test |
 |---|---|
-| S1-01 | Given a user assigned warehouse_operator at Site A only, when they open `/sites/<site-b-id>/locations` or call `GET /api/v1/locations?siteId=<site-b-id>`, then the response is 403 (denied) and the list contains no Site B rows, and an AuditEvent `authz.denied` is written. |
+| S1-01 | Given a user assigned warehouse_operator at Site A only, when they open `/sites/<site-b-id>/locations` or call `GET /api/v1/locations?siteId=<site-b-id>`, then the response is 403 (denied) and the list contains no Site B rows, and an AuditEvent `identity.authorization.denied` is written. |
 | S1-02 | Given the same user, when they call `POST /api/v1/locations` with `siteId` of Site B in the body, then the service rejects it before any write and the Site B location count is unchanged. |
 | S1-03 | Given a site_manager who submitted a settings change that requires approval, when they attempt to approve it, then the approval is denied with reason `separation_of_duties` and audited; a different site_manager can approve it. |
 | S1-04 | Given a system_admin, when they add permission `inventory.adjustment.approve` to the site_manager role, then an AuditEvent records actor, time, role, before and after permission sets, and the change is visible in the audit viewer. |
@@ -624,8 +625,8 @@ Indicative sequencing:
 | S1-10 | Given the seed script, when it runs against a database whose `APP_ENV` is `production`, then it refuses and exits non-zero; when it runs against development or staging, then every person, customer, supplier and product name is from the fictional list and no real credentials are present. |
 | S1-11 | Given an owner_director with an organization-wide assignment, when they open the site switcher, then every site is listed; given a warehouse_operator assigned to Site A, then only Site A is listed and the switcher is hidden if there is one site. |
 | S1-12 | Given a UOM conversion from `g` to `mL` with no material density, when it is saved, then validation rejects it as dimensionally inconsistent; `g` to `kg` saves. |
-| S1-13 | Given numbering rule `GR-{YY}-{SEQ5}` for Site A, when 20 numbers are requested concurrently inside transactions, then 20 distinct consecutive numbers are issued. |
-| S1-14 | Given a signed-in user whose session has exceeded the idle timeout for their device class, when they make a request, then it is rejected and they must sign in again; an active session within the absolute lifetime continues. |
+| S1-13 | Given the organization-wide numbering rule `GR-{YY}-{SEQ}` with sequence width 5, when 20 numbers are requested concurrently inside transactions, then 20 distinct consecutive numbers are issued; a site-scoped rule must contain `{SITE}` (for example `GR-{SITE}-{YY}-{SEQ}`) or validation rejects it. |
+| S1-14 | Given a signed-in user whose session has exceeded the idle timeout for their role sensitivity (`session.idle_minutes`, or `session.idle_minutes_privileged` for holders of a restricted permission; `docs/security.md` §3.4), when they make a request, then it is rejected and they must sign in again; an active session within the absolute lifetime continues. |
 | S1-15 | Given CI runs on a pull request, when any of lint, typecheck, unit, integration or the Playwright smoke fails, then the pull request is blocked; the permission negative tests (S1-01 to S1-03) are part of the required set. |
 
 ---
@@ -635,6 +636,7 @@ Indicative sequencing:
 | Term | Plain-language definition |
 |---|---|
 | Allocation | Assignment of specific lots and boxes to a confirmed sales order line, done before picking; distinct from a reservation. |
+| Approval decision | One row in the `approval_decisions` ledger recording who approved or rejected one step of an approvable record, when and why; never edited. |
 | Approval threshold | A configured value (quantity, amount or always) above which a transaction needs a second person's approval. |
 | ATP (available-to-promise) | Stock that can be promised to a new order: on-hand minus reserved, allocated, quarantined, on-hold, expired and recalled quantities. |
 | Attestation | A recorded "I did/checked this" by an authenticated user with re-entered credentials; not a validated regulated e-signature. |
@@ -646,10 +648,13 @@ Indicative sequencing:
 | CAPA | Corrective and preventive action: the plan that fixes the cause of a deviation or complaint and checks that the fix worked. |
 | Change control | The approval process for changing a formula, routing, specification or template. |
 | Checker | The second person who verifies a weighing or step (the "Checked by" column); must differ from the conductor. |
+| Checklist item | One line of a line-clearance or step checklist defined on a routing step (RoutingStepChecklistItem); the operator's tick and the checker's confirmation are recorded per batch step. |
 | Container (box/carton/pallet) | A physical package with a unique ID that holds quantities of one or more lots; not the same as a lot or a product. |
+| Costing run | A finance calculation of estimated versus actual cost for the batches in a period (CostingRun); `final` runs are immutable and corrected by a new run. |
 | Deviation | Any departure from the approved procedure or limits during a batch, recorded for investigation. |
-| Disposition | QA's decision about a lot or batch: release, reject, hold, rework. |
+| Disposition | QA's recorded decision about a lot or batch; one of release, reject, hold, conditional_release, rework, recall or expire (the last is written by the nightly expiry job). |
 | Dispensing | Weighing or measuring each ingredient for a batch against its target and tolerance. |
+| Downtime event | A period during which a production line or piece of equipment was unavailable, with start, end and reason (DowntimeEvent); opened and closed by equipment state changes. |
 | Effective-dated | A record version that applies from a given date until replaced by a newer version. |
 | Expiry date | The date after which a lot must not be used or shipped. |
 | FEFO | First-expired, first-out: use the lot that expires soonest. |
@@ -660,29 +665,62 @@ Indicative sequencing:
 | INCI name | The standard ingredient name used in cosmetics (International Nomenclature of Cosmetic Ingredients). |
 | Intermediate | A prepared material (for example lye solution) made in-house and then used as an ingredient. |
 | Inventory balance | The projected on-hand quantity per lot, location and status, always reconcilable to the movement ledger. |
+| Landed cost | The cost of a received material including the purchase price plus freight, duties and other charges attributed to the receipt; used for lot costing. |
+| Legacy document | A scanned historical paper record (BMR, delivery receipt, invoice, test record) indexed for search and genealogy context (LegacyDocument); it never enters a state machine or the stock ledger. |
+| Legacy number | The number a record carried in the paper or spreadsheet system before go-live, kept in a `legacy_number` field next to the new system number. |
+| Legal hold | A flag placed on records that blocks every retention action (archive, anonymise, delete) until the hold is lifted, for example during an investigation or recall. |
 | Line clearance | The check that a work area is clean and free of previous materials and labels before a step begins. |
 | Lot | A quantity of one material or product with the same origin, received or produced together, with its own number, status and dates. |
 | Lot quality status | quarantine, released, on_hold, rejected, expired or recalled. |
+| Mapping profile | A saved, versioned description of how the columns of a time-clock or spreadsheet file map to system fields (ImportMapping); reused for every import of the same layout. |
+| Material alias | An alternate name or code that resolves to one material in search, scan fallback and imports (MaterialAlias), so old labels and supplier names still find the right record. |
+| Minute class | The category a worked minute falls into for attendance summaries (for example regular, overtime, night differential, rest day, holiday), as defined by the attendance rule set. |
 | Numbering rule | The configured pattern that generates human-readable numbers per site and document type. |
+| Open item | An invoice, bill or credit note that has not yet been fully paid or applied; the list of open items per customer or supplier is the basis of statements and aging. |
 | Operator mode | The simplified task-oriented view for floor users: large targets, plain words, one task per screen. |
+| Overhead pool | The period's indirect production cost total entered by finance from the accountant's figures and spread over batches in a costing run. |
+| Overtime request | A request for approved overtime hours for an employee (OvertimeRequest), approved by someone other than the employee before it counts in time summaries. |
+| Pack | One boxing and verification session that produces containers from a batch output or for a sales order (Pack); the boxing note / packing list is generated from it. |
+| Pack verification scan | Each checker scan of a box during pack verification (PackVerificationScan); kept as evidence and never edited; failures feed the pack verification KPI. |
 | Packaging reconciliation | Comparing packaging and label components issued, used, damaged and returned for a batch. |
-| Pick | Collecting allocated boxes for an order; Pack: verifying and sealing them; Dispatch: posting the shipment. |
+| Pairing | Matching attendance punches into in/out pairs per employee and work date so worked minutes can be computed; unmatched punches become exceptions. |
+| Paper record page | A scanned page of a paper record kept for a batch step that the company's SOPs still require on paper (BatchPaperRecord); part of the hybrid batch record. |
+| Parallel run | A period in which the system's attendance or payroll figures are computed alongside the existing process and compared before anyone relies on them. |
+| Payment application | Assigning a recorded customer or supplier payment to one or more open items; the unapplied remainder stays visible until applied. |
+| Payment confirmation | The step in which HR or finance records that a payroll period's amounts were actually paid (date and reference), closing the period. |
+| Period lock | Closing an accounting period so that nothing dated inside it can be posted, reversed or applied; unlocking needs approval and is audited. |
+| Pick | Collecting allocated boxes for an order (sales module); Pack: verifying and sealing them into containers (inventory module, `inventory.pack.*`); Dispatch: posting the shipment. |
 | Posting | Making a transaction final; posted records are immutable and only reversible. |
+| Posting date | The date a finance document is recorded against (issue, bill, paid-at or approval date); it must fall in an open accounting period. |
+| Provider event | A verified message from an external provider (for example a payment webhook) stored and processed idempotently; the system never marks anything paid on a redirect alone. |
+| Punch | A single time-clock record of an employee's badge or biometric event with a timestamp and, where the device gives it, an in/out direction. |
 | Purchase order (PO) | A commitment to buy from a supplier; receipts are matched to its lines. |
 | QA hold | A quality decision that stops a lot, batch, box or location from being used until lifted. |
+| Qualified reviewer | A named person with the competence and authority to validate a class of configuration (formulas and routings, quality rules, tax and finance, attendance and payroll, devices); the team never invents these rules. |
 | Quarantine | The default status of received or newly produced stock until QA releases it. |
+| Quick guide | A short, versioned in-app task guide (text and images) opened from the user menu or the operator-mode `?` for the current screen (FR-platform-16); on a batch step it links to the work-instruction revision in force. |
 | Reservation | Earmarking stock for a planned need (for example a work order) without choosing specific boxes; distinct from allocation. |
+| Retention policy | The configured rule per data class saying how long records are kept online and what happens afterwards (archive, anonymise, delete); defaults in `docs/security.md` §7, validated by qualified reviewers. |
 | Retest date | The date by which a material must be re-tested before further use. |
 | Reversal | A posted transaction that cancels an earlier one, linked to it, with reason and actor; the original stays visible. |
 | Routing | The ordered steps, equipment and checks to make a product; versioned. |
+| Rule set version | An approved, effective-dated version of the attendance or payroll rules; the version in force on a work date is recorded on every summary and payroll line computed from it. |
 | Sales order (SO) | A customer's confirmed request to buy, moving through the order state machine. |
 | Scan-to-action | Scan a code, see what it is and its status, then choose from only the actions allowed. |
+| Setting change request | A proposed change to a setting that requires approval (SettingChangeRequest); it is applied only when a different authorised user approves it. |
 | Shipment | The posted dispatch of boxes to a customer; this is when stock leaves the ledger. |
 | Site | A physical operating location with its own warehouses, lines and user assignments. |
+| Statement of account | A customer-facing (or supplier) document listing open items, aging buckets, payments and credits for a period. |
+| Stock adjustment (document) | The approvable document behind an adjustment (StockAdjustment) with lines, reason codes and approver; posting it writes one `adjustment` movement per line. |
+| Supplementary period | An extra payroll period opened to pay amounts missed or corrected after a regular period was closed, instead of editing the closed one. |
 | Sync conflict | A queued offline command the server could not apply as-is; it waits in a review queue for a person to resolve. |
+| Three-way match | Checking a supplier bill line against the purchase order (quantity, price) and the goods receipt (quantity) before approval; variances outside tolerance need approval. |
+| Time summary | The computed worked minutes per employee, work date and minute class, derived from paired punches and the rule set version in force; the input to payroll support. |
 | Tolerance | The allowed difference between target and actual quantity for an ingredient. |
+| Transfer request | The source document behind a move between locations, warehouses or sites (TransferRequest); a scan-to-move creates and posts one in a single step, inter-site transfers post out and in separately. |
 | Traveler | A printed sheet that follows a batch through the process steps. |
 | UOM | Unit of measure; conversions must stay within one dimension unless a material density is defined. |
+| Work date | The calendar day a punch is credited to, derived by the rule set (night shifts crossing midnight belong to one work date), not simply the punch timestamp's date. |
 | Work order (WO) | The plan to make a quantity of a product at a site and line by a date; executed as one or more batches. |
 | Yield | Actual output compared with expected output; the variance is recorded and explained. |
 
