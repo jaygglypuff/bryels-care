@@ -53,7 +53,7 @@ ships, and the automated test that proves it (names resolve in `docs/testing.md`
 | T | Permissions change not applied to live session | Stale authority | `permissions_version` bump invalidates cached context ≤ 60 s; scope refresh on every request after that | P1 | `authz.session.permissions_changed` |
 | R | Cannot tell which device did what | Weak audit | Session row carries device label, IP, user agent, created/last seen; audit events carry `session_id` | P1 | `audit.session_in_events` |
 | I | Shared floor tablets expose previous user | Cross-user data | Idle timeout, explicit sign-out button on every operator screen, logout clears IndexedDB caches, `Cache-Control: no-store` on app pages | P1 / P7 | `session.idle_expiry`, `offline.logout_clears_cache` |
-| E | Revoked session keeps working offline | Bypass of revocation | Server rejects replay from revoked session; client must re-authenticate and permissions refresh at least every 8 h | P7 | `authz.session.revoked`, `offline.replay.revoked_session` |
+| E | Revoked session keeps working offline | Bypass of revocation | Server rejects replay from revoked session; client must re-authenticate; online clients refresh their permission set every 8 h or on each sync, and the offline authorization snapshot stays valid for 12 h without a server round trip (`docs/offline-sync.md` A-OFF-02, `settings.offline.auth_snapshot_max_age`) | P7 | `authz.session.revoked`, `offline.replay.revoked_session` |
 | D | Session table growth | Slow auth | Expired sessions purged by a daily job; index on `expires_at` | P1 | `jobs.session_purge` |
 
 ### 2.3 Internal web app and API
@@ -74,7 +74,7 @@ ships, and the automated test that proves it (names resolve in `docs/testing.md`
 
 | STRIDE | Threat | Impact | Control | Phase | Test |
 |---|---|---|---|---|---|
-| T | Malicious QR content (URLs, scripts, SQL) | Injection, phishing of operators | Payload grammar `^BC:(LOT|BOX|LOC|MAT|SKU):[A-Z0-9][A-Z0-9._-]{0,63}$`; anything else is "Unrecognised code"; payload is treated as an opaque key for a scoped lookup; never rendered as HTML or opened as a link | P2 | `scan.payload_grammar`, `scan.rejects_url` |
+| T | Malicious QR content (URLs, scripts, SQL) | Injection, phishing of operators | Payload grammar `^BC:(LOT\|BOX\|LOC\|MAT\|SKU\|EQP\|DOC):[A-Z0-9][A-Z0-9._-]{0,63}$` (section 4.9; resolution per `docs/data-model.md` §9.5); anything else is "Unrecognised code"; payload is treated as an opaque key for a scoped lookup (`EQP` → equipment register with calibration status; `DOC` → source record of the generated document, after authentication only, section 2.7); never rendered as HTML or opened as a link | P2 | `scan.payload_grammar`, `scan.rejects_url` (both cover all seven types) |
 | I | Label encodes internal data (prices, customer, location map) | Leakage from a photo of a label | Payload carries only the typed identifier; human-readable label text limited to the fields in `docs/reports-and-templates.md`; no cost, no customer price | P2 | `label.payload_minimal` |
 | S | Scanning a code from another site's label | Cross-site read | Lookup is scoped; unknown or out-of-scope code → "not found at your site" | P2 | `authz.cross_site.scan` |
 | T | Duplicate scan submission (double tap, retry) | Double movement | Idempotency key per scan action; server returns the first result | P2 | `authz.idempotency.duplicate_key` |
@@ -100,7 +100,7 @@ ships, and the automated test that proves it (names resolve in `docs/testing.md`
 | T | Wrong employee mapping, duplicate rows | Payroll errors | Mapping preview, row-level status, duplicates flagged, review and approval before post, original file + checksum retained (ADR-021) | P5 | `import.duplicates_flagged`, `import.requires_approval` |
 | I | Import file contains personal data readable by the wrong role | Leak | Attendance imports need `hr.attendance_import.*`; files stored with data class `restricted`; download audited | P5 | `authz.sensitive_fields.masked` (import case) |
 | D | Huge or malformed files block the worker | Jobs starve | Row cap (100,000 rows, A-SEC-18), streaming parser, job timeout, one import job per user at a time | P5 | `import.row_cap` |
-| R | Who imported what, with which mapping | Disputes | ImportJob stores uploader, mapping version, checksum; audit `platform.import_posted` | P5 | `audit.import_events` |
+| R | Who imported what, with which mapping | Disputes | ImportJob stores uploader, mapping version, checksum; audit `platform.import_job.posted` | P5 | `audit.import_events` |
 
 ### 2.7 Document download links (PDF BMR, DR, labels, exports)
 
@@ -109,7 +109,7 @@ ships, and the automated test that proves it (names resolve in `docs/testing.md`
 | I | Shared or leaked link opens a document | Leakage of batch/customer data | Signed URL, 5-minute TTL (A-SEC-19), bound to document id and requesting user id (portal: portal user id); issued only after the permission check; `Content-Disposition: attachment` | P2 | `documents.signed_url_expires`, `documents.signed_url_user_bound` |
 | I | QR on printed BMR points to a public URL | Leakage | QR encodes `BC:DOC:<document-number>`; resolving it requires login and permission | P3 | `documents.qr_requires_auth` |
 | T | Altered PDF presented as original | Fraud | Stored file hash and template version recorded; reprint has a reason and a visible "Reprint n" marker; hash shown in the document footer | P3 | `documents.reprint_audit`, `documents.hash_recorded` |
-| R | Who downloaded or reprinted | Disputes | Audit `documents.downloaded`, `documents.reprinted` | P2 | `audit.document_events` |
+| R | Who downloaded or reprinted | Disputes | Audit `documents.generated_document.downloaded`, `documents.generated_document.reprinted` | P2 | `audit.document_events` |
 | D | Mass generation of PDFs | Worker exhaustion | Generation runs in the worker with a per-user queue limit (10 pending, A-SEC-20) and Chromium memory cap | P3 | `jobs.pdf_queue_limit` |
 
 ### 2.8 Background jobs
@@ -129,7 +129,7 @@ ships, and the automated test that proves it (names resolve in `docs/testing.md`
 | T | Replayed command referencing stale stock state | Negative stock, wrong lot | Server re-validates every command against current state, scope and permissions; conflicts go to the review queue, never auto-applied | P7 | `offline.replay.revalidated`, `offline.conflict_queued` |
 | T | Duplicate replay after partial failure | Double posting | Client UUIDv7 ids + idempotency keys; server returns stored result | P2 | `authz.idempotency.duplicate_key` |
 | S | Replay from a stolen device | Unauthorized postings | Session must still be valid; device logout cleanup; online-only list (QA release, finance posting, payroll, permissions) can never be queued | P7 | `offline.replay.revoked_session`, `offline.online_only_rejected` |
-| T | Device clock skew backdates records | Wrong timestamps | Client time stored as `client_recorded_at`; server sets `occurred_at`; skew > 15 min flagged | P7 | `offline.time_skew_flagged` |
+| T | Device clock skew backdates records | Wrong timestamps | Client time stored as `sync_commands.client_created_at`; the server sets `posted_at` on the posted row; `clock_skew_seconds` is recorded and `is_clock_skew_flagged` is set when skew exceeds the A-OFF-05 threshold (default 10 min, `docs/offline-sync.md`); flagged, not fatal | P7 | `offline.time_skew_flagged` |
 | I | Cached data on a lost phone | Leak | Cache limited to approved reference data for the user's sites; cleared on logout; no secrets in the PWA; encryption where the platform offers it (`docs/offline-sync.md`) | P7 | `offline.logout_clears_cache` |
 
 ### 2.10 Customer portal and payment webhooks (Phase 8)
@@ -139,7 +139,7 @@ ships, and the automated test that proves it (names resolve in `docs/testing.md`
 | S | Credential stuffing on public login | Customer account takeover | Separate `portal_users`; stricter lockout (5 attempts), TOTP available, breach-list check on by default for portal | P8 | `portal.auth.lockout` |
 | I | Tenant crossover by id | Another customer's orders/prices | `PortalAuthContext` with `customer_id` filter on every query; 404 on foreign ids; DTO allow-lists | P8 | `authz.portal.tenant_isolation` |
 | S | Forged payment webhook | Order marked paid for free | Verify provider signature (HMAC, constant-time compare), timestamp tolerance 5 min, replay store by provider event id, process in worker, order paid only after server-side confirmation; never from the browser redirect | P8 | `webhook.signature_invalid_rejected`, `webhook.replay_ignored`, `webhook.redirect_not_trusted` |
-| T | Amount mismatch between order and payment | Underpayment | Compare webhook amount/currency to the order; mismatch → `pending_reconciliation`, never auto-paid | P8 | `webhook.amount_mismatch_flagged` |
+| T | Amount mismatch between order and payment | Underpayment | Compare webhook amount/currency to the order; mismatch → `payment_provider_events` row stored with `processing_result = amount_mismatch`, no PaymentRecord created, exception queue item for `finance` (`docs/modules/finance.md` §7); a PaymentRecord created from a matching webhook stays `recorded` until reconciled; never auto-paid | P8 | `webhook.amount_mismatch_flagged` |
 | I | Card data stored | Compliance breach | Provider-hosted payment page; no card fields in our forms; only provider references stored | P8 | `payments.no_card_fields` |
 | D | Public API abuse | Outage | Portal rate limits, bot protection at the edge if available, order size caps | P8 | `portal.ratelimit` |
 | R | Refund disputes | Loss | `finance.refund.approve` with reason; provider refund id stored; reconciliation report | P8 | `payments.refund_audit` |
@@ -197,7 +197,7 @@ ships, and the automated test that proves it (names resolve in `docs/testing.md`
 | Cookie name | `__Host-bc_session` (requires `Secure`, `Path=/`, no `Domain`) |
 | Flags | `HttpOnly; Secure; SameSite=Lax; Path=/` |
 | Value | 32 random bytes, base64url; database stores `sha256(value)` only |
-| Table | `sessions(id, user_id, token_hash, created_at, last_seen_at, idle_expires_at, absolute_expires_at, ip, user_agent, device_label, mfa_verified_at, reauthenticated_at, permissions_version, revoked_at, revoked_reason)` |
+| Table | `sessions` as defined in `docs/data-model.md` §3.1 (`token_hash` = sha256 of the cookie value, `active_site_id`, `device_registration_id` from Phase 7, `mfa_verified_at`, `reauthenticated_at`, `revoked_at`/`revoked_by`/`revoked_reason`); `permissions_version` is not a session column, it is the AuthContext cache version in `docs/permissions-matrix.md` §1.1 |
 | Idle expiry, standard roles | 12 hours sliding, refreshed at most once per 5 minutes (A-SEC-08) |
 | Idle expiry, privileged (holder of any R permission) | 1 hour (A-SEC-09) |
 | Absolute expiry | 7 days standard, 24 hours privileged (A-SEC-10) |
@@ -219,7 +219,7 @@ All lifetimes are `platform.settings` keys (`session.idle_minutes`, `session.idl
    cache does not cache revocation.
 4. Logout on a device: server marks the session revoked; the PWA clears IndexedDB caches and
    the outbox **after** warning if commands are still pending (user chooses sync-first or
-   discard with confirmation; discard is audited `offline.outbox_discarded`), unregisters
+   discard with confirmation; discard is audited `platform.sync_command.outbox_discarded`), unregisters
    push subscriptions, and removes cached reference data (`docs/offline-sync.md`).
 5. A daily job deletes sessions 30 days after expiry/revocation (A-SEC-11); audit events keep
    the `session_id` for correlation.
@@ -242,15 +242,15 @@ change approval rules.
 | Secret storage | Encrypted at rest with `DATA_ENCRYPTION_KEY` (AES-256-GCM, key id stored for rotation) |
 | Enrolment | Requires re-authentication; QR + manual key; must verify one code before activation; 10 single-use recovery codes shown once and stored argon2id-hashed |
 | Grace | 7 days after a privileged assignment is granted (A-SEC-13), then privileged actions are blocked until enrolled |
-| Reset | `identity.mfa.admin` with reason; user notified; audit `auth.mfa_reset` |
+| Reset | `identity.mfa.admin` with reason; user notified; audit `identity.mfa.reset` |
 | Rate limit | section 3.3 |
 
 ### 3.8 Invitation and reset tokens
 
 | Token | Length / storage | Lifetime | Rules |
 |---|---|---|---|
-| Invitation | 32 random bytes, `sha256` stored in `user_invitations(user_id, token_hash, expires_at, used_at, invited_by)` | 72 hours | single use; bound to the invited email; sets password (and TOTP if required) and moves the user to `active`; resend invalidates the previous token |
-| Password reset | same scheme in `password_resets` | 30 minutes | single use; newest token invalidates older ones; success revokes all other sessions and emails the user; request always answered the same way |
+| Invitation | 32 random bytes, `sha256` stored in `invitations(email, role_id, site_id, token_hash, expires_at, accepted_at, revoked_at, accepted_user_id)` (`docs/data-model.md` §3.1; `created_by` from the standard column set is the inviter) | 72 hours | single use; bound to the invited email; sets password (and TOTP if required), creates the user as `active` and records `accepted_user_id`; resend revokes the previous token (`revoked_at`) |
+| Password reset | same scheme in `password_reset_tokens(user_id, token_hash, expires_at, used_at, requested_ip)` | 30 minutes | single use; newest token invalidates older ones; success revokes all other sessions and emails the user; request always answered the same way |
 | Email change | same scheme, sent to the **new** address, confirmation to the old | 30 minutes | re-auth required to start |
 | Portal invitation | same scheme in `portal_invitations` | 72 hours | tenant bound (Phase 8) |
 
@@ -369,8 +369,9 @@ reconsidered if load warrants a cache (ADR-002 keeps Redis out until needed).
 5. Store in the S3-compatible bucket (ADR-014) under `org/<org-uuid>/<attachment-uuid>`
    with the original name kept in the database only; bucket is private; the application
    never executes or includes uploaded content.
-6. `file_attachments` records: data class (section 7), sha-256, size, uploader, parent
-   entity and site; download goes through section 4.8.
+6. `file_attachments` records: `is_sensitive` flag (data class follows the parent record,
+   section 7), `virus_scan_status`, sha-256, size, uploader, parent entity and site;
+   download goes through section 4.8 (sensitive files require re-authentication).
 7. Antivirus scanning: deferred (A-SEC-17); re-evaluated at Gate 9 with the owner.
 
 ### 4.7 Spreadsheet formula-injection neutralisation
@@ -391,25 +392,35 @@ tests `export.formula_neutralized` and is applied in the export layer, not per r
   endpoint.
 - Links are never placed in emails or notifications; notifications link to the record page,
   which issues a fresh signed URL after authentication.
-- Audit `documents.downloaded` with document id, user, IP.
+- Audit `documents.generated_document.downloaded` with document id, user, IP.
 
 ### 4.9 Scan payload format
 
-`BC:<TYPE>:<CODE>` where `TYPE ∈ {LOT, BOX, LOC, MAT, SKU}` and `CODE` matches
-`[A-Z0-9][A-Z0-9._-]{0,63}` (ADR-017). Human-readable label text is limited to the fields
-in `docs/reports-and-templates.md`. No URL, no site name, no customer, no price, no person is
-ever encoded. `BC:DOC:<number>` (document QR) resolves only after authentication.
+`BC:<TYPE>:<CODE>` where `TYPE ∈ {LOT, BOX, LOC, MAT, SKU, EQP, DOC}` and `CODE` matches
+`[A-Z0-9][A-Z0-9._-]{0,63}` (64 characters maximum, underscore allowed; ADR-017). The full
+grammar is `^BC:(LOT|BOX|LOC|MAT|SKU|EQP|DOC):[A-Z0-9][A-Z0-9._-]{0,63}$`; `docs/data-model.md`
+§9.5 is the single resolution rule (organization-scoped lookup, then site-filtered by
+`AuthContext`). `EQP` resolves to `equipment.code` (organization-unique) and shows the
+calibration status; `DOC` (document QR on printed BMRs and delivery receipts) resolves to
+`generated_documents.document_number` only after authentication and the permission check on
+the source record. Human-readable label text is limited to the fields in
+`docs/reports-and-templates.md`. No URL, no site name, no customer, no price, no person is
+ever encoded. Tests `scan.payload_grammar` and `scan.rejects_url` cover all seven types.
 
 ### 4.10 Idempotency keys
 
 - Header `Idempotency-Key: <uuid>` is mandatory on every command endpoint that posts or
   creates (stock, production, finance, uploads, sync replay, webhooks use the provider event
   id). Server actions carry the key in the input schema.
-- Table `idempotency_keys(key, user_id, endpoint, request_hash, status, response_code,
-  response_body, created_at, expires_at)`; unique on `(user_id, key)`; rows kept 7 days
+- Table `idempotency_keys(organization_id, key, scope, user_id, request_hash, status,
+  response_code, response, created_at, completed_at, expires_at)` as defined in
+  `docs/data-model.md` §11.4: `scope` is the command type or endpoint (e.g.
+  `inventory.movement.post`), `response` is the stored result envelope (jsonb) replayed
+  verbatim; unique on `(organization_id, key)`; `expires_at = created_at + 7 days`
   (A-SEC-21).
-- Same key + same request hash → stored response replayed; same key + different hash →
-  422 `IDEMPOTENCY_KEY_REUSED`; concurrent duplicates serialize on the key row
+- Same key + same user + same request hash → stored response replayed; same key with a
+  different request hash, or replayed by a different `user_id` → 422
+  `IDEMPOTENCY_KEY_REUSED`; concurrent duplicates serialize on the key row
   (`INSERT ... ON CONFLICT DO NOTHING` then `SELECT ... FOR UPDATE`).
 - Ledger tables additionally carry the key in a partial unique index as a last line of
   defence (ADR-006).
@@ -442,15 +453,23 @@ rejects UPDATE/DELETE). Every event has the base fields:
 | `id` | UUIDv7 |
 | `occurred_at` | server time (UTC) |
 | `organization_id`, `site_id` | site nullable for organization-level events |
-| `actor_user_id`, `actor_session_id` | `system:<job>` for jobs; `on_behalf_of_user_id` when a job acts for a user |
-| `action` | event name below |
-| `entity_type`, `entity_id`, `entity_number` | human-readable number when one exists |
-| `request_id` | correlation id shared with logs |
+| `actor_id`, `actor_kind` | `actor_kind` ∈ `user` / `system` / `portal_user` / `job`; jobs act as the system user with `on_behalf_of_user_id` set when a job acts for a user |
+| `on_behalf_of_user_id` | the user a job or system actor acted for (nullable) |
+| `session_id`, `device_registration_id` | the session that performed the action; the registered device for replayed offline commands (Phase 7) |
+| `action` | event name below, always `module.entity.event` (`docs/data-model.md` §8.1 is canonical) |
+| `permission_code` | the permission string that authorized the action (`action` never doubles as a permission) |
+| `entity_type`, `entity_id`, `entity_number` | table name, id, human-readable number when one exists |
+| `correlation_id`, `request_id` | `correlation_id` links every event of one business operation (including replayed sync commands); `request_id` is shared with logs |
 | `ip`, `user_agent` | user agent truncated to 256 chars |
-| `reason_code`, `reason_text` | mandatory where the table says so |
+| `reason_code_id`, `reason` | `reason_codes` reference and free text; mandatory where the table says so |
 | `before`, `after` | JSON diff of changed fields, redacted per data class |
 | `data_class` | `normal` / `sensitive` / `restricted` (controls who may read the payload) |
 | `outcome` | `success` / `denied` / `failed` |
+
+Column names are those of `audit_events` in `docs/data-model.md` §8. Event names follow
+`module.entity.event` (three segments, CHECK-enforced; §8.1 of the data model holds the
+mapping from earlier two-segment names and is canonical). The typed list lives in
+`src/lib/audit.ts`.
 
 Never logged anywhere (audit, application logs, error reports): passwords or hashes, session
 tokens or ids in clear, TOTP secrets/codes/recovery codes, reset/invitation tokens, API keys,
@@ -460,49 +479,57 @@ auth endpoints, and personal data that the action does not concern.
 
 | Event | Trigger | Extra required fields | Data class | Phase |
 |---|---|---|---|---|
-| `auth.login_succeeded`, `auth.login_failed`, `auth.locked`, `auth.unlocked` | sign-in flow | method (password/totp), failure reason category | sensitive | P1 |
-| `auth.logout`, `auth.session_revoked`, `auth.sessions_revoked_all` | user or admin | revoked session count, reason | sensitive | P1 |
-| `auth.password_changed`, `auth.password_reset_requested`, `auth.password_reset_completed` | account flows | – | sensitive | P1 |
-| `auth.reauthenticated` | step-up | purpose (action attempted) | sensitive | P1 |
-| `auth.mfa_enrolled`, `auth.mfa_disabled`, `auth.mfa_reset`, `auth.mfa_failed` | MFA flows | admin actor for reset | sensitive | P1b |
-| `authz.denied` | 403/404-by-scope/409-SoD | permission, site, entity | sensitive | P1 |
-| `identity.user_created`, `identity.user_updated`, `identity.user_locked`, `identity.user_deactivated`, `identity.user_reactivated`, `identity.invitation_sent` | user admin | before/after of changed fields | sensitive | P1 |
-| `identity.role_created`, `identity.role_updated` | role admin | permission diff with sensitivity of each added permission | restricted | P1 |
-| `identity.assignment_granted`, `identity.assignment_revoked`, `identity.assignment_scope_changed` | assignment admin | user, role, site, sub-scope, effective dates | restricted | P1 |
-| `identity.owner_break_glass` | owner uses role/assignment admin | – | restricted | P1 |
-| `masterdata.formula_submitted`, `masterdata.formula_approved`, `masterdata.formula_obsoleted` (same for routing, work instruction, label/document template, inspection plan) | revision flow | revision number, approvers | sensitive | P3 |
-| `masterdata.site_changed`, `masterdata.location_special_designated`, `masterdata.equipment_blocking_rule_changed` | structure admin | before/after | sensitive | P1/P2 |
-| `inventory.movement_posted`, `inventory.movement_reversed` | ledger posting | movement type, lot, from/to location, qty base, idempotency key | normal (reversal: sensitive with reason) | P2 |
-| `inventory.adjustment_submitted/approved/posted` | adjustment flow | value, reason | sensitive | P2 |
-| `inventory.held_stock_issued`, `inventory.negative_balance_posted` | controlled exceptions | approver, reason, purpose | restricted | P2 |
-| `inventory.count_variance_approved`, `inventory.count_posted` | stock count | variance value and % | sensitive | P2 |
-| `inventory.lot_attributes_changed`, `inventory.container_split/merged/repacked` | lot/container edits | before/after | normal | P2 |
-| `procurement.receipt_posted/reversed`, `procurement.discrepancy_approved` | receiving | PO, supplier, lots created | normal/sensitive | P2 |
-| `procurement.pr_approved`, `procurement.po_approved`, `procurement.po_sent`, `procurement.po_cancelled` | PO flow | amount, rule step | sensitive | P6 |
-| `production.work_order_released/cancelled`, `production.batch_started/submitted/closed/cancelled` | state transitions | from/to state, snapshot revision ids | normal | P3 |
-| `production.batch_reopened`, `production.batch_amended` | controlled reopen | reason, fields changed, approvers | restricted | P3 |
-| `production.dispense_recorded`, `production.dispense_checked`, `production.dispense_voided` | dispensing | material, lot, target, actual, tolerance result, scale/equipment | normal (void: sensitive) | P3 |
-| `production.over_tolerance_approved`, `production.material_substituted`, `production.equipment_override` | controlled exceptions | approver, reason, deviation id | restricted | P3 |
-| `production.consumption_posted`, `production.output_posted`, `production.yield_approved`, `production.scrap_approved` | batch postings | quantities, variance | sensitive | P3 |
-| `quality.test_result_recorded/reviewed/corrected` | results | spec limits, value, correction reason (original retained) | sensitive | P3 |
-| `quality.disposition_approved` | release/reject/rework/conditional | target (lot/batch), from/to status, approvers | restricted | P2 |
-| `quality.hold_placed`, `quality.hold_lifted` | holds | scope of hold, reason | restricted (lift) | P2 |
-| `quality.deviation_opened/closed`, `quality.capa_closed`, `quality.change_approved`, `quality.complaint_closed` | quality system | linked records | sensitive | P3/P4 |
-| `quality.recall_initiated`, `quality.recall_lots_marked`, `quality.recall_closed` | recall | lots, containers, customers affected (ids) | restricted | P4 |
-| `sales.price_list_changed/approved`, `sales.credit_terms_changed` | pricing | before/after amounts | sensitive | P4 |
-| `sales.order_confirmed/cancelled`, `sales.shipment_dispatched/reversed`, `sales.over_shipment_approved`, `sales.return_posted` | fulfilment | quantities, boxes, DR number | normal (exceptions restricted) | P4 |
-| `hr.employee_created/updated`, `hr.employee_personal_data_viewed`, `hr.employee_personal_data_changed` | HR records | field names changed (values for personal data only in restricted payload) | restricted | P5 |
-| `hr.attendance_imported/approved/posted/reversed`, `hr.attendance_corrected`, `hr.correction_approved` | attendance | import id, row counts, employee id, before/after times | sensitive | P5 |
-| `hr.leave_approved`, `hr.overtime_approved` | approvals | employee id, period | sensitive | P6 |
-| `hr.payroll_rule_changed`, `hr.payroll_period_submitted/approved/posted/reopened`, `hr.payroll_line_adjusted`, `hr.payslip_generated`, `hr.payment_export_created` | payroll | period, totals, reviewer sign-off reference, adjustment reason | restricted | P6 |
-| `finance.invoice/bill/credit_note/payment_posted` and `_reversed`, `finance.expense_approved/posted`, `finance.period_locked/unlocked`, `finance.tax_config_changed`, `finance.costing_run_posted`, `finance.accountant_export_created` | finance | amounts, counterparties (ids), period, reason | restricted | P6 |
-| `documents.generated`, `documents.downloaded`, `documents.reprinted`, `documents.superseded` | document engine | template version, source revision, hash, reprint reason | normal (reprint: sensitive) | P2/P3 |
-| `documents.attachment_uploaded/removed` | attachments | parent entity, size, sha-256 | normal | P2 |
-| `platform.export_created` | any export of class S/R | module, filters, row count, format, file hash | sensitive/restricted | P1 |
-| `platform.settings_changed`, `platform.approval_rule_changed`, `platform.numbering_rule_changed`, `platform.integration_changed`, `platform.notification_rule_changed` | configuration | before/after (secrets never included) | restricted | P1 |
-| `platform.import_posted/reversed`, `platform.job_retried/cancelled` | jobs and imports | job id, counts | sensitive | P2/P5 |
-| `offline.replay_accepted/rejected/conflicted`, `offline.outbox_discarded`, `offline.conflict_resolved` | sync | command id, client recorded time, resolution choice | sensitive | P7 |
-| `portal.user_invited/suspended`, `portal.order_submitted`, `payments.webhook_received/rejected`, `payments.payment_recorded`, `payments.refund_approved` | portal and payments | tenant, provider event id | sensitive/restricted | P8 |
+| `identity.session.login_succeeded`, `identity.session.login_failed`, `identity.user.locked`, `identity.user.unlocked` | sign-in flow (lockout and admin lock/unlock share the name; `actor_kind` tells them apart) | method (password/totp), failure reason category | sensitive | P1 |
+| `identity.session.logged_out`, `identity.session.revoked`, `identity.session.revoked_all` | user or admin | revoked session count, reason | sensitive | P1 |
+| `identity.user.password_changed`, `identity.user.password_reset_requested`, `identity.user.password_reset_completed` | account flows | – | sensitive | P1 |
+| `identity.session.reauthenticated` | step-up | purpose (action attempted) | sensitive | P1 |
+| `identity.mfa.enrolled`, `identity.mfa.disabled`, `identity.mfa.reset`, `identity.mfa.failed` | MFA flows | admin actor for reset | sensitive | P1b |
+| `identity.authorization.denied` (`outcome = 'denied'`) | 403/404-by-scope/409-SoD | permission, site, entity | sensitive | P1 |
+| `identity.user.created`, `identity.user.updated`, `identity.user.deactivated`, `identity.user.reactivated`, `identity.invitation.sent`, `identity.invitation.accepted`, `identity.invitation.revoked` | user admin and invitation flow | before/after of changed fields; invitation id, role, site | sensitive | P1 |
+| `identity.role.created`, `identity.role.updated` | role admin | permission diff with sensitivity of each added permission | restricted | P1 |
+| `identity.site_assignment.granted`, `identity.site_assignment.revoked`, `identity.site_assignment.scope_changed` | assignment admin | user, role, site, sub-scope, effective dates | restricted | P1 |
+| `identity.role.owner_break_glass` | owner uses role/assignment admin | – | restricted | P1 |
+| `platform.seed.applied` | `pnpm db:seed` (fictional data; refused when `APP_ENV = production`) | seed set name, row counts, `APP_ENV` | sensitive | P1 |
+| `platform.database_session.break_glass_opened` | manual production SQL session (`docs/operations-runbook.md` break-glass procedure) | ticket/reason, second person, script hash, database role used | restricted | P1 |
+| `masterdata.<entity>.created`, `masterdata.<entity>.updated` (pattern row for every master-data entity: `material`, `sku`, `product`, `supplier`, `customer`, `location`, `warehouse`, `equipment`, `uom`, …) | master data maintenance | before/after of changed fields | normal (partners and prices: sensitive) | P1/P2 |
+| `masterdata.formula_revision.submitted`, `masterdata.formula_revision.approved`, `masterdata.formula_revision.obsoleted` (same pattern for `routing_revision`, `work_instruction_revision`, `label_template`, `document_template_version`, `inspection_plan`) | revision flow | revision number, approvers | sensitive | P3 |
+| `masterdata.site.changed`, `masterdata.location.special_designated`, `masterdata.equipment.blocking_rule_changed` | structure admin | before/after | sensitive | P1/P2 |
+| `inventory.stock_movement.posted`, `inventory.stock_movement.reversed` | ledger posting | movement type, lot, from/to location, qty base, idempotency key | normal (reversal: sensitive with reason) | P2 |
+| `inventory.stock_adjustment.submitted` / `.approved` / `.posted` | adjustment flow | value, reason | sensitive | P2 |
+| `inventory.stock_movement.held_stock_issued` | controlled exception (negative balances are rejected by constraint, ADR-006, so no negative-balance event exists) | approver, reason, purpose | restricted | P2 |
+| `inventory.stock_count.released`, `inventory.stock_count.variance_approved`, `inventory.stock_count.posted`, `inventory.stock_count.cancelled` | stock count | scope, variance value and %, reason (cancel) | sensitive | P2 |
+| `inventory.inventory_lot.created`, `inventory.inventory_lot.attributes_changed`, `inventory.container.split` / `.merged` / `.repacked`, `inventory.container.verified` | lot/container edits and label verification scan | before/after; scanned payload for verification | normal | P2 |
+| `inventory.pack.started`, `inventory.pack.verified` | packing and pack verification scan | sales order, boxes, scanned payloads | normal | P4 |
+| `inventory.inventory_balance.rebuilt` | projection rebuild job (`inventory.rebuild_balances`, enqueued with `inventory.balance.admin`) | job id, scope, rows rebuilt, differences found | sensitive | P2 |
+| `procurement.goods_receipt.posted` / `.reversed`, `procurement.goods_receipt.discrepancy_approved` | receiving | PO, supplier, lots created | normal/sensitive | P2 |
+| `procurement.purchase_request.approved`, `procurement.purchase_order.approved`, `procurement.purchase_order.sent`, `procurement.purchase_order.cancelled` | PO flow | amount, rule step | sensitive | P6 |
+| `production.work_order.released` / `.cancelled`, `production.batch.created`, `production.batch.revisions_snapshotted`, `production.batch.started` / `.submitted` / `.closed`, `production.batch.rejected` (abandonment, A-DM-24), `production.batch.deleted_draft` | state transitions | from/to state, snapshot revision ids | normal | P3 |
+| `production.batch.reopened`, `production.batch.amended` | controlled reopen | reason, fields changed, approvers | restricted | P3 |
+| `production.dispense_record.recorded`, `production.dispense_record.checked`, `production.dispense_record.voided` | dispensing | material, lot, target, actual, tolerance result, scale/equipment | normal (void: sensitive) | P3 |
+| `production.dispense_record.over_tolerance_approved`, `production.batch_material.substituted`, `production.equipment_use.override_approved` | controlled exceptions | approver, reason, deviation id | restricted | P3 |
+| `production.batch_material.consumption_posted`, `production.batch_output.posted`, `production.yield_record.approved`, `production.scrap_rework_record.approved` | batch postings | quantities, variance | sensitive | P3 |
+| `production.batch_paper_record.reviewed` | legacy paper BMR review (`docs/data-migration-plan.md`) | legacy number, reviewer, outcome | sensitive | P3 |
+| `quality.test_result.recorded` / `.reviewed` / `.corrected` | results | spec limits, value, correction reason (original retained) | sensitive | P3 |
+| `quality.inspection.sampled`, `quality.inspection.reviewed` | inspection flow | plan revision, sample ids, reviewer | sensitive | P3 |
+| `quality.disposition.approved` | release/reject/rework/conditional | target (lot/batch), from/to status, approvers | restricted | P2 |
+| `quality.hold.placed`, `quality.hold.lifted` | holds | scope of hold, reason | restricted (lift) | P2 |
+| `quality.deviation.opened` / `.closed`, `quality.capa.closed`, `quality.change_control.approved`, `quality.complaint.closed` | quality system | linked records | sensitive | P3/P4 |
+| `quality.recall_case.initiated`, `quality.recall_case.lots_marked`, `quality.recall_case.closed` | recall | lots, containers, customers affected (ids) | restricted | P4 |
+| `quality.genealogy.traced` | forward/reverse trace query (`docs/data-model.md` §10.5) | root entity, direction, depth, row count | sensitive | P3 |
+| `sales.price_list.changed` / `.approved`, `sales.customer.credit_terms_changed` | pricing | before/after amounts | sensitive | P4 |
+| `sales.sales_order.confirmed` / `.cancelled`, `sales.pick.scanned`, `sales.pick.completed`, `sales.shipment.dispatched` / `.reversed`, `sales.shipment.over_shipment_approved`, `sales.delivery_receipt.acknowledged`, `sales.customer_return.posted` | fulfilment | quantities, boxes, DR number, acknowledgement evidence | normal (exceptions restricted) | P4 |
+| `hr.employee.created` / `.updated`, `hr.employee.personal_data_viewed`, `hr.employee.personal_data_changed` | HR records | field names changed (values for personal data only in restricted payload) | restricted | P5 |
+| `hr.attendance_import.imported` / `.approved` / `.posted` / `.reversed`, `hr.attendance_mapping.saved`, `hr.attendance_exception.resolved`, `hr.attendance_event.corrected`, `hr.attendance_event.correction_approved` | attendance | import id, row counts, mapping profile, exception type and resolution, employee id, before/after times | sensitive | P5 |
+| `hr.leave_request.approved`, `hr.overtime_request.approved` | approvals | employee id, period | sensitive | P6 |
+| `hr.payroll_rule.changed`, `hr.payroll_period.submitted` / `.approved` / `.posted` / `.reopened`, `hr.payroll_line.adjusted`, `hr.payslip.generated`, `hr.payment_export.created` | payroll | period, totals, reviewer sign-off reference, adjustment reason | restricted | P6 |
+| `finance.invoice.posted`, `finance.supplier_bill.posted`, `finance.credit_note.posted`, `finance.payment_record.posted` and the matching `.reversed`; `finance.expense_claim.approved` / `.posted`; `finance.accounting_period.locked` / `.unlocked`; `finance.tax_config.changed`; `finance.costing_run.posted`; `finance.accountant_export.created` | finance | amounts, counterparties (ids), period, reason | restricted | P6 |
+| `documents.generated_document.generated`, `documents.generated_document.downloaded`, `documents.generated_document.reprinted`, `documents.generated_document.superseded`, `documents.label_job.printed`, `documents.label_job.voided` | document engine and label printing | template version, source revision, hash, reprint/void reason | normal (reprint, void: sensitive) | P2/P3 |
+| `documents.file_attachment.uploaded` / `.removed` | attachments | parent entity, size, sha-256 | normal | P2 |
+| `platform.export.created` | any export of class S/R | module, filters, row count, format, file hash | sensitive/restricted | P1 |
+| `platform.setting.changed`, `platform.approval_rule.changed`, `platform.numbering_rule.changed`, `platform.integration.changed`, `platform.notification_rule.changed` | configuration | before/after (secrets never included) | restricted | P1 |
+| `platform.import_job.posted` / `.reversed`, `platform.background_job.retried` / `.cancelled` | jobs and imports | job id, counts | sensitive | P2/P5 |
+| `platform.sync_command.replay_accepted` / `.replay_rejected` / `.replay_conflicted`, `platform.sync_command.outbox_discarded`, `platform.sync_conflict.resolved` | sync | command id, `client_created_at`, resolution choice | sensitive | P7 |
+| `sales.portal_user.invited` / `.suspended`, `sales.sales_order.submitted` (`actor_kind = 'portal_user'`), `finance.payment_provider_event.received` / `.rejected`, `finance.payment_record.recorded`, `finance.refund.approved` | portal and payments | tenant, provider event id | sensitive/restricted | P8 |
 
 Retention of audit events follows the longest retention of the records they reference
 (section 7). Audit reads require `platform.audit.view`; payload redaction by `data_class`
@@ -515,9 +542,9 @@ S/R exports for the owner.
 | Rule | Detail |
 |---|---|
 | Secrets live only in environment variables | Railway variables per environment (development, staging, production); never in the repository, images, logs, client bundles or the database; `.env.example` lists names only |
-| Variable groups (Railway shared variables) | `db` (`DATABASE_URL` runtime, `MIGRATION_DATABASE_URL`), `auth` (`SESSION_SECRET`, `CSRF_SECRET`, `FILE_URL_SECRET`, `DATA_ENCRYPTION_KEY`, optional `AUTH_PEPPER`), `storage` (`S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`), `mail` (`SMTP_URL`), `observability` (`ERROR_REPORTING_DSN`), `payments` (Phase 8: `PAYMONGO_SECRET_KEY`, `PAYMONGO_WEBHOOK_SECRET`), `backup` (`BACKUP_ENCRYPTION_PUBLIC_KEY`); `web` and `worker` services reference the groups they need, nothing more (details in `docs/deployment-railway.md`) |
+| Variable groups (Railway shared variables) | `base` (`APP_ENV`, `APP_ORIGIN`, `TRUSTED_PROXY_HEADER` for the client IP used by rate limits, `MAINTENANCE_MODE`), `db-app` (`DATABASE_URL`, runtime role `bc_app`), `db-migrate` (`DATABASE_MIGRATION_URL`, `bc_migrate`, present only on `web` for the pre-deploy migration), `db-backup` (`DATABASE_BACKUP_URL`, `bc_backup`; `DATABASE_READONLY_URL` for `bc_readonly` where analytics needs it), `auth` (`SESSION_SECRET`/`SESSION_SECRET_PREVIOUS`, `CSRF_SECRET`/`CSRF_SECRET_PREVIOUS`, `FILE_URL_SECRET`, `DATA_ENCRYPTION_KEY`/`DATA_ENCRYPTION_KEY_PREVIOUS` for the dual-key rotation window, optional `AUTH_PEPPER`), `storage` (`S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`), `mail` (`SMTP_URL`), `observability` (`ERROR_REPORTING_DSN`), `payments` (Phase 8: `PAYMONGO_SECRET_KEY`, `PAYMONGO_WEBHOOK_SECRET`), `backup` (`BACKUP_ENCRYPTION_PUBLIC_KEY`, `BACKUP_PREFIX`, `BACKUP_RETENTION_DAILY`, `BACKUP_RETENTION_MONTHLY`, `BACKUP_OFFSITE_ENDPOINT`, `BACKUP_OFFSITE_BUCKET`, `BACKUP_OFFSITE_REGION`, `BACKUP_OFFSITE_ACCESS_KEY_ID`, `BACKUP_OFFSITE_SECRET_ACCESS_KEY`); `web`, `worker` and `backup` services reference the groups they need, nothing more; `docs/deployment-railway.md` section 4 is the authoritative variable list |
 | Client exposure | Only `NEXT_PUBLIC_*` variables reach the browser; CI greps the client bundle for secret names |
-| Database roles (least privilege) | `bc_migrate`: owner of schema, runs migrations only at deploy; `bc_app`: SELECT/INSERT/UPDATE on application tables, INSERT/SELECT only on ledger and audit tables, no DELETE on ledgers/audit (enforced by grants and triggers), no DDL; `bc_readonly`: SELECT for analytics views, backups and ad-hoc owner queries; `bc_rls` role switching evaluated with ADR-022 |
+| Database roles (least privilege) | `bc_migrate`: owner of schema, runs migrations only at deploy; `bc_app`: SELECT/INSERT/UPDATE on application tables, INSERT/SELECT only on ledger and audit tables, no DELETE on ledgers/audit (enforced by grants and triggers), no DDL; `bc_readonly`: SELECT for analytics views and ad-hoc owner queries (no SELECT on sessions, MFA secrets, idempotency keys or sensitive employee columns); `bc_backup`: SELECT on all tables and sequences, used only by the `backup` service for `pg_dump` (`DATABASE_BACKUP_URL`); `bc_rls` role switching evaluated with ADR-022 |
 | Key material | `DATA_ENCRYPTION_KEY` (32 bytes, base64) encrypts TOTP secrets and any field marked encrypted in `docs/data-model.md`; each ciphertext stores a key id so rotation is a background re-encrypt job |
 | Rotation | Database passwords and bucket keys every 180 days or on suspected exposure; `SESSION_SECRET`/`CSRF_SECRET` rotation supported with a dual-key window of 24 h; `DATA_ENCRYPTION_KEY` via key id; webhook secrets on provider rotation; all rotations recorded in `docs/operations-runbook.md` log (A-SEC-22) |
 | Access to production variables | Owner plus the named operations contact; developers use staging; every change to a production variable noted in the runbook change log |
@@ -531,9 +558,11 @@ S/R exports for the owner.
 
 All periods are defaults requiring confirmation by the owner and the company's legal,
 accounting and HR advisers (A-SEC-24). The system implements them as `retention_policies`
-rows (data class, retention period, action: archive/anonymise/delete, legal hold flag) so
-confirmed values are configuration. Nothing is deleted while a legal hold, open complaint,
-recall or audit references the record. The Philippine Data Privacy Act and cosmetics record
+rows (data class, `retention_months`, `basis`, `minimum_months`, `action` in `archive` /
+`anonymise` / `delete` / `keep`, reviewer confirmation) and `legal_holds` rows that block
+every retention action on what they reference (`docs/data-model.md` §12.1), so confirmed
+values are configuration; the sweep job only reports for unconfirmed classes. Nothing is
+deleted while a legal hold, open complaint, recall or audit references the record. The Philippine Data Privacy Act and cosmetics record
 expectations must be validated by qualified reviewers; the defaults below are engineering
 placeholders, not legal advice.
 
@@ -589,7 +618,7 @@ Data subject requests (access, correction, deletion) are handled through
 4. TOTP enforced for all privileged users; no shared accounts; every floor tablet has its
    own device label; offboarding procedure rehearsed.
 5. Retention policies loaded with owner-confirmed values; legal hold tested.
-6. Monitoring alerts for failed logins spike, lockouts, `authz.denied` rate, restricted
+6. Monitoring alerts for failed logins spike, lockouts, `identity.authorization.denied` rate, restricted
    permission use, failed webhooks, job dead letters (`docs/deployment-railway.md`).
 7. Incident process (8.3) agreed with the owner and the operations contact.
 8. RLS decision (ADR-022) recorded: adopted or explicitly deferred with reason.
@@ -601,10 +630,10 @@ Security-specific hooks that the runbook must include:
 
 | Trigger | First actions | Evidence to preserve |
 |---|---|---|
-| Suspected account compromise | revoke all sessions of the user (`identity.user.admin`), lock account, force reset, review `authz.denied` and restricted actions by that user in the last 30 days | audit events, session rows, logs by `request_id` |
+| Suspected account compromise | revoke all sessions of the user (`identity.user.admin`), lock account, force reset, review `identity.authorization.denied` and restricted actions by that user in the last 30 days | audit events, session rows, logs by `request_id` |
 | Suspected site boundary leak | disable the affected endpoint behind a feature switch, run the cross-site test suite against production data shape in staging, list affected records from audit | audit, logs, the failing query |
 | Secret exposure | rotate the secret (section 6), revoke sessions if `SESSION_SECRET`, re-encrypt if `DATA_ENCRYPTION_KEY`, review bucket access logs | git history, variable change log |
-| Malicious or corrupted import/upload | void the import, quarantine the file (set attachment `blocked`), scan other uploads from the same user | ImportJob, file hashes |
+| Malicious or corrupted import/upload | void the import, quarantine the file (set `file_attachments.virus_scan_status = 'blocked'`, which refuses download), scan other uploads from the same user | ImportJob, file hashes |
 | Webhook fraud attempt (Phase 8) | keep the order unpaid, block the source, reconcile with the provider dashboard | provider event ids, signatures |
 | Lost or stolen device | revoke that session, discard its outbox server-side, remove push subscription, note in the device register | session row, last sync time |
 | Data subject request | runbook procedure; anonymise, never delete ledgers | request record |
