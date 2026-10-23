@@ -163,7 +163,8 @@ export function Scanner({
         const caps = (track?.getCapabilities?.() ?? {}) as { torch?: boolean };
         setTorch({ supported: !!caps.torch, on: false });
         videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => undefined);
+        // Do not await: some streams only start playing after the first frame; the loop tolerates "not ready".
+        void videoRef.current.play().catch(() => undefined);
         setCameraState("on");
         const tick = async () => {
           if (stopped || !videoRef.current) return;

@@ -59,7 +59,7 @@ export default async function PrintLabelJobPage({ params }: { params: Promise<{ 
             <FailForm jobId={job.id} />
           </div>
         )}
-        {job.status === "printed" && !job.voidedAt && <Banner tone="ok" title="Already printed">Printing again from here is not recorded. If a label is lost or damaged, use Reprint with a reason.</Banner>}
+        {job.status === "printed" && !job.voidedAt && <Banner tone="ok" title="Recorded as printed">Printed by {job.printedByName}. Stick the label on the container now. Printing again from here is not recorded; for a lost or damaged label use Reprint with a reason.</Banner>}
       </div>
       {printable && render.css && render.body && (
         <>
