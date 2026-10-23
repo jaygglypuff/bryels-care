@@ -4,7 +4,7 @@ Owner: finance-specialist. Reviewers: product-manager (accountable), analytics-s
 security-engineer, database-architect. Status: Phase 0 draft for Gate 0; build in Phase 6
 (payment-provider reconciliation in Phase 8). Binding: ADR-006 (append-only postings),
 ADR-009 (numbering), ADR-010 (`numeric`, `decimal.js`), ADR-019 (locale assumption),
-ADR-020 (scope). Related: `docs/data-model.md` §2.9, §3.9, §5.7, §6.10;
+ADR-020 (scope). Related: `docs/data-model.md` §2.9, §3.9, §5.7, §6.10, §9.2;
 `docs/permissions-matrix.md` §2.10, §3.10, §5, §6; `docs/process-maps.md` W04, W09;
 `docs/security.md` §2.10, §4.10, §4.11, §5, §7; `docs/PRD.md` FR-finance-01..09, A-PRD-10.
 
@@ -71,17 +71,17 @@ the same transaction as the document state change, with `Idempotency-Key`, `corr
 | Entity (table) | Purpose | Number (rule code) | Posting type | Site scope |
 |---|---|---|---|---|
 | Invoice (`invoices`, `invoice_lines`) | What a customer owes for a dispatched shipment | `INV`, gapless | `invoice_issue` | fulfilment site |
-| SupplierBill (`supplier_bills`, `supplier_bill_lines`) | What we owe a supplier for received goods, services or landed-cost charges | `BILL` (internal; supplier reference kept separately) | `bill_approve` (fired at posting; see §2.10) | receiving site |
+| SupplierBill (`supplier_bills`, `supplier_bill_lines`) | What we owe a supplier for received goods, services or landed-cost charges | `BILL` (internal; supplier reference kept separately) | `bill_post` (fires at `posted`, not at approval) | receiving site |
 | PaymentRecord (`payment_records`, `payment_applications`) | Money received (inbound) or paid (outbound), applied to one or more open documents | `PAY` | `payment` | site of first applied document; org-wide allowed |
 | CreditNote (`credit_notes`) | Reduces a customer's receivable (return, pricing error, void of an invoice) | `CN` | `credit_note` | invoice's site |
 | ExpenseClaim (`expense_claims`) | Employee spend to reimburse, with approval limits | `EXP` | `expense` | employee's site |
 | CostingRun (`costing_runs`, `costing_run_lines`) | Estimate and actual cost per batch and SKU for a period | `COST` | none (no money moves) | site |
-| Reconciliation (`reconciliations`, `reconciliation_lines`) | Matches a bank, cash or provider statement to payment records | `REC` | none | site or org-wide |
+| Reconciliation (`reconciliations`, `reconciliation_lines`) | Matches a bank, cash or provider statement to payment records | `RCN` | none | site or org-wide |
 | AccountingPeriod (`accounting_periods`) | Period lock control | period code `YYYY-MM` | none | org-wide |
 | JournalEntry (`journal_entries`, `journal_lines`) | Only if GL approved | `JE` | `journal` | org-wide |
 
-Rule codes `BILL`, `CN`, `EXP`, `COST`, `REC` are additions to `numbering_rules` (only `INV`
-and `PAY` are named in the data model today; see §10.3).
+Rule codes, default patterns and sequence widths are defined in `docs/data-model.md` §9.2
+(`JE` only if a GL is approved); §2.7 quotes the defaults.
 
 ### 2.2 Common lifecycle
 
@@ -90,19 +90,22 @@ stateDiagram-v2
   [*] --> draft : create
   draft --> submitted : submit (locks edits)
   submitted --> draft : return with reason
-  submitted --> approved : approve (SoD: approver ≠ submitter; approval_rules)
-  approved --> posted : post (ledger row, number allocated, period open)
+  submitted --> approved : approve under SoD and approval_rules
+  approved --> posted : post writes the ledger row and allocates the number in an open period
   draft --> cancelled : cancel with reason
   submitted --> cancelled : cancel with reason
-  posted --> settled : payments/credits applied (partially_paid → paid)
-  posted --> voided : reversal posting + reason (never delete)
-  settled --> closed : finance closes or auto-close when fully settled
+  posted --> partially_paid : payment or credit applied
+  partially_paid --> paid : fully applied
+  posted --> paid : fully applied in one step
+  posted --> voided : reversal posting with reason, never deleted
+  partially_paid --> voided : reversal posting with reason, never deleted
+  paid --> closed : finance closes or auto-close when fully settled
 ```
 
-Per-entity state names follow the data model where it already defines them (`issued` for
-invoices, `recorded` for payments, `final` for costing runs). §2.10 lists the states that
-the data model must add to make submit/approve/post explicit instead of inferred from the
-`approval` columns.
+Per-entity state names follow the data model (`docs/data-model.md` §3.9, §6.10): `issued`
+for invoices, `recorded` for payments, `final` for costing runs; `submitted`/`approved`/
+`posted` are explicit transitions, not inferred from the `approval` columns. §2.10 tracks the
+remaining alignment items.
 
 ### 2.3 Per-entity states and guards
 
@@ -110,21 +113,21 @@ the data model must add to make submit/approve/post explicit instead of inferred
 |---|---|---|---|---|
 | Invoice | `draft → submitted → approved → issued → partially_paid → paid → closed`; `draft|submitted → cancelled`; `issued|partially_paid → voided` | shipment `dispatched`; every line maps to a shipped `sales_order_line`; customer active; period open; tax configuration resolved; `finance.invoice.post` | `paid_amount` projection from `payment_applications` and applied credit notes | CreditNote for the open amount (full void sets `voided_by_credit_note_id`), or `reversal` posting if nothing applied yet |
 | SupplierBill | `draft → submitted → approved → posted → partially_paid → paid → closed`; `draft|submitted → cancelled`; `posted|partially_paid → voided`; `submitted → disputed → submitted` | three-way match within tolerance or variance approved (§3.2); supplier active; period open; `finance.supplier_bill.post` | outbound `payment_applications` | `reversal` posting; a replacement bill references `reversal_of_id`'s document |
-| PaymentRecord | `draft → recorded → reconciled`; `draft → cancelled`; `recorded → voided` | amount > 0; counterparty exactly one; applications ≤ amount; period open; above-threshold approval satisfied (§9); `finance.payment_record.post` | `reconciled` only through a Reconciliation line (§6.4, §7) | `reversal` posting; applications reversed in the same transaction; invoice/bill balances recomputed |
+| PaymentRecord | `draft → recorded → reconciled`; `draft → cancelled`; `recorded → voided` | amount > 0; counterparty exactly one; applications ≤ amount; period open; above-threshold approval satisfied (§9); `finance.payment_record.post` | `reconciled` only through a Reconciliation line (§6.3, §7) | `reversal` posting; applications reversed in the same transaction; invoice/bill balances recomputed |
 | CreditNote | `draft → submitted → approved → issued → applied`; `draft|submitted → cancelled`; `issued → voided` | references an `issued`/`partially_paid` invoice; amount ≤ invoice open amount unless `refund` flag; return-based notes require `customer_returns` approved; period open | `applied` when fully applied to the invoice or refunded by an outbound PaymentRecord | `reversal` posting |
 | ExpenseClaim | `draft → submitted → approved → posted → paid`; `submitted → rejected`; `draft|submitted → cancelled` | approval steps satisfied; receipt attached above threshold (A-FIN-21); category active; period open | `paid` when `payment_record_id` is set by a posted outbound PaymentRecord | `reversal` posting before payment; after payment, reverse the payment first |
 | CostingRun | `draft → final` | all batches in range are `closed` or explicitly excluded with reason; overhead pool for the period exists or run flagged `overhead_missing` | n/a | `final` is immutable; a correcting run sets `supersedes_run_id` with reason |
 | Reconciliation | `open → in_progress → completed` | every statement line `matched`, `manual` or `unmatched` with note; difference explained | n/a | reopen with `finance.reconciliation.post` + reason (audit) |
-| AccountingPeriod | `open → locked`; `locked → open` (unlock) | lock: no `submitted`/`approved` documents dated in the period remain, or they are moved with reason | n/a | unlock needs `finance.period_lock.void` with `finance` + `owner_director` (approval rule `period_lock.unlock`) |
+| AccountingPeriod | `open → locked`; `locked → open` (unlock) | lock: no `submitted`/`approved` documents dated in the period remain, or they are moved with reason | n/a | unlock needs `finance.period_lock.void` with `finance` + `owner_director` (`approval_rules.document_type = period_lock_unlock`) |
 
 ### 2.4 Posting rules (all entities)
 
 1. The command carries `Idempotency-Key`; a repeat returns the stored response (`docs/security.md` §4.10). The ledger row also stores the key with a partial unique index.
 2. Locking order inside the transaction: the document row (`FOR UPDATE`), then `accounting_periods` (`FOR SHARE`), then `numbering_rules` last (`docs/data-model.md` §5.4).
 3. Posting date = document date (issue date, bill date, paid-at date, claim approval date). It must fall in an `open` period; otherwise `409 PERIOD_LOCKED`. Backdating into a locked period is impossible by construction.
-4. Gapless numbers are allocated only at posting, never at draft, so cancelled drafts leave no gap (`A-DM-05`, definition to be added to the data model).
+4. Gapless numbers are allocated only at posting, never at draft, so cancelled drafts leave no gap (`A-DM-05`, `docs/data-model.md` §9.1 and §14.1).
 5. Projections updated in the same transaction: `invoices.paid_amount/status`, `supplier_bills.*`, `sales_orders.status` (`shipped → invoiced`), period totals used by exports.
-6. Audit events (`docs/security.md` §5): `finance.invoice_posted`, `finance.bill_posted`, `finance.payment_posted`, `finance.credit_note_posted`, `finance.expense_posted`, each `_reversed`, plus `approval.evaluated` with rule ids.
+6. Audit events (`module.entity.event`, `docs/data-model.md` §8.1; catalogue in `docs/security.md` §5): `finance.invoice.posted`, `finance.supplier_bill.posted`, `finance.payment_record.posted`, `finance.credit_note.posted`, `finance.expense_claim.posted`, each entity's `.reversed`, plus `platform.approval_rule.evaluated` with rule ids.
 7. Amounts are `numeric(18,4)` in storage, `decimal.js` in code, displayed to 2 decimals (`A-DM-01`); line totals are computed from unrounded unit amounts; document totals are the sum of rounded lines (configurable to document-level rounding if the accountant requires it).
 
 ### 2.5 Reversal rules
@@ -143,21 +146,26 @@ the data model must add to make submit/approve/post explicit instead of inferred
 | Rule | Detail |
 |---|---|
 | Period | Calendar month by default (A-FIN-02); 12 future periods created by the `finance.period_maintenance` job; the accountant can change the fiscal calendar in configuration. |
-| Lock | `finance.period_lock.post` after the accountant export for the period is produced and acknowledged; emits `finance.period_locked`. |
+| Lock | `finance.period_lock.post` after the accountant export for the period is produced and acknowledged; emits `finance.accounting_period.locked`. |
 | Effect | No posting, reversal, costing-run finalisation or payment application dated inside the period. Reads and exports still work. |
-| Unlock | `finance.period_lock.void`, two approvers (`finance` and `owner_director`), reason, `finance.period_unlocked`; a re-export is required afterwards and the export run is marked `superseded`. |
+| Unlock | `finance.period_lock.void`, two approvers (`finance` and `owner_director`), reason, `finance.accounting_period.unlocked`; a re-export is required afterwards and the export run is marked `superseded`. |
 | Pre-lock check | Lists documents dated in the period still in `submitted`/`approved`, payments `recorded` but unreconciled, unmatched reconciliation lines, costing runs in `draft`. Lock proceeds only when the list is empty or every item is acknowledged with reason. |
 
 ### 2.7 Numbering
 
-| Document | Default pattern (A-PRD-04 style; owner-configurable per site) | Gapless |
+| Document | Default pattern (`docs/data-model.md` §9.2; `{SEQ}` width from `sequence_width`; owner-configurable per site) | Gapless (`is_gapless`) |
 |---|---|---|
-| Invoice | `INV-{YY}-{SEQ5}`; optional series per site/branch if the accountant requires a registered series (§10.2 Q-FIN-03) | yes |
-| Supplier bill (internal) | `BILL-{YY}-{SEQ5}`; supplier's own number in `supplier_reference` (unique per supplier to block duplicates) | no |
-| Payment | `PAY-{YY}-{SEQ5}` with `direction` shown on documents (receipt vs disbursement) | yes |
-| Credit note | `CN-{YY}-{SEQ5}` | yes |
-| Expense claim | `EXP-{YY}-{SEQ5}` | no |
-| Costing run, reconciliation | `COST-{YYMM}-{SEQ2}`, `REC-{YYMM}-{SEQ2}` | no |
+| Invoice | `INV-{YYYY}-{SEQ}`, SEQ width 6, yearly reset; optional series per site/branch if the accountant requires a registered series (§10.2 Q-FIN-03) | yes (A-DM-05) |
+| Supplier bill (internal) | `BILL-{YY}-{SEQ}`, SEQ width 5; supplier's own number in `supplier_reference` (unique per supplier to block duplicates) | no |
+| Payment | `PAY-{YY}-{SEQ}`, SEQ width 6, with `direction` shown on documents (receipt vs disbursement) | no (A-FIN-05) |
+| Credit note | `CN-{YYYY}-{SEQ}`, SEQ width 5 | no (A-FIN-05) |
+| Expense claim | `EXP-{YY}-{SEQ}`, SEQ width 5 | no |
+| Costing run, reconciliation | `COST-{YYMM}-{SEQ}`, `RCN-{YYMM}-{SEQ}`, SEQ width 2, monthly reset | no |
+
+Only `INV` promises no gaps (A-DM-05): its number is allocated inside the posting transaction
+and never previewed. Other types may show a gap after a failed posting, by design. If the
+accountant requires gapless payment or credit-note series, `is_gapless` is switched on for
+`PAY`/`CN` in `numbering_rules` (A-FIN-05); no code change is involved.
 
 ### 2.8 Validation catalogue (blocking)
 
@@ -184,22 +192,26 @@ posting-rule table maintained by the accountant (document type × line kind → 
 accounts). Trial balance and period close become reports. None of this is created without
 the superseding ADR; `finance.journal_entry.*` permissions stay dormant.
 
-### 2.10 Alignment requests for `docs/data-model.md`
+### 2.10 Alignment with `docs/data-model.md`
 
-| Table | Change needed | Why |
-|---|---|---|
-| `invoices`, `credit_notes` | add states `submitted`, `approved` | submit/approve are explicit transitions, not inferred from `approval` columns |
-| `supplier_bills` | add `submitted`, `posted`, `disputed`; add `bill_kind in ('bill','credit','charge')`; add `replaces_document_id` | SoD needs approve ≠ post; supplier credits (W04-09) and landed-cost charge bills need a kind |
-| `payment_records` | add `draft`, `cancelled`; `recorded` is the "pending reconciliation" state named in `docs/permissions-matrix.md` §7 | above-threshold payments need a pre-posting state; one name for the webhook-created state |
-| `expense_claims` | add `posted`; add `claim_kind in ('claim','request')` (A-FIN-22) | `finance.expense_claim.post` and posting type `expense` exist |
-| `financial_postings` | rename `bill_approve` → `bill_post` (or document that it fires at posting) | posting happens at `posted`, not at approval |
-| `costing_runs` | add `supersedes_run_id`, `overhead_pool_id`, `labour_rate_set_id`; add basis `direct_cost_pct` | correcting runs; allocation method traceability |
-| `costing_run_lines` | add `good_output_qty_base`, `labour_hours`, `allocation_fallback bool`, `unit_cost_estimate_amount`, `unit_cost_actual_amount` | estimate and actual side by side |
-| new `tax_configurations` | §5 | no tax values in code |
-| new `lot_cost_history` (ledger) | §4.3 | lot cost changes must be traceable |
-| new `overhead_pools`, `labour_rates`, `standard_costs` (config) | §4 | allocation inputs are data |
-| new `accountant_export_profiles`, `export_account_mappings`, `accountant_export_runs` | §6 | export layouts are configuration; runs are audited and reconcilable |
-| new `refund_requests` (P8) | §7 | refund approval before provider call |
+Status as of `docs/data-model.md` §14.3 (row for this section). Applied items are listed so
+the history stays traceable; only the pending rows still require data-model work.
+
+| Table | Change | Why | Status |
+|---|---|---|---|
+| `invoices`, `credit_notes` | states `submitted`, `approved` | submit/approve are explicit transitions, not inferred from `approval` columns | applied (§3.9, §6.10) |
+| `supplier_bills` | states `submitted`, `posted`, `disputed`; `bill_kind in ('bill','credit','charge')`; `replaces_document_id` | SoD needs approve ≠ post; supplier credits (W04-09) and landed-cost charge bills need a kind | applied (§3.9) |
+| `payment_records` | states `draft`, `cancelled`; `recorded` is the "pending reconciliation" state | above-threshold payments need a pre-posting state; one name for the webhook-created state | applied (§3.9); `docs/permissions-matrix.md` §7 still says `pending_reconciliation` (§10.3) |
+| `expense_claims` | state `posted`; `claim_kind in ('claim','request')` (A-FIN-22) | `finance.expense_claim.post` and posting type `expense` exist | applied (§3.9) |
+| `financial_postings` | `bill_post` fires at `posted`, not at approval | posting happens at `posted` | applied (§3.9 `posting_type`) |
+| `numbering_rules` | codes `BILL`, `CN`, `EXP`, `COST`, `RCN`; `is_gapless` on `INV` only (A-DM-05) | §2.7 | applied (§9.1, §9.2, §14.1) |
+| `costing_runs` | add `supersedes_run_id`, `overhead_pool_id`, `labour_rate_set_id`; add basis `direct_cost_pct` | correcting runs; allocation method traceability | pending (arrives with the costing tables, §14.3) |
+| `costing_run_lines` | add `good_output_qty_base`, `labour_hours`, `allocation_fallback bool`, `unit_cost_estimate_amount`, `unit_cost_actual_amount` | estimate and actual side by side | pending (§14.3) |
+| new `tax_configurations` | §5 | no tax values in code | pending; listed in §13.7 |
+| new `lot_cost_history` (ledger) | §4.3 | lot cost changes must be traceable | pending; listed in §13.7 |
+| new `overhead_pools`, `labour_rates`, `standard_costs` (config) | §4 | allocation inputs are data | pending; listed in §13.7 |
+| new `accountant_export_profiles`, `export_account_mappings`, `accountant_export_runs` | §6 | export layouts are configuration; runs are audited and reconcilable | pending; listed in §13.7 |
+| new `refund_requests` (P8) | §7 | refund approval before provider call | pending; listed in §13.7 |
 
 ## 3. Receivables, payables and expense flows
 
@@ -209,25 +221,25 @@ the superseding ADR; `finance.journal_entry.*` permissions stay dormant.
 flowchart LR
   A[Shipment dispatched W09-08] --> B[Invoice draft from shipment lines]
   B --> C[Submit] --> D{approval_rules}
-  D --> E[Issue: posting, gapless number, PDF]
-  E --> F[Customer statement, monthly or on demand]
+  D --> E["Issue: posting, gapless number, PDF"]
+  E --> F["Customer statement, monthly or on demand"]
   F --> G[Payment recorded and applied]
   G --> H{Fully paid?}
   H -- yes --> I[Invoice paid → closed]
-  H -- no --> J[Overdue → Action Center, credit check W09-03]
+  H -- no --> J["Overdue → Action Center, credit check W09-03"]
   E --> K[Return or pricing error → Credit note → applied or refunded]
 ```
 
 | Step | Role (permission) | System action | Data | Validations | State | Document | Audit |
 |---|---|---|---|---|---|---|---|
 | R-01 | `sales_cs` or `finance` (`finance.invoice.create`) | Create invoice from a `dispatched` shipment: lines = shipped quantities × price snapshot from the sales order, customer bill-to, terms, tax configuration resolved per line | `Invoice`, `invoice_lines` (`sales_order_line_id`, `qty`, `unit_amount`, `tax_rate_pct`) | V-FIN-SRC, V-FIN-DUP, V-FIN-TAX | — → `draft` | — | — |
-| R-02 | same (`finance.invoice.submit`) | Submit; edits locked; approval rule matched by total | `submitted_by/at` | V-FIN-SCOPE | `draft → submitted` | — | `approval.evaluated` |
+| R-02 | same (`finance.invoice.submit`) | Submit; edits locked; approval rule matched by total | `submitted_by/at` | V-FIN-SCOPE | `draft → submitted` | — | `platform.approval_rule.evaluated` |
 | R-03 | `finance` ≠ submitter, `owner_director` above threshold (`finance.invoice.approve`) | Approve or return with reason | `approved_by/at` | V-FIN-SOD | `submitted → approved` | — | approval decision |
-| R-04 | `finance` (`finance.invoice.post`, restricted) | Issue: ledger row `invoice_issue`, number, due date = issue date + customer terms (A-FIN-04), PDF job, sales order `shipped → invoiced` | `financial_postings`, `generated_documents` | V-FIN-PERIOD, V-FIN-SOD (poster rule), V-FIN-IDEMP | `approved → issued` | Invoice PDF (template `invoice`) | `finance.invoice_posted`, `documents.generated` |
-| R-05 | job `finance.statements` or `finance` (`finance.invoice.export`) | Statement of account: open items per customer, aging buckets, payments and credits in the period | `generated_documents` | masking: prices visible to statement roles only | — | Statement PDF/XLSX | `documents.generated` |
-| R-06 | `finance` (`finance.payment_record.create` then `.post`) | Record inbound payment (cash, bank transfer, cheque, e-wallet, provider), apply to invoices oldest-due-first by default (A-FIN-07), remainder stays unapplied on account | `PaymentRecord`, `payment_applications` | V-FIN-APPLY, V-FIN-PERIOD | `draft → recorded`; invoice `issued → partially_paid → paid` | Official receipt only if the accountant confirms the system issues it (Q-FIN-03) | `finance.payment_posted` |
-| R-07 | `sales_cs` creates, `finance` approves/posts (`finance.credit_note.*`) | Credit note from a `customer_returns` approved record or a pricing reason code; apply to the invoice or mark for refund | `CreditNote` | V-FIN-SRC, amount ≤ open amount unless refund | `draft → … → issued → applied` | Credit note PDF | `finance.credit_note_posted` |
-| R-08 | `finance` (`finance.invoice.void`) | Void an issued invoice: full credit note (preferred) or reversal when nothing is applied | `voided_by_credit_note_id` or `reversal` row | §2.5 | `issued → voided`; sales order `invoiced → shipped` | — | `finance.invoice_reversed` |
+| R-04 | `finance` (`finance.invoice.post`, restricted) | Issue: ledger row `invoice_issue`, number, due date = issue date + customer terms (A-FIN-04), PDF job, sales order `shipped → invoiced` | `financial_postings`, `generated_documents` | V-FIN-PERIOD, V-FIN-SOD (poster rule), V-FIN-IDEMP | `approved → issued` | Invoice PDF (template `invoice`) | `finance.invoice.posted`, `documents.generated_document.generated` |
+| R-05 | job `finance.statements` or `finance` (`finance.invoice.export`) | Statement of account: open items per customer, aging buckets, payments and credits in the period | `generated_documents` | masking: prices visible to statement roles only | — | Statement PDF/XLSX | `documents.generated_document.generated` |
+| R-06 | `finance` (`finance.payment_record.create` then `.post`) | Record inbound payment (cash, bank transfer, cheque, e-wallet, provider), apply to invoices oldest-due-first by default (A-FIN-07), remainder stays unapplied on account | `PaymentRecord`, `payment_applications` | V-FIN-APPLY, V-FIN-PERIOD | `draft → recorded`; invoice `issued → partially_paid → paid` | Official receipt only if the accountant confirms the system issues it (Q-FIN-03) | `finance.payment_record.posted` |
+| R-07 | `sales_cs` creates, `finance` approves/posts (`finance.credit_note.*`) | Credit note from a `customer_returns` approved record or a pricing reason code; apply to the invoice or mark for refund | `CreditNote` | V-FIN-SRC, amount ≤ open amount unless refund | `draft → … → issued → applied` | Credit note PDF | `finance.credit_note.posted` |
+| R-08 | `finance` (`finance.invoice.void`) | Void an issued invoice: full credit note (preferred) or reversal when nothing is applied | `voided_by_credit_note_id` or `reversal` row | §2.5 | `issued → voided`; sales order `invoiced → shipped` | — | `finance.invoice.reversed` |
 | R-09 | job `finance.overdue_scan` nightly | Flag overdue invoices, update customer open balance used by W09-03, notify `finance` and `sales_cs` | notifications | — | — | — | — |
 
 Exception paths: partial shipment → one invoice per shipment (A-FIN-03), consolidated monthly
@@ -243,7 +255,7 @@ flowchart LR
   B --> C[Supplier bill entered against PO and GR lines]
   C --> D{Three-way match}
   D -- within tolerance --> E[Submit → approve by threshold → post]
-  D -- variance --> F[Disputed: procurement amends PO, supplier credit, or variance approved]
+  D -- variance --> F["Disputed: procurement amends PO, supplier credit, or variance approved"]
   F --> E
   E --> G[Payment proposal by due date] --> H[Outbound payment recorded and applied]
   H --> I[Bill paid → closed]
@@ -269,7 +281,7 @@ never sends money: bank payment happens outside, and the record is the evidence.
 | Step | Role (permission) | Action | Rule |
 |---|---|---|---|
 | X-01 | any employee user (`finance.expense_claim.create`, `.submit`) | Create a claim: category (configuration), amount, date, description, receipt photo/PDF (mandatory above A-FIN-21), site; optional pre-spend `request` kind converted to a claim later (A-FIN-22) | self-service, own records only |
-| X-02 | system | Match `approval_rules` for `expense_claim`: default `site_manager` ≤ 5,000; `site_manager` then `finance` above 5,000; escalation to `finance` after 72 h, `owner_director` above threshold (A-PM-15, placeholders) | `approval.evaluated` |
+| X-02 | system | Match `approval_rules` for `expense_claim`: default `site_manager` ≤ 5,000; `site_manager` then `finance` above 5,000; escalation to `finance` after 72 h, `owner_director` above threshold (A-PM-15, placeholders) | `platform.approval_rule.evaluated` |
 | X-03 | approver(s) (`finance.expense_claim.approve`) | Approve, reject with reason, or reduce amount with note | claimant can never approve own claim; direct supervisor may approve within threshold |
 | X-04 | `finance` (`finance.expense_claim.post`) | Post: ledger row `expense`, claim becomes payable to the employee | V-FIN-PERIOD |
 | X-05 | `finance` (`finance.payment_record.post`) | Outbound PaymentRecord with `employee_id` counterparty; `expense_claims.payment_record_id` set; may be batched per pay cycle and handed to HR as a payroll-adjacent export only if the accountant approves that route | `approved → posted → paid` |
@@ -289,7 +301,7 @@ own claims and payslip-style history; `finance.expense_claim.view` is needed for
 | Costing | run list, run detail (batch lines estimate vs actual), SKU cost card | estimate/actual labels on every number; `allocation_fallback` warning |
 | Period locks, tax configuration, export profiles | lock/unlock with pre-lock checklist, effective-dated rates with reviewer sign-off, column mappings | restricted actions need re-authentication (`docs/security.md` §3.6) |
 
-Confirm dialogs for post/void follow `docs/ux-system.md` 5.16 (typed confirmation for void).
+Confirm dialogs for post/void follow component 5.16 in `docs/ux-system.md` §5 (typed confirmation for void).
 
 ## 4. Product and batch costing model (FR-finance-05)
 
@@ -342,7 +354,7 @@ read the row effective at consumption time, so a finalised run never changes.
 | 1 | `finance` creates a run (`finance.costing_run.create`): site, period, method (`standard`, `actual`, `moving_average`), overhead basis, overhead pool, labour rate set. |
 | 2 | Job `finance.costing.compute` builds one line per `closed` batch (and a per-SKU roll-up weighted by good output), both bases. Batches not closed are listed as excluded. |
 | 3 | Finance reviews variances (estimate vs actual per element, per batch); recompute allowed while `draft`. |
-| 4 | `finance.costing_run.post` → `final`; audit `finance.costing_run_posted`; `skus.standard_cost` may be updated from the run by a separate confirmed action (reason recorded). |
+| 4 | `finance.costing_run.post` → `final`; audit `finance.costing_run.posted`; `skus.standard_cost` may be updated from the run by a separate confirmed action (reason recorded). |
 | 5 | Reports: batch cost sheet (elements, estimate vs actual, variance, method, pool), SKU cost trend, cost of goods shipped per invoice line (for margin KPIs, §8), landed-cost variance per PO line. All exports carry generated-at, method, and an `ESTIMATE`/`ACTUAL` column. |
 
 Costing never posts money and is not in the accountant export unless they ask for a cost of
@@ -364,7 +376,7 @@ off every row; `finance.tax_config.admin` is restricted and records `reviewed_by
 Boundaries: the system computes line tax from the effective configuration and shows it on
 documents; it does not decide which rule applies to which customer, does not file returns,
 and does not decide whether its invoice is the legally required document (Q-FIN-03).
-Changing a rate emits `finance.tax_config_changed` with before/after and the reviewer.
+Changing a rate emits `finance.tax_configuration.changed` with before/after and the reviewer.
 
 ## 6. Accountant export (FR-finance-08)
 
@@ -395,7 +407,7 @@ generated-by role, period, site filter, profile version, record counts, control 
 | `export_account_mappings` | target account code per (posting_type, tax_code, sku/material class, site); needed by systems that import journals or require account columns; unmapped combinations block the export with a list |
 | Targets | profile templates seeded for a generic journal CSV and for the most common SME packages; the exact target column names are confirmed against the target system's current import template during Phase 6 with the accountant, never assumed |
 | Idempotent runs | `accountant_export_runs(run_number, profile_id, period, filters, row_counts, control_totals, file_attachment_id, sha256, status generated|acknowledged|superseded, acknowledged_by)`; re-export of a locked period produces the same file hash unless an unlock happened |
-| Permission | `finance.accountant_export.export` (restricted, re-auth); `platform.export_created` and `finance.accountant_export_created` audit events; files deleted after 30 days (A-SEC-30), the run record stays |
+| Permission | `finance.accountant_export.export` (restricted, re-auth); `platform.export.created` and `finance.accountant_export.created` audit events; files deleted after 30 days (A-SEC-30), the run record stays |
 
 ### 6.3 Reconciliation report (export ↔ posted records)
 
@@ -412,12 +424,12 @@ event and posting is explicit.
 
 ```mermaid
 flowchart LR
-  A[Provider webhook] --> B[Verify signature, timestamp ≤ 5 min]
-  B --> C[Insert payment_provider_events, unique provider+event_id]
-  C --> D[Worker job: match to order/invoice by provider payment id]
-  D -- amount and currency match --> E[PaymentRecord recorded, method=provider, provider_event_id set]
-  D -- mismatch or unknown --> F[Exception queue: finance resolves]
-  E --> G[Applications to invoice; order paid status from PaymentRecord only]
+  A[Provider webhook] --> B["Verify signature, timestamp ≤ 5 min"]
+  B --> C["Insert payment_provider_events, unique provider+event_id"]
+  C --> D["Worker job: match to order/invoice by provider payment id"]
+  D -- amount and currency match --> E["PaymentRecord recorded, method=provider, provider_event_id set"]
+  D -- mismatch or unknown --> F["Exception queue: finance resolves"]
+  E --> G["Applications to invoice; order paid status from PaymentRecord only"]
   H[Provider settlement/payout file] --> I[Reconciliation kind=payment_provider]
   I --> J[Lines matched to PaymentRecords and fee records] --> K[PaymentRecord reconciled]
 ```
@@ -472,7 +484,7 @@ and a test that recomputes it from the posted ledger for a fixed fictional perio
 | Sensitive fields | cost and margin (`finance.cost.view`), customer pricing and terms, supplier prices, tax identifiers, bank references: masked in the DTO layer, absent from pick/pack/DR documents, included only in finance exports (`docs/permissions-matrix.md` §6) |
 | Site scope | every finance query is scoped by `ctx.allowedSiteIds`; org-wide payments carry `site_id NULL` and are visible to org-wide roles only |
 | Offline | all finance commands are online-only; the outbox rejects them (`docs/offline-sync.md`) |
-| Audit | every post/reverse/approve/lock/unlock/config change/export writes an audit event in the same transaction (`docs/security.md` §5, restricted class); `before/after` redacted for bank and tax identifiers; `approval.evaluated` records rule ids |
+| Audit | every post/reverse/approve/lock/unlock/config change/export writes an audit event in the same transaction (`docs/security.md` §5, restricted class); `before/after` redacted for bank and tax identifiers; `platform.approval_rule.evaluated` records rule ids |
 | Retention | finance records 10 years, archive after (A-SEC-26, placeholder until the accountant confirms) |
 | Tests (CI, `tests/integration/authz/finance.*`) | cross-site url/body/query/export; role escalation per action; `sod.approve_own`; `sod.poster_equals_approver_above_threshold`; `threshold.rule_evaluation`; `idempotency.duplicate_key`; `period.locked_posting_rejected`; `reversal.immutable_original`; `reversal.cascade_payment_applications`; `invoice.only_from_dispatched_shipment`; `bill.three_way_match_variance`; `export.reconciles_to_ledger`; `costing.estimate_actual_separated`; `sensitive_fields.masked` |
 
@@ -487,7 +499,7 @@ and a test that recomputes it from the posted ledger for a fixed fictional perio
 | A-FIN-02 | Accounting periods are calendar months; fiscal year = calendar year | fiscal calendar | Accountant |
 | A-FIN-03 | One invoice per dispatched shipment; consolidated monthly invoice per customer optional | per customer | Owner, Sales |
 | A-FIN-04 | Posting date = document date; due date = date + counterparty terms days | per customer/supplier | Accountant |
-| A-FIN-05 | Invoice, payment and credit note numbers are gapless per organization; optional series per site | `numbering_rules` | Accountant |
+| A-FIN-05 | Only invoice numbers are gapless per organization (`is_gapless`, A-DM-05); payment and credit-note numbers may show gaps after a failed posting unless the accountant asks for `is_gapless` on `PAY`/`CN`; optional invoice series per site | `numbering_rules` | Accountant |
 | A-FIN-06 | Customer statements are open-item (list of unpaid documents), monthly and on demand | statement template | Accountant |
 | A-FIN-07 | Payments apply to the oldest due invoice first; manual override allowed | setting | Finance |
 | A-FIN-08 | Three-way match tolerance placeholders: quantity exact; price ±2 % or PHP 100 per line, whichever is larger | `settings` per site | Accountant, Procurement |
@@ -548,8 +560,7 @@ For the accountant:
 | Permission | `finance.accountant_export.admin` (R) | export profiles and account mappings |
 | Permission | `finance.refund.create` (S, P8) | refund request before `finance.refund.approve` |
 | Tables | `tax_configurations`, `lot_cost_history`, `overhead_pools`, `labour_rates`, `standard_costs`, `accountant_export_profiles`, `export_account_mappings`, `accountant_export_runs`, `refund_requests` | §4, §5, §6, §7 |
-| Columns / states | listed in §2.10 | explicit state machines and SoD |
-| Numbering rule codes | `BILL`, `CN`, `EXP`, `COST`, `REC` (`JE` only with GL) | §2.7 |
+| Columns | pending rows of §2.10 (`costing_runs`, `costing_run_lines`) | estimate and actual side by side; correcting runs |
 | Jobs (pg-boss) | `finance.period_maintenance`, `finance.statements`, `finance.overdue_scan`, `finance.costing.compute`, `finance.accountant_export`, `finance.provider.process_event` (P8) | §3, §4, §6, §7 |
 | Glossary (`docs/PRD.md` §12) | Posting date, Period lock, Three-way match, Landed cost, Open item, Statement of account, Payment application, Costing run, Overhead pool, Provider event | shared vocabulary |
-| Doc alignment | `docs/permissions-matrix.md` §7 "`pending_reconciliation`" → `recorded`; `A-DM-05` definition missing in `docs/data-model.md`; `financial_postings.bill_approve` naming | consistency |
+| Doc alignment | `docs/permissions-matrix.md` §7 "`pending_reconciliation`" → `recorded` | consistency |
