@@ -124,6 +124,7 @@ Every assumption below is a default the team will build unless the owner says ot
 | A-PRD-32 | Time-clock export | CSV or XLSX with employee identifier, timestamp and in/out flag; mapping layer absorbs other layouts | Unknown format | Mapping versions | Yes (HR, IT) | 5 |
 | A-PRD-33 | Backup objectives | RPO 24 h (daily logical dump plus platform backups), RTO 4 h; see `docs/deployment-railway.md` | Brief: define with company | Env/platform settings | Yes (Owner, IT) | 9 |
 | A-PRD-34 | MFA scope | TOTP mandatory from Phase 1b for owner_director, system_admin and any user holding a restricted (R) permission (`docs/security.md` §3.7, `docs/permissions-matrix.md` A-PM-02); optional for everyone else | ADR-004 | Restricted flag per permission | Yes | 1 |
+| A-PRD-35 | Offline sync defaults | Defined once in `docs/offline-sync.md` §10 (A-OFF-01 to A-OFF-09), in particular A-OFF-08 retry schedule 5 s, 30 s, 2 min, 10 min, 30 min, then every 30 min (jittered ±20 %) with at most 20 transport attempts per command, and A-OFF-09 maximum queue age 72 h (never below the 12 h authorization snapshot of A-OFF-02) before a command needs re-authentication and conflict review | Brief: offline selective, server authoritative; values unknown | Settings `settings.offline.retry_schedule`, `settings.offline.max_attempts`, `settings.offline.max_queue_age_hours` | Yes (IT, site managers) | 7 |
 
 ---
 
@@ -160,17 +161,17 @@ The brief's fifteen functional modules map onto twelve code modules
 |---|---|---|---|---|
 | 1 Identity, roles, sites, governance | identity, platform (audit, approvals) | Organization, Site, Department, User, Role, Permission, UserSiteAssignment, Session, AuditEvent, ApprovalRule, ApprovalDecision | Phase 1 | Approval thresholds and separation of duties are platform services used by every module |
 | 2 Master data and configuration | masterdata | Product, Sku, Uom, UomConversion, Material, Supplier, Customer, CustomerRequirement, Formula, FormulaRevision, BomLine, Routing, RoutingRevision, RoutingStep, WorkInstructionRevision, LabelTemplate, Warehouse, Location, ProductionLine, Equipment, ReasonCode, MaterialAlias | Phase 1 (basics), 2 (material aliases), 3 (formulas/routings), 4 (customers) | Effective-dated revisions from day one |
-| 3 Inventory, warehouse, scanning | inventory, documents (labels) | InventoryLot, InventoryBalance, StockMovement, StockReservation, StockAllocation, StockCount, StockCountLine, StockAdjustment, TransferRequest, Container, ContainerContent, ContainerLineage, Pack, PackVerificationScan, LabelJob | Phase 2 (Pack and PackVerificationScan from 3) | Scan-to-action shell lives in `src/ui` and is reused by production and sales |
-| 4 Procurement and suppliers | procurement, masterdata (Supplier) | PurchaseRequest, PurchaseOrder, PurchaseOrderLine, GoodsReceipt, GoodsReceiptLine, SupplierLotDocument | Phase 2 (unplanned receipts, supplier lot documents), 6 (PR/PO) | GoodsReceipt belongs to procurement; posting goes through inventory |
+| 3 Inventory, warehouse, scanning | inventory, documents (labels) | InventoryLot, InventoryBalance, StockMovement, StockReservation, StockAllocation, StockCount, StockCountScope, StockCountLine, StockAdjustment, TransferRequest, Container, ContainerContent, ContainerLineage, Pack, PackVerificationScan, LabelJob | Phase 2 (Pack and PackVerificationScan from 3) | Scan-to-action shell lives in `src/ui` and is reused by production and sales |
+| 4 Procurement and suppliers | procurement, masterdata (Supplier) | PurchaseRequest, PurchaseOrder, PurchaseOrderLine, PurchaseOrderAmendment, GoodsReceipt, GoodsReceiptLine, SupplierLotDocument, SupplierReturn | Phase 2 (unplanned receipts, supplier lot documents), 6 (PR/PO, PO amendments, supplier returns) | GoodsReceipt belongs to procurement; posting goes through inventory |
 | 5 Production planning and execution | production | ProductionPlan, WorkOrder, Batch, BatchMaterial, DispenseRecord, ProcessStepRecord, EquipmentUse, BatchOutput, YieldRecord, ScrapReworkRecord, Deviation | Phase 3 | ProductionPlan from demand in Phase 5 |
-| 6 Quality and traceability | quality | InspectionPlan, Inspection, TestResult, QualityHold, Capa, ChangeControl, Complaint, RecallCase, Disposition | Phase 2 (lot holds and release), 3 (inspections, dispositions, deviations), 4 (complaints, returns, recall explorer), 6 (CAPA, change control) | Genealogy is a query across inventory, production and sales |
+| 6 Quality and traceability | quality | InspectionPlan, Inspection, InspectionSample, TestResult, QualityHold, Capa, CapaAction, ChangeControl, Complaint, RecallCase, RecallCaseCustomer, Disposition | Phase 2 (lot holds, lot dispositions and release), 3 (inspections, batch dispositions, deviations), 4 (complaints, returns, recall explorer), 6 (CAPA, change control) | Genealogy is a query across inventory, production and sales |
 | 7 BMR and document generation | documents | DocumentTemplate, DocumentTemplateVersion, GeneratedDocument, FileAttachment, LegacyDocument | Phase 2 (labels, attachments, legacy documents), 3 (BMR, dispensing sheet) | Rendering per ADR-016 |
 | 8 Packaging, boxing, dispatch, delivery documents | inventory (Pack, PackVerificationScan, Container), sales (Pick, Shipment, DeliveryReceipt), documents | Pack, PackVerificationScan, Container, ContainerContent, Pick, Shipment, DeliveryReceipt | Phase 3 (Pack from batch output), 4 (Pick, Shipment, DeliveryReceipt) | Pack lives in inventory (`docs/data-model.md` A-DM-29; permissions `inventory.pack.{view,create,submit,approve}`); shipment posting is an inventory command |
-| 9 Sales, CRM, portal | sales | Quote, SalesOrder, SalesOrderLine, CustomerReturn; portal tenant (Phase 8) | Phase 4; portal Phase 8 | Pricing fields are sensitive (permissions matrix) |
+| 9 Sales, CRM, portal | sales | Quote, PriceList, SalesOrder, SalesOrderLine, CustomerReturn; portal tenant (Phase 8) | Phase 4; portal Phase 8 | Pricing fields are sensitive (permissions matrix) |
 | 10 Finance and accounting support | finance | Invoice, SupplierBill, PaymentRecord, CreditNote, ExpenseClaim, CostingRun, Reconciliation, JournalEntry (only if GL approved) | Phase 6 | Scope per ADR-020 |
 | 11 HR, attendance, shifts, payroll | hr | Employee, Shift, ShiftAssignment, AttendanceImport, AttendanceEvent, AttendanceException, LeaveRequest, OvertimeRequest, PayrollPeriod, PayrollLine, Payslip, PayrollApproval | Phase 5 (employees, import), 6 (rules, leave and overtime, payroll support) | Scope per ADR-021 |
 | 12 Analytics, forecasting, dashboards | analytics | KPI definitions, ScheduledReport, reporting views | Phase 5 | Catalogue in `docs/analytics-kpis.md` |
-| 13 Notifications, tasks, monitoring | platform (notifications, jobs, settings) | Notification, BackgroundJob, ScheduledReport, Setting, SettingChangeRequest | Phase 1 (health, settings, diagnostics cards Health/Backups/Variables), 2 (jobs, in-app), 5 (action center, email, full diagnostics) | Action Center and diagnostics per FR-platform-07 and FR-platform-09; settings changes that require approval go through SettingChangeRequest (S1-03) |
+| 13 Notifications, tasks, monitoring | platform (notifications, jobs, settings) | Notification, BackgroundJob, ScheduledReport, Setting, SettingChangeRequest | Phase 1 (health, settings, diagnostics cards Health/Backups/Variables), 2 (jobs, in-app, Jobs and Reconciliation cards), 5 (action center, email, remaining diagnostics cards), 7 (Sync card) | Action Center and diagnostics per FR-platform-07 and FR-platform-09; settings changes that require approval go through SettingChangeRequest (S1-03) |
 | 14 Maintenance, equipment, calibration | masterdata (Equipment), production (EquipmentUse, EquipmentServiceRecord, DowntimeEvent, blocking rules) | Equipment, EquipmentUse, EquipmentServiceRecord, DowntimeEvent | Phase 1 (register), 3 (service records, downtime events, derived availability, blocking), later (PM plans, maintenance work orders, spares; A-DM-30) | No separate module; added if maintenance scope grows |
 | 15 Import/export and integration | platform (imports, files, numbering), `/api/v1` | ImportJob, FileAttachment, NumberingRule, SyncCommand, SyncConflict, DeviceRegistration | Phase 1 (API, numbering), 2 (exports), 5 (import wizard), 7 (sync, device registrations) | Provider adapters: email, storage, payment, time-clock, accounting |
 
@@ -196,7 +197,7 @@ flowchart LR
 
 | Flow | Included at go-live | Proven by |
 |---|---|---|
-| Foundation | Sign-in, sessions, MFA for privileged roles, sites, roles, site-scoped permissions, audit log, master data, numbering, health, staging and production deploy | G1 |
+| Foundation | Sign-in, sessions, MFA for privileged roles, sites, roles, site-scoped permissions, audit log, master data, numbering, health, staging deploy (production deploy at G9) | G1 |
 | Receive → label → move → count | Unplanned and PO-less receipts, lots with expiry/retest, quarantine by default, labels (QR/Code 128), scan-to-action, moves and transfers, boxes with lineage, cycle and blind counts with approved variance posting, expiry alerts, stock card | G2 |
 | Plan → weigh → produce → QA release → BMR | Versioned formulas and routings, work orders and batches, line clearance, dispensing with lot scan and tolerance, process readings, step checklist with conductor/checker, holds, deviations, yield and reconciliation, lot and batch disposition, BMR and dispensing sheet PDFs with reprint audit | G3 |
 | Order → pick → pack → ship | Customer master and requirements, sales orders with approval, allocation by FEFO/FIFO, pick lists, pack verification by box scan, packaging reconciliation, shipment posting, delivery receipt, customer order status, complaints and returns capture | G4 |
@@ -206,7 +207,7 @@ flowchart LR
 | Phase | Scope added |
 |---|---|
 | 5 Reporting + imports | Owner and operations dashboards, scheduled reports, CSV/XLSX import wizard, attendance import and exception review, action center, email notifications |
-| 6 Procurement + HR/finance | Purchase requests and orders, expected and partial receipts, supplier performance, reorder suggestions, shifts and attendance rules, payroll support or accounting exports per approved scope, CAPA and change control, equipment maintenance plans |
+| 6 Procurement + HR/finance | Purchase requests and orders, expected and partial receipts, supplier performance, reorder suggestions, shifts and attendance rules, payroll support or accounting exports per approved scope, CAPA and change control, equipment maintenance plans only if the owner approves that scope (FR-production-15, Later) |
 | 7 Offline/PWA hardening | Installability, approved offline workflows, outbox, conflict queue, device testing |
 | 8 Customer portal + payments | External ordering with tenant isolation, payment provider adapter, verified webhooks, reconciliation |
 | 9 Production readiness | Load and security testing, backup/restore drill, monitoring, SOPs, training, migration rehearsal, rollback plan |
@@ -260,7 +261,7 @@ delivery and a one-line acceptance hint; full acceptance criteria live in `docs/
 | FR-masterdata-01 | Products and SKUs: variants, family, status, shelf life, storage conditions, barcode/QR format | Must | 1 | SKU with shelf life yields computed expiry on batch |
 | FR-masterdata-02 | SKU packaging configuration (container, cap, label, carton, inserts, units per box) and customer-specific SKU mapping | Must | 4 | Packaging order lists components from SKU config |
 | FR-masterdata-03 | UOM and conversions, dimensionally valid; density conversions material-specific and versioned (ADR-010) | Must | 1 | g↔L conversion rejected without material density |
-| FR-masterdata-04 | Materials: INCI and common names, type (raw, packaging, intermediate), supplier part number, specification, approved suppliers, unit, storage conditions, retest/expiry rules, allergen/hazard notes, required quality documents | Must (basics) / Should (approved suppliers, required documents) | 1 / 2 | Receipt of a material missing a required document is flagged |
+| FR-masterdata-04 | Materials: INCI and common names, type (raw, packaging, intermediate), supplier part number, specification, approved suppliers, unit, storage conditions, retest/expiry rules, allergen/hazard notes, required quality documents | Must (basics) / Should (approved suppliers, required documents) | 1 / 2 (required documents) / 6 (approved suppliers) | Receipt of a material missing a required document is flagged |
 | FR-masterdata-05 | Versioned formulas/BOMs: lines with theoretical quantity, tolerance, expected yield, effective dates, approval; packaging BOM; label template link | Must | 3 | Draft revision cannot be used by a batch |
 | FR-masterdata-06 | Versioned routings: steps, equipment/line requirements, work instruction revisions, QC checkpoints, required checks and sign-off rules per step | Must | 3 | Routing step with checker required blocks completion without checker |
 | FR-masterdata-07 | Sites, warehouses, zones/bins/racks, special locations (receiving/staging, quarantine, hold, rejected, recall), production lines, equipment register | Must | 1 | Special locations exist per warehouse in seed |
@@ -268,7 +269,7 @@ delivery and a one-line acceptance hint; full acceptance criteria live in `docs/
 | FR-masterdata-09 | Customers: profiles, contacts, ship-to addresses, contract/pricing rules, lead times, credit/terms, specifications, artwork/label versions, required documents, notes | Must | 4 | Order picks customer pricing and artwork version |
 | FR-masterdata-10 | Supplier basics (name, contacts, status) for receipts; full supplier master in procurement | Must | 2 | Receipt requires an active supplier |
 | FR-masterdata-11 | Label templates, versioned, with configurable content and symbology (ADR-017) | Must | 2 | Reprint uses the template version recorded on the label job |
-| FR-masterdata-12 | Shifts, holiday calendars and site calendars | Should | 5 | Attendance rules reference the calendar |
+| FR-masterdata-12 | Shifts, holiday calendars and site calendars | Should | 6 (Phase 5 has one default shift per site) | Attendance rules reference the calendar |
 | FR-masterdata-13 | Effective-dated, versioned records; a batch keeps the exact formula, routing, specification and instruction revisions used at creation | Must | 3 | Revising a formula does not change an existing BMR |
 | FR-masterdata-14 | Equipment calibration, cleaning and maintenance due dates on the register | Should | 3 | Weighing on a scale past calibration due raises a blocking or warning rule per config |
 
@@ -327,7 +328,7 @@ delivery and a one-line acceptance hint; full acceptance criteria live in `docs/
 |---|---|---|---|---|
 | FR-quality-01 | Lot disposition: decisions release, reject, hold, conditional_release and recall (Disposition) move the lot between the quality statuses quarantine, released, on_hold, rejected and recalled (`expired` is set by the expiry job); only qa_qc (or configured role) may release | Must | 2 | Warehouse operator cannot release |
 | FR-quality-02 | Quality holds on lot, batch, box or location with reason, owner and release | Must | 2 (lot), 3 (batch) | Held stock excluded from availability |
-| FR-quality-03 | Inspections: incoming, in-process, finished product; sampling plans, test methods, specifications, acceptance criteria, results with units, attachments, reviewer, approval | Must | 3 (incoming minimal in 2) | Out-of-spec result cannot be approved as pass |
+| FR-quality-03 | Inspections: incoming, in-process, finished product; sampling plans, test methods, specifications, acceptance criteria, results with units, attachments, reviewer, approval | Must | 3 (lot release at receipt in 2 via dispositions, A-PM-18) | Out-of-spec result cannot be approved as pass |
 | FR-quality-04 | Batch disposition: release, reject, conditional_release (with conditions and review date), rework; only authorised roles | Must | 3 | Batch `released` only by qa_qc with sign-off |
 | FR-quality-05 | Deviations with investigation, root cause and linkage to batch/lot/step | Must | 3 | Open deviation blocks batch release unless closed or waived with approval |
 | FR-quality-06 | Complaints and customer returns with linkage to shipment, lot and batch | Should | 4 | Complaint opens reverse trace |
@@ -423,12 +424,12 @@ delivery and a one-line acceptance hint; full acceptance criteria live in `docs/
 | FR-platform-06 | Notifications: in-app from Phase 2, email adapter from Phase 5; other channels only after consent and policy | Must | 2 / 5 | Approval request notifies approver |
 | FR-platform-07 | Action center: pending approvals, late work orders, low stock, expiring lots, failed imports, sync conflicts, quality holds, overdue maintenance, complaints, unshipped orders | Must | 5 (approvals from 2) | Items clear when resolved |
 | FR-platform-08 | Recurring checks and escalation rules: owner, due date, severity, acknowledgement, resolution notes, audit | Should | 5 | Unacknowledged item escalates after configured time |
-| FR-platform-09 | Monitoring: API and worker health, failed jobs, error rates, latency, storage, database capacity, sync backlog, backup status; admin diagnostics view without secrets | Must | 1 (health endpoints; diagnostics cards Health, Backups, Variables), 5 (Database, Jobs, Imports, Reconciliation, Sync, Errors, Alerts, Integrations cards) | Diagnostics page shows no environment values; Phase 1 cards are Gate 1 evidence (`docs/deployment-railway.md` §14, `docs/operations-runbook.md` §17) |
-| FR-platform-10 | CSV/XLSX import wizard: preview, mapping, validation, duplicate detection, error file, resumable processing, audit | Must | 5 (master data imports Should in 1) | Re-running an import does not duplicate rows |
+| FR-platform-09 | Monitoring: API and worker health, failed jobs, error rates, latency, storage, database capacity, sync backlog, backup status; admin diagnostics view without secrets | Must | 1 (health endpoints; diagnostics cards Health, Backups, Variables), 2 (Jobs, Reconciliation cards), 5 (Database, Imports, Errors, Alerts, Integrations cards), 7 (Sync card) | Diagnostics page shows no environment values; Phase 1 cards are Gate 1 evidence (`docs/deployment-railway.md` §14, `docs/operations-runbook.md` §17) |
+| FR-platform-10 | CSV/XLSX import wizard: preview, mapping, validation, duplicate detection, error file, resumable processing, audit | Must | 5 (command-line loader in Phase 2 if early go-live after G4, Q-MIG-13) | Re-running an import does not duplicate rows |
 | FR-platform-11 | Exports of reports, master data and transactions by permission; spreadsheet formula injection protection | Must | 2 | Cell starting with `=` is escaped |
 | FR-platform-12 | Versioned internal API (`/api/v1`) with typed client; provider adapters for email, storage, payment, time-clock import, accounting export | Must | 1 (API), as needed | Breaking change requires `/api/v2` |
 | FR-platform-13 | Offline sync infrastructure: SyncCommand outbox, replay with idempotency, SyncConflict review queue, sync status UI (`docs/offline-sync.md`) | Later | 7 | AC-20 |
-| FR-platform-14 | Data migration tooling per `docs/data-migration-plan.md`: identifier generation, duplicate reconciliation, sign-off | Must | 9 (plan in 0) | Migration rehearsal recorded |
+| FR-platform-14 | Data migration tooling per `docs/data-migration-plan.md`: identifier generation, duplicate reconciliation, sign-off | Must | 9 (plan in 0; loader, QA bulk disposition and label verification in Phase 2 if early go-live after G4, Q-MIG-13) | Migration rehearsal recorded |
 | FR-platform-15 | Fictional seed data for development and staging; production data never overwritten | Must | 1 | Seed refuses to run against production |
 | FR-platform-16 | In-app help and quick guides (brief: Global screens): a per-screen help entry (user menu and the operator-mode `?`) opens a short task guide (text and images) for the current workflow without leaving the task; guides are versioned, organization-wide content records (`help_guides`, edited with `platform.help_guide.admin`), cached for offline reading, and on a batch step link to the work-instruction revision snapshot; content authored by site managers with the ux-ui-designer and mapped to SOPs in Phase 9 | Should | 2 (receive, move, count), extended every phase; SOP mapping and training 9 | Every operator-mode screen has a help entry that opens without leaving the task; a guide edit creates a new version and is audited |
 
@@ -545,12 +546,12 @@ Exit criteria are quoted from the brief. Gates are defined in `docs/team-charter
 | Phase | Scope | Exit criteria (brief) | Depends on | Gate |
 |---|---|---|---|---|
 | 0 Discovery and process mapping | Interviews and process maps (procurement, warehouse, production, QA, packaging, sales, attendance/payroll, finance, reporting); existing files and machine export formats; this document set | Approved glossary, workflows, roles/sites matrix, MVP scope, assumptions/risk register, data migration plan | Owner availability for interviews | G0 |
-| 1 Foundation | Repository, environments, design system, auth, sites/RBAC, audit events, master data, migrations, seed data, CI, logging (Slice 1, section 11) | Permission tests pass; staging deploy works; basic mobile layout and operational shell approved | G0 approval of ADR-001 to 014, 019 to 021 | G1 |
+| 1 Foundation | Repository, environments, design system, auth, sites/RBAC, audit events, master data, migrations, seed data, CI, logging (Slice 1, section 11) | Permission tests pass; staging deploy works; basic mobile layout and operational shell approved | G0 approval of ADR-001 to 014, 019 to 021, 023 | G1 |
 | 2 Inventory MVP | Receipts, lots, locations, stock ledger, reservations, labels, scan-to-move, FIFO/FEFO recommendations, stock counts, boxes, holds and lot release, jobs, exports | End-to-end receive → label → move → count flow tested; concurrency and multi-site isolation verified | Phase 1; hardware answers (Q-A-03) | G2 |
 | 3 Production + BMR | Versioned formulas/routings, work orders, batches, weighing, process records, QA hold/release, deviations, yield, BMR and dispensing sheet PDFs, intermediates | Run a representative soap batch in staging with traceability and printable record reviewed by production/QA | Phase 2 ledger; approved routings (Q-B-01, Q-B-02); ADR-016 decision | G3 |
 | 4 Packaging + fulfilment + CRM | Customer master and requirements, orders, allocation, pick/pack, box IDs, packaging reconciliation, shipments, delivery receipts, order status, complaints/returns | Order-to-shipment flow reconciles stock and every shipped box is traceable | Phases 2 and 3 | G4 |
 | 5 Reporting + imports | Owner and operations dashboards, operational reports, scheduled reports, action center, email, import wizard, attendance import and exception review, employees | KPIs reconcile to source data; attendance import validated against representative time-clock files | Phase 4 data; time-clock files (Q-A-06) | G5 |
-| 6 Procurement + HR/finance scope | Purchase requests/orders, supplier performance, reorder suggestions, shifts/attendance rules, payroll support and/or accounting exports, invoices/bills/payments, costing, CAPA/change control, maintenance plans | Qualified business owners validate calculations and approvals; sensitive access tests pass | Phase 5; scope decisions (Q-A-04, Q-A-05) | G6 |
+| 6 Procurement + HR/finance scope | Purchase requests/orders, supplier performance, reorder suggestions, shifts/attendance rules, payroll support and/or accounting exports, invoices/bills/payments, costing, CAPA/change control, maintenance plans only if the owner approves that scope (FR-production-15, Later) | Qualified business owners validate calculations and approvals; sensitive access tests pass | Phase 5; scope decisions (Q-A-04, Q-A-05) | G6 |
 | 7 Offline/PWA hardening | Installability, approved offline workflows, outbox, conflict queue, device testing | Offline acceptance tests pass on representative phones/tablets; conflicts are visible and recoverable | Idempotent commands from Phase 2; offline list (Q-A-02) | G7 |
 | 8 Customer portal + payment | External ordering, customer-specific access, provider adapter, verified webhooks, reconciliation | Security review, sandbox payment tests, idempotency and failure/refund tests pass | Phase 4 orders; Phase 6 invoices; decision Q-C-03 | G8 |
 | 9 Production readiness | Load/security testing, backup/restore, monitoring, SOPs, training, data migration rehearsal, rollback plan | Go-live checklist signed by company owners; support ownership and incident procedure established | All phases in the go-live set | G9 |
@@ -575,7 +576,7 @@ Indicative sequencing:
 4. Phase 4 customer master and sales order work can start when Phase 3 has a released batch to ship; packaging reconciliation needs Phase 3 output lots.
 5. Phase 5 attendance import can be built as soon as representative files arrive, independent of Phase 4; KPI work needs Phase 4 data.
 6. Phase 7 groundwork (idempotency keys, client ids, outbox contract) is part of Phase 2's API design; the PWA hardening itself waits for Phase 4 screens to stabilise.
-7. A production go-live after G4 is possible without Phases 5 to 8 if the owner accepts spreadsheets for reporting and procurement for a period; Phase 9 activities (backup drill, security review, migration rehearsal) must then be pulled forward.
+7. A production go-live after G4 is possible without Phases 5 to 8 if the owner accepts spreadsheets for reporting and procurement for a period; Phase 9 activities (backup drill, security review, migration rehearsal) must then be pulled forward and backlog epic E-2-07 (loader, QA bulk disposition, label verification, opening receipts, legacy document index) becomes Must (Q-MIG-13, R-08).
 8. Security review runs continuously on anything touching auth, scope, uploads, exports or webhooks (charter working agreement 6).
 
 ---
@@ -587,13 +588,13 @@ Indicative sequencing:
 | Area | What Slice 1 delivers |
 |---|---|
 | Repository and tooling | pnpm workspace, TypeScript strict, Next.js App Router, Drizzle, ESLint boundaries, Prettier, Husky, Vitest, Playwright (ADR-001, 003, 012, 013) |
-| Environments | Local (Docker Postgres), staging and production on Railway with separate databases and secrets; migrations as pre-deploy step (ADR-014) |
+| Environments | Local (Docker Postgres) and staging on Railway with separate databases and secrets; the production project is created in Phase 9 with the same IaC (promotion workflow dry-run only in Slice 1); migrations as pre-deploy step (ADR-014) |
 | Design system shell | Tokens, base components, responsive shell: desktop left navigation with collapsible groups, mobile bottom/drawer navigation, page title, site switcher, user menu; loading/empty/error/denied states; operator mode entry point (`docs/ux-system.md`) |
 | Sign-in and sessions | Email + password (argon2id), invitation and password reset, session list and revocation, idle and absolute expiry, account states; MFA (TOTP) for privileged roles in Phase 1b (ADR-004) |
 | Sites and role/permission administration | Organization, sites, roles seeded from `docs/permissions-matrix.md`, user management, user_site_assignments, org-wide assignment for owner_director/system_admin/auditor |
 | Site-scoped authorization | AuthContext built per request; scoped repository helpers; permission check in every service; separation of duties helper; approval threshold table |
 | Audit log | AuditEvent table and writer; events for sign-in/out, failed sign-in, password reset, user and role changes, assignment changes, settings changes; audit viewer with filters |
-| Master data basics | UOM and conversions, sites, warehouses, locations (with special locations), products and SKUs (basic fields), materials (basic fields), reason codes, numbering rules, settings |
+| Master data basics | UOM and conversions, sites, warehouses, locations (with special locations), production lines and equipment register (`production_lines`, `equipment`; register fields only, service records Phase 3; FR-masterdata-07), products and SKUs (basic fields), materials (basic fields), reason codes, numbering rules, settings |
 | Migrations and seed | Migrations from zero; fictional seed (two sites, warehouses, locations, users per role, a few products and materials); seed guard against production |
 | CI | GitHub Actions: lint, typecheck, unit, integration against Postgres service, Playwright smoke at 360 px and desktop; permission negative tests mandatory |
 | Health and diagnostics | `/api/health` and `/api/ready`; structured logs with correlation id; admin diagnostics page with the Health, Backups and Variables cards only (names and booleans, never values; FR-platform-09 Phase 1 part, `platform.diagnostics.view`) |
@@ -615,8 +616,8 @@ Indicative sequencing:
 |---|---|
 | S1-01 | Given a user assigned warehouse_operator at Site A only, when they open `/sites/<site-b-id>/locations` or call `GET /api/v1/locations?siteId=<site-b-id>`, then the response is 403 (denied) and the list contains no Site B rows, and an AuditEvent `identity.authorization.denied` is written. |
 | S1-02 | Given the same user, when they call `POST /api/v1/locations` with `siteId` of Site B in the body, then the service rejects it before any write and the Site B location count is unchanged. |
-| S1-03 | Given a site_manager who submitted a settings change that requires approval, when they attempt to approve it, then the approval is denied with reason `separation_of_duties` and audited; a different site_manager can approve it. |
-| S1-04 | Given a system_admin, when they add permission `inventory.adjustment.approve` to the site_manager role, then an AuditEvent records actor, time, role, before and after permission sets, and the change is visible in the audit viewer. |
+| S1-03 | Given a system_admin who submitted a setting change that requires approval (a SettingChangeRequest), when they attempt to approve it, then 409 `separation_of_duties` is returned and audited (`identity.authorization.denied`); the owner_director, or a second system_admin, holding `platform.settings.approve` can approve it. A site_manager holds no `platform.settings.*` permission and can neither submit nor approve. |
+| S1-04 | Given a system_admin holding `identity.role.admin`, when they attempt to change the permission set of a seeded role (`is_system = true`, for example site_manager), then the change is rejected and no `role_permissions` row changes (seeded roles are read-only templates; editable custom roles by cloning arrive in Phase 1b, US-1-29). Given a system_admin holding `identity.site_assignment.admin`, when they change a user's role assignment at Site A (for example warehouse_operator to site_manager), then `identity.site_assignment.*` AuditEvents (`revoked`, `granted`) record actor, time, user, role, site and before/after, the change is visible in the audit viewer, and the user's effective permissions change at their next request. |
 | S1-05 | Given a user with two active sessions, when a system_admin revokes all sessions for that user, then the user's next request on either device is redirected to sign-in and the sessions show `revoked` with the actor. |
 | S1-06 | Given a user whose account is deactivated, when they attempt to sign in with correct credentials, then sign-in fails with a generic message, no session is created, and the failed attempt is audited. |
 | S1-07 | Given a phone viewport of 360 × 640 px, when any Slice 1 page is opened, then there is no horizontal scroll, every interactive element is at least 44 px tall and the primary action is reachable without scrolling the navigation. |
@@ -646,6 +647,7 @@ Indicative sequencing:
 | BMR (Batch Manufacturing Record) | The document that records everything about a batch: formula, materials and lots weighed, steps, checks, yield, tests and QA decision. |
 | BOM / formula | The list of materials and quantities needed to make a product; "formula" is used for the recipe, "packaging BOM" for packaging components. |
 | CAPA | Corrective and preventive action: the plan that fixes the cause of a deviation or complaint and checks that the fix worked. |
+| CAPA action | One task inside a CAPA with its own owner, due date and verification (CapaAction); overdue actions appear in the Action Center while the CAPA owner stays accountable for the whole plan. |
 | Change control | The approval process for changing a formula, routing, specification or template. |
 | Checker | The second person who verifies a weighing or step (the "Checked by" column); must differ from the conductor. |
 | Checklist item | One line of a line-clearance or step checklist defined on a routing step (RoutingStepChecklistItem); the operator's tick and the checker's confirmation are recorded per batch step. |
@@ -659,6 +661,7 @@ Indicative sequencing:
 | Expiry date | The date after which a lot must not be used or shipped. |
 | FEFO | First-expired, first-out: use the lot that expires soonest. |
 | FIFO | First-in, first-out: use the oldest received lot when expiry does not apply. |
+| Forecast assumptions | The owner screen that shows, per SKU and site, how each forecast was made: method, history length, backtest error, confidence band (or why there is none) and the drivers in words; forecasts are labelled as estimates, never actuals (Phase 6 and later, `analytics.forecast.view`; `docs/ux-system.md` §9.15, `docs/analytics-kpis.md`). |
 | Genealogy | The full chain from supplier lot to receipt, batch, finished lot, box, order and delivery, in either direction. |
 | Goods receipt | The record of materials arriving, which creates lots and a receipt movement when posted. |
 | Idempotency key | A unique key sent with a command so that sending it twice (retry, replay) has the same effect as once. |
@@ -682,6 +685,7 @@ Indicative sequencing:
 | Overtime request | A request for approved overtime hours for an employee (OvertimeRequest), approved by someone other than the employee before it counts in time summaries. |
 | Pack | One boxing and verification session that produces containers from a batch output or for a sales order (Pack); the boxing note / packing list is generated from it. |
 | Pack verification scan | Each checker scan of a box during pack verification (PackVerificationScan); kept as evidence and never edited; failures feed the pack verification KPI. |
+| Packaging order | The instruction to box a quantity of one SKU, from a batch output or for a sales order, with the resolved packaging configuration (SKU default or approved customer requirement), components to issue and expected boxes; it is recorded as a Pack (`inventory.pack.create`; FR-sales-05, `docs/ux-system.md` §9.7a). |
 | Packaging reconciliation | Comparing packaging and label components issued, used, damaged and returned for a batch. |
 | Pairing | Matching attendance punches into in/out pairs per employee and work date so worked minutes can be computed; unmatched punches become exceptions. |
 | Paper record page | A scanned page of a paper record kept for a batch step that the company's SOPs still require on paper (BatchPaperRecord); part of the hybrid batch record. |
@@ -699,6 +703,7 @@ Indicative sequencing:
 | Qualified reviewer | A named person with the competence and authority to validate a class of configuration (formulas and routings, quality rules, tax and finance, attendance and payroll, devices); the team never invents these rules. |
 | Quarantine | The default status of received or newly produced stock until QA releases it. |
 | Quick guide | A short, versioned in-app task guide (text and images) opened from the user menu or the operator-mode `?` for the current screen (FR-platform-16); on a batch step it links to the work-instruction revision in force. |
+| Read-only maintenance mode | An application setting (`platform.maintenance.read_only`, A-DEP-21: on/off plus a list of roles that keep write access; Phase 2) used during the cutover load window so that only the loader roles can write while everyone else sees a banner and read-only screens; distinct from the `MAINTENANCE_MODE=1` environment variable (full 503 page), which is used only for restores; procedure in `docs/operations-runbook.md` §17a.2. |
 | Reservation | Earmarking stock for a planned need (for example a work order) without choosing specific boxes; distinct from allocation. |
 | Retention policy | The configured rule per data class saying how long records are kept online and what happens afterwards (archive, anonymise, delete); defaults in `docs/security.md` §7, validated by qualified reviewers. |
 | Retest date | The date by which a material must be re-tested before further use. |
@@ -706,6 +711,7 @@ Indicative sequencing:
 | Routing | The ordered steps, equipment and checks to make a product; versioned. |
 | Rule set version | An approved, effective-dated version of the attendance or payroll rules; the version in force on a work date is recorded on every summary and payroll line computed from it. |
 | Sales order (SO) | A customer's confirmed request to buy, moving through the order state machine. |
+| Scan box contents | The operator-mode screen that builds one box at a time inside a Pack: the system allocates the box number and label, the operator scans the lot or units into the box until the count matches units per box, and the last box can be closed as partial (`docs/ux-system.md` §9.7a). |
 | Scan-to-action | Scan a code, see what it is and its status, then choose from only the actions allowed. |
 | Setting change request | A proposed change to a setting that requires approval (SettingChangeRequest); it is applied only when a different authorised user approves it. |
 | Shipment | The posted dispatch of boxes to a customer; this is when stock leaves the ledger. |
@@ -717,9 +723,11 @@ Indicative sequencing:
 | Three-way match | Checking a supplier bill line against the purchase order (quantity, price) and the goods receipt (quantity) before approval; variances outside tolerance need approval. |
 | Time summary | The computed worked minutes per employee, work date and minute class, derived from paired punches and the rule set version in force; the input to payroll support. |
 | Tolerance | The allowed difference between target and actual quantity for an ingredient. |
+| Traceability explorer | The quality screen that searches a lot, box, batch, complaint or supplier lot and walks the genealogy forward (to shipments and customers) or in reverse (to input lots, equipment and operators), listing affected customers; each trace is audited (`quality.genealogy.view`, `quality.genealogy.viewed`; `docs/ux-system.md` §9.14). |
 | Transfer request | The source document behind a move between locations, warehouses or sites (TransferRequest); a scan-to-move creates and posts one in a single step, inter-site transfers post out and in separately. |
 | Traveler | A printed sheet that follows a batch through the process steps. |
 | UOM | Unit of measure; conversions must stay within one dimension unless a material density is defined. |
+| Undo window | The short period (default 60 seconds, `settings.ux.undo_window_seconds`) during which an operator can undo their own stock move from the confirmation toast; the undo posts a linked reversal movement and is refused if anything else has touched the lot, box or location since (`docs/ux-system.md` §5.17, A-UX-15). |
 | Work date | The calendar day a punch is credited to, derived by the rule set (night shifts crossing midnight belong to one work date), not simply the punch timestamp's date. |
 | Work order (WO) | The plan to make a quantity of a product at a site and line by a date; executed as one or more batches. |
 | Yield | Actual output compared with expected output; the variance is recorded and explained. |
@@ -731,7 +739,7 @@ Indicative sequencing:
 These are reviewed at Gate 0 (`docs/team-charter.md`, G0). Nothing in Phase 1 starts until
 items 1 to 3 are answered.
 
-1. Approve or amend ADR-001 to ADR-014 and ADR-019 to ADR-021 (`docs/decision-log.md`).
+1. Approve or amend ADR-001 to ADR-014, ADR-019 to ADR-021 and ADR-023 (`docs/decision-log.md`).
 2. Answer the ten blocking questions Q-A-01 to Q-A-10 (section 9.1); the defaults will be
    used for any left unanswered, and the resulting assumptions become binding until changed.
 3. Confirm the MVP boundary (section 5.1) and the launch sequence (Q-A-10), including whether
