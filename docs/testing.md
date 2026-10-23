@@ -810,6 +810,24 @@ executor, device row and evidence so both documents stay in step.
 | T-17 | Manual at G3 | — | D1, D2, D4 PDF viewers | Screenshots per viewer; metadata dump |
 | T-18 | CI | `jobs.pdf_queue_limit` (11 concurrent requests, 429 on the 11th), PDF memory check of section 11.1 | — | CI run URL, memory sample |
 
+### 9.18 MVP client-demo rehearsal (pre-demo check)
+
+Before every client demo the full storyline of `docs/demo-script.md` is run on a production
+build against a freshly reset database: receipt into quarantine, label, keyboard-wedge scan, QA
+release, expired-lot release blocked, put-away move, batch plan, start, weigh 5 ingredients
+(FEFO-recommended lots, checker ≠ operator), 7 checklist steps, completion, 3 QC results, batch
+release, BMR PDF, sales order, FEFO allocation, dispatch, DR PDF, reverse and forward trace,
+owner KPIs before and after, audit log, and a 390 × 844 phone check (no horizontal scroll).
+The run asserts status chips, numbers and texts, and fails on any error page, console error or
+failed request (favicon excluded).
+
+| Run | Result | Evidence |
+|---|---|---|
+| 23 Oct 2026 (QA) | Passed from a fresh seed after 8 fixes (listed in the QA report of that date) | 32 screenshots, `bmr.pdf` (2 pages), `delivery-receipt.pdf` (1 page); 12 screenshots kept in `docs/demo/` |
+
+Follow-up: move the rehearsal script into `tests/e2e/demo-rehearsal.spec.ts` under the
+Playwright configuration of 3.7, so that CI runs it against an ephemeral database.
+
 ---
 
 ## 10. CI gates and flakiness policy (ADR-013)

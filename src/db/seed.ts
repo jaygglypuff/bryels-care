@@ -286,6 +286,8 @@ async function main() {
     const size = new Decimal(f.rev.referenceBatchSizeG);
     const theoYield = size.mul(f.rev.theoreticalYieldPct).div(100);
     const started = opts.status !== "planned";
+    // Created the day before the planned start, but never in the future (batches planned ahead were created yesterday).
+    const createdAt = at(Math.min(-opts.daysAgo - 1, -1), 15);
     const [b] = await db
       .insert(s.batches)
       .values({
@@ -301,10 +303,10 @@ async function main() {
         startedAt: started ? at(-opts.daysAgo, 8) : null,
         theoreticalYieldG: theoYield.toString(),
         createdBy: U["manager.nfd"],
-        createdAt: at(-opts.daysAgo - 1, 15),
+        createdAt,
       })
       .returning();
-    await db.insert(s.batchStateTransitions).values({ batchId: b.id, fromState: null, toState: "planned", actorId: U["manager.nfd"], at: at(-opts.daysAgo - 1, 15) });
+    await db.insert(s.batchStateTransitions).values({ batchId: b.id, fromState: null, toState: "planned", actorId: U["manager.nfd"], at: createdAt });
     const bms = await db
       .insert(s.batchMaterials)
       .values(f.bomLines.map((bl) => ({ batchId: b.id, bomLineId: bl.id, lineNo: bl.lineNo, materialId: bl.materialId, theoreticalQtyG: bl.quantityG, tolerancePct: bl.tolerancePct })))
@@ -357,7 +359,7 @@ async function main() {
       await db.insert(s.batchStateTransitions).values({ batchId: b.id, fromState: prev, toState: st, actorId: st === "released" ? U["qa.nfd"] : U["operator.nfd"], at: at(-opts.daysAgo, 9) });
       prev = st;
     }
-    await audit("production.batch.created", "batch", b.id, bNo, U["manager.nfd"], site, at(-opts.daysAgo - 1, 15));
+    await audit("production.batch.created", "batch", b.id, bNo, U["manager.nfd"], site, createdAt);
     return b;
   };
 

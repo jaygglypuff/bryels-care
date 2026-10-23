@@ -30,7 +30,13 @@ type Props = {
 export function Shell({ nav, user, sites, currentSiteId, switchSite, signOut, children }: Props) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const isActive = (href: string) => href !== "#" && (pathname === href || (href !== "/dashboard" && pathname.startsWith(href + "/")) || pathname === href);
+  // Highlight only the most specific matching item (e.g. /inventory/receive/… marks "Receive materials", not also "Lots & stock").
+  const matches = (href: string) => href !== "#" && (pathname === href || (href !== "/dashboard" && pathname.startsWith(href + "/")));
+  const activeHref = nav
+    .flatMap((g) => g.items.map((i) => i.href))
+    .filter(matches)
+    .sort((a, b) => b.length - a.length)[0];
+  const isActive = (href: string) => href === activeHref;
 
   const sidebar = (
     <nav aria-label="Main" className="flex h-full flex-col gap-1 overflow-y-auto px-3 py-4">

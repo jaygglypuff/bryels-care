@@ -95,6 +95,7 @@ The full production topology (worker, bucket, backups, staging/production separa
 | `docs/offline-sync.md` | Cached data, command queue, idempotency, conflicts, retry policy |
 | `docs/reports-and-templates.md` | Document templates (BMR, labels, DR, pick list), print specs, revision rules |
 | `docs/testing.md` | Test strategy, invariants, device matrix, acceptance procedures |
+| `docs/demo-script.md` | Presenter's guide for the 15 to 20 minute client demo, with screenshots in `docs/demo/` |
 | `docs/deployment-railway.md` | Services, Postgres, storage, secrets, migrations, backups, rollback |
 | `docs/operations-runbook.md` | Routine admin, failed jobs/imports, sync conflicts, incidents, restore |
 | `docs/risk-register.md` | Risks, likelihood, impact, owner, mitigation, trigger |

@@ -147,7 +147,7 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
                   <Td className="font-medium">
                     {s.locationCode} <span className="font-normal text-muted">· {s.locationName}</span>
                   </Td>
-                  <Td>{s.kind}</Td>
+                  <Td>{s.kind.charAt(0).toUpperCase() + s.kind.slice(1)}</Td>
                   <Td>{fmtLotQty(s.qty, lot.baseUom)}</Td>
                 </tr>
               ))}

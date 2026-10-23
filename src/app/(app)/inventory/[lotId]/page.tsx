@@ -16,7 +16,7 @@ export const metadata = { title: "Lot" };
 const STATUS_WORDS: Record<string, string> = { quarantine: "quarantined", on_hold: "on QA hold", rejected: "rejected", expired: "expired", recalled: "recalled" };
 
 function RiskBanner({ lot, canSeeQa }: { lot: LotDetail; canSeeQa: boolean }) {
-  const qa = canSeeQa ? <Link href="/quality" className={buttonClass("secondary", "sm")}>Open QA queue</Link> : undefined;
+  const qa = canSeeQa ? <Link href={`/quality/lots/${lot.id}`} className={buttonClass("secondary", "sm")}>Open QA decision</Link> : undefined;
   const s = lot.qualityStatus;
   if (s === "quarantine")
     return (
@@ -44,7 +44,7 @@ function RiskBanner({ lot, canSeeQa }: { lot: LotDetail; canSeeQa: boolean }) {
     );
   if (s === "expired" || isPastExpiry(lot.expiresOn))
     return (
-      <Banner tone="exp" title={`Expired${lot.expiresOn ? ` on ${fmtDate(lot.expiresOn)}` : ""}: not usable`}>
+      <Banner tone="exp" title={`Expired${lot.expiresOn ? ` on ${fmtDate(lot.expiresOn)}` : ""}: not usable`} action={qa}>
         Expired stock is blocked from issue, consumption and shipment. Move it to a quarantine, hold or rejected location for disposal.
       </Banner>
     );

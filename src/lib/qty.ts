@@ -38,8 +38,12 @@ export function fmtDateTime(v: string | Date | null | undefined): string {
   });
 }
 
+/**
+ * Calendar days from today (Asia/Manila) to a date: 0 = today, 1 = tomorrow, -1 = yesterday.
+ * Matches the ledger and QA rules, where a lot is usable through the end of its expiry day.
+ */
 export function daysUntil(date: string | null | undefined, from = new Date()): number | null {
   if (!date) return null;
-  const ms = new Date(date + "T00:00:00+08:00").getTime() - from.getTime();
-  return Math.floor(ms / 86_400_000);
+  const today = from.toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+  return Math.round((Date.parse(String(date).slice(0, 10) + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86_400_000);
 }

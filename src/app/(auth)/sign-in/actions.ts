@@ -30,11 +30,11 @@ export async function signIn(_: ActionState, formData: FormData): Promise<Action
       .update(users)
       .set({ failedLoginCount: failures, status: failures >= MAX_FAILURES ? "locked" : user.status })
       .where(eq(users.id, user.id));
-    await db.insert(auditEvents).values({ organizationId: user.organizationId, actorId: user.id, action: "identity.session.sign_in_failed", entityType: "user", entityId: user.id });
+    await db.insert(auditEvents).values({ organizationId: user.organizationId, actorId: user.id, action: "identity.session.sign_in_failed", entityType: "user", entityId: user.id, entityNumber: user.email });
     return generic;
   }
   await db.update(users).set({ failedLoginCount: 0, lastLoginAt: new Date() }).where(and(eq(users.id, user.id)));
   await createSession(user.id);
-  await db.insert(auditEvents).values({ organizationId: user.organizationId, actorId: user.id, action: "identity.session.signed_in", entityType: "user", entityId: user.id });
+  await db.insert(auditEvents).values({ organizationId: user.organizationId, actorId: user.id, action: "identity.session.signed_in", entityType: "user", entityId: user.id, entityNumber: user.email });
   redirect("/dashboard");
 }

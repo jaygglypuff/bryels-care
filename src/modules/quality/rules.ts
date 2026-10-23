@@ -7,6 +7,8 @@
  * validated by qualified reviewers before production use.
  */
 
+import { fmtDate } from "@/lib/qty";
+
 export type LotDecision = "release" | "reject" | "hold" | "release_from_hold";
 export type BatchDecision = "release" | "reject";
 
@@ -52,7 +54,7 @@ export function lotDecisionBlocker(
     return { code: "state", message: `Lot ${lot.lotNumber} is the output of batch ${opts.pendingBatchNumber}; decide it through batch release.` };
   }
   if (t.to === "released" && isLotExpired(lot, opts.now)) {
-    return { code: "blocked_lot", message: `Lot ${lot.lotNumber} expired${lot.expiresOn ? ` on ${lot.expiresOn}` : ""} and cannot be released. Reject it instead.` };
+    return { code: "blocked_lot", message: `Lot ${lot.lotNumber} expired${lot.expiresOn ? ` on ${fmtDate(lot.expiresOn)}` : ""} and cannot be released. Reject it instead.` };
   }
   if (!t.from.includes(lot.qualityStatus)) {
     return { code: "state", message: `${t.label} is not possible while the lot is ${lot.qualityStatus.replace("_", " ")}.` };
