@@ -231,7 +231,7 @@ async function main() {
       await move({ siteId: site, type: "receipt", lotId: lot.id, to: L(site, x.loc), qty: new Decimal(x.qty), uom: m.baseUom, doc: ["goods_receipt", gr.id, grNo], by: U["warehouse.nfd"], when: at(-x.daysAgo, 8) });
       await audit("inventory.goods_receipt.posted", "inventory_lot", lot.id, lot.lotNumber, U["warehouse.nfd"], site, at(-x.daysAgo, 8), { qty: x.qty });
       if (x.status !== "quarantine") {
-        await db.insert(s.dispositions).values({ organizationId: O, siteId: site, subjectType: "lot", subjectId: lot.id, decision: x.status === "released" ? "release" : x.status === "on_hold" ? "hold" : "reject", fromStatus: "quarantine", toStatus: x.status === "expired" ? "released" : x.status, reason: "Incoming inspection: CoA reviewed, appearance and odour conform.", decidedBy: U["qa.nfd"], decidedAt: at(-x.daysAgo + 1, 10) });
+        await db.insert(s.dispositions).values({ organizationId: O, siteId: site, subjectType: "lot", subjectId: lot.id, decision: x.status === "released" || x.status === "expired" ? "release" : x.status === "on_hold" ? "hold" : "reject", fromStatus: "quarantine", toStatus: x.status === "expired" ? "released" : x.status, reason: "Incoming inspection: CoA reviewed, appearance and odour conform.", decidedBy: U["qa.nfd"], decidedAt: at(-x.daysAgo + 1, 10) });
         if (x.loc === "QUA-01" && x.status === "released") {
           /* stays */
         }
