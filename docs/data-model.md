@@ -945,6 +945,30 @@ stored reduced to its type prefix and length). Scans that act (move, count, disp
 verify) are stored on their own records with `device_registration_id`, `client_sequence` and
 `scan_payload` where listed.
 
+#### 3.3.1 Implemented in Wave 1 W1C (E-2-04, E-2-05): differences from the target above
+
+Engineers: the tables below exist in `src/db/schema/{containers,transfers,counts,reservations}.ts`.
+Business owners: boxes, counts, adjustments and reservations now work as described in
+`docs/process-maps.md` W02 and W03, with the interim simplifications listed here.
+
+| Item | As built | Why / follow-up |
+|---|---|---|
+| `inventory_balances` key | Still `(lot_id, location_id)`; no `container_id`, `reserved_base`, `allocated_base` | Owned by the ledger stream. Box contents live in `container_contents` and must never exceed the balance of their lot at the box location; the box page flags a mismatch. Reserved and allocated quantities are computed from `stock_reservations` and `stock_allocations`. |
+| Movements carry the box | `stock_movements.meta.containerId` (plus `correlationId`, `reversalOfId` for undo) | `postMovement` has no `container_id` / `reversal_of_id` / `correlation_id` parameters yet; move to columns when the ledger adds them. |
+| Split / merge / repack | Lineage rows and content changes only; no ledger rows, because stock does not change location and balances are not container-keyed | Becomes `transfer` movements with source `container_operation` once balances carry `container_id`. |
+| `inventory_lots.origin_lot_id` | Added (inter-site re-lot) | US-2-14 AC2. |
+| Movement type `issue` | Added to `MovementType` (inter-site issue at the source site) | §5.1. |
+| `transfer_requests` | Extra columns `container_id`, `from_location_id`, `to_location_id`, `session_id`, `correlation_id`, `undone_at`, `undone_by`; lines carry `issue_movement_id`, `receipt_movement_id`, `destination_lot_id`, `reversal_movement_id` | Undo (US-2-28) is allowed only for the same user and session inside the window; the request stays `completed` and the undo columns are set. |
+| `stock_counts.status` | Adds `approved` between variance approval and posting (`planned → in_progress → counted ⇄ recount → [pending_approval →] approved → posted`, any pre-posted → `cancelled`) | `pending_approval` means step 1 approved, waiting for the second approver. |
+| `stock_count_entries` | New append-only table: every count and recount with counter and time | "Original counts never erased"; the line keeps the final quantity and variance. Recounter ≠ any earlier counter of the line; approver ≠ any counter of the count. |
+| `stock_count_scopes` | Locations only (no material class / ABC scope yet) | W03-01 finer scopes later. |
+| `stock_approval_decisions` | Interim append-only decisions for `stock_adjustment` and `stock_count` | Fold into the platform `approval_decisions` table when it exists. Thresholds come from `inventory_settings`, not yet from `approval_rules`. |
+| `stock_adjustments` | `requires_second_approval`, `value_unknown`, cancel and reject columns; lines may carry a found-stock new lot (created at posting on QA hold) | A-DM-32. |
+| `stock_reservations` | `reservation_number` (rule `RSV`), `demand_reference`; demand types add `batch` and `manual` | Sales allocation ignores reservations of the order being allocated and converts them. |
+| `allocation_rules` | New: FEFO/FIFO per default, material kind, material, product or customer, optional minimum shelf life | Precedence customer > product/material > material kind > default > built-in FEFO. |
+| `inventory_settings` | New interim key/value settings (organization or site) | Until the platform `settings` table and `src/lib/settings.ts` exist; keys in `src/modules/inventory/policy.ts`. |
+| V-FREEZE | Enforced by scan-move, the lot move page, undo, adjustments and inter-site transfer (`assertLocationsNotFrozen`) | Not yet enforced inside `postMovement` for production and dispatch postings. |
+
 ### 3.4 Procurement
 
 | Table → column | Type | Null | Constraint / default | Notes |
@@ -2002,6 +2026,7 @@ pattern contains `{SITE}` (`A-DM-07`).
 | `CNT` | `stock_counts.count_number` | `CNT-{YY}-{SEQ}` (4) | yearly | P2 |
 | `ADJ` | `stock_adjustments.adjustment_number` | `ADJ-{YY}-{SEQ}` (5) | yearly | P2 |
 | `TR` | `transfer_requests.transfer_number` | `TR-{YY}-{SEQ}` (6) | yearly | P2 |
+| `RSV` | `stock_reservations.reservation_number` | `RSV-{YY}-{SEQ}` (6) | yearly | P2 |
 | `GR` | `goods_receipts.receipt_number` | `GR-{YY}-{SEQ}` (5) | yearly | P2 |
 | `SRT` | `supplier_returns.return_number` | `SRT-{YY}-{SEQ}` (4) | yearly | P6 |
 | `PR` | `purchase_requests.request_number` | `PR-{YY}-{SEQ}` (5) | yearly | P6 |

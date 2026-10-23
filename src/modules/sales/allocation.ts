@@ -8,6 +8,7 @@ import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { D, daysUntil, fmtQty } from "@/lib/qty";
 import { assertTransition, lockOrder } from "./orders";
+import { convertReservationsForDemands, reservedByLotLocation, resolveAllocationStrategy, sortCandidates } from "@/modules/inventory";
 
 /** Orders whose allocations still hold stock (shipped allocations were already issued from stock). */
 const OPEN_ALLOCATION_STATUSES = ["confirmed", "allocated"];
@@ -17,6 +18,8 @@ export type StockCandidate = {
   lotNumber: string;
   productId: string;
   expiresOn: string | null;
+  manufacturedOn: string | null;
+  lotCreatedAt: Date;
   locationId: string;
   locationCode: string;
   onHand: string;
@@ -28,7 +31,7 @@ export type StockCandidate = {
  * Released finished-goods stock in storage locations of a site, net of open allocations,
  * in FEFO order (earliest expiry first, lots without expiry last). Expired lots are excluded.
  */
-export async function availableStock(q: DbOrTx, siteId: string, productIds?: string[]): Promise<StockCandidate[]> {
+export async function availableStock(q: DbOrTx, siteId: string, productIds?: string[], opts: { excludeDemandIds?: string[] } = {}): Promise<StockCandidate[]> {
   const where = [
     eq(inventoryLots.siteId, siteId),
     eq(inventoryLots.itemKind, "product"),
@@ -59,6 +62,8 @@ export async function availableStock(q: DbOrTx, siteId: string, productIds?: str
       lotNumber: inventoryLots.lotNumber,
       productId: inventoryLots.productId,
       expiresOn: inventoryLots.expiresOn,
+      manufacturedOn: inventoryLots.manufacturedOn,
+      lotCreatedAt: inventoryLots.createdAt,
       locationId: locations.id,
       locationCode: locations.code,
       onHand: inventoryBalances.qtyBase,
@@ -70,12 +75,17 @@ export async function availableStock(q: DbOrTx, siteId: string, productIds?: str
     .leftJoin(reserved, and(eq(reserved.lotId, inventoryBalances.lotId), eq(reserved.locationId, inventoryBalances.locationId)))
     .where(and(...where))
     .orderBy(sql`${inventoryLots.expiresOn} asc nulls last`, asc(inventoryLots.lotNumber), asc(locations.code));
+  // Inventory reservations (US-2-20) reduce available-to-promise, except the demand being allocated.
+  const held = await reservedByLotLocation(q, siteId, { excludeDemandIds: opts.excludeDemandIds });
   return rows
     .filter((r) => {
       const d = daysUntil(r.expiresOn);
       return d === null || d >= 0;
     })
-    .map((r) => ({ ...r, productId: r.productId!, available: Decimal.max(D(r.onHand).minus(r.reserved), 0).toString() }));
+    .map((r) => {
+      const reservedQty = D(r.reserved).plus(held.get(`${r.lotId}|${r.locationId}`) ?? 0);
+      return { ...r, productId: r.productId!, reserved: reservedQty.toString(), available: Decimal.max(D(r.onHand).minus(reservedQty), 0).toString() };
+    });
 }
 
 /** Product options for order entry with released available units at the current site. */
@@ -139,7 +149,7 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
         .orderBy(asc(inventoryLots.id))
         .for("update");
     }
-    const candidates = await availableStock(tx, o.siteId, productIds);
+    const candidates = await availableStock(tx, o.siteId, productIds, { excludeDemandIds: lines.map((l) => l.id) });
     const remaining = new Map(candidates.map((c) => [`${c.lotId}|${c.locationId}`, D(c.available)]));
 
     const result: AllocationResult = { orderNumber: o.orderNumber, fullyAllocated: true, created: [], shortfalls: [], skippedForShelfLife: [], minShelfLifeDays: minShelf };
@@ -149,11 +159,13 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
     for (const line of lines) {
       const already = existing.filter((a) => a.salesOrderLineId === line.id).reduce((s, a) => s.plus(a.qtyUnits), new Decimal(0));
       let need = D(line.qty).minus(already);
-      for (const c of candidates) {
+      // FEFO/FIFO rule per product and customer (US-2-20), the same order the recommendation shows.
+      const rule = await resolveAllocationStrategy(tx, o.organizationId, { productId: line.productId, customerId: o.customerId });
+      const lineMin = Math.max(minShelf, rule.minShelfLifeDays ?? 0);
+      for (const c of sortCandidates(candidates.filter((x) => x.productId === line.productId), rule.strategy)) {
         if (need.lte(0)) break;
-        if (c.productId !== line.productId) continue;
         const left = daysUntil(c.expiresOn);
-        if (left !== null && left < minShelf) {
+        if (left !== null && left < lineMin) {
           skipped.set(c.lotNumber, left);
           continue;
         }
@@ -182,6 +194,7 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
     } else {
       await tx.insert(stockAllocations).values(inserts);
     }
+    if (result.fullyAllocated) await convertReservationsForDemands(tx, lines.map((l) => l.id));
     if (result.fullyAllocated) {
       assertTransition(o.status, "allocated", o.orderNumber);
       await tx.update(salesOrders).set({ status: "allocated" }).where(eq(salesOrders.id, o.id));

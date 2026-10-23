@@ -6,7 +6,7 @@ import { inventoryBalances, inventoryLots, stockMovements } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 
-export type MovementType = "receipt" | "transfer" | "consumption" | "output" | "adjustment" | "shipment" | "reversal";
+export type MovementType = "receipt" | "issue" | "transfer" | "consumption" | "output" | "adjustment" | "shipment" | "reversal";
 
 export type PostMovementInput = {
   movementType: MovementType;

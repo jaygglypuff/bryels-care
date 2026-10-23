@@ -26,6 +26,14 @@ export const NAV: NavGroup[] = [
       { label: "Receive materials", href: "/inventory/receive", permission: "inventory.receipt.post" },
       { label: "Scan / look up", href: "/inventory/scan", permission: "inventory.lot.view" },
       { label: "Stock movements", href: "/inventory/movements", permission: "inventory.movement.view" },
+      // Wave 1 W1C
+      { label: "Scan to move", href: "/inventory/move", permission: "inventory.movement.post" },
+      { label: "Boxes", href: "/inventory/containers", permission: "inventory.container.view" },
+      { label: "Locations & stock", href: "/inventory/locations", permission: "masterdata.location.view" },
+      { label: "Expiry alerts", href: "/inventory/lots/expiry", permission: "inventory.lot.view" },
+      { label: "FEFO & reservations", href: "/inventory/lots/reservations", permission: "inventory.lot.view" },
+      { label: "Stock counts", href: "/inventory/counts", permission: "inventory.stock_count.view" },
+      { label: "Adjustments", href: "/inventory/adjustments", permission: "inventory.adjustment.view" },
     ],
   },
   {

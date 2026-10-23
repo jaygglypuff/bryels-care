@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRightLeft, Lock, Printer, Share2 } from "lucide-react";
+import { ArrowRightLeft, Boxes, Lock, PenLine, Printer, Share2, Target } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtDateTime } from "@/lib/qty";
 import { EXPIRY_WARN_DAYS, getLotDetail, isPastExpiry, moveDestinations, type LotDetail } from "@/modules/inventory/lots";
 import { documentHref } from "@/modules/inventory/movements";
+import { listContainers } from "@/modules/inventory/containers";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td, buttonClass } from "@/ui/core";
 import { Banner, StatusChip } from "@/ui/status";
 import { Expiry, LocationKindChip, MOVEMENT_LABEL, fmtLotQty } from "@/ui/inventory/bits";
@@ -51,11 +52,11 @@ function RiskBanner({ lot, canSeeQa }: { lot: LotDetail; canSeeQa: boolean }) {
   return null;
 }
 
-export default async function LotPage({ params, searchParams }: { params: Promise<{ lotId: string }>; searchParams: Promise<{ moved?: string }> }) {
+export default async function LotPage({ params, searchParams }: { params: Promise<{ lotId: string }>; searchParams: Promise<{ moved?: string; edited?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("inventory.lot.view")) return <Forbidden what="lots and stock" />;
   const { lotId } = await params;
-  const { moved } = await searchParams;
+  const { moved, edited } = await searchParams;
   let lot: LotDetail;
   try {
     lot = await getLotDetail(ctx, lotId);
@@ -67,6 +68,7 @@ export default async function LotPage({ params, searchParams }: { params: Promis
   const site = ctx.allowedSites.find((s) => s.id === lot.siteId);
   const destinations = ctx.can("inventory.movement.post") ? await moveDestinations(ctx, lot) : [];
   const expired = lot.qualityStatus === "expired" || isPastExpiry(lot.expiresOn);
+  const boxes = ctx.can("inventory.container.view") && lot.siteId === ctx.currentSiteId ? await listContainers(ctx, { q: lot.lotNumber }) : [];
   const usable = lot.qualityStatus === "released" && !expired;
 
   // Allowed actions only; disallowed ones are shown greyed with the reason (ux-system §5.9).
@@ -74,8 +76,14 @@ export default async function LotPage({ params, searchParams }: { params: Promis
   if (ctx.can("inventory.movement.post")) {
     const canMoveSomewhere = lot.balances.some((b) => destinations.some((d) => d.id !== b.locationId));
     const reason = onHand.lte(0) ? "No stock left in this lot." : !canMoveSomewhere ? "No other allowed location at this site." : undefined;
-    actions.push({ key: "move", label: "Move stock", href: `/inventory/${lot.id}/move`, icon: <ArrowRightLeft size={16} />, reason });
+    actions.push({ key: "move", label: "Move stock", href: `/inventory/move?lot=${lot.id}`, icon: <ArrowRightLeft size={16} />, reason });
   }
+  // W1C (US-2-15, US-2-16, US-2-20): box, correct details, FEFO/reserve.
+  if (ctx.can("inventory.container.create") && lot.siteId === ctx.currentSiteId) {
+    actions.push({ key: "box", label: "Pack into a box", href: `/inventory/containers/new?lot=${lot.id}`, icon: <Boxes size={16} />, reason: onHand.lte(0) ? "No stock left in this lot." : undefined });
+  }
+  if (ctx.can("inventory.lot.edit")) actions.push({ key: "edit", label: "Correct dates / supplier lot", href: `/inventory/lots/${lot.id}/edit`, icon: <PenLine size={16} /> });
+  if (lot.siteId === ctx.currentSiteId) actions.push({ key: "fefo", label: ctx.can("inventory.reservation.create") ? "FEFO rank / reserve" : "FEFO rank", href: `/inventory/lots/reservations?lot=${lot.id}`, icon: <Target size={16} /> });
   if (ctx.can("inventory.label.print")) actions.push({ key: "label", label: "Print label", href: `/print/lot-label/${lot.id}`, icon: <Printer size={16} />, newTab: true });
   if (ctx.can("quality.genealogy.view")) actions.push({ key: "trace", label: "Genealogy", href: `/quality/trace?lot=${encodeURIComponent(lot.lotNumber)}`, icon: <Share2 size={16} /> });
   const blocked = usable ? [] : [
@@ -95,6 +103,13 @@ export default async function LotPage({ params, searchParams }: { params: Promis
       />
 
       {moved && <Banner tone="ok" title={`Stock moved (${moved})`}>The transfer is posted to the ledger below.</Banner>}
+      {edited && <Banner tone="ok" title="Lot details corrected">The old and new values are in the audit trail.</Banner>}
+      <nav className="flex flex-wrap gap-2 text-[13px]" aria-label="Lot sections">
+        <a href="#movements" className="rounded-full border border-line px-3 py-1.5 hover:bg-surface-2">Movements</a>
+        <a href="#documents" className="rounded-full border border-line px-3 py-1.5 hover:bg-surface-2">Documents</a>
+        {ctx.can("quality.genealogy.view") && <Link href={`/quality/trace?lot=${encodeURIComponent(lot.lotNumber)}`} className="rounded-full border border-line px-3 py-1.5 hover:bg-surface-2">Genealogy</Link>}
+        {boxes.length > 0 && <a href="#boxes" className="rounded-full border border-line px-3 py-1.5 hover:bg-surface-2">Boxes ({boxes.length})</a>}
+      </nav>
       <RiskBanner lot={lot} canSeeQa={ctx.can("quality.disposition.view")} />
       {lot.siteId !== ctx.currentSiteId && <Banner tone="info" title={`This lot belongs to ${site?.code} · ${site?.name}`}>Switch site to see it in that site's lists.</Banner>}
 
@@ -164,7 +179,29 @@ export default async function LotPage({ params, searchParams }: { params: Promis
         )}
       </Card>
 
-      <Card>
+      {boxes.length > 0 && (
+        <Card id="boxes">
+          <CardTitle>In boxes</CardTitle>
+          <div className="flex flex-wrap gap-2">
+            {boxes.map((b) => (
+              <Link key={b.id} href={`/inventory/containers/${b.id}`} className="rounded-full border border-line px-3 py-1.5 font-mono text-[13px] hover:bg-surface-2">
+                {b.containerNumber} · {b.locationCode ?? "—"}
+              </Link>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <Card id="documents">
+        <CardTitle>Documents</CardTitle>
+        <ul className="space-y-1 text-[13px]">
+          <li>Goods receipt: {lot.receipt ? <Link href={`/inventory/receive/${lot.receipt.id}`} className="text-primary-text hover:underline">{lot.receipt.number}</Link> : "—"}</li>
+          <li>Source batch: {lot.batchNumber && lot.sourceBatchId ? <Link href={`/production/${lot.sourceBatchId}`} className="text-primary-text hover:underline">{lot.batchNumber}</Link> : "—"}</li>
+          <li className="text-muted">Supplier certificates (CoA) are attached to receipts when file attachments ship (US-2-08).</li>
+        </ul>
+      </Card>
+
+      <Card id="movements">
         <CardTitle>Movement ledger</CardTitle>
         {lot.movements.length === 0 ? (
           <EmptyState title="No movements yet" />

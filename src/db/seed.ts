@@ -426,6 +426,7 @@ async function main() {
     await db.insert(s.numberingRules).values({ organizationId: O, documentType: t, prefix: p, sequenceWidth: w, periodKey: pk, nextValue: (counters[t] ?? 0) + 1 });
   }
 
+  await (await import("./seeds/w1c")).seedW1C(db);
   console.log(`Seeded demo organization with ${mats.length} materials, ${counters.LOT} lots, ${counters.BATCH} batches, ${counters.SO} orders.`);
   await client.end();
 }
