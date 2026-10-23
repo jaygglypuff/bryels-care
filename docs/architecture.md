@@ -181,6 +181,12 @@ Exports use the same scoped queries, so a CSV can never contain another site's r
   `{ ok: true, data }` or `{ ok: false, error: { code, message, details } }`.
 - Commands are `POST /api/v1/<module>/<entity>/<verb>` (e.g. `POST /api/v1/inventory/movements/post`), queries are `GET` with filters. Verbs mirror the permission action where possible.
 - Idempotency: `Idempotency-Key` header (UUID) or body field; required for postings.
+- Undo: a command whose result the same actor may safely reverse within
+  `settings.ux.undo_window_seconds` (default 60, `docs/data-model.md` settings registry) returns
+  `undo: { until, command }` in `data`; the undo command posts a linked `reversal` row with
+  idempotency key `undo:<movement_id>` and writes `<module>.<entity>.reversed`
+  (`docs/data-model.md` §8.1). The server decides undoability per call (which actions qualify:
+  `docs/ux-system.md` §5.17 rules); the client never infers it.
 - Versioning: path version; breaking changes create `/api/v2` routes that coexist for one
   release cycle; non-breaking additions do not bump.
 - Pagination: cursor-based (`?cursor=&limit=`), stable ordering by `(created_at, id)`.
@@ -233,12 +239,12 @@ nowhere else may a new code be introduced. Rules:
 | `platform.reencrypt` | platform | on demand after `DATA_ENCRYPTION_KEY` rotation | `(from_key_id, to_key_id, table_name)` | 1 | re-encrypts rows carrying the previous key id in batches (`docs/operations-runbook.md` §15) |
 | `db.backfill` | db (migrations) | dedicated migration or post-deploy step | `(migration_id, table_name)` | 1 | expand/backfill/contract loops of 5,000 rows, resumable, row counts logged (`docs/data-model.md` §13.3) |
 | `platform.backup_dump` | platform | daily cron 18:17 UTC (02:17 Manila) | `(scheduled_for_date)` | 1 | **not a pg-boss job**: it is the Railway `backup` cron service (`docs/deployment-railway.md` §2, §9); registered here so `backup_runs`, the Backups card and alerts use one name |
-| `platform.metrics_sample` | platform | every 5 min | `(floor(now, 5 min))` | 2 | writes `metrics_samples` (queue depth, failed jobs, sync backlog, reconciliation differences, backup age) |
+| `platform.metrics_sample` | platform | every 5 min | `(floor(now, 5 min))` | 1 | writes `metrics_samples` (queue depth, failed jobs, sync backlog, reconciliation differences, backup age) from the first staging deploy; web replicas also write request counters directly (`docs/deployment-railway.md` §8.2) |
 | `platform.alerts_evaluate` | platform | every 5 min, after the sample | `(floor(now, 5 min))` | 2 | evaluates alert rules, deduplicates per rule and window, delivers in-app/webhook (`docs/deployment-railway.md` §8) |
 | `platform.notification_dispatch` | platform | domain events (approval requested, dead-lettered job, alert, action-centre item) | `(notification_id, channel)` | 2 in-app / 5 email | email only when `EMAIL_PROVIDER` is configured; otherwise in-app only, never a fake send |
 | `platform.import_job.process` | platform | upload completes and mapping approved (master-data and opening-balance imports) | `(import_job_id)` | 5 (loader rehearsal earlier per `docs/data-migration-plan.md`) | row-level results in `import_job_rows`; posting is a separate user command (`platform.import_job.post`) |
 | `platform.retention_sweep` | platform | weekly | `(retention_policy_id, iso_week)` | 2 | deletes or anonymises per `retention_policies`, honours `legal_holds` (`docs/data-model.md` §12.4, `docs/security.md` §7) |
-| `documents.render` | documents | a `generated_documents` row is created (BMR, dispensing sheet, DR, pick list, statements, reports) or a `label_jobs` row is queued | `(generated_document_id)` | 2 labels / 3 documents | Chromium render, sha256, bucket object, `file_attachments` row (`docs/reports-and-templates.md` §4, §8.5) |
+| `documents.render` | documents | a `generated_documents` row is created (BMR, dispensing sheet, DR, pick list, statements, reports) or a `label_jobs` row is queued | `(generated_document_id)` | 2 labels / 3 documents | Chromium render, sha256, bucket object, `file_attachments` row (`docs/reports-and-templates.md` §4, §8.5); labels and label batches render through this job with kind `label` (there is no separate label job code) |
 | `inventory.reconcile` | inventory | nightly 01:00 site time and on demand | `(kind, as_of_date)` | 2 | ledger vs projection per `docs/data-model.md` §5.6; writes `reconciliation_runs`; differences notify, never auto-fix |
 | `inventory.rebuild_balances` | inventory | on demand by `inventory.balance.admin` after a reconciliation difference | `(reconciliation_run_id, balance_keys_hash)` | 2 | recomputes projection rows from the ledger for the listed keys; audited (`docs/operations-runbook.md` §9) |
 | `inventory.expiry_scan` | inventory | nightly and on demand (`asOf`) | `(site_id, as_of_date)` | 2 | lots past expiry become `expired` with a disposition row; FEFO risk and expiring-lot alerts (FR-inventory-12) |
@@ -251,9 +257,10 @@ nowhere else may a new code be introduced. Rules:
 | `analytics.snapshot_kpis` | analytics | 01:30 site time, after `inventory.reconcile` | `(kpi_id, site_id, as_of_date, filters_hash)` | 5 | inserts `kpi_snapshots` |
 | `analytics.reconcile_kpis` | analytics | 02:00 site time | `(as_of_date)` | 5 | R-queries vs snapshots; mismatch raises a `critical` notification |
 | `analytics.scheduled_report` | analytics | `scheduled_reports.cron_expression` in its timezone | `(scheduled_report_id, period_key)` | 5 | files kept 30 days (A-SEC-30) |
-| `analytics.forecast_baseline` | analytics | weekly, Sunday 03:00 | `(sku_id, site_id, iso_week)` | 5 | produces nothing when data sufficiency fails (`docs/analytics-kpis.md` §6) |
+| `analytics.forecast_baseline` | analytics | weekly, Sunday 03:00 | `(sku_id, site_id, iso_week)` | 6+ | after FR-analytics-08 is scheduled; produces nothing when data sufficiency fails (`docs/analytics-kpis.md` §6) |
 | `analytics.movers_classify` | analytics | weekly | `(site_id, iso_week)` | 5 | fast/slow mover classification (KPI-INV-05) |
 | `analytics.export_job` | analytics | export request above the synchronous row limit (A-PM-17) | `(export_request_id)` | 5 | same scope checks as the synchronous export; audited file |
+| `procurement.reorder_suggest` | procurement | nightly per site | `(site_id, as_of_date)` | 6 | writes `reorder_suggestions` rows with their drivers (`docs/data-model.md` §3.4, W04-01, KPI-PRO-07); never creates a purchase request or PO |
 | `finance.period_maintenance` | finance | monthly and on demand | `(fiscal_calendar_version, as_of_month)` | 6 | keeps 12 future periods open (`docs/modules/finance.md` §3) |
 | `finance.statements` | finance | user request or statement schedule | `(customer_id, period_key)` | 6 | statement of account document via `documents.render` |
 | `finance.overdue_scan` | finance | nightly | `(as_of_date)` | 6 | flags overdue invoices, updates customer open balance, notifies |
@@ -262,7 +269,9 @@ nowhere else may a new code be introduced. Rules:
 | `finance.provider.process_event` | finance | payment provider webhook verified | `(provider, provider_event_id)` | 8 | `payment_provider_events` ledger (`docs/security.md` §4.11) |
 
 Not jobs: offline command replay runs synchronously inside `POST /api/v1/sync/commands`
-(`docs/offline-sync.md` §4); the sync backlog is observed by `platform.metrics_sample`. A
+(`docs/offline-sync.md` §4), so there is no `platform.sync_replay` code; the sync backlog is
+observed by `platform.metrics_sample`. `platform.backup_dump` is the only registry code that
+runs outside pg-boss (the Railway `backup` cron service, ADR-014). A
 server-side replay job is introduced only if Phase 7 measurements show batches exceeding the
 request budget, through a new row here.
 
@@ -343,10 +352,14 @@ depends on.
 
 ## 14. Major decisions and their status
 
-See `docs/decision-log.md`. Decisions needing owner approval at Gate 0: ADR-001 to 014 and
-ADR-019 to 021. ADR-015 to 018 are Proposed and go for approval at the gate of the phase that
-implements them (ADR-015 and 017 Phase 2, ADR-016 Phase 3, ADR-018 Phase 7 with API groundwork
-in Phase 2). ADR-022 is Deferred (evaluated at the end of Phase 2).
+See `docs/decision-log.md`. Decisions needing owner approval at Gate 0: ADR-001 to 014,
+ADR-019 to 021 and ADR-023. ADR-023 records the Phase 0 reconciliation rulings (Pack in
+inventory, audit naming, idempotency scope, device table, finance postings without GL, negative
+stock). ADR-015 to 018 are Proposed and go for approval at the gate before the phase that first
+implements them (`docs/team-charter.md` gate table): ADR-015 and 017 at G1, before Phase 2
+starts (US-2-03, US-2-13); ADR-016 at G2, before Phase 3; ADR-018 at G6, before Phase 7, with
+its API groundwork (idempotent `/api/v1` commands) built from Phase 2 under ADR-006 and §6.
+ADR-022 is Deferred (evaluated at the end of Phase 2).
 
 ## 15. Risks specific to this architecture
 
