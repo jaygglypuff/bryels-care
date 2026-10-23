@@ -1418,7 +1418,7 @@ snapshots and exports unless explicitly permitted (`A-DM-15`).
 | **`restore_drills`** · P2 · T · `std` | | | | `backup_run_id`, `performed_at`, `performed_by`, `witness_user_id`, `target_environment`, `duration_seconds`, `measured_rto_seconds`, `dump_age_seconds` (measured RPO), `checksum_verified` bool, `decrypt_succeeded` bool, `result` (`passed`,`failed`), `reconciliation_rows`, `notes`, `report_attachment_id`, `signed_off_by`, `signed_off_at` (owner sign-off, ck `signed_off_by <> performed_by`); evidence for Gate 9 (`docs/deployment-railway.md` §10) |
 | **`worker_heartbeats`** · P1 · T · `id`, `organization_id` | | | | `worker_id` (`uq`), `hostname`, `release_tag`, `started_at`, `last_heartbeat_at`, `queue_depth`, `migrations_current` bool; one row per worker instance, updated every 30 s, read by `/api/ready` |
 | **`metrics_samples`** · P1 · L · `id`, `organization_id`, `sampled_at` | | | | `metric` (text), `value` numeric(18,6), `labels` jsonb (§1.7); used from the first staging deploy and written by exactly two writers: the `platform.metrics_sample` job every 5 minutes (queue depth, failed jobs, sync backlog, reconciliation differences, backup age) and each `web` replica every 60 s (request, 5xx and latency counters, `labels.replica`; `docs/deployment-railway.md` §8.2); monthly partitions like `audit_events`; no FK from other tables |
-| **`reconciliation_runs`** · P2 · T · `std` | | | | result of each `inventory.reconcile` run and of each `inventory.rebuild_balances` run (§5.6): `run_at`, `kind` (`inventory_balances`,`container_contents`,`reservations`,`quality_status`,`rebuild`), `differences_count`, `report_attachment_id`, `status` (`clean`,`differences`,`failed`), `notified_user_ids`; the differences themselves are in the report file, never auto-fixed |
+| **`reconciliation_runs`** · P2 · T · `std` | | | | result of each `inventory.reconcile` run and of each `inventory.rebuild_balances` run (§5.6): `run_at`, `kind` (`inventory_balances`,`container_contents`,`reservations`,`quality_status`,`rebuild`), `differences_count`, `report_attachment_id`, `status` (`clean`,`differences`,`rebuilt`,`failed`), `notified_user_ids`; the differences are in the report (jsonb `report` until file storage exists, §13.8), never auto-fixed |
 | **`customer_portal_tenants`** · P8 · M · `std +soft` | | | | `code`, `name`, `status`; separate auth boundary (ADR-011) |
 | **`portal_users`** · P8 · M · `std` | | | | `customer_portal_tenant_id`, `email` (unique per tenant), `password_hash`, `status`, `mfa_required`; never joined to internal `users` |
 | **`portal_sessions`**, **`portal_invitations`** · P8 · T | | | | same shape as `sessions` and `invitations` with `portal_user_id` / `customer_portal_tenant_id` instead of `user_id` / `role_id`; separate cookie and lockout counters (`docs/permissions-matrix.md` §7) |
@@ -1556,6 +1556,15 @@ GROUP BY 1, 2, 3;
 promisable (`A-DM-23`). `$as_of` is the business date in the site's timezone supplied by the
 service clock; no availability, expiry or effective-date SQL uses `CURRENT_DATE`, so tests can
 pin the date (`docs/testing.md` Q-TST-05).
+
+As built (US-2-05, `src/modules/inventory/availability.ts`): the balance key is still
+lot × location with the quality status on the lot (the MVP), so each quantity is placed in
+exactly one bucket by precedence recalled → rejected → expired (status or date) → on_hold →
+quarantine → released; reserved/allocated count only against usable stock and allocations on
+blocked stock are reported as `allocatedBlocked`, which makes the identity hold by
+construction. A lot is usable through the end of its expiry day, so "expired by date" is
+`expires_on < $as_of` (A-W1A-04; the SQL above shows `<=`). A pure function
+(`computeAvailability`) and the SQL are tested to agree (`availability.formula`).
 
 ### 5.4 Locking order (deadlock-free posting)
 
@@ -2772,6 +2781,27 @@ Acceptance mapping: S1-09 (migrate from zero, re-run is a no-op), S1-10 (seed gu
 | P8 | `customer_portal_tenants`, `portal_users`, `portal_sessions`, `portal_invitations`, `payment_provider_events` | `customers.portal_tenant_id`, `sales_orders.portal_user_id`, `payment_records.provider_event_id` FKs |
 | P5/P6, requested by module documents, **not yet catalogued in §3** | analytics (`docs/analytics-kpis.md` §8.3): schema `analytics` with `kpi_definitions` (`ver`), `kpi_snapshots` (append-only), `kpi_reconciliation_results`, `refresh_log`, `forecasts`, `report_runs`, `demand_events`, `production_line_calendars` (`reorder_suggestions` is catalogued in §3.4 under procurement, not analytics); HR (`docs/modules/hr-attendance-payroll.md` §11.3): `employee_contacts`, `employee_time_clock_aliases`, `skills`, `employee_skills`, `shift_patterns`, `shift_break_windows`, `leave_types`, `leave_balances`, `attendance_day_summaries`, `pay_components`, `payroll_rule_sets` + `payroll_rule_values`, `statutory_tables` + `statutory_table_brackets`, `employee_compensation`, `employee_pay_component_assignments`, `payroll_runs`, `export_layouts`, `attendance_import_state_transitions`; finance (`docs/modules/finance.md` §2.10): `tax_configurations`, `lot_cost_history` (ledger), `overhead_pools`, `labour_rates`, `standard_costs`, `accountant_export_profiles`, `export_account_mappings`, `accountant_export_runs`, `refund_requests` (P8) | these are accepted in principle; the database architect catalogues them in §3 in the Phase 5 and Phase 6 revisions of this document, following the conventions of §1, before their migrations are generated (§14.3) |
 | Deferred | `journal_entries`, `journal_lines` (ADR-020), `equipment_maintenance_plans`, `maintenance_work_orders`, `spare_parts` (PRD FR-production-15) | need an approved scope and an ADR |
+
+### 13.8 As built in Wave 1 stream W1A (ledger core, jobs, exports, command API)
+
+Migration `0001_w1a_ledger_jobs_exports.sql` (the integrator regenerates one combined migration).
+New schema file `src/db/schema/platform.ts`:
+
+| Table | Columns (as built) | Constraints / notes |
+|---|---|---|
+| `settings` | `id`, `organization_id`, `scope`, `site_id`, `user_id`, `key`, `value` jsonb, `updated_by`, `created_at`, `updated_at` | `uq (organization_id, scope, site_id, user_id, key) NULLS NOT DISTINCT`; ck scope and scope/target match; registry and defaults in `src/lib/settings.ts` (keys so far: `inventory.role_movement_types`, `platform.export.max_rows`, `platform.jobs.max_attempts`) |
+| `background_jobs` | `id`, `organization_id`, `site_id`, `job_kind`, `status`, `payload`, `result`, `error_message`, `attempts`, `max_attempts`, `idempotency_key` (not null), `pgboss_job_id`, `correlation_id`, `requested_by` (= on behalf of), `run_after`, `started_at`, `finished_at`, `dead_lettered_at`, `retried_count`, `cancelled_by`, `created_at`, `updated_at` | `uq (organization_id, idempotency_key)`; ck status in (`queued`,`running`,`succeeded`,`failed`,`cancelled`); dead-lettered = `failed` with `dead_lettered_at` set; the row is the outbox the worker relays to pg-boss |
+| `notifications` | as §3.10 plus `link` (in-app route, never a file URL) | partial `uq (recipient_user_id, dedupe_key) WHERE dedupe_key IS NOT NULL`; ck severity, channel |
+| `reconciliation_runs` | `id`, `organization_id`, `site_id` (null = all sites), `kind`, `status`, `as_of`, `differences_count`, `report` jsonb (the differences or the rebuilt keys with before/after), `report_attachment_id` (null until file storage exists), `notified_user_ids` jsonb, `background_job_id`, `source_run_id`, `triggered_by`, `error_message`, `created_at` | ck status in (`clean`,`differences`,`rebuilt`,`failed`) |
+| `worker_heartbeats` | as §3.10 without `organization_id` (one worker serves the organization) | `uq (worker_id)` |
+
+Changed tables:
+
+| Table | Change | Why |
+|---|---|---|
+| `stock_movements` | + `qty_entered`, `entered_uom` (ADR-010), `quality_status_at_posting`, `correlation_id`; FK `reversal_of_id → stock_movements`; partial `uq (reversal_of_id)`; ix `(correlation_id)`; ck `qty_base > 0`, ck movement type list, `ck_stock_movements_locations` (§5.1 table, `reversal` needs a link and at least one side), ck `(movement_type = 'reversal') = (reversal_of_id IS NOT NULL)` | US-2-01 AC2, US-2-02; `movement_number` is not added yet: the stock card shows the source document number (A-RPT-16 gap noted for the integrator) |
+| `audit_events` | + `actor_label` (`system:<job code>`), `on_behalf_of` → users | architecture §8 rule 4 (`audit.job_actor`) |
+| `idempotency_keys` | + `user_id`, `request_hash`, `response_code`, `client_command_id`, `device_id`, `client_created_at`, `completed_at`, `expires_at` (created + 7 days, A-SEC-21) | §11.4 for `/api/v1` commands; the production module's form-level use of the table is unchanged |
 
 ## 14. Open questions and assumptions
 

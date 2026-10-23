@@ -17,7 +17,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
 
 /** Left navigation (ux-system §3). Planned modules are shown disabled with their phase, never as fake links. */
 export const NAV: NavGroup[] = [
-  { label: "Home", icon: "home", items: [{ label: "Overview", href: "/dashboard" }] },
+  { label: "Home", icon: "home", items: [{ label: "Overview", href: "/dashboard" }, { label: "Notifications", href: "/notifications" }] },
   {
     label: "Inventory",
     icon: "boxes",
@@ -26,6 +26,7 @@ export const NAV: NavGroup[] = [
       { label: "Receive materials", href: "/inventory/receive", permission: "inventory.receipt.post" },
       { label: "Scan / look up", href: "/inventory/scan", permission: "inventory.lot.view" },
       { label: "Stock movements", href: "/inventory/movements", permission: "inventory.movement.view" },
+      { label: "Availability", href: "/inventory/availability", permission: "inventory.balance.view" },
     ],
   },
   {
@@ -69,6 +70,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Users & roles", href: "/admin/users", permission: "identity.user.view" },
       { label: "Audit log", href: "/admin/audit", permission: "platform.audit.view" },
+      { label: "Diagnostics", href: "/admin/diagnostics", permission: "platform.job.view" },
     ],
   },
   {

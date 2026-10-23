@@ -91,7 +91,12 @@ export default async function LotPage({ params, searchParams }: { params: Promis
             <Link href="/inventory" className="text-primary-text hover:underline">Lots & stock</Link> · {lot.itemName} · {lot.itemCode}
           </>
         }
-        actions={<StatusChip status={lot.qualityStatus} className="px-3 py-1 text-[13px]" />}
+        actions={
+          <>
+            {ctx.can("inventory.movement.view") && <LinkButton href={`/inventory/stock-card/${lot.id}`} variant="secondary" size="sm">Stock card</LinkButton>}
+            <StatusChip status={lot.qualityStatus} className="px-3 py-1 text-[13px]" />
+          </>
+        }
       />
 
       {moved && <Banner tone="ok" title={`Stock moved (${moved})`}>The transfer is posted to the ledger below.</Banner>}

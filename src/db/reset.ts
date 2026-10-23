@@ -5,7 +5,7 @@ import postgres from "postgres";
 async function main() {
   if (process.env.ALLOW_DEMO_SEED !== "true") throw new Error("Refusing to reset: ALLOW_DEMO_SEED is not true");
   const sql = postgres(process.env.DATABASE_MIGRATION_URL || process.env.DATABASE_URL!, { max: 1, onnotice: () => {} });
-  await sql.unsafe("DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; CREATE SCHEMA public;");
+  await sql.unsafe("DROP SCHEMA IF EXISTS public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA IF EXISTS pgboss CASCADE; CREATE SCHEMA public;");
   await sql.end();
   console.log("Database reset");
 }

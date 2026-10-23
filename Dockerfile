@@ -16,10 +16,12 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 COPY --from=build /app/.next ./.next
 COPY --from=build /app/next.config.ts ./next.config.ts
-COPY src/db ./src/db
-COPY src/lib/permissions.ts ./src/lib/permissions.ts
+# The worker (pnpm worker) runs the TypeScript sources with tsx, so the image carries src/ and tsconfig.json.
+COPY tsconfig.json ./tsconfig.json
+COPY src ./src
 COPY scripts ./scripts
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s CMD node -e "fetch('http://localhost:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-# Applies migrations, loads the fictional demo data only when ALLOW_DEMO_SEED=true, then starts the web server.
+# web (default): applies migrations, loads the fictional demo data only when ALLOW_DEMO_SEED=true, starts Next.js.
+# worker: the Railway `worker` service overrides the start command with `pnpm worker` (docs/deployment-railway.md §2.2).
 CMD ["sh", "scripts/start.sh"]

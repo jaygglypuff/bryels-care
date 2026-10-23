@@ -14,7 +14,9 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:reset": "tsx src/db/reset.ts && pnpm db:migrate && pnpm db:seed",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "api:contract": "tsx scripts/api-contract.ts",
+    "worker": "tsx --require ./scripts/worker-preload.cjs src/worker.ts"
   },
   "packageManager": "pnpm@10.28.0",
   "dependencies": {
@@ -24,6 +26,7 @@
     "drizzle-orm": "0.45.4",
     "lucide-react": "0.545.0",
     "next": "15.5.28",
+    "pg-boss": "12.38.0",
     "postgres": "3.4.9",
     "qrcode": "1.5.4",
     "react": "19.1.1",

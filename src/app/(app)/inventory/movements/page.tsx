@@ -44,7 +44,7 @@ export default async function MovementsPage({ searchParams }: { searchParams: Pr
               const href = documentHref(m);
               return (
                 <tr key={m.id} className="hover:bg-surface-2">
-                  <Td className="whitespace-nowrap">{fmtDateTime(m.postedAt)}</Td>
+                  <Td className="whitespace-nowrap"><Link href={`/inventory/movements/${m.id}`} className="text-primary-text hover:underline">{fmtDateTime(m.postedAt)}</Link></Td>
                   <Td>{MOVEMENT_LABEL[m.movementType] ?? m.movementType}{m.reason && <div className="max-w-[220px] truncate text-[12px] text-muted" title={m.reason}>{m.reason}</div>}</Td>
                   <Td><Link href={`/inventory/${m.lotId}`} className="font-mono font-semibold text-primary-text hover:underline">{m.lotNumber}</Link></Td>
                   <Td>{m.itemName ?? m.productName}<div className="text-[12px] text-muted">{m.itemCode ?? m.productSku}</div></Td>

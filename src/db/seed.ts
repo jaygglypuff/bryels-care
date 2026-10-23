@@ -9,6 +9,7 @@ import postgres from "postgres";
 import Decimal from "decimal.js";
 import { hash } from "@node-rs/argon2";
 import * as s from "./schema";
+import { seedW1a } from "./seeds/w1a";
 import { ROLE_BUNDLES } from "../lib/permissions";
 
 if (process.env.ALLOW_DEMO_SEED !== "true") {
@@ -425,6 +426,8 @@ async function main() {
   for (const [t, [p, w, pk]] of Object.entries(RULE)) {
     await db.insert(s.numberingRules).values({ organizationId: O, documentType: t, prefix: p, sequenceWidth: w, periodKey: pk, nextValue: (counters[t] ?? 0) + 1 });
   }
+
+  await seedW1a(db, O);
 
   console.log(`Seeded demo organization with ${mats.length} materials, ${counters.LOT} lots, ${counters.BATCH} batches, ${counters.SO} orders.`);
   await client.end();

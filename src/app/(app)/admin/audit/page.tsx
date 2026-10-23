@@ -141,7 +141,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
                     <Td>
                       <Entity r={r} />
                     </Td>
-                    <Td>{r.actorName ?? "System"}</Td>
+                    <Td>{r.actorName ?? r.actorLabel ?? "System"}</Td>
                     <Td className="whitespace-nowrap">{where(r)}</Td>
                     <Td className="max-w-[240px] text-fg-2">{r.reason ?? "—"}</Td>
                   </tr>
@@ -160,7 +160,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
                     <Entity r={r} />
                   </p>
                   <p className="text-[12px] text-muted">
-                    {r.actorName ?? "System"} · {where(r)}
+                    {r.actorName ?? r.actorLabel ?? "System"} · {where(r)}
                     {r.reason && ` · “${r.reason}”`}
                   </p>
                   <Payload r={r} />

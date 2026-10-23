@@ -45,6 +45,15 @@ export const PERMISSIONS = [
   "sales.shipment.view",
   // analytics
   "analytics.dashboard.view",
+  // Wave 1 W1A: ledger core, jobs, exports (docs/permissions-matrix.md §2.3, §2.12)
+  "inventory.balance.view",
+  "inventory.balance.export",
+  "inventory.balance.admin",
+  "inventory.movement.export",
+  "inventory.movement.void",
+  "platform.job.view",
+  "platform.job.admin",
+  "platform.diagnostics.view",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -63,15 +72,21 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
       "masterdata.material.create",
       "masterdata.product.create",
       "masterdata.customer.create",
+      "platform.job.admin",
+      "inventory.balance.admin",
     ],
   },
   site_manager: {
     name: "Site Manager",
     orgWide: false,
     permissions: [
-      ...VIEW_ALL,
+      ...VIEW_ALL.filter((p) => p !== "platform.diagnostics.view"),
       "inventory.receipt.post",
       "inventory.movement.post",
+      "inventory.movement.void",
+      "inventory.movement.export",
+      "inventory.balance.export",
+      "inventory.balance.admin",
       "inventory.label.print",
       "production.batch.create",
       "production.batch.edit",
@@ -96,6 +111,9 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
       "production.dispense_record.approve",
       "production.batch.submit",
       "inventory.label.print",
+      // A-PM-06: posts only consumption/output/production-area transfers (setting inventory.role_movement_types)
+      "inventory.movement.post",
+      "inventory.balance.view",
     ],
   },
   warehouse_operator: {
@@ -114,6 +132,9 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
       "sales.shipment.view",
       "sales.allocation.post",
       "sales.shipment.post",
+      "inventory.balance.view",
+      "inventory.balance.export",
+      "inventory.movement.export",
     ],
   },
   qa_qc: {
@@ -138,7 +159,12 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
       "masterdata.product.view",
       "inventory.lot.view",
       "analytics.dashboard.view",
+      "inventory.balance.view",
     ],
   },
-  auditor: { name: "Auditor (read-only)", orgWide: true, permissions: VIEW_ALL },
+  auditor: {
+    name: "Auditor (read-only)",
+    orgWide: true,
+    permissions: [...VIEW_ALL.filter((p) => p !== "platform.diagnostics.view"), "inventory.balance.export", "inventory.movement.export"],
+  },
 };

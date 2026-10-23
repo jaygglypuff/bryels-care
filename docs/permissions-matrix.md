@@ -542,7 +542,8 @@ proposer cannot approve the same entry (section 5.1).
 
 Notes: `PO` posts movements only of types `consumption`, `output` and `transfer` whose source
 or destination is a production location; the service enforces the movement-type subset per
-role via `role_movement_types` configuration (A-PM-06). `intersite_transfer.post` requires
+role via `role_movement_types` configuration (A-PM-06; implemented in Phase 2 as the setting
+`inventory.role_movement_types`, checked inside `postMovement`, default in `src/lib/settings.ts`). `intersite_transfer.post` requires
 `inventory.movement.post` at both the source and destination site. There is no negative-balance
 permission: balances cannot go negative (database constraint, ADR-006 as amended). `a` on `pack`
 means acting as **checker** for another user's Pack; the service rejects verifying one's own

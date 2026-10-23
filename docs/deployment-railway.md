@@ -133,6 +133,27 @@ fake PDF.
 | backup | `node dist/backup.js` | Section 9; exits 0 on success, 1 on failure (Railway cron services must exit, **verified 2026-10-16**) |
 | seed | `node dist/seed.js` | Fictional data; refuses when `APP_ENV=production` (PRD S1-10); run manually on staging after the first migration |
 
+### 2.3 As built today (Phase 2, US-2-03): how the worker runs
+
+Until the bundled `dist/*.js` entry points above exist, the image is the MVP Dockerfile at the
+repository root and the worker runs the TypeScript sources directly:
+
+| Item | Current implementation |
+|---|---|
+| Image | one image for both services; the runner stage carries `src/`, `tsconfig.json` and `scripts/` so the worker can start |
+| `web` start command | default `CMD` (`sh scripts/start.sh`: migrate, optional demo seed, `next start`) |
+| `worker` start command | `pnpm worker` (= `tsx --require ./scripts/worker-preload.cjs src/worker.ts`; the preload maps the `server-only` guard to an empty module for this server process) |
+| Worker health | `/api/health` (process up) and `/api/ready` (migrations current, pg-boss started, heartbeat < 90 s) on `PORT`; `railway.json`'s `/api/health` healthcheck works for both services |
+| Schema wait | the worker polls `drizzle.__drizzle_migrations` every 10 s until it matches the bundled journal (web applies migrations), gives up after 15 min |
+| pg-boss | v12, schema `pgboss` (created on first start), pool `max: 2`; one queue per registered job code with exponential retry and dead-letter queue `platform.dead_letter`; our `background_jobs` table stays the source of truth |
+| Variables | `DATABASE_URL` (same runtime role as web; needs CREATE on the database for the `pgboss` schema on first start, or create it once as the migration role), `WORKER_CONCURRENCY` (default 2), `PORT` (set by Railway) |
+| Draining | on `SIGTERM` the relay stops, pg-boss stops gracefully (50 s), then exit 0; set the worker's draining time to 60 s |
+
+Railway setup: add a second service from the same repository (Dockerfile builder), set its
+**Custom Start Command** to `pnpm worker`, give it the same `DATABASE_URL` reference, no public
+domain, one replica. Without this service nothing breaks, but queued jobs (reconciliation,
+rebuilds) never run and Admin → Diagnostics shows "The worker is not running".
+
 ## 3. Railway service configuration
 
 Railway's `railway.json`/`railway.toml` "config as code" is deprecated in favour of
