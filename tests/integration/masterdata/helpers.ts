@@ -1,8 +1,5 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { eq } from "drizzle-orm";
 import { expect } from "vitest";
-import postgres from "postgres";
 import { db } from "@/db/client";
 import { organizations, sites, users } from "@/db/schema";
 import { AuthContext, type SiteRef } from "@/lib/auth/context";
@@ -10,12 +7,12 @@ import { DomainError } from "@/lib/errors";
 import { ROLE_BUNDLES } from "@/lib/permissions";
 import { resetTestDatabase } from "../../support/db";
 
-/** Resets the database, loads the demo seed and installs the W1D SQL (triggers, exclusions). */
+/**
+ * Resets the database through the normal migrate path (which includes the W1D custom SQL
+ * migration 0002_w1d_custom_sql: triggers, exclusion constraints) and loads the demo seed.
+ */
 export async function setupW1D() {
   await resetTestDatabase();
-  const sql = postgres(process.env.DATABASE_URL!, { max: 1, onnotice: () => {} });
-  await sql.unsafe(readFileSync(path.resolve(__dirname, "../../../src/db/sql/w1d.sql"), "utf8"));
-  await sql.end();
   const [org] = await db.select().from(organizations);
   const all = await db.select({ id: sites.id, code: sites.code, name: sites.name }).from(sites);
   const nfd = all.find((s) => s.code === "NFD")!;

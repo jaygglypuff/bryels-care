@@ -31,10 +31,11 @@ Demo accounts (password `demo1234`, all fictional): `owner@`, `admin@`, `manager
 `bryels-care.test`. Reset the demo data at any time with `pnpm db:reset`.
 
 Production engineering master data (formulas, routings, work instructions, inspection plans,
-equipment) ships with a custom SQL file, `src/db/sql/w1d.sql` (exclusion constraints on effective
-dates, draft-only and immutability triggers, batch revision freeze). Apply it after the
-migrations: `psql "$DATABASE_URL" -f src/db/sql/w1d.sql` (idempotent). The integration tests
-install it themselves.
+equipment) needs SQL that Drizzle cannot express (exclusion constraints on effective dates,
+draft-only and immutability triggers, batch revision freeze). It ships as the custom migration
+`src/db/migrations/0002_w1d_custom_sql.sql`, applied by `pnpm db:migrate` like any other
+migration. Its canonical source is `src/db/sql/w1d.sql`; the migration is a verbatim copy and
+`tests/integration/masterdata/custom-sql.test.ts` fails if they drift.
 
 | Command | What it does |
 |---|---|
