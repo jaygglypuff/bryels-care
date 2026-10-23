@@ -3,7 +3,7 @@
 Owner: `devops-engineer` (with `principal-architect`; security procedures reviewed by
 `security-engineer`). Status: Proposed for Gate 0; rehearsed in Phase 1 (admin procedures),
 Phase 2 (jobs, reconciliation), Phase 5 (imports), Phase 7 (sync), Phase 9 (restore,
-incidents). Companion documents: `docs/deployment-railway.md` (platform, backups, rollback),
+incidents, go-live checklist and cutover, section 17a). Companion documents: `docs/deployment-railway.md` (platform, backups, rollback),
 `docs/security.md` (access, audit, incident hooks), `docs/permissions-matrix.md` (who may do
 what), `docs/offline-sync.md` (conflict rules), `docs/process-maps.md` (business workflows).
 
@@ -42,7 +42,8 @@ Account states, token lifetimes, lockout and session rules are defined in
 2. The invitation email carries a 72-hour single-use link (`docs/security.md` 3.8). If it
    expires, use Resend; the old link dies.
 3. The user sets a password (and TOTP if the role requires it) and becomes `active`.
-4. Recorded: `identity.user_created`, `identity.invitation_sent`, `identity.assignment_granted`.
+4. Recorded: `identity.user.created`, `identity.invitation.sent`,
+   `identity.site_assignment.granted`.
 5. Shared floor devices: the person signs in with personal credentials; no shared accounts
    (`docs/security.md` 8.2 item 4).
 
@@ -57,15 +58,17 @@ Account states, token lifetimes, lockout and session rules are defined in
    on next sync (`docs/permissions-matrix.md` 4.3).
 4. Granting a role with restricted permissions starts the 7-day TOTP enrolment grace
    (A-SEC-13); tell the user.
-5. Recorded: `identity.assignment_granted` / `identity.assignment_revoked` /
-   `identity.assignment_scope_changed`; restricted grants appear in the owner's weekly
+5. Recorded: `identity.site_assignment.granted` / `identity.site_assignment.revoked` /
+   `identity.site_assignment.scope_changed`; restricted grants appear in the owner's weekly
    access report.
 
 ### 2.3 Change a role's permissions
 
-Built-in roles are read-only. Clone to a custom role (`identity.role.admin`), edit with a
-change reason, test on staging with a seeded user, then grant. Recorded:
-`identity.role_created` / `identity.role_updated` with the permission diff and sensitivity.
+Seeded roles are read-only templates (never edited in place; a release may add permissions
+to them). To change what a role may do, clone the template into an editable custom role
+(`identity.role.admin`, Phase 1b, US-1-29), edit the copy with a change reason, test on
+staging with a seeded user, then move the affected assignments to the custom role. Recorded:
+`identity.role.created` / `identity.role.updated` with the permission diff and sensitivity.
 `system_admin` can never hold quality release, finance posting or payroll permissions, and
 the screen refuses such grants (`docs/security.md` 2.11).
 
@@ -73,10 +76,10 @@ the screen refuses such grants (`docs/security.md` 2.11).
 
 | Situation | Action | Permission | Recorded |
 |---|---|---|---|
-| Suspected misuse | Users → Lock (reason) | `identity.user.admin` | `identity.user_locked` |
-| Auto-lockout after failed sign-ins | wait for the timer or Unlock after verifying identity | `identity.user.admin` | `auth.unlocked` |
-| Forgotten password | user uses "Forgot password" (30-minute link); admin may trigger "Force reset" which sends the same link and revokes other sessions; admins never set or see passwords | `identity.user.admin` | `auth.password_reset_requested` |
-| Email changed | user starts from Profile with re-authentication; admin edits only with `identity.user.edit` and a reason | | `identity.user_updated` |
+| Suspected misuse | Users → Lock (reason) | `identity.user.admin` | `identity.user.locked` |
+| Auto-lockout after failed sign-ins | wait for the timer or Unlock after verifying identity | `identity.user.admin` | `identity.user.unlocked` |
+| Forgotten password | user uses "Forgot password" (30-minute link); admin may trigger "Force reset" which sends the same link and revokes other sessions; admins never set or see passwords | `identity.user.admin` | `identity.user.password_reset_requested` |
+| Email changed | user starts from Profile with re-authentication; admin edits only with `identity.user.edit` and a reason | | `identity.user.updated` |
 
 ### 2.5 MFA (TOTP) reset
 
@@ -84,16 +87,18 @@ the screen refuses such grants (`docs/security.md` 2.11).
    write who verified in the reason field.
 2. Users → Security → Reset MFA (`identity.mfa.admin`). The user re-enrols at next sign-in;
    privileged actions are blocked until then.
-3. Recorded: `auth.mfa_reset`; the user is notified by email.
+3. Recorded: `identity.mfa.reset`; the user is notified by email.
 
 ### 2.6 Revoke sessions and lost devices
 
 1. Users → Sessions → Revoke one (`identity.session.void`) or Sign out everywhere
    (`identity.user.admin`). The device fails its next request.
 2. Lost or stolen device: additionally discard its outbox server-side
-   (`platform.sync_command.void`, Phase 7), remove push subscriptions, mark the device in
-   the device register. Evidence per `docs/security.md` 8.3 ("Lost or stolen device").
-3. Recorded: `auth.session_revoked`, `auth.sessions_revoked_all`, `offline.outbox_discarded`.
+   (`platform.sync_command.void`, Phase 7), remove push subscriptions, set the device's row in
+   `device_registrations` to `suspended` (or `removed` with reason; `docs/data-model.md` 11.1).
+   Evidence per `docs/security.md` 8.3 ("Lost or stolen device").
+3. Recorded: `identity.session.revoked`, `identity.session.revoked_all`,
+   `platform.sync_command.outbox_discarded`.
 
 ### 2.7 Deactivate and offboard (checklist)
 
@@ -109,9 +114,9 @@ deleted.
 3. Devices: if a personal phone was used, confirm the app was signed out (cache cleared on
    next open); if a shared device, nothing to do.
 4. Records: export nothing; their history stays attributed to them.
-5. Recorded: `identity.user_deactivated`; the weekly access report lists the deactivation.
+5. Recorded: `identity.user.deactivated`; the weekly access report lists the deactivation.
 6. Reactivation (returning staff) uses `identity.user.admin` with a reason
-   (`identity.user_reactivated`); assignments are re-granted explicitly, never restored
+   (`identity.user.reactivated`); assignments are re-granted explicitly, never restored
    automatically.
 
 ### 2.8 Structure changes
@@ -120,8 +125,78 @@ Sites, departments, warehouses, lines (`masterdata.*.admin`), special locations
 (`masterdata.location.admin`) and equipment blocking rules (`masterdata.equipment.admin`)
 are changed on staging first, then on production with a reason. A location is deactivated,
 never deleted; a location holding stock cannot be deactivated until moved. Recorded:
-`masterdata.site_changed`, `masterdata.location_special_designated`,
-`masterdata.equipment_blocking_rule_changed`.
+`masterdata.site.changed`, `masterdata.location.special_designated`,
+`masterdata.equipment.blocking_rule_changed`.
+
+### 2.9 Onboarding, training and SOP alignment
+
+Adoption is a go-live risk (`docs/risk-register.md` R-26, R-30); this section is the
+onboarding checklist and training plan those risks cite. Quick guides are the one-page,
+task-oriented help pages opened from "?" in the app (`docs/ux-system.md` 3.2; backlog US-9-08)
+and must match the shipped flow; a guide that differs from the screen is a defect.
+
+**(a) New-user onboarding checklist (per person, kept by the system administrator; A-OPS-16)**
+
+| # | Step | Who | Evidence |
+|---|---|---|---|
+| 1 | Account invited with role(s) and site(s) (2.1); organization-wide scope only for the three roles that allow it | `system_admin` | `identity.user.created`, `identity.site_assignment.granted` |
+| 2 | First sign-in completed; TOTP enrolled where the role holds restricted permissions (within the A-SEC-13 grace) | user, `system_admin` checks | `identity.mfa.enrolled` |
+| 3 | Signed in on the device(s) actually used for the job (shared floor tablet, personal phone, desktop); camera or scanner tested with one scan (section 11) | user with L1 | sign-in visible in Sessions |
+| 4 | Role quick guides read (table below); operator roles complete the training scenario on staging with fictional seed data | user, trainer | training record (see (b)) |
+| 5 | First real task done under supervision by the site manager or process owner (for example one receipt, one dispensing step, one count zone, one disposition) | supervisor | supervisor initials on the training record |
+| 6 | Where SOPs apply (QA/QC, production, warehouse), the user has read the revised SOP of (c) | QA process owner | SOP read-and-understood record (company form) |
+| 7 | Added to the support channel and told the L1/L2 route (section 16) | `system_admin` | – |
+
+A user may hold a `post`, `approve` or `admin` permission in production only after steps 1 to 6
+are complete (A-OPS-16); until then the administrator grants `view`/`create` only.
+
+**(b) Training plan outline (per phase and role; A-OPS-17)**
+
+| Phase going live | Audience (roles) | Content | Format and duration | Trainer | Evidence |
+|---|---|---|---|---|---|
+| 1 | `owner_director`, `system_admin`, `site_manager` | sign-in, MFA, users and assignments (2.1–2.7), structure (2.8), diagnostics (17), support route (16) | hands-on, 2 h, staging | devops-engineer with `security-engineer` material | attendance list |
+| 2 | `warehouse_operator`, `site_manager`, `procurement`, `qa_qc` | scanning, receipts, transfers, labels, counts and adjustments, quarantine and release, sync status basics | floor session, 2 × 1.5 h per site, real printers and scanners | warehouse-procurement-specialist, site manager | attendance list; scenario completed on staging |
+| 3 | `production_planner`, `production_operator`, `qa_qc` | work orders, line clearance, dispensing with tolerance, process steps, BMR and hybrid paper record (A-PROC-37), deviations, dispositions | floor session, 2 × 2 h, one full staging batch | manufacturing-process-engineer, QA process owner | scenario batch closed on staging |
+| 4 | `sales_cs`, `warehouse_operator`, `site_manager` | orders, allocation and FEFO, pick/pack verification, dispatch and DR | 1.5 h | product-manager, sales lead | attendance list |
+| 5–8 (as they go live) | `hr_payroll`, `finance`, `analytics` readers, `owner_director` | imports and exception queue, payroll parallel run, finance postings and reversals, dashboards | 1–2 h per module | module specialist persona | attendance list |
+| every phase | all | "what to do when": error banner and `requestId`, conflicts, printer first checks, who to call | 20 min, part of each session | site manager | – |
+| annual | all | refresher on changed flows and new quick guides (section 18) | 30 min | site manager | attendance list |
+
+Evidence of completion is a dated attendance list or scenario sign-off kept as a
+`FileAttachment` on the user (or on the Employee, `attachment_kind = training_certificate`,
+once Phase 5 is live) and, for group sessions, on the gate record. Training uses staging and
+fictional seed data only; no real customer, supplier or payroll data appears in a session.
+
+**(c) SOP alignment (owned by the QA process owner; company responsibility)**
+
+The system does not define procedures; the company's SOPs must describe the digital record
+before production use. Each row is *company responsibility; verify with authorized personnel
+before production use*. The team supplies screen flows (`docs/process-maps.md`) and sample
+printouts; QA decides wording, effective dates and training needs.
+
+| SOP area (company document) | What changes with the system | Must be effective before | Flow reference |
+|---|---|---|---|
+| BMR completion and review; hybrid record (which entries stay handwritten, how paper pages are scanned and attached) | digital BMR with electronic attestations that are records, not validated e-signatures (A-PROC-37, A-PRD-14); printed BMR keeps signature lines | Phase 3 go-live | W05, W06 |
+| Line clearance (weighing and production areas, second clearance) | checklist recorded in the app with attestation; equipment status checked by scan | Phase 3 | W05 |
+| Dispensing and weighing (tolerance, over-tolerance approval, scale use) | scan-to-dispense with tolerance check and approval path | Phase 3 | W05 |
+| Quarantine, release, hold and rejection of lots | Disposition records; status drives availability; QA bulk disposition at cutover | Phase 2 | W06 |
+| Labelling (material, container, finished goods; reprint control) | approved label templates, verification scan, reprint reason (section 10) | Phase 2 | W02, W08, W09 |
+| Stock count and adjustment | counts through the app with blind count option; adjustments approved and reversed, never edited | Phase 2 | W03 |
+| Receiving and supplier documents | goods receipt with supplier lot and document scan; quarantine by default | Phase 2 | W04 |
+| Delivery and customer acknowledgment | pick/pack verification, dispatch posting, DR acknowledgment | Phase 4 | W09 |
+| Deviation, CAPA, complaint and recall handling | records in the quality module with states and approvals | Phase 3 (deviation) / later phases | W07 |
+| Record retention and archiving | retention policies and legal hold in the system (`docs/security.md` 7); paper archive rules remain the company's | Phase 1 (policy values), Phase 5 (sweeps) | – |
+
+Status of each SOP (draft, approved, effective, trained) is reported at every gate from Gate 2
+onward and is a line of the go-live checklist (17a). The team never writes SOP content.
+
+**(d) Feedback loop (A-OPS-19)**
+
+During hypercare (`docs/data-migration-plan.md` 12.6) the daily stand-up collects operator
+feedback; the adoption metrics there (scan rate, manual-entry rate) are the R-26 triggers.
+After hypercare, feedback arrives through the support channel (section 16) and a monthly
+15-minute review with site managers; items become backlog stories, quick-guide fixes or SOP
+change requests to QA. Quick guides are revised in the same release as the flow they describe.
 
 ## 3. Master data and revision approvals
 
@@ -139,8 +214,8 @@ administrator supports the flow but never approves quality-relevant revisions.
 
 Administrator checks before an approval is released to production: open batches that will
 keep the old revision are listed and understood by production; the effective date is not in
-the past; label templates were printed and scanned. Recorded: `masterdata.formula_approved`
-and siblings. Never edit an effective revision in the database; a wrong approval is fixed by
+the past; label templates were printed and scanned. Recorded:
+`masterdata.formula_revision.approved` and siblings. Never edit an effective revision in the database; a wrong approval is fixed by
 a new revision.
 
 ## 4. Numbering rule changes
@@ -158,7 +233,7 @@ changes apply to future numbers only (`docs/security.md` 2.11).
    go backwards; a `reset period` change takes effect at the next period boundary.
 4. Legacy paper numbers from before go-live live in `legacy_number` fields
    (`docs/data-migration-plan.md`); they are never re-issued.
-5. Recorded: `platform.numbering_rule_changed` with before/after; note in appendix A.
+5. Recorded: `platform.numbering_rule.changed` with before/after; note in appendix A.
 
 ## 5. Settings and approval rules
 
@@ -166,7 +241,7 @@ changes apply to future numbers only (`docs/security.md` 2.11).
 alert thresholds, retention policies and feature switches; `platform.approval_rule.admin`
 (owner only) changes approval thresholds and separation-of-duties rules
 (`docs/permissions-matrix.md` 5.2). Both are restricted actions, versioned with actor and
-reason, and recorded as `platform.settings_changed` / `platform.approval_rule_changed`. Try
+reason, and recorded as `platform.setting.changed` / `platform.approval_rule.changed`. Try
 every change on staging first; business rules marked "qualified reviewer" in
 `approval_rules.reviewed_by` are not changed without that reviewer's sign-off.
 
@@ -179,27 +254,35 @@ times is dead-lettered and raises the failed-jobs alert (`docs/deployment-railwa
    kind, payload summary (no secrets), attempts, last error, `correlationId` and the
    originating user.
 2. Classify: **transient** (timeout, connection reset, bucket 5xx) → Retry
-   (`platform.job.admin`, recorded `platform.job_retried`); **poison** (payload invalid,
+   (`platform.job.admin`, recorded `platform.background_job.retried`); **poison** (payload invalid,
    referenced record deleted or in a state that no longer allows the action) → Cancel with
-   reason (`platform.job_cancelled`) and tell the originating user; **bug** → open an
+   reason (`platform.background_job.cancelled`) and tell the originating user; **bug** → open an
    incident S3 (section 12), capture the `correlationId`, escalate to L3.
 3. Jobs are idempotent and keyed, so a retry never duplicates a posting; if a retry would be
    unsafe for business reasons (for example the batch has since been reopened), cancel.
 4. Never re-run a job's effect by hand with SQL.
 
-| Job kind | Typical failure | Action |
+| Job code (`docs/architecture.md` 8 registry) | Typical failure | Action |
 |---|---|---|
-| PDF generation (BMR, dispensing sheet, DR, pick list) | renderer disabled (`PDF_RENDERER=disabled`), Chromium out of memory | configure renderer (Phase 3); retry once; if memory, report under ADR-016 |
-| Label batch | template version retired | regenerate from the current approved template |
-| Import processing | malformed file, mapping mismatch | section 7 |
-| Scheduled report | recipient lost permission (dropped, listed in audit), query timeout | fix recipients; narrow filters |
-| Notification / email | `EMAIL_PROVIDER=none`, SMTP rejected | configure provider; retry |
+| `documents.render` (BMR, dispensing sheet, DR, pick list PDFs) | renderer disabled (`PDF_RENDERER=disabled`), Chromium out of memory | configure renderer (Phase 3); retry once; if memory, report under ADR-016 |
+| `documents.label_batch` (proposed code; label batch print) | template version retired | regenerate from the current approved template |
+| `platform.import_process` (proposed code; ImportJob parse and validate) | malformed file, mapping mismatch | section 7 |
+| `analytics.scheduled_report`, `analytics.snapshot_kpis`, `analytics.reconcile_kpis` | recipient lost permission (dropped, listed in audit), query timeout | fix recipients; narrow filters |
+| `platform.notification_dispatch` (proposed code; in-app and email) | `EMAIL_PROVIDER=none`, SMTP rejected | configure provider; retry |
 | `inventory.reconcile` | none expected; differences are not failures | section 9 |
-| Expiry and FEFO scan | long run | retry off-peak |
+| `inventory.expiry_scan` (expiry and FEFO risk) | long run | retry off-peak |
 | `platform.partition_maintenance` | partition exists | safe to retry; if the audit `DEFAULT` partition is non-empty, incident S2 |
-| `platform.backup_dump` | bucket or key error | section 13.5; backup-age alert follows |
+| `platform.retention_sweep` | legal hold on a row in the sweep set | expected: held rows are skipped and listed; no action unless the list is unexpected |
 | `platform.metrics_sample`, `platform.alerts_evaluate` | database busy | retry; if repeated, capacity incident |
-| Sync replay (Phase 7) | conflicts are not failures | section 8 |
+| `platform.reencrypt` (section 15) | key id missing | fix `DATA_ENCRYPTION_KEY*` variables; retry; rows are re-encrypted idempotently |
+| `inventory.rebuild_balances` (section 9) | key set too large | re-enqueue per site; never run during a posting-heavy shift |
+| `platform.sync_replay` (proposed code; Phase 7 server-side ordering) | conflicts are not failures | section 8 |
+
+Not a pg-boss job: `platform.backup_dump` is the `backup` cron service (`node dist/backup.js`,
+`docs/deployment-railway.md` 9). Its failures are rows in `backup_runs` with
+`status = 'failed'` and raise the backup-age alert; handle them per section 13.5. Codes marked
+"proposed" are used here until the job registry in `docs/architecture.md` 8 names them
+(ruling 45); the diagnostics Jobs card shows the registry code.
 
 ## 7. Failed or partial imports
 
@@ -210,10 +293,10 @@ are never posted silently (AC-19).
 
 | Situation | What you see | Action | Permission | Recorded |
 |---|---|---|---|---|
-| `failed` during parse | status `failed`, error summary, original file kept | download the error file; fix the source file or create a new mapping version; upload again (same checksum requires a re-run reason) | `platform.import_job.create`, `hr.attendance_import.create` | `platform.import_posted` only on later success |
-| Rows rejected in preview | counts: ok / duplicate / unknown / invalid | resolve each exception type explicitly (map unknown id, confirm duplicate, request correction, reject with reason) | `platform.import_job.submit`, `hr.attendance_import.edit` | `hr.attendance_exception.resolved` |
-| Posted with rejected rows ("partial") | status `posted` with rejected count > 0 | rejected rows stay listed; a follow-up import of the corrected rows is normal; never edit `import_job_rows` | `platform.import_job.post`, `hr.attendance_import.post` | `platform.import_posted` |
-| Wrong file posted | – | Reverse the import: reversal events for every created record with reason; original file and rows retained | `platform.import_job.void`, `hr.attendance_import.*` per W10-08 | `platform.import_reversed`, `hr.attendance_import.reversed` |
+| `failed` during parse | status `failed`, error summary, original file kept | download the error file; fix the source file or create a new mapping version; upload again (same checksum requires a re-run reason) | `platform.import_job.create`, `hr.attendance_import.create` | `platform.import_job.posted` only on later success |
+| Rows rejected in preview | counts: ok / duplicate / unknown / invalid | resolve each exception type explicitly (map unknown id, confirm duplicate, request correction, reject with reason) | `platform.import_job.submit`, `hr.attendance_exception.edit` | `hr.attendance_exception.resolved` |
+| Posted with rejected rows ("partial") | status `posted` with rejected count > 0 | rejected rows stay listed; a follow-up import of the corrected rows is normal; never edit `import_job_rows` | `platform.import_job.post`, `hr.attendance_import.post` | `platform.import_job.posted` |
+| Wrong file posted | – | Reverse the import: reversal events for every created record with reason; original file and rows retained | `platform.import_job.void`, `hr.attendance_import.*` per W10-08 | `platform.import_job.reversed`, `hr.attendance_import.reversed` |
 | Suspicious or malicious file | virus scan flag or odd content | void the import, mark the attachment blocked, follow `docs/security.md` 8.3 | `platform.import_job.void`, `platform.file.admin` | |
 
 Attendance events already used by an approved payroll period need `finance` plus
@@ -225,19 +308,25 @@ archival (A-OPS-09); original files follow `docs/security.md` section 7.
 Rules are in `docs/offline-sync.md` sections 4 and 5; this is the operating routine.
 
 1. Action centre → Sync conflicts (`platform.sync_conflict.view`): each row shows device,
-   user, site, command type, payload summary, server reason (for example `lot_on_hold`,
-   `insufficient_stock`, `dependency_failed`, `time_skew`), and the related record.
+   user, site, command type, payload summary, server reason (`sync_conflicts.reason_code`,
+   for example `stock_not_eligible` for held, quarantined or expired stock,
+   `insufficient_stock`, `state_changed`, `dependency_failed`; `docs/data-model.md` 11.3),
+   the human-readable `reason_message`, and the related record.
 2. The reviewer (`site_manager` or the module's supervisor role) chooses one resolution
-   (`platform.sync_conflict.approve`): **re-apply with corrected data** (creates a new,
-   online command), **discard with reason**, or **escalate** to a deviation (production) or
-   a stock adjustment with approval (inventory). The original command is never applied as-is.
+   (`platform.sync_conflict.approve`): **re-apply with corrected data** (`resolved_applied` /
+   `resolved_amended`; creates a new, online command), **discard with reason**
+   (`resolved_discarded`), or **escalate** (`escalated`) to a deviation (production) or a
+   stock adjustment with approval (inventory). The original command is never applied as-is.
 3. `dependency_failed` conflicts are resolved after their parent; the queue shows the chain.
-4. `time_skew` flags are informational: the server time stands; note the device in the
-   device register if it recurs.
+4. Clock skew is not a conflict: a command whose client time differs from server receipt by
+   more than 10 minutes (A-OFF-05) is applied normally and carries
+   `sync_commands.is_clock_skew_flagged = true`; the server time stands. The flag is shown on
+   the command in the Sync card; a device whose `device_registrations.max_clock_skew_seen_seconds`
+   keeps growing gets its clock fixed by L1 before it is used again.
 5. Target: conflicts resolved within one working day; older than two days escalate to the
    owner (A-OPS-08). The sync-backlog alert (`docs/deployment-railway.md` 8.3) fires at 20
    open conflicts.
-6. Recorded: `offline.conflict_resolved` with the resolution choice; the originating user
+6. Recorded: `platform.sync_conflict.resolved` with the resolution choice, note and both command ids; the originating user
    sees the outcome on the device.
 
 ## 9. Ledger-versus-balance reconciliation differences
@@ -267,9 +356,10 @@ notification to `system_admin` and the site's `site_manager` and is handled as i
    cost or touches a released finished-goods lot (A-OPS-06).
 5. Re-run `inventory.reconcile` on demand and confirm zero rows.
 
-Note for the architect: `inventory.rebuild_balances` and the permission that may enqueue it
-(suggested `inventory.balance.admin`, sensitivity S) do not exist in the data model or the
-permissions matrix yet; see section 21.
+Note for the architect: `reconciliation_runs` is catalogued (`docs/data-model.md` 3.10), but
+the job `inventory.rebuild_balances` and the permission that may enqueue it (suggested
+`inventory.balance.admin`, sensitivity S) are still missing from the `docs/architecture.md` 8
+job registry and `docs/permissions-matrix.md`; see section 21 item 4.
 
 ## 10. Document reprint control
 
@@ -280,10 +370,10 @@ Generated documents keep template version, source revision, generator and reprin
 |---|---|
 | Who | `documents.reprint.create` (default: production and QA for BMR and dispensing sheets, warehouse and sales for DR and pick lists per the matrix) |
 | How | Document → Reprint → reason code and note (mandatory) → the PDF renders with watermark `REPRINT n` and the reprint counter increments |
-| Recorded | `documents.reprinted` (reason, template version, source revision, requester); listed on the document's history |
+| Recorded | `documents.generated_document.reprinted` (reason, template version, source revision, requester); listed on the document's history |
 | BMR reprints | QA is notified of every BMR reprint by notification rule (A-OPS-07); paper copies are uncontrolled unless signed (wording validated by QA) |
-| Superseded documents | when the source record changes after generation, the old document is marked superseded (`documents.generated_document.void`, `documents.superseded`); the superseded PDF stays downloadable with a SUPERSEDED watermark |
-| Downloads | signed links expire in 5 minutes; every download is `documents.downloaded` (`docs/security.md` 4.8) |
+| Superseded documents | when the source record changes after generation, the old document is marked superseded (`documents.generated_document.void`, `documents.generated_document.superseded`); the superseded PDF stays downloadable with a SUPERSEDED watermark |
+| Downloads | signed links expire in 5 minutes; every download is `documents.generated_document.downloaded` (`docs/security.md` 4.8) |
 | Review | the weekly access report lists reprint counts by document kind and user; unexplained spikes are reviewed by QA |
 
 ## 11. Label printer and scanner troubleshooting
@@ -524,6 +614,76 @@ Five-step triage: (1) Health card, (2) Alerts card, (3) Jobs and Errors for the 
 report, (4) copy the `requestId` into the Railway log search and the audit log, (5) decide
 severity and open the incident entry.
 
+## 17a. Go-live checklist and cutover (Gate 9)
+
+### 17a.1 Go-live checklist
+
+Gate 9 exits when this checklist is signed by the company owners (`docs/team-charter.md` G9;
+brief item 35). The persona in "Owner" produces the evidence; the "Business signer" is the
+company person who confirms it. The signed checklist is attached to the cutover record
+(`docs/data-migration-plan.md` 12.5) and referenced in the Gate 9 report. Lines for phases not
+in the go-live set are marked "n/a (Phase n)" and signed as such. One line not signed means no
+go-live.
+
+| # | Item | Evidence | Owner (persona) | Business signer | Date |
+|---|---|---|---|---|---|
+| 1 | Security review done; penetration-test findings fixed or formally accepted (`docs/security.md` 8.2 items 1–3, 8) | test report, `docs/risk-register.md` acceptances, `\dp` output, failing UPDATE/DELETE test | security-engineer | Owner/Director | |
+| 2 | Restore drill passed within RTO (4 h, A-PRD-33) with measured RPO (`docs/deployment-railway.md` 10; section 13) | `restore_drills` row and appendix A record | devops-engineer | operations contact, Owner/Director | |
+| 3 | Multi-site authorization suite green, including against the migrated data shape (`docs/testing.md` 5; MC-15) | CI gate run, MC-15 result | qa-test-engineer | Owner/Director | |
+| 4 | Device and offline acceptance on the company's own hardware (`docs/testing.md` 7; AC-20 only if Phase 7 is in the go-live set) | device matrix results, AC-20 record or "n/a (Phase 7)" | qa-test-engineer, ux-ui-designer | site manager per site | |
+| 5 | Data migration dress rehearsal R2 passed; MC-01..MC-16 green or with approved fixes (`docs/data-migration-plan.md` 11) | R2 report | principal-architect | Owner/Director, custodians per `docs/data-migration-plan.md` 2 | |
+| 6 | Business-owner acceptance of AC-10..AC-23 for the phases going live (`docs/testing.md` 9) | signed acceptance records | product-manager | process owners (production, QA, warehouse, sales) | |
+| 7 | Retention policies loaded with confirmed values; legal hold tested (`docs/security.md` 7, 8.2 item 5) | `retention_policies` rows with `confirmed_by`, legal-hold test | security-engineer | Owner/Director, QA process owner | |
+| 8 | TOTP enforced for all privileged users; no shared accounts; every floor device registered and labelled (`docs/security.md` 8.2 item 4) | identity report, `device_registrations` list | security-engineer | `system_admin` | |
+| 9 | Monitoring alerts routed and tested; external uptime monitor live (`docs/deployment-railway.md` 8.3; backlog US-9-04) | alert simulation record | devops-engineer | operations contact | |
+| 10 | Support tiers (16) and incident process (12) agreed; every row of section 1 has a named person | signed section 1 table | devops-engineer | Owner/Director | |
+| 11 | Hypercare roster for T+1 to T+14 with a team member per site for T+1 to T+3 (`docs/data-migration-plan.md` 12.6) | roster | product-manager | site manager per site | |
+| 12 | Training delivered per 2.9(b) for every go-live role; onboarding checklist 2.9(a) complete for every production user; quick guides published and matching the shipped flows | training records, user list with onboarding status | product-manager | HR, site manager per site | |
+| 13 | SOPs of 2.9(c) for the go-live phases approved and effective by the company | SOP status list | quality-regulatory-specialist (status only) | QA process owner | |
+| 14 | Rollback plan rehearsed: code rollback and pre-load restore (`docs/deployment-railway.md` 11; MC-14; 17a.2) | rehearsal record | devops-engineer | operations contact | |
+| 15 | Production environment checklist complete (`docs/deployment-railway.md` 14 repeated for the production project; variables inventoried, rotation dates recorded, backup key custody rehearsed) | deployment log, variable change log, rotation log | devops-engineer | operations contact | |
+| 16 | Owner go decision | this checklist signed; cutover go/no-go (`docs/data-migration-plan.md` 12.1) passed | principal-architect (gate report) | Owner/Director | |
+
+### 17a.2 Cutover: pre-load restore point and maintenance mode
+
+This is the procedure `docs/data-migration-plan.md` 12.1 item 6 and 12.4 refer to. It runs on
+T0 before the first load and is rehearsed at R2. Two-person rule applies (section 1).
+
+1. **Freeze check (T-1, end of shift).** Confirm the last scheduled dump succeeded
+   (`backup_runs.status = 'succeeded'`), PITR is enabled on the production Postgres service,
+   and no ImportJob is `under_review`. Note the freeze time in the cutover record.
+2. **Close the application (T0, before load).** Set `MAINTENANCE_MODE=1` on `web` and
+   redeploy (`web` answers 503 with the maintenance page; `docs/deployment-railway.md` 4);
+   scale `worker` to 0. Nothing can now be written by users or jobs.
+3. **Take the restore point.** Run `node dist/backup.js --manual --label pre-load-<date>`;
+   verify the `backup_runs` row (SHA-256, row counts, offsite copy present). Take a manual
+   Railway volume backup of the Postgres service and record its identifier. Record the PITR
+   restore timestamp (`SELECT now()` through `railway connect`, UTC) as **the restore point**.
+   Record the object count of the bucket prefixes the load will write to. All four facts go
+   into the cutover record and appendix A (restore record).
+4. **Reopen for the cutover team only.** Unset `MAINTENANCE_MODE`, redeploy `web`, scale
+   `worker` to 1, confirm `/api/ready` is 200. The freeze is organisational from here: only
+   the cutover team signs in; operators are told the system opens at the go-live
+   declaration. Loads run with `MIGRATION_WINDOW_OPEN=true` (`docs/data-migration-plan.md`
+   9.4, 12.4); the operations contact sets and later removes that variable (variable change
+   log).
+5. **Rollback inside the window** (`docs/data-migration-plan.md` 13, second row): repeat step
+   2, then restore the manual volume backup (13.2) or PITR to the restore point (13.1);
+   verify with `inventory.reconcile` (zero rows) and the row counts of step 3; bucket objects
+   written after the restore point are unreferenced and are deleted from the recorded
+   prefixes with the owner's agreement (signed links are only issued for existing
+   `file_attachments` rows, so they are never served). Reopen as in step 4 after the owner's
+   decision.
+6. **Go-live.** After MC-16 passes, remove `MIGRATION_WINDOW_OPEN`, confirm `worker` is
+   running and the scheduled dump time is unchanged, and the Owner/Director declares go-live
+   (`docs/data-migration-plan.md` 12.5). Keep the pre-load dump and volume backup until
+   hypercare exit plus 90 days (A-OPS-20).
+
+Note: `MAINTENANCE_MODE` is a production variable (two-person rule, appendix A), not an
+application setting. A finer read-only switch that keeps sign-in working does not exist yet;
+`docs/data-migration-plan.md` 13 (row "first 24 hours") depends on one and is listed in
+section 21.
+
 ## 18. Periodic checklists
 
 | Cadence | Who | Items |
@@ -532,7 +692,7 @@ severity and open the incident entry.
 | Weekly | `system_admin`, owner | read the access-and-exceptions report (`docs/security.md` section 5); clear failed jobs and old conflicts; review reprint counts; deploy log complete |
 | Monthly | operations contact | backup verification: pick one random dump, download from offsite, verify SHA-256, decrypt, `pg_restore --list`; review database growth vs volume; cost review (`docs/deployment-railway.md` 13) |
 | Quarterly (first week of Jan/Apr/Jul/Oct, A-OPS-11) | operations contact, owner, `system_admin` | **restore drill** per `docs/deployment-railway.md` 10 with the evidence row; **access review**: every `user_site_assignments` row confirmed by the site manager and owner, restricted-permission holders listed and justified, TOTP enrolled for all privileged users, accounts without sign-in for 90 days locked and for 180 days deactivated (A-OPS-04), Railway and GitHub members reviewed; **backup verification** of one monthly and one daily dump; secrets rotation due dates checked (section 15); alert thresholds and recipients confirmed; device register reviewed; retention policies and legal holds reviewed with QA and finance; this runbook and the deployment document re-read against the dashboard |
-| Annual | owner | independent security test (`docs/security.md` 8.2); full disaster-recovery rehearsal from the offsite dump into a fresh project (section 13.3) with measured RPO/RTO; incident register review; training refresh |
+| Annual | owner | independent security test (`docs/security.md` 8.2); full disaster-recovery rehearsal from the offsite dump into a fresh project (section 13.3) with measured RPO/RTO; incident register review; training refresh (2.9(b)) |
 
 ## 19. Appendix A: operational logs (templates)
 
@@ -567,6 +727,11 @@ never secret values) and are updated in the same PR as the change they record (A
 | A-OPS-13 | Printers accept PDF or raster output; no vendor printer language in the MVP | templates | IT contact |
 | A-OPS-14 | "Degraded" = any S2 alert active; "down" = `/api/ready` or worker heartbeat failing; shown on the diagnostics Health card | – | – |
 | A-OPS-15 | Operational logs are markdown files under `docs/ops-log/` in the repository (names and dates only) | location | owner, security |
+| A-OPS-16 | A user receives `post`, `approve` or `admin` permissions in production only after onboarding steps 1–6 of 2.9(a) are complete; the system administrator keeps the checklist | policy | owner, HR |
+| A-OPS-17 | Training formats and durations per 2.9(b); evidence kept as a `FileAttachment` on the user (or Employee once Phase 5 is live) and on the gate record for group sessions; staging and fictional data only | plan | owner, HR, QA |
+| A-OPS-18 | The SOP list in 2.9(c) is the set the company must revise before each phase's go-live; QA process owner may add or remove rows; the team never writes SOP content | list | QA process owner |
+| A-OPS-19 | Feedback loop: daily in hypercare, then support channel plus a monthly 15-minute review with site managers; quick guides change in the same release as the flow | cadence | owner, site managers |
+| A-OPS-20 | Cutover restore point = manual dump + manual volume backup + PITR timestamp taken under `MAINTENANCE_MODE=1`; kept until hypercare exit plus 90 days | retention | owner, operations contact |
 
 ## 21. Open questions and items for other documents
 
@@ -575,20 +740,25 @@ never secret values) and are updated in the same PR as the change they record (A
 2. Owner: confirm support hours and whether night-shift production needs after-hours cover
    (A-OPS-01, A-OPS-02).
 3. QA: confirm the BMR reprint notification rule and the "uncontrolled copy" wording.
-4. Architect / database-architect: add job `inventory.rebuild_balances` (projection rebuild
-   from the ledger for a key set, audited) and a permission to enqueue it (suggested
-   `inventory.balance.admin`, S) to `docs/data-model.md` and `docs/permissions-matrix.md`;
-   add job `platform.reencrypt` for `DATA_ENCRYPTION_KEY` rotation; add tables
-   `backup_runs`, `restore_drills`, `metrics_samples`, `worker_heartbeats`,
-   `reconciliation_runs` and a `devices`/`device_registrations` register reference (listed
-   in `docs/deployment-railway.md` 17).
-5. Architect: `docs/data-model.md` refers to sections §9 (numbering) and §11 (sync and
-   devices) that do not yet exist; section 4 and section 8 of this runbook depend on them.
+4. Applied in `docs/data-model.md` 3.10 and 11.1: tables `backup_runs`, `restore_drills`,
+   `metrics_samples`, `worker_heartbeats`, `reconciliation_runs` and the
+   `device_registrations` register. Still open: the job registry in `docs/architecture.md` 8
+   (ruling 45) must list `inventory.rebuild_balances` (projection rebuild from the ledger for
+   a key set, audited), `platform.reencrypt` (`DATA_ENCRYPTION_KEY` rotation) and the codes
+   marked "proposed" in section 6; `docs/permissions-matrix.md` must add
+   `inventory.balance.admin` (S) to enqueue the rebuild (ruling 41).
+5. Applied: `docs/data-model.md` §9 (numbering) and §11 (offline and sync tables) exist;
+   sections 4 and 8 of this runbook cite them.
 6. Security: the audit catalogue lacks `hr.attendance_exception.resolved` and
    `hr.attendance_mapping.saved` used by `docs/process-maps.md` W10 and section 7 here; and
-   `platform.break_glass` for manual database sessions (section 14) would make the
-   break-glass log verifiable from the audit trail.
+   a three-segment event for manual database sessions (section 14; suggested
+   `platform.break_glass_session.opened`, distinct from `identity.owner_break_glass`, which
+   itself needs re-keying) would make the break-glass log verifiable from the audit trail.
 7. Product: the diagnostics page (FR-platform-09) is scheduled for Phase 5 while Slice 1
    needs at least the Health, Backups and Variables cards for Gate 1 evidence; propose
    splitting FR-platform-09 into Phase 1 (health, backups, variable names) and Phase 5 (the
    rest).
+8. Product / database-architect: `docs/data-migration-plan.md` 13 relies on a read-only
+   "maintenance mode" switched by `system_admin` through `platform.settings.admin`; only the
+   `MAINTENANCE_MODE` variable (full 503) exists (17a.2). Either add a `settings.platform.read_only`
+   setting with its behaviour, or reword the migration plan to use the variable.
