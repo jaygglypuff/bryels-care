@@ -128,13 +128,13 @@ tests/
 
 ```mermaid
 flowchart LR
-  A[globalSetup: TEST_DATABASE_URL] --> B[DROP/CREATE bc_test_template]
+  A["globalSetup: TEST_DATABASE_URL"] --> B["DROP/CREATE bc_test_template"]
   B --> C[pnpm db:migrate against template]
-  C --> D[base seed: org, sites NFD/RVS, roles, permissions, users per role, UOMs, locations, reason codes, numbering rules, settings]
-  D --> E[per worker N: CREATE DATABASE bc_test_wN TEMPLATE bc_test_template]
-  E --> F[per test file: TRUNCATE operational tables, keep base seed]
-  F --> G[per test: factories create only what the test needs, unique codes]
-  G --> H[globalTeardown: drop worker databases]
+  C --> D["base seed: org, sites NFD/RVS, roles, permissions, users per role, UOMs, locations, reason codes, numbering rules, settings"]
+  D --> E["per worker N: CREATE DATABASE bc_test_wN TEMPLATE bc_test_template"]
+  E --> F["per test file: TRUNCATE operational tables, keep base seed"]
+  F --> G["per test: factories create only what the test needs, unique codes"]
+  G --> H["globalTeardown: drop worker databases"]
 ```
 
 | Decision | Choice | Why |
@@ -258,7 +258,7 @@ codes follow `docs/architecture.md` section 5 and `docs/permissions-matrix.md` s
 | `stock.negative.rejected` | Issue 10 g from a balance of 5 g | 409 `STOCK_INSUFFICIENT`; no row |
 | `stock.negative.reserved_counts` | Issue 5 g where on_hand 5 g, reserved 3 g | 409 (on_hand − reserved − allocated ≥ qty) |
 | `stock.negative.check_constraint` | Direct `UPDATE inventory_balances SET on_hand_base = -1` as admin | `ck` violation |
-| `stock.negative.no_policy_exception` | Actor holds `inventory.negative_balance.post` with reason (catalogue entry kept, disabled); any site setting attempting to allow negative stock | 409 `STOCK_INSUFFICIENT`; nothing written. Architect ruling (2026-10-16): balances never go negative in Phases 1 to 9, the ADR-006 "configured policy" exception is withdrawn and the `inventory_balances` CHECK has no bypass; allowing it would need a new ADR |
+| `stock.negative.no_policy_exception` | Any actor, including `owner_director` and `system_admin` holding every inventory permission, posts an issue, consumption or shipment that would take `on_hand_base` below zero; any site setting attempting to allow negative stock; a direct SQL update as `bc_test_admin` setting a negative balance | 409 `STOCK_INSUFFICIENT`; nothing written; no permission string or setting changes the outcome (the catalogue has no negative-balance permission, `docs/permissions-matrix.md` §3.3); the direct SQL update fails on the `inventory_balances` CHECK. Architect ruling (2026-10-16): balances never go negative in Phases 1 to 9, the ADR-006 "configured policy" exception is withdrawn and the `inventory_balances` CHECK has no bypass; allowing it would need a new ADR |
 
 ### 4.4 FEFO / FIFO selection (A-PRD-16)
 
@@ -528,8 +528,10 @@ integration tests against `POST /api/v1/sync/commands`.
 | `offline.conflict_queued` and `offline.conflict_resolved_each_way` | site_manager resolves: re-apply with corrected data, discard with reason, escalate to adjustment | Re-apply creates a new audited command; discard audited `platform.sync_conflict.resolved`; original never applied silently |
 | `offline.dependency_failed` | Second move of the same box after a rejected first move | Marked `conflict: dependency_failed`; independent commands still apply |
 | `offline.dispense_capture_rules` | Offline dispense on a registered device: wrong lot, out of tolerance, operator = checker | Blocked locally where cached data allows; the server stores an out-of-tolerance or wrong-lot capture as a `dispense_records` row with `is_within_tolerance = false`, no consumption posted, plus a `deviations` stub (`docs/data-model.md` 11.5), never auto-accepted |
+| `offline.retry_max_attempts_failed` | Server unreachable (route abort) for every flush; `settings.offline.max_attempts` lowered to 3 in the fixture (A-OFF-08, default 20) | After the third failed attempt the command shows device-side status `failed` under "Could not reach the server" and the periodic retry timer stops for it (no further requests observed); no `sync_conflicts` row exists; a manual "Sync now" resets `attempts` once and, with the server reachable, posts the command once |
+| `offline.queue_age_exceeded_to_conflict` | `page.clock` advances past `settings.offline.max_queue_age_hours` (A-OFF-09, default 72 h) before the queued move is flushed | Device warns before the limit ("Sync within N h…"); at flush the server rejects the command with reason `auth_snapshot_expired`, writes a `sync_conflicts` row for review and `platform.sync_command.replay_rejected`; nothing posted; after re-authentication a reviewer may re-apply it as a new command |
 | `offline.count_plan_closed` | Count line replayed after the count left `in_progress` | Rejected to conflict queue; recount candidate |
-| `offline.logout_clears_cache` | Logout with pending commands | Warning lists pending commands; "discard" audited `platform.sync_command.discarded` (name to be added to `src/lib/audit.ts`, section 12); IndexedDB empty afterwards; next user on the shared device sees nothing |
+| `offline.logout_clears_cache` | Logout with pending commands | Warning lists pending commands; "discard" audited `platform.sync_command.discarded`; IndexedDB empty afterwards; next user on the shared device sees nothing |
 | `offline.reference_freshness_badge` | Cached lot card 25 h old | "data as of" badge; full reference refresh on reconnect (A-OFF-01) |
 | `offline.no_sensitive_cache` | Inspect IndexedDB after use by finance and HR users | No pricing, cost, payroll or personal data tables present |
 
@@ -727,8 +729,8 @@ Automated: `migrations.apply_from_zero_and_noop` (S1-09), `health.ready_reflects
 |---|---|---|---|
 | S1-01 | `authz.cross_site.url` (masterdata.location), `authz.cross_site.query`, `audit.authz_denied_written` | integration | 9.1 steps 1 to 3 |
 | S1-02 | `authz.cross_site.body` (masterdata.location create) | integration | 9.1 step 4 |
-| S1-03 | `authz.sod.approve_own` (platform settings change), `authz.sod.other_approver_ok` | integration | Two site managers on D4 |
-| S1-04 | `identity.role_permission_change_audited` (before/after sets), e2e `flows/identity/audit-viewer.spec.ts` | integration + e2e | Audit viewer filter by role |
+| S1-03 | `authz.sod.approve_own` (platform settings change: the submitting `system_admin` approving their own request gets 409 `SEPARATION_OF_DUTIES`), `authz.sod.other_approver_ok` (a second `system_admin` or an `owner_director` holding `platform.settings.approve` succeeds), `authz.sod.site_manager_cannot_approve_settings` (a `site_manager` gets 403 `PERMISSION_DENIED`) | integration | Fixture: two `system_admin` users plus one `owner_director`; one admin submits on D4, the other admin approves on D1 |
+| S1-04 | `identity.seeded_role_read_only` (an edit to a seeded `is_system` role such as `site_manager` is rejected and `role_permissions` is unchanged; cloning into custom roles is Phase 1b, US-1-29), `identity.assignment_change_audited_and_effective` (changing a user's role assignment writes `identity.site_assignment.granted` / `.revoked` with before/after role, and the user's effective permissions change at the next request), e2e `flows/identity/audit-viewer.spec.ts` | integration + e2e | Fixture user moved from `warehouse_operator` to `site_manager` at NFD; audit viewer filtered by entity type `user_site_assignments` shows the change, and the user's next request reflects the new role |
 | S1-05 | `identity.revoke_all_sessions`, `authz.session.revoked` | integration + e2e (two contexts) | Two devices: D1 and D4 |
 | S1-06 | `auth.lifecycle.deactivated_denied`, `auth.error.generic`, `audit.auth_events` | integration | Deactivated user attempts sign-in |
 | S1-07 | e2e `states/mobile-360.spec.ts`: for every Slice 1 route assert `document.scrollingElement.scrollWidth <= 360`, every interactive element ≥ 44 px (48 px in operator mode), primary action visible without scrolling the navigation; axe clean | e2e `mobile-360` | D1 walk-through of every page |
@@ -830,7 +832,7 @@ reviews cross-module changes; the `security-engineer` persona reviews changes un
 |---|---|
 | Nightly | Full Playwright matrix (`desktop-chromium`, `mobile-360`, `tablet-768`, `mobile-webkit`, `mobile-360-camera`), property tests with 10× iterations, `concurrency.deadlock_free` at 1,000 interleavings, Lighthouse CI (section 11), dependency update PRs |
 | Gate | Nightly set plus the manual procedures of section 9 for the phase (including the printer and label tests of 9.17 at G2 to G5), the security checklist of `docs/security.md` 8.1, and the performance report; results attached to the gate report |
-| Phase 9 | Load test (section 11.2), penetration test findings, backup/restore drill (9.14), migration rehearsal MC-01 to MC-16 (9.16) |
+| Phase 9 | Load test (section 11.2), penetration test findings, backup/restore drill (9.14), migration rehearsal MC-01 to MC-16 (9.16), go-live checklist (`docs/operations-runbook.md` §17a.1) |
 
 ### 10.3 Flakiness policy
 
@@ -889,7 +891,7 @@ Rate limits (`docs/security.md` 4.5) are verified to engage with 429 and `Retry-
 | Q-TST-04 | Closed (architect ruling, 2026-10-16): the clock-skew flag threshold is 10 minutes (`docs/offline-sync.md` A-OFF-05); `docs/security.md` adopts it. `offline.time_skew_flagged` uses 10 minutes. | — | — |
 | Q-TST-05 | Closed (applied): `docs/data-model.md` 5.3 and every availability, expiry and effective-date query take `$as_of`; no `CURRENT_DATE` (section 3.6). | database-architect | — |
 | Q-TST-06 | Closed (architect ruling, 2026-10-16): the catalogue spellings are canonical (`inventory.movement.*`, `quality.hold.*`, `sales.over_shipment.approve`, `masterdata.formula.approve`); the data model and process maps are renamed. This document already uses the catalogue; the `authz-coverage` check reads `src/lib/permissions.ts`, which must equal `docs/permissions-matrix.md`. | — | — |
-| Q-TST-07 | Resolved (architect ruling, 2026-10-16): audit names are `module.entity.event` as in `docs/data-model.md` 8.1 (for example `inventory.stock_movement.posted`, `identity.authorization.denied`); the `docs/security.md` section 5 catalogue and `docs/process-maps.md` are re-keyed to them. Tests assert the data-model names (applied in sections 1.2, 2.2, 4, 5, 6 and 9). Still needed: `platform.sync_command.discarded` (logout discard of a pending outbox, section 6) is not yet in data-model 8.1 / `src/lib/audit.ts`. | database-architect (add the one name) | `audit.*` tests |
+| Q-TST-07 | Resolved (architect ruling, 2026-10-16): audit names are `module.entity.event` as in `docs/data-model.md` 8.1 (for example `inventory.stock_movement.posted`, `identity.authorization.denied`); the `docs/security.md` section 5 catalogue and `docs/process-maps.md` are re-keyed to them. Tests assert the data-model names (applied in sections 1.2, 2.2, 4, 5, 6 and 9). `platform.sync_command.discarded` (logout discard of a pending outbox, section 6) is catalogued in data-model 8.1 (architect ruling 74). | — | `audit.*` tests |
 | Q-TST-08 | Is a dedicated staging environment with the `perf` seed acceptable for the nightly performance run, or must performance runs use a separate Railway environment to avoid disturbing acceptance testing? | devops-engineer, owner | Section 11 from Phase 2 |
 | Q-TST-09 | Does the owner want the manual acceptance records (`docs/acceptance/<phase>/`) kept in the repository or in the company's document system? | Owner | Evidence storage from G1 |
 | Q-TST-10 | Independent penetration test budget for G9 (`docs/security.md` open question 4) and whether its findings are gate-blocking. | Owner | Phase 9 plan |
