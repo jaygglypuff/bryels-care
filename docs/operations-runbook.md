@@ -98,7 +98,7 @@ the screen refuses such grants (`docs/security.md` 2.11).
    `device_registrations` to `suspended` (or `removed` with reason; `docs/data-model.md` 11.1).
    Evidence per `docs/security.md` 8.3 ("Lost or stolen device").
 3. Recorded: `identity.session.revoked`, `identity.session.revoked_all`,
-   `platform.sync_command.outbox_discarded`.
+   `platform.sync_command.discarded`.
 
 ### 2.7 Deactivate and offboard (checklist)
 
@@ -265,10 +265,10 @@ times is dead-lettered and raises the failed-jobs alert (`docs/deployment-railwa
 | Job code (`docs/architecture.md` 8 registry) | Typical failure | Action |
 |---|---|---|
 | `documents.render` (BMR, dispensing sheet, DR, pick list PDFs) | renderer disabled (`PDF_RENDERER=disabled`), Chromium out of memory | configure renderer (Phase 3); retry once; if memory, report under ADR-016 |
-| `documents.label_batch` (proposed code; label batch print) | template version retired | regenerate from the current approved template |
-| `platform.import_process` (proposed code; ImportJob parse and validate) | malformed file, mapping mismatch | section 7 |
+| `documents.render` for a queued `label_jobs` row (label batch print) | template version retired | regenerate from the current approved template |
+| `platform.import_job.process` (ImportJob parse and validate) | malformed file, mapping mismatch | section 7 |
 | `analytics.scheduled_report`, `analytics.snapshot_kpis`, `analytics.reconcile_kpis` | recipient lost permission (dropped, listed in audit), query timeout | fix recipients; narrow filters |
-| `platform.notification_dispatch` (proposed code; in-app and email) | `EMAIL_PROVIDER=none`, SMTP rejected | configure provider; retry |
+| `platform.notification_dispatch` (in-app and email) | `EMAIL_PROVIDER=none`, SMTP rejected | configure provider; retry |
 | `inventory.reconcile` | none expected; differences are not failures | section 9 |
 | `inventory.expiry_scan` (expiry and FEFO risk) | long run | retry off-peak |
 | `platform.partition_maintenance` | partition exists | safe to retry; if the audit `DEFAULT` partition is non-empty, incident S2 |
@@ -276,13 +276,14 @@ times is dead-lettered and raises the failed-jobs alert (`docs/deployment-railwa
 | `platform.metrics_sample`, `platform.alerts_evaluate` | database busy | retry; if repeated, capacity incident |
 | `platform.reencrypt` (section 15) | key id missing | fix `DATA_ENCRYPTION_KEY*` variables; retry; rows are re-encrypted idempotently |
 | `inventory.rebuild_balances` (section 9) | key set too large | re-enqueue per site; never run during a posting-heavy shift |
-| `platform.sync_replay` (proposed code; Phase 7 server-side ordering) | conflicts are not failures | section 8 |
 
 Not a pg-boss job: `platform.backup_dump` is the `backup` cron service (`node dist/backup.js`,
 `docs/deployment-railway.md` 9). Its failures are rows in `backup_runs` with
-`status = 'failed'` and raise the backup-age alert; handle them per section 13.5. Codes marked
-"proposed" are used here until the job registry in `docs/architecture.md` 8 names them
-(ruling 45); the diagnostics Jobs card shows the registry code.
+`status = 'failed'` and raise the backup-age alert; handle them per section 13.5. Not a job
+either: offline sync replay runs synchronously inside `POST /api/v1/sync/commands`
+(`docs/architecture.md` 8, `docs/offline-sync.md` 4); a rejected command becomes a conflict
+(section 8), never a failed job. Every code above is a row of the job registry in
+`docs/architecture.md` 8; the diagnostics Jobs card shows the same code.
 
 ## 7. Failed or partial imports
 
@@ -546,6 +547,9 @@ fails (webhook to chat), the deploy log contains the migrator's output.
 Manual SQL on production is break-glass only: reviewed script, two people, `bc_migrate`
 session through the tunnel, output saved, appendix A entry, and an audit event written by
 the script itself where it changes business data (reversal plus replacement, never updates).
+Before the session opens, the operator writes `platform.database_session.break_glass_opened`
+(`docs/security.md` 5: ticket or reason, second person, script hash, database role used) and
+copies its audit event id into the break-glass log; no event, no session.
 
 ## 15. Secrets rotation
 
@@ -646,43 +650,62 @@ go-live.
 
 ### 17a.2 Cutover: pre-load restore point and maintenance mode
 
-This is the procedure `docs/data-migration-plan.md` 12.1 item 6 and 12.4 refer to. It runs on
-T0 before the first load and is rehearsed at R2. Two-person rule applies (section 1).
+This is the single operator procedure for the go-live cutover: `docs/data-migration-plan.md`
+12.1 item 6, 12.4 and 13 and `docs/deployment-railway.md` 9.1 point here instead of repeating
+the steps. It runs on T0 before the first load and is rehearsed on staging at R2 (MC-14).
+Two-person rule applies (section 1). Every fact noted below goes into the cutover record
+(appendix A).
+
+Two distinct switches are used, never interchangeably:
+
+| Switch | What it does | Used in this procedure for |
+|---|---|---|
+| Application read-only maintenance mode: settings key `platform.maintenance.read_only` (A-DEP-21; boolean plus a role allow-list; Phase 2; `docs/data-model.md` settings catalogue) | `web` keeps serving and sign-in works; roles outside the allow-list get read-only screens and a banner; every command from them is refused on the server | the load window (steps 2–6) and, if the plan calls for it, the hypercare read-only fallback |
+| `MAINTENANCE_MODE=1` production variable (two-person rule, production variable change log) | `web` answers 503 with the maintenance page for everything except `/api/health` (`docs/deployment-railway.md` 4) | restores only (step 5; section 13) |
 
 1. **Freeze check (T-1, end of shift).** Confirm the last scheduled dump succeeded
    (`backup_runs.status = 'succeeded'`), PITR is enabled on the production Postgres service,
    and no ImportJob is `under_review`. Note the freeze time in the cutover record.
-2. **Close the application (T0, before load).** Set `MAINTENANCE_MODE=1` on `web` and
-   redeploy (`web` answers 503 with the maintenance page; `docs/deployment-railway.md` 4);
-   scale `worker` to 0. Nothing can now be written by users or jobs.
-3. **Take the restore point.** Run `node dist/backup.js --manual --label pre-load-<date>`;
-   verify the `backup_runs` row (SHA-256, row counts, offsite copy present). Take a manual
-   Railway volume backup of the Postgres service and record its identifier. Record the PITR
-   restore timestamp (`SELECT now()` through `railway connect`, UTC) as **the restore point**.
-   Record the object count of the bucket prefixes the load will write to. All four facts go
-   into the cutover record and appendix A (restore record).
-4. **Reopen for the cutover team only.** Unset `MAINTENANCE_MODE`, redeploy `web`, scale
-   `worker` to 1, confirm `/api/ready` is 200. The freeze is organisational from here: only
-   the cutover team signs in; operators are told the system opens at the go-live
-   declaration. Loads run with `MIGRATION_WINDOW_OPEN=true` (`docs/data-migration-plan.md`
-   9.4, 12.4); the operations contact sets and later removes that variable (variable change
-   log).
-5. **Rollback inside the window** (`docs/data-migration-plan.md` 13, second row): repeat step
-   2, then restore the manual volume backup (13.2) or PITR to the restore point (13.1);
-   verify with `inventory.reconcile` (zero rows) and the row counts of step 3; bucket objects
-   written after the restore point are unreferenced and are deleted from the recorded
-   prefixes with the owner's agreement (signed links are only issued for existing
-   `file_attachments` rows, so they are never served). Reopen as in step 4 after the owner's
-   decision.
-6. **Go-live.** After MC-16 passes, remove `MIGRATION_WINDOW_OPEN`, confirm `worker` is
-   running and the scheduled dump time is unchanged, and the Owner/Director declares go-live
-   (`docs/data-migration-plan.md` 12.5). Keep the pre-load dump and volume backup until
-   hypercare exit plus 90 days (A-OPS-20).
-
-Note: `MAINTENANCE_MODE` is a production variable (two-person rule, appendix A), not an
-application setting. A finer read-only switch that keeps sign-in working does not exist yet;
-`docs/data-migration-plan.md` 13 (row "first 24 hours") depends on one and is listed in
-section 21.
+2. **Switch to read-only (T0, before any load).** `system_admin` turns on
+   `platform.maintenance.read_only` in Settings (`platform.settings.admin`; audited
+   `platform.setting.changed`) with the allow-list `system_admin`, `owner_director` and the
+   cutover team's `warehouse_operator` and `qa_qc` accounts, so the import wizard, label
+   printing and the QA bulk disposition keep working. Confirm with a non-listed test account
+   that a command is refused. Note the time (T0 freeze) and the audit event id.
+3. **Take the restore point.** Run `node dist/backup.js --manual --label pre-load-<yyyy-mm-dd>`;
+   set `hold = true` on the resulting `backup_runs` row so retention never prunes it; verify
+   `status = 'succeeded'`, SHA-256, row counts and the offsite copy. Take a manual Railway
+   volume backup of the Postgres service and record its identifier. Record the PITR restore
+   timestamp to the second (`SELECT now()` through `railway connect`) in UTC and Asia/Manila
+   as **the restore point**. Run `node dist/backup.js --files --manual --label
+   pre-load-<yyyy-mm-dd>` to record the manifest of bucket object keys existing at the
+   restore point, and note the object count per prefix the load will write to. All of these
+   go into the cutover record (appendix A).
+4. **Open the load window.** The devops-engineer sets `MIGRATION_WINDOW_OPEN=true` on `web`
+   and `worker` (`docs/deployment-railway.md` 4), witnessed by the operations contact, and
+   records it in the production variable change log; confirm `/api/ready` is 200 and the
+   worker heartbeat is current. Loads proceed per `docs/data-migration-plan.md` 9.4 and 12.4;
+   operators outside the allow-list are told the system opens for posting at the go-live
+   declaration.
+5. **Rollback inside the window** (`docs/data-migration-plan.md` 13, row "after posting,
+   before go-live declaration"; Owner/Director's decision only). This is a production
+   restore: follow "Before any restore" in section 13 (`MAINTENANCE_MODE=1` on `web`, `worker`
+   scaled to 0, pre-restore dump), then restore by PITR to the restore point (13.1), else the
+   manual volume backup (13.2), else the pre-load dump (13.3). Copy bucket objects whose keys
+   are not in the step 3 manifest (written by the aborted load) to the offsite bucket under
+   `backups/production/aborted-cutover-<date>/`, then delete them from the bucket (signed
+   links are only issued for existing `file_attachments` rows, so they are never served).
+   Verify with the reconciliation query (`docs/data-model.md` 5.6, zero rows) and the step 3
+   row and object counts. Remove `MIGRATION_WINDOW_OPEN`, unset `MAINTENANCE_MODE`, scale
+   `worker` to 1; read-only mode stays on (it was on at the restore point) until the new T0 is
+   planned. Open an incident record (section 12).
+6. **Go-live.** After MC-16 passes, the devops-engineer removes `MIGRATION_WINDOW_OPEN`;
+   confirm `worker` is running and the scheduled dump time is unchanged; the Owner/Director
+   declares go-live (`docs/data-migration-plan.md` 12.5); `system_admin` switches
+   `platform.maintenance.read_only` off (or keeps it on as the hypercare read-only fallback of
+   `docs/data-migration-plan.md` 13). Keep the hold on the pre-load `backup_runs` row and the
+   volume backup until hypercare exit plus 90 days (A-OPS-20). After go-live is declared, no
+   restore is performed; corrections are reversals (ADR-006).
 
 ## 18. Periodic checklists
 
@@ -706,7 +729,8 @@ never secret values) and are updated in the same PR as the change they record (A
 | Rotation log (A-SEC-22) | secret name, rotated on, by, witness, method, next due |
 | Restore drill record (`docs/deployment-railway.md` 10) | date, operator, witness, backup object key, SHA-256 ok, dump age, decrypt ok, restore duration, migrate check, row counts match, reconciliation zero, smoke ok, measured RTO, findings, owner sign-off |
 | Incident register | id, opened, severity, title, lead, affected sites, mitigated, resolved, postmortem link, actions open/closed |
-| Break-glass log | date, environment, who, witness, reason, script reference, output saved at |
+| Break-glass log | date, environment, who, witness, reason, script reference and hash, `platform.database_session.break_glass_opened` audit event id, output saved at |
+| Cutover record (17a.2; `docs/deployment-railway.md` 9.1; `docs/data-migration-plan.md` 12) | site(s), T-1 freeze time and last scheduled dump id; T0 read-only switch time (`platform.maintenance.read_only` on) and its audit event id; pre-load `backup_runs` id, SHA-256, hold set (y/n); manual volume backup id; PITR restore point (UTC and Asia/Manila); bucket object manifest key and object counts per prefix; `MIGRATION_WINDOW_OPEN` set time and removed time (by, witness); MC-01..MC-16 results with evidence links; go-live or rollback decision with time and decider; rollback restore layer and verification (if any); read-only switch-off time; signatures (operations contact, devops-engineer, Owner/Director) |
 
 ## 20. Assumptions (need owner confirmation)
 
@@ -731,7 +755,7 @@ never secret values) and are updated in the same PR as the change they record (A
 | A-OPS-17 | Training formats and durations per 2.9(b); evidence kept as a `FileAttachment` on the user (or Employee once Phase 5 is live) and on the gate record for group sessions; staging and fictional data only | plan | owner, HR, QA |
 | A-OPS-18 | The SOP list in 2.9(c) is the set the company must revise before each phase's go-live; QA process owner may add or remove rows; the team never writes SOP content | list | QA process owner |
 | A-OPS-19 | Feedback loop: daily in hypercare, then support channel plus a monthly 15-minute review with site managers; quick guides change in the same release as the flow | cadence | owner, site managers |
-| A-OPS-20 | Cutover restore point = manual dump + manual volume backup + PITR timestamp taken under `MAINTENANCE_MODE=1`; kept until hypercare exit plus 90 days | retention | owner, operations contact |
+| A-OPS-20 | Cutover restore point = manual dump (held) + manual volume backup + PITR timestamp + bucket object manifest, taken under the read-only maintenance mode (`platform.maintenance.read_only`); kept until hypercare exit plus 90 days | retention | owner, operations contact |
 
 ## 21. Open questions and items for other documents
 
@@ -742,23 +766,25 @@ never secret values) and are updated in the same PR as the change they record (A
 3. QA: confirm the BMR reprint notification rule and the "uncontrolled copy" wording.
 4. Applied in `docs/data-model.md` 3.10 and 11.1: tables `backup_runs`, `restore_drills`,
    `metrics_samples`, `worker_heartbeats`, `reconciliation_runs` and the
-   `device_registrations` register. Still open: the job registry in `docs/architecture.md` 8
-   (ruling 45) must list `inventory.rebuild_balances` (projection rebuild from the ledger for
-   a key set, audited), `platform.reencrypt` (`DATA_ENCRYPTION_KEY` rotation) and the codes
-   marked "proposed" in section 6; `docs/permissions-matrix.md` must add
-   `inventory.balance.admin` (S) to enqueue the rebuild (ruling 41).
+   `device_registrations` register. Applied in the job registry (`docs/architecture.md` 8):
+   `inventory.rebuild_balances`, `platform.reencrypt`, `platform.import_job.process`,
+   `platform.notification_dispatch`, `platform.retention_sweep`, `analytics.snapshot_kpis`;
+   label batches render through `documents.render` and sync replay is synchronous (rulings
+   71, 77). Applied in `docs/permissions-matrix.md`: `inventory.balance.admin` (S, P2).
 5. Applied: `docs/data-model.md` §9 (numbering) and §11 (offline and sync tables) exist;
    sections 4 and 8 of this runbook cite them.
-6. Security: the audit catalogue lacks `hr.attendance_exception.resolved` and
-   `hr.attendance_mapping.saved` used by `docs/process-maps.md` W10 and section 7 here; and
-   a three-segment event for manual database sessions (section 14; suggested
-   `platform.break_glass_session.opened`, distinct from `identity.owner_break_glass`, which
-   itself needs re-keying) would make the break-glass log verifiable from the audit trail.
+6. Applied in `docs/security.md` 5: `hr.attendance_exception.resolved` and
+   `hr.attendance_mapping.saved` (used by `docs/process-maps.md` W10 and section 7 here);
+   `platform.database_session.break_glass_opened` for manual database sessions (section 14,
+   written before the session opens); the owner's role-admin break-glass is
+   `identity.role.owner_break_glass` (ruling 75).
 7. Product: the diagnostics page (FR-platform-09) is scheduled for Phase 5 while Slice 1
    needs at least the Health, Backups and Variables cards for Gate 1 evidence; propose
    splitting FR-platform-09 into Phase 1 (health, backups, variable names) and Phase 5 (the
    rest).
-8. Product / database-architect: `docs/data-migration-plan.md` 13 relies on a read-only
-   "maintenance mode" switched by `system_admin` through `platform.settings.admin`; only the
-   `MAINTENANCE_MODE` variable (full 503) exists (17a.2). Either add a `settings.platform.read_only`
-   setting with its behaviour, or reword the migration plan to use the variable.
+8. Decided (ruling 91): the application read-only maintenance mode is the settings key
+   `platform.maintenance.read_only` (A-DEP-21; boolean plus role allow-list; Phase 2), used
+   for the cutover load window and the hypercare read-only fallback; `MAINTENANCE_MODE=1` is
+   used only for restores; 17a.2 is the single procedure. The settings-catalogue entry in
+   `docs/data-model.md`, the PRD glossary term "Read-only maintenance mode" and the
+   `docs/data-migration-plan.md` 13 wording are maintained in those documents.

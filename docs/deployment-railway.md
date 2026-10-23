@@ -238,7 +238,7 @@ variable (`docs/architecture.md` section 12).
 | `WORKER_CONCURRENCY` | plain | worker | – | x | – | `2` | `4` | `4` | per queue class |
 | `PDF_RENDERER`, `PUPPETEER_EXECUTABLE_PATH` | plain | worker | – | x | – | `disabled` | `disabled` → `chromium` (Phase 3) | same | ADR-016 |
 | `ALERT_WEBHOOK_URL` | secret | observability | – | x | – | unset | optional | optional | chat-tool webhook for alerts (A-DEP-10) |
-| `MAINTENANCE_MODE` | plain | base | x | – | – | unset | unset | unset | `1` makes `web` answer 503 with a maintenance page for everything except `/api/health`; used during restores and the cutover rollback (section 9.1). The read-only mode used during cutover and hypercare is an application setting, not this variable (A-DEP-21) |
+| `MAINTENANCE_MODE` | plain | base | x | – | – | unset | unset | unset | `1` makes `web` answer 503 with a maintenance page for everything except `/api/health`; used during restores and the cutover rollback (section 9.1, `docs/operations-runbook.md` §17a.2). The read-only mode used during the cutover load window and hypercare is an application setting, not this variable (A-DEP-21) |
 | `PAYMONGO_SECRET_KEY`, `PAYMONGO_WEBHOOK_SECRET` | secret | payments | x | x | – | unset | sandbox | live | Phase 8; sandbox and live never coexist (`docs/security.md` 4.11) |
 | `NEXT_PUBLIC_APP_ENV` | plain | base | x | – | – | `development` | `staging` | `production` | only `NEXT_PUBLIC_*` reaches the browser; CI greps the bundle for secret names |
 | `RAILWAY_ENVIRONMENT`, `RAILWAY_SERVICE_NAME`, `RAILWAY_REPLICA_ID`, `RAILWAY_GIT_COMMIT_SHA` | platform | – | x | x | x | – | injected | injected | read-only; added to every log line |
@@ -432,32 +432,32 @@ its window; the dump is the floor.
 ### 9.1 Cutover restore point and maintenance mode (data-migration go-live)
 
 `docs/data-migration-plan.md` sections 12.4 and 13 require a pre-load backup, an agreed
-restore point and a maintenance mode for the go-live day (T0). This is the procedure; the
-operator steps and the cutover log form live in `docs/operations-runbook.md`.
+restore point and a maintenance mode for the go-live day (T0). The single operator procedure
+(ordered steps, who does what, the cutover log form and the rollback inside the window) is
+`docs/operations-runbook.md` §17a.2; this section keeps only the platform facts that procedure
+relies on and does not repeat its steps.
 
-| Step | When | Action | Evidence |
+Two distinct maintenance mechanisms are used (architect ruling 91):
+
+| Mechanism | What it is | Used for | Who changes it, evidence |
 |---|---|---|---|
-| 1 | T0, after the freeze (plan section 12.2) and before any T0 load | `system_admin` turns on the application read-only maintenance mode (A-DEP-21): every role except `system_admin`, `owner_director` and the cutover team's `warehouse_operator`/`qa_qc` accounts gets read-only access and a banner; `web` keeps serving so the import wizard, label printing and the QA bulk disposition work | setting change audit event |
-| 2 | immediately after step 1 | operations contact runs `node dist/backup.js --manual --label pre-load-<yyyy-mm-dd>` (section 9) and sets `hold = true` on the resulting `backup_runs` row so retention never prunes it; verifies `status = 'succeeded'`, SHA-256 and the offsite copy | `backup_runs` row id in the cutover log |
-| 3 | same time | manual Railway volume backup from the Backups tab (production only; same rule as section 5.3 item 3) and the PITR timestamp noted to the second (UTC and Asia/Manila) as the **restore point** | screenshot or CLI output, timestamp in the cutover log |
-| 4 | same time | `node dist/backup.js --files --manual --label pre-load-<yyyy-mm-dd>` records the list of bucket object keys existing at the restore point (import files, attachments, generated documents) | object-key manifest in the backup prefix |
-| 5 | after steps 2–4 succeed | devops-engineer sets `MIGRATION_WINDOW_OPEN=true` on `web` and `worker` (section 4) and records the change in the runbook change log; loads proceed per the plan | variable change log entry |
-| 6 | when MC-16 passes and the owner declares go-live | `MIGRATION_WINDOW_OPEN` removed; read-only maintenance mode switched off (or kept on for the hypercare read-only fallback of plan section 13); hold on the pre-load `backup_runs` row kept until the T+14 hypercare exit, then released | variable change log, setting audit event |
+| (a) Application read-only mode | settings key `platform.maintenance.read_only` (A-DEP-21): boolean plus an allow-list of roles that keep write access; every other role gets read-only access and a banner; `web` keeps serving so sign-in, the import wizard, label printing and the QA bulk disposition keep working (Phase 2) | the cutover load window: only the loader roles write | `system_admin` under `platform.settings.admin`; setting change audit event |
+| (b) `MAINTENANCE_MODE=1` | environment variable on `web` (section 4): full 503 with a maintenance page for everything except `/api/health` | restores only (including the cutover rollback to the restore point) | operations contact, production variable two-person rule; variable change log |
 
-Rollback to the restore point (plan section 13, "after posting, before go-live declaration")
-is a production restore, run only on the Owner/Director's decision: (1) `MAINTENANCE_MODE=1`
-on `web`; (2) restore per `docs/operations-runbook.md` section 13, preferring PITR to the
-step 3 timestamp, else the step 2 dump; (3) delete bucket objects whose keys are not in the
-step 4 manifest (objects created by the aborted load) after copying them to the offsite
-bucket under `backups/production/aborted-cutover-<date>/` for the record; (4) run the
-reconciliation query (`docs/data-model.md` 5.6) and expect zero rows; (5) remove
-`MIGRATION_WINDOW_OPEN`, unset `MAINTENANCE_MODE`, keep the read-only mode on until the new
-T0 is planned; (6) incident record (runbook section 12). After go-live is declared, no
-restore is performed; corrections are reversals (ADR-006), as the plan states.
+Platform facts the runbook procedure uses:
 
-Rehearsal: the staging rehearsals R1 and R2 of the migration plan run steps 1–6 and the
-rollback once each (check MC-14), and the measured restore time is published with the drill
-results of section 10.
+| Fact | Detail |
+|---|---|
+| Pre-load dump | `node dist/backup.js --manual --label pre-load-<yyyy-mm-dd>` (section 9); set `hold = true` on its `backup_runs` row so retention never prunes it; `status = 'succeeded'`, SHA-256 and the offsite copy are the success evidence. How long the hold is kept is set by the runbook (A-OPS-20) |
+| Volume snapshot | manual Railway volume backup from the Backups tab (production only; same rule as section 5.3 item 3); restores to the same service and environment only |
+| Restore point | the PITR timestamp noted to the second (UTC and Asia/Manila); PITR restores to a new sibling Postgres service (section 9 table) |
+| Bucket manifest | `node dist/backup.js --files --manual --label pre-load-<yyyy-mm-dd>` records the bucket object keys existing at the restore point (import files, attachments, generated documents); Railway does not back up bucket objects |
+| Load switch | `MIGRATION_WINDOW_OPEN=true` on `web` and `worker` (section 4) lets the opening-balance loader run against production; removed when check MC-16 passes |
+| Rollback to the restore point | a production restore with (b) on, run only on the Owner/Director's decision before the go-live declaration (plan section 13): prefer PITR to the restore point, else the pre-load dump; bucket objects whose keys are not in the manifest are copied to `backups/production/aborted-cutover-<date>/` in the offsite bucket and then deleted; the reconciliation query (`docs/data-model.md` 5.6) must return zero rows. After go-live is declared, no restore is performed; corrections are reversals (ADR-006) |
+
+Rehearsal: the staging rehearsals R1 and R2 of the migration plan run the runbook §17a.2
+procedure and its rollback once each (check MC-14), and the measured restore time is published
+with the drill results of section 10.
 
 ## 10. Restore drill (rehearsed before Gate 9, then quarterly)
 
@@ -506,8 +506,10 @@ Decide with this table; details in `docs/operations-runbook.md` sections 13 and 
 | Bucket deleted by mistake | Railway keeps a deleted bucket restorable for 52 hours from the Activity feed (**verified 2026-10-16**); else restore objects from the offsite copy | none within 52 h | hours |
 
 Rules: never roll back by editing the database by hand; `MAINTENANCE_MODE=1` on `web` while
-cutting over a restored database; both `web` and `worker` are always on the same commit after
-a rollback; every rollback is an incident record (runbook section 12) even when brief.
+cutting over a restored database; a rollback during the data-migration cutover window follows
+`docs/operations-runbook.md` §17a.2 (platform facts in section 9.1); both `web` and `worker`
+are always on the same commit after a rollback; every rollback is an incident record (runbook
+section 12) even when brief.
 
 ## 12. Custom domain and TLS
 
@@ -638,7 +640,7 @@ assumptions or risk-register items.
 | A-DEP-18 | CI holds a Railway token for staging only; production is deployed solely by Railway's GitHub integration on the `production` branch | workflow | security-engineer |
 | A-DEP-19 | `WITH_CHROMIUM=0` until ADR-016 is accepted at the start of Phase 3 | build arg | principal-architect |
 | A-DEP-20 | Dumps use a dedicated `bc_backup` role and exclude the `pgboss` schema (queue state is transient; jobs in flight at restore time are re-enqueued by their owners) | role, script | database-architect |
-| A-DEP-21 | Cutover and hypercare use an application-level read-only maintenance mode: a `settings` key (proposed `platform.maintenance.read_only`, with an allow-list of roles that keep write access) changed by `system_admin` under `platform.settings.admin` with an audit event; `MAINTENANCE_MODE=1` (full 503) is reserved for restores. Key name and allow-list to be confirmed in `docs/data-model.md` settings catalogue | `settings` key | principal-architect, database-architect |
+| A-DEP-21 | Cutover and hypercare use an application-level read-only maintenance mode: a `settings` key `platform.maintenance.read_only` (boolean plus an allow-list of roles that keep write access; Phase 2; key name fixed by architect ruling 91) changed by `system_admin` under `platform.settings.admin` with an audit event; `MAINTENANCE_MODE=1` (full 503) is reserved for restores. Default allow-list to be confirmed when the key is catalogued in `docs/data-model.md` settings | `settings` key | principal-architect, database-architect |
 
 ## 17. Open questions and items for other documents
 
@@ -647,26 +649,23 @@ assumptions or risk-register items.
    private key with the owner (`docs/security.md` open question 1)?
 3. Owner: budget approval for the Pro plan, error reporting and the offsite bucket.
 4. IT contact: confirm the maintenance window and the uptime-monitor recipients.
-5. Security: `docs/security.md` section 6 still names the migration variable
-   `MIGRATION_DATABASE_URL`; the chosen name is `DATABASE_MIGRATION_URL` (architect ruling
-   28; `docs/architecture.md` section 12 and this document already use it). Only
-   `docs/security.md` section 6 remains to be corrected.
-6. Applied in `docs/data-model.md` section 3.10 (`backup_runs`, `worker_heartbeats` in P1;
-   `restore_drills`, `metrics_samples`, `reconciliation_runs` in P2). Still open:
-   `docs/architecture.md` section 8 (job registry, ruling 45) must list
-   `platform.metrics_sample`, `platform.alerts_evaluate`, `platform.backup_dump`; and the
-   `metrics_samples` row in data-model section 3.10 says the table is written by the
-   `platform.metrics_sample` job only, while section 8.2 here has `web` replicas writing
-   their request counters directly (every 60 s, `labels.replica`). The data model should
-   name both writers.
+5. Applied: `docs/security.md` section 6 now names the migration variable
+   `DATABASE_MIGRATION_URL` (architect ruling 28), matching `docs/architecture.md` section 12
+   and this document.
+6. Applied in `docs/data-model.md` section 3.10 (`backup_runs`, `worker_heartbeats` and
+   `metrics_samples` in P1, `metrics_samples` naming both writers, the
+   `platform.metrics_sample` job and the `web` replicas of section 8.2; `restore_drills`,
+   `reconciliation_runs` in P2; architect ruling 65) and in the `docs/architecture.md`
+   section 8 job registry (`platform.metrics_sample`, `platform.alerts_evaluate`,
+   `platform.backup_dump`).
 7. Applied: `docs/data-model.md` sections 9 (numbering rules) and 11 (offline and sync
    tables) now exist and the runbook links resolve.
-8. Security: the `TRUSTED_PROXY_HEADER`, `MAINTENANCE_MODE`, `MIGRATION_WINDOW_OPEN`,
-   `DATABASE_BACKUP_URL`, `*_PREVIOUS` and `BACKUP_OFFSITE_*` variables are new and should
-   be added to the variable groups table in `docs/security.md` section 6.
-9. Operations runbook: the operator steps and cutover log form for section 9.1 (pre-load
-   backup, restore point, read-only maintenance mode, rollback) are to be written in
-   `docs/operations-runbook.md`; `docs/data-migration-plan.md` section 14 lists them as
-   "to be written".
-10. Data model / PRD: the read-only maintenance mode setting of A-DEP-21 needs an entry in
-    the settings catalogue and the glossary.
+8. Applied: `TRUSTED_PROXY_HEADER`, `MAINTENANCE_MODE`, `MIGRATION_WINDOW_OPEN`,
+   `DATABASE_BACKUP_URL`, the `*_PREVIOUS` and the `BACKUP_OFFSITE_*` variables are in the
+   variable groups row of `docs/security.md` section 6 (architect ruling 64).
+9. Applied: the operator steps and cutover log for section 9.1 are
+   `docs/operations-runbook.md` §17a.2, the single operator procedure (architect ruling 91);
+   section 9.1 now keeps only the platform facts.
+10. Data model: the read-only maintenance mode setting of A-DEP-21
+    (`platform.maintenance.read_only`, architect ruling 91) still needs an entry in the
+    `docs/data-model.md` settings catalogue; the `docs/PRD.md` glossary entry exists.

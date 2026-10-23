@@ -21,11 +21,11 @@ Entries are numbered `ADR-nnn` and never deleted; a superseded entry points to i
 | ADR-011 | Single organization, multi-site tenancy model with a future portal tenant boundary | Proposed (Gate 0) | 2026-10-12 |
 | ADR-012 | Vitest (unit + integration on real Postgres) and Playwright (end-to-end) | Proposed (Gate 0) | 2026-10-12 |
 | ADR-013 | pnpm, TypeScript strict, ESLint boundaries between modules, GitHub Actions CI | Proposed (Gate 0) | 2026-10-12 |
-| ADR-014 | Railway: web service + worker service from one image, managed Postgres, S3-compatible bucket | Proposed (Gate 0) | 2026-10-12 |
-| ADR-015 | pg-boss (Postgres-backed) for background jobs | Proposed (Phase 2) | 2026-10-12 |
-| ADR-016 | PDF generation: code-defined renderers with versioned JSON template definitions, headless Chromium in the worker | Proposed (Phase 3) | 2026-10-12 |
-| ADR-017 | QR Code default symbology; Code 128 configurable; camera scanning via BarcodeDetector with ZXing fallback | Proposed (Phase 2) | 2026-10-12 |
-| ADR-018 | Offline: PWA (Serwist) + IndexedDB outbox with idempotent commands; server authoritative | Proposed (Phase 7, API groundwork in Phase 2) | 2026-10-12 |
+| ADR-014 | Railway: web service + worker service + backup cron service from one image, managed Postgres, S3-compatible bucket | Proposed (Gate 0) | 2026-10-12 |
+| ADR-015 | pg-boss (Postgres-backed) for background jobs | Proposed (approve at G1, before Phase 2) | 2026-10-12 |
+| ADR-016 | PDF generation: code-defined renderers with versioned JSON template definitions, headless Chromium in the worker | Proposed (approve at G2, before Phase 3) | 2026-10-12 |
+| ADR-017 | QR Code default symbology; Code 128 configurable; camera scanning via BarcodeDetector with ZXing fallback | Proposed (approve at G1, before Phase 2) | 2026-10-12 |
+| ADR-018 | Offline: PWA (Serwist) + IndexedDB outbox with idempotent commands; server authoritative | Proposed (approve at G6, before Phase 7; API groundwork in Phase 2) | 2026-10-12 |
 | ADR-019 | Default locale assumptions: Philippines, Asia/Manila, PHP, metric units | Proposed (Gate 0, needs business confirmation) | 2026-10-12 |
 | ADR-020 | Finance module starts as operational finance support, not a general ledger | Proposed (Gate 0) | 2026-10-12 |
 | ADR-021 | Payroll is import-first and reporting-first; payroll calculation gated behind qualified review | Proposed (Gate 0) | 2026-10-12 |
@@ -208,7 +208,9 @@ pre-commit (lint-staged), GitHub Actions CI (lint, typecheck, unit, integration,
 
 **Decision.** One Docker image; Railway services: `web` (Next.js server, health at
 `/api/health` and readiness at `/api/ready`), `worker` (pg-boss consumer, same image,
-`node dist/worker.js`), managed PostgreSQL, and an S3-compatible bucket for files. Environments:
+`node dist/worker.js`), a `backup` cron service (same image, `node dist/backup.js`, read-only
+role `bc_backup`; job code `platform.backup_dump` in `docs/architecture.md` §8), managed
+PostgreSQL, and an S3-compatible bucket for files. Environments:
 development (local), staging, production, each with its own database and secrets. Migrations
 run as the `web` service's pre-deploy command; the `worker` does not migrate and waits until
 the schema version is current before consuming jobs. Service configuration is expressed as
@@ -220,7 +222,9 @@ restore is rehearsed before go-live (see `docs/deployment-railway.md`).
 
 **Decision.** Use pg-boss for queued and scheduled jobs (PDF generation, label batches,
 imports, scheduled reports, balance reconciliation, notifications). Jobs are idempotent and
-keyed. Revisit only if queue throughput exceeds what Postgres comfortably serves.
+keyed. Job codes, triggers and idempotency keys are registered in `docs/architecture.md` §8 (the
+job registry); no job runs under a code that is not listed there. Revisit only if queue throughput
+exceeds what Postgres comfortably serves.
 
 ## ADR-016 PDF generation (Phase 3, proposed)
 

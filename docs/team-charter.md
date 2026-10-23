@@ -55,7 +55,7 @@ I = informed. Owner approval is required at gates regardless of RACI.
 
 | Gate | After phase | Owner reviews | Team evidence |
 |---|---|---|---|
-| G0 | 0 Discovery and architecture | this document set, stack and architecture (ADR-001 to 014, 019 to 021), ERD, permission model, MVP and roadmap, Slice 1 definition | consistency review complete |
+| G0 | 0 Discovery and architecture | this document set, stack and architecture (ADR-001 to 014, 019 to 021, 023), ERD, permission model, MVP and roadmap, Slice 1 definition | consistency review complete |
 | G1 | 1 Foundation | staging deployment, sign-in, site switching, role/permission admin, audit log, operational shell on phone and desktop | permission tests pass in CI; deploy from docs works |
 | G2 | 2 Inventory MVP | receive → label → move → count on a phone with the company's hardware | concurrency and cross-site tests pass; FEFO verified |
 | G3 | 3 Production + BMR | a representative soap batch run in staging with a printed BMR reviewed by production and QA | batch snapshot and traceability tests pass |
