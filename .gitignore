@@ -7,3 +7,6 @@ out/
 next-env.d.ts
 coverage/
 demo-output/
+
+# Agent git worktrees (parallel build streams)
+.claude/worktrees/
