@@ -184,7 +184,7 @@ printouts; QA decides wording, effective dates and training needs.
 | Stock count and adjustment | counts through the app with blind count option; adjustments approved and reversed, never edited | Phase 2 | W03 |
 | Receiving and supplier documents | goods receipt with supplier lot and document scan; quarantine by default | Phase 2 | W04 |
 | Delivery and customer acknowledgment | pick/pack verification, dispatch posting, DR acknowledgment | Phase 4 | W09 |
-| Deviation, CAPA, complaint and recall handling | records in the quality module with states and approvals | Phase 3 (deviation) / later phases | W07 |
+| Deviation, CAPA, complaint and recall handling | records in the quality module with states and approvals | Phase 3 (deviation), Phase 4 (complaint), Phase 6 (CAPA, change control, recall case) | W07 |
 | Record retention and archiving | retention policies and legal hold in the system (`docs/security.md` 7); paper archive rules remain the company's | Phase 1 (policy values), Phase 5 (sweeps) | – |
 
 Status of each SOP (draft, approved, effective, trained) is reported at every gate from Gate 2
@@ -522,7 +522,7 @@ verifies each object; missing objects are listed and their records flagged "file
 
 ### 13.5 After every restore
 
-Record in the incident register and the restore record (appendix A): layer used, backup
+Record in the incident register and the production restore record (section 19, Appendix A, row "Production restore record"): layer used, backup
 identity, timings (measured RTO), data gap (measured RPO), verification results, who did
 and witnessed it, re-entered work. Run `inventory.reconcile` on demand. Review the backup
 alerts: a failed `platform.backup_dump` is fixed the same day (bucket credentials, key,
@@ -728,6 +728,7 @@ never secret values) and are updated in the same PR as the change they record (A
 | Production variable change log (`docs/security.md` section 6) | date, environment, service, variable name, change type (add/rotate/remove), by, witness, reason, ticket |
 | Rotation log (A-SEC-22) | secret name, rotated on, by, witness, method, next due |
 | Restore drill record (`docs/deployment-railway.md` 10) | date, operator, witness, backup object key, SHA-256 ok, dump age, decrypt ok, restore duration, migrate check, row counts match, reconciliation zero, smoke ok, measured RTO, findings, owner sign-off |
+| Production restore record (13.5) | date/time, incident id, environment, operator, witness, restore layer used (PITR, logical dump, volume backup), backup identity (object key or restore point), SHA-256 ok, `MAINTENANCE_MODE` on/off times, measured RTO, measured RPO (data gap), verification results (migrate check, row counts, `inventory.reconcile` result, smoke), re-entered work, owner sign-off |
 | Incident register | id, opened, severity, title, lead, affected sites, mitigated, resolved, postmortem link, actions open/closed |
 | Break-glass log | date, environment, who, witness, reason, script reference and hash, `platform.database_session.break_glass_opened` audit event id, output saved at |
 | Cutover record (17a.2; `docs/deployment-railway.md` 9.1; `docs/data-migration-plan.md` 12) | site(s), T-1 freeze time and last scheduled dump id; T0 read-only switch time (`platform.maintenance.read_only` on) and its audit event id; pre-load `backup_runs` id, SHA-256, hold set (y/n); manual volume backup id; PITR restore point (UTC and Asia/Manila); bucket object manifest key and object counts per prefix; `MIGRATION_WINDOW_OPEN` set time and removed time (by, witness); MC-01..MC-16 results with evidence links; go-live or rollback decision with time and decider; rollback restore layer and verification (if any); read-only switch-off time; signatures (operations contact, devops-engineer, Owner/Director) |

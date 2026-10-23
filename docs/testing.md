@@ -92,7 +92,7 @@ sections 4 to 6 and must exist in code with exactly those ids.
 | Print preview | Playwright `page.emulateMedia({ media: 'print' })` + `toHaveScreenshot()` per template at A4 and at each label size | Visual diff ≤ 0.1 % pixels against the committed baseline; shell, nav and buttons absent; `thead` repeats |
 | Generated PDF | Worker renders the fixture record with a fixed clock; `pdf-parse` extracts text per page | Page count; batch/order/shipment identifier on every page; `Page x of y`; template version and checksum in footer; signature blocks present; status watermark (`DRAFT`, `CONTROLLED COPY`, `REPRINT n`) |
 | PDF visual | `pdftoppm` page 1 → PNG, pixel diff | ≤ 0.5 % difference against baseline (fonts embedded) |
-| Label QR round trip | Render label PNG → decode with ZXing in Node | Decoded payload equals `BC:<TYPE>:<CODE>` and matches the grammar `^BC:(LOT|BOX|LOC|MAT|SKU|EQP|DOC):[A-Z0-9][A-Z0-9._-]{0,63}$` (ADR-017, `docs/data-model.md` 9.5); quiet zone ≥ 2 mm at the declared print DPI |
+| Label QR round trip | Render label PNG → decode with ZXing in Node | Decoded payload equals `BC:<TYPE>:<CODE>` and matches the grammar `^BC:(LOT\|BOX\|LOC\|MAT\|SKU\|EQP\|DOC):[A-Z0-9][A-Z0-9._-]{0,63}$` (ADR-017, `docs/data-model.md` 9.5); quiet zone ≥ 2 mm at the declared print DPI |
 | Reprint control | Integration test on `generated_documents` | `reprint_of_id` set, reason required (check constraint), audit `documents.generated_document.reprinted` |
 
 ---
@@ -248,6 +248,8 @@ codes follow `docs/architecture.md` section 5 and `docs/permissions-matrix.md` s
 | `ledger.reversal.twice_rejected` | Second reversal of the same movement | 409; partial unique index on `reversal_of_id` holds |
 | `ledger.reversal.replacement_correlated` | Reversal + replacement | Replacement carries the reversal's `correlation_id`; the three rows list together |
 | `ledger.reversal.revalidated` | Reversal when the stock has since moved | 409 (would go negative); nothing written |
+| `ledger.reversal.undo_window` | Actor's own scan-move undone inside `settings.ux.undo_window_seconds` (US-2-28) with idempotency key `undo:<movement_id>` | One linked `reversal` row with reason `undo_by_actor`; original untouched; a repeated tap returns the stored result; after the window elapses, or for another user or session, 409 and nothing written |
+| `ledger.reversal.undo_refused_after_later_movement` | Undo attempted after a later movement, reservation, allocation, count line or status change on the same lot, box or location | 409 with the reason; no row written or edited; response offers the reversal request path (`inventory.movement.void`) |
 | `ledger.reversal.receipt_with_lot` | `procurement.goods_receipt.void` | Lot remains (never deleted), balance zero, lot flagged in UI; audit `procurement.goods_receipt.reversed` |
 | `finance.reversal.locked_period` (P6) | Reversal in a locked `accounting_periods` row | 409; audit absent |
 
@@ -406,6 +408,10 @@ changes `inventory_lots.quality_status`; `inventory.lot.edit` with a status fiel
 quantities, and an expiry on the as-of date, the SQL of `docs/data-model.md` 5.3 and the pure
 function return the same numbers and `available = on_hand − reserved − allocated − quarantined − on_hold − expired − recalled − rejected`;
 `availability.site_scoped`: an RVS balance never contributes to an NFD query.
+`production.plan_line_creates_work_order_with_reservations` (I, P5, US-5-15): converting a
+production plan line creates exactly one `work_orders` row with `production_plan_line_id` set;
+releasing it creates FEFO `stock_reservations` that reduce `available` by the reserved
+quantity; nothing is created without the planner's action.
 
 ### 4.16 Containers, counts, genealogy
 
@@ -427,6 +433,7 @@ function return the same numbers and `available = on_hand − reserved − alloc
 | `statemachine.reason_required_backward` | Cancel, reopen, reject without reason | 422 |
 | `statemachine.transition_row_written` | Legal transition | Row with actor, from/to, correlation id, same transaction |
 | `statemachine.no_free_status` | Zod schemas with a `status` field on update commands | Rejected (`.strict()`), alias of the security.md name |
+| `help.guide_versioned` (P2) | Edit and publish of a `help_guides` entry (US-2-27) | Each edit inserts a new draft version (`platform.help_guide.updated`); publishing by the author is refused (409 `SEPARATION_OF_DUTIES`); a second holder of `platform.help_guide.admin` publishes (`platform.help_guide.published`); earlier versions stay readable; a user without the permission gets 403 |
 | `audit.required_fields` | Every mutating command | Audit row has actor, action, entity, site, request id, outcome; redaction applied |
 | `audit.emitted_for_catalogue` | Each event the slice's stories name, spelled as in `docs/data-model.md` section 8.1 and present in the typed list of `src/lib/audit.ts`; every name matches the `audit_events.action` CHECK | Present with the data class stated |
 
@@ -468,16 +475,16 @@ merged module lacks a test tagged with it (`@perm inventory.movement.post`).
 |---|---|---|
 | identity | `identity.deactivated_denied_every_request`, `identity.org_wide_only_three_roles` (assignment with `site_id = NULL` for `site_manager` → 422 and `ck` violation), `identity.site_manager_cannot_grant` (A-PM-12) | 1 |
 | masterdata | `masterdata.restricted_to_sites_hidden` (A-PM-11), `masterdata.formula_percentages_hidden_from_operator` (A-PM-16), `masterdata.revision_child_edit_after_draft_rejected` (trigger `tg_<child>_parent_draft`) | 1, 3 |
-| inventory | `authz.exception.held_stock_issue` (matrix 4.5), `inventory.adjustment_post_requires_approval`, `inventory.lot_edit_cannot_change_status`, `inventory.intersite_transfer_needs_both_sites`, `inventory.operator_movement_types` (A-PM-06 `role_movement_types`) | 2 |
+| inventory | `authz.exception.held_stock_issue` (matrix 4.5), `inventory.adjustment_post_requires_approval`, `inventory.lot_edit_cannot_change_status`, `inventory.intersite_transfer_needs_both_sites`, `inventory.operator_movement_types` (A-PM-06 `role_movement_types`), `authz.subscope.warehouse_write` (assignment scoped to warehouse W1: a write at a W2 location of the same site → 404 `NOT_FOUND`, nothing written; W1 succeeds; US-2-29) | 2 |
 | procurement | `procurement.receipt_void_requires_void_permission`, `procurement.discrepancy_approve_not_receiver`, `procurement.asl_blocks_line` (V-ASL), `procurement.po_prices_hidden_from_warehouse` | 2, 6 |
 | production | `authz.exception.over_tolerance`, `production.material_substitution_requires_approver` (wrong material never: `production.wrong_material_never_allowed`), `production.equipment_override_requires_approver` (V-CAL), `production.reopen_requires_two_approvals` (A-PM-07), `production.batch_post_requires_post_permission` | 3 |
-| quality | `quality.disposition_only_qa` (owner_director denied, A-PM-08), `quality.conditional_release_two_qa_users`, `quality.hold_lift_not_creator`, `quality.test_result_void_appends` (original row untouched), `quality.recall_two_approvals` | 2, 3, 4 |
+| quality | `quality.disposition_only_qa` (owner_director denied, A-PM-08), `quality.conditional_release_two_qa_users`, `quality.hold_lift_not_creator`, `quality.test_result_void_appends` (original row untouched), `quality.recall_two_approvals` (recall cases, Phase 6) | 2, 3, 6 |
 | documents | `documents.signed_url_expires`, `documents.signed_url_user_bound`, `documents.qr_requires_auth`, `documents.reprint_requires_reason`, `documents.generated_scoped_by_source_record` | 2, 3 |
 | sales | `authz.exception.over_shipment`, `sales.pricing_masked_on_pick_pack_dr` (documents never show prices), `sales.order_site_of_fulfilment`, `sales.credit_terms_masked`, `sales.cancel_after_dispatch_rejected` (V-STATE) | 4 |
 | hr | `hr.personal_data_requires_restricted_view`, `hr.personal_data_view_audited`, `hr.employee_export_excludes_ids_and_bank`, `hr.attendance_correction_not_self`, `hr.payroll_export_requires_reauth`, `hr.site_manager_directory_only` | 5, 6 |
 | finance | `finance.post_requires_reauth_and_totp`, `finance.period_unlock_two_approvals`, `finance.cost_fields_masked` (`finance.cost.view`), `finance.journal_entry_dormant` (ADR-020: 404 unless GL approved) | 2, 6 |
 | analytics | `analytics.owner_dashboard_filters_to_allowed_sites` (site_manager with two sites compares those two only), `analytics.export_row_masking`, `reports.recipient_recheck` | 5 |
-| platform | `settings.versioned`, `platform.settings_admin_restricted`, `diagnostics.no_secrets`, `jobs.context_rebuilt`, `jobs.revoked_user_report_skipped`, `jobs.payload_validated`, `jobs.dead_letter`, `platform.sync_conflict_resolve_requires_approve` (P7) | 1, 2, 7 |
+| platform | `settings.versioned`, `platform.settings_admin_restricted`, `diagnostics.no_secrets`, `jobs.context_rebuilt`, `jobs.revoked_user_report_skipped`, `jobs.payload_validated`, `jobs.dead_letter`, `platform.read_only_mode_blocks_writes` (P2: with `platform.maintenance.read_only` enabled, every mutating command from a role outside the allow-list is refused before any write; reads, sign-in and health endpoints work), `platform.read_only_mode_allow_list` (P2: allow-listed roles write normally; toggling writes `platform.setting.changed`), `platform.sync_conflict_resolve_requires_approve` (P7) | 1, 2, 7 |
 | portal (P8) | `authz.portal.tenant_isolation`, `portal.auth.lockout`, `portal.ratelimit`, `webhook.signature_invalid_rejected`, `webhook.replay_ignored`, `webhook.redirect_not_trusted`, `webhook.amount_mismatch_flagged`, `payments.no_card_fields`, `payments.refund_audit` | 8 |
 
 ### 5.3 Security controls (names from `docs/security.md` section 2, `tests/integration/security/`)
@@ -607,7 +614,7 @@ Automated: `idempotency.*`, `ledger.projection.updated_in_transaction`, `procure
 
 ### 9.3 AC-12 Blocked stock cannot be issued (G2 status, G3 issue)
 
-1. As qa_qc, place lot L1 `on_hold`; let lot L2 expire (expiry date yesterday, nightly job run on demand by system_admin); mark lot L3 `rejected`; mark L4 `recalled` via a recall case.
+1. As qa_qc, place lot L1 `on_hold`; let lot L2 expire (expiry date yesterday, nightly job run on demand by system_admin); mark lot L3 `rejected`; mark L4 `recalled` via a `recall` lot disposition (FR-quality-01; recall cases are Phase 6).
 2. As warehouse_operator on D1, scan each lot. Expected: risk banner (Quarantined / QA Hold / Expired / Rejected / Recalled) with icon and text; Move to a released bin and Allocate greyed with reason.
 3. As production_operator on D3 during dispensing, scan each lot. Expected: "wrong lot / not eligible" with the expected lot shown; no dispense row.
 4. As qa_qc, use the controlled exception for L1 (sampling, reason). Expected: allowed for quarantine/on_hold only; badge on the record; audit `inventory.stock_movement.held_stock_issued`. Attempt the same for L2, L3, L4. Expected: refused, no exception path.
@@ -735,7 +742,7 @@ Automated: `migrations.apply_from_zero_and_noop` (S1-09), `health.ready_reflects
 | S1-06 | `auth.lifecycle.deactivated_denied`, `auth.error.generic`, `audit.auth_events` | integration | Deactivated user attempts sign-in |
 | S1-07 | e2e `states/mobile-360.spec.ts`: for every Slice 1 route assert `document.scrollingElement.scrollWidth <= 360`, every interactive element ≥ 44 px (48 px in operator mode), primary action visible without scrolling the navigation; axe clean | e2e `mobile-360` | D1 walk-through of every page |
 | S1-08 | `health.ready_reflects_database` (database stopped via test container pause) | integration | 9.14 step 2 |
-| S1-09 | `migrations.apply_from_zero_and_noop` (fresh database; second run no-op; `drizzle-kit check` no drift) | integration | Fresh staging deploy |
+| S1-09 | `migrations.apply_from_zero_and_noop` (fresh database creates exactly the 33 Slice 1 tables of `docs/data-model.md` §13.6; second run no-op; `drizzle-kit check` no drift) | integration | Fresh staging deploy |
 | S1-10 | `seed.guard_production`, `seed.names_fictional` (every name in the fictional list; no credential patterns) | integration | Attempt seed on staging with `APP_ENV=production` |
 | S1-11 | `identity.site_switcher_lists_allowed_sites`, e2e `flows/identity/site-switcher.spec.ts` (both viewports) | integration + e2e | owner_director vs warehouse_operator on D1 |
 | S1-12 | `uom.dimension_mismatch_rejected`, `uom.mass_to_mass_exact` | unit + integration | Create conversions on D4 |

@@ -62,8 +62,9 @@ belong to `site_id`; personal fields are never required to create the directory 
 
 1. `employees.user_id` is optional and unique. Floor staff need an `Employee` row for
    attendance but not a `User`; external accountants are users without an employee row.
-2. Self-service permissions (`hr.leave_request.create/void`, own payslip, own attendance) are
-   resolved through this link: the service looks up the employee whose `user_id = ctx.userId`.
+2. Self-service (own leave requests, own payslip, own attendance) needs no permission string
+   (`docs/permissions-matrix.md` §2.12 self-service list); `hr.leave_request.create/void` mean acting
+   for another employee (held by `hr_payroll`). Self-service is resolved through this link: the service looks up the employee whose `user_id = ctx.userId`.
    No link → no self-service screens (empty state explains "ask HR to link your account").
 3. Setting `employment_status = separated` in one transaction: sets `separation_date`, writes
    `hr.employee.updated`, and, if a user is linked, creates a notification for `system_admin`
@@ -504,11 +505,11 @@ separate from the reviewer's domain (what it pays).
 
 | Step | Role / permission | Action | Validation |
 |---|---|---|---|
-| 1 | employee (`hr.leave_request.create`, self-service via §2.2) or `hr_payroll` on behalf | create draft: type, dates, `days` (computed from schedule, half days allowed), reason, attachment | dates not inside a locked payroll period; no overlap with another non-rejected request; balance check if configured |
+| 1 | employee (self-service via §2.2, no permission) or `hr_payroll` on behalf of another employee (`hr.leave_request.create`) | create draft: type, dates, `days` (computed from schedule, half days allowed), reason, attachment | dates not inside a locked payroll period; no overlap with another non-rejected request; balance check if configured |
 | 2 | same | submit | notification to approver (§2.3) |
 | 3 | supervisor / `site_manager` (`hr.leave_request.approve`, department sub-scope) | approve or reject with reason | `V-SOD` self; escalation to `hr_payroll` after 48 h (`approval_rules`) |
 | 4 | system | on approval: daily evaluation marks the dates `leave_<type>`; employee status may go `on_leave` (§2.5); audit `hr.leave_request.approved` | — |
-| 5 | employee / `hr.leave_request.void` | cancel | reason when already approved; summaries recomputed |
+| 5 | employee (own request, self-service) or `hr_payroll` for another employee (`hr.leave_request.void`) | cancel | reason when already approved; summaries recomputed |
 
 ### 6.2 Overtime
 
@@ -516,7 +517,7 @@ Two paths, selected by `overtime_approval_mode` (§5.2):
 
 | Path | Record | Flow | Permissions |
 |---|---|---|---|
-| Pre-approval | `OvertimeRequest` (`overtime_requests`, `docs/data-model.md` §3.8): employee, work date, planned start/end or minutes, reason, requested_by, status `submitted → approved | rejected | cancelled`, `approved_minutes_cap` | supervisor or employee requests before the day; approval sets the cap; actual overtime minutes up to the cap count, excess raises `overtime_unapproved` | `hr.overtime.create` (P6, catalogued with `hr.overtime.view/void`), `hr.overtime.approve` |
+| Pre-approval | `OvertimeRequest` (`overtime_requests`, `docs/data-model.md` §3.8): employee, work date, planned start/end or minutes, reason, requested_by, status `submitted → approved \| rejected \| cancelled`, `approved_minutes_cap` | supervisor or employee requests before the day; approval sets the cap; actual overtime minutes up to the cap count, excess raises `overtime_unapproved` | `hr.overtime.create` (P6, catalogued with `hr.overtime.view/void`), `hr.overtime.approve` |
 | Post-facto | `attendance_exceptions` kind `overtime_unapproved` raised by §5.3 | supervisor approves (`approved`) with note or dismisses (minutes reclassified to `regular`/dropped per `overtime_min_minutes`) | `hr.overtime.approve` (department sub-scope) |
 
 Thresholds (`approval_rules` for record type `overtime`: for example minutes per day or per
@@ -605,7 +606,7 @@ stateDiagram-v2
 | `pending_approval → locked` | `hr.payroll_period.approve` (reject) | reviewer | reason mandatory; lines kept for comparison |
 | `approved → exported` | `hr.payroll_period.post` | `hr_payroll` | generates one `payslips` row + `GeneratedDocument` (template kind `payslip`) per employee, the payment export file (§8.7) and the register; `exported_at`, `export_file_attachment_id`; `hr.payroll_period.posted`, `hr.payslip.generated`, `hr.payment_export.created` |
 | `exported → closed` | `hr.payroll_period.post` | `hr_payroll` | `payment_confirmed_at`, `payment_reference` entered (bank file accepted / cash released; manual confirmation, A-HR-18); accountant export created (§10); period read-only forever |
-| `approved|exported → computed` | `hr.payroll_period.void` | `finance` + `owner_director` (two approvals, `docs/permissions-matrix.md` §5.3) | reason; blocked once `payment_confirmed_at` is set; issued payslips marked `superseded` and reissued after re-approval; `hr.payroll_period.reopened` |
+| `approved\|exported → computed` | `hr.payroll_period.void` | `finance` (holds `hr.payroll_period.void`, submits the reopen as step 1); `owner_director` approves step 2 (`approval_rules` `payroll_period_reopen`, `docs/permissions-matrix.md` §5.2, §5.3) | reason; blocked once `payment_confirmed_at` is set; issued payslips marked `superseded` and reissued after re-approval; `hr.payroll_period.reopened` |
 
 ### 8.3 Configuration structure (all effective-dated, all validated by the reviewer)
 

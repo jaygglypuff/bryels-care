@@ -652,7 +652,7 @@ assumptions or risk-register items.
 5. Applied: `docs/security.md` section 6 now names the migration variable
    `DATABASE_MIGRATION_URL` (architect ruling 28), matching `docs/architecture.md` section 12
    and this document.
-6. Applied in `docs/data-model.md` section 3.10 (`backup_runs`, `worker_heartbeats` and
+6. Closed. Applied in `docs/data-model.md` section 3.10 (`backup_runs`, `worker_heartbeats` and
    `metrics_samples` in P1, `metrics_samples` naming both writers, the
    `platform.metrics_sample` job and the `web` replicas of section 8.2; `restore_drills`,
    `reconciliation_runs` in P2; architect ruling 65) and in the `docs/architecture.md`
@@ -666,6 +666,7 @@ assumptions or risk-register items.
 9. Applied: the operator steps and cutover log for section 9.1 are
    `docs/operations-runbook.md` §17a.2, the single operator procedure (architect ruling 91);
    section 9.1 now keeps only the platform facts.
-10. Data model: the read-only maintenance mode setting of A-DEP-21
-    (`platform.maintenance.read_only`, architect ruling 91) still needs an entry in the
-    `docs/data-model.md` settings catalogue; the `docs/PRD.md` glossary entry exists.
+10. Closed. The read-only maintenance mode setting of A-DEP-21
+    (`platform.maintenance.read_only`, architect ruling 91) is in the `docs/data-model.md`
+    section 3.1 settings registry (P2, object `{enabled, allowed_role_codes}`) and in the
+    `docs/PRD.md` glossary; backlog US-2-30 builds it.

@@ -778,7 +778,8 @@ are listed only where the page adds something. Permissions reference
 Phase 4 (brief module 8; PRD FR-sales-05 and FR-production-12; `docs/process-maps.md` W05-15
 and W08). The Pack entity lives in the inventory module (`inventory.pack.*`,
 `docs/permissions-matrix.md` 2.3) with state machine `open → verified → closed | cancelled`
-(`docs/data-model.md` `packs`).
+(`docs/data-model.md` `packs`). The `packs` and `pack_verification_scans` tables ship in
+Phase 3 (batch outputs are packed at W05-15); the packaging screens below ship in Phase 4.
 
 - **Packaging order** (tablet, `inventory.pack.create`): header "Pack PA-26-000031 ·
   Acapulco Soap · lot L-2610-00042", source badge (Batch B-NFD-261012-001 output / Sales
@@ -950,7 +951,7 @@ only sampling capture queues (`docs/process-maps.md` 6).
 ### 9.14 Deviations / CAPA and traceability / recall explorer
 
 Phase 3 for deviations and the genealogy explorer; Phase 4 for complaints and the recall
-explorer (read-only); Phase 6 for CAPA and recall cases (FR-quality-07, FR-quality-08 in
+explorer (read-only); Phase 6 for CAPA, change control and recall cases (FR-quality-07, FR-quality-08 in
 `docs/PRD.md`; backlog US-4-17, US-6-18). Behaviour is W07 in `docs/process-maps.md`; states are those of `docs/data-model.md`
 (`deviations`, `capas`, `complaints`, `recall_cases`).
 

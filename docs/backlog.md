@@ -95,7 +95,7 @@ No placeholder buttons: an unconfigured integration renders the **S** state, nev
   story is added to the catalogue in the same change as the story card, never invented in code.
 - Audit event names follow `module.entity.event` (`docs/data-model.md` §8.1); where `docs/security.md` §5
   still uses the two-segment form, the mapping table in §8.1 applies.
-- Entity, table and state names come from `docs/data-model.md` §3 and §6; the Slice 1 tables are the 32
+- Entity, table and state names come from `docs/data-model.md` §3 and §6; the Slice 1 tables are the 33
   listed in §13.6.
 - Scan payloads follow ADR-017: `BC:LOT`, `BC:BOX`, `BC:LOC`, `BC:MAT`, `BC:SKU`, `BC:EQP`, `BC:DOC`.
 - Pack permissions are `inventory.pack.{view,create,submit,approve}` (`docs/permissions-matrix.md` §2.3, P3).
@@ -130,7 +130,7 @@ marked "pull forward" in section 5.5 become Must.
 |---|---|---|---|---|
 | E-1-01 Repository, tooling, CI | One repository where every change is linted, type-checked and tested before merge (ADR-013) | S1-15; `authz-coverage` and `migrations` jobs required | G0 approval of ADR-001..014, 019..021, 023 | R-09, R-42, R-43, R-48 |
 | E-1-02 Environments and deployment | Staging on Railway from documented steps; health, readiness, backups, external monitor (ADR-014) | S1-08; `docs/deployment-railway.md` §14 checklist complete | E-1-01; Railway plan and region (A-DEP-01..03) | R-36, R-23, R-37 |
-| E-1-03 Data foundation | Migrations from zero for the 32 Slice 1 tables; fictional seed with a production guard (ADR-003, ADR-009, ADR-010) | S1-09, S1-10, S1-12, S1-13 | E-1-01 | R-16, R-17 |
+| E-1-03 Data foundation | Migrations from zero for the 33 Slice 1 tables; fictional seed with a production guard (ADR-003, ADR-009, ADR-010) | S1-09, S1-10, S1-12, S1-13 | E-1-01 | R-16, R-17 |
 | E-1-04 Identity and sessions | Sign in and out, invitations, password reset, lockout, session listing and revocation, device-class timeouts (ADR-004) | S1-05, S1-06, S1-14 | E-1-03 | R-20, R-27 |
 | E-1-05 Authorization framework and audit | AuthContext, scoped repositories, separation of duties, approval rules, append-only audit with viewer (ADR-005, ADR-006) | S1-01..S1-04; AC-10 framework; AC-22 | E-1-03, E-1-04 | R-14, R-13 |
 | E-1-06 Administration | Users, roles, site assignments, settings, numbering rules, approval rules administered without engineers | S1-04, S1-11, S1-13 | E-1-05 | R-07, R-49 |
@@ -215,7 +215,7 @@ flowchart LR
 
 ## 3. Phase 1 Foundation, Slice 1 (detailed, in implementation order)
 
-Scope and exclusions are fixed by `docs/PRD.md` §11.1 and §11.2. Tables are the 32 of
+Scope and exclusions are fixed by `docs/PRD.md` §11.1 and §11.2. Tables are the 33 of
 `docs/data-model.md` §13.6 (`0000_extensions_and_functions` to `0004_grants`); Phase 1b adds
 `0005_mfa`. Site scope only (no warehouse/department/line sub-scopes), no MFA in Slice 1a, no
 stock, documents, jobs or email. Gate G1 evidence is the S1-01..S1-15 set (`docs/testing.md` §9.15)
@@ -244,7 +244,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 ### 3.2 E-1-03 Data foundation
 
 #### US-1-03 Database connection, migration runner and Slice 1 migrations (L, Must) — FR-platform-03 (table), ADR-002, ADR-003, ADR-009, ADR-010, S1-09
-**As** the database-architect **I want** the five Slice 1 migration files applied by an idempotent, advisory-locked runner using the migration role **so that** the 32 Slice 1 tables exist identically in every environment and the runtime role can never alter ledgers.
+**As** the database-architect **I want** the five Slice 1 migration files applied by an idempotent, advisory-locked runner using the migration role **so that** the 33 Slice 1 tables exist identically in every environment and the runtime role can never alter ledgers.
 - Permissions: none (deploy-time) · Entities: all tables of `docs/data-model.md` §13.6; functions `uuid_generate_v7()`, `forbid_mutation()`, `format_document_number()`; roles `bc_migrate`, `bc_app`, `bc_readonly`, `bc_backup` via `scripts/db/bootstrap-roles.sql`
 - AC1 Given an empty PostgreSQL 16 database, When `pnpm db:migrate` runs, Then `0000`..`0004` apply in order inside one transaction each, each file and hash is recorded in `drizzle.__drizzle_migrations`, and a second run is a no-op that exits 0 (S1-09); `drizzle-kit check` reports no drift.
 - AC2 Given a changed hash on an already-applied file, When the runner starts, Then it aborts before applying anything and exits non-zero naming the file.
@@ -610,7 +610,7 @@ Phase 7 can replay it (ADR-018).
 - AC1 Given a scan-move, put-away or box placement posted by the user, When the success response returns, Then it carries `undo: { until, command }` (`docs/architecture.md` §6) only for actions in the ux §5.17 matrix, and the client shows "Undo" only when that field is present.
 - AC2 Given Undo tapped inside the window by the same actor, session and device while online, When the undo command runs with idempotency key `undo:<movement_id>`, Then a linked `reversal` movement back to the source lot/location posts after the same validations, `inventory.stock_movement.reversed` is written with reason `undo_by_actor`, a repeated tap returns the stored result, and the toast names both movement numbers with no further undo.
 - AC3 Given a later movement, reservation, allocation, count line or status change touching the lot, box or location, or the window elapsed, or a different user or session, When undo is attempted, Then it is refused (409 with the reason), nothing is edited or deleted, and the toast offers "Request reversal" (US-2-02).
-- States: toast with countdown; O (undo is Online-only; offline only "Remove from queue" applies, Phase 7) · Audit: `inventory.stock_movement.reversed` · Depends: → US-2-14, → US-2-02, → US-1-19 · Tests: `ledger.reversal.*`, `idempotency.*`; to add to `docs/testing.md` §4.2: `ledger.reversal.undo_window`, `ledger.reversal.undo_refused_after_later_movement`
+- States: toast with countdown; O (undo is Online-only; offline only "Remove from queue" applies, Phase 7) · Audit: `inventory.stock_movement.reversed` · Depends: → US-2-14, → US-2-02, → US-1-19 · Tests: `ledger.reversal.*`, `idempotency.*`; `docs/testing.md` §4.2: `ledger.reversal.undo_window`, `ledger.reversal.undo_refused_after_later_movement`
 
 #### US-2-15 Containers: create, split, merge, repack with lineage; box labels (M, Must) — FR-inventory-07 (materials), AC-16 (box card), W02-04..06
 **As** a warehouse_operator **I want** boxes with unique ids whose contents, status and history are known **so that** a split or repack never loses where the stock came from.
@@ -700,21 +700,21 @@ Phase 7 can replay it (ADR-018).
 - AC1 Given a published guide for the screen key, When "?" (operator mode) or Help in the user menu is opened, Then a sheet shows the guide (text and images) over the task and closing it returns to the same step with entered values intact; a screen without a guide shows the empty state "No guide for this screen yet", never a dead link.
 - AC2 Given an author with `platform.help_guide.admin`, When a guide is edited, Then a new draft version is created and `platform.help_guide.updated` is written; a second holder of the permission (never the author) publishes it, writing `platform.help_guide.published`, and the previous version stays readable in the history; a user without the permission gets 403 on edit (`docs/data-model.md` `help_guides`).
 - AC3 Given a guide response, When served, Then it carries version and `updated_at` so the Phase 7 reference cache (US-7-01; `docs/offline-sync.md` cached-read set) stores published versions; until then the sheet shows the O state "Help needs a connection".
-- States: sheet L E X O; editor L X V D · Audit: `platform.help_guide.updated`, `platform.help_guide.published` · Depends: → US-1-08, ⇢ US-2-07, ⇢ US-2-14, ⇢ US-2-18 · Tests: `authz.*` (platform.help_guide); to add to `docs/testing.md`: `help.guide_versioned`, e2e help sheet keeps step state on both viewports. Each later phase adds guides for its screens; SOP mapping and training are US-9-08.
+- States: sheet L E X O; editor L X V D · Audit: `platform.help_guide.updated`, `platform.help_guide.published` · Depends: → US-1-08, ⇢ US-2-07, ⇢ US-2-14, ⇢ US-2-18 · Tests: `authz.*` (platform.help_guide); `docs/testing.md` §4.17: `help.guide_versioned`; to add: e2e help sheet keeps step state on both viewports. Each later phase adds guides for its screens; SOP mapping and training are US-9-08.
 
 #### US-2-29 Warehouse sub-scope on site assignments (M, Should) — FR-identity-03 (sub-scope), `docs/permissions-matrix.md` §4.4, A-PM-13
 **As** a system_admin **I want** to limit a warehouse_operator's write access to the warehouses they work in **so that** a person at a large site cannot post stock in another warehouse of the same site.
 - Permissions: `identity.site_assignment.admin` (R) · Entities: `user_site_assignments.scope` (jsonb, Phase 2 column per matrix §4.4)
 - AC1 Given an assignment with `{"warehouseIds": [W1]}`, When the user posts a movement, count, receipt, container or label job at a location of warehouse W2 at the same site, Then the request is refused as out of scope (404 `NOT_FOUND`, matrix §1) and nothing is written; at W1 it succeeds; reads stay site-wide while `scope.enforce_on_read` is off.
 - AC2 Given a scope change, When saved, Then `identity.site_assignment.scope_changed` records before/after, `permissions_version` bumps and the user's next request applies it; an absent key means the whole site; the line (P3) and department (P5) sub-scopes reuse the same column in their phases.
-- States: standard (assignment grid gains a scope column) · Audit: `identity.site_assignment.scope_changed` · Depends: → US-1-18, → US-2-01 · Tests: `authz.cross_site.*` (inventory); to add to `docs/testing.md`: `authz.subscope.warehouse_write`
+- States: standard (assignment grid gains a scope column) · Audit: `identity.site_assignment.scope_changed` · Depends: → US-1-18, → US-2-01 · Tests: `authz.cross_site.*` (inventory); `docs/testing.md` §5.2: `authz.subscope.warehouse_write`
 
 #### US-2-30 Read-only maintenance mode with role allow-list and banner (S, Should → Must before any cutover; pull forward) — A-DEP-21, `docs/operations-runbook.md` §17a.2, `docs/deployment-railway.md` §9.1, `docs/data-migration-plan.md` §13
 **As** the devops-engineer **I want** an application read-only mode in which only allow-listed roles can write **so that** nobody posts stock while the cutover load runs, without taking the application down.
 - Permissions: `platform.settings.admin` (R, re-auth) changes the key (US-1-19) · Entities: settings key `platform.maintenance.read_only` (`{enabled, allowed_role_codes}`, P2; `docs/data-model.md` §3.1 settings registry)
 - AC1 Given the mode enabled with an allow-list, When a user whose roles are outside the list submits any mutating command (API, server action or job enqueue on their behalf), Then the service refuses it before any write and every page shows the banner "Read-only for maintenance"; reads, sign-in, `/api/health` and `/api/ready` keep working; allow-listed roles (for example the loader user of US-2-25 and qa_qc for US-2-23) write normally.
 - AC2 Given the toggle, When changed, Then `platform.setting.changed` records before/after and the cutover record cites its audit event id (runbook §17a.2); the mode is distinct from `MAINTENANCE_MODE=1` (full 503, restores only), which this story does not change.
-- States: banner on every page; forms show X with the maintenance message · Audit: `platform.setting.changed` · Depends: → US-1-19, → US-1-13 · Tests: to add to `docs/testing.md`: `platform.read_only_mode_blocks_writes`, `platform.read_only_mode_allow_list`
+- States: banner on every page; forms show X with the maintenance message · Audit: `platform.setting.changed` · Depends: → US-1-19, → US-1-13 · Tests: `docs/testing.md` §5.2: `platform.read_only_mode_blocks_writes`, `platform.read_only_mode_allow_list`
 
 ### 4.2 Phase 3 Production + BMR
 
@@ -1013,7 +1013,7 @@ Key stories are listed as one row each: id, title (size, priority), requirements
 | US-5-12 Time summaries labelled "computed under rule set vX, not for pay" (M, Must) | FR-hr-04, §7 | Given posted events and the single draft rule set, When summaries compute, Then they are visible to `hr_payroll` only, reconcile to events (§7.3), and are never shown as pay. |
 | **E-5-06** US-5-13 Full diagnostics page: Database, Imports, Alerts, Errors and Integrations cards (M, Must) | FR-platform-09 (Phase 5 part) | Given `platform.diagnostics.view`, When opened, Then the Phase 5 cards join Health, Backups, Variables (Phase 1, US-1-26) and Jobs, Reconciliation (Phase 2, US-2-03, US-2-04) and render booleans, counts, names and versions only (`diagnostics.no_secrets`); Integrations shows configured / setup required per adapter; the Sync card stays **S** until Phase 7 (US-7-06). |
 | US-5-14 Weekly access-and-exceptions report (S, Must) | `docs/security.md` §5, §2.11 | Given the week, When generated, Then role grants, restricted-permission use, controlled exceptions, reprints by kind and S/R exports are listed for the owner, delivered per A-PRD-25. |
-| **E-5-07** US-5-15 Production plan from confirmed orders and forecast with availability and reservations (M, Should) | FR-production-13, W05-01, A-PROC-30, `docs/data-model.md` `production_plans`, `production_plan_lines` | Given confirmed sales orders, min-stock rules and (once FR-analytics-08 is scheduled) approved forecast overrides for a period, When a production_planner builds a plan (`production.production_plan.{view,create,edit}`), Then each line shows demand by source (forecast lines carry the Forecast label), on hand, reserved, open work orders and material availability with shortages; the optional approval gate (`production.production_plan.approve`, off by default, A-PROC-30; approver ≠ submitter, A-PM-14) applies when on; converting a plan line creates a `work_orders` row linked by `production_plan_line_id` whose release reserves materials by FEFO (US-3-05); nothing is created automatically. Tests: `authz.sod.approve_own` (production_plan); to add to `docs/testing.md`: `production.plan_line_creates_work_order_with_reservations`. |
+| **E-5-07** US-5-15 Production plan from confirmed orders and forecast with availability and reservations (M, Should) | FR-production-13, W05-01, A-PROC-30, `docs/data-model.md` `production_plans`, `production_plan_lines` | Given confirmed sales orders, min-stock rules and (once FR-analytics-08 is scheduled) approved forecast overrides for a period, When a production_planner builds a plan (`production.production_plan.{view,create,edit}`), Then each line shows demand by source (forecast lines carry the Forecast label), on hand, reserved, open work orders and material availability with shortages; the optional approval gate (`production.production_plan.approve`, off by default, A-PROC-30; approver ≠ submitter, A-PM-14) applies when on; converting a plan line creates a `work_orders` row linked by `production_plan_line_id` whose release reserves materials by FEFO (US-3-05); nothing is created automatically. Tests: `authz.sod.approve_own` (production_plan); `docs/testing.md` §4.15: `production.plan_line_creates_work_order_with_reservations`. |
 
 ### 5.2 Phase 6 Procurement + HR/finance scope
 

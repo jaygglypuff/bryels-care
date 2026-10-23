@@ -262,15 +262,15 @@ description, sensitivity and phase are listed on one row.
 | `quality.hold.approve` | Lift a hold | R | P2 |
 | `quality.deviation.{view,create,submit}` | Deviation / nonconformance | N | P3 |
 | `quality.deviation.approve`, `quality.deviation.export` | Close a deviation; export | S | P3 |
-| `quality.capa.{view,create,submit}` | Capa | N | P3 |
-| `quality.capa.approve` | Close a CAPA | S | P3 |
-| `quality.change_control.{view,create,submit}` | ChangeControl | N | P3 |
-| `quality.change_control.approve` | Approve a change | S | P3 |
+| `quality.capa.{view,create,submit}` | Capa | N | P6 |
+| `quality.capa.approve` | Close a CAPA | S | P6 |
+| `quality.change_control.{view,create,submit}` | ChangeControl (Phase 3 formula/routing revisions use `masterdata.formula.approve` / `masterdata.routing.approve`) | N | P6 |
+| `quality.change_control.approve` | Approve a change | S | P6 |
 | `quality.complaint.{view,create,submit}` | Complaint | N | P4 |
 | `quality.complaint.approve` | Close a complaint | S | P4 |
-| `quality.recall_case.{view,create}` | RecallCase | S | P4 |
-| `quality.recall_case.approve` | Initiate/close a recall (two approvals by default) | R | P4 |
-| `quality.recall_case.admin` | Mark lots/containers `recalled` in bulk from a case | R | P4 |
+| `quality.recall_case.{view,create}` | RecallCase (the Phase 4 recall explorer uses `quality.genealogy.view`) | S | P6 |
+| `quality.recall_case.approve` | Initiate/close a recall (two approvals by default) | R | P6 |
+| `quality.recall_case.admin` | Mark lots/containers `recalled` in bulk from a case | R | P6 |
 | `quality.genealogy.view` | Forward/backward trace explorer | N | P3 |
 | `quality.genealogy.export` | Export a trace (contains customers and suppliers) | S | P3 |
 
@@ -320,10 +320,10 @@ description, sensitivity and phase are listed on one row.
 | `hr.employee.create`, `hr.employee.edit` | Create and maintain employee records (directory and employment fields) | S | P5 |
 | `hr.employee.export` | Export employee lists | R | P5 |
 | `hr.employee_personal_data.view`, `hr.employee_personal_data.edit` | Personal fields: date of birth, addresses, government ids, bank details, emergency contacts, documents | R | P5 |
-| `hr.shift.view` | Shift definitions | N | P5 |
-| `hr.shift.admin` | Configure shifts | S | P5 |
-| `hr.shift_assignment.{view,create}` | Assign employees to shifts | N | P5 |
-| `hr.shift_assignment.approve` | Approve schedule changes | S | P5 |
+| `hr.shift.view` | Shift definitions | N | P6 |
+| `hr.shift.admin` | Configure shifts | S | P6 |
+| `hr.shift_assignment.{view,create}` | Assign employees to shifts | N | P6 |
+| `hr.shift_assignment.approve` | Approve schedule changes | S | P6 |
 | `hr.calendar.view` | Holiday/working calendars | N | P5 |
 | `hr.calendar.admin` | Configure calendars (values validated by HR) | S | P5 |
 | `hr.attendance_import.{view,create,submit}` | Upload, map, preview an AttendanceImport | S | P5 |
@@ -414,8 +414,8 @@ qualified reviewer's sign-off is recorded on the version. Any reference to
 | `analytics.report.admin` | Define/alter report definitions and KPI formulas | S | P5 |
 | `analytics.scheduled_report.{view,create}` | ScheduledReport subscriptions (recipients must hold the underlying permissions) | S | P5 |
 | `analytics.scheduled_report.admin` | Manage all schedules | S | P5 |
-| `analytics.forecast.{view,edit}` | View forecasts; enter manual overrides with reason | N | P5 |
-| `analytics.forecast.approve` | Approve an override for planning use | S | P5 |
+| `analytics.forecast.{view,edit}` | View forecasts; enter manual overrides with reason (FR-analytics-08) | N | P6 |
+| `analytics.forecast.approve` | Approve an override for planning use | S | P6 |
 | `analytics.kpi_definition.view` | Read KPI definitions | N | P5 |
 | `analytics.financial_kpi.view` | Revenue, margin, receivables, payables, cash indicators; P5 for Estimate tiles (shipped value at order price, A-KPI-10), invoice-based figures from P6 | S | P5 |
 | `analytics.labor_kpi.view` | Attendance/labour summaries (aggregated, no per-person pay) | S | P5 |
@@ -434,7 +434,7 @@ qualified reviewer's sign-off is recorded on the version. Any reference to
 | `platform.numbering_rule.view` | NumberingRule definitions | N | P1 |
 | `platform.numbering_rule.admin` | Change numbering (never retroactive) | R | P1 |
 | `platform.file.admin` | Storage management, orphan cleanup | S | P2 |
-| `platform.help_guide.admin` | Author and publish in-app help guides and screen walkthroughs (reading them needs no permission) | S | P2 |
+| `platform.help_guide.admin` | Author and publish in-app help guides and screen walkthroughs (reading them needs no permission); every edit is a new draft version, published by a second holder of the permission, never the author (`docs/data-model.md` §4.2) | S | P2 |
 | `platform.import_job.{view,create,submit}` | Generic ImportJob wizard (master data, prices); Phase 2 if early go-live after G4 (Q-MIG-13) | N | P5 |
 | `platform.import_job.approve`, `platform.import_job.post`, `platform.import_job.void` | Approve, post and reverse imports; Phase 2 if early go-live after G4 (Q-MIG-13) | S | P5 |
 | `platform.settings.view` | Read system settings | N | P1 |
@@ -443,7 +443,7 @@ qualified reviewer's sign-off is recorded on the version. Any reference to
 | `platform.approval_rule.view` | Read `approval_rules` | N | P1 |
 | `platform.approval_rule.admin` | Change approval rules and SoD configuration | R | P1 |
 | `platform.integration.view` | View adapter status and configuration (never secrets) | S | P6 |
-| `platform.integration.admin` | Email/storage/time-clock/accounting adapter configuration | R | P6 |
+| `platform.integration.admin` | Integration adapter configuration: email adapter from P5; storage, time-clock and accounting adapters P6; payment provider P8 | R | P5 |
 | `platform.diagnostics.view` | Health, queue depth, sync backlog, error rates (never secrets) | S | P1 |
 | `platform.sync_conflict.{view,edit}` | SyncConflict queue and resolution proposals | N | P7 |
 | `platform.sync_conflict.approve` | Resolve a conflict (chooses server or client version with reason) | S | P7 |
