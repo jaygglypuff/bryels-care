@@ -5,16 +5,25 @@ import { batches, idempotencyKeys, rolePermissions, userSiteAssignments, users }
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 
-/** Frozen copy of the formula revision stored on the batch at creation (batch snapshot rule). */
+/**
+ * Frozen copy stored on the batch at creation (batch snapshot rule, docs/data-model.md §4.4): the
+ * approved formula revision with scaled lines, the approved routing revision with its steps
+ * (parameters, checklist items, work-instruction text) and the finished-product inspection plan.
+ * Fields added by W1D are optional so MVP-era snapshots still read.
+ */
 export type FormulaSnapshot = {
+  schemaVersion?: "bom_snapshot/v2";
   formulaId?: string;
   formulaCode: string;
   formulaName: string;
   revisionNo: number;
   formulaRevisionId?: string;
+  effectiveFrom?: string | null;
   referenceBatchSizeG: string;
   theoreticalYieldPct: string;
   takenAt?: string;
+  routing?: { routingId: string; routingCode: string; routingName: string; routingRevisionId: string; revisionNo: number; effectiveFrom: string | null };
+  inspectionPlan?: { id: string; code: string; revisionNo: number; isPlaceholder: boolean; tests: { testCode: string; name: string; valueKind: string; uom: string | null; specMin: string | null; specMax: string | null; specText: string | null; isRequired: boolean }[] } | null;
   lines: {
     bomLineId: string;
     lineNo: number;
@@ -24,16 +33,31 @@ export type FormulaSnapshot = {
     inciName: string | null;
     quantityG: string;
     tolerancePct: string;
+    toleranceAbsG?: string | null;
+    scaling?: string;
+    phaseCode?: string | null;
+    targetQtyG?: string;
+    requiresChecker?: boolean;
   }[];
   steps: {
     routingStepId: string;
     stepNo: number;
     name: string;
     stepKind: string;
+    area?: string | null;
     instruction: string | null;
     requiresChecker: boolean;
+    requiresEquipment?: boolean;
+    equipmentKind?: string | null;
+    workInstruction?: { code: string; name: string; revisionNo: number; revisionId: string; bodyMarkdown: string } | null;
+    parameters?: { id: string; code: string; name: string; valueKind: string; uom: string | null; minValue: string | null; targetValue: string | null; maxValue: string | null; isRequired: boolean }[];
+    checklistItems?: { id: string; itemNo: number; text: string; requiresPhoto: boolean; isBlocking: boolean }[];
   }[];
 };
+
+/** Step kinds that hold the ingredient weighing (MVP "weighing", routing vocabulary "dispensing"). */
+export const WEIGHING_STEP_KINDS = ["dispensing", "weighing"] as const;
+export const isWeighingStep = (kind: string) => (WEIGHING_STEP_KINDS as readonly string[]).includes(kind);
 
 /** The permission a person must hold at the batch site to sign as checker (weighing and steps). */
 export const CHECKER_PERMISSION = "production.dispense_record.approve" as const;

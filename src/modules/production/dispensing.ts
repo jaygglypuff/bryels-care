@@ -21,10 +21,13 @@ export type DispenseInput = {
   idempotencyKey?: string | null;
 };
 
-/** Tolerance window for a theoretical quantity (tolerancePct is a placeholder pending approval, A-PRD-18). */
-export function toleranceRange(theoreticalQtyG: Decimal.Value, tolerancePct: Decimal.Value) {
+/**
+ * Tolerance window for a theoretical quantity. An absolute tolerance (g) from the BOM line takes
+ * precedence over the percentage (tolerances are process-owner configuration, A-PROC-03).
+ */
+export function toleranceRange(theoreticalQtyG: Decimal.Value, tolerancePct: Decimal.Value, toleranceAbsG?: Decimal.Value | null) {
   const theo = new Decimal(theoreticalQtyG);
-  const band = theo.mul(tolerancePct).div(100);
+  const band = toleranceAbsG !== null && toleranceAbsG !== undefined ? new Decimal(toleranceAbsG) : theo.mul(tolerancePct).div(100);
   return { min: theo.minus(band), max: theo.plus(band) };
 }
 
@@ -85,7 +88,7 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput) {
         .limit(1);
       if (!loc) throw new DomainError("not_found", "Source location not found at this site.");
 
-      const { min, max } = toleranceRange(bm.theoreticalQtyG, bm.tolerancePct);
+      const { min, max } = toleranceRange(bm.theoreticalQtyG, bm.tolerancePct, bm.toleranceAbsG);
       const within = actual.gte(min) && actual.lte(max);
       const reason = input.exceptionReason?.trim() || null;
       if (!within && !reason) {

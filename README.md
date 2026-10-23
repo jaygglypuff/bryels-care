@@ -27,7 +27,14 @@ pnpm dev                         # http://localhost:3000
 
 Demo accounts (password `demo1234`, all fictional): `owner@`, `admin@`, `manager.nfd@`,
 `operator.nfd@`, `checker.nfd@`, `warehouse.nfd@`, `qa.nfd@`, `sales@`, `warehouse.rvs@`,
-`auditor@` at `bryels-care.test`. Reset the demo data at any time with `pnpm db:reset`.
+`auditor@`, `planner.nfd@` (production planner) and `qa.lead@` (second QA approver) at
+`bryels-care.test`. Reset the demo data at any time with `pnpm db:reset`.
+
+Production engineering master data (formulas, routings, work instructions, inspection plans,
+equipment) ships with a custom SQL file, `src/db/sql/w1d.sql` (exclusion constraints on effective
+dates, draft-only and immutability triggers, batch revision freeze). Apply it after the
+migrations: `psql "$DATABASE_URL" -f src/db/sql/w1d.sql` (idempotent). The integration tests
+install it themselves.
 
 | Command | What it does |
 |---|---|

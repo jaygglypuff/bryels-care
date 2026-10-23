@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { D, fmtDateTime, fmtQty } from "@/lib/qty";
-import { getFormula } from "@/modules/production";
-import { Banner } from "@/ui/status";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { getFormula } from "@/modules/masterdata";
+import { Card, CardTitle, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
 import { Forbidden } from "../../../forbidden";
-import { RevisionStatus } from "../revision-status";
+import { newFormulaRevisionAction } from "../../_eng/actions";
+import { CommandForm } from "../../_eng/forms";
+import { EffectiveRange, VerifyBanner, VersionChip } from "../../_eng/ui";
 
 export const metadata: Metadata = { title: "Formula" };
 
@@ -18,10 +19,7 @@ export default async function FormulaDetail({ params }: { params: Promise<{ id: 
   if (!f) {
     return <EmptyState title="Formula not found" action={<LinkButton href="/masterdata/formulas" variant="secondary">Back to formulas</LinkButton>} />;
   }
-  const rev = f.current;
-  const ref = rev ? D(rev.referenceBatchSizeG) : D(0);
-  const total = f.lines.reduce((acc, l) => acc.plus(l.line.quantityG), D(0));
-
+  const canNew = ctx.can("masterdata.formula.create") && !f.openRevisionId;
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -31,107 +29,82 @@ export default async function FormulaDetail({ params }: { params: Promise<{ id: 
         <PageHeader
           title={`${f.formula.code} · ${f.formula.name}`}
           subtitle={`${f.product.name} (${f.product.skuCode})`}
-          actions={ctx.can("production.batch.create") && rev?.status === "approved" ? <LinkButton href="/production/new" variant="cta">New batch</LinkButton> : undefined}
+          actions={
+            <>
+              {f.effectiveRevisionId && (
+                <LinkButton href={`/masterdata/formulas/${f.formula.id}/revisions/${f.effectiveRevisionId}`} variant="secondary">
+                  Effective revision
+                </LinkButton>
+              )}
+              {ctx.can("production.batch.create") && f.effectiveRevisionId && (
+                <LinkButton href="/production/new" variant="cta">
+                  New batch
+                </LinkButton>
+              )}
+            </>
+          }
         />
       </div>
-
-      {!rev ? (
-        <EmptyState title="No revision yet">This formula has no revision. A process owner must create and approve one.</EmptyState>
-      ) : (
-        <>
-          {rev.status !== "approved" && (
-            <Banner tone="warn" title="No approved revision">
-              Showing the latest revision ({rev.status.replace(/_/g, " ")}). Batches can only use an approved revision.
-            </Banner>
-          )}
-          <Card>
-            <Dl
-              items={[
-                ["Revision", <span key="r" className="flex items-center gap-2">Rev {rev.revisionNo} <RevisionStatus status={rev.status} /></span>],
-                ["Reference batch size", `${fmtQty(ref.div(1000), "kg", 2)} (${fmtQty(ref, "g", 1)})`],
-                ["Theoretical yield", fmtQty(rev.theoreticalYieldPct, "%", 1)],
-                ["Submitted by", f.revisions.find((r) => r.id === rev.id)?.submittedByName ?? "—"],
-                ["Approved by", f.revisions.find((r) => r.id === rev.id)?.approvedByName ?? "—"],
-                ["Created", fmtDateTime(rev.createdAt)],
-              ]}
-            />
-            {rev.notes && <p className="mt-3 text-[13px] text-[var(--warn-fg)]">{rev.notes}</p>}
-          </Card>
-
-          <Card>
-            <CardTitle>Ingredients</CardTitle>
-            {f.lines.length === 0 ? (
-              <EmptyState title="No ingredient lines" />
-            ) : (
-              <Table head={["#", "Material", "INCI name", "Quantity (g)", "% of batch", "Tolerance"]}>
-                {f.lines.map(({ line, material }) => {
-                  const q = D(line.quantityG);
-                  const band = q.mul(line.tolerancePct).div(100);
-                  return (
-                    <tr key={line.id}>
-                      <Td>{line.lineNo}</Td>
-                      <Td>
-                        <span className="font-medium">{material.name}</span> <span className="text-muted">({material.code})</span>
-                      </Td>
-                      <Td>{material.inciName ?? "—"}</Td>
-                      <Td className="text-right">{fmtQty(q, "", 1)}</Td>
-                      <Td className="text-right">{ref.gt(0) ? fmtQty(q.div(ref).mul(100), "%", 2) : "—"}</Td>
-                      <Td className="whitespace-nowrap">
-                        ±{fmtQty(line.tolerancePct, "%", 2)} ({fmtQty(q.minus(band), "", 1)}–{fmtQty(q.plus(band), "g", 1)})
-                      </Td>
-                    </tr>
-                  );
-                })}
-                <tr className="bg-surface-2 font-semibold">
-                  <Td />
-                  <Td>Total</Td>
-                  <Td />
-                  <Td className="text-right">{fmtQty(total, "", 1)}</Td>
-                  <Td className="text-right">{ref.gt(0) ? fmtQty(total.div(ref).mul(100), "%", 2) : "—"}</Td>
-                  <Td />
-                </tr>
-              </Table>
-            )}
-            <p className="mt-2 text-[12px] text-[var(--warn-fg)]">Tolerances are placeholders pending process-owner approval (A-PRD-18).</p>
-          </Card>
-
-          <Card>
-            <CardTitle>Checklist steps</CardTitle>
-            {f.steps.length === 0 ? (
-              <EmptyState title="No routing steps" />
-            ) : (
-              <ol className="flex flex-col divide-y divide-line">
-                {f.steps.map((s) => (
-                  <li key={s.id} className="py-2.5">
-                    <p className="font-medium">
-                      {s.stepNo}. {s.name} <span className="text-[12px] font-normal text-muted">· {s.stepKind}{s.requiresChecker ? " · checker required" : ""}</span>
+      <VerifyBanner />
+      <Card>
+        <CardTitle
+          action={
+            canNew ? (
+              <div className="w-auto">
+                <CommandForm action={newFormulaRevisionAction} hidden={{ formulaId: f.formula.id }} label="Start new revision" pendingText="Starting…" variant="secondary" />
+              </div>
+            ) : undefined
+          }
+        >
+          Revisions
+        </CardTitle>
+        {f.revisions.length === 0 ? (
+          <EmptyState title="No revision yet" />
+        ) : (
+          <>
+            <ul className="flex flex-col gap-2 md:hidden">
+              {f.revisions.map((r) => (
+                <li key={r.id}>
+                  <Link href={`/masterdata/formulas/${f.formula.id}/revisions/${r.id}`} className="block rounded-[14px] border border-line p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold">Rev {r.revisionNo}</span>
+                      <VersionChip status={r.status} label={r.label} />
+                    </div>
+                    <p className="mt-1 text-[12px] text-muted">
+                      <EffectiveRange from={r.effectiveFrom} to={r.effectiveTo} />
                     </p>
-                    {s.instruction && <p className="text-[13px] text-fg-2">{s.instruction}</p>}
-                  </li>
-                ))}
-              </ol>
-            )}
-          </Card>
-
-          {f.revisions.length > 1 && (
-            <Card>
-              <CardTitle>Revision history</CardTitle>
-              <Table head={["Revision", "Status", "Reference size", "Created"]}>
+                    {r.changeSummary && <p className="mt-1 text-[12px]">{r.changeSummary}</p>}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden md:block">
+              <Table head={["Revision", "Status", "Effective", "Reference size", "Change", "Submitted by", "Final approver", "Created"]}>
                 {f.revisions.map((r) => (
-                  <tr key={r.id}>
-                    <Td>Rev {r.revisionNo}</Td>
+                  <tr key={r.id} className="hover:bg-surface-2/60">
                     <Td>
-                      <RevisionStatus status={r.status} />
+                      <Link href={`/masterdata/formulas/${f.formula.id}/revisions/${r.id}`} className="font-semibold text-primary-text hover:underline">
+                        Rev {r.revisionNo}
+                      </Link>
+                    </Td>
+                    <Td>
+                      <VersionChip status={r.status} label={r.label} />
+                    </Td>
+                    <Td className="whitespace-nowrap">
+                      <EffectiveRange from={r.effectiveFrom} to={r.effectiveTo} />
                     </Td>
                     <Td>{fmtQty(D(r.referenceBatchSizeG).div(1000), "kg", 2)}</Td>
-                    <Td>{fmtDateTime(r.createdAt)}</Td>
+                    <Td className="max-w-[260px]">{r.changeSummary ?? "—"}</Td>
+                    <Td>{r.submittedByName ?? "—"}</Td>
+                    <Td>{r.approvedByName ?? "—"}</Td>
+                    <Td className="whitespace-nowrap">{fmtDateTime(r.createdAt)}</Td>
                   </tr>
                 ))}
               </Table>
-            </Card>
-          )}
-        </>
-      )}
+            </div>
+          </>
+        )}
+      </Card>
     </div>
   );
 }

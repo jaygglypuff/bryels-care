@@ -5,7 +5,7 @@ import { batchMaterials, processStepRecords } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
-import { type FormulaSnapshot, assertChecker, lockBatch } from "./shared";
+import { type FormulaSnapshot, assertChecker, isWeighingStep, lockBatch } from "./shared";
 
 export type CompleteStepInput = {
   batchId: string;
@@ -41,7 +41,7 @@ export async function completeStep(ctx: AuthContext, input: CompleteStepInput) {
       throw new DomainError("state", `Complete step ${missing[0].stepNo} (${missing[0].name}) first. Steps are completed in order.`);
     }
 
-    if (step.stepKind === "weighing") {
+    if (isWeighingStep(step.stepKind)) {
       const pending = await tx
         .select({ id: batchMaterials.id })
         .from(batchMaterials)

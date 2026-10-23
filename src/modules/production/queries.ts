@@ -7,23 +7,20 @@ import {
   batchMaterials,
   batchStateTransitions,
   batches,
-  bomLines,
   dispenseRecords,
   dispositions,
-  formulaRevisions,
-  formulas,
   inventoryBalances,
   inventoryLots,
   locations,
   materials,
   processStepRecords,
   products,
-  routingSteps,
   testResults,
   users,
 } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
+import { approvedFormulaRevisionOptions, getEffectiveRouting } from "@/modules/masterdata";
 import { type FormulaSnapshot, eligibleCheckers, manilaToday } from "./shared";
 import { toleranceRange } from "./dispensing";
 
@@ -133,7 +130,7 @@ export async function getBatchRecord(ctx: AuthContext, batchId: string) {
   const nm = (id: string | null | undefined) => (id ? (names.get(id) ?? "Unknown user") : null);
 
   const ingredients = mats.map(({ bm, material }) => {
-    const { min, max } = toleranceRange(bm.theoreticalQtyG, bm.tolerancePct);
+    const { min, max } = toleranceRange(bm.theoreticalQtyG, bm.tolerancePct, bm.toleranceAbsG);
     return {
       id: bm.id,
       lineNo: bm.lineNo,
@@ -144,6 +141,7 @@ export async function getBatchRecord(ctx: AuthContext, batchId: string) {
       baseUom: material.baseUom,
       theoreticalQtyG: bm.theoreticalQtyG,
       tolerancePct: bm.tolerancePct,
+      toleranceAbsG: bm.toleranceAbsG,
       minG: min.toString(),
       maxG: max.toString(),
       dispensedQtyG: bm.dispensedQtyG,
@@ -278,90 +276,20 @@ export async function checkerOptions(ctx: AuthContext, siteId: string) {
   return list.filter((u) => u.id !== ctx.userId);
 }
 
-/** Approved formula revisions available for a new batch, with their product. */
+/**
+ * Approved formula revisions available for a new batch, with their product and the routing that
+ * will be snapshotted (resolution happens again at creation for the planned date).
+ */
 export async function approvedFormulaOptions(ctx: AuthContext) {
   ctx.require("production.batch.create");
-  const rows = await db
-    .select({
-      revisionId: formulaRevisions.id,
-      revisionNo: formulaRevisions.revisionNo,
-      referenceBatchSizeG: formulaRevisions.referenceBatchSizeG,
-      theoreticalYieldPct: formulaRevisions.theoreticalYieldPct,
-      formulaCode: formulas.code,
-      formulaName: formulas.name,
-      productId: products.id,
-      productName: products.name,
-      productSku: products.skuCode,
-      lineCount: sql<number>`(select count(*)::int from ${bomLines} where ${bomLines.formulaRevisionId} = ${formulaRevisions.id})`,
-      stepCount: sql<number>`(select count(*)::int from ${routingSteps} where ${routingSteps.formulaRevisionId} = ${formulaRevisions.id})`,
-    })
-    .from(formulaRevisions)
-    .innerJoin(formulas, eq(formulas.id, formulaRevisions.formulaId))
-    .innerJoin(products, eq(products.id, formulas.productId))
-    .where(and(eq(formulas.organizationId, ctx.organizationId), eq(formulaRevisions.status, "approved")))
-    .orderBy(asc(products.name), desc(formulaRevisions.revisionNo));
-  return rows;
-}
-
-/** Formula list (organization master data) with the latest approved revision summary. */
-export async function listFormulas(ctx: AuthContext) {
-  ctx.require("masterdata.formula.view");
-  const rows = await db
-    .select({
-      formulaId: formulas.id,
-      code: formulas.code,
-      name: formulas.name,
-      productName: products.name,
-      productSku: products.skuCode,
-      revisionId: formulaRevisions.id,
-      revisionNo: formulaRevisions.revisionNo,
-      status: formulaRevisions.status,
-      referenceBatchSizeG: formulaRevisions.referenceBatchSizeG,
-      theoreticalYieldPct: formulaRevisions.theoreticalYieldPct,
-      lineCount: sql<number>`(select count(*)::int from ${bomLines} where ${bomLines.formulaRevisionId} = ${formulaRevisions.id})`,
-    })
-    .from(formulas)
-    .innerJoin(products, eq(products.id, formulas.productId))
-    .leftJoin(formulaRevisions, eq(formulaRevisions.formulaId, formulas.id))
-    .where(eq(formulas.organizationId, ctx.organizationId))
-    .orderBy(asc(formulas.code), desc(formulaRevisions.revisionNo));
-  // One row per formula: the approved revision if any, otherwise the latest.
-  const byFormula = new Map<string, (typeof rows)[number]>();
+  const rows = await approvedFormulaRevisionOptions(ctx);
+  const today = manilaToday();
+  const out = [];
   for (const r of rows) {
-    const cur = byFormula.get(r.formulaId);
-    if (!cur || (cur.status !== "approved" && r.status === "approved")) byFormula.set(r.formulaId, r);
+    const routing = await getEffectiveRouting(ctx, r.productId, r.effectiveFrom && r.effectiveFrom > today ? r.effectiveFrom : today);
+    out.push({ ...r, stepCount: routing?.steps.length ?? 0, routingLabel: routing ? `${routing.routing.code} rev ${routing.rev.revisionNo}` : null });
   }
-  return [...byFormula.values()];
-}
-
-export async function getFormula(ctx: AuthContext, formulaId: string) {
-  ctx.require("masterdata.formula.view");
-  const [f] = await db
-    .select({ formula: formulas, product: products })
-    .from(formulas)
-    .innerJoin(products, eq(products.id, formulas.productId))
-    .where(and(eq(formulas.id, formulaId), eq(formulas.organizationId, ctx.organizationId)))
-    .limit(1);
-  if (!f) return null;
-  const revisions = await db.select().from(formulaRevisions).where(eq(formulaRevisions.formulaId, f.formula.id)).orderBy(desc(formulaRevisions.revisionNo));
-  const current = revisions.find((r) => r.status === "approved") ?? revisions[0] ?? null;
-  const lines = current
-    ? await db
-        .select({ line: bomLines, material: materials })
-        .from(bomLines)
-        .innerJoin(materials, eq(materials.id, bomLines.materialId))
-        .where(eq(bomLines.formulaRevisionId, current.id))
-        .orderBy(asc(bomLines.lineNo))
-    : [];
-  const steps = current ? await db.select().from(routingSteps).where(eq(routingSteps.formulaRevisionId, current.id)).orderBy(asc(routingSteps.stepNo)) : [];
-  const names = await userNames(revisions.flatMap((r) => [r.submittedBy, r.approvedBy]));
-  return {
-    ...f,
-    revisions: revisions.map((r) => ({ ...r, submittedByName: r.submittedBy ? names.get(r.submittedBy) : null, approvedByName: r.approvedBy ? names.get(r.approvedBy) : null })),
-    current,
-    lines,
-    steps,
-  };
+  return out;
 }
 
 /** Products with finished-goods stock on hand in the caller's sites (all statuses and released). */

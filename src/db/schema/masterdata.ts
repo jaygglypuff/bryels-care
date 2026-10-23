@@ -1,4 +1,5 @@
-import { boolean, integer, numeric, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { type AnyPgColumn, boolean, check, date, integer, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { QTY, createdAt, id } from "./_common";
 import { organizations, sites, users } from "./identity";
 
@@ -78,7 +79,16 @@ export const formulas = pgTable(
   (t) => [uniqueIndex("formulas_org_code_uq").on(t.organizationId, t.code)],
 );
 
-/** status: draft | pending_approval | approved | superseded. Batches snapshot the revision used. */
+/**
+ * Versioned formula content (docs/data-model.md §3.2, §4; US-3-01).
+ * status: draft → pending_approval → approved | rejected; approved → retired (state machine in
+ * src/modules/masterdata/versioning.ts). An approved revision is immutable; a change is a new
+ * revision. effective_from inclusive, effective_to exclusive (null = open-ended). "Superseded" is
+ * a derived label (approved with effective_to in the past), never a stored state.
+ * Approval is two steps (qa_qc, then site_manager/owner_director) recorded in approval_decisions;
+ * approved_by holds the final step. Overlap of approved ranges is blocked in the service under a
+ * formula row lock and by the exclusion constraint in src/db/sql/w1d.sql.
+ */
 export const formulaRevisions = pgTable(
   "formula_revisions",
   {
@@ -88,35 +98,63 @@ export const formulaRevisions = pgTable(
     status: text("status").notNull().default("draft"),
     referenceBatchSizeG: numeric("reference_batch_size_g", QTY).notNull(),
     theoreticalYieldPct: numeric("theoretical_yield_pct", QTY).notNull().default("100"),
+    effectiveFrom: date("effective_from"),
+    effectiveTo: date("effective_to"),
+    supersedesId: uuid("supersedes_id").references((): AnyPgColumn => formulaRevisions.id),
+    changeSummary: text("change_summary"),
+    createdBy: uuid("created_by").references(() => users.id),
     submittedBy: uuid("submitted_by").references(() => users.id),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
     approvedBy: uuid("approved_by").references(() => users.id),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    approvalNote: text("approval_note"),
     notes: text("notes"),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("formula_rev_uq").on(t.formulaId, t.revisionNo)],
+  (t) => [
+    uniqueIndex("formula_rev_uq").on(t.formulaId, t.revisionNo),
+    /** At most one open (draft or pending) revision per formula. */
+    uniqueIndex("formula_rev_one_open_uq").on(t.formulaId).where(sql`${t.status} in ('draft', 'pending_approval')`),
+    check("formula_rev_status_ck", sql`${t.status} in ('draft', 'pending_approval', 'approved', 'rejected', 'retired')`),
+    check("formula_rev_sod_ck", sql`${t.approvedBy} is null or ${t.approvedBy} is distinct from ${t.submittedBy}`),
+    check("formula_rev_effective_ck", sql`${t.status} not in ('approved', 'retired') or (${t.effectiveFrom} is not null and ${t.approvedBy} is not null)`),
+    check("formula_rev_range_ck", sql`${t.effectiveTo} is null or ${t.effectiveFrom} is null or ${t.effectiveTo} > ${t.effectiveFrom}`),
+    check("formula_rev_size_ck", sql`${t.referenceBatchSizeG} > 0`),
+    check("formula_rev_yield_ck", sql`${t.theoreticalYieldPct} > 0 and ${t.theoreticalYieldPct} <= 100`),
+  ],
 );
 
-/** Ingredient lines. tolerancePct is a placeholder until process owners approve real limits (A-PROC-03). */
-export const bomLines = pgTable("bom_lines", {
-  id: id(),
-  formulaRevisionId: uuid("formula_revision_id").notNull().references(() => formulaRevisions.id),
-  lineNo: integer("line_no").notNull(),
-  materialId: uuid("material_id").notNull().references(() => materials.id),
-  quantityG: numeric("quantity_g", QTY).notNull(),
-  tolerancePct: numeric("tolerance_pct", QTY).notNull(),
-});
-
-/** Routing / checklist steps of a formula revision (from the paper BMR's 7 steps). */
-export const routingSteps = pgTable("routing_steps", {
-  id: id(),
-  formulaRevisionId: uuid("formula_revision_id").notNull().references(() => formulaRevisions.id),
-  stepNo: integer("step_no").notNull(),
-  name: text("name").notNull(),
-  /** clearance | weighing | process | packaging | transfer */
-  stepKind: text("step_kind").notNull(),
-  instruction: text("instruction"),
-  requiresChecker: boolean("requires_checker").notNull().default(true),
-});
+/**
+ * Ingredient lines per revision (quantities per reference batch size). Exactly one of
+ * tolerance_pct / tolerance_abs_g (A-DM-17, A-PROC-03: no system default; seed values are
+ * fictional placeholders). Editable only while the parent revision is draft (service + trigger
+ * tg_bom_lines_parent_draft in src/db/sql/w1d.sql).
+ */
+export const bomLines = pgTable(
+  "bom_lines",
+  {
+    id: id(),
+    formulaRevisionId: uuid("formula_revision_id").notNull().references(() => formulaRevisions.id),
+    lineNo: integer("line_no").notNull(),
+    materialId: uuid("material_id").notNull().references(() => materials.id),
+    quantityG: numeric("quantity_g", QTY).notNull(),
+    tolerancePct: numeric("tolerance_pct", QTY),
+    toleranceAbsG: numeric("tolerance_abs_g", QTY),
+    /** e.g. oils, lye, additives */
+    phaseCode: text("phase_code"),
+    /** proportional | fixed */
+    scaling: text("scaling").notNull().default("proportional"),
+    isCritical: boolean("is_critical").notNull().default(true),
+    requiresChecker: boolean("requires_checker").notNull().default(true),
+  },
+  (t) => [
+    uniqueIndex("bom_lines_rev_line_uq").on(t.formulaRevisionId, t.lineNo),
+    check("bom_lines_tolerance_one_ck", sql`num_nonnulls(${t.tolerancePct}, ${t.toleranceAbsG}) = 1`),
+    check("bom_lines_tolerance_non_negative_ck", sql`coalesce(${t.tolerancePct}, 0) >= 0 and coalesce(${t.toleranceAbsG}, 0) >= 0`),
+    check("bom_lines_qty_ck", sql`${t.quantityG} > 0`),
+    check("bom_lines_scaling_ck", sql`${t.scaling} in ('proportional', 'fixed')`),
+  ],
+);
 
 export const customers = pgTable(
   "customers",

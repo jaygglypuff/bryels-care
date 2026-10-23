@@ -1,12 +1,12 @@
 import "server-only";
-import { and, asc, eq } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
-import { batchMaterials, batchStateTransitions, batches, bomLines, formulaRevisions, formulas, materials, products, routingSteps } from "@/db/schema";
+import { batchMaterials, batchStateTransitions, batches } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
+import { getEffectiveRouting, getInspectionPlan, isEffectiveOn, loadFormulaRevisionForSnapshot } from "@/modules/masterdata";
 import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
 import { transitionBatch } from "./state";
 
@@ -20,9 +20,11 @@ export type CreateBatchInput = {
 };
 
 /**
- * Creates a planned batch at the current site in one transaction: allocates the batch number,
- * freezes the approved formula revision into formula_snapshot, scales ingredient requirements to
- * the planned size, computes the theoretical yield, records the first state transition and audits.
+ * Creates a planned batch at the current site in one transaction: checks the chosen formula
+ * revision is approved and effective on the planned start date (V-REV), resolves the routing
+ * revision and finished-product inspection plan effective on that date, allocates the batch
+ * number, freezes all of them into formula_snapshot (plus the revision ids), scales ingredient
+ * requirements to the planned size, records the first state transition and audits.
  */
 export async function createBatch(ctx: AuthContext, input: CreateBatchInput): Promise<{ batchId: string; batchNumber: string }> {
   ctx.require("production.batch.create");
@@ -44,40 +46,68 @@ export async function createBatch(ctx: AuthContext, input: CreateBatchInput): Pr
 
   return db.transaction(async (tx) => {
     const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.batch.create", async () => {
-      const [rev] = await tx
-        .select({ rev: formulaRevisions, formula: formulas, product: products })
-        .from(formulaRevisions)
-        .innerJoin(formulas, eq(formulas.id, formulaRevisions.formulaId))
-        .innerJoin(products, eq(products.id, formulas.productId))
-        .where(and(eq(formulaRevisions.id, input.formulaRevisionId), eq(formulas.organizationId, ctx.organizationId)))
-        .limit(1);
+      const rev = await loadFormulaRevisionForSnapshot(tx, ctx.organizationId, input.formulaRevisionId);
       if (!rev) throw new DomainError("not_found", "Formula revision not found.");
+      const revLabel = `Formula ${rev.formula.code} revision ${rev.rev.revisionNo}`;
       if (rev.rev.status !== "approved") {
-        throw new DomainError("state", `Formula ${rev.formula.code} revision ${rev.rev.revisionNo} is ${rev.rev.status.replace(/_/g, " ")}; only an approved revision can be used for a batch.`);
+        throw new DomainError("state", `${revLabel} is ${rev.rev.status.replace(/_/g, " ")}; only an approved revision can be used for a batch.`);
       }
-
-      const lines = await tx
-        .select({ line: bomLines, material: materials })
-        .from(bomLines)
-        .innerJoin(materials, eq(materials.id, bomLines.materialId))
-        .where(eq(bomLines.formulaRevisionId, rev.rev.id))
-        .orderBy(asc(bomLines.lineNo));
-      const steps = await tx.select().from(routingSteps).where(eq(routingSteps.formulaRevisionId, rev.rev.id)).orderBy(asc(routingSteps.stepNo));
+      // V-REV: the revision must be effective on the planned start date (docs/process-maps.md §1.5).
+      if (!isEffectiveOn(rev.rev, input.plannedStartOn)) {
+        const range = `${rev.rev.effectiveFrom ?? "?"}${rev.rev.effectiveTo ? ` until ${rev.rev.effectiveTo}` : " onwards"}`;
+        throw new DomainError("validation", `${revLabel} is not effective on ${input.plannedStartOn} (effective ${range}). Choose the revision effective on that date.`, {
+          rule: "V-REV",
+          fieldErrors: { plannedStartOn: "No effective revision on this date." },
+        });
+      }
+      const routing = await getEffectiveRouting(ctx, rev.product.id, input.plannedStartOn, { tx });
+      if (!routing) {
+        throw new DomainError("validation", `${rev.product.name} has no approved routing effective on ${input.plannedStartOn}. A routing revision must be approved first (V-REV).`, { rule: "V-REV" });
+      }
+      const plan = await getInspectionPlan(ctx, { planKind: "finished_product", productId: rev.product.id, date: input.plannedStartOn }, { tx });
+      const { lines } = rev;
+      const steps = routing.steps;
       if (lines.length === 0) throw new DomainError("state", "The formula revision has no ingredient lines.");
-      if (steps.length === 0) throw new DomainError("state", "The formula revision has no routing steps.");
+      if (steps.length === 0) throw new DomainError("state", "The routing revision has no steps.");
 
       const refSize = new Decimal(rev.rev.referenceBatchSizeG);
       const factor = plannedSizeG.div(refSize);
+      // Proportional lines scale with the batch size; fixed lines copy (docs/data-model.md §4.4).
+      const scaled = lines.map(({ line, material }) => {
+        const target = line.scaling === "fixed" ? new Decimal(line.quantityG) : new Decimal(line.quantityG).mul(factor).toDecimalPlaces(6);
+        // For an absolute tolerance the stored percentage is only the display equivalent.
+        const pct = line.toleranceAbsG !== null ? (target.gt(0) ? new Decimal(line.toleranceAbsG).div(target).mul(100).toDecimalPlaces(6) : new Decimal(0)) : new Decimal(line.tolerancePct ?? 0);
+        return { line, material, target, pct };
+      });
       const snapshot: FormulaSnapshot = {
+        schemaVersion: "bom_snapshot/v2",
         formulaId: rev.formula.id,
         formulaCode: rev.formula.code,
         formulaName: rev.formula.name,
         formulaRevisionId: rev.rev.id,
         revisionNo: rev.rev.revisionNo,
+        effectiveFrom: rev.rev.effectiveFrom,
         referenceBatchSizeG: rev.rev.referenceBatchSizeG,
         theoreticalYieldPct: rev.rev.theoreticalYieldPct,
         takenAt: new Date().toISOString(),
-        lines: lines.map(({ line, material }) => ({
+        routing: {
+          routingId: routing.routing.id,
+          routingCode: routing.routing.code,
+          routingName: routing.routing.name,
+          routingRevisionId: routing.rev.id,
+          revisionNo: routing.rev.revisionNo,
+          effectiveFrom: routing.rev.effectiveFrom,
+        },
+        inspectionPlan: plan
+          ? {
+              id: plan.plan.id,
+              code: plan.plan.code,
+              revisionNo: plan.plan.revisionNo,
+              isPlaceholder: plan.plan.isPlaceholder,
+              tests: plan.tests.map((t) => ({ testCode: t.testCode, name: t.name, valueKind: t.valueKind, uom: t.uom, specMin: t.specMin, specMax: t.specMax, specText: t.specText, isRequired: t.isRequired })),
+            }
+          : null,
+        lines: scaled.map(({ line, material, target, pct }) => ({
           bomLineId: line.id,
           lineNo: line.lineNo,
           materialId: material.id,
@@ -85,15 +115,28 @@ export async function createBatch(ctx: AuthContext, input: CreateBatchInput): Pr
           materialName: material.name,
           inciName: material.inciName,
           quantityG: line.quantityG,
-          tolerancePct: line.tolerancePct,
+          tolerancePct: pct.toString(),
+          toleranceAbsG: line.toleranceAbsG,
+          scaling: line.scaling,
+          phaseCode: line.phaseCode,
+          targetQtyG: target.toString(),
+          requiresChecker: line.requiresChecker,
         })),
         steps: steps.map((s) => ({
           routingStepId: s.id,
           stepNo: s.stepNo,
           name: s.name,
           stepKind: s.stepKind,
+          area: s.area,
           instruction: s.instruction,
           requiresChecker: s.requiresChecker,
+          requiresEquipment: s.requiresEquipment,
+          equipmentKind: s.equipmentKind,
+          workInstruction: s.workInstruction
+            ? { code: s.workInstruction.code, name: s.workInstruction.name, revisionNo: s.workInstruction.revisionNo, revisionId: s.workInstruction.revisionId, bodyMarkdown: s.workInstruction.bodyMarkdown }
+            : null,
+          parameters: s.parameters.map((p) => ({ id: p.id, code: p.code, name: p.name, valueKind: p.valueKind, uom: p.uom, minValue: p.minValue, targetValue: p.targetValue, maxValue: p.maxValue, isRequired: p.isRequired })),
+          checklistItems: s.checklistItems.map((c) => ({ id: c.id, itemNo: c.itemNo, text: c.text, requiresPhoto: c.requiresPhoto, isBlocking: c.isBlocking })),
         })),
       };
       const theoreticalYieldG = plannedSizeG.mul(rev.rev.theoreticalYieldPct).div(100).toDecimalPlaces(6);
@@ -107,6 +150,8 @@ export async function createBatch(ctx: AuthContext, input: CreateBatchInput): Pr
           batchNumber,
           productId: rev.product.id,
           formulaRevisionId: rev.rev.id,
+          routingRevisionId: routing.rev.id,
+          inspectionPlanId: plan?.plan.id ?? null,
           formulaSnapshot: snapshot,
           plannedSizeG: plannedSizeG.toString(),
           status: "planned",
@@ -116,13 +161,14 @@ export async function createBatch(ctx: AuthContext, input: CreateBatchInput): Pr
         })
         .returning();
       await tx.insert(batchMaterials).values(
-        lines.map(({ line }) => ({
+        scaled.map(({ line, target, pct }) => ({
           batchId: b.id,
           bomLineId: line.id,
           lineNo: line.lineNo,
           materialId: line.materialId,
-          theoreticalQtyG: new Decimal(line.quantityG).mul(factor).toDecimalPlaces(6).toString(),
-          tolerancePct: line.tolerancePct,
+          theoreticalQtyG: target.toString(),
+          tolerancePct: pct.toString(),
+          toleranceAbsG: line.toleranceAbsG,
         })),
       );
       await tx.insert(batchStateTransitions).values({ batchId: b.id, fromState: null, toState: "planned", actorId: ctx.userId });
@@ -138,6 +184,18 @@ export async function createBatch(ctx: AuthContext, input: CreateBatchInput): Pr
           plannedSizeG: plannedSizeG.toString(),
           plannedStartOn: input.plannedStartOn,
           theoreticalYieldG: theoreticalYieldG.toString(),
+        },
+      });
+      await audit(tx, ctx, {
+        action: "production.batch.revisions_snapshotted",
+        entityType: "batch",
+        entityId: b.id,
+        entityNumber: batchNumber,
+        siteId,
+        after: {
+          formulaRevision: `${rev.formula.code} rev ${rev.rev.revisionNo}`,
+          routingRevision: `${routing.routing.code} rev ${routing.rev.revisionNo}`,
+          inspectionPlan: plan ? `${plan.plan.code} rev ${plan.plan.revisionNo}` : null,
         },
       });
       return { batchId: b.id, batchNumber };
