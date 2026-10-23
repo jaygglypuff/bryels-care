@@ -112,7 +112,8 @@ export const BLOCKED_STATUSES = ["quarantine", "on_hold", "rejected", "expired",
 /** Throws unless the lot is released and not past its expiry date. */
 export function assertLotUsable(lot: { lotNumber: string; qualityStatus: string; expiresOn: string | null }, today = new Date()) {
   if (lot.qualityStatus !== "released") {
-    throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} is ${lot.qualityStatus.replace("_", " ")} and cannot be used.`);
+    const words: Record<string, string> = { quarantine: "in quarantine", on_hold: "on QA hold", rejected: "rejected", expired: "expired", recalled: "recalled" };
+    throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} is ${words[lot.qualityStatus] ?? lot.qualityStatus} and cannot be used until QA releases it.`);
   }
   if (lot.expiresOn && new Date(lot.expiresOn + "T23:59:59+08:00") < today) {
     throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} expired on ${lot.expiresOn} and cannot be used.`);

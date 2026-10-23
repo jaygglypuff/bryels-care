@@ -1,0 +1,129 @@
+import "server-only";
+import { and, eq, or, sql } from "drizzle-orm";
+import type { DbOrTx, Tx } from "@/db/client";
+import { batches, idempotencyKeys, rolePermissions, userSiteAssignments, users } from "@/db/schema";
+import type { AuthContext } from "@/lib/auth/context";
+import { DomainError } from "@/lib/errors";
+
+/** Frozen copy of the formula revision stored on the batch at creation (batch snapshot rule). */
+export type FormulaSnapshot = {
+  formulaId?: string;
+  formulaCode: string;
+  formulaName: string;
+  revisionNo: number;
+  formulaRevisionId?: string;
+  referenceBatchSizeG: string;
+  theoreticalYieldPct: string;
+  takenAt?: string;
+  lines: {
+    bomLineId: string;
+    lineNo: number;
+    materialId: string;
+    materialCode: string;
+    materialName: string;
+    inciName: string | null;
+    quantityG: string;
+    tolerancePct: string;
+  }[];
+  steps: {
+    routingStepId: string;
+    stepNo: number;
+    name: string;
+    stepKind: string;
+    instruction: string | null;
+    requiresChecker: boolean;
+  }[];
+};
+
+/** The permission a person must hold at the batch site to sign as checker (weighing and steps). */
+export const CHECKER_PERMISSION = "production.dispense_record.approve" as const;
+
+/** Today's calendar date in the plant's time zone (Asia/Manila), as YYYY-MM-DD. */
+export function manilaToday(now = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}
+
+export function addDays(date: string, days: number): string {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Loads a batch of the caller's organization with a row lock and checks site scope. */
+export async function lockBatch(tx: Tx, ctx: AuthContext, batchId: string) {
+  const [b] = await tx
+    .select()
+    .from(batches)
+    .where(and(eq(batches.id, batchId), eq(batches.organizationId, ctx.organizationId)))
+    .for("update")
+    .limit(1);
+  if (!b) throw new DomainError("not_found", "Batch not found.");
+  ctx.requireSite(b.siteId);
+  return b;
+}
+
+/** Users who may sign as checker at a site: active, holding CHECKER_PERMISSION there (or org-wide). */
+export async function eligibleCheckers(dbx: DbOrTx, organizationId: string, siteId: string) {
+  return dbx
+    .selectDistinct({ id: users.id, displayName: users.displayName })
+    .from(users)
+    .innerJoin(userSiteAssignments, eq(userSiteAssignments.userId, users.id))
+    .innerJoin(rolePermissions, eq(rolePermissions.roleId, userSiteAssignments.roleId))
+    .where(
+      and(
+        eq(users.organizationId, organizationId),
+        eq(users.status, "active"),
+        eq(rolePermissions.permissionCode, CHECKER_PERMISSION),
+        or(eq(userSiteAssignments.siteId, siteId), eq(userSiteAssignments.isOrganizationWide, true)),
+      ),
+    )
+    .orderBy(users.displayName);
+}
+
+/** Separation of duties: the checker must be another eligible person at the batch site. */
+export async function assertChecker(tx: Tx, ctx: AuthContext, siteId: string, checkerId: string | null | undefined) {
+  if (!checkerId) throw new DomainError("validation", "Choose the checker who verified this.");
+  if (checkerId === ctx.userId) {
+    throw new DomainError("separation_of_duties", "The checker must be a different person from the operator. Ask a colleague to check and sign.");
+  }
+  const list = await eligibleCheckers(tx, ctx.organizationId, siteId);
+  const found = list.find((u) => u.id === checkerId);
+  if (!found) throw new DomainError("validation", "The selected checker is not authorized to check production records at this site.");
+  return found;
+}
+
+/**
+ * Idempotent command wrapper (ADR-009): the first call stores its result under the key; a repeat
+ * with the same key returns the stored result without re-running the command. Concurrent repeats
+ * serialize on the unique index of idempotency_keys.
+ */
+export async function idempotent<T extends object>(
+  tx: Tx,
+  ctx: AuthContext,
+  key: string | null | undefined,
+  command: string,
+  fn: () => Promise<T>,
+): Promise<{ result: T; replayed: boolean }> {
+  if (!key) return { result: await fn(), replayed: false };
+  const inserted = await tx
+    .insert(idempotencyKeys)
+    .values({ organizationId: ctx.organizationId, key, command })
+    .onConflictDoNothing()
+    .returning({ id: idempotencyKeys.id });
+  if (inserted.length === 0) {
+    const [row] = await tx
+      .select()
+      .from(idempotencyKeys)
+      .where(and(eq(idempotencyKeys.organizationId, ctx.organizationId), eq(idempotencyKeys.key, key)))
+      .limit(1);
+    if (!row || row.command !== command) throw new DomainError("conflict", "This request key was already used for a different action. Reload the page and try again.");
+    if (!row.result) throw new DomainError("conflict", "This request is still being processed. Reload the page in a moment.");
+    return { result: row.result as T, replayed: true };
+  }
+  const result = await fn();
+  await tx
+    .update(idempotencyKeys)
+    .set({ result: sql`${JSON.stringify(result)}::jsonb` })
+    .where(eq(idempotencyKeys.id, inserted[0].id));
+  return { result, replayed: false };
+}
