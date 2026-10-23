@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { Logo } from "@/ui/brand";
 import QRCode from "qrcode";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -48,7 +49,7 @@ export default async function DeliveryReceiptPrint({ params }: { params: Promise
       <article className="print-page mx-auto w-full max-w-[210mm] bg-white p-[15mm] text-[12px] leading-snug text-black shadow-sm print:p-0 print:shadow-none">
         <header className="flex items-start justify-between gap-6 border-b-2 border-black pb-4">
           <div>
-            <p className="text-[18px] font-bold">Bryel&apos;s Care</p>
+            <Logo tagline className="mb-2 h-[48px] w-auto" />
             <p>{organizationName}</p>
             <p>{COMPANY.address}</p>
             <p>{COMPANY.phone}</p>

@@ -7,7 +7,7 @@ export function cx(...c: (string | false | null | undefined)[]) {
 
 export function Card({ className, children, ...rest }: ComponentProps<"section">) {
   return (
-    <section className={cx("rounded-[16px] border border-line bg-surface p-4 sm:p-5", className)} {...rest}>
+    <section className={cx("rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)] sm:p-6", className)} {...rest}>
       {children}
     </section>
   );
@@ -16,7 +16,7 @@ export function Card({ className, children, ...rest }: ComponentProps<"section">
 export function CardTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <div className="mb-3 flex items-center justify-between gap-3">
-      <h2 className="text-[15px] font-semibold text-fg">{children}</h2>
+      <h2 className="font-display text-[17px] font-semibold text-fg">{children}</h2>
       {action}
     </div>
   );
@@ -26,7 +26,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="text-[22px] font-semibold tracking-tight text-fg sm:text-[26px]">{title}</h1>
+        <h1 className="font-display text-[26px] font-semibold tracking-tight text-fg sm:text-[32px]">{title}</h1>
         {subtitle && <p className="mt-1 text-[13px] text-muted">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
@@ -37,7 +37,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
 const BTN = {
   primary: "bg-primary text-white hover:bg-primary-hover border-transparent",
   cta: "bg-cta text-white hover:bg-black border-transparent",
-  secondary: "bg-surface text-fg border-line-strong hover:bg-surface-2",
+  secondary: "bg-surface text-fg border-line hover:bg-surface-2 hover:border-line-strong",
   ghost: "bg-transparent text-primary-text border-transparent hover:bg-primary-soft",
   danger: "bg-[#c62828] text-white hover:bg-[#8a1c1c] border-transparent",
 } as const;
@@ -45,8 +45,8 @@ export type ButtonVariant = keyof typeof BTN;
 
 export function buttonClass(variant: ButtonVariant = "primary", size: "md" | "lg" | "sm" = "md") {
   return cx(
-    "inline-flex items-center justify-center gap-2 rounded-[10px] border font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-    size === "lg" ? "min-h-[52px] px-5 text-[16px]" : size === "sm" ? "min-h-[32px] px-3 text-[13px]" : "min-h-[44px] px-4 text-[14px]",
+    "inline-flex items-center justify-center gap-2 rounded-full border font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+    size === "lg" ? "min-h-[52px] px-6 text-[16px]" : size === "sm" ? "min-h-[34px] px-3.5 text-[13px]" : "min-h-[44px] px-5 text-[14px]",
     BTN[variant],
   );
 }
@@ -61,7 +61,7 @@ export function LinkButton({ variant = "primary", size = "md", className, ...res
 
 export function EmptyState({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-[14px] border border-dashed border-line-strong px-6 py-10 text-center">
+    <div className="flex flex-col items-center justify-center rounded-[20px] border border-dashed border-line-strong bg-surface-2/60 px-6 py-10 text-center">
       <p className="font-medium text-fg">{title}</p>
       {children && <p className="mt-1 max-w-md text-[13px] text-muted">{children}</p>}
       {action && <div className="mt-4">{action}</div>}
@@ -72,7 +72,7 @@ export function EmptyState({ title, children, action }: { title: string; childre
 /** Desktop table that becomes a stacked card list on phones (ux-system §4). */
 export function Table({ head, children, className }: { head: ReactNode[]; children: ReactNode; className?: string }) {
   return (
-    <div className={cx("overflow-x-auto rounded-[12px] border border-line", className)}>
+    <div className={cx("overflow-x-auto rounded-[16px] border border-line bg-surface", className)}>
       <table className="w-full min-w-[640px] border-collapse text-left text-[13px]">
         <thead className="bg-surface-2 text-[11px] uppercase tracking-wide text-muted">
           <tr>
@@ -96,9 +96,9 @@ export function Td({ className, ...rest }: ComponentProps<"td">) {
 export function Kpi({ label, value, hint, tone = "neutral", href }: { label: string; value: ReactNode; hint?: ReactNode; tone?: "neutral" | "good" | "warn" | "bad"; href?: string }) {
   const hintColor = tone === "good" ? "text-[var(--ok-fg)]" : tone === "warn" ? "text-[var(--warn-fg)]" : tone === "bad" ? "text-[var(--bad-fg)]" : "text-muted";
   const body = (
-    <Card className="h-full transition-shadow hover:shadow-sm">
+    <Card className="h-full transition-shadow hover:shadow-[var(--shadow-pop)]">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-2 text-[30px] font-semibold leading-none text-fg tabular">{value}</p>
+      <p className="mt-3 font-display text-[34px] font-semibold leading-none text-fg tabular">{value}</p>
       {hint && <p className={cx("mt-2 text-[12px]", hintColor)}>{hint}</p>}
     </Card>
   );
@@ -119,7 +119,7 @@ export function Field({ label, htmlFor, error, hint, children }: { label: string
 }
 
 export const inputClass =
-  "min-h-[44px] w-full rounded-[10px] border border-line-strong bg-surface px-3 text-[14px] text-fg placeholder:text-muted focus:border-ring focus:outline-none";
+  "min-h-[44px] w-full rounded-[14px] border border-line-strong bg-surface px-3.5 text-[14px] text-fg placeholder:text-muted focus:border-ring focus:outline-none focus:ring-2 focus:ring-[var(--lime-200)]";
 
 export function Input(props: ComponentProps<"input">) {
   return <input {...props} className={cx(inputClass, props.className)} />;

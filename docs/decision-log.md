@@ -310,3 +310,38 @@ rules; one recorded ruling per item stops the drift before code exists.
 
 **Consequences.** Any document still using the superseded spellings is defective and is fixed
 in the Phase 0 consistency pass; Phase 1 lint rules and database CHECKs enforce items 2, 3 and 6.
+
+## ADR-024 Brand palette, recreated logo and Dribbble-style shell
+
+**Status.** Accepted (owner request after the MVP), 2026-10-23. Amends ADR-007 (design tokens)
+and `docs/ux-system.md` §3 (navigation model).
+
+**Decision.**
+1. The primary palette is the company's greens: leaf green `--brand-600` `#367a24` (primary
+   actions, links, active tabs) and light green `--lime-400` `#8dc63f` (accents, focus ring,
+   positive chart segments), each with a 50 to 900 ramp in `src/app/globals.css`. Gold
+   `--gold-400` `#e3b54a` is a decorative accent only. Dark `--cta` `#17210f` stays the
+   highest-emphasis action and active-module pill, as in the reference design.
+2. The logo is a vector recreation (`src/ui/brand.tsx`: `Logo`, `LogoMark`; favicon
+   `src/app/icon.svg`) of the mark printed on the owner's paper BMR. It is used in the app
+   shell, sign-in, the printed BMR and the delivery receipt. Lot labels stay monochrome for
+   thermal printers.
+3. Desktop navigation follows the reference: a top bar with logo, a pill row of modules
+   (active pill solid `--cta`), site selector, scan button, QA bell and account menu; a second
+   pill row for the active module's pages; and a left rail of round quick-action icons. This
+   replaces the 240 px persistent left navigation of `docs/ux-system.md` §3.1. Tablet and phone
+   keep the drawer; phones keep bottom tabs (Home, Scan, Batches, QA, Orders), filtered by
+   permission.
+4. Display type is Poppins (headings, KPI values, logo); body text is Inter. Both are
+   self-hosted through `next/font`.
+
+**Why.** The owner asked for the design to follow the supplied Dribbble reference more
+closely and to carry the company logo and green / light-green colours before the client
+presentation.
+
+**Consequences.** The quick-action rail and the bottom tabs show only actions the user holds
+permission for, and the QA bell is hidden without `quality.disposition.view`. The server
+still enforces every permission (ADR-005). The recreated logo is a placeholder for the
+official vector artwork (assumption A-PRD-36). Contrast (WCAG AA): white on `--brand-600` is 5.3:1, `--brand-600`
+text on the page background `--bg` is 4.7:1, `--fg` on `--lime-400` is 8.2:1; light green
+(2.0:1 against white) is never used for text or as the only carrier of meaning.

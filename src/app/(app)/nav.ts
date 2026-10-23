@@ -2,6 +2,18 @@ import type { Permission } from "@/lib/permissions";
 
 export type NavItem = { label: string; href: string; permission?: Permission; planned?: string };
 export type NavGroup = { label: string; icon: string; items: NavItem[] };
+export type QuickAction = { label: string; href: string; icon: string; permission?: Permission };
+
+/** Round icon rail (Dribbble reference): the most common operator actions, one tap away. */
+export const QUICK_ACTIONS: QuickAction[] = [
+  { label: "Scan or look up", href: "/inventory/scan", icon: "scan", permission: "inventory.lot.view" },
+  { label: "Receive materials", href: "/inventory/receive", icon: "receive", permission: "inventory.receipt.post" },
+  { label: "New batch", href: "/production/new", icon: "batch", permission: "production.batch.create" },
+  { label: "QA queue", href: "/quality", icon: "qa", permission: "quality.disposition.view" },
+  { label: "New sales order", href: "/sales/new", icon: "order", permission: "sales.sales_order.create" },
+  { label: "Traceability", href: "/quality/trace", icon: "trace", permission: "quality.genealogy.view" },
+  { label: "Audit log", href: "/admin/audit", icon: "audit", permission: "platform.audit.view" },
+];
 
 /** Left navigation (ux-system §3). Planned modules are shown disabled with their phase, never as fake links. */
 export const NAV: NavGroup[] = [
@@ -34,7 +46,7 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    label: "Sales & dispatch",
+    label: "Sales",
     icon: "truck",
     items: [
       { label: "Sales orders", href: "/sales", permission: "sales.sales_order.view" },
@@ -52,7 +64,7 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
-    label: "Administration",
+    label: "Admin",
     icon: "settings",
     items: [
       { label: "Users & roles", href: "/admin/users", permission: "identity.user.view" },

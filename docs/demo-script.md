@@ -84,7 +84,7 @@ posted transactions, and every card is a link to the list behind it."
 
 **Point at:**
 - **Orders this week** (2 orders, ₱13,104.00) and **Production output** (367 units, yield 98.8 %).
-- **Production board**: one batch planned, one in process, one waiting for QC, one released.
+- **Batch journey**: one batch planned, one in process, one waiting for QC, one released.
 - **Near-expiry lots**: an Acapulco Extract lot is already **Expired** (red). Remember it for
   scene 4.
 - Scroll down to **Order fulfilment** (the donut) and **Recent activity**.

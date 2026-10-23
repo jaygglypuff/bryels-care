@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Logo } from "@/ui/brand";
 import Link from "next/link";
 import QRCode from "qrcode";
 import { requireContext } from "@/lib/auth/context";
@@ -143,10 +144,7 @@ export default async function BmrPrintPage({ params }: Params) {
               </tr>
               <tr>
                 <td rowSpan={2} style={{ width: "24%", verticalAlign: "middle" }}>
-                  <div className="brand">
-                    Bryel&apos;s Care
-                    <small>Beauty and Wellness from Nature</small>
-                  </div>
+                  <Logo tagline className="h-[52px] w-auto" />
                 </td>
                 <td colSpan={2}>
                   <span className="lbl">Product Name:</span>

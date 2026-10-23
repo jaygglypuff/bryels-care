@@ -1,39 +1,60 @@
 import { redirect } from "next/navigation";
 import { getContext } from "@/lib/auth/context";
+import { Logo } from "@/ui/brand";
 import { SignInForm } from "./form";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sign in" };
 
+const DEMO = ["owner", "manager.nfd", "operator.nfd", "checker.nfd", "warehouse.nfd", "qa.nfd", "sales", "warehouse.rvs"];
+
 export default async function SignInPage() {
   if (await getContext()) redirect("/dashboard");
   return (
-    <main className="grid min-h-dvh place-items-center px-4 py-10">
-      <div className="w-full max-w-[420px]">
-        <div className="mb-6 flex items-center gap-2">
-          <span className="grid size-10 place-items-center rounded-[11px] bg-primary text-[15px] font-bold text-white">BC</span>
-          <div>
-            <p className="font-semibold text-fg">Bryel&apos;s Care</p>
-            <p className="text-[12px] text-muted">Manufacturing ERP + CRM</p>
-          </div>
+    <main className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
+      <section
+        className="relative hidden overflow-hidden p-12 text-white lg:flex lg:flex-col"
+        style={{ background: "radial-gradient(120% 90% at 0% 0%, var(--brand-500) 0%, var(--brand-700) 55%, var(--brand-900) 100%)" }}
+      >
+        <svg aria-hidden="true" className="absolute -right-24 -top-24 size-[520px] opacity-[0.16]" viewBox="0 0 200 200">
+          <path d="M100 10 C130 60, 170 80, 190 100 C170 120, 130 140, 100 190 C70 140, 30 120, 10 100 C30 80, 70 60, 100 10Z" fill="var(--lime-300)" />
+        </svg>
+        <svg aria-hidden="true" className="absolute -bottom-32 -left-20 size-[420px] opacity-[0.12]" viewBox="0 0 200 200">
+          <circle cx="100" cy="100" r="96" fill="none" stroke="var(--lime-300)" strokeWidth="14" />
+        </svg>
+        <div className="relative inline-flex w-fit rounded-[22px] bg-white px-5 py-3 shadow-[var(--shadow-pop)]">
+          <Logo tagline className="h-16 w-auto" />
         </div>
-        <SignInForm />
-        {process.env.ALLOW_DEMO_SEED === "true" && (
-          <div className="mt-5 rounded-[14px] border border-line bg-surface p-4 text-[12px] text-fg-2">
-            <p className="mb-2 font-semibold text-fg">Demo accounts (fictional data) · password <code className="font-mono">demo1234</code></p>
-            <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-              <li>owner@bryels-care.test</li>
-              <li>manager.nfd@bryels-care.test</li>
-              <li>operator.nfd@bryels-care.test</li>
-              <li>checker.nfd@bryels-care.test</li>
-              <li>warehouse.nfd@bryels-care.test</li>
-              <li>qa.nfd@bryels-care.test</li>
-              <li>sales@bryels-care.test</li>
-              <li>warehouse.rvs@bryels-care.test</li>
-            </ul>
+        <div className="relative mt-auto max-w-[460px]">
+          <p className="font-display text-[34px] font-semibold leading-tight">From raw material to the customer&apos;s shelf, every lot accounted for.</p>
+          <ul className="mt-6 grid gap-2 text-[14px] text-white/85">
+            <li>• Receive, label and release materials with QA control</li>
+            <li>• Digital Batch Manufacturing Records with checked weighing</li>
+            <li>• FEFO picking, dispatch and full lot traceability</li>
+          </ul>
+        </div>
+        <p className="relative mt-10 text-[12px] text-white/60">Bryel&apos;s Care Corporation · Manufacturing ERP + CRM</p>
+      </section>
+      <section className="flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-[420px]">
+          <div className="mb-6 lg:hidden">
+            <Logo tagline className="h-14 w-auto" />
           </div>
-        )}
-      </div>
+          <SignInForm />
+          {process.env.ALLOW_DEMO_SEED === "true" && (
+            <div className="mt-5 rounded-[20px] bg-surface p-5 text-[12px] text-fg-2 shadow-[var(--shadow-card)]">
+              <p className="mb-2 font-semibold text-fg">
+                Demo accounts · fictional data · password <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono">demo1234</code>
+              </p>
+              <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                {DEMO.map((u) => (
+                  <li key={u} className="font-mono text-[11.5px]">{u}@bryels-care.test</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </section>
     </main>
   );
 }

@@ -267,6 +267,14 @@ Design starts at 360 px and adds, never subtracts. Nothing core needs more than 
 
 ## 3. Navigation model
 
+> **Amended by ADR-024 (2026-10-23).** As built, desktop uses the reference layout instead of
+> the 240 px left navigation of §3.1: a top bar (logo, module pills with the active module as a
+> solid `--cta` pill, site selector, scan, QA bell, account menu), a second pill row for the
+> active module's pages, and a left rail of round quick-action icons filtered by permission
+> (`src/app/(app)/shell.tsx`, `src/app/(app)/nav.ts`). Tablet and phone keep the drawer; phone
+> bottom tabs are Home, Scan, Batches, QA, Orders. Brand colours (green `--brand-600`, light
+> green `--lime-400`) and the Poppins/Inter type pairing are defined in `src/app/globals.css`.
+
 ```mermaid
 flowchart LR
   subgraph Desktop_lg_up["Desktop 1024px+"]

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowDownRight, ArrowRight, ArrowUpRight, Minus } from "lucide-react";
+import { ArrowDownRight, ArrowRight, ArrowUpRight, CalendarDays, ClipboardCheck, Minus, Plus } from "lucide-react";
 import type { ActivityRow, BoardCard, NearExpiryLot, OwnerDashboard } from "@/modules/analytics";
 import { BOARD_LIMIT, NEAR_EXPIRY_WINDOW_DAYS } from "@/modules/analytics";
 import { Card, EmptyState, Table, Td, cx } from "@/ui/core";
@@ -42,13 +42,13 @@ function KpiCard({
 }) {
   const toneCls = tone === "good" ? "text-[var(--ok-fg)]" : tone === "warn" ? "text-[var(--warn-fg)]" : tone === "bad" ? "text-[var(--bad-fg)]" : "text-fg-2";
   return (
-    <Link href={href} aria-label={`${caption}: open ${linkLabel}`} className="group block h-full rounded-[16px]">
-      <Card className="flex h-full flex-col gap-2 transition-shadow group-hover:shadow-[0_4px_12px_rgba(28,27,24,.08)]">
+    <Link href={href} aria-label={`${caption}: open ${linkLabel}`} className="group block h-full rounded-[24px]">
+      <Card className="flex h-full flex-col gap-2 transition-shadow group-hover:shadow-[var(--shadow-pop)]">
         <div className="flex items-start justify-between gap-2">
           <span className="text-[12px] font-semibold uppercase tracking-[.04em] text-fg-2">{caption}</span>
           <ArrowRight size={16} className="mt-0.5 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" aria-hidden />
         </div>
-        <div className="tabular text-[34px] font-semibold leading-[40px] tracking-[-.01em] text-fg">
+        <div className="tabular font-display text-[36px] font-semibold leading-[42px] tracking-[-.01em] text-fg">
           {value}
           {unit && <small className="ml-1 text-[16px] font-medium tracking-normal text-fg-2">{unit}</small>}
         </div>
@@ -75,7 +75,7 @@ function SectionCard({ id, title, aside, children }: { id: string; title: string
   return (
     <Card aria-labelledby={`${id}-h`} id={id} className="min-w-0">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h2 id={`${id}-h`} className="text-[16px] font-semibold text-fg">
+        <h2 id={`${id}-h`} className="font-display text-[18px] font-semibold text-fg">
           {title}
         </h2>
         {aside && <div className="text-[12px] text-muted">{aside}</div>}
@@ -87,30 +87,66 @@ function SectionCard({ id, title, aside, children }: { id: string; title: string
 
 // ---------- production board ----------
 
-function BatchCard({ b, showSite }: { b: BoardCard; showSite: boolean }) {
+function BatchCard({ b, showSite, highlight }: { b: BoardCard; showSite: boolean; highlight?: boolean }) {
   const pct = b.stepsTotal > 0 ? (b.stepsDone / b.stepsTotal) * 100 : 0;
+  const running = (b.status === "in_process" || b.status === "materials_staged") && b.stepsTotal > 0;
   return (
-    <Link href={`/production/${b.id}`} className="block rounded-[12px] border border-line bg-surface p-3 transition-colors hover:border-line-strong">
+    <Link
+      href={`/production/${b.id}`}
+      className={cx(
+        "group block rounded-[18px] p-3.5 transition-all",
+        highlight ? "bg-cta text-white shadow-[var(--shadow-pop)] hover:-translate-y-0.5" : "bg-surface shadow-[var(--shadow-card)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-pop)]",
+      )}
+    >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[13px] text-fg">{b.batchNumber}</span>
-        {showSite && <span className="text-[11px] font-semibold text-muted">{b.siteCode}</span>}
+        <span className={cx("font-mono text-[12.5px]", highlight ? "text-white/80" : "text-fg-2")}>{b.batchNumber}</span>
+        {showSite && <span className={cx("text-[11px] font-semibold", highlight ? "text-white/70" : "text-muted")}>{b.siteCode}</span>}
       </div>
-      <p className="mt-1 text-[14px] font-medium leading-5 text-fg">
-        {b.productName} · {fmtMass(b.plannedSizeG)}
+      <p className={cx("mt-1.5 font-display text-[14.5px] font-semibold leading-5", highlight ? "text-white" : "text-fg")}>{b.productName}</p>
+      <p className={cx("mt-0.5 text-[12px] leading-4", highlight ? "text-white/75" : "text-muted")}>
+        {fmtMass(b.plannedSizeG)} · {b.meta}
+        {running && ` · step ${Math.min(b.stepsDone + 1, b.stepsTotal)} of ${b.stepsTotal}`}
       </p>
-      <p className="mt-1 text-[12px] leading-4 text-muted">
-        {b.meta}
-        {(b.status === "in_process" || b.status === "materials_staged") && b.stepsTotal > 0 && ` · step ${Math.min(b.stepsDone + 1, b.stepsTotal)} of ${b.stepsTotal}`}
-      </p>
-      {(b.status === "in_process" || b.status === "materials_staged") && b.stepsTotal > 0 && (
-        <div className="mt-2 h-1 overflow-hidden rounded-[2px] bg-primary-soft" role="img" aria-label={`${b.stepsDone} of ${b.stepsTotal} steps completed`}>
-          <i className="block h-full bg-primary" style={{ width: `${pct.toFixed(1)}%` }} />
+      {running && (
+        <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-[var(--lime-100)]" role="img" aria-label={`${b.stepsDone} of ${b.stepsTotal} steps completed`}>
+          <i className="block h-full rounded-full" style={{ width: `${pct.toFixed(1)}%`, background: "linear-gradient(90deg, var(--brand-600), var(--lime-400))" }} />
         </div>
       )}
-      <div className="mt-2">
-        <StatusChip status={b.status} />
+      <div className="mt-2.5 flex items-center justify-between">
+        {highlight ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[12px] font-medium">Next: QA review</span>
+        ) : (
+          <StatusChip status={b.status} />
+        )}
+        <ArrowRight size={15} className={cx("transition-transform group-hover:translate-x-0.5", highlight ? "text-white/80" : "text-muted")} aria-hidden />
       </div>
     </Link>
+  );
+}
+
+const AVATAR_TONES = ["#d3ecaf", "#bfe0a8", "#e8f5d3", "#fdead2", "#e0ecfa", "#ece5fa", "#d9f0ec", "#fbe3e1"];
+
+function TeamRow({ team }: { team: NonNullable<OwnerDashboard["team"]> }) {
+  if (team.length === 0) return null;
+  return (
+    <div className="flex items-center" aria-label="People who posted work in the last 30 days">
+      {team.map((t, i) => (
+        <div key={t.userId} className="relative -ml-2 first:ml-0" title={`${t.name} · ${t.actions} actions in 30 days`}>
+          <span
+            className="grid size-10 place-items-center rounded-full text-[12px] font-semibold ring-[3px] ring-white"
+            style={{ background: AVATAR_TONES[i % AVATAR_TONES.length], color: "var(--brand-900)" }}
+          >
+            {t.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}
+          </span>
+          <span
+            className="absolute -bottom-1 left-1/2 grid min-w-[18px] -translate-x-1/2 place-items-center rounded-full px-1 text-[10px] font-semibold leading-[18px] text-white ring-2 ring-white"
+            style={{ background: i === 0 ? "var(--brand-600)" : i < 3 ? "var(--lime-500)" : "#9aa594" }}
+          >
+            {t.actions}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -122,21 +158,28 @@ function Board({ board, showSite }: { board: NonNullable<OwnerDashboard["board"]
     ["Released · 14 days", board.released, "No batch released in the last 14 days."],
   ];
   return (
-    <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1 lg:mx-0 lg:grid lg:grid-cols-4 lg:overflow-visible lg:px-0">
-      {cols.map(([title, cards, empty]) => (
-        <div key={title} className="flex w-[78%] min-w-0 shrink-0 snap-start flex-col gap-2 rounded-[12px] bg-surface-2 p-2.5 sm:w-[46%] lg:w-auto">
-          <div className="flex items-center justify-between px-1.5 pb-1 pt-0.5 text-[12px] font-semibold uppercase tracking-[.04em] text-fg-2">
-            <span>{title}</span>
-            <span className="tabular font-medium text-muted">{cards.length}</span>
+    <div className="-mx-1 flex snap-x snap-mandatory gap-5 overflow-x-auto px-1 pb-1 lg:mx-0 lg:grid lg:grid-cols-4 lg:overflow-visible lg:px-0">
+      {cols.map(([title, cards, empty], ci) => (
+        <div key={title} className="relative flex w-[78%] min-w-0 shrink-0 snap-start flex-col sm:w-[46%] lg:w-auto">
+          <div className="flex min-h-0 flex-1 flex-col gap-2.5 rounded-[22px] bg-surface-2 p-3">
+            {cards.length === 0 && <p className="px-1.5 py-6 text-center text-[12px] text-muted">{empty}</p>}
+            {cards.slice(0, BOARD_LIMIT).map((b, i) => (
+              <BatchCard key={b.id} b={b} showSite={showSite} highlight={title === "Awaiting QC" && i === 0} />
+            ))}
+            {cards.length > BOARD_LIMIT && (
+              <Link href="/production" className="px-1.5 text-[12px] font-medium text-primary-text hover:underline">
+                +{cards.length - BOARD_LIMIT} more in Batches
+              </Link>
+            )}
           </div>
-          {cards.length === 0 && <p className="px-1.5 py-3 text-[12px] text-muted">{empty}</p>}
-          {cards.slice(0, BOARD_LIMIT).map((b) => (
-            <BatchCard key={b.id} b={b} showSite={showSite} />
-          ))}
-          {cards.length > BOARD_LIMIT && (
-            <Link href="/production" className="px-1.5 text-[12px] font-medium text-primary-text hover:underline">
-              +{cards.length - BOARD_LIMIT} more in Batches
-            </Link>
+          <p className="mt-3 text-center font-display text-[13px] font-medium text-fg">
+            {title} <span className="tabular text-muted">· {cards.length}</span>
+          </p>
+          {ci < cols.length - 1 && (
+            <svg aria-hidden="true" className="absolute -right-[18px] top-1/2 hidden h-6 w-[16px] -translate-y-1/2 lg:block" viewBox="0 0 16 24">
+              <path d="M0 12 H12" stroke="var(--border-strong)" strokeWidth="1.5" strokeDasharray="2 2.5" />
+              <circle cx="13" cy="12" r="2.5" fill="var(--brand-600)" />
+            </svg>
           )}
         </div>
       ))}
@@ -220,10 +263,10 @@ function NearExpiry({ data, showSite }: { data: NonNullable<OwnerDashboard["near
 // ---------- fulfilment ----------
 
 const ORDER_COLOURS: Record<string, string> = {
-  draft: "#7D7A70", // --status-neutral-icon
-  confirmed: "#2A78D6", // --chart-2
-  allocated: "#6250D6", // --chart-4
-  shipped: "#1E8449", // --viz-good
+  draft: "#b9c2b2", // neutral sage
+  confirmed: "#8dc63f", // --lime-400 (brand light green)
+  allocated: "#4f9d34", // --brand-500
+  shipped: "#27581c", // --brand-800 (brand deep green)
 };
 const ORDER_LABEL: Record<string, string> = { draft: "Draft", confirmed: "Confirmed", allocated: "Allocated", shipped: "Shipped" };
 
@@ -234,7 +277,7 @@ function Fulfilment({ data }: { data: NonNullable<OwnerDashboard["fulfilment"]> 
         {data.cancelled > 0 ? `${plural(data.cancelled, "order")} cancelled in the period.` : "Orders created in the last 30 days appear here by status."}
       </EmptyState>
     );
-  const segs = data.byStatus.map((s) => ({ key: s.status, label: ORDER_LABEL[s.status], value: s.count, color: ORDER_COLOURS[s.status] }));
+  const segs = data.byStatus.filter((s) => s.count > 0).map((s) => ({ key: s.status, label: ORDER_LABEL[s.status], value: s.count, color: ORDER_COLOURS[s.status] }));
   const pct = (n: number) => D(n).div(data.total).mul(100).toFixed(0);
   return (
     <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center lg:flex-col 2xl:flex-row">
@@ -393,18 +436,27 @@ export function OwnerOverview({ data, canAudit }: { data: OwnerDashboard; canAud
       </div>
 
       {board && (
-        <SectionCard
-          id="board"
-          title="Production board"
-          aside={
-            <Link href="/production" className="font-medium text-primary-text hover:underline">
-              All batches
-            </Link>
-          }
-        >
+        <Card aria-labelledby="board-h" id="board" className="min-w-0">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 id="board-h" className="font-display text-[20px] font-semibold text-fg">Batch journey</h2>
+              <p className="mt-0.5 text-[12px] text-muted">From plan to QA release. Dark card = the next action waiting on QA.</p>
+            </div>
+            {data.team && <TeamRow team={data.team} />}
+            <div className="flex items-center gap-2">
+              <Link href="/production/new" className="grid size-10 place-items-center rounded-full border border-line bg-surface text-fg-2 hover:text-fg" title="New batch" aria-label="New batch">
+                <Plus size={18} />
+              </Link>
+              <Link href="/quality" className="grid size-10 place-items-center rounded-full border border-line bg-surface text-fg-2 hover:text-fg" title="QA queue" aria-label="QA queue">
+                <ClipboardCheck size={18} />
+              </Link>
+              <Link href="/production" className="grid size-10 place-items-center rounded-full border border-line bg-surface text-fg-2 hover:text-fg" title="All batches" aria-label="All batches">
+                <CalendarDays size={18} />
+              </Link>
+            </div>
+          </div>
           <Board board={board} showSite={showSite} />
-          <p className="mt-2 text-[12px] text-muted">Current batch status. In process includes materials staged; Released shows batches released by QA in the last 14 days.</p>
-        </SectionCard>
+        </Card>
       )}
 
       {nearExpiry && (

@@ -155,6 +155,8 @@ export type OwnerDashboard = {
   nearExpiry: null | { rows: NearExpiryLot[]; total: number };
   fulfilment: null | { byStatus: { status: string; count: number }[]; total: number; cancelled: number };
   activity: null | ActivityRow[];
+  /** People who posted work in scope in the last 30 days (avatar row on the batch journey board). */
+  team: null | { userId: string; name: string; actions: number }[];
 };
 
 export const NEAR_EXPIRY_WINDOW_DAYS = 30;
@@ -169,7 +171,7 @@ export async function getOwnerDashboard(ctx: AuthContext, scope: DashboardScope)
   const siteCode = new Map(ctx.allowedSites.map((s) => [s.id, s.code]));
   const ids = scope.siteIds;
 
-  const [orders, output, fefo, qa, board, nearExpiry, fulfilment, activity] = await Promise.all([
+  const [orders, output, fefo, qa, board, nearExpiry, fulfilment, activity, team] = await Promise.all([
     ctx.can("sales.sales_order.view") ? ordersKpi(ids, tz, today) : null,
     ctx.can("production.batch.view") ? outputKpi(ids, tz, today) : null,
     ctx.can("inventory.lot.view") ? fefoKpi(ids, today) : null,
@@ -178,9 +180,31 @@ export async function getOwnerDashboard(ctx: AuthContext, scope: DashboardScope)
     ctx.can("inventory.lot.view") ? nearExpiryLots(ids, today, siteCode) : null,
     ctx.can("sales.sales_order.view") ? fulfilmentDonut(ids, tz, today) : null,
     ctx.can("platform.audit.view") ? recentActivity(ctx, scope, siteCode) : null,
+    ctx.can("production.batch.view") ? teamActivity(scope.siteIds) : null,
   ]);
 
-  return { scope, generatedAt: new Date(), today, timezone: tz, orders, output, fefo, qa, board, nearExpiry, fulfilment, activity };
+  return { scope, generatedAt: new Date(), today, timezone: tz, orders, output, fefo, qa, board, nearExpiry, fulfilment, activity, team };
+}
+
+/** Actors with posted changes (non-view, non-session events) at the scope's sites in the last 30 days. */
+async function teamActivity(siteIds: string[]) {
+  const n = sql<number>`count(*)::int`;
+  const rows = await db
+    .select({ userId: users.id, name: users.displayName, actions: n })
+    .from(auditEvents)
+    .innerJoin(users, eq(users.id, auditEvents.actorId))
+    .where(
+      and(
+        inArray(auditEvents.siteId, siteIds),
+        sql`${auditEvents.occurredAt} >= now() - interval '30 days'`,
+        sql`${auditEvents.action} not like '%.viewed'`,
+        sql`${auditEvents.action} not like 'identity.session.%'`,
+      ),
+    )
+    .groupBy(users.id, users.displayName)
+    .orderBy(desc(n))
+    .limit(8);
+  return rows.map((r) => ({ ...r, actions: Number(r.actions) }));
 }
 
 /** KPI-OWN-01: sales orders created in the last 7 local days (today included), cancelled excluded. */

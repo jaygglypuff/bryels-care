@@ -66,7 +66,7 @@ The full production topology (worker, bucket, backups, staging/production separa
 | `src/db/schema/`, `src/db/migrations/` | Drizzle schema (MVP subset of `docs/data-model.md`) and SQL migrations |
 | `src/db/seed.ts` | Fictional demo data shaped after the Acapulco Soap BMR |
 | `src/lib/` | Auth (argon2id sessions, `AuthContext`), audit, numbering, decimal helpers |
-| `src/ui/` | Design-system components from `docs/ux-system.md` |
+| `src/ui/` | Design-system components from `docs/ux-system.md`; `brand.tsx` holds the logo (ADR-024) |
 | `tests/integration/` | Integration tests on a real Postgres per module |
 
 ## Source of truth

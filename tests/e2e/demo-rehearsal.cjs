@@ -95,7 +95,7 @@ async function kpiValue(page, caption) {
   {
     const { context, page } = await asUser('owner@bryels-care.test');
     await expectText(page, 'Owner overview');
-    for (const t of ['Orders this week', 'Production output', 'Stock at FEFO risk', 'QA queue', 'Production board', 'Near-expiry lots', 'Order fulfilment', 'Recent activity']) await expectText(page, t);
+    for (const t of ['Orders this week', 'Production output', 'Stock at FEFO risk', 'QA queue', 'Batch journey', 'Near-expiry lots', 'Order fulfilment', 'Recent activity']) await expectText(page, t);
     facts.ordersBefore = await kpiValue(page, 'Orders this week');
     facts.outputBefore = await kpiValue(page, 'Production output');
     log('owner KPIs before: orders', facts.ordersBefore, 'output units', facts.outputBefore);

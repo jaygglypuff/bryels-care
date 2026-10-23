@@ -2,22 +2,30 @@
 
 /* Design tokens from docs/ux-system.md §2 and docs/design/style-tile.html (light theme for the MVP). */
 :root {
-  --green-50: #eef6f0; --green-100: #d8ecde; --green-200: #b3d9be; --green-300: #86c19a; --green-400: #57a574;
-  --green-500: #2f8a54; --green-600: #28804b; --green-700: #23703f; --green-800: #1b5a33; --green-900: #0f321e;
-  --bg: #f6f5f1; --surface: #ffffff; --surface-2: #f1f0eb; --border: #e6e4dd; --border-strong: #c9c6bc;
-  --fg: #1c1b18; --fg-2: #5b5951; --fg-muted: #6f6c63; --cta: #1c1b18;
-  --primary: #28804b; --primary-hover: #1b5a33; --primary-text: #23703f; --primary-soft: #d8ecde; --ring: #23703f;
-  --ok-bg: #ddf3e4; --ok-fg: #14532d; --ok-bd: #9fd4b2;
-  --warn-bg: #fdefcf; --warn-fg: #6b4400; --warn-bd: #f0cf7d;
-  --bad-bg: #fbe1e1; --bad-fg: #8a1c1c; --bad-bd: #f0a6a6;
-  --info-bg: #dcebfa; --info-fg: #1c4a80; --info-bd: #a9cbf0;
-  --neu-bg: #eceae3; --neu-fg: #45423a; --neu-bd: #d3d0c7;
-  --q-bg: #fde9cf; --q-fg: #703d00; --q-bd: #f2be7a;
-  --hold-bg: #eae3fa; --hold-fg: #43307a; --hold-bd: #c9bbef;
-  --exp-bg: #ece7e0; --exp-fg: #514738; --exp-bd: #cfc7b8;
-  --rej-bg: #f9e1e8; --rej-fg: #7a1f3a; --rej-bd: #eaa7bc;
-  --appr-bg: #d6efec; --appr-fg: #114b47; --appr-bd: #9bd6cf;
-  --font: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Brand: leaf green and light green from the Bryel's Care logo */
+  --brand-50: #f1f8ec; --brand-100: #ddefd2; --brand-200: #bfe0a8; --brand-300: #96cb76; --brand-400: #6db34d;
+  --brand-500: #4f9d34; --brand-600: #367a24; --brand-700: #316f21; --brand-800: #27581c; --brand-900: #173512;
+  --lime-50: #f5fbec; --lime-100: #e8f5d3; --lime-200: #d3ecaf; --lime-300: #b5dc7e; --lime-400: #8dc63f; --lime-500: #74ad2c;
+  --gold-400: #e3b54a;
+  /* Surfaces: soft green-grey workspace with white cards (Dribbble reference) */
+  --bg: #eef2ea; --surface: #ffffff; --surface-2: #f5f7f2; --surface-3: #e9eee4; --border: #e2e8dc; --border-strong: #c8d1bf;
+  --fg: #172014; --fg-2: #4d5947; --fg-muted: #6b7565; --cta: #17210f;
+  --primary: var(--brand-600); --primary-hover: var(--brand-700); --primary-text: var(--brand-700); --primary-soft: var(--lime-100); --ring: var(--brand-600);
+  --shadow-card: 0 1px 2px rgba(23, 32, 20, 0.04), 0 8px 24px -12px rgba(23, 32, 20, 0.10);
+  --shadow-pop: 0 12px 32px -8px rgba(23, 32, 20, 0.22);
+  /* Status (pastel fill + dark text + border; never colour alone) */
+  --ok-bg: #e2f3d6; --ok-fg: #1f5a12; --ok-bd: #b9df9a;
+  --warn-bg: #fdf0cf; --warn-fg: #6b4400; --warn-bd: #f0cf7d;
+  --bad-bg: #fbe3e1; --bad-fg: #8a1c1c; --bad-bd: #f0aaa6;
+  --info-bg: #e0ecfa; --info-fg: #1c4a80; --info-bd: #b3cff0;
+  --neu-bg: #edf0e9; --neu-fg: #434b3e; --neu-bd: #d5dccd;
+  --q-bg: #fdead2; --q-fg: #703d00; --q-bd: #f2c184;
+  --hold-bg: #ece5fa; --hold-fg: #43307a; --hold-bd: #cdbff0;
+  --exp-bg: #eee9e1; --exp-fg: #514738; --exp-bd: #d3cbbd;
+  --rej-bg: #f9e2e9; --rej-fg: #7a1f3a; --rej-bd: #eaaabd;
+  --appr-bg: #d9f0ec; --appr-fg: #114b47; --appr-bd: #a2d8d1;
+  --font: var(--font-inter), Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: var(--font-poppins), Poppins, var(--font);
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   color-scheme: light;
 }
@@ -37,13 +45,21 @@
   --color-primary-text: var(--primary-text);
   --color-primary-soft: var(--primary-soft);
   --color-ring: var(--ring);
+  --color-surface-3: var(--surface-3);
+  --color-brand: var(--brand-600);
+  --color-brand-soft: var(--lime-100);
+  --color-lime: var(--lime-400);
   --font-sans: var(--font);
+  --font-display: var(--font-display);
   --font-mono: var(--mono);
-  --radius-card: 16px;
+  --radius-card: 24px;
 }
 
 html, body { background: var(--bg); color: var(--fg); font-family: var(--font); }
 body { font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0.01em; }
+.scroll-x-hidden { scrollbar-width: none; }
+.scroll-x-hidden::-webkit-scrollbar { display: none; }
 .tabular { font-variant-numeric: tabular-nums; }
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 6px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
