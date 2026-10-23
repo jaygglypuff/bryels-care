@@ -18,7 +18,7 @@ submitted. Approval limits are data the owner can change, not code.
 |---|---|
 | Permission | String `module.entity.action`. Actions: `view`, `create`, `edit`, `submit`, `approve`, `post`, `export`, `void`, `admin`. The catalogue in section 2 is the complete set; a permission that is not in the catalogue does not exist and cannot be granted. |
 | Role | Named bundle of permissions (`roles`, `role_permissions`). The 13 roles below are seeded and `is_system = true`. Custom roles (Phase 1b) are cloned from a seeded role and can only remove permissions or add permissions of sensitivity `normal`; adding `sensitive`/`restricted` permissions requires `identity.role.admin` plus re-authentication and an audit event. |
-| Site assignment | `user_site_assignments(user_id, site_id, role_id, scope, effective_from, effective_to, granted_by)`. A user holds a role **at a site**. `site_id = NULL` is an organization-wide assignment and is allowed only for `owner_director`, `system_admin`, `auditor` (database check constraint plus service rule). |
+| Site assignment | `user_site_assignments(user_id, site_id, role_id, is_organization_wide, valid_from, valid_to, created_by)` (`docs/data-model.md` §3.1); the `scope jsonb` sub-scope column is a Phase 2 addition (section 4.4). A user holds a role **at a site**. `site_id = NULL` with `is_organization_wide = true` is an organization-wide assignment and is allowed only for `owner_director`, `system_admin`, `auditor` (database check constraint plus service rule). |
 | AuthContext | Built once per request (route handler, server action, job runner, sync replay) and passed to every service call. Never built from client-supplied claims. Shape below. |
 | Deny by default | No permission → denied. No assignment at the record's site → the record does not exist for that user (404, not 403, to avoid confirming existence). Missing `site_id` in a command that needs one → 422. |
 | Server-side enforcement | Services call `authorize(ctx, permission, { siteId })` before any read or write. Route handlers and UI never decide; they only render what the service returns. ESLint rule: repository methods are not importable outside the module's service layer. |
@@ -63,7 +63,7 @@ Resolution flow (every request):
 
 1. Adapter reads the session cookie, loads `sessions` row, rejects if revoked/expired (see
    `docs/security.md` section 3).
-2. Loads active `user_site_assignments` (effective today) and their `role_permissions`.
+2. Loads active `user_site_assignments` (`valid_from <= today < valid_to`) and their `role_permissions`.
 3. Builds `sitePermissions` (per site) and `orgPermissions` (org-wide roles).
 4. `hasPermission(ctx, perm, siteId)` is true when `orgPermissions` has `perm`, or
    `sitePermissions.get(siteId)` has `perm`. `siteId` is required for every operational
@@ -89,8 +89,10 @@ flowchart LR
 
 Caching: the AuthContext may be cached per session for at most 60 seconds (A-PM-01) keyed by
 `permissions_version`; any change to roles, permissions or assignments bumps the version and
-invalidates immediately. Offline clients re-fetch permissions on every reconnect and at least
-every 8 hours (`docs/offline-sync.md`).
+invalidates immediately. Online clients refresh their permission set on every sync and at least
+every 8 hours (`docs/security.md`); the offline authorization snapshot stays valid for 12 hours
+without a server round trip (A-OFF-02 in `docs/offline-sync.md`), after which new offline
+commands are blocked until the client reconnects.
 
 ## 2. Permission catalogue
 
@@ -131,14 +133,14 @@ that share description, sensitivity and phase are listed on one row.
 | `masterdata.{site,department,warehouse,production_line,uom,uom_conversion,reason_code}.view` | View organization structure and reference lists (all roles need these for the UI) | N | P1 |
 | `masterdata.site.admin` | Create/edit sites, time zone, numbering defaults | R | P1 |
 | `masterdata.{department,warehouse,production_line,uom,uom_conversion,reason_code}.admin` | Configure structure and reference lists | S | P1 |
-| `masterdata.location.view`, `masterdata.location.create`, `masterdata.location.edit` | Zones/bins/racks within a warehouse | N | P2 |
-| `masterdata.location.admin` | Designate special locations (receiving/staging, quarantine, hold, rejected, recall); deactivate | S | P2 |
-| `masterdata.equipment.view` | Equipment register | N | P1 |
-| `masterdata.equipment.edit` | Record cleaning/maintenance/calibration status and due dates | N | P3 |
-| `masterdata.equipment.admin` | Create equipment, assign to site/line, define blocking rules | S | P1 |
+| `masterdata.location.view`, `masterdata.location.create`, `masterdata.location.edit` | Zones/bins/racks within a warehouse (needed by Slice 1 site setup, S1-01/S1-02) | N | P1 |
+| `masterdata.location.admin` | Designate special locations (receiving/staging, quarantine, hold, rejected, recall); deactivate | S | P1 |
 | `masterdata.product.{view,create,edit,export}` | Products, families, shelf life, storage conditions, status | N (export S) | P1 |
 | `masterdata.sku.{view,create,edit}` | SKUs/variants, packaging configuration, barcode format, customer SKU mapping | N | P1 |
 | `masterdata.material.{view,create,edit,export}` | Raw/packaging materials, INCI, specs, approved suppliers, retest/expiry rules, hazard notes | N (export S) | P1 |
+| `masterdata.equipment.view` | Equipment register (canonical family for equipment; `docs/process-maps.md` W13, `docs/data-model.md` §6.11) | N | P1 |
+| `masterdata.equipment.edit` | Record cleaning/maintenance/calibration service records and due dates (`equipment_service_records`); return to service | N | P3 |
+| `masterdata.equipment.admin` | Create equipment, assign to site/line, define blocking rules | S | P1 |
 | `masterdata.supplier.{view,create,edit}` | Supplier records, contacts, approved-material list, quality status | N | P2 |
 | `masterdata.supplier.export` | Export supplier list | S | P2 |
 | `masterdata.supplier_price.view`, `masterdata.supplier_price.edit` | Supplier prices, MOQ, lead time cost fields | S | P6 |
@@ -165,6 +167,7 @@ that share description, sensitivity and phase are listed on one row.
 | `inventory.lot.create` | Create a lot without a goods receipt (opening balance, found stock); always paired with an adjustment | S | P2 |
 | `inventory.lot.edit` | Correct lot attributes (dates, supplier lot) with reason; status is never edited here | S | P2 |
 | `inventory.balance.view`, `inventory.balance.export` | InventoryBalance projection and availability | N | P2 |
+| `inventory.balance.admin` | Enqueue the projection rebuild (`inventory.rebuild_balances` job) and resolve ledger-vs-projection reconciliation differences (`docs/operations-runbook.md` §9, §21); never writes the ledger | S | P2 |
 | `inventory.movement.view`, `inventory.movement.export` | StockMovement ledger | N | P2 |
 | `inventory.movement.post` | Post issue/transfer/consumption/output/return movements | N | P2 |
 | `inventory.movement.void` | Post a reversal of a movement (reason mandatory) | S | P2 |
@@ -172,7 +175,6 @@ that share description, sensitivity and phase are listed on one row.
 | `inventory.adjustment.approve` | Approve an adjustment (thresholds in `approval_rules`) | S | P2 |
 | `inventory.adjustment.post` | Post an approved adjustment to the ledger | S | P2 |
 | `inventory.held_stock_issue.approve` | Controlled exception: issue quarantined/on_hold stock (for example sampling, rework); reason mandatory | R | P2 |
-| `inventory.negative_balance.post` | Controlled exception: allow a posting to drive a balance negative where policy permits; disabled by default | R | P2 |
 | `inventory.reservation.{view,create,void}` | StockReservation for work orders and sales orders | N | P2 |
 | `inventory.allocation.{view,create,void}` | StockAllocation of specific lots/containers (FEFO/FIFO) | N | P2 |
 | `inventory.intersite_transfer.post` | Transfer between two sites (actor must hold `inventory.movement.post` at both) | S | P2 |
@@ -181,6 +183,8 @@ that share description, sensitivity and phase are listed on one row.
 | `inventory.stock_count.post` | Post reconciliation adjustments from an approved count | S | P2 |
 | `inventory.container.{view,create,edit,export}` | Containers (box/carton/pallet), contents, split/merge/repack with lineage | N | P2 |
 | `inventory.label_job.{view,create}` | Print labels singly or in batches from approved templates | N | P2 |
+| `inventory.pack.{view,create,submit}` | Pack (boxing/verification session from a batch output or for a sales order, `docs/data-model.md` §3.7): start boxing, assign boxes, submit for verification | N | P3 |
+| `inventory.pack.approve` | Checker verification of a Pack (scan sample, count, label content); checker ≠ packer | S | P3 |
 
 ### 2.4 procurement
 
@@ -213,7 +217,7 @@ that share description, sensitivity and phase are listed on one row.
 | `production.batch.submit` | Operator transitions: start, complete steps, submit to `awaiting_qc` | N | P3 |
 | `production.batch.approve` | Supervisor transitions: approve start after line clearance, approve closure | S | P3 |
 | `production.batch.post` | Post consumption/output/yield to ledgers (normally in the same transaction as `submit` by the same actor) | S | P3 |
-| `production.batch.void` | Cancel a batch before `in_process` | S | P3 |
+| `production.batch.void` | Delete a `draft` batch; abandon a `planned`/`materials_staged` batch as `rejected` with reason (QA disposition follows, `rejected → closed`); there is no `cancelled` batch state (A-DM-24) | S | P3 |
 | `production.batch.admin` | Controlled reopen/amend of a closed batch (reason mandatory, full audit) | R | P3 |
 | `production.line_clearance.create` | Record a line-clearance check | N | P3 |
 | `production.line_clearance.approve` | Checker sign-off of line clearance (not own) | S | P3 |
@@ -244,7 +248,7 @@ that share description, sensitivity and phase are listed on one row.
 | `quality.test_result.approve` | Reviewer sign-off of results | S | P3 |
 | `quality.test_result.void` | Append a correction to a result (original retained) | S | P3 |
 | `quality.test_result.export` | Export results | S | P3 |
-| `quality.disposition.{view,create}` | View and propose a Disposition (quarantine, release, reject, rework, conditional) | N | P2 |
+| `quality.disposition.{view,create}` | View and propose a Disposition (`decision` in `release`, `reject`, `hold`, `conditional_release`, `rework`, `recall`, `expire`; `docs/data-model.md` §3.6) | N | P2 |
 | `quality.disposition.approve` | Approve a Disposition: the only way a lot or batch becomes `released`/`rejected`/`rework_approved` | R | P2 |
 | `quality.conditional_release.approve` | Second approval required for a conditional release (`approval_rules` default: two `qa_qc` users) | R | P3 |
 | `quality.hold.view` | QualityHold records | N | P2 |
@@ -290,7 +294,6 @@ that share description, sensitivity and phase are listed on one row.
 | `sales.sales_order.approve` | Credit/approval check → `confirmed` | S | P4 |
 | `sales.sales_order.void`, `sales.sales_order.export` | Cancel with controlled reversal; export with prices | S | P4 |
 | `sales.pick.{view,create,submit}` | Pick lists and scan confirmation | N | P4 |
-| `sales.pack.{view,create,submit}` | Pack verification, box assignment | N | P4 |
 | `sales.shipment.{view,create,edit,export}` | Shipment draft/picked/packed | N | P4 |
 | `sales.shipment.post` | Dispatch: posts the shipment stock issue | S | P4 |
 | `sales.shipment.void` | Reverse a dispatched shipment (return to stock) | S | P4 |
@@ -327,9 +330,11 @@ that share description, sensitivity and phase are listed on one row.
 | `hr.attendance_exception.{view,edit,approve}` | Work the exception queue | S | P5 |
 | `hr.leave_request.create`, `hr.leave_request.void` | Own leave requests (self-service; no site assignment needed) | N | P6 |
 | `hr.leave_request.view`, `hr.leave_request.approve` | View and approve team leave | S | P6 |
+| `hr.overtime.view`, `hr.overtime.create` | View and create OvertimeRequests for employees in scope (own requests are self-service) | N | P6 |
 | `hr.overtime.approve` | Approve overtime (configurable thresholds) | S | P6 |
+| `hr.overtime.void` | Cancel an approved OvertimeRequest with reason | S | P6 |
 | `hr.payroll_rule.view` | View the effective-dated rule catalogue | R | P6 |
-| `hr.payroll_rule.admin` | Change rules (requires qualified reviewer sign-off recorded on the rule version) | R | P6 |
+| `hr.payroll_rule.admin` | Change payroll rules and attendance rule sets (requires qualified reviewer sign-off recorded on the rule version) | R | P6 |
 | `hr.payroll_period.{view,create,submit}` | PayrollPeriod and computation runs (ADR-021) | R | P6 |
 | `hr.payroll_period.approve` | PayrollApproval (reviewer; SoD with submit) | R | P6 |
 | `hr.payroll_period.post` | Lock an approved period and generate payslips | R | P6 |
@@ -339,6 +344,12 @@ that share description, sensitivity and phase are listed on one row.
 | `hr.payslip.view` | View payslips of others (own payslip is self-service) | R | P6 |
 | `hr.payslip.create`, `hr.payslip.export` | Generate and download payslips of others | R | P6 |
 | `hr.payment_export.export` | Bank/payment file export | R | P6 |
+
+Attendance rule sets (`attendance_rule_sets`, `docs/modules/hr-attendance-payroll.md` §5.1) have
+no permission of their own: drafting and approval both use `hr.payroll_rule.admin`, the approver
+must be a different user from the submitter (SoD on `submitted_by`/`approved_by`), and the
+qualified reviewer's sign-off is recorded on the version. Any reference to
+`hr.attendance_rule.approve` means this mapping.
 
 ### 2.10 finance (Phase 6 unless noted; ADR-020)
 
@@ -356,6 +367,7 @@ that share description, sensitivity and phase are listed on one row.
 | `finance.supplier_bill.post`, `finance.supplier_bill.void` | Post / reverse | R | P6 |
 | `finance.supplier_bill.export` | Export bills | S | P6 |
 | `finance.payment_record.{view,create}` | Record customer receipts and supplier payments | S | P6 |
+| `finance.payment_record.approve` | Approve a payment above the `approval_rules` threshold before posting (SoD) | S | P6 |
 | `finance.payment_record.post`, `finance.payment_record.void` | Post / reverse payments | R | P6 |
 | `finance.payment_record.export` | Export payment registers | S | P6 |
 | `finance.credit_note.{view,create,submit}` | CreditNote drafting | S | P6 |
@@ -367,17 +379,20 @@ that share description, sensitivity and phase are listed on one row.
 | `finance.expense_claim.post`, `finance.expense_claim.void` | Post / reverse | R | P6 |
 | `finance.expense_claim.export` | Export claims | S | P6 |
 | `finance.costing_run.{view,create,post,export}` | CostingRun (estimate vs actual; allocation method stored) | S | P6 |
+| `finance.costing_config.admin` | Standard costs, labour rates, overhead pools, manual lot-cost rows (reviewer sign-off recorded; `docs/modules/finance.md` §4) | R | P6 |
 | `finance.reconciliation.{view,create}` | Bank/payment-provider reconciliation | S | P6 |
 | `finance.reconciliation.post` | Post a reconciliation | R | P6 |
 | `finance.period_lock.view` | Period lock status | S | P6 |
 | `finance.period_lock.post` | Lock a period | R | P6 |
-| `finance.period_lock.void` | Unlock a period (owner co-approval) | R | P6 |
+| `finance.period_lock.void` | Unlock a period (owner co-approval); the table is `accounting_periods`, audit `finance.accounting_period.unlocked` | R | P6 |
 | `finance.tax_config.view` | Tax configuration (values validated by the accountant) | S | P6 |
 | `finance.tax_config.admin` | Change tax configuration (reviewer sign-off recorded) | R | P6 |
 | `finance.accountant_export.export` | Export to the accountant's system | R | P6 |
+| `finance.accountant_export.admin` | Export profiles and account mappings | R | P6 |
 | `finance.journal_entry.{view,create,post,void}` | Only if a general ledger is approved (ADR-020); dormant otherwise | R | P6+ |
 | `finance.payment_provider.admin` | Configure the payment provider adapter and webhook secrets (future) | R | P8 |
-| `finance.refund.approve` | Approve a refund through the provider (future) | R | P8 |
+| `finance.refund.create` | Request a refund (`refund_requests`) before approval (future) | S | P8 |
+| `finance.refund.approve` | Approve a refund through the provider (future; approver ≠ requester) | R | P8 |
 
 ### 2.11 analytics (Phase 5)
 
@@ -409,10 +424,12 @@ that share description, sensitivity and phase are listed on one row.
 | `platform.numbering_rule.view` | NumberingRule definitions | N | P1 |
 | `platform.numbering_rule.admin` | Change numbering (never retroactive) | R | P1 |
 | `platform.file.admin` | Storage management, orphan cleanup | S | P2 |
-| `platform.import_job.{view,create,submit}` | Generic ImportJob wizard (master data, prices) | N | P5 |
-| `platform.import_job.approve`, `platform.import_job.post`, `platform.import_job.void` | Approve, post and reverse imports | S | P5 |
+| `platform.help_guide.admin` | Author and publish in-app help guides and screen walkthroughs (reading them needs no permission) | S | P2 |
+| `platform.import_job.{view,create,submit}` | Generic ImportJob wizard (master data, prices); Phase 2 if early go-live after G4 (Q-MIG-13) | N | P5 |
+| `platform.import_job.approve`, `platform.import_job.post`, `platform.import_job.void` | Approve, post and reverse imports; Phase 2 if early go-live after G4 (Q-MIG-13) | S | P5 |
 | `platform.settings.view` | Read system settings | N | P1 |
-| `platform.settings.admin` | Change system settings (session policy, password policy, feature switches) | R | P1 |
+| `platform.settings.admin` | Change system settings (session policy, password policy, feature switches); keys flagged `requires_approval` are submitted as `setting_change_requests` instead | R | P1 |
+| `platform.settings.approve` | Approve a `setting_change_request` submitted by another user (S1-03): `owner_director`, or a second `system_admin`; SoD enforced on `setting_change_requests.submitted_by/approved_by` | R | P1 |
 | `platform.approval_rule.view` | Read `approval_rules` | N | P1 |
 | `platform.approval_rule.admin` | Change approval rules and SoD configuration | R | P1 |
 | `platform.integration.admin` | Email/storage/time-clock/accounting adapter configuration | R | P6 |
@@ -423,8 +440,8 @@ that share description, sensitivity and phase are listed on one row.
 
 Self-service capabilities that need no permission string (always allowed for an active user,
 on own records only): view/edit own profile, change own password, manage own sessions and
-TOTP, view own notifications, own leave requests and expense claims, own payslips, own
-shift schedule, own sync queue.
+TOTP, view own notifications, own leave and overtime requests and expense claims, own payslips,
+own shift schedule, own sync queue.
 
 ## 3. Role × permission matrix
 
@@ -441,7 +458,7 @@ Role philosophy (owners should read this part):
   approval chain, but does not perform operational postings by default. An owner who also
   packs orders is given `warehouse_operator` at that site in addition (A-PM-03). The owner
   holds break-glass `identity.role.admin` and `identity.site_assignment.admin`; use of these
-  is audited as `identity.owner_break_glass`.
+  is audited as `identity.role.owner_break_glass`.
 - **system_admin** administers identity, configuration, templates, jobs, integrations and
   diagnostics, and can view non-sensitive operational data across sites for support. It
   deliberately does **not** hold quality release, financial posting, payroll approval or
@@ -497,23 +514,26 @@ formulas only through the batch (target quantities), never percentages (section 
 | Entity | OD | SA | SM | PP | PO | WO | QA | PR | SC | FI | HR | AU | CP |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | lot | v x* | v* | v c e x | v | v | v e x | v e x | v | v | v x | – | v x* | – |
-| balance | v x* | v* | v x | v x | v | v x | v | v x | v | v x | – | v x* | – |
+| balance | v x* | v m* | v x m | v x | v | v x | v | v x | v | v x | – | v x* | – |
 | movement | v x* | v* | v p o x | v | v p | v p x | v p | v | v | v x | – | v x* | – |
 | adjustment | v a* | – | v c s a p | – | – | v c s | v c s | – | – | v | – | v x* | – |
 | held_stock_issue | a* | – | – | – | – | – | a | – | – | – | – | – | – |
-| negative_balance | – | – | – | – | – | – | – | – | – | – | – | – | – |
 | reservation | v* | v* | v c o | v c o | v | v | v | v | v c o | – | – | v* | – |
 | allocation | v* | v* | v c o | v | v | v c o | v | – | v c o | – | – | v* | – |
 | intersite_transfer | – | – | p | – | – | p | – | – | – | – | – | – | – |
 | stock_count | v a x* | v* | v c s a p x | v | – | v c s | v | – | – | v x | – | v x* | – |
 | container | v x* | v* | v c e x | v | v c e | v c e x | v | – | v | – | – | v x* | – |
 | label_job | v* | v* | v c | v | v c | v c | v c | – | – | – | – | v* | – |
+| pack | v* | v* | v c s a | v | v c s a | v c s a | v | – | v | – | – | v* | – |
 
 Notes: `PO` posts movements only of types `consumption`, `output` and `transfer` whose source
 or destination is a production location; the service enforces the movement-type subset per
 role via `role_movement_types` configuration (A-PM-06). `intersite_transfer.post` requires
-`inventory.movement.post` at both the source and destination site. `negative_balance.post` is
-granted to nobody until the owner enables the policy for a site.
+`inventory.movement.post` at both the source and destination site. There is no negative-balance
+permission: balances cannot go negative (database constraint, ADR-006 as amended). `a` on `pack`
+means acting as **checker** for another user's Pack; the service rejects verifying one's own
+(`packs.checked_by <> packed_by`). `balance.admin` (projection rebuild, reconciliation
+differences) is held by `system_admin` and `site_manager` (A-PM-19).
 
 ### 3.4 procurement
 
@@ -593,7 +613,6 @@ at their site.
 | quote | v a x* | – | v a | – | – | – | – | – | v c e s x o | v a x | – | v x* | – |
 | sales_order | v a x* | – | v a | v | – | v | v | – | v c e s x o | v a x | – | v x* | portal only |
 | pick | v* | – | v c s | – | – | v c s | – | – | v | – | – | v* | – |
-| pack | v* | – | v c s | – | – | v c s | v | – | v | – | – | v* | – |
 | shipment | v x* | – | v c e p o x | – | – | v c e p | v | – | v x | v x | – | v x* | portal only |
 | over_shipment | a* | – | a | – | – | – | – | – | – | – | – | – | – |
 | delivery_receipt | v x* | – | v c x | – | – | v c x | – | – | v x | v x | – | v x* | portal only |
@@ -614,7 +633,7 @@ at their site.
 | attendance_event | v* | – | v e a | – | – | – | – | – | – | – | v e a x* | v x* | – |
 | attendance_exception | v* | – | v e a | – | – | – | – | – | – | – | v e a* | v* | – |
 | leave_request | v* | – | v a | – | – | – | – | – | – | – | v a o* | v* | – |
-| overtime | a* | – | a | – | – | – | – | – | – | – | a* | – | – |
+| overtime | v a* | – | v c a o | – | – | – | – | – | – | – | v c a o* | v* | – |
 | payroll_rule | v* | – | – | – | – | – | – | – | – | v* | v m* | v* | – |
 | payroll_period | v a x* | – | – | – | – | – | – | – | – | v a* | v c s p* | v* | – |
 | payroll_line | v* | – | – | – | – | – | – | – | – | v* | v e x* | v* | – |
@@ -635,17 +654,18 @@ export and no payslips by default (A-PM-04).
 | credit_terms | v a* | – | – | – | – | – | – | – | v | v a* | – | v* | – |
 | invoice | v a x* | – | v | – | – | – | – | – | v c s | v c e s a p o x* | – | v x* | portal only |
 | supplier_bill | v a x* | – | v | – | – | – | – | v c s | – | v c e s a p o x* | – | v x* | – |
-| payment_record | v a x* | – | – | – | – | – | – | – | v | v c p o x* | – | v x* | portal only |
+| payment_record | v a x* | – | – | – | – | – | – | – | v | v c a p o x* | – | v x* | portal only |
 | credit_note | v a* | – | – | – | – | – | – | – | v c s | v c s a p o* | – | v x* | – |
 | expense_claim | v a x* | – | v a | c s | c s | c s | c s | c s | c s | v c s a p o x* | c s | v x* | – |
 | costing_run | v x* | – | v | v | – | – | – | – | – | v c p x* | – | v x* | – |
+| costing_config | – | – | – | – | – | – | – | – | – | m* | – | – | – |
 | reconciliation | v* | – | – | – | – | – | – | – | – | v c p* | – | v* | – |
 | period_lock | v o* | – | – | – | – | – | – | – | – | v p* | – | v* | – |
 | tax_config | v* | – | – | – | – | – | – | – | – | v m* | – | v* | – |
-| accountant_export | x* | – | – | – | – | – | – | – | – | x* | – | x* | – |
+| accountant_export | x* | – | – | – | – | – | – | – | – | x m* | – | x* | – |
 | journal_entry (if GL approved) | v* | – | – | – | – | – | – | – | – | v c p o* | – | v x* | – |
 | payment_provider (P8) | v* | m* | – | – | – | – | – | – | – | v* | – | v* | – |
-| refund (P8) | a* | – | – | – | – | – | – | – | – | a* | – | – | – |
+| refund (P8) | a* | – | – | – | – | – | – | – | c | c a* | – | – | – |
 
 Notes: within `finance`, the person who submits an invoice, bill, credit note or payment cannot
 approve it, and the approver cannot post it unless the `approval_rules` row for that record
@@ -676,8 +696,9 @@ threshold.
 | notification_rule | v* | m* | v c | – | – | – | – | – | – | – | – | v* | – |
 | numbering_rule | v* | v m* | v | – | – | – | – | – | – | – | – | v* | – |
 | file | – | m* | – | – | – | – | – | – | – | – | – | – | – |
+| help_guide | m* | m* | – | – | – | – | – | – | – | – | – | – | – |
 | import_job | v* | v c s a p o* | v c s a p | – | – | – | – | v c s | – | v c s | – | v* | – |
-| settings | v* | v m* | – | – | – | – | – | – | – | – | – | v* | – |
+| settings | v a* | v m a* | – | – | – | – | – | – | – | – | – | v* | – |
 | approval_rule | v m* | v* | v | – | – | – | – | – | – | v* | – | v* | – |
 | integration | v* | m* | – | – | – | – | – | – | – | – | – | v* | – |
 | diagnostics | v* | v* | – | – | – | – | – | – | – | – | – | – | – |
@@ -686,7 +707,9 @@ threshold.
 
 Note: `platform.approval_rule.admin` belongs to the owner, not the system administrator,
 because approval rules are financial and quality controls; `system_admin` may view them to
-support configuration but every change is owner-authored.
+support configuration but every change is owner-authored. `platform.settings.approve` for a
+`system_admin` applies only to requests submitted by a different user (a second administrator);
+with one administrator the owner approves.
 
 ## 4. Scope rules
 
@@ -719,7 +742,7 @@ support configuration but every change is owner-authored.
 
 ### 4.3 Site-scope refresh
 
-Assignments have `effective_from/effective_to`. Revoking an assignment bumps
+Assignments have `valid_from/valid_to`. Revoking an assignment bumps
 `permissions_version`; cached contexts expire within 60 seconds; offline clients see the
 change on next sync and must re-authenticate when the server reports
 `PERMISSIONS_CHANGED` (`docs/offline-sync.md`).
@@ -729,7 +752,7 @@ change on next sync and must re-authenticate when the server reports
 Phase 1 ships site-level scope only. Sub-scopes refine **write** scope first; read scope
 stays site-wide until the owner asks for stricter reading (A-PM-13).
 
-| Sub-scope | Data shape (`user_site_assignments.scope` jsonb) | Applies to | Phase |
+| Sub-scope | Data shape (`user_site_assignments.scope` jsonb, a Phase 2 column not yet in `docs/data-model.md` §3.1) | Applies to | Phase |
 |---|---|---|---|
 | Warehouse | `{"warehouseIds": ["<uuid>", ...]}` | Movements, counts, receipts, containers, label jobs whose location belongs to a listed warehouse; adjustments | P2 |
 | Department | `{"departmentIds": [...]}` | Attendance corrections, leave and overtime approvals, shift assignments for employees of the department | P5 |
@@ -754,6 +777,7 @@ Sub-scopes never apply to `view` in Phase 2 and 3; a later setting
 | Disposition (lot/batch release) | result entry user | the user who entered the test results cannot approve the disposition for that lot/batch | conditional release needs a second `qa_qc` | mandatory |
 | QualityHold lift | hold creator | same user | – | mandatory |
 | DispenseRecord / ProcessStepRecord / line clearance checker | conducting operator | same user as checker | – | mandatory |
+| Pack verification | packer (`packed_by`) | same user as checker (`checked_by`) | – | mandatory |
 | Invoice, SupplierBill, CreditNote, PaymentRecord | submitter | same user; poster ≠ approver above threshold | – | mandatory |
 | PayrollPeriod | `hr_payroll` submitter | same user; approver must be `finance` or `owner_director` | reopening needs two approvals | mandatory |
 | Attendance correction | proposer | same user; the employee concerned can never approve their own | – | mandatory |
@@ -761,39 +785,45 @@ Sub-scopes never apply to `view` in Phase 2 and 3; a later setting
 | WorkOrder release, ProductionPlan, SalesOrder confirmation, Quote | submitter | same user | – | default on, owner may disable per record type (A-PM-14) |
 | CustomerReturn, CustomerRequirement, forecast override | submitter | same user | – | default on |
 
-Implementation: every approvable record stores `submitted_by`, `submitted_at`,
-`approved_by[]`, `approved_at[]`. `approve()` checks `ctx.userId ∉ {created_by,
-submitted_by}` and, for multi-approval, that the user has not already approved. Violation →
-409 `SEPARATION_OF_DUTIES`. Users with two roles do not escape the rule: SoD compares user
-ids, not roles.
+Implementation: every approvable record carries the `approval` column set of
+`docs/data-model.md` §1 (`submitted_by`, `submitted_at`, `approved_by`, `approved_at`,
+`approval_note`, CHECK `approved_by <> submitted_by`); the submitter/approver column pair per
+record type is the coverage table in `docs/data-model.md` §7 item 10. Multi-step approvals
+(`approval_rules.step > 1` or `required_count > 1`) write one row per decision to the
+append-only `approval_decisions` ledger (`record_type`, `record_id`, `approval_rule_id`,
+`step`, `decision`, `decided_by`, `decided_at`, `reauthenticated_at`); the record's own
+`approved_by/approved_at` hold the final step. `approve()` checks `ctx.userId ∉ {created_by,
+submitted_by}` and, for multi-approval, that `(record_type, record_id, step, decided_by)` is
+not already present. Violation → 409 `SEPARATION_OF_DUTIES`. Users with two roles do not
+escape the rule: SoD compares user ids, not roles.
 
 ### 5.2 `approval_rules`
 
-```
-approval_rules(
-  id uuidv7, organization_id, record_type text,          -- e.g. 'purchase_order'
-  site_id uuid NULL,                                       -- NULL = all sites
-  condition jsonb,        -- {"field":"total_amount","currency":"PHP","min":"50000.00","max":null}
-                          -- or {"field":"variance_pct","min":"2.0"} or {"field":"quantity_base","uom":"kg","min":"100"}
-  step int,               -- 1..n sequential approval steps
-  required_role_code text NULL, required_permission text NULL,   -- one of the two
-  required_count int default 1,                            -- distinct approvers for this step
-  poster_may_equal_approver bool default false,
-  escalation_role_code text NULL, escalation_after_hours int NULL,
-  active bool, effective_from date, effective_to date NULL,
-  created_by, created_at, reviewed_by NULL, reviewed_at NULL   -- qualified reviewer sign-off where required
-)
-```
+The table is defined in `docs/data-model.md` §3.1 (`approval_rules`, Phase 1, soft-deletable,
+site-optional) with typed columns, not a free-form condition:
 
-Evaluation: select active rules for the record type and site (site-specific beats
-organization-wide), pick those whose condition matches, order by `step`; each step is
-satisfied by `required_count` distinct users holding the role/permission at the record's
-site; escalation creates a notification and allows the escalation role to approve after
-the delay. No matching rule → the base `.approve` permission is sufficient (one approver).
+| Column group | Columns | Meaning |
+|---|---|---|
+| What | `document_type` | one value per approvable record type (CHECK list in the data model; the `document_type` column of the defaults table below) |
+| Where | `site_id` NULL | NULL = organization-wide; a site-specific rule beats the organization-wide one |
+| When it applies | `threshold_basis` in (`always`, `amount`, `qty_base`, `variance_pct`, `discount_pct`, `credit_check_failed`); `min_value`, `max_value`, `currency`, `threshold_uom_id` | null bound = unbounded; currency for `amount`, UOM for `qty_base` |
+| Who | `step`, `required_count`, `required_role_id` or `required_permission_code` (exactly one) | sequential steps; distinct approvers per step |
+| Posting rule | `poster_may_equal_approver` (default false) | A-PM-10 |
+| Escalation | `escalation_role_id`, `escalation_after_hours` (both or neither) | notification plus permission for the escalation role after the delay |
+| Validity | `effective_from`, `effective_to`, `reviewed_by`, `reviewed_at` | qualified reviewer sign-off where the rule encodes a company policy |
 
-Default rules (all amounts PHP, all are assumptions A-PM-15 that need owner confirmation):
+Evaluation (`docs/data-model.md` §7 item 8): select effective rules for the `document_type`
+and site (site-specific first, then organization-wide), keep those whose threshold matches,
+order by `step`; each step is satisfied by `required_count` distinct users holding the role or
+permission at the record's site; every decision is an `approval_decisions` row and the
+evaluation is audited as `platform.approval_rule.evaluated`; escalation creates a
+notification and allows the escalation role to approve after the delay. No matching rule → the
+base `.approve` permission is sufficient (one approver, still recorded in `approval_decisions`).
 
-| Record type | Condition | Step 1 | Step 2 | Escalation |
+Default rules (all amounts PHP, all are assumptions A-PM-15 that need owner confirmation; role
+codes below are seeded as `required_role_id`):
+
+| `document_type` | Condition | Step 1 | Step 2 | Escalation |
 |---|---|---|---|---|
 | purchase_request | any | site_manager | – | owner_director after 48 h |
 | purchase_order | total ≤ 50,000 | site_manager | – | owner_director after 48 h |
@@ -802,21 +832,21 @@ Default rules (all amounts PHP, all are assumptions A-PM-15 that need owner conf
 | expense_claim | total > 5,000 | site_manager | finance | owner_director after 72 h |
 | stock_adjustment | value ≤ 20,000 | site_manager | – | – |
 | stock_adjustment | value > 20,000 | site_manager | owner_director | – |
-| stock_count | variance_pct > 2 or value > 20,000 | site_manager | owner_director | – |
+| stock_count_variance | variance_pct > 2 or value > 20,000 | site_manager | owner_director | – |
 | formula_revision | any | qa_qc | site_manager or owner_director | – |
 | routing_revision | any | qa_qc | site_manager | – |
-| disposition.conditional_release | any | qa_qc | qa_qc (different user) | owner_director |
+| disposition_conditional_release | any | qa_qc | qa_qc (different user) | owner_director |
 | recall_case | any | qa_qc | owner_director | – |
-| batch.reopen | any | site_manager | qa_qc | – |
+| batch_reopen | any | site_manager | qa_qc | – |
 | sales_order | credit check fails or total > 200,000 | finance | – | owner_director after 24 h |
 | quote | discount_pct > 10 | site_manager | finance | – |
 | over_shipment | any | site_manager | – | – |
 | invoice, supplier_bill, credit_note, payment_record | total ≤ 100,000 | finance (≠ submitter) | – | – |
 | invoice, supplier_bill, credit_note, payment_record | total > 100,000 | finance | owner_director | – |
 | payroll_period | any | finance | owner_director | – |
-| period_lock.unlock | any | finance | owner_director | – |
-| leave_request, overtime | any | site_manager (or department supervisor) | – | hr_payroll after 48 h |
-| work_order release | any | production_planner or site_manager (≠ submitter) | – | – |
+| period_lock_unlock | any | finance | owner_director | – |
+| leave_request, overtime_request | any | site_manager (or department supervisor) | – | hr_payroll after 48 h |
+| work_order_release | any | production_planner or site_manager (≠ submitter) | – | – |
 
 ### 5.3 Controlled exceptions
 
@@ -826,17 +856,16 @@ unmistakable badge on the record and documents.
 
 | Exception | Permission | Default approver | Mandatory data | Audit event |
 |---|---|---|---|---|
-| Issue quarantined / on_hold stock (sampling, rework, destruction) | `inventory.held_stock_issue.approve` | qa_qc | reason code, purpose, quantity cap | `inventory.held_stock_issued` |
+| Issue quarantined / on_hold stock (sampling, rework, destruction) | `inventory.held_stock_issue.approve` | qa_qc | reason code, purpose, quantity cap | `inventory.stock_movement.held_stock_issued` |
 | Issue expired / recalled / rejected stock | not possible through any flow; only `quality.disposition.approve` can change status, after which normal rules apply | – | – | – |
-| Negative balance | `inventory.negative_balance.post` | nobody (policy off) | site policy enabled by owner, reason | `inventory.negative_balance_posted` |
-| Out-of-tolerance dispense | `production.over_tolerance_dispense.approve` | qa_qc (site_manager if rule allows) | measured value, tolerance, reason, deviation auto-created | `production.over_tolerance_approved` |
-| Lot other than staged/recommended | `production.material_substitution.approve` | qa_qc | both lots, reason; wrong **material** is never allowed | `production.material_substituted` |
-| Equipment blocked by maintenance/calibration | `production.equipment_override.approve` | site_manager, QA notified | equipment, blocking rule, reason, deviation | `production.equipment_override` |
-| Over-shipment beyond allocated/ordered quantity | `sales.over_shipment.approve` | site_manager | order line, excess quantity, customer agreement reference | `sales.over_shipment_approved` |
-| Reopen closed batch | `production.batch.admin` | site_manager + qa_qc | reason, fields to amend | `production.batch_reopened` |
-| Reverse posted ledger row | `*.void` of the module | module approver | reason, link to original | `<module>.reversed` |
-| Unlock accounting period | `finance.period_lock.void` | finance + owner_director | reason | `finance.period_unlocked` |
-| Reopen locked payroll period | `hr.payroll_period.void` | finance + owner_director | reason | `hr.payroll_period_reopened` |
+| Out-of-tolerance dispense | `production.over_tolerance_dispense.approve` | qa_qc (site_manager if rule allows) | measured value, tolerance, reason, deviation auto-created | `production.dispense_record.over_tolerance_approved` |
+| Lot other than staged/recommended | `production.material_substitution.approve` | qa_qc | both lots, reason; wrong **material** is never allowed | `production.dispense_record.material_substituted` |
+| Equipment blocked by maintenance/calibration | `production.equipment_override.approve` | site_manager, QA notified | equipment, blocking rule, reason, deviation | `production.equipment_use.override_approved` |
+| Over-shipment beyond allocated/ordered quantity | `sales.over_shipment.approve` | site_manager | order line, excess quantity, customer agreement reference | `sales.shipment.over_shipment_approved` |
+| Reopen closed batch | `production.batch.admin` | site_manager + qa_qc | reason, fields to amend | `production.batch.reopened` |
+| Reverse posted ledger row | `*.void` of the module | module approver | reason, link to original | `<module>.<entity>.reversed` |
+| Unlock accounting period | `finance.period_lock.void` | finance + owner_director | reason | `finance.accounting_period.unlocked` |
+| Reopen locked payroll period | `hr.payroll_period.void` | finance + owner_director | reason | `hr.payroll_period.reopened` |
 
 ## 6. Sensitive-field rules
 
@@ -863,7 +892,7 @@ Export restrictions (all phases):
 
 1. An export requires the module `.export` permission and runs the same scoped query as the
    screen with the same masking.
-2. Exports of sensitivity S or R emit `platform.export_created` with filters, row count,
+2. Exports of sensitivity S or R emit `platform.export.created` with filters, row count,
    format and file hash; R exports require re-authentication within 10 minutes.
 3. Scheduled reports deliver only to recipients who hold the permissions at generation time;
    a recipient who lost a permission is dropped and the owner of the schedule is notified.
@@ -883,7 +912,7 @@ Export restrictions (all phases):
 | Portal capabilities | `portal.catalog.view`, `portal.order.create`, `portal.order.view`, `portal.quote.view`, `portal.document.view` (DR, invoice, statement, CoA where configured), `portal.payment.create`, `portal.account.edit`, `portal.user.admin` (customer's own admin manages their colleagues). Held in `portal_roles`, not in internal `roles`. |
 | Never exposed | Internal notes; other customers or their orders; stock quantities, locations, warehouses, lots beyond the lot number printed on the DR; batch records, test results, deviations; costs, margins, supplier identities; employee names (documents show role titles); internal user ids; audit log; internal document templates; unapproved products. |
 | Orders from the portal | Enter as SalesOrder `submitted` with `source = portal`; internal approval rules apply unchanged; price shown is the approved price list snapshot. |
-| Payments (PayMongo or similar) | Webhook handler verifies the signature, is idempotent on provider event id, writes a PaymentRecord in `pending_reconciliation`; an order is marked paid only from a verified webhook or a server-side status query, never from the redirect (`docs/security.md` section 2.10). |
+| Payments (PayMongo or similar) | Webhook handler verifies the signature, is idempotent on provider event id, writes a PaymentRecord in state `recorded` (reconciled only later through a Reconciliation line, `docs/modules/finance.md` §7; a mismatch stores the event and creates no PaymentRecord); an order is marked paid only from a verified webhook or a server-side status query, never from the redirect (`docs/security.md` section 2.10). |
 | Rate limits and abuse | Stricter limits than internal (`docs/security.md` section 4.5); account enumeration prevented; portal downloads via signed URLs bound to the portal user. |
 | Tests | Tenant isolation negative tests (another tenant's order id → 404; document id → 404), permission tests, webhook replay tests; part of Gate 8. |
 
@@ -902,7 +931,7 @@ from the shared test kit. A pull request that adds an entity without these tests
 | `authz.cross_site.query` | List endpoint with `?siteId=B` or filters that match Site B rows | Only Site A rows; total count excludes B |
 | `authz.cross_site.export` | CSV/XLSX/PDF export with Site B filter | Rows from A only; audit event records the applied scope |
 | `authz.cross_site.site_switcher` | `activeSiteId` set to B via header/cookie manipulation | Ignored; scope unchanged |
-| `authz.role_escalation.missing_permission` | Each role attempts each mutating action it does not hold | 403 `PERMISSION_DENIED`; audit `authz.denied` event |
+| `authz.role_escalation.missing_permission` | Each role attempts each mutating action it does not hold | 403 `PERMISSION_DENIED`; audit `identity.authorization.denied` event |
 | `authz.role_escalation.restricted_without_reauth` | Holder of an R permission acts with `reauthenticatedAt` older than 10 min | 401 `REAUTH_REQUIRED` |
 | `authz.role_escalation.custom_role_sensitivity` | Custom role gains an R permission via role edit | Rejected unless actor holds `identity.role.admin` and re-authenticated; audit |
 | `authz.sod.approve_own` | Submitter approves own record; second approver repeats | 409 `SEPARATION_OF_DUTIES` |
@@ -941,6 +970,7 @@ from the shared test kit. A pull request that adds an entity without these tests
 | A-PM-16 | Operators never see formula percentages; BMR prints quantities | production process owner, QA |
 | A-PM-17 | Export row limit 50,000 before background job | owner |
 | A-PM-18 | Lot release at goods receipt (Phase 2) uses `quality.disposition.approve` before full inspection records exist (Phase 3) | QA lead |
+| A-PM-19 | `inventory.balance.admin` (projection rebuild, reconciliation differences) is held by `system_admin` and `site_manager` | owner |
 
 Open questions for the owner:
 
