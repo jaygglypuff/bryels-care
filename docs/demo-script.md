@@ -116,20 +116,28 @@ of the demo.
 **Say:** "The new lot gets its own number and goes straight into **Quarantined**. Nobody can use
 it until QA releases it."
 
-4. Click **Print labels (1)**. A new tab shows the 100 × 50 mm label with a QR code.
+4. Click **Print labels (1)**. A new tab opens the receipt's label request: keep the approved
+   raw-material template and the NFD print station and click **Send 1 label job to the station**.
+5. Click **Print station**. The lot is in **To print**; click **Print**. A new tab shows the
+   100 × 50 mm label with a QR code and "STATUS AT PRINT: QUARANTINE". (Use the browser's print
+   dialog at 100 % on a real label printer.) Click **Printed OK**: the job is recorded as printed
+   by Lito, with the time.
 
 ![Lot label with QR code](demo/03-lot-label-qr.png)
 
-**Say:** "One label per container. The QR code is what the operators scan."
-Close the label tab.
+**Say:** "One label per container. The QR code is what the operators scan. Every label print is
+recorded, and a reprint needs a reason."
+Close the label tabs.
 
 ### Scene 3: Scanning (1 min). Still `warehouse.nfd@`
 
-1. Left menu: **Inventory → Scan / look up**.
+1. Menu: **Warehouse → Scan / look up** (or the scan icon in the top bar).
 2. Type `BC:LOT:` followed by the new lot number (for example `BC:LOT:L-2610-00019`) and press
    Enter. A handheld scanner types exactly this, followed by Enter.
-3. The lot page opens with the orange banner **Quarantined: not usable yet**. Point at the greyed
-   action: *Issue to production: blocked while the lot is quarantined.*
+3. The scan card shows the lot with the orange banner **Quarantined: not usable yet**. Point at
+   the greyed action: *Issue to production: blocked while the lot is quarantined.* **Open lot**
+   opens the full lot page. Box labels (`BC:BOX:…`), location labels (`BC:LOC:…`) and equipment
+   labels (`BC:EQP:…`) answer the same way.
 
 **Say:** "A scanner or a phone camera opens the right record in one step. The system tells the
 operator what is not allowed, and why."
@@ -161,9 +169,10 @@ in the system, not in someone's memory."
 (Do not reject it. Leave it for the next demo.)
 
 **Optional (1 min), sign in as `warehouse.nfd@`:** open the coconut oil lot again, click
-**Move stock**, choose **A-01 · Oils rack A-01**, reason `Put-away after QA release`, and click
-**Post move**. This shows the released drum leaving the quarantine cage; the movement ledger at
-the bottom of the lot page records it. It was done in the rehearsal, and scene 6 then shows the
+**Move stock** (scan-to-move), scan or type `BC:LOC:A-01` as the destination, reason
+`Put-away after QA release`, and click **Confirm move**. The confirmation names the transfer
+number and offers **Undo** for a short time. This shows the released drum leaving the quarantine
+cage; the movement ledger on the lot page records it. It was done in the rehearsal, and scene 6 then shows the
 lot at **A-01**. If you skip it, scene 6 shows **QUA-01** instead.
 
 ### Scene 5: Plan a batch (1 min). Sign in as `manager.nfd@`

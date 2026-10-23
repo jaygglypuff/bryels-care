@@ -41,7 +41,8 @@ async function asUser(email, viewport = DESK, extra = {}) {
       const f = r.failure()?.errorText ?? '';
       if (/favicon/i.test(r.url())) return;
       // Next.js cancels in-flight RSC prefetches on navigation; those are not failures of the app.
-      if (f.includes('ERR_ABORTED') && (r.url().includes('_rsc=') || r.resourceType() === 'fetch' || r.resourceType() === 'document')) return;
+      // Likewise for prefetched route chunks (/_next/static/) when a navigation starts first.
+      if (f.includes('ERR_ABORTED') && (r.url().includes('_rsc=') || r.url().includes('/_next/static/') || r.resourceType() === 'fetch' || r.resourceType() === 'document')) return;
       problems.push(`[${tag}] request failed ${r.method()} ${r.url()}: ${f}`);
     });
     p.on('response', (r) => {
@@ -134,24 +135,44 @@ async function kpiValue(page, caption) {
     log('received', facts.receiptNumber, 'lot', facts.coconutLot);
     await shot(page, 'receipt-posted');
 
+    // Labels go through label jobs (US-2-12): send the receipt's jobs to the station, print one, confirm it.
     const [labels] = await Promise.all([wh.context.waitForEvent('page'), page.getByRole('link', { name: /Print labels/ }).click()]);
     await labels.waitForLoadState('networkidle');
     await labels.setViewportSize(DESK);
     await labels.getByText(facts.coconutLot).first().waitFor();
-    assert((await labels.locator('svg').count()) > 0, 'QR svg on label');
-    await shot(labels, 'lot-label-qr');
+    await labels.getByRole('button', { name: /Send 1 label job/ }).click();
+    await labels.getByText(/label job\(s\) sent to the print station/).waitFor({ timeout: 20000 });
+    await labels.goto(BASE + '/labels');
+    const job = labels.locator('[data-testid=station-job]').filter({ hasText: facts.coconutLot }).first();
+    await job.waitFor();
+    await shot(labels, 'label-station-queue');
+    const [printTab] = await Promise.all([wh.context.waitForEvent('page'), job.getByRole('link', { name: 'Print' }).click()]);
+    await printTab.waitForLoadState('networkidle');
+    await printTab.setViewportSize(DESK);
+    await printTab.getByText(facts.coconutLot).first().waitFor();
+    assert((await printTab.locator('.print-label svg, [data-testid=label-page] svg, main svg').count()) > 0, 'QR svg on label');
+    await shot(printTab, 'lot-label-qr');
+    await printTab.getByRole('button', { name: 'Printed OK' }).click();
+    await printTab.getByText('Recorded as printed').waitFor({ timeout: 20000 });
+    log('label printed for', facts.coconutLot);
+    await printTab.close();
     await labels.close();
 
     // ---------------- c. Scan the new lot ----------------
+    // The scan page answers with a result card (US-2-13), then "Open lot" goes to the lot page.
     await page.goto(BASE + '/inventory/scan');
-    await page.locator('#code').focus();
+    await page.locator('#scan-input').focus();
     await page.keyboard.type(`BC:LOT:${facts.coconutLot}`, { delay: 10 }); // keyboard-wedge scanner
     await page.keyboard.press('Enter');
+    const card = page.locator('[data-testid=scan-result][data-entity=lot]');
+    await card.waitFor({ timeout: 20000 });
+    await card.getByText('Quarantined: not usable yet').waitFor();
+    assert((await card.innerText()).includes(facts.coconutLot), 'scan card shows the lot');
+    await shot(page, 'scan-lot-quarantined');
+    await card.getByRole('link', { name: 'Open lot' }).click();
     await page.waitForURL(/\/inventory\/[0-9a-f-]{36}$/, { timeout: 20000 });
     facts.coconutLotId = page.url().split('/').pop();
-    await expectText(page, 'Quarantined: not usable yet');
     assert((await page.locator('h1').innerText()).includes(facts.coconutLot), 'scanned lot page');
-    await shot(page, 'scan-lot-quarantined');
   }
 
   // ---------------- d. QA releases the new lot; expired lot cannot be released ----------------
@@ -194,16 +215,22 @@ async function kpiValue(page, caption) {
     const page = wh.page;
     await page.goto(BASE + '/inventory/' + facts.coconutLotId);
     await expectText(page, 'Released');
+    // Scan-to-move (US-2-14): the lot is preloaded from the lot page; scan the rack label, confirm.
     await page.getByRole('link', { name: 'Move stock' }).click();
-    await page.waitForURL(/\/move$/);
-    const dest = await page.locator('#toLocationId option', { hasText: 'A-01' }).first().innerText();
-    await page.selectOption('#toLocationId', { label: dest });
-    await page.fill('#reason', 'Put-away after QA release');
+    await page.waitForURL(/\/inventory\/move\?lot=/);
+    await page.locator('#dst').waitFor();
+    await page.locator('#dst').fill('BC:LOC:A-01');
+    await page.locator('#dst').press('Enter');
+    await page.getByRole('button', { name: 'Confirm move' }).waitFor({ timeout: 20000 });
+    await page.getByRole('textbox', { name: 'Reason (optional)' }).fill('Put-away after QA release');
     await shot(page, 'move-to-rack');
-    await page.getByRole('button', { name: 'Post move' }).click();
-    await page.waitForURL(/moved=/, { timeout: 20000 });
-    await expectText(page, 'Stock moved');
-    await page.locator('table').getByText('A-01').first().waitFor();
+    await page.getByRole('button', { name: 'Confirm move' }).click();
+    await page.getByText(/^Posted TR-\d{2}-\d{6}$/).waitFor({ timeout: 20000 });
+    await expectText(page, 'to A-01');
+    assert(await page.getByRole('button', { name: /^Undo \(\d+s\)$/ }).count() === 1, 'undo offered for own move');
+    await shot(page, 'move-posted-undo');
+    await page.goto(BASE + '/inventory/' + facts.coconutLotId);
+    await expectText(page, 'A-01');
     log('coconut lot moved to A-01');
   }
 
@@ -438,6 +465,37 @@ async function kpiValue(page, caption) {
     assert(await noHScroll(), 'weigh form has no horizontal scroll at 390 px');
     await page.screenshot({ path: path.join(OUT, `${String(++shotNo).padStart(2, '0')}-phone-weigh-form.png`) });
     await context.close();
+  }
+
+  // ---------------- n. Shell: grouped navigation, QA queue badge, no horizontal scroll ----------------
+  {
+    const noHScroll = async (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+    const { context, page } = await asUser('qa.nfd@bryels-care.test');
+    const qaLink = page.locator('aside[aria-label="Quick actions"] a[href="/quality"]');
+    const qaLabel = await qaLink.getAttribute('aria-label');
+    log('QA rail icon:', qaLabel);
+    assert(/^QA queue(, \d+ open)?$/.test(qaLabel), 'QA rail icon label ' + qaLabel);
+    await context.close();
+    const desk = await asUser('manager.nfd@bryels-care.test');
+    for (const [url, group, tab] of [['/inventory/counts', 'Warehouse', 'Stock counts'], ['/inventory/containers', 'Inventory', 'Boxes'], ['/labels', 'Warehouse', 'Label print station']]) {
+      await desk.page.goto(BASE + url);
+      await desk.page.locator('nav[aria-label="Modules"] a[aria-current="page"]', { hasText: group }).waitFor();
+      await desk.page.locator('header a[aria-current="page"]', { hasText: tab }).first().waitFor();
+      assert(await noHScroll(desk.page), `${url} has no horizontal scroll at 1440 px`);
+    }
+    await shot(desk.page, 'shell-warehouse-tabs', { top: true });
+    await desk.context.close();
+    const phone = await asUser('warehouse.nfd@bryels-care.test', PHONE, { isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+    for (const url of ['/inventory/move', '/inventory/counts', '/inventory/containers', '/labels', '/inventory/scan', '/inventory/receive']) {
+      await phone.page.goto(BASE + url);
+      await noErrorPage(phone.page);
+      assert(await noHScroll(phone.page), `${url} has no horizontal scroll at 390 px`);
+    }
+    await phone.page.getByRole('button', { name: 'Open menu' }).click();
+    await phone.page.getByText('Warehouse', { exact: true }).filter({ visible: true }).first().waitFor();
+    await shot(phone.page, 'phone-menu-groups');
+    await phone.context.close();
+    log('shell checked at 1440 and 390 px');
   }
 
   await browser.close();

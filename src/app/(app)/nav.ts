@@ -4,6 +4,9 @@ export type NavItem = { label: string; href: string; permission?: Permission; pl
 export type NavGroup = { label: string; icon: string; items: NavItem[] };
 export type QuickAction = { label: string; href: string; icon: string; permission?: Permission };
 
+/** Live counts shown as a badge on the matching rail icon, phone tab and sub-tab (keyed by href). */
+export type NavBadges = Partial<Record<string, number>>;
+
 /** Round icon rail (Dribbble reference): the most common operator actions, one tap away. */
 export const QUICK_ACTIONS: QuickAction[] = [
   { label: "Scan or look up", href: "/inventory/scan", icon: "scan", permission: "inventory.lot.view" },
@@ -19,25 +22,32 @@ export const QUICK_ACTIONS: QuickAction[] = [
 export const NAV: NavGroup[] = [
   { label: "Home", icon: "home", items: [{ label: "Overview", href: "/dashboard" }, { label: "Notifications", href: "/notifications" }] },
   {
+    // Stock visibility: what is where, in which status, and what is free to use.
     label: "Inventory",
     icon: "boxes",
     items: [
       { label: "Lots & stock", href: "/inventory", permission: "inventory.lot.view" },
+      { label: "Locations & stock", href: "/inventory/locations", permission: "masterdata.location.view" },
+      { label: "Boxes", href: "/inventory/containers", permission: "inventory.container.view" },
+      { label: "Availability", href: "/inventory/availability", permission: "inventory.balance.view" },
+      { label: "Expiry alerts", href: "/inventory/lots/expiry", permission: "inventory.lot.view" },
+      { label: "FEFO & reservations", href: "/inventory/lots/reservations", permission: "inventory.lot.view" },
+      { label: "Stock movements", href: "/inventory/movements", permission: "inventory.movement.view" },
+    ],
+  },
+  {
+    // Warehouse operations: the tasks that change stock, in the order goods flow through the site.
+    label: "Warehouse",
+    icon: "warehouse",
+    items: [
       { label: "Receive materials", href: "/inventory/receive", permission: "procurement.goods_receipt.create" },
       { label: "Goods receipts", href: "/inventory/receipts", permission: "procurement.goods_receipt.view" },
       { label: "Put away", href: "/inventory/receive/put-away", permission: "inventory.movement.post" },
-      { label: "Scan / look up", href: "/inventory/scan", permission: "inventory.lot.view" },
-      { label: "Stock movements", href: "/inventory/movements", permission: "inventory.movement.view" },
-      // Wave 1 W1C
       { label: "Scan to move", href: "/inventory/move", permission: "inventory.movement.post" },
-      { label: "Boxes", href: "/inventory/containers", permission: "inventory.container.view" },
-      { label: "Locations & stock", href: "/inventory/locations", permission: "masterdata.location.view" },
-      { label: "Expiry alerts", href: "/inventory/lots/expiry", permission: "inventory.lot.view" },
-      { label: "FEFO & reservations", href: "/inventory/lots/reservations", permission: "inventory.lot.view" },
+      { label: "Scan / look up", href: "/inventory/scan", permission: "inventory.lot.view" },
       { label: "Stock counts", href: "/inventory/counts", permission: "inventory.stock_count.view" },
       { label: "Adjustments", href: "/inventory/adjustments", permission: "inventory.adjustment.view" },
       { label: "Label print station", href: "/labels", permission: "inventory.label_job.view" },
-      { label: "Availability", href: "/inventory/availability", permission: "inventory.balance.view" },
     ],
   },
   {

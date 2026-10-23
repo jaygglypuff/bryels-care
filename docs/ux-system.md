@@ -274,6 +274,15 @@ Design starts at 360 px and adds, never subtracts. Nothing core needs more than 
 > (`src/app/(app)/shell.tsx`, `src/app/(app)/nav.ts`). Tablet and phone keep the drawer; phone
 > bottom tabs are Home, Scan, Batches, QA, Orders. Brand colours (green `--brand-600`, light
 > green `--lime-400`) and the Poppins/Inter type pairing are defined in `src/app/globals.css`.
+>
+> **Wave 1 integration (2026-10-23).** Inventory pages are split into two module pills so each
+> sub-tab row stays on one line at 1440 px: **Inventory** (stock visibility: Lots & stock,
+> Locations & stock, Boxes, Availability, Expiry alerts, FEFO & reservations, Stock movements)
+> and **Warehouse** (tasks in the order goods flow: Receive materials, Goods receipts, Put away,
+> Scan to move, Scan / look up, Stock counts, Adjustments, Label print station). Sub-tab pills
+> wrap instead of scrolling. The bell counts unread notifications only; the open QA queue count
+> is a badge on the QA rail icon, the phone QA tab, the QA queue sub-tab and the drawer entry
+> (users with `quality.disposition.view`).
 
 ```mermaid
 flowchart LR
