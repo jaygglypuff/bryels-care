@@ -138,8 +138,8 @@ Icons are 16 px inside chips, 20 px in banners, 24 px on scan result cards.
 ### 2.6 Chart palette
 
 Validated with the data-viz palette validator (OKLab, Machado 2009 CVD simulation) against
-`--surface` in each theme. Rules follow `docs/kpi-catalogue` conventions once the analytics
-specialist publishes them; the palette here is the binding set.
+`--surface` in each theme. Rules follow the `docs/analytics-kpis.md` conventions (value
+labels in its section 1.2); the palette here is the binding set.
 
 **Categorical (identity), fixed order, never cycled.** Assign slot 1 to the first series and
 continue in order; a 7th series folds into "Other" or the chart becomes small multiples.
@@ -423,6 +423,11 @@ the finance / payroll scopes are approved and the role holds the permissions.
 All components live in `src/ui` on Radix primitives (ADR-007), each with a Storybook-like
 gallery route (`/design/gallery`, Phase 1) showing every variant and state.
 
+Numbering note: the numbers 5.1 to 5.25 below are **component rows** of this table, not
+sub-headings. Other documents cite a component as "component 5.16 in `docs/ux-system.md` §5".
+The detailed rule blocks that follow the table are headed "Rules: 5.n ..." and reuse the row
+number of the component they expand.
+
 | # | Component | Variants | Key rules |
 |---|---|---|---|
 | 5.1 | App shell | desktop nav, tablet rail, phone tabs, operator density | role- and permission-filtered; remembers collapse state; site in URL |
@@ -441,7 +446,7 @@ gallery route (`/design/gallery`, Phase 1) showing every variant and state.
 | 5.14 | Stepper | horizontal (tablet/desktop), compact "Step n of m" (phone) with progress bar | steps = routing steps or packing steps; completed, current, blocked (with reason), skipped (with approval) |
 | 5.15 | Approval card | requester vs approver, amounts, threshold, reason | approver cannot be the requester (ADR-005); approve/reject require reason when rejecting |
 | 5.16 | Confirm dialog | destructive (danger), irreversible (post), with reason field, with typed confirmation for void/reverse | states consequence in one sentence; button label is the verb ("Post shipment", "Void invoice") |
-| 5.17 | Toast and undo | success, info, warning, error; undo where a safe reversal exists | 5 s; undo keeps toast until done; errors persist until dismissed |
+| 5.17 | Toast and undo | success, info, warning, error; undo where a safe reversal exists | 5 s; undo keeps toast until done; errors persist until dismissed; which actions offer undo: see 5.17 rules below |
 | 5.18 | Document preview and print layout | PDF/HTML preview, page thumbnails, print button, reprint reason | see section 10 |
 | 5.19 | Label preview | actual size at 100 % zoom, QR/Code 128, template version | shows the encoded payload text below the code for verification |
 | 5.20 | State components | loading skeleton, empty, error, permission denied, offline, not found | copy patterns in section 6 |
@@ -451,7 +456,7 @@ gallery route (`/design/gallery`, Phase 1) showing every variant and state.
 | 5.24 | Bottom sheet / drawer / dialog | phone sheets, tablet/desktop dialogs and side panels | sheets for pickers and "More"; dialogs for confirm and short forms; side panel for detail on xl |
 | 5.25 | Numeric keypad | optional on-screen keypad for weights and counts | shown when the device has no physical keypad in operator mode; large keys 56 px |
 
-### 5.8 Forms and fields
+### Rules: 5.8 Forms and fields
 
 - Label above the field (never placeholder-only); required marked with text "Required" in
   the caption, not an asterisk alone. Helper text below; error text replaces helper text,
@@ -469,19 +474,22 @@ gallery route (`/design/gallery`, Phase 1) showing every variant and state.
   draft state.
 - Dates display `DD MMM YYYY` and times 24-hour in the site time zone (ADR-019).
 
-### 5.9 Scan input and scan result card
+### Rules: 5.9 Scan input and scan result card
 
 Entry modes, selectable and remembered per device: **camera** (viewfinder overlay,
 `BarcodeDetector` with ZXing fallback, torch toggle, tap to focus), **keyboard-wedge** (a
 visually quiet always-focused input on scan pages; Enter terminates a scan), **manual**
 (type a code; the typed prefix selects the entity type, for example `LOT` → lot number).
 
-Payloads follow ADR-017 (`BC:LOT:`, `BC:BOX:`, `BC:LOC:`, `BC:MAT:`, `BC:SKU:`). On success
-the scanner shows a 300 ms check flash and a short haptic (where supported) and opens the
-**scan result card**:
+Payloads follow ADR-017 (`BC:LOT:`, `BC:BOX:`, `BC:LOC:`, `BC:MAT:`, `BC:SKU:`, `BC:EQP:`,
+`BC:DOC:`; grammar in `docs/data-model.md` 9.5). On success the scanner shows a 300 ms check
+flash and a short haptic (where supported) and opens the **scan result card**:
 
-1. Identity: entity caption (Lot / Box / Location / Material / SKU), identifier in `data-lg`,
-   name and code, site and location.
+1. Identity: entity caption (Lot / Box / Location / Material / SKU / Equipment / Document),
+   identifier in `data-lg`, name and code, site and location. For Equipment the card shows
+   the availability reason and calibration due date; a `BC:DOC:` scan opens the generated
+   document record only after authentication and permission check (`docs/security.md` 4.9),
+   never a public URL.
 2. Status: quality status chip; expiry with days remaining; quantity on hand / available;
    for a box, contents summary; for a location, what it holds.
 3. Risk banner if the status is Quarantined, QA Hold, Expired, Recalled, Rejected or
@@ -494,7 +502,7 @@ the scanner shows a 300 ms check flash and a short haptic (where supported) and 
 Duplicate scans within 2 s are ignored; the same payload scanned twice in a flow asks
 "Already scanned. Scan it again?" to prevent double posting (idempotency keys per ADR-006).
 
-### 5.10 Status chip and risk banner
+### Rules: 5.10 Status chip and risk banner
 
 - Chip: 24 px (tables) or 28 px (cards), pastel `-bg`, `-fg` text, 1 px `-border`, 16 px
   leading icon, label in sentence case, `--radius-full`. Screen-reader text equals the label
@@ -506,7 +514,7 @@ Duplicate scans within 2 s are ignored; the same payload scanned twice in a flow
 - Sync Pending banner shows counts and a "View queue" action; Approval Required shows
   "Waiting for {role}" and, for the approver, the approve action.
 
-### 5.12 KPI card and chart conventions
+### Rules: 5.12 KPI card and chart conventions
 
 - KPI card: caption label, hero value (proportional figures), delta with sign, arrow icon
   and comparison period in text ("+9 % vs last week"), 12-point sparkline (2 px line, 10 %
@@ -522,6 +530,50 @@ Duplicate scans within 2 s are ignored; the same payload scanned twice in a flow
   tooltip is also reachable by keyboard; charts state "Updated HH:MM" and the filter scope.
 - Forecast and estimate series render dashed with an "Estimate" legend entry and never in
   the same visual weight as actuals.
+
+### Rules: 5.17 Toast, undo and reversal matrix
+
+The brief asks for "a clear undo/reversal workflow when safe". Undo is never an edit or a
+delete: when a toast offers "Undo", the server posts a **linked reversal** (ADR-006: a
+`reversal` ledger row that references the original, with actor, time and reason
+`undo_by_actor`) and writes an audit event, exactly as a supervisor reversal would, but
+without a second person because the window is short and the record is untouched by anything
+else. Outside the matrix below, no screen shows "Undo"; the toast instead links to the
+record, where the module's `.void` reversal (`docs/permissions-matrix.md` 5.3) or an
+append-only correction is the recovery path.
+
+| Action (screen) | Undo in toast? | Mechanism | Window | Permission |
+|---|---|---|---|---|
+| Draft saves and autosaves (receipt draft, order draft, deviation draft, form fields) | Yes | client restores the previous draft values; nothing posted | until the next save or navigation | the form's own `.create` / `.edit` |
+| Checklist tick, line-clearance item, process parameter **before** the step is completed (9.3) | Yes | client-side revert of the unsaved or queued step record | until "Complete step" | `production.process_step_record.create` as for the step |
+| Move stock / transfer within a site, put-away, box placement (9.4, W02, W01-08, W08-06) | Yes | server posts a `reversal` movement back to the source lot/location, same actor, idempotency key `undo:<movement_id>`; refused (toast explains) if any later movement, reservation, allocation, count line or status change touched the lot, box or location | `settings.ux.undo_window_seconds`, default 60 (A-UX-15) | `inventory.movement.post` (own movement, in window); afterwards `inventory.movement.void` with reason |
+| Queued offline command not yet synced (sync queue sheet, component 5.21) | Yes ("Remove from queue") | removed from the device queue with a reason; logged in the queue history; once replayed the rules of this table apply | until replay | the command's own permission |
+| Stock count line capture (9.6) | No | a recount is a new line; original counts are never edited | — | `inventory.stock_count.*` |
+| Weigh / dispense confirm (9.3) | No | append-only correction row with reason (`production.dispense_record.void` retains the original), approval per `docs/process-maps.md` W05 exception paths; deviation where tolerance is involved | — | `production.dispense_record.void` (S), `production.dispense_record.approve` |
+| Label print (9.4, 9.7a) | No (paper exists) | reprint with reason (`documents.reprint.create`); a label that no longer matches is voided (audit `documents.label_job.voided`, `docs/data-model.md` 8.1) and the scan result card warns "Label voided" | — | `documents.reprint.create` |
+| Receipt post (9.5) | No | reversal receipt with reason (`procurement.goods_receipt.void`), replacement receipt | — | `procurement.goods_receipt.void` (S) |
+| Consumption / output / yield post, transfer to quarantine (9.3) | No | `production_postings` row of type `reversal` plus linked `stock_movements` reversal with reason; amend via controlled reopen (`production.batch.admin`) | — | `inventory.movement.void` (S); reopen `production.batch.admin` |
+| Adjustment post, variance posting (9.6) | No | reversal movement with reason, then a new adjustment | — | `inventory.movement.void` (S) |
+| Dispatch post (9.7) | No ("cannot be undone without a return") | `sales.shipment.void` posts the return-to-stock reversal; customer return path otherwise | — | `sales.shipment.void` (S) |
+| QA disposition, hold placed or lifted (9.13) | No | a new `dispositions` ledger row with reason by an authorised `qa_qc` user; the earlier row stays | — | `quality.disposition.approve` (R, re-auth) |
+| Test result saved (9.13) | No | append correction with reason; original shown struck through | — | `quality.test_result.void` (S) |
+| Approval decision (any approval card, 5.15) | No | a further `approval_decisions` row (reject, re-approve) with reason | — | the entity's `.approve` |
+| Financial posting (invoice, bill, payment, credit note, expense) | No | module `.void` reversal or credit note with reason; period lock rules apply | — | `finance.<entity>.void` (R, re-auth) |
+| Payroll period lock | No | reopen only with two approvals | — | `hr.payroll_period.void` (R) |
+
+Behaviour rules:
+
+1. The "Undo" button is shown only when the server's success response carries
+   `undo: { until, command }`; the client never infers undoability.
+2. Undo is same actor, same session, same device; it is Online-only (the reversal must
+   re-check the ledger). Offline, only the "Remove from queue" row applies.
+3. When the window elapses the toast swaps "Undo" for "Request reversal", which opens the
+   record with the supervisor reversal action if the user holds the `.void` permission or
+   otherwise shows who can.
+4. A successful undo shows its own toast ("Move reversed. Movement MOV-26-0000432 →
+   MOV-26-0000433.") with no further undo; the record timeline shows both rows.
+5. Every undo writes an audit event (`<module>.<entity>.reversed`, `docs/data-model.md` 8.1)
+   and never deletes or edits a posted row.
 
 ---
 
@@ -540,13 +592,13 @@ words (work orders, lots, customers), never a table name.
 | Error (load) | request failed | inline card with retry and a reference id; page header stays usable | "Couldn't load {things}. Try again. Reference {id}." |
 | Error (action) | mutation failed | toast (persistent) with retry where safe; form keeps values | "Couldn't {verb} {thing}. {reason}. Try again." |
 | Validation | client/server validation | inline field errors + summary | "Enter … / Choose … / {field} must be …" |
-| Success | mutation posted | toast with the record number and a link; undo when a safe reversal exists | "Weight recorded for Coconut Oil." / "Shipment DR-2026-0042 posted." |
+| Success | mutation posted | toast with the record number and a link; undo when a safe reversal exists (matrix in the 5.17 rules) | "Weight recorded for Coconut Oil." / "Shipment SH-26-00042 posted." |
 | Permission denied | user lacks the permission at this site | full-region state with lock icon; no record details | "You don't have access to {page} at {site}. Ask your site manager, or switch site." |
 | Not found / out of scope | record missing or belongs to a site the user cannot see | identical state for both cases (no existence leak) | "This record isn't available at your sites." |
 | Offline (read) | no connection, cached data present | top banner (info) with last sync time; lists show data freshness | "You're offline. Showing data from 09:41." |
 | Offline (write) | no connection, command queued | banner with pending count; queued rows carry the Sync Pending chip | "Saved on this device. 3 changes will sync when you're back online." |
 | Online-only action offline | action not allowed offline | button disabled with reason text | "Needs a connection: QA release is online-only." |
-| Sync failed / conflict | server rejected a replayed command | action-centre item + row chip; review screen with server vs device values | "1 change needs review: lot RM-2026-0171 was moved by Rhea M. at 09:12." |
+| Sync failed / conflict | server rejected a replayed command | action-centre item + row chip; review screen with server vs device values | "1 change needs review: lot L-2610-00171 was moved by Rhea M. at 09:12." |
 | Setup required | integration not configured | disabled action with explanation, link for admins | "Label printing isn't set up for Site A yet. Ask an administrator." |
 
 Page-type matrix (which states are mandatory): list pages: all except validation; detail
@@ -564,7 +616,7 @@ refetch, error, permission denied, offline (read) with data timestamp; scanner: 
 | Language | Verbs people use: Receive, Weigh, Move, Pack, Dispatch, Count, Scan, Confirm. No "submit", "entity", "transaction". One idea per line. Numbers with units always. |
 | Steps | A flow shows "Step n of m" with the step name; m is fixed by the routing or packing configuration and known up front. Target: receive ≤ 5 steps per line, weigh ≤ 3 interactions per ingredient (scan lot, read weight, confirm), move = 2 scans + confirm, dispatch = scan boxes + confirm. |
 | Targets | Buttons 52 to 56 px tall, tiles ≥ 96 px, keypad keys 56 px, list rows 56 px. Primary action sticky at the bottom. |
-| Confirmation | Reading back what was scanned before posting: "Move box BX-0421 (24 pcs Acapulco Soap, lot ACS-2026-0011) to WH1-A-03?" One tap confirms; a mistake is fixed by "Undo" within the toast only where the server supports reversal; otherwise a supervisor reversal with reason. |
+| Confirmation | Reading back what was scanned before posting: "Move box BX-00000421 (24 pcs Acapulco Soap, lot L-2610-00011) to WH1-A-03?" One tap confirms; a mistake is fixed by "Undo" within the toast only where the server supports reversal (matrix in the 5.17 rules); otherwise a supervisor reversal with reason. |
 | Progress and safety | A step cannot complete until its required checks pass (line clearance ticked, checker signed, tolerance met). Blocked steps show the reason and who can unblock. |
 | High-risk states at scan time | The scan result card shows the risk banner before any action; the Issue / Consume / Ship actions are listed as blocked with the reason; the operator can only move within the quarantine area, print a label or request inspection, according to the server's allowed actions. Expired and Recalled also trigger a stronger pattern: full-width danger banner and a required "Report to QA" action. |
 | Wrong material or lot | Scanning a lot that does not match the ingredient line: banner "This is Palm Oil, not Coconut Oil. Scan the Coconut Oil lot." with the expected material code; no way to proceed without a supervisor exception. |
@@ -656,7 +708,7 @@ are listed only where the page adds something. Permissions reference
   weighing → line clearance → mixing and cutting → line clearance → packaging and
   labelling → transfer to quarantine, for the Acapulco Soap example). Each step is a full
   screen with its checks and sign-offs.
-- **Weigh / dispense step**: header "Weigh Batch · ACS-2026-0012 · Acapulco Soap"; "Step 2
+- **Weigh / dispense step**: header "Weigh Batch · B-NFD-261012-001 · Acapulco Soap"; "Step 2
   of 7 · Weighing"; ingredient card "Ingredient 1 of 5": name, INCI, internal code, lot
   scan field (shows the FEFO-recommended lot; a wrong lot blocks), target quantity with
   unit, tolerance as ± % and absolute range, actual quantity input (decimal keypad, unit
@@ -718,6 +770,55 @@ are listed only where the page adds something. Permissions reference
   Delivery receipt preview and print afterwards, with received-by capture (name,
   signature on screen where allowed, remarks).
 
+### 9.7a Packaging order and scan box contents
+
+Phase 4 (brief module 8; PRD FR-sales-05 and FR-production-12; `docs/process-maps.md` W05-15
+and W08). The Pack entity lives in the inventory module (`inventory.pack.*`,
+`docs/permissions-matrix.md` 2.3) with state machine `open → verified → closed | cancelled`
+(`docs/data-model.md` `packs`).
+
+- **Packaging order** (tablet, `inventory.pack.create`): header "Pack PA-26-000031 ·
+  Acapulco Soap · lot L-2610-00042", source badge (Batch B-NFD-261012-001 output / Sales
+  order SO-26-00018 / Repack), Pack state chip. Card "Resolved configuration": container,
+  cap or closure, label template and version, carton type, inserts, units per box,
+  lot/expiry printing on or off, shipping marks; every row names its source, "SKU default"
+  or a "Customer override: {customer}, requirement rev n" badge (approved
+  `CustomerRequirement` revision only, A-PROC-22); a warning banner "Default configuration
+  used, sales to review before shipment" when the customer configuration was missing
+  (`packs.used_default_config`). Card "Components to issue": packaging BOM lines (wrapper,
+  label, carton, insert) with required quantity, scan-or-search lot field (FEFO
+  recommended; wrong material, expired or held lots block as in 9.3) and issued quantity.
+  Card "Reconciliation": one row per component, issued − used − damaged − returned =
+  variance against the tolerance (A-PROC-19, default 0 unexplained units for labels);
+  damaged units are entered with a reason and become a `ScrapReworkRecord`; variance
+  outside tolerance blocks "Finish boxing" and offers "Raise deviation" (9.14). Expected
+  boxes shown as "12 boxes of 24 + 1 partial" from the lot output. Primary "Start boxing".
+  Starting is Online-only (W08-01); the list page uses the states of section 6.
+- **Scan box contents** (tablet + scanner, operator mode): "Box 7 of 13 · PA-26-000031".
+  Step 1 "New box": the server allocates the box number (BX-00000421) and queues its label
+  (`BC:BOX:BX-00000421`; box creation is Queueable, label printing Online-only, so the
+  label row shows "Will print when back online"). Step 2 scan the lot `BC:LOT:` (must match
+  the pack's SKU and lot; mixed lots per box only when the SKU configuration allows) or
+  scan units into the box; running count "18 / 24" in `data-lg`, each scan a check flash.
+  Step 3 "Close box" when the count equals units per box. Last box: "Partial box" toggle →
+  actual quantity, label prints `PARTIAL` and the container is flagged partial (W08-03;
+  `containers.is_partial`). Over-count against the lot balance is blocked (V-NEG, no
+  exception). Side list (phone: sheet) of boxes created: box number, quantity, Container
+  state chip (`open`, `sealed`), label state (queued / printed / failed with "Reprint" that
+  asks a reason). Sticky primary action cycles "Close box" → "Next box" → "Finish boxing".
+- **Pack verification** (checker, `inventory.pack.approve`; second user on the same device,
+  A-UX-08, checker ≠ packer): verification mode `all` or `sample` (A-PROC-38: every box for
+  the first batch of a SKU, then a configurable sample); scan each selected box → ok or
+  mismatch row; confirm label content against the artwork version; blocking banner "13
+  boxes × 24 units = 312 ≠ lot output 300. Reconcile before verifying." until equal.
+  Primary "Verify pack" → Pack `verified`; the boxing note / packing list is generated
+  (W08-05) and previewed with the 9.12 pattern; then "Put away" scans boxes or a pallet to
+  a location (W08-06, Queueable). Mismatches beyond the sample tolerance keep the pack
+  `open` and list the boxes to re-check.
+- States: all form states; offline per `docs/process-maps.md` 6 (box creation and scans
+  Queueable with allocation and lot status re-checked on replay, over-quantity rejected;
+  pack start, label print and document generation Online-only).
+
 ### 9.8 Customer detail and order entry
 
 - **Customer detail** (desktop two-column, phone stacked): header with name, code, status,
@@ -760,12 +861,222 @@ are listed only where the page adds something. Permissions reference
 
 - Preview panel with page thumbnails, zoom, "Print / download PDF", "Reprint" (requires
   reason; logged), template version and source record revision shown in the header,
-  watermark "DRAFT" until the batch is closed and QA-dispositioned. Content per
+  status watermark from the A-RPT-04 vocabulary in `docs/reports-and-templates.md` (section
+  2.6 maps batch states to `DRAFT`, `IN PROGRESS`, `UNDER QA REVIEW`, `FINAL – PENDING
+  CLOSURE`, `CONTROLLED COPY`, `REPRINT n`, `AMENDED rev n`, `SUPERSEDED`, `VOID`); the
+  same word is shown as a chip in the preview header. Content per
   `docs/reports-and-templates.md`: header fields, dispensing table (INCI name, code, lot,
   expiry, theoretical, tolerance, actual, unit, dispensed by, checked by, time, deviation
   flag), process steps with readings, checklist sign-offs, yield, QC results, disposition,
   signatures, remarks, QR to the internal record, page x of y with batch number on every
   page.
+
+### 9.13 Quality: inspection queue, test entry, holds and dispositions
+
+Phases: lot holds and dispositions ship in Phase 2 (lot release at goods receipt before
+full inspection records exist, A-PM-18 in `docs/permissions-matrix.md`); inspection plans,
+inspections and test entry in Phase 3. Behaviour is W06 in `docs/process-maps.md`; states
+are the Inspection and Quality hold machines in `docs/data-model.md` 6.6 and 6.7; every
+quality-status change is a `dispositions` ledger row. Quality evidence is sensitive
+(`docs/permissions-matrix.md` 6): production and warehouse roles see status and outcome
+only, raw results need `quality.test_result.view`. All quality decisions are Online-only;
+only sampling capture queues (`docs/process-maps.md` 6).
+
+- **Inspection queue** (desktop and tablet list; `quality.inspection.view`): tabs by stage
+  Incoming / In-process / Finished product; columns inspection number (INS-26-00042), due
+  (relative, overdue in danger with icon), subject (lot L-2610-00042 with material, or
+  batch B-NFD-261012-001 with product), plan revision, state chip (`pending`,
+  `in_progress`, `awaiting_review`, `approved`, `rejected`, `cancelled`), sampling status
+  ("Not sampled" / "Sampled by Rhea M. 09:12"), risk chips (hold, near expiry, open
+  deviation), assignee avatar. Filters: site, stage, state, overdue only, material or SKU;
+  saved views. Per-row primary action by state: `pending` → "Record sampling";
+  `in_progress` → "Enter results"; `awaiting_review` → "Review" (hidden for the performer,
+  SoD). Phone: card list; sampling capture (quantity, container scan, sampler, time, sample
+  label 50 × 30 mm) is Queueable (W06-02) and the sample removal posts a consumption
+  movement with reason `sample` when online.
+- **Test entry** (tablet or desktop form; `quality.test_result.create`): header subject,
+  plan and "Test 3 of 7"; per test: name, method, specification with unit (min to max,
+  text, or pass/fail), result input (numeric with unit suffix and `inputmode="decimal"`,
+  text, or pass/fail radio cards), live within-spec indicator (success or danger chip; the
+  unit must match the specification), instrument field by scan `BC:EQP:` showing the
+  calibration due date (an unavailable instrument blocks with its reason, V-CAL), tester
+  (signed in), checker sign-off (A-UX-08; checker ≠ tester), attachments (photos, external
+  lab report), note. Results are append-only: "Correct result" opens a dialog that requires
+  a reason (`quality.test_result.void`); the superseded value stays visible struck through
+  with "corrected by {name}, {time}" in the history list and in the BMR annex. Primary
+  "Save results", then "Submit for review" (`quality.inspection.submit`) once every
+  required test has a value; a failed test does not block submission but shows the banner
+  "1 result out of specification. Release will need an OOS deviation." Review by a
+  different `qa_qc` user (`quality.inspection.approve`) adds the review checklist (BMR
+  complete, deviations closed or accepted, reconciliation OK, documents attached) and
+  "Request retest" (new result rows, both kept).
+- **Holds** (desktop; `quality.hold.view`): list of QualityHold records (QH-26-0007) with
+  scope chips (lot / batch / box / location), reason code, opened by and at, linked
+  deviation, state chip (`open`, `investigating`, `closed`), quantity affected. "Place hold"
+  (`quality.hold.create`): scope picker (scan-or-search, several records allowed), reason
+  code plus text, link an existing deviation or raise one, roles to notify; confirm dialog
+  states the consequence in one sentence ("Blocks allocation, issue and shipment for 3
+  lots at Northfield Plant."). Hold detail: affected records with their locations, "Move to
+  hold location" tasks for the warehouse (9.4), timeline. "Lift hold"
+  (`quality.hold.approve`; never the opener): resolution (`released`, `rejected`, `rework`,
+  `recalled`) plus reason, writes the closing disposition; re-authentication is required
+  (restricted action, `docs/security.md` 3.6).
+- **Dispositions** (desktop decision card; `quality.disposition.create` proposes,
+  `quality.disposition.approve` decides): header subject, current status chip and quantity
+  at decision; summary panel: results (n passed / n failed / n pending, link to test
+  entry), open deviations with severity, holds open, BMR review status for batches (from
+  W06-04), supplier documents for incoming lots. Decision radio cards Release / Reject /
+  Conditional release / Rework / Hold (values of `dispositions.decision`); reason is
+  mandatory for anything but release; Conditional release requires conditions and a review
+  date and a second approver (`quality.conditional_release.approve`, shown as the Approval
+  Required banner; only when the site setting `allow_conditional_release` is on, default
+  off); Rework requires the rework instruction reference; failed tests disable Release with
+  the reason text unless a linked OOS deviation is closed. Separation of duties is
+  server-enforced and mirrored: the decide button is disabled with "You requested this
+  inspection" / "You entered these results" for the excluded users. Confirm dialog with
+  typed confirmation for Reject, re-authentication for every decision (R permission).
+  Result: a new disposition row, lot or batch status change, label reprint job with the
+  new status word (W06-05), warehouse move task, toast with link. Dispositions are never
+  edited; a correction is a new disposition with reason (5.17 rules).
+- **Bulk disposition** (Phase 2 migration helper, `docs/data-migration-plan.md`): the same
+  card over a selected set of lots sharing one decision and reason, one disposition row per
+  lot, listed in the result toast.
+- States: list pages all except validation; forms all; Permission denied for raw results
+  shows the status chip and outcome only, never an empty results table.
+
+### 9.14 Deviations / CAPA and traceability / recall explorer
+
+Phase 3 for deviations, CAPA and the genealogy explorer; Phase 4 for complaints and recall
+cases. Behaviour is W07 in `docs/process-maps.md`; states are those of `docs/data-model.md`
+(`deviations`, `capas`, `complaints`, `recall_cases`).
+
+- **Raise deviation** (phone, tablet or desktop; any role with `quality.deviation.create`;
+  opened from "More" on a batch step, lot, receipt line, order or equipment): pre-filled
+  references as chips, type, description, photos; severity shows "Awaiting QA
+  classification" because only `qa_qc` sets `minor` / `major` / `critical`. Capture is
+  Queueable (W07-01); classification is Online-only. Deviations the system opened
+  (out-of-tolerance dispense, calibration exception, failed in-process check, yield out of
+  range, reconciliation mismatch) carry a "System" raiser badge.
+- **Deviation detail** (desktop; `qa_qc`): header DEV-26-0031, state chip (`open`,
+  `investigating`, `closed`), severity chip, linked records; tabs Investigation (root
+  cause, impact assessment with "Find affected": other batches that used the same lots,
+  equipment or operator, via the genealogy query), Containment (holds placed from here,
+  9.13), CAPA (linked cards), Documents, History. Primary action by state: `open` → "Start
+  investigation"; `investigating` → "Close deviation" (`quality.deviation.approve`; closer ≠
+  raiser; requires resolution, the disposition of affected stock recorded in 9.13 and an
+  effectiveness check date; open CAPA needs a written justification). Batch-linked
+  deviations print in the BMR annex (9.12).
+- **CAPA** (desktop): list with CAPA-26-004, source (`deviation`, `complaint`, `audit`,
+  `change_control`, `other`), owner avatar, due date (overdue in danger and in the Action
+  centre), state chip (`open`, `in_progress`, `verification`, `closed`). Detail: root
+  cause, corrective action, preventive action, action items each with owner and due date,
+  verification method, effectiveness check (date, result, by whom), "Submit for closure"
+  (`quality.capa.submit`) and "Close CAPA" (`quality.capa.approve`, different user).
+- **Traceability explorer** (desktop; tablet read-only; `quality.genealogy.view`): search
+  by scan or typed lot, box, batch, complaint or supplier lot; direction toggle Forward
+  (supplier lot → lots → batches → outputs → boxes → shipments → customers) and Reverse
+  (finished lot or box → batch → input lots, equipment, operators → other batches sharing
+  those lots → boxes → shipments → customers). Tree view with expandable nodes (status
+  chip, quantity, dates per lot) and the table twin; large trees load one level at a time
+  ("Show 40 more"). Panel "Affected customers": customer, ship-to, shipment, DR number
+  (DR-26-00042), boxes, quantity (sensitive; `owner_director` sees every site, others their
+  scope). Actions: "Export trace" (`quality.genealogy.export`, reason logged, point-in-time
+  stamp on every page), "Place hold on selected" (9.13), "Start recall case"
+  (`quality.recall_case.create`; pre-fills affected lots, boxes, shipments and customers).
+  Scanning `BC:LOT:` or `BC:BOX:` anywhere in the explorer re-roots the tree. Online-only.
+- **Recall case** (desktop; `quality.recall_case.*`): header RC-2026-01, kind (`recall`,
+  `withdrawal`, `mock`), state chip (`open`, `notifying`, `recovering`, `closed`), approval
+  card (`qa_qc` proposes, `owner_director` approves, two decisions recorded). Panels: scope
+  (lots and boxes, "Mark recalled" bulk action `quality.recall_case.admin` that writes
+  `recalled` dispositions and blocks shipment), customer notification list for `sales_cs`
+  (per customer: to notify / notified / acknowledged; letter templates are company
+  configuration), expected versus received returns (scan receipts into the recall location
+  only, W07-09), reconciliation shipped − returned − accounted with an explanation field
+  for any gap, closure report. Regulatory classification and notification obligations are
+  free-text configuration fields validated by the company's QA; the system never computes
+  them. Online-only; every action audited.
+- **Complaint** (desktop or phone; `quality.complaint.*`, raised by `sales_cs` or
+  `qa_qc`): CMP-26-0012, customer, product, lot or box from the label (validated against
+  shipments to that customer when known), description, photos, sample returned, state
+  chip (`open`, `investigating`, `resolved`, `closed`); "Trace this lot" opens the explorer;
+  "Raise deviation" links a DEV; acknowledgement document to the customer per
+  `docs/reports-and-templates.md`.
+- States: list pages all except validation; detail pages all except empty-filtered; the
+  explorer adds "No records trace from this code at your sites." (same text for not found
+  and out of scope) and a per-level loading row.
+
+### 9.15 Owner: trends, exceptions and forecast assumptions
+
+9.2 covers the executive overview with exceptions and site comparison. This section adds
+the remaining Owner screens of the brief. Value labels follow `docs/analytics-kpis.md` 1.2
+(Actual, Estimate, Forecast, Overridden); the governance rules are its section 6.
+
+- **Trends** (Phase 5; desktop and tablet; `analytics.dashboard.view`, cross-site with
+  `analytics.owner_dashboard.view`): KPI picker (multi-select from the catalogue in
+  `docs/analytics-kpis.md` 2, up to six series assigned to `--chart-1..6` in order),
+  period selector with comparison (previous period / same period last year), grain (day,
+  week, month, limited to the KPI's time basis), site filter ("All sites" only for
+  organization-wide roles). Line chart with its table twin, "Updated HH:MM · {scope}" and a
+  definition tooltip per series; each series carries its value label chip (Actual or
+  Estimate; estimates dashed). Clicking a point drills to the source report in the same
+  scope (W11-02). "Save view" and "Schedule" (`analytics.scheduled_report.create`).
+  States: the dashboard set of section 6; offline shows the cached snapshot with its
+  timestamp.
+- **Exceptions**: the Action centre Exceptions tab (component 5.5) as a full page: grouped
+  by kind (late work orders, FEFO risk, holds open longer than n days, overdue CAPA,
+  unreconciled imports, sync conflicts), each row with record number, site, age, owner and
+  primary action; filters; counts in the header; grouped per site for owner roles.
+- **Forecast assumptions** (Phase 6 and later per `docs/analytics-kpis.md` 6;
+  `analytics.forecast.view`): persistent info banner "Forecasts are estimates, not
+  actuals." Table per SKU × site: method name (MA-3, MA-6, seasonal naive, SES with its α),
+  history length ("18 of 24 months"), backtest WAPE, MAE and bias, next-period forecast
+  with its P10 to P90 band or the text "no confidence band: too little history",
+  intermittent-demand flag, sufficiency state ("Insufficient history (n of 12 months)"
+  shows no number at all). Row expand: the drivers in words (demand history, seasonality
+  factor, lead time, open orders, safety stock, expiry risk, MOQ, demand events) in the
+  sentence form of `docs/analytics-kpis.md` 6.5, the losing method and its error, a chart
+  of history versus forecast (dashed line, 10 % band wash) with table twin. "Override"
+  (`analytics.forecast.edit`): value with unit, period, reason (required), expiry equal to
+  the horizon; it stays `submitted` until a different user approves
+  (`analytics.forecast.approve`); states `draft`, `submitted`, `approved`, `rejected`,
+  `retired` (`forecast_overrides`); the original forecast stays visible; the Overridden chip
+  shows "by {name}, {date}: {reason}" on hover or tap. A forecast or override is labelled
+  Forecast or Overridden, never Actual; it never appears in a hero KPI card, on a printed
+  document other than a report page titled "Forecast (estimate)", or as an automatic work
+  order, purchase order or reservation. Reorder suggestions (Phase 6,
+  `procurement.reorder_suggestion.*`) link from here as accept-or-dismiss rows with reason
+  and their drivers in words. States: the dashboard set; a SKU that fails sufficiency shows
+  the sufficiency text, never an empty chart.
+
+### 9.16 Later-phase screens (outline specs)
+
+The remaining screens the brief requires are built in Phases 5 and 6. Their wireframe
+spec is added to this section in the design sprint preceding each phase (A-UX-16); the
+outline below fixes what is already decided so that the data model and permissions are
+not built around a different screen. "Restricted-data rule" refers to
+`docs/permissions-matrix.md` 6 (masking in the service layer, lock icon from `_masked`).
+
+| Screen (brief) | Workflow / authority | Phase | Device | Primary action | Restricted-data rule |
+|---|---|---|---|---|---|
+| Supplier list / detail | W04; `masterdata.supplier.*` | 2 (records), 6 (prices, performance) | desktop | "New supplier" | prices, MOQ cost terms only with `masterdata.supplier_price.view` |
+| Purchase request / purchase order | W04; `procurement.purchase_request.*`, `procurement.purchase_order.*` | 6 | desktop; approvals also on phone via the Action centre | "Submit request" / "Send PO" (`procurement.purchase_order.post`) | approval card 5.15 with SoD; PO prices hidden from warehouse and production |
+| Expected receipts | W01, W04 | 2 (manual, opening balances), 6 (from PO) | tablet, phone | "Receive" (opens 9.5) | quantities only; no prices on receipt screens |
+| Supplier lot documents | W01; `procurement.supplier_lot_document.*` | 2 | tablet, desktop | "Attach document" | — |
+| Reorder suggestions | W04; `docs/analytics-kpis.md` 6.5; `procurement.reorder_suggestion.*` | 6 | desktop | "Accept into request" / "Dismiss" (reason) | drivers in words on every row; never creates an order by itself |
+| Employee list / detail | `docs/modules/hr-attendance-payroll.md`; W10 | 5 | desktop | "New employee" | personal fields behind `hr.employee_personal_data.view` with lock icons; exports are R with re-authentication |
+| Shifts and assignments | `hr.shift.*`, `hr.shift_assignment.*` | 5 | desktop | "Assign shift" (approval for changes) | — |
+| Leave | `hr.leave_request.*` | 6 | phone (self-service), desktop (approve) | "Request leave" / "Approve" | own requests only unless `hr.leave_request.view` |
+| Exception review (after 9.9) | W10; `hr.attendance_exception.*` | 5 | desktop | "Resolve" (correction proposed, approved by a different user) | punch detail for hr_payroll and own-site site_manager only |
+| Time summaries | `docs/modules/hr-attendance-payroll.md` | 5 | desktop | "Export" (R) | aggregated by default; per-person detail restricted as above |
+| Payroll period / approval | ADR-021; `hr.payroll_period.*` | 6 | desktop, Online-only | "Submit period" / "Approve" / "Lock" | every figure R with re-authentication; submit ≠ approve; lock reopened only by `hr.payroll_period.void` with two approvals |
+| Invoices, supplier bills (match panel), payments, credit notes and expense claims, reconciliation workspace, costing, accounting export | `docs/modules/finance.md` 3.4 (authoritative list and states); ADR-020 scope | 6 | desktop-first, Online-only | "Post" with the component 5.16 confirm; typed confirmation for void | R permissions with re-authentication; estimate / actual label on every costing figure |
+| Master data (products, SKUs, materials, UOMs, locations, equipment) | `masterdata.*`; W13 for equipment | 1 (core), later per entity | desktop | "New {thing}" | formula percentages and supplier prices masked per permissions 6 |
+| Formula and routing revisions | W12; `masterdata.formula.*`, `masterdata.routing.*` | 3 | desktop | "Submit for approval" / "Approve" (R) | percentages only with `masterdata.formula.view`; side-by-side diff between revisions; batches keep their snapshot |
+| Document templates | ADR-016; `documents.template.*`; `docs/reports-and-templates.md` | 2 (labels), 3 to 4 (BMR, DR) | desktop | "Approve version" | preview with components 5.18 and 5.19; test page per template |
+| Approval rules | `docs/permissions-matrix.md` 5.2; `approval_rules` | 1 | desktop | "Save rule" (re-authentication; approval by a second administrator where the registry requires it) | — |
+| Numbering rules | `docs/data-model.md` 9; `platform.numbering_rule.admin` | 1 | desktop | "Save" with a preview of the next number | future numbers only, never retroactive |
+| Integrations | `docs/security.md` 2.11; brief item 31; `platform.integration.admin` | 6 (email, storage, time-clock, accounting), 8 (payment) | desktop | "Test connection" | one card per adapter with Configured / Setup required / Error and the last check time; an unconfigured adapter renders the Setup required state and every dependent button elsewhere is disabled with the reason (section 6), never a fake success; secrets are write-only fields that are never displayed or returned by the API (only the variable name and "set / not set"); rotation replaces, never reveals |
+| System health | `platform.diagnostics.view`; `docs/deployment-railway.md` | 1 (Health, Backups, Variables cards), 5 (rest) | desktop | "Run checks" | health booleans, queue depth, sync backlog, versions, backup status; environment values never rendered |
 
 ---
 
@@ -774,10 +1085,10 @@ are listed only where the page adds something. Permissions reference
 | Item | Rule |
 |---|---|
 | Default page | A4 portrait, 15 mm margins; landscape allowed for wide tables (stock card, pick list). US Letter is a per-site setting (A-UX-05). |
-| Thermal labels (assumption A-UX-04) | Three sizes: 50 × 30 mm (raw material containers, samples), 100 × 50 mm (boxes/cartons, WIP, finished goods), 100 × 150 mm (pallets, shipment units). Each label template declares its size, symbology (QR default, Code 128 option, ADR-017), quiet zone ≥ 2 mm, and minimum text 7 pt. |
+| Thermal labels (assumption A-UX-04, aligned to A-RPT-08) | Three media sizes, assigned per label kind by the catalogue in `docs/reports-and-templates.md` section 8.3 (authoritative): 50 × 30 mm (samples, small-container variant of the raw material label, equipment), 100 × 50 mm (raw material containers such as drums and sacks, WIP / intermediates, finished goods lots, boxes / cartons, rack and bin locations), 100 × 150 mm (pallets / shipment units, zone signs). Each label template declares its size, symbology (QR default, Code 128 option, ADR-017), quiet zone ≥ 2 mm, and minimum text 7 pt. |
 | Print stylesheet | `@media print`: hide shell, nav, buttons, sticky bars; expand collapsed sections; tables repeat headers (`thead { display: table-header-group }`); avoid page breaks inside rows and signature blocks; black text on white regardless of theme; chart texture fill on; links show no URL; chips print with icon and label and a 1 px border. |
 | PDF generation | Same HTML template rendered in the worker (ADR-016); preview on screen uses the same CSS; fonts embedded (Inter). |
-| Document header | Company name and mark, document title, document number and template version, record identifier (batch, order, shipment), site, generated by and at, status watermark (DRAFT / CONTROLLED COPY / REPRINT n). |
+| Document header | Company name and mark, document title, document number (`DOC-{YY}-{SEQ}`) and template version, record identifier (batch, order, shipment), site, generated by and at, status watermark word per A-RPT-04 in `docs/reports-and-templates.md` (`DRAFT`, `IN PROGRESS`, `UNDER QA REVIEW`, `FINAL – PENDING CLOSURE`, `CONTROLLED COPY`, `REPRINT n`, `AMENDED rev n`, `SUPERSEDED`, `VOID`), printed diagonally in the body and as text in the header. |
 | Document footer | Page x of y, record identifier repeated, template version, generated timestamp, QR to the internal record (optional), "Printed copies are uncontrolled unless signed" (wording validated by QA). |
 | Label content | Human-readable text plus code: unique id, product/material, lot, quantity with unit, dates (received, expiry/retest), status word, site/location, as configured per template (see `docs/reports-and-templates.md`). |
 | Reprint | Every reprint asks for a reason, increments the reprint counter on the document and writes an audit event. |
@@ -792,7 +1103,7 @@ are listed only where the page adds something. Permissions reference
 | A-UX-01 | Primary operator devices are Android phones with 360 to 412 px CSS width and iPads (768 / 820 px); desktop users are supervisors, owners and admins on 1280 px+ screens. | Yes: device list per site |
 | A-UX-02 | Some devices are shared between operators per shift; sign-in uses personal credentials, with a quick re-auth (PIN) for checker sign-off on the same device. | Yes |
 | A-UX-03 | Brand green is derived from the logo on the BMR; no official brand hex, logo files or typeface were supplied. Tokens are named so values can be swapped. | Yes: brand assets |
-| A-UX-04 | Thermal label sizes 50 × 30, 100 × 50 and 100 × 150 mm; printers are network or USB label printers that accept PDF or raster output. | Yes: printer models and stock |
+| A-UX-04 | Thermal label sizes 50 × 30, 100 × 50 and 100 × 150 mm, assigned per label kind by `docs/reports-and-templates.md` section 8.3 (raw material default 100 × 50 mm with a 50 × 30 mm small-container variant; same assumption as A-RPT-08); printers are network or USB label printers that accept PDF or raster output. | Yes: printer models and stock |
 | A-UX-05 | A4 is the default paper size for all documents; Letter is configurable per site. | Yes |
 | A-UX-06 | UI language is English; operator vocabulary may need Filipino equivalents in a glossary and, later, a translation layer. | Yes |
 | A-UX-07 | Shared devices hide "Keep me signed in" and use a shorter idle timeout (configuration). | Yes |
@@ -803,6 +1114,8 @@ are listed only where the page adds something. Permissions reference
 | A-UX-12 | The production board columns default to the batch state machine states shown; sites can hide columns they do not use. | Yes: production |
 | A-UX-13 | Operator home tiles are the six listed; a site can hide tiles it does not use. | No (configurable) |
 | A-UX-14 | Dates display `DD MMM YYYY`, times 24-hour, numbers with comma thousands separators, metric units (ADR-019). | Yes |
+| A-UX-15 | Toast "Undo" exists only for the actions in the 5.17 rules matrix; the undo window for an operator's own stock move is 60 seconds (`settings.ux.undo_window_seconds`, per organization, registry in `src/lib/settings.ts`) and applies only while nothing else has touched the lot, box or location; every undo is a linked reversal row plus audit event. All other posted actions have no undo and use the module's `.void` reversal with reason. | Yes: warehouse and QA |
+| A-UX-16 | Wireframe specs for the Phase 5 and 6 screens listed in 9.16 are produced in the design sprint before each phase; the outline table fixes device, primary action and restricted-data rule now so the data model and permissions are not built around a different screen. | No (process) |
 
 Open questions for the owner (Gate 0):
 
