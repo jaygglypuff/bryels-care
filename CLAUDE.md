@@ -58,5 +58,8 @@ the owning persona with the Agent tool rather than improvising outside its exper
 
 ## Commands
 
-Added in Phase 1 (`pnpm dev`, `pnpm test`, `pnpm db:migrate`, ...). Until then there is no
-build to run.
+`pnpm dev`, `pnpm typecheck`, `pnpm test` (integration tests on a real Postgres via
+`TEST_DATABASE_URL`), `pnpm build`, `pnpm db:generate` / `db:migrate` / `db:seed` / `db:reset`.
+See README for setup. Every stock change goes through `postMovement` in
+`src/modules/inventory/ledger.ts`; services take `AuthContext` first and check permission and
+site before touching data.

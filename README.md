@@ -6,9 +6,68 @@ identity and sites, master data, inventory and scanning, procurement, production
 Manufacturing Records, quality and traceability, packaging and dispatch, sales/CRM, HR and
 attendance, operational finance, analytics, and a future customer portal.
 
-**Status: Phase 0 (discovery and architecture) delivered; awaiting Gate 0 approval.**
-No product code exists yet by design; the brief requires architecture, data model and
-permission design to be reviewed before sensitive modules are implemented.
+**Status: MVP built for client demonstration (Gate 0 approved).** The MVP covers the go-live
+flow end to end on fictional data: receive → label → QA release → batch with weighing and the
+digital Batch Manufacturing Record → QA batch release → order → FEFO allocation → dispatch and
+delivery receipt → traceability, plus the owner overview and audit log. Procurement, HR,
+finance, offline mode and the customer portal are planned (shown as "Coming next" in the app).
+See `docs/demo-script.md` for the presenter's guide.
+
+## Run the MVP locally
+
+Prerequisites: Node.js 22, pnpm 10, PostgreSQL 16.
+
+```bash
+pnpm install
+cp .env.example .env             # set DATABASE_URL to your Postgres database
+pnpm db:migrate                  # apply migrations
+pnpm db:seed                     # load the fictional demo data (requires ALLOW_DEMO_SEED=true)
+pnpm dev                         # http://localhost:3000
+```
+
+Demo accounts (password `demo1234`, all fictional): `owner@`, `admin@`, `manager.nfd@`,
+`operator.nfd@`, `checker.nfd@`, `warehouse.nfd@`, `qa.nfd@`, `sales@`, `warehouse.rvs@`,
+`auditor@` at `bryels-care.test`. Reset the demo data at any time with `pnpm db:reset`.
+
+| Command | What it does |
+|---|---|
+| `pnpm dev` | Development server with hot reload |
+| `pnpm build` / `pnpm start` | Production build and server |
+| `pnpm typecheck` | TypeScript strict check |
+| `pnpm test` | Integration tests against a real Postgres (`TEST_DATABASE_URL`, default `postgres://postgres@localhost:5432/bryels_test`) |
+| `pnpm db:generate` | Generate a SQL migration from schema changes (review before committing) |
+| `pnpm db:migrate` / `pnpm db:seed` / `pnpm db:reset` | Apply migrations / load demo data / wipe and reload demo data |
+
+Environment variables: `DATABASE_URL` (required), `DATABASE_MIGRATION_URL` (optional separate
+migration role), `APP_ORIGIN` (public URL, used for origin checks), `ALLOW_DEMO_SEED` (`true`
+only on demo and staging environments; never in production).
+
+## Deploy to Railway (demo or staging)
+
+1. Create a Railway project, add a **PostgreSQL** service, and add a service from this GitHub
+   repository. Railway builds the `Dockerfile` (see `railway.json`).
+2. On the app service set variables: `DATABASE_URL=${{Postgres.DATABASE_URL}}`,
+   `APP_ORIGIN=https://<your-app>.up.railway.app`, and for a demo `ALLOW_DEMO_SEED=true`.
+3. Deploy. On start the container applies migrations, loads the demo data if allowed and empty,
+   and serves on `$PORT`; Railway checks `/api/health`. `/api/ready` reports database status.
+4. Generate a public domain in the service's Networking settings and sign in with a demo account.
+
+The full production topology (worker, bucket, backups, staging/production separation) is in
+`docs/deployment-railway.md` and arrives with later phases.
+
+## Code map
+
+| Path | Contents |
+|---|---|
+| `src/app/(app)/` | Authenticated pages per module (thin server components and server actions) |
+| `src/app/print/` | Print layouts: lot labels, Batch Manufacturing Record, delivery receipt |
+| `src/modules/<module>/` | Domain services: permission and site checks, transactions, audit |
+| `src/modules/inventory/ledger.ts` | The stock ledger: every stock change goes through `postMovement` |
+| `src/db/schema/`, `src/db/migrations/` | Drizzle schema (MVP subset of `docs/data-model.md`) and SQL migrations |
+| `src/db/seed.ts` | Fictional demo data shaped after the Acapulco Soap BMR |
+| `src/lib/` | Auth (argon2id sessions, `AuthContext`), audit, numbering, decimal helpers |
+| `src/ui/` | Design-system components from `docs/ux-system.md` |
+| `tests/integration/` | Integration tests on a real Postgres per module |
 
 ## Source of truth
 
@@ -73,15 +132,3 @@ Phases follow the brief: 0 Discovery → 1 Foundation → 2 Inventory MVP → 3 
 4 Packaging, fulfilment, CRM → 5 Reporting + imports → 6 Procurement + HR/finance →
 7 Offline/PWA hardening → 8 Customer portal + payments → 9 Production readiness.
 Exit criteria per phase are in `docs/PRD.md`.
-
-## Local setup, commands, environment variables, deployment
-
-No code exists yet; the `pnpm` commands (`dev`, `test`, `db:migrate`, ...) are added with
-Slice 1 (see `docs/PRD.md` section 11 and `docs/backlog.md` for the Slice 1 definition). The
-planning documents already define:
-
-- Environment variables and secrets groups: `docs/deployment-railway.md` section 4 and
-  `docs/architecture.md` section 12.
-- First staging deployment checklist: `docs/deployment-railway.md` section 14; topology in
-  section 1.
-- CI pipeline and test commands: `docs/testing.md` section 10.
