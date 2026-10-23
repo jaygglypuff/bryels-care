@@ -36,30 +36,30 @@ the security review.
 ```mermaid
 flowchart TB
   subgraph Clients
-    PWA[PWA on phone / tablet / desktop\nservice worker + IndexedDB outbox]
-    Scanner[Keyboard-wedge scanners\nCamera scanning]
-    Portal[Customer portal\n(Phase 8, separate auth boundary)]
+    PWA["PWA on phone / tablet / desktop<br/>service worker + IndexedDB outbox"]
+    Scanner["Keyboard-wedge scanners<br/>Camera scanning"]
+    Portal["Customer portal<br/>(Phase 8, separate auth boundary)"]
   end
 
   subgraph Railway["Railway project (staging / production)"]
     subgraph Web["web service (Next.js)"]
-      RSC[Server components\n(reads)]
-      Actions[Server actions\n(internal forms)]
-      API["/api/v1 route handlers\n(commands, queries, sync, portal)"]
+      RSC["Server components<br/>(reads)"]
+      Actions["Server actions<br/>(internal forms)"]
+      API["/api/v1 route handlers<br/>(commands, queries, sync, portal)"]
       Health["/api/health, /api/ready"]
     end
     subgraph Worker["worker service (same image)"]
-      Jobs[pg-boss consumers:\nPDF/labels, imports, scheduled reports,\nnotifications, balance reconciliation, sync replay]
+      Jobs["pg-boss consumers (job registry, section 8):<br/>documents, imports, scheduled reports,<br/>notifications, reconciliation, KPI snapshots"]
     end
     subgraph Modules["src/modules (framework-free domain layer)"]
       identity; masterdata; inventory; procurement; production; quality; documents; sales; hr; finance; analytics; platform
     end
-    PG[(PostgreSQL 16\nledgers, records, sessions,\naudit, job queue, reporting views)]
-    Bucket[(S3-compatible bucket\nPDFs, labels, imports,\nattachments, backups)]
+    PG[("PostgreSQL 16<br/>ledgers, records, sessions,<br/>audit, job queue, reporting views")]
+    Bucket[("S3-compatible bucket<br/>PDFs, labels, imports,<br/>attachments, backups")]
   end
 
-  Email[Email provider\n(adapter)]
-  Pay[Payment provider\n(Phase 8, adapter + webhooks)]
+  Email["Email provider<br/>(adapter)"]
+  Pay["Payment provider<br/>(Phase 8, adapter + webhooks)"]
 
   PWA --> RSC & Actions & API
   Scanner --> PWA
@@ -83,19 +83,19 @@ src/
     api/health, api/ready   liveness and readiness
   modules/
     identity/               users, roles, permissions, sessions, site assignments, invitations, MFA
-    masterdata/             products, SKUs, UOM, materials, suppliers, customers, formulas, routings, sites, locations, lines, equipment, numbering, reason codes
-    inventory/              lots, balances, movements, reservations, allocations, containers, counts, labels, FEFO/FIFO
+    masterdata/             products, SKUs, UOM, materials, suppliers, customers, customer requirements, formulas, routings, sites, locations, lines, equipment master, reason codes
+    inventory/              lots, balances, movements, reservations, allocations, containers, counts, pack and pack verification, label jobs, FEFO/FIFO
     procurement/            purchase requests, orders, goods receipts, supplier documents, reorder suggestions
-    production/             plans, work orders, batches, dispensing, process steps, yield, scrap/rework, BMR data
+    production/             plans, work orders, batches, dispensing, process steps, equipment service records and uses, yield, scrap/rework, BMR data
     quality/                inspections, results, holds, dispositions, deviations, CAPA, change control, complaints, recalls, genealogy
     documents/              templates, versions, generation, reprints, print layouts
-    sales/                  quotes, orders, allocations, pick/pack, shipments, delivery receipts, returns, customer requirements
+    sales/                  quotes, orders, picks, shipments, delivery receipts, returns (allocations and pack are inventory; customer requirements are masterdata)
     hr/                     employees, shifts, attendance imports, exceptions, leave, payroll periods (phased)
     finance/                invoices, bills, payments, credit notes, expenses, costing, reconciliation (phased)
     analytics/              KPI definitions, reporting views, scheduled reports, exports
-    platform/               audit events, background jobs, notifications, files, imports, settings, feature flags
+    platform/               audit events, background jobs, notifications, numbering rules, files, imports, settings, feature flags
   db/
-    schema/                 Drizzle schema per module (one file per module, exported from index)
+    schema/                 Drizzle schema, one file per module: src/db/schema/<module>.ts (identity, platform, masterdata, inventory, procurement, production, quality, documents, sales, hr, finance, analytics), exported from index.ts (docs/data-model.md section 13.2)
     migrations/             generated SQL migrations (reviewed, committed)
     seed/                   fictional seed data scripts (dev/staging only)
   lib/                      cross-cutting infrastructure (not business rules)
@@ -103,6 +103,7 @@ src/
     db.ts                   connection, transaction helper
     result.ts               ok/err result type and error codes
     idempotency.ts          idempotency key storage and replay
+    jobs.ts                 job registry: job codes, payload schemas, idempotency key builders (section 8)
     audit.ts                audit event writer
     state-machine.ts        typed transition tables
     money.ts, quantity.ts   decimal helpers, UOM conversion
@@ -205,33 +206,81 @@ Exports use the same scoped queries, so a CSV can never contain another site's r
 | App ↔ providers | Adapters with verified webhooks | Direct provider calls from UI | Provider adapter interfaces in `platform`, secrets in environment |
 | Runtime ↔ database | Runtime role (DML only) | Schema changes | Separate migration role; RLS evaluated later (ADR-022) |
 
-## 8. Background work
+## 8. Background work (job registry)
 
-pg-boss (ADR-015) runs in the worker service against the same database. Job classes:
+pg-boss (ADR-015) runs in the worker service against the same database. This table is the
+**job registry**: every job code used anywhere in the documentation or code appears here, and
+nowhere else may a new code be introduced. Rules:
 
-| Job | Trigger | Idempotency | Phase |
-|---|---|---|---|
-| Generate document PDF (BMR, dispensing sheet, DR, pick list, labels) | command enqueues after posting | keyed by (document id, template version) | 3 |
-| Label batch print job | user request | keyed by label job id | 2 |
-| Import processing (attendance, master data) | upload completes | keyed by import job id; row-level results | 5 |
-| Scheduled reports | cron | keyed by (report id, period) | 5 |
-| Notifications (in-app, email) | domain events | keyed by event id | 2 |
-| Balance reconciliation (ledger vs projection) | nightly + on demand | read-only; writes a reconciliation report | 2 |
-| Expiry and FEFO risk scan | nightly | idempotent recompute | 2 |
-| Sync replay (optional server-side ordering) | sync endpoint | per command idempotency key | 7 |
-| Backup dump to bucket | daily cron | dated object key | 1 |
+1. A job code is `<module>.<job_name>`; `job_name` is lower snake case and may itself be
+   `entity.verb` (pattern `^[a-z]+\.[a-z_]+(\.[a-z_]+)?$`, for example `inventory.reconcile`,
+   `finance.costing.compute`). The owning module is the first segment.
+2. `src/lib/jobs.ts` is the code registry: one entry per code with its payload Zod schema,
+   idempotency key builder and queue class. Enqueuing a code that is not registered fails.
+   `background_jobs.job_kind` (`docs/data-model.md` §3.10) stores the code; the runbook
+   (`docs/operations-runbook.md` §6) and the diagnostics page show the same code.
+3. The idempotency key is `<code>:<key tuple>`; pg-boss `singletonKey` carries the same value
+   so a duplicate enqueue is dropped, and a retry never repeats a posting.
+4. Jobs run with a system `AuthContext` (`system:<code>`, `on_behalf_of` the triggering user
+   when there is one) and still write audit events. Scheduled times are in the site's
+   timezone unless stated; test suites call job functions directly with an `asOf` clock
+   (`docs/testing.md` §2).
 
-Jobs run with a system `AuthContext` and still write audit events. Failed jobs are visible
-in the admin diagnostics view with retry controls (`docs/operations-runbook.md`).
+| Job code | Module | Trigger | Idempotency key tuple | Phase | Notes |
+|---|---|---|---|---|---|
+| `identity.session_purge` | identity | daily | `(as_of_date)` | 1 | deletes session rows 30 days after expiry (`docs/security.md` A-SEC-11) |
+| `platform.partition_maintenance` | platform | monthly (1st) and after migration | `(partition_name)` | 1 | creates `audit_events_YYYY_MM` three months ahead; non-empty `DEFAULT` partition raises S2 (`docs/data-model.md` §8.2) |
+| `platform.reencrypt` | platform | on demand after `DATA_ENCRYPTION_KEY` rotation | `(from_key_id, to_key_id, table_name)` | 1 | re-encrypts rows carrying the previous key id in batches (`docs/operations-runbook.md` §15) |
+| `db.backfill` | db (migrations) | dedicated migration or post-deploy step | `(migration_id, table_name)` | 1 | expand/backfill/contract loops of 5,000 rows, resumable, row counts logged (`docs/data-model.md` §13.3) |
+| `platform.backup_dump` | platform | daily cron 18:17 UTC (02:17 Manila) | `(scheduled_for_date)` | 1 | **not a pg-boss job**: it is the Railway `backup` cron service (`docs/deployment-railway.md` §2, §9); registered here so `backup_runs`, the Backups card and alerts use one name |
+| `platform.metrics_sample` | platform | every 5 min | `(floor(now, 5 min))` | 2 | writes `metrics_samples` (queue depth, failed jobs, sync backlog, reconciliation differences, backup age) |
+| `platform.alerts_evaluate` | platform | every 5 min, after the sample | `(floor(now, 5 min))` | 2 | evaluates alert rules, deduplicates per rule and window, delivers in-app/webhook (`docs/deployment-railway.md` §8) |
+| `platform.notification_dispatch` | platform | domain events (approval requested, dead-lettered job, alert, action-centre item) | `(notification_id, channel)` | 2 in-app / 5 email | email only when `EMAIL_PROVIDER` is configured; otherwise in-app only, never a fake send |
+| `platform.import_job.process` | platform | upload completes and mapping approved (master-data and opening-balance imports) | `(import_job_id)` | 5 (loader rehearsal earlier per `docs/data-migration-plan.md`) | row-level results in `import_job_rows`; posting is a separate user command (`platform.import_job.post`) |
+| `platform.retention_sweep` | platform | weekly | `(retention_policy_id, iso_week)` | 2 | deletes or anonymises per `retention_policies`, honours `legal_holds` (`docs/data-model.md` §12.4, `docs/security.md` §7) |
+| `documents.render` | documents | a `generated_documents` row is created (BMR, dispensing sheet, DR, pick list, statements, reports) or a `label_jobs` row is queued | `(generated_document_id)` | 2 labels / 3 documents | Chromium render, sha256, bucket object, `file_attachments` row (`docs/reports-and-templates.md` §4, §8.5) |
+| `inventory.reconcile` | inventory | nightly 01:00 site time and on demand | `(kind, as_of_date)` | 2 | ledger vs projection per `docs/data-model.md` §5.6; writes `reconciliation_runs`; differences notify, never auto-fix |
+| `inventory.rebuild_balances` | inventory | on demand by `inventory.balance.admin` after a reconciliation difference | `(reconciliation_run_id, balance_keys_hash)` | 2 | recomputes projection rows from the ledger for the listed keys; audited (`docs/operations-runbook.md` §9) |
+| `inventory.expiry_scan` | inventory | nightly and on demand (`asOf`) | `(site_id, as_of_date)` | 2 | lots past expiry become `expired` with a disposition row; FEFO risk and expiring-lot alerts (FR-inventory-12) |
+| `production.equipment_status` | production | nightly | `(site_id, as_of_date)` | 3 | equipment with a passed calibration/maintenance due date and `blocking_rule = 'block'` moves to `maintenance` (`docs/data-model.md` §3.5) |
+| `hr.attendance_import.parse` | hr | mapping chosen on an uploaded attendance file | `(attendance_import_id)` | 5 | `uploaded → parsed` (`docs/modules/hr-attendance-payroll.md` §3) |
+| `hr.attendance.evaluate_day` | hr | after an import is posted; nightly for the previous work date | `(employee_id, work_date, rule_set_version)` | 5 | pairs punches and classifies minutes (HR §5.3) |
+| `hr.attendance.reconcile` | hr | nightly | `(as_of_date)` | 5 | compares events with summaries, reports differences (HR §5) |
+| `hr.payroll.compute` | hr | `hr.payroll_period.submit` (`locked → computed`) | `(payroll_period_id, run_no)` | 6 (gated by ADR-021) | one transaction per employee; `payroll_runs` row records inputs hash and rule-set versions (HR §8.4) |
+| `analytics.refresh_mv` | analytics | every 15 min, one job per materialized view, staggered | `(mv_name, floor(now, 15 min))` | 5 | `REFRESH MATERIALIZED VIEW CONCURRENTLY`; `refresh_log` (`docs/analytics-kpis.md` §4) |
+| `analytics.snapshot_kpis` | analytics | 01:30 site time, after `inventory.reconcile` | `(kpi_id, site_id, as_of_date, filters_hash)` | 5 | inserts `kpi_snapshots` |
+| `analytics.reconcile_kpis` | analytics | 02:00 site time | `(as_of_date)` | 5 | R-queries vs snapshots; mismatch raises a `critical` notification |
+| `analytics.scheduled_report` | analytics | `scheduled_reports.cron_expression` in its timezone | `(scheduled_report_id, period_key)` | 5 | files kept 30 days (A-SEC-30) |
+| `analytics.forecast_baseline` | analytics | weekly, Sunday 03:00 | `(sku_id, site_id, iso_week)` | 5 | produces nothing when data sufficiency fails (`docs/analytics-kpis.md` §6) |
+| `analytics.movers_classify` | analytics | weekly | `(site_id, iso_week)` | 5 | fast/slow mover classification (KPI-INV-05) |
+| `analytics.export_job` | analytics | export request above the synchronous row limit (A-PM-17) | `(export_request_id)` | 5 | same scope checks as the synchronous export; audited file |
+| `finance.period_maintenance` | finance | monthly and on demand | `(fiscal_calendar_version, as_of_month)` | 6 | keeps 12 future periods open (`docs/modules/finance.md` §3) |
+| `finance.statements` | finance | user request or statement schedule | `(customer_id, period_key)` | 6 | statement of account document via `documents.render` |
+| `finance.overdue_scan` | finance | nightly | `(as_of_date)` | 6 | flags overdue invoices, updates customer open balance, notifies |
+| `finance.costing.compute` | finance | costing run submitted | `(costing_run_id)` | 6 | one line per closed batch (finance §6) |
+| `finance.accountant_export` | finance | user request (`finance.accountant_export.export`) | `(export_run_id)` | 6 | files deleted after 30 days; run record stays |
+| `finance.provider.process_event` | finance | payment provider webhook verified | `(provider, provider_event_id)` | 8 | `payment_provider_events` ledger (`docs/security.md` §4.11) |
+
+Not jobs: offline command replay runs synchronously inside `POST /api/v1/sync/commands`
+(`docs/offline-sync.md` §4); the sync backlog is observed by `platform.metrics_sample`. A
+server-side replay job is introduced only if Phase 7 measurements show batches exceeding the
+request budget, through a new row here.
+
+Failed jobs are visible in the admin diagnostics view with retry controls
+(`docs/operations-runbook.md` §6).
 
 ## 9. Documents and printing
 
-Templates are versioned records (`document_template_versions`) holding an HTML/CSS layout
-and a data binding. Generation (ADR-016, proposed) renders the template with a frozen
-snapshot of the source record revision, stores the PDF in the bucket, and records
-`generated_documents` (who, when, template version, source revision, reprint reason). On-screen
-preview uses the same template. Labels share the pipeline with label-sized page settings and
-barcode rendering (ADR-017). Controlled reprint writes an audit event.
+Templates are versioned records (`document_template_versions`) whose `definition` is a
+versioned JSON configuration (schema `document_template/v1`: renderer id and version, dataset,
+page settings, section selection, labels, options). The HTML/CSS is produced by code-defined
+renderers in `src/modules/documents/renderers/<kind>/v<n>.tsx`; **no HTML is stored in or
+executed from the database** (ADR-016 as amended, `docs/reports-and-templates.md` §1.2,
+A-RPT-01). Generation enqueues `documents.render` (§8), which renders the definition against a
+frozen snapshot of the source record revision, stores the PDF in the bucket, and records
+`generated_documents` (who, when, template version, source revision, checksum, reprint
+reason). On-screen preview uses the same renderer. Labels share the pipeline with label-sized
+page settings and barcode rendering (ADR-017). Controlled reprint writes an audit event.
 
 ## 10. Offline strategy (summary)
 
@@ -259,19 +308,28 @@ service worker ships in Phase 7.
 
 ## 12. Environments and configuration
 
+The authoritative variable table (name, type, group, which service receives it, per-environment
+values) is `docs/deployment-railway.md` §4; this summary names the groups the architecture
+depends on.
+
 | Setting | Source | Notes |
 |---|---|---|
-| `DATABASE_URL`, `DATABASE_MIGRATION_URL` | Railway Postgres | runtime vs migration role |
-| `SESSION_SECRET`, `APP_ORIGIN` | Railway variables | cookie signing, Origin checks |
-| `S3_*` | bucket credentials | private bucket |
-| `EMAIL_*` | provider | adapter, optional in dev |
-| `LOG_LEVEL`, `NODE_ENV`, `RAILWAY_ENVIRONMENT` | platform | |
+| `DATABASE_URL`, `DATABASE_MIGRATION_URL`, `DATABASE_BACKUP_URL` | Railway Postgres | runtime role `bc_app` (web and worker), migration role `bc_migrate` (web pre-deploy only), read-only role `bc_backup` (backup cron only) |
+| `SESSION_SECRET`, `CSRF_SECRET`, `FILE_URL_SECRET`, `DATA_ENCRYPTION_KEY` (each with a `_PREVIOUS` twin during rotation), `APP_ORIGIN`, `TRUSTED_PROXY_HEADER` | Railway variables | cookie signing, anti-CSRF tokens, signed download URLs, column encryption with key id, Origin checks, client IP for rate limits |
+| `S3_*`, `BACKUP_*` | bucket credentials | private bucket; backup encryption public key and offsite bucket on the backup service only |
+| `EMAIL_*`, `PDF_RENDERER`, `WORKER_CONCURRENCY` | provider / worker | adapters render "setup required" when unset; `PDF_RENDERER=disabled` until Phase 3 |
+| `APP_ENV`, `MAINTENANCE_MODE`, `LOG_LEVEL`, `NODE_ENV`, `RAILWAY_ENVIRONMENT` | platform | `APP_ENV` is the authoritative environment flag (seed guard, badge); `MAINTENANCE_MODE=1` answers 503 except `/api/health`; `RAILWAY_*` are injected read-only and logged |
 | Business configuration (timezone, currency, numbering, approval rules, FEFO rules, attendance rules) | `settings` and rule tables in the database, editable by `system_admin` | never environment variables |
 
 ## 13. Cross-cutting patterns
 
-- **State machines**: a transition table per record type (`state/<record>.ts`), checked in
-  the command, recorded in `*_state_transitions`. No free-form status strings.
+- **State machines**: a typed transition table per status-bearing record type
+  (`state/<record>.ts`), checked in the command before any write. No free-form status
+  strings. Transitions of the records listed in `docs/data-model.md` §6.1 (equipment,
+  purchase order, work order, batch, inspection, quality hold, sales order, shipment, payroll
+  period, invoice; attendance import pending) are also recorded in their
+  `*_state_transitions` ledger table; every other status change is recorded as an
+  `audit_events` row carrying the before and after status, actor, reason and time.
 - **Versioned master data**: effective-dated revisions with approval; operational records
   reference revision ids and store a frozen snapshot of what they used.
 - **Numbering**: `numbering_rules` allocate human-readable numbers inside the posting
@@ -286,7 +344,9 @@ service worker ships in Phase 7.
 ## 14. Major decisions and their status
 
 See `docs/decision-log.md`. Decisions needing owner approval at Gate 0: ADR-001 to 014 and
-ADR-019 to 021. Decisions deferred to later phases: ADR-015 to 018, ADR-022.
+ADR-019 to 021. ADR-015 to 018 are Proposed and go for approval at the gate of the phase that
+implements them (ADR-015 and 017 Phase 2, ADR-016 Phase 3, ADR-018 Phase 7 with API groundwork
+in Phase 2). ADR-022 is Deferred (evaluated at the end of Phase 2).
 
 ## 15. Risks specific to this architecture
 

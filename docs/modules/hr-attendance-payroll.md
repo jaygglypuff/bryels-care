@@ -66,7 +66,7 @@ belong to `site_id`; personal fields are never required to create the directory 
    resolved through this link: the service looks up the employee whose `user_id = ctx.userId`.
    No link → no self-service screens (empty state explains "ask HR to link your account").
 3. Setting `employment_status = separated` in one transaction: sets `separation_date`, writes
-   `hr.employee_updated`, and, if a user is linked, creates a notification for `system_admin`
+   `hr.employee.updated`, and, if a user is linked, creates a notification for `system_admin`
    to deactivate the user; a setting `hr.employee.auto_deactivate_user_on_separation`
    (default **on**, A-HR-03) deactivates the user and revokes sessions in the same transaction.
 4. Deactivating a user never changes employment status (the person may still be employed
@@ -78,7 +78,7 @@ belong to `site_id`; personal fields are never required to create the directory 
 
 | Concept | Rule |
 |---|---|
-| Primary site | `employees.site_id`; drives HR scope for `site_manager`, the default rule set and holiday calendar, and the default timezone of punches. A transfer edits `site_id` with reason; history is the audit trail (`hr.employee_updated` before/after). Payroll lines store the site in force at lock time. |
+| Primary site | `employees.site_id`; drives HR scope for `site_manager`, the default rule set and holiday calendar, and the default timezone of punches. A transfer edits `site_id` with reason; history is the audit trail (`hr.employee.updated` before/after). Payroll lines store the site in force at lock time. |
 | Department | `departments(site_id)`; used by the department sub-scope (`docs/permissions-matrix.md` §4.4) so a supervisor approves only their department's leave, overtime and corrections. |
 | Supervisor | `supervisor_id` → `employees`. Leave, overtime and correction requests route first to the supervisor's linked user if that user holds the approve permission at the site, else to any `site_manager` of the site, with escalation to `hr_payroll` after the configured delay (`approval_rules`, default 48 h, A-PM-15). |
 | Multi-site workers | One primary site; punches from another site's device raise `site_mismatch` (§4.8) and are accepted only by explicit HR resolution. |
@@ -109,7 +109,7 @@ stateDiagram-v2
 
 | Transition | Permission | Side effects |
 |---|---|---|
-| any → `separated` | `hr.employee.edit` + re-authentication | user deactivation (§2.2.3); open leave/overtime/correction requests cancelled with reason; `time_clock_identifier` kept (history) but excluded from matching after `separation_date` + grace days (`hr.import.identifier_grace_days`, default 7); final-pay handling is a payroll correction line (§8.8), never automatic |
+| any → `separated` | `hr.employee.edit` + re-authentication | user deactivation (§2.2 item 3); open leave/overtime/correction requests cancelled with reason; `time_clock_identifier` kept (history) but excluded from matching after `separation_date` + grace days (`hr.import.identifier_grace_days`, default 7); final-pay handling is a payroll correction line (§8.8), never automatic |
 | `active` ↔ `on_leave` | automatic from approved `LeaveRequest` when `days >= hr.employee.on_leave_threshold_days` (default 5, A-HR-05) or manual | punches during `on_leave` raise `unscheduled` |
 | `active` ↔ `suspended` | `hr.employee.edit`, reason mandatory | punches raise `unscheduled`; excluded from payroll computation unless the reviewer configures otherwise |
 
@@ -163,7 +163,7 @@ summaries in a locked payroll period is blocked (create a new code instead).
 - Resolution order on a work date: site calendar → organization calendar → none. A date may
   carry one holiday per calendar; when both site and organization list it, the site row wins.
 - Edits: `hr.calendar.admin`; changing or deleting a holiday that falls inside a locked
-  payroll period is blocked. Every change is audited (`hr.calendar_changed` **(new)**).
+  payroll period is blocked. Every change is audited (`hr.calendar.changed` **(new)**).
 - Half-day or local (city/province) holidays are modelled as `holiday_kind` values with
   `applies_to_site_ids` on the calendar; the pay treatment is in the payroll rule set, not here.
 
@@ -196,23 +196,24 @@ behind those steps.
 |---|---|---|---|
 | — | `uploaded` | `hr.attendance_import.create` | file type and size per `docs/security.md` §4.6 (csv, xlsx; `.xlsm` rejected; cap 20 MB, 100,000 rows); `checksum_sha256` computed while streaming; same checksum already `posted` → `V-DUP`, continue only as re-run with reason |
 | `uploaded` | `parsed` | mapping chosen or created (`hr.attendance_import.create`), worker job `hr.attendance_import.parse` keyed by import id | mapping covers employee identifier and timestamp; sample of 20 rows parses |
-| `uploaded` / `parsed` | `failed` **(new)** | parse error, cap exceeded, job timeout | row results so far discarded; nothing posted; the import can be re-parsed with another mapping version |
+| `uploaded` / `parsed` | `failed` | parse error, cap exceeded, job timeout | row results so far discarded; nothing posted; the import can be re-parsed with another mapping version |
 | `parsed` | `previewed` | worker finishes row evaluation (§4.4–4.8) | counters filled; preview available |
 | `previewed` | `under_review` | `hr.attendance_import.submit` | the submitter has looked at the validation step (UI) |
-| `under_review` | `approved` **(new)** | `hr.attendance_import.approve` | every row has a result other than `pending`; ambiguous rows are `dismissed`, `requested` or `resolved` (§4.8); `reviewed_by` set; SoD `reviewed_by <> uploaded_by` when `hr.import.require_second_reviewer = true` (default **off**, A-HR-09, because HR may be one person) |
+| `under_review` | `approved` | `hr.attendance_import.approve` | every row has a result other than `pending`; ambiguous rows are `dismissed`, `requested` or `resolved` (§4.8); `reviewed_by` set; SoD `reviewed_by <> uploaded_by` when `hr.import.require_second_reviewer = true` (default **off**, A-HR-09, because HR may be one person) |
 | `approved` | `posted` | `hr.attendance_import.post` | idempotency key = import id; creates `attendance_events` in one transaction; generates the exception report |
 | `under_review` / `approved` | `rejected` | `hr.attendance_import.void` with reason | file and rows kept; nothing posted |
-| `posted` | `reversed` **(new)** | `hr.attendance_import.void` with reason (§4.12) | no event of the import inside a payroll period in `locked` or later, else blocked until `hr.payroll_period.void` reopens it |
+| `posted` | `reversed` | `hr.attendance_import.void` with reason (§4.12) | no event of the import inside a payroll period in `locked` or later, else blocked until `hr.payroll_period.void` reopens it |
 
 Each transition writes `attendance_import_state_transitions` **(new)** (shape
-`docs/data-model.md` §6.1) and the audit events of `docs/security.md` §5
-(`hr.attendance_imported/approved/posted/reversed`).
+`docs/data-model.md` §6.1) and the audit events
+`hr.attendance_import.uploaded/approved/posted/reversed` (naming per `docs/data-model.md`
+§8.1, `module.entity.event`).
 
 ### 4.2 Provenance retained on every import
 
 | Item | Where | Note |
 |---|---|---|
-| Original file, byte for byte | `file_attachments` (bucket, data class restricted, `is_sensitive = true`) | never re-served inline; download via signed URL, audited `documents.downloaded` |
+| Original file, byte for byte | `file_attachments` (bucket, data class restricted, `is_sensitive = true`) | never re-served inline; download via signed URL, audited `documents.file_attachment.downloaded` |
 | Checksum, size, name, content type | `attendance_imports.checksum_sha256`, `file_attachments` | shown on the wizard and the exception report |
 | Uploader and time | `uploaded_by`, `uploaded_at` | |
 | Mapping version | `import_mapping_id` (a specific `import_mappings` version row) | mapping definitions are immutable once used |
@@ -225,9 +226,11 @@ Each transition writes `attendance_import_state_transitions` **(new)** (shape
 
 A profile describes one file layout (one time-clock model / firmware). Profiles are versioned
 (`ver` set): a change creates a new version; imports point at the exact version; versions used
-by a posted import cannot be edited or retired. Administered with `platform.imports.admin`
-(`system_admin`) and `hr.attendance_import.create` (`hr_payroll` may create and edit drafts
-but a profile version must be approved by a second user before use in production, A-HR-10).
+by a posted import cannot be edited or retired. Administered with
+`platform.import_job.{create,approve}` (`system_admin`; a profile version is approved under
+`platform.import_job.approve`, `docs/data-model.md` §4.1) and `hr.attendance_import.create`
+(`hr_payroll` may create and edit drafts but a profile version must be approved by a second
+user before use in production, A-HR-10).
 
 `definition` (jsonb, Zod-validated, `schema_version: "attendance-mapping/v1"`):
 
@@ -265,7 +268,7 @@ sites must be in the organization. A profile is tested against a stored sample f
 | — | No match | | row result `unknown_employee`; resolution options §4.8 |
 
 A match to a `separated` employee outside grace, or to `suspended`/`on_leave`, yields
-`inactive_employee` **(new row result)** rather than `accepted`.
+`inactive_employee` rather than `accepted`.
 
 ### 4.5 Timestamp parsing and timezone
 
@@ -312,19 +315,19 @@ in `correction_note`.
 Row-level results live on `attendance_import_rows.result`; employee/day exceptions live in
 `attendance_exceptions` (`exception_kind`, `work_date`) and are also raised by the daily
 evaluation (§5.3) after posting. Statuses: `open → requested → approved | dismissed` and
-`open → resolved` (`requested` is **new**; the other values exist).
+`open → resolved` (`docs/data-model.md` §3.8).
 
 | Exception | Detected | Row result | Exception kind | Resolution options (who) | Posts? |
 |---|---|---|---|---|---|
 | Duplicate punch | §4.7 | `duplicate` | `duplicate` | confirm duplicate (`resolved`, not posted) or "legitimate" with note (`hr_payroll`) | only if legitimate |
 | Unknown employee | §4.4 no match | `unknown_employee` | — (no employee) | map to employee ± save alias; or dismiss with reason (`hr_payroll`). Bulk map is allowed only for the **same raw identifier** (A-PROC-17) | after mapping |
-| Inactive employee | match to separated/suspended/on_leave | `inactive_employee` **(new)** | `unscheduled` | accept with note (e.g. return from leave not yet recorded) or dismiss | after acceptance |
+| Inactive employee | match to separated/suspended/on_leave | `inactive_employee` | `unscheduled` | accept with note (e.g. return from leave not yet recorded) or dismiss | after acceptance |
 | Missing punch | unpaired `in` or `out` per pairing | `missing_punch` | `missing_in` / `missing_out` | request correction (supervisor proposes time + reason + optional evidence) → HR approves (§4.10); or dismiss (no hours credited) | the existing punch posts; the missing one only as an approved correction event |
-| Out of sequence | `in` after `in`, `out` before any `in`, break punches outside an open pair | `out_of_sequence` **(new)** | `out_of_sequence` **(new)** | HR re-classifies direction with note, or requests correction, or dismisses | after re-classification |
-| Outside shift window | punch beyond `window_before/after` of the resolved shift, or on a day with no schedule | `accepted` (the punch is real) | `unscheduled` or `outside_shift_window` **(new)** | supervisor confirms work (becomes rest-day/unscheduled work class) or marks as not worked; HR approves | yes; classification pending |
-| Device / site mismatch | device's site ≠ employee primary site | `site_mismatch` **(new)** | `site_mismatch` **(new)** | HR accepts for that date (temporary assignment note) or dismisses | after acceptance |
+| Out of sequence | `in` after `in`, `out` before any `in`, break punches outside an open pair | `out_of_sequence` | `out_of_sequence` | HR re-classifies direction with note, or requests correction, or dismisses | after re-classification |
+| Outside shift window | punch beyond `window_before/after` of the resolved shift, or on a day with no schedule | `accepted` (the punch is real) | `unscheduled` or `outside_shift_window` | supervisor confirms work (becomes rest-day/unscheduled work class) or marks as not worked; HR approves | yes; classification pending |
+| Device / site mismatch | device's site ≠ employee primary site | `site_mismatch` | `site_mismatch` | HR accepts for that date (temporary assignment note) or dismisses | after acceptance |
 | Invalid timestamp / value | §4.5 | `error` | — | fix mapping version and re-parse, or dismiss | no |
-| Outside period / age | §4.5.5 | `out_of_range` | — | dismiss or accept with reason | after acceptance |
+| Outside period / age | §4.5 item 5 | `out_of_range` | — | dismiss or accept with reason | after acceptance |
 | Late / undertime / absent / unapproved overtime | §5.3 after posting | — | `late`, `undertime`, `absent`, `overtime_unapproved` | supervisor annotates or requests correction / overtime approval (§6.2); HR closes | n/a (summary) |
 
 Rules: no bulk "accept all" exists for `unknown_employee`, `missing_punch`, `out_of_sequence`
@@ -339,14 +342,15 @@ link); dismissing a row never deletes it.
    `rows_out_of_sequence`, `rows_site_mismatch`, `rows_inactive_employee` **(new counters)**)
    and a filterable table with the raw row, parsed values, employee, verdict and reason.
 2. Review (`under_review`): HR works the exception list (§4.8). Each change writes
-   `hr.attendance_exception_resolved` **(new audit event)**.
+   `hr.attendance_exception.resolved` **(new audit event)**.
 3. Approve (`approved`): the approver sees the final totals and a list of rows that will **not**
    post (with reasons). This list is the body of the exception report.
 4. Post (`posted`): in one transaction, with idempotency key = import id: insert
    `attendance_events` (`source = import`, `attendance_import_row_id`, `status = active`) for
    rows in `accepted` or resolved-to-post results; set `attendance_event_id` on each row; set
-   counters; write `hr.attendance_posted`; enqueue daily evaluation for every affected
-   employee/work date (§5.3) and generation of the exception report (`documents.generated`).
+   counters; write `hr.attendance_import.posted`; enqueue daily evaluation for every affected
+   employee/work date (§5.3) and generation of the exception report
+   (`documents.generated_document.generated`).
 5. Rows still `requested` at post time stay open as exceptions; the correction, when approved,
    posts its own event and marks the row `corrected`.
 
@@ -363,8 +367,8 @@ link); dismissing a row never deletes it.
    differs from the shift boundary by more than `max_correction_minutes_without_evidence`.
 4. Approval appends one `attendance_events` row: `source = correction` (or `manual` when no
    original exists), `corrects_event_id` (original → `status = superseded`), `approved_by`,
-   `correction_reason`; exception → `approved`; audit `hr.attendance_corrected` then
-   `hr.correction_approved` with before/after times.
+   `correction_reason`; exception → `approved`; audit `hr.attendance_event.corrected` then
+   `hr.attendance_event.correction_approved` with before/after times.
 5. Rejection → `dismissed` with reason; the requester is notified; a new request may be filed.
 6. Corrections inside a payroll period in `locked` or later are blocked (`V-STATE`) until the
    period is reopened (§8.8) or are routed to the next period as a dated adjustment.
@@ -383,9 +387,9 @@ of the same file (same checksum) requires a reason, links to the earlier import
    `state`); the message names the period; reopening needs `hr.payroll_period.void` (§8.8).
 3. In one transaction: every event created by the import (and any correction event that
    `corrects_event_id` one of them) is set `status = voided` with `voided_by`, `voided_at`,
-   `void_reason` **(new columns)**; superseded originals are **not** restored; exceptions of
+   `void_reason`; superseded originals are **not** restored; exceptions of
    those rows go `dismissed` with the rollback reference; import → `reversed`; audit
-   `hr.attendance_reversed` listing the event ids; summaries recomputed.
+   `hr.attendance_import.reversed` listing the event ids; summaries recomputed.
 4. The original file, rows, results and the previous exception report stay. Voided events are
    ignored by duplicate detection so a corrected re-import can post them again.
 
@@ -398,16 +402,17 @@ of the same file (same checksum) requires a reason, links to the earlier import
   fallback. Resolution for a work date: site version → organization version → none (summaries
   cannot be computed; the import still posts).
 - Lifecycle `draft → pending_approval → approved → retired` (`docs/data-model.md` §4.2).
-  Draft by `hr.payroll_rule.admin`; approval by `hr.attendance_rule.approve` (referenced by
-  the data model; **missing from the permission catalogue**, §11.3) held by a user other than
-  the submitter; in addition `validated_by`, `validated_at`, `validation_note` **(new
-  columns)** record the company's qualified reviewer's sign-off. A version without validation
-  may be approved for **preview** use (summaries labelled "unvalidated") but a payroll period
-  cannot lock against it.
+  Draft by `hr.payroll_rule.admin`; approval by a second user holding `hr.payroll_rule.admin`
+  who is not the submitter (`approval` set, `docs/data-model.md` §4.1; there is no separate
+  `hr.attendance_rule.*` permission); in addition `validated_by`, `validated_at`,
+  `validation_note` **(new columns)** record the company's qualified reviewer's sign-off. A
+  version without validation may be approved for **preview** use (summaries labelled
+  "unvalidated") but a payroll period cannot lock against it.
 - Keys are typed; a version is complete only when every key marked "required" has a value.
   Values are never defaulted from code at evaluation time: a missing required value fails the
   evaluation with a visible error, never a silent zero.
-- Every value change is a new version; `hr.payroll_rule_changed` records the diff.
+- Every value change is a new version; `hr.attendance_rule_set.changed` records the diff and
+  the approval transition writes `hr.attendance_rule_set.approved` (`docs/data-model.md` §4.2).
 
 ### 5.2 Catalogue (`rule_key` → type; shipped default; who validates)
 
@@ -502,7 +507,7 @@ separate from the reviewer's domain (what it pays).
 | 1 | employee (`hr.leave_request.create`, self-service via §2.2) or `hr_payroll` on behalf | create draft: type, dates, `days` (computed from schedule, half days allowed), reason, attachment | dates not inside a locked payroll period; no overlap with another non-rejected request; balance check if configured |
 | 2 | same | submit | notification to approver (§2.3) |
 | 3 | supervisor / `site_manager` (`hr.leave_request.approve`, department sub-scope) | approve or reject with reason | `V-SOD` self; escalation to `hr_payroll` after 48 h (`approval_rules`) |
-| 4 | system | on approval: daily evaluation marks the dates `leave_<type>`; employee status may go `on_leave` (§2.5); audit `hr.leave_approved` | — |
+| 4 | system | on approval: daily evaluation marks the dates `leave_<type>`; employee status may go `on_leave` (§2.5); audit `hr.leave_request.approved` | — |
 | 5 | employee / `hr.leave_request.void` | cancel | reason when already approved; summaries recomputed |
 
 ### 6.2 Overtime
@@ -511,13 +516,13 @@ Two paths, selected by `overtime_approval_mode` (§5.2):
 
 | Path | Record | Flow | Permissions |
 |---|---|---|---|
-| Pre-approval | `OvertimeRequest` **(new)**: employee, work date, planned start/end or minutes, reason, requested_by, status `submitted → approved | rejected | cancelled`, `approved_minutes_cap` | supervisor or employee requests before the day; approval sets the cap; actual overtime minutes up to the cap count, excess raises `overtime_unapproved` | `hr.overtime.create` **(new)**, `hr.overtime.approve` |
+| Pre-approval | `OvertimeRequest` (`overtime_requests`, `docs/data-model.md` §3.8): employee, work date, planned start/end or minutes, reason, requested_by, status `submitted → approved | rejected | cancelled`, `approved_minutes_cap` | supervisor or employee requests before the day; approval sets the cap; actual overtime minutes up to the cap count, excess raises `overtime_unapproved` | `hr.overtime.create` (P6, catalogued with `hr.overtime.view/void`), `hr.overtime.approve` |
 | Post-facto | `attendance_exceptions` kind `overtime_unapproved` raised by §5.3 | supervisor approves (`approved`) with note or dismisses (minutes reclassified to `regular`/dropped per `overtime_min_minutes`) | `hr.overtime.approve` (department sub-scope) |
 
 Thresholds (`approval_rules` for record type `overtime`: for example minutes per day or per
 week above which `site_manager` or `hr_payroll` must approve rather than the supervisor) are
 data; defaults are blank until HR sets them (A-HR-15). Approvals are audited
-`hr.overtime_approved` with employee id and minutes; the approver can never be the employee.
+`hr.overtime_request.approved` with employee id and minutes; the approver can never be the employee.
 
 ## 7. Time summaries and reports
 
@@ -560,7 +565,7 @@ job `hr.attendance.reconcile`, nightly, reports differences, never fixes silentl
 
 | # | Condition | Where checked |
 |---|---|---|
-| 1 | Setting `hr.payroll.computation_enabled = true`, changeable only by `owner_director` with re-authentication; change audited `hr.payroll_rule_changed` | settings |
+| 1 | Setting `hr.payroll.computation_enabled = true`, changeable only by `owner_director` with re-authentication; change audited `platform.setting.changed` (key named in the payload) | settings |
 | 2 | Attendance rule set version in force for every date of the period is `approved` **and** `validated_by` is set | §5.1 |
 | 3 | Payroll rule set version (§8.3) in force is `approved` and validated; every statutory table referenced is validated and effective | §8.3 |
 | 4 | `hr.payroll.qualified_reviewer_user_ids` names at least one user holding `hr.payroll_period.approve` who is not the computing user (A-HR-16) | settings |
@@ -571,7 +576,7 @@ job `hr.attendance.reconcile`, nightly, reports differences, never fixes silentl
 
 Mapping of plain words to states: draft = `open`; calculated = `computed`; reviewed =
 `pending_approval` with reviewer step recorded; approved = `approved`; paid = `exported` with
-`payment_confirmed_at` **(new)**; closed = `closed`.
+`payment_confirmed_at`; closed = `closed`.
 
 ```mermaid
 stateDiagram-v2
@@ -596,11 +601,11 @@ stateDiagram-v2
 | `locked → computed` | `hr.payroll_period.submit` | `hr_payroll` | gate §8.1 all items; worker job keyed by (period id, run no.); writes `payroll_lines` with `rule_reference` per line; a `payroll_runs` **(new)** row records inputs hash, rule-set versions, duration, totals |
 | `computed → locked` | `hr.payroll_period.submit` | `hr_payroll` | reason; previous lines marked `superseded_by_run_id` **(new)**, never deleted; manual overrides are listed and must be explicitly re-applied |
 | `computed → pending_approval` | `hr.payroll_period.submit` | `hr_payroll` ≠ approver | register totals snapshot on the period; reviewer notified; re-authentication |
-| `pending_approval → approved` | `hr.payroll_period.approve` | step 1 `finance` user in `qualified_reviewer_user_ids`; step 2 `owner_director` (`approval_rules`) | `payroll_approvals` row per step with `note` containing the reviewer's attestation text (A-HR-17); approver ≠ computing/submitting user (`CHECK` + service); re-authentication; `hr.payroll_period_approved` |
+| `pending_approval → approved` | `hr.payroll_period.approve` | step 1 `finance` user in `qualified_reviewer_user_ids`; step 2 `owner_director` (`approval_rules`) | `payroll_approvals` row per step with `note` containing the reviewer's attestation text (A-HR-17); approver ≠ computing/submitting user (`CHECK` + service); re-authentication; `hr.payroll_period.approved` |
 | `pending_approval → locked` | `hr.payroll_period.approve` (reject) | reviewer | reason mandatory; lines kept for comparison |
-| `approved → exported` | `hr.payroll_period.post` | `hr_payroll` | generates one `payslips` row + `GeneratedDocument` (template kind `payslip`) per employee, the payment export file (§8.7) and the register; `exported_at`, `export_file_attachment_id`; `hr.payroll_period_posted`, `hr.payslip_generated`, `hr.payment_export_created` |
-| `exported → closed` | `hr.payroll_period.post` | `hr_payroll` | `payment_confirmed_at`, `payment_reference` **(new)** entered (bank file accepted / cash released; manual confirmation, A-HR-18); accountant export created (§10); period read-only forever |
-| `approved|exported → computed` | `hr.payroll_period.void` | `finance` + `owner_director` (two approvals, `docs/permissions-matrix.md` §5.3) | reason; blocked once `payment_confirmed_at` is set; issued payslips marked `superseded` and reissued after re-approval; `hr.payroll_period_reopened` |
+| `approved → exported` | `hr.payroll_period.post` | `hr_payroll` | generates one `payslips` row + `GeneratedDocument` (template kind `payslip`) per employee, the payment export file (§8.7) and the register; `exported_at`, `export_file_attachment_id`; `hr.payroll_period.posted`, `hr.payslip.generated`, `hr.payment_export.created` |
+| `exported → closed` | `hr.payroll_period.post` | `hr_payroll` | `payment_confirmed_at`, `payment_reference` entered (bank file accepted / cash released; manual confirmation, A-HR-18); accountant export created (§10); period read-only forever |
+| `approved|exported → computed` | `hr.payroll_period.void` | `finance` + `owner_director` (two approvals, `docs/permissions-matrix.md` §5.3) | reason; blocked once `payment_confirmed_at` is set; issued payslips marked `superseded` and reissued after re-approval; `hr.payroll_period.reopened` |
 
 ### 8.3 Configuration structure (all effective-dated, all validated by the reviewer)
 
@@ -625,7 +630,7 @@ stateDiagram-v2
    adjustments. Each line stores `qty`, `rate_amount`, `amount`, `currency`,
    `rule_reference`; money uses `numeric`/`decimal.js` with `money_rounding` applied per line.
 4. Manual lines (`is_manual_override = true`, `override_reason`, `override_by`) are entered
-   by `hr.payroll_line.edit` after a run, audited `hr.payroll_line_adjusted`; they survive a
+   by `hr.payroll_line.edit` after a run, audited `hr.payroll_line.adjusted`; they survive a
    recompute only if re-confirmed.
 5. Totals per employee are written to the period's register snapshot; the run row stores the
    hash of inputs so an identical rerun is detected.
@@ -649,8 +654,8 @@ One `payslips` row per employee and period (unique), rendered from a versioned
 number, masked ids), period, pay date, every line marked `print_on_payslip`, gross,
 deductions, net, employer shares in a separate section, rule-set banner, document number and
 version. Issued to the employee self-service page (`hr.payslip.view` for others; own payslip
-through §2.2). Viewing and downloading are audited (`hr.payslip_viewed` **(new)**,
-`documents.downloaded`). Reissue after reopen generates a new document that references the
+through §2.2). Viewing and downloading are audited (`hr.payslip.viewed` **(new)**,
+`documents.generated_document.downloaded`). Reissue after reopen generates a new document that references the
 superseded one; the old file is retained.
 
 ### 8.7 Payment export
@@ -659,7 +664,7 @@ A bank or payment file per period, produced by `hr.payment_export.export` (R, re
 layout is an `ExportLayout` **(new)** (§10) chosen per `payment_method`; content: employee
 number, name, masked account reference resolved to the full account **only inside the export
 stream**, net amount, currency, pay date; file stored as a sensitive attachment with checksum;
-audit `hr.payment_export_created` with row count and hash; regenerating requires a reason and
+audit `hr.payment_export.created` with row count and hash; regenerating requires a reason and
 supersedes the previous file. No payment provider integration is in scope (A-HR-18).
 
 ### 8.8 Corrections
@@ -668,7 +673,7 @@ supersedes the previous file. No payment provider integration is in scope (A-HR-
 |---|---|
 | Before `approved` | recompute (§8.2) or manual line with reason |
 | `approved`/`exported`, payment not confirmed | reopen with two approvals (§8.2); lines of the superseded run stay visible |
-| After payment confirmed / `closed` | never reopened; a correction is an `adjustment` line in the next or a supplementary period (`period_kind = supplementary` **(new)**, same lifecycle) with `corrects_payroll_line_id` **(new)** and reason; attendance corrections for a closed period are posted as dated events and picked up by the supplementary period |
+| After payment confirmed / `closed` | never reopened; a correction is an `adjustment` line in the next or a supplementary period (`period_kind = supplementary`, same lifecycle) with `corrects_payroll_line_id` and reason; attendance corrections for a closed period are posted as dated events and picked up by the supplementary period |
 | Attendance import rollback touching a closed period | blocked (§4.12); documented as an adjustment instead |
 
 ## 9. Access restrictions and audit
@@ -698,12 +703,12 @@ record outside scope is a 404.
 2. Restricted permissions (`hr.employee_personal_data.*`, `hr.payroll_*`, `hr.payslip.*`,
    `hr.payment_export.export`, `hr.attendance_event.export`, `hr.employee.export`) require
    TOTP (A-PRD-34) and re-authentication within 10 minutes (`docs/security.md` §3.6).
-3. Exports: `.export` permission + the same scoped query + `platform.export_created` with
+3. Exports: `.export` permission + the same scoped query + `platform.export.created` with
    filters, row count, format, hash; row cap 50,000 (A-PM-17); formula-injection
    neutralisation; a "contains personal data" header; `hr.employee.export` omits government
    ids and bank details unless a separate confirmation is ticked (audited).
-4. View audit: `hr.employee_personal_data_viewed` on every detail view of personal fields,
-   `hr.payslip_viewed` **(new)** on payslip view; list screens show directory fields only,
+4. View audit: `hr.employee.personal_data_viewed` on every detail view of personal fields,
+   `hr.payslip.viewed` **(new)** on payslip view; list screens show directory fields only,
    so listing does not spam the audit log (feasibility note for the brief's "audit on view").
 5. Employee files and import files are `is_sensitive` attachments: signed URL 5 minutes,
    download audited, never linked from email.
@@ -716,17 +721,23 @@ record outside scope is a 404.
    approve correction (mandatory), submit vs approve payroll (mandatory), employee vs own
    anything (mandatory).
 
-### 9.3 Audit events used (names from `docs/security.md` §5; additions marked)
+### 9.3 Audit events used (`module.entity.event` per `docs/data-model.md` §8.1; additions marked)
 
-`hr.employee_created/updated`, `hr.employee_personal_data_viewed/changed`,
-`hr.attendance_imported/approved/posted/reversed`, `hr.attendance_corrected`,
-`hr.correction_approved`, `hr.leave_approved`, `hr.overtime_approved`,
-`hr.payroll_rule_changed`, `hr.payroll_period_submitted/approved/posted/reopened`,
-`hr.payroll_line_adjusted`, `hr.payslip_generated`, `hr.payment_export_created`,
-`platform.export_created`, `documents.generated/downloaded`, `platform.import_posted`.
-Additions **(new)**: `hr.attendance_mapping_saved`, `hr.attendance_exception_resolved`,
-`hr.shift_assignment_approved`, `hr.calendar_changed`, `hr.employee_exported`,
-`hr.payslip_viewed`, `hr.payroll_run_completed`, `hr.payroll_closed`.
+Names are the three-segment form the `audit_events.action` CHECK accepts; the two-segment
+names of `docs/security.md` §5 are re-keyed by its owner and every name is registered in
+`src/lib/audit.ts`. Existing: `hr.employee.created/updated`,
+`hr.employee.personal_data_viewed/personal_data_changed`,
+`hr.attendance_import.uploaded/approved/posted/reversed`, `hr.attendance_event.corrected`,
+`hr.attendance_event.correction_approved`, `hr.leave_request.approved`,
+`hr.overtime_request.approved`, `hr.attendance_rule_set.changed/approved`,
+`hr.payroll_rule_set.changed/approved`, `hr.payroll_period.submitted/approved/posted/reopened`,
+`hr.payroll_line.adjusted`, `hr.payslip.generated`, `hr.payment_export.created`,
+`platform.export.created`, `platform.setting.changed`,
+`documents.generated_document.generated/downloaded`, `documents.file_attachment.downloaded`,
+`platform.import_job.posted`.
+Additions **(new)**: `hr.attendance_mapping.saved`, `hr.attendance_exception.resolved`,
+`hr.shift_assignment.approved`, `hr.calendar.changed`, `hr.employee.exported`,
+`hr.payslip.viewed`, `hr.payroll_run.completed`, `hr.payroll_period.closed`.
 
 ### 9.4 Mandatory negative tests (added to `docs/testing.md` by qa-test-engineer)
 
@@ -815,11 +826,10 @@ provenance rules.
 
 | Kind | Item | Owner | Reason |
 |---|---|---|---|
-| Permission | `hr.attendance_rule.approve` (R, P6) — referenced by `docs/data-model.md` §4.1, absent from `docs/permissions-matrix.md` §2.9; alternatively rename the data-model reference to `hr.payroll_rule.admin` + second user | security-engineer | §5.1 |
-| Permission | `hr.overtime.view`, `hr.overtime.create`, `hr.overtime.void` (N/S, P6) | security-engineer | §6.2 pre-approval requests |
+| Permission | `hr.overtime.view`, `hr.overtime.create`, `hr.overtime.void` (N/S, P6) — accepted by the architect, added to `docs/permissions-matrix.md` §2.9 alongside `hr.overtime.approve` | security-engineer | §6.2 pre-approval requests |
 | Permission naming | `docs/process-maps.md` W10 uses `hr.attendance_import.edit`, `hr.attendance_correction.create/approve`; the catalogue names are `hr.attendance_exception.edit`, `hr.attendance_event.edit/approve` | hr-payroll-specialist (process-maps edit), security-engineer | consistency |
-| Entities | `EmployeeContact`, `EmployeeTimeClockAlias`, `Skill`, `EmployeeSkill`, `ShiftPattern`, `ShiftBreakWindow`, `LeaveType`, `LeaveBalance`, `OvertimeRequest`, `AttendanceDaySummary` (+ classes), `PayComponent`, `PayrollRuleSet`/`PayrollRuleValue`, `StatutoryTable`/`StatutoryTableBracket`, `EmployeeCompensation`, `EmployeePayComponentAssignment`, `PayrollRun`, `ExportLayout`, `attendance_import_state_transitions` | database-architect, product-manager (glossary) | §2–§10 |
-| Columns / enum values | `attendance_imports.status` + `failed`, `approved`, `reversed`; `is_historical`, `rerun_of_import_id`; `attendance_import_rows.result` + `inactive_employee`, `out_of_sequence`, `site_mismatch`; `direction_inferred`; `attendance_exceptions.status` + `requested`; `exception_kind` + `out_of_sequence`, `outside_shift_window`, `site_mismatch`; proposal columns on exceptions; `attendance_events.voided_by/at/void_reason`; `shift_assignments.status`, `rest_weekdays`, `pattern_code`; shift windows and default flag; rule-set `validated_by/at/validation_note`; `payroll_periods.payroll_rule_set_id`, `payment_confirmed_at`, `payment_reference`, `period_kind`; `payroll_lines.superseded_by_run_id`, `corrects_payroll_line_id` | database-architect | §3, §4, §5, §8 |
-| Audit events | listed in §9.3 as additions | security-engineer | §9.3 |
+| Entities | `EmployeeContact`, `EmployeeTimeClockAlias`, `Skill`, `EmployeeSkill`, `ShiftPattern`, `ShiftBreakWindow`, `LeaveType`, `LeaveBalance`, `AttendanceDaySummary` (+ classes), `PayComponent`, `PayrollRuleSet`/`PayrollRuleValue`, `StatutoryTable`/`StatutoryTableBracket`, `EmployeeCompensation`, `EmployeePayComponentAssignment`, `PayrollRun`, `ExportLayout`, `attendance_import_state_transitions` (`OvertimeRequest` already exists as `overtime_requests`) | database-architect, product-manager (glossary) | §2–§10 |
+| Columns / enum values (still pending; import/row/exception enum values, `attendance_events.voided_*`, `payroll_periods.period_kind/payment_confirmed_at/payment_reference` and `payroll_lines.corrects_payroll_line_id` are already in `docs/data-model.md` §3.8) | `attendance_imports.is_historical`, `rerun_of_import_id`, counters `rows_out_of_sequence`, `rows_site_mismatch`, `rows_inactive_employee`; `attendance_import_rows.direction_inferred`; proposal columns on `attendance_exceptions` (`proposed_occurred_at`, `proposed_event_kind`, `requested_by`, `request_reason`, `evidence_attachment_id`); `shift_assignments.status`, `rest_weekdays`, `pattern_code`; `shifts.window_before_minutes/window_after_minutes/is_default_for_site` and break windows; rule-set `validated_by/at/validation_note`; `payroll_periods.payroll_rule_set_id` (arrives with `payroll_rule_sets`); `payroll_lines.superseded_by_run_id` | database-architect | §3, §4, §5, §8 |
+| Audit events | listed in §9.3 as additions; the two-segment names in `docs/security.md` §5 (`hr.*`, `documents.generated/downloaded`, `platform.export_created`, `platform.import_posted`) re-keyed to the `module.entity.event` names of §9.3 | security-engineer | §9.3 |
 | Settings keys | `hr.employee.auto_deactivate_user_on_separation`, `hr.employee.on_leave_threshold_days`, `hr.employee.government_id_types`, `hr.import.identifier_grace_days`, `hr.import.max_future_minutes`, `hr.import.max_age_days`, `hr.import.require_second_reviewer`, `hr.calendar.holiday_kinds`, `hr.payroll.computation_enabled`, `hr.payroll.qualified_reviewer_user_ids`, `platform.imports.require_approval` | backend-engineer (`src/lib/settings.ts`) | §2, §4, §8 |
 | Glossary terms | mapping profile, punch, pairing, work date, minute class, time summary, rule set version, qualified reviewer, parallel run, supplementary period, payment confirmation | product-manager | `docs/PRD.md` §12 |
