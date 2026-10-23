@@ -43,6 +43,10 @@ export const materials = pgTable(
     baseUom: text("base_uom").notNull().default("g"),
     shelfLifeDays: integer("shelf_life_days"),
     storageConditions: text("storage_conditions"),
+    /** A lot of this material cannot be released until a CoA is attached (US-2-08; set by QA, A-W1B-03). */
+    requiresCoa: boolean("requires_coa").notNull().default(false),
+    /** false = lots are created released at receipt (QA-configured "release on receipt" class, A-PROC-10). */
+    requiresIncomingInspection: boolean("requires_incoming_inspection").notNull().default(true),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("materials_org_code_uq").on(t.organizationId, t.code)],

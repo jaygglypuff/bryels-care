@@ -18,6 +18,8 @@ export type PostMovementInput = {
   sourceDocumentId?: string;
   sourceDocumentNumber?: string;
   reason?: string;
+  /** For movementType "reversal": the movement being reversed (US-2-07 receipt void). */
+  reversalOfId?: string;
   idempotencyKey?: string;
   meta?: Record<string, unknown>;
 };
@@ -98,6 +100,7 @@ export async function postMovement(tx: Tx, ctx: AuthContext, input: PostMovement
       sourceDocumentId: input.sourceDocumentId ?? null,
       sourceDocumentNumber: input.sourceDocumentNumber ?? null,
       reason: input.reason ?? null,
+      reversalOfId: input.reversalOfId ?? null,
       idempotencyKey: input.idempotencyKey ?? null,
       postedBy: ctx.userId,
       meta: input.meta ?? null,

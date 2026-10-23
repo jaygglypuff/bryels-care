@@ -2804,6 +2804,35 @@ Acceptance mapping: S1-09 (migrate from zero, re-run is a no-op), S1-10 (seed gu
 | P5/P6, requested by module documents, **not yet catalogued in §3** | analytics (`docs/analytics-kpis.md` §8.3): schema `analytics` with `kpi_definitions` (`ver`), `kpi_snapshots` (append-only), `kpi_reconciliation_results`, `refresh_log`, `forecasts`, `report_runs`, `demand_events`, `production_line_calendars` (`reorder_suggestions` is catalogued in §3.4 under procurement, not analytics); HR (`docs/modules/hr-attendance-payroll.md` §11.3): `employee_contacts`, `employee_time_clock_aliases`, `skills`, `employee_skills`, `shift_patterns`, `shift_break_windows`, `leave_types`, `leave_balances`, `attendance_day_summaries`, `pay_components`, `payroll_rule_sets` + `payroll_rule_values`, `statutory_tables` + `statutory_table_brackets`, `employee_compensation`, `employee_pay_component_assignments`, `payroll_runs`, `export_layouts`, `attendance_import_state_transitions`; finance (`docs/modules/finance.md` §2.10): `tax_configurations`, `lot_cost_history` (ledger), `overhead_pools`, `labour_rates`, `standard_costs`, `accountant_export_profiles`, `export_account_mappings`, `accountant_export_runs`, `refund_requests` (P8) | these are accepted in principle; the database architect catalogues them in §3 in the Phase 5 and Phase 6 revisions of this document, following the conventions of §1, before their migrations are generated (§14.3) |
 | Deferred | `journal_entries`, `journal_lines` (ADR-020), `equipment_maintenance_plans`, `maintenance_work_orders`, `spare_parts` (PRD FR-production-15) | need an approved scope and an ADR |
 
+### 13.8 As built: Wave 1 receiving, files and holds (US-2-06 to US-2-10)
+
+What the code implements today (`src/db/schema/receiving.ts`, `files.ts`, `holds.ts`) and where it
+still differs from §3. Differences are deliberate MVP simplifications, listed so the next slice closes them.
+
+| Table | As built | Differs from §3 |
+|---|---|---|
+| `suppliers` | `code`, `name` (unique per organization, name case-insensitive), contact fields, `payment_terms_days`, `default_lead_time_days`, `quality_status` (`new`,`approved`,`conditional`,`suspended`) + `quality_status_reason`, `is_active`, `notes`, created/updated by | `is_active` instead of `+soft`; `tax_identifier` not stored yet (needs masking, §6 of the permissions matrix) |
+| `supplier_materials` | table only (`supplier_id`, `material_id`, `supplier_part_number`, `is_approved`, `lead_time_days`); approval flow Phase 6 | proposer/approver columns arrive with W04-11 |
+| `goods_receipts` | adds `receipt_kind`, `status` (`draft`,`posted`,`cancelled`,`reversed`), nullable `receipt_number` (allocated at posting, §9.3), `supplier_id` (nullable: an unregistered supplier name posts but blocks release until procurement links it), `unplanned_reason_code` (code list, A-W1B-01), `idempotency_key` (unique), `correlation_id`, posted/cancelled/reversed actor, time and reason with checks | status `reversed` added (receipt void, US-2-07 AC3); no `warehouse_id` (one warehouse per site in the MVP) |
+| `goods_receipt_lines` | `line_no`, nullable `lot_id` (set at posting), `qty_entered`/`uom_entered` + `qty_base`, supplier lot and dates incl. `retest_on`, `container_count`, `storage_conditions_confirmed`, `initial_quality_status`, discrepancy kind/note/recorded/approved (check approver ≠ recorder), `document_missing`, `stock_movement_id` | units are text (`g`,`kg`,`mg`,`mL`,`L`,`pcs`) until the UOM tables exist |
+| `supplier_lot_documents` | per line, `lot_id` filled at posting, kind `coa`,`sds`,`specification`,`photo`,`other`, document number/dates, `verified_by/at` | — |
+| `file_attachments` | §3.10 columns plus `storage_driver` (`local`,`s3`), `idempotency_key`, `delete_reason`; key `org/<org>/<attachment>` | `is_sensitive` re-auth download not enforced yet (no re-auth in the MVP) |
+| `quality_holds` | §3.6 columns for lot or location scope (no batch/container yet), `status` `open`,`investigating`,`closed`, resolution, closer ≠ opener check, `idempotency_key` | the location is blocked by the open hold itself, not by `locations.status` (no such column yet) |
+| `quality_hold_lots` | new: each lot a hold put on hold, its status before the hold, the `hold` and closing dispositions | not in §3 |
+| `quality_hold_state_transitions` | §6.1 shape | — |
+| `materials` | adds `requires_coa` (default false, A-W1B-03) and `requires_incoming_inspection` (default true, A-W1B-07) | — |
+| `inventory_lots` | adds `retest_on` | — |
+
+Disposition values written by these flows: `hold` (hold placed, retest due), `hold_lifted` (hold lifted,
+lot back to its pre-hold status, A-W1B-05), `reject` (hold lifted as rejected), `expire` (nightly job
+`inventory.expiry_check`, system actor `system@bryels-care.invalid`, users.status `system`), `release`
+(release on receipt). Audit events: `procurement.goods_receipt.created/updated/posted/cancelled/reversed/
+discrepancy_recorded/supplier_linked`, `procurement.goods_receipt_line.discrepancy_approved`,
+`inventory.inventory_lot.created`, `inventory.stock_movement.posted` (put-away),
+`inventory.stock_movement.held_stock_issued`, `quality.hold.placed/state_changed/lifted`,
+`quality.disposition.expired/held` (job), `documents.file_attachment.uploaded/downloaded/removed`,
+`masterdata.supplier.created/updated`, `platform.export.created`.
+
 ## 14. Open questions and assumptions
 
 ### 14.1 Assumptions register (`A-DM-nn`)

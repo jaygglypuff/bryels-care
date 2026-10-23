@@ -23,6 +23,8 @@ export const inventoryLots = pgTable(
     supplierLotNumber: text("supplier_lot_number"),
     manufacturedOn: date("manufactured_on"),
     expiresOn: date("expires_on"),
+    /** Retest date: the expiry job puts released lots on hold when it is reached (US-2-10, A-PROC-36). */
+    retestOn: date("retest_on"),
     qualityStatus: text("quality_status").notNull().default("quarantine"),
     /** Batch that produced this lot (finished goods and intermediates). */
     sourceBatchId: uuid("source_batch_id"),
@@ -87,25 +89,4 @@ export const stockMovements = pgTable(
   ],
 );
 
-/** Goods receipt header (one receipt can create several lots). */
-export const goodsReceipts = pgTable("goods_receipts", {
-  id: id(),
-  organizationId: uuid("organization_id").notNull().references(() => organizations.id),
-  siteId: uuid("site_id").notNull().references(() => sites.id),
-  receiptNumber: text("receipt_number").notNull(),
-  supplierName: text("supplier_name").notNull(),
-  supplierDocumentNumber: text("supplier_document_number"),
-  receivedBy: uuid("received_by").notNull().references(() => users.id),
-  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
-  notes: text("notes"),
-});
-
-export const goodsReceiptLines = pgTable("goods_receipt_lines", {
-  id: id(),
-  goodsReceiptId: uuid("goods_receipt_id").notNull().references(() => goodsReceipts.id),
-  lotId: uuid("lot_id").notNull().references(() => inventoryLots.id),
-  materialId: uuid("material_id").notNull().references(() => materials.id),
-  qtyBase: numeric("qty_base", QTY).notNull(),
-  locationId: uuid("location_id").notNull().references(() => locations.id),
-  createdAt: createdAt(),
-});
+// Goods receipts and their lines live in ./receiving.ts (Wave 1 W1B, US-2-07).

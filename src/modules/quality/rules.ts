@@ -47,7 +47,7 @@ export function isLotExpired(lot: { qualityStatus: string; expiresOn: string | n
 export function lotDecisionBlocker(
   decision: LotDecision,
   lot: { lotNumber: string; qualityStatus: string; expiresOn: string | null },
-  opts: { isReceiver: boolean; pendingBatchNumber?: string | null; now?: Date },
+  opts: { isReceiver: boolean; pendingBatchNumber?: string | null; now?: Date; releaseBlockers?: string[] },
 ): { code: "state" | "blocked_lot" | "separation_of_duties"; message: string } | null {
   const t = LOT_TRANSITIONS[decision];
   if (opts.pendingBatchNumber) {
@@ -58,6 +58,10 @@ export function lotDecisionBlocker(
   }
   if (!t.from.includes(lot.qualityStatus)) {
     return { code: "state", message: `${t.label} is not possible while the lot is ${lot.qualityStatus.replace("_", " ")}.` };
+  }
+  if (t.to === "released" && opts.releaseBlockers?.length) {
+    // Receiving and hold rules (open discrepancy, missing CoA, unlinked supplier, open QA hold; US-2-07/08/10).
+    return { code: "state", message: opts.releaseBlockers.join(" ") };
   }
   if (t.to === "released") {
     if (opts.isReceiver) {

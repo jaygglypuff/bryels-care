@@ -3,6 +3,7 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { daysUntil, fmtDate, fmtDateTime } from "@/lib/qty";
 import { getLotDisposition } from "@/modules/quality/dispositions";
+import { issueDownloadUrl, listLotDocuments } from "@/modules/inventory/receiving-documents";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
 import { Banner, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -47,6 +48,12 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
     throw e;
   }
   const { lot } = v;
+  const docs = await Promise.all(
+    (await listLotDocuments(ctx, lot.id)).map(async (d) => ({
+      ...d,
+      href: ctx.can("documents.file_attachment.view") ? ((await issueDownloadUrl(ctx, d.id).catch(() => null))?.url ?? null) : null,
+    })),
+  );
   const banner = BANNER[lot.qualityStatus] ?? { title: lot.qualityStatus, body: "" };
   const days = daysUntil(lot.expiresOn);
   const options: DecisionOption[] = v.decisions.map((d) => ({
@@ -135,6 +142,24 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
             )}
           </Card>
         </div>
+
+        {lot.itemKind === "material" && (
+          <Card>
+            <CardTitle>Supplier documents</CardTitle>
+            {docs.length === 0 ? (
+              <p className="text-[13px] text-muted">No CoA or other supplier document is attached to this lot{v.receipt ? "; attach it on the goods receipt" : ""}.</p>
+            ) : (
+              <ul className="space-y-1 text-[13px]">
+                {docs.map((d) => (
+                  <li key={d.id}>
+                    {d.href ? <a href={d.href} className="font-medium text-primary-text hover:underline">{d.fileName}</a> : <span className="font-medium">{d.fileName}</span>}
+                    <span className="text-muted"> · {d.documentKind.toUpperCase()}{d.documentNumber ? ` ${d.documentNumber}` : ""} · {d.uploadedBy}, {fmtDateTime(d.createdAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        )}
 
         <Card>
           <CardTitle>Stock on hand</CardTitle>

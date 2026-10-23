@@ -11,6 +11,7 @@ import { hash } from "@node-rs/argon2";
 import * as s from "./schema";
 import { ROLE_BUNDLES } from "../lib/permissions";
 import { LOTION_ROUTING, SOAP_ROUTING, type SeedStep, seedApprovedFormulaAndRouting, seedW1D } from "./seeds/w1d";
+import { seedReceivingW1B } from "./seeds/w1b";
 
 if (process.env.ALLOW_DEMO_SEED !== "true") {
   console.error("Refusing to seed: ALLOW_DEMO_SEED is not true. Demo data must never reach production.");
@@ -417,6 +418,7 @@ async function main() {
 
   await seedW1D(db, { O, U, sites: { NFD: nfd.id, RVS: rvs.id }, roleRows, passwordHash: pw });
 
+  await seedReceivingW1B(db);
   console.log(`Seeded demo organization with ${mats.length} materials, ${counters.LOT} lots, ${counters.BATCH} batches, ${counters.SO} orders.`);
   await client.end();
 }

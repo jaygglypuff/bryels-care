@@ -24,6 +24,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { postMovement } from "@/modules/inventory/ledger";
+import { lotReleaseBlockers } from "@/modules/inventory";
 import {
   BATCH_DECIDED_STATUSES,
   BATCH_TRANSITIONS,
@@ -265,11 +266,12 @@ export async function getLotDisposition(ctx: AuthContext, lotId: string) {
   const pending = await pendingBatchFor(db, lot);
   const receivers = await receiverIds(db, lot);
   const isReceiver = receivers.has(ctx.userId);
+  const releaseBlockers = await lotReleaseBlockers(db, lot.id);
   const decisions = LOT_DECISIONS.map((d) => ({
     decision: d,
     label: LOT_TRANSITIONS[d].label,
     toStatus: LOT_TRANSITIONS[d].to,
-    blocker: lotDecisionBlocker(d, lot, { isReceiver, pendingBatchNumber: pending?.number ?? null })?.message ?? null,
+    blocker: lotDecisionBlocker(d, lot, { isReceiver, pendingBatchNumber: pending?.number ?? null, releaseBlockers })?.message ?? null,
   }));
 
   return {
@@ -282,6 +284,7 @@ export async function getLotDisposition(ctx: AuthContext, lotId: string) {
     sourceBatch,
     pendingBatch: pending,
     expired: isLotExpired(lot),
+    releaseBlockers,
     isReceiver,
     canDecide: ctx.can("quality.disposition.approve"),
     decisions,
@@ -363,7 +366,8 @@ export async function decideLot(ctx: AuthContext, input: DecideLotInput) {
 
     const pending = await pendingBatchFor(tx, lot);
     const receivers = await receiverIds(tx, lot);
-    const blocker = lotDecisionBlocker(input.decision, lot, { isReceiver: receivers.has(ctx.userId), pendingBatchNumber: pending?.number ?? null });
+    const releaseBlockers = t.to === "released" ? await lotReleaseBlockers(tx, lot.id) : [];
+    const blocker = lotDecisionBlocker(input.decision, lot, { isReceiver: receivers.has(ctx.userId), pendingBatchNumber: pending?.number ?? null, releaseBlockers });
     if (blocker) throw new DomainError(blocker.code, blocker.message);
 
     const dispositionId = uuidv7();

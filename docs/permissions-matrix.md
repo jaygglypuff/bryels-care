@@ -984,6 +984,19 @@ from the shared test kit. A pull request that adds an entity without these tests
 | `authz.portal.tenant_isolation` (P8) | Portal user requests another tenant's order/document | 404; internal endpoints reject portal cookie with 401 |
 | `authz.ui.not_a_control` (e2e) | Hidden button invoked through devtools/direct POST | Server denies; proves UI hiding is not relied on |
 
+### 8.1 As built: role bundles in code (Wave 1 receiving)
+
+`src/lib/permissions.ts` holds the MVP subset of this catalogue. Wave 1 W1B added the strings
+`masterdata.supplier.{view,create,edit,export}`, `procurement.goods_receipt.{view,create,post,export,void}`,
+`procurement.receipt_discrepancy.approve`, `procurement.supplier_lot_document.{view,create}`,
+`documents.file_attachment.{view,create,export,void}`, `quality.hold.{view,create,approve}` and
+`inventory.held_stock_issue.approve`, granted per section 3 to warehouse_operator, site_manager, qa_qc,
+auditor (exports) and a new `procurement` bundle. owner_director no longer holds
+`quality.disposition.approve` and `quality.hold.approve` (A-PM-08; US-2-10 AC1). The MVP string
+`inventory.receipt.post` is superseded by `procurement.goods_receipt.{create,post}` and remains only
+until the dashboard tile and lots page stop using it. Restricted (R) permissions do not yet require
+re-authentication (no re-auth flow in the MVP).
+
 ## 9. Assumptions and open questions
 
 | Id | Assumption (default) | Needs confirmation from |

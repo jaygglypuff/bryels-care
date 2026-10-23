@@ -71,15 +71,39 @@ export const PERMISSIONS = [
   "masterdata.equipment.admin",
   "production.equipment_use.create",
   "production.equipment_override.approve",
+  // Wave 1 W1B: receiving, suppliers, supplier documents, file attachments, holds (US-2-06..US-2-10)
+  "masterdata.supplier.view",
+  "masterdata.supplier.create",
+  "masterdata.supplier.edit",
+  "masterdata.supplier.export",
+  "procurement.goods_receipt.view",
+  "procurement.goods_receipt.create",
+  "procurement.goods_receipt.post",
+  "procurement.goods_receipt.export",
+  "procurement.goods_receipt.void",
+  "procurement.receipt_discrepancy.approve",
+  "procurement.supplier_lot_document.view",
+  "procurement.supplier_lot_document.create",
+  "documents.file_attachment.view",
+  "documents.file_attachment.create",
+  "documents.file_attachment.export",
+  "documents.file_attachment.void",
+  "quality.hold.view",
+  "quality.hold.create",
+  "quality.hold.approve",
+  "inventory.held_stock_issue.approve",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
 
 const VIEW_ALL = PERMISSIONS.filter((p) => p.endsWith(".view"));
 
+/** Decisions only qa_qc may take; the owner sees but cannot release or lift holds (A-PM-08, US-2-10 AC1). */
+const QA_ONLY: readonly Permission[] = ["quality.disposition.approve", "quality.hold.approve"];
+
 /** Seeded role bundles (read-only templates). */
 export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; permissions: readonly Permission[] }> = {
-  owner_director: { name: "Owner/Director", orgWide: true, permissions: PERMISSIONS },
+  owner_director: { name: "Owner/Director", orgWide: true, permissions: PERMISSIONS.filter((p) => !QA_ONLY.includes(p)) },
   system_admin: {
     name: "System Administrator",
     orgWide: true,
@@ -104,6 +128,17 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
       "production.batch.submit",
       "production.dispense_record.approve",
       "sales.sales_order.approve",
+      // Wave 1 W1B
+      "procurement.goods_receipt.create",
+      "procurement.goods_receipt.post",
+      "procurement.goods_receipt.export",
+      "procurement.goods_receipt.void",
+      "procurement.receipt_discrepancy.approve",
+      "procurement.supplier_lot_document.create",
+      "documents.file_attachment.create",
+      "documents.file_attachment.export",
+      "documents.file_attachment.void",
+      "quality.hold.create",
     ],
   },
   production_operator: {
@@ -140,6 +175,18 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
       "sales.shipment.view",
       "sales.allocation.post",
       "sales.shipment.post",
+      // Wave 1 W1B
+      "masterdata.supplier.view",
+      "procurement.goods_receipt.view",
+      "procurement.goods_receipt.create",
+      "procurement.goods_receipt.post",
+      "procurement.supplier_lot_document.view",
+      "procurement.supplier_lot_document.create",
+      "documents.file_attachment.view",
+      "documents.file_attachment.create",
+      "documents.file_attachment.export",
+      "quality.hold.view",
+      "quality.hold.create",
     ],
   },
   qa_qc: {
@@ -149,6 +196,38 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
       ...VIEW_ALL.filter((p) => !p.startsWith("identity.") && !p.startsWith("platform.")),
       "quality.disposition.approve",
       "quality.test_result.create",
+      // Wave 1 W1B
+      "masterdata.supplier.edit",
+      "procurement.supplier_lot_document.create",
+      "documents.file_attachment.create",
+      "documents.file_attachment.export",
+      "documents.file_attachment.void",
+      "quality.hold.create",
+      "quality.hold.approve",
+      "inventory.held_stock_issue.approve",
+    ],
+  },
+  procurement: {
+    name: "Procurement",
+    orgWide: false,
+    permissions: [
+      "masterdata.supplier.view",
+      "masterdata.supplier.create",
+      "masterdata.supplier.edit",
+      "masterdata.supplier.export",
+      "masterdata.material.view",
+      "masterdata.location.view",
+      "inventory.lot.view",
+      "procurement.goods_receipt.view",
+      "procurement.goods_receipt.export",
+      "procurement.receipt_discrepancy.approve",
+      "procurement.supplier_lot_document.view",
+      "procurement.supplier_lot_document.create",
+      "documents.file_attachment.view",
+      "documents.file_attachment.create",
+      "documents.file_attachment.export",
+      "quality.disposition.view",
+      "quality.hold.view",
     ],
   },
   sales_cs: {
@@ -166,7 +245,11 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
       "analytics.dashboard.view",
     ],
   },
-  auditor: { name: "Auditor (read-only)", orgWide: true, permissions: VIEW_ALL },
+  auditor: {
+    name: "Auditor (read-only)",
+    orgWide: true,
+    permissions: [...VIEW_ALL, "masterdata.supplier.export", "procurement.goods_receipt.export", "documents.file_attachment.export"],
+  },
 };
 
 // Wave 1 W1D: role grants for production engineering master data (docs/permissions-matrix.md §3.2,

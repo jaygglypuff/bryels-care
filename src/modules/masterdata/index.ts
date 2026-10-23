@@ -90,3 +90,8 @@ export {
 export { APPROVAL_POLICIES, ROUTING_SEQUENCING_ONLY_POLICY, type ApprovalRecordType, type ApprovalStepPolicy } from "./approval-policy";
 export { VERSION_STATUSES, VERSION_TRANSITIONS, canVersionTransition, businessToday, effectiveLabel, type VersionStatus } from "./versioning";
 export { STEP_KINDS, AREAS, EQUIPMENT_KINDS } from "./schemas";
+
+// Wave 1 W1B: suppliers (US-2-06)
+export { listSuppliers, supplierOptions, getSupplier, createSupplier, updateSupplier, exportSuppliersCsv, type SupplierFilter } from "./suppliers";
+export { SUPPLIER_QUALITY_STATUSES, SUPPLIER_QUALITY_LABELS, SupplierInputSchema, parseOrThrow, type SupplierInput, type SupplierQualityStatus } from "./supplier-schemas";
+export { toCsv, neutralizeCell } from "./csv";
