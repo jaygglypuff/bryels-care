@@ -78,15 +78,15 @@ describe("goods receipt", () => {
     const lines = await db.select().from(goodsReceiptLines).where(eq(goodsReceiptLines.goodsReceiptId, r.receiptId));
     expect(lines).toHaveLength(2);
     for (const l of lines) {
-      const [lot] = await db.select().from(inventoryLots).where(eq(inventoryLots.id, l.lotId));
+      const [lot] = await db.select().from(inventoryLots).where(eq(inventoryLots.id, l.lotId!));
       expect(lot.qualityStatus).toBe("quarantine");
       expect(lot.siteId).toBe(nfd.id);
       expect(lot.lotNumber).toMatch(/^L-\d{4}-\d{5}$/);
-      expect(await onHand(l.lotId, l.locationId)).toBe(l.qtyBase);
+      expect(await onHand(l.lotId!, l.locationId)).toBe(l.qtyBase);
     }
     const mv = await db.select().from(stockMovements).where(eq(stockMovements.sourceDocumentId, r.receiptId));
     expect(mv.map((m) => m.movementType)).toEqual(["receipt", "receipt"]);
-    const ev = await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, r.receiptId), eq(auditEvents.action, "inventory.goods_receipt.posted")));
+    const ev = await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, r.receiptId), eq(auditEvents.action, "procurement.goods_receipt.posted")));
     expect(ev).toHaveLength(1);
   });
 
@@ -128,27 +128,27 @@ describe("stock transfer", () => {
     const storage = await loc(nfd.id, "PKG-01");
 
     await expectDomain(
-      transferStock(whNfd, { lotId: line.lotId, fromLocationId: rcv.id, toLocationId: storage.id, qty: "100", reason: "put away", idempotencyKey: randomUUID() }),
+      transferStock(whNfd, { lotId: line.lotId!, fromLocationId: rcv.id, toLocationId: storage.id, qty: "100", reason: "put away", idempotencyKey: randomUUID() }),
       "blocked_lot",
     );
     const key = randomUUID();
-    const t1 = await transferStock(whNfd, { lotId: line.lotId, fromLocationId: rcv.id, toLocationId: qua.id, qty: "200", reason: "to cage", idempotencyKey: key });
-    const t2 = await transferStock(whNfd, { lotId: line.lotId, fromLocationId: rcv.id, toLocationId: qua.id, qty: "200", reason: "to cage", idempotencyKey: key });
+    const t1 = await transferStock(whNfd, { lotId: line.lotId!, fromLocationId: rcv.id, toLocationId: qua.id, qty: "200", reason: "to cage", idempotencyKey: key });
+    const t2 = await transferStock(whNfd, { lotId: line.lotId!, fromLocationId: rcv.id, toLocationId: qua.id, qty: "200", reason: "to cage", idempotencyKey: key });
     expect(t1.number).toMatch(/^MOV-\d{2}-\d{6}$/);
     expect(t2.replayed).toBe(true);
     expect(t2.movementId).toBe(t1.movementId);
-    expect(await onHand(line.lotId, rcv.id)).toBe("300.000000");
-    expect(await onHand(line.lotId, qua.id)).toBe("200.000000");
+    expect(await onHand(line.lotId!, rcv.id)).toBe("300.000000");
+    expect(await onHand(line.lotId!, qua.id)).toBe("200.000000");
     const ev = await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, t1.movementId), eq(auditEvents.action, "inventory.stock_movement.transferred")));
     expect(ev).toHaveLength(1);
 
     await expectDomain(
-      transferStock(whNfd, { lotId: line.lotId, fromLocationId: rcv.id, toLocationId: qua.id, qty: "301", reason: "too much", idempotencyKey: randomUUID() }),
+      transferStock(whNfd, { lotId: line.lotId!, fromLocationId: rcv.id, toLocationId: qua.id, qty: "301", reason: "too much", idempotencyKey: randomUUID() }),
       "insufficient_stock",
     );
     // Another site's warehouse operator cannot see or move it.
     await expectDomain(
-      transferStock(whRvs, { lotId: line.lotId, fromLocationId: rcv.id, toLocationId: qua.id, qty: "1", reason: "cross site", idempotencyKey: randomUUID() }),
+      transferStock(whRvs, { lotId: line.lotId!, fromLocationId: rcv.id, toLocationId: qua.id, qty: "1", reason: "cross site", idempotencyKey: randomUUID() }),
       "not_found",
     );
   });

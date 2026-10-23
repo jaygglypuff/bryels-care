@@ -4,3 +4,6 @@ export * from "./inventory";
 export * from "./production";
 export * from "./quality";
 export * from "./sales";
+export * from "./files";
+export * from "./receiving";
+export * from "./holds";

@@ -7,7 +7,7 @@ export type QuickAction = { label: string; href: string; icon: string; permissio
 /** Round icon rail (Dribbble reference): the most common operator actions, one tap away. */
 export const QUICK_ACTIONS: QuickAction[] = [
   { label: "Scan or look up", href: "/inventory/scan", icon: "scan", permission: "inventory.lot.view" },
-  { label: "Receive materials", href: "/inventory/receive", icon: "receive", permission: "inventory.receipt.post" },
+  { label: "Receive materials", href: "/inventory/receive", icon: "receive", permission: "procurement.goods_receipt.create" },
   { label: "New batch", href: "/production/new", icon: "batch", permission: "production.batch.create" },
   { label: "QA queue", href: "/quality", icon: "qa", permission: "quality.disposition.view" },
   { label: "New sales order", href: "/sales/new", icon: "order", permission: "sales.sales_order.create" },
@@ -23,7 +23,9 @@ export const NAV: NavGroup[] = [
     icon: "boxes",
     items: [
       { label: "Lots & stock", href: "/inventory", permission: "inventory.lot.view" },
-      { label: "Receive materials", href: "/inventory/receive", permission: "inventory.receipt.post" },
+      { label: "Receive materials", href: "/inventory/receive", permission: "procurement.goods_receipt.create" },
+      { label: "Goods receipts", href: "/inventory/receipts", permission: "procurement.goods_receipt.view" },
+      { label: "Put away", href: "/inventory/receive/put-away", permission: "inventory.movement.post" },
       { label: "Scan / look up", href: "/inventory/scan", permission: "inventory.lot.view" },
       { label: "Stock movements", href: "/inventory/movements", permission: "inventory.movement.view" },
     ],
@@ -42,6 +44,7 @@ export const NAV: NavGroup[] = [
     icon: "shield",
     items: [
       { label: "QA queue", href: "/quality", permission: "quality.disposition.view" },
+      { label: "QA holds", href: "/quality/holds", permission: "quality.hold.view" },
       { label: "Traceability", href: "/quality/trace", permission: "quality.genealogy.view" },
     ],
   },
@@ -61,6 +64,7 @@ export const NAV: NavGroup[] = [
       { label: "Materials", href: "/masterdata/materials", permission: "masterdata.material.view" },
       { label: "Products", href: "/masterdata/products", permission: "masterdata.product.view" },
       { label: "Locations", href: "/masterdata/locations", permission: "masterdata.location.view" },
+      { label: "Suppliers", href: "/masterdata/suppliers", permission: "masterdata.supplier.view" },
     ],
   },
   {

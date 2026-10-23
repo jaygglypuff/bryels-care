@@ -42,6 +42,18 @@ Environment variables: `DATABASE_URL` (required), `DATABASE_MIGRATION_URL` (opti
 migration role), `APP_ORIGIN` (public URL, used for origin checks), `ALLOW_DEMO_SEED` (`true`
 only on demo and staging environments; never in production).
 
+File attachments (supplier CoA, delivery photos; `docs/security.md` §4.6, §4.8):
+
+| Variable | Use |
+|---|---|
+| `FILE_STORAGE` | `local` (development: files under `FILE_STORAGE_DIR`, default `./.data/files`, excluded from version control, never served statically) or `s3` (staging/production: private S3-compatible bucket, e.g. the Railway Bucket). Unset = uploads show "File storage isn't set up" and nothing is stored |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE` | Bucket settings when `FILE_STORAGE=s3` (Railway: `${{Bucket.ENDPOINT}}` etc., path style `false`; MinIO: `true`) |
+| `FILE_URL_SECRET` | 32+ random characters; signs the 5-minute, user-bound download links. Required in production (a per-process secret is used in development) |
+
+Custom SQL: after migrating a database that already holds MVP receipts (not a fresh one), run
+`src/db/sql/w1b.sql` once to mark those receipts as posted. The nightly expiry check is the job
+`inventory.expiry_check` (`src/modules/inventory/jobs/expiry-check.ts`), wired by the job registry.
+
 ## Deploy to Railway (demo or staging)
 
 1. Create a Railway project, add a **PostgreSQL** service, and add a service from this GitHub

@@ -10,6 +10,7 @@ import Decimal from "decimal.js";
 import { hash } from "@node-rs/argon2";
 import * as s from "./schema";
 import { ROLE_BUNDLES } from "../lib/permissions";
+import { seedReceivingW1B } from "./seeds/w1b";
 
 if (process.env.ALLOW_DEMO_SEED !== "true") {
   console.error("Refusing to seed: ALLOW_DEMO_SEED is not true. Demo data must never reach production.");
@@ -426,6 +427,7 @@ async function main() {
     await db.insert(s.numberingRules).values({ organizationId: O, documentType: t, prefix: p, sequenceWidth: w, periodKey: pk, nextValue: (counters[t] ?? 0) + 1 });
   }
 
+  await seedReceivingW1B(db);
   console.log(`Seeded demo organization with ${mats.length} materials, ${counters.LOT} lots, ${counters.BATCH} batches, ${counters.SO} orders.`);
   await client.end();
 }
