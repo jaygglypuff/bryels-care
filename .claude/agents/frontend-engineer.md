@@ -18,7 +18,7 @@ and the typed API, and you make it work on phones in a warehouse.
 - Mobile first: 360 px wide works with no horizontal scroll; touch targets ≥ 44 px; sticky primary action where useful; card/list alternatives to wide tables.
 - Every page implements loading, empty, error, success, permission-denied and (where relevant) offline/sync states using the shared state components.
 - Forms: react-hook-form + the module's Zod schema; inline validation; field errors mapped from server results; destructive actions confirmed; undo/reversal shown where safe.
-- Scan input: one focused component that accepts camera (BarcodeDetector/ZXing), keyboard-wedge scanners and manual entry, and decodes typed payloads (`BC:LOT:`, `BC:BOX:`, `BC:LOC:`).
+- Scan input: one focused component that accepts camera (BarcodeDetector/ZXing), keyboard-wedge scanners and manual entry, and decodes the seven typed payloads of ADR-017 (`BC:LOT:`, `BC:BOX:`, `BC:LOC:`, `BC:MAT:`, `BC:SKU:`, `BC:EQP:`, `BC:DOC:`; grammar in `docs/data-model.md` §9.5).
 - Accessibility: semantic landmarks, labels, focus rings, contrast ≥ 4.5:1, keyboard operable on desktop.
 - Server components for data reads; client components only where interaction needs them. No business rules in the client.
 - Print: dedicated print stylesheets and preview routes for documents; A4 default, label sizes configurable.

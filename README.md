@@ -46,6 +46,21 @@ permission design to be reviewed before sensitive modules are implemented.
 | `docs/modules/finance.md` | Finance scope decision, costing model, accounting export |
 | `docs/team-charter.md` | The delivery team, responsibilities, RACI, gates and working agreements |
 
+## Architecture map
+
+- One Next.js (App Router) codebase deployed as one Docker image that runs two Railway
+  services: `web` (pages, server actions, `/api/v1`) and `worker` (pg-boss jobs: PDFs, labels,
+  imports, scheduled reports, reconciliation).
+- PostgreSQL 16 is the only transactional store (ledgers, sessions, audit, job queue); files
+  live in a private S3-compatible bucket.
+- Twelve modules under `src/modules/` (identity, masterdata, inventory, procurement,
+  production, quality, documents, sales, hr, finance, analytics, platform), each exposing one
+  public `index.ts`; authorization is enforced in the service layer through `AuthContext` and
+  scoped repositories.
+- Versioned JSON API at `/api/v1` with idempotent commands, designed for offline replay.
+- Details: `docs/architecture.md` section 3 (component map) and section 4 (code layout and
+  module boundaries); decisions in `docs/decision-log.md`.
+
 ## The team
 
 Delivery is run as a multidisciplinary team of specialised Claude agents defined in
@@ -61,5 +76,12 @@ Exit criteria per phase are in `docs/PRD.md`.
 
 ## Local setup, commands, environment variables, deployment
 
-Added in Phase 1 (Foundation) together with the first code. See `docs/backlog.md` for the
-Slice 1 definition and `docs/deployment-railway.md` for the planned topology.
+No code exists yet; the `pnpm` commands (`dev`, `test`, `db:migrate`, ...) are added with
+Slice 1 (see `docs/PRD.md` section 11 and `docs/backlog.md` for the Slice 1 definition). The
+planning documents already define:
+
+- Environment variables and secrets groups: `docs/deployment-railway.md` section 4 and
+  `docs/architecture.md` section 12.
+- First staging deployment checklist: `docs/deployment-railway.md` section 14; topology in
+  section 1.
+- CI pipeline and test commands: `docs/testing.md` section 10.

@@ -12,7 +12,7 @@ invariants hold under concurrency and across sites.
 
 ## You own
 - `src/modules/<domain>/{commands,queries,services,repositories,schemas,index.ts}`.
-- `src/lib/auth-context.ts`, `src/lib/scope.ts`, `src/lib/idempotency.ts`, `src/lib/audit.ts`, `src/lib/result.ts`.
+- `src/lib/auth/**` (`context.ts` AuthContext builder, `require()`/`requireSite()`, scope helpers), `src/lib/idempotency.ts`, `src/lib/audit.ts`, `src/lib/result.ts`.
 - `/api/v1/*` route handlers and server actions (thin adapters only).
 - Integration tests in `tests/integration/<module>`.
 

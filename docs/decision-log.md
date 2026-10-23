@@ -23,13 +23,14 @@ Entries are numbered `ADR-nnn` and never deleted; a superseded entry points to i
 | ADR-013 | pnpm, TypeScript strict, ESLint boundaries between modules, GitHub Actions CI | Proposed (Gate 0) | 2026-10-12 |
 | ADR-014 | Railway: web service + worker service from one image, managed Postgres, S3-compatible bucket | Proposed (Gate 0) | 2026-10-12 |
 | ADR-015 | pg-boss (Postgres-backed) for background jobs | Proposed (Phase 2) | 2026-10-12 |
-| ADR-016 | PDF generation from HTML/CSS templates with headless Chromium in the worker | Proposed (Phase 3) | 2026-10-12 |
+| ADR-016 | PDF generation: code-defined renderers with versioned JSON template definitions, headless Chromium in the worker | Proposed (Phase 3) | 2026-10-12 |
 | ADR-017 | QR Code default symbology; Code 128 configurable; camera scanning via BarcodeDetector with ZXing fallback | Proposed (Phase 2) | 2026-10-12 |
 | ADR-018 | Offline: PWA (Serwist) + IndexedDB outbox with idempotent commands; server authoritative | Proposed (Phase 7, API groundwork in Phase 2) | 2026-10-12 |
 | ADR-019 | Default locale assumptions: Philippines, Asia/Manila, PHP, metric units | Proposed (Gate 0, needs business confirmation) | 2026-10-12 |
 | ADR-020 | Finance module starts as operational finance support, not a general ledger | Proposed (Gate 0) | 2026-10-12 |
 | ADR-021 | Payroll is import-first and reporting-first; payroll calculation gated behind qualified review | Proposed (Gate 0) | 2026-10-12 |
 | ADR-022 | Postgres row-level security as defense in depth | Deferred (evaluate end of Phase 2) | 2026-10-12 |
+| ADR-023 | Phase 0 reconciliation decisions (Pack in inventory, audit naming, idempotency scope, device table, finance postings without GL, negative stock) | Proposed (Gate 0) | 2026-10-16 |
 
 ---
 
@@ -123,14 +124,21 @@ requester/approver separation and tests proving cross-site access is impossible.
 RLS alone is not enough because scope must also shape API responses and exports.
 RLS as defense in depth is ADR-022.
 
+**Note (2026-10-16).** Permission strings use the catalogue spellings in
+`docs/permissions-matrix.md`: `inventory.movement.*` (not `inventory.stock_movement.*`),
+`quality.hold.*` (not `quality.quality_hold.*`) and `inventory.pack.*` (not `sales.pack.*`); see ADR-023.
+
 ## ADR-006 Append-only ledgers; balances are projections
 
 **Decision.** `stock_movements`, `production_postings` (consumption/output) and financial
 postings are immutable once posted. Corrections are a reversal row linked to the original plus
-a replacement row, each with reason, actor and time. `inventory_balances` (lot × location ×
-status) is a projection updated inside the same transaction as the posting and reconciled by
-a scheduled job against the ledger. Posting serializes on the affected lot/location rows
-(`SELECT ... FOR UPDATE`) and rejects negative balances unless a configured policy allows it.
+a replacement row, each with reason, actor and time. `inventory_balances` (site × location ×
+lot × container × quality status) is a projection updated inside the same transaction as the
+posting and reconciled by a scheduled job against the ledger. Posting serializes on the
+affected lot/location rows
+(`SELECT ... FOR UPDATE`). Negative balances are rejected by a database constraint; allowing
+negative WIP balances for specific sites would require a new ADR replacing the constraint with a
+policy-aware trigger.
 Every posting command carries an idempotency key; a repeated key returns the original result.
 
 **Why.** Traceability, concurrency safety and "never edit historical balances" are
@@ -200,7 +208,7 @@ pre-commit (lint-staged), GitHub Actions CI (lint, typecheck, unit, integration,
 
 **Decision.** One Docker image; Railway services: `web` (Next.js server, health at
 `/api/health` and readiness at `/api/ready`), `worker` (pg-boss consumer, same image,
-`pnpm start:worker`), managed PostgreSQL, and an S3-compatible bucket for files. Environments:
+`node dist/worker.js`), managed PostgreSQL, and an S3-compatible bucket for files. Environments:
 development (local), staging, production, each with its own database and secrets. Migrations
 run as the `web` service's pre-deploy command; the `worker` does not migrate and waits until
 the schema version is current before consuming jobs. Service configuration is expressed as
@@ -276,3 +284,25 @@ payroll/accounting reviewer before the company relies on it.
 Phase 2, evaluate adding Postgres RLS policies keyed on a per-transaction
 `SET LOCAL app.allowed_site_ids` so that a bug in a scoped query cannot leak another site's
 rows. Adoption depends on connection-pool behaviour on Railway and migration complexity.
+
+## ADR-023 Phase 0 reconciliation decisions
+
+**Status.** Proposed (Gate 0), 2026-10-16. Decisions taken by the principal architect while
+reconciling the Phase 0 documents; each amends the ADR in the "Amends" column and is binding for
+the documents and for Phase 1 code.
+
+| # | Decision | Amends | Where defined |
+|---|---|---|---|
+| 1 | `Pack` (pack verification, box assignment) lives in the `inventory` module; permission strings are `inventory.pack.{view,create,submit,approve}`; `sales.pack.*` is withdrawn | ADR-005 | `docs/permissions-matrix.md`, `docs/data-model.md` |
+| 2 | Audit event names are three lower `snake_case` segments `module.entity.event` (e.g. `identity.authorization.denied`, `documents.label_job.printed`), CHECK-enforced; the authorizing permission is stored separately in `permission_code` | ADR-005, ADR-006 | `docs/data-model.md` §8.1 |
+| 3 | Idempotency keys are unique per `(organization_id, key)`, not per user; a repeated key returns the stored result | ADR-006, ADR-018 | `docs/data-model.md` §11.4 |
+| 4 | The client device table is `device_registrations` (sessions and sync commands reference `device_registration_id`) | ADR-018 | `docs/data-model.md` §11, `docs/offline-sync.md` |
+| 5 | Finance ledger rows are `financial_postings` (operational postings per invoice, bill, payment, credit note, period-locked and reversible); no journal entries or general ledger accounts are created unless the owners extend ADR-020 | ADR-020 | `docs/modules/finance.md`, `docs/data-model.md` |
+| 6 | Negative stock is blocked by the `inventory_balances` CHECK constraint in every phase; no site policy may bypass it (see the ADR-006 wording) | ADR-006 | `docs/data-model.md` §5.2, `docs/process-maps.md` V-NEG |
+| 7 | Canonical permission spellings: `inventory.movement.*`, `quality.hold.*`, `inventory.pack.*` | ADR-005 | `docs/permissions-matrix.md` |
+
+**Why.** The Phase 0 documents were written in parallel and diverged on these names and
+rules; one recorded ruling per item stops the drift before code exists.
+
+**Consequences.** Any document still using the superseded spellings is defective and is fixed
+in the Phase 0 consistency pass; Phase 1 lint rules and database CHECKs enforce items 2, 3 and 6.

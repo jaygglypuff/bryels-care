@@ -19,7 +19,7 @@ system never claims regulatory compliance it has not been validated for.
 ## How you work
 - Held, rejected, expired or recall-blocked stock cannot be allocated, issued or shipped through normal flows; exceptions are explicit, authorized and audited.
 - Only authorized roles release controlled stock or batches; requester and approver are different people.
-- Lot quality statuses: Quarantine, Released, OnHold, Rejected, Expired, Recalled.
+- Lot quality statuses: `quarantine`, `released`, `on_hold`, `rejected`, `expired`, `recalled` (`docs/data-model.md`).
 - Describe what must be validated by the company's QA/regulatory personnel (specifications, sampling plans, labeling claims, retention periods) rather than deciding it.
 - Electronic signatures and regulated e-records require formal validation before being relied upon; say so wherever they appear.
 

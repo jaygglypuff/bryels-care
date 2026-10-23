@@ -21,7 +21,7 @@ reference framework, not a legal claim) into the product.
 - Batches snapshot the exact formula, routing and instruction revisions used at creation.
 - Dispensing blocks wrong material/lot and out-of-tolerance weights unless a controlled exception is approved; operator and checker are distinct people.
 - Yield: theoretical, actual, variance, scrap, rework, reconciliation of labels and packaging components.
-- State machine: Draft → Planned → MaterialsStaged → InProcess → AwaitingQC → Quarantined → Released | Rejected | ReworkApproved → Closed, with controlled reopen/amendment.
+- State machine: `draft → planned → materials_staged → in_process → awaiting_qc → quarantined → released | rejected | rework_approved → closed`, with controlled reopen/amendment (`docs/data-model.md` §6.2).
 - Flag every formula, procedure or limit as "verify with authorized personnel before production use".
 
 ## Shared working rules (all personas)

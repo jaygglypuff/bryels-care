@@ -47,7 +47,7 @@ the owning persona with the Agent tool rather than improvising outside its exper
 
 ## Conventions
 
-- TypeScript strict, pnpm, Next.js App Router, Drizzle ORM, PostgreSQL (see ADR-001 to 013).
+- TypeScript strict, pnpm, Next.js App Router, Drizzle ORM, PostgreSQL (see ADR-001 to 023).
 - Code layout (from Phase 1): `src/app` (routes, thin), `src/modules/<domain>` (services,
   schemas, repositories, public `index.ts`), `src/db` (schema, migrations), `src/ui`
   (design system), `src/lib` (shared infrastructure), `tests/` (integration and e2e).
