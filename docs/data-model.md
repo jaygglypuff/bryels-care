@@ -36,7 +36,7 @@ are labelled `A-DM-nn` and collected in §14.
 | Money | `<name>_amount` + `currency` (ISO 4217, `char(3)`) | `total_amount`, `currency` |
 | Constraint names | `pk_`, `fk_<table>_<col>`, `uq_<table>_<cols>`, `ck_<table>_<rule>`, `ix_<table>_<cols>`, `tg_<table>_<purpose>` | `uq_inventory_lots_org_lot_number` |
 | Enum values | lower `snake_case` text, identical to the shared vocabulary | `materials_staged`, `partially_shipped` |
-| Drizzle | one file per domain in `src/db/schema/<domain>.ts`, exported through `src/db/schema/index.ts`; constraint names are set explicitly so generated SQL matches this document | |
+| Drizzle | one file per domain in `src/db/schema/<domain>.ts`, exported through `src/db/schema/index.ts`; constraint names are set explicitly so generated SQL matches this document | `src/db/schema/inventory.ts` |
 
 ### 1.2 Keys
 
@@ -61,9 +61,10 @@ Every catalogue entry in §3 names the sets it includes instead of repeating the
 | `+site` | `site_id uuid NOT NULL FK sites` plus composite `FOREIGN KEY (organization_id, site_id) REFERENCES sites (organization_id, id)` so a row can never point at a site of another organization | operational records |
 | `+site?` | as `+site` but `site_id NULL` = valid for all sites | master data with optional site restriction |
 | `+soft` | `deleted_at timestamptz NULL`, `deleted_by uuid NULL FK users`; unique indexes become partial `WHERE deleted_at IS NULL` | master data only; never ledgers or posted documents |
+| `+status` | `status_changed_at timestamptz NOT NULL DEFAULT now()`, `status_changed_by uuid NOT NULL FK users`; kept in step with `status` by `src/lib/state-machine.ts` (§6.1) | every table whose `status` is governed by a state machine in §6 (`batches`, `work_orders`, `purchase_orders`, `sales_orders`, `inspections`, `quality_holds`, `shipments`, `payroll_periods`, `invoices`, `equipment`); the §3 rows do not repeat them |
 | `ledger` | `id`, `organization_id`, `site_id` (+ composite FK), `posted_at timestamptz NOT NULL DEFAULT now()`, `posted_by uuid NOT NULL FK users`, `correlation_id uuid NOT NULL`, `idempotency_key text NULL`, `reversal_of_id uuid NULL FK self`; no `updated_*`, no `deleted_*`; `BEFORE UPDATE OR DELETE` trigger `forbid_mutation()` raises `integrity_constraint_violation` | append-only tables |
 | `ver` | `version_no int NOT NULL`, `status text NOT NULL` (`draft`, `pending_approval`, `approved`, `rejected`, `retired`), `effective_from date NOT NULL`, `effective_to date NULL`, `supersedes_id uuid NULL FK self`, `change_summary text NULL` + `approval` set; `UNIQUE (<parent>_id, version_no)`; GiST exclusion so approved ranges of one parent never overlap (§4.3) | versioned master records |
-| `approval` | `submitted_by uuid NULL FK users`, `submitted_at timestamptz NULL`, `approved_by uuid NULL FK users`, `approved_at timestamptz NULL`, `approval_note text NULL`; `CHECK (approved_by IS NULL OR approved_by IS DISTINCT FROM submitted_by)` (separation of duties, ADR-005). Multi-step approvals (`approval_rules.step > 1`, `required_count > 1`) record every decision in `approval_decisions` (§3.1, §7.10); the record's own columns hold the final step | approvable records whose SoD is mandatory in `docs/permissions-matrix.md` §5.1 |
+| `approval` | `submitted_by uuid NULL FK users`, `submitted_at timestamptz NULL`, `approved_by uuid NULL FK users`, `approved_at timestamptz NULL`, `approval_note text NULL`; `CHECK (approved_by IS NULL OR approved_by IS DISTINCT FROM submitted_by)` (separation of duties, ADR-005). Multi-step approvals (`approval_rules.step > 1`, `required_count > 1`) record every decision in `approval_decisions` (§3.1, §7 item 10); the record's own columns hold the final step | approvable records whose SoD is mandatory in `docs/permissions-matrix.md` §5.1 |
 | `approval?` | the same five columns **without** the CHECK; separation of duties is enforced by the service against setting `approvals.sod.<record_type>` (default `true`) so the owner can switch it off per record type without a migration (A-PM-14, `A-DM-31`) | `work_orders`, `production_plans`, `sales_orders`, `quotes`, `customer_returns`, `forecast_overrides` |
 | `qty` | `qty_entered numeric(18,6) NOT NULL`, `uom_entered_id uuid NOT NULL FK uoms`, `qty_base numeric(18,6) NOT NULL`, `uom_base_id uuid NOT NULL FK uoms`; `CHECK (qty_entered > 0 AND qty_base > 0)` unless noted | quantity-bearing rows |
 | `money` | `<name>_amount numeric(18,4) NOT NULL`, `currency char(3) NOT NULL DEFAULT 'PHP'` | money-bearing rows |
@@ -120,7 +121,7 @@ the owning module and carries a `schema_version` key inside the document.
 
 | Column | Content |
 |---|---|
-| `document_template_versions.definition` | template layout, field bindings, page settings |
+| `document_template_versions.definition` | renderer id + JSON configuration (section selection, labels, options, page settings; schema `document_template/v1`, ADR-016); never HTML |
 | `import_mappings.definition` | column mapping, parsing rules |
 | `audit_events.before`, `audit_events.after` | redacted entity snapshots |
 | `settings.value` | typed setting value |
@@ -134,6 +135,9 @@ the owning module and carries a `schema_version` key inside the document.
 | `metrics_samples.labels` | metric dimensions written by the `platform.metrics_sample` job (§3.10) |
 | `label_templates.fields` | which optional fields a label prints (schema `label_fields/v1`, §3.2) |
 | `import_job_rows.raw`, `attendance_import_rows.raw` | the original row, untouched |
+| `user_site_assignments.scope` | optional sub-scope of an assignment (warehouse, department, line ids; schema `assignment_scope/v1`; P2, `docs/permissions-matrix.md` §4.4) |
+| `backup_runs.row_counts` | exact row counts of the reference tables at dump time, compared at restore drills (§3.10) |
+| `purchase_order_amendments.before`, `purchase_order_amendments.after` | header and line values before and after an amendment (schema `po_amendment/v1`, §3.4) |
 
 Everything else is columns. Addresses, contacts, tolerances, test specifications, rule values
 and parameters are tables because they are queried, validated and reported on.
@@ -149,6 +153,13 @@ and parameters are tables because they are queried, validated and reported on.
 5. Append-only tables are indexed for their read paths only (`(site_id, lot_id, posted_at)`,
    `(source_document_type, source_document_id)`); no index for admin convenience.
 6. No GIN indexes on JSONB until a measured need appears.
+7. The composite indexes requested by `docs/analytics-kpis.md` §4.4 (17 read-path indexes on
+   `stock_movements`, `production_postings`, `batches`, `batch_state_transitions`,
+   `process_step_records`, `dispense_records`, `inspections`, `quality_holds`, `deviations`,
+   `shipments`, `sales_orders`, `sales_order_state_transitions`, `goods_receipts`,
+   `dispositions`, `attendance_events`, `invoices`, `notifications`) are accepted as written
+   there; they follow rule 2 and are created by the Phase 5 migration `analytics_indexes`
+   (§13.7) rather than being repeated row by row in §3.
 
 ### 1.9 Foreign keys, checks and immutability
 
@@ -166,7 +177,9 @@ and parameters are tables because they are queried, validated and reported on.
 Two layers: (1) `idempotency_keys` stores every command's key, request hash and result so a
 replay returns the original response (ADR-006, ADR-018); (2) ledger rows and posted documents
 also carry `idempotency_key` with a partial unique index, so even a bug in layer 1 cannot post
-twice. Keys are client-generated UUIDv7 strings scoped by `(organization_id, scope, key)`.
+twice. Keys are client-generated UUIDv7 strings, unique per `(organization_id, key)` (§11.4,
+`A-DM-26`); `scope` is stored for diagnostics and request-hash comparison and is not part of
+the uniqueness key.
 
 ## 2. Domain ERDs
 
@@ -496,6 +509,7 @@ Types: `num6` = `numeric(18,6)`, `money` = `numeric(18,4)`, `pct` = `numeric(9,4
 | `code`, `name`, `legal_name` | text | no | `uq (code)` | |
 | `timezone`, `currency`, `locale` | text / char(3) / text | no | defaults `Asia/Manila`, `PHP`, `en-PH` (ADR-019) | configurable |
 | `status` | text | no | ck in (`active`,`suspended`) | |
+| `permissions_version` | int | no | default 0 | bumped in the same transaction as any change to `roles`, `role_permissions` or `user_site_assignments`; compared with `sessions.permissions_version` (§7 item 3, A-PM-01) |
 | **`sites`** · P1 · M · `std +soft` | | | | `uq (organization_id, id)` backs composite site FKs |
 | `code`, `name` | text | no | `uq (organization_id, code)` partial | code appears in numbering patterns |
 | `timezone` | text | no | default organization timezone | dates interpreted here |
@@ -564,6 +578,7 @@ Types: `num6` = `numeric(18,6)`, `money` = `numeric(18,4)`, `pct` = `numeric(9,4
 | `site_id` | uuid | yes | → sites (+ composite FK) | null only when organization-wide |
 | `is_organization_wide` | bool | no | ck `(is_organization_wide AND site_id IS NULL) OR (NOT is_organization_wide AND site_id IS NOT NULL)` | service also checks `roles.is_organization_wide_allowed` |
 | `valid_from`, `valid_to` | date | no / yes | | temporary cover |
+| `scope` | jsonb | yes | schema `assignment_scope/v1` (§1.7); column added in P2 | optional warehouse / department / production-line sub-scope inside the site (`docs/permissions-matrix.md` §4.4); null = the whole site |
 | | | | `uq (user_id, role_id, site_id) NULLS NOT DISTINCT` | |
 | **`sessions`** · P1 · T · `id`, `organization_id`, `created_at` | | | | opaque cookie value is the token; only its hash is stored |
 | `user_id` | uuid | no | → users | |
@@ -573,23 +588,28 @@ Types: `num6` = `numeric(18,6)`, `money` = `numeric(18,4)`, `pct` = `numeric(9,4
 | `active_site_id` | uuid | yes | → sites | last site context |
 | `last_seen_at`, `idle_expires_at`, `absolute_expires_at` | ts | no | | values from settings (`docs/security.md`) |
 | `mfa_verified_at`, `reauthenticated_at` | ts | yes | | privileged actions check recency |
+| `permissions_version` | int | no | default 0 | the `organizations.permissions_version` the cached `AuthContext` was built from; a mismatch forces a rebuild on the next request (cache ≤ 60 s, A-PM-01; `docs/security.md` §3.4) |
 | `revoked_at`, `revoked_by`, `revoked_reason` | ts / uuid / text | yes | | revocation is an update, never a delete |
 | **`password_reset_tokens`** · P1 · T · `id`, `organization_id`, `created_at` | | | | |
 | `user_id` | uuid | no | → users | |
 | `token_hash` | text | no | `uq` | |
 | `expires_at`, `used_at` | ts | no / yes | | single use |
 | `requested_ip` | inet | yes | | |
+| **`password_history`** · P1 · T · `id`, `organization_id`, `created_at` | | | | the last 5 password hashes per user so a new password cannot repeat one (`docs/security.md` §3.2, A-SEC-05) |
+| `user_id`, `password_hash` | uuid / text | no | → users; ix `(user_id, created_at)` | the sweep deletes rows beyond the newest 5 per user |
+| **`rate_limit_buckets`** · P1 · T · `id`, `created_at` only (no `organization_id`: buckets exist before authentication) | | | | Postgres token buckets behind the limits in `docs/security.md` §4.5 |
+| `scope`, `key` | text | no | `uq (scope, key)` | scope = limit name (`login_ip`, `login_account`, `password_reset`, `api_user`, …); key = ip, `lower(email)` or user id |
+| `tokens`, `refilled_at` | numeric(9,2) / ts | no | | `INSERT ... ON CONFLICT (scope, key) DO UPDATE`; rows idle for 24 h are deleted by the sweep (§12.2 `security`) |
 | **`mfa_secrets`** · P1b · T · `std` | | | | TOTP (ADR-004) |
 | `user_id` | uuid | no | → users, `uq` | |
 | `secret_enc` | bytea | no | | AES-GCM with env key; never logged |
 | `recovery_code_hashes` | text[] | no | | argon2id hashes |
 | `confirmed_at`, `last_used_at` | ts | yes | | |
-| **`invitations`** · P1 · T · `std` | | | | |
-| `email` | text | no | | |
+| **`invitations`** · P1 · T · `std` | | | | one rule (§7 item 5): `identity.user.create` inserts the `users` row with `status = 'invited'` and this row in one transaction; acceptance sets `password_hash`, `status = 'active'` and inserts the `user_site_assignments` row from `role_id`/`site_id` |
+| `user_id`, `email` | uuid / text | no | → users (the invited row) | `email` is a copy for the message; the user row is the link |
 | `role_id`, `site_id` | uuid | no / yes | → roles, → sites | null site = organization-wide |
 | `token_hash` | text | no | `uq` | |
-| `expires_at`, `accepted_at`, `revoked_at` | ts | no / yes / yes | | |
-| `accepted_user_id` | uuid | yes | → users | |
+| `expires_at`, `accepted_at`, `revoked_at` | ts | no / yes / yes | | a resend revokes this row and inserts a new one |
 | **`approval_rules`** · P1 · C · `std +site? +soft` | | | | thresholds are data (ADR-005); evaluation and default rules in `docs/permissions-matrix.md` §5.2 (defaults are `A-PM-15`) |
 | `document_type` | text | no | ck in (`purchase_request`,`purchase_order`,`sales_order`,`quote`,`stock_adjustment`,`stock_count_variance`,`expense_claim`,`invoice`,`supplier_bill`,`credit_note`,`payment_record`,`dispense_exception`,`over_shipment`,`formula_revision`,`routing_revision`,`disposition_conditional_release`,`recall_case`,`batch_reopen`,`work_order_release`,`leave_request`,`overtime_request`,`payroll_period`,`period_lock_unlock`,`setting_change_request`,`retention_action`) | one value per approvable record type |
 | `threshold_basis` | text | no | ck in (`always`,`amount`,`qty_base`,`variance_pct`,`discount_pct`,`credit_check_failed`) | |
@@ -603,13 +623,13 @@ Types: `num6` = `numeric(18,6)`, `money` = `numeric(18,4)`, `pct` = `numeric(9,4
 | **`settings`** · P1 · C · `std` | | | | typed key registry lives in `src/lib/settings.ts` |
 | `scope` | text | no | ck in (`organization`,`site`,`user`) | |
 | `site_id`, `user_id` | uuid | yes | → sites, → users; ck matches scope | |
-| `key`, `value` | text / jsonb | no | `uq (organization_id, scope, site_id, user_id, key) NULLS NOT DISTINCT` | e.g. `inventory.reservation_ttl_days` |
+| `key`, `value` | text / jsonb | no | `uq (organization_id, scope, site_id, user_id, key) NULLS NOT DISTINCT` | e.g. `inventory.reservation_ttl_days`; `inventory.role_movement_types` (organization or site scope; value = map of role code → allowed `stock_movements.movement_type` values, A-PM-06) is a setting, not a table |
 | **`setting_change_requests`** · P1 · T · `std +site?` + `approval` | | | | a change to a setting whose registry entry (`src/lib/settings.ts`) has `requires_approval = true` is proposed here and written to `settings` only on approval (S1-03); every applied change keeps proposer, approver and reason (`docs/security.md` §2.11 "settings are versioned") |
 | `scope`, `site_id`, `user_id`, `key` | text / uuid / uuid / text | no / yes / yes / no | same ck as `settings` | |
 | `old_value`, `new_value`, `reason` | jsonb / jsonb / text | yes / no / no | | |
 | `status` | text | no | ck in (`submitted`,`approved`,`rejected`,`applied`,`cancelled`) | `applied` is set in the same transaction as the `settings` upsert |
 | `applied_at` | ts | yes | | |
-| **`approval_decisions`** · P1 · L · `id`, `organization_id`, `site_id` NULL, `created_at` | | | | one row per approval-step decision on any approvable record (§7.10); `forbid_mutation()`; the record's `approved_by/approved_at` hold the final step |
+| **`approval_decisions`** · P1 · L · `id`, `organization_id`, `site_id` NULL, `created_at` | | | | one row per approval-step decision on any approvable record (§7 item 10); `forbid_mutation()`; the record's `approved_by/approved_at` hold the final step |
 | `record_type`, `record_id` | text / uuid | no | ck type in the `approval_rules.document_type` list | polymorphic by design (§1.9); integrity checked by the service |
 | `approval_rule_id`, `step` | uuid / int | yes / no | → approval_rules; default 1 | null rule = base `.approve` permission |
 | `decision` | text | no | ck in (`approved`,`rejected`,`returned`) | |
@@ -650,6 +670,7 @@ derived labels, not stored states (§14.3).
 | `product_family` | text | no | ck in (`soap`,`lotion`,`cream`,`oil`,`other`) | extendable |
 | `status` | text | no | ck in (`draft`,`active`,`discontinued`) | |
 | `default_formula_id`, `default_routing_id` | uuid | yes | → formulas, → routings | columns added in P3 (§13.7) |
+| `primary_image_attachment_id` | uuid | yes | → file_attachments (kind `product_image`) | column added in P2; images are re-encoded and metadata-stripped (`docs/security.md` §4.6) and served through signed URLs only; portal exposure (P8) is limited to approved catalogue items |
 | **`skus`** · P1 · M · `std +soft` | | | | sellable / stockable variant |
 | `product_id` | uuid | no | → products | |
 | `code`, `name` | text | no | `uq (organization_id, code)` partial | scan `BC:SKU:<code>` |
@@ -659,6 +680,7 @@ derived labels, not stored states (§14.3).
 | `uom_base_id` | uuid | no | → uoms | usually `pcs` |
 | `units_per_box`, `boxes_per_pallet` | int | yes | ck `> 0` | packaging configuration |
 | `gtin` | text | yes | | optional retail barcode |
+| `primary_image_attachment_id` | uuid | yes | → file_attachments (kind `product_image`) | column added in P2; same rules as `products` |
 | `shelf_life_days`, `retest_days` | int | yes | | drives lot expiry at output |
 | `storage_conditions` | text | yes | | |
 | `allocation_rule` | text | no | ck in (`fefo`,`fifo`) default `fefo` | configurable per SKU |
@@ -684,11 +706,13 @@ derived labels, not stored states (§14.3).
 | `legacy_number` | text | yes | partial `uq (organization_id, legacy_number)` | §9.6 |
 | `contact_name`, `email`, `phone`, `address_line1`, `city`, `country` | text | yes | | |
 | `payment_terms_days`, `default_lead_time_days` | int | yes | | |
+| `tax_identifier` | text | yes | | configuration reference, sensitive (`docs/modules/finance.md` §5; masking per `docs/permissions-matrix.md` §6) |
 | `quality_status` | text | no | ck in (`approved`,`conditional`,`suspended`,`new`) default `new` | receiving from `suspended` needs exception |
 | **`supplier_materials`** · P2 · M · `std +soft` | | | | approved-supplier list |
 | `supplier_id`, `material_id` | uuid | no | `uq (supplier_id, material_id)` partial | |
 | `supplier_part_number` | text | yes | | |
-| `is_approved` | bool | no | default false | |
+| `is_approved`, `approved_by`, `approved_at` | bool / uuid / ts | no / yes / yes | default false; → users | ASL decision under `masterdata.supplier.approve` (W04-11), approver ≠ the procurement requester |
+| `audit_date`, `evidence_attachment_id`, `suspended_reason` | date / uuid / text | yes | → file_attachments | supplier audit evidence; reason required when `is_approved` is switched off (service) |
 | `lead_time_days`, `moq_qty`, `moq_uom_id` | int / num6 / uuid | yes | | |
 | `unit_price`, `currency`, `price_effective_from` | money / char(3) / date | yes | | |
 | **`customers`** · P4 · M · `std +soft` | | | | |
@@ -708,7 +732,7 @@ derived labels, not stored states (§14.3).
 | **`customer_requirements`** · P4 · V · `std` + `ver` | | | | agreed specifications |
 | `customer_id` | uuid | no | → customers | |
 | `sku_id` | uuid | yes | → skus | null = all SKUs |
-| `requirement_kind` | text | no | ck in (`label_artwork`,`carton_count`,`coa_required`,`moq`,`lead_time`,`packaging`,`document`,`lot_age_max_days`,`other`) | |
+| `requirement_kind` | text | no | ck in (`label_artwork`,`carton_count`,`coa_required`,`moq`,`lead_time`,`packaging`,`document`,`lot_age_max_days`,`min_remaining_shelf_life_days`,`full_shipment_required`,`shipping_marks`,`other`) | `min_remaining_shelf_life_days` (`value_numeric`) filters allocation (W09-05); `full_shipment_required` (`value_text` `true`/`false`) drives CX-SHIP (A-PROC-15); `shipping_marks` (`value_text`) prints on the boxing note and box label |
 | `value_numeric`, `value_uom_id`, `value_text` | num6 / uuid / text | yes | | one of them per kind |
 | `label_template_id`, `document_template_version_id` | uuid | yes | | artwork / required document |
 | **`reason_codes`** · P1 · M · `std +soft` | | | | Slice 1 master data (`docs/PRD.md` §11.1) |
@@ -747,6 +771,7 @@ derived labels, not stored states (§14.3).
 | `step_no`, `code`, `name` | int / text / text | no | `uq (routing_revision_id, step_no)` | the 7 BMR checklist rows are steps |
 | `step_kind` | text | no | ck in (`line_clearance`,`dispensing`,`process`,`in_process_qc`,`filling`,`cutting`,`curing`,`hold`,`packaging`,`reconciliation`,`transfer`,`checklist`) | `hold` = curing/bulk hold with a minimum duration (A-PROC-05) |
 | `area` | text | yes | ck in (`weighing`,`production`,`packaging`,`filling`,`other`); required when `step_kind = 'line_clearance'` (ck) | distinguishes the two production-area clearances on the paper BMR (A-PROC-32) |
+| `record_mode` | text | no | ck in (`electronic`,`paper_then_transcribe`,`paper_only`) default `electronic` | how the step is recorded (`docs/reports-and-templates.md` §2.5); versioned with the routing revision; a `paper_then_transcribe` step needs a reviewed `batch_paper_records` row before the batch leaves `awaiting_qc` (§6.2) |
 | `min_duration_minutes` | int | yes | ck `> 0` | `hold` steps cannot complete earlier without CX-TOL |
 | `requires_checker`, `blocks_until_complete`, `requires_equipment` | bool | no | default true / true / false | |
 | `equipment_kind`, `equipment_id` | text / uuid | yes | → equipment | class or specific unit |
@@ -831,12 +856,17 @@ derived labels, not stored states (§14.3).
 | `status` | text | no | ck in (`active`,`fulfilled`,`released`,`cancelled`) | |
 | **`stock_counts`** · P2 · T · `std +site` | | | | |
 | `count_number` | text | no | `uq (organization_id, count_number)` | rule `CNT` |
-| `warehouse_id`, `location_id` | uuid | no / yes | | scope |
+| `warehouse_id`, `location_id` | uuid | no / yes | | whole warehouse or one location; finer scopes (several locations, zone, material class, ABC class) are `stock_count_scopes` rows (W03-01) |
 | `count_kind` | text | no | ck in (`cycle`,`full`,`spot`) | |
 | `is_blind` | bool | no | default true | counters do not see expected qty |
 | `status` | text | no | ck in (`planned`,`in_progress`,`counted`,`recount`,`pending_approval`,`posted`,`cancelled`) | |
 | `scheduled_for`, `frozen_at`, `posted_at` | date / ts / ts | yes | | expected quantities snapshotted at `frozen_at` |
 | `approval` set | | | | variance approval |
+| `cancel_reason_code_id`, `cancel_note` | uuid / text | yes | → reason_codes; reason required when `status = 'cancelled'` (ck) | W03-09 |
+| **`stock_count_scopes`** · P2 · T · `std +site` | | | | one row per scope element of a count; frozen with the count (W03-01) |
+| `stock_count_id`, `location_id`, `material_class`, `abc_class` | uuid / uuid / text / text | no / yes / yes / yes | → stock_counts, → locations; ck `num_nonnulls(location_id, material_class, abc_class) >= 1`; ck class in the `materials.material_class` list; ck abc in (`A`,`B`,`C`) | a location row includes its child locations |
+| **`stock_count_counters`** · P2 · T · `std +site` | | | | assigned counters (W03-01) |
+| `stock_count_id`, `user_id` | uuid | no | → stock_counts, → users; `uq (stock_count_id, user_id)` | only assigned counters may enter lines; the variance approver is never a counter (§7 item 10) |
 | **`stock_count_lines`** · P2 · T · `std +site` | | | | original count never erased |
 | `stock_count_id`, `location_id`, `lot_id`, `container_id` | uuid | no / no / no / yes | | |
 | `expected_qty_base` | num6 | no | | snapshot |
@@ -845,9 +875,11 @@ derived labels, not stored states (§14.3).
 | `variance_qty_base` | num6 | yes | | final − expected |
 | `variance_reason_code_id`, `variance_note` | uuid / text | yes | | |
 | `adjustment_movement_id` | uuid | yes | → stock_movements | posted adjustment |
+| `is_unexpected` | bool | no | default false | "found" item outside the frozen expectation (W03-03); `expected_qty_base = 0` |
+| `device_registration_id`, `client_sequence`, `idempotency_key` | uuid / bigint / text | yes | partial `uq` on key | offline capture (A-PROC-28) |
 | **`containers`** · P2 · T · `std +site` | | | | box / carton / pallet |
 | `container_number` | text | no | `uq (organization_id, container_number)` | rule `BOX`; scan `BC:BOX:<container_number>` |
-| `container_kind` | text | no | ck in (`box`,`carton`,`pallet`,`drum`,`tote`) | |
+| `container_kind` | text | no | ck in (`box`,`carton`,`pallet`,`drum`,`tote`,`sack`,`bag`,`bottle`,`loose`) | `loose` = an unpackaged counted unit at the opening-stock load (`docs/data-migration-plan.md` S-02, A-MIG-07) |
 | `status` | text | no | ck in (`open`,`sealed`,`in_transit`,`shipped`,`empty`,`void`) | |
 | `current_location_id` | uuid | yes | → locations | null once shipped |
 | `parent_container_id` | uuid | yes | → containers | box on pallet |
@@ -855,6 +887,8 @@ derived labels, not stored states (§14.3).
 | `packed_at`, `packed_by`, `checked_by` | ts / uuid / uuid | yes | ck `checked_by <> packed_by` | |
 | `gross_weight`, `net_weight`, `weight_uom_id` | num6 / num6 / uuid | yes | | |
 | `label_template_id` | uuid | yes | → label_templates | |
+| `is_partial` | bool | no | default false | partial last box (W08-03); printed as `PARTIAL` on the box label and the boxing note |
+| `verified_at`, `verified_by`, `verification_scan_payload` | ts / uuid / text | yes | → users; all three or none (ck) | label verification scan (US-2-24; `docs/data-migration-plan.md` §10.5, MC-06): the printed label was scanned back against this row; audit `inventory.container.verified` |
 | **`container_contents`** · P2 · P · `id`, `organization_id`, `site_id`, `updated_at` | | | | current contents; history is in `stock_movements.container_id` |
 | `container_id`, `lot_id` | uuid | no | `uq (container_id, lot_id)` | |
 | `qty_base`, `uom_base_id` | num6 / uuid | no | ck `>= 0` | |
@@ -864,7 +898,7 @@ derived labels, not stored states (§14.3).
 | `qty_base`, `lot_id` | num6 / uuid | no | | what moved along the edge |
 | **`label_jobs`** · P2 · T · `std +site` | | | | printing is a job, reprints are audited |
 | `label_template_id` | uuid | no | → label_templates | |
-| `entity_type`, `entity_id` | text / uuid | no | ck type in (`inventory_lot`,`container`,`location`,`batch`,`sample`) | |
+| `entity_type`, `entity_id` | text / uuid | no | ck type in (`inventory_lot`,`container`,`location`,`batch`,`inspection_sample`,`equipment`) | sample labels reference `inspection_samples.id` (W06-02); equipment labels carry `BC:EQP` (W13-01) |
 | `copies` | int | no | ck `> 0` | |
 | `status` | text | no | ck in (`queued`,`rendering`,`ready`,`printed`,`failed`,`cancelled`) | |
 | `printer_name`, `error_message` | text | yes | | |
@@ -887,6 +921,15 @@ derived labels, not stored states (§14.3).
 | `requested_by`, `completed_at`, `reason_code_id`, `notes` | uuid / ts / uuid / text | no / yes / yes / yes | | |
 | **`transfer_request_lines`** · P2 · T · `std +site` | | | | `transfer_request_id`, `line_no`, `lot_id`, `container_id`, `from_location_id`, `to_location_id`, `qty` set, `issue_movement_id`, `receipt_movement_id` (inter-site: issue at A, receipt at B creating a lot with `origin_lot_id`), `status` (`pending`,`posted`,`cancelled`) |
 
+**Scan lookups are not persisted.** A lookup scan (`docs/process-maps.md` W02-01) is a read:
+it is written to the structured log with the request's correlation id and device id, never as
+a table row. Only outcomes that matter become audit events: a payload that resolves to a
+record outside the caller's sites writes `identity.authorization.denied` (`outcome =
+'denied'`); an unparseable or unknown payload writes `inventory.scan.unrecognised` (payload
+stored reduced to its type prefix and length). Scans that act (move, count, dispense, pick,
+verify) are stored on their own records with `device_registration_id`, `client_sequence` and
+`scan_payload` where listed.
+
 ### 3.4 Procurement
 
 | Table → column | Type | Null | Constraint / default | Notes |
@@ -899,6 +942,7 @@ derived labels, not stored states (§14.3).
 | `reason_code_id` | uuid | yes | → reason_codes; required for `unplanned` and `opening_balance` (ck) | A-PROC-26 |
 | `status` | text | no | ck in (`draft`,`posted`,`cancelled`) | |
 | `received_at`, `received_by`, `carrier_reference`, `notes` | ts / uuid / text / text | no / no / yes / yes | | |
+| `supplier_document_number` | text | yes | partial `uq (supplier_id, supplier_document_number)` | the supplier's delivery receipt or invoice number (W01-01); the photo of the supplier DR is a `file_attachments` row with `entity_type = 'goods_receipt'`, `attachment_kind = 'photo'` |
 | `posted_at`, `posted_by`, `idempotency_key`, `correlation_id` | ts / uuid / text / uuid | yes | partial `uq` on key | |
 | **`goods_receipt_lines`** · P2 · T · `std +site` | | | | each posted line creates one lot |
 | `goods_receipt_id`, `line_no` | uuid / int | no | `uq (goods_receipt_id, line_no)` | |
@@ -906,6 +950,9 @@ derived labels, not stored states (§14.3).
 | `material_id`, `sku_id` | uuid | yes | ck exactly one | |
 | `supplier_lot_number`, `manufacture_date`, `expiry_date`, `retest_date` | text / date / date / date | yes | | |
 | `qty` set | | | | received quantity |
+| `container_count`, `qty_per_container_base` | int / num6 | yes | ck `container_count > 0`; ck `qty_per_container_base > 0` | W01-03; posting creates one `containers` row per container (the last may be `is_partial`) and one label per container (W01-07); null = a single container or loose stock |
+| `storage_conditions_confirmed` | bool | no | default false | W01-03; must be true for materials with `storage_conditions` set (service) |
+| `counted_by`, `checked_by`, `count_sheet_ref` | uuid / uuid / text | yes | → users; ck `checked_by <> counted_by`; both users required when `goods_receipts.receipt_kind = 'opening_balance'` (ck) | opening-stock load: two people per counted row (`docs/data-migration-plan.md` §7.9, principle P6) |
 | `to_location_id` | uuid | no | → locations | default: receiving/quarantine location |
 | `initial_quality_status` | text | no | ck in (`quarantine`,`released`) default `quarantine` | `released` only for materials with `requires_incoming_inspection = false` |
 | `lot_id`, `inspection_id`, `stock_movement_id` | uuid | yes | set at posting | |
@@ -916,6 +963,14 @@ derived labels, not stored states (§14.3).
 | `goods_receipt_line_id`, `lot_id`, `file_attachment_id` | uuid | no | | |
 | `document_kind`, `document_number`, `issued_date`, `expires_date` | text / text / date / date | no / yes / yes / yes | ck kind in (`coa`,`sds`,`specification`,`photo`,`other`) | |
 | `verified_by`, `verified_at` | uuid / ts | yes | | QA check |
+| **`supplier_returns`** · P6 · T · `std +site` + `approval` | | | | goods sent back to a supplier (W01-11, W04-09): rejected or returned-as-is lots; posts one `issue` movement per line with `source_document_type = 'supplier_return'` (§5.1); `procurement.supplier_return.{create,post}` plus `.approve` by a second user |
+| `return_number`, `status` | text | no | `uq (organization_id, return_number)`; ck in (`draft`,`submitted`,`approved`,`posted`,`cancelled`) | rule `SRT` (§9.2) |
+| `supplier_id`, `goods_receipt_id`, `purchase_order_id` | uuid | no / yes / yes | → suppliers, → goods_receipts, → purchase_orders | |
+| `reason_code_id`, `reason_note`, `supplier_rma_reference` | uuid / text / text | no / yes / yes | → reason_codes (`applies_to` `return`) | |
+| `posted_at`, `posted_by`, `idempotency_key`, `correlation_id` | ts / uuid / text / uuid | yes | partial `uq` on key | poster ≠ approver (`approval` set) |
+| **`supplier_return_lines`** · P6 · T · `std +site` | | | | |
+| `supplier_return_id`, `line_no`, `lot_id`, `container_id`, `from_location_id` | uuid / int / uuid / uuid / uuid | no / no / no / yes / no | `uq (supplier_return_id, line_no)` | the lot must be `rejected`; returning a `released` or `quarantine` lot needs a `qa_qc` disposition first (W04-09) |
+| `qty` set, `stock_movement_id`, `credit_expected_amount`, `currency` | — / uuid / money / char(3) | no / yes / yes / yes | → stock_movements | movement set at posting; the expected credit feeds the supplier bill dispute (`docs/modules/finance.md`) |
 | **`purchase_requests`** · P6 · T · `std +site` + `approval` | | | | |
 | `request_number`, `status` | text | no | `uq`; ck in (`draft`,`submitted`,`approved`,`rejected`,`converted`,`cancelled`) | rule `PR` |
 | `requested_by`, `needed_by_date`, `justification` | uuid / date / text | no / yes / yes | | |
@@ -930,12 +985,19 @@ derived labels, not stored states (§14.3).
 | `order_date`, `expected_date`, `payment_terms_days` | date / date / int | no / yes / yes | | |
 | `subtotal_amount`, `tax_amount`, `total_amount`, `currency` | money ×3 / char(3) | no | | tax values are configuration (accountant) |
 | `sent_at`, `sent_by`, `supplier_reference`, `notes` | ts / uuid / text / text | yes | | |
+| `is_urgent`, `urgent_reason` | bool / text | no / yes | default false; reason required when urgent (ck) | W04 exception path; urgent orders are listed in the Action Center |
+| **`purchase_order_amendments`** · P6 · T · `std +site` + `approval` | | | | versioned amendment of a PO after `sent` (W04-09, W01-11): quantities, prices, dates; history is never edited |
+| `purchase_order_id`, `amendment_no`, `reason`, `before`, `after` | uuid / int / text / jsonb / jsonb | no | → purchase_orders; `uq (purchase_order_id, amendment_no)`; schema `po_amendment/v1` (§1.7) | approved under `procurement.purchase_order.approve` by a user ≠ the amender; applied to the PO rows in the same transaction as the approval |
 | **`purchase_order_lines`** · P6 · T · `std +site` | | | | |
 | `purchase_order_id`, `line_no`, `material_id` | uuid / int / uuid | no | `uq (purchase_order_id, line_no)` | |
 | `qty` set, `unit_amount`, `currency`, `expected_date` | | mixed | | ordered |
 | `qty_received_base` | num6 | no | default 0; ck `<= qty_base` unless over-receipt allowed by approval rule | projection from receipt lines |
 | `supplier_material_id` | uuid | yes | → supplier_materials | price/lead-time reference |
 | **`purchase_order_state_transitions`** · P6 · L | | | | shape §6.1 |
+| **`reorder_suggestions`** · P6 · T · `std +site` | | | | persisted output of the `procurement.reorder_suggest` job (W04-01; brief module 4): one row per material, site and run, so review (`procurement.reorder_suggestion.{view,approve}`) and KPI-PRO-07 have rows; `public` schema, file `procurement.ts` (not `analytics`); never creates a PO by itself |
+| `material_id`, `run_at`, `suggested_qty_base`, `uom_base_id` | uuid / ts / num6 / uuid | no | → materials, → uoms; ck qty `> 0` | |
+| `on_hand_base`, `reserved_base`, `open_po_qty_base`, `forecast_qty_base`, `safety_stock_base`, `expiry_risk_qty_base`, `lead_time_days`, `explanation` | num6 ×6 / int / text | yes | | the drivers shown to procurement |
+| `status`, `reviewed_by`, `reviewed_at`, `purchase_request_id` | text / uuid / ts / uuid | no / yes / yes / yes | ck status in (`open`,`accepted`,`dismissed`,`superseded`); → purchase_requests | `superseded` when the next run replaces an unreviewed row; `accepted` links the request created from it |
 
 ### 3.5 Production and BMR
 
@@ -953,6 +1015,7 @@ derived labels, not stored states (§14.3).
 | `production_line_id`, `production_plan_line_id`, `sales_order_id` | uuid | yes | | |
 | `department_id` | uuid | yes | → departments | overrides `production_lines.department_id` on the BMR header |
 | `qty_planned_base`, `uom_base_id` | num6 / uuid | no | ck `> 0` | |
+| `batch_count`, `batch_size_base` | int / num6 | yes | ck `batch_count > 0`; ck `batch_size_base > 0` | W05-02; batch size defaults from `formula_revisions.batch_size_base`; `batch_count × batch_size_base` is expected to equal `qty_planned_base` (warning, not a CHECK) |
 | `planned_start`, `planned_end`, `priority` | ts / ts / int | yes / yes / no | default 5 | |
 | `assigned_planner_id`, `assigned_supervisor_id` | uuid | yes | → users | |
 | **`batches`** · P3 · T · `std +site` | | | | execution record with a BMR; §4.4, §6.2 |
@@ -960,6 +1023,7 @@ derived labels, not stored states (§14.3).
 | `legacy_number` | text | yes | partial `uq (organization_id, legacy_number)` | paper batch number of a batch that started on paper and is finished in the system (hypercare); historical paper BMRs are `legacy_documents`, never batches (§9.6, `A-DM-09`) |
 | `work_order_id`, `production_line_id` | uuid | no / yes | | |
 | `formula_revision_id`, `routing_revision_id`, `bmr_template_version_id`, `inspection_plan_id` | uuid | no / no / no / yes | → each revision table | frozen at creation; never updated after `planned` (trigger `tg_batches_freeze_revisions`) |
+| `label_template_id`, `label_template_version_id` | uuid | yes | → label_templates, → document_template_versions | finished-goods label template snapshot (W05-03; printed on the BMR header, `docs/reports-and-templates.md` §2.2 A); frozen by `tg_batches_freeze_revisions` with the revision columns (§4.4) |
 | `batch_size_base`, `uom_base_id` | num6 / uuid | no | ck `> 0` | e.g. 17,600 g |
 | `bom_snapshot` | jsonb | no | | frozen scaled BOM with tolerances (§4.4) |
 | `started_at`, `ended_at` | ts | yes | | BMR start/end date |
@@ -967,6 +1031,7 @@ derived labels, not stored states (§14.3).
 | `expiry_date`, `retest_date` | date | yes | | computed from shelf life at output; QA may override with reason |
 | `disposition_id` | uuid | yes | → dispositions | final QA decision |
 | `closed_at`, `closed_by`, `reopen_count` | ts / uuid / int | yes / yes / no | default 0 | reopen = transition with reason |
+| `rework_batch_id`, `rework_of_batch_id` | uuid | yes | → batches | a `rework_approved` batch closes once its linked rework batch exists (`rework_batch_id` set, §6.2); the rework batch points back with `rework_of_batch_id` so both BMRs cross-reference |
 | `remarks` | text | yes | | BMR remarks |
 | **`batch_materials`** · P3 · T · `std +site` | | | | ingredient table rows of the BMR |
 | `batch_id`, `line_no`, `bom_line_id`, `material_id` | uuid / int / uuid / uuid | no | `uq (batch_id, line_no)` | |
@@ -1024,6 +1089,7 @@ derived labels, not stored states (§14.3).
 | **`deviations`** · P3 · T · `std +site` | | | | |
 | `deviation_number`, `status` | text | no | `uq`; ck in (`open`,`investigating`,`closed`) | rule `DEV` |
 | `batch_id`, `lot_id`, `dispense_record_id`, `process_step_record_id` | uuid | yes | | what it concerns |
+| `deviation_kind` | text | no | ck in (`out_of_tolerance`,`equipment_override`,`material_substitution`,`failed_check`,`yield_out_of_range`,`reconciliation_mismatch`,`skipped_step`,`oos`,`operator_report`,`complaint`,`other`) | set by the controlled exception that opened it (CX-TOL, CX-CAL, CX-MAT, …) or by the raiser (W07-01); the BMR exceptions section groups by kind (`docs/reports-and-templates.md` §2.2 I) |
 | `severity`, `description`, `root_cause`, `resolution` | text | no / no / yes / yes | ck severity in (`minor`,`major`,`critical`) | |
 | `raised_by`, `raised_at`, `closed_by`, `closed_at`, `capa_id` | uuid / ts / uuid / ts / uuid | no / no / yes / yes / yes | ck `closed_by <> raised_by` | closure by `quality.deviation.approve`, never the raiser (`docs/permissions-matrix.md` §5.1) |
 | **`production_postings`** · P3 · L · `ledger` | | | | batch-side event that generated stock movements; §5.7 |
@@ -1049,12 +1115,18 @@ derived labels, not stored states (§14.3).
 | `inspection_number`, `status` | text | no | `uq`; ck in (`pending`,`in_progress`,`awaiting_review`,`approved`,`rejected`,`cancelled`) | rule `INS` |
 | `inspection_plan_id`, `inspection_kind` | uuid / text | no | | kind copied from plan |
 | `lot_id`, `batch_id`, `goods_receipt_line_id`, `process_step_record_id` | uuid | yes | ck `lot_id` or `batch_id` set | subject |
-| `sampled_at`, `sampled_by`, `sample_qty_base`, `sample_uom_id` | ts / uuid / num6 / uuid | yes | | |
+| `sampled_at`, `sampled_by`, `sample_qty_base`, `sample_uom_id` | ts / uuid / num6 / uuid | yes | | projection of `inspection_samples`: first sample's time and sampler, total sampled quantity |
 | `performed_by`, `reviewed_by`, `reviewed_at`, `outcome` | uuid / uuid / ts / text | yes | ck `reviewed_by <> performed_by`; outcome in (`pass`,`fail`,`conditional`) | |
+| **`inspection_samples`** · P3 · T · `std +site` | | | | one row per physical sample taken (W06-02); the sample label prints per row |
+| `inspection_id`, `sample_no` | uuid / int | no | → inspections; `uq (inspection_id, sample_no)` | |
+| `lot_id`, `container_id`, `qty_base`, `uom_base_id` | uuid / uuid / num6 / uuid | no / yes / no / no | → inventory_lots, → containers, → uoms; ck qty `> 0` | the container scanned at sampling |
+| `sampled_by`, `sampled_at`, `label_job_id`, `consumption_movement_id` | uuid / ts / uuid / uuid | no / no / yes / yes | → users, → label_jobs, → stock_movements | sample removal posts a `consumption` movement with reason `sample` (A-PROC-34) |
+| `device_registration_id`, `client_sequence`, `idempotency_key` | uuid / bigint / text | yes | partial `uq` on key | sample capture is queueable (W06-02) |
 | **`test_results`** · P3 · T · `std +site` | | | | evidence; corrections append |
 | `inspection_id`, `inspection_plan_test_id` | uuid | no | | |
 | `value_numeric`, `value_text`, `value_pass` | num6 / text / bool | yes | | |
 | `uom_id`, `is_within_spec`, `tested_at`, `tested_by`, `checked_by` | uuid / bool / ts / uuid / uuid | yes / no / no / no / yes | ck `checked_by <> tested_by` | |
+| `instrument_equipment_id`, `method_override` | uuid / text | yes | → equipment | instrument used (W06-03); availability checked as in §3.1 at save (V-CAL); `method_override` when it differs from `inspection_plan_tests.method`; the CoA and the BMR QC section print the instrument code |
 | `supersedes_id`, `correction_reason`, `file_attachment_id` | uuid / text / uuid | yes | | |
 | **`dispositions`** · P3 · L · `ledger` | | | | every quality-status change of a lot or batch |
 | `lot_id`, `batch_id`, `container_id` | uuid | yes | ck at least one | |
@@ -1066,13 +1138,17 @@ derived labels, not stored states (§14.3).
 | `requested_by`, `decided_by`, `reason` | uuid / uuid / text | yes / no / no | ck `decided_by <> requested_by` | only roles with `quality.disposition.approve` |
 | **`quality_holds`** · P3 · T · `std +site` | | | | §6.7 |
 | `hold_number`, `status` | text | no | `uq`; ck in (`open`,`investigating`,`closed`) | rule `QH` |
-| `lot_id`, `batch_id`, `container_id` | uuid | yes | ck at least one | |
+| `lot_id`, `batch_id`, `container_id`, `location_id` | uuid | yes | ck at least one; → locations | a hold on a location (W06-07) sets `locations.status = 'blocked'` while the hold is open and restores the previous status at closure; the hold notice prints the scope |
 | `reason_code_id`, `reason`, `opened_by`, `opened_at` | uuid / text / uuid / ts | no | | |
 | `resolution`, `closed_by`, `closed_at`, `closing_disposition_id` | text / uuid / ts / uuid | yes | ck resolution in (`released`,`rejected`,`rework`,`recalled`); ck `closed_by <> opened_by` | lifting a hold (`quality.hold.approve`) is never done by the user who placed it |
 | **`capas`** · P3 · T · `std +site` | | | | corrective / preventive action |
 | `capa_number`, `status`, `source_kind` | text | no | ck status in (`open`,`in_progress`,`verification`,`closed`); source in (`deviation`,`complaint`,`audit`,`change_control`,`other`) | rule `CAPA` |
 | `deviation_id`, `complaint_id`, `owner_id`, `due_date` | uuid / uuid / uuid / date | yes / yes / no / yes | | |
 | `root_cause`, `corrective_action`, `preventive_action`, `effectiveness_check`, `closed_by`, `closed_at` | text ×4 / uuid / ts | yes | | |
+| **`capa_actions`** · P3 · T · `std +site` | | | | individual actions with owners and due dates (W07-04); the Action Center lists overdue rows; `capas.owner_id` stays the CAPA owner |
+| `capa_id`, `action_no`, `action_kind`, `description` | uuid / int / text / text | no | → capas; `uq (capa_id, action_no)`; ck kind in (`corrective`,`preventive`) | |
+| `owner_id`, `due_date`, `status` | uuid / date / text | no | → users; ck status in (`open`,`done`,`verified`,`cancelled`) | |
+| `completed_at`, `completed_by`, `verification_method`, `verified_by`, `verified_at` | ts / uuid / text / uuid / ts | yes | ck `verified_by <> completed_by` | verification by a second person |
 | **`change_controls`** · P3 · T · `std +site?` + `approval` | | | | controlled change to a versioned record |
 | `change_number`, `status`, `title`, `description` | text | no | ck status in (`draft`,`submitted`,`approved`,`rejected`,`implemented`,`closed`) | rule `CC` |
 | `entity_type`, `entity_id`, `capa_id` | text / uuid / uuid | no / no / yes | | e.g. `formula_revision` |
@@ -1085,6 +1161,12 @@ derived labels, not stored states (§14.3).
 | `complaint_id`, `opened_by`, `opened_at`, `closed_at` | uuid / uuid / ts / ts | yes / no / no / yes | | |
 | **`recall_case_lots`** · P4 · T · `std` | | | | |
 | `recall_case_id`, `lot_id`, `disposition_id` | uuid | no / no / yes | `uq (recall_case_id, lot_id)` | disposition to `recalled` |
+| **`recall_case_containers`** · P4 · T · `std` | | | | affected boxes when the scope is narrower than a lot (W07-08) |
+| `recall_case_id`, `container_id`, `shipment_id` | uuid | no / no / yes | → recall_cases, → containers, → shipments; `uq (recall_case_id, container_id)` | populated from the forward trace (§10.3) at case opening and stored |
+| **`recall_case_customers`** · P4 · T · `std` | | | | customer notification list and return reconciliation (W07-08, W07-10) |
+| `recall_case_id`, `customer_id`, `shipment_id` | uuid | no / no / yes | → recall_cases, → customers, → shipments; `uq (recall_case_id, customer_id, shipment_id) NULLS NOT DISTINCT` | one row per customer and shipment of an affected lot, from the forward trace, stored at opening |
+| `qty_shipped_base`, `qty_returned_base`, `qty_accounted_base`, `uom_base_id` | num6 ×3 / uuid | no | default 0 for returned and accounted; → uoms | reconciliation = shipped − returned − accounted (W07-10) |
+| `notified_at`, `notified_by`, `notification_document_id`, `acknowledged_at`, `note` | ts / uuid / uuid / ts / text | yes | → users, → generated_documents (kind `recall_notice`) | `sales_cs` records the notification; the wording of the notice is company configuration |
 | **`inspection_state_transitions`**, **`quality_hold_state_transitions`** · P3 · L | | | | shape §6.1 |
 
 ### 3.7 Sales and logistics
@@ -1096,12 +1178,17 @@ derived labels, not stored states (§14.3).
 | `customer_id`, `valid_until`, `currency`, `subtotal_amount`, `tax_amount`, `total_amount` | uuid / date / char(3) / money ×3 | no / yes / no / no / no / no | | |
 | `converted_sales_order_id` | uuid | yes | → sales_orders | |
 | **`quote_lines`** · P4 · T · `std +site` | | | | `quote_id`, `line_no`, `sku_id`, `qty` set, `unit_amount`, `currency`, `customer_requirement_id` |
+| **`price_lists`** · P4 · V · `std` + `ver` | | | | customer price lists (W09-01; `docs/data-migration-plan.md` S-10, import kind `price_lists`); `sales.price_list.{view,edit,approve}` (approver ≠ editor, `ver`); supplier prices stay on `supplier_materials` |
+| `code`, `name`, `party_kind`, `customer_id`, `currency` | text / text / text / uuid / char(3) | no / no / no / yes / no | `uq (organization_id, code, version_no)`; ck kind in (`customer`,`general`); `customer_id` required when kind = `customer` (ck); → customers | `general` = default list for customers without their own |
+| **`price_list_lines`** · P4 · V (child) · `std` | | | | |
+| `price_list_id`, `sku_id`, `min_qty_base`, `uom_base_id` | uuid / uuid / num6 / uuid | no | → price_lists, → skus, → uoms; `uq (price_list_id, sku_id, min_qty_base)`; `min_qty_base` default 0 | quantity breaks |
+| `unit_amount`, `currency` | money / char(3) | no | | copied to `quote_lines.unit_amount` / `sales_order_lines.unit_amount` at entry; an edited line price beyond the discount threshold triggers `approval_rules` (`quote`, `sales_order`) |
 | **`sales_orders`** · P4 · T · `std +site` + `approval?` | | | | §6.5; internal notes never reach the portal |
 | `order_number`, `status` | text | no | `uq`; ck in (`draft`,`submitted`,`pending_approval`,`confirmed`,`allocated`,`picking`,`packed`,`partially_shipped`,`shipped`,`invoiced`,`closed`,`cancelled`) | rule `SO` |
 | `legacy_number` | text | yes | partial `uq (organization_id, legacy_number)` | open orders imported as drafts keep the old order number (§9.6; `docs/data-migration-plan.md` §4) |
 | `customer_id`, `ship_to_address_id`, `bill_to_address_id`, `quote_id` | uuid | no / no / yes / yes | | |
 | `order_date`, `requested_delivery_date`, `customer_po_number` | date / date / text | no / yes / yes | | |
-| `currency`, `subtotal_amount`, `tax_amount`, `total_amount` | char(3) / money ×3 | no | | sensitive to roles without `sales.pricing.view` |
+| `currency`, `subtotal_amount`, `tax_amount`, `total_amount` | char(3) / money ×3 | no | | sensitive to roles without `sales.price_list.view` |
 | `credit_check_status` | text | no | ck in (`not_required`,`pending`,`passed`,`failed`,`overridden`) | approval rule `sales_order` |
 | `source`, `portal_user_id` | text / uuid | no / yes | ck source in (`internal`,`portal`) | P8 |
 | `notes_internal`, `notes_customer`, `cancel_reason_code_id` | text / text / uuid | yes | | |
@@ -1109,14 +1196,16 @@ derived labels, not stored states (§14.3).
 | `sales_order_id`, `line_no`, `sku_id` | uuid / int / uuid | no | `uq (sales_order_id, line_no)` | |
 | `qty` set, `unit_amount`, `currency`, `customer_requirement_id` | | mixed | | ordered |
 | `qty_reserved_base`, `qty_allocated_base`, `qty_picked_base`, `qty_shipped_base`, `qty_invoiced_base` | num6 | no | default 0; ck each `<= qty_base` unless over-shipment approved | projections |
-| `requested_lot_id`, `max_lot_age_days` | uuid / int | yes | | customer requirements applied |
+| `requested_lot_id`, `max_lot_age_days`, `min_remaining_shelf_life_days` | uuid / int / int | yes | | customer requirements applied at allocation (`lot_age_max_days`, `min_remaining_shelf_life_days`; W09-05) |
+| `is_backordered` | bool | no | default false | set when the reservation falls short (W09-04), cleared when fully reserved; planners see backordered demand in W05-01 |
 | **`picks`** · P4 · T · `std +site` | | | | |
 | `pick_number`, `status` | text | no | `uq`; ck in (`draft`,`in_progress`,`completed`,`cancelled`) | rule `PK` |
 | `sales_order_id`, `assigned_to`, `started_at`, `completed_at` | uuid / uuid / ts / ts | no / yes / yes / yes | | |
 | **`pick_lines`** · P4 · T · `std +site` | | | | each scan is a line |
 | `pick_id`, `sales_order_line_id`, `allocation_id`, `lot_id`, `container_id`, `from_location_id` | uuid | no / no / no / no / yes / no | | |
-| `qty_base`, `uom_base_id`, `scanned_at`, `picked_by`, `scan_payload` | num6 / uuid / ts / uuid / text | no | | payload kept as evidence |
-| **`packs`** · P3 · T · `std +site` | | | | the Pack entity (`A-DM-29`): one boxing/verification session that produces containers, from a batch output (`docs/process-maps.md` W05-15, W08) or for a sales order (W09-07); the boxing note / packing list is generated from it; schema file `inventory.ts` (permission string to be settled, §14.3) |
+| `qty_base`, `uom_base_id`, `scanned_at`, `picked_by`, `scan_payload` | num6 / uuid / ts / uuid / text | no / no / no / no / yes | ck `scan_payload IS NOT NULL OR entry_mode = 'manual'` | payload kept as evidence |
+| `entry_mode`, `manual_entry_reason` | text / text | no / yes | ck mode in (`scan`,`manual`) default `scan`; reason required when manual (ck) | manual box id entry when a label is unreadable (W09 exception path); audit `sales.pick_line.manual_entry`; the label is reprinted after verification |
+| **`packs`** · P3 · T · `std +site` | | | | the Pack entity (`A-DM-29`): one boxing/verification session that produces containers, from a batch output (`docs/process-maps.md` W05-15, W08) or for a sales order (W09-07); the boxing note / packing list is generated from it; schema file `inventory.ts`; permission strings `inventory.pack.{view,create,submit,approve}` (decided 2026-10-16, architect item 25) |
 | `pack_number`, `status` | text | no | `uq (organization_id, pack_number)`; ck status in (`open`,`verified`,`closed`,`cancelled`) | rule `PA`; `verified` requires every verification scan `ok` and box count × units = packed quantity |
 | `source_kind` | text | no | ck in (`batch_output`,`sales_order`,`repack`) | |
 | `batch_id`, `batch_output_id`, `sales_order_id`, `pick_id` | uuid | yes | ck: `batch_output` ⇒ `batch_output_id` set; `sales_order` ⇒ `sales_order_id` set (`pick_id` optional); `repack` ⇒ neither required | |
@@ -1126,7 +1215,7 @@ derived labels, not stored states (§14.3).
 | `config_snapshot` | jsonb | no | schema `pack_config/v1` | packaging configuration frozen at start (§1.7) |
 | `used_default_config` | bool | no | default false | flagged for `sales_cs` review before shipment when a customer configuration was missing (W08 exception path) |
 | `verification_mode`, `verification_sample_size`, `verification_failure_count` | text / int / int | no / yes / no | ck mode in (`all`,`sample`); default 0 | A-PROC-38; failures are a projection of `pack_verification_scans` (KPI "pack verification failures") |
-| `packed_by`, `checked_by`, `verified_at`, `closed_at` | uuid / uuid / ts / ts | no / yes / yes / yes | ck `checked_by <> packed_by` | checker holds the pack approve permission (§14.3) |
+| `packed_by`, `checked_by`, `verified_at`, `closed_at` | uuid / uuid / ts / ts | no / yes / yes / yes | ck `checked_by <> packed_by` | checker holds `inventory.pack.approve` |
 | `boxing_note_document_id`, `idempotency_key` | uuid / text | yes | → generated_documents; partial `uq` | |
 | **`pack_verification_scans`** · P3 · T · `std +site` | | | | each checker scan during verification (W08-04); evidence, never edited |
 | `pack_id`, `container_id` | uuid / uuid | no / yes | → packs, → containers | null container when the scanned box is unknown |
@@ -1137,6 +1226,7 @@ derived labels, not stored states (§14.3).
 | `shipment_number`, `status` | text | no | `uq`; ck in (`draft`,`picked`,`packed`,`dispatched`,`delivered`,`returned`) | rule `SH` |
 | `sales_order_id`, `ship_to_address_id` | uuid | no | | |
 | `carrier_name`, `tracking_number`, `driver_name`, `vehicle_plate` | text | yes | | |
+| `package_count`, `gross_weight`, `weight_uom_id` | int / num6 / uuid | yes | ck `package_count > 0`; ck `gross_weight > 0`; → uoms | captured at W09-07; defaults proposed from the containers with this `shipment_id` (count, Σ `gross_weight`) and editable; printed on the DR header (`docs/reports-and-templates.md` §7) |
 | `dispatched_at`, `dispatched_by`, `delivered_at`, `received_by_name`, `signature_attachment_id` | ts / uuid / ts / text / uuid | yes | | signature image only; see e-record caution in `docs/reports-and-templates.md` |
 | `over_shipment_approved_by`, `idempotency_key`, `correlation_id` | uuid / text / uuid | yes | partial `uq` | |
 | **`shipment_lines`** · P4 · T · `std +site` | | | | |
@@ -1186,11 +1276,12 @@ snapshots and exports unless explicitly permitted (`A-DM-15`).
 | **`attendance_imports`** · P5 · T · `std +site` | | | | original file retained |
 | `import_number`, `status` | text | no | `uq`; ck in (`uploaded`,`parsed`,`previewed`,`under_review`,`approved`,`posted`,`rejected`,`failed`,`reversed`) | rule `ATT`; states per `docs/modules/hr-attendance-payroll.md` §4 |
 | `file_attachment_id`, `checksum_sha256`, `import_mapping_id`, `uploaded_by`, `uploaded_at` | uuid / text / uuid / uuid / ts | no | | |
-| `rows_total`, `rows_accepted`, `rows_duplicate`, `rows_unknown_employee`, `rows_missing_punch`, `rows_error` | int | no | default 0 | |
+| `rows_total`, `rows_accepted`, `rows_duplicate`, `rows_unknown_employee`, `rows_inactive_employee`, `rows_missing_punch`, `rows_out_of_sequence`, `rows_site_mismatch`, `rows_error` | int | no | default 0 | one counter per `attendance_import_rows.result` |
+| `is_historical`, `rerun_of_import_id` | bool / uuid | no / yes | default false; → attendance_imports | history-only import (no exceptions raised, never used for pay) at readiness; a re-run after a partial failure points at the original (`docs/modules/hr-attendance-payroll.md` §4, §9) |
 | `reviewed_by`, `reviewed_at`, `posted_by`, `posted_at` | uuid / ts / uuid / ts | yes | ck `posted_by <> uploaded_by` when rule requires | |
 | **`attendance_import_rows`** · P5 · T · `std +site` | | | | |
 | `attendance_import_id`, `row_no`, `raw` | uuid / int / jsonb | no | `uq (import_id, row_no)` | untouched row |
-| `parsed_identifier`, `parsed_at`, `parsed_kind` | text / ts / text | yes | | |
+| `parsed_identifier`, `parsed_at`, `parsed_kind`, `direction_inferred`, `matched_by` | text / ts / text / bool / text | yes / yes / yes / no / yes | default false; ck matched_by in (`time_clock_identifier`,`alias`,`employee_number`,`manual`) | `direction_inferred` = in/out derived from shift proximity, flagged for review; `matched_by` = which key matched the employee (hr module §4) |
 | `employee_id`, `result`, `error_message`, `attendance_event_id` | uuid / text / text / uuid | yes / no / yes / yes | ck result in (`accepted`,`duplicate`,`unknown_employee`,`inactive_employee`,`missing_punch`,`out_of_sequence`,`out_of_range`,`site_mismatch`,`error`,`corrected`) | |
 | `corrected_by`, `corrected_at`, `correction_note` | uuid / ts / text | yes | | never silently discarded |
 | **`attendance_events`** · P5 · T · `std +site` | | | | |
@@ -1202,6 +1293,7 @@ snapshots and exports unless explicitly permitted (`A-DM-15`).
 | **`attendance_exceptions`** · P5 · T · `std +site` | | | | |
 | `employee_id`, `work_date`, `exception_kind` | uuid / date / text | no | ck kind in (`missing_in`,`missing_out`,`late`,`undertime`,`absent`,`unscheduled`,`overtime_unapproved`,`duplicate`,`out_of_sequence`,`outside_shift_window`,`site_mismatch`) | |
 | `status`, `resolution_note`, `resolved_by`, `resolved_at`, `attendance_event_id` | text / text / uuid / ts / uuid | no / yes / yes / yes / yes | ck status in (`open`,`requested`,`resolved`,`approved`,`dismissed`) | `requested` = correction proposed, awaiting `hr.attendance_event.approve` |
+| `proposed_occurred_at`, `proposed_event_kind`, `requested_by`, `request_reason`, `evidence_attachment_id` | ts / text / uuid / text / uuid | yes | ck kind in the `attendance_events.event_kind` list; the first four required when `status = 'requested'` (ck); → users, → file_attachments | the proposed correction awaiting approval; on approval the service inserts the `attendance_events` correction row |
 | **`leave_requests`** · P6 · T · `std +site` + `approval` | | | | |
 | `employee_id`, `leave_type_code`, `from_date`, `to_date`, `days`, `reason`, `status` | uuid / text / date / date / numeric(5,2) / text / text | no / no / no / no / no / yes / no | ck status in (`draft`,`submitted`,`approved`,`rejected`,`cancelled`) | leave types are configuration |
 | **`overtime_requests`** · P6 · T · `std +site` + `approval` | | | | overtime needs approval (`hr.overtime.approve`, thresholds in `approval_rules`); the employee never approves their own (`docs/permissions-matrix.md` §5.1) |
@@ -1229,21 +1321,22 @@ snapshots and exports unless explicitly permitted (`A-DM-15`).
 | `period_code`, `period_start`, `period_end`, `status` | text / date / date / text | no | ck status in (`open`,`locked`); GiST no overlap | |
 | `locked_by`, `locked_at` | uuid / ts | yes | | postings into a locked period are refused |
 | **`invoices`** · P6 · T · `std +site` + `approval` | | | | §6.10 |
-| `invoice_number`, `status` | text | no | `uq`; ck in (`draft`,`submitted`,`approved`,`issued`,`partially_paid`,`paid`,`voided`,`cancelled`) | rule `INV`; gapless (`A-DM-05`, §9.1); `submitted`/`approved` are explicit transitions (`docs/modules/finance.md` §2.10) |
+| `invoice_number`, `status` | text | no | `uq`; ck in (`draft`,`submitted`,`approved`,`issued`,`partially_paid`,`paid`,`closed`,`voided`,`cancelled`) | rule `INV`; gapless (`A-DM-05`, §9.1); `submitted`/`approved` are explicit transitions (`docs/modules/finance.md` §2.10) |
 | `legacy_number` | text | yes | partial `uq (organization_id, legacy_number)` | §9.6 |
 | `customer_id`, `sales_order_id`, `shipment_id`, `bill_to_address_id` | uuid | no / yes / yes / yes | | |
 | `issue_date`, `due_date`, `currency`, `subtotal_amount`, `tax_amount`, `total_amount`, `paid_amount` | date / date / char(3) / money ×4 | no | `paid_amount` default 0 | tax lines come from configuration |
 | `tax_configuration_ref`, `posted_at`, `posted_by`, `voided_by_credit_note_id`, `idempotency_key` | text / ts / uuid / uuid / text | yes | | |
 | **`invoice_lines`** · P6 · T · `std +site` | | | | `invoice_id`, `line_no`, `sku_id`, `sales_order_line_id`, `description`, `qty` set, `unit_amount`, `tax_rate_pct`, `line_amount`, `currency` |
-| **`supplier_bills`** · P6 · T · `std +site` + `approval` | | | | mirror of invoices for payables: `bill_number` (internal, rule `BILL`), `supplier_reference`, `supplier_id`, `purchase_order_id`, `goods_receipt_id`, dates, amounts, `bill_kind` (`bill`,`credit`,`charge`), `replaces_document_id`, `status` (`draft`,`submitted`,`approved`,`posted`,`partially_paid`,`paid`,`disputed`,`voided`,`cancelled`); approve ≠ post for SoD (`docs/modules/finance.md` §2.10) |
-| **`supplier_bill_lines`** · P6 · T · `std +site` | | | | `supplier_bill_id`, `line_no`, `material_id`, `purchase_order_line_id`, `qty` set, `unit_amount`, `tax_rate_pct`, `line_amount`, `currency` |
+| **`supplier_bills`** · P6 · T · `std +site` + `approval` | | | | mirror of invoices for payables: `bill_number` (internal, rule `BILL`), `supplier_reference`, `legacy_number` (partial `uq`; open payables at cutover, §9.6), `supplier_id`, `purchase_order_id`, `goods_receipt_id`, dates, amounts, `bill_kind` (`bill`,`credit`,`charge`), `replaces_document_id`, `status` (`draft`,`submitted`,`approved`,`posted`,`partially_paid`,`paid`,`closed`,`disputed`,`voided`,`cancelled`); approve ≠ post for SoD (`docs/modules/finance.md` §2.10) |
+| **`supplier_bill_lines`** · P6 · T · `std +site` | | | | `supplier_bill_id`, `line_no`, `material_id`, `purchase_order_line_id`, `goods_receipt_line_id`, `qty` set, `unit_amount`, `tax_rate_pct`, `line_amount`, `currency`, `charge_kind` (`goods`,`freight`,`duties`,`brokerage`,`other`; landed-cost charges, finance P-01), `match_result` (`matched`,`qty_variance`,`price_variance`,`no_po`; three-way match, finance P-01/P-02) |
 | **`payment_records`** · P6 · T · `std +site?` + `approval` | | | | money received or paid; provider events are separate (P8); `approval_rules` for `payment_record` (`docs/permissions-matrix.md` §5.1), poster ≠ approver above threshold |
 | `payment_number`, `direction`, `status` | text | no | ck direction in (`inbound`,`outbound`); status in (`draft`,`recorded`,`reconciled`,`voided`,`cancelled`) | rule `PAY`; `recorded` is the "pending reconciliation" state a webhook-created payment starts in |
 | `customer_id`, `supplier_id`, `employee_id` | uuid | yes | ck exactly one | counterparty |
 | `method`, `reference`, `bank_reference`, `paid_at`, `amount`, `currency` | text / text / text / ts / money / char(3) | no / yes / yes / no / no / no | ck method in (`cash`,`bank_transfer`,`cheque`,`gcash`,`provider`,`other`) | |
 | `posted_by`, `posted_at`, `voided_by`, `voided_at`, `void_reason`, `idempotency_key` | uuid / ts / uuid / ts / text / text | yes | | |
+| `withheld_amount`, `provider_payment_id`, `provider_event_id` | money / text / uuid | yes | → payment_provider_events (FK added in P8) | withholding snapshot (certificates stay with the accountant, Q-FIN-10); provider ids for `method = 'provider'` (`docs/modules/finance.md` §5, §7) |
 | **`payment_applications`** · P6 · T · `std +site?` | | | | `payment_record_id`, `invoice_id` or `supplier_bill_id` (ck one), `applied_amount`, `currency`, `applied_at`; sum per payment ≤ payment amount (service + reconciliation check) |
-| **`credit_notes`** · P6 · T · `std +site` + `approval` | | | | `credit_note_number` (rule `CN`), `invoice_id`, `customer_return_id`, `reason_code_id`, `reason`, `amount`, `currency`, `status` (`draft`,`submitted`,`approved`,`issued`,`applied`,`voided`), `posted_at`, `posted_by` |
+| **`credit_notes`** · P6 · T · `std +site` + `approval` | | | | `credit_note_number` (rule `CN`), `invoice_id`, `customer_return_id`, `reason_code_id`, `reason`, `amount`, `currency`, `status` (`draft`,`submitted`,`approved`,`issued`,`applied`,`voided`,`cancelled`), `is_refund` bool default false (paid out through a `payment_records` row instead of being applied to an invoice; `finance.refund.create`, P8), `posted_at`, `posted_by` |
 | **`expense_claims`** · P6 · T · `std +site` + `approval` | | | | `claim_number` (rule `EXP`), `employee_id`, `claim_kind` (`claim`,`request`), `category_code` (configuration), `description`, `amount`, `currency`, `receipt_attachment_id`, `status` (`draft`,`submitted`,`approved`,`rejected`,`posted`,`paid`,`cancelled`), `approval_rule_id`, `payment_record_id` |
 | **`costing_runs`** · P6 · T · `std +site` | | | | `run_number`, `period_start`, `period_end`, `method` (`standard`,`actual`,`moving_average`), `overhead_allocation_basis` (`labour_hours`,`batch_count`,`output_qty`), `status` (`draft`,`final`), `run_by`, `finalised_at`; method choices are finance configuration |
 | **`costing_run_lines`** · P6 · T · `std +site` | | | | `costing_run_id`, `batch_id` or `sku_id`, `material_amount`, `packaging_amount`, `labour_amount`, `overhead_amount`, `scrap_amount`, `yield_variance_amount`, `landed_amount`, `unit_cost_amount`, `currency`, `basis` (`estimate`,`actual`) |
@@ -1265,14 +1358,14 @@ snapshots and exports unless explicitly permitted (`A-DM-15`).
 | `code`, `name`, `template_kind` | text | no | `uq (organization_id, code)` partial; ck kind in (`bmr`,`dispensing_sheet`,`traveler`,`boxing_note`,`delivery_receipt`,`pick_list`,`label`,`stock_card`,`goods_receipt`,`count_sheet`,`variance_report`,`hold_notice`,`coa`,`deviation_report`,`traceability_report`,`supplier_return`,`purchase_order`,`quotation`,`order_confirmation`,`invoice`,`statement`,`payslip`,`attendance_exception_report`,`recall_notice`,`return_receipt`,`report`,`test_page`,`other`) | catalogue in `docs/reports-and-templates.md` §9 |
 | `page_size`, `orientation` | text | no | default `A4` / `portrait` | labels use media from `label_templates` |
 | **`document_template_versions`** · P2 · V · `std` + `ver` | | | | §4 |
-| `document_template_id`, `definition` | uuid / jsonb | no | | HTML/CSS layout + field bindings (ADR-016) |
+| `document_template_id`, `definition` | uuid / jsonb | no | | renderer id + JSON configuration (schema `document_template/v1`): section selection, labels, options, page settings; never HTML (ADR-016, `docs/reports-and-templates.md` A-RPT-01) |
 | `definition_checksum` | text | no | | printed on the document footer with `version_no` |
 | **`generated_documents`** · P2 · T · `std +site?` | | | | every render; reprints link back |
 | `document_template_version_id`, `document_kind` | uuid / text | no | | |
 | `source_entity_type`, `source_entity_id`, `source_revision_at` | text / uuid / ts | no | | `source_revision_at` = source row `updated_at` when rendered |
 | `document_number`, `file_attachment_id`, `checksum_sha256`, `page_count` | text / uuid / text / int | yes | ck `status <> 'ready' OR (file_attachment_id IS NOT NULL AND checksum_sha256 IS NOT NULL)` | `document_number` from rule `DOC` (§9.2), printed with the QR `BC:DOC:<number>` |
 | `status`, `superseded_by_id` | text / uuid | no / yes | ck status in (`rendering`,`ready`,`failed`,`superseded`,`void`); → generated_documents | lifecycle of a render (`docs/reports-and-templates.md` §1.4, §11.1) |
-| `record_revision_no`, `source_state`, `watermark` | int / text / text | no / yes / yes | `uq (source_entity_type, source_entity_id, document_kind, record_revision_no)` | `record_revision_no` counts renders per source record and kind; `source_state` = the source's status at render (§2.6 there); `watermark` e.g. `NOT STARTED`, `IN PROGRESS`, `UNCONTROLLED COPY` |
+| `record_revision_no`, `source_state`, `watermark` | int / text / text | no / yes / yes | `uq (source_entity_type, source_entity_id, document_kind, record_revision_no)` | `record_revision_no` counts renders per source record and kind; `source_state` = the source's status at render (§2.6 there); `watermark` holds one of the A-RPT-04 words (`DRAFT`, `IN PROGRESS`, `UNDER QA REVIEW`, `FINAL – PENDING CLOSURE`, `CONTROLLED COPY`, `REPRINT n`, `AMENDED rev n`, `SUPERSEDED`, `VOID`; `docs/reports-and-templates.md` §1.5) |
 | `generated_by`, `generated_at`, `background_job_id` | uuid / ts / uuid | no / no / yes | | |
 | `reprint_of_id`, `reprint_reason_code_id`, `reprint_note` | uuid / uuid / text | yes | reason required with reprint (ck) | controlled reprint history |
 | `parameters` | jsonb | yes | | report filters |
@@ -1287,7 +1380,7 @@ snapshots and exports unless explicitly permitted (`A-DM-15`).
 | | | | ix `(product_id, start_date)`, `(legacy_kind, legacy_number)` | |
 | **`file_attachments`** · P2 · T · `std +site?` | | | | objects live in the bucket (ADR-014) |
 | `bucket_key`, `file_name`, `content_type`, `size_bytes`, `checksum_sha256` | text / text / text / bigint / text | no | `uq (bucket_key)` | |
-| `entity_type`, `entity_id`, `attachment_kind` | text / uuid / text | yes | ck kind in (`coa`,`sds`,`specification`,`certificate`,`photo`,`signature`,`paper_record_page`,`legacy_document`,`template_test_page`,`import`,`export`,`report`,`backup_manifest`,`other`) | |
+| `entity_type`, `entity_id`, `attachment_kind` | text / uuid / text | yes | ck kind in (`coa`,`sds`,`specification`,`certificate`,`photo`,`signature`,`paper_record_page`,`legacy_document`,`template_test_page`,`import`,`export`,`report`,`backup_manifest`,`archive`,`product_image`,`artwork`,`employee_photo`,`contract`,`government_id_scan`,`medical`,`training_certificate`,`other`) | `archive` (P2) = frozen legacy spreadsheets (`docs/data-migration-plan.md` §4); `product_image`/`artwork` (P2) attach to `product`, `sku`, `customer_requirement`; the five employee kinds (P5) are `is_sensitive` by default (`docs/modules/hr-attendance-payroll.md` §2.1) |
 | `is_sensitive`, `virus_scan_status` | bool / text | no | default false / `pending` | sensitive files require re-auth to download |
 | **`import_mappings`** · P5 · V · `std +site?` + `ver` | | | | `code`, `name`, `import_kind` (`attendance`,`materials`,`skus`,`suppliers`,`customers`,`price_lists`,`locations`,`legacy_documents`,`opening_stock`,`open_sales_orders`,`open_purchase_orders`,`employees`,`equipment`,`other`; `docs/data-migration-plan.md` §9.2), `definition` jsonb; created in P2 instead of P5 if the go-live loader moves forward (Q-MIG-13) |
 | **`import_jobs`** · P5 · T · `std +site?` | | | | `import_number`, `import_kind`, `file_attachment_id`, `checksum_sha256`, `import_mapping_id`, `status` (`uploaded`,`validated`,`under_review`,`posted`,`rejected`,`failed`), row counters, `error_file_attachment_id`, `uploaded_by`, `posted_by`, `posted_at`, `idempotency_key` |
@@ -1303,11 +1396,11 @@ snapshots and exports unless explicitly permitted (`A-DM-15`).
 | **`sync_commands`**, **`sync_conflicts`**, **`device_registrations`** · P7 (`device_registrations` ids designed in P1) | | | | §11 |
 | **`retention_policies`**, **`legal_holds`** · P2 · C / T | | | | §12.1 |
 | **`forecast_overrides`** · P5 · T · `std +site?` + `approval?` | | | | manual forecast override (`analytics.forecast.edit` / `.approve`): `sku_id`, `period_start`, `period_end`, `baseline_qty_base`, `override_qty_base`, `uom_base_id`, `reason`, `status` (`draft`,`submitted`,`approved`,`rejected`,`retired`); partial `uq (sku_id, site_id, period_start) NULLS NOT DISTINCT WHERE status = 'approved'`; the other `analytics.*` tables requested by `docs/analytics-kpis.md` §8.3 are listed in §13.7 |
-| **`backup_runs`** · P1 · T · `id`, `organization_id`, `created_at` | | | | one row per logical dump (`docs/deployment-railway.md` §9): `kind` (`scheduled`,`manual`), `label`, `started_at`, `finished_at`, `status` (`running`,`succeeded`,`failed`), `bucket_key`, `offsite_bucket_key`, `size_bytes`, `checksum_sha256`, `pg_version`, `release_tag`, `error_message`, `triggered_by` NULL; written by the `backup` service with `bc_app`; retained per §12.2 |
-| **`restore_drills`** · P2 · T · `std` | | | | `backup_run_id`, `performed_at`, `performed_by`, `target_environment`, `duration_seconds`, `result` (`passed`,`failed`), `reconciliation_rows`, `notes`, `report_attachment_id`; evidence for Gate 9 |
+| **`backup_runs`** · P1 · T · `id`, `organization_id`, `created_at` | | | | one row per logical dump (`docs/deployment-railway.md` §9): `kind` (`scheduled`,`manual`), `label`, `started_at`, `finished_at`, `status` (`running`,`succeeded`,`failed`), `bucket_key`, `offsite_bucket_key`, `size_bytes`, `checksum_sha256`, `pg_version`, `release_tag`, `error_message`, `triggered_by` NULL, `row_counts` jsonb (§1.7; exact counts of `stock_movements`, `audit_events`, `batches`, `users` at dump time), `hold` bool default false (a held run is never pruned); the `backup` service dumps as `bc_backup` (`DATABASE_BACKUP_URL`, §13.4) and writes this row as `bc_app`; retained per §12.2 |
+| **`restore_drills`** · P2 · T · `std` | | | | `backup_run_id`, `performed_at`, `performed_by`, `witness_user_id`, `target_environment`, `duration_seconds`, `measured_rto_seconds`, `dump_age_seconds` (measured RPO), `checksum_verified` bool, `decrypt_succeeded` bool, `result` (`passed`,`failed`), `reconciliation_rows`, `notes`, `report_attachment_id`, `signed_off_by`, `signed_off_at` (owner sign-off, ck `signed_off_by <> performed_by`); evidence for Gate 9 (`docs/deployment-railway.md` §10) |
 | **`worker_heartbeats`** · P1 · T · `id`, `organization_id` | | | | `worker_id` (`uq`), `hostname`, `release_tag`, `started_at`, `last_heartbeat_at`, `queue_depth`, `migrations_current` bool; one row per worker instance, updated every 30 s, read by `/api/ready` |
 | **`metrics_samples`** · P2 · L · `id`, `organization_id`, `sampled_at` | | | | `metric` (text), `value` numeric(18,6), `labels` jsonb (§1.7), written by the `platform.metrics_sample` job every 5 minutes (sync backlog, failed jobs, reconciliation differences, backup age); monthly partitions like `audit_events`; no FK from other tables |
-| **`reconciliation_runs`** · P2 · T · `std` | | | | result of each `inventory.reconcile` run (§5.6): `run_at`, `kind` (`inventory_balances`,`container_contents`,`reservations`,`quality_status`), `differences_count`, `report_attachment_id`, `status` (`clean`,`differences`,`failed`), `notified_user_ids`; the differences themselves are in the report file, never auto-fixed |
+| **`reconciliation_runs`** · P2 · T · `std` | | | | result of each `inventory.reconcile` run and of each `inventory.rebuild_balances` run (§5.6): `run_at`, `kind` (`inventory_balances`,`container_contents`,`reservations`,`quality_status`,`rebuild`), `differences_count`, `report_attachment_id`, `status` (`clean`,`differences`,`failed`), `notified_user_ids`; the differences themselves are in the report file, never auto-fixed |
 | **`customer_portal_tenants`** · P8 · M · `std +soft` | | | | `code`, `name`, `status`; separate auth boundary (ADR-011) |
 | **`portal_users`** · P8 · M · `std` | | | | `customer_portal_tenant_id`, `email` (unique per tenant), `password_hash`, `status`, `mfa_required`; never joined to internal `users` |
 | **`portal_sessions`**, **`portal_invitations`** · P8 · T | | | | same shape as `sessions` and `invitations` with `portal_user_id` / `customer_portal_tenant_id` instead of `user_id` / `role_id`; separate cookie and lockout counters (`docs/permissions-matrix.md` §7) |
@@ -1366,7 +1459,9 @@ planned start date; the batch copies them at creation and never re-resolves.
 At `batches` creation (status `draft`) the service, in one transaction:
 
 1. Copies `formula_revision_id`, `routing_revision_id`, `bmr_template_version_id` and
-   `inspection_plan_id` from the work order (resolved as in §4.3).
+   `inspection_plan_id` from the work order (resolved as in §4.3) and resolves
+   `label_template_id` / `label_template_version_id` from the SKU, or from the customer
+   requirement when the work order serves one order (A-PROC-22).
 2. Scales every `bom_lines` row to `batch_size_base` (`proportional` lines scale by
    `batch_size_base / formula_revisions.batch_size_base`; `fixed` lines copy as is), computes
    `tolerance_low_base`/`tolerance_high_base`, and inserts `batch_materials`.
@@ -1379,7 +1474,7 @@ At `batches` creation (status `draft`) the service, in one transaction:
 4. Creates one `process_step_records` row per `routing_steps` row of the frozen routing revision.
 
 Trigger `tg_batches_freeze_revisions` rejects any later change to the four revision columns,
-`batch_size_base` or `bom_snapshot` once `status <> 'draft'`. The BMR renderer reads only the
+the two label-template columns, `batch_size_base` or `bom_snapshot` once `status <> 'draft'`. The BMR renderer reads only the
 snapshot and the batch's own records, never the live formula.
 
 ## 5. Ledger design (ADR-006)
@@ -1466,7 +1561,9 @@ order (keys → lots → balances → numbering rule) and sort ids within a clas
 
 ### 5.5 Negative stock, reversal and replacement
 
-- Negative balances are rejected by `CHECK (on_hand_base >= 0)` and by step 6 (`A-DM-02`).
+- Negative balances are rejected by `CHECK (on_hand_base >= 0)` and by step 6 (`A-DM-02`);
+  there is no policy switch in Phases 1–9 (ADR-006 as amended 2026-10-16; process-maps V-NEG
+  is a hard block: the operator posts the missing receipt or adjustment first).
   Blocked stock (`quarantine`, `on_hold`, `rejected`, `expired`, `recalled`) can move only to
   `quarantine`/`hold`/`rejected`/`recall` locations, or (for `quarantine`/`on_hold` only) with
   `exception_approved_by` holding `inventory.held_stock_issue.approve` on that site; `expired`,
@@ -1510,12 +1607,21 @@ inventory_lots.quality_status` and `reserved_base`/`allocated_base` against acti
 reservations/allocations. The same job reconciles `container_contents` against movements with
 `container_id`.
 
+**Rebuild (`inventory.rebuild_balances`, on demand).** When a difference is confirmed to be a
+projection fault (`docs/operations-runbook.md` §9), a user holding `inventory.balance.admin`
+enqueues a keyed rebuild (site, optional lot or location set). The job locks the affected
+`inventory_balances` rows in §5.4 order, recomputes `on_hand_base` from `stock_movements`,
+`reserved_base`/`allocated_base` from active reservations and allocations and `quality_status`
+from `inventory_lots`, writes a `reconciliation_runs` row with `kind = 'rebuild'` and the
+before/after counts, and audits `inventory.inventory_balance.rebuilt`. It never touches the
+ledger.
+
 ### 5.7 Production and financial postings
 
 | Ledger | Row = | Projection updated in the same transaction | Reversal |
 |---|---|---|---|
 | `production_postings` | one consumption/output/scrap event of a batch, 1:1 with a `stock_movements` row | `batch_materials.dispensed_qty_base`, `batch_materials.status`, `batch_outputs.lot_id`, `batches.actual_yield_base` | `posting_type = 'reversal'` + `reversal_of_id`; the linked movement is reversed in the same transaction |
-| `financial_postings` | one posted financial event (invoice issue, bill approval, payment, credit note, expense) | `invoices.paid_amount`, `invoices.status`, `supplier_bills.*`, period totals | `posting_type = 'reversal'`; refused when `accounting_periods.status = 'locked'` |
+| `financial_postings` | one posted financial event (invoice issue, bill posting (`bill_post`, at `supplier_bills.posted`), payment, credit note, expense) | `invoices.paid_amount`, `invoices.status`, `supplier_bills.*`, period totals | `posting_type = 'reversal'`; refused when `accounting_periods.status = 'locked'` |
 | `dispositions` | one quality-status change | `inventory_lots.quality_status`, `inventory_balances.quality_status`, `batches.disposition_id` | no reversal; a new disposition with the opposite decision and a reason |
 | `container_lineage` | one split/merge/repack edge | `container_contents`, `containers.status` | via the stock movement reversal that moved the quantity back |
 
@@ -1534,7 +1640,7 @@ Ten ledger tables with identical columns: `id`, `organization_id`, `site_id` (nu
 exception transitions, enforced by the state machine), `occurred_at timestamptz NOT NULL`,
 `correlation_id uuid NOT NULL`, `device_registration_id uuid NULL`. Index
 `(<entity>_id, occurred_at)`. The entity row keeps `status`, `status_changed_at`,
-`status_changed_by`; the transition row is written in the same transaction by
+`status_changed_by` (the `+status` set, §1.3); the transition row is written in the same transaction by
 `src/lib/state-machine.ts`, which holds the transition table below as typed data.
 
 ### 6.2 Batch
@@ -1542,13 +1648,14 @@ exception transitions, enforced by the state machine), `occurred_at timestamptz 
 | From | To | Guard |
 |---|---|---|
 | draft | planned | revisions frozen, batch number allocated |
-| planned | materials_staged | all `batch_materials` have an allocation; line clearance step complete |
-| materials_staged | in_process | every `requires_checker` dispense checked; equipment `in_service` |
-| in_process | awaiting_qc | all `blocks_until_complete` steps complete; outputs posted |
-| awaiting_qc | quarantined | output lots exist in a quarantine location |
+| planned | materials_staged | every `batch_materials` line staged: allocation exists and the lot is in the staging location (W05-05) |
+| materials_staged | in_process | weighing-area line clearance step (`step_kind = 'line_clearance'`, `area = 'weighing'`) completed and checked; equipment `in_service` (W05-06); dispensing (W05-07) happens in `in_process` |
+| in_process | awaiting_qc | every `requires_checker` dispense checked; all `blocks_until_complete` steps complete; consumption and output posted, output lots in a quarantine location (W05-17) |
+| awaiting_qc | quarantined | finished-product inspection results entered and BMR review complete (A-PROC-29, W05-18); every `paper_then_transcribe` step (`routing_steps.record_mode`) has a reviewed `batch_paper_records` row |
 | quarantined | released / rejected / rework_approved | `dispositions` row by `quality.disposition.approve`, decider ≠ requester |
 | released / rejected | closed | yield record checked; reconciliation complete |
-| rework_approved | in_process | rework plan recorded (`scrap_rework_records` approved) |
+| rework_approved | closed | the approved rework runs as a separate batch: `batches.rework_batch_id` set (`scrap_rework_records` approved, rework batch created); the original closes with the link (W05-20, W06) |
+| rework_approved | in_process | in-place rework: rework plan recorded (`scrap_rework_records` approved) |
 | closed | in_process / quarantined (reopen) | `production.batch.admin` permission, site_manager + qa_qc approval (A-PM-07, `approval_rules` type `batch_reopen`), reason, audit; `reopen_count + 1` |
 | draft | (deleted) | a batch may be deleted only while `draft` and nothing references it; there is no `cancelled` batch state in the vocabulary (`A-DM-24`) |
 | planned / materials_staged / in_process | rejected | abandonment after planning goes `rejected → closed` with a reason; consumed materials stay consumed, staged lots are returned by transfer (`A-DM-24`) |
@@ -1556,8 +1663,9 @@ exception transitions, enforced by the state machine), `occurred_at timestamptz 
 ### 6.3 Work order
 
 `draft → planned → released → in_progress → completed → closed`; `draft|planned|released →
-cancelled` (reason); `in_progress` requires at least one batch past `planned`; `completed`
-requires every batch `closed`.
+cancelled` (reason); `in_progress` requires at least one batch `in_process` (W05-06); `completed`
+when every batch has reached `awaiting_qc` or beyond (W05-17); `closed` when every batch is
+`closed` (W05-20).
 
 ### 6.4 Purchase order
 
@@ -1571,7 +1679,10 @@ after all lines received or short-closed with reason.
 
 `draft → submitted → pending_approval → confirmed → allocated → picking → packed →
 partially_shipped → shipped → invoiced → closed`; `submitted → confirmed` when no approval
-rule matches; `confirmed|allocated|picking → cancelled` (reason, reservations released);
+rule matches; `draft|submitted|pending_approval|confirmed|allocated|picking|packed → cancelled` (reason;
+reservations and allocations released; for `packed` the pack is cancelled and its boxes return
+to pickable stock or are re-allocated; W09-03, W09-12; nothing from `partially_shipped` on is
+cancelled, only returned and credited);
 `partially_shipped → picking` for the remainder; `shipped → invoiced` by invoice posting;
 `invoiced → closed` when paid or by finance with reason.
 
@@ -1633,19 +1744,25 @@ Column detail is in §3.1; this section states the rules the schema enforces.
    path. `auditor` roles are given `*.view` and `platform.audit.view` only.
 3. **Site scope**: `user_site_assignments` with `is_organization_wide` only for roles whose
    `is_organization_wide_allowed` is true (`owner_director`, `system_admin`, `auditor`); the
-   service recomputes `AuthContext.allowedSiteIds` on every request from this table (no
-   caching beyond the request) so revocation is immediate.
+   service builds `AuthContext` from this table and may cache it per session for at most 60 s,
+   keyed by `organizations.permissions_version` (copied to `sessions.permissions_version`);
+   any change to roles, permissions or assignments bumps the version so the next request
+   rebuilds (A-PM-01, `docs/security.md` §3.4). Session revocation is checked on every request
+   regardless of the cache.
 4. **Sessions**: opaque token hashed; `idle_expires_at` and `absolute_expires_at` are both
    checked; `revoked_at` is set on logout, password change, deactivation and admin revocation;
    `mfa_verified_at` and `reauthenticated_at` gate privileged actions. Expired sessions are
    purged by a job after the retention in §12.
-5. **Password reset tokens** and **invitations** are single use, hashed, expiring; acceptance
-   creates the user and assignments in one transaction.
+5. **Password reset tokens** and **invitations** are single use, hashed, expiring.
+   `identity.user.create` inserts the `users` row (`status = 'invited'`, no password) and the
+   `invitations` row (`user_id`, `role_id`, `site_id`) in one transaction; acceptance sets
+   `password_hash`, `status = 'active'` and inserts the `user_site_assignments` row in one
+   transaction (`docs/security.md` §3.9).
 6. **MFA secrets** (P1b): encrypted secret, hashed recovery codes; `users.mfa_required` is set
    by role policy; enrolment and recovery-code use are audit events.
 7. **Separation of duties** is in the schema: `approval` set CHECKs on every approvable
-   record whose SoD is mandatory (`purchase_requests`, `purchase_orders`, `stock_adjustments`,
-   `stock_counts`, `scrap_rework_records`, `leave_requests`, `overtime_requests`,
+   record whose SoD is mandatory (`purchase_requests`, `purchase_orders`,
+   `purchase_order_amendments`, `supplier_returns`, `stock_adjustments`, `stock_counts`, `scrap_rework_records`, `leave_requests`, `overtime_requests`,
    `payroll_periods`, `invoices`, `supplier_bills`, `credit_notes`, `payment_records`,
    `expense_claims`, `change_controls`, `recall_cases`, `setting_change_requests`, every
    `ver` table); `approval?` columns with a service check on the configurable ones
@@ -1851,6 +1968,7 @@ pattern contains `{SITE}` (`A-DM-07`).
 | `ADJ` | `stock_adjustments.adjustment_number` | `ADJ-{YY}-{SEQ}` (5) | yearly | P2 |
 | `TR` | `transfer_requests.transfer_number` | `TR-{YY}-{SEQ}` (6) | yearly | P2 |
 | `GR` | `goods_receipts.receipt_number` | `GR-{YY}-{SEQ}` (5) | yearly | P2 |
+| `SRT` | `supplier_returns.return_number` | `SRT-{YY}-{SEQ}` (4) | yearly | P6 |
 | `PR` | `purchase_requests.request_number` | `PR-{YY}-{SEQ}` (5) | yearly | P6 |
 | `PO` | `purchase_orders.po_number` | `PO-{YY}-{SEQ}` (5) | yearly | P6 |
 | `PP` | `production_plans.plan_number` | `PP-{YYMM}-{SEQ}` (3) | monthly | P3 |
@@ -2384,21 +2502,22 @@ mechanics and the classes that document does not cover are new (`A-DM-16`, `A-DM
 
 | `data_class` | Tables | Default period | Basis | Action at end | Mechanics | Id |
 |---|---|---|---|---|---|---|
-| `quality_batch` | `batches` and children, `dispense_records`, `process_step_records`, `process_step_readings`, `process_step_checklist_results`, `batch_paper_records`, `legacy_documents`, `equipment_uses`, `equipment_service_records`, `downtime_events`, `batch_outputs`, `yield_records`, `scrap_rework_records`, `deviations`, `inspections`, `test_results`, `dispositions`, `quality_holds`, `capas`, `change_controls`, BMR `generated_documents` and attachments | 5 years after batch/lot expiry, minimum 7 years | `expiry_date` | archive | rows stay in Postgres until QA signs the archive manifest; archived as JSON + PDFs to the bucket; immutable | A-SEC-25 |
-| `stock_ledger` | `stock_movements`, `production_postings`, `container_lineage`, `inventory_lots`, `containers`, `container_contents`, `stock_counts`, `stock_count_lines`, `stock_adjustments`, `transfer_requests`, `stock_reservations`, `stock_allocations`, `goods_receipts`, `supplier_lot_documents` | 7 years | `record_date` (posted_at) | archive | a lot is archivable only when every movement of it is older than the period and no genealogy of it is under hold; immutable | §7 (security) |
+| `quality_batch` | `batches` and children, `dispense_records`, `process_step_records`, `process_step_readings`, `process_step_checklist_results`, `batch_paper_records`, `legacy_documents`, `equipment_uses`, `equipment_service_records`, `downtime_events`, `batch_outputs`, `yield_records`, `scrap_rework_records`, `deviations`, `inspections`, `inspection_samples`, `test_results`, `dispositions`, `quality_holds`, `capas`, `capa_actions`, `change_controls`, BMR `generated_documents` and attachments | 5 years after batch/lot expiry, minimum 7 years | `expiry_date` | archive | rows stay in Postgres until QA signs the archive manifest; archived as JSON + PDFs to the bucket; immutable | A-SEC-25 |
+| `stock_ledger` | `stock_movements`, `production_postings`, `container_lineage`, `inventory_lots`, `containers`, `container_contents`, `stock_counts`, `stock_count_scopes`, `stock_count_counters`, `stock_count_lines`, `stock_adjustments`, `transfer_requests`, `stock_reservations`, `stock_allocations`, `goods_receipts`, `supplier_lot_documents`, `supplier_returns`, `supplier_return_lines` | 7 years | `record_date` (posted_at) | archive | a lot is archivable only when every movement of it is older than the period and no genealogy of it is under hold; immutable | §7 (security) |
 | `financial` | `invoices`, `supplier_bills`, `payment_records`, `payment_applications`, `credit_notes`, `expense_claims`, `costing_runs`, `financial_postings`, `accounting_periods`, `reconciliations`, accountant exports | 10 years | `period_end` | archive | immutable | A-SEC-26 |
-| `sales_customer` | `customers`, `customer_addresses`, `customer_contacts`, `customer_requirements`, `quotes`, `sales_orders`, `picks`, `packs`, `shipments`, `delivery_receipts`, `customer_returns`, `complaints`, `recall_cases` | 7 years after last activity | `last_activity` | anonymise contact persons; keep documents | `customer_contacts.*` and `customer_addresses.contact_name/phone` blanked, `anonymised_at` set; `customers.name` kept (a business, not a person) | §7 (security) |
-| `procurement` | `purchase_requests`, `purchase_orders`, `supplier_materials`, `suppliers` | 7 years after last activity | `last_activity` | anonymise supplier contact persons | as above | §7 (security) |
+| `sales_customer` | `customers`, `customer_addresses`, `customer_contacts`, `customer_requirements`, `price_lists`, `quotes`, `sales_orders`, `picks`, `packs`, `shipments`, `delivery_receipts`, `customer_returns`, `complaints`, `recall_cases`, `recall_case_customers`, `recall_case_containers` | 7 years after last activity | `last_activity` | anonymise contact persons; keep documents | `customer_contacts.*` and `customer_addresses.contact_name/phone` blanked, `anonymised_at` set; `customers.name` kept (a business, not a person) | §7 (security) |
+| `procurement` | `purchase_requests`, `purchase_orders`, `purchase_order_amendments`, `reorder_suggestions`, `supplier_materials`, `suppliers` | 7 years after last activity | `last_activity` | anonymise supplier contact persons | as above | §7 (security) |
 | `employee_personal` | `employees` **S** columns, personal attachments | employment + 5 years | `employment_end` | anonymise | personal columns nulled, `anonymised_at` set, `employee_number`, name initials and employment dates kept for ledgers and payroll history; `employees.user_id` user anonymised too | A-SEC-27 |
 | `attendance` | `attendance_imports` (original files), `attendance_import_rows`, `attendance_events`, `attendance_exceptions`, `overtime_requests` | 3 years | `record_date` | delete original files, keep summaries | `file_attachments` of kind `import` deleted from the bucket, row kept with `deleted_at`; events kept until the `payroll` period of the same dates expires | A-SEC-28 |
 | `payroll` | `payroll_periods`, `payroll_lines`, `payslips`, `payroll_approvals`, payment exports, `attendance_rule_sets` | 10 years | `period_end` | archive | immutable once `closed` | A-SEC-29 |
 | `audit` | `audit_events`, `approval_decisions`, all `*_state_transitions` | longest retention of referenced records; minimum 7 years; default indefinite | `record_date` | archive partitions | partitions detached and compressed to the bucket; never dropped without owner approval | A-DM-14 |
 | `identity` | `users`, `roles`, `role_permissions`, `user_site_assignments`, `invitations` | indefinite (rows are FK targets) | – | anonymise users 2 years after deactivation | `display_name` → `Former user <n>`, email → `anonymised+<id>@invalid`, `anonymised_at` set | A-DM-16 |
-| `security` | `sessions`, `password_reset_tokens`, `mfa_secrets` (on deactivation), rate-limit counters | sessions 30 days after expiry; tokens 7 days after expiry/use; counters 24 h | `record_date` | delete | sweep job with `DELETE` grant limited to these tables (§13.4) | A-SEC-11 |
+| `security` | `sessions`, `password_reset_tokens`, `mfa_secrets` (on deactivation), `rate_limit_buckets`, `password_history` (rows beyond the newest 5 per user) | sessions 30 days after expiry; tokens 7 days after expiry/use; buckets idle 24 h; history beyond 5 at once | `record_date` | delete | sweep job with `DELETE` grant limited to these tables (§13.4) | A-SEC-11 |
 | `idempotency` | `idempotency_keys` | 7 days | `record_date` | delete | §11.4 | A-SEC-21 |
 | `sync` | `sync_commands`, `sync_conflicts` | 180 days after terminal status | `record_date` | delete | §11.6 | A-DM-12 |
 | `jobs_notifications` | `background_jobs` (succeeded/cancelled), `notifications` (read or older) | jobs 90 days; notifications 180 days | `record_date` | delete | failed jobs kept until retried or cancelled | A-DM-18 |
 | `documents_generated` | `generated_documents` + files | follow the parent record (`parent_record`) | `parent_record` | with parent | a reprint lineage is archived together | §7 (security) |
+| `labels_generated` | `generated_documents` of kind `label` + files | files 90 days; the row and the `label_jobs` row follow the labelled lot or box | `record_date` | delete file, keep row | bucket object deleted, row kept with checksum; a reprint renders anew from the current data | A-RPT-20 |
 | `exports` | `file_attachments` of kind `export`, scheduled report outputs | 30 days | `record_date` | delete | bucket object deleted, row kept with `deleted_at` and checksum for the audit trail | A-SEC-30 |
 | `attachments_other` | photos, scans, certificates | follow the parent record | `parent_record` | with parent | | §7 (security) |
 | `backups` | logical dumps in the bucket | 35 daily + 12 monthly | – | delete | `docs/deployment-railway.md` | A-SEC-31 |
@@ -2555,7 +2674,8 @@ edit src/db/schema/<domain>.ts
 |---|---|---|---|
 | `bc_migrate` | `pnpm db:migrate` (pre-deploy), `pnpm db:seed:reference` | owner of schema `public` and `drizzle`; all DDL; `ALTER DEFAULT PRIVILEGES` grants below to `bc_app`/`bc_readonly` | `DATABASE_MIGRATION_URL` (`docs/architecture.md` §12; `docs/security.md` §6 spells it `MIGRATION_DATABASE_URL`, to be aligned, §14.3) |
 | `bc_app` | web and worker | `SELECT, INSERT, UPDATE` on application tables; `SELECT, INSERT` only on ledger and audit tables (`stock_movements`, `production_postings`, `financial_postings`, `dispositions`, `container_lineage`, `approval_decisions`, `payment_provider_events`, every `*_state_transitions`, `audit_events` and partitions); `DELETE` only on the retention-sweep list (`sessions`, `password_reset_tokens`, `idempotency_keys`, `sync_commands`, `sync_conflicts`, `background_jobs`, `notifications`, `import_job_rows`, draft children listed per module); `EXECUTE` on application functions; no DDL, no `TRUNCATE`, no `pgboss` schema ownership (pg-boss uses its own role or `bc_app` with ownership of only the `pgboss` schema) | `DATABASE_URL`; the `forbid_mutation()` trigger is the second line of defence behind the missing grants |
-| `bc_readonly` | analytics views, backups, owner ad-hoc queries | `SELECT` on reporting views and, explicitly listed, on non-sensitive tables; no `SELECT` on `employees` **S** columns (column-level `GRANT SELECT (col, ...)`), `payroll_*`, `mfa_secrets`, `sessions`, `idempotency_keys` | `DATABASE_READONLY_URL`; RLS evaluation (ADR-022) may add `bc_rls` later |
+| `bc_readonly` | analytics views, owner ad-hoc queries | `SELECT` on reporting views and, explicitly listed, on non-sensitive tables; no `SELECT` on `employees` **S** columns (column-level `GRANT SELECT (col, ...)`), `payroll_*`, `mfa_secrets`, `sessions`, `idempotency_keys` | `DATABASE_READONLY_URL`; RLS evaluation (ADR-022) may add `bc_rls` later |
+| `bc_backup` | `pg_dump` in the `backup` service (`platform.backup_dump`) | `SELECT` on all tables and sequences of `public` (sensitive columns included: the dump is encrypted at rest, `docs/deployment-railway.md` §9); nothing on the `pgboss` schema; no other right | `DATABASE_BACKUP_URL` (A-DEP-20); the `backup_runs` row is written as `bc_app` (§3.10) |
 
 Roles are created once per environment by `scripts/db/bootstrap-roles.sql`, run by devops
 with the Railway owner credentials (passwords from environment, never in the repository);
@@ -2588,15 +2708,15 @@ sync, MFA).
 | File | Creates | Notes |
 |---|---|---|
 | `0000_extensions_and_functions` | extensions `pgcrypto`, `btree_gist`; functions `uuid_generate_v7()`, `forbid_mutation()`, `format_document_number()`; schema `drizzle` | pure SQL |
-| `0001_identity_core` | `organizations`, `sites`, `departments`, `warehouses`, `locations`, `production_lines`, `equipment`, `users`, `roles`, `permissions`, `role_permissions`, `user_site_assignments`, `sessions`, `password_reset_tokens`, `invitations` | §3.1; `sessions.device_registration_id` omitted until P7 |
+| `0001_identity_core` | `organizations`, `sites`, `departments`, `warehouses`, `locations`, `production_lines`, `equipment`, `users`, `roles`, `permissions`, `role_permissions`, `user_site_assignments`, `sessions`, `password_reset_tokens`, `password_history`, `rate_limit_buckets`, `invitations` | §3.1; `sessions.device_registration_id` and `user_site_assignments.scope` omitted until P7 / P2; `production_lines` and `equipment` are created here (tables and register screens only) because PRD FR-masterdata-07 places the production-line and equipment register in Phase 1 although PRD §11.1 does not list them (§14.3) |
 | `0002_platform_core` | `settings`, `setting_change_requests`, `approval_rules`, `approval_decisions`, `numbering_rules`, `idempotency_keys`, `audit_events` + 12 monthly partitions + `audit_events_default`, `backup_runs`, `worker_heartbeats` | §3.1, §3.10, §8, §9, §11.4; `forbid_mutation` on `audit_events` and `approval_decisions`; the two operations tables back the Slice 1 backup job and readiness checks in `docs/deployment-railway.md` |
 | `0003_master_data_basics` | `uoms`, `uom_conversions`, `products`, `skus`, `materials`, `reason_codes` | §3.2; `skus.label_template_id`, `skus.bmr_template_id`, `products.default_formula_id`, `products.default_routing_id`, `materials.default_inspection_plan_id` omitted until their target tables exist (P2/P3, §13.7); `uom_conversions` carries the `ver` set and the dimension trigger |
-| `0004_grants` | `GRANT`/`REVOKE` for `bc_app` and `bc_readonly` on everything above | §13.4 |
+| `0004_grants` | `GRANT`/`REVOKE` for `bc_app`, `bc_readonly` and `bc_backup` on everything above | §13.4 |
 
-Slice 1 therefore creates exactly 30 application tables: `organizations`, `sites`,
+Slice 1 therefore creates exactly 32 application tables: `organizations`, `sites`,
 `departments`, `warehouses`, `locations`, `production_lines`, `equipment`, `users`, `roles`,
 `permissions`, `role_permissions`, `user_site_assignments`, `sessions`,
-`password_reset_tokens`, `invitations`, `settings`, `setting_change_requests`,
+`password_reset_tokens`, `password_history`, `rate_limit_buckets`, `invitations`, `settings`, `setting_change_requests`,
 `approval_rules`, `approval_decisions`, `numbering_rules`, `idempotency_keys`, `audit_events`
 (partitioned), `backup_runs`, `worker_heartbeats`, `uoms`, `uom_conversions`, `products`,
 `skus`, `materials`, `reason_codes`, plus `drizzle.__drizzle_migrations`. Phase 1b adds
@@ -2611,14 +2731,14 @@ Acceptance mapping: S1-09 (migrate from zero, re-run is a no-op), S1-10 (seed gu
 
 | Phase | Adds (tables) | Adds (columns on earlier tables) |
 |---|---|---|
-| P2 | `suppliers`, `supplier_materials`, `label_templates`, `document_templates`, `document_template_versions`, `generated_documents`, `file_attachments`, `inventory_lots`, `inventory_balances`, `stock_movements`, `stock_reservations`, `stock_allocations`, `stock_counts`, `stock_count_lines`, `stock_adjustments`, `stock_adjustment_lines`, `transfer_requests`, `transfer_request_lines`, `containers`, `container_contents`, `container_lineage`, `label_jobs`, `goods_receipts`, `goods_receipt_lines`, `supplier_lot_documents`, `background_jobs`, `notifications`, `retention_policies`, `legal_holds`, `metrics_samples`, `reconciliation_runs`, `restore_drills`, `material_aliases`, `legacy_documents`, `lot_genealogy_edges` (view) | `skus.label_template_id`, `skus.bmr_template_id`, `materials.requires_coa` defaults reviewed |
-| P3 | `formulas`, `formula_revisions`, `bom_lines`, `routings`, `routing_revisions`, `routing_steps`, `routing_step_parameters`, `routing_step_checklist_items`, `work_instructions`, `work_instruction_revisions`, `production_plans`, `production_plan_lines`, `work_orders`, `batches`, `batch_materials`, `dispense_records`, `process_step_records`, `process_step_readings`, `process_step_checklist_results`, `batch_paper_records`, `equipment_uses`, `equipment_service_records`, `equipment_state_transitions`, `downtime_events`, `batch_outputs`, `yield_records`, `scrap_rework_records`, `deviations`, `production_postings`, `batch_state_transitions`, `work_order_state_transitions`, `inspection_plans`, `inspection_plan_tests`, `inspections`, `test_results`, `dispositions`, `quality_holds`, `capas`, `change_controls`, `inspection_state_transitions`, `quality_hold_state_transitions`, `packs`, `pack_verification_scans` | `products.default_formula_id`, `products.default_routing_id`, `materials.default_inspection_plan_id`, `containers.pack_id`, `inventory_lots.batch_output_id` FK |
-| P4 | `customers`, `customer_addresses`, `customer_contacts`, `customer_requirements`, `quotes`, `quote_lines`, `sales_orders`, `sales_order_lines`, `picks`, `pick_lines`, `shipments`, `shipment_lines`, `delivery_receipts`, `customer_returns`, `customer_return_lines`, `complaints`, `recall_cases`, `recall_case_lots`, `sales_order_state_transitions`, `shipment_state_transitions` | `containers.sales_order_id`, `containers.shipment_id` FKs |
-| P5 | `employees`, `import_mappings`, `import_jobs`, `import_job_rows`, `attendance_imports`, `attendance_import_rows`, `attendance_events`, `attendance_exceptions`, `scheduled_reports`, `scheduled_report_recipients`, `forecast_overrides`, reporting views | |
-| P6 | `purchase_requests`, `purchase_request_lines`, `purchase_orders`, `purchase_order_lines`, `purchase_order_state_transitions`, `shifts`, `shift_assignments`, `holiday_calendars`, `holidays`, `attendance_rule_sets`, `attendance_rule_values`, `leave_requests`, `overtime_requests`, `payroll_periods`, `payroll_lines`, `payslips`, `payroll_approvals`, `payroll_period_state_transitions`, `accounting_periods`, `invoices`, `invoice_lines`, `supplier_bills`, `supplier_bill_lines`, `payment_records`, `payment_applications`, `credit_notes`, `expense_claims`, `costing_runs`, `costing_run_lines`, `financial_postings`, `reconciliations`, `reconciliation_lines`, `invoice_state_transitions` | `goods_receipt_lines.purchase_order_line_id` FK |
+| P2 | `suppliers`, `supplier_materials`, `label_templates`, `document_templates`, `document_template_versions`, `generated_documents`, `file_attachments`, `inventory_lots`, `inventory_balances`, `stock_movements`, `stock_reservations`, `stock_allocations`, `stock_counts`, `stock_count_lines`, `stock_adjustments`, `stock_adjustment_lines`, `transfer_requests`, `transfer_request_lines`, `containers`, `container_contents`, `container_lineage`, `label_jobs`, `goods_receipts`, `goods_receipt_lines`, `supplier_lot_documents`, `background_jobs`, `notifications`, `retention_policies`, `legal_holds`, `metrics_samples`, `reconciliation_runs`, `restore_drills`, `material_aliases`, `legacy_documents`, `stock_count_scopes`, `stock_count_counters`, `lot_genealogy_edges` (view) | `skus.label_template_id`, `skus.bmr_template_id`, `products.primary_image_attachment_id`, `skus.primary_image_attachment_id`, `user_site_assignments.scope`, `materials.requires_coa` defaults reviewed |
+| P3 | `formulas`, `formula_revisions`, `bom_lines`, `routings`, `routing_revisions`, `routing_steps`, `routing_step_parameters`, `routing_step_checklist_items`, `work_instructions`, `work_instruction_revisions`, `production_plans`, `production_plan_lines`, `work_orders`, `batches`, `batch_materials`, `dispense_records`, `process_step_records`, `process_step_readings`, `process_step_checklist_results`, `batch_paper_records`, `equipment_uses`, `equipment_service_records`, `equipment_state_transitions`, `downtime_events`, `batch_outputs`, `yield_records`, `scrap_rework_records`, `deviations`, `production_postings`, `batch_state_transitions`, `work_order_state_transitions`, `inspection_plans`, `inspection_plan_tests`, `inspections`, `test_results`, `dispositions`, `quality_holds`, `capas`, `change_controls`, `inspection_state_transitions`, `quality_hold_state_transitions`, `inspection_samples`, `capa_actions`, `packs`, `pack_verification_scans` | `products.default_formula_id`, `products.default_routing_id`, `materials.default_inspection_plan_id`, `containers.pack_id`, `inventory_lots.batch_output_id` FK |
+| P4 | `customers`, `customer_addresses`, `customer_contacts`, `customer_requirements`, `quotes`, `quote_lines`, `sales_orders`, `sales_order_lines`, `picks`, `pick_lines`, `shipments`, `shipment_lines`, `delivery_receipts`, `customer_returns`, `customer_return_lines`, `complaints`, `recall_cases`, `recall_case_lots`, `recall_case_containers`, `recall_case_customers`, `price_lists`, `price_list_lines`, `sales_order_state_transitions`, `shipment_state_transitions` | `containers.sales_order_id`, `containers.shipment_id` FKs |
+| P5 | `employees`, `import_mappings`, `import_jobs`, `import_job_rows`, `attendance_imports`, `attendance_import_rows`, `attendance_events`, `attendance_exceptions`, `scheduled_reports`, `scheduled_report_recipients`, `forecast_overrides`, reporting views | `file_attachments.attachment_kind` CHECK gains the employee kinds (§3.10); composite read-path indexes of §1.8 rule 7 (`analytics_indexes`) |
+| P6 | `supplier_returns`, `supplier_return_lines`, `purchase_requests`, `purchase_request_lines`, `purchase_orders`, `purchase_order_lines`, `purchase_order_amendments`, `purchase_order_state_transitions`, `reorder_suggestions`, `shifts`, `shift_assignments`, `holiday_calendars`, `holidays`, `attendance_rule_sets`, `attendance_rule_values`, `leave_requests`, `overtime_requests`, `payroll_periods`, `payroll_lines`, `payslips`, `payroll_approvals`, `payroll_period_state_transitions`, `accounting_periods`, `invoices`, `invoice_lines`, `supplier_bills`, `supplier_bill_lines`, `payment_records`, `payment_applications`, `credit_notes`, `expense_claims`, `costing_runs`, `costing_run_lines`, `financial_postings`, `reconciliations`, `reconciliation_lines`, `invoice_state_transitions` | `goods_receipt_lines.purchase_order_line_id` FK; HR columns on P5/P6 tables requested by `docs/modules/hr-attendance-payroll.md` §11.3: `shifts.window_before_minutes`, `shifts.window_after_minutes`, `shifts.is_default_for_site`, `shifts.status`, `shift_assignments.status`, `shift_assignments.rest_weekdays`, `shift_assignments.pattern_code`, `attendance_rule_sets.validated_by/validated_at/validation_note`, `payroll_periods.payroll_rule_set_id` (with `payroll_rule_sets`), `payroll_lines.superseded_by_run_id` (with `payroll_runs`), `employees.cost_centre_code`, `overtime_requests.approved_minutes_cap` |
 | P7 | `device_registrations`, `sync_commands`, `sync_conflicts` | `sessions.device_registration_id` FK; the nullable `device_registration_id` columns on ledgers gain their FK |
-| P8 | `customer_portal_tenants`, `portal_users`, `portal_sessions`, `portal_invitations`, `payment_provider_events` | `customers.portal_tenant_id`, `sales_orders.portal_user_id` FK |
-| P5/P6, requested by module documents, **not yet catalogued in §3** | analytics (`docs/analytics-kpis.md` §8.3): schema `analytics` with `kpi_definitions` (`ver`), `kpi_snapshots` (append-only), `kpi_reconciliation_results`, `refresh_log`, `forecasts`, `report_runs`, `demand_events`, `production_line_calendars`, `reorder_suggestions`; HR (`docs/modules/hr-attendance-payroll.md` §11.3): `employee_contacts`, `employee_time_clock_aliases`, `skills`, `employee_skills`, `shift_patterns`, `shift_break_windows`, `leave_types`, `leave_balances`, `attendance_day_summaries`, `pay_components`, `payroll_rule_sets` + `payroll_rule_values`, `statutory_tables` + `statutory_table_brackets`, `employee_compensation`, `employee_pay_component_assignments`, `payroll_runs`, `export_layouts`, `attendance_import_state_transitions`; finance (`docs/modules/finance.md` §2.10): `tax_configurations`, `lot_cost_history` (ledger), `overhead_pools`, `labour_rates`, `standard_costs`, `accountant_export_profiles`, `export_account_mappings`, `accountant_export_runs`, `refund_requests` (P8) | these are accepted in principle; the database architect catalogues them in §3 in the Phase 5 and Phase 6 revisions of this document, following the conventions of §1, before their migrations are generated (§14.3) |
+| P8 | `customer_portal_tenants`, `portal_users`, `portal_sessions`, `portal_invitations`, `payment_provider_events` | `customers.portal_tenant_id`, `sales_orders.portal_user_id`, `payment_records.provider_event_id` FKs |
+| P5/P6, requested by module documents, **not yet catalogued in §3** | analytics (`docs/analytics-kpis.md` §8.3): schema `analytics` with `kpi_definitions` (`ver`), `kpi_snapshots` (append-only), `kpi_reconciliation_results`, `refresh_log`, `forecasts`, `report_runs`, `demand_events`, `production_line_calendars` (`reorder_suggestions` is catalogued in §3.4 under procurement, not analytics); HR (`docs/modules/hr-attendance-payroll.md` §11.3): `employee_contacts`, `employee_time_clock_aliases`, `skills`, `employee_skills`, `shift_patterns`, `shift_break_windows`, `leave_types`, `leave_balances`, `attendance_day_summaries`, `pay_components`, `payroll_rule_sets` + `payroll_rule_values`, `statutory_tables` + `statutory_table_brackets`, `employee_compensation`, `employee_pay_component_assignments`, `payroll_runs`, `export_layouts`, `attendance_import_state_transitions`; finance (`docs/modules/finance.md` §2.10): `tax_configurations`, `lot_cost_history` (ledger), `overhead_pools`, `labour_rates`, `standard_costs`, `accountant_export_profiles`, `export_account_mappings`, `accountant_export_runs`, `refund_requests` (P8) | these are accepted in principle; the database architect catalogues them in §3 in the Phase 5 and Phase 6 revisions of this document, following the conventions of §1, before their migrations are generated (§14.3) |
 | Deferred | `journal_entries`, `journal_lines` (ADR-020), `equipment_maintenance_plans`, `maintenance_work_orders`, `spare_parts` (PRD FR-production-15) | need an approved scope and an ADR |
 
 ## 14. Open questions and assumptions
@@ -2632,7 +2752,7 @@ the discipline of §13.
 | Id | Assumption (default chosen) | Where | Configurable? | Needs confirmation from |
 |---|---|---|---|---|
 | A-DM-01 | Precision: quantities `numeric(18,6)`, money `numeric(18,4)`, percentages `numeric(9,4)`; PHP displayed to 2 decimals | §1.6 | display per UOM/currency; storage by migration | owner (only if finer resolution is priced or weighed) |
-| A-DM-02 | Negative stock is impossible: `CHECK (on_hand_base >= 0)` and the posting validation; the `inventory.negative_balance.post` exception exists in the matrix but the site policy is off and the CHECK would have to be relaxed by migration before it could work | §3.3, §5.5 | site policy + migration | owner (informed) |
+| A-DM-02 | Negative stock is impossible in Phases 1–9: `CHECK (on_hand_base >= 0)` plus the posting validation, with no policy switch (ADR-006 amended 2026-10-16, architect ruling 42); the matrix entry `inventory.negative_balance.post` is inoperative and process-maps V-NEG is a hard block; allowing negative WIP balances for a site would need a new ADR replacing the constraint with a policy-aware trigger | §3.3, §5.5 | new ADR + migration only | owner (informed) |
 | A-DM-03 | Quality status is a property of the lot, not of a box or location; dispositions re-key all balance rows of the lot | §5.2 | migration | QA lead |
 | A-DM-04 | Material classes are `raw`, `packaging`, `intermediate`, `consumable`; intermediates (lye solution, colourant in oil) are materials with their own lots (A-PRD-27) | §3.2 | migration (CHECK) | production process owner |
 | A-DM-05 | Invoice numbers are gapless (`is_gapless`), all other document types may have gaps after a failed posting | §9.1, §9.3 | per rule | accountant |
@@ -2694,7 +2814,7 @@ the discipline of §13.
 |---|---|---|
 | `BC:EQP:<code>` scan payload | accepted (§9.5); `equipment.code` now organization-unique | ADR-017 and the vocabulary in the team brief (principal-architect); `docs/security.md` §4.9 type set (security-engineer); `docs/process-maps.md` A-PROC-42 closes |
 | Audit event naming | one convention: `module.entity.event`, three segments, CHECK-enforced (§8.1) | `docs/security.md` §5 catalogue re-keyed and `actor_user_id`/`reason_text` renamed (security-engineer); `docs/process-maps.md` audit column already uses this form except `platform.exception.approved`, `platform.label.printed`, `platform.document.generated`, `platform.sync_command.replayed` → `documents.label_job.printed`, `documents.generated_document.generated`, `platform.sync_command.replay_*` (process owners); `docs/reports-and-templates.md` §1.1 and §13.3 (`documents.generated`, `platform.label.*`) → `documents.generated_document.*`, `documents.label_job.printed|voided|reprinted` (manufacturing-process-engineer, warehouse-procurement-specialist) |
-| Pack entity | single `packs` table + `pack_verification_scans`, source batch output / sales order / repack, P3, schema file `inventory.ts` (§3.7, A-DM-29) | permission strings: matrix has `sales.pack.{view,create,submit}` (P4), process-maps uses `inventory.pack.*` with `.approve` for the checker; recommend `inventory.pack.{view,create,submit,approve}` from P3 (security-engineer, principal-architect) |
+| Pack entity | single `packs` table + `pack_verification_scans`, source batch output / sales order / repack, P3, schema file `inventory.ts` (§3.7, A-DM-29); permission strings `inventory.pack.{view,create,submit,approve}` from P3 (decided 2026-10-16, architect item 25) | `docs/permissions-matrix.md` renames `sales.pack.*` → `inventory.pack.*` (security-engineer); `docs/process-maps.md` and the backlog use the same strings (process owners, product-manager) |
 | Equipment service records | `equipment_service_records`, `equipment_state_transitions`, derived availability, `blocking_rule` (§3.1, §6.11) | `docs/process-maps.md` W13 status names `available/calibration_due/maintenance_due/cleaning_required` are derived reasons, not stored states (manufacturing-process-engineer); PRD FR-production-15 stays "later" |
 | Reservations | lot-level (A-DM-22) | `docs/process-maps.md` W09-04 wording (warehouse-procurement-specialist, principal-architect) |
 | Permission strings used in this document | aligned to the matrix: `inventory.movement.post/void`, `masterdata.formula.approve`, `masterdata.routing.approve`, `masterdata.work_instruction.approve`, `masterdata.customer_requirement.approve`, `masterdata.uom_conversion.admin`, `platform.numbering_rule.admin`, `hr.payroll_rule.admin`, `platform.import_job.approve`, `quality.hold.approve`, `production.batch.admin` (reopen) | none; `docs/process-maps.md` still uses `inventory.stock_movement.post`, `masterdata.formula_revision.approve`, `quality.quality_hold.approve`, `production.equipment.create/edit/approve`, `masterdata.change_control.create` and `production.batch.post` which the matrix does not define (process owners, security-engineer) |
@@ -2706,10 +2826,53 @@ the discipline of §13.
 | Attendance rule versions | approved under `hr.payroll_rule.admin` + reviewer sign-off (§4.1) | matrix has no `hr.attendance_rule.*`; confirm the mapping (hr-payroll-specialist, security-engineer) |
 | Overtime | `overtime_requests` table added (§3.8) | PRD glossary/entity list (product-manager) |
 | `docs/reports-and-templates.md` §13.3 | all items applied: `production_lines.department_id` and `work_orders.department_id`; `routing_steps.area`, `routing_step_checklist_items`, `process_step_checklist_results`; `generated_documents.status/superseded_by_id/record_revision_no/source_state/watermark`; `document_templates.template_kind` values; numbering type `DOC`; `label_jobs` void/printed/station columns and `document_template_version_id`; `label_templates.applies_to` `equipment`, `symbology` `ean13` (later), `copies_default`, `fields`; `batch_paper_records`; `file_attachments.attachment_kind` values; `delivery_receipts` acknowledgment columns; `dispositions.conditions/review_date`; settings keys and reprint reason codes in the reference seed (§13.5) | ADR-017 gains `ean13` when retail barcodes are scheduled (principal-architect) |
-| `docs/analytics-kpis.md` §8.3 | applied: `stock_movements.unit_cost_amount`, `sync_commands.replayed_at`, `equipment_uses.exception_approved_by/deviation_id`, `dispositions.qty_base_at_decision`, `downtime_events`, `shift_assignments.production_line_id`, `scheduled_reports.owner_user_id`, `notifications.resolved_at`, `packs.verification_failure_count` + `pack_verification_scans`, `forecast_overrides` (public schema, not `analytics`); pending catalogue entries for the `analytics.*` tables, `demand_events`, `production_line_calendars`, `reorder_suggestions` (§13.7) | analytics-specialist to confirm the `analytics` schema name and that `forecast_overrides` may live in `public` |
+| `docs/analytics-kpis.md` §8.3 | applied: `stock_movements.unit_cost_amount`, `sync_commands.replayed_at`, `equipment_uses.exception_approved_by/deviation_id`, `dispositions.qty_base_at_decision`, `downtime_events`, `shift_assignments.production_line_id`, `scheduled_reports.owner_user_id`, `notifications.resolved_at`, `packs.verification_failure_count` + `pack_verification_scans`, `forecast_overrides` (public schema, not `analytics`); `reorder_suggestions` catalogued in §3.4 (P6, procurement, `public`, job-written rows); pending catalogue entries for the `analytics.*` tables, `demand_events`, `production_line_calendars` (§13.7) | analytics-specialist to confirm the `analytics` schema name, that `forecast_overrides` may live in `public`, and that KPI-PRO-07 reads `reorder_suggestions.status`/`run_at` |
 | `docs/modules/finance.md` §2.10 | applied: invoice/credit-note `submitted`/`approved`, supplier-bill states and `bill_kind`/`replaces_document_id`, payment `draft`/`cancelled`, expense `posted`/`claim_kind`, `financial_postings.bill_post`, `A-DM-05` defined (§9.1, §14.1); pending catalogue entries for the new finance tables (§13.7) | finance-specialist (costing-run columns `supersedes_run_id`, `overhead_pool_id`, `labour_rate_set_id`, `good_output_qty_base`, `labour_hours`, `allocation_fallback`, estimate/actual unit costs arrive with those tables) |
 | `docs/modules/hr-attendance-payroll.md` §11.3 | applied: `hr.attendance_rule.approve` reference replaced by `hr.payroll_rule.admin` + second user; `overtime_requests`; attendance import/row/exception enum additions; `attendance_events.voided_*`; `payroll_periods.period_kind/payment_confirmed_at/payment_reference/computed_by`; `payroll_lines.corrects_payroll_line_id`; pending catalogue entries for the new HR entities and remaining columns (§13.7) | hr-payroll-specialist; `payroll_periods.payroll_rule_set_id` is added with `payroll_rule_sets` |
 | `docs/deployment-railway.md` open items 6 and 7 | applied: `backup_runs`, `worker_heartbeats` (P1), `restore_drills`, `metrics_samples`, `reconciliation_runs` (P2) in §3.10; §9 and §11 now exist | devops-engineer: job names `platform.metrics_sample`, `platform.alerts_evaluate`, `platform.backup_dump` belong in `docs/architecture.md` §8 |
 | `docs/testing.md` Q-TST-05 | applied: §5.3 and every date-dependent query take `$as_of`; no `CURRENT_DATE` | qa-test-engineer (informed) |
 | `docs/data-migration-plan.md` §14 | applied: `legacy_number` on materials, products, skus, suppliers, customers, employees, inventory_lots, sales_orders, purchase_orders (and goods_receipts, delivery_receipts, invoices, batches); `material_aliases`; `legacy_documents` with rule `LDOC`; `goods_receipts.receipt_kind` with `opening_balance` and nullable supplier; reason codes and `applies_to` `receipt`/`disposition`; `import_mappings.import_kind` extended | product-manager: `LegacyDocument`, `MaterialAlias` in the PRD entity list and glossary; devops-engineer: `MIGRATION_WINDOW_OPEN` guard lives with the loader, not in the schema |
 | New glossary terms | Pack verification scan, legacy number, legal hold, retention policy, setting change request, transfer request, stock adjustment (document), paper record page, checklist item, downtime event, approval decision | `docs/PRD.md` §12 (product-manager) |
+| Round-2 additions 2026-10-23: `+status` set | `status_changed_at`/`status_changed_by` defined once in §1.3 for every state-machine table (§6.1) | none; engineers (informed) |
+| Round-2: analytics indexes | `docs/analytics-kpis.md` §4.4 indexes accepted as §1.8 rule 7, created by the P5 `analytics_indexes` migration | analytics-specialist (informed) |
+| Round-2: permissions version | `organizations.permissions_version` + `sessions.permissions_version`, AuthContext cache ≤ 60 s (§3.1, §7 item 3) | `docs/security.md` §2.2/§3.4, `docs/operations-runbook.md` §2.2 and matrix A-PM-01 already assume this; no change needed (security-engineer, devops-engineer informed) |
+| Round-2: assignment sub-scope | `user_site_assignments.scope` jsonb, P2 (§3.1, §1.7) | `docs/permissions-matrix.md` §4.4 cites the column (security-engineer) |
+| Round-2: role movement types | setting key `inventory.role_movement_types`, not a table (§3.1) | `docs/permissions-matrix.md` A-PM-06 and the settings registry name the key (security-engineer, backend-engineer) |
+| Round-2: invitations | `invitations.user_id` replaces `accepted_user_id`; the `users` row is created at invitation with `status = 'invited'` (§3.1, §7 item 5) | `docs/security.md` §3.9 table name `user_invitations` → `invitations` (security-engineer) |
+| Round-2: `password_history`, `rate_limit_buckets` | P1 tables in `0001_identity_core` (§3.1, §13.6), `security` retention class | `docs/security.md` §3.2 and §4.5 cite the table names (security-engineer) |
+| Round-2: product images | `products.primary_image_attachment_id`, `skus.primary_image_attachment_id`; attachment kinds `product_image`, `artwork` (P2) | `docs/PRD.md` portal catalogue (P8) and `docs/ux-system.md` reference imagery (product-manager, frontend-engineer) |
+| Round-2: `routing_steps.record_mode` | `electronic` / `paper_then_transcribe` / `paper_only` per step, guard in §6.2 | `docs/reports-and-templates.md` §2.5 cites the column (manufacturing-process-engineer) |
+| Round-2: supplier evidence | `suppliers.tax_identifier`; `supplier_materials.approved_by/approved_at/audit_date/evidence_attachment_id/suspended_reason` (§3.2) | `docs/modules/finance.md` §5; `docs/process-maps.md` W04-11 (finance-specialist, warehouse-procurement-specialist) |
+| Round-2: customer requirements | `requirement_kind` gains `min_remaining_shelf_life_days`, `full_shipment_required`, `shipping_marks`; `sales_order_lines.min_remaining_shelf_life_days`, `is_backordered` (§3.2, §3.7) | `docs/process-maps.md` W09-04/05; boxing-note dataset in `docs/reports-and-templates.md` §5 (process owners) |
+| Round-2: stock counts | `stock_count_scopes`, `stock_count_counters`, `stock_counts.cancel_reason_code_id/cancel_note`, `stock_count_lines.is_unexpected` + offline columns (§3.3) | `docs/process-maps.md` W03 adopts states `planned/in_progress/counted/recount/pending_approval/posted/cancelled` (`counting` → `in_progress`; no `draft`) per ruling 40 (warehouse-procurement-specialist) |
+| Round-2: containers | `container_kind` + `sack`,`bag`,`bottle`,`loose`; `is_partial`; `verified_at/verified_by/verification_scan_payload` (§3.3) | `docs/data-migration-plan.md` §10.5 and backlog US-2-24 cite the columns; `docs/reports-and-templates.md` §8.3 `PARTIAL` reads `is_partial` (product-manager, manufacturing-process-engineer) |
+| Round-2: `label_jobs.entity_type` | `inspection_sample` (replaces `sample`) and `equipment` added (§3.3) | `docs/reports-and-templates.md` §8.3 and `docs/process-maps.md` W06-02/W13-01 (manufacturing-process-engineer) |
+| Round-2: scan lookups | not persisted; audit `inventory.scan.unrecognised` for unknown payloads (§3.3) | `docs/process-maps.md` W02-01 "Scan event" row becomes "structured log + audit on failure"; `docs/security.md` §5 adds the event (process owners, security-engineer) |
+| Round-2: goods receipts | `goods_receipts.supplier_document_number`; supplier DR photo = attachment kind `photo`; `goods_receipt_lines.container_count/qty_per_container_base/storage_conditions_confirmed/counted_by/checked_by/count_sheet_ref` (§3.4) | `docs/data-migration-plan.md` §9.2 opening-stock template maps to these columns (product-manager) |
+| Round-2: supplier returns | `supplier_returns`, `supplier_return_lines`, rule `SRT`, P6, movement `issue` + source `supplier_return` (§3.4, §5.1, §9.2) | `docs/permissions-matrix.md` adds `procurement.supplier_return.approve` next to `{create,post}`; `docs/process-maps.md` W01-11/W04-09 say movement type `issue`; `docs/reports-and-templates.md` §9 supplier return note dataset (security-engineer, process owners) |
+| Round-2: purchase orders | `purchase_orders.is_urgent/urgent_reason`; `purchase_order_amendments` (P6) (§3.4) | `docs/process-maps.md` W04 exception path and W04-09 cite them (warehouse-procurement-specialist) |
+| Round-2: reorder suggestions | `reorder_suggestions` persisted (P6, procurement, `public`), written by job `procurement.reorder_suggest` (§3.4) | `docs/process-maps.md` W04-01 "derived view" → job-written rows; `docs/analytics-kpis.md` KPI-PRO-07 source confirmed; `docs/architecture.md` §8 job registry adds `procurement.reorder_suggest` (process owners, analytics-specialist, principal-architect) |
+| Round-2: work orders | `work_orders.batch_count`, `batch_size_base` (§3.5) | none (process-maps W05-02 already captures them) |
+| Round-2: batches | `label_template_id/label_template_version_id` snapshot (§4.4), `rework_batch_id/rework_of_batch_id` (§3.5, §6.2) | `docs/reports-and-templates.md` §2.2 A reads the snapshot; `docs/process-maps.md` W05-03 (manufacturing-process-engineer) |
+| Round-2: `deviations.deviation_kind` | eleven kinds (§3.5) | `docs/process-maps.md` W07-01 and `docs/reports-and-templates.md` §2.2 I use the list (process owners) |
+| Round-2: `inspection_samples` | one row per sample, label and consumption movement per row (§3.6) | `docs/process-maps.md` W06-02 `Inspection.samples[]` → `InspectionSample`; `docs/PRD.md` glossary/entity list adds InspectionSample (quality-regulatory-specialist, product-manager) |
+| Round-2: test instruments | `test_results.instrument_equipment_id`, `method_override` (§3.6) | `docs/process-maps.md` W06-03; CoA dataset in `docs/reports-and-templates.md` (quality-regulatory-specialist) |
+| Round-2: `quality_holds.location_id` | location holds block the location while open (§3.6) | `docs/process-maps.md` W06-07; hold notice dataset (quality-regulatory-specialist) |
+| Round-2: `capa_actions` | per-action owner, due date, verification (§3.6) | `docs/process-maps.md` W07-04; `docs/PRD.md` glossary adds "CAPA action" (quality-regulatory-specialist, product-manager) |
+| Round-2: recall lists | `recall_case_containers`, `recall_case_customers` with shipped/returned/accounted quantities and notification evidence (§3.6) | `docs/process-maps.md` W07-08/W07-10; recall notice dataset (quality-regulatory-specialist) |
+| Round-2: price lists | `price_lists`, `price_list_lines` (P4, `ver`) under `sales.price_list.{view,edit,approve}` (§3.7) | `docs/data-migration-plan.md` §9.2 `price_lists` template maps to the columns; `docs/PRD.md` entity list adds PriceList (product-manager) |
+| Round-2: picks | `pick_lines.entry_mode/manual_entry_reason`, `scan_payload` nullable for manual entry; audit `sales.pick_line.manual_entry` (§3.7) | `docs/security.md` §5 adds the event; `docs/process-maps.md` W09 exception path (security-engineer, process owners) |
+| Round-2: shipments | `shipments.package_count/gross_weight/weight_uom_id` (§3.7) | `docs/reports-and-templates.md` §7 DR header reads them (manufacturing-process-engineer) |
+| Round-2: HR columns | P5 columns on `attendance_imports`, `attendance_import_rows`, `attendance_exceptions` catalogued (§3.8); P6 columns listed in §13.7 | `docs/modules/hr-attendance-payroll.md` §11.3 pending list closes (hr-payroll-specialist) |
+| Round-2: finance columns | `invoices`/`supplier_bills` `closed`; `credit_notes` `cancelled`, `is_refund`; `supplier_bills.legacy_number`; `supplier_bill_lines.goods_receipt_line_id/charge_kind/match_result`; `payment_records.withheld_amount/provider_payment_id/provider_event_id` (§3.9) | `docs/modules/finance.md` §2.3/§5/§7 cite the names (finance-specialist) |
+| Round-2: templates | `document_template_versions.definition` = renderer id + JSON (`document_template/v1`); watermark vocabulary = A-RPT-04 (§3.10, §1.7) | none (aligned to ADR-016 and `docs/reports-and-templates.md`) |
+| Round-2: attachment kinds | `archive`, `product_image`, `artwork`, `employee_photo`, `contract`, `government_id_scan`, `medical`, `training_certificate` (§3.10) | none (aligned to `docs/data-migration-plan.md` §4 and HR §2.1) |
+| Round-2: backups | `backup_runs.hold/row_counts`; `restore_drills` evidence columns; role `bc_backup` in §13.4 and `0004_grants` (§3.10, §13.4, §13.6) | `docs/security.md` §6 variable groups list `DATABASE_BACKUP_URL` (security-engineer); deployment and runbook already match (devops-engineer informed) |
+| Round-2: balance rebuild | job `inventory.rebuild_balances` described in §5.6; `reconciliation_runs.kind` += `rebuild`; audit `inventory.inventory_balance.rebuilt` | `docs/operations-runbook.md` §9 note to the architect closes; `docs/architecture.md` §8 job registry and `docs/permissions-matrix.md` `inventory.balance.admin` already exist (devops-engineer informed) |
+| Round-2: batch guards | §6.2 rewritten per ruling 34 (dispensing in `in_process`; `awaiting_qc → quarantined` = results + BMR review); `rework_approved → closed` added; §6.3 `completed` at `awaiting_qc`, `closed` at batch closure | `docs/process-maps.md` W05 already states this; `docs/PRD.md` and `docs/testing.md` state-machine tests follow §6.2 (qa-test-engineer informed) |
+| Round-2: sales order cancellation | §6.5 allows `cancelled` from `draft`, `submitted`, `pending_approval` and `packed` as well | `docs/process-maps.md` W09-12 "* → cancelled (pre-dispatch)" now reads "any state up to `packed`" (warehouse-procurement-specialist) |
+| Round-2: idempotency wording | §1.10 now says `(organization_id, key)`; §5.7 says `bill_post` at `supplier_bills.posted` | `docs/testing.md` §4.11 and `docs/security.md` §4.10 per ruling 35 (qa-test-engineer, security-engineer) |
+| Round-2: negative stock | A-DM-02 and §5.5 reworded per ruling 42 (hard CHECK, no policy) | `docs/decision-log.md` ADR-006 sentence; `docs/process-maps.md` V-NEG; `docs/permissions-matrix.md` marks `inventory.negative_balance.post` inoperative or removes it (principal-architect, process owners, security-engineer) |
+| Round-2: label retention | class `labels_generated` (files 90 days, rows with the lot) in §12.2 | `docs/security.md` §7 adds the class with basis A-RPT-20 (security-engineer) |
+| Round-2: Slice 1 scope | `production_lines` and `equipment` stay in `0001_identity_core` (PRD FR-masterdata-07, Phase 1); Slice 1 now creates 32 tables | `docs/PRD.md` §11.1 master-data row lists "production lines and equipment register (tables only)" (product-manager) |
+| Round-2: payload grammar | kept at 64 characters with `_` allowed (§9.4, ruling 37) | `docs/reports-and-templates.md` §8.1 adopts it (manufacturing-process-engineer) |
