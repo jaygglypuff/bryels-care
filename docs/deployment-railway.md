@@ -24,7 +24,7 @@ pass criteria; nothing in section 15 is relied on until its check passes.
 flowchart LR
   subgraph GH["GitHub"]
     Repo[(repository)]
-    CI[Actions: lint, typecheck, unit,\nintegration, e2e smoke, build, scans]
+    CI["Actions: lint, typecheck, unit,<br/>integration, e2e smoke, build, scans"]
   end
   subgraph RW["Railway workspace: Bryel's Care"]
     subgraph Stg["project bryels-care-staging (branch main)"]
@@ -36,9 +36,9 @@ flowchart LR
       PPG[(Postgres 16)] --- PBk[(Bucket)]
     end
   end
-  Off[(Offsite bucket,\nother provider)]
+  Off[("Offsite bucket,<br/>other provider")]
   Mon[External uptime monitor]
-  Err[Error reporting\nSentry-compatible]
+  Err["Error reporting<br/>Sentry-compatible"]
   Repo --> CI --> Stg
   Repo -->|promotion workflow| Prd
   SB --> Off
@@ -51,7 +51,7 @@ flowchart LR
 |---|---|---|---|---|---|---|
 | development | developer machine: `pnpm dev`, Postgres 16 in Docker (`docker compose up db`), MinIO or local-disk storage adapter | local | local | `.env.local` (never committed; `.env.example` lists names only) | developer | fictional seed only |
 | staging | Railway project `bryels-care-staging` (A-DEP-01), region Southeast Asia / Singapore (A-DEP-02) | Railway Postgres 16 service | Railway Bucket | Railway variables of that project | automatic on push to `main` | fictional seed; restore drills use production dumps only with owner approval (`docs/security.md` section 6) |
-| production | Railway project `bryels-care-production` | Railway Postgres 16 service | Railway Bucket | Railway variables; access limited to the owner and the operations contact | promotion workflow (section 4.3) | real company data; seed refuses to run (`APP_ENV=production`, PRD S1-10) |
+| production | Railway project `bryels-care-production` | Railway Postgres 16 service | Railway Bucket | Railway variables; access limited to the owner and the operations contact | promotion workflow (section 3.1) | real company data; seed refuses to run (`APP_ENV=production`, PRD S1-10) |
 
 Services in each Railway project (one Docker image, three start commands):
 
@@ -220,6 +220,7 @@ variable (`docs/architecture.md` section 12).
 | `DATABASE_BACKUP_URL` | secret | db-backup | – | – | x | local URL | `bc_backup` | same | read-only role for `pg_dump` (A-DEP-20) |
 | `DATABASE_POOL_MAX` | plain | db-app | x | x | – | `5` | `10` / `5` | `10` / `5` | web / worker (A-DEP-17) |
 | `MIGRATION_ALLOW_DESTRUCTIVE`, `MIGRATION_MAX_BACKUP_AGE_HOURS` | plain | db-migrate | x | – | – | `1`, `0` | unset, `2` | unset, `2` | section 5.3; set to `1` for one deploy, then removed |
+| `MIGRATION_WINDOW_OPEN` | plain | db-migrate | x | x | – | `true` | unset | unset | `true` lets the opening-balance loader and `opening_balance` import jobs run against production (`docs/data-migration-plan.md` A-MIG-08); set only for the cutover window of section 9.1 and removed when check MC-16 passes; the change is logged in the runbook change log |
 | `SESSION_SECRET`, `SESSION_SECRET_PREVIOUS` | secret | auth | x | x | – | fixed dev value | generated | generated | `_PREVIOUS` holds the old key during the 24 h rotation window |
 | `CSRF_SECRET`, `CSRF_SECRET_PREVIOUS` | secret | auth | x | – | – | " | " | " | |
 | `FILE_URL_SECRET` | secret | auth | x | x | – | " | " | " | signed application download URLs (`docs/security.md` 4.8) |
@@ -237,7 +238,7 @@ variable (`docs/architecture.md` section 12).
 | `WORKER_CONCURRENCY` | plain | worker | – | x | – | `2` | `4` | `4` | per queue class |
 | `PDF_RENDERER`, `PUPPETEER_EXECUTABLE_PATH` | plain | worker | – | x | – | `disabled` | `disabled` → `chromium` (Phase 3) | same | ADR-016 |
 | `ALERT_WEBHOOK_URL` | secret | observability | – | x | – | unset | optional | optional | chat-tool webhook for alerts (A-DEP-10) |
-| `MAINTENANCE_MODE` | plain | base | x | – | – | unset | unset | unset | `1` makes `web` answer 503 with a maintenance page for everything except `/api/health`; used during restores |
+| `MAINTENANCE_MODE` | plain | base | x | – | – | unset | unset | unset | `1` makes `web` answer 503 with a maintenance page for everything except `/api/health`; used during restores and the cutover rollback (section 9.1). The read-only mode used during cutover and hypercare is an application setting, not this variable (A-DEP-21) |
 | `PAYMONGO_SECRET_KEY`, `PAYMONGO_WEBHOOK_SECRET` | secret | payments | x | x | – | unset | sandbox | live | Phase 8; sandbox and live never coexist (`docs/security.md` 4.11) |
 | `NEXT_PUBLIC_APP_ENV` | plain | base | x | – | – | `development` | `staging` | `production` | only `NEXT_PUBLIC_*` reaches the browser; CI greps the bundle for secret names |
 | `RAILWAY_ENVIRONMENT`, `RAILWAY_SERVICE_NAME`, `RAILWAY_REPLICA_ID`, `RAILWAY_GIT_COMMIT_SHA` | platform | – | x | x | x | – | injected | injected | read-only; added to every log line |
@@ -364,7 +365,7 @@ scrape application metrics (check V-12). Application metrics therefore live in P
 
 | Metric | Source | Sampling |
 |---|---|---|
-| requests, 5xx count, latency histogram per route class (`page`, `query`, `command`, `scan`, `export`) | in-process counters in `web`, flushed every 60 s per replica to `metrics_samples` | 60 s |
+| requests, 5xx count, latency histogram per route class (`page`, `query`, `command`, `scan`, `export`) | in-process counters in `web`, flushed every 60 s per replica directly into `metrics_samples` (`labels.replica = RAILWAY_REPLICA_ID`); the only writer of that table besides the `platform.metrics_sample` job, see item 6 in section 17 | 60 s |
 | queue depth, oldest queued job age, failed jobs, dead-lettered jobs per kind | pg-boss tables, sampled by the worker job `platform.metrics_sample` | 5 min |
 | sync backlog (pending `sync_commands`, oldest age, open `sync_conflicts`) | same job (Phase 7) | 5 min |
 | database size (`pg_database_size`), largest tables, connections used vs `max_connections`, replication/PITR archive lag where exposed | same job | 5 min |
@@ -391,7 +392,7 @@ Samples are kept 90 days (A-DEP-11) and feed the diagnostics page and the alert 
 | Audit default partition non-empty | count > 0 | S2 | in-app to `system_admin` | 6 |
 | Reconciliation difference | any row from `inventory.reconcile` | S2 | in-app critical to `system_admin`, `site_manager` | 9 (runbook) |
 | Deploy failed | Railway deployment webhook event `FAILED`/`CRASHED` | S2 | chat webhook (Railway → webhook, check V-13) | 14 |
-| Security signals | failed-login spike, lockouts, `authz.denied` rate, restricted-permission use, dead letters (`docs/security.md` 8.2) | S2 | weekly report + in-app | `docs/security.md` 8.3 |
+| Security signals | failed-login spike, lockouts, `identity.authorization.denied` rate, restricted-permission use, dead letters (`docs/security.md` 8.2) | S2 | weekly report + in-app | `docs/security.md` 8.3 |
 
 Alert delivery is the worker job `platform.alerts_evaluate` (every 5 min, deduplicated per
 alert for 1 h, resolved notice when the condition clears). Because the worker cannot alert
@@ -427,6 +428,36 @@ a schedule flag, check V-04) that copies new or changed objects to the offsite b
 Objectives (A-PRD-33, A-DEP-09): RPO 24 h and RTO 4 h are the commitments; measured values
 from the drill (section 10) replace them. PITR is expected to give an RPO of minutes within
 its window; the dump is the floor.
+
+### 9.1 Cutover restore point and maintenance mode (data-migration go-live)
+
+`docs/data-migration-plan.md` sections 12.4 and 13 require a pre-load backup, an agreed
+restore point and a maintenance mode for the go-live day (T0). This is the procedure; the
+operator steps and the cutover log form live in `docs/operations-runbook.md`.
+
+| Step | When | Action | Evidence |
+|---|---|---|---|
+| 1 | T0, after the freeze (plan section 12.2) and before any T0 load | `system_admin` turns on the application read-only maintenance mode (A-DEP-21): every role except `system_admin`, `owner_director` and the cutover team's `warehouse_operator`/`qa_qc` accounts gets read-only access and a banner; `web` keeps serving so the import wizard, label printing and the QA bulk disposition work | setting change audit event |
+| 2 | immediately after step 1 | operations contact runs `node dist/backup.js --manual --label pre-load-<yyyy-mm-dd>` (section 9) and sets `hold = true` on the resulting `backup_runs` row so retention never prunes it; verifies `status = 'succeeded'`, SHA-256 and the offsite copy | `backup_runs` row id in the cutover log |
+| 3 | same time | manual Railway volume backup from the Backups tab (production only; same rule as section 5.3 item 3) and the PITR timestamp noted to the second (UTC and Asia/Manila) as the **restore point** | screenshot or CLI output, timestamp in the cutover log |
+| 4 | same time | `node dist/backup.js --files --manual --label pre-load-<yyyy-mm-dd>` records the list of bucket object keys existing at the restore point (import files, attachments, generated documents) | object-key manifest in the backup prefix |
+| 5 | after steps 2–4 succeed | devops-engineer sets `MIGRATION_WINDOW_OPEN=true` on `web` and `worker` (section 4) and records the change in the runbook change log; loads proceed per the plan | variable change log entry |
+| 6 | when MC-16 passes and the owner declares go-live | `MIGRATION_WINDOW_OPEN` removed; read-only maintenance mode switched off (or kept on for the hypercare read-only fallback of plan section 13); hold on the pre-load `backup_runs` row kept until the T+14 hypercare exit, then released | variable change log, setting audit event |
+
+Rollback to the restore point (plan section 13, "after posting, before go-live declaration")
+is a production restore, run only on the Owner/Director's decision: (1) `MAINTENANCE_MODE=1`
+on `web`; (2) restore per `docs/operations-runbook.md` section 13, preferring PITR to the
+step 3 timestamp, else the step 2 dump; (3) delete bucket objects whose keys are not in the
+step 4 manifest (objects created by the aborted load) after copying them to the offsite
+bucket under `backups/production/aborted-cutover-<date>/` for the record; (4) run the
+reconciliation query (`docs/data-model.md` 5.6) and expect zero rows; (5) remove
+`MIGRATION_WINDOW_OPEN`, unset `MAINTENANCE_MODE`, keep the read-only mode on until the new
+T0 is planned; (6) incident record (runbook section 12). After go-live is declared, no
+restore is performed; corrections are reversals (ADR-006), as the plan states.
+
+Rehearsal: the staging rehearsals R1 and R2 of the migration plan run steps 1–6 and the
+rollback once each (check MC-14), and the measured restore time is published with the drill
+results of section 10.
 
 ## 10. Restore drill (rehearsed before Gate 9, then quarterly)
 
@@ -607,6 +638,7 @@ assumptions or risk-register items.
 | A-DEP-18 | CI holds a Railway token for staging only; production is deployed solely by Railway's GitHub integration on the `production` branch | workflow | security-engineer |
 | A-DEP-19 | `WITH_CHROMIUM=0` until ADR-016 is accepted at the start of Phase 3 | build arg | principal-architect |
 | A-DEP-20 | Dumps use a dedicated `bc_backup` role and exclude the `pgboss` schema (queue state is transient; jobs in flight at restore time are re-enqueued by their owners) | role, script | database-architect |
+| A-DEP-21 | Cutover and hypercare use an application-level read-only maintenance mode: a `settings` key (proposed `platform.maintenance.read_only`, with an allow-list of roles that keep write access) changed by `system_admin` under `platform.settings.admin` with an audit event; `MAINTENANCE_MODE=1` (full 503) is reserved for restores. Key name and allow-list to be confirmed in `docs/data-model.md` settings catalogue | `settings` key | principal-architect, database-architect |
 
 ## 17. Open questions and items for other documents
 
@@ -615,14 +647,26 @@ assumptions or risk-register items.
    private key with the owner (`docs/security.md` open question 1)?
 3. Owner: budget approval for the Pro plan, error reporting and the offsite bucket.
 4. IT contact: confirm the maintenance window and the uptime-monitor recipients.
-5. Architect: `docs/security.md` section 6 names the migration variable
-   `MIGRATION_DATABASE_URL`; `docs/architecture.md` section 12 and this document use
-   `DATABASE_MIGRATION_URL`. One name must be chosen and the other document corrected.
-6. Architect/data model: this document introduces operational tables `backup_runs`,
-   `restore_drills`, `metrics_samples`, `worker_heartbeats`, `reconciliation_runs` and jobs
-   `platform.metrics_sample`, `platform.alerts_evaluate`, `platform.backup_dump`; they need
-   entries in `docs/data-model.md` section 3.10 and `docs/architecture.md` section 8.
-7. Architect: `docs/data-model.md` references sections "§9" (numbering rules) and "§11"
-   (sync and devices) that do not exist yet; the runbook links to them by name.
-8. Security: the `TRUSTED_PROXY_HEADER` and `MAINTENANCE_MODE` variables are new and should
+5. Security: `docs/security.md` section 6 still names the migration variable
+   `MIGRATION_DATABASE_URL`; the chosen name is `DATABASE_MIGRATION_URL` (architect ruling
+   28; `docs/architecture.md` section 12 and this document already use it). Only
+   `docs/security.md` section 6 remains to be corrected.
+6. Applied in `docs/data-model.md` section 3.10 (`backup_runs`, `worker_heartbeats` in P1;
+   `restore_drills`, `metrics_samples`, `reconciliation_runs` in P2). Still open:
+   `docs/architecture.md` section 8 (job registry, ruling 45) must list
+   `platform.metrics_sample`, `platform.alerts_evaluate`, `platform.backup_dump`; and the
+   `metrics_samples` row in data-model section 3.10 says the table is written by the
+   `platform.metrics_sample` job only, while section 8.2 here has `web` replicas writing
+   their request counters directly (every 60 s, `labels.replica`). The data model should
+   name both writers.
+7. Applied: `docs/data-model.md` sections 9 (numbering rules) and 11 (offline and sync
+   tables) now exist and the runbook links resolve.
+8. Security: the `TRUSTED_PROXY_HEADER`, `MAINTENANCE_MODE`, `MIGRATION_WINDOW_OPEN`,
+   `DATABASE_BACKUP_URL`, `*_PREVIOUS` and `BACKUP_OFFSITE_*` variables are new and should
    be added to the variable groups table in `docs/security.md` section 6.
+9. Operations runbook: the operator steps and cutover log form for section 9.1 (pre-load
+   backup, restore point, read-only maintenance mode, rollback) are to be written in
+   `docs/operations-runbook.md`; `docs/data-migration-plan.md` section 14 lists them as
+   "to be written".
+10. Data model / PRD: the read-only maintenance mode setting of A-DEP-21 needs an entry in
+    the settings catalogue and the glossary.
