@@ -44,12 +44,12 @@ An exception is never a bypass. It is a recorded decision with: a reason code, t
 |---|---|---|---|
 | CX-LOT | Use, move or allocate a lot whose quality status is `quarantine`, `on_hold`, `rejected`, `expired` or `recalled` outside the normal path (for example, move recalled stock to the recall location, sample from quarantine). | `qa_qc` with `inventory.held_stock_issue.approve` (issue or move held stock); lifting a hold needs `quality.hold.approve`; release itself is W06 only. | `QualityHold` override line + `Deviation` when stock is consumed or shipped. |
 | CX-TOL | Accept an out-of-tolerance dispensed weight or a process parameter outside limits. | Holder of `production.over_tolerance_dispense.approve` (`qa_qc` by default; `site_manager` where `approval_rules` allow) **and** `qa_qc` acknowledgement (A-PROC-06; `docs/permissions-matrix.md` §5.3). | `Deviation` (mandatory). |
-| CX-MAT | Substitute a material or lot that is not the one the BOM line and reservation expect (same material, different approved lot; or an approved alternate material). | `production.material_substitution.approve` (`qa_qc` by default; `production_planner` may be configured for same-material lot substitution); `qa_qc` for an alternate material. | `BatchMaterial` substitution line + `Deviation` for alternates. |
+| CX-MAT | Substitute a material or lot that is not the one the BOM line and reservation expect (same material, different approved lot; or an approved alternate material). | `production.material_substitution.approve` (held by `qa_qc` and `owner_director`; `production_planner` may approve same-material lot substitution only if granted `production.material_substitution.approve` through a custom role: R permission, owner approval); `qa_qc` for an alternate material. | `BatchMaterial` substitution line + `Deviation` for alternates. |
 | CX-QTY | Receive more than the open PO quantity, add an unplanned PO line, or accept a short delivery as complete. | `procurement` with `procurement.receipt_discrepancy.approve`. | `GoodsReceiptLine.discrepancy_kind` + `discrepancy_approved_by` + PO amendment. |
 | CX-SHIP | Ship more than the ordered or allocated quantity, or ship a partial quantity when the customer requires full shipments. | `site_manager` or `owner_director` with `sales.over_shipment.approve`; never the `sales_cs` user who created the order. | `SalesOrderLine` over-ship approval + audit. |
 | CX-COUNT | Post a count variance above the auto-approval threshold. | `site_manager` with `inventory.stock_count.approve`; approver ≠ counter. | `StockCount` approval + adjustment movements with reason codes. |
-| CX-CAL | Use equipment that is overdue for calibration, cleaning or maintenance. | `production.equipment_override.approve`; `site_manager` **and** `qa_qc` both decide (A-PROC-23), recorded as two `approval_decisions`. | `EquipmentUse.exception_approved_by` + `Deviation`. |
-| CX-REOPEN | Reopen or amend a completed or closed batch, count or receipt. | `qa_qc` for batches; `site_manager` for inventory documents. | Amendment record; original values retained. |
+| CX-CAL | Use equipment that is overdue for calibration, cleaning or maintenance. | `production.equipment_override.approve`; `site_manager` approves **and** `qa_qc` co-approves (two-person rule, A-PROC-23), recorded as two `approval_decisions`. | `EquipmentUse.exception_approved_by` + `Deviation`. |
+| CX-REOPEN | Reopen or amend a completed or closed batch, count or receipt. | `site_manager` (`production.batch.admin`) + `qa_qc` co-approval for batches (`batch_reopen` rule); `site_manager` for inventory documents. | Amendment record; original values retained. |
 
 There is deliberately **no exception** for a duplicate scan (V-DUP): the system returns the original result (idempotency) and tells the operator the action was already done.
 
@@ -154,18 +154,18 @@ Consistent with the brief's offline table and ADR-018; the full policy is `docs/
 flowchart TD
   A[Delivery arrives] --> B{Purchase order exists?}
   B -- yes --> C[Select expected receipt and PO line]
-  B -- no --> D[Unplanned receipt: supplier, reason code]
-  C --> E[Scan material code, enter qty, UOM, supplier lot, mfg/expiry/retest, photos]
+  B -- no --> D["Unplanned receipt: supplier, reason code"]
+  C --> E["Scan material code, enter qty, UOM, supplier lot, mfg/expiry/retest, photos"]
   D --> E
   E --> F{Discrepancy?}
-  F -- over, short, wrong item, damaged, missing CoA --> G[Record discrepancy, notify procurement]
-  F -- none --> H[Assign internal lot, print raw material labels]
+  F -- "over, short, wrong item, damaged, missing CoA" --> G["Record discrepancy, notify procurement"]
+  F -- none --> H["Assign internal lot, print raw material labels"]
   G --> H
-  H --> I[Post goods receipt: lot created in quarantine, receipt movement]
-  I --> J[Put-away: scan lot label and quarantine location]
+  H --> I["Post goods receipt: lot created in quarantine, receipt movement"]
+  I --> J["Put-away: scan lot label and quarantine location"]
   J --> K[Incoming inspection W06]
-  K -- released --> L[Move to storage, stock becomes available]
-  K -- rejected --> M[Rejected location, supplier return via W04]
+  K -- released --> L["Move to storage, stock becomes available"]
+  K -- rejected --> M["Rejected location, supplier return via W04"]
 ```
 
 | Step | Role | Device | System action | Data captured | Validations / blocks | State transition | Documents / labels | Audit event | Offline |
@@ -180,7 +180,7 @@ flowchart TD
 | W01-08 | warehouse_operator (`inventory.movement.post`) | Phone+Scanner | Put-away: scan `BC:LOT`, then `BC:LOC` of the destination. | `StockMovement` type=transfer (from receiving to quarantine location), idempotency key. | V-LOC: quarantined lot only to quarantine-class locations; V-DUP; V-FREEZE. | — | — | inventory.stock_movement.posted | Queueable (validated on replay) |
 | W01-09 | system | — | Create incoming `Inspection` from the material's `InspectionPlan`; notify `qa_qc`. | `Inspection` (lot, plan revision, samples required). | Material class with "release on receipt with CoA" rule (A-PROC-10) skips to W06-disposition with CoA evidence; still a QA decision. | Inspection: — → pending | — | quality.inspection.created | Online-only |
 | W01-10 | qa_qc | Tablet | Disposition (W06). Released lots may then be moved to storage (W02). | `Disposition`. | V-AUTH. | InventoryLot: quarantine → released / rejected / on_hold | Updated status on reprinted label (reprint reason "status change"). | quality.disposition.approved | Online-only |
-| W01-11 | procurement | Desktop | Review unplanned receipts and discrepancies; link to PO, create PO amendment, supplier return or credit request. | PO amendment, `SupplierReturn` document (posts `StockMovement` type=issue, source=`supplier_return`, from the lot's status location; reason code required; W04-09). | V-AUTH (`procurement.purchase_order.approve`). | — | Supplier discrepancy note | procurement.purchase_order.amended | Online-only |
+| W01-11 | procurement | Desktop | Review unplanned receipts and discrepancies; link to PO, create PO amendment, supplier return or credit request. | PO amendment, `SupplierReturn` document (posts `StockMovement` type=issue, source=`supplier_return`, from the lot's status location; reason code required; W04-09). | V-AUTH (`procurement.receipt_discrepancy.approve` to accept; `procurement.purchase_order.edit` to amend; `procurement.supplier_return.create` for a return). | — | Supplier discrepancy note | procurement.purchase_order.amended | Online-only |
 
 **Exception paths**
 
@@ -207,31 +207,31 @@ flowchart TD
 ```mermaid
 flowchart TD
   A[Scan code or type it] --> B{Payload type}
-  B -- BC:LOT --> C[Lot card: material, lot, qty by location, status, expiry, FEFO rank]
-  B -- BC:BOX --> D[Box card: SKU, lot, qty, status, location, lineage]
-  B -- BC:LOC --> E[Location card: contents, counts in progress]
+  B -- "BC:LOT" --> C["Lot card: material, lot, qty by location, status, expiry, FEFO rank"]
+  B -- "BC:BOX" --> D["Box card: SKU, lot, qty, status, location, lineage"]
+  B -- "BC:LOC" --> E["Location card: contents, counts in progress"]
   C --> F{Allowed actions by status and permission}
   D --> F
-  F -- Move --> G[Scan destination BC:LOC, confirm qty]
+  F -- Move --> G["Scan destination BC:LOC, confirm qty"]
   F -- Split / Merge / Repack --> H[Create child containers with lineage]
-  F -- Hold / Release / Reject --> I[QA actions, W06]
+  F -- Hold / Release / Reject --> I["QA actions, W06"]
   F -- Print label --> J[LabelJob]
   G --> K{Online?}
   K -- yes --> L[Post transfer movement]
-  K -- no --> M[Queue command, show Sync Pending]
-  M --> N[Server revalidates on replay, conflict queue if rejected]
+  K -- no --> M["Queue command, show Sync Pending"]
+  M --> N["Server revalidates on replay, conflict queue if rejected"]
 ```
 
 | Step | Role | Device | System action | Data captured | Validations / blocks | State transition | Documents / labels | Audit event | Offline |
 |---|---|---|---|---|---|---|---|---|---|
-| W02-01 | any operational role (`inventory.lot.view`) | Phone+Scanner | Scan; parse payload (`BC:LOT`, `BC:BOX`, `BC:LOC`, `BC:MAT`, `BC:SKU`); manual entry fallback. | Scan event (device id, user, time, payload). | V-SCOPE: record outside the user's sites shows "not found in your sites". Unknown payload → "not recognised" with manual entry. | — | — | — | Cached read |
+| W02-01 | any operational role (`inventory.lot.view`) | Phone+Scanner | Scan; parse payload (`BC:LOT`, `BC:BOX`, `BC:LOC`, `BC:MAT`, `BC:SKU`); manual entry fallback. | None persisted: structured log only; an unknown or unparseable payload writes audit `inventory.scan.unrecognised`. | V-SCOPE: record outside the user's sites shows "not found in your sites". Unknown payload → "not recognised" with manual entry. | — | — | — | Cached read |
 | W02-02 | system | — | Show identity card with status badge (icon + text + colour), expiry, FEFO rank among same-material lots, current location(s), reservations/allocations, and only the actions the role may perform in this status. | — | Blocked statuses (`on_hold`, `rejected`, `expired`, `recalled`) show only: view, print, move-to-hold/rejected/recall (qa_qc). | — | — | — | Cached read |
 | W02-03 | warehouse_operator (`inventory.movement.post`) | Phone+Scanner | Move: scan destination `BC:LOC`; confirm full or partial quantity. | `StockMovement` type=transfer: lot or container, from/to location, qty, reason (optional), idempotency key = client UUIDv7. | V-LOC (status vs location class; a transfer across warehouses of the same site is the same `inventory.movement.post`; a cross-site transfer needs `inventory.intersite_transfer.post` and posts an issue at A plus a receipt at B); V-FREEZE; V-NEG; V-HOLD/V-EXP/V-REC for destinations outside hold/rejected/recall classes → CX-LOT; V-DUP. | Container.current_location_id updated; balances projected | — | inventory.stock_movement.posted | Queueable |
 | W02-04 | warehouse_operator (`inventory.container.create`) | Phone | Split: enter quantity to take out; system creates child box id(s) from the numbering rule, copies lot and status, records parent. | `Container` (child), `container_lineage` (operation=split, parent_container_id, child_container_id), `ContainerContent` lines. | Child qty ≤ parent content; V-HOLD etc. inherited from the lot (status is a lot property, boxes inherit). | Container(parent): open → open (reduced) ; child: — → open | Box label for each child | inventory.container.split | Queueable (ids are client UUIDv7; box number assigned on replay, label printed after sync) |
 | W02-05 | warehouse_operator | Phone | Merge: scan two or more boxes of the same SKU; mixed lots per box only if the SKU config allows (A-PROC-22). | New `Container` with `container_lineage` (operation=merge, one edge per parent); parents emptied. | Different quality statuses cannot be merged; V-MAT (different SKU). | Parents: open → empty; new: — → open | New box label | inventory.container.merged | Queueable |
 | W02-06 | warehouse_operator | Phone | Repack: move contents between boxes (customer-specific count); packing date and packer recorded. | `ContainerContent` moves with `container_lineage` (operation=repack). | As W02-05. | — | Box label reprint (reason: repack) | inventory.container.repacked | Queueable |
 | W02-07 | warehouse_operator | Phone+Printer | Reprint label with reason code. | `LabelJob` (reprint_reason). | Reprint count visible on the lot/box card. | — | Label | documents.label_job.reprinted | Online-only |
-| W02-08 | system | — | Replay queued commands on reconnect: server re-runs all validations; success → posted; failure → `SyncConflict` for review. | `SyncCommand` outcome. | V-DUP guarantees single posting. | SyncCommand: received → applied / rejected / conflict (the device's `Sync Pending` / `Synced` / `Failed` badges are UI labels, not states) | — | platform.sync_command.replay_accepted / replay_rejected / replay_conflicted | — |
+| W02-08 | system | — | Replay queued commands on reconnect: server re-runs all validations; success → posted; failure → `SyncConflict` for review. | `SyncCommand` outcome. | V-DUP guarantees single posting. | SyncCommand: received → applied / rejected / conflict (the device's `Sync Pending` / `Synced` / `Failed` badges are UI labels, not states) | — | platform.sync_command.replay_accepted / replay_rejected / replay_conflicted | — (replay; retry schedule and max attempts A-OFF-08, max queue age A-OFF-09 in `docs/offline-sync.md`) |
 | W02-09 | site_manager (`platform.sync_conflict.approve`) | Desktop | Resolve conflicts: accept server state, re-issue the move with current data, or discard with reason. | `SyncConflict.resolution_note`, `resolution_command_id` (new command for re-issue; the original is never re-run). | V-AUTH. | SyncConflict: open → resolved_applied (accept/re-apply) / resolved_amended (re-issue with current data) / resolved_discarded (discard with reason) / escalated (to a deviation or stock adjustment) | — | platform.sync_conflict.resolved | Online-only |
 
 **Exception paths**
@@ -242,7 +242,7 @@ flowchart TD
 | Scan of a lot that is `recalled` | Card shows RECALLED; only `qa_qc` may move it, and only to the recall location (CX-LOT recorded automatically with the recall case reference). |
 | Same box scanned twice for the same move | V-DUP: "Already moved to LOC-xx at 10:42 by you"; nothing posted. |
 | Destination location full or wrong class | V-LOC with suggested locations; operator rescans. |
-| Device offline for days | Queue has a maximum age (configurable, see `docs/offline-sync.md`); expired commands require re-authentication and go to conflict review. |
+| Device offline for days | Queue has a maximum age (configurable, A-OFF-09 in `docs/offline-sync.md`); expired commands require re-authentication and go to conflict review. |
 | Partial move leaves fraction in source | Allowed; FEFO rank unchanged; the lot shows two locations. |
 
 **Approval gates.** None for normal moves. CX-LOT for blocked stock. Conflict resolution by `site_manager`.
@@ -257,17 +257,17 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A[Plan count: scope, blind, schedule, counters] --> B[Release count: locations frozen]
-  B --> C[Counter scans location, scans lot or box, enters qty]
+  A["Plan count: scope, blind, schedule, counters"] --> B["Release count: locations frozen"]
+  B --> C["Counter scans location, scans lot or box, enters qty"]
   C --> D[Submit count sheet]
   D --> E{Variance vs system at freeze?}
   E -- none --> H[Approve and post]
   E -- within auto threshold --> G[Auto-approve lines]
   E -- above threshold --> F[Recount by a different counter]
   F --> I{Still variant?}
-  I -- yes --> J[Site manager reviews, reason code, approve or reject]
+  I -- yes --> J["Site manager reviews, reason code, approve or reject"]
   I -- no --> G
-  J --> K[Post adjustment movements, unfreeze]
+  J --> K["Post adjustment movements, unfreeze"]
   G --> K
   K --> H
 ```
@@ -308,12 +308,12 @@ flowchart LR
   A[Reorder suggestion or manual need] --> B[Purchase request]
   B --> C{Approval by threshold}
   C -- rejected --> B
-  C -- approved --> D[Procurement builds PO: approved supplier, price, MOQ, lead time]
+  C -- approved --> D["Procurement builds PO: approved supplier, price, MOQ, lead time"]
   D --> E{PO approval by threshold}
-  E -- approved --> F[Send PO to supplier, expected receipt lines created]
-  F --> G[Receipts W01, partial or full]
+  E -- approved --> F["Send PO to supplier, expected receipt lines created"]
+  F --> G["Receipts W01, partial or full"]
   G --> H{Discrepancies?}
-  H -- yes --> I[Amend PO, supplier return, credit request]
+  H -- yes --> I["Amend PO, supplier return, credit request"]
   H -- no --> J[PO received → closed]
   I --> J
   J --> K[Supplier performance updated]
@@ -321,7 +321,7 @@ flowchart LR
 
 | Step | Role | Device | System action | Data captured | Validations / blocks | State transition | Documents / labels | Audit event | Offline |
 |---|---|---|---|---|---|---|---|---|---|
-| W04-01 | system | — | Reorder suggestion: lists materials below min, with drivers (on hand, reserved, open POs, lead time, forecast, safety stock, expiry risk) and an explanation; never auto-creates a PO. | `ReorderSuggestion` view (derived, not persisted as orders). | Suggestions require human review. | — | — | — | Cached read |
+| W04-01 | system | — | Reorder suggestion: lists materials below min, with drivers (on hand, reserved, open POs, lead time, forecast, safety stock, expiry risk) and an explanation; never auto-creates a PO. | `ReorderSuggestion` rows (`reorder_suggestions`) written by job `procurement.reorder_suggest`; reviewed via `procurement.reorder_suggestion.approve` (accepted into a purchase request). | Suggestions require human review. | — | — | — | Cached read |
 | W04-02 | requester (`procurement.purchase_request.create`) | Phone / Desktop | Create PR: material, qty, UOM, needed-by date, reason, site; attach suggestion if used. | `PurchaseRequest`, lines. | V-SCOPE; V-UOM. | PurchaseRequest: draft → submitted (on submit) | — | procurement.purchase_request.submitted | Online-only |
 | W04-03 | approver (`procurement.purchase_request.approve`) | Phone / Desktop | Approve or reject per threshold (estimated value); may reduce qty with note. | approval, comment. | V-SOD (requester ≠ approver); V-AUTH; threshold is configuration (A-PROC-13). | PurchaseRequest: submitted → approved / rejected | — | procurement.purchase_request.approved | Online-only |
 | W04-04 | procurement (`procurement.purchase_order.create`) | Desktop | Convert approved PRs to a PO: choose supplier from ASL, price (contract or last), MOQ rounding shown, lead time → expected date, payment terms, delivery site/warehouse. | `PurchaseOrder`, `PurchaseOrderLine` (pr_line_id). | V-ASL (supplier not approved for material or quality status blocked) → cannot add line; V-UOM (purchase UOM conversion). | PurchaseOrder: draft → submitted | — | procurement.purchase_order.submitted | Online-only |
@@ -331,7 +331,7 @@ flowchart LR
 | W04-08 | warehouse_operator | Phone | Receive (W01); PO progresses with each posted GR. | — | — | PurchaseOrder: sent → partially_received → received | — | — | — |
 | W04-09 | procurement | Desktop | Handle discrepancies from W01-11: amend PO (qty/price), create supplier return (`SupplierReturn` document; posts `StockMovement` type=issue, source=`supplier_return`, from the lot's status location to null, reason code required; QA status must be `rejected` or returned-as-is approved by qa_qc), request credit. | PO amendment (versioned), `SupplierReturn` with lines, `SupplierBill` dispute (Phase 6). | V-AUTH; return of a `released` lot requires `qa_qc` status change first. | PurchaseOrder: received → closed | Supplier return note | procurement.purchase_order.amended; inventory.stock_movement.posted | Online-only |
 | W04-10 | system | — | Update supplier performance: on-time, in-full, discrepancy count, document completeness, lead-time variance, rejections at inspection. | derived metrics. | — | — | Supplier performance report | — | Cached read |
-| W04-11 | qa_qc (`masterdata.supplier.edit`) | Desktop | Maintain ASL: approve/suspend supplier per material with evidence (documents, audit date). | `supplier_materials.is_approved` per material, `Supplier.quality_status`. | V-SOD vs procurement requester. | — | — | masterdata.supplier.asl_changed | Online-only |
+| W04-11 | qa_qc (`masterdata.supplier.approve`; `procurement` proposes with `masterdata.supplier.edit`) | Desktop | Maintain ASL: approve/suspend supplier per material with evidence (documents, audit date). | `supplier_materials.is_approved` per material, `Supplier.quality_status`. | V-SOD: the user who proposed the ASL entry cannot approve it (`supplier_materials.approved_by` ≠ the procurement requester). | — | — | masterdata.supplier.asl_changed | Online-only |
 
 **Exception paths**
 
@@ -354,20 +354,20 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  A[Demand: orders, forecast, min stock] --> B[Production plan]
-  B --> C[Work order: SKU, qty, dates, site/line]
-  C --> D[Batch created: formula/routing/instruction revisions snapshotted, batch number]
-  D --> E[Material staging: reserve released lots by FEFO, pick to staging]
+  A["Demand: orders, forecast, min stock"] --> B[Production plan]
+  B --> C["Work order: SKU, qty, dates, site/line"]
+  C --> D["Batch created: formula/routing/instruction revisions snapshotted, batch number"]
+  D --> E["Material staging: reserve released lots by FEFO, pick to staging"]
   E --> F[1 Weighing area line clearance]
-  F --> G[2 Dispensing/weighing: scan lot, weigh, tolerance, operator + checker]
+  F --> G["2 Dispensing/weighing: scan lot, weigh, tolerance, operator + checker"]
   G --> H[3 Production area line clearance]
-  H --> I[4 Process steps with parameters: mixing, moulding, cutting]
+  H --> I["4 Process steps with parameters: mixing, moulding, cutting"]
   I --> J[In-process QC]
-  J -- fail --> X[Deviation W07, hold step]
+  J -- fail --> X["Deviation W07, hold step"]
   J -- pass --> K[Optional curing hold]
   K --> L[5 Production area line clearance before packaging]
-  L --> M[6 Packaging and labeling, component reconciliation, boxing W08]
-  M --> N[7 Transfer to quarantine: output lot posted, consumption posted, yield]
+  L --> M["6 Packaging and labeling, component reconciliation, boxing W08"]
+  M --> N["7 Transfer to quarantine: output lot posted, consumption posted, yield"]
   N --> O[Batch awaiting_qc → quarantined]
   O --> P[QA release W06]
   P --> Q[Closed]
@@ -397,7 +397,7 @@ flowchart TD
 | W05-18 | qa_qc | Tablet | Finished-product tests and BMR review (W06). When results and review are complete the batch is `quarantined` awaiting disposition. | `TestResult`, review checklist. | — | Batch: awaiting_qc → quarantined | BMR QC section | quality.inspection.completed | Online-only |
 | W05-19 | qa_qc (`quality.disposition.approve`) | Tablet / Desktop | Disposition (W06): `release`, `reject`, `hold`, `conditional_release` (with conditions and review date), `rework`. | `Disposition`. | V-AUTH; V-SOD. | Batch: quarantined → released / rejected / rework_approved; InventoryLot: quarantine → released (also for `conditional_release`) / rejected / on_hold (`hold`) | BMR disposition and signature block; FG label reprint with status RELEASED | quality.disposition.approved | Online-only |
 | W05-20 | production_planner (`production.batch.edit`) then site_manager | Desktop | Close batch: reconciliation complete, documents attached (scanned paper pages if SOP requires), costing snapshot (estimate vs actual, Phase 6), BMR final PDF generated. | `Batch.closed_at`, `GeneratedDocument` (BMR, template version, source revision). | All deviations closed or accepted by qa_qc; reservations released. | Batch: released/rejected/rework_approved → closed; WorkOrder: completed → closed | BMR final PDF (page numbers, batch id on every page, QR to record) | production.batch.closed; documents.generated_document.generated | Online-only |
-| W05-21 | qa_qc (`production.batch.void`-level: `production.batch.admin`) | Desktop | Controlled reopen/amend: reason, scope of amendment; original values retained; new BMR revision generated. | Amendment record. | CX-REOPEN. | Batch: closed → in_process / quarantined (reopen, `reopen_count + 1`) → … → closed | BMR revision n+1 with change note | production.batch.reopened; production.batch.amended | Online-only |
+| W05-21 | site_manager (`production.batch.admin`) requests; qa_qc co-approves (second `approval_decisions` row, `batch_reopen` rule, A-PM-07 in `docs/permissions-matrix.md`) | Desktop | Controlled reopen/amend: reason, scope of amendment; original values retained; new BMR revision generated. | Amendment record. | CX-REOPEN. | Batch: closed → in_process / quarantined (reopen, `reopen_count + 1`) → … → closed | BMR revision n+1 with change note | production.batch.reopened; production.batch.amended | Online-only |
 
 **Worked example: Acapulco Soap (from the paper BMR; verify with authorized personnel before production use).**
 
@@ -432,7 +432,7 @@ flowchart TD
 | Batch must be cancelled mid-process | Batch → rejected via W06 with reason; consumed materials remain consumed; staged unused lots returned to storage by W02; scrap recorded. |
 | Paper used because SOP requires handwriting | Paper page scanned and attached to the step; reviewer confirms transcription; both retained. |
 
-**Approval gates.** G-W05-A plan approval (optional); G-W05-B work order release (planner); G-W05-C each line clearance and dispense checked by a second person; G-W05-D exceptions CX-TOL/CX-MAT/CX-CAL; G-W05-E transfer to quarantine (operator + checker); G-W05-F disposition (qa_qc, W06); G-W05-G closure; G-W05-H reopen (qa_qc).
+**Approval gates.** G-W05-A plan approval (optional); G-W05-B work order release (planner); G-W05-C each line clearance and dispense checked by a second person; G-W05-D exceptions CX-TOL/CX-MAT/CX-CAL; G-W05-E transfer to quarantine (operator + checker); G-W05-F disposition (qa_qc, W06); G-W05-G closure; G-W05-H reopen (site_manager + qa_qc co-approval).
 **KPIs touched.** Plan vs actual output, yield %, yield variance, scrap/rework %, cycle time per step, line utilization, deviations per batch, right-first-time (batches with no CX), QC turnaround.
 **Open questions.** Q-PR-01..Q-PR-10.
 
@@ -444,15 +444,15 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A[Inspection created: incoming W01, in-process W05, finished W05-17] --> B[Sampling: qty, container, sampler, time]
-  B --> C[Test entry: result, unit, spec, pass or fail, tester, attachments]
+  A["Inspection created: incoming W01, in-process W05, finished W05-17"] --> B["Sampling: qty, container, sampler, time"]
+  B --> C["Test entry: result, unit, spec, pass or fail, tester, attachments"]
   C --> D[Review by a second qa_qc user or reviewer role]
   D --> E{Disposition}
-  E -- release --> F[Lot released, batch released, move out of quarantine]
-  E -- reject --> G[Lot rejected, rejected location, supplier return or scrap]
+  E -- release --> F["Lot released, batch released, move out of quarantine"]
+  E -- reject --> G["Lot rejected, rejected location, supplier return or scrap"]
   E -- conditional_release --> H[Lot released with conditions and review date]
   E -- hold --> HH[Lot on_hold]
-  E -- rework --> I[Batch rework_approved, rework batch W05 with genealogy]
+  E -- rework --> I["Batch rework_approved, rework batch W05 with genealogy"]
   H --> E
   HH --> E
   F --> J[Allocation and shipment allowed W09]
@@ -461,7 +461,7 @@ flowchart TD
 | Step | Role | Device | System action | Data captured | Validations / blocks | State transition | Documents / labels | Audit event | Offline |
 |---|---|---|---|---|---|---|---|---|---|
 | W06-01 | system | — | Create `Inspection` from the plan at the trigger (receipt, checkpoint, output); list in the QA inspection queue with due time. | `Inspection` (stage, lot or batch, plan revision, required tests). | Lot keeps status `quarantine` (incoming/finished) or WIP step hold (in-process). | Inspection: — → pending | — | quality.inspection.created | Online-only |
-| W06-02 | qa_qc or production_operator per plan (`quality.inspection.submit`) | Phone / Tablet | Record sampling: quantity taken, container scanned, sampler, time, sample label printed. Sample removal posts a consumption movement with reason `sample` (A-PROC-34). | `Inspection.samples[]`, `StockMovement` type=consumption (reason sample). | V-HOLD does not block sampling from `quarantine`; sampling from `on_hold`/`recalled` requires CX-LOT. | Inspection: pending → in_progress | Sample label | quality.inspection.sampled; inventory.stock_movement.posted | Queueable (sample capture), movement Online-only |
+| W06-02 | production_operator or warehouse_operator per plan (`quality.inspection.create` for sample capture); qa_qc (`quality.inspection.submit`) | Phone / Tablet | Record sampling: quantity taken, container scanned, sampler, time, sample label printed. Sample removal posts a consumption movement with reason `sample` (A-PROC-34). | `InspectionSample` rows (one per physical sample; the sample label keys on `inspection_samples`), `StockMovement` type=consumption (reason sample). | V-HOLD does not block sampling from `quarantine`; sampling from `on_hold`/`recalled` requires CX-LOT. | Inspection: pending → in_progress | Sample label | quality.inspection.sampled; inventory.stock_movement.posted | Queueable (sample capture), movement Online-only |
 | W06-03 | qa_qc (`quality.test_result.create`) | Tablet / Desktop | Enter each test: value, unit, method, instrument id, specification (min/max/text), pass/fail computed, attachments (photos, external lab report). | `TestResult`. | Unit must match the spec; V-CAL on instrument. Results are append-only: a correction is a new `TestResult` row with reason, linked to the superseded row. | Inspection stays in_progress; → awaiting_review when every required result is entered | — | quality.test_result.recorded; quality.test_result.corrected | Online-only |
 | W06-04 | qa_qc (a different user) (`quality.inspection.approve`) | Desktop | Review results and, for batches, the BMR (all steps complete, deviations closed or accepted, reconciliation OK, documents attached). Reviewer may request retest. | `Inspection.reviewed_by`, review checklist. | V-SOD: reviewer ≠ tester (configurable to allow same user at small sites with `owner_director` approval, A-PROC-35). | Inspection: awaiting_review → approved / rejected; Batch: awaiting_qc → quarantined | BMR QC section | quality.inspection.reviewed | Online-only |
 | W06-05 | qa_qc (`quality.disposition.approve`) | Desktop | Disposition: `release`, `reject`, `hold`, `conditional_release` (with `conditions` and `review_date`; second approval `quality.conditional_release.approve`), `rework` (with rework instruction reference). Reason and comment required for anything but release. | `Disposition` (decision, reason, conditions, review_date, decided_by, time). | V-AUTH: only `qa_qc` with `quality.disposition.approve`; V-SOD: decider ≠ the user who requested the inspection, ran the batch step 7, or entered the results; failed tests block `release` unless a documented OOS investigation (Deviation) concludes otherwise. | InventoryLot: quarantine → released (`release`, `conditional_release`) / rejected / on_hold (`hold`); Batch: quarantined → released / rejected / rework_approved | BMR disposition block; lot label reprint with new status | quality.disposition.approved; inventory.lot.status_changed | Online-only |
@@ -491,16 +491,16 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-  A[Trigger: CX approved, failed check, operator report, complaint] --> B[Deviation opened, linked to batch/lot/step/order]
-  B --> C[Containment: QualityHold on affected stock]
-  C --> D[Investigation: root cause, impact assessment]
+  A["Trigger: CX approved, failed check, operator report, complaint"] --> B["Deviation opened, linked to batch/lot/step/order"]
+  B --> C["Containment: QualityHold on affected stock"]
+  C --> D["Investigation: root cause, impact assessment"]
   D --> E{CAPA needed?}
   E -- yes --> F[CAPA actions with owners and due dates]
   E -- no --> G[Close with justification]
   F --> H[Effectiveness check] --> G
-  I[Complaint from customer] --> J[Reverse genealogy: lot → batches → inputs → boxes → shipments → customers]
+  I[Complaint from customer] --> J["Reverse genealogy: lot → batches → inputs → boxes → shipments → customers"]
   J --> K{Recall or withdrawal?}
-  K -- yes --> L[RecallCase: scope, holds, customer notifications, returns, disposition]
+  K -- yes --> L["RecallCase: scope, holds, customer notifications, returns, disposition"]
   K -- no --> B
 ```
 
@@ -529,9 +529,9 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  A[Packaging order: batch output or sales order repack] --> B[Resolve config: SKU default, customer override]
-  B --> C[Scan finished lot BC:LOT, confirm units per box]
-  C --> D[Create box id, add contents, print box label]
+  A["Packaging order: batch output or sales order repack"] --> B["Resolve config: SKU default, customer override"]
+  B --> C["Scan finished lot BC:LOT, confirm units per box"]
+  C --> D["Create box id, add contents, print box label"]
   D --> E{More boxes?}
   E -- yes --> C
   E -- no --> F[Checker verifies box count and a sample of labels]
@@ -573,16 +573,16 @@ flowchart TD
   A[Quote] --> B[Sales order draft] --> C[Submit]
   C --> D{Credit and approval check}
   D -- within limits --> E[Confirmed]
-  D -- exceeds --> F[Pending approval: finance or owner] --> E
-  E --> G[Allocate lots and boxes: FEFO/FIFO, released only, min shelf life]
-  G --> H[Pick list, scan each box]
-  H --> I[Pack verification: scanned vs ordered]
-  I -- over quantity --> X[Blocked: CX-SHIP approval]
-  I --> J[Dispatch posting: shipment movement issues stock, DR printed]
-  J --> K[Delivery, DR acknowledgment: name, signature, time, photo]
+  D -- exceeds --> F["Pending approval: finance or owner"] --> E
+  E --> G["Allocate lots and boxes: FEFO/FIFO, released only, min shelf life"]
+  G --> H["Pick list, scan each box"]
+  H --> I["Pack verification: scanned vs ordered"]
+  I -- over quantity --> X["Blocked: CX-SHIP approval"]
+  I --> J["Dispatch posting: shipment movement issues stock, DR printed"]
+  J --> K["Delivery, DR acknowledgment: name, signature, time, photo"]
   K --> L[Invoice handoff to finance]
   L --> M[Closed]
-  J -- partial --> N[Order partially_shipped, remaining allocation kept]
+  J -- partial --> N["Order partially_shipped, remaining allocation kept"]
 ```
 
 | Step | Role | Device | System action | Data captured | Validations / blocks | State transition | Documents / labels | Audit event | Offline |
@@ -592,13 +592,13 @@ flowchart TD
 | W09-03 | system, then approver (`sales.sales_order.approve`) | Desktop | Credit/approval check: open balance + order value vs credit limit, overdue invoices, order value threshold; within limits → auto-confirm; else pending approval (A-PROC-14). | approval record. | V-SOD: approver ≠ order creator; V-AUTH. | SalesOrder: submitted → confirmed, or → pending_approval → confirmed / cancelled | Order confirmation to customer | sales.sales_order.confirmed | Online-only |
 | W09-04 | system | — | Reserve per line: released lots are selected by FEFO/FIFO (A-PROC-09) and reserved lot- and location-specifically (`StockReservation` with `lot_id`, `location_id`, `demand_type = sales_order_line`); the line's `qty_reserved_base` projection reflects the order in availability (A-DM-22). | `StockReservation` per lot/location; `SalesOrderLine.qty_reserved_base`. | Shortage (no eligible lot) → line flagged `backorder`; planner sees demand in W05-01. | — | — | inventory.reservation.created | — |
 | W09-05 | warehouse_operator (`sales.sales_order.edit` + `inventory.allocation.create`) | Desktop / Tablet | Allocate: system proposes lots and boxes by the rule (FEFO where expiry matters, else FIFO; configurable per SKU/customer), honouring customer min remaining shelf life; operator accepts or changes within allowed lots. | `StockAllocation` (order line, lot, box ids, qty). | Only `released` lots in the order's site (V-HOLD/V-EXP/V-REC exclude others; CX-LOT never applies to customer shipment except documented conditional release rule, W06); allocation ≤ available (V-OVER). | SalesOrder: confirmed → allocated | Allocation summary | inventory.allocation.created | Online-only |
-| W09-06 | warehouse_operator (`sales.pick.create`) | Phone+Scanner | Pick: pick list by location; scan each allocated `BC:BOX` (or `BC:LOT` + qty for loose units); progress shown. | `Pick` lines (box id, qty, picker, time). | V-MAT: box not in allocation → "not for this order"; a different box of the same SKU/lot may be substituted if allocation rule allows (audited); V-DUP; V-FREEZE. | SalesOrder: allocated → picking; Shipment: draft → picked | Pick list (print or on-screen) | sales.pick.scanned | Queueable |
-| W09-07 | warehouse_operator (`inventory.pack.approve`) | Tablet+Scanner | Pack verification: scanned boxes vs ordered quantity per line; shortfall → partial shipment decision; carrier, tracking, gross weight, number of packages. | `Pack`/`Shipment` header. | V-OVER: scanned qty > ordered or > allocated → blocked → CX-SHIP; partial shipment when the customer requires full → CX-SHIP (A-PROC-15); V-SOD: verifier ≠ picker where staffing allows (configurable). | Shipment: picked → packed; SalesOrder: picking → packed | Packing list (W08) | sales.shipment.packed | Queueable (scans), decision Online-only |
+| W09-06 | warehouse_operator (`sales.pick.create`) | Phone+Scanner | Pick: pick list by location; scan each allocated `BC:BOX` (or `BC:LOT` + qty for loose units); progress shown. | `Pick` lines (box id, qty, picker, time). | V-MAT: box not in allocation → "not for this order"; a different box of the same SKU/lot may be substituted if allocation rule allows (audited); V-DUP; V-FREEZE. | SalesOrder: allocated → picking; Shipment: draft → picked | Pick list (print or on-screen) | sales.pick.scanned | Queueable (`pick_pack`) |
+| W09-07 | warehouse_operator (`inventory.pack.approve`) | Tablet+Scanner | Pack verification: scanned boxes vs ordered quantity per line; shortfall → partial shipment decision; carrier, tracking, gross weight, number of packages. | `Pack`/`Shipment` header. | V-OVER: scanned qty > ordered or > allocated → blocked → CX-SHIP; partial shipment when the customer requires full → CX-SHIP (A-PROC-15); V-SOD: verifier ≠ picker where staffing allows (configurable). | Shipment: picked → packed; SalesOrder: picking → packed | Packing list (W08) | sales.shipment.packed | Queueable (`pick_pack`, scans), decision Online-only |
 | W09-08 | warehouse_operator (`sales.shipment.post`) | Tablet | **Dispatch posting**: one transaction posts `StockMovement` type=shipment for every box/lot (stock issued now, not at DR creation), releases allocations and reservations for shipped qty, numbers the DR. | `Shipment.dispatched_at`, driver/carrier, vehicle, `DeliveryReceipt` number. | V-AUTH; V-DUP; V-NEG; lot status re-checked at posting (V-HOLD/V-EXP/V-REC block even if allocated earlier). | Shipment: packed → dispatched; SalesOrder: packed → shipped / partially_shipped; Container: sealed → shipped; Pack: verified → closed | Delivery receipt (company, customer, ship-to, SO/DR numbers, items, lots, box ids, qty, date/time, driver/carrier, received-by block, remarks) | inventory.stock_movement.posted; sales.shipment.dispatched; documents.generated_document.generated | Online-only |
 | W09-09 | driver / warehouse_operator | Phone | Delivery receipt acknowledgment: received-by name, signature capture or photo of signed DR, time, remarks (short, damaged). | `DeliveryReceipt.acknowledged_*`, `FileAttachment`. | Acknowledgment is evidence, not an e-signature (W06 note). | Shipment: dispatched → delivered; SalesOrder stays shipped until W09-10 | DR acknowledgment copy | sales.delivery_receipt.acknowledged | Queueable |
 | W09-10 | sales_cs / finance (`finance.invoice.create`, Phase 6) | Desktop | Invoice handoff: invoice created from the dispatched shipment (never from a draft DR); until Phase 6, export of shipment data to the accountant (A-PROC-24). | `Invoice` (Phase 6) or export file. | V-AUTH; shipment must be `dispatched`. | SalesOrder: shipped → invoiced → closed | Invoice / statement (Phase 6) | finance.invoice.created | Online-only |
 | W09-11 | sales_cs | Desktop | Returns (`CustomerReturn`): receive by box scan, QA disposition (W06), credit note (Phase 6). | `CustomerReturn`. | V-LOC (returns location, status `quarantine`). | Shipment: delivered → returned (partial allowed) | Return receipt | inventory.stock_movement.posted | Online-only |
-| W09-12 | sales_cs (`sales.sales_order.void`) | Desktop | Cancel/controlled reversal: before dispatch, cancel releases allocations; after dispatch, only via return + credit (reversal movements with reason). | reason. | V-STATE. | SalesOrder: * → cancelled (pre-dispatch) | — | sales.sales_order.cancelled | Online-only |
+| W09-12 | sales_cs (`sales.sales_order.void`) | Desktop | Cancel/controlled reversal: before dispatch, cancel releases allocations; after dispatch, only via return + credit (reversal movements with reason). | reason. | V-STATE. | SalesOrder: draft…packed → cancelled (not from `partially_shipped` on; a packed order's pack is cancelled and its boxes return to pickable stock) | — | sales.sales_order.cancelled | Online-only |
 
 **Exception paths**
 
@@ -622,17 +622,17 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A[Download file from time-clock machine] --> B[Upload CSV/XLSX: checksum, uploader, time]
-  B --> C[Choose or create mapping: employee id column, timestamp columns, direction, site]
+  A[Download file from time-clock machine] --> B["Upload CSV/XLSX: checksum, uploader, time"]
+  B --> C["Choose or create mapping: employee id column, timestamp columns, direction, site"]
   C --> D[Preview parsed rows with per-row status]
   D --> E{Exceptions?}
-  E -- unknown employee, duplicate, missing punch, out of period, bad timestamp --> F[Exception list for review]
+  E -- "unknown employee, duplicate, missing punch, out of period, bad timestamp" --> F[Exception list for review]
   E -- none --> G
-  F --> G[Review: resolve, request correction, or leave rejected]
-  G --> H[Post: AttendanceEvents created, ambiguous rows never posted]
-  H --> I[Exception report generated, file and row results retained]
+  F --> G["Review: resolve, request correction, or leave rejected"]
+  G --> H["Post: AttendanceEvents created, ambiguous rows never posted"]
+  H --> I["Exception report generated, file and row results retained"]
   I --> J[Manager correction requests → hr_payroll approval → appended events]
-  J --> K[Time summaries by period for review, payroll gated behind qualified reviewer]
+  J --> K["Time summaries by period for review, payroll gated behind qualified reviewer"]
 ```
 
 | Step | Role | Device | System action | Data captured | Validations / blocks | State transition | Documents / labels | Audit event | Offline |
@@ -684,12 +684,12 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-  A[Change request: reason, scope, impact] --> B[Draft revision n+1]
-  B --> C[Review: BOM sums, tolerances, step parameters, equipment, checks]
+  A["Change request: reason, scope, impact"] --> B[Draft revision n+1]
+  B --> C["Review: BOM sums, tolerances, step parameters, equipment, checks"]
   C --> D{Approve?}
   D -- no --> B
   D -- yes --> E[Approved with effective date]
-  E --> F[New batches snapshot n+1, open batches keep n]
+  E --> F["New batches snapshot n+1, open batches keep n"]
   E --> G["Revision n: effective_to set (retired later), still readable in old BMRs"]
 ```
 
@@ -697,7 +697,7 @@ flowchart LR
 |---|---|---|---|---|---|---|---|---|---|
 | W12-01 | author (`quality.change_control.create`) | Desktop | Open a change control: what changes (formula, routing, instruction, inspection plan, label), why, affected SKUs, open work orders/batches listed. | `ChangeControl`. | — | ChangeControl: draft → submitted | — | quality.change_control.submitted | Online-only |
 | W12-02 | author (`masterdata.formula.edit`, `masterdata.routing.edit`) | Desktop | Draft the revision: BOM lines (material, qty per batch size or %, tolerance per line, allergen notes), expected yield, routing steps (type, order, parameters with units and limits, equipment class, required checks, instruction text), effective date. System checks line sums and shows rounding (F-05). | `FormulaRevision`, `BomLine`, `RoutingRevision`, `RoutingStep`, `WorkInstructionRevision`. | Tolerance required on every line (no system default, A-PROC-03); dimensionally valid UOM (V-UOM). | revision: draft | Redline comparison vs current revision | masterdata.formula_revision.drafted | Online-only |
-| W12-03 | reviewer (≠ author) | Desktop | Review with checklist; comments; request changes. | review record. | V-SOD. | revision: draft → pending_approval (`masterdata.formula.submit`; review comments recorded as `approval_decisions`, a returned revision goes back to draft) | — | masterdata.formula_revision.reviewed | Online-only |
+| W12-03 | author submits (`masterdata.formula.submit`); reviewer (≠ author) reviews | Desktop | Author submits the revision; reviewer reviews with checklist; comments; request changes. | review record; `submitted_by` = author. | V-SOD: reviewer ≠ author; the approver (W12-04) must differ from `submitted_by`. | revision: draft → pending_approval on the author's submit (`masterdata.formula.submit`); review comments recorded as `approval_decisions`; a returned revision goes back to draft | — | masterdata.formula_revision.submitted; masterdata.formula_revision.reviewed | Online-only |
 | W12-04 | approver (`masterdata.formula.approve`, `masterdata.routing.approve`) | Desktop | Approve with effective date; optionally retire the previous revision at that date. The approved revision is the controlled source for production; verify with authorized personnel before production use. | approval, effective_from. | V-SOD (approver ≠ author, ≠ reviewer where staffing allows); `qa_qc` approval mandatory when quality-relevant (A-PROC-41). | revision: pending_approval → approved (with `effective_from`) or → rejected; previous revision stays approved with `effective_to` set and is later retired; ChangeControl: submitted → approved → closed | Approved revision PDF | masterdata.formula_revision.approved | Online-only |
 | W12-05 | system | — | Batches created on/after the effective date snapshot the new revision (W05-03); existing batches unchanged; V-REV blocks batch creation when no effective revision exists. | — | — | — | — | — | — |
 
@@ -713,7 +713,7 @@ flowchart LR
 | W13-01 | site_manager (`masterdata.equipment.admin`) | Desktop | Register equipment: id, type (scale, mixer, kettle, filler...), site/line, capacity/range, calibration interval and last date, preventive maintenance plan, cleaning rule (per batch/changeover), qualification status, responsible technician. | `Equipment` (status, `blocking_rule`, due dates, `cleaning_rule`, `qualification_status`), PM plan. | — | Equipment: — → in_service | Equipment label `BC:EQP:<id>` (extension of the payload scheme, A-PROC-42) | masterdata.equipment.created | Online-only |
 | W13-02 | system | — | Nightly (`production.equipment_status` job) and on-change evaluation derives availability: calibration due passed → reason `calibration_due`; PM due passed → `maintenance_due`; cleaning not recorded since last use → `cleaning_required`; qualification pending → `qualification_pending`; downtime logged → `out_of_service`. Reasons are derived labels, never stored states (`docs/data-model.md` §3.1). Action Center lists overdue items. | derived availability reasons; `downtime_events` row. | — | Equipment: in_service → maintenance only when a due date passes and `blocking_rule = block` (reason recorded); otherwise no stored transition | — | masterdata.equipment.status_changed (only when the stored status changes) | — |
 | W13-03 | production_operator | Tablet | Select or scan equipment at W05-06/07/10/11 and W06-03. | `EquipmentUse` (equipment, step, start/end). | V-CAL: equipment not available (stored status ≠ `in_service` or a derived reason present) → cannot select; message shows reason and due date; `blocking_rule = warn` records the reasons on `EquipmentUse` instead. | — | — | production.equipment_use.created | Queueable (cached status; re-validated on replay) |
-| W13-04 | site_manager + qa_qc (`production.equipment_override.approve`, two `approval_decisions`) | Desktop | CX-CAL exception: documented risk assessment, time-boxed, linked Deviation; batch flagged for QA review at disposition. | `EquipmentUse.exception_approved_by`, `EquipmentUse.deviation_id`, `Deviation`. | V-SOD vs the operator requesting. | — | — | production.equipment_use.override_approved | Online-only |
+| W13-04 | site_manager approves + qa_qc co-approves (`production.equipment_override.approve`, two `approval_decisions`, A-PROC-23) | Desktop | CX-CAL exception: documented risk assessment, time-boxed, linked Deviation; batch flagged for QA review at disposition. | `EquipmentUse.exception_approved_by`, `EquipmentUse.deviation_id`, `Deviation`. | V-SOD vs the operator requesting. | — | — | production.equipment_use.override_approved | Online-only |
 | W13-05 | technician (`masterdata.equipment.edit`) | Phone / Desktop | Record cleaning, maintenance or calibration: date, result, certificate attachment, next due; return to service. | `equipment_service_records` row, `FileAttachment`. | Calibration result out of tolerance → equipment stays blocked and `qa_qc` assesses impact on batches that used it since last good calibration (reverse query via `EquipmentUse`). | Equipment: maintenance / out_of_service → in_service (written by posting the service record with result `pass`/`completed`; after a failed calibration only after `qa_qc` review) | Calibration certificate record | masterdata.equipment.serviced | Online-only |
 
 **Approval gates.** G-W13-A exception (site_manager + qa_qc); G-W13-B return to service after failed calibration (qa_qc). **KPIs touched.** Overdue maintenance/calibration count, downtime, batches run under equipment exception. **Open questions.** Q-PR-12.
