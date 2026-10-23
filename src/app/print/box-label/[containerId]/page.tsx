@@ -8,7 +8,7 @@ import { fmtDate } from "@/lib/qty";
 import { getContainer, type ContainerDetail } from "@/modules/inventory/containers";
 import { LinkButton } from "@/ui/core";
 import { fmtLotQty } from "@/ui/inventory/bits";
-import { LABEL_CSS } from "../../lot-label/label";
+import { LABEL_CSS } from "../label-css";
 import { PrintButton } from "../../lot-label/print-button";
 
 export const metadata = { title: "Box label" };
@@ -22,7 +22,7 @@ const STATUS_WORD: Record<string, string> = { quarantine: "QUARANTINE", released
  */
 export default async function BoxLabelPage({ params }: { params: Promise<{ containerId: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.label.print") || !ctx.can("inventory.container.view")) return <div className="p-6"><Forbidden what="label printing" /></div>;
+  if (!ctx.can("inventory.label_job.create") || !ctx.can("inventory.container.view")) return <div className="p-6"><Forbidden what="label printing" /></div>;
   const { containerId } = await params;
   let box: ContainerDetail;
   try {

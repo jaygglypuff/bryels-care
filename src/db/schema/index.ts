@@ -12,3 +12,4 @@ export * from "./containers";
 export * from "./transfers";
 export * from "./counts";
 export * from "./reservations";
+export * from "./documents";

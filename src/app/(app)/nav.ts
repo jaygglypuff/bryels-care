@@ -36,6 +36,7 @@ export const NAV: NavGroup[] = [
       { label: "FEFO & reservations", href: "/inventory/lots/reservations", permission: "inventory.lot.view" },
       { label: "Stock counts", href: "/inventory/counts", permission: "inventory.stock_count.view" },
       { label: "Adjustments", href: "/inventory/adjustments", permission: "inventory.adjustment.view" },
+      { label: "Label print station", href: "/labels", permission: "inventory.label_job.view" },
     ],
   },
   {
@@ -85,6 +86,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Users & roles", href: "/admin/users", permission: "identity.user.view" },
       { label: "Audit log", href: "/admin/audit", permission: "platform.audit.view" },
+      { label: "Templates & labels", href: "/admin/templates", permission: "masterdata.label_template.view" },
     ],
   },
   {

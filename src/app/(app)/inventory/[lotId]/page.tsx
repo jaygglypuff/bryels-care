@@ -84,7 +84,7 @@ export default async function LotPage({ params, searchParams }: { params: Promis
   }
   if (ctx.can("inventory.lot.edit")) actions.push({ key: "edit", label: "Correct dates / supplier lot", href: `/inventory/lots/${lot.id}/edit`, icon: <PenLine size={16} /> });
   if (lot.siteId === ctx.currentSiteId) actions.push({ key: "fefo", label: ctx.can("inventory.reservation.create") ? "FEFO rank / reserve" : "FEFO rank", href: `/inventory/lots/reservations?lot=${lot.id}`, icon: <Target size={16} /> });
-  if (ctx.can("inventory.label.print")) actions.push({ key: "label", label: "Print label", href: `/print/lot-label/${lot.id}`, icon: <Printer size={16} />, newTab: true });
+  if (ctx.can("inventory.label_job.create")) actions.push({ key: "label", label: "Print label", href: `/labels/new?entityType=inventory_lot&entityId=${lot.id}`, icon: <Printer size={16} /> }); // W1E: label jobs
   if (ctx.can("quality.genealogy.view")) actions.push({ key: "trace", label: "Genealogy", href: `/quality/trace?lot=${encodeURIComponent(lot.lotNumber)}`, icon: <Share2 size={16} /> });
   const blocked = usable ? [] : [
     { label: lot.itemKind === "product" ? "Allocate / ship" : "Issue to production", reason: `blocked while the lot is ${expired && lot.qualityStatus === "released" ? "expired" : STATUS_WORDS[lot.qualityStatus] ?? lot.qualityStatus}.` },

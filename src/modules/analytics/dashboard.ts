@@ -466,7 +466,7 @@ export async function getOperatorHome(ctx: AuthContext): Promise<OperatorTile[]>
   const { tz, today } = await orgClock(ctx);
   const tiles: Promise<OperatorTile>[] = [];
 
-  if (ctx.can("inventory.receipt.post"))
+  if (ctx.can("procurement.goods_receipt.create"))
     tiles.push(
       db
         .select({ n: sql<number>`count(*)::int` })

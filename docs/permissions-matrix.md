@@ -287,6 +287,7 @@ description, sensitivity and phase are listed on one row.
 | `documents.reprint.create` | Reprint a controlled document (reason mandatory, audit) | S | P2 |
 | `documents.file_attachment.{view,create,export}` | Upload/download FileAttachments on records the actor can view | N | P2 |
 | `documents.file_attachment.void` | Soft-delete an attachment (file retained per retention policy) | S | P2 |
+| `documents.print_station.admin` | Add and change print stations (the PC or tablet next to a label printer) at the actor's sites; added in Wave 1 (E-2-03). Granted to `system_admin` and `site_manager`; seeing a station's queue needs `inventory.label_job.view` | N | P2 |
 
 ### 2.8 sales (Phase 4; portal Phase 8)
 
@@ -619,6 +620,7 @@ Disposition; the owner cannot release stock (A-PM-08, confirm with the company's
 | template | v a* | v c e* | v c e s | v c e s | v | v | v a o | – | v | v | v | v* | – |
 | generated_document | v x* | v* | v c x o | v c x | v c x | v c x | v c x o | v c x | v c x | v c x | v c x | v x* | portal only |
 | reprint | – | – | c | – | c | c | c | – | c | c | c | – | – |
+| print_station | – | m* | m | – | – | – | – | – | – | – | – | – | – |
 | file_attachment | v x* | v o* | v c x o | v c x | v c x | v c x | v c x o | v c x | v c x | v c x | v c x | v x* | portal only |
 
 Generated documents and attachments are always additionally scoped by the source record: a

@@ -12,6 +12,7 @@ import * as s from "./schema";
 import { ROLE_BUNDLES } from "../lib/permissions";
 import { LOTION_ROUTING, SOAP_ROUTING, type SeedStep, seedApprovedFormulaAndRouting, seedW1D } from "./seeds/w1d";
 import { seedReceivingW1B } from "./seeds/w1b";
+import { seedW1e } from "./seeds/w1e";
 
 if (process.env.ALLOW_DEMO_SEED !== "true") {
   console.error("Refusing to seed: ALLOW_DEMO_SEED is not true. Demo data must never reach production.");
@@ -420,6 +421,7 @@ async function main() {
 
   await seedReceivingW1B(db);
   await (await import("./seeds/w1c")).seedW1C(db);
+  await seedW1e(db); // W1E: templates, label templates, print station
   console.log(`Seeded demo organization with ${mats.length} materials, ${counters.LOT} lots, ${counters.BATCH} batches, ${counters.SO} orders.`);
   await client.end();
 }

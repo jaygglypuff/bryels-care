@@ -41,7 +41,7 @@ export default async function LotsPage({ searchParams }: { searchParams: Promise
         actions={
           <>
             <LinkButton href="/inventory/scan" variant="secondary">Scan / look up</LinkButton>
-            {ctx.can("inventory.receipt.post") && <LinkButton href="/inventory/receive" variant="cta">Receive materials</LinkButton>}
+            {ctx.can("procurement.goods_receipt.create") && <LinkButton href="/inventory/receive" variant="cta">Receive materials</LinkButton>}
           </>
         }
       />
@@ -100,7 +100,7 @@ export default async function LotsPage({ searchParams }: { searchParams: Promise
         {lots.length === 0 ? (
           <EmptyState
             title={filtered ? "No lots match these filters" : "No stock at this site yet"}
-            action={filtered ? <LinkButton href="/inventory" variant="secondary">Clear filters</LinkButton> : ctx.can("inventory.receipt.post") ? <LinkButton href="/inventory/receive">Receive materials</LinkButton> : undefined}
+            action={filtered ? <LinkButton href="/inventory" variant="secondary">Clear filters</LinkButton> : ctx.can("procurement.goods_receipt.create") ? <LinkButton href="/inventory/receive">Receive materials</LinkButton> : undefined}
           >
             {filtered ? "Try a different item, kind or status, or include empty lots." : "Received materials and produced finished goods appear here."}
           </EmptyState>

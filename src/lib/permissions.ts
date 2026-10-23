@@ -20,10 +20,8 @@ export const PERMISSIONS = [
   "masterdata.customer.create",
   // inventory
   "inventory.lot.view",
-  "inventory.receipt.post",
   "inventory.movement.view",
   "inventory.movement.post",
-  "inventory.label.print",
   // production
   "production.batch.view",
   "production.batch.create",
@@ -116,6 +114,25 @@ export const PERMISSIONS = [
   "inventory.reservation.view",
   "inventory.reservation.create",
   "inventory.reservation.void",
+  // Wave 1 W1E: documents, labels and scanning (E-2-03; docs/permissions-matrix.md §3.2, §3.3, §3.7)
+  "documents.template.view",
+  "documents.template.create",
+  "documents.template.edit",
+  "documents.template.submit",
+  "documents.template.approve",
+  "documents.template.void",
+  "documents.generated_document.view",
+  "documents.generated_document.create",
+  "documents.generated_document.export",
+  "documents.generated_document.void",
+  "documents.reprint.create",
+  "documents.print_station.admin",
+  "masterdata.label_template.view",
+  "masterdata.label_template.create",
+  "masterdata.label_template.edit",
+  "masterdata.label_template.approve",
+  "inventory.label_job.view",
+  "inventory.label_job.create",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -144,9 +161,7 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
     orgWide: false,
     permissions: [
       ...VIEW_ALL,
-      "inventory.receipt.post",
       "inventory.movement.post",
-      "inventory.label.print",
       "production.batch.create",
       "production.batch.edit",
       "production.batch.submit",
@@ -199,7 +214,6 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
       "production.dispense_record.create",
       "production.dispense_record.approve",
       "production.batch.submit",
-      "inventory.label.print",
       // Wave 1 W1C (permissions-matrix §3.3, PO column)
       "inventory.container.view",
       "inventory.container.create",
@@ -213,9 +227,7 @@ export const ROLE_BUNDLES: Record<string, { name: string; orgWide: boolean; perm
     permissions: [
       "inventory.lot.view",
       "inventory.movement.view",
-      "inventory.receipt.post",
       "inventory.movement.post",
-      "inventory.label.print",
       "masterdata.material.view",
       "masterdata.product.view",
       "masterdata.location.view",
@@ -401,3 +413,47 @@ ROLE_BUNDLES.production_planner = {
     "quality.disposition.view",
   ],
 };
+
+// Wave 1 W1E: role grants for documents, labels and scanning (docs/permissions-matrix.md §3.2, §3.3, §3.7).
+const W1E_DOC_USER = [
+  "documents.template.view",
+  "documents.generated_document.view",
+  "documents.generated_document.create",
+  "documents.generated_document.export",
+  "documents.reprint.create",
+  "masterdata.label_template.view",
+] as const;
+const W1E_GRANTS: Record<string, readonly Permission[]> = {
+  system_admin: ["documents.template.create", "documents.template.edit", "masterdata.label_template.create", "masterdata.label_template.edit", "documents.print_station.admin"],
+  site_manager: [
+    "documents.template.create",
+    "documents.template.edit",
+    "documents.template.submit",
+    "documents.generated_document.create",
+    "documents.generated_document.export",
+    "documents.generated_document.void",
+    "documents.reprint.create",
+    "masterdata.label_template.create",
+    "masterdata.label_template.edit",
+    "inventory.label_job.create",
+    "documents.print_station.admin",
+  ],
+  production_operator: [...W1E_DOC_USER, "inventory.label_job.view", "inventory.label_job.create"],
+  warehouse_operator: [...W1E_DOC_USER, "inventory.label_job.view", "inventory.label_job.create"],
+  qa_qc: [
+    "documents.template.approve",
+    "documents.template.void",
+    "documents.generated_document.create",
+    "documents.generated_document.export",
+    "documents.generated_document.void",
+    "documents.reprint.create",
+    "masterdata.label_template.approve",
+    "inventory.label_job.create",
+  ],
+  sales_cs: [...W1E_DOC_USER],
+  auditor: ["documents.generated_document.export"],
+  procurement: ["inventory.label_job.view", "inventory.label_job.create"],
+};
+for (const [role, grants] of Object.entries(W1E_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}

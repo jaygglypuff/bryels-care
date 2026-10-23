@@ -17,6 +17,7 @@ const RULES: Record<string, { prefix: string; width: number; period: "YY" | "YYM
   CNT: { prefix: "CNT", width: 4, period: "YY" },
   ADJ: { prefix: "ADJ", width: 5, period: "YY" },
   RSV: { prefix: "RSV", width: 6, period: "YY" },
+  DOC: { prefix: "DOC", width: 7, period: "YY" }, // W1E: generated documents, organization scope (A-RPT-03)
 };
 
 function periodKey(kind: "YY" | "YYMM" | "", now = new Date()): string {

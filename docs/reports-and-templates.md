@@ -33,7 +33,7 @@ Batches additionally freeze `batches.bmr_template_version_id` at creation (`docs
 
 ### 1.2 Template definition (`definition` jsonb, schema `document_template/v1`)
 
-Decision (A-RPT-01, needs principal architect and security engineer confirmation): the database stores **layout configuration and bindings**, not arbitrary HTML. The HTML/CSS of ADR-016 is produced by **code-defined renderers** in `src/modules/documents/renderers/<kind>/v<n>.tsx` (React rendered to static markup; user text is escaped by the component layer, `docs/security.md` §4). A template version pins a renderer id and configures it. Free HTML in the database was rejected because a template author could inject script or external resources into a worker that reads internal data; a sandboxed HTML "custom block" can be added later behind a feature flag if a real need appears.
+Decision (A-RPT-01, needs principal architect and security engineer confirmation): the database stores **layout configuration and bindings**, not arbitrary HTML. The HTML/CSS of ADR-016 is produced by **code-defined renderers** in `src/modules/documents/renderers/<id>-v<n>.ts` (built with an escaping HTML builder, see §1.4.1; user text is always escaped, `docs/security.md` §4). A template version pins a renderer id and configures it. Free HTML in the database was rejected because a template author could inject script or external resources into a worker that reads internal data; a sandboxed HTML "custom block" can be added later behind a feature flag if a real need appears.
 
 ```json
 {
@@ -90,6 +90,16 @@ Each document kind has a typed dataset built by the owning module under the **ca
 4. Preview: the same HTML is served in a sandboxed iframe with the same print CSS; the page thumbnails come from the stored PDF once ready. "PDF identical to preview" is a test, not a promise (§12).
 5. Download: signed URL, 5-minute TTL, bound to document id and user (A-SEC-19), `Content-Disposition: attachment`; audit `documents.generated_document.downloaded`.
 6. Offline (ADR-018): generation and label printing are **Online-only**; previously downloaded PDFs may be cached read-only with an "as of" marker (Phase 7 decision in `docs/offline-sync.md`).
+
+### 1.4.1 Phase 2 rendering as built (Wave 1, E-2-03; pending the ADR-016 final call)
+
+| Item | As built | Differs from the design above because |
+|---|---|---|
+| Renderers | `src/modules/documents/renderers/<id>-v<n>.ts`: pure functions of the frozen dataset that build HTML with an escaping builder (`html.ts`); registry in `renderers/registry.ts`. Built now: `label` v1 (datasets `label/{material,wip,finished_good,location}/v1`) and `test_page` v1 (`test_page/a4/v1`) | React's static renderer cannot be imported in the Next.js server-component layer; the builder keeps renderers framework-free for the worker |
+| Output | `PDF_RENDERER=disabled` (default): the row is generated, numbered (`DOC`), rendered and hashed (sha256 of the rendered HTML) synchronously; printing uses the browser dialog from `/print/labels/<job>` and `/print/documents/<id>`, which re-render the stored dataset and refuse to print if the hash differs. "Download PDF" shows the setup-required state | Headless Chromium would add roughly 300–400 MB to the image and a few hundred MB of memory per render on Railway; the browser dialog already gives "Save as PDF" and label-sized `@page` |
+| Worker | `src/modules/documents/jobs/render.ts` exports `{ code: "documents.render", handler }`; idempotent; used for retries now and for PDF output when the Chromium adapter ships | job registry is being built in parallel (W1A) |
+| Page x of y | CSS `@page` margin boxes (Chrome 131+); running header and footer are in the page body | no Chromium `headerTemplate` in browser print |
+| Label test pages | `/print/labels/test/<label template>`: live, unrecorded, sample data, 50 mm ruler (40 mm on 50 mm media); A4 test pages are recorded documents (`test_page` kind) | T-01 needs a page before a template is approved |
 
 ### 1.5 Header and footer on every page
 

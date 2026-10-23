@@ -244,7 +244,7 @@ export async function getReceiptDocument(ctx: AuthContext, receiptId: string) {
       linkSupplier: !gr.supplierId && gr.status !== "cancelled" && ctx.can("procurement.receipt_discrepancy.approve"),
       upload: (gr.status === "draft" || gr.status === "posted") && ctx.can("documents.file_attachment.create") && ctx.can("procurement.supplier_lot_document.create"),
       voidFile: ctx.can("documents.file_attachment.void"),
-      printLabels: gr.status === "posted" && ctx.can("inventory.label.print"),
+      printLabels: gr.status === "posted" && ctx.can("inventory.label_job.create"),
     },
   };
 }

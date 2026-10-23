@@ -1,19 +1,18 @@
 "use server";
-import { redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
-import { toActionState, type ActionState } from "@/lib/errors";
-import { resolveScan } from "@/modules/inventory/lookup";
+import { DomainError } from "@/lib/errors";
+import { MAX_RAW_LENGTH } from "@/lib/scan/payload";
+import { resolveScanCard, type ScanCard } from "@/modules/scan";
 
-export async function scanAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  let href: string;
+/** Resolves one scan into a result card (reads only; scoped and rate limited on the server). */
+export async function scanCardAction(raw: string): Promise<ScanCard> {
+  const ctx = await requireContext();
+  const code = String(raw ?? "").slice(0, MAX_RAW_LENGTH * 2);
   try {
-    const ctx = await requireContext();
-    const code = String(formData.get("code") ?? "").slice(0, 200);
-    const r = await resolveScan(ctx, code);
-    if (!r.ok) return { ok: false, message: r.message };
-    href = r.href;
+    return await resolveScanCard(ctx, code);
   } catch (e) {
-    return toActionState(e);
+    if (e instanceof DomainError && e.code === "forbidden") return { outcome: "forbidden", payload: code, message: e.message };
+    console.error(e);
+    return { outcome: "not_found", payload: code, message: "The look-up failed. Check your connection and scan again." };
   }
-  redirect(href);
 }

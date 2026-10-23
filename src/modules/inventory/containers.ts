@@ -513,7 +513,7 @@ export function boxAllowedActions(
     if (box.status === "open" && !empty) out.push({ key: "seal", label: "Seal box", href: `/inventory/containers/${box.id}?op=seal`, allowed: true });
     if (box.status === "sealed") out.push({ key: "reopen", label: "Reopen box", href: `/inventory/containers/${box.id}?op=reopen`, allowed: true });
   }
-  if (ctx.can("inventory.label.print")) out.push({ key: "label", label: "Print box label", href: `/print/box-label/${box.id}`, allowed: box.status !== "void", reason: box.status === "void" ? "The box is void." : undefined });
+  if (ctx.can("inventory.label_job.create")) out.push({ key: "label", label: "Print box label", href: `/print/box-label/${box.id}`, allowed: box.status !== "void", reason: box.status === "void" ? "The box is void." : undefined });
   return out;
 }
 

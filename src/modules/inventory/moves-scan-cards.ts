@@ -143,7 +143,7 @@ export async function describeLotForScan(ctx: AuthContext, raw: string): Promise
       actions.push({ key: "reserve", label: "Reserve", href: `/inventory/lots/reservations?lot=${lot.id}`, allowed: usable && onHand.gt(0), reason: usable ? (onHand.gt(0) ? undefined : "No stock left.") : "Only released, unexpired stock can be reserved." });
     }
   }
-  if (ctx.can("inventory.label.print")) actions.push({ key: "label", label: "Print label", href: `/print/lot-label/${lot.id}`, allowed: true });
+  if (ctx.can("inventory.label_job.create")) actions.push({ key: "label", label: "Print label", href: `/labels/new?entityType=inventory_lot&entityId=${lot.id}`, allowed: true });
   return {
     kind: "lot",
     id: lot.id,
