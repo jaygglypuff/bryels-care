@@ -1,14 +1,15 @@
 import "server-only";
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { inventoryBalances, inventoryLots, locations, materials, products, warehouses } from "@/db/schema";
+import { containers, equipment, inventoryBalances, inventoryLots, locations, materials, products, sites, warehouses } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { daysUntil, D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
 import { invalidScanMessage, parseScan, type ScanType } from "@/lib/scan/payload";
 import { scanRateLimiter } from "@/lib/scan/rate-limit";
 import { activeStationsAt, approvedLabelTemplatesFor, findDocumentByNumber, labelHistory } from "@/modules/documents";
-import { getLotDetail, isPastExpiry, resolveScan } from "@/modules/inventory";
+import { activeCountsForLocations, describeBoxForScan, getContainer, getLotDetail, heldLocations, isPastExpiry, resolveScan } from "@/modules/inventory";
+import { equipmentAvailability } from "@/modules/masterdata";
 import { LOT_TRANSITIONS } from "@/modules/quality";
 
 /**
@@ -16,8 +17,9 @@ import { LOT_TRANSITIONS } from "@/modules/quality";
  * actions the server allows, with a reason for each disallowed one. Reads only, no audit.
  * Every lookup is scoped to the user's sites; a record elsewhere looks exactly like a missing one.
  *
- * Actions link to existing pages (lot detail, move, QA decision, label request). Boxes and
- * equipment are recognised but have no tables yet: the card says so instead of guessing.
+ * Actions link to existing pages (lot detail, move, QA decision, label request). Boxes use the
+ * W1C box card (describeBoxForScan), locations add the count freeze and QA hold state, and
+ * equipment shows the W1D availability (status, calibration, cleaning).
  */
 
 export type ScanAction = { key: string; label: string; href?: string; allowed: boolean; reason?: string; primary?: boolean };
@@ -28,7 +30,7 @@ export type ScanCard =
   | {
       outcome: "found";
       payload: string;
-      entity: "lot" | "location" | "material" | "sku" | "document" | "record";
+      entity: "lot" | "box" | "location" | "equipment" | "material" | "sku" | "document" | "record";
       caption: string;
       identifier: string;
       title: string;
@@ -194,9 +196,22 @@ async function locationCard(ctx: AuthContext, value: string, payload: string): P
         .orderBy(inventoryLots.lotNumber)
         .limit(20)
     : [];
+  // Count freeze (W1C, V-FREEZE) and location QA hold (W1B): both block moves in and out.
+  const [count] = await activeCountsForLocations(db, [l.id]);
+  const hold = (await heldLocations(db, l.siteId)).find((h) => h.locationId === l.id);
+  const [boxes] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(containers)
+    .where(and(eq(containers.currentLocationId, l.id), inArray(containers.status, ["open", "sealed"])));
+  const elsewhere = `This location is at ${site?.code}. Switch site first.`;
   const actions: ScanAction[] = [
-    { key: "lots", label: "Lots at this location", href: `/inventory?loc=${l.id}`, allowed: here, reason: here ? undefined : `This location is at ${site?.code}. Switch site first.` },
+    { key: "lots", label: "What is here", href: `/inventory/locations/${l.id}`, allowed: here, reason: here ? undefined : elsewhere },
   ];
+  if (ctx.can("inventory.movement.post")) {
+    const reason = !here ? elsewhere : !l.isActive ? "Location is inactive." : count ? `Frozen by stock count ${count.countNumber}.` : hold ? `Blocked by QA hold ${hold.holdNumber}.` : undefined;
+    actions.push({ key: "move_here", label: "Move stock here", href: `/inventory/move?to=${l.id}`, allowed: !reason, reason });
+  }
+  if (count && here && ctx.can("inventory.stock_count.submit")) actions.push({ key: "count", label: `Count ${count.countNumber}`, href: `/inventory/counts/${count.countId}`, allowed: true, primary: true });
   if (ctx.can("inventory.label_job.create")) {
     let reason: string | undefined = here ? undefined : `This location is at ${site?.code}. Switch site first.`;
     if (!reason) {
@@ -219,12 +234,83 @@ async function locationCard(ctx: AuthContext, value: string, payload: string): P
     facts: [
       ["Kind", l.kind],
       ["Warehouse", row.wh],
+      ["Boxes here", String(Number(boxes?.n ?? 0))],
+      ["Count in progress", count?.countNumber ?? "None"],
     ],
-    risk: ["quarantine", "hold", "rejected"].includes(l.kind) ? { tone: l.kind === "rejected" ? "rej" : l.kind === "hold" ? "hold" : "q", title: `${l.kind === "rejected" ? "Rejected goods" : l.kind === "hold" ? "QA hold" : "Quarantine"} location`, body: "Stock here is not usable until QA decides." } : null,
+    risk: count
+      ? { tone: "warn", title: `Frozen by stock count ${count.countNumber}`, body: "Nothing can move in or out of this location until the count is posted or cancelled." }
+      : hold
+        ? { tone: "hold", title: `Under QA hold ${hold.holdNumber}`, body: "No stock may be moved into this location; stock here may only go to a quarantine, hold or rejected location." }
+        : ["quarantine", "hold", "rejected"].includes(l.kind) ? { tone: l.kind === "rejected" ? "rej" : l.kind === "hold" ? "hold" : "q", title: `${l.kind === "rejected" ? "Rejected goods" : l.kind === "hold" ? "QA hold" : "Quarantine"} location`, body: "Stock here is not usable until QA decides." } : null,
     holdings: here
       ? holdings.map((h) => ({ label: `${h.lotNumber} · ${h.item} · ${LABEL_WORD[h.status] ?? h.status}`, qty: lotQty(h.qty, h.uom), href: `/inventory/${h.lotId}` }))
       : undefined,
     actions,
+  };
+}
+
+async function boxCard(ctx: AuthContext, value: string, payload: string): Promise<ScanCard> {
+  if (!ctx.can("inventory.container.view")) return { outcome: "forbidden", payload, message: "Your role cannot look up boxes." };
+  const c = await describeBoxForScan(ctx, value);
+  if (!c) return notFound(payload, "box", ctx);
+  const box = await getContainer(ctx, c.id);
+  const site = ctx.allowedSites.find((s) => s.id === box.siteId);
+  const here = box.siteId === ctx.currentSiteId;
+  const lotStatuses = [...new Set(box.contents.map((x) => x.qualityStatus))];
+  const risk = lotStatuses.length === 1 ? riskFor(lotStatuses[0], false) : lotStatuses.length > 1 ? { tone: "warn" as const, title: "Mixed lot statuses", body: "This box holds lots with different QA statuses; check each lot before use." } : null;
+  return {
+    outcome: "found",
+    payload,
+    entity: "box",
+    caption: "Box",
+    identifier: c.title,
+    title: c.subtitle,
+    subtitle: box.locationCode ? `At ${box.locationCode}` : null,
+    siteCode: site?.code ?? null,
+    status: lotStatuses.length === 1 ? { code: lotStatuses[0] } : { code: box.status === "sealed" || box.status === "open" ? "released" : "cancelled", label: `Box ${box.status}` },
+    facts: c.facts,
+    risk: c.warnings.length ? { tone: "warn", title: c.warnings[0], body: c.warnings.slice(1).join(" ") || "Resolve this before moving the box." } : risk,
+    holdings: box.contents.map((x) => ({ label: `${x.lotNumber} · ${x.itemName} · ${LABEL_WORD[x.qualityStatus] ?? x.qualityStatus}`, qty: lotQty(x.qtyBase, x.baseUom), href: `/inventory/${x.lotId}` })),
+    actions: [
+      { key: "open", label: "Open box", href: c.href, allowed: true },
+      ...c.allowedActions.map((a) => ({ ...a, allowed: a.allowed && here, reason: !here ? `This box is at ${site?.code}. Switch site first.` : a.reason, primary: a.key === "move" && a.allowed && here })),
+    ],
+  };
+}
+
+async function equipmentCard(ctx: AuthContext, value: string, payload: string): Promise<ScanCard> {
+  if (!ctx.can("masterdata.equipment.view")) return { outcome: "forbidden", payload, message: "Your role cannot look up equipment." };
+  const rows = await db
+    .select({ id: equipment.id, siteId: equipment.siteId, siteCode: sites.code })
+    .from(equipment)
+    .innerJoin(sites, eq(sites.id, equipment.siteId))
+    .where(and(eq(equipment.organizationId, ctx.organizationId), inArray(equipment.siteId, ctx.allowedSiteIds), eq(equipment.code, value)));
+  const row = rows.find((r) => r.siteId === ctx.currentSiteId) ?? (rows.length === 1 ? rows[0] : null);
+  if (!row) return notFound(payload, "equipment", ctx);
+  const av = await equipmentAvailability(ctx, row.id);
+  const e = av.equipment;
+  return {
+    outcome: "found",
+    payload,
+    entity: "equipment",
+    caption: "Equipment",
+    identifier: e.code,
+    title: e.name,
+    subtitle: e.kind.replace(/_/g, " "),
+    siteCode: row.siteCode,
+    status: { code: av.usable ? "released" : "on_hold", label: av.usable ? (av.override ? "Usable (override)" : "Available") : "Not usable" },
+    facts: [
+      ["Status", e.status.replace(/_/g, " ")],
+      ["Calibration due", e.calibrationDueDate ?? "—"],
+      ["Maintenance due", e.maintenanceDueDate ?? "—"],
+      ["Cleaning", e.cleaningStatus.replace(/_/g, " ")],
+    ],
+    risk: av.usable
+      ? av.warnings.length
+        ? { tone: "warn", title: "Usable with a warning", body: av.warnings.map((w) => w.detail).join(" · ") }
+        : null
+      : { tone: "bad", title: "Do not use this equipment", body: av.blockingReasons.map((r) => r.detail).join(" · ") || "Blocked." },
+    actions: [{ key: "open", label: "Open equipment record", href: `/masterdata/equipment/${e.id}`, allowed: true, primary: true }],
   };
 }
 
@@ -298,10 +384,7 @@ async function documentCard(ctx: AuthContext, value: string, payload: string): P
   };
 }
 
-const NOT_TRACKED: Partial<Record<ScanType, string>> = {
-  BOX: "Box labels are recognised, but boxes are not tracked in this version yet. Scan the lot label instead.",
-  EQP: "Equipment labels are recognised, but equipment is not set up in this version yet.",
-};
+const NOT_TRACKED: Partial<Record<ScanType, string>> = {};
 
 /** Resolves one scan into a card. Rate limited per user (120 per minute). */
 export async function resolveScanCard(ctx: AuthContext, raw: string): Promise<ScanCard> {
@@ -320,6 +403,10 @@ export async function resolveScanCard(ctx: AuthContext, raw: string): Promise<Sc
         }
         case "LOC":
           return await locationCard(ctx, p.value, payload);
+        case "BOX":
+          return await boxCard(ctx, p.value, payload);
+        case "EQP":
+          return await equipmentCard(ctx, p.value, payload);
         case "MAT":
           return await materialCard(ctx, p.value, payload);
         case "SKU":

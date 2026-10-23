@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { documentTemplateVersions, documentTemplates, inventoryLots, labelTemplates, organizations, sites, users } from "@/db/schema";
+import { containers, documentTemplateVersions, documentTemplates, equipment, inventoryLots, labelTemplates, organizations, sites, users } from "@/db/schema";
 import { AuthContext, type SiteRef } from "@/lib/auth/context";
 import { ROLE_BUNDLES } from "@/lib/permissions";
 import { createLabelJob, generateTemplateTestPage, markLabelJobPrinted, voidLabelJob } from "@/modules/documents";
@@ -79,12 +79,36 @@ describe("scan result card (US-2-13)", () => {
     expect(c.siteCode).toBe("RVS");
   });
 
-  it("scan.rejects_url and unknown strings are 'not recognised'; boxes and equipment are recognised but not tracked yet", async () => {
+  it("scan.rejects_url and unknown strings are 'not recognised'; unknown boxes and equipment are 'not found'", async () => {
     expect((await resolveScanCard(whNfd, "https://evil.example/BC:LOT:L-1")).outcome).toBe("not_recognised");
     expect((await resolveScanCard(whNfd, "hello world")).outcome).toBe("not_recognised");
-    expect((await resolveScanCard(whNfd, "BC:BOX:BX-1")).outcome).toBe("not_supported");
-    expect((await resolveScanCard(whNfd, "BC:EQP:SCALE-01")).outcome).toBe("not_supported");
+    expect((await resolveScanCard(whNfd, "BC:BOX:BX-1")).outcome).toBe("not_found");
+    expect((await resolveScanCard(whNfd, "BC:EQP:NOPE-01")).outcome).toBe("not_found");
     expect((await resolveScanCard(whNfd, "BC:LOT:NOPE-1")).outcome).toBe("not_found");
+  });
+
+  it("BC:BOX shows the W1C box card (contents, location, server-decided actions); another site's box is not found", async () => {
+    const [box] = await db.select().from(containers).where(and(eq(containers.siteId, nfd.id), inArray(containers.status, ["open", "sealed"]))).limit(1);
+    expect(box, "seeded demo box at NFD").toBeTruthy();
+    const c = found(await resolveScanCard(whNfd, `BC:BOX:${box.containerNumber}`));
+    expect(c.entity).toBe("box");
+    expect(c.identifier).toBe(box.containerNumber);
+    expect(c.siteCode).toBe("NFD");
+    expect(c.holdings?.length).toBeGreaterThan(0);
+    expect(c.actions.find((a) => a.key === "open")?.href).toBe(`/inventory/containers/${box.id}`);
+    expect((await resolveScanCard(whRvs, `BC:BOX:${box.containerNumber}`)).outcome).toBe("not_found");
+    expect((await resolveScanCard(sales, `BC:BOX:${box.containerNumber}`)).outcome).toBe(sales.can("inventory.container.view") ? "found" : "forbidden");
+  });
+
+  it("BC:LOC shows boxes, the count freeze and a move-here action; BC:EQP shows equipment availability", async () => {
+    const loc = found(await resolveScanCard(whNfd, "BC:LOC:A-01"));
+    expect(loc.facts.find(([k]) => k === "Count in progress")).toBeTruthy();
+    expect(loc.actions.find((a) => a.key === "move_here")).toMatchObject({ allowed: true, href: expect.stringContaining("/inventory/move?to=") });
+    const [eq1] = await db.select().from(equipment).where(eq(equipment.siteId, nfd.id)).limit(1);
+    const e = found(await resolveScanCard(manager, `BC:EQP:${eq1.code}`));
+    expect(e.entity).toBe("equipment");
+    expect(e.actions[0].href).toBe(`/masterdata/equipment/${eq1.id}`);
+    expect((await resolveScanCard(whRvs, `BC:EQP:${eq1.code}`)).outcome).toMatch(/not_found|forbidden/);
   });
 
   it("locations resolve at the current site with contents and a label action; materials and SKUs resolve", async () => {
