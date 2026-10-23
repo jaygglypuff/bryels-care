@@ -20,7 +20,7 @@ export async function audit(
 ) {
   await tx.insert(auditEvents).values({
     organizationId: ctx.organizationId,
-    siteId: e.siteId ?? ctx.currentSiteId,
+    siteId: "siteId" in e ? (e.siteId ?? null) : ctx.currentSiteId,
     actorId: ctx.userId,
     action: e.action,
     entityType: e.entityType,

@@ -5,7 +5,7 @@ export type NavGroup = { label: string; icon: string; items: NavItem[] };
 
 /** Left navigation (ux-system §3). Planned modules are shown disabled with their phase, never as fake links. */
 export const NAV: NavGroup[] = [
-  { label: "Home", icon: "home", items: [{ label: "Overview", href: "/dashboard", permission: "analytics.dashboard.view" }] },
+  { label: "Home", icon: "home", items: [{ label: "Overview", href: "/dashboard" }] },
   {
     label: "Inventory",
     icon: "boxes",
