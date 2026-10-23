@@ -6,7 +6,9 @@ ADR-013 (tooling, CI), ADR-018 (offline). Related: `docs/PRD.md` (acceptance cri
 AC-23, Slice 1 tests S1-01 to S1-15, NFRs), `docs/permissions-matrix.md` section 8 (mandatory
 negative tests), `docs/security.md` section 2 (threat-model test names resolve here),
 `docs/process-maps.md` section 1.5 (validation catalogue `V-*`) and 1.3 (exceptions `CX-*`),
-`docs/data-model.md` sections 4 and 5 (batch snapshot, ledger), `docs/offline-sync.md` section 9.
+`docs/data-model.md` sections 4, 5, 8.1 and 11.4 (batch snapshot, ledger, audit names,
+idempotency), `docs/offline-sync.md` section 9, `docs/data-migration-plan.md` section 11
+(MC-01 to MC-16), `docs/reports-and-templates.md` section 12 (T-01 to T-18).
 
 Plain-language summary for owners: nothing in this project is called "done" because a screen
 exists or because someone says it works. Every rule the brief cares about (one site cannot see
@@ -41,7 +43,7 @@ A slice is done when all of the following exist in the same change and CI is gre
 2. Permission strings from the catalogue in every command; the negative set of section 5 for every new entity.
 3. Zod schemas (`.strict()`) and the integration tests for every `V-*` validation the process map cites for the slice's steps.
 4. State machine transition table with `statemachine.*` tests (section 4.17).
-5. Audit events from the `docs/security.md` catalogue, asserted by `audit.*` tests.
+5. Audit events named `module.entity.event` exactly as in `docs/data-model.md` section 8.1 (typed list in `src/lib/audit.ts`; the `docs/security.md` section 5 catalogue is re-keyed to those names), asserted by `audit.*` tests.
 6. Loading / empty / error / permission-denied / offline states (`docs/ux-system.md` section 6) covered by the slice's e2e test on desktop and at 360 px.
 7. Documentation updated (`docs/*.md`, README commands, environment variables).
 8. Deployment notes (migration order, new variables, rollback) in the slice report.
@@ -90,8 +92,8 @@ sections 4 to 6 and must exist in code with exactly those ids.
 | Print preview | Playwright `page.emulateMedia({ media: 'print' })` + `toHaveScreenshot()` per template at A4 and at each label size | Visual diff ≤ 0.1 % pixels against the committed baseline; shell, nav and buttons absent; `thead` repeats |
 | Generated PDF | Worker renders the fixture record with a fixed clock; `pdf-parse` extracts text per page | Page count; batch/order/shipment identifier on every page; `Page x of y`; template version and checksum in footer; signature blocks present; status watermark (`DRAFT`, `CONTROLLED COPY`, `REPRINT n`) |
 | PDF visual | `pdftoppm` page 1 → PNG, pixel diff | ≤ 0.5 % difference against baseline (fonts embedded) |
-| Label QR round trip | Render label PNG → decode with ZXing in Node | Decoded payload equals `BC:<TYPE>:<CODE>` and matches the grammar `^BC:(LOT|BOX|LOC|MAT|SKU):[A-Z0-9][A-Z0-9._-]{0,63}$`; quiet zone ≥ 2 mm at the declared print DPI |
-| Reprint control | Integration test on `generated_documents` | `reprint_of_id` set, reason required (check constraint), audit `documents.reprinted` |
+| Label QR round trip | Render label PNG → decode with ZXing in Node | Decoded payload equals `BC:<TYPE>:<CODE>` and matches the grammar `^BC:(LOT|BOX|LOC|MAT|SKU|EQP|DOC):[A-Z0-9][A-Z0-9._-]{0,63}$` (ADR-017, `docs/data-model.md` 9.5); quiet zone ≥ 2 mm at the declared print DPI |
+| Reprint control | Integration test on `generated_documents` | `reprint_of_id` set, reason required (check constraint), audit `documents.generated_document.reprinted` |
 
 ---
 
@@ -128,7 +130,7 @@ tests/
 flowchart LR
   A[globalSetup: TEST_DATABASE_URL] --> B[DROP/CREATE bc_test_template]
   B --> C[pnpm db:migrate against template]
-  C --> D[base seed: org, sites ALPHA/BRAVO, roles, permissions, users per role, UOMs, locations, reason codes, numbering rules, settings]
+  C --> D[base seed: org, sites NFD/RVS, roles, permissions, users per role, UOMs, locations, reason codes, numbering rules, settings]
   D --> E[per worker N: CREATE DATABASE bc_test_wN TEMPLATE bc_test_template]
   E --> F[per test file: TRUNCATE operational tables, keep base seed]
   F --> G[per test: factories create only what the test needs, unique codes]
@@ -141,7 +143,7 @@ flowchart LR
 | Isolation between tests | Truncate operational tables per test file (`TRUNCATE … RESTART IDENTITY CASCADE` on every table not in the base-seed allow-list); unique codes per test inside a file | Concurrency and idempotency tests need committed state visible from several connections, which a transactional rollback cannot provide |
 | Transactional rollback | Opt-in `withRollback(fn)` for single-connection repository tests only | Faster for pure query tests; never used for commands that lock or commit |
 | Database roles | Service calls run on a pool connected as `bc_app` (DML only, no `UPDATE`/`DELETE` on ledger and audit tables); setup, truncation and trigger assertions use `bc_test_admin` | Grants and `forbid_mutation()` triggers are part of what is tested |
-| Extensions | `btree_gist`, `pgcrypto` created by migration `0001`; CI image `postgres:16` | Same as Railway (ADR-002) |
+| Extensions | `btree_gist`, `pgcrypto` created by migration `0000_extensions_and_functions` (`docs/data-model.md` 13.6); CI image `postgres:16` | Same as Railway (ADR-002) |
 | Local | `docker compose -f docker/compose.test.yml up -d` exposes port 5433; `TEST_DATABASE_URL=postgres://bc_test:bc_test@localhost:5433/postgres` (A-TST-07) | No shared dev database for tests |
 | CI | GitHub Actions service container `postgres:16` with health check; same `TEST_DATABASE_URL` | ADR-012 |
 
@@ -155,12 +157,12 @@ with thresholds on `src/modules/**` (lines 85 %, branches 80 %) and 100 % on
 ### 3.3 Factories and fixtures
 
 - Factories are builders that take the test `ctx` and return persisted rows, for example
-  `lot({ site: 'ALPHA', material: 'RM-COCONUT-OIL', qty: '5000', status: 'released', expiry: '2027-03-31' })`.
+  `lot({ site: 'NFD', material: 'RM-COCONUT-OIL', qty: '5000', status: 'released', expiry: '2027-03-31' })`.
   Every factory defaults every required field, generates unique codes (`uniq('LOT')`) and uses
   names from the fictional list (section 8). Factories call module commands where a ledger is
   involved (a lot with stock is created through `postMovement`, never by inserting balances).
 - `asUser(role, siteIds)` builds a real session row and `AuthContext` for a seeded user of that
-  role at the given sites; `asUser('warehouse_operator', ['ALPHA'])` is the canonical "Site A
+  role at the given sites; `asUser('warehouse_operator', ['NFD'])` is the canonical "NFD
   operator". `asOrgWide('owner_director')` for the three organization-wide roles.
   `withReauth(ctx)` sets `reauthenticated_at = now` for restricted actions; `withoutReauth(ctx)`
   sets it 11 minutes ago.
@@ -200,7 +202,7 @@ row, and five identical responses. `replayMutated(command, { key, body, mutate }
 | Concern | Rule |
 |---|---|
 | Server time | Services receive a `Clock` (`src/lib/clock.ts`: `now()`, `today(timeZone)`); tests inject `FixedClock('2026-10-16T02:00:00Z')` and `advance('P1D')`. The clock is on the command dependencies, not on `AuthContext`. |
-| Database "today" | SQL that depends on the current date (availability, expiry job, effective-date lookup) takes an `$as_of` parameter supplied from the clock; tests never rely on `CURRENT_DATE`. (`docs/data-model.md` 5.3 currently writes `CURRENT_DATE`; parameterisation is requested in section 12.) |
+| Database "today" | SQL that depends on the current date (availability, expiry job, effective-date lookup) takes an `$as_of` parameter supplied from the clock; tests never rely on `CURRENT_DATE` (`docs/data-model.md` 5.3 and every date-dependent query take `$as_of`; Q-TST-05 closed). |
 | Expiry job | `jobs.expiry.run({ asOf })` is invoked directly by tests; no cron in tests. |
 | Client time (e2e) | `page.clock.install({ time })` and `page.clock.setSystemTime()` for clock-skew tests (section 6). |
 | Ids | UUIDv7 generation accepts an injected clock and random source in tests so ordering assertions are stable; natural numbers come from the real numbering rules. |
@@ -212,7 +214,7 @@ row, and five identical responses. `replayMutated(command, { key, body, mutate }
 |---|---|
 | Projects | `desktop-chromium` (Desktop Chrome, 1280 × 800); `mobile-360` (Chromium, 360 × 640, `deviceScaleFactor: 3`, `isMobile`, `hasTouch`); `tablet-768` (768 × 1024, nightly); `mobile-webkit` (WebKit, iPhone SE profile 375 × 667, nightly, A-TST-02); `mobile-360-camera` (fake video capture, nightly) |
 | Web server | `pnpm build && pnpm start` with `APP_ENV=test`, `DATABASE_URL` of the e2e database seeded by `pnpm db:seed --profile e2e`; `reuseExistingServer` locally |
-| Auth | `global-setup` signs in once per role and stores `storageState` in `tests/e2e/.auth/<role>.json`; tests pick a role with `test.use({ storageState: auth('warehouse_operator.alpha') })` |
+| Auth | `global-setup` signs in once per role and stores `storageState` in `tests/e2e/.auth/<role>.json`; tests pick a role with `test.use({ storageState: auth('warehouse_operator.nfd') })` |
 | Permissions | `permissions: ['camera']` for scan specs; `geolocation` never granted |
 | Artefacts | `trace: 'retain-on-failure'`, `video: 'retain-on-failure'`, `screenshot: 'only-on-failure'`; uploaded as CI artefacts |
 | Retries | `retries: 0` locally; `1` in CI with the retry reported as a flake (section 10) |
@@ -242,11 +244,11 @@ codes follow `docs/architecture.md` section 5 and `docs/permissions-matrix.md` s
 
 | Test id | Proves | Expected |
 |---|---|---|
-| `ledger.reversal.links_original` | `inventory.movement.void` on a posted transfer | New row `movement_type = 'reversal'`, `reversal_of_id` = original, reason and actor set; original row byte-identical; balances back to pre-posting; audit `inventory.movement_reversed` |
+| `ledger.reversal.links_original` | `inventory.movement.void` on a posted transfer | New row `movement_type = 'reversal'`, `reversal_of_id` = original, reason and actor set; original row byte-identical; balances back to pre-posting; audit `inventory.stock_movement.reversed` |
 | `ledger.reversal.twice_rejected` | Second reversal of the same movement | 409; partial unique index on `reversal_of_id` holds |
 | `ledger.reversal.replacement_correlated` | Reversal + replacement | Replacement carries the reversal's `correlation_id`; the three rows list together |
 | `ledger.reversal.revalidated` | Reversal when the stock has since moved | 409 (would go negative); nothing written |
-| `ledger.reversal.receipt_with_lot` | `procurement.goods_receipt.void` | Lot remains (never deleted), balance zero, lot flagged in UI; audit `procurement.receipt_reversed` |
+| `ledger.reversal.receipt_with_lot` | `procurement.goods_receipt.void` | Lot remains (never deleted), balance zero, lot flagged in UI; audit `procurement.goods_receipt.reversed` |
 | `finance.reversal.locked_period` (P6) | Reversal in a locked `accounting_periods` row | 409; audit absent |
 
 ### 4.3 No negative stock (A-PRD-17, A-DM-02)
@@ -256,8 +258,7 @@ codes follow `docs/architecture.md` section 5 and `docs/permissions-matrix.md` s
 | `stock.negative.rejected` | Issue 10 g from a balance of 5 g | 409 `STOCK_INSUFFICIENT`; no row |
 | `stock.negative.reserved_counts` | Issue 5 g where on_hand 5 g, reserved 3 g | 409 (on_hand − reserved − allocated ≥ qty) |
 | `stock.negative.check_constraint` | Direct `UPDATE inventory_balances SET on_hand_base = -1` as admin | `ck` violation |
-| `stock.negative.policy_exception` | Site policy `allow_negative_stock` on and actor holds `inventory.negative_balance.post` with reason | Posted; audit `inventory.negative_balance_posted` (restricted) |
-| `stock.negative.policy_off_even_with_permission` | Policy off, permission held | 409 |
+| `stock.negative.no_policy_exception` | Actor holds `inventory.negative_balance.post` with reason (catalogue entry kept, disabled); any site setting attempting to allow negative stock | 409 `STOCK_INSUFFICIENT`; nothing written. Architect ruling (2026-10-16): balances never go negative in Phases 1 to 9, the ADR-006 "configured policy" exception is withdrawn and the `inventory_balances` CHECK has no bypass; allowing it would need a new ADR |
 
 ### 4.4 FEFO / FIFO selection (A-PRD-16)
 
@@ -299,10 +300,10 @@ changes `inventory_lots.quality_status`; `inventory.lot.edit` with a status fiel
 |---|---|---|
 | `tolerance.absolute_and_percent` (U) | Rule "±2 % or ±1 g, whichever is stricter" on 190.9 g | Low/high bounds computed with `decimal.js`; 189.9 inside, 189.8 outside |
 | `tolerance.boundary_inclusive` (U) | Actual exactly on the bound | Inside (bounds inclusive; `ck low <= target <= high`) |
-| `dispense.tolerance.within` | 3,723.2 g target ±1 %, actual 3,700.0 g | `is_within_tolerance = true`; audit `production.dispense_recorded` |
+| `dispense.tolerance.within` | 3,723.2 g target ±1 %, actual 3,700.0 g | `is_within_tolerance = true`; audit `production.dispense_record.recorded` |
 | `dispense.tolerance.outside_rejected` | Actual 3,650.0 g | 409 `OUT_OF_TOLERANCE`; no `dispense_records` row; re-weigh allowed |
 | `dispense.tolerance.exception_requires_permission` | Same with `production.over_tolerance_dispense.approve` held by the operator | 409 (approver must be a different user, online, with reason) |
-| `dispense.tolerance.exception_approved_creates_deviation` | qa_qc approves with reason | Row saved with `exception_approved_by`, `deviation_id` set, audit `production.over_tolerance_approved` (restricted) |
+| `dispense.tolerance.exception_approved_creates_deviation` | qa_qc approves with reason | Row saved with `exception_approved_by`, `deviation_id` set, audit `production.dispense_record.over_tolerance_approved` (restricted) |
 | `process.parameter_outside_limits` | Reading outside `routing_step_parameters` limits | `is_within_limits = false`; step cannot complete without CX-TOL |
 
 ### 4.7 Operator ≠ checker (V-SOD)
@@ -329,7 +330,7 @@ changes `inventory_lots.quality_status`; `inventory.lot.edit` with a status fiel
 | `batch.snapshot.trigger_freezes` | `UPDATE batches SET formula_revision_id` after `planned` | Trigger `tg_batches_freeze_revisions` raises |
 | `batch.snapshot.no_effective_revision` | Work order planned on a date with no approved revision | 422 (V-REV); batch cannot be created |
 | `batch.snapshot.renderer_reads_snapshot_only` | Static check: BMR renderer imports no live formula query | Lint rule passes |
-| `batch.snapshot.reopen_keeps_revisions` | Controlled reopen (`production.batch.admin`) | Revisions unchanged; `reopen_count + 1`; BMR revision n+1; audit `production.batch_reopened` |
+| `batch.snapshot.reopen_keeps_revisions` | Controlled reopen (`production.batch.admin`) | Revisions unchanged; `reopen_count + 1`; BMR revision n+1; audit `production.batch.reopened` |
 
 ### 4.9 Over-shipment block and shipment posting = stock issue (V-OVER, CX-SHIP)
 
@@ -337,26 +338,26 @@ changes `inventory_lots.quality_status`; `inventory.lot.edit` with a status fiel
 |---|---|---|
 | `shipment.over_allocated_rejected` | Pack 11 boxes against an allocation of 10 | 409 `OVER_SHIPMENT`; nothing written |
 | `shipment.over_ordered_rejected` | Allocation 12, ordered 10 | 409 at pack verification |
-| `shipment.over_with_approval` | `sales.over_shipment.approve` by site_manager (≠ order creator) with reason and customer reference | Allowed; `over_shipment_approved_by` set; audit `sales.over_shipment_approved` (restricted) |
+| `shipment.over_with_approval` | `sales.over_shipment.approve` by site_manager (≠ order creator) with reason and customer reference | Allowed; `over_shipment_approved_by` set; audit `sales.shipment.over_shipment_approved` (restricted) |
 | `shipment.draft_no_stock_change` | Shipment in `draft`, `picked`, `packed`; DR generated | No `stock_movements` row; balances unchanged |
-| `shipment.dispatch_posts_issue` | `sales.shipment.post` | One `shipment` movement per shipment line, `stock_movement_id` set, containers `shipped`, allocations and reservations fulfilled, DR number allocated, all in one transaction; audit `sales.shipment_dispatched` |
+| `shipment.dispatch_posts_issue` | `sales.shipment.post` | One `shipment` movement per shipment line, `stock_movement_id` set, containers `shipped`, allocations and reservations fulfilled, DR number allocated, all in one transaction; audit `sales.shipment.dispatched` |
 | `shipment.reconciles` | After dispatch | Σ `shipment_lines.qty_base` = Σ movements with `source_document_id = shipment.id`; `sales_order_lines.qty_shipped_base` updated; availability reduced by exactly that quantity |
 | `shipment.dispatch_rechecks_status` | Allocated lot put `on_hold` before dispatch | 409; nothing posted |
 | `shipment.partial_allowed_unless_customer_full` | Customer requirement "full shipment required" | 409 (CX-SHIP) when partial; allowed otherwise (A-PRD-24) |
-| `shipment.reverse_returns_stock` | `sales.shipment.void` | Reversal movements; containers back to `closed`; order state per machine |
+| `shipment.reverse_returns_stock` | `sales.shipment.void` | Reversal movements; containers back to `sealed`; order state per machine |
 
 ### 4.10 Numbering uniqueness under concurrency (ADR-009)
 
 | Test id | Proves | Expected |
 |---|---|---|
-| `numbering.unique_under_concurrency` | 20 concurrent postings requesting `GR-{YY}-{SEQ5}` at Site ALPHA (S1-13) | 20 distinct consecutive numbers; no gaps for non-gapless rules only if all commit |
+| `numbering.unique_under_concurrency` | 20 concurrent postings requesting `GR-{YY}-{SEQ}` (`sequence_width` 5, organization scope; S1-13) | 20 distinct consecutive numbers; no gaps for non-gapless rules only if all commit |
 | `numbering.locked_last` | Lock order keys → lots → balances → numbering rule | No deadlock over 200 randomized interleavings (`concurrency.deadlock_free`) |
 | `numbering.rollback_no_consume_gapless` | Invoice numbering (`A-DM-05`) with a failed transaction | Next invoice reuses the number (gapless); stock movement numbers may gap (documented) |
 | `numbering.reset_period` | Rule with yearly reset across a year boundary (clock injected) | Sequence restarts; uniqueness per `(organization_id, number)` still holds |
-| `numbering.per_site_prefix` | Same rule type at ALPHA and BRAVO | Independent sequences, distinct prefixes |
-| `numbering.change_not_retroactive` | `platform.numbering_rule.admin` edits a rule | Existing numbers untouched; new version effective forward; audit `platform.numbering_rule_changed` |
+| `numbering.per_site_prefix` | Same rule type at NFD and RVS (site scope, pattern with `{SITE}`) | Independent sequences, distinct prefixes |
+| `numbering.change_not_retroactive` | `platform.numbering_rule.admin` edits a rule | Existing numbers untouched; new version effective forward; audit `platform.numbering_rule.changed` |
 
-### 4.11 Idempotent replay (`docs/security.md` 4.10)
+### 4.11 Idempotent replay (`docs/data-model.md` 11.4, `docs/security.md` 4.10)
 
 | Test id | Proves | Expected |
 |---|---|---|
@@ -365,7 +366,7 @@ changes `inventory_lots.quality_status`; `inventory.lot.edit` with a status fiel
 | `idempotency.same_key_different_body_422` | Same key, mutated body | 422 `IDEMPOTENCY_KEY_REUSED` |
 | `idempotency.ledger_partial_unique_backstop` | Bypass layer 1 (test seam) and insert twice with the same key | Partial unique index on `stock_movements (organization_id, idempotency_key)` rejects |
 | `idempotency.key_required_on_postings` | Posting without `Idempotency-Key` | 422 |
-| `idempotency.scoped_per_user` | Same key by two users | Two independent postings (key scoped by `(organization_id, scope, key)`) |
+| `idempotency.scoped_per_organization` | Same key sent by a second user of the same organization (`docs/data-model.md` 11.4) | 422 `IDEMPOTENCY_KEY_REUSED`; keys are unique per `(organization_id, key)`; no second posting |
 | `idempotency.expired_key_reused` | Key older than 7 days (A-SEC-21) | Treated as new |
 | `authz.idempotency.duplicate_key` | Alias used by the permissions matrix; runs the three cases above through HTTP | As above |
 
@@ -404,7 +405,7 @@ changes `inventory_lots.quality_status`; `inventory.lot.edit` with a status fiel
 `availability.formula` (U+I): for a lot set covering every status, reserved and allocated
 quantities, and an expiry on the as-of date, the SQL of `docs/data-model.md` 5.3 and the pure
 function return the same numbers and `available = on_hand − reserved − allocated − quarantined − on_hold − expired − recalled − rejected`;
-`availability.site_scoped`: a BRAVO balance never contributes to an ALPHA query.
+`availability.site_scoped`: an RVS balance never contributes to an NFD query.
 
 ### 4.16 Containers, counts, genealogy
 
@@ -421,13 +422,13 @@ function return the same numbers and `available = on_hand − reserved − alloc
 
 | Test id | Proves | Expected |
 |---|---|---|
-| `statemachine.table_complete` (U) | Every state in each machine (batch, work order, PO, SO, shipment, inspection, hold, payroll period, invoice) is reachable and terminal states have no exits | Snapshot of the transition table reviewed in PR |
+| `statemachine.table_complete` (U) | Every state in each of the ten machines of `docs/data-model.md` section 6 (batch, work order, PO, SO, inspection, quality hold, shipment, payroll period, invoice, equipment) is reachable and terminal states have no exits | Snapshot of the transition table reviewed in PR |
 | `statemachine.illegal_transition_rejected` | Each illegal pair per machine | 409 `STATE`; no `*_state_transitions` row |
 | `statemachine.reason_required_backward` | Cancel, reopen, reject without reason | 422 |
 | `statemachine.transition_row_written` | Legal transition | Row with actor, from/to, correlation id, same transaction |
 | `statemachine.no_free_status` | Zod schemas with a `status` field on update commands | Rejected (`.strict()`), alias of the security.md name |
 | `audit.required_fields` | Every mutating command | Audit row has actor, action, entity, site, request id, outcome; redaction applied |
-| `audit.emitted_for_catalogue` | Each event in `docs/security.md` section 5 for the slice | Present with the data class stated |
+| `audit.emitted_for_catalogue` | Each event the slice's stories name, spelled as in `docs/data-model.md` section 8.1 and present in the typed list of `src/lib/audit.ts`; every name matches the `audit_events.action` CHECK | Present with the data class stated |
 
 ---
 
@@ -442,15 +443,15 @@ merged module lacks a test tagged with it (`@perm inventory.movement.post`).
 
 | Test id | Driven through | Expected |
 |---|---|---|
-| `authz.cross_site.url` | `GET /api/v1/<module>/<entity>/<id>` for a BRAVO record as ALPHA user; page route too | 404 `NOT_FOUND`; response body has no entity fields; audit `authz.denied` |
-| `authz.cross_site.body` | `POST` with `siteId` BRAVO or a parent id of BRAVO | 404 or 422 `SITE_NOT_ALLOWED`; row count unchanged |
-| `authz.cross_site.query` | `?siteId=BRAVO`, filters matching BRAVO rows, search/autocomplete (`authz.cross_site.search`) | ALPHA rows only; totals exclude BRAVO |
-| `authz.cross_site.export` | CSV/XLSX/PDF export with BRAVO filter | ALPHA rows only; `platform.export_created` audit records filters and row count |
-| `authz.cross_site.site_switcher` | `activeSiteId` cookie/header set to BRAVO | Ignored; scope unchanged |
-| `authz.cross_site.scan` | `BC:LOT` of a BRAVO lot scanned at ALPHA | "not found at your site"; no fields leak |
-| `authz.role_escalation.missing_permission` | Each role × each mutating permission it does not hold (generated from the matrix) | 403 `PERMISSION_DENIED`; audit `authz.denied` |
+| `authz.cross_site.url` | `GET /api/v1/<module>/<entity>/<id>` for an RVS record as NFD user; page route too | 404 `NOT_FOUND`; response body has no entity fields; audit `identity.authorization.denied` (`outcome = 'denied'`) |
+| `authz.cross_site.body` | `POST` with `siteId` RVS or a parent id of RVS | 404 or 422 `SITE_NOT_ALLOWED`; row count unchanged |
+| `authz.cross_site.query` | `?siteId=RVS`, filters matching RVS rows, search/autocomplete (`authz.cross_site.search`) | NFD rows only; totals exclude RVS |
+| `authz.cross_site.export` | CSV/XLSX/PDF export with RVS filter | NFD rows only; `platform.export.created` audit records filters and row count |
+| `authz.cross_site.site_switcher` | `activeSiteId` cookie/header set to RVS | Ignored; scope unchanged |
+| `authz.cross_site.scan` | `BC:LOT` of an RVS lot scanned at NFD | "not found at your site"; no fields leak |
+| `authz.role_escalation.missing_permission` | Each role × each mutating permission it does not hold (generated from the matrix) | 403 `PERMISSION_DENIED`; audit `identity.authorization.denied` |
 | `authz.role_escalation.restricted_without_reauth` | R permission, `reauthenticated_at` 11 min old | 401 `REAUTH_REQUIRED` |
-| `authz.role_escalation.custom_role_sensitivity` | Custom role gains an R permission | Rejected unless `identity.role.admin` + re-auth; audit `identity.role_updated` |
+| `authz.role_escalation.custom_role_sensitivity` | Custom role gains an R permission | Rejected unless `identity.role.admin` + re-auth; audit `identity.role.updated` |
 | `identity.no_self_grant` | User with `identity.site_assignment.admin` grants own user a role | 403 |
 | `authz.sod.approve_own` | Submitter approves; second approver repeats | 409 `SEPARATION_OF_DUTIES` |
 | `authz.sod.poster_equals_approver_above_threshold` | Finance (P6) | 409 |
@@ -504,7 +505,7 @@ Each runs in the phase the security document assigns and is referenced by id in 
 
 ## 6. Offline tests (Phase 7; API groundwork Phase 2)
 
-All e2e, project `mobile-360`, registered device fixture, warehouse_operator at ALPHA unless
+All e2e, project `mobile-360`, registered device fixture, warehouse_operator at NFD unless
 stated. Connectivity is driven with `context.setOffline(true)` and, for partial connectivity,
 `page.route('**/api/v1/**', route => delay(35_000))` (requests time out). State assertions
 query the server through `tests/kit/http.ts` after reconnection. Server-side counterparts run as
@@ -515,20 +516,20 @@ integration tests against `POST /api/v1/sync/commands`.
 | `offline.airplane_mid_workflow` | Scan box, go offline before confirming destination, confirm | Command in outbox with `Sync Pending` chip and banner "Saved on this device. 1 change will sync…"; after `setOffline(false)` the move is posted once; chip clears |
 | `offline.tab_closed_pending` | Queue 3 moves offline, close the tab, reopen | Outbox persisted in IndexedDB; 3 pending shown; sync once online |
 | `offline.app_restart` | Queue, kill the browser context, new context with same storage | Same as above; `sync_log` shows one flush |
-| `offline.time_skew_flagged` | `page.clock.setSystemTime(now + 20 min)`, queue a dispense capture, sync | Server stores `clientCreatedAt`, sets `posted_at` to server time, flags skew > threshold (A-OFF-05: 10 min; `docs/security.md` says 15 min, see section 12) on the record and in `offline.replay_accepted` audit; not rejected |
+| `offline.time_skew_flagged` | `page.clock.setSystemTime(now + 20 min)`, queue a dispense capture, sync | Server stores `clientCreatedAt`, sets `posted_at` to server time, flags skew > threshold (A-OFF-05: 10 minutes; `docs/security.md` adopts the same value) on the record and in the `platform.sync_command.replay_accepted` audit; not rejected |
 | `offline.duplicate_scan_same_box` | Scan the same box twice for the same move offline | UI asks "Already scanned. Scan it again?"; forcing it yields one command (same idempotency key); server posts once |
 | `offline.partial_connectivity` | Requests time out during flush | Outbox retries with backoff; no duplicate posting (`idempotency.concurrent_duplicates_single_row` via HTTP); status `syncing` → `synced` |
 | `offline.replay_after_lost_response` | Server applies the batch but the response is dropped (route abort after request) | Client resends; server returns stored results; one ledger row per command |
 | `offline.expired_session` | Session expires while offline | New offline commands blocked ("sign in to continue"); existing queue retained; after sign-in the queue flushes; replay from the old session id rejected (`offline.replay.revoked_session`) |
 | `offline.permission_revoked_while_offline` | Admin removes `inventory.movement.post` while the device is offline | On reconnect `PERMISSIONS_CHANGED`; queued moves are rejected to the conflict list; nothing posted |
-| `offline.auth_snapshot_too_old` | Snapshot older than 12 h (A-OFF-02) | New offline commands blocked until reconnect |
+| `offline.auth_snapshot_too_old` | Offline authorization snapshot older than 12 h with no server round trip (A-OFF-02; distinct from the 8 h online permission refresh in `docs/security.md`, which `authz.session.permissions_changed` covers) | New offline commands blocked until reconnect; queued commands retained |
 | `offline.online_only_rejected` | Craft a `quality.disposition.approve` command in the outbox | Server rejects (`offline.online_only_rejected`); UI never offers the action offline ("Needs a connection: QA release is online-only") |
 | `offline.replay.revalidated` | Move of a lot that was put `on_hold` by QA while offline | Command rejected (V-HOLD); `sync_conflicts` row; device shows the conflict; nothing posted |
-| `offline.conflict_queued` and `offline.conflict_resolved_each_way` | site_manager resolves: re-apply with corrected data, discard with reason, escalate to adjustment | Re-apply creates a new audited command; discard audited `offline.conflict_resolved`; original never applied silently |
+| `offline.conflict_queued` and `offline.conflict_resolved_each_way` | site_manager resolves: re-apply with corrected data, discard with reason, escalate to adjustment | Re-apply creates a new audited command; discard audited `platform.sync_conflict.resolved`; original never applied silently |
 | `offline.dependency_failed` | Second move of the same box after a rejected first move | Marked `conflict: dependency_failed`; independent commands still apply |
-| `offline.dispense_capture_rules` | Offline dispense on a registered device: wrong lot, out of tolerance, operator = checker | Blocked locally where cached data allows; server records out-of-tolerance capture as `pending_review` with a deviation stub, never auto-accepted |
+| `offline.dispense_capture_rules` | Offline dispense on a registered device: wrong lot, out of tolerance, operator = checker | Blocked locally where cached data allows; the server stores an out-of-tolerance or wrong-lot capture as a `dispense_records` row with `is_within_tolerance = false`, no consumption posted, plus a `deviations` stub (`docs/data-model.md` 11.5), never auto-accepted |
 | `offline.count_plan_closed` | Count line replayed after the count left `in_progress` | Rejected to conflict queue; recount candidate |
-| `offline.logout_clears_cache` | Logout with pending commands | Warning lists pending commands; "discard" audited `offline.outbox_discarded`; IndexedDB empty afterwards; next user on the shared device sees nothing |
+| `offline.logout_clears_cache` | Logout with pending commands | Warning lists pending commands; "discard" audited `platform.sync_command.discarded` (name to be added to `src/lib/audit.ts`, section 12); IndexedDB empty afterwards; next user on the shared device sees nothing |
 | `offline.reference_freshness_badge` | Cached lot card 25 h old | "data as of" badge; full reference refresh on reconnect (A-OFF-01) |
 | `offline.no_sensitive_cache` | Inspect IndexedDB after use by finance and HR users | No pricing, cost, payroll or personal data tables present |
 
@@ -563,9 +564,9 @@ Accessibility is checked on D1 and D4 by axe in every flow spec and manually at 
 
 | Rule | Detail |
 |---|---|
-| Fictional only | Every person, customer, supplier, address, email and phone number in seed and fixtures comes from `src/db/seed/fictional.ts`; names are obviously invented ("Narra Oils Trading (fictional)", "Kalinga Wellness Store (fictional)"); emails end in `@bryels.test`; no real employee, customer, supplier or price. |
+| Fictional only | Every person, customer, supplier, address, email and phone number in seed and fixtures comes from `src/db/seed/fictional.ts`; names are obviously invented ("Narra Oils Trading (fictional)", "Kalinga Wellness Store (fictional)"); emails end in `@bryels-care.test` (same fixture list as the demo seed, `docs/data-model.md` 13.5); no real employee, customer, supplier or price. |
 | Reference material from the brief | The Acapulco Soap BMR values (five ingredients, 17,600 g) are seeded as the example formula with the header "example from the paper BMR; tolerances are fictional placeholders; verify with authorized personnel before production use". No other formula, test, limit or statutory value is seeded as if real. |
-| Seed profiles | `base` (organization, two sites `ALPHA` and `BRAVO`, one warehouse and line each, special locations, 13 roles, permission catalogue, one user per role per site plus the three org-wide users, UOMs and conversions, reason codes, numbering rules, settings); `e2e` (base + released and blocked lots, boxes, a planned work order, an open count, a confirmed order); `demo` (richer, for staging walkthroughs); `perf` (A-PRD-12 volumes for section 11). |
+| Seed profiles | `base` (organization, the two fictional sites of `docs/data-model.md` 13.5, `NFD` "Northfield Plant" and `RVS` "Riverside Depot", one warehouse and line each, special locations, 13 roles, permission catalogue, one user per role per site plus the three org-wide users, UOMs and conversions, reason codes, numbering rules, settings); `e2e` (base + released and blocked lots, boxes, a planned work order, an open count, a confirmed order); `demo` (richer, for staging walkthroughs); `perf` (A-PRD-12 volumes for section 11). |
 | Seed guard | `pnpm db:seed` refuses when `APP_ENV=production` or when the target database contains any `stock_movements` row not created by a seed run (S1-10); exit code non-zero. |
 | Credentials | Dev/staging passwords are generated by the seed command and printed once; never committed; staging users are deactivated before go-live. |
 | Determinism | Seed uses fixed UUIDv7 ids (fixed clock and seeded random) so e2e selectors and snapshots are stable. |
@@ -583,11 +584,11 @@ hardware. Results are recorded as described in section 1.3.
 
 ### 9.1 AC-10 Cross-site isolation (Gate G1 framework, G2 inventory)
 
-1. Sign in as `wo.alpha@bryels.test` (warehouse_operator, ALPHA only) on D4.
-2. Open a BRAVO lot URL copied from the BRAVO operator's screen. Expected: "This record isn't available at your sites." No lot fields visible.
-3. In devtools, replay the lot list request with `siteId` = BRAVO. Expected: 404 or empty list; no BRAVO rows.
-4. Replay a movement post with a BRAVO location in the body. Expected: 404/422; BRAVO balance unchanged (verified by the BRAVO operator).
-5. Export the stock list with a BRAVO filter. Expected: file contains only ALPHA rows; audit viewer (system_admin) shows `platform.export_created` with the applied scope and `authz.denied` events for steps 2 to 4.
+1. Sign in as `warehouse_operator.nfd@bryels-care.test` (warehouse_operator, NFD only) on D4.
+2. Open an RVS lot URL copied from the RVS operator's screen. Expected: "This record isn't available at your sites." No lot fields visible.
+3. In devtools, replay the lot list request with `siteId` = RVS. Expected: 404 or empty list; no RVS rows.
+4. Replay a movement post with an RVS location in the body. Expected: 404/422; RVS balance unchanged (verified by the RVS operator).
+5. Export the stock list with an RVS filter. Expected: file contains only NFD rows; audit viewer (system_admin) shows `platform.export.created` with the applied scope and `identity.authorization.denied` events for steps 2 to 4.
 6. Repeat step 2 on D1 at 360 px. Expected: same denied state, no horizontal scroll.
 
 Automated: `authz.cross_site.*` for identity, masterdata (G1) and inventory, procurement (G2); `authz.cross_site.scan`. Evidence: screenshots of steps 2 to 5 and the audit viewer.
@@ -607,7 +608,7 @@ Automated: `idempotency.*`, `ledger.projection.updated_in_transaction`, `procure
 1. As qa_qc, place lot L1 `on_hold`; let lot L2 expire (expiry date yesterday, nightly job run on demand by system_admin); mark lot L3 `rejected`; mark L4 `recalled` via a recall case.
 2. As warehouse_operator on D1, scan each lot. Expected: risk banner (Quarantined / QA Hold / Expired / Rejected / Recalled) with icon and text; Move to a released bin and Allocate greyed with reason.
 3. As production_operator on D3 during dispensing, scan each lot. Expected: "wrong lot / not eligible" with the expected lot shown; no dispense row.
-4. As qa_qc, use the controlled exception for L1 (sampling, reason). Expected: allowed for quarantine/on_hold only; badge on the record; audit `inventory.held_stock_issued`. Attempt the same for L2, L3, L4. Expected: refused, no exception path.
+4. As qa_qc, use the controlled exception for L1 (sampling, reason). Expected: allowed for quarantine/on_hold only; badge on the record; audit `inventory.stock_movement.held_stock_issued`. Attempt the same for L2, L3, L4. Expected: refused, no exception path.
 
 Automated: `stock.blocked.matrix`, `stock.blocked.*`, `expiry_job.sets_expired`, `disposition.only_path_to_released`, `fefo.excludes_blocked`. Evidence: screenshots of each banner and the audit rows.
 
@@ -627,7 +628,7 @@ Automated: `batch.snapshot.*`. Evidence: both PDFs attached, diff output, screen
 2. Scan the correct lot, select scale `SC-01`, enter 3,650.0 g. Expected: blocked as out of tolerance; re-weigh offered.
 3. Enter 3,700.0 g. Expected: accepted, within tolerance, operator and time shown.
 4. Try to tick "checked" on the same session. Expected: refused. Checker signs in on their own device/session and confirms. Expected: checked by a different user.
-5. Enter 3,650.0 g on another line and request the exception. Expected: qa_qc approval screen requires reason; after approval the row shows the deviation flag and a Deviation exists; audit `production.over_tolerance_approved`.
+5. Enter 3,650.0 g on another line and request the exception. Expected: qa_qc approval screen requires reason; after approval the row shows the deviation flag and a Deviation exists; audit `production.dispense_record.over_tolerance_approved`.
 6. Enter the weight in `kg` (3.7). Expected: stored as 3,700 g; displayed in g.
 
 Automated: `dispense.*`, `tolerance.*`, `sod.dispense.*`, `uom.*`, `production.wrong_material_never_allowed`. Evidence: screenshots, dispensing sheet PDF, audit rows.
@@ -656,7 +657,7 @@ Automated: `container.lineage.*`, `idempotency.*`, `scan.payload_grammar`, `offl
 
 1. As sales_cs, order SO-1 for 10 boxes of ACS-100G; confirm; allocate (FEFO). Note the available quantity of the lot.
 2. As warehouse_operator on D1, pick 10 boxes by scan; at pack verification scan an 11th box. Expected: blocked "over shipment"; the 11th box is not added.
-3. As site_manager (not the order creator) approve the exception with reason and customer reference. Expected: 11 allowed; badge on the shipment and DR; audit `sales.over_shipment_approved`.
+3. As site_manager (not the order creator) approve the exception with reason and customer reference. Expected: 11 allowed; badge on the shipment and DR; audit `sales.shipment.over_shipment_approved`.
 4. Generate the DR before dispatch. Expected: stock unchanged (available quantity identical to step 1 minus allocation only).
 5. Dispatch. Expected: available reduced by exactly the shipped quantity; one `shipment` movement per line; DR number assigned; containers `shipped`; order `shipped`.
 6. Run the stock reconciliation report. Expected: zero differences.
@@ -668,7 +669,7 @@ Automated: `shipment.*`, `fefo.*`, `ledger.projection.matches_ledger`, `authz.ex
 1. Generate the BMR for closed batch B1 from D4; open the preview and the PDF.
 2. Check every page: batch number and product in header and footer, `Page x of y`, template version and checksum, formula revision, ingredient table (INCI name, material code, lot, expiry, theoretical, tolerance, actual, UOM, dispensed by, checked by, timestamps, deviation flag), procedure steps with readings and equipment, checklist 1 to 7 with conductor and checker, yield, QC results with spec limits, disposition with QA name and time, remarks, signature areas, QR `BC:DOC:<number>`.
 3. Print on D7; compare to the preview. Expected: identical layout; no shell elements.
-4. Reprint. Expected: reason required; "REPRINT 1" watermark; audit `documents.reprinted`; reprint counter on the record.
+4. Reprint. Expected: reason required; "REPRINT 1" watermark; audit `documents.generated_document.reprinted`; reprint counter on the record.
 5. Scan the QR while signed out. Expected: login required, then the batch record.
 
 Automated: PDF text and visual checks of section 2.2 for the `bmr` template, `documents.reprint_audit`, `documents.hash_recorded`, `documents.qr_requires_auth`, `jobs.pdf_queue_limit`. Evidence: printed BMR reviewed and initialled by production and QA (gate requirement), PDF attached.
@@ -699,7 +700,7 @@ Automated: all `offline.*` rows green on `mobile-360` in the gate CI run.
 
 1. Seed profile `perf` (one month of data) on staging. As owner_director open the executive overview for that month, all sites. Expected: every tile shows definition, time basis, filters, refresh time and actual/estimate label.
 2. For each owner KPI (output, yield, stock value, near-expiry, fill rate, quality holds, attendance coverage) drill down to the source list and export it. Expected: the tile value equals the recomputation from the exported rows (the analytics specialist supplies the reconciliation SQL per KPI, stored in `docs/analytics-kpis.md`).
-3. Repeat as site_manager of ALPHA. Expected: ALPHA-only numbers.
+3. Repeat as site_manager of NFD. Expected: NFD-only numbers.
 4. Change a filter. Expected: tiles and drill-down agree.
 
 Automated: `analytics.kpi.reconciles_to_source` (one test per KPI: compute from the fact tables with the seed clock and compare to the KPI query, exact `decimal.js` equality), `analytics.owner_dashboard_filters_to_allowed_sites`, dashboard p95 (section 11). Evidence: exported lists and the reconciliation query output.
@@ -707,7 +708,7 @@ Automated: `analytics.kpi.reconciles_to_source` (one test per KPI: compute from 
 ### 9.13 AC-22 Permission coverage (every gate)
 
 1. The gate report lists the `authz-coverage` job output: permission catalogue size in code equals the matrix; every mutating command has `@perm` tags with tests; zero uncovered.
-2. A reviewer picks three random commands and invokes them through the API without the permission and from the wrong site. Expected: 403 / 404 and `authz.denied` events.
+2. A reviewer picks three random commands and invokes them through the API without the permission and from the wrong site. Expected: 403 / 404 and `identity.authorization.denied` events.
 
 Automated: `authz-coverage` job, section 5 sets. Evidence: job log and the three manual probes.
 
@@ -736,9 +737,69 @@ Automated: `migrations.apply_from_zero_and_noop` (S1-09), `health.ready_reflects
 | S1-10 | `seed.guard_production`, `seed.names_fictional` (every name in the fictional list; no credential patterns) | integration | Attempt seed on staging with `APP_ENV=production` |
 | S1-11 | `identity.site_switcher_lists_allowed_sites`, e2e `flows/identity/site-switcher.spec.ts` (both viewports) | integration + e2e | owner_director vs warehouse_operator on D1 |
 | S1-12 | `uom.dimension_mismatch_rejected`, `uom.mass_to_mass_exact` | unit + integration | Create conversions on D4 |
-| S1-13 | `numbering.unique_under_concurrency` (20 parallel, `GR-{YY}-{SEQ5}`) | integration (concurrency harness) | — |
+| S1-13 | `numbering.unique_under_concurrency` (20 parallel, `GR-{YY}-{SEQ}`, SEQ width 5) | integration (concurrency harness) | — |
 | S1-14 | `session.idle_expiry` (per device class, clock injected), `session.absolute_expiry`, `session.active_continues` | integration | Wait past idle on D1 |
 | S1-15 | CI configuration test `ci.required_checks_present` (reads `.github/workflows/ci.yml` and branch protection via `gh api`); PR with a deliberately failing authz test is blocked | CI | Reviewer opens the blocked PR |
+
+### 9.16 Migration rehearsal checks MC-01 to MC-16 (G9; G4 when the owner chooses an early go-live after Phase 4)
+
+The normative list of checks with pass criteria, and the rehearsal schedule (R1 structural at
+the end of Phase 2, R2 dress rehearsal at T-14, R3 cutover at T0), is `docs/data-migration-plan.md`
+section 11; it is not repeated here. This section fixes how the checks are executed and
+evidenced (backlog E-9-03 / US-9-06; E-2-07 for an early go-live; risk R-12).
+
+1. Environment: R1 and R2 run on staging restored to the pre-load backup point with maintenance
+   mode on (`docs/operations-runbook.md`, `docs/deployment-railway.md`) and
+   `MIGRATION_WINDOW_OPEN` set only for the load window; R3 runs on production. Never on a
+   developer machine or in CI (section 8, production data rule).
+2. Executed by `principal-architect` and `qa-test-engineer` with the custodians of migration plan
+   section 2; each MC check is recorded pass/fail with the evidence below in the cutover record
+   (`docs/acceptance/<phase>/migration/`, section 1.3). A failed check blocks the next rehearsal
+   unless the migration plan's "approved fix" rule applies (R2 pass criterion).
+3. The automated ids below run against the migrated database copy (`tests/integration/migration/`,
+   executed with `TEST_DATABASE_URL` pointing at the staging copy, never at production).
+
+| MC | Automated test ids | Manual evidence |
+|---|---|---|
+| MC-01, MC-02 | `migration.rows_complete_no_unresolved_errors`, `migration.entity_counts_equal_accepted_rows` | Import job summary per file |
+| MC-03, MC-04 | `migration.opening_quantities_reconcile` (`decimal.js`, exact to 6 decimals), `inventory.reconcile` job output, `ledger.projection.matches_ledger` on the migrated shape | Reconciliation report, zero differences |
+| MC-05 | — | Variance report per item against the frozen S-01 sheets; site manager sign-off above threshold (A-MIG-02) |
+| MC-06 | `migration.label_job_per_opening_lot`, `container.verified_by_scan_listed` | Label verification screen: remaining list per location; photos of three printed labels |
+| MC-07, MC-08 | `migration.disposition_per_opening_lot`, `expiry_job.sets_expired`, `fefo.selects_earliest_expiry` on 10 sampled materials | Bulk disposition export |
+| MC-09 | `migration.no_duplicate_codes_or_legacy_numbers` | Query output |
+| MC-10, MC-11 | — | Custodian spot-check sheet (10 % sample, ≤ 1 % errors); open-order count and quantity against the frozen S-12 extract, every order `confirmed` |
+| MC-12 | `documents.legacy_document_opens_from_lot`, `authz.cross_site.url` (`legacy_documents`) | Screenshots: 3 finished-goods lots (legacy BMR opens), 3 material lots (label and lot page show supplier lot and expiry) |
+| MC-13 | — | Timing record per cutover step against the window (A-MIG-09) |
+| MC-14 | `migrations.apply_from_zero_and_noop` on the restored copy | Restore drill within RTO (A-PRD-33) and ledger reconciliation after restore; shares evidence with 9.14 step 3 |
+| MC-15 | `authz.cross_site.*` (section 5.1) executed against the migrated database | CI run URL of that execution |
+| MC-16 | `audit.import_events`, `migration.opening_movements_reference_receipt` (`source_document_type = 'goods_receipt'`, opening receipt id set) | Audit viewer export: one `platform.import_job.posted` per job with counts |
+
+### 9.17 Printer and label tests T-01 to T-18 (G2 to G5)
+
+`docs/reports-and-templates.md` section 12 is the normative list (method, pass criterion and gate
+per test); labels follow section 8.3 of that document. This section maps each test to its
+executor, device row and evidence so both documents stay in step.
+
+| T | Executed as | Automated test ids (must be green in the gate CI run) | Device / role | Evidence |
+|---|---|---|---|---|
+| T-01 | Manual at G2: print the test page of every label template on each company printer at 203 and 300 dpi; measure the 50 mm ruler mark and QR module | — (A-TST-04: no printer in CI) | D6; warehouse_operator with qa-test-engineer | Photo of label with ruler, measurement sheet |
+| T-02 | Manual at G2 on the device matrix; CI counterpart is the label QR round trip (section 2.2) and `mobile-360-camera` | `scan.payload_grammar`, e2e camera scan specs | D1, D2; warehouse_operator | Screen recording per label kind, decode times |
+| T-03 | Manual at G2 with each company scanner; terminator variants | `scanWedge` specs (section 2.1) | D5 on D1 and D4 | Payload shown equals printed payload |
+| T-04 | Company test: labels in cold room, wet area, 7 days of handling, started before G2 week | — | D1 for re-scan | Photos before/after, scan results |
+| T-05 | CI | `scan.payload_grammar`, `label.payload_minimal`, `numbering.output_matches_payload_grammar` (every rule output matches `^[A-Z0-9][A-Z0-9._-]{0,63}$`; `_` allowed, lowercase rejected at rule configuration) | — | CI run URL |
+| T-06 | CI plus 9.9 step 4 | `documents.reprint_requires_reason`, `documents.reprint_audit` (audit `documents.generated_document.reprinted`; label reprints `documents.label_job.printed` with `reprint_of_id`) | D4, D6 | Audit rows, reprint counter screenshot |
+| T-07 | CI plus manual at G2 | `label_job.status_transitions` (`queued → rendering → ready → printed`), `label_job.retry_single_identity`, `jobs.dead_letter` | D1 creates, print station on D4 prints | Action Center failure screenshot, single label identity |
+| T-08 | 9.9 (AC-18) | section 2.2 PDF checks for the `bmr` template | D4, D7; production and QA reviewers | Initialled printed BMR |
+| T-09 | Nightly | `pdf.page_break_stress` on `fixtures.stressBatch()` (60 BOM lines, 30 steps × 10 parameters, 3 inspections, 40 audit rows) | — | PDF artefact |
+| T-10 | 9.4 step 5 | `batch.snapshot.later_revision_no_effect`, `documents.template_version_change_no_effect` | D4 | Text diff empty except footer timestamp |
+| T-11 | CI | `documents.preview_text_equals_pdf_text`, `documents.hash_recorded` | — | CI run URL |
+| T-12 | CI (section 5) | `authz.cross_site.url` (`generated_documents`), `documents.generated_scoped_by_source_record`, `authz.role_escalation.missing_permission` (auditor reprint, operator template approve), `sales.pricing_masked_on_pick_pack_dr` | — | CI run URL |
+| T-13 | 9.8 steps 4 and 5 | `shipment.draft_no_stock_change`, `shipment.dispatch_posts_issue` | D1, D4, D7 | Three DR copies, portal copy without internal data |
+| T-14 | G4 manual plus e2e | `pack.verification_blocks_mismatch`, `container.repack_preserves_history` (packing list v2 supersedes v1 with lineage) | D1, D3 | Packing list v1 and v2 |
+| T-15 | CI after the concurrency suite | `report.stock_card_reconciles` (50 random lots, zero differences, any difference printed) | — | Report output |
+| T-16 | 9.10 step 5 | `import.values_only`, `audit.import_events`, `export.formula_neutralized` | D4; hr_payroll | Exception report, audit export |
+| T-17 | Manual at G3 | — | D1, D2, D4 PDF viewers | Screenshots per viewer; metadata dump |
+| T-18 | CI | `jobs.pdf_queue_limit` (11 concurrent requests, 429 on the 11th), PDF memory check of section 11.1 | — | CI run URL, memory sample |
 
 ---
 
@@ -768,8 +829,8 @@ reviews cross-module changes; the `security-engineer` persona reviews changes un
 | Run | Content |
 |---|---|
 | Nightly | Full Playwright matrix (`desktop-chromium`, `mobile-360`, `tablet-768`, `mobile-webkit`, `mobile-360-camera`), property tests with 10× iterations, `concurrency.deadlock_free` at 1,000 interleavings, Lighthouse CI (section 11), dependency update PRs |
-| Gate | Nightly set plus the manual procedures of section 9 for the phase, the security checklist of `docs/security.md` 8.1, and the performance report; results attached to the gate report |
-| Phase 9 | Load test (section 11.2), penetration test findings, backup/restore drill, migration rehearsal |
+| Gate | Nightly set plus the manual procedures of section 9 for the phase (including the printer and label tests of 9.17 at G2 to G5), the security checklist of `docs/security.md` 8.1, and the performance report; results attached to the gate report |
+| Phase 9 | Load test (section 11.2), penetration test findings, backup/restore drill (9.14), migration rehearsal MC-01 to MC-16 (9.16) |
 
 ### 10.3 Flakiness policy
 
@@ -825,15 +886,17 @@ Rate limits (`docs/security.md` 4.5) are verified to engage with 429 and `Retry-
 | Q-TST-01 | Which exact phone, tablet and scanner models are in use, and are floor devices shared (A-TST-01, A-TST-03, A-TST-08)? | IT (Q-A-03) | Device matrix finalisation before G2 |
 | Q-TST-02 | Can one Android phone and one iPhone be made available to the team for every gate from G2, plus the label printer and A4 printer? | Owner, IT | Manual procedures 9.2, 9.7, 9.9 |
 | Q-TST-03 | Who from production and QA signs the printed BMR review at G3, and who from HR supplies the anonymised time-clock file for 9.10 (Q-A-06)? | Owner | G3, G5 evidence |
-| Q-TST-04 | Clock-skew flag threshold: `docs/offline-sync.md` A-OFF-05 says 10 minutes, `docs/security.md` 2.9 says 15 minutes. One value is needed for `offline.time_skew_flagged`. | principal-architect, security-engineer | Phase 7 test |
-| Q-TST-05 | `docs/data-model.md` 5.3 uses `CURRENT_DATE`; tests need an `$as_of` parameter (section 3.6). Agree the parameterisation before Phase 2. | database-architect | Expiry and availability tests |
-| Q-TST-06 | Permission strings differ between documents (for example `inventory.stock_movement.post` in the data model and process maps versus `inventory.movement.post` in the catalogue; `quality.quality_hold.*` versus `quality.hold.*`; `sales.shipment.approve` versus `sales.over_shipment.approve`; `production.formula.approve` versus `masterdata.formula.approve`). This document uses the catalogue. The `authz-coverage` check needs one source of truth. | security-engineer, principal-architect | Phase 1 test kit |
-| Q-TST-07 | Audit event names differ between `docs/process-maps.md` (`inventory.stock_movement.posted`) and `docs/security.md` (`inventory.movement_posted`). Tests assert the security catalogue names. | security-engineer | `audit.*` tests |
+| Q-TST-04 | Closed (architect ruling, 2026-10-16): the clock-skew flag threshold is 10 minutes (`docs/offline-sync.md` A-OFF-05); `docs/security.md` adopts it. `offline.time_skew_flagged` uses 10 minutes. | — | — |
+| Q-TST-05 | Closed (applied): `docs/data-model.md` 5.3 and every availability, expiry and effective-date query take `$as_of`; no `CURRENT_DATE` (section 3.6). | database-architect | — |
+| Q-TST-06 | Closed (architect ruling, 2026-10-16): the catalogue spellings are canonical (`inventory.movement.*`, `quality.hold.*`, `sales.over_shipment.approve`, `masterdata.formula.approve`); the data model and process maps are renamed. This document already uses the catalogue; the `authz-coverage` check reads `src/lib/permissions.ts`, which must equal `docs/permissions-matrix.md`. | — | — |
+| Q-TST-07 | Resolved (architect ruling, 2026-10-16): audit names are `module.entity.event` as in `docs/data-model.md` 8.1 (for example `inventory.stock_movement.posted`, `identity.authorization.denied`); the `docs/security.md` section 5 catalogue and `docs/process-maps.md` are re-keyed to them. Tests assert the data-model names (applied in sections 1.2, 2.2, 4, 5, 6 and 9). Still needed: `platform.sync_command.discarded` (logout discard of a pending outbox, section 6) is not yet in data-model 8.1 / `src/lib/audit.ts`. | database-architect (add the one name) | `audit.*` tests |
 | Q-TST-08 | Is a dedicated staging environment with the `perf` seed acceptable for the nightly performance run, or must performance runs use a separate Railway environment to avoid disturbing acceptance testing? | devops-engineer, owner | Section 11 from Phase 2 |
 | Q-TST-09 | Does the owner want the manual acceptance records (`docs/acceptance/<phase>/`) kept in the repository or in the company's document system? | Owner | Evidence storage from G1 |
 | Q-TST-10 | Independent penetration test budget for G9 (`docs/security.md` open question 4) and whether its findings are gate-blocking. | Owner | Phase 9 plan |
 
-### Assumptions introduced in this document
+---
+
+## 13. Assumptions (A-TST-nn)
 
 | Id | Assumption (default) | Configurable where | Needs confirmation from |
 |---|---|---|---|
