@@ -10,6 +10,7 @@ import Decimal from "decimal.js";
 import { hash } from "@node-rs/argon2";
 import * as s from "./schema";
 import { ROLE_BUNDLES } from "../lib/permissions";
+import { LOTION_ROUTING, SOAP_ROUTING, type SeedStep, seedApprovedFormulaAndRouting, seedW1D } from "./seeds/w1d";
 
 if (process.env.ALLOW_DEMO_SEED !== "true") {
   console.error("Refusing to seed: ALLOW_DEMO_SEED is not true. Demo data must never reach production.");
@@ -131,45 +132,27 @@ async function main() {
   const [gbs] = await db.insert(s.products).values({ organizationId: O, skuCode: "GBS-135", name: "Guava Bar Soap 135 g", family: "Soap", unitNetMassG: "135", unitsPerBox: 48, shelfLifeDays: 730 }).returning();
   const [ahl] = await db.insert(s.products).values({ organizationId: O, skuCode: "AHL-250", name: "Aloe Hand Lotion 250 mL", family: "Lotion", unitNetMassG: "255", unitsPerBox: 24, shelfLifeDays: 540 }).returning();
 
-  const SOAP_STEPS: [string, string, string][] = [
-    ["Weighing area line clearance", "clearance", "Confirm the weighing area is clean and free of previous materials, labels and documents."],
-    ["Weighing", "weighing", "Dispense each ingredient against the formula; operator weighs, a second person checks."],
-    ["Production area line clearance", "clearance", "Confirm the production room and equipment are clean and labelled for this batch."],
-    ["Mixing and cutting", "process", "Combine oils and lye solution, mix to trace, add extract and colour, pour, cure and cut. Record temperature and time."],
-    ["Packaging area line clearance", "clearance", "Confirm the packaging line is clear before wrapping (second clearance on the paper BMR)."],
-    ["Packaging and labeling", "packaging", "Wrap bars, print lot and expiry, reconcile wrappers used and destroyed."],
-    ["Transfer to quarantine storage area", "transfer", "Move finished goods to quarantine until QA disposition."],
-  ];
-  const LOTION_STEPS: [string, string, string][] = [
-    ["Weighing area line clearance", "clearance", "Confirm the weighing area is clean."],
-    ["Weighing", "weighing", "Dispense each phase ingredient; operator weighs, a second person checks."],
-    ["Production area line clearance", "clearance", "Confirm the kettle and filler are clean."],
-    ["Heating and emulsification", "process", "Heat water and oil phases separately, combine and homogenise. Record temperatures."],
-    ["Cooling and in-process check", "process", "Cool, add aloe below the set temperature, check appearance and pH."],
-    ["Filling and labeling", "packaging", "Fill bottles, cap, label with lot and expiry."],
-    ["Transfer to quarantine storage area", "transfer", "Move finished goods to quarantine until QA disposition."],
-  ];
-
-  async function makeFormula(product: typeof acs, code: string, name: string, sizeG: string, lines: [string, string][], steps: [string, string, string][], yieldPct: string) {
-    const [f] = await db.insert(s.formulas).values({ organizationId: O, productId: product.id, code, name }).returning();
-    const [rev] = await db
-      .insert(s.formulaRevisions)
-      .values({ formulaId: f.id, revisionNo: 1, status: "approved", referenceBatchSizeG: sizeG, theoreticalYieldPct: yieldPct, submittedBy: U["manager.nfd"], approvedBy: U["qa.nfd"], notes: "Demo values. Verify formula, tolerances and steps with authorized personnel before production use." })
-      .returning();
-    const bl = await db
-      .insert(s.bomLines)
-      .values(lines.map(([mat, q], i) => ({ formulaRevisionId: rev.id, lineNo: i + 1, materialId: M(mat).id, quantityG: q, tolerancePct: "0.5" })))
-      .returning();
-    const rs = await db
-      .insert(s.routingSteps)
-      .values(steps.map(([nm, kind, ins], i) => ({ formulaRevisionId: rev.id, stepNo: i + 1, name: nm, stepKind: kind, instruction: ins, requiresChecker: true })))
-      .returning();
-    return { formula: f, rev, bomLines: bl, steps: rs, product };
+  // Formulas and routings: approved revision 1 of each, two approvals (W1D, src/db/seeds/w1d.ts).
+  async function makeFormula(product: typeof acs, code: string, name: string, sizeG: string, lines: [string, string][], steps: SeedStep[], yieldPct: string, routingCode: string) {
+    const r = await seedApprovedFormulaAndRouting(db, {
+      O,
+      U,
+      product,
+      code,
+      name,
+      sizeG,
+      yieldPct,
+      lines: lines.map(([mat, q]) => ({ materialId: M(mat).id, quantityG: q, tolerancePct: "0.5" })),
+      routingCode,
+      steps,
+    });
+    return { ...r, product };
   }
 
-  const fACS = await makeFormula(acs, "F-ACS-01", "Acapulco Soap", "17600", [["MAT-0012", "3723.2"], ["MAT-0013", "8687.4"], ["MAT-0021", "4964.2"], ["MAT-0043", "190.9"], ["MAT-0051", "34.4"]], SOAP_STEPS, "95");
-  const fGBS = await makeFormula(gbs, "F-GBS-01", "Guava Bar Soap", "17600", [["MAT-0012", "3723.2"], ["MAT-0013", "8687.4"], ["MAT-0021", "4964.2"], ["MAT-0044", "225.2"]], SOAP_STEPS, "95");
-  const fAHL = await makeFormula(ahl, "F-AHL-01", "Aloe Hand Lotion", "40000", [["MAT-0063", "28400"], ["MAT-0060", "6000"], ["MAT-0061", "2400"], ["MAT-0062", "3200"]], LOTION_STEPS, "97");
+  const fACS = await makeFormula(acs, "F-ACS-01", "Acapulco Soap", "17600", [["MAT-0012", "3723.2"], ["MAT-0013", "8687.4"], ["MAT-0021", "4964.2"], ["MAT-0043", "190.9"], ["MAT-0051", "34.4"]], SOAP_ROUTING, "95", "R-ACS-01");
+  const fGBS = await makeFormula(gbs, "F-GBS-01", "Guava Bar Soap", "17600", [["MAT-0012", "3723.2"], ["MAT-0013", "8687.4"], ["MAT-0021", "4964.2"], ["MAT-0044", "225.2"]], SOAP_ROUTING, "95", "R-GBS-01");
+  const fAHL = await makeFormula(ahl, "F-AHL-01", "Aloe Hand Lotion", "40000", [["MAT-0063", "28400"], ["MAT-0060", "6000"], ["MAT-0061", "2400"], ["MAT-0062", "3200"]], LOTION_ROUTING, "97", "R-AHL-01");
+  void fAHL;
 
   // Numbering helper (keeps numbering_rules in sync with the seeded numbers)
   const counters: Record<string, number> = {};
@@ -275,13 +258,18 @@ async function main() {
     const site = opts.site ?? nfd.id;
     const bNo = next("BATCH");
     const snapshot = {
+      schemaVersion: "bom_snapshot/v2",
+      formulaId: f.formula.id,
+      formulaRevisionId: f.rev.id,
       formulaCode: f.formula.code,
       formulaName: f.formula.name,
       revisionNo: f.rev.revisionNo,
+      effectiveFrom: f.rev.effectiveFrom,
+      routing: { routingId: f.routing.id, routingCode: f.routing.code, routingName: f.routing.name, routingRevisionId: f.routingRev.id, revisionNo: f.routingRev.revisionNo, effectiveFrom: f.routingRev.effectiveFrom },
       referenceBatchSizeG: f.rev.referenceBatchSizeG,
       theoreticalYieldPct: f.rev.theoreticalYieldPct,
-      lines: f.bomLines.map((b) => ({ bomLineId: b.id, lineNo: b.lineNo, materialId: b.materialId, materialCode: mats.find((m) => m.id === b.materialId)!.code, materialName: mats.find((m) => m.id === b.materialId)!.name, inciName: mats.find((m) => m.id === b.materialId)!.inciName, quantityG: b.quantityG, tolerancePct: b.tolerancePct })),
-      steps: f.steps.map((st) => ({ routingStepId: st.id, stepNo: st.stepNo, name: st.name, stepKind: st.stepKind, instruction: st.instruction, requiresChecker: st.requiresChecker })),
+      lines: f.bomLines.map((b) => ({ bomLineId: b.id, lineNo: b.lineNo, materialId: b.materialId, materialCode: mats.find((m) => m.id === b.materialId)!.code, materialName: mats.find((m) => m.id === b.materialId)!.name, inciName: mats.find((m) => m.id === b.materialId)!.inciName, quantityG: b.quantityG, tolerancePct: b.tolerancePct ?? "0", targetQtyG: b.quantityG })),
+      steps: f.steps.map((st) => ({ routingStepId: st.id, stepNo: st.stepNo, name: st.name, stepKind: st.stepKind, area: st.area, instruction: st.instruction, requiresChecker: st.requiresChecker })),
     };
     const size = new Decimal(f.rev.referenceBatchSizeG);
     const theoYield = size.mul(f.rev.theoreticalYieldPct).div(100);
@@ -296,6 +284,7 @@ async function main() {
         batchNumber: bNo,
         productId: f.product.id,
         formulaRevisionId: f.rev.id,
+        routingRevisionId: f.routingRev.id,
         formulaSnapshot: snapshot,
         plannedSizeG: size.toString(),
         status: opts.status,
@@ -309,7 +298,7 @@ async function main() {
     await db.insert(s.batchStateTransitions).values({ batchId: b.id, fromState: null, toState: "planned", actorId: U["manager.nfd"], at: createdAt });
     const bms = await db
       .insert(s.batchMaterials)
-      .values(f.bomLines.map((bl) => ({ batchId: b.id, bomLineId: bl.id, lineNo: bl.lineNo, materialId: bl.materialId, theoreticalQtyG: bl.quantityG, tolerancePct: bl.tolerancePct })))
+      .values(f.bomLines.map((bl) => ({ batchId: b.id, bomLineId: bl.id, lineNo: bl.lineNo, materialId: bl.materialId, theoreticalQtyG: bl.quantityG, tolerancePct: bl.tolerancePct ?? "0" })))
       .returning();
     if (opts.dispense) {
       for (const bm of bms) {
@@ -425,6 +414,8 @@ async function main() {
   for (const [t, [p, w, pk]] of Object.entries(RULE)) {
     await db.insert(s.numberingRules).values({ organizationId: O, documentType: t, prefix: p, sequenceWidth: w, periodKey: pk, nextValue: (counters[t] ?? 0) + 1 });
   }
+
+  await seedW1D(db, { O, U, sites: { NFD: nfd.id, RVS: rvs.id }, roleRows, passwordHash: pw });
 
   console.log(`Seeded demo organization with ${mats.length} materials, ${counters.LOT} lots, ${counters.BATCH} batches, ${counters.SO} orders.`);
   await client.end();

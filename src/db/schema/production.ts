@@ -1,7 +1,8 @@
 import { boolean, index, integer, jsonb, numeric, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { QTY, createdAt, id } from "./_common";
 import { organizations, sites, users } from "./identity";
-import { bomLines, formulaRevisions, locations, materials, products, routingSteps } from "./masterdata";
+import { bomLines, formulaRevisions, locations, materials, products } from "./masterdata";
+import { inspectionPlans, routingRevisions, routingSteps } from "./engineering";
 import { inventoryLots } from "./inventory";
 
 /**
@@ -18,7 +19,11 @@ export const batches = pgTable(
     batchNumber: text("batch_number").notNull(),
     productId: uuid("product_id").notNull().references(() => products.id),
     formulaRevisionId: uuid("formula_revision_id").notNull().references(() => formulaRevisions.id),
-    /** Frozen copy of formula header, BOM lines and steps at creation (batch snapshot rule). */
+    /** Approved routing revision effective on the planned start date, frozen at creation (W1D). */
+    routingRevisionId: uuid("routing_revision_id").notNull().references(() => routingRevisions.id),
+    /** Finished-product inspection plan effective at creation, when one exists (W1D). */
+    inspectionPlanId: uuid("inspection_plan_id").references(() => inspectionPlans.id),
+    /** Frozen copy of formula header, BOM lines, routing steps and plan refs at creation (batch snapshot rule). */
     formulaSnapshot: jsonb("formula_snapshot").notNull(),
     plannedSizeG: numeric("planned_size_g", QTY).notNull(),
     status: text("status").notNull().default("planned"),
@@ -55,7 +60,10 @@ export const batchMaterials = pgTable("batch_materials", {
   lineNo: integer("line_no").notNull(),
   materialId: uuid("material_id").notNull().references(() => materials.id),
   theoreticalQtyG: numeric("theoretical_qty_g", QTY).notNull(),
+  /** For an absolute-tolerance BOM line this is the equivalent percentage, for display only. */
   tolerancePct: numeric("tolerance_pct", QTY).notNull(),
+  /** Absolute tolerance in g when the BOM line defines one; takes precedence over tolerancePct. */
+  toleranceAbsG: numeric("tolerance_abs_g", QTY),
   dispensedQtyG: numeric("dispensed_qty_g", QTY).notNull().default("0"),
   /** pending | dispensed | exception */
   status: text("status").notNull().default("pending"),

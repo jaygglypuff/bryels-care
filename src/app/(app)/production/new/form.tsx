@@ -17,6 +17,8 @@ type Option = {
   productSku: string;
   lineCount: number;
   stepCount: number;
+  effectiveFrom?: string | null;
+  routingLabel?: string | null;
 };
 
 export function NewBatchForm({ options, today, idempotencyKey }: { options: Option[]; today: string; idempotencyKey: string }) {
@@ -96,11 +98,12 @@ export function NewBatchForm({ options, today, idempotencyKey }: { options: Opti
                 ["Reference size", fmtQty(D(rev.referenceBatchSizeG).div(1000), "kg", 1)],
                 ["Theoretical yield", `${fmtQty(rev.theoreticalYieldPct, "%", 1)}`],
                 ["Ingredients", String(rev.lineCount)],
-                ["Checklist steps", String(rev.stepCount)],
+                ["Routing", rev.routingLabel ? `${rev.routingLabel} · ${rev.stepCount} steps` : "No approved routing"],
+                ["Effective from", rev.effectiveFrom ?? "—"],
                 ["Scale factor", factor ? `× ${factor}` : "—"],
               ]}
             />
-            <p className="mt-3 text-[12px] text-muted">The batch keeps a frozen copy (snapshot) of this revision. Later formula changes do not affect it.</p>
+            <p className="mt-3 text-[12px] text-muted">The batch keeps a frozen copy (snapshot) of this formula revision and of the routing revision effective on the planned start date. Later changes do not affect it.</p>
           </div>
         )}
 

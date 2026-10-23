@@ -39,7 +39,10 @@ export type ActionState = { ok: boolean; message?: string; fieldErrors?: Record<
 
 /** Converts thrown errors into a form-friendly state for server actions. */
 export function toActionState(e: unknown): ActionState {
-  if (e instanceof DomainError) return { ok: false, message: e.message };
+  if (e instanceof DomainError) {
+    const fe = e.details?.fieldErrors;
+    return fe && typeof fe === "object" ? { ok: false, message: e.message, fieldErrors: fe as Record<string, string> } : { ok: false, message: e.message };
+  }
   if (e && typeof e === "object" && "issues" in e) {
     const issues = (e as { issues: { path: (string | number)[]; message: string }[] }).issues;
     const fieldErrors: Record<string, string> = {};

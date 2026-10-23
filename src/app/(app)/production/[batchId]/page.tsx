@@ -4,7 +4,7 @@ import { uuidv7 } from "uuidv7";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
-import { type BatchRecord, type LotOption, checkerOptions, getBatchRecord, progressLabel, usableLotsForBatch } from "@/modules/production";
+import { type BatchRecord, type LotOption, checkerOptions, getBatchRecord, isWeighingStep, progressLabel, usableLotsForBatch } from "@/modules/production";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
@@ -79,7 +79,7 @@ export default async function BatchWorkspace({ params }: Params) {
   const checkers = needsForms ? await checkerOptions(ctx, batch.siteId) : [];
   const site = ctx.allowedSites.find((s) => s.id === batch.siteId);
   const allStepsDone = rec.stepsDone >= rec.steps.length;
-  const weighingStepNo = rec.steps.find((s) => s.stepKind === "weighing")?.stepNo ?? null;
+  const weighingStepNo = rec.steps.find((s) => isWeighingStep(s.stepKind))?.stepNo ?? null;
 
   const weighBlocked = !inProcess
     ? batch.status === "planned"
@@ -150,6 +150,7 @@ export default async function BatchWorkspace({ params }: Params) {
               "Formula",
               <span key="f">
                 {snapshot.formulaCode} rev {snapshot.revisionNo}
+                {snapshot.routing && <span className="block text-[12px]">Routing {snapshot.routing.routingCode} rev {snapshot.routing.revisionNo}</span>}
                 <span className="block text-[12px] text-muted">snapshot taken {fmtDateTime(snapshot.takenAt ?? batch.createdAt)}</span>
               </span>,
             ],

@@ -11,8 +11,6 @@ export {
   usableLotsForBatch,
   checkerOptions,
   approvedFormulaOptions,
-  listFormulas,
-  getFormula,
   listProducts,
   progressLabel,
   type BatchListRow,
@@ -20,4 +18,4 @@ export {
   type LotOption,
 } from "./queries";
 export { BATCH_STATUSES, BATCH_TRANSITIONS, canTransition, transitionBatch, isBatchStatus, type BatchStatus } from "./state";
-export { type FormulaSnapshot, manilaToday, addDays, CHECKER_PERMISSION } from "./shared";
+export { type FormulaSnapshot, manilaToday, addDays, CHECKER_PERMISSION, isWeighingStep } from "./shared";

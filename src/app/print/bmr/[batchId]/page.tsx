@@ -283,6 +283,7 @@ export default async function BmrPrintPage({ params }: Params) {
                   <td>
                     <b>{s.name}</b>
                     {s.instruction && <span className="muted" style={{ display: "block" }}>{s.instruction}</span>}
+                    {s.workInstruction && <span className="muted" style={{ display: "block" }}>Work instruction {s.workInstruction.code} rev {s.workInstruction.revisionNo}</span>}
                   </td>
                   <td>{s.record?.readings ?? ""}</td>
                   <td>
@@ -402,7 +403,9 @@ export default async function BmrPrintPage({ params }: Params) {
                 Scan: BC:DOC:{batch.batchNumber} · Status {docState} · Site {rec.batch.siteId ? ctx.allowedSites.find((s) => s.id === batch.siteId)?.code : ""}
               </div>
               <div>
-                Formula snapshot {snapshot.formulaCode} rev {snapshot.revisionNo} taken {fmtDateTime(snapshot.takenAt ?? batch.createdAt)}; created by {rec.createdByName}.
+                Formula snapshot {snapshot.formulaCode} rev {snapshot.revisionNo}
+                {snapshot.routing ? `, routing ${snapshot.routing.routingCode} rev ${snapshot.routing.revisionNo}` : ""}
+                {snapshot.inspectionPlan ? `, inspection plan ${snapshot.inspectionPlan.code} rev ${snapshot.inspectionPlan.revisionNo}` : ""} taken {fmtDateTime(snapshot.takenAt ?? batch.createdAt)}; created by {rec.createdByName}.
               </div>
               <div>Printed copies are uncontrolled unless signed. Formula, tolerances and steps are demo values: verify with authorized personnel before production use.</div>
             </div>

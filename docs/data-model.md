@@ -1496,6 +1496,37 @@ Trigger `tg_batches_freeze_revisions` rejects any later change to the four revis
 the two label-template columns, `batch_size_base` or `bom_snapshot` once `status <> 'draft'`. The BMR renderer reads only the
 snapshot and the batch's own records, never the live formula.
 
+### 4.5 Implementation status (Wave 1 W1D, US-3-01..04)
+
+Plain language: formulas, routings, work instructions and inspection plans are now versioned in
+the database exactly as §4.1 to §4.4 describe; a batch can only be created from a formula
+revision that is approved and effective on its planned start date, and it freezes that revision,
+the effective routing revision and the finished-product inspection plan.
+
+| Item | As built | Differs from the catalogue above |
+|---|---|---|
+| Schema files | `src/db/schema/masterdata.ts` (`formulas`, `formula_revisions`, `bom_lines`), `src/db/schema/engineering.ts` (all other W1D tables), `src/db/schema/production.ts` (`batches.routing_revision_id`, `batches.inspection_plan_id`, `batch_materials.tolerance_abs_g`) | One schema file per stream for parallel delivery; `routing_steps` moved from `masterdata.ts` to `engineering.ts` (no SQL change) |
+| `formula_revisions` | MVP table extended with `effective_from`, `effective_to`, `supersedes_id`, `change_summary`, `created_by`, `submitted_at`, `approved_at`, `approval_note`; status CHECK `draft, pending_approval, approved, rejected, retired`; CHECKs for SoD, effective dates on approved rows, range order, size > 0, 0 < yield ≤ 100; partial unique index "one open revision per formula" | Quantities stay in grams (`reference_batch_size_g`, `quantity_g`) because `uoms` does not exist yet; `revision_no` instead of `version_no`; `inspection_plan_id` not added (the plan is resolved from `inspection_plans.product_id`, see below) |
+| `bom_lines` | `tolerance_pct` / `tolerance_abs_g` with `num_nonnulls(...) = 1`, `phase_code`, `scaling` (`proportional`, `fixed`), `is_critical`, `requires_checker`, `uq (formula_revision_id, line_no)` | `line_kind`, `sequence` not added (line order is dispensing order) |
+| `routings`, `routing_revisions`, `routing_steps`, `routing_step_parameters`, `routing_step_checklist_items` | As §3.2, plus `routing_revisions.change_scope` (`sequencing_only` / `quality_relevant`, computed at submit, drives the approval policy, A-PROC-41) and `routing_step_parameters.sequence`; units are text | `routing_steps.formula_revision_id` (MVP binding) kept nullable and no longer written; `equipment_id` per step not added (equipment class only); `default_production_line_id` not added |
+| `work_instructions`, `work_instruction_revisions` | As §3.2 with the `ver` + `approval` sets | `file_attachment_id` not added (no file storage yet) |
+| `inspection_plans`, `inspection_plan_tests` | As §3.6 with `is_placeholder` (fictional content pending QA review) and CHECKs: incoming → material, other kinds → product; numeric test needs unit and min or max | `sku_id` is `product_id` (SKUs are products in the MVP) |
+| `equipment`, `equipment_service_records`, `equipment_state_transitions`, `downtime_events` | As §3.1 and §6.11; `line_label` text until `production_lines` exist | `capacity_uom` text; `certificate_attachment_id` not added |
+| `equipment_override_requests` | New: the CX-CAL request (reason, availability reasons at request, time box, status `pending_approval, approved, rejected, cancelled`), two decisions in `approval_decisions` (`equipment_override`) | `equipment_uses` (Wave 2) will reference the approved request; the deviation is opened by Wave 2 |
+| `approval_decisions` | As §3.1 without `approval_rule_id` (no `approval_rules` table yet); `uq (record_type, record_id, step, decided_by)`; append-only by trigger | Policy steps are typed data in `src/modules/masterdata/approval-policy.ts` (A-PRD-37) |
+| Custom SQL | `src/db/sql/w1d.sql` (canonical), applied as the Drizzle custom migration `0002_w1d_custom_sql` (`drizzle-kit generate --custom`, verbatim copy, drift-tested): GiST exclusion of overlapping approved ranges (formula, routing, work instruction, inspection plan code), `tg_*_parent_draft` triggers on child rows, immutability of approved/retired/rejected revisions, append-only `approval_decisions` and `equipment_state_transitions`, `tg_batches_freeze_revisions` | Hand-written custom migration in the normal `pnpm db:migrate` path |
+| Batch snapshot | `batches.formula_snapshot` keeps its name and gains `schemaVersion: "bom_snapshot/v2"`, `routing`, `inspectionPlan`, per line `targetQtyG`, `toleranceAbsG`, `scaling`, `phaseCode`, per step `area`, `workInstruction` (text frozen), `parameters`, `checklistItems` | The column is not renamed to `bom_snapshot` to keep the MVP readers working |
+
+Service entry points for Wave 2 (all take `AuthContext` first and accept `{ tx }`):
+`getEffectiveFormulaRevision(ctx, productId, date)`, `getEffectiveRouting(ctx, productId, date)`,
+`getInspectionPlan(ctx, { planKind, productId | materialId, date })`,
+`equipmentAvailability(ctx, equipmentId, at)` (returns `usable`, `blockingReasons`, `warnings`
+and the approved, unexpired override).
+
+Migration note: the generated migration adds `routing_steps.routing_revision_id` and
+`batches.routing_revision_id` as `NOT NULL`; a database that already holds MVP batches or routing
+steps must be reset (`pnpm db:reset`) or backfilled before it applies.
+
 ## 5. Ledger design (ADR-006)
 
 Plain language: stock is a diary, not a spreadsheet cell. Every receipt, move, consumption,

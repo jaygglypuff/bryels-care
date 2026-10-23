@@ -35,6 +35,9 @@ export const NAV: NavGroup[] = [
       { label: "Batches", href: "/production", permission: "production.batch.view" },
       { label: "New batch", href: "/production/new", permission: "production.batch.create" },
       { label: "Formulas", href: "/masterdata/formulas", permission: "masterdata.formula.view" },
+      { label: "Routings", href: "/masterdata/routings", permission: "masterdata.routing.view" },
+      { label: "Work instructions", href: "/masterdata/work-instructions", permission: "masterdata.work_instruction.view" },
+      { label: "Equipment", href: "/masterdata/equipment", permission: "masterdata.equipment.view" },
     ],
   },
   {
@@ -43,6 +46,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "QA queue", href: "/quality", permission: "quality.disposition.view" },
       { label: "Traceability", href: "/quality/trace", permission: "quality.genealogy.view" },
+      { label: "Inspection plans", href: "/masterdata/inspection-plans", permission: "quality.inspection_plan.view" },
     ],
   },
   {

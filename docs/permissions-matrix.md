@@ -144,6 +144,7 @@ description, sensitivity and phase are listed on one row.
 | `masterdata.equipment.view` | Equipment register (canonical family for equipment; `docs/process-maps.md` W13, `docs/data-model.md` §6.11) | N | P1 |
 | `masterdata.equipment.edit` | Record cleaning/maintenance/calibration service records and due dates (`equipment_service_records`); return to service | N | P3 |
 | `masterdata.equipment.admin` | Create equipment, assign to site/line, define blocking rules | S | P1 |
+| `masterdata.equipment.approve` | QA review of a failed calibration or other failed service record before the equipment may return to service (G-W13-B); reviewer ≠ performer and ≠ recorder | S | P3 |
 | `masterdata.supplier.{view,create,edit}` | Supplier records, contacts, approved-material list, quality status | N | P2 |
 | `masterdata.supplier.export` | Export supplier list | S | P2 |
 | `masterdata.supplier.approve` | Approve or suspend an approved-supplier-list entry (`supplier_materials.is_approved`, W04-11); `procurement` proposes with `masterdata.supplier.edit`; approver ≠ proposer | S | P6 |
@@ -504,7 +505,7 @@ Role philosophy (owners should read this part):
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | site, department, warehouse, production_line, uom, uom_conversion, reason_code | v* | v m* | v | v | v | v | v | v | v | v | v | v* | – |
 | location | v* | v c e m* | v c e | v | v | v c | v | v | v | v | – | v* | – |
-| equipment | v* | v m* | v e m | v | v e | v | v | – | – | v | – | v* | – |
+| equipment | v a* | v m* | v e m | v | v e | v | v a | – | – | v | – | v* | – |
 | product, sku | v x* | v c e x* | v | v c e | v | v | v e | v | v x | v x | – | v x* | – |
 | material | v x* | v c e* | v | v c e | v | v | v e | v c e x | – | v x | – | v x* | – |
 | supplier | v x* | v* | v | – | – | v | v e a | v c e x | – | v x | – | v x* | – |
@@ -515,6 +516,8 @@ Role philosophy (owners should read this part):
 | routing | v a* | – | v c e s a | v c e s | v | – | v a | – | – | – | – | v* | – |
 | work_instruction | v a* | – | v c s a | v c s | v | v | v a | – | – | – | – | v* | – |
 | label_template | v a* | v c e* | v c e | v | v | v | v a | – | v | – | – | v* | – |
+
+`a` on equipment is `masterdata.equipment.approve` (QA review after a failed calibration, added by W1D).
 
 Notes: formula and routing approval requires two approvals by default (`qa_qc` and
 `site_manager` or `owner_director`), neither being the submitter (A-PM-05). Operators see

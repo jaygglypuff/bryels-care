@@ -8,6 +8,20 @@
       "when": 1792754661183,
       "tag": "0000_mvp_core",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792762800759,
+      "tag": "0001_w1d_engineering",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792772302772,
+      "tag": "0002_w1d_custom_sql",
+      "breakpoints": true
     }
   ]
 }
