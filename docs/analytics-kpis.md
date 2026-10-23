@@ -90,7 +90,7 @@ outdated" (`docs/offline-sync.md`: 24 h cache); the word "live" never appears of
 | Price, order value, revenue, margin, AR/AP, cash | + `sales.price_list.view` for order values; + `analytics.financial_kpi.view` for revenue, margin, AR/AP, cash | organization-wide roles only by default (owner_director, finance, auditor) |
 | Labour summaries | + `analytics.labor_kpi.view` | aggregated per site/department/shift; groups under the minimum size are suppressed (A-KPI-09); no per-person values on any dashboard |
 | Raw QC results and deviation text | + `quality.test_result.view` | otherwise only outcome and status |
-| Exports | + `analytics.report.export` and the module `.export` permission for the rows | same query, same masking, audit `platform.export_created` |
+| Exports | + `analytics.report.export` and the module `.export` permission for the rows | same query, same masking, audit `platform.export.created` |
 
 A site manager assigned to two sites comparing them sees exactly those two sites. Site
 comparison never lists a site outside the caller's scope, not even its name.
@@ -108,6 +108,7 @@ comparison never lists a site outside the caller's scope, not even its name.
 | Quantities | base UOM per dimension (g, mL, pcs); never summed across dimensions; the tile states the unit |
 | Money | organization currency (PHP, ADR-019); FX is out of scope until a second currency exists |
 | Ratios | from summed numerator and denominator; `NULLIF(denominator, 0)` yields "n/a", never 0 % |
+| Business date | every date-dependent query takes `$as_of` (business date in site time from the service clock, `docs/data-model.md` 5.3); no KPI, availability or expiry SQL uses `CURRENT_DATE`, so tests can pin the date (`docs/testing.md` Q-TST-05) |
 
 ### 1.7 Shared netting views
 
@@ -131,7 +132,7 @@ column named is the one that buckets the record into the period; "as-of" = point
 **Phase**: first phase in which the KPI can be computed from posted data. **Drill-down**:
 route under the operational shell; each route runs the R-query with the same filters.
 Parameters in R-queries: `$site_ids uuid[]` (allowed and selected sites), `$from`, `$to`
-timestamptz computed from the period in site time, `$asof` timestamptz.
+timestamptz computed from the period in site time, `$as_of` timestamptz.
 
 ### 2.1 Owner overview (`analytics.owner_dashboard.view`)
 
@@ -158,7 +159,7 @@ the referenced R-query with `$site_ids` = all allowed sites (additivity rule 1.4
 ```sql
 -- R-OWN-13 open action-centre items (platform notifications, FR-platform-07)
 SELECT kind, severity, COUNT(*) FROM notifications
-WHERE (site_id = ANY($site_ids) OR site_id IS NULL) AND resolved_at IS NULL   -- resolved_at: see 8.3
+WHERE (site_id = ANY($site_ids) OR site_id IS NULL) AND resolved_at IS NULL   -- resolved_at: docs/data-model.md 3.10 (notifications)
 GROUP BY 1, 2;
 ```
 
@@ -174,10 +175,10 @@ GROUP BY 1, 2;
 | KPI-OPS-06 | Line utilisation | hours a line had a batch in `in_process` / available hours (setting `production.line_available_hours`, A-KPI-06) | `batch_state_transitions.occurred_at` | S, L | `batch_state_transitions`, `batches`, settings | mv15 | `/production/batches?line=` | A (busy), E (available) | 3 |
 | KPI-OPS-07 | Planned vs actual cycle time per step | avg (completed − started) minutes vs `routing_steps.expected_duration_minutes`, per step kind | `process_step_records.completed_at` | S, P, L | `process_step_records`, `routing_steps` | mv15 | `/production/batches/{id}#steps` | A | 3 |
 | KPI-OPS-08 | Bottleneck step | step with the largest Σ positive overrun minutes in the period (from KPI-OPS-07) | same | S, P, L | same | mv15 | same | A | 3 |
-| KPI-OPS-09 | Downtime hours | Σ downtime per line/equipment with reason | `downtime_events.started_at` | S, L | `downtime_events` (missing, 8.3) | mv15 | `/production/equipment/{id}#downtime` | A | 6+ |
+| KPI-OPS-09 | Downtime hours | Σ downtime per line/equipment with reason | `downtime_events.started_at` | S, L | `downtime_events` | mv15 | `/production/equipment/{id}#downtime` | A | 6+ |
 | KPI-OPS-10 | Schedule adherence | % batches whose `in_process` transition is within ± grace of `work_orders.planned_start` (A-KPI-07); % work orders completed by `planned_end` | transition `occurred_at` | S, P, L | `batch_state_transitions`, `work_orders` | mv15 | `/production/work-orders?late=1` | A | 3 |
 | KPI-OPS-11 | Labour coverage per line/shift | present headcount / scheduled headcount (KPI-HR-01 by line) | work date | S, L, D | `attendance_events`, `shift_assignments` | night | `/hr/attendance/summary` | A / E | 6 |
-| KPI-OPS-12 | QC turnaround | KPI-QUA-01 | | | | | | | 3 |
+| KPI-OPS-12 | QC turnaround | same as KPI-QUA-01 (shown on the operations dashboard; one definition, one snapshot) | `reviewed_at` | S, P, M, St | `inspections` | mv15 | `/quality/inspections?period=` | A | 3 |
 | KPI-OPS-13 | Deviations per batch; right-first-time | deviations raised / batches closed; % closed batches with no deviation and no controlled exception (CX-TOL, CX-MAT, CX-CAL, skipped step) | `batches.closed_at` | S, P, L | `deviations`, `dispense_records`, `process_step_records` | mv15 | `/quality/deviations?period=` | A | 3 |
 | KPI-OPS-14 | Late work orders | count with status in (planned, released, in_progress) and `planned_end` < now | as-of | S, P, L | `work_orders` | live | `/production/work-orders?late=1` | A | 3 |
 | KPI-OPS-15 | Equipment overdue; batches under equipment exception | `in_service` equipment with `calibration_due_date` < today; batches with a CX-CAL deviation in period | as-of; `deviations.raised_at` | S, L | `equipment`, `deviations`, `equipment_uses` | live | `/production/equipment?overdue=1` | A | 3 |
@@ -204,7 +205,7 @@ SELECT b.production_line_id, SUM(EXTRACT(EPOCH FROM (LEAST(t2.occurred_at, $to) 
 FROM batches b
 JOIN batch_state_transitions t1 ON t1.batch_id = b.id AND t1.to_state = 'in_process'
 LEFT JOIN batch_state_transitions t2 ON t2.batch_id = b.id AND t2.from_state = 'in_process'
-WHERE b.site_id = ANY($site_ids) AND t1.occurred_at < $to AND COALESCE(t2.occurred_at, $asof) >= $from GROUP BY 1;
+WHERE b.site_id = ANY($site_ids) AND t1.occurred_at < $to AND COALESCE(t2.occurred_at, $as_of) >= $from GROUP BY 1;
 -- R-OPS-07 / R-OPS-08
 SELECT rs.step_kind, rs.name, AVG(EXTRACT(EPOCH FROM (r.completed_at - r.started_at)) / 60) AS actual_min,
        AVG(rs.expected_duration_minutes) AS expected_min,
@@ -243,21 +244,21 @@ FROM dispense_records WHERE site_id = ANY($site_ids) AND supersedes_id IS NULL A
 | KPI-INV-11 | Moves per operator-day; label reprint rate | `transfer` movements per `posted_by` per day (median); label jobs with `reprint_of_id` / printed label jobs | `posted_at`; `label_jobs.updated_at` | S, W | `v_stock_movements_net`, `label_jobs` | night | `/inventory/movements?type=transfer` | A | 2 |
 | KPI-INV-12 | Stock value | Σ on-hand × `inventory_lots.unit_cost_amount`; output lots use the latest final `costing_run_lines.unit_cost_amount`, else flagged Estimate; coverage % shown (A-KPI-08) | as-of | S, W, M, P, St | `inventory_balances`, `inventory_lots`, `costing_run_lines` | mv15 | `/inventory/valuation` | A / E | 2 (6 for output lots) |
 | KPI-INV-13 | Traceability completeness | % received lots with `supplier_lot_number`; % closed batches whose `batch_materials` are all `complete`; % shipped containers with a `shipment_id` | as-of / `closed_at` | S | `inventory_lots`, `batch_materials`, `containers` | night | `/quality/traceability` | A | 3 |
-| KPI-INV-14 | Ledger reconciliation status | mismatch rows and run time of the last `inventory.reconcile` job (must be 0) | job `finished_at` | S | `background_jobs` | night | `/admin/diagnostics/jobs` | A | 2 |
+| KPI-INV-14 | Ledger reconciliation status | `differences_count` and `run_at` of the last `inventory.reconcile` run per `kind` (`status` must be `clean`, count 0) | `reconciliation_runs.run_at` | S | `reconciliation_runs` | night | `/admin/diagnostics/jobs` | A | 2 |
 | KPI-INV-15 | Sync conflict rate | open `sync_conflicts` / replayed `sync_commands` in period | `sync_commands.replayed_at` | S | `sync_commands`, `sync_conflicts` | live | `/admin/sync/conflicts` | A | 7 |
 
 ```sql
 -- R-INV-01 / R-INV-02 / R-INV-04: the availability query of docs/data-model.md 5.3 with
 -- extra FILTER clauses, proven against the ledger by R-INV-14:
-SELECT SUM(on_hand_base) FILTER (WHERE l.expiry_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30) AS expiring_30d,
-       SUM(on_hand_base) FILTER (WHERE b.quality_status = 'expired' OR l.expiry_date < CURRENT_DATE) AS expired
+SELECT SUM(on_hand_base) FILTER (WHERE l.expiry_date BETWEEN $as_of::date AND $as_of::date + 30) AS expiring_30d,
+       SUM(on_hand_base) FILTER (WHERE b.quality_status = 'expired' OR l.expiry_date < $as_of::date) AS expired
 FROM inventory_balances b JOIN inventory_lots l ON l.id = b.lot_id WHERE b.site_id = ANY($site_ids);
 -- R-INV-14 ledger vs projection (must return zero rows): docs/data-model.md 5.6 verbatim.
 -- R-INV-05 / R-INV-06 trailing outflow per item
 SELECT l.material_id, l.sku_id, SUM(m.qty_base) / 90.0 AS avg_daily_outflow
 FROM analytics.v_stock_movements_net m JOIN inventory_lots l ON l.id = m.lot_id
 WHERE m.site_id = ANY($site_ids) AND m.movement_type IN ('consumption', 'shipment', 'issue')
-  AND m.posted_at >= $asof - INTERVAL '90 days' AND m.posted_at < $asof GROUP BY 1, 2;
+  AND m.posted_at >= $as_of - INTERVAL '90 days' AND m.posted_at < $as_of GROUP BY 1, 2;
 -- R-INV-08
 SELECT COUNT(*) FILTER (WHERE variance_qty_base = 0)::numeric / NULLIF(COUNT(*), 0) AS accuracy,
        COUNT(*) FILTER (WHERE recount_qty_base IS NOT NULL)::numeric / NULLIF(COUNT(*), 0) AS recount_rate,
@@ -373,7 +374,7 @@ WHERE t.site_id = ANY($site_ids) AND t.to_state = 'confirmed' AND s.first_dispat
 | KPI-PRO-04 | Price variance | (PO line `unit_amount` − `supplier_materials.unit_price`) / `unit_price`, weighted by qty (supplier-price permission) | `purchase_orders.approved_at` | Sup, M | `purchase_order_lines`, `supplier_materials` | mv15 | `/procurement/orders/{id}` | A | 6 |
 | KPI-PRO-05 | Open POs; overdue expected receipts | PO lines with `qty_received_base < qty_base` on orders in (sent, partially_received); overdue when `expected_date` < today | as-of | S, Sup, M | `purchase_order_lines`, `purchase_orders` | live | `/procurement/expected-receipts?overdue=1` | A | 6 |
 | KPI-PRO-06 | Incoming rejection rate per supplier | incoming inspections `outcome = 'fail'` / reviewed incoming inspections, joined to the receipt line's supplier | `reviewed_at` | Sup, M | `inspections`, `goods_receipt_lines`, `goods_receipts` | mv15 | `/quality/inspections?kind=incoming&supplier=` | A | 3 |
-| KPI-PRO-07 | Reorder suggestions reviewed | suggestions accepted / suggestions produced in period; stockouts that occurred on items with an unactioned suggestion | suggestion `created_at` | S, M | `reorder_suggestions` (missing, 8.3) | night | `/procurement/reorder` | A | 6 |
+| KPI-PRO-07 | Reorder suggestions reviewed | suggestions accepted / suggestions produced in period; stockouts that occurred on items with an unactioned suggestion | suggestion `created_at` | S, M | `reorder_suggestions` (pending, 8.3) | night | `/procurement/reorder` | A | 6 |
 
 ```sql
 -- R-PRO-01
@@ -433,7 +434,7 @@ KPI-FIN-02 as an Estimate or hides the finance row (UX open question 6).
 | KPI-FIN-02 | Shipped value at order price | Σ `shipment_lines.qty_base × sales_order_lines.unit_amount` dispatched in period (A-KPI-10) | `dispatched_at` | S, C, P | `shipment_lines`, `sales_order_lines`, `shipments` | mv15 | `/sales/shipments?period=` | E | 4/5 |
 | KPI-FIN-03 | Gross margin | KPI-FIN-01 − Σ (invoiced qty × unit cost from the latest final `costing_run_lines` for the SKU); Estimate while any line uses `basis = 'estimate'` | `issue_date` | S, C, P | `invoice_lines`, `costing_run_lines` | mv15 | `/finance/costing` | E / A | 6 |
 | KPI-FIN-04 | Receivables outstanding and aging | Σ (`total_amount − paid_amount`) for invoices in (issued, partially_paid); buckets by days past `due_date`: current, 1–30, 31–60, 61–90, 90+ | as-of | C | `invoices` | live | `/finance/receivables` | A | 6 |
-| KPI-FIN-05 | Payables outstanding and aging | same over `supplier_bills` in (approved, partially_paid) | as-of | Sup | `supplier_bills` | live | `/finance/payables` | A | 6 |
+| KPI-FIN-05 | Payables outstanding and aging | same over `supplier_bills` with `status IN ('posted', 'partially_paid')` (a bill is owed once posted, `docs/modules/finance.md` 2.3) | as-of | Sup | `supplier_bills` | live | `/finance/payables` | A | 6 |
 | KPI-FIN-06 | Net recorded payments | Σ inbound − Σ outbound `payment_records` not voided, `paid_at` in period; labelled "not a bank balance" | `paid_at` | S | `payment_records` | live | `/finance/payments?period=` | A | 6 |
 | KPI-FIN-07 | Batch cost: estimate vs actual | per batch, `costing_run_lines` `basis = 'estimate'` vs `basis = 'actual'`: material, packaging, labour, overhead, scrap, yield variance | `costing_runs.finalised_at` | S, P | `costing_run_lines` | mv15 | `/finance/costing/{run}` | E and A side by side | 6 |
 | KPI-FIN-08 | Expense claims pending and approved amount | count and Σ amount in `submitted`; Σ approved in period | `submitted_at`; `approved_at` | S | `expense_claims` | live | `/finance/expenses?status=submitted` | A | 6 |
@@ -449,8 +450,8 @@ SELECT (SELECT SUM(total_amount) FROM invoices WHERE site_id = ANY($site_ids) AN
           FROM analytics.v_financial_postings_net WHERE site_id = ANY($site_ids)
            AND posting_type IN ('invoice_issue','credit_note') AND posted_at >= $from AND posted_at < $to) AS revenue_ledger;
 -- R-FIN-04 aging
-SELECT CASE WHEN due_date >= $asof::date THEN 'current' WHEN $asof::date - due_date <= 30 THEN '1-30'
-            WHEN $asof::date - due_date <= 60 THEN '31-60' WHEN $asof::date - due_date <= 90 THEN '61-90' ELSE '90+' END AS bucket,
+SELECT CASE WHEN due_date >= $as_of::date THEN 'current' WHEN $as_of::date - due_date <= 30 THEN '1-30'
+            WHEN $as_of::date - due_date <= 60 THEN '31-60' WHEN $as_of::date - due_date <= 90 THEN '61-90' ELSE '90+' END AS bucket,
        SUM(total_amount - paid_amount)
 FROM invoices WHERE site_id = ANY($site_ids) AND status IN ('issued', 'partially_paid') GROUP BY 1;
 ```
@@ -473,7 +474,7 @@ Default period: this week (owner), today (operations), as-of now (inventory), th
 | Inventory | KPI-INV-01 available (per dimension), KPI-INV-02 blocked, KPI-INV-04 expiring 30 d, KPI-INV-06 items at stockout risk; KPI-INV-12 value when permitted | Stacked bar: on-hand by status per warehouse (statuses in risk colours, never colour alone); aging histogram (sequential ramp); small multiples: top 10 movers | FEFO risk list; stockout risk list with days of cover and lead time; last count results (KPI-INV-08); reconciliation status banner (KPI-INV-14) | `analytics.dashboard.view`; `finance.cost.view` for value |
 | Quality | KPI-QUA-03 holds open, KPI-QUA-01 turnaround, KPI-QUA-02 first-pass, KPI-QUA-07 overdue CAPA | Line: turnaround median and p90 per week; column: deviations by severity per month; donut: incoming inspection outcomes | Open holds (age sorted); incoming backlog; open deviations; open change controls; recall reconciliation per open case | `analytics.dashboard.view`; `quality.test_result.view` for raw results |
 | Sales / CRM | KPI-SAL-01 confirmed orders, KPI-SAL-02 OTIF, KPI-SAL-03 fill rate, KPI-SAL-11 overdue orders | Stage board: orders per state (board pattern from `docs/source/ui-inspiration.md`); donut OTIF; line: order-to-ship median per week; forecast vs actual per SKU (dashed forecast, Phase 6+) | Overdue orders; unacknowledged DRs; returns and complaints; customers inactive > 60 days; per-customer service table (KPI-SAL-08) | `analytics.dashboard.view`; `sales.price_list.view` for values |
-| Procurement (Phase 6) | KPI-PRO-05 open POs, KPI-PRO-01 supplier OTIF, KPI-PRO-02 lead-time variance, KPI-PRO-06 rejection rate | Scatter (≤ 3 series): promised vs actual lead time per supplier; bar: OTIF per supplier | Overdue expected receipts; reorder suggestions with drivers (section 6.6); price variances (supplier-price permission) | `analytics.dashboard.view`; `masterdata.supplier_price.view` |
+| Procurement (Phase 6) | KPI-PRO-05 open POs, KPI-PRO-01 supplier OTIF, KPI-PRO-02 lead-time variance, KPI-PRO-06 rejection rate | Scatter (≤ 3 series): promised vs actual lead time per supplier; bar: OTIF per supplier | Overdue expected receipts; reorder suggestions with drivers (section 2.6, KPI-PRO-07, and 7.2); price variances (supplier-price permission) | `analytics.dashboard.view`; `masterdata.supplier_price.view` |
 | HR / labour | KPI-HR-01 coverage, KPI-HR-04 open exceptions, KPI-HR-02 exception rate of the latest import | Column: present vs scheduled per shift per day (slots 1, 2); line: exception rate per import | Imports (status, counts, time to post); open exceptions by kind (aggregated) | `analytics.labor_kpi.view` |
 | Finance (Phase 6) | KPI-FIN-01 revenue, KPI-FIN-04 AR outstanding, KPI-FIN-05 AP outstanding, KPI-FIN-06 net payments | Stacked bar: AR and AP aging buckets; line: revenue invoiced vs shipped value estimate (dashed); column: batch cost estimate vs actual | Overdue invoices; overdue bills; unreconciled payments; pending expense claims | `analytics.financial_kpi.view` |
 
@@ -506,7 +507,7 @@ flowchart LR
 | Postgres schema | `analytics` (views, materialized views, snapshot and definition tables); application tables stay in `public`. `bc_readonly` gets SELECT on `analytics.*` only (`docs/security.md` 6). |
 | Views | `analytics.v_<subject>` (plain views, netting and scoping helpers) |
 | Materialized views | `analytics.mv_<subject>`; every MV has a unique index so `REFRESH MATERIALIZED VIEW CONCURRENTLY` works; every MV carries `site_id` as its first indexed column so scoped repositories filter it like any operational table |
-| Tables | `analytics.kpi_definitions` (versioned, `ver` set), `analytics.kpi_snapshots` (append-only), `analytics.kpi_reconciliation_results`, `analytics.refresh_log`, `analytics.forecasts`, `analytics.forecast_overrides`, `analytics.report_runs` (8.3 lists these as additions to `docs/data-model.md`) |
+| Tables | `analytics.kpi_definitions` (versioned, `ver` set), `analytics.kpi_snapshots` (append-only), `analytics.kpi_reconciliation_results`, `analytics.refresh_log`, `analytics.forecasts`, `analytics.report_runs` (pending catalogue entries, `docs/data-model.md` 13.7; status in 8.3). `forecast_overrides` is an application table in `public` with the `approval?` column set (`docs/data-model.md` 3.10), not an `analytics.*` table, because it is an approved business record written by users, not a derived aggregate. |
 | Code | `src/modules/analytics/` with `kpi/` (definitions as typed data mirrored into `kpi_definitions`), `views/` (SQL files applied by migrations), `jobs/`, `reports/`, `exports/`, public `index.ts`; other modules never read `analytics.*` |
 
 ### 4.2 Materialized views
@@ -565,7 +566,7 @@ due_date)`; `notifications (site_id, resolved_at) WHERE resolved_at IS NULL`.
 | RPT-OPS-DAILY | Operations daily | board counts, output vs plan, late WOs, deviations, equipment overdue | daily 06:30 per site | site_manager, production_planner | PDF | 5 |
 | RPT-INV-EXPIRY | Near-expiry and expired stock | KPI-INV-04 list, per site, 30/60/90 buckets | weekly Monday | site_manager, warehouse (view), qa_qc | XLSX, CSV | 5 |
 | RPT-INV-VALUATION | Stock valuation and aging | KPI-INV-03, KPI-INV-12 with coverage | monthly, 1st | finance, owner_director | XLSX | 5 (value Phase 6 for output lots) |
-| RPT-INV-STOCKCARD | Stock card / movement report (`docs/reports-and-templates.md`) | opening, receipts, issues, transfers, adjustments, closing per lot/location with references | on demand | roles with `inventory.stock_movement.view` | PDF, CSV | 2 |
+| RPT-INV-STOCKCARD | Stock card / movement report (`docs/reports-and-templates.md`) | opening, receipts, issues, transfers, adjustments, closing per lot/location with references | on demand | roles with `inventory.movement.view` | PDF, CSV | 2 |
 | RPT-QUA-WEEKLY | Quality weekly | turnaround, first-pass, holds, OOS, deviations, CAPA, backlog | Monday | qa_qc, site_manager | PDF | 5 |
 | RPT-SAL-OTIF | Customer service monthly | OTIF, fill rate, order-to-ship, returns per customer | monthly, 1st | sales_cs, owner_director | PDF, XLSX | 5 |
 | RPT-HR-IMPORT | Attendance import exception report (brief table) | original file reference, rows by result, unknown employees, missing punches, corrections, approver | per import, on post | hr_payroll, site_manager (own site) | PDF, XLSX | 5 |
@@ -578,7 +579,7 @@ due_date)`; `notifications (site_id, resolved_at) WHERE resolved_at IS NULL`.
 1. A schedule (`scheduled_reports`, `scheduled_report_recipients`) stores report code, cron
    and timezone, filters (`parameters`), format and recipients. Creating one requires
    `analytics.scheduled_report.create`; the creator becomes the schedule owner
-   (`owner_user_id`, 8.3). Recipients must be system users (A-PROC-40; external accountant
+   (`scheduled_reports.owner_user_id`, `docs/data-model.md` 3.10). Recipients must be system users (A-PROC-40; external accountant
    delivery is open question 2).
 2. At each run the worker rebuilds an AuthContext for every recipient and checks the report
    permission, the class permissions of 1.5 and site scope. The report is rendered once per
@@ -608,7 +609,7 @@ due_date)`; `notifications (site_id, resolved_at) WHERE resolved_at IS NULL`.
 | Header block | first rows: report, generated-at, generated-by, site filter, period, definition versions, markers (personal data, cost/price) |
 | Numbers and dates | numeric columns exported as numbers in base UOM with a unit column; dates ISO `YYYY-MM-DD` in site time plus a timezone column; money with a currency column; no rounding beyond display precision unless the report says so |
 | Limits | 50,000 rows per synchronous export (A-PM-17); larger extracts run as `analytics.export_job` with the same checks and an audited file |
-| Audit | `analytics.report.exported` and `platform.export_created` with filters, row count, format, file hash |
+| Audit | `analytics.report.exported` and `platform.export.created` with filters, row count, format, file hash |
 | Reconciliation | the export of a KPI drill-down is the R-query result; its total row equals the tile |
 
 ---
@@ -649,11 +650,17 @@ posting.
 
 ### 6.4 Manual overrides
 
-`forecast_overrides(forecast_id, sku_id, site_id, period, value, reason, created_by,
-approved_by, approved_at, expires_at)`: entry needs `analytics.forecast.edit` and a reason;
-use for planning needs `analytics.forecast.approve` by a different user; overrides expire
-with the horizon; the original forecast stays visible; audit `analytics.forecast.overridden`.
-Overridden values render as Overridden (1.2).
+`public.forecast_overrides` (`docs/data-model.md` 3.10; `std +site?` + `approval?` column
+sets): `sku_id`, `site_id`, `period_start`, `period_end`, `baseline_qty_base` (the forecast
+value being replaced), `override_qty_base`, `uom_base_id`, `reason`, `status` in (`draft`,
+`submitted`, `approved`, `rejected`, `retired`); at most one `approved` override per
+(`sku_id`, `site_id`, `period_start`). A `forecast_id` to `analytics.forecasts` is added once
+that table is catalogued (8.3). Entry needs `analytics.forecast.edit` and a reason; use for
+planning needs `analytics.forecast.approve` by a different user (SoD per setting
+`approvals.sod.forecast_override`, A-DM-31); an override expires at `period_end`, so it
+never outlives the horizon, and is `retired` when the baseline is re-forecast; the original
+forecast stays visible; audit `analytics.forecast.overridden`. Overridden values render as
+Overridden (1.2).
 
 ### 6.5 What is never shown as fact
 
@@ -725,7 +732,7 @@ person accepts or dismisses with a reason, each showing its drivers in words:
 | A-KPI-12 | Scheduled report recipients are internal users only (A-PROC-40) | — | Yes (Q-OW-02) |
 | A-KPI-13 | Forecast level SKU × site × month, horizon 3 months, sufficiency 6 / 12 / 24 periods | settings | Yes (Q-C-05) |
 | A-KPI-14 | Dashboard live-query cache 60 s; offline snapshot 24 h | settings | No |
-| A-KPI-15 | Generated report files kept 2 years, then archived with the document retention policy (A-PRD-13) | per report | Yes |
+| A-KPI-15 | Generated scheduled-report files are kept 30 days in the bucket, then deleted (`docs/security.md` 7, A-SEC-30, the single retention authority); report definitions (`kpi_definitions`, `scheduled_reports`) and run logs (`report_runs`) are kept 2 years; a report needed longer is re-run from its snapshot | per report (file retention is not extendable past A-SEC-30) | Yes |
 | A-KPI-16 | Complaint rate denominator = units shipped (pcs) in the same period | setting | No |
 | A-KPI-17 | A KPI definition change creates a new version; old snapshots keep their version; change needs `analytics.report.admin` and is audited (`analytics.kpi_definition.changed`) | — | No |
 | A-KPI-18 | Owner first-screen five: orders this week, output vs plan, stock at FEFO risk, QA holds, OTIF | per user layout | Yes (Q-OW-01) |
@@ -750,20 +757,26 @@ person accepts or dismisses with a reason, each showing its drivers in words:
 8. Minimum group size for labour aggregates (A-KPI-09) and whether supervisors may see
    department-level late/absence rates.
 
-### 8.3 Tables and columns needed that `docs/data-model.md` does not define (for the database architect)
+### 8.3 Tables and columns requested from `docs/data-model.md` (reconciliation with the database architect)
 
-| Addition | Why |
-|---|---|
-| `analytics.kpi_definitions` (versioned), `analytics.kpi_snapshots`, `analytics.kpi_reconciliation_results`, `analytics.refresh_log`, `analytics.report_runs` | section 1.1, 1.4, 4.1, 5.2 |
-| `analytics.forecasts`, `analytics.forecast_overrides`, `demand_events` | section 6 |
-| `scheduled_reports.owner_user_id` | notify the schedule owner when a recipient is skipped (`docs/permissions-matrix.md` 6, rule 3) |
-| `notifications.resolved_at` (or `status`) | "items clear when resolved" (FR-platform-07); KPI-OWN-13 |
-| `downtime_events(site_id, production_line_id, equipment_id, started_at, ended_at, reason_code_id, note)` | KPI-OPS-09; brief module 14 |
-| `production_lines` available-hours setting or `production_line_calendars` | KPI-OPS-06 |
-| `equipment_uses.exception_approved_by`, `deviation_id` | `docs/process-maps.md` W13-04 names `EquipmentUse.exception`; KPI-OPS-15 |
-| `shift_assignments.production_line_id` (or `employees.production_line_id`) | KPI-OPS-11 labour coverage per line |
-| `packs` verification outcome (`verification_failures int` or a `pack_verification_events` table) | W08 "pack verification failures" KPI (not catalogued until the column exists) |
-| `reorder_suggestions` | KPI-PRO-07; brief module 4 |
-| `dispositions.qty_base_at_decision` | rejected quantity per disposition (KPI-QUA-05) without reconstructing balances |
-| `stock_movements.unit_cost_amount` at posting | period valuation and count-variance value that ties to the ledger (KPI-INV-08, INV-12 over time) |
-| `sync_commands.replayed_at` | KPI-INV-15 (Phase 7; section 11 of the data model is referenced but not present in the file) |
+Status as of the data model revision recorded in `docs/data-model.md` 14.3: "applied" rows are
+defined there and this document reads them as sources; "pending" rows are accepted in principle
+(`docs/data-model.md` 13.7) and are catalogued before their Phase 5/6 migrations are generated.
+
+| Requested | Why | Data model location | Status |
+|---|---|---|---|
+| `analytics.kpi_definitions` (versioned), `analytics.kpi_snapshots`, `analytics.kpi_reconciliation_results`, `analytics.refresh_log`, `analytics.report_runs` | section 1.1, 1.4, 4.1, 5.2 | 13.7 (P5/P6 list) | pending; schema name `analytics` confirmed |
+| `analytics.forecasts`, `demand_events` | section 6 | 13.7 | pending |
+| `forecast_overrides` | section 6.4 | 3.10, `public` schema, `approval?` set | applied; placement in `public` confirmed (4.1) |
+| `scheduled_reports.owner_user_id` | notify the schedule owner when a recipient is skipped (`docs/permissions-matrix.md` 6, rule 3) | 3.10 `scheduled_reports` | applied |
+| `notifications.resolved_at` | "items clear when resolved" (FR-platform-07); KPI-OWN-13 | 3.10 `notifications` | applied |
+| `downtime_events(site_id, production_line_id, equipment_id, started_at, ended_at, reason_code_id, note)` | KPI-OPS-09; brief module 14 | 3.1 `downtime_events` (P3), 6 equipment transitions | applied |
+| `production_lines` available-hours setting or `production_line_calendars` | KPI-OPS-06 | 13.7 | pending (setting `production.line_available_hours`, A-KPI-06, is the interim) |
+| `equipment_uses.exception_approved_by`, `deviation_id` | `docs/process-maps.md` W13-04 names `EquipmentUse.exception`; KPI-OPS-15 | 3.5 `equipment_uses` | applied |
+| `shift_assignments.production_line_id` | KPI-OPS-11 labour coverage per line | 3.8 `shift_assignments` | applied |
+| `packs` verification outcome | W08 "pack verification failures" KPI | 3.7 `packs.verification_failure_count` (projection) + `pack_verification_scans` | applied; KPI to be catalogued in 2.5 in the Phase 3 revision |
+| `reorder_suggestions` | KPI-PRO-07; brief module 4 | 13.7 | pending |
+| `dispositions.qty_base_at_decision` | rejected quantity per disposition (KPI-QUA-05) without reconstructing balances | 3.6 `dispositions` | applied |
+| `stock_movements.unit_cost_amount` at posting | period valuation and count-variance value that ties to the ledger (KPI-INV-08, INV-12 over time) | 3.3 `stock_movements` (A-DM-34) | applied |
+| `sync_commands.replayed_at` | KPI-INV-15 (Phase 7) | 11.2 `sync_commands` | applied |
+| `reconciliation_runs` | KPI-INV-14 reads the stored result instead of `background_jobs` | 3.10 `reconciliation_runs` (P2) | applied (added by the devops items, used here) |
