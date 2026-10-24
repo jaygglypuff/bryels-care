@@ -142,6 +142,23 @@ export const PERMISSIONS = [
   "platform.job.view",
   "platform.job.admin",
   "platform.diagnostics.view",
+  // Wave 2 W2B: batch execution (US-3-09..13; docs/permissions-matrix.md §2.5, §3.5)
+  "production.line_clearance.create",
+  "production.line_clearance.approve",
+  "production.dispense_record.view",
+  "production.dispense_record.void",
+  "production.over_tolerance_dispense.approve",
+  "production.process_step_record.view",
+  "production.process_step_record.create",
+  "production.process_step_record.approve",
+  "production.batch_output.create",
+  "production.yield_record.view",
+  "production.yield_record.create",
+  "production.yield_record.approve",
+  "production.scrap_rework_record.view",
+  "production.scrap_rework_record.create",
+  "production.scrap_rework_record.approve",
+  "production.batch.post",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -483,4 +500,56 @@ for (const [role, grants] of Object.entries(W1A_GRANTS)) {
 // Diagnostics (worker, jobs, reconciliation) are for system administrators, not every view-all role.
 for (const role of ["site_manager", "auditor"]) {
   ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => p !== "platform.diagnostics.view");
+}
+
+// Wave 2 W2B: role grants for batch execution (docs/permissions-matrix.md §3.5). A production_operator
+// holds `production.line_clearance.approve` to act as checker for a colleague's clearance (§3.5 note;
+// the service refuses checking one's own entry). View strings reach VIEW_ALL roles at definition.
+const W2B_GRANTS: Record<string, readonly Permission[]> = {
+  site_manager: [
+    "production.line_clearance.approve",
+    "production.dispense_record.view",
+    "production.dispense_record.void",
+    "production.over_tolerance_dispense.approve",
+    "production.process_step_record.view",
+    "production.process_step_record.approve",
+    "production.batch_output.create",
+    "production.yield_record.view",
+    "production.yield_record.create",
+    "production.yield_record.approve",
+    "production.scrap_rework_record.view",
+    "production.scrap_rework_record.create",
+    "production.scrap_rework_record.approve",
+    "production.batch.post",
+  ],
+  production_operator: [
+    "production.line_clearance.create",
+    "production.line_clearance.approve",
+    "production.dispense_record.view",
+    "production.process_step_record.view",
+    "production.process_step_record.create",
+    "production.process_step_record.approve",
+    "production.batch_output.create",
+    "production.yield_record.view",
+    "production.yield_record.create",
+    "production.scrap_rework_record.view",
+    "production.scrap_rework_record.create",
+    "production.batch.post",
+  ],
+  qa_qc: [
+    "production.line_clearance.approve",
+    "production.dispense_record.view",
+    "production.dispense_record.approve",
+    "production.over_tolerance_dispense.approve",
+    "production.process_step_record.view",
+    "production.process_step_record.approve",
+    "production.yield_record.view",
+    "production.yield_record.approve",
+    "production.scrap_rework_record.view",
+    "production.scrap_rework_record.approve",
+  ],
+  production_planner: ["production.dispense_record.view", "production.process_step_record.view", "production.yield_record.view", "production.scrap_rework_record.view"],
+};
+for (const [role, grants] of Object.entries(W2B_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
 }

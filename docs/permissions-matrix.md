@@ -1000,6 +1000,19 @@ auditor (exports) and a new `procurement` bundle. owner_director no longer holds
 until the dashboard tile and lots page stop using it. Restricted (R) permissions do not yet require
 re-authentication (no re-auth flow in the MVP).
 
+### 8.2 As built: batch execution (Wave 2 W2B)
+
+Added strings: `production.line_clearance.{create,approve}`, `production.dispense_record.{view,void}`,
+`production.over_tolerance_dispense.approve`, `production.process_step_record.{view,create,approve}`,
+`production.batch_output.create`, `production.yield_record.{view,create,approve}`,
+`production.scrap_rework_record.{view,create,approve}` and `production.batch.post`, granted per section 3.5.
+Deviation from the table: production_operator also holds `production.line_clearance.approve` so a colleague
+operator can sign as checker (the note under 3.5 and the paper BMR "Checked by"); the service refuses checking
+one's own entry. qa_qc now holds `production.dispense_record.approve` (3.5 `v a`). A process-parameter
+exception (CX-TOL on a step) uses `production.over_tolerance_dispense.approve` until a dedicated string exists
+(A-W2B-08). Second-person signatures on a shared device are co-signatures with the signer's own password
+(A-W2B-01).
+
 ## 9. Assumptions and open questions
 
 | Id | Assumption (default) | Needs confirmation from |

@@ -58,6 +58,45 @@ export const SETTINGS = {
   "inventory.container.allow_mixed_lots": { scopes: ["organization"], schema: z.boolean(), default: false, assumption: "A-PROC-22" },
   /** Near-expiry buckets in days: Expiry alerts page and `expiring_lot` notifications (US-2-16). */
   "inventory.expiry.alert_days": { scopes: ["organization"], schema: z.array(z.number().int().min(1).max(3650)).min(1).max(6), default: [30, 60, 90] as number[], assumption: "A-KPI-03" },
+
+  // Wave 2 W2B: batch execution (US-3-09..13). Defaults are fictional placeholders for the process owner and QA to confirm.
+  /** A-PROC-31: post ingredient consumption at each dispense (and packaging consumption at packaging) instead of at transfer to quarantine (W05-17). */
+  "production.post_consumption_at_dispense": { scopes: ["organization", "site"], schema: z.boolean(), default: false, assumption: "A-PROC-31" },
+  /** A-PROC-33: actual yield % of theoretical outside [min, max] needs approval and a deviation before posting. Per-SKU override by product SKU code. */
+  "production.yield.limits_pct": {
+    scopes: ["organization", "site"],
+    schema: z
+      .object({ min: z.number().min(0).max(1000), max: z.number().min(0).max(1000), bySku: z.record(z.string(), z.object({ min: z.number().min(0).max(1000), max: z.number().min(0).max(1000) })).optional() })
+      .refine((v) => v.min <= v.max, "min must not exceed max"),
+    default: { min: 95, max: 102 } as { min: number; max: number; bySku?: Record<string, { min: number; max: number }> },
+    assumption: "A-PROC-33, A-W2B-03",
+  },
+  /** A-PROC-19: allowed |issued − used − damaged − returned| per packaging component (base units); 0 for labels. */
+  "production.packaging.reconciliation_tolerance": {
+    scopes: ["organization", "site"],
+    schema: z.object({ defaultQty: z.number().min(0), byMaterialCode: z.record(z.string(), z.number().min(0)).optional() }),
+    default: { defaultQty: 0 } as { defaultQty: number; byMaterialCode?: Record<string, number> },
+    assumption: "A-PROC-19",
+  },
+  /** Scrap or rework above this % of the theoretical unit count needs approval (production.scrap_rework_record.approve). */
+  "production.scrap.approval_threshold_pct": { scopes: ["organization", "site"], schema: z.number().min(0).max(100), default: 2, assumption: "A-W2B-04" },
+  /** Reason codes offered for scrap and rework records. */
+  "production.scrap_rework.reason_codes": {
+    scopes: ["organization"],
+    schema: z.array(z.object({ code: z.string().regex(/^[a-z0-9_]{2,40}$/), label: z.string().min(2).max(80) })).min(1),
+    default: [
+      { code: "broken_bar", label: "Broken or cracked unit" },
+      { code: "underweight", label: "Underweight unit" },
+      { code: "appearance", label: "Appearance defect" },
+      { code: "packaging_damage", label: "Damaged in packaging" },
+      { code: "other", label: "Other (explain in the note)" },
+    ] as { code: string; label: string }[],
+    assumption: "A-W2B-05",
+  },
+  /** A-PROC-08: finished-lot expiry basis: manufacture (batch start) date or packaging date, plus product shelf life. */
+  "production.output.expiry_basis": { scopes: ["organization"], schema: z.enum(["manufacture_date", "packaging_date"]), default: "manufacture_date" as "manufacture_date" | "packaging_date", assumption: "A-PROC-08" },
+  /** W13-02: equipment with cleaning rule per_batch becomes "dirty" (cleaning required) when its use on a batch ends. */
+  "production.equipment.mark_dirty_after_batch_use": { scopes: ["organization", "site"], schema: z.boolean(), default: true, assumption: "A-W2B-06" },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS;
