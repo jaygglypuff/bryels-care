@@ -17,6 +17,7 @@ import {
   products,
   testResults,
   users,
+  stockReservations,
 } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -247,8 +248,15 @@ export async function usableLotsForBatch(ctx: AuthContext, batchId: string) {
       ),
     )
     .orderBy(sql`${inventoryLots.expiresOn} asc nulls last`, asc(inventoryLots.lotNumber), asc(locations.code));
+  // W2A staging: stock staged (reserved) for this batch is recommended first, at its staging location.
+  const staged = await db
+    .select({ lotId: stockReservations.lotId, locationId: stockReservations.locationId })
+    .from(stockReservations)
+    .where(and(eq(stockReservations.demandType, "batch"), eq(stockReservations.demandId, b.id), eq(stockReservations.status, "active")));
+  const isStaged = (r: { lotId: string; locationId: string }) => staged.some((x) => x.lotId === r.lotId && (!x.locationId || x.locationId === r.locationId));
+  const ordered = [...rows.filter(isStaged), ...rows.filter((r) => !isStaged(r))];
   const out: Record<string, LotOption[]> = {};
-  for (const r of rows) {
+  for (const r of ordered) {
     (out[r.materialId!] ??= []).push({
       lotId: r.lotId,
       lotNumber: r.lotNumber,

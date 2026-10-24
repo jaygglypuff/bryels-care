@@ -143,7 +143,7 @@ export default async function InspectionPage({ params }: { params: Promise<{ ins
                                 ) : null}
                               </div>
                             )}
-                            {r.live && v.can.correct && <CorrectForm inspectionId={ins.id} resultId={r.id} test={t} />}
+                            {r.live && v.can.correct && <CorrectForm inspectionId={ins.id} resultId={r.id} test={{ ...t }} />}
                           </li>
                         ))}
                       </ul>
@@ -152,7 +152,7 @@ export default async function InspectionPage({ params }: { params: Promise<{ ins
                       <details className="mt-2" open={!t.hasLive && t.isRequired}>
                         <summary className="cursor-pointer text-[13px] text-primary-text">{t.hasLive ? "Add a retest result" : "Enter result"}</summary>
                         <div className="mt-2">
-                          <ResultForm inspectionId={ins.id} test={t} />
+                          <ResultForm inspectionId={ins.id} test={{ ...t }} />
                         </div>
                       </details>
                     )}

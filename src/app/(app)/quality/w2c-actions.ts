@@ -1,5 +1,14 @@
 "use server";
 import { revalidatePath } from "next/cache";
+
+/*
+ * Response note (Wave 2 integration): actions that answer in place (no redirect) do not call
+ * revalidatePath; the forms refresh the router after a success (ActionForm, BulkForm, VerifyScanForm).
+ * With revalidatePath, under the pages' loading.tsx boundaries, the response never committed in
+ * production builds and the form stayed on "Recording…" although the change was saved (a redirect
+ * back to the same page hung the same way). The pages are dynamic, so a refresh is enough. Actions
+ * that move to another page (start inspection, raise deviation) keep revalidate + redirect.
+ */
 import { redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { toActionState, type ActionState } from "@/lib/errors";
@@ -55,10 +64,8 @@ export async function startInspectionAction(_p: ActionState, fd: FormData): Prom
   redirect(`/quality/inspections/${id}`);
 }
 
-function refreshInspection(id: string) {
-  revalidatePath(`/quality/inspections/${id}`);
-  revalidatePath("/quality/inspections");
-  revalidatePath("/quality");
+function refreshInspection(_id: string) {
+  // No revalidatePath in place: see the note at the top of this file (the forms refresh the router).
 }
 
 export async function recordSampleAction(_p: ActionState, fd: FormData): Promise<ActionState> {
@@ -123,7 +130,6 @@ export async function reviewInspectionAction(_p: ActionState, fd: FormData): Pro
     const ctx = await requireContext();
     const r = await reviewInspection(ctx, { inspectionId, decision: str(fd, "decision") as ReviewDecision, note: opt(fd, "note") });
     refreshInspection(inspectionId);
-    revalidatePath("/quality/batches");
     return { ok: true, message: `Inspection ${r.status === "in_progress" ? "returned for testing" : r.status}.${r.batchStatus ? " The batch is now quarantined and ready for its disposition." : ""}` };
   } catch (e) {
     return toActionState(e);
@@ -166,10 +172,8 @@ export async function openDeviationAction(_p: ActionState, fd: FormData): Promis
   redirect(`/quality/deviations/${id}?opened=1`);
 }
 
-function refreshDeviation(id: string) {
-  revalidatePath(`/quality/deviations/${id}`);
-  revalidatePath("/quality/deviations");
-  revalidatePath("/quality");
+function refreshDeviation(_id: string) {
+  // No revalidatePath in place: see the note at the top of this file (the forms refresh the router).
 }
 
 export async function startInvestigationAction(_p: ActionState, fd: FormData): Promise<ActionState> {
@@ -210,7 +214,6 @@ export async function containDeviationAction(_p: ActionState, fd: FormData): Pro
       idempotencyKey: str(fd, "idempotencyKey"),
     });
     refreshDeviation(deviationId);
-    revalidatePath("/quality/holds");
     return { ok: true, message: `Containment hold ${r.holdNumber} placed and linked.` };
   } catch (e) {
     return toActionState(e);
@@ -237,7 +240,6 @@ export async function requestConditionalAction(_p: ActionState, fd: FormData): P
   try {
     const ctx = await requireContext();
     await requestConditionalRelease(ctx, { batchId, conditions: str(fd, "conditions"), reviewDate: str(fd, "reviewDate"), reason: str(fd, "reason") });
-    revalidatePath(`/quality/batches/${batchId}`);
     return { ok: true, message: "Conditional release requested. A second approver must decide it." };
   } catch (e) {
     return toActionState(e);
@@ -249,8 +251,6 @@ export async function decideConditionalAction(_p: ActionState, fd: FormData): Pr
   try {
     const ctx = await requireContext();
     const r = await decideConditionalRelease(ctx, { requestId: str(fd, "requestId"), decision: str(fd, "decision") === "approve" ? "approve" : "reject", note: str(fd, "note") });
-    revalidatePath(`/quality/batches/${batchId}`);
-    revalidatePath("/quality");
     return { ok: true, message: r.status === "approved" ? `Conditional release approved; the batch and lot ${r.release?.lotNumber ?? ""} are released with conditions.` : "Conditional release rejected." };
   } catch (e) {
     return toActionState(e);
@@ -262,7 +262,6 @@ export async function cancelConditionalAction(_p: ActionState, fd: FormData): Pr
   try {
     const ctx = await requireContext();
     await cancelConditionalRelease(ctx, { requestId: str(fd, "requestId"), reason: str(fd, "reason") });
-    revalidatePath(`/quality/batches/${batchId}`);
     return { ok: true, message: "Request cancelled." };
   } catch (e) {
     return toActionState(e);
@@ -283,8 +282,6 @@ export async function bulkDispositionAction(_p: BulkState, fd: FormData): Promis
       note: opt(fd, "note"),
       password: str(fd, "password"),
     });
-    revalidatePath("/quality/bulk");
-    revalidatePath("/quality");
     return { ok: r.failed === 0, message: `${r.done} of ${r.total} lot(s) decided${r.failed ? `; ${r.failed} refused (see the list)` : ""}. Reference ${r.correlationId}.`, outcomes: r.outcomes, correlationId: r.correlationId };
   } catch (e) {
     return toActionState(e);
@@ -300,7 +297,6 @@ export async function verifyLabelAction(_p: VerifyState, fd: FormData): Promise<
   try {
     const ctx = await requireContext();
     const r = await verifyLabelScan(ctx, { locationId, scan: str(fd, "scan") });
-    revalidatePath("/quality/label-verification");
     return {
       ok: true,
       message: r.status === "verified" ? `${r.kind === "box" ? "Box" : "Lot"} ${r.number} verified.` : `${r.kind === "box" ? "Box" : "Lot"} ${r.number} was already verified${r.verifiedByName ? ` by ${r.verifiedByName}` : ""}.`,

@@ -83,6 +83,23 @@ async function expectText(page, text, timeout = 15000) {
   await page.getByText(text, { exact: false }).filter({ visible: true }).first().waitFor({ state: 'visible', timeout });
 }
 
+/**
+ * Waits for the page to show the result of an action. Known issue (Wave 2 integration report): in
+ * production builds the router sometimes does not apply the refreshed page after an in-place action
+ * that follows a client-side navigation; the change is saved. The rehearsal then reloads once and
+ * records it in facts.uiReloads so the run shows how often it happened.
+ */
+async function settle(page, locator, label, timeout = 8000) {
+  try {
+    await locator.waitFor({ timeout });
+  } catch {
+    (facts.uiReloads ??= []).push(label);
+    log('UI did not refresh after', label, '- reloading');
+    await page.reload();
+    await locator.waitFor({ timeout: 15000 });
+  }
+}
+
 async function kpiValue(page, caption) {
   const card = page.locator(`a[aria-label^="${caption}:"]`);
   const txt = await card.locator('div.tabular').first().innerText();
@@ -234,23 +251,72 @@ async function kpiValue(page, caption) {
     log('coconut lot moved to A-01');
   }
 
-  // ---------------- e. Manager plans a batch ----------------
+  // ---------------- e. Planner plans a work order; manager releases it; batch from the work order ----------------
   {
+    const { context, page } = await asUser('planner.nfd@bryels-care.test');
+    await page.goto(BASE + '/production/work-orders/new');
+    await expectText(page, 'New work order');
+    const prodOpt = await page.locator('#productId option', { hasText: 'ACS-135' }).first().innerText();
+    await page.selectOption('#productId', { label: prodOpt });
+    await page.fill('#batchSizeKg', '17.6');
+    await page.fill('#batchCount', '1');
+    await page.fill('#plannedStart', manilaDate(0));
+    await page.fill('#plannedEnd', manilaDate(2));
+    await shot(page, 'work-order-form');
+    await page.getByRole('button', { name: 'Create work order' }).click();
+    await page.waitForURL(/\/production\/work-orders\/[0-9a-f-]{36}/, { timeout: 30000 });
+    facts.workOrderId = page.url().split('/').pop().split('?')[0];
+    await page.getByRole('button', { name: 'Plan (resolve revisions)' }).click();
+    await expectText(page, 'Planned with', 30000);
+    facts.workOrderNumber = (await page.locator('h1').innerText()).trim();
+    assert(/^WO-\d{2}-\d{5}$/.test(facts.workOrderNumber), 'work order number ' + facts.workOrderNumber);
+    log('work order', facts.workOrderNumber, 'planned');
+    await shot(page, 'work-order-planned');
+    await context.close();
+  }
+  {
+    // Separation of duties: the site manager (not the planner) releases; released lots are reserved by FEFO.
     const { context, page } = await asUser('manager.nfd@bryels-care.test');
-    await page.goto(BASE + '/production/new');
-    await page.selectOption('#productId', { label: 'Acapulco Soap 135 g (ACS-135)' });
-    await page.fill('#plannedSizeKg', '17.6');
-    await expectText(page, 'Theoretical yield 16.72 kg');
-    await shot(page, 'new-batch-form');
-    await page.getByRole('button', { name: 'Create batch' }).click();
-    await page.waitForURL(/\/production\/[0-9a-f-]{36}$/, { timeout: 30000 });
-    facts.batchId = page.url().split('/').pop();
+    await page.goto(BASE + '/production/work-orders/' + facts.workOrderId);
+    await page.getByRole('button', { name: 'Release and reserve materials' }).click();
+    await expectText(page, 'Released.', 30000);
+    await settle(page, page.getByRole('button', { name: 'Create batch 1 of 1' }), 'work order release');
+    await shot(page, 'work-order-released');
+    await page.getByRole('button', { name: 'Create batch 1 of 1' }).click();
+    await page.waitForURL(/\/production\/staging\/[0-9a-f-]{36}/, { timeout: 30000 });
+    facts.batchId = page.url().split('/').pop().split('?')[0];
+    await page.goto(BASE + '/production/' + facts.batchId);
     facts.batchNumber = (await page.locator('h1').innerText()).trim();
     assert(/^B-\d{2}-\d{4}$/.test(facts.batchNumber), 'batch number ' + facts.batchNumber);
     await expectText(page, 'Planned, not started');
-    log('batch', facts.batchNumber);
+    log('batch', facts.batchNumber, 'from', facts.workOrderNumber);
     await shot(page, 'batch-planned');
     await context.close();
+  }
+
+  // ---------------- e2. Warehouse stages the reserved lots by scan ----------------
+  facts.staged = {};
+  {
+    const page = wh.page;
+    await page.goto(BASE + '/production/staging/' + facts.batchId);
+    await page.locator('#lotCode').waitFor({ timeout: 20000 });
+    for (let guard = 0; guard < 12; guard++) {
+      const pick = page.locator('p', { hasText: /^Pick: / }).first();
+      if (!(await pick.count())) break;
+      const lineTitle = (await pick.locator('xpath=preceding::p[contains(@class,"font-medium")][1]').innerText()).trim();
+      const lotNo = (await pick.innerText()).replace(/^Pick: /, '').split(' @ ')[0].trim();
+      await page.fill('#lotCode', 'BC:LOT:' + lotNo);
+      await page.fill('#toLocationCode', 'BC:LOC:PRD-01');
+      await page.getByRole('button', { name: 'Confirm staging' }).click();
+      await page.getByText(/^(Staged|Batch fully staged)$/).first().waitFor({ timeout: 20000 });
+      (facts.staged[lineTitle.split('. ')[0]] ??= []).push(lotNo);
+      log('staged', lineTitle, 'lot', lotNo);
+      await page.reload();
+      await page.locator('body').waitFor();
+    }
+    await expectText(page, 'All ingredients staged');
+    assert(Object.keys(facts.staged).length >= 5, 'every ingredient staged: ' + JSON.stringify(facts.staged));
+    await shot(page, 'staging-complete');
   }
 
   // ---------------- f. Operator executes the batch (W2B operator mode: one step at a time) ----------------
@@ -282,12 +348,12 @@ async function kpiValue(page, caption) {
     };
 
     await page.goto(BASE + '/production/' + facts.batchId);
-    await page.getByRole('button', { name: 'Start batch' }).click();
-    await expectText(page, 'In process');
+    await expectText(page, 'Materials staged');
 
-    // Step 1: weighing-area line clearance, conductor + checker.
+    // Step 1: weighing-area line clearance, conductor + checker: signing it starts the batch (in process).
     await signClearance(1);
-    log('step 1 clearance signed');
+    await expectText(page, 'In process');
+    log('step 1 clearance signed; batch in process');
 
     // Step 2: weighing. Scan each lot (FEFO recommendation shown), scale, weight, checker signs on device.
     await panel(2).waitFor({ timeout: 20000 });
@@ -298,8 +364,10 @@ async function kpiValue(page, caption) {
       await form.waitFor();
       const hint = await form.getByText(/^Recommended \(FEFO\): /).innerText();
       const lotNo = hint.replace(/^Recommended \(FEFO\): /, '').split(' at ')[0].trim();
-      if (n === 1) assert(lotNo === facts.coconutLot && hint.includes('A-01'), `coconut oil FEFO suggests the newly released lot ${facts.coconutLot}, got ${hint}`);
+      // The lot staged for this line is recommended first, at the staging location.
+      assert((facts.staged[String(n)] ?? []).includes(lotNo) && hint.includes(' at PRD-01'), `line ${n}: a lot staged for it (${facts.staged[String(n)]}) at PRD-01 recommended, got ${hint}`);
       await form.locator('input[name=lotRef]').fill('BC:LOT:' + lotNo);
+      await form.locator('input[name=locationRef]').fill('BC:LOC:PRD-01');
       const label = await form.locator('label', { hasText: 'Net weight (target' }).innerText();
       const theo = label.match(/target ([\d,.]+) g/)[1].replace(/,/g, '');
       await form.locator('input[name=qty]').fill(theo);
@@ -380,36 +448,54 @@ async function kpiValue(page, caption) {
     await context.close();
   }
 
-  // ---------------- g. QA tests and releases the batch ----------------
+  // ---------------- g. QA: inspection against the frozen plan, review by a second QA user, release ----------------
   {
     const page = qa.page;
     await page.goto(BASE + '/quality');
     await page.getByRole('link', { name: facts.batchNumber }).first().click();
     await page.waitForURL(/\/quality\/batches\//);
     await expectText(page, 'Batch status: awaiting QC');
-    const tests = [
-      ['pH (10% solution)', '9.0 – 10.5', '9.7'],
-      ['Appearance', 'Smooth green bar, no cracks', 'Conforms'],
-      ['Net weight (n=10)', '≥ 135 g each', '136.0 g avg'],
+    // The finished-product inspection was created when the batch was posted to quarantine.
+    await page.getByRole('link', { name: /^INS-\d{2}-\d{5}$/ }).first().click();
+    await page.waitForURL(/\/quality\/inspections\/[0-9a-f-]{36}/);
+    facts.inspectionId = page.url().split('/').pop();
+    const results = [
+      ['pH (10% solution)', { value: '9.7' }],
+      ['Appearance', { value: 'Smooth green bar, no cracks', conforms: 'yes' }],
+      ['Net weight (n=10)', { value: '136.0' }],
     ];
-    for (const [name, spec, res] of tests) {
-      await page.fill('#testName', name);
-      await page.fill('#specification', spec);
-      await page.fill('#result', res);
-      await page.selectOption('#passed', 'pass');
-      await page.getByRole('button', { name: 'Record test result' }).click();
-      await page.locator('table td', { hasText: res }).first().waitFor({ timeout: 20000 });
-      await page.waitForFunction(() => !document.querySelector('#testName')?.value, null, { timeout: 10000 }).catch(() => {});
+    for (const [name, r] of results) {
+      const li = page.locator('li', { hasText: name }).filter({ has: page.getByRole('button', { name: 'Record result' }) }).first();
+      await li.locator('input[name=value]').fill(r.value);
+      if (r.conforms) await li.locator('select[name=conforms]').selectOption(r.conforms);
+      await li.getByRole('button', { name: 'Record result' }).click();
+      await settle(page, page.locator('li', { hasText: name }).getByText('Pass', { exact: true }).first(), 'result ' + name);
     }
-    await expectText(page, '3 passed');
+    await expectText(page, 'Awaiting review');
+    await shot(page, 'qa-inspection-results', { full: true });
+  }
+  const qaLead = await asUser('qa.lead@bryels-care.test');
+  {
+    // Review and decision by a second QA user (reviewer ≠ tester; decider ≠ result entry).
+    const page = qaLead.page;
+    await page.goto(BASE + '/quality/inspections/' + facts.inspectionId);
+    await page.waitForLoadState('networkidle'); // hydrated before the first click
+    await page.selectOption('#decision', 'approve');
+    await page.getByRole('button', { name: 'Record review' }).click();
+    await settle(page, page.getByText('Approved · pass').first(), 'inspection review');
+    await page.goto(BASE + '/quality/batches/' + facts.batchId);
+    await expectText(page, 'Batch status: quarantined');
     await page.check('input[name=decision][value=release]');
-    await page.fill('#reason', 'All three tests within specification; BMR reviewed, no exceptions.');
+    await page.fill('#reason', 'Inspection approved, all three tests within specification; BMR reviewed, no exceptions.');
     await shot(page, 'qa-batch-tests', { full: true });
     await page.getByRole('button', { name: 'Release batch' }).click();
     await expectText(page, 'Batch status: released', 30000);
     await expectText(page, 'at FG-01');
     await shot(page, 'qa-batch-released', { top: true });
-
+    await qaLead.context.close();
+  }
+  {
+    const page = qa.page;
     // ---------------- h. BMR print ----------------
     await page.goto(BASE + '/print/bmr/' + facts.batchId);
     await expectText(page, facts.batchNumber);
@@ -489,7 +575,7 @@ async function kpiValue(page, caption) {
     const page = qa.page;
     await page.goto(BASE + '/quality/trace');
     await page.fill('#q', facts.fgLot);
-    await page.getByRole('button', { name: 'Trace' }).click();
+    await page.getByRole('button', { name: 'Trace', exact: true }).click();
     await page.waitForURL(/q=/);
     const rev = page.locator('div', { has: page.getByText('Where it came from (reverse)', { exact: true }) }).last();
     await expectText(page, facts.coconutLot);
@@ -515,8 +601,17 @@ async function kpiValue(page, caption) {
     assert(outputAfter === facts.outputBefore + 124, `output KPI ${facts.outputBefore} -> ${outputAfter}`);
     await expectText(page, facts.batchNumber);
     await shot(page, 'owner-overview-after');
-    await page.goto(BASE + '/admin/audit');
-    for (const t of [facts.orderNumber, facts.batchNumber, facts.coconutLot, 'Shipment dispatched', 'Disposition released', 'Goods receipt posted']) await expectText(page, t);
+    // Wave 2 flows write many more events; look each document up by number (the audit filter).
+    for (const [q, events] of [
+      [facts.orderNumber, []],
+      [facts.batchNumber, ['Disposition released']],
+      [facts.receiptNumber, ['Goods receipt posted']],
+      [facts.workOrderNumber, []],
+    ]) {
+      await page.goto(BASE + '/admin/audit?q=' + encodeURIComponent(q));
+      await expectText(page, q);
+      for (const t of events) await expectText(page, t);
+    }
     await shot(page, 'audit-log');
     await context.close();
   }

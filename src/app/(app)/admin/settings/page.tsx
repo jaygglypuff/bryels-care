@@ -48,7 +48,7 @@ export default async function SettingsPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Chip tone="appr">Waiting</Chip>
                   <span className="font-medium">{p.label}</span>
-                  <span className="font-mono text-[12px] text-muted">{p.key}{p.siteCode ? ` · ${p.siteCode}` : ""}</span>
+                  <span className="font-mono text-[12px] text-muted break-all">{p.key}{p.siteCode ? ` · ${p.siteCode}` : ""}</span>
                 </div>
                 <p className="mt-1 break-words">
                   <span className="text-muted">From</span> <span className="font-mono">{show(p.oldValue)}</span> <span className="text-muted">to</span> <span className="font-mono">{show(p.newValue)}</span>
@@ -78,7 +78,7 @@ export default async function SettingsPage() {
                     {r.pending > 0 && <Chip tone="info">{r.pending} waiting</Chip>}
                     {r.invalidStored && <Chip tone="bad">Stored value invalid · default used</Chip>}
                   </div>
-                  <p className="font-mono text-[12px] text-muted">{r.key} · assumption {r.def.assumption}</p>
+                  <p className="font-mono text-[12px] text-muted break-all">{r.key} · assumption {r.def.assumption}</p>
                   {r.def.description && <p className="mt-1 text-[13px] text-muted">{r.def.description}</p>}
                   <p className="mt-1 break-words text-[13px]">
                     Organization: <span className="font-mono">{show(r.organizationValue)}</span> {!r.organizationStored && <span className="text-muted">(default)</span>}

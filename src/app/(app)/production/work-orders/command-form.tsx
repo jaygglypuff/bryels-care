@@ -35,10 +35,12 @@ export function CommandForm({
   const [state, formAction] = useActionState(action, null);
   const router = useRouter();
   useEffect(() => {
-    if (state?.ok) {
-      setKey(newKey());
-      router.refresh();
-    }
+    if (!state?.ok) return;
+    setKey(newKey());
+    router.refresh();
+    // A refresh right after a client navigation was sometimes dropped in production builds; refresh again.
+    const again = setTimeout(() => router.refresh(), 700);
+    return () => clearTimeout(again);
   }, [state, router]);
   return (
     <form
