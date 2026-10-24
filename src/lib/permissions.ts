@@ -1111,6 +1111,19 @@ for (const role of ["system_admin", "site_manager", "qa_qc"]) {
 // "v c*"). Supplier quality status and approved-supplier decisions stay with procurement and QA.
 const W3_INTEGRATION_GRANTS: Record<string, readonly Permission[]> = {
   system_admin: ["masterdata.supplier.create"],
+  // W3D added the finance bundle after W3A/W3B wrote their grants: matrix §3.11 FI column (dashboard v,
+  // owner_dashboard v*, report v x*, scheduled_report v c*, kpi_definition v*, financial_kpi v*).
+  // Report administration (FI m*) stays with system_admin until the owner confirms it (A-W3I-02).
+  finance: [
+    "analytics.dashboard.view",
+    "analytics.owner_dashboard.view",
+    "analytics.financial_kpi.view",
+    "analytics.kpi_definition.view",
+    "analytics.report.view",
+    "analytics.report.export",
+    "analytics.scheduled_report.view",
+    "analytics.scheduled_report.create",
+  ],
 };
 for (const [role, grants] of Object.entries(W3_INTEGRATION_GRANTS)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];

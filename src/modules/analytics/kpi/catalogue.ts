@@ -72,12 +72,23 @@ const days = (a: string, b: string) => sql`round(extract(epoch from (${sql.raw(a
 
 // ---------------------------------------------------------------- sales
 
+/**
+ * When an order was confirmed, as known at T (A-W3A-03 resolved by the Wave 3 integration): the first
+ * `confirmed` row of W3D's sales_order_state_transitions; orders entered before Wave 3 have no
+ * transition rows and keep their entry time. Use as `cross join lateral (${confirmedAtLateral(p)}) ca`.
+ */
+const confirmedAtLateral = (p: KpiQueryParams) => sql`
+  select coalesce(
+           (select min(t.occurred_at) from sales_order_state_transitions t where t.sales_order_id = o.id and t.to_state = 'confirmed' and t.occurred_at <= ${T(p)}),
+           case when not exists (select 1 from sales_order_state_transitions t2 where t2.sales_order_id = o.id) then o.created_at end) as confirmed_at`;
+
 const confirmedOrders = (p: KpiQueryParams, value: boolean) => sql`
-  select o.site_id, 'sales_order'::text as ref_type, o.id as ref_id, o.order_number as ref_number, o.created_at as basis_at,
+  select o.site_id, 'sales_order'::text as ref_type, o.id as ref_id, o.order_number as ref_number, ca.confirmed_at as basis_at,
          ${value ? sql`(select coalesce(sum(l.qty_units * l.unit_price), 0) from sales_order_lines l where l.sales_order_id = o.id)` : sql`1::numeric`} as num,
          null::numeric as den, c.name as item, o.status as detail, o.status as category
     from sales_orders o join customers c on c.id = o.customer_id
-   where ${inSites("o.site_id", p.siteIds)} and ${inPeriod("o.created_at", p)} and o.status not in ('draft', 'cancelled')`;
+   cross join lateral (${confirmedAtLateral(p)}) ca
+   where ${inSites("o.site_id", p.siteIds)} and ${inPeriod("ca.confirmed_at", p)} and o.status not in ('draft', 'submitted', 'pending_approval', 'cancelled')`;
 
 /** Shipped quantity per (order, product) known by T, net of reversed shipment movements. */
 const shippedByProduct = (p: KpiQueryParams, orderFilter: SQL) => sql`
@@ -125,14 +136,16 @@ const fillRate = (p: KpiQueryParams) => sql`
          (select coalesce(sum(l.qty_units), 0) from sales_order_lines l where l.sales_order_id = o.id) as den,
          c.name as item, fs.delivery_receipt_number as detail, null::text as category
     from fs join sales_orders o on o.id = fs.sales_order_id join customers c on c.id = o.customer_id
-   where ${inPeriod("fs.dispatched_at", p)} and o.status <> 'cancelled'`;
+   cross join lateral (${confirmedAtLateral(p)}) ca
+   where ${inPeriod("fs.dispatched_at", p)} and o.status <> 'cancelled' and ca.confirmed_at is not null`;
 
 const orderToShip = (p: KpiQueryParams) => sql`
   with fs as (${firstShipments(p)})
   select fs.site_id, 'sales_order'::text as ref_type, o.id as ref_id, o.order_number as ref_number, fs.dispatched_at as basis_at,
-         ${days("fs.dispatched_at", "o.created_at")} as num, null::numeric as den, c.name as item, fs.delivery_receipt_number as detail, null::text as category
+         ${days("fs.dispatched_at", "ca.confirmed_at")} as num, null::numeric as den, c.name as item, fs.delivery_receipt_number as detail, null::text as category
     from fs join sales_orders o on o.id = fs.sales_order_id join customers c on c.id = o.customer_id
-   where ${inPeriod("fs.dispatched_at", p)} and o.status <> 'cancelled'`;
+   cross join lateral (${confirmedAtLateral(p)}) ca
+   where ${inPeriod("fs.dispatched_at", p)} and o.status <> 'cancelled' and ca.confirmed_at is not null`;
 
 const overdueOrders = (p: KpiQueryParams) => sql`
   select o.site_id, 'sales_order'::text as ref_type, o.id as ref_id, o.order_number as ref_number, o.created_at as basis_at,
@@ -369,18 +382,18 @@ export const KPIS: KpiDefinition[] = [
   // sales
   {
     code: "KPI-SAL-01", name: "Orders confirmed", short: "Orders", area: "sales", kind: "period", aggregate: "sum", unit: "count", label: "actual", refresh: "live", additive: true, better: "up",
-    definition: "Sales orders entered in the period that are confirmed or further along (drafts and cancelled orders excluded).",
-    formula: "COUNT(sales orders created in [from, to) with status not in (draft, cancelled))",
-    timeBasis: "sales_orders.created_at (order entry; until order state transitions are recorded, A-W3A-03)",
-    sources: ["sales_orders.created_at", "sales_orders.status", "customers.name"], permissions: SALES_VIEW,
+    definition: "Sales orders confirmed in the period that are still confirmed or further along (drafts, orders waiting for submission or approval, and cancelled orders excluded).",
+    formula: "COUNT(sales orders whose first confirmed transition is in [from, to) and whose status is not draft, submitted, pending_approval or cancelled)",
+    timeBasis: "first sales_order_state_transitions.occurred_at to confirmed; orders entered before Wave 3 (no transitions): sales_orders.created_at (A-W3A-03)",
+    sources: ["sales_order_state_transitions", "sales_orders.created_at", "sales_orders.status", "customers.name"], permissions: SALES_VIEW,
     rows: (p) => confirmedOrders(p, false),
   },
   {
     code: "KPI-SAL-01V", name: "Order value confirmed", short: "Order value", area: "sales", kind: "period", aggregate: "sum", unit: "money", label: "actual", refresh: "live", additive: true, better: "up",
     definition: "Value at order price of the orders counted by KPI-SAL-01.",
     formula: "Σ sales_order_lines.qty_units × unit_price over the orders of KPI-SAL-01",
-    timeBasis: "sales_orders.created_at", sources: ["sales_orders", "sales_order_lines.qty_units", "sales_order_lines.unit_price"],
-    permissions: [...SALES_VIEW, "analytics.financial_kpi.view"],
+    timeBasis: "as KPI-SAL-01 (confirmation time)", sources: ["sales_order_state_transitions", "sales_orders", "sales_order_lines.qty_units", "sales_order_lines.unit_price"],
+    permissions: [...SALES_VIEW, "analytics.financial_kpi.view", "sales.price_list.view"],
     rows: (p) => confirmedOrders(p, true),
   },
   {
@@ -401,9 +414,9 @@ export const KPIS: KpiDefinition[] = [
   },
   {
     code: "KPI-SAL-04", name: "Order-to-ship time", short: "Order to ship", area: "sales", kind: "period", aggregate: "median", unit: "days", label: "actual", refresh: "mv15", additive: false, better: "down",
-    definition: "Median days from order entry to the first dispatch, for orders first shipped in the period.",
-    formula: "percentile_disc(0.5) of (first dispatched_at − sales_orders.created_at) in days",
-    timeBasis: "first shipments.dispatched_at", sources: ["sales_orders.created_at", "shipments.dispatched_at"],
+    definition: "Median days from order confirmation to the first dispatch, for orders first shipped in the period.",
+    formula: "percentile_disc(0.5) of (first dispatched_at − confirmation time) in days; confirmation = first confirmed transition, else order entry for orders from before Wave 3",
+    timeBasis: "first shipments.dispatched_at", sources: ["sales_order_state_transitions", "sales_orders.created_at", "shipments.dispatched_at"],
     permissions: SALES_VIEW, rows: orderToShip,
   },
   {
@@ -418,7 +431,7 @@ export const KPIS: KpiDefinition[] = [
     definition: "Value of goods dispatched in the period at the order's unit price. An estimate of revenue until invoices exist (Phase 6, A-KPI-10).",
     formula: "Σ shipped qty × (Σ line qty × unit price / Σ line qty of that product on the order), shipments dispatched in [from, to)",
     timeBasis: "shipments.dispatched_at", sources: ["shipments", "stock_movements (shipment)", "sales_order_lines.unit_price"],
-    permissions: [...SALES_VIEW, "analytics.financial_kpi.view"], rows: shippedValue,
+    permissions: [...SALES_VIEW, "analytics.financial_kpi.view", "sales.price_list.view"], rows: shippedValue,
   },
   // production
   {

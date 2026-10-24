@@ -242,7 +242,14 @@ export default async function TrendsPage({ searchParams }: { searchParams: Promi
             </ul>
           )}
           {trends && <SaveViewForm config={config} defaultName={`${trends.series.map((s) => s.short).slice(0, 3).join(", ")} by ${grain}`} />}
-          <p className="mt-2 text-[12px] text-muted">Scheduling a view as a report arrives with scheduled reports (US-5-05).</p>
+          {ctx.can("analytics.scheduled_report.view") ? (
+            <p className="mt-2 text-[12px] text-muted">
+              Saved views stay on screen. To receive a report by email on a schedule, use{" "}
+              <Link href="/reports/schedules" className="text-primary-text hover:underline">scheduled reports</Link> (trend views are not schedulable yet).
+            </p>
+          ) : (
+            <p className="mt-2 text-[12px] text-muted">Saved views stay on screen; trend views are not schedulable as reports yet.</p>
+          )}
         </Card>
       </div>
     </>
