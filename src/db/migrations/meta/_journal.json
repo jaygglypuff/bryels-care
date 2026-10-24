@@ -57,6 +57,34 @@
       "when": 1792808065052,
       "tag": "0007_w2g_custom_sql",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792854333667,
+      "tag": "0008_wave3",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792854335183,
+      "tag": "0009_w3a_custom_sql",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792854336855,
+      "tag": "0010_w3f_custom_sql",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792854338488,
+      "tag": "0011_w3i_custom_sql",
+      "breakpoints": true
     }
   ]
 }
