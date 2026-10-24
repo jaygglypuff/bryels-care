@@ -510,29 +510,53 @@ async function kpiValue(page, caption) {
     log('BMR PDF saved');
   }
 
-  // ---------------- i. Sales creates and confirms the order ----------------
+  // ---------------- i. Sales quotes, converts the quotation to an order and submits it; finance approves (W3D) ----------------
   {
     const { context, page } = await asUser('sales@bryels-care.test');
-    await page.goto(BASE + '/sales/new');
-    await page.selectOption('#customerId', { label: 'Mabuhay Pharmacy Group (CUS-003)' });
-    await expectText(page, 'Min shelf life at dispatch: 270 days');
-    await page.fill('#customerPoNumber', 'MPG-PO-7781');
-    await page.fill('#requestedDeliveryOn', manilaDate(3));
-    const opt = await page.locator('#p-1 option', { hasText: 'ACS-135' }).first().innerText();
-    await page.selectOption('#p-1', { label: opt });
-    await page.fill('#q-1', '60');
-    await page.fill('#u-1', '72.50');
+    await page.goto(BASE + '/sales/quotations/new');
+    await page.selectOption('#q-customer', { label: 'Sari Glow Online (CUS-005)' });
+    await page.fill('#q-valid', manilaDate(14));
+    const opt = await page.locator('#qp-1 option', { hasText: 'ACS-135' }).first().innerText();
+    await page.selectOption('#qp-1', { label: opt });
+    await page.fill('#qq-1', '60');
+    await page.fill('#qu-1', '72.50');
     await expectText(page, '4,350.00');
-    await shot(page, 'sales-new-order');
-    await page.getByRole('button', { name: 'Create draft order' }).click();
-    await page.waitForURL(/\/sales\/[0-9a-f-]{36}$/, { timeout: 30000 });
-    facts.orderId = page.url().split('/').pop();
+    await shot(page, 'sales-new-quotation');
+    await page.getByRole('button', { name: 'Save draft quotation' }).click();
+    await page.waitForURL(/\/sales\/quotations\/[0-9a-f-]{36}\?saved=1/, { timeout: 30000 });
+    facts.quoteNumber = (await page.locator('h1').innerText()).trim();
+    assert(/^QT-\d{2}-\d{5}$/.test(facts.quoteNumber), 'quotation number ' + facts.quoteNumber);
+    await page.getByRole('button', { name: 'Submit quotation' }).click();
+    // A 3.3 % discount on the PHP 75.00 list price is within the 10 % rule: the quotation is sent.
+    await settle(page, page.getByRole('button', { name: 'Convert to sales order' }), 'quotation submit');
+    await page.fill('#cv-date', manilaDate(3));
+    await page.fill('#cv-po', 'SGO-PO-2231');
+    await shot(page, 'quotation-sent');
+    await page.getByRole('button', { name: 'Convert to sales order' }).click();
+    await page.waitForURL(/\/sales\/[0-9a-f-]{36}(\?|$)/, { timeout: 30000 });
+    facts.orderId = page.url().split('/').pop().split('?')[0];
     facts.orderNumber = (await page.locator('h1').innerText()).trim();
-    await expectText(page, 'Draft');
-    await page.getByRole('button', { name: 'Confirm order' }).click();
-    await page.waitForURL(/done=confirmed/, { timeout: 30000 });
-    await page.locator('h1 + * , header').getByText('Confirmed').first().waitFor().catch(async () => expectText(page, 'Confirmed'));
-    log('order', facts.orderNumber, 'confirmed');
+    await expectText(page, facts.quoteNumber);
+    // Sari Glow's open orders plus this one exceed its credit limit: the order waits for finance.
+    await page.getByRole('button', { name: 'Submit and confirm order' }).click();
+    await page.waitForURL(/done=pending_approval/, { timeout: 30000 });
+    await expectText(page, 'Needs approval');
+    log('quotation', facts.quoteNumber, '-> order', facts.orderNumber, 'pending approval');
+    await shot(page, 'sales-order-pending-approval');
+    await context.close();
+  }
+  {
+    const { context, page } = await asUser('finance@bryels-care.test');
+    await page.goto(BASE + '/action-centre?tab=approvals');
+    await page.getByText(`Order ${facts.orderNumber} waits for approval`).first().waitFor({ timeout: 20000 });
+    await shot(page, 'finance-action-centre');
+    await page.goto(BASE + '/sales/' + facts.orderId);
+    await expectText(page, 'over credit limit');
+    await page.fill('#approve-note', 'Customer paid the September invoice (fictional).');
+    await page.getByRole('button', { name: 'Approve and confirm' }).click();
+    // The approval form leaves the page with the new state (ADR-043): the history shows the transition.
+    await settle(page, page.getByText('pending approval → confirmed').first(), 'order approval');
+    log('order', facts.orderNumber, 'approved by finance');
     await shot(page, 'sales-order-confirmed');
     await context.close();
   }
@@ -608,14 +632,78 @@ async function kpiValue(page, caption) {
     await shot(page, 'order-shipped');
     const drHref = await page.locator('a[href^="/print/delivery-receipt/"]').first().getAttribute('href');
     await page.goto(BASE + drHref);
-    await expectText(page, 'Mabuhay Pharmacy Group');
+    await expectText(page, 'Sari Glow Online');
     await expectText(page, 'Ramon Aquino');
     await expectText(page, 'NBC 1234');
     await expectText(page, facts.fgLot);
     await shot(page, 'delivery-receipt');
     await page.pdf({ path: path.join(OUT, 'delivery-receipt.pdf'), printBackground: true, preferCSSPageSize: true });
     log('DR PDF saved');
+    // The driver brings back the signed copy: the warehouse records the acknowledgment (W3E, US-4-13).
+    await page.goto(BASE + '/sales/shipments/' + facts.shipmentId);
+    await page.fill('#receivedByName', 'Liza Manalo');
+    await page.fill('#receivedByPosition', 'Store supervisor');
+    await page.selectOption('#kind', 'name_only');
+    await page.fill('#remarks', 'All boxes received in good order.');
+    await page.getByRole('button', { name: 'Save acknowledgment' }).click();
+    await settle(page, page.getByText('Liza Manalo · Store supervisor').first(), 'DR acknowledgment', 30000);
+    facts.drNumber = (await page.locator('a[href^="/print/delivery-receipt/"]').first().innerText().catch(() => '')).trim();
+    await shot(page, 'dr-acknowledged');
+    log('DR acknowledged for', facts.orderNumber);
     await wh.context.close();
+  }
+
+  // ---------------- k0. Sales logs a complaint on the shipped lot; opens a return into quarantine (W3F) ----------------
+  {
+    const { context, page } = await asUser('sales@bryels-care.test');
+    await page.goto(BASE + '/quality/complaints/new');
+    await page.selectOption('#customerId', { label: 'Sari Glow Online (CUS-005)' });
+    await page.fill('#code', 'BC:LOT:' + facts.fgLot);
+    await page.selectOption('#category', 'packaging');
+    await page.fill('#qtyAffected', '2');
+    await page.fill('#description', 'Two bars arrived with torn wrappers.');
+    await page.fill('#internalNotes', 'Check the packing line wrapper tension (fictional).');
+    await page.getByRole('button', { name: 'Log complaint' }).click();
+    await page.waitForURL(/\/quality\/complaints\/[0-9a-f-]{36}/, { timeout: 30000 });
+    facts.complaintNumber = (await page.locator('h1').innerText()).trim();
+    assert(/^CMP-\d{2}-\d{4}$/.test(facts.complaintNumber), 'complaint number ' + facts.complaintNumber);
+    await expectText(page, facts.fgLot);
+    await shot(page, 'complaint-logged');
+    log('complaint', facts.complaintNumber, 'on', facts.fgLot);
+
+    await page.goto(BASE + '/sales/returns/new');
+    const ship = await page.locator('#shipmentId option', { hasText: facts.orderNumber }).first().getAttribute('value');
+    await page.selectOption('#shipmentId', ship);
+    await page.selectOption('#reasonCode', { index: 4 });
+    const reasonLabel = await page.locator('#reasonCode option:checked').innerText();
+    if (/explain/i.test(reasonLabel)) await page.fill('#reasonNote', 'Torn wrappers (complaint ' + facts.complaintNumber + ')');
+    await page.getByRole('button', { name: 'Open return' }).click();
+    await page.waitForURL(/\/sales\/returns\/[0-9a-f-]{36}/, { timeout: 30000 });
+    facts.returnId = page.url().split('/').pop().split('?')[0];
+    facts.returnNumber = (await page.locator('h1').innerText()).trim();
+    await page.fill('#code', 'BC:LOT:' + facts.fgLot);
+    await page.fill('#qty', '2');
+    await page.selectOption('#condition', 'damaged');
+    await page.getByRole('button', { name: 'Add line' }).click();
+    await settle(page, page.getByRole('button', { name: 'Submit for approval' }), 'return line');
+    await page.getByRole('button', { name: 'Submit for approval' }).click();
+    await settle(page, page.getByText('Waiting for approval').first(), 'return submit');
+    await shot(page, 'return-submitted');
+    await context.close();
+  }
+  {
+    // The site manager (not the person who opened it) approves and receives the goods into quarantine.
+    const { context, page } = await asUser('manager.nfd@bryels-care.test');
+    await page.goto(BASE + '/sales/returns/' + facts.returnId);
+    await page.getByRole('button', { name: 'Approve return' }).click();
+    await settle(page, page.getByRole('button', { name: 'Receive into quarantine' }), 'return approval');
+    page.once('dialog', (d) => d.accept());
+    await page.getByRole('button', { name: 'Receive into quarantine' }).click();
+    await settle(page, page.getByText('Received in quarantine').first(), 'return posting', 30000);
+    facts.returnLot = (await page.locator('a[href^="/inventory/"]').filter({ hasText: /^L-/ }).last().innerText().catch(() => '')).trim();
+    await shot(page, 'return-in-quarantine');
+    log('return', facts.returnNumber, 'received into quarantine', facts.returnLot);
+    await context.close();
   }
 
   // ---------------- k. QA traces the new finished lot ----------------
@@ -628,15 +716,66 @@ async function kpiValue(page, caption) {
     const rev = page.locator('div', { has: page.getByText('Where it came from (reverse)', { exact: true }) }).last();
     await expectText(page, facts.coconutLot);
     await expectText(page, 'Laguna Oleo Supply');
-    await expectText(page, 'Mabuhay Pharmacy Group');
+    await expectText(page, 'Sari Glow Online');
     void rev;
     await shot(page, 'trace-finished-lot', { full: true });
     // Recall view: from the supplier lot forward to the customer
     await page.goto(BASE + '/quality/trace?q=' + encodeURIComponent(facts.coconutLot));
     await expectText(page, facts.batchNumber);
-    await expectText(page, 'Mabuhay Pharmacy Group');
+    await expectText(page, 'Sari Glow Online');
     await shot(page, 'trace-coconut-forward', { full: true });
+    // Recall explorer (W3F): from the complaint forward to every customer, shipment and box.
+    await page.goto(BASE + '/quality/recall');
+    await page.fill('#code', facts.complaintNumber);
+    await page.getByRole('button', { name: 'Explore', exact: true }).click();
+    await page.waitForURL(/code=/, { timeout: 30000 });
+    await expectText(page, 'Sari Glow Online');
+    await expectText(page, facts.fgLot);
+    await shot(page, 'recall-explorer', { full: true });
+    // The returned goods wait for QA in the action centre.
+    await page.goto(BASE + '/action-centre?tab=exceptions');
+    await page.getByText(`Returned goods of ${facts.returnNumber} wait for a QA decision`).first().waitFor({ timeout: 20000 });
+    await shot(page, 'qa-action-centre');
     await qa.context.close();
+  }
+
+  // ---------------- k2. Site manager exports the shipments report (W3B) ----------------
+  {
+    const { context, page } = await asUser('manager.nfd@bryels-care.test');
+    await page.goto(BASE + '/reports/RPT-SAL-SHIPMENTS?period=today');
+    await expectText(page, 'Shipments and delivery receipts');
+    await expectText(page, facts.orderNumber);
+    const href = await page.getByRole('link', { name: 'CSV' }).getAttribute('href');
+    const res = await page.request.get(BASE + href);
+    assert(res.ok(), 'report export HTTP ' + res.status());
+    const csv = await res.text();
+    assert(csv.includes(facts.orderNumber), 'exported CSV lists the order');
+    assert(!/unit price|amount/i.test(csv.split('\n')[0] ?? ''), 'shipments report carries no money columns');
+    await shot(page, 'report-shipments');
+    log('report exported', csv.split('\n').length, 'lines');
+    await context.close();
+  }
+
+  // ---------------- k3. System administrator dry-runs a customer import (W3C) ----------------
+  {
+    const { context, page } = await asUser('admin@bryels-care.test');
+    await page.goto(BASE + '/admin/imports');
+    await page.selectOption('#imp-kind', { label: 'Customers' });
+    const csv = [
+      'code,name,status,ship_to_line1,ship_to_city,ship_to_province,contact_name,phone,email,min_shelf_life_days,payment_terms_days,credit_limit_amount,currency,tax_identifier,legacy_number',
+      'CUS-9201,Kalayaan Beauty Corner (fictional),active,8 Bonifacio St.,Calamba,Laguna,Nora Santos,+63 900 222 3333,orders@kalayaan.test,180,,,PHP,,C-201',
+      'CUS-9202,Dollar Buyer (fictional),active,4 Luna St.,Calamba,,,,,,,,USD,,',
+    ].join('\n');
+    await page.setInputFiles('#imp-file', { name: 'customers.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
+    await page.getByRole('button', { name: 'Upload and map columns' }).click();
+    await page.waitForURL(/\/admin\/imports\/[0-9a-f-]{36}/, { timeout: 30000 });
+    facts.importNumber = (await page.locator('h1').innerText()).trim();
+    await page.getByRole('button', { name: 'Validate the file' }).click();
+    await settle(page, page.getByText('Validated').first(), 'import validation (dry run)', 30000);
+    await expectText(page, 'Currency USD is not supported');
+    await shot(page, 'import-dry-run', { full: true });
+    log('import', facts.importNumber, 'validated (dry run, nothing posted)');
+    await context.close();
   }
 
   // ---------------- l. Owner sees the changes ----------------
@@ -710,10 +849,23 @@ async function kpiValue(page, caption) {
     await shot(desk.page, 'shell-warehouse-tabs', { top: true });
     await desk.context.close();
     const phone = await asUser('warehouse.nfd@bryels-care.test', PHONE, { isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
-    for (const url of ['/inventory/move', '/inventory/counts', '/inventory/containers', '/labels', '/inventory/scan', '/inventory/receive']) {
+    for (const url of ['/inventory/move', '/inventory/counts', '/inventory/containers', '/labels', '/inventory/scan', '/inventory/receive', '/sales/picking', '/sales/shipments', '/sales/shipments/' + facts.shipmentId, '/sales/returns', '/sales/returns/' + facts.returnId, '/warehouse/packs', '/action-centre', '/reports']) {
       await phone.page.goto(BASE + url);
       await noErrorPage(phone.page);
       assert(await noHScroll(phone.page), `${url} has no horizontal scroll at 390 px`);
+    }
+    for (const [email, urls] of [
+      ['sales@bryels-care.test', ['/sales/quotations', '/sales/board', '/sales/' + facts.orderId, '/sales/price-lists', '/quality/complaints', '/sales/customers']],
+      ['qa.nfd@bryels-care.test', ['/quality/recall?code=' + encodeURIComponent(facts.complaintNumber), '/quality/complaints', '/analytics']],
+      ['admin@bryels-care.test', ['/admin/imports', '/admin/notification-rules', '/admin/diagnostics']],
+    ]) {
+      const other = await asUser(email, PHONE, { isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+      for (const url of urls) {
+        await other.page.goto(BASE + url);
+        await noErrorPage(other.page);
+        assert(await noHScroll(other.page), `${url} has no horizontal scroll at 390 px (${email})`);
+      }
+      await other.context.close();
     }
     await phone.page.getByRole('button', { name: 'Open menu' }).click();
     await phone.page.getByText('Warehouse', { exact: true }).filter({ visible: true }).first().waitFor();
