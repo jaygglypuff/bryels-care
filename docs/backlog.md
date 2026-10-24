@@ -962,18 +962,21 @@ Gate G4 runs order → pick → pack → ship on staging with every shipped box 
 - Permissions: `masterdata.customer.{view,create,edit,export}`, `finance.credit_terms.view` (S), `finance.credit_terms.approve` (S) · Entities: `customers`, `customer_addresses`, `customer_contacts`
 - AC1 Given a sales_cs user without `finance.credit_terms.view`, When they open a customer, Then `credit_limit_amount`, `payment_terms_days` and `tax_identifier` are absent with a `_masked` hint in API, page and export; a credit-limit change needs `finance.credit_terms.approve` and writes `sales.customer.credit_terms_changed`; exactly one default ship-to and bill-to exist.
 - States: standard; customer 360 layout per `docs/ux-system.md` §9.8 · Audit: `masterdata.customer.created/updated`, `sales.customer.credit_terms_changed`, `platform.export.created` · Depends: → US-1-13 · Tests: `sales.credit_terms_masked`, `authz.sensitive_fields.masked`
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3D). Customers with structured addresses (one default ship-to/bill-to), contacts, credit terms set by finance and masked in DTOs, page and export; credit hold.
 
 #### US-4-02 Customer requirements and SKU packaging configuration (M, Must) — FR-masterdata-02, FR-sales-03 (requirements), A-PRD-31, A-PROC-22
 **As** sales_cs **I want** versioned, approved customer requirements (label artwork version, carton count, CoA required, MOQ, lead time, max lot age, documents) and SKU packaging configuration with customer SKU mapping **so that** boxing and allocation apply the agreed rules automatically.
 - Permissions: `masterdata.customer_requirement.{view,create,edit}`, `masterdata.customer_requirement.approve` (S), `masterdata.sku.edit` · Entities: `customer_requirements` (`ver`), `skus` packaging fields, customer SKU mapping
 - AC1 Given a requirement version, When used by boxing or allocation, Then only an `approved` effective version applies and the record snapshots its id; a missing customer configuration falls back to the SKU default and flags the pack "default config used" for sales_cs review.
 - States: standard · Audit: `masterdata.customer_requirement.approved` · Depends: → US-4-01, → US-1-22 · Tests: `statemachine.*` (version), `fefo.min_shelf_life_customer`
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3D). Versioned customer requirements with approval (not by the drafter), artwork register, customer item codes; order lines snapshot the approved versions; `resolvePackagingConfig` for boxing (W3E to adopt).
 
 #### US-4-03 Price lists with approval and masking (M, Must) — FR-sales-03 (pricing), `docs/permissions-matrix.md` §6
 **As** sales_cs **I want** customer-specific prices and MOQ drafted and approved **so that** order entry picks the agreed price and nobody without the permission ever sees it.
 - Permissions: `sales.price_list.view/edit/approve` (S) · Entities: price list lines (party, item, price, currency, effective dates)
 - AC1 Given a price change, When approved by a user other than the editor, Then it becomes effective and `sales.price_list.approved` is written; warehouse and production roles never receive price fields on any screen, API or document.
 - States: standard · Audit: `sales.price_list.changed/approved` · Depends: → US-4-01 · Tests: `authz.sensitive_fields.masked` (pricing), `sales.pricing_masked_on_pick_pack_dr`
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3D). Versioned price lists with quantity breaks, approval via `approval_rules` (`price_list`), SoD; order/quote prices resolve from the lists; prices masked for non-price roles.
 
 #### E-4-02 Orders and approval (W09-01..04)
 
@@ -982,6 +985,7 @@ Gate G4 runs order → pick → pack → ship on staging with every shipped box 
 - Permissions: `sales.quote.{view,create,edit,submit,void}`, `sales.quote.approve` (discount threshold), `sales.quote.export` · Entities: `quotes`, `quote_lines`; numbering `QT`; document `quotation`
 - AC1 Given a quote above the discount threshold, When submitted, Then approval per `approval_rules` (`quote`) is required; conversion copies lines and current prices into a draft order linked back; "reorder from history" does the same from a past order.
 - States: standard · Audit: `sales.quote.sent/approved/converted` · Depends: → US-4-03 · Tests: `authz.sod.approve_own` (quote)
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3D). Quotations with discount-threshold approval, issue, accept/decline, convert to a linked draft order, reorder from history, nightly expiry job, printable quotation.
 
 #### US-4-05 Sales order entry, credit/approval check and state machine (L, Must) — FR-sales-02, FR-sales-03, W09-02..04, A-PROC-14, A-PM-14
 **As** sales_cs **I want** to enter an order whose requirements and prices resolve from the customer and that confirms itself within limits or waits for approval **so that** nothing ships that credit or management has not accepted.
@@ -989,12 +993,14 @@ Gate G4 runs order → pick → pack → ship on staging with every shipped box 
 - AC1 Given an order whose value plus open balance exceeds the credit limit or the amount threshold, When submitted, Then it stops at `pending_approval` with the reason shown ("Needs approval: over credit limit"), the creator cannot approve, and confirmation writes `sales.sales_order.confirmed`; within limits it auto-confirms; MOQ below the customer's requirement warns or blocks per setting.
 - AC2 Given a confirmed order, When cancelled before dispatch, Then reservations release and `sales.sales_order.cancelled` carries the reason; after dispatch cancellation is 409 (return path only); every transition writes a `sales_order_state_transitions` row.
 - States: standard; order entry per `docs/ux-system.md` §9.8 with ATP indicator · Audit: `sales.sales_order.submitted/confirmed/cancelled` · Depends: → US-4-02, → US-4-03, → US-1-14 · Tests: `statemachine.*` (sales order), `authz.threshold.rule_evaluation`, `sales.cancel_after_dispatch_rejected`, `sales.order_site_of_fulfilment`
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3D). Submit, credit/amount/discount rule check, confirmed or pending_approval with reasons; SoD; return, cancel (allocations and reservations released, 409 after dispatch); transition rows; MOQ warn/block.
 
 #### US-4-06 Order status board and customer 360 (S, Must) — FR-sales-01, FR-sales-10
 **As** sales_cs **I want** an order board by state and a customer page with open orders, shipments, complaints and requirements **so that** "where is my order" is answered from the screen.
 - Permissions: `sales.sales_order.view`, `sales.shipment.view`, `quality.complaint.view` · Entities: read models
 - AC1 Given the board, When opened, Then columns equal the sales order states, cards drag only where permitted, and the customer page shows history tabs with financial fields masked by role.
 - States: L E X D · Audit: none · Depends: → US-4-05 · Tests: e2e `flows/sales/order-board.spec.ts`
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3D). Order board by state with permitted moves (submit, approve, allocate) and customer 360 with role masking and plug-in sections (complaints to be wired by W3F/integration).
 
 #### E-4-03 Boxing (W08)
 

@@ -37,6 +37,8 @@ export async function createOrderAction(_: ActionState, fd: FormData): Promise<A
     customerPoNumber: s(fd, "customerPoNumber"),
     requestedDeliveryOn: s(fd, "requestedDeliveryOn"),
     notes: s(fd, "notes"),
+    shipToAddressId: s(fd, "shipToAddressId"), // W3D
+    billToAddressId: s(fd, "billToAddressId"), // W3D
     lines,
   });
   if (!parsed.success) return { ok: false, message: "Check the highlighted fields.", fieldErrors: issuesToFieldErrors(parsed.error.issues) };

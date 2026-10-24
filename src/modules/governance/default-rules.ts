@@ -120,4 +120,6 @@ export const DEFAULT_APPROVAL_RULES: ApprovalRuleSpec[] = [
   rule({ documentType: "leave_request", step: 1, label: "Site manager approval", requiredRoleCodes: ["site_manager"], escalationRoleCodes: ["hr_payroll"], escalationAfterHours: 48 }),
   rule({ documentType: "overtime_request", step: 1, label: "Site manager approval", requiredRoleCodes: ["site_manager"], escalationRoleCodes: ["hr_payroll"], escalationAfterHours: 48 }),
   rule({ documentType: "work_order_release", step: 1, label: "Planner or site manager approval", requiredRoleCodes: ["production_planner", "site_manager"] }),
+  // Wave 3 W3D (US-4-03): a customer or general price list version is approved by finance or the owner (≠ the editor).
+  rule({ documentType: "price_list", step: 1, label: "Finance or owner approval", requiredRoleCodes: ["finance", "owner_director"], requiredPermissionCode: "sales.price_list.approve", source: "A-W3D-03" }),
 ];

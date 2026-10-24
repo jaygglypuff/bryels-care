@@ -42,6 +42,7 @@ export const APPROVAL_DOCUMENT_TYPES = [
   "supplier_return",
   "equipment_override",
   "payroll_period_reopen",
+  "price_list", // Wave 3 W3D (US-4-03)
 ] as const;
 
 export const APPROVAL_THRESHOLD_BASES = ["always", "amount", "qty_base", "variance_pct", "discount_pct", "credit_check_failed"] as const;

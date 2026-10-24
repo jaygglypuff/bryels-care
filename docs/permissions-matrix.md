@@ -1104,6 +1104,30 @@ Thresholds of `stock_adjustment` and `stock_count_variance` now come from `appro
 While the read-only maintenance mode applies to a user, every permission check for an action other
 than `view` or `export` refuses with `read_only` (503 `READ_ONLY_MODE`) before any write (US-2-30).
 
+### 8.6 As built: Wave 3 W3D customers, price lists, quotations, orders
+
+Strings added (block `// Wave 3 W3D` in `src/lib/permissions.ts`): `masterdata.customer.{edit,export}`,
+`masterdata.customer_requirement.{view,create,edit,approve}`, `finance.credit_terms.{view,approve}`,
+`sales.price_list.{view,edit,approve}`, `sales.quote.{view,create,edit,submit,void,approve,export}`,
+`sales.sales_order.{edit,submit,void,export}`. Grants follow §3.2, §3.8 and §3.10, with these
+as-built notes:
+
+- A `finance` role bundle (organization-wide) is added when absent (A-W3D-10).
+- `sales_cs` loses the MVP grant `sales.sales_order.approve` (the matrix gives SC `v c e s x o`); a
+  draft is submitted with `sales.sales_order.submit` and confirms itself within limits.
+- `.view` strings reach the VIEW_ALL roles automatically, so `sales.price_list.view` and
+  `finance.credit_terms.view` are removed again from system_admin and site_manager, and
+  `sales.quote.view` from system_admin.
+- owner_director keeps view/approve/export but not the operational strings (`sales.sales_order.create/submit/edit/void`,
+  `sales.quote.create/edit/submit/void`, `sales.price_list.edit`, `masterdata.customer.edit`,
+  `masterdata.customer_requirement.create/edit`).
+- Placing/lifting a credit hold needs `finance.credit_terms.approve` (A-W3D-08).
+- Masking (§6) is done in the service DTOs: `creditLimitAmount`, `paymentTermsDays`, `taxIdentifier`
+  (without `finance.credit_terms.view`) and every unit price, discount, line value and order/quote
+  total (without `sales.price_list.view`) are omitted and listed in `_masked`; exports drop the same
+  columns (`requires`). Approval document type `price_list` was added to `approval_rules`
+  (A-W3D-03). Tests: `tests/integration/sales/w3d-*.test.ts`.
+
 ## 9. Assumptions and open questions
 
 | Id | Assumption (default) | Needs confirmation from |

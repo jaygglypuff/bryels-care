@@ -27,7 +27,8 @@ pnpm dev                         # http://localhost:3000
 
 Demo accounts (password `demo1234`, all fictional): `owner@`, `admin@`, `manager.nfd@`,
 `operator.nfd@`, `checker.nfd@`, `warehouse.nfd@`, `qa.nfd@`, `sales@`, `warehouse.rvs@`,
-`auditor@`, `planner.nfd@` (production planner) and `qa.lead@` (second QA approver) at
+`auditor@`, `planner.nfd@` (production planner), `qa.lead@` (second QA approver), `finance@`
+(finance: credit, price list and order approvals) and `sales2@` (second sales user) at
 `bryels-care.test`. Reset the demo data at any time with `pnpm db:reset`.
 
 Production engineering master data (formulas, routings, work instructions, inspection plans,

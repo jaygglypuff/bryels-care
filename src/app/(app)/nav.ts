@@ -87,6 +87,10 @@ export const NAV: NavGroup[] = [
       { label: "Sales orders", href: "/sales", permission: "sales.sales_order.view" },
       { label: "New order", href: "/sales/new", permission: "sales.sales_order.create" },
       { label: "Customers", href: "/sales/customers", permission: "masterdata.customer.view" },
+      // Wave 3 W3D: board, quotations, price lists
+      { label: "Order board", href: "/sales/board", permission: "sales.sales_order.view" },
+      { label: "Quotations", href: "/sales/quotations", permission: "sales.quote.view" },
+      { label: "Price lists", href: "/sales/price-lists", permission: "sales.price_list.view" },
     ],
   },
   {
