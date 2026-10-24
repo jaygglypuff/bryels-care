@@ -307,6 +307,24 @@ export const SETTINGS = {
     }[],
     assumption: "A-UX-12", group: "Production", label: "Production board columns",
   },
+  // Wave 3 W3E: boxing and fulfilment (US-4-07..14). Defaults need owner / process-owner confirmation.
+  /** A-PROC-38: after the first verified pack of a SKU (all boxes), the checker scans this many boxes. */
+  "inventory.pack.verification_sample_size": { scopes: ["organization", "site"], schema: z.number().int().min(1).max(500), default: 3, assumption: "A-PROC-38", group: "Fulfilment", label: "Pack verification sample (boxes)", requiresApproval: true },
+  /** A-W3E-01: a scanned box that is not the allocated one may replace it when it holds the same lot and quantity. */
+  "sales.pick.substitution": { scopes: ["organization", "site"], schema: z.enum(["none", "same_lot"]), default: "same_lot" as "none" | "same_lot", assumption: "A-W3E-01", group: "Fulfilment", label: "Pick substitution rule", requiresApproval: true },
+  /** A-W3E-02: dispatch straight from the allocation without pick and pack verification (MVP path). Off: AC-17. */
+  "sales.fulfilment.direct_dispatch_allowed": { scopes: ["organization", "site"], schema: z.boolean(), default: false, assumption: "A-W3E-02", group: "Fulfilment", label: "Allow dispatch without pick and pack verification", requiresApproval: true },
+  /** A-RPT-13: copies printed per delivery receipt (Customer, Driver, File). */
+  "documents.delivery_receipt.copies": { scopes: ["organization", "site"], schema: z.number().int().min(1).max(5), default: 3, assumption: "A-RPT-13", group: "Documents and labels", label: "Delivery receipt copies" },
+  /** A-RPT-12: statutory / commercial wording printed on the DR; content validated by the accountant. Empty = none. */
+  "documents.delivery_receipt.statutory_text": { scopes: ["organization", "site"], schema: z.string().max(600), default: "", assumption: "A-RPT-12", group: "Documents and labels", label: "Delivery receipt statutory wording (accountant-validated)", requiresApproval: true },
+  "documents.delivery_receipt.template_code": { scopes: ["organization", "site"], schema: z.string().regex(/^[A-Z0-9][A-Z0-9._-]{0,63}$/), default: "DR-STD", assumption: "A-W3E-03", group: "Documents and labels", label: "Delivery receipt template code" },
+  "documents.pick_list.template_code": { scopes: ["organization", "site"], schema: z.string().regex(/^[A-Z0-9][A-Z0-9._-]{0,63}$/), default: "PICK-LIST", assumption: "A-W3E-03", group: "Documents and labels", label: "Pick list template code" },
+  "documents.boxing_note.template_code": { scopes: ["organization", "site"], schema: z.string().regex(/^[A-Z0-9][A-Z0-9._-]{0,63}$/), default: "BOXING-NOTE", assumption: "A-W3E-03", group: "Documents and labels", label: "Boxing note / packing list template code" },
+  /** W09 exception path: unacknowledged delivery receipts older than this appear in the action centre. */
+  "sales.delivery_receipt.unacknowledged_days": { scopes: ["organization", "site"], schema: z.number().int().min(1).max(60), default: 3, assumption: "A-W3E-04", group: "Fulfilment", label: "Remind about unacknowledged delivery receipts after (days)" },
+  /** A-W3E-05: largest acknowledgment image embedded in the regenerated DR (bigger files are kept and referenced). */
+  "documents.delivery_receipt.max_embedded_image_kb": { scopes: ["organization"], schema: z.number().int().min(50).max(4096), default: 1024, assumption: "A-W3E-05", group: "Documents and labels", label: "Largest signature/photo embedded in a DR (KB)" },
 } as const satisfies Record<string, SettingDefinition>;
 
 export type SettingKey = keyof typeof SETTINGS;

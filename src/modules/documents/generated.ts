@@ -196,6 +196,19 @@ export function assertSourceVisible(ctx: AuthContext, d: { sourceEntityType: str
       // (dispensing sheet, traveler) are also visible to the stager (inventory.movement.post).
       if (!ctx.can("production.batch.view") && !(ctx.can("inventory.movement.post") && ["dispensing_sheet", "traveler"].includes(d.documentKind ?? ""))) throw hidden();
       break;
+    // Wave 3 W3E: fulfilment documents follow the shipment / pick / pack permission and site; box labels the box.
+    case "shipment":
+      if (!ctx.can("sales.shipment.view") && !ctx.can("sales.delivery_receipt.view")) throw hidden();
+      break;
+    case "pick":
+      if (!ctx.can("sales.pick.view")) throw hidden();
+      break;
+    case "pack":
+      if (!ctx.can("inventory.pack.view")) throw hidden();
+      break;
+    case "container":
+      if (!ctx.can("inventory.container.view")) throw hidden();
+      break;
     default:
       throw hidden();
   }

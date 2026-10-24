@@ -76,3 +76,7 @@ export { inventoryReconcileJob, inventoryRebuildBalancesJob } from "./jobs";
 export { availabilityRows, availabilityTotals, computeAvailability, bucketOf, manilaToday, type AvailabilityRow } from "./availability";
 export { getStockCard, type StockCard } from "./stock-card";
 export { availabilityExport, stockCardExport } from "./exports";
+// Wave 3 W3E: transaction-level box primitives used by boxing, repack and dispatch (src/modules/sales)
+export { containerMachine, lockContainers, contentsOf, addContent, takeContent, newBox, emptyIfDrained } from "./containers";
+export { OPEN_ALLOCATION_ORDER_STATUSES } from "./reservations";
+export { claimIdempotencyKey, storeIdempotentResult, stateMachine } from "./command-kit";

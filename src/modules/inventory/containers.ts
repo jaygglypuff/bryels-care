@@ -34,7 +34,8 @@ export const containerMachine = stateMachine<ContainerStatus>("container", {
   sealed: ["open", "empty", "in_transit", "shipped"],
   in_transit: ["open", "sealed"],
   empty: ["open", "void"],
-  shipped: [],
+  // W3E: shipped → sealed only through the shipment reversal (sales dispatch), never from the box screen.
+  shipped: ["sealed"],
   void: [],
 });
 
@@ -44,7 +45,7 @@ const parseQty = (v: string, what = "quantity") => {
   return new Decimal(v);
 };
 
-async function lockContainers(tx: Tx, ctx: AuthContext, ids: string[]) {
+export async function lockContainers(tx: Tx, ctx: AuthContext, ids: string[]) {
   const sorted = [...new Set(ids)].sort();
   if (sorted.some((i) => !isUuid(i))) throw new DomainError("not_found", "Box not found in your sites.");
   const rows = await tx.select().from(containers).where(inArray(containers.id, sorted)).orderBy(asc(containers.id)).for("update");
@@ -61,11 +62,11 @@ async function lockLots(tx: Tx, lotIds: string[]) {
   return tx.select().from(inventoryLots).where(inArray(inventoryLots.id, sorted)).orderBy(asc(inventoryLots.id)).for("update");
 }
 
-async function contentsOf(tx: Tx, containerId: string) {
+export async function contentsOf(tx: Tx, containerId: string) {
   return tx.select().from(containerContents).where(and(eq(containerContents.containerId, containerId), gt(containerContents.qtyBase, "0")));
 }
 
-async function addContent(tx: Tx, box: { id: string; organizationId: string; siteId: string }, lotId: string, baseUom: string, qty: Decimal) {
+export async function addContent(tx: Tx, box: { id: string; organizationId: string; siteId: string }, lotId: string, baseUom: string, qty: Decimal) {
   await tx
     .insert(containerContents)
     .values({ organizationId: box.organizationId, siteId: box.siteId, containerId: box.id, lotId, baseUom, qtyBase: qty.toString() })
@@ -75,14 +76,14 @@ async function addContent(tx: Tx, box: { id: string; organizationId: string; sit
     });
 }
 
-async function takeContent(tx: Tx, containerId: string, lotId: string, qty: Decimal) {
+export async function takeContent(tx: Tx, containerId: string, lotId: string, qty: Decimal) {
   await tx
     .update(containerContents)
     .set({ qtyBase: sql`${containerContents.qtyBase} - ${qty.toString()}`, updatedAt: new Date() })
     .where(and(eq(containerContents.containerId, containerId), eq(containerContents.lotId, lotId)));
 }
 
-async function newBox(tx: Tx, ctx: AuthContext, v: { siteId: string; locationId: string | null; kind: string; isPartial?: boolean; notes?: string | null }) {
+export async function newBox(tx: Tx, ctx: AuthContext, v: { siteId: string; locationId: string | null; kind: string; isPartial?: boolean; notes?: string | null }) {
   const number = await nextNumber(tx, ctx.organizationId, "BOX");
   const [box] = await tx
     .insert(containers)
@@ -104,7 +105,7 @@ async function newBox(tx: Tx, ctx: AuthContext, v: { siteId: string; locationId:
 }
 
 /** Empties a box when nothing is left in it (status open/sealed → empty). */
-async function emptyIfDrained(tx: Tx, box: typeof containers.$inferSelect) {
+export async function emptyIfDrained(tx: Tx, box: typeof containers.$inferSelect) {
   const left = await contentsOf(tx, box.id);
   if (left.length === 0 && containerMachine.can(box.status as ContainerStatus, "empty")) {
     await tx.update(containers).set({ status: "empty", updatedAt: new Date() }).where(eq(containers.id, box.id));
@@ -375,6 +376,7 @@ export async function setBoxStatus(ctx: AuthContext, containerId: string, to: "s
   ctx.require("inventory.container.edit");
   return db.transaction(async (tx) => {
     const [box] = await lockContainers(tx, ctx, [containerId]);
+    if (box.status === "shipped") throw new DomainError("state", `Box ${box.containerNumber} was shipped; only a shipment reversal can bring it back.`);
     containerMachine.assert(box.status, to, `Box ${box.containerNumber}`);
     if (to === "void" && (await contentsOf(tx, box.id)).length) throw new DomainError("state", "Only an empty box can be voided.");
     await tx.update(containers).set({ status: to, updatedAt: new Date() }).where(eq(containers.id, box.id));

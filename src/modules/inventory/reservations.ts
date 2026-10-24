@@ -37,7 +37,12 @@ export const reservationMachine = stateMachine<ReservationStatus>("stock_reserva
 });
 
 /** Sales order statuses whose allocations still hold stock (mirrors src/modules/sales/allocation.ts). */
-const OPEN_ALLOCATION_STATUSES = ["confirmed", "allocated"];
+/**
+ * Order states whose open allocations still hold stock (W3E adds picking, packed and the remainder of a
+ * partially shipped order). Allocations themselves must be `open` (fulfilled ones were issued from stock).
+ */
+export const OPEN_ALLOCATION_ORDER_STATUSES = ["confirmed", "allocated", "picking", "packed", "partially_shipped"];
+const OPEN_ALLOCATION_STATUSES = OPEN_ALLOCATION_ORDER_STATUSES;
 
 export type Strategy = "fefo" | "fifo";
 export type StrategySource = "customer" | "product" | "material" | "material_kind" | "default" | "built_in";
@@ -115,7 +120,7 @@ async function allocatedByLotLocation(q: DbOrTx, lotIds: string[]) {
     .from(stockAllocations)
     .innerJoin(salesOrderLines, eq(salesOrderLines.id, stockAllocations.salesOrderLineId))
     .innerJoin(salesOrders, eq(salesOrders.id, salesOrderLines.salesOrderId))
-    .where(and(inArray(stockAllocations.lotId, lotIds), inArray(salesOrders.status, OPEN_ALLOCATION_STATUSES)))
+    .where(and(inArray(stockAllocations.lotId, lotIds), eq(stockAllocations.status, "open"), inArray(salesOrders.status, OPEN_ALLOCATION_STATUSES)))
     .groupBy(stockAllocations.lotId, stockAllocations.locationId);
   return new Map(rows.map((r) => [`${r.lotId}|${r.locationId}`, new Decimal(r.qty)]));
 }

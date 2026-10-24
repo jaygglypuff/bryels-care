@@ -1,11 +1,11 @@
 import "server-only";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { locations, materials, warehouses } from "@/db/schema";
+import { batches, inventoryLots, locations, materials, packBoxes, packs, users, warehouses } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtMass, fmtQty } from "@/lib/qty";
-import { allowedDestinationKinds, getLotDetail, LOT_STATUSES } from "@/modules/inventory";
+import { allowedDestinationKinds, getContainer, getLotDetail, LOT_STATUSES } from "@/modules/inventory";
 import type { LabelData } from "./renderers/label-v1";
 import { STATUS_WORD } from "./renderers/shared";
 import { isUuid } from "./templates";
@@ -17,7 +17,7 @@ import { isUuid } from "./templates";
  */
 
 export type LabelEntity = {
-  entityType: "inventory_lot" | "location";
+  entityType: "inventory_lot" | "location" | "container";
   entityId: string;
   siteId: string;
   number: string;
@@ -127,9 +127,72 @@ export async function locationLabelEntity(ctx: AuthContext, locationId: string):
   };
 }
 
+const initials = (name: string | null | undefined) =>
+  (name ?? "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0]!.toUpperCase())
+    .join("")
+    .slice(0, 4) || null;
+
+/**
+ * Box / carton label data (W3E, US-4-07; docs/reports-and-templates.md §8.3 "Box / carton"): BC:BOX,
+ * SKU, lot, expiry, units (PARTIAL), packed date, packer initials, customer marks and "Box n of N"
+ * from the pack that produced the box, status word inherited from the lot at print.
+ */
+export async function containerLabelEntity(ctx: AuthContext, containerId: string): Promise<LabelEntity> {
+  const box = await getContainer(ctx, containerId);
+  if (box.status === "void" || box.contents.length === 0) throw new DomainError("state", `Box ${box.containerNumber} is ${box.status === "void" ? "void" : "empty"}; there is nothing to label.`);
+  const [pb] = await db
+    .select({ boxNo: packBoxes.boxNo, boxCount: packs.boxCount, packStatus: packs.status, config: packs.configSnapshot, packer: users.displayName })
+    .from(packBoxes)
+    .innerJoin(packs, eq(packs.id, packBoxes.packId))
+    .innerJoin(users, eq(users.id, packs.packedBy))
+    .where(and(eq(packBoxes.containerId, box.id), eq(packBoxes.status, "packed")))
+    .orderBy(desc(packBoxes.createdAt))
+    .limit(1);
+  const lots = await db
+    .select({ id: inventoryLots.id, batchNumber: batches.batchNumber })
+    .from(inventoryLots)
+    .leftJoin(batches, eq(batches.id, inventoryLots.sourceBatchId))
+    .where(inArray(inventoryLots.id, box.contents.map((c) => c.lotId)));
+  const first = box.contents[0];
+  const statuses = [...new Set(box.contents.map((c) => c.qualityStatus))];
+  const expiries = box.contents.map((c) => c.expiresOn).filter((x): x is string => !!x).sort();
+  const marks = (pb?.config as { shippingMarks?: string | null } | undefined)?.shippingMarks ?? null;
+  const qty = box.contents.map((c) => qtyText(D(c.qtyBase).toString(), c.baseUom)).join(" + ");
+  return {
+    entityType: "container",
+    entityId: box.id,
+    siteId: box.siteId,
+    number: box.containerNumber,
+    appliesTo: box.containerKind === "pallet" ? "pallet" : "carton",
+    // Content identity: a label is superseded when the box's lots or quantities change (split, merge, repack).
+    state: `${statuses.join("+")}|${box.contents.map((c) => `${c.lotNumber}:${D(c.qtyBase).toString()}`).join(",")}`,
+    revisionAt: new Date(box.updatedAt ?? box.createdAt),
+    entity: {
+      payloadType: "BOX",
+      value: box.containerNumber,
+      caption: box.containerKind === "pallet" ? "PALLET" : "BOX",
+      itemCode: first.itemCode || null,
+      itemName: first.itemName || null,
+      batchNumber: lots.map((l) => l.batchNumber).filter(Boolean).join(", ") || null,
+      expiresOn: expiries[0] ? fmtDate(expiries[0]) : "No expiry",
+      expiryLabel: "Expiry",
+      quantityText: `${box.contents.map((c) => c.lotNumber).join(", ")} · ${qty}${box.isPartial ? " · PARTIAL" : ""}`,
+      statusWord: statuses.length === 1 ? (STATUS_WORD[statuses[0]] ?? statuses[0].toUpperCase()) : "MIXED STATUS",
+      packedOn: box.packedAt ? fmtDate(box.packedAt) : null,
+      packerInitials: initials(pb?.packer ?? box.packedByName),
+      customerMarks: marks,
+      boxOfText: pb ? `${pb.boxNo} of ${pb.boxCount}` : null,
+    },
+  };
+}
+
 export async function labelEntity(ctx: AuthContext, entityType: string, entityId: string): Promise<LabelEntity> {
   if (entityType === "inventory_lot") return lotLabelEntity(ctx, entityId);
   if (entityType === "location") return locationLabelEntity(ctx, entityId);
+  if (entityType === "container") return containerLabelEntity(ctx, entityId);
   throw new DomainError("validation", "Labels for this kind of record arrive with its module.");
 }
 

@@ -49,6 +49,11 @@ export const NAV: NavGroup[] = [
       { label: "Adjustments", href: "/inventory/adjustments", permission: "inventory.adjustment.view" },
       { label: "Label print station", href: "/labels", permission: "inventory.label_job.view" },
       { label: "Label verification", href: "/quality/label-verification", permission: "inventory.container.edit" },
+      // Wave 3 W3E: boxing and fulfilment
+      { label: "Boxing", href: "/warehouse/packs", permission: "inventory.pack.view" },
+      { label: "Repack for a customer", href: "/warehouse/repack", permission: "inventory.container.edit" },
+      { label: "Picking", href: "/sales/picking", permission: "sales.pick.view" },
+      { label: "Dispatch", href: "/sales/dispatch", permission: "sales.shipment.view" },
     ],
   },
   {
@@ -87,6 +92,7 @@ export const NAV: NavGroup[] = [
       { label: "Sales orders", href: "/sales", permission: "sales.sales_order.view" },
       { label: "New order", href: "/sales/new", permission: "sales.sales_order.create" },
       { label: "Customers", href: "/sales/customers", permission: "masterdata.customer.view" },
+      { label: "Shipments", href: "/sales/shipments", permission: "sales.shipment.view" }, // W3E
     ],
   },
   {

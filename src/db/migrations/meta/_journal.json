@@ -57,6 +57,13 @@
       "when": 1792808065052,
       "tag": "0007_w2g_custom_sql",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792848565850,
+      "tag": "0008_mushy_captain_america",
+      "breakpoints": true
     }
   ]
 }

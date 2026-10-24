@@ -234,6 +234,25 @@ export const PERMISSIONS = [
   "production.production_plan.edit",
   "production.production_plan.approve",
   "production.material_substitution.approve",
+  // Wave 3 W3E: boxing, allocation, pick, pack verification, dispatch, delivery receipts, shipment export (E-4-03, E-4-04; docs/permissions-matrix.md §2.3, §2.11, §3.3, §3.8)
+  "inventory.pack.view",
+  "inventory.pack.create",
+  "inventory.pack.submit",
+  "inventory.pack.approve",
+  "inventory.allocation.view",
+  "inventory.allocation.create",
+  "inventory.allocation.void",
+  "sales.pick.view",
+  "sales.pick.create",
+  "sales.pick.submit",
+  "sales.shipment.create",
+  "sales.shipment.edit",
+  "sales.shipment.export",
+  "sales.shipment.void",
+  "sales.over_shipment.approve",
+  "sales.delivery_receipt.view",
+  "sales.delivery_receipt.create",
+  "sales.delivery_receipt.export",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -809,5 +828,63 @@ const W2A_GRANTS: Record<string, readonly Permission[]> = {
   auditor: ["production.work_order.export"],
 };
 for (const [role, grants] of Object.entries(W2A_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+
+// Wave 3 W3E: role grants for boxing and fulfilment (docs/permissions-matrix.md §3.3 allocation/pack,
+// §3.8 pick/shipment/over_shipment/delivery_receipt). View strings reach the VIEW_ALL roles
+// automatically; owner_director holds every string. `sales.over_shipment.approve` is restricted (R)
+// and goes to site_manager only; the approver must not be the order's creator (service rule).
+const W3E_GRANTS: Record<string, readonly Permission[]> = {
+  site_manager: [
+    "inventory.allocation.create",
+    "inventory.allocation.void",
+    "inventory.pack.create",
+    "inventory.pack.submit",
+    "inventory.pack.approve",
+    "sales.pick.create",
+    "sales.pick.submit",
+    "sales.shipment.create",
+    "sales.shipment.edit",
+    "sales.shipment.post",
+    "sales.shipment.void",
+    "sales.shipment.export",
+    "sales.over_shipment.approve",
+    "sales.delivery_receipt.create",
+    "sales.delivery_receipt.export",
+  ],
+  production_planner: ["inventory.allocation.view", "inventory.pack.view"],
+  production_operator: ["inventory.allocation.view", "inventory.pack.view", "inventory.pack.create", "inventory.pack.submit", "inventory.pack.approve"],
+  warehouse_operator: [
+    "inventory.allocation.view",
+    "inventory.allocation.create",
+    "inventory.allocation.void",
+    "inventory.pack.view",
+    "inventory.pack.create",
+    "inventory.pack.submit",
+    "inventory.pack.approve",
+    "sales.pick.view",
+    "sales.pick.create",
+    "sales.pick.submit",
+    "sales.shipment.create",
+    "sales.shipment.edit",
+    "sales.delivery_receipt.view",
+    "sales.delivery_receipt.create",
+    "sales.delivery_receipt.export",
+  ],
+  qa_qc: ["inventory.allocation.view", "inventory.pack.view", "sales.shipment.view"],
+  sales_cs: [
+    "inventory.allocation.view",
+    "inventory.allocation.create",
+    "inventory.allocation.void",
+    "inventory.pack.view",
+    "sales.pick.view",
+    "sales.shipment.export",
+    "sales.delivery_receipt.view",
+    "sales.delivery_receipt.export",
+  ],
+  auditor: ["sales.shipment.export", "sales.delivery_receipt.export"],
+};
+for (const [role, grants] of Object.entries(W3E_GRANTS)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
 }

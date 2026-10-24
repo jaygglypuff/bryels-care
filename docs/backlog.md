@@ -1004,12 +1004,14 @@ Gate G4 runs order → pick → pack → ship on staging with every shipped box 
 - AC1 Given a pack started from a batch, When a box is created, Then units per box come from the customer requirement (approved revision) or the SKU default, the box inherits the lot's status (quarantined boxes allowed at batch boxing), the last partial box prints `PARTIAL`, and the box label carries `BC:BOX`, SKU, lot, expiry, units, packed date, packer initials and customer marks.
 - AC2 Given verification, When boxes × units ≠ lot output, Then blocked until reconciled; the checker scans the configured sample (all boxes for the first batch of a SKU) and cannot be the packer; the boxing note lists box ids, quantities, totals, packer and checker and is regenerated as v2 after a repack with lineage printed.
 - States: tablet flow; scanner states · Audit: `inventory.pack.started/verified`, `inventory.container.created`, `documents.label_job.printed`, `documents.generated_document.generated` · Depends: → US-3-13, → US-2-15, → US-4-02 · Tests: `sod.pack.checker_not_packer`, T-14, `container.lineage.*`; `docs/testing.md` §9.7 step 1
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3E). Packs from a batch output (`src/modules/sales/boxing.ts`, `/warehouse/packs`): units per box from the approved customer carton count or the SKU default (flag "default config used"), boxes sealed and PARTIAL-flagged, quarantined boxes allowed, box labels through label jobs (`label/carton/v1`), checker ≠ packer, sample per A-PROC-38, T-14 reconciliation block, boxing note v1. Packaging orders for a sales order are a service (`startPack` kind `sales_order`) without their own screen yet.
 
 #### US-4-08 Repack for customer-specific counts (S, Must) — W08-07, W02-06
 **As** a warehouse_operator **I want** to repack released boxes to a customer's carton count with new labels **so that** the order ships in the agreed configuration with lineage preserved.
 - Permissions: `inventory.container.edit`, `inventory.pack.create` · Entities: `container_lineage` (`repack`), `label_jobs` (void old, print new)
 - AC1 Given a repack, When completed, Then only `released` lots are allowed, old labels are voided, new labels printed, lineage resolvable from original to final box and the packing list regenerates (v2 supersedes v1).
 - States: scanner states · Audit: `inventory.container.repacked`, `documents.label_job.voided` · Depends: → US-4-07 · Tests: `container.repack_preserves_history`
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3E). `repackForCustomer` (`/warehouse/repack`): released lots only, `repack` lineage edges, old labels voided, original boxing note regenerated as v2 superseding v1 with lineage; the repack is verified like any pack.
 
 #### E-4-04 Allocation, pick, pack, dispatch, delivery receipt (W09-05..10)
 
@@ -1018,18 +1020,21 @@ Gate G4 runs order → pick → pack → ship on staging with every shipped box 
 - Permissions: `inventory.allocation.{view,create,void}`, `sales.sales_order.edit` · Entities: `stock_allocations` (`sales_order_line`), `sales_order_lines.qty_allocated_base`
 - AC1 Given an order line, When allocated, Then only `released`, unexpired lots at the fulfilment site with remaining shelf life ≥ the customer requirement are proposed by the configured rule, allocation ≤ available (V-OVER), the order moves `confirmed → allocated`, and a later status change of an allocated lot blocks dispatch (re-check).
 - States: standard; allocation summary · Audit: `inventory.stock_allocation.created/released` · Depends: → US-4-05, → US-2-20 · Tests: `fefo.*`, `fefo.expired_between_allocation_and_dispatch`, `stock.blocked.matrix` (allocation)
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3E). FEFO/FIFO by rule with boxes (whole boxes, loose, then part of a box), customer min shelf life and max lot age through the `customer_requirements` reader with a safe default (contract in docs/data-model.md §3.7a), `inventory.allocation.create/void`, release with reason, dispatch re-checks status. Operator choice of a different lot than proposed is not built (release and re-allocate, or same-lot substitution at the pick).
 
 #### US-4-10 Pick list and pick scans (M, Must) — FR-sales-06 (pick), FR-documents-09 (pick list), W09-06, A-RPT-15
 **As** a warehouse_operator **I want** a pick list by location and to scan each allocated box **so that** a box not on the order is caught at the shelf.
 - Permissions: `sales.pick.{view,create,submit}` · Entities: `picks`, `pick_lines` (scan payload kept), pick list document (no `BC:BOX` codes)
 - AC1 Given a scanned box outside the allocation, When submitted, Then "not for this order"; a same-SKU/lot substitute is accepted only if the rule allows and is audited; duplicate scans count once; progress is shown and the order moves `allocated → picking`, shipment `draft → picked`.
 - States: scanner states; short-pick reason · Audit: `sales.pick.scanned/completed` · Depends: → US-4-09, → US-2-13 · Tests: `authz.cross_site.scan`, `idempotency.*` (pick scan)
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3E). Pick lists and scans (`/sales/picking`), box or lot + qty, not-for-this-order refusal, same-lot substitution (A-W3E-01), duplicates once, idempotent scans, manual entry with reason, short-pick reason, recorded pick list document without prices or box codes.
 
 #### US-4-11 Pack verification against the order and over-shipment exception (M, Must) — FR-sales-06 (verification), AC-17 (block), W09-07, A-PRD-24, A-PROC-15
 **As** a warehouse_operator **I want** scanned boxes verified against ordered quantities with carrier, tracking and weights captured **so that** over-shipment or a forbidden partial shipment is stopped before the truck.
 - Permissions: `inventory.pack.approve` (checker ≠ packer, mandatory; `packs.checked_by <> packed_by`), `sales.shipment.{view,create,edit}`, `sales.over_shipment.approve` (R: site_manager ≠ order creator) · Entities: `shipments` (`over_shipment_approved_by`), `packs`
 - AC1 Given 10 boxes allocated, When an 11th is scanned, Then 409 `OVER_SHIPMENT` and the box is not added; a site_manager approval with reason and customer reference allows it with a badge on shipment and DR and `sales.shipment.over_shipment_approved` (restricted); a partial shipment for a customer requiring full shipment is 409 (CX-SHIP); shipment moves `picked → packed`, order `picking → packed`.
 - States: tablet flow; A banner · Audit: `sales.shipment.packed`, `sales.shipment.over_shipment_approved` · Depends: → US-4-10 · Tests: `shipment.over_allocated_rejected`, `shipment.over_ordered_rejected`, `shipment.over_with_approval`, `shipment.partial_allowed_unless_customer_full`, `authz.exception.over_shipment`
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3E). Verification by a non-picker (`/sales/packing/<shipment>`), 409 OVER_SHIPMENT and CX-SHIP partial with site-manager approval (re-auth, not the order creator), carrier/tracking/weight/packages, packing list.
 
 #### US-4-12 Dispatch posting and delivery receipt generation (L, Must) — FR-sales-08, FR-sales-09, AC-17 (reconcile), W09-08, `docs/reports-and-templates.md` §7, A-RPT-12/13
 **As** a warehouse_operator **I want** "Dispatch shipment" to issue stock for every box in one transaction and number the delivery receipt **so that** stock leaves the ledger exactly when goods leave the dock, never when a draft DR is printed.
@@ -1037,18 +1042,21 @@ Gate G4 runs order → pick → pack → ship on staging with every shipped box 
 - AC1 Given a packed shipment, When a DR is generated before dispatch, Then no movement posts and balances are unchanged; when dispatched, Then one `shipment` movement per line, allocations and reservations fulfilled, DR number allocated, containers `shipped`, order `shipped`/`partially_shipped`, lot status re-checked (an `on_hold` lot blocks posting), and `Σ shipment_lines.qty_base` equals the movements for the shipment; the reconciliation report shows zero differences.
 - AC2 Given a dispatched shipment, When reversed with reason, Then reversal movements post, containers return to `sealed` and the order state follows the machine; the DR prints company, ship-from, numbers, customer and ship-to, carrier/driver/plate, lines with lots and box ids, ordered vs shipped, received-by block and remarks; reprint requires a reason.
 - States: confirm dialog "This issues stock and cannot be undone without a return"; L X S · Audit: `sales.shipment.dispatched/reversed`, `documents.generated_document.generated/reprinted` · Depends: → US-4-11, → US-2-01, → US-2-11 · Tests: `shipment.draft_no_stock_change`, `shipment.dispatch_posts_issue`, `shipment.reconciles`, `shipment.dispatch_rechecks_status`, `shipment.reverse_returns_stock`, `sales.pricing_masked_on_pick_pack_dr`, T-13; `docs/testing.md` §9.8
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3E). `dispatchShipment` posts one shipment movement per line through `postMovement`, boxes shipped, allocations fulfilled, DR numbered in the transaction, order shipped / partially shipped, reconciliation zero; draft DR without stock change; reversal with reason; DR reprint through the document record. The MVP `dispatchOrder` is switched off by default (A-W3E-02).
 
 #### US-4-13 Delivery receipt acknowledgment (S, Must) — FR-sales-09, W09-09, A-RPT-14
 **As** a driver or warehouse_operator **I want** to capture the receiver's name, a drawn signature or photo and remarks **so that** proof of delivery is attached to the shipment (evidence, not an e-signature).
 - Permissions: `sales.delivery_receipt.create`, `documents.file_attachment.create` · Entities: `delivery_receipts` (`acknowledgment_kind`, `received_by_position`, `signature_attachment_id`, `acknowledged_by_user_id`), `shipments.delivered_at`
 - AC1 Given an acknowledgment, When saved, Then the DR regenerates as `ACKNOWLEDGED <time>` with the image embedded, the shipment moves `dispatched → delivered`, and unacknowledged DRs older than the configured days appear in the action centre.
 - States: phone capture; O queued (P7) · Audit: `sales.delivery_receipt.acknowledged` · Depends: → US-4-12 · Tests: `statemachine.*` (shipment), e2e acknowledgment
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3E). Acknowledgment with drawn signature, photo or name only (file storage, sensitive attachment), DR regenerated ACKNOWLEDGED with the image, shipment delivered; daily reminder job and `/sales/dispatch` list of unacknowledged DRs. Offline queueing (P7) not built.
 
 #### US-4-14 Interim shipment export to the accountant (S, Must) — W09-10, A-PROC-24, `docs/modules/finance.md` §1.3
 **As** finance **I want** dispatched shipments exported in an agreed layout until invoices exist in Phase 6 **so that** billing continues from system data, never from draft documents.
 - Permissions: `sales.shipment.export` (S) · Entities: export via US-2-21
 - AC1 Given a period, When exported, Then only `dispatched`/`delivered` shipments appear with order, DR, customer, lines, lots and quantities (prices only for `sales.price_list.view` holders), neutralised and audited.
 - States: standard · Audit: `platform.export.created` · Depends: → US-4-12, → US-2-21 · Tests: `authz.cross_site.export` (sales)
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3E). `shipmentExport` (`/api/v1/sales/shipments/export`, button on `/sales/shipments`): dispatched/delivered only, lots and boxes, prices only for `sales.price_list.view` (string added by W3D; masked until then), audited.
 
 #### E-4-05 Complaints, returns and trace to customer (W07, W09-11)
 

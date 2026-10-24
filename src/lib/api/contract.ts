@@ -249,6 +249,17 @@ export const queries = {
     query: z.object({ status: z.enum(["active", "open", "investigating", "closed", "all"]).optional(), format: z.enum(["csv", "xlsx"]).default("csv") }).strict(),
     response: "file",
   },
+  // Wave 3 W3E (US-4-14)
+  shipmentExport: {
+    kind: "query",
+    name: "sales.shipment.export",
+    method: "GET",
+    path: "/api/v1/sales/shipments/export",
+    summary: "CSV/XLSX of dispatched and delivered shipments of a period for the accountant (lots, boxes, quantities; prices only for price-list viewers; audited).",
+    permission: "sales.shipment.export",
+    query: z.object({ siteId: z.uuid(), from: DATE, to: DATE, format: z.enum(["csv", "xlsx"]).default("csv") }).strict(),
+    response: "file",
+  },
 } as const satisfies Record<string, QueryContract>;
 
 export type Commands = typeof commands;

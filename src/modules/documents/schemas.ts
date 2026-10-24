@@ -90,6 +90,11 @@ export const LABEL_FIELD_KEYS = [
   "warehouse",
   "location_kind",
   "allowed_statuses",
+  // W3E: box / carton labels (docs/reports-and-templates.md §8.3)
+  "packed",
+  "packer",
+  "customer_marks",
+  "box_of",
 ] as const;
 export type LabelFieldKey = (typeof LABEL_FIELD_KEYS)[number];
 
@@ -106,7 +111,7 @@ export const DEFAULT_LABEL_FIELDS: Record<(typeof LABEL_APPLIES_TO)[number], Lab
   material: ["item_name", "inci_name", "supplier", "supplier_lot", "received", "expiry", "quantity", "storage", "status_word", "scan_to_verify"],
   wip: ["item_name", "batch", "manufactured", "expiry", "quantity", "status_word", "scan_to_verify"],
   finished_good: ["item_name", "batch", "manufactured", "expiry", "quantity", "status_word", "scan_to_verify"],
-  carton: ["item_name", "expiry", "quantity", "status_word", "scan_to_verify"],
+  carton: ["item_name", "batch", "expiry", "quantity", "packed", "packer", "customer_marks", "box_of", "status_word", "scan_to_verify"],
   pallet: ["item_name", "quantity"],
   location: ["location_name", "warehouse", "location_kind", "allowed_statuses"],
   equipment: ["item_name"],
@@ -161,7 +166,7 @@ export const idempotencyKey = z.string().uuid("The form is missing its submissio
 
 export const createLabelJobInput = z.object({
   labelTemplateId: uuid,
-  entityType: z.enum(["inventory_lot", "location"]),
+  entityType: z.enum(["inventory_lot", "location", "container"]),
   entityId: uuid,
   copies: z.coerce.number().int().min(1, "At least 1 copy.").max(99, "At most 99 copies per job."),
   printStationId: uuid.optional().nullable(),

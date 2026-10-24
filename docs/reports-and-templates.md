@@ -380,6 +380,16 @@ Rules: a batch cannot leave `awaiting_qc` while any `paper_then_transcribe` step
 
 ---
 
+### 7.1 Boxing note, pick list and DR as built (Wave 3 W3E)
+
+| Item | As built |
+|---|---|
+| Renderers | `boxing_note` v1 (`boxing_note/v1`, variants batch / order / repack), `pick_list` v1 (`pick_list/v1`), `delivery_receipt` v1 (`delivery_receipt/v1`, one page per copy) in `src/modules/documents/renderers/`; shared chrome `fulfilment-shared.ts`. Each renderer refuses a dataset that contains `BC:BOX:`/`BC:LOT:` payloads or price fields (`sales.pricing_masked_on_pick_pack_dr`) |
+| Templates | Codes from settings (`BOXING-NOTE`, `PICK-LIST`, `DR-STD`); demo seed approves them; without an approved template the step completes and the screen shows the setup state with a generate button |
+| DR life cycle | Draft DR for a packed shipment: recorded, watermark `DRAFT – NOT ISSUED`, no number, no stock movement. Dispatch: DR number (rule DR), DR row `issued`, document generated (draft superseded). Acknowledgment: DR `acknowledged`, document regenerated with watermark `ACKNOWLEDGED <time>` and the image embedded (≤ 1 MB, A-W3E-05). Reversal: DR `voided`, documents void. Reprint through the document record (reason) |
+| Box label | Dataset `label/carton/v1` (label templates `applies_to = carton`): BC:BOX, SKU, lot, batch, expiry, units (PARTIAL), packed date, packer initials, customer marks, box n of N, status word inherited from the lot; a repack voids the old labels ("superseded label — destroy") |
+| Print pages | `/print/pick-list/<pick>`, `/print/delivery-receipt/<shipment>` (current DR document, hash-checked), boxing notes via `/print/documents/<id>` |
+
 ## 8. Labels
 
 ### 8.1 Payload grammar (ADR-017, `docs/security.md` §2.7)

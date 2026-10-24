@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db, type Tx } from "@/db/client";
 import { customers, inventoryLots, locations, products, salesOrderLines, salesOrders, shipments, stockAllocations } from "@/db/schema";
@@ -10,13 +10,20 @@ import { nextNumber } from "@/lib/numbering";
 import { D } from "@/lib/qty";
 
 /** Sales order state machine (data-model; W09). Only these transitions are allowed. */
-export const ORDER_STATUSES = ["draft", "confirmed", "allocated", "shipped", "cancelled"] as const;
+export const ORDER_STATUSES = ["draft", "confirmed", "allocated", "picking", "packed", "partially_shipped", "shipped", "cancelled"] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 const TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   draft: ["confirmed", "cancelled"],
   confirmed: ["allocated", "cancelled"],
-  allocated: ["shipped"],
-  shipped: [],
+  // W3E fulfilment (W09-05..08): allocated → picking → packed → shipped | partially_shipped. Backward
+  // moves are the controlled undo paths: allocation released (→ confirmed), pick or shipment cancelled
+  // before dispatch (→ allocated), dispatch reversed (→ allocated / partially_shipped). allocated → shipped
+  // is the MVP direct dispatch, refused unless `sales.fulfilment.direct_dispatch_allowed`.
+  allocated: ["picking", "shipped", "confirmed"],
+  picking: ["packed", "allocated"],
+  packed: ["shipped", "partially_shipped", "allocated"],
+  partially_shipped: ["picking", "shipped", "allocated", "partially_shipped"],
+  shipped: ["allocated", "partially_shipped"],
   cancelled: [],
 };
 
@@ -124,7 +131,7 @@ export async function getOrder(ctx: AuthContext, orderId: string) {
         .from(stockAllocations)
         .innerJoin(inventoryLots, eq(inventoryLots.id, stockAllocations.lotId))
         .innerJoin(locations, eq(locations.id, stockAllocations.locationId))
-        .where(inArray(stockAllocations.salesOrderLineId, lines.map((l) => l.line.id)))
+        .where(and(inArray(stockAllocations.salesOrderLineId, lines.map((l) => l.line.id)), ne(stockAllocations.status, "released")))
         .orderBy(asc(inventoryLots.expiresOn), asc(inventoryLots.lotNumber))
     : [];
   const shipmentRows = await db.select().from(shipments).where(eq(shipments.salesOrderId, o.order.id)).orderBy(desc(shipments.dispatchedAt));
@@ -246,7 +253,14 @@ export async function cancelOrder(ctx: AuthContext, orderId: string, reason: str
     const o = await lockOrder(tx, ctx, orderId);
     assertTransition(o.status, "cancelled", o.orderNumber);
     const lineIds = (await tx.select({ id: salesOrderLines.id }).from(salesOrderLines).where(eq(salesOrderLines.salesOrderId, o.id))).map((l) => l.id);
-    const released = lineIds.length ? await tx.delete(stockAllocations).where(inArray(stockAllocations.salesOrderLineId, lineIds)).returning() : [];
+    // W3E: allocations are released with the reason, never deleted (pick lines and shipment lines may reference them).
+    const released = lineIds.length
+      ? await tx
+          .update(stockAllocations)
+          .set({ status: "released", releasedAt: new Date(), releasedBy: ctx.userId, releaseReason: `Order cancelled: ${reason}` })
+          .where(and(inArray(stockAllocations.salesOrderLineId, lineIds), eq(stockAllocations.status, "open")))
+          .returning()
+      : [];
     await tx.update(salesOrders).set({ status: "cancelled" }).where(eq(salesOrders.id, o.id));
     await audit(tx, ctx, {
       action: "sales.sales_order.cancelled",

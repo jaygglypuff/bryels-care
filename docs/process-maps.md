@@ -572,6 +572,13 @@ flowchart TD
 **KPIs touched.** Boxes per labour hour, label reprint rate, pack verification failures.
 **Open questions.** Q-WH-13, Q-WH-14.
 
+**As built (Wave 3 W3E).** Screens `/warehouse/packs` (boxing queue and packs), `/warehouse/packs/<pack>`
+(add box → label job → submit → checker scans → verify → boxing note), `/warehouse/repack`. Boxes are
+sealed at creation; a removed box is voided with a reason before verification; packs from a batch
+output must reconcile (boxes × units = output) before submission and verification (T-14). Pack
+closure happens at dispatch for shipment packs; batch packs stay `verified` (put-away by scan as
+before). Assumptions A-W3E-06/-08.
+
 ### W09 Fulfilling a customer order
 
 **Purpose.** Quote → order → credit/approval → allocation by FEFO/FIFO → pick with box scans → pack verification → dispatch posting (stock issued here) → delivery receipt → acknowledgment → invoice handoff; partial shipments allowed, over-shipment blocked.
@@ -619,6 +626,15 @@ flowchart TD
 | Box label unreadable | Manual box id entry (audited, flagged `manual_entry`); reprint label after verification. |
 | Driver leaves without acknowledgment | Shipment stays `dispatched`; Action Center lists unacknowledged DRs after a configurable number of days. |
 | Partial delivery refused by customer | Return of refused boxes (W09-11); credit per Phase 6 rules. |
+
+**As built (Wave 3 W3E).** Allocate on the order (whole boxes, then loose units, A-W3E-07) →
+`/sales/picking` start pick (shipment `draft`, order `picking`) → scan boxes / lot + quantity →
+complete (short-pick reason) → `/sales/packing/<shipment>` verification by a non-picker, CX-SHIP
+approvals with re-authentication → complete packing (shipment `packed`, order `packed`, packing list)
+→ `/sales/shipments/<shipment>` draft DR (optional) → dispatch (stock issued, DR numbered, order
+`shipped` / `partially_shipped`) → acknowledgment (shipment `delivered`) or reversal (A-W3E-09).
+Unacknowledged DRs: `/sales/dispatch` and the daily reminder (A-W3E-04). Interim accountant export
+on `/sales/shipments` (`/api/v1/sales/shipments/export`).
 
 **Approval gates.** G-W09-A credit/approval (finance or owner_director, SoD vs creator); G-W09-B over-shipment / partial when full required (CX-SHIP); G-W09-C dispatch posting (warehouse_operator with `sales.shipment.post`).
 **KPIs touched.** On-time in-full, fill rate, order-to-ship time, picks per hour, unacknowledged DRs, returns rate.

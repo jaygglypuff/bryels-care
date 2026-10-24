@@ -677,6 +677,14 @@ at their site.
 | portal_user | – | v m* | – | – | – | – | – | – | v m | – | – | v* | – |
 | portal_catalog | v* | – | – | – | – | – | – | – | v m | – | – | v* | – |
 
+As built (Wave 3 W3E, `src/lib/permissions.ts` block "Wave 3 W3E"): the strings of the rows above
+plus `inventory.allocation.{view,create,void}` and `inventory.pack.{view,create,submit,approve}`
+(§3.3) are in the catalogue and granted per these columns; `sales.allocation.post` (MVP) is kept
+in the catalogue but no longer checked (allocation requires `inventory.allocation.create`).
+`sales.over_shipment.approve` also requires re-authentication and an approver who is not the
+order's creator. Prices in the shipment export need `sales.price_list.view` (added by W3D; until
+then every holder sees them masked).
+
 ### 3.9 hr
 
 | Entity | OD | SA | SM | PP | PO | WO | QA | PR | SC | FI | HR | AU | CP |

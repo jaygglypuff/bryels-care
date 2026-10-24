@@ -39,6 +39,22 @@ const STATES: Record<string, { tone: Tone; label: string; icon: ReactNode }> = {
   pending: { tone: "neu", label: "Pending", icon: <CircleDashed size={13} /> },
   dispensed: { tone: "ok", label: "Dispensed", icon: <CheckCircle2 size={13} /> },
   exception: { tone: "warn", label: "Exception", icon: <AlertOctagon size={13} /> },
+  // W3E fulfilment: order, pick, pack, shipment and delivery receipt states
+  picking: { tone: "info", label: "Picking", icon: <CircleDashed size={13} /> },
+  packed: { tone: "appr", label: "Packed", icon: <CheckCircle2 size={13} /> },
+  partially_shipped: { tone: "warn", label: "Partly shipped", icon: <Truck size={13} /> },
+  picked: { tone: "info", label: "Picked", icon: <CheckCircle2 size={13} /> },
+  dispatched: { tone: "ok", label: "Dispatched", icon: <Truck size={13} /> },
+  delivered: { tone: "ok", label: "Delivered", icon: <CheckCircle2 size={13} /> },
+  returned: { tone: "warn", label: "Returned", icon: <Truck size={13} /> },
+  reversed: { tone: "neu", label: "Reversed", icon: <Ban size={13} /> },
+  in_progress: { tone: "info", label: "In progress", icon: <CircleDashed size={13} /> },
+  completed: { tone: "ok", label: "Completed", icon: <CheckCircle2 size={13} /> },
+  open: { tone: "info", label: "Open", icon: <CircleDashed size={13} /> },
+  verified: { tone: "ok", label: "Verified", icon: <CheckCircle2 size={13} /> },
+  issued: { tone: "info", label: "Issued", icon: <CheckCircle2 size={13} /> },
+  acknowledged: { tone: "ok", label: "Acknowledged", icon: <CheckCircle2 size={13} /> },
+  voided: { tone: "neu", label: "Voided", icon: <Ban size={13} /> },
 };
 
 export function StatusChip({ status, label, className }: { status: string; label?: string; className?: string }) {
