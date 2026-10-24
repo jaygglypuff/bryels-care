@@ -1410,6 +1410,27 @@ supplier-lot start node, the goods receipt of each material lot, an "as of" time
 | **`customer_return_lines`** · P4 · T · `std +site` | | | | `customer_return_id`, `sku_id`, `lot_id`, `container_id`, `qty` set, `condition` (`sellable`,`damaged`,`expired`,`unknown`), `to_location_id`, `stock_movement_id`, `disposition_id` |
 | **`sales_order_state_transitions`**, **`shipment_state_transitions`** · P4 · L | | | | shape §6.1 |
 
+### 3.7.1 As built in Wave 3 W3F (US-4-15, US-4-16, US-4-17)
+
+New tables in `src/db/schema/complaints.ts`; differences from §3.6 / §3.7:
+
+| Table | As built | Difference from the target |
+|---|---|---|
+| `complaints` | `complaint_number` (rule `CMP`), status open → investigating → resolved → closed (resolved → investigating to reopen), `category` and `severity` from settings, `channel`, `customer_id`, `customer_reference`, `product_id`, `lot_id`, `container_id`, `sales_order_id`, `shipment_id`, `reported_code`, `trace_match` (`verified`, `unverified`, `mismatch`, `not_given`; ck verified ⇒ shipment), `description` and `customer_response` (customer-facing), `internal_notes`, `investigation`, `root_cause`, `resolution` (internal), `qty_affected`, `sample_returned`, `deviation_id`, `recall_review_flagged`, received/classified/resolved/closed actors, idempotency key; ck resolved ⇒ resolution, closed ⇔ closer + severity | `site_id` is required (the shipment's or lot's site, else the logger's site); `received_by` is the logger |
+| `complaint_links` | complaint → deviation, customer_return, extra lot, container or shipment, with the number; unique per (complaint, kind, entity) | new |
+| `complaint_state_transitions`, `customer_return_state_transitions` | §6.1 shape | not append-only by trigger yet (W2C tables are) |
+| `customer_returns` | `return_number` (rule `RT`), status draft → submitted → approved → received → inspected → closed, submitted → draft, draft/submitted/approved → cancelled; `shipment_id` required, `complaint_id`, `reason_code` (reason codes, category `return`), `to_location_id`, approval column set without CHECK (SoD by setting), received/inspected/closed actors, `cancel_reason` | `submitted` and `approved` states added for the approval step; `reason_code` is the code text, not an id |
+| `customer_return_lines` | `lot_id` (shipped lot), `container_id` (unique per return, V-DUP), `qty_base` + `base_uom`, `condition`, `to_location_id`, `return_lot_id` (the quarantine lot created at posting, `origin_lot_id` = `lot_id`), `stock_movement_id` (ck posted ⇔ both set), `scan_payload`, `manual_entry`, `note` | `disposition_id` is not stored: the QA decision is read from `dispositions` of the return lot |
+
+Posting a return writes a `return` movement (source document `customer_return`, idempotency key
+`customer_return:<line id>`) through `postMovement` into the new lot. The genealogy edge `returned`
+(§10.1) is the re-lot edge of that lot; `src/modules/quality/genealogy.ts` now follows re-lot edges
+(transfers and returns) both ways, and `src/modules/quality/recall.ts` implements §10.3/§10.4 (forward,
+and reverse with sibling batches) with boxes, shipments, customers, quantities shipped/returned/still at
+the customer and stock on hand. Boxes on a shipment are read only through `shipmentBoxes()` in
+`src/modules/sales/returns-shipments.ts` (MVP: `meta.containerId` on shipment movements; W3E's
+`shipment_boxes` replaces it). `deviations.source` adds `complaint`.
+
 ### 3.8 HR and payroll
 
 Employee personal data and payroll rows are readable only by `hr_payroll`, `finance`,

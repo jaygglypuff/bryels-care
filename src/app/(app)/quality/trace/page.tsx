@@ -10,7 +10,7 @@ import { fmtLotQty } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
-const ROLE_LABEL = { consumed: "used", produced: "produced", shipped: "shipped", on_order: "on order" } as const;
+const ROLE_LABEL = { consumed: "used", produced: "produced", shipped: "shipped", on_order: "on order", relotted: "re-lotted (transfer or customer return)" } as const;
 
 function NodeIcon({ kind }: { kind: TraceNode["kind"] }) {
   const cls = "mt-0.5 shrink-0 text-muted";

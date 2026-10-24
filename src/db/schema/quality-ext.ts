@@ -127,7 +127,7 @@ export const inspectionStateTransitions = pgTable(
 
 export const DEVIATION_STATUSES = ["open", "investigating", "closed"] as const;
 /** What raised the deviation (W07-01 triggers); `manual` = a person raised it from a screen. */
-export const DEVIATION_SOURCES = ["manual", "cx_tol", "cx_cal", "in_process_check", "yield", "reconciliation", "oos", "other"] as const;
+export const DEVIATION_SOURCES = ["manual", "cx_tol", "cx_cal", "in_process_check", "yield", "reconciliation", "oos", "other", "complaint"] as const;
 
 /**
  * Deviation / nonconformance (FR-production-08, FR-quality-05, W07-01..05; numbering DEV).

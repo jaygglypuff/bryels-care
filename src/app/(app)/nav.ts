@@ -77,6 +77,9 @@ export const NAV: NavGroup[] = [
       { label: "QA holds", href: "/quality/holds", permission: "quality.hold.view" },
       { label: "Bulk disposition", href: "/quality/bulk", permission: "quality.disposition.approve" },
       { label: "Traceability", href: "/quality/trace", permission: "quality.genealogy.view" },
+      // Wave 3 W3F
+      { label: "Complaints", href: "/quality/complaints", permission: "quality.complaint.view" },
+      { label: "Recall explorer", href: "/quality/recall", permission: "quality.genealogy.view" },
       { label: "Inspection plans", href: "/masterdata/inspection-plans", permission: "quality.inspection_plan.view" },
     ],
   },
@@ -87,6 +90,8 @@ export const NAV: NavGroup[] = [
       { label: "Sales orders", href: "/sales", permission: "sales.sales_order.view" },
       { label: "New order", href: "/sales/new", permission: "sales.sales_order.create" },
       { label: "Customers", href: "/sales/customers", permission: "masterdata.customer.view" },
+      // Wave 3 W3F
+      { label: "Customer returns", href: "/sales/returns", permission: "sales.customer_return.view" },
     ],
   },
   {

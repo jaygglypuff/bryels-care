@@ -600,6 +600,49 @@
         },
         "additionalProperties": false
       }
+    },
+    {
+      "name": "quality.recall.export",
+      "method": "GET",
+      "path": "/api/v1/quality/recall/export",
+      "summary": "CSV/XLSX of the recall explorer: affected customers, shipments, boxes, stock, lots and batches from a lot, box, batch, supplier lot or complaint (names customers; audited).",
+      "permission": "quality.genealogy.export",
+      "response": "file",
+      "query": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "supplierLot": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "complaintId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "forward",
+              "reverse"
+            ]
+          },
+          "format": {
+            "default": "csv",
+            "type": "string",
+            "enum": [
+              "csv",
+              "xlsx"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
     }
   ]
 }

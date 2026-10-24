@@ -53,6 +53,7 @@ export const DEVIATION_SOURCE_LABEL: Record<DeviationSource, string> = {
   reconciliation: "Reconciliation mismatch",
   oos: "Out-of-specification result (OOS)",
   other: "Other automatic trigger",
+  complaint: "Customer complaint",
 };
 
 type DeviationRow = typeof deviations.$inferSelect;

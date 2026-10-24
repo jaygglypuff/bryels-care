@@ -1057,18 +1057,21 @@ Gate G4 runs order → pick → pack → ship on staging with every shipped box 
 - Permissions: `quality.complaint.{view,create,submit}`, `quality.complaint.approve` (close) · Entities: `complaints` (numbering `CMP`)
 - AC1 Given a lot or box id, When entered, Then it is validated against shipments to that customer when known; closure needs qa_qc; internal notes never reach customer-facing documents.
 - States: standard · Audit: `quality.complaint.opened/closed` · Depends: → US-4-12 · Tests: `authz.*` (quality.complaint)
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3F). `/quality/complaints` (list, log, detail): lot/box code checked against the customer's recorded shipments (A-W3F-04), QA-only severity and closure, recall-assessment prompt (A-W3F-03), "Raise deviation" (source `complaint`), customer-facing acknowledgement that prints no internal field (A-W3F-07). Tests `tests/integration/quality/w3f-complaints-recall.test.ts`.
 
 #### US-4-16 Customer returns received by scan into quarantine (M, Should) — FR-quality-06, W09-11, W07-09
 **As** a warehouse_operator **I want** to receive returned boxes by scan into the returns location in `quarantine` **so that** QA dispositions them before anything is resold or scrapped.
 - Permissions: `sales.customer_return.{view,create,submit}`, `sales.customer_return.approve` (S), `sales.customer_return.post` (S) · Entities: `customer_returns`, `customer_return_lines` (condition, `to_location_id`, movement, disposition); `return` movement; numbering `RT`
 - AC1 Given approved return lines, When posted, Then `return` movements land in the returns/quarantine location, the shipment moves `delivered → returned` (partial allowed), and QA disposition follows W06; credit notes wait for Phase 6.
 - States: scanner states · Audit: `sales.customer_return.posted` · Depends: → US-4-12, → US-2-10 · Tests: `statemachine.*` (shipment), `stock.blocked.location_class`
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3F), shipment state via contract. `/sales/returns`: scan box/lot lines (V-OVER, V-DUP), submit → approve (SoD) → post as new quarantine lots with `return` movements into RET-01 (A-W3F-05); QA decides each return lot with the normal lot decision, then inspected → closed. The shipment transition is the `sales.shipment.returned` event until W3E's shipment state machine is wired in (A-W3F-08). Tests `tests/integration/sales/w3f-returns.test.ts`.
 
 #### US-4-17 Genealogy forward to customer and recall explorer (read) (S, Must) — FR-quality-09 (to customer), FR-quality-08 (explorer), W07-07, `docs/ux-system.md` §9.14
 **As** qa_qc **I want** the trace to continue from finished lot to box, shipment and customer, and in reverse from a complaint **so that** a recall list is a query, not a binder search.
 - Permissions: `quality.genealogy.view`, `quality.genealogy.export` (S) · Entities: `lot_genealogy_edges` extended with pack, shipment and customer edges
 - AC1 Given a complaint's lot, When traced in reverse, Then batches, sibling batches sharing input lots, boxes, shipments and customers list within 2 s for seed data, scoped to the user's sites (owner sees all); the recall case workflow itself is Phase 6 (E-6-06).
 - States: L E X D · Audit: `quality.genealogy.viewed`, `platform.export.created` · Depends: → US-3-16, → US-4-12 · Tests: `genealogy.forward_and_backward` (full chain)
+- **Delivery status (Wave 3, 2026-10-24):** Done (W3F). `/quality/recall` read-only explorer from a lot, box, batch, supplier lot or complaint, forward or reverse with sibling batches; affected customers, shipments (shipped / returned / still at customer), boxes, stock on hand; CSV/XLSX through `src/lib/export.ts` (`/api/v1/quality/recall/export`); W2C trace follows re-lot (return/transfer) edges. Boxes per shipment appear once W3E records them (contract `shipmentBoxes`).
 
 ---
 

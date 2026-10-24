@@ -1104,6 +1104,21 @@ Thresholds of `stock_adjustment` and `stock_count_variance` now come from `appro
 While the read-only maintenance mode applies to a user, every permission check for an action other
 than `view` or `export` refuses with `read_only` (503 `READ_ONLY_MODE`) before any write (US-2-30).
 
+### 8.6 As built: Wave 3 W3F complaints, customer returns, recall explorer
+
+`quality.complaint.{view,create,submit,approve}` and `sales.customer_return.{view,create,submit,approve,post}`
+are in `src/lib/permissions.ts` (block `// Wave 3 W3F`), granted per §3.6 and §3.8: owner_director view
+plus `sales.customer_return.approve`; site_manager view, return approve and post; qa_qc complaint
+v c s a and return v a; sales_cs complaint v c s and return v c s; warehouse_operator return v c s;
+auditor view; system_admin none of them. Severity classification and closure of a complaint need
+`quality.complaint.approve`; `submit` covers starting, updating, resolving and reopening. The return
+approver may not be its creator or submitter while `approvals.sod.customer_return` is on (409
+`SEPARATION_OF_DUTIES`). The recall explorer uses `quality.genealogy.view` and its export
+`quality.genealogy.export` (S); the W2C restriction of A-W2C-05 still applies (sales_cs has no
+genealogy view, so "Trace this lot" shows for QA, managers, owner and auditor only). Raising a
+deviation from a complaint needs `quality.deviation.create` as well. Every service checks the
+permission at the record's site (`requireAt`) and scopes queries to the user's sites.
+
 ## 9. Assumptions and open questions
 
 | Id | Assumption (default) | Needs confirmation from |

@@ -45,3 +45,21 @@ export {
 export { requestConditionalRelease, decideConditionalRelease, cancelConditionalRelease, conditionalReleaseState } from "./conditional-release";
 export { bulkDispositionCandidates, applyBulkDisposition, BULK_REASON_CODES, type BulkDispositionInput, type BulkFilter } from "./bulk-disposition";
 export { labelVerificationZone, verifyLabelScan, labelVerificationLocations } from "./label-verification";
+// Wave 3 W3F: complaints (US-4-15) and the recall explorer (US-4-17)
+export {
+  logComplaint,
+  classifyComplaint,
+  startComplaintInvestigation,
+  updateComplaint,
+  resolveComplaint,
+  reopenComplaint,
+  closeComplaint,
+  raiseComplaintDeviation,
+  listComplaints,
+  getComplaint,
+  complaintFormContext,
+  getComplaintAcknowledgement,
+  type LogComplaintInput,
+} from "./complaints";
+export { COMPLAINT_TRANSITIONS, COMPLAINT_STATUS_LABEL, COMPLAINT_CHANNEL_LABEL, TRACE_MATCH_LABEL, toCustomerFacing, type ComplaintStatus, type CustomerFacingComplaint } from "./complaints-rules";
+export { recallScope, recallExport, flattenRecall, type RecallScope, type RecallQuery, type RecallMode } from "./recall";

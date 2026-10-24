@@ -307,6 +307,52 @@ export const SETTINGS = {
     }[],
     assumption: "A-UX-12", group: "Production", label: "Production board columns",
   },
+
+  // Wave 3 W3F: complaints, customer returns and the recall explorer (E-4-05). Every list is the company's
+  // QA configuration (A-W3F-nn in docs/PRD.md); the defaults are placeholders for QA to confirm or replace.
+  /** Complaint categories offered when a complaint is logged (W07-06). */
+  "quality.complaint.categories": {
+    scopes: ["organization"],
+    schema: z.array(z.object({ code: z.string().regex(/^[a-z][a-z0-9_]{0,30}$/), label: z.string().min(1).max(60) }).strict()).min(1).max(30),
+    default: [
+      { code: "product_quality", label: "Product quality (appearance, smell, texture)" },
+      { code: "packaging", label: "Packaging or container" },
+      { code: "labelling", label: "Label or printed information" },
+      { code: "quantity", label: "Quantity or count" },
+      { code: "foreign_matter", label: "Foreign matter" },
+      { code: "skin_reaction", label: "Reported skin or health reaction" },
+      { code: "delivery", label: "Delivery or documents" },
+      { code: "other", label: "Other" },
+    ] as { code: string; label: string }[],
+    assumption: "A-W3F-01", group: "Quality", label: "Complaint categories", requiresApproval: true,
+  },
+  /** Complaint severity classes qa_qc chooses from; their meaning is the company's QA definition. */
+  "quality.complaint.severity_levels": {
+    scopes: ["organization"],
+    schema: z.array(z.string().regex(/^[a-z][a-z0-9_]{0,30}$/)).min(1).max(10),
+    default: ["minor", "major", "critical"] as string[],
+    assumption: "A-W3F-02", group: "Quality", label: "Complaint severity levels", requiresApproval: true,
+  },
+  /** Severities that flag the complaint for a recall assessment and notify QA and the owner. A prompt only: the recall decision stays with people (W07-08, A-PROC-25). */
+  "quality.complaint.recall_review_severities": {
+    scopes: ["organization"],
+    schema: z.array(z.string().regex(/^[a-z][a-z0-9_]{0,30}$/)).max(10),
+    default: ["critical"] as string[],
+    assumption: "A-W3F-03", group: "Quality", label: "Complaint severities that prompt a recall assessment", requiresApproval: true,
+  },
+  /** When the customer has recorded shipments, the lot or box named must be among them (W07-06 "validated against shipments to that customer when known"). */
+  "quality.complaint.require_shipment_match": { scopes: ["organization"], schema: z.boolean(), default: true, assumption: "A-W3F-04", group: "Quality", label: "Complaint lot must match a shipment to the customer" },
+  /**
+   * Location kinds a customer return may be received into (V-LOC: the returns location, status quarantine). The
+   * inventory location-class rule (allowedDestinationKinds) applies on top, so `recall` takes effect only once
+   * recall locations accept quarantined stock (recall cases, Phase 6).
+   */
+  "sales.customer_return.location_kinds": {
+    scopes: ["organization", "site"],
+    schema: z.array(z.enum(["quarantine", "hold", "recall"])).min(1).max(3),
+    default: ["quarantine"] as ("quarantine" | "hold" | "recall")[],
+    assumption: "A-W3F-05", group: "Sales", label: "Customer returns are received into location kinds",
+  },
 } as const satisfies Record<string, SettingDefinition>;
 
 export type SettingKey = keyof typeof SETTINGS;
