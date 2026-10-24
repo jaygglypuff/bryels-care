@@ -11,6 +11,7 @@ import { getSetting } from "@/lib/settings";
 import { assertTransition, assertUuid, diff, isReferenced, optInt, optText, optUuid, reqText, scanCode, uniqueConflict } from "./org-common";
 import { PRODUCT_STATUSES, PRODUCT_TRANSITIONS, type ProductStatus, isValidGtin } from "./products-shelf-life";
 import { parseInput } from "./schemas";
+import { runInTx, type InTx } from "@/lib/tx";
 
 /**
  * Products and SKUs, basic fields (US-1-22). Products are organization-wide master data. The MVP
@@ -137,10 +138,11 @@ async function assertProductCodeFree(q: DbOrTx, ctx: AuthContext, code: string, 
   if (s && s.productId !== productId) throw new DomainError("conflict", `${code} is already an SKU code of another product.`, { field: "code" });
 }
 
-export async function createProduct(ctx: AuthContext, raw: unknown) {
+/** `opts.tx`: run inside a caller's transaction (savepoint), e.g. an import chunk (W3C, src/lib/tx.ts). */
+export async function createProduct(ctx: AuthContext, raw: unknown, opts?: InTx) {
   ctx.require("masterdata.product.create");
   const v = parseInput(ProductInput, raw);
-  return db.transaction(async (tx) => {
+  return runInTx(opts, async (tx) => {
     const family = await normaliseFamily(tx, ctx.organizationId, v.family);
     await assertProductCodeFree(tx, ctx, v.code);
     const [p] = await tx
@@ -273,10 +275,11 @@ async function assertSkuRefs(q: DbOrTx, ctx: AuthContext, v: z.output<typeof Sku
   return p;
 }
 
-export async function createSku(ctx: AuthContext, raw: unknown) {
+/** `opts.tx`: run inside a caller's transaction (savepoint), e.g. an import chunk (W3C, src/lib/tx.ts). */
+export async function createSku(ctx: AuthContext, raw: unknown, opts?: InTx) {
   ctx.require("masterdata.sku.create");
   const v = parseInput(SkuInput, raw);
-  return db.transaction(async (tx) => {
+  return runInTx(opts, async (tx) => {
     await assertSkuRefs(tx, ctx, v);
     const [s] = await tx
       .insert(skus)

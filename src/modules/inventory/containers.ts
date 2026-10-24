@@ -25,6 +25,7 @@ import { allowedDestinationKinds, isPastExpiry, isUuid } from "./lots";
 import { looseQty, MOVABLE_BOX_STATUSES } from "./moves";
 import { activeCountsForLocations } from "./counts";
 import { getInventorySetting } from "./policy";
+import { runInTx, type InTx } from "@/lib/tx";
 
 type ContainerStatus = "open" | "sealed" | "in_transit" | "shipped" | "empty" | "void";
 
@@ -126,7 +127,8 @@ function sameItem(a: { materialId: string | null; productId: string | null }, b:
 export type CreateBoxInput = { lotId: string; locationId: string; qty: string; containerKind?: string; isPartial?: boolean; notes?: string | null; idempotencyKey: string };
 
 /** Packs loose stock of a lot at a location into a new box (rule BOX). Stock stays at the location. */
-export async function createBox(ctx: AuthContext, input: CreateBoxInput) {
+/** `opts.tx`: run inside a caller's transaction (savepoint), e.g. opening-stock posting (W3C, src/lib/tx.ts). */
+export async function createBox(ctx: AuthContext, input: CreateBoxInput, opts?: InTx) {
   ctx.require("inventory.container.create");
   const kind = input.containerKind ?? "box";
   if (!(CONTAINER_KINDS as readonly string[]).includes(kind)) throw new DomainError("validation", "Choose a container kind.");
@@ -134,7 +136,7 @@ export async function createBox(ctx: AuthContext, input: CreateBoxInput) {
   const qty = parseQty(input.qty);
   const key = `box_create:${input.idempotencyKey}`;
   const body = { ...input, idempotencyKey: undefined };
-  return db.transaction(async (tx) => {
+  return runInTx(opts, async (tx) => {
     const claimed = await claimIdempotencyKey<{ id: string; containerNumber: string }>(tx, ctx.organizationId, key, "inventory.container.create", body);
     if (claimed) return { ...claimed.replay, replayed: true };
     const [lot] = await lockLots(tx, [input.lotId]);
@@ -369,6 +371,32 @@ export async function repackBox(ctx: AuthContext, input: RepackInput) {
     await storeIdempotentResult(tx, ctx.organizationId, key, body, result);
     return { ...result, replayed: false };
   });
+}
+
+/**
+ * W3C (docs/data-migration-plan.md §9.3): before an opening-stock line is reversed, the boxes holding
+ * that lot at that location are emptied and voided in the caller's transaction (the reversal takes the
+ * stock away, so no box may keep claiming it). Returns the voided box numbers. Audited per box.
+ */
+export async function voidBoxesForReversal(tx: Tx, ctx: AuthContext, input: { lotId: string; locationId: string; reason: string }) {
+  const rows = await tx
+    .select({ box: containers, qty: containerContents.qtyBase })
+    .from(containerContents)
+    .innerJoin(containers, eq(containers.id, containerContents.containerId))
+    .where(and(eq(containerContents.lotId, input.lotId), eq(containers.currentLocationId, input.locationId), inArray(containers.status, ["open", "sealed"]), gt(containerContents.qtyBase, "0")))
+    .orderBy(asc(containers.id))
+    .for("update");
+  const voided: string[] = [];
+  for (const { box, qty } of rows) {
+    ctx.requireSite(box.siteId);
+    const all = await contentsOf(tx, box.id);
+    if (all.some((c) => c.lotId !== input.lotId)) throw new DomainError("state", `Box ${box.containerNumber} also holds other lots; repack it before the reversal.`);
+    await takeContent(tx, box.id, input.lotId, new Decimal(qty));
+    await tx.update(containers).set({ status: "void", updatedAt: new Date() }).where(eq(containers.id, box.id));
+    await audit(tx, ctx, { action: "inventory.container.voided", entityType: "container", entityId: box.id, entityNumber: box.containerNumber, siteId: box.siteId, reason: input.reason, before: { status: box.status }, after: { status: "void" } });
+    voided.push(box.containerNumber);
+  }
+  return voided;
 }
 
 /** Seal, reopen or void an (empty) box through the container state machine. */

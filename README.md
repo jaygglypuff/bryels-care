@@ -49,6 +49,7 @@ migration. Its canonical source is `src/db/sql/w1d.sql`; the migration is a verb
 | `pnpm worker` | Background worker (pg-boss): reconciliation, expiry check, reservation expiry, balance rebuilds, document renders; health on `PORT` (default 3001) |
 | `pnpm db:reference` | Installs the reference master data (units g/kg/mg/mL/L/pcs, SI conversions, default reason codes) for every organization that lacks them; idempotent, never overwrites company edits. Runs automatically after the migrations in `scripts/start.sh` (every deploy) and in `pnpm admin:bootstrap`; the demo seed installs it too (ADR-040) |
 | `pnpm admin:bootstrap` | Production first administrator: invited owner + system admin and a one-time link (no demo seed, refuses once anyone is active; `--sync-roles` re-syncs seeded role templates). See "First administrator" below |
+| `pnpm migrate:load …` / `pnpm migrate:approve <IMP> --as <email>` | Go-live loader (US-2-25): `--kind <kind> --file <path> --site <code> --as <email>` validates a file (dry run, results CSV next to the file) and submits it; a second person approves; `--post --job <IMP> --as <email>` posts. Asks for the password interactively. Production needs `MIGRATION_WINDOW_OPEN=true`; `--post` also needs the read-only maintenance mode on. Same engine as Admin → Imports (`docs/data-migration-plan.md` §9.4, §9.5) |
 | `pnpm api:contract` | Regenerate `docs/api/v1-contract.json` from `src/lib/api/contract.ts` (a test fails when it is stale) |
 
 Environment variables (the full per-service table is `docs/deployment-railway.md` §4):
@@ -72,6 +73,7 @@ Environment variables (the full per-service table is `docs/deployment-railway.md
 | `RELEASE` | web, worker | Release tag on every log line and error report (staging/production: `${{RAILWAY_GIT_COMMIT_SHA}}`); default `dev` |
 | `ERROR_REPORTING_DSN` | web, worker | Error-reporting adapter (`src/lib/log/error-reporter.ts`): unset = disabled (logged once, never a failure); `console` = structured `error_report` log line; a Sentry-compatible DSN = events posted to the provider without cookies, headers, bodies or query strings |
 | `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_ROLES`, `BOOTSTRAP_ORG_NAME`, `BOOTSTRAP_SITE_CODE`, `BOOTSTRAP_SITE_NAME` | one-off shell | Read only by `pnpm admin:bootstrap` (first administrator, organization, first site and its reference data); set for the one run, then remove. See "First administrator" below |
+| `MIGRATION_WINDOW_OPEN` | web, worker, one-off shell | `true` only during the cutover window: lets the migration loader run against production (`APP_ENV=production`) and lets opening-stock imports post there; also required by `migrate:load --post` everywhere. Remove when check MC-16 passes (`docs/operations-runbook.md` §17a.2) |
 | `DATABASE_POOL_MAX` | web, worker | Connection pool size per process (default 10; `DB_POOL_MAX` is accepted as an older alias) |
 | `BACKUP_STATUS_SOURCE` | web, worker | `table` = the diagnostics Backups card and the backup-age alert read `backup_runs` (written by `pnpm backup:record` from the backup service). Unset = the card says "not configured" |
 

@@ -10,6 +10,7 @@ import { platformAlertsEvaluateJob, platformMetricsSampleJob } from "@/modules/g
 import { inventoryExpiryCheckJob, inventoryRebuildBalancesJob, inventoryReconcileJob, inventoryReservationExpiryJob } from "@/modules/inventory/jobs";
 import { salesQuoteExpiryJob } from "@/modules/sales/quotations-expiry-job";
 import { salesDeliveryReceiptReminderJob } from "@/modules/sales/jobs/dr-reminder"; // W3E
+import { importJobProcessJob } from "@/modules/imports/jobs/process";
 import { type AnyJobDefinition, type JobRegistry, createJobRegistry } from "./job-definition";
 
 /**
@@ -28,6 +29,7 @@ export function jobDefinitions(): AnyJobDefinition[] {
     platformAlertsEvaluateJob,
     salesQuoteExpiryJob,
     salesDeliveryReceiptReminderJob, // W3E (US-4-13)
+    importJobProcessJob,
   ];
 }
 

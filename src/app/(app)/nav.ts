@@ -134,6 +134,9 @@ export const NAV: NavGroup[] = [
       { label: "Settings", href: "/admin/settings", permission: "platform.settings.view" },
       { label: "Approval rules", href: "/admin/approval-rules", permission: "platform.approval_rule.view" },
       { label: "Numbering", href: "/admin/numbering", permission: "platform.numbering_rule.view" },
+      // Wave 3 W3C: import wizard and legacy documents
+      { label: "Imports", href: "/admin/imports", permission: "platform.import_job.view" },
+      { label: "Legacy documents", href: "/admin/imports/legacy-documents", permission: "documents.legacy_document.view" },
     ],
   },
   {

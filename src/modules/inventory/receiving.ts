@@ -685,6 +685,8 @@ export async function reverseReceipt(ctx: AuthContext, input: { receiptId: strin
   return db.transaction(async (tx) => {
     const gr = await lockReceipt(tx, ctx, input.receiptId);
     const to = assertReceiptTransition("reverse", gr.status, receiptLabel(gr));
+    // W3C: opening stock lines live in opening_balance_lines; the import job void reverses them (docs/data-migration-plan.md §9.3).
+    if (gr.receiptKind === "opening_balance") throw new DomainError("state", `Receipt ${receiptLabel(gr)} is an opening balance; reverse it by voiding its import job.`);
     const rows = await tx
       .select({ line: goodsReceiptLines, lotNumber: inventoryLots.lotNumber, locationCode: locations.code })
       .from(goodsReceiptLines)

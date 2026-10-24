@@ -10,6 +10,7 @@ import { DomainError } from "@/lib/errors";
 import { assertUuid, bool, diff, optText, optUuid, reqText, uniqueConflict } from "./org-common";
 import { parseInput } from "./schemas";
 import { type ConversionStep, type Quantity, enteredEqualsBase, toBasePair } from "./uom-math";
+import { runInTx, type InTx } from "@/lib/tx";
 
 /**
  * Units of measure and versioned conversions (US-1-21, ADR-010). Every role can read the lists
@@ -169,10 +170,10 @@ const sameMaterial = (materialId: string | null) => (materialId ? eq(uomConversi
  * Proposes a new conversion version (status pending_approval). A second admin approves it; the
  * approved version then replaces the previous one for the same units (and material).
  */
-export async function proposeConversion(ctx: AuthContext, raw: unknown) {
+export async function proposeConversion(ctx: AuthContext, raw: unknown, opts?: InTx) {
   ctx.require("masterdata.uom_conversion.admin");
   const v = parseInput(ConversionInput, raw);
-  return db.transaction(async (tx) => {
+  return runInTx(opts, async (tx) => {
     const units = await tx.select().from(uoms).where(and(eq(uoms.organizationId, ctx.organizationId), inArray(uoms.id, [v.fromUomId, v.toUomId])));
     const from = units.find((u) => u.id === v.fromUomId);
     const to = units.find((u) => u.id === v.toUomId);

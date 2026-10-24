@@ -31,12 +31,15 @@ export const inventoryLots = pgTable(
     /** Lot this one was re-lotted from (inter-site transfer, US-2-14 AC2); a genealogy edge. */
     originLotId: uuid("origin_lot_id"),
     baseUom: text("base_uom").notNull(),
+    /** Paper batch or legacy lot number of an opening lot (W3C, US-2-26); never a scan payload or a foreign key. */
+    legacyNumber: text("legacy_number"),
     createdBy: uuid("created_by").references(() => users.id),
     createdAt: createdAt(),
   },
   (t) => [
     uniqueIndex("lots_org_number_uq").on(t.organizationId, t.lotNumber),
     index("lots_site_status_idx").on(t.siteId, t.qualityStatus),
+    uniqueIndex("lots_org_legacy_number_uq").on(t.organizationId, t.legacyNumber).where(sql`${t.legacyNumber} is not null`),
   ],
 );
 

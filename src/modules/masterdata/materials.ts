@@ -9,6 +9,7 @@ import { DomainError } from "@/lib/errors";
 import type { ExportDefinition } from "@/lib/export";
 import { assertTransition, assertUuid, bool, diff, isReferenced, optInt, optText, reqText, scanCode, uniqueConflict } from "./org-common";
 import { parseInput } from "./schemas";
+import { runInTx, type InTx } from "@/lib/tx";
 
 /**
  * Materials, basic fields (US-1-23, A-PRD-27, A-DM-04). Organization-wide master data: every role
@@ -116,10 +117,11 @@ async function assertBaseUom(q: DbOrTx, organizationId: string, code: string) {
   if (!u.isBase) throw new DomainError("validation", `${code} is not a base unit. Stock is kept in the base unit of its dimension (g, mL or pcs); other units are converted.`, { field: "baseUom" });
 }
 
-export async function createMaterial(ctx: AuthContext, raw: unknown) {
+/** `opts.tx`: run inside a caller's transaction (savepoint), e.g. an import chunk (W3C, src/lib/tx.ts). */
+export async function createMaterial(ctx: AuthContext, raw: unknown, opts?: InTx) {
   ctx.require("masterdata.material.create");
   const v = parseInput(CreateInput, raw);
-  return db.transaction(async (tx) => {
+  return runInTx(opts, async (tx) => {
     await assertBaseUom(tx, ctx.organizationId, v.baseUom);
     const [m] = await tx
       .insert(materials)
