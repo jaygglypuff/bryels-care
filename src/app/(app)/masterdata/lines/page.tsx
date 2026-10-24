@@ -43,7 +43,7 @@ export default async function LinesPage({ searchParams }: { searchParams: Promis
                 options={opts.departments.map((d) => ({ value: d.id, label: `${ctx.allowedSites.find((s) => s.id === d.siteId)?.code ?? ""} · ${d.name}` }))}
                 hint="Must be a department of the same site."
               />
-              <TextField name="code" label="Code" placeholder="SOAP-2" mono />
+              <TextField name="code" label="Code" placeholder="SOAP-3" mono />
               <TextField name="name" label="Name" placeholder="Soap line 2" />
             </Grid>
             <TextareaField name="notes" label="Notes (optional)" />

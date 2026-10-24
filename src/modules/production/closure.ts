@@ -9,6 +9,7 @@ import {
   batchAmendments,
   batchClosures,
   batchMaterials,
+  batchOutputs,
   batchReopenRequests,
   batchStateTransitions,
   batches,
@@ -127,9 +128,14 @@ export async function closureChecks(q: DbOrTx, ctx: AuthContext, b: typeof batch
   checks.push({ code: "paper_records", label: "Paper pages reviewed", ok: paper.length === 0, blocking: true, detail: paper.length ? paper.map((p) => p.message).join(" ") : "No paper page is waiting for review." });
 
   const y = await bmrYieldRecord(q, b.id);
-  if (y.available && b.status === "released") {
+  // A batch posted before electronic execution (MVP/legacy: no batch_outputs row, output on the batch
+  // itself) has no yield record to check; the BMR prints its actual yield from the batch.
+  const [posted] = await q.select({ id: batchOutputs.id }).from(batchOutputs).where(eq(batchOutputs.batchId, b.id)).limit(1);
+  if (y.available && b.status === "released" && !posted && !y.rows.length) {
+    checks.push({ code: "yield_record", label: "Yield reconciliation checked", ok: true, blocking: false, detail: "Recorded before electronic execution records; the BMR prints the actual yield from the batch." });
+  } else if (y.available && b.status === "released") {
     const rec = y.rows[0];
-    checks.push({ code: "yield_record", label: "Yield reconciliation checked", ok: !!rec?.checkedBy, blocking: true, detail: !rec ? "No yield record." : rec.checkedBy ? `Checked by ${rec.checkedBy}.` : "The yield record has not been checked by a second person." });
+    checks.push({ code: "yield_record", label: "Yield reconciliation checked", ok: !!rec?.checkedBy, blocking: true, detail: !rec ? "No yield record." : rec.checkedBy ? `Checked by ${rec.checkedBy} (co-signed the transfer to quarantine).` : "The yield record has not been checked by a second person." });
   } else {
     checks.push({ code: "yield_record", label: "Yield reconciliation checked", ok: true, blocking: false, detail: y.available ? "Not required for a rejected batch." : "Yield reconciliation records are not captured electronically in this version; the BMR prints the actual yield." });
   }

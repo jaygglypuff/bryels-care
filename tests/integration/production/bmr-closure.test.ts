@@ -451,7 +451,9 @@ describe("US-3-20 hybrid paper record pages", () => {
   });
 
   it("QA can release once every page is reviewed", async () => {
-    await decideBatch(qa, { batchId: awaiting.id, decision: "release", reason: "All results within specification; BMR and paper page reviewed." });
+    // The decider must not be the person who entered the batch's results (W2C, sod.disposition.decider_not_result_entry).
+    const qaLead = await asUser(kit, "qa.lead@bryels-care.test", "qa_qc", [kit.nfd, kit.rvs]);
+    await decideBatch(qaLead, { batchId: awaiting.id, decision: "release", reason: "All results within specification; BMR and paper page reviewed." });
     expect((await batch(awaiting.id)).status).toBe("released");
   });
 });

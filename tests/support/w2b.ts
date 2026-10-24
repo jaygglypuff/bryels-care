@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { uuidv7 } from "uuidv7";
 import { db } from "@/db/client";
@@ -18,6 +18,7 @@ import {
   routingStepParameters,
   routingSteps,
   routings,
+  settings,
   users,
 } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
@@ -42,6 +43,15 @@ import { type Kit, makeLot } from "./kit";
  * Batch-execution helpers (W2B) for integration tests of this and other streams. Every helper goes
  * through the services (permissions, SoD, ledger), never through direct inserts.
  */
+
+/**
+ * Batches without a work order are refused by default (A-W2A-01). Execution fixtures create batches
+ * directly on purpose; this turns the switch on for the organization of the kit (idempotent).
+ */
+export async function allowDirectBatches(kit: { orgId: string }) {
+  await db.delete(settings).where(and(eq(settings.organizationId, kit.orgId), eq(settings.key, "production.batch.allow_without_work_order"), isNull(settings.siteId)));
+  await db.insert(settings).values({ organizationId: kit.orgId, scope: "organization", key: "production.batch.allow_without_work_order", value: true });
+}
 
 export const manilaDay = (offset = 0) => new Date(Date.now() + offset * 86_400_000).toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
 
@@ -94,6 +104,7 @@ export async function weighAllAtTarget(operator: AuthContext, checker: AuthConte
  * W2B service. Returns the batch id, number and output lot.
  */
 export async function runSoapBatchToQuarantine(kit: Kit, a: { manager: AuthContext; operator: AuthContext; checker: AuthContext; plannedSizeKg?: string; units?: string }) {
+  await allowDirectBatches(kit);
   const { batchId, batchNumber } = await createBatch(a.manager, { formulaRevisionId: await acapulcoRevisionId(), plannedSizeKg: a.plannedSizeKg ?? "17.6", plannedStartOn: manilaDay(0) });
   await startBatch(a.operator, batchId);
   await cleanEquipment(a.operator, "SC-01");

@@ -207,11 +207,11 @@ describe("locations (US-1-20 AC1–AC3)", () => {
 
 describe("production lines and the equipment register (US-1-20 AC3)", () => {
   it("lines are site-scoped; equipment is assigned to a line of its site; blocking_rule changes are audited", async () => {
-    await expectCode(createLine(manager, { siteId: kit.nfd.id, code: "SOAP-2", name: "Soap line 2" }), "forbidden");
+    await expectCode(createLine(manager, { siteId: kit.nfd.id, code: "SOAP-3", name: "Soap line 3" }), "forbidden");
     const rvsDept = (await import("@/modules/masterdata")).listDepartments;
     const [rvsWhDept] = await rvsDept(admin, { siteId: kit.rvs.id });
-    await expectCode(createLine(admin, { siteId: kit.nfd.id, code: "SOAP-2", name: "Soap line 2", departmentId: rvsWhDept.id }), "validation");
-    const line = await createLine(admin, { siteId: kit.nfd.id, code: "SOAP-2", name: "Soap line 2" });
+    await expectCode(createLine(admin, { siteId: kit.nfd.id, code: "SOAP-3", name: "Soap line 3", departmentId: rvsWhDept.id }), "validation");
+    const line = await createLine(admin, { siteId: kit.nfd.id, code: "SOAP-3", name: "Soap line 3" });
     const seeded = (await listLines(manager)).find((l) => l.code === "SOAP-1")!;
     expect(seeded.equipmentCount).toBeGreaterThanOrEqual(3);
     const detail = await getLine(manager, seeded.id);
@@ -219,7 +219,7 @@ describe("production lines and the equipment register (US-1-20 AC3)", () => {
     const [mix] = await db.select().from(equipment).where(eq(equipment.code, "MIX-01"));
     await expectCode(assignEquipmentToLine(operator, { equipmentId: mix.id, productionLineId: line.id }), "forbidden");
     const moved = await assignEquipmentToLine(manager, { equipmentId: mix.id, productionLineId: line.id });
-    expect(moved).toMatchObject({ productionLineId: line.id, lineLabel: "Soap line 2" });
+    expect(moved).toMatchObject({ productionLineId: line.id, lineLabel: "Soap line 3" });
     expect(await events(mix.id, "masterdata.equipment.line_assigned")).toHaveLength(1);
     // Cross-site: an RVS manager cannot touch NFD equipment or lines.
     await expectCode(assignEquipmentToLine(managerRvs, { equipmentId: mix.id, productionLineId: null }), "not_found");

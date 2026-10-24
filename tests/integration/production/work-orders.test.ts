@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
-import { auditEvents, batches, stockReservations, workOrderStateTransitions, workOrders } from "@/db/schema";
+import { auditEvents, batches, settings, stockReservations, workOrderStateTransitions, workOrders } from "@/db/schema";
 import {
   cancelWorkOrder,
   createBatchFromWorkOrder,
@@ -227,11 +227,14 @@ describe("batches from work orders (US-3-06)", () => {
     await expectCode(createBatchFromWorkOrder(w.plannerRvs, { workOrderId: r.workOrderId }), "not_found");
   });
 
-  it("direct batch creation is refused once the transition setting is off", async () => {
-    await setOrgSetting(w.orgId, "production.batch.allow_without_work_order", false);
+  it("direct batch creation is refused by default (production.batch.allow_without_work_order is off)", async () => {
+    await db.delete(settings).where(and(eq(settings.organizationId, w.orgId), eq(settings.key, "production.batch.allow_without_work_order")));
     const [wo] = await db.select().from(workOrders).where(eq(workOrders.status, "released")).limit(1);
     await expectCode(createBatch(w.manager, { formulaRevisionId: wo.formulaRevisionId!, plannedSizeKg: "17.6", plannedStartOn: day(2) }), "validation");
+    // The switch exists for legacy/service callers; turned on, direct creation works.
     await setOrgSetting(w.orgId, "production.batch.allow_without_work_order", true);
+    await createBatch(w.manager, { formulaRevisionId: wo.formulaRevisionId!, plannedSizeKg: "17.6", plannedStartOn: day(2) });
+    await db.delete(settings).where(and(eq(settings.organizationId, w.orgId), eq(settings.key, "production.batch.allow_without_work_order")));
   });
 
   it("cancelling a work order abandons its unstarted batches (planned → rejected)", async () => {

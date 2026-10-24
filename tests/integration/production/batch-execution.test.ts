@@ -44,7 +44,7 @@ import {
 } from "@/modules/production";
 import { resetTestDatabase } from "../../support/db";
 import { type Kit, asUser, expectCode, loadKit, loc, makeLot, onHand } from "../../support/kit";
-import { SOAP_LOTS, acapulcoRevisionId, cleanEquipment, lotBySupplierLot, manilaDay, runSoapBatchToQuarantine, signChecklist, snapshotOf, weighAllAtTarget } from "../../support/w2b";
+import { SOAP_LOTS, acapulcoRevisionId, allowDirectBatches, cleanEquipment, lotBySupplierLot, manilaDay, runSoapBatchToQuarantine, signChecklist, snapshotOf, weighAllAtTarget } from "../../support/w2b";
 
 let kit: Kit;
 let manager: AuthContext;
@@ -73,6 +73,7 @@ async function newStartedBatch(sizeKg = "17.6") {
 beforeAll(async () => {
   await resetTestDatabase();
   kit = await loadKit();
+  await allowDirectBatches(kit); // execution tests create batches without work orders on purpose
   manager = await asUser(kit, "manager.nfd@bryels-care.test", "site_manager", [kit.nfd]);
   operator = await asUser(kit, "operator.nfd@bryels-care.test", "production_operator", [kit.nfd]);
   checker = await asUser(kit, "checker.nfd@bryels-care.test", "production_operator", [kit.nfd]);

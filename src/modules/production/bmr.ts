@@ -38,7 +38,7 @@ import {
   type BmrData,
   type SourceTemplate,
 } from "@/modules/documents";
-import { bmrBatchOutputs, bmrDeviations, bmrEquipmentUses, bmrInspections, bmrLineClearanceChecks, bmrProcessReadings, bmrYieldRecord } from "./bmr-sources";
+import { bmrBatchOutputs, bmrDeviations, bmrEquipmentUses, bmrInspections, bmrLineClearanceChecks, bmrPackagingReconciliations, bmrProcessReadings, bmrYieldRecord } from "./bmr-sources";
 import { toleranceRange } from "./dispensing";
 import { type FormulaSnapshot, idempotent } from "./shared";
 
@@ -192,7 +192,7 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
   const docs = await documentsForSource(q, ctx.organizationId, "batch", batch.id, [BMR_KIND, PAPER_PAGE_KIND]);
 
   // W2B / W2C sources (empty and `available: false` until those tables exist).
-  const [lc, readings, equipmentUses, yieldRec, outputs, inspections, deviations] = await Promise.all([
+  const [lc, readings, equipmentUses, yieldRec, outputs, inspections, deviations, packagingRecs] = await Promise.all([
     bmrLineClearanceChecks(q, batch.id),
     bmrProcessReadings(q, batch.id),
     bmrEquipmentUses(q, batch.id),
@@ -200,6 +200,7 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
     bmrBatchOutputs(q, batch.id),
     bmrInspections(q, batch.id),
     bmrDeviations(q, batch.id),
+    bmrPackagingReconciliations(q, batch.id),
   ]);
 
   const nm = await names(q, [
@@ -246,8 +247,9 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
           at: fmtDateTime(d.r.recordedAt),
           checker: who(d.r.checkerId),
           exceptionReason: d.r.exceptionReason ?? null,
-          struck: false,
-          struckReason: null,
+          // A voided weighing stays on the record, struck through with its reason (W2B voidDispense).
+          struck: !!d.r.voidedAt,
+          struckReason: d.r.voidedAt ? `Voided: ${d.r.voidReason ?? "reason not given"}` : null,
         })),
       },
       theo: new Decimal(bm.theoreticalQtyG),
@@ -283,14 +285,14 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
         workInstruction: s.workInstruction ? `${s.workInstruction.code} rev ${s.workInstruction.revisionNo}` : null,
         readings: r?.readings ?? null,
         conducted: r ? { name: who(r.conductedBy) ?? "", at: at(r.completedAt) } : null,
-        checked: r?.checkedBy ? { name: who(r.checkedBy) ?? "", at: null } : null,
+        checked: r?.checkedBy ? { name: who(r.checkedBy) ?? "", at: at(r.checkedAt) } : null,
       };
     });
 
   const disposition = [...disps].reverse().find((d) => ["release", "reject", "rework", "conditional_release"].includes(d.decision)) ?? null;
   const exceptions = lines.flatMap((l) =>
     l.line.records
-      .filter((r) => !r.withinTolerance)
+      .filter((r) => !r.withinTolerance && !r.struck)
       .map((r) => `Weighing exception, ${l.line.name}: ${r.actualText} g vs ${l.line.theoreticalText} g (${l.line.toleranceText}). Reason: ${r.exceptionReason ?? "—"}`),
   );
   const y = yieldRec.rows[0];
@@ -359,9 +361,15 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
       rows: equipmentUses.rows.map((e) => ({ stepNo: e.stepNo, code: e.code, name: e.name, calibrationDue: e.calibrationDue, cleaning: e.cleaning, operator: e.operator, at: at(e.startedAt), exception: e.exceptionReason })),
     },
     packaging: {
-      available: yieldRec.available,
-      rows: y
-        ? [
+      available: yieldRec.available || packagingRecs.available,
+      rows: [
+        // W2B packaging reconciliation: one line per component lot issued to the packaging step.
+        ...packagingRecs.rows.map((p) => ({
+          label: `${p.material}${p.lot ? ` (${p.lot})` : ""}`,
+          value: `issued ${p.issued}, used ${p.used ?? "—"}, damaged ${p.damaged ?? "—"}, returned ${p.returned ?? "—"} ${p.uom}; variance ${p.variance ?? "—"} (tolerance ${p.tolerance})${p.withinTolerance === false ? " !" : ""}${p.countedBy ? ` · counted by ${p.countedBy}` : ""}`,
+        })),
+        ...(y && y.labelsIssued !== null
+          ? [
             { label: "Labels issued", value: y.labelsIssued === null ? "—" : String(y.labelsIssued) },
             { label: "Labels used", value: y.labelsUsed === null ? "—" : String(y.labelsUsed) },
             { label: "Labels destroyed", value: y.labelsDestroyed === null ? "—" : String(y.labelsDestroyed) },
@@ -369,9 +377,10 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
               label: "Labels unaccounted",
               value: y.labelsIssued === null ? "—" : `${y.labelsIssued - (y.labelsUsed ?? 0) - (y.labelsDestroyed ?? 0)}${y.labelsIssued - (y.labelsUsed ?? 0) - (y.labelsDestroyed ?? 0) !== 0 ? " !" : ""}`,
             },
-            ...(y.packagingNotes ? [{ label: "Notes", value: y.packagingNotes }] : []),
-          ]
-        : [],
+            ]
+          : []),
+        ...(y?.packagingNotes ? [{ label: "Notes", value: y.packagingNotes }] : []),
+      ],
     },
     outputYield: {
       theoreticalText: `${fmtQty(batch.theoreticalYieldG, "g", 0)} (${fmtQty(snap.theoreticalYieldPct, "%", 1)} of batch size)`,
@@ -386,8 +395,11 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
               { label: "Theoretical", value: y.theoretical },
               { label: "Actual", value: y.actual },
               { label: "Variance", value: `${y.variance}${y.variancePct ? ` (${y.variancePct} %)` : ""}` },
+              ...(y.yieldPct ? [{ label: "Yield", value: `${y.yieldPct} %${y.limitsText ? ` (limits ${y.limitsText})` : ""}${y.withinLimits === false ? " !" : ""}` }] : []),
+              ...(y.actualUnits ? [{ label: "Units", value: y.actualUnits }] : []),
               { label: "Recorded by", value: y.recordedBy ?? "—" },
               { label: "Checked by", value: y.checkedBy ?? "—" },
+              ...(y.approvedBy ? [{ label: "Out-of-range yield approved by", value: `${y.approvedBy}${y.approvalReason ? `: ${y.approvalReason}` : ""}` }] : []),
             ]
           : [],
       },

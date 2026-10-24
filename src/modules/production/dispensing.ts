@@ -120,6 +120,11 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
   return db.transaction(async (tx) => {
     const batch = await lockBatch(tx, ctx, input.batchId);
     const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.dispense_record.create", async () => {
+      if (batch.status === "materials_staged") {
+        // §6.2: the signed weighing-area line clearance (step 1) moves the batch in process.
+        const first = [...(batch.formulaSnapshot as FormulaSnapshot).steps].sort((x, z) => x.stepNo - z.stepNo).find((s) => s.stepKind === "line_clearance");
+        throw new DomainError("state", `Complete step ${first?.stepNo ?? 1} (${first?.name ?? "line clearance"}) first: weighing starts once the line clearance is signed.`, { rule: "V-STATE" });
+      }
       if (batch.status !== "in_process") {
         throw new DomainError("state", `Batch ${batch.batchNumber} is ${batch.status.replace(/_/g, " ")}. Weighing is only possible while the batch is in process.`);
       }

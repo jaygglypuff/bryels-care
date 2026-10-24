@@ -32,7 +32,7 @@ import {
 } from "@/modules/production";
 import { resetTestDatabase } from "../../support/db";
 import { type Kit, asUser, expectCode, loadKit, loc, makeLot } from "../../support/kit";
-import { type FixtureStep, cleanEquipment, makeExecutionFixture, manilaDay } from "../../support/w2b";
+import { type FixtureStep, allowDirectBatches, cleanEquipment, makeExecutionFixture, manilaDay } from "../../support/w2b";
 
 let kit: Kit;
 let manager: AuthContext;
@@ -92,6 +92,7 @@ async function throughWeighing(batchId: string) {
 beforeAll(async () => {
   await resetTestDatabase();
   kit = await loadKit();
+  await allowDirectBatches(kit); // execution tests create batches without work orders on purpose
   manager = await asUser(kit, "manager.nfd@bryels-care.test", "site_manager", [kit.nfd]);
   operator = await asUser(kit, "operator.nfd@bryels-care.test", "production_operator", [kit.nfd]);
   checker = await asUser(kit, "checker.nfd@bryels-care.test", "production_operator", [kit.nfd]);

@@ -127,7 +127,7 @@ export async function missingPrerequisites(q: DbOrTx, batch: BatchRow, step: Sna
 function assertBatchExecutable(batch: BatchRow, step: SnapshotStep) {
   if (batch.status === "in_process") return;
   if (batch.status === "materials_staged" && step.stepKind === "line_clearance") return;
-  const hint = batch.status === "planned" ? " Start the batch (materials staged) first." : "";
+  const hint = batch.status === "planned" ? (batch.workOrderId ? " Stage the materials first." : " Confirm the materials at the line first.") : "";
   throw new DomainError("state", `Batch ${batch.batchNumber} is ${batch.status.replace(/_/g, " ")}; ${stepLabel(step)} cannot be worked on now.${hint}`);
 }
 

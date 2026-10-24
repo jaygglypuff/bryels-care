@@ -1,7 +1,8 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { allowDirectBatches } from "../../support/w2b";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { approvalDecisions, auditEvents, batches, bomLines, formulaRevisions, formulas, products, routingRevisions, routings } from "@/db/schema";
+import { approvalDecisions, auditEvents, batches, bomLines, formulaRevisions, formulas, organizations, products, routingRevisions, routings } from "@/db/schema";
 import type { AuthContext, SiteRef } from "@/lib/auth/context";
 import {
   createFormula,
@@ -49,6 +50,7 @@ async function linesOf(revisionId: string): Promise<Line[]> {
 
 beforeAll(async () => {
   const s = await setupW1D();
+  await allowDirectBatches({ orgId: (await db.select({ id: organizations.id }).from(organizations).limit(1))[0].id }); // snapshot tests create batches directly
   nfd = s.nfd;
   planner = await s.ctxFor("planner.nfd@bryels-care.test", "production_planner", [nfd]);
   manager = await s.ctxFor("manager.nfd@bryels-care.test", "site_manager", [nfd]);
