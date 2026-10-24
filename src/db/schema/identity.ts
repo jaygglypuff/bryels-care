@@ -1,4 +1,5 @@
-import { bigint, boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { type AnyPgColumn, bigint, boolean, check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { createdAt, id, updatedAt } from "./_common";
 
 export const organizations = pgTable("organizations", {
@@ -34,6 +35,9 @@ export const users = pgTable(
     status: text("status").notNull().default("active"),
     failedLoginCount: integer("failed_login_count").notNull().default(0),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    /** W2E (US-1-11, US-1-16): password set/changed (acceptance, reset, own change); deactivation time. */
+    passwordChangedAt: timestamp("password_changed_at", { withTimezone: true }),
+    deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -51,8 +55,18 @@ export const roles = pgTable(
     isSystem: boolean("is_system").notNull().default(true),
     /** owner_director, system_admin and auditor may be assigned organization-wide. */
     allowsOrganizationWide: boolean("allows_organization_wide").notNull().default(false),
+    /** W2E (US-1-29): custom roles are cloned from a seeded template; status active | inactive. */
+    description: text("description"),
+    clonedFromRoleId: uuid("cloned_from_role_id").references((): AnyPgColumn => roles.id),
+    status: text("status").notNull().default("active"),
+    createdBy: uuid("created_by").references(() => users.id),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("roles_org_code_uq").on(t.organizationId, t.code)],
+  (t) => [
+    uniqueIndex("roles_org_code_uq").on(t.organizationId, t.code),
+    check("ck_roles_status", sql`${t.status} in ('active','inactive')`),
+    check("ck_roles_custom_clone", sql`${t.isSystem} or ${t.clonedFromRoleId} is not null`),
+  ],
 );
 
 export const rolePermissions = pgTable(
@@ -73,9 +87,28 @@ export const userSiteAssignments = pgTable(
     /** Null when isOrganizationWide is true. */
     siteId: uuid("site_id").references(() => sites.id),
     isOrganizationWide: boolean("is_organization_wide").notNull().default(false),
+    /**
+     * W2E (US-1-18): validity window. timestamptz (org-local midnight computed by the service) so every
+     * query compares with now() without a timezone; active = valid_from <= now() < coalesce(valid_to, ∞).
+     */
+    validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
+    validTo: timestamp("valid_to", { withTimezone: true }),
+    /** W2E (US-2-29): optional sub-scope inside the site, `{"warehouseIds": [...]}`; null = whole site. */
+    scope: jsonb("scope"),
+    createdBy: uuid("created_by").references(() => users.id),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedBy: uuid("revoked_by").references(() => users.id),
+    revokedReason: text("revoked_reason"),
     createdAt: createdAt(),
   },
-  (t) => [index("usa_user_idx").on(t.userId)],
+  (t) => [
+    index("usa_user_idx").on(t.userId),
+    check("ck_usa_org_wide_site", sql`(${t.isOrganizationWide} and ${t.siteId} is null) or (not ${t.isOrganizationWide} and ${t.siteId} is not null)`),
+    check("ck_usa_validity", sql`${t.validTo} is null or ${t.validTo} >= ${t.validFrom}`),
+    uniqueIndex("usa_live_uq")
+      .on(t.userId, t.roleId, sql`coalesce(${t.siteId}, '00000000-0000-0000-0000-000000000000'::uuid)`)
+      .where(sql`${t.revokedAt} is null`),
+  ],
 );
 
 export const sessions = pgTable(
@@ -89,8 +122,29 @@ export const sessions = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     userAgent: text("user_agent"),
+    /** W2E (US-1-12, US-1-28): see docs/security.md §3.4. `expires_at` is the absolute expiry. */
+    idleExpiresAt: timestamp("idle_expires_at", { withTimezone: true }),
+    ip: text("ip"),
+    deviceLabel: text("device_label"),
+    /** standard | shared (shared floor device: shorter idle timeout, setting session.idle_minutes_shared_device). */
+    deviceClass: text("device_class").notNull().default("standard"),
+    /** The user held a restricted (R) permission when the session started: shorter timeouts, MFA. */
+    privileged: boolean("privileged").notNull().default(false),
+    /** mfa_pending (password ok, TOTP step outstanding; never authorizes anything) | active. */
+    stage: text("stage").notNull().default("active"),
+    activeSiteId: uuid("active_site_id").references(() => sites.id),
+    mfaVerifiedAt: timestamp("mfa_verified_at", { withTimezone: true }),
+    reauthenticatedAt: timestamp("reauthenticated_at", { withTimezone: true }),
+    revokedBy: uuid("revoked_by").references(() => users.id),
+    revokedReason: text("revoked_reason"),
   },
-  (t) => [uniqueIndex("sessions_token_uq").on(t.tokenHash)],
+  (t) => [
+    uniqueIndex("sessions_token_uq").on(t.tokenHash),
+    index("sessions_user_idx").on(t.userId),
+    index("sessions_expires_idx").on(t.expiresAt),
+    check("ck_sessions_stage", sql`${t.stage} in ('mfa_pending','active')`),
+    check("ck_sessions_device_class", sql`${t.deviceClass} in ('standard','shared')`),
+  ],
 );
 
 /** Append-only audit trail; action follows module.entity.event (data-model §8.1). */

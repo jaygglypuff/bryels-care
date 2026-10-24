@@ -1000,6 +1000,34 @@ auditor (exports) and a new `procurement` bundle. owner_director no longer holds
 until the dashboard tile and lots page stop using it. Restricted (R) permissions do not yet require
 re-authentication (no re-auth flow in the MVP).
 
+### 8.2 As built: identity administration (Wave 2 W2E)
+
+Strings added to `src/lib/permissions.ts`: `identity.user.{create,edit,export}`, `identity.invitation.create`,
+`identity.role.admin`, `identity.site_assignment.{view,export,admin}`, `identity.session.{view,void}`,
+`identity.mfa.admin`. Grants: `system_admin` all of them (view strings through its view-all bundle);
+`auditor` the two exports and the view strings; `site_manager` the view strings except
+`identity.session.view`; `owner_director` holds every string (break-glass; use without a
+`system_admin` role writes `identity.role.owner_break_glass`, A-W2E-07). Sensitivity N/S/R for every
+catalogue string is in `src/lib/auth/sensitivity.ts`, generated from section 2.
+
+Rules enforced in `src/modules/identity` (tests in `tests/integration/identity/`):
+
+| Rule | Enforcement | Test |
+|---|---|---|
+| Grants need `identity.site_assignment.admin` **at the target site** (404 outside the actor's sites); organization-wide grants need it through an organization-wide assignment | `assertMayGrant` uses `ctx.canAt` / `ctx.canOrgWide` (per-assignment permissions, section 1.1) | `a site-scoped assignment administrator cannot reach another site` |
+| No self-grant, no self status change | refused and audited `identity.authorization.denied` | `identity.no_self_grant` |
+| Organization-wide only for roles with `allows_organization_wide` (owner_director, system_admin, auditor) | service + `ck_usa_org_wide_site` | `identity.org_wide_only_three_roles` |
+| A role carrying R permissions the actor lacks is granted only by owner_director (setting `identity.assignment.restricted_grant_requires_owner`, default true, A-W2E-02) | refused and audited | `escalation: … cannot hand out restricted permissions they lack` |
+| Seeded roles (`is_system`) are read-only templates | any change refused and audited | `identity.seeded_role_read_only` |
+| Custom roles cannot hold a string the creator does not hold; a role holding `identity.role.admin` or `identity.site_assignment.admin` cannot also hold quality release, finance post/void, payroll or approval-rule strings | `assertCustomSet` | `authz.role_escalation.custom_role_sensitivity` |
+| R actions (user admin, role admin, assignment admin) need step-up: re-authentication within `identity.reauth_window_minutes` (10) and, for enrolled users, the TOTP step; privileged users past the 7-day grace must enrol first | `assertStepUp` | `step-up required`, `auth.mfa.grace_enforced` |
+| Warehouse write sub-scope (section 4.4): `user_site_assignments.scope = {"warehouseIds": [...]}`; any covering assignment without a scope means the whole site | `ctx.requireWarehouseWrite` in `postMovement` (every ledger write: moves, receipts, count and adjustment postings, container moves) | `authz.subscope.warehouse_write` |
+
+Not yet as specified: the AuthContext is rebuilt per request (no 60 s cache), so `permissions_version`
+is not stored; restricted permissions of other modules do not yet require step-up (only identity
+administration does); label-job creation and draft documents are not yet checked against the
+warehouse sub-scope (their postings are).
+
 ## 9. Assumptions and open questions
 
 | Id | Assumption (default) | Needs confirmation from |

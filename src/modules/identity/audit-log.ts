@@ -3,6 +3,7 @@ import { and, desc, eq, ilike, inArray, isNull, like, or, sql } from "drizzle-or
 import { z } from "zod";
 import { db } from "@/db/client";
 import { auditEvents, userSiteAssignments, users } from "@/db/schema";
+import { activeAssignment } from "@/lib/auth/assignments";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 
@@ -58,7 +59,7 @@ async function scopeFilter(ctx: AuthContext) {
   const [orgWide] = await db
     .select({ id: userSiteAssignments.id })
     .from(userSiteAssignments)
-    .where(and(eq(userSiteAssignments.userId, ctx.userId), eq(userSiteAssignments.isOrganizationWide, true)))
+    .where(and(eq(userSiteAssignments.userId, ctx.userId), eq(userSiteAssignments.isOrganizationWide, true), activeAssignment()))
     .limit(1);
   const sitePart = inArray(auditEvents.siteId, ctx.allowedSiteIds);
   return { orgWide: !!orgWide, where: and(eq(auditEvents.organizationId, ctx.organizationId), orgWide ? or(sitePart, isNull(auditEvents.siteId)) : sitePart) };

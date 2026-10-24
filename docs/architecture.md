@@ -254,7 +254,7 @@ nowhere else may a new code be introduced. Rules:
 
 | Job code | Module | Trigger | Idempotency key tuple | Phase | Notes |
 |---|---|---|---|---|---|
-| `identity.session_purge` | identity | daily | `(as_of_date)` | 1 | deletes session rows 30 days after expiry (`docs/security.md` A-SEC-11) |
+| `identity.session_purge` | identity | daily 02:30 Asia/Manila | `(as_of_date)` | 1 | deletes session rows 30 days after expiry or revocation (`docs/security.md` A-SEC-11, setting `session.purge_after_days`) and closes assignments whose `valid_to` has passed (`identity.site_assignment.revoked` by the system actor); built in W2E (`src/modules/identity/jobs.ts`) |
 | `platform.partition_maintenance` | platform | monthly (1st) and after migration | `(partition_name)` | 1 | creates `audit_events_YYYY_MM` three months ahead; non-empty `DEFAULT` partition raises S2 (`docs/data-model.md` §8.2) |
 | `platform.reencrypt` | platform | on demand after `DATA_ENCRYPTION_KEY` rotation | `(from_key_id, to_key_id, table_name)` | 1 | re-encrypts rows carrying the previous key id in batches (`docs/operations-runbook.md` §15) |
 | `db.backfill` | db (migrations) | dedicated migration or post-deploy step | `(migration_id, table_name)` | 1 | expand/backfill/contract loops of 5,000 rows, resumable, row counts logged (`docs/data-model.md` §13.3) |

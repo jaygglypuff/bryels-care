@@ -16,6 +16,7 @@ import {
   userSiteAssignments,
   users,
 } from "@/db/schema";
+import { activeAssignment } from "@/lib/auth/assignments";
 import type { AuthContext, SiteRef } from "@/lib/auth/context";
 import { D } from "@/lib/qty";
 
@@ -48,7 +49,7 @@ export async function isOrganizationWide(ctx: AuthContext): Promise<boolean> {
   const rows = await db
     .select({ id: userSiteAssignments.id })
     .from(userSiteAssignments)
-    .where(and(eq(userSiteAssignments.userId, ctx.userId), eq(userSiteAssignments.isOrganizationWide, true)))
+    .where(and(eq(userSiteAssignments.userId, ctx.userId), eq(userSiteAssignments.isOrganizationWide, true), activeAssignment())) // W2E: active assignments only
     .limit(1);
   return rows.length > 0;
 }
