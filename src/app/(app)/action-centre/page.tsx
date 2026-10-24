@@ -6,6 +6,9 @@ import { listMyNotifications } from "@/modules/platform";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { AcknowledgeForm } from "./forms";
+import { registerAppHooks } from "@/modules/wiring";
+
+registerAppHooks(); // Wave 3 cross-module registrations (src/modules/wiring.ts); cheap and idempotent
 
 export const metadata = { title: "Action centre" };
 export const dynamic = "force-dynamic";

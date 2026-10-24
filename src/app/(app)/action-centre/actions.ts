@@ -3,6 +3,9 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError, type ActionState, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
 import { acknowledgeActionItem, saveNotificationRule } from "@/modules/action-centre";
+import { registerAppHooks } from "@/modules/wiring";
+
+registerAppHooks(); // Wave 3 cross-module registrations (src/modules/wiring.ts); cheap and idempotent
 
 /** Thin adapters over the action-centre service (US-5-06, US-5-07). */
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();

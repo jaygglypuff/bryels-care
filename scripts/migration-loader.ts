@@ -29,6 +29,7 @@ function prompt(question: string, opts: { secret: boolean }): Promise<string> {
 
 async function main() {
   const { parseLoaderArgs, runLoader } = await import("../src/modules/imports/loader");
+  (await import("../src/modules/wiring")).registerAppHooks(); // registered import kinds (customers) and other cross-module hooks
   const argv = process.argv.slice(2);
   const args = parseLoaderArgs(argv);
   return runLoader(args, {

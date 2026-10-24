@@ -14,6 +14,8 @@ import { db } from "@/db/client";
 import {
   auditEvents,
   containers,
+  customerAddresses,
+  customers,
   goodsReceipts,
   importJobRows,
   importJobs,
@@ -53,6 +55,7 @@ import {
   issueImportFileUrl,
   redeemImportFile,
 } from "@/modules/imports";
+import { registerAppHooks } from "@/modules/wiring";
 import { resetTestDatabase } from "../../support/db";
 import { asUser, expectCode, type Kit, loadKit } from "../../support/kit";
 
@@ -232,7 +235,47 @@ describe("suppliers kind", () => {
     expect((rows[0].values as { email: string | null }).email).toBeNull();
     await submitImport(procurement, r.jobId);
     await expectCode(approveImport(procurement, r.jobId), "forbidden");
-    void suppliers;
+    // Wave 3 integration (ADR-053): a seeded role can post it — system_admin holds platform.import_job.post
+    // and masterdata.supplier.create; the site manager approves but cannot post suppliers.
+    await approveImport(manager, r.jobId, "Checked against the vendor list");
+    await expectCode(postImport(manager, r.jobId), "forbidden");
+    await postImport(admin, r.jobId);
+    expect((await job(r.jobId)).status).toBe("posted");
+    const created = await db.select().from(suppliers).where(sql`${suppliers.code} in ('SUP-8001','SUP-8002')`);
+    expect(created.map((x) => x.code).sort()).toEqual(["SUP-8001", "SUP-8002"]);
+    expect(created.find((x) => x.code === "SUP-8001")!.email).toBeNull();
+  });
+});
+
+describe("customers kind (W3D customer service, registered by the Wave 3 wiring)", () => {
+  it("validates, refuses credit terms without finance.credit_terms.approve, and posts customers with their ship-to address", async () => {
+    registerAppHooks();
+    const csv = [
+      "code,name,status,ship_to_line1,ship_to_city,ship_to_province,contact_name,phone,email,min_shelf_life_days,payment_terms_days,credit_limit_amount,currency,tax_identifier,legacy_number",
+      "CUS-9101,Sampaguita Wellness Store (fictional),active,12 Rizal Ave.,Santa Rosa,Laguna,Lorna Reyes,+63 900 111 2222,orders@sampaguita.test,180,,,PHP,,C-101",
+      "CUS-9102,Ilang-Ilang Spa (fictional),prospect,3 Mabini St.,Calamba,Laguna,,,,,30,50000,PHP,,C-102",
+      "CUS-9103,No Address Trading (fictional),active,,,,,,,,,,PHP,,C-103",
+      "CUS-9104,Dollar Buyer (fictional),active,4 Luna St.,Calamba,,,,,,,,USD,,",
+    ].join("\n");
+    const r = await upload(admin, "customers", "customers.csv", csv);
+    await startValidation(admin, r.jobId);
+    const rows = (await listImportRows(admin, r.jobId)).rows;
+    expect(rows.map((x) => x.result)).toEqual(["accepted", "rejected", "rejected", "rejected"]);
+    expect(JSON.stringify(rows[1].errors)).toMatch(/finance/);
+    expect(JSON.stringify(rows[2].errors)).toMatch(/ship-to/i);
+    expect(JSON.stringify(rows[3].errors)).toMatch(/PHP/);
+    await submitImport(admin, r.jobId);
+    await approveImport(manager, r.jobId, "Checked against the customer list");
+    await postImport(admin, r.jobId);
+    expect((await job(r.jobId)).status).toBe("posted");
+    const [c] = await db.select().from(customers).where(eq(customers.code, "CUS-9101"));
+    expect(c).toMatchObject({ name: "Sampaguita Wellness Store (fictional)", minShelfLifeDays: 180, creditLimitAmount: null });
+    expect(c.shipToAddress).toMatch(/12 Rizal Ave\./);
+    const [addr] = await db.select().from(customerAddresses).where(eq(customerAddresses.customerId, c.id));
+    expect(addr).toMatchObject({ isDefaultShipTo: true, city: "Santa Rosa" });
+    const ev = await db.select().from(auditEvents).where(and(eq(auditEvents.action, "masterdata.customer.created"), eq(auditEvents.entityId, c.id)));
+    expect(ev).toHaveLength(1);
+    expect(await db.select().from(customers).where(eq(customers.code, "CUS-9102"))).toHaveLength(0);
   });
 });
 

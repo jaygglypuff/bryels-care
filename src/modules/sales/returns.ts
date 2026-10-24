@@ -533,9 +533,10 @@ export async function closeCustomerReturn(ctx: AuthContext, input: { returnId: s
 
 /* ------------------------------------------------------------------ queries */
 
-export async function listCustomerReturns(ctx: AuthContext, f: { status?: string } = {}) {
+export async function listCustomerReturns(ctx: AuthContext, f: { status?: string; customerId?: string } = {}) {
   ctx.require("sales.customer_return.view");
   const conds = [eq(customerReturns.organizationId, ctx.organizationId), inArray(customerReturns.siteId, ctx.allowedSiteIds)];
+  if (f.customerId) conds.push(eq(customerReturns.customerId, f.customerId));
   if (!f.status || f.status === "active") conds.push(inArray(customerReturns.status, ["draft", "submitted", "approved", "received", "inspected"]));
   else if (f.status !== "all" && f.status in RETURN_STATUS_LABEL) conds.push(eq(customerReturns.status, f.status));
   return db

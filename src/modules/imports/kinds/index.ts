@@ -41,21 +41,31 @@ const customersPlaceholder: ImportKindHandler = {
   },
 };
 
-const KINDS = new Map<string, ImportKindHandler>(
-  ([materialsKind, uomConversionsKind, reasonCodesKind, locationsKind, skusKind, suppliersKind, customersPlaceholder, legacyDocumentsKind, openingStockKind] as ImportKindHandler[]).map((k) => [k.kind, k]),
-);
+const BUILT_IN: ImportKindHandler[] = [materialsKind, uomConversionsKind, reasonCodesKind, locationsKind, skusKind, suppliersKind, customersPlaceholder, legacyDocumentsKind, openingStockKind] as ImportKindHandler[];
+
+// Registered handlers live on globalThis (one per process), like the other cross-module registries,
+// so a handler registered at server start (src/instrumentation.ts → registerAppHooks) is seen by
+// every Next.js route bundle and by the worker.
+const REGISTRY_KEY = Symbol.for("bryels.imports.kindHandlers");
+function registered(): Map<string, ImportKindHandler> {
+  const g = globalThis as unknown as Record<symbol, Map<string, ImportKindHandler> | undefined>;
+  g[REGISTRY_KEY] ??= new Map();
+  return g[REGISTRY_KEY]!;
+}
 
 /** Registers (or replaces) a kind handler, e.g. the customer kind once the customer master exists. */
 export function registerImportKind(handler: ImportKindHandler): void {
-  KINDS.set(handler.kind, handler);
+  registered().set(handler.kind, handler);
 }
 
+/** Built-in kinds in load order, each replaced by a registered handler of the same kind; extra registered kinds last. */
 export function importKinds(): ImportKindHandler[] {
-  return [...KINDS.values()];
+  const reg = registered();
+  return [...BUILT_IN.map((k) => reg.get(k.kind) ?? k), ...[...reg.values()].filter((h) => !BUILT_IN.some((k) => k.kind === h.kind))];
 }
 
 export function getImportKind(kind: string): ImportKindHandler {
-  const k = KINDS.get(kind);
+  const k = importKinds().find((h) => h.kind === kind);
   if (!k) throw new DomainError("validation", `Unknown import kind ${kind}.`, { field: "kind" });
   return k;
 }

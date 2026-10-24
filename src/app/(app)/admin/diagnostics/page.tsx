@@ -10,6 +10,9 @@ import { Card, CardTitle, EmptyState, Input, PageHeader, Table, Td, buttonClass,
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { cancelJobAction, rebuildBalancesAction, retryJobAction, runReconciliationAction } from "./actions";
+import { registerAppHooks } from "@/modules/wiring";
+
+registerAppHooks(); // Wave 3 cross-module registrations (src/modules/wiring.ts); cheap and idempotent
 
 export const metadata = { title: "Diagnostics" };
 

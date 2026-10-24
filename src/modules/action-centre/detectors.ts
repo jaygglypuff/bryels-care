@@ -184,15 +184,20 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
       kind: "open_deviation", siteId: String(r.site_id), entityType: "deviation", entityId: String(r.id), recordNumber: String(r.deviation_number),
       title: `Deviation ${r.deviation_number} is ${r.status}`, detail: `Severity ${r.sev}`, link: `/quality/deviations/${r.id}`, openedAt: d(r.at),
     })),
+  // W3E: issued delivery receipts of shipments still out (not acknowledged), after
+  // `sales.delivery_receipt.unacknowledged_days` (the same setting as the daily DR reminder job).
   unacknowledged_dr: async (org, now) => {
-    const rows = await run(sql`select sh.id, sh.site_id, sh.sales_order_id, sh.delivery_receipt_number, sh.dispatched_at as at from shipments sh where sh.organization_id = ${org}::uuid and sh.delivered_at is null`);
+    const rows = await run(sql`
+      select sh.id, sh.site_id, coalesce(dr.dr_number, sh.delivery_receipt_number) as dr_number, sh.shipment_number, sh.dispatched_at as at
+      from shipments sh join delivery_receipts dr on dr.shipment_id = sh.id and dr.status = 'issued'
+      where sh.organization_id = ${org}::uuid and sh.status = 'dispatched' and sh.dispatched_at is not null`);
     const out: Candidate[] = [];
     for (const r of rows) {
-      const hours = await getSetting(db, org, "action_centre.dr_unacknowledged_hours", String(r.site_id));
-      if (now.getTime() - d(r.at).getTime() < hours * 3_600_000) continue;
+      const days = await getSetting(db, org, "sales.delivery_receipt.unacknowledged_days", String(r.site_id));
+      if (now.getTime() - d(r.at).getTime() < days * 86_400_000) continue;
       out.push({
-        kind: "unacknowledged_dr", siteId: String(r.site_id), entityType: "shipment", entityId: String(r.id), recordNumber: String(r.delivery_receipt_number),
-        title: `Delivery receipt ${r.delivery_receipt_number} is not acknowledged`, detail: `Dispatched more than ${hours} h ago`, link: `/sales/${r.sales_order_id}`, openedAt: new Date(d(r.at).getTime() + hours * 3_600_000),
+        kind: "unacknowledged_dr", siteId: String(r.site_id), entityType: "shipment", entityId: String(r.id), recordNumber: String(r.dr_number ?? r.shipment_number),
+        title: `Delivery receipt ${r.dr_number ?? r.shipment_number} is not acknowledged`, detail: `Dispatched more than ${days} day(s) ago`, link: `/sales/shipments/${r.id}`, openedAt: new Date(d(r.at).getTime() + days * 86_400_000),
       });
     }
     return out;
@@ -200,13 +205,60 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
   unshipped_order: async (org, _now, today) => {
     const grace = await getSetting(db, org, "action_centre.order_late_grace_days");
     return (await run(sql`
-      select so.id, so.site_id, so.order_number, so.requested_delivery_on as req from sales_orders so
-      where so.organization_id = ${org}::uuid and so.status in ('confirmed','allocated')
+      select so.id, so.site_id, so.order_number, so.status, so.requested_delivery_on as req from sales_orders so
+      where so.organization_id = ${org}::uuid and so.status in ('confirmed','allocated','picking','packed','partially_shipped')
         and (case when so.requested_delivery_on ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then so.requested_delivery_on::date end) < (${today}::date - ${grace}::int)`)).map((r) => ({
       kind: "unshipped_order", siteId: String(r.site_id), entityType: "sales_order", entityId: String(r.id), recordNumber: String(r.order_number),
-      title: `Order ${r.order_number} is not shipped; requested for ${r.req}`, detail: null, link: `/sales/${r.id}`, openedAt: new Date(`${r.req}T16:00:00Z`),
+      title: `Order ${r.order_number} is not shipped; requested for ${r.req}`, detail: `Status ${String(r.status).replace(/_/g, " ")}`, link: `/sales/${r.id}`, openedAt: new Date(`${r.req}T16:00:00Z`),
     }));
   },
+  // W3D: commercial approvals and credit holds.
+  "approval.sales_order": async (org) =>
+    (await run(sql`select id, site_id, order_number, coalesce(submitted_at, status_changed_at) as at from sales_orders where organization_id = ${org}::uuid and status = 'pending_approval'`)).map((r) => ({
+      kind: "approval.sales_order", siteId: String(r.site_id), entityType: "sales_order", entityId: String(r.id), recordNumber: String(r.order_number),
+      title: `Order ${r.order_number} waits for approval`, detail: null, link: `/sales/${r.id}`, openedAt: d(r.at),
+    })),
+  "approval.quote": async (org) =>
+    (await run(sql`select id, site_id, quote_number, coalesce(submitted_at, created_at) as at from quotes where organization_id = ${org}::uuid and status = 'pending_approval'`)).map((r) => ({
+      kind: "approval.quote", siteId: String(r.site_id), entityType: "quote", entityId: String(r.id), recordNumber: String(r.quote_number),
+      title: `Quotation ${r.quote_number} waits for approval`, detail: null, link: `/sales/quotations/${r.id}`, openedAt: d(r.at),
+    })),
+  "approval.price_list": async (org) =>
+    (await run(sql`select id, code, version_no, coalesce(submitted_at, created_at) as at from price_lists where organization_id = ${org}::uuid and status = 'pending_approval'`)).map((r) => ({
+      kind: "approval.price_list", siteId: null, entityType: "price_list", entityId: String(r.id), recordNumber: `${r.code} v${r.version_no}`,
+      title: `Price list ${r.code} version ${r.version_no} waits for approval`, detail: null, link: `/sales/price-lists/${r.id}`, openedAt: d(r.at),
+    })),
+  "approval.customer_requirement": async (org) =>
+    (await run(sql`
+      select r.id, r.customer_id, c.name, r.requirement_kind, r.version_no, coalesce(r.submitted_at, r.created_at) as at
+      from customer_requirements r join customers c on c.id = r.customer_id where r.organization_id = ${org}::uuid and r.status = 'pending_approval'`)).map((r) => ({
+      kind: "approval.customer_requirement", siteId: null, entityType: "customer_requirement", entityId: String(r.id), recordNumber: `${String(r.requirement_kind).replace(/_/g, " ")} v${r.version_no}`,
+      title: `Requirement of ${r.name} waits for approval`, detail: `${String(r.requirement_kind).replace(/_/g, " ")}, version ${r.version_no}`, link: `/sales/customers/${r.customer_id}`, openedAt: d(r.at),
+    })),
+  credit_hold: async (org) =>
+    (await run(sql`
+      select c.id, c.code, c.name, c.updated_at as at,
+             (select count(*)::int from sales_orders so where so.customer_id = c.id and so.status in ('draft','submitted','pending_approval')) as waiting
+      from customers c where c.organization_id = ${org}::uuid and c.status = 'on_hold'`)).map((r) => ({
+      kind: "credit_hold", siteId: null, entityType: "customer", entityId: String(r.id), recordNumber: String(r.code),
+      title: `${r.name} is on credit hold`, detail: Number(r.waiting) ? `${r.waiting} order(s) not yet accepted` : "New orders need approval", link: `/sales/customers/${r.id}`, openedAt: d(r.at),
+    })),
+  // W3F: complaints and customer returns.
+  open_complaint: async (org) =>
+    (await run(sql`select id, site_id, complaint_number, status, coalesce(severity, 'unclassified') as sev, received_at as at from complaints where organization_id = ${org}::uuid and status in ('open','investigating')`)).map((r) => ({
+      kind: "open_complaint", siteId: String(r.site_id), entityType: "complaint", entityId: String(r.id), recordNumber: String(r.complaint_number),
+      title: `Complaint ${r.complaint_number} is ${r.status}`, detail: `Severity ${r.sev}`, link: `/quality/complaints/${r.id}`, openedAt: d(r.at),
+    })),
+  "approval.customer_return": async (org) =>
+    (await run(sql`select id, site_id, return_number, coalesce(submitted_at, created_at) as at from customer_returns where organization_id = ${org}::uuid and status = 'submitted'`)).map((r) => ({
+      kind: "approval.customer_return", siteId: String(r.site_id), entityType: "customer_return", entityId: String(r.id), recordNumber: String(r.return_number),
+      title: `Return ${r.return_number} waits for approval`, detail: null, link: `/sales/returns/${r.id}`, openedAt: d(r.at),
+    })),
+  return_awaiting_qa: async (org) =>
+    (await run(sql`select id, site_id, return_number, received_at as at from customer_returns where organization_id = ${org}::uuid and status = 'received'`)).map((r) => ({
+      kind: "return_awaiting_qa", siteId: String(r.site_id), entityType: "customer_return", entityId: String(r.id), recordNumber: String(r.return_number),
+      title: `Returned goods of ${r.return_number} wait for a QA decision`, detail: "Received into quarantine; disposition every return lot.", link: `/sales/returns/${r.id}`, openedAt: d(r.at),
+    })),
 };
 
 /** Every current candidate of the organization (built-in detectors, replaced by registered sources of the same kind). */

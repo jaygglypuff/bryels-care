@@ -1104,3 +1104,23 @@ for (const [role, grants] of Object.entries(W3A_GRANTS)) {
 for (const role of ["system_admin", "site_manager", "qa_qc"]) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => p !== "analytics.owner_dashboard.view" && p !== "analytics.financial_kpi.view");
 }
+
+// Wave 3 integration (ADR-053): the import poster needs the entity's create permission too. system_admin
+// already creates materials, products and customers (W2G master-data administration); it now also creates
+// suppliers so a seeded role can post a supplier import prepared by procurement (matrix §3.6 supplier SA
+// "v c*"). Supplier quality status and approved-supplier decisions stay with procurement and QA.
+const W3_INTEGRATION_GRANTS: Record<string, readonly Permission[]> = {
+  system_admin: ["masterdata.supplier.create"],
+};
+for (const [role, grants] of Object.entries(W3_INTEGRATION_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+// Matrix §3.8/§3.10: QA has no access to prices, quotations or credit terms. qa_qc is built on VIEW_ALL, so
+// W3D's `.view` strings reached it; the money-bearing ones are removed here (W3D did the same for
+// system_admin and site_manager).
+const W3_INTEGRATION_EXCLUDE: Record<string, readonly Permission[]> = {
+  qa_qc: ["sales.price_list.view", "sales.quote.view", "finance.credit_terms.view"],
+};
+for (const [role, drop] of Object.entries(W3_INTEGRATION_EXCLUDE)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => !drop.includes(p));
+}

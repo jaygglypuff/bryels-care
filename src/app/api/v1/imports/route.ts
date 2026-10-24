@@ -2,6 +2,9 @@ import { getContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { uploadImport } from "@/modules/imports";
 import { assertSameOrigin, errorResponse } from "../_http";
+import { registerAppHooks } from "@/modules/wiring";
+
+registerAppHooks(); // Wave 3 cross-module registrations (src/modules/wiring.ts); cheap and idempotent
 
 export const dynamic = "force-dynamic";
 

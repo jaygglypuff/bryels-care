@@ -12,7 +12,7 @@ export const FILE_KEYS = "fileTier1Keys";
  * one counter per import kind (not a numbering_rules document type). Reads the highest code in use in the
  * caller's transaction, so earlier rows of the same chunk are counted.
  */
-export async function nextLoaderCode(tx: Tx, table: "materials" | "suppliers" | "products", column: "code" | "sku_code", organizationId: string, prefix: string, state: KindRunState, width = 4): Promise<string> {
+export async function nextLoaderCode(tx: Tx, table: "materials" | "suppliers" | "products" | "customers", column: "code" | "sku_code", organizationId: string, prefix: string, state: KindRunState, width = 4): Promise<string> {
   const rows = await tx.execute<{ max: number | null }>(
     sql`select max(substring(${sql.identifier(column)} from ${`^${prefix}-(\\d+)$`})::int) as max from ${sql.identifier(table)} where organization_id = ${organizationId} and ${sql.identifier(column)} ~ ${`^${prefix}-\\d+$`}`,
   );

@@ -4,6 +4,7 @@ import { db, type DbOrTx, type Tx } from "@/db/client";
 import { CUSTOMER_SEGMENTS, CUSTOMER_STATUSES, customerAddresses, customerContacts, customers, salesOrders, shipments } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
+import { runInTx, type InTx } from "@/lib/tx";
 import { DomainError } from "@/lib/errors";
 import type { ExportDefinition } from "@/lib/export";
 import { CREDIT_FIELDS, formatAddress, idempotent, isUuid, maskFields } from "./crm-support";
@@ -222,12 +223,13 @@ function assertCreditInput(ctx: AuthContext, input: { creditLimitAmount?: string
   }
 }
 
-export async function createCustomer(ctx: AuthContext, input: CustomerInput) {
+/** Creates a customer; with `{ tx }` (W3C imports) it runs in a savepoint of the caller's transaction. */
+export async function createCustomer(ctx: AuthContext, input: CustomerInput, opts: InTx = {}) {
   ctx.require("masterdata.customer.create");
   assertCreditInput(ctx, input);
   const shipTo = input.shipTo ?? (input.shipToAddress ? legacyAddress(input.shipToAddress) : null);
   if (!shipTo) throw new DomainError("validation", "Enter the ship-to address.", { field: "shipTo.line1" });
-  return db.transaction(async (tx) => {
+  return runInTx(opts, async (tx) => {
     const { result } = await idempotent(tx, ctx, input.idempotencyKey, "masterdata.customer.create", async () => {
       const [dup] = await tx
         .select({ id: customers.id })

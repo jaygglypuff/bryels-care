@@ -30,18 +30,28 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   { kind: "approval.equipment_override", tab: "approvals", label: "Equipment override to approve", severity: "warning", permission: "production.equipment_override.approve", actionLabel: "Review override" },
   { kind: "approval.setting_change", tab: "approvals", label: "Setting change to approve", severity: "info", permission: "platform.settings.approve", actionLabel: "Review change" },
   { kind: "approval.template_version", tab: "approvals", label: "Document template to approve", severity: "info", permission: "documents.template.approve", actionLabel: "Review template" },
+  // Wave 3 integration: W3D commercial approvals, W3F return approval
+  { kind: "approval.sales_order", tab: "approvals", label: "Sales order to approve", severity: "warning", permission: "sales.sales_order.approve", actionLabel: "Review order" },
+  { kind: "approval.quote", tab: "approvals", label: "Quotation to approve", severity: "info", permission: "sales.quote.approve", actionLabel: "Review quotation" },
+  { kind: "approval.price_list", tab: "approvals", label: "Price list to approve", severity: "info", permission: "sales.price_list.approve", actionLabel: "Review price list" },
+  { kind: "approval.customer_requirement", tab: "approvals", label: "Customer requirement to approve", severity: "info", permission: "masterdata.customer_requirement.approve", actionLabel: "Review requirement" },
+  { kind: "approval.import_job", tab: "approvals", label: "Import to approve", severity: "info", permission: "platform.import_job.approve", actionLabel: "Review import" },
+  { kind: "approval.customer_return", tab: "approvals", label: "Customer return to approve", severity: "warning", permission: "sales.customer_return.approve", actionLabel: "Review return" },
   // Exceptions
   { kind: "late_work_order", tab: "exceptions", label: "Late work order", severity: "warning", permission: "production.work_order.view", actionLabel: "Open work order" },
   { kind: "low_stock", tab: "exceptions", label: "Finished goods below minimum stock", severity: "warning", permission: "inventory.balance.view", actionLabel: "Plan production" },
   { kind: "expiring_lot", tab: "exceptions", label: "Lot expiring soon", severity: "warning", permission: "inventory.lot.view", actionLabel: "Open lot" },
   { kind: "expired_stock", tab: "exceptions", label: "Expired stock on hand", severity: "critical", permission: "inventory.lot.view", actionLabel: "Open lot" },
   { kind: "failed_job", tab: "exceptions", label: "Failed background job", severity: "critical", permission: "platform.job.view", actionLabel: "Open in diagnostics" },
-  { kind: "failed_import", tab: "exceptions", label: "Failed import", severity: "critical", permission: "platform.job.view", actionLabel: "Open import" },
+  { kind: "failed_import", tab: "exceptions", label: "Failed import", severity: "critical", permission: "platform.import_job.view", actionLabel: "Open import" },
   { kind: "reconciliation_difference", tab: "exceptions", label: "Stock reconciliation difference", severity: "critical", permission: "platform.job.view", actionLabel: "Open report" },
   { kind: "open_hold", tab: "exceptions", label: "Open QA hold", severity: "warning", permission: "quality.hold.view", actionLabel: "Open hold" },
   { kind: "open_deviation", tab: "exceptions", label: "Open deviation", severity: "warning", permission: "quality.deviation.view", actionLabel: "Open deviation" },
   { kind: "unacknowledged_dr", tab: "exceptions", label: "Delivery receipt not acknowledged", severity: "warning", permission: "sales.shipment.view", actionLabel: "Record delivery" },
   { kind: "unshipped_order", tab: "exceptions", label: "Order unshipped past its date", severity: "warning", permission: "sales.sales_order.view", actionLabel: "Open order" },
+  { kind: "credit_hold", tab: "exceptions", label: "Customer on credit hold", severity: "warning", permission: "finance.credit_terms.view", actionLabel: "Open customer" },
+  { kind: "open_complaint", tab: "exceptions", label: "Open customer complaint", severity: "warning", permission: "quality.complaint.view", actionLabel: "Open complaint" },
+  { kind: "return_awaiting_qa", tab: "exceptions", label: "Customer return waiting for QA", severity: "warning", permission: "quality.disposition.approve", actionLabel: "Open return" },
 ];
 
 export function actionKind(kind: string): ActionKind | undefined {

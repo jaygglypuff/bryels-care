@@ -467,7 +467,6 @@ export const SETTINGS = {
     label: "Actions listed as controlled exceptions",
     restricted: true,
   },
-  "action_centre.dr_unacknowledged_hours": { scopes: ["organization", "site"], schema: z.number().int().min(1).max(24 * 60), default: 48, assumption: "A-W3B-07", group: "Action centre", label: "Delivery receipt unacknowledged after (hours)" },
   "action_centre.order_late_grace_days": { scopes: ["organization", "site"], schema: z.number().int().min(0).max(60), default: 0, assumption: "A-W3B-07", group: "Action centre", label: "Order unshipped this many days after the requested date" },
   "action_centre.work_order_late_grace_days": { scopes: ["organization", "site"], schema: z.number().int().min(0).max(60), default: 0, assumption: "A-W3B-07", group: "Action centre", label: "Work order late this many days after its planned end" },
   // Wave 3 W3A: KPI engine (docs/analytics-kpis.md §1.3, §8.1)

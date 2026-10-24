@@ -73,7 +73,7 @@ describe("W3D role bundles (docs/permissions-matrix.md §3.8, §3.10)", () => {
   it("sales_cs cannot approve orders; system administrators and site managers never see prices or credit terms", () => {
     expect(ROLE_BUNDLES.sales_cs.permissions).not.toContain("sales.sales_order.approve");
     expect(ROLE_BUNDLES.sales_cs.permissions).toContain("sales.sales_order.submit");
-    for (const r of ["system_admin", "site_manager", "warehouse_operator", "production_operator", "production_planner"]) {
+    for (const r of ["system_admin", "site_manager", "qa_qc", "warehouse_operator", "production_operator", "production_planner"]) {
       expect(ROLE_BUNDLES[r].permissions, r).not.toContain("sales.price_list.view");
       expect(ROLE_BUNDLES[r].permissions, r).not.toContain("finance.credit_terms.view");
     }

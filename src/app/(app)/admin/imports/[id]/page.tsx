@@ -9,6 +9,9 @@ import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { ApproveForm, DecisionForm, MappingForm, PostForm, ReasonForm, ScanUploadForm, SubmitForm, ValidateButton } from "../forms";
 import { STATUS_TONE } from "../ui";
+import { registerAppHooks } from "@/modules/wiring";
+
+registerAppHooks(); // Wave 3 cross-module registrations (src/modules/wiring.ts); cheap and idempotent
 
 export const metadata = { title: "Import" };
 

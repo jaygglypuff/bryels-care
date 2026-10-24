@@ -11,6 +11,7 @@ import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td, but
 import { Banner, StatusChip } from "@/ui/status";
 import { Expiry, LocationKindChip, MOVEMENT_LABEL, fmtLotQty } from "@/ui/inventory/bits";
 import { Forbidden } from "../../forbidden";
+import { LotMigrationSection } from "../../admin/imports/lot-migration-section";
 
 export const metadata = { title: "Lot" };
 
@@ -205,6 +206,9 @@ export default async function LotPage({ params, searchParams }: { params: Promis
           <li className="text-muted">Supplier certificates (CoA) are attached to receipts when file attachments ship (US-2-08).</li>
         </ul>
       </Card>
+
+      {/* W3C (US-2-26): opening-balance origin and scanned legacy BMRs of migrated lots; renders nothing otherwise. */}
+      <LotMigrationSection ctx={ctx} lotId={lot.id} />
 
       <Card id="movements">
         <CardTitle>Movement ledger</CardTitle>

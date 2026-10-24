@@ -18,6 +18,9 @@ import {
   type ImportJobStatus,
   type MappingInput,
 } from "@/modules/imports";
+import { registerAppHooks } from "@/modules/wiring";
+
+registerAppHooks(); // Wave 3 cross-module registrations (src/modules/wiring.ts); cheap and idempotent
 
 /** Thin adapters over the imports service (in-place actions, ADR-043): every rule is checked in the service. */
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();

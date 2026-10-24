@@ -421,9 +421,10 @@ export async function raiseComplaintDeviation(ctx: AuthContext, input: { complai
 
 /* ------------------------------------------------------------------ queries */
 
-export async function listComplaints(ctx: AuthContext, f: { status?: string; q?: string } = {}) {
+export async function listComplaints(ctx: AuthContext, f: { status?: string; q?: string; customerId?: string } = {}) {
   ctx.require("quality.complaint.view");
   const conds = [eq(complaints.organizationId, ctx.organizationId), inArray(complaints.siteId, ctx.allowedSiteIds)];
+  if (f.customerId) conds.push(eq(complaints.customerId, f.customerId));
   if (!f.status || f.status === "active") conds.push(inArray(complaints.status, ["open", "investigating", "resolved"]));
   else if (f.status !== "all" && (["open", "investigating", "resolved", "closed"] as string[]).includes(f.status)) conds.push(eq(complaints.status, f.status));
   const q = f.q?.trim();
