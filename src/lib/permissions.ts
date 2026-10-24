@@ -142,6 +142,20 @@ export const PERMISSIONS = [
   "platform.job.view",
   "platform.job.admin",
   "platform.diagnostics.view",
+  // Wave 2 W2C: inspections, results, review, conditional release, deviations, genealogy export (docs/permissions-matrix.md §2.6, §3.6)
+  "quality.inspection.view",
+  "quality.inspection.create",
+  "quality.inspection.submit",
+  "quality.inspection.approve",
+  "quality.test_result.view",
+  "quality.test_result.void",
+  "quality.conditional_release.approve",
+  "quality.deviation.view",
+  "quality.deviation.create",
+  "quality.deviation.submit",
+  "quality.deviation.approve",
+  "quality.deviation.export",
+  "quality.genealogy.export",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -484,3 +498,45 @@ for (const [role, grants] of Object.entries(W1A_GRANTS)) {
 for (const role of ["site_manager", "auditor"]) {
   ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => p !== "platform.diagnostics.view");
 }
+
+// Wave 2 W2C: role grants for inspections, results, deviations and genealogy (docs/permissions-matrix.md §3.6).
+// View strings reach VIEW_ALL roles automatically; the matrix keeps system_admin away from quality evidence
+// and gives owner_director view/export plus the second approval of a conditional release only.
+const W2C_GRANTS: Record<string, readonly Permission[]> = {
+  site_manager: ["quality.deviation.create", "quality.deviation.submit"],
+  // Matrix §3.6 also lists genealogy view for PP/PO/WO/PR/SC; not granted yet because a trace names
+  // customers and suppliers (A-W2C-05, owner to confirm).
+  production_planner: ["quality.deviation.view"],
+  production_operator: ["quality.inspection.view", "quality.inspection.create", "quality.deviation.view", "quality.deviation.create"],
+  warehouse_operator: ["quality.inspection.view", "quality.inspection.create", "quality.deviation.view", "quality.deviation.create"],
+  qa_qc: [
+    "quality.inspection.create",
+    "quality.inspection.submit",
+    "quality.inspection.approve",
+    "quality.test_result.void",
+    "quality.conditional_release.approve",
+    "quality.deviation.create",
+    "quality.deviation.submit",
+    "quality.deviation.approve",
+    "quality.deviation.export",
+    "quality.genealogy.export",
+  ],
+  procurement: ["quality.inspection.view"],
+  auditor: ["quality.deviation.export", "quality.genealogy.export"],
+};
+for (const [role, grants] of Object.entries(W2C_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+const W2C_NOT_FOR_OWNER: readonly Permission[] = [
+  "quality.inspection.create",
+  "quality.inspection.submit",
+  "quality.inspection.approve",
+  "quality.test_result.void",
+  "quality.deviation.create",
+  "quality.deviation.submit",
+  "quality.deviation.approve",
+  "quality.deviation.export",
+];
+ROLE_BUNDLES.owner_director.permissions = ROLE_BUNDLES.owner_director.permissions.filter((p) => !W2C_NOT_FOR_OWNER.includes(p));
+const W2C_NOT_FOR_ADMIN: readonly Permission[] = ["quality.inspection.view", "quality.test_result.view", "quality.deviation.view"];
+ROLE_BUNDLES.system_admin.permissions = ROLE_BUNDLES.system_admin.permissions.filter((p) => !W2C_NOT_FOR_ADMIN.includes(p));

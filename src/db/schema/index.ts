@@ -14,3 +14,4 @@ export * from "./counts";
 export * from "./reservations";
 export * from "./documents";
 export * from "./platform";
+export * from "./quality-ext";

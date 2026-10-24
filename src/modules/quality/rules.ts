@@ -24,9 +24,12 @@ export const LOT_TRANSITIONS: Record<LotDecision, { from: readonly string[]; to:
 
 /** Batch disposition machine (only the QA part of the batch state machine). */
 export const BATCH_TRANSITIONS: Record<BatchDecision, { from: readonly string[]; to: string; label: string; event: "released" | "rejected" }> = {
-  release: { from: ["awaiting_qc"], to: "released", label: "Release batch", event: "released" },
-  reject: { from: ["awaiting_qc"], to: "rejected", label: "Reject batch", event: "rejected" },
+  release: { from: ["awaiting_qc", "quarantined"], to: "released", label: "Release batch", event: "released" },
+  reject: { from: ["awaiting_qc", "quarantined"], to: "rejected", label: "Reject batch", event: "rejected" },
 };
+
+/** Batch statuses shown in the QA queue as waiting for a decision (quarantined = inspection reviewed, W2C). */
+export const BATCH_AWAITING_DECISION = ["awaiting_qc", "quarantined"] as const;
 
 /** Batch statuses in which QC test results may be recorded. */
 export const TESTABLE_BATCH_STATUSES = ["in_process", "awaiting_qc"] as const;
@@ -47,7 +50,7 @@ export function isLotExpired(lot: { qualityStatus: string; expiresOn: string | n
 export function lotDecisionBlocker(
   decision: LotDecision,
   lot: { lotNumber: string; qualityStatus: string; expiresOn: string | null },
-  opts: { isReceiver: boolean; pendingBatchNumber?: string | null; now?: Date; releaseBlockers?: string[] },
+  opts: { isReceiver: boolean; pendingBatchNumber?: string | null; now?: Date; releaseBlockers?: string[]; isTester?: boolean },
 ): { code: "state" | "blocked_lot" | "separation_of_duties"; message: string } | null {
   const t = LOT_TRANSITIONS[decision];
   if (opts.pendingBatchNumber) {
@@ -67,6 +70,9 @@ export function lotDecisionBlocker(
     if (opts.isReceiver) {
       return { code: "separation_of_duties", message: "You received this lot, so you cannot release it. Another QA user must decide (separation of duties)." };
     }
+    if (opts.isTester) {
+      return { code: "separation_of_duties", message: "You entered test results for this lot, so you cannot release it. Another QA user must decide (separation of duties)." };
+    }
   }
   return null;
 }
@@ -81,19 +87,32 @@ export type BatchReleaseFacts = {
   missingSteps: string[];
   pendingLines: string[];
   isOperatorOrChecker: boolean;
+  /** W2C: the decider entered a test result of the batch (sod.disposition.decider_not_result_entry). */
+  isTester?: boolean;
+  /** W2C: the batch has a frozen inspection plan; its inspection decides test completeness (extraBlockers). */
+  planDriven?: boolean;
+  /** W2C: inspection, deviation, hold and receiving reasons computed by the services. */
+  extraBlockers?: string[];
 };
 
 /** Every reason the batch cannot be released; empty array means release is allowed. */
 export function batchReleaseBlockers(f: BatchReleaseFacts): { code: "state" | "separation_of_duties"; message: string }[] {
   const out: { code: "state" | "separation_of_duties"; message: string }[] = [];
-  if (!BATCH_TRANSITIONS.release.from.includes(f.status)) out.push({ code: "state", message: `The batch is ${f.status.replace("_", " ")}, not awaiting QC.` });
+  if (!BATCH_TRANSITIONS.release.from.includes(f.status)) out.push({ code: "state", message: `The batch is ${f.status.replace(/_/g, " ")}, not awaiting QC.` });
   if (!f.hasOutputLot) out.push({ code: "state", message: "The batch has no finished-goods output lot yet." });
   else if (f.outputLotStatus !== "quarantine") out.push({ code: "state", message: `The output lot is ${String(f.outputLotStatus).replace("_", " ")}, not quarantined.` });
   else if (f.outputLotExpired) out.push({ code: "state", message: "The output lot is past its expiry date." });
-  if (f.testCount === 0) out.push({ code: "state", message: "Record at least one test result before release." });
-  if (f.failedTests.length) out.push({ code: "state", message: `Failed test(s): ${f.failedTests.join(", ")}. A batch with a failed result cannot be released; reject it or investigate (OOS) outside the MVP.` });
+  if (!f.planDriven && f.testCount === 0) out.push({ code: "state", message: "Record at least one test result before release." });
+  if (f.failedTests.length) {
+    out.push({
+      code: "state",
+      message: `Failed test(s): ${f.failedTests.join(", ")}. A failed result blocks release unless an OOS deviation on that result is closed with the conclusion that release may proceed; otherwise reject the batch.`,
+    });
+  }
+  for (const m of f.extraBlockers ?? []) out.push({ code: "state", message: m });
   if (f.missingSteps.length) out.push({ code: "state", message: `Checklist step(s) not completed: ${f.missingSteps.join(", ")}.` });
   if (f.pendingLines.length) out.push({ code: "state", message: `Ingredient line(s) not dispensed: ${f.pendingLines.join(", ")}.` });
   if (f.isOperatorOrChecker) out.push({ code: "separation_of_duties", message: "You weighed, checked or conducted steps on this batch, so you cannot release it (separation of duties)." });
+  if (f.isTester) out.push({ code: "separation_of_duties", message: "You entered test results for this batch, so you cannot release it (separation of duties)." });
   return out;
 }
