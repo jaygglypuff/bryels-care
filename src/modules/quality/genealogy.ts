@@ -1,9 +1,10 @@
 import "server-only";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   batchMaterials,
   batches,
+  containers,
   customers,
   dispenseRecords,
   goodsReceiptLines,
@@ -12,6 +13,7 @@ import {
   materials,
   products,
   salesOrders,
+  shipmentLines,
   shipments,
   sites,
   stockMovements,
@@ -43,6 +45,8 @@ export type TraceNode = {
   uom?: string | null;
   /** What the quantity means on this edge: consumed, produced, shipped. */
   qtyRole?: "consumed" | "produced" | "shipped" | "on_order" | "relotted";
+  /** Shipment nodes: the boxes of this lot that left on the shipment (W3E shipment_lines). */
+  boxNumbers?: string[];
   supplierName?: string | null;
   supplierLot?: string | null;
   itemKind?: string;
@@ -275,13 +279,24 @@ class Tracer {
       .where(and(eq(stockMovements.lotId, lot.id), eq(stockMovements.movementType, "shipment"), eq(stockMovements.sourceDocumentType, "shipment"), notReversed))
       .groupBy(shipments.id, salesOrders.id, customers.id)
       .orderBy(shipments.dispatchedAt);
+    // W3E: boxes of this lot per shipment (one shipment line per box, posted).
+    const boxRows = rows.length
+      ? await db
+          .select({ shipmentId: shipmentLines.shipmentId, number: containers.containerNumber })
+          .from(shipmentLines)
+          .innerJoin(containers, eq(containers.id, shipmentLines.containerId))
+          .where(and(eq(shipmentLines.lotId, lot.id), inArray(shipmentLines.shipmentId, rows.map((r) => r.shipmentId)), isNotNull(shipmentLines.stockMovementId)))
+          .orderBy(containers.containerNumber)
+      : [];
     const nodes: TraceNode[] = [];
     for (const r of rows) {
       if (!this.allowed.includes(r.siteId)) {
         this.hidden++;
         continue;
       }
+      const boxNumbers = boxRows.filter((b) => b.shipmentId === r.shipmentId).map((b) => b.number);
       nodes.push({
+        boxNumbers: boxNumbers.length ? boxNumbers : undefined,
         kind: "shipment",
         id: r.shipmentId,
         number: r.drNumber,

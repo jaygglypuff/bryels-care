@@ -33,6 +33,7 @@ import {
 import { AuthContext } from "@/lib/auth/context";
 import { runExport } from "@/lib/export";
 import { createBox, findLedgerDifferences, postMovement } from "@/modules/inventory";
+import { traceGenealogy, type TraceNode } from "@/modules/quality";
 import {
   acknowledgeDeliveryReceipt,
   allocateOrder,
@@ -397,5 +398,10 @@ describe("US-4-14 interim shipment export and box-level traceability", () => {
     const mv = await db.select().from(stockMovements).where(and(eq(stockMovements.lotId, lotA.id), eq(stockMovements.movementType, "shipment")));
     expect(mv.some((m) => (m.meta as { containerNumber?: string }).containerNumber)).toBe(true);
     expect(await shippedBoxesForLot(whRvs, lotA.id).catch(() => [])).toHaveLength(0);
+    // W2C trace (Wave 3 integration): the shipment nodes of the lot name the boxes that left on them.
+    const trace = await traceGenealogy(qa, { lotNumber: lotA.lotNumber });
+    const flat = (ns: TraceNode[]): TraceNode[] => ns.flatMap((n) => [n, ...flat(n.children)]);
+    const shipNodes = flat(trace.forward ?? []).filter((n) => n.kind === "shipment");
+    expect(shipNodes.some((n) => (n.boxNumbers ?? []).some((b) => rows.some((r) => r.boxNumber === b)))).toBe(true);
   });
 });

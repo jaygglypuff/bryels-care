@@ -38,6 +38,13 @@ function NodeRow({ n }: { n: TraceNode }) {
         <p className="text-[13px] text-fg-2">
           {n.label}
           {n.qty && n.qtyRole ? <span className="text-muted"> · {fmtLotQty(n.qty, n.uom)} {ROLE_LABEL[n.qtyRole]}</span> : null}
+          {n.kind === "shipment" && n.boxNumbers?.length ? (
+            <span className="text-muted">
+              {" "}
+              · {n.boxNumbers.length === 1 ? "box" : `${n.boxNumbers.length} boxes`} {n.boxNumbers.slice(0, 6).join(", ")}
+              {n.boxNumbers.length > 6 ? ` +${n.boxNumbers.length - 6} more` : ""}
+            </span>
+          ) : null}
           {n.kind === "lot" && n.supplierName ? <span className="text-muted"> · {n.supplierName}{n.supplierLot ? `, supplier lot ${n.supplierLot}` : ""}</span> : null}
           {n.kind === "lot" && n.expiresOn ? <span className="text-muted"> · exp. {fmtDate(n.expiresOn)}</span> : null}
           {n.kind === "lot" && n.receiptNumber && n.receiptHref ? (
