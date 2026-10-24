@@ -170,7 +170,7 @@ describe("analytics.kpi.reconciles_to_source", () => {
       .where(and(eq(salesOrders.status, "confirmed"), sql`${salesOrders.orderNumber} like 'SOM-%'`, sql`${salesOrders.createdAt} < '2025-03-31T16:00:00Z'`))
       .limit(1);
     expect(order).toBeTruthy();
-    const sales = await asUser(kit, "manager.nfd@bryels-care.test", "site_manager", [kit.nfd, kit.rvs]);
+    const sales = await asUser(kit, "sales@bryels-care.test", "sales_cs", [kit.nfd, kit.rvs]); // W3D: cancelling needs sales.sales_order.void (sales_cs)
     await cancelOrder(sales, order.id, "Customer withdrew the order (test).");
     const before = await db.select().from(kpiSnapshots).where(and(eq(kpiSnapshots.kpiCode, "KPI-SAL-01"), eq(kpiSnapshots.scopeKey, "all"), eq(kpiSnapshots.grain, "month")));
 
