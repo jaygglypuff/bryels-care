@@ -5,6 +5,7 @@ import { Card, CardTitle, EmptyState, PageHeader } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { RequestDecision, SettingForm, type ValueKind } from "./forms";
+import { StepUpGate } from "../users/step-up-gate";
 
 export const metadata = { title: "Settings" };
 
@@ -29,6 +30,7 @@ export default async function SettingsPage() {
   return (
     <div className="space-y-5">
       <PageHeader title="Settings" subtitle="Business configuration as data. Keys marked “needs approval” change only after a second person approves." />
+      <StepUpGate ctx={ctx} purpose="change restricted settings" />
       {orphans.length > 0 && (
         <Banner tone="warn" title={`${orphans.length} stored value(s) belong to settings that no longer exist`}>
           {orphans.map((o) => o.key).join(", ")}. They have no effect; remove them with a database change when convenient.

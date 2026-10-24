@@ -455,8 +455,8 @@ export function BulkForm({ rows, reasonCodes }: { rows: BulkRow[]; reasonCodes: 
         <Field label="Note (optional)" htmlFor="b-note" error={fe.note}>
           <Input id="b-note" name="note" maxLength={500} placeholder="For example: rehearsal R1, zone A" />
         </Field>
-        <Field label="Your password (re-authentication)" htmlFor="b-password" error={fe.password}>
-          <Input id="b-password" name="password" type="password" required autoComplete="current-password" />
+        <Field label="Your password (re-authentication)" htmlFor="b-password" error={fe.password} hint="Not needed within 10 minutes of “Confirm it’s you”; two-step sign-in users confirm there.">
+          <Input id="b-password" name="password" type="password" autoComplete="current-password" />
         </Field>
       </div>
       <FormMessage state={state} />

@@ -2,9 +2,9 @@ import "server-only";
 import { and, asc, eq, gte, inArray, isNull, like, lte, or, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import { db } from "@/db/client";
-import { batches, inventoryBalances, inventoryLots, locations, materials, products, users, warehouses } from "@/db/schema";
+import { batches, inventoryBalances, inventoryLots, locations, materials, products, warehouses } from "@/db/schema";
 import { AuthContext } from "@/lib/auth/context";
-import { verifyPassword } from "@/lib/auth/password";
+import { requireReauthentication } from "@/modules/governance";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
@@ -91,7 +91,7 @@ export async function bulkDispositionCandidates(ctx: AuthContext, f: BulkFilter 
   };
 }
 
-export type BulkDispositionInput = { lotIds: string[]; decision: "release" | "reject"; reasonCode: string; note?: string | null; password: string };
+export type BulkDispositionInput = { lotIds: string[]; decision: "release" | "reject"; reasonCode: string; note?: string | null; password?: string | null };
 
 export type BulkLotOutcome = { lotId: string; lotNumber: string; ok: boolean; toStatus?: string; message?: string; labelNote?: string | null };
 
@@ -107,11 +107,9 @@ export async function applyBulkDisposition(ctx: AuthContext, input: BulkDisposit
   const maxLots = await getSetting(db, ctx.organizationId, "quality.bulk_disposition.max_lots");
   if (ids.length > maxLots) throw new DomainError("validation", `Select at most ${maxLots} lots per run.`, { field: "lotIds" });
 
-  // Re-authentication (restricted decision, permissions matrix "R"): the user re-enters their password.
-  const [me] = await db.select({ hash: users.passwordHash }).from(users).where(eq(users.id, ctx.userId)).limit(1);
-  if (!me || !input.password || !(await verifyPassword(me.hash, input.password))) {
-    throw new DomainError("reauth_required", "Your password did not match. Enter your own password to confirm this bulk decision.", { field: "password" });
-  }
+  // Re-authentication (restricted decision, permissions matrix "R"): the shared rule — W2E's step-up window,
+  // else the password typed in the form (never for a TOTP user), failures audited (governance reauth).
+  await requireReauthentication(ctx, input.password, "quality.disposition.bulk");
 
   const correlationId = uuidv7();
   const bulk = new AuthContext(ctx.userId, ctx.organizationId, ctx.displayName, ctx.email, ctx.roleCodes, ctx.permissions, ctx.allowedSites, ctx.currentSiteId, { ...ctx.options, correlationId });

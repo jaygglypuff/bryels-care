@@ -131,8 +131,8 @@ export function RuleForm({ value, opts }: { value: RuleFormValue; opts: Opts }) 
         <Field label="Reason for this change" htmlFor={p("reason")} error={fe.reason}>
           <Input id={p("reason")} name="reason" required minLength={3} />
         </Field>
-        <Field label="Your password" htmlFor={p("pw")} error={fe.password}>
-          <Input id={p("pw")} name="password" type="password" required autoComplete="current-password" />
+        <Field label="Your password" htmlFor={p("pw")} error={fe.password} hint="Not needed within 10 minutes of “Confirm it’s you”; two-step sign-in users confirm there.">
+          <Input id={p("pw")} name="password" type="password" autoComplete="current-password" />
         </Field>
       </div>
       <FormMessage state={state} />
@@ -148,7 +148,7 @@ export function RemoveRuleForm({ id }: { id: string }) {
     <form action={action} className="mt-2 flex flex-wrap items-end gap-2">
       <input type="hidden" name="id" value={id} />
       <Input name="reason" required minLength={3} placeholder="Reason" aria-label="Reason for removing" className="!min-h-[36px] w-44 text-[13px]" />
-      <Input name="password" type="password" required placeholder="Your password" aria-label="Your password" autoComplete="current-password" className="!min-h-[36px] w-40 text-[13px]" />
+      <Input name="password" type="password" placeholder="Your password" aria-label="Your password" autoComplete="current-password" className="!min-h-[36px] w-40 text-[13px]" />
       <SubmitButton size="sm" variant="ghost" pendingText="Removing…">Remove rule</SubmitButton>
       {fe.password && <p className="w-full text-[13px] text-[var(--bad-fg)]">{fe.password}</p>}
       <FormMessage state={state} />

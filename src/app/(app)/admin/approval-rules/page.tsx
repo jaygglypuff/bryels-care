@@ -7,6 +7,7 @@ import { Card, CardTitle, EmptyState, PageHeader } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { RemoveRuleForm, RuleForm, type RuleFormValue } from "./forms";
+import { StepUpGate } from "../users/step-up-gate";
 
 export const metadata = { title: "Approval rules" };
 
@@ -43,6 +44,7 @@ export default async function ApprovalRulesPage() {
   return (
     <div className="space-y-5">
       <PageHeader title="Approval rules" subtitle="Who approves what, above which amount or variance. Nobody approves their own submission. The defaults are assumptions (A-PM-15) for the owner to confirm." />
+      <StepUpGate ctx={ctx} purpose="change approval rules" />
       {!canAdmin && <Banner tone="info" title="Read only">Only the owner changes approval rules (they are financial and quality controls).</Banner>}
       {canAdmin && (
         <Card>

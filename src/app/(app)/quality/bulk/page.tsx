@@ -5,6 +5,7 @@ import { Banner } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { fmtLotQty } from "../_ui";
 import { BulkForm } from "../w2c-forms";
+import { StepUpGate } from "../../admin/users/step-up-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default async function BulkDispositionPage({ searchParams }: { searchPara
   return (
     <>
       <PageHeader title="Bulk disposition" subtitle={`${ctx.currentSite.code} · apply one QA decision to many lots (opening stock); each lot is checked and recorded separately`} actions={<LinkButton href="/quality" variant="secondary">QA queue</LinkButton>} />
+      <StepUpGate ctx={ctx} purpose="apply a bulk disposition" />
       <div className="flex flex-col gap-5">
         <Card>
           <CardTitle>Filter</CardTitle>

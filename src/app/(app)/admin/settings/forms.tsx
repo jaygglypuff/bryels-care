@@ -47,8 +47,8 @@ export function SettingForm({ settingKey, kind, current, sites, requiresApproval
         <Field label="Reason" htmlFor={id("reason")} error={fe.reason}>
           <Input id={id("reason")} name="reason" required minLength={3} maxLength={500} placeholder="Why this changes" />
         </Field>
-        <Field label="Your password" htmlFor={id("password")} error={fe.password} hint="Restricted change: confirm it is you.">
-          <Input id={id("password")} name="password" type="password" required autoComplete="current-password" />
+        <Field label="Your password" htmlFor={id("password")} error={fe.password} hint="Not needed within 10 minutes of “Confirm it’s you”; two-step sign-in users confirm there.">
+          <Input id={id("password")} name="password" type="password" autoComplete="current-password" />
         </Field>
       </div>
       <FormMessage state={state} />
@@ -69,7 +69,7 @@ export function RequestDecision({ id, canApprove, isOwn }: { id: string; canAppr
           <form action={approve} className="flex flex-1 flex-wrap items-end gap-2">
             <input type="hidden" name="id" value={id} />
             <Input name="note" placeholder="Note (optional)" aria-label="Approval note" className="!min-h-[36px] w-40 text-[13px]" />
-            <Input name="password" type="password" required placeholder="Your password" aria-label="Your password" autoComplete="current-password" className="!min-h-[36px] w-40 text-[13px]" />
+            <Input name="password" type="password" placeholder="Your password" aria-label="Your password" autoComplete="current-password" className="!min-h-[36px] w-40 text-[13px]" />
             <SubmitButton size="sm" pendingText="Approving…">Approve</SubmitButton>
           </form>
           <form action={reject} className="flex flex-wrap items-end gap-2">

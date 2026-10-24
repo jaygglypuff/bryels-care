@@ -6,6 +6,7 @@ import { Card, CardTitle, PageHeader, Table, Td } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { NumberingVersionForm, VersionDecision } from "./forms";
+import { StepUpGate } from "../users/step-up-gate";
 
 export const metadata = { title: "Numbering rules" };
 
@@ -21,6 +22,7 @@ export default async function NumberingPage() {
   return (
     <div className="space-y-5">
       <PageHeader title="Numbering rules" subtitle="How document numbers look. A change never alters numbers already issued; the running number of the period continues." />
+      <StepUpGate ctx={ctx} purpose="change numbering rules" />
       {!canAdmin && <Banner tone="info" title="Read only">System administrators change numbering; a second administrator approves each change.</Banner>}
       <Card>
         <CardTitle>Document types</CardTitle>

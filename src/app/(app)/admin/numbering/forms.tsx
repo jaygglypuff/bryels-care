@@ -40,8 +40,8 @@ export function NumberingVersionForm({ documentType, current, today }: { documen
       <label className="flex items-center gap-2 text-[13px]">
         <input type="checkbox" name="isGapless" defaultChecked={current.isGapless} /> Gapless (numbers are never previewed; for invoices)
       </label>
-      <Field label="Your password" htmlFor={p("pw")} error={fe.password}>
-        <Input id={p("pw")} name="password" type="password" required autoComplete="current-password" className="sm:max-w-xs" />
+      <Field label="Your password" htmlFor={p("pw")} error={fe.password} hint="Not needed within 10 minutes of “Confirm it’s you”; two-step sign-in users confirm there.">
+        <Input id={p("pw")} name="password" type="password" autoComplete="current-password" className="sm:max-w-xs" />
       </Field>
       <FormMessage state={state} />
       <SubmitButton size="sm" pendingText="Submitting…">Submit new version</SubmitButton>
@@ -58,7 +58,7 @@ export function VersionDecision({ id, isOwn }: { id: string; isOwn: boolean }) {
         {!isOwn && (
           <form action={approve} className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="id" value={id} />
-            <Input name="password" type="password" required placeholder="Your password" aria-label="Your password" autoComplete="current-password" className="!min-h-[36px] w-40 text-[13px]" />
+            <Input name="password" type="password" placeholder="Your password" aria-label="Your password" autoComplete="current-password" className="!min-h-[36px] w-40 text-[13px]" />
             <SubmitButton size="sm" pendingText="Approving…">Approve</SubmitButton>
           </form>
         )}
