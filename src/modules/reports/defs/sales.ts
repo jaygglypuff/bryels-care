@@ -19,7 +19,7 @@ export const salesOrdersReport: ReportDefinition = {
       kind: "select",
       label: "Show",
       options: [
-        { value: "open", label: "Not yet shipped (confirmed or allocated)" },
+        { value: "open", label: "Not yet fully shipped (confirmed to partially shipped)" },
         { value: "overdue", label: "Unshipped past the requested date" },
         { value: "period", label: "Created in the period" },
       ],
@@ -43,17 +43,17 @@ export const salesOrdersReport: ReportDefinition = {
   fetch: async ({ siteIds, params, period, limit, today, tz }) => {
     const where =
       params.scope === "overdue"
-        ? sql`so.status in ('confirmed','allocated') and (case when so.requested_delivery_on ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then so.requested_delivery_on::date end) < ${today}::date`
+        ? sql`so.status in ('confirmed','allocated','picking','packed','partially_shipped') and (case when so.requested_delivery_on ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then so.requested_delivery_on::date end) < ${today}::date`
         : params.scope === "period"
           ? sql`so.created_at >= ${dayStart(period!.from, tz)} and so.created_at < ${dayStart(period!.toExclusive, tz)}`
-          : sql`so.status in ('confirmed','allocated')`;
+          : sql`so.status in ('confirmed','allocated','picking','packed','partially_shipped')`;
     return select(sql`
       select so.order_number as "order", s.code as site, c.name as customer, coalesce(so.customer_po_number, '') as "customerPo", so.status,
              ${localTs(sql`so.created_at`, tz)} as "createdAt", coalesce(so.requested_delivery_on, '') as "requestedOn",
              (select count(*)::int from sales_order_lines l where l.sales_order_id = so.id) as lines,
              (select trim_scale(coalesce(sum(l.qty_units), 0))::text from sales_order_lines l where l.sales_order_id = so.id) as "qtyOrdered",
-             (select count(*)::int from shipments sh where sh.sales_order_id = so.id) as shipments,
-             case when so.status in ('confirmed','allocated') and (case when so.requested_delivery_on ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then so.requested_delivery_on::date end) < ${today}::date
+             (select count(*)::int from shipments sh where sh.sales_order_id = so.id and sh.status in ('dispatched','delivered','returned')) as shipments,
+             case when so.status in ('confirmed','allocated','picking','packed','partially_shipped') and (case when so.requested_delivery_on ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then so.requested_delivery_on::date end) < ${today}::date
                   then (${today}::date - (case when so.requested_delivery_on ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then so.requested_delivery_on::date end)) else 0 end as "daysOverdue",
              'pcs' as "_unit", so.id::text as "_id"
       from sales_orders so
@@ -100,6 +100,7 @@ export const shipmentsReport: ReportDefinition = {
   ],
   columns: [
     { key: "dr", header: "Delivery receipt" },
+    { key: "status", header: "Status" },
     { key: "site", header: "Site" },
     { key: "dispatchedAt", header: "Dispatched at" },
     { key: "order", header: "Order" },
@@ -114,20 +115,20 @@ export const shipmentsReport: ReportDefinition = {
     const p = period!;
     const ack = params.ack === "unacknowledged" ? sql`and sh.delivered_at is null` : params.ack === "acknowledged" ? sql`and sh.delivered_at is not null` : sql``;
     return select(sql`
-      select sh.delivery_receipt_number as dr, s.code as site, ${localTs(sql`sh.dispatched_at`, tz)} as "dispatchedAt", so.order_number as "order", c.name as customer,
+      select coalesce(sh.delivery_receipt_number, sh.shipment_number, '') as dr, sh.status, s.code as site, ${localTs(sql`sh.dispatched_at`, tz)} as "dispatchedAt", so.order_number as "order", c.name as customer,
              coalesce(sh.carrier, '') as carrier, sh.package_count as packages, ${localTs(sql`sh.delivered_at`, tz)} as "deliveredAt", coalesce(sh.received_by_name, '') as "receivedBy",
              case when sh.delivered_at is null then floor(extract(epoch from (${now.toISOString()}::timestamptz - sh.dispatched_at)) / 3600)::int else null end as "hoursOpen",
-             so.id::text as "_orderId"
+             so.id::text as "_orderId", sh.id::text as "_shipmentId"
       from shipments sh
       join sales_orders so on so.id = sh.sales_order_id
       join customers c on c.id = so.customer_id
       join sites s on s.id = sh.site_id
-      where ${inIds(sql`sh.site_id`, siteIds)} and sh.dispatched_at >= ${dayStart(p.from, tz)} and sh.dispatched_at < ${dayStart(p.toExclusive, tz)} ${ack}
+      where ${inIds(sql`sh.site_id`, siteIds)} and sh.status in ('dispatched','delivered','returned') and sh.dispatched_at >= ${dayStart(p.from, tz)} and sh.dispatched_at < ${dayStart(p.toExclusive, tz)} ${ack}
       order by sh.dispatched_at, sh.delivery_receipt_number
       limit ${limit}`);
   },
   valueLabel: "Actual",
-  timeBasis: "By dispatch time (shipments.dispatched_at); acknowledged = a delivery time and receiver were recorded.",
+  timeBasis: "By dispatch time (shipments.dispatched_at) of shipments that left the site (dispatched, delivered, returned; reversed ones are excluded); acknowledged = a delivery time and receiver were recorded.",
   sources: "shipments, sales_orders, customers",
   footnotes: ["A delivery receipt acknowledgement is evidence of receipt, not an electronic signature (A-RPT-14)."],
   summarize: (rows) => [
@@ -136,5 +137,5 @@ export const shipmentsReport: ReportDefinition = {
   ],
   schedulable: true,
   defaultCadence: "weekly",
-  rowLink: (r) => (r._orderId ? `/sales/${r._orderId}` : null),
+  rowLink: (r) => (r._shipmentId ? `/sales/shipments/${r._shipmentId}` : r._orderId ? `/sales/${r._orderId}` : null),
 };

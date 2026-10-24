@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gte, inArray, isNotNull, lt } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { containers, customers, inventoryLots, products, salesOrderLines, salesOrders, shipmentLines, shipments } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
@@ -12,8 +12,9 @@ import { D } from "@/lib/qty";
  * Interim shipment export to the accountant (US-4-14, W09-10, A-PROC-24) until invoices exist in
  * Phase 6: dispatched / delivered shipments of a period with order, DR, customer, lines, lots and
  * quantities; billing never works from draft documents. Prices and line amounts are columns that
- * require `sales.price_list.view` (stream W3D adds that string; until then they are masked for
- * everyone, the safe default). Neutralised and audited by the export layer.
+ * require W3D's `sales.price_list.view`; without it the query does not even read the price
+ * (defence in depth on top of the export layer's column masking). Neutralised and audited by the
+ * export layer.
  */
 export type ShipmentExportFilter = { siteId: string; from: string; to: string } & Record<string, unknown>;
 
@@ -34,12 +35,12 @@ type Row = {
   boxNumber: string | null;
   qty: string;
   uom: string;
-  unitPrice: string;
+  unitPrice: string | null;
   overShipment: boolean;
 };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const PRICE = "sales.price_list.view" as Permission;
+const PRICE: Permission = "sales.price_list.view";
 
 export async function shipmentExportRows(ctx: AuthContext, f: ShipmentExportFilter, limit: number): Promise<Row[]> {
   ctx.require("sales.shipment.export");
@@ -66,7 +67,7 @@ export async function shipmentExportRows(ctx: AuthContext, f: ShipmentExportFilt
       boxNumber: containers.containerNumber,
       qty: shipmentLines.qtyBase,
       uom: shipmentLines.baseUom,
-      unitPrice: salesOrderLines.unitPrice,
+      unitPrice: ctx.can(PRICE) ? salesOrderLines.unitPrice : sql<string | null>`null`,
       overShipment: shipmentLines.isOverShipment,
     })
     .from(shipmentLines)
@@ -120,7 +121,7 @@ export const shipmentExport: ExportDefinition<ShipmentExportFilter, Row> = {
     { header: "Quantity", value: (r) => D(r.qty).toString(), numeric: true },
     { header: "Unit", value: (r) => r.uom },
     { header: "Over-shipment", value: (r) => (r.overShipment ? "yes" : "no") },
-    { header: "Unit price", value: (r) => D(r.unitPrice).toString(), numeric: true, requires: PRICE },
-    { header: "Line amount", value: (r) => D(r.qty).times(r.unitPrice).toDecimalPlaces(2).toString(), numeric: true, requires: PRICE },
+    { header: "Unit price", value: (r) => (r.unitPrice === null ? null : D(r.unitPrice).toString()), numeric: true, requires: PRICE },
+    { header: "Line amount", value: (r) => (r.unitPrice === null ? null : D(r.qty).times(r.unitPrice).toDecimalPlaces(2).toString()), numeric: true, requires: PRICE },
   ],
 };

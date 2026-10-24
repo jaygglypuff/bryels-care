@@ -15,7 +15,7 @@ export { approvalProgress as salesApprovalProgress, type ApprovalProgress as Sal
 export { salesQuoteExpiryJob } from "./quotations-expiry-job";
 // Wave 3 W3E: boxing and fulfilment
 export * from "./fulfilment-state";
-export { customerFulfilmentRequirements, type FulfilmentRequirements } from "./fulfilment-requirements";
+export { customerFulfilmentRequirements, requirementsFromSnapshot, type FulfilmentRequirements } from "./fulfilment-requirements";
 export * from "./boxing";
 export * from "./picking";
 export * from "./packing";

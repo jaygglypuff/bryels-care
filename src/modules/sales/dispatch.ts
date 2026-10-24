@@ -35,7 +35,7 @@ import { markDocumentVoid } from "@/modules/documents";
 import { lockOrder } from "./orders";
 import { openAllocationsForOrder } from "./allocation";
 import { issueDeliveryReceiptInTx, liveDeliveryReceipt, voidDeliveryReceiptInTx } from "./delivery-receipts";
-import { isUuid, lockShipment, peekShipment, advanceOrder, transitionShipment, type OrderRow, type ShipmentRow } from "./fulfilment-state";
+import { CUSTOMER_HEADER_COLUMNS, ORDER_HEADER_COLUMNS, isUuid, lockShipment, peekShipment, advanceOrder, transitionShipment, type OrderRow, type ShipmentRow } from "./fulfilment-state";
 import { shippedByOrderLine } from "./packing";
 
 /**
@@ -387,7 +387,7 @@ export async function getShipment(ctx: AuthContext, shipmentId: string) {
   ctx.require("sales.shipment.view");
   if (!isUuid(shipmentId)) throw new DomainError("not_found", "Shipment not found in your sites.");
   const [row] = await db
-    .select({ s: shipments, o: salesOrders, c: customers })
+    .select({ s: shipments, o: ORDER_HEADER_COLUMNS, c: CUSTOMER_HEADER_COLUMNS })
     .from(shipments)
     .innerJoin(salesOrders, eq(salesOrders.id, shipments.salesOrderId))
     .innerJoin(customers, eq(customers.id, salesOrders.customerId))

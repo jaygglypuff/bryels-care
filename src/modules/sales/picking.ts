@@ -14,7 +14,7 @@ import { assertLocationsNotFrozen, assertLotUsable, claimIdempotencyKey, storeId
 import { generateForSource, resolveTemplateVersion } from "@/modules/documents";
 import { lockOrder } from "./orders";
 import { openAllocationsForOrder } from "./allocation";
-import { isUuid, pickMachine, advanceOrder, transitionShipment } from "./fulfilment-state";
+import { ORDER_HEADER_COLUMNS, isUuid, pickMachine, advanceOrder, transitionShipment } from "./fulfilment-state";
 
 /**
  * Pick lists and pick scans (US-4-10, W09-06). A pick covers the order's open allocations; each scan
@@ -366,7 +366,7 @@ export async function getPick(ctx: AuthContext, pickId: string) {
   ctx.require("sales.pick.view");
   if (!isUuid(pickId)) throw new DomainError("not_found", "Pick not found in your sites.");
   const [row] = await db
-    .select({ pick: picks, order: salesOrders, customerName: customers.name, customerCode: customers.code, shipmentNumber: shipments.shipmentNumber, shipmentStatus: shipments.status })
+    .select({ pick: picks, order: ORDER_HEADER_COLUMNS, customerName: customers.name, customerCode: customers.code, shipmentNumber: shipments.shipmentNumber, shipmentStatus: shipments.status })
     .from(picks)
     .innerJoin(salesOrders, eq(salesOrders.id, picks.salesOrderId))
     .innerJoin(customers, eq(customers.id, salesOrders.customerId))

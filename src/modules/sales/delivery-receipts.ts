@@ -32,7 +32,7 @@ import { notifyUsers, usersWithRoles } from "@/modules/platform/notifications";
 import type { JobRunContext } from "@/modules/platform/job-definition";
 import { claimIdempotencyKey, storeIdempotentResult } from "@/modules/inventory";
 import { lockOrder } from "./orders";
-import { deliveryReceiptMachine, isUuid, lockShipment, peekShipment, transitionShipment, type ShipmentRow } from "./fulfilment-state";
+import { CUSTOMER_HEADER_COLUMNS, ORDER_HEADER_COLUMNS, deliveryReceiptMachine, isUuid, lockShipment, peekShipment, transitionShipment, type ShipmentRow } from "./fulfilment-state";
 
 /**
  * Delivery receipts (US-4-12, US-4-13; docs/reports-and-templates.md §7). The DR number is allocated
@@ -50,7 +50,7 @@ export type Acknowledgment = NonNullable<DeliveryReceiptData["acknowledgment"]>;
 /** Frozen delivery_receipt/v1 dataset of a shipment (from its lines; after dispatch they are the ledger postings). */
 export async function deliveryReceiptData(q: DbOrTx, shipmentId: string, opts: { drNumber: string | null; acknowledgment?: Acknowledgment | null; remarks?: string | null }): Promise<DeliveryReceiptData> {
   const [row] = await q
-    .select({ s: shipments, o: salesOrders, c: customers, site: sites, orgName: organizations.name })
+    .select({ s: shipments, o: ORDER_HEADER_COLUMNS, c: CUSTOMER_HEADER_COLUMNS, site: sites, orgName: organizations.name })
     .from(shipments)
     .innerJoin(salesOrders, eq(salesOrders.id, shipments.salesOrderId))
     .innerJoin(customers, eq(customers.id, salesOrders.customerId))

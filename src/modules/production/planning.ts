@@ -25,6 +25,7 @@ import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
 import { getSetting } from "@/lib/settings";
 import { getEffectiveFormulaRevision } from "@/modules/masterdata";
+import { OPEN_ALLOCATION_ORDER_STATUSES } from "@/modules/inventory";
 import { addDays, idempotent, manilaToday } from "./shared";
 import { insertWorkOrder } from "./work-orders";
 import { stagingKinds, workOrderCandidates, workOrderRequirements } from "./work-orders-reserve";
@@ -81,7 +82,7 @@ export async function demandSnapshot(q: DbOrTx, ctx: AuthContext, siteId: string
     if (!r) rows.set(productId, (r = { productId, soDemand: new Decimal(0), salesOrderIds: new Set(), salesOrderLineIds: [], firstDate: null, minStock: null, onHand: new Decimal(0), available: new Decimal(0), openWo: new Decimal(0) }));
     return r;
   };
-  // 1. Open confirmed orders due by the period end (ordered − allocated).
+  // 1. Open confirmed (or partially shipped) orders due by the period end (ordered − allocated − shipped).
   const so = await q
     .select({
       lineId: salesOrderLines.id,
@@ -89,11 +90,12 @@ export async function demandSnapshot(q: DbOrTx, ctx: AuthContext, siteId: string
       productId: salesOrderLines.productId,
       qty: salesOrderLines.qtyUnits,
       due: salesOrders.requestedDeliveryOn,
-      allocated: sql<string>`coalesce((select sum(${stockAllocations.qtyUnits}) from ${stockAllocations} where ${stockAllocations.salesOrderLineId} = ${salesOrderLines.id}), 0)::text`,
+      // Open and fulfilled (shipped) allocations cover the line; released ones (W3E) do not.
+      allocated: sql<string>`coalesce((select sum(${stockAllocations.qtyUnits}) from ${stockAllocations} where ${stockAllocations.salesOrderLineId} = ${salesOrderLines.id} and ${stockAllocations.status} <> 'released'), 0)::text`,
     })
     .from(salesOrderLines)
     .innerJoin(salesOrders, eq(salesOrders.id, salesOrderLines.salesOrderId))
-    .where(and(eq(salesOrders.organizationId, ctx.organizationId), eq(salesOrders.siteId, siteId), eq(salesOrders.status, "confirmed"), sql`(${salesOrders.requestedDeliveryOn} is null or ${salesOrders.requestedDeliveryOn} <= ${periodEnd})`));
+    .where(and(eq(salesOrders.organizationId, ctx.organizationId), eq(salesOrders.siteId, siteId), inArray(salesOrders.status, ["confirmed", "partially_shipped"]), sql`(${salesOrders.requestedDeliveryOn} is null or ${salesOrders.requestedDeliveryOn} <= ${periodEnd})`));
   for (const l of so) {
     const open = Decimal.max(new Decimal(l.qty).minus(l.allocated), 0);
     if (open.lte(0)) continue;
@@ -133,7 +135,7 @@ export async function demandSnapshot(q: DbOrTx, ctx: AuthContext, siteId: string
     .innerJoin(inventoryLots, eq(inventoryLots.id, stockAllocations.lotId))
     .innerJoin(salesOrderLines, eq(salesOrderLines.id, stockAllocations.salesOrderLineId))
     .innerJoin(salesOrders, eq(salesOrders.id, salesOrderLines.salesOrderId))
-    .where(and(eq(inventoryLots.siteId, siteId), inArray(inventoryLots.productId, ids), inArray(salesOrders.status, ["confirmed", "allocated"])))
+    .where(and(eq(inventoryLots.siteId, siteId), inArray(inventoryLots.productId, ids), eq(stockAllocations.status, "open"), inArray(salesOrders.status, OPEN_ALLOCATION_ORDER_STATUSES)))
     .groupBy(inventoryLots.productId);
   // 4. Units already coming from open work orders.
   const wos = await q

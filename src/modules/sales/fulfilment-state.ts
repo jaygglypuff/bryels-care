@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Tx } from "@/db/client";
-import { salesOrders, shipmentStateTransitions, shipments } from "@/db/schema";
+import { customers, salesOrders, shipmentStateTransitions, shipments } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -49,6 +49,32 @@ export const deliveryReceiptMachine = stateMachine<DeliveryReceiptStatus>("deliv
   acknowledged: [],
   voided: [],
 });
+
+/**
+ * Order and customer columns the fulfilment screens (pick, packing, shipment, DR) may read. Explicit
+ * on purpose: the full rows carry money (order totals, unit prices) and credit terms, which the
+ * warehouse never sees (docs/permissions-matrix.md §6, W3D masking).
+ */
+export const ORDER_HEADER_COLUMNS = {
+  id: salesOrders.id,
+  organizationId: salesOrders.organizationId,
+  siteId: salesOrders.siteId,
+  orderNumber: salesOrders.orderNumber,
+  status: salesOrders.status,
+  customerId: salesOrders.customerId,
+  customerPoNumber: salesOrders.customerPoNumber,
+  requestedDeliveryOn: salesOrders.requestedDeliveryOn,
+  shipToText: salesOrders.shipToText,
+  createdBy: salesOrders.createdBy,
+};
+export const CUSTOMER_HEADER_COLUMNS = {
+  id: customers.id,
+  code: customers.code,
+  name: customers.name,
+  shipToAddress: customers.shipToAddress,
+  contactName: customers.contactName,
+  phone: customers.phone,
+};
 
 export type ShipmentRow = typeof shipments.$inferSelect;
 export type OrderRow = typeof salesOrders.$inferSelect;

@@ -21,7 +21,7 @@ import { DomainError } from "@/lib/errors";
 import { D, daysUntil, fmtQty } from "@/lib/qty";
 import { lockOrder } from "./orders";
 import { advanceOrder } from "./fulfilment-state";
-import { customerFulfilmentRequirements } from "./fulfilment-requirements";
+import { customerFulfilmentRequirements, requirementsFromSnapshot, type FulfilmentRequirements } from "./fulfilment-requirements";
 import {
   convertReservationsForDemands,
   looseQty,
@@ -138,7 +138,7 @@ export type AllocationResult = {
   skippedForLotAge: { lotNumber: string; ageDays: number }[];
   minShelfLifeDays: number;
   maxLotAgeDays: number | null;
-  requirementSource: "customer_requirement" | "customer_default";
+  requirementSource: FulfilmentRequirements["source"];
 };
 
 type Insert = { salesOrderLineId: string; lotId: string; locationId: string; qtyUnits: string; containerId: string | null };
@@ -219,8 +219,8 @@ const ageInDays = (manufacturedOn: string | null, createdAt: Date) => {
 /**
  * FEFO/FIFO allocation (W09-05, US-4-09, A-PROC-09): for each order line, allocates released,
  * unexpired finished-goods lots of the product at the order's site by the configured rule (US-2-20),
- * skipping lots below the customer's minimum remaining shelf life or above its maximum lot age
- * (customer requirements, read through `customerFulfilmentRequirements`), and proposes boxes
+ * skipping lots below the customer's minimum remaining shelf life or above its maximum lot age (the
+ * order line's requirement snapshot taken at submission, else `customerFulfilmentRequirements`), and proposes boxes
  * (whole boxes, then loose units). Partial allocation is kept; the order moves `confirmed → allocated`
  * only when every line is covered. Serialization: the order row, then the candidate lot rows
  * (sorted by id) are locked, the lock order of dispatch posting.
@@ -234,7 +234,7 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
     if (!ALLOCATABLE_STATUSES.includes(o.status)) throw new DomainError("state", `Order ${o.orderNumber} is ${o.status.replace(/_/g, " ")}; only confirmed orders (or the remainder of a partial shipment) can be allocated.`);
 
     const lines = await tx
-      .select({ id: salesOrderLines.id, productId: salesOrderLines.productId, qty: salesOrderLines.qtyUnits, sku: products.skuCode })
+      .select({ id: salesOrderLines.id, productId: salesOrderLines.productId, qty: salesOrderLines.qtyUnits, sku: products.skuCode, minRemainingShelfLifeDays: salesOrderLines.minRemainingShelfLifeDays, requirementSnapshot: salesOrderLines.requirementSnapshot })
       .from(salesOrderLines)
       .innerJoin(products, eq(products.id, salesOrderLines.productId))
       .where(eq(salesOrderLines.salesOrderId, o.id))
@@ -256,7 +256,11 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
     const candidates = await availableStock(tx, o.siteId, productIds, { excludeDemandIds: lines.map((l) => l.id) });
     const remaining = new Map(candidates.map((c) => [`${c.lotId}|${c.locationId}`, D(c.available)]));
 
-    const firstReq = await customerFulfilmentRequirements(tx, o.organizationId, o.customerId, lines[0]?.productId ?? null);
+    // The order line's requirement snapshot (frozen at submission, W3D) wins; lines entered before Wave 3
+    // have none and read the customer's requirements in force today.
+    const lineRequirements = async (line: (typeof lines)[number] | undefined) =>
+      (line && requirementsFromSnapshot(line)) ?? (await customerFulfilmentRequirements(tx, o.organizationId, o.customerId, line?.productId ?? null));
+    const firstReq = await lineRequirements(lines[0]);
     const result: AllocationResult = {
       orderNumber: o.orderNumber,
       fullyAllocated: true,
@@ -278,7 +282,7 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
       const already = existing.filter((a) => a.salesOrderLineId === line.id).reduce((s, a) => s.plus(a.qtyUnits), new Decimal(0));
       let need = D(line.qty).minus(already);
       if (need.lte(0)) continue;
-      const req = await customerFulfilmentRequirements(tx, o.organizationId, o.customerId, line.productId);
+      const req = await lineRequirements(line);
       // FEFO/FIFO rule per product and customer (US-2-20), the same order the recommendation shows.
       const rule = await resolveAllocationStrategy(tx, o.organizationId, { productId: line.productId, customerId: o.customerId });
       const lineMin = Math.max(req.minRemainingShelfLifeDays, rule.minShelfLifeDays ?? 0);

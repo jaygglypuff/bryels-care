@@ -30,8 +30,8 @@ import { parseScan } from "@/lib/scan/payload";
 import { assertLotUsable, claimIdempotencyKey, storeIdempotentResult } from "@/modules/inventory";
 import { auditDenied, requireReauthentication } from "@/modules/governance";
 import { lockOrder } from "./orders";
-import { customerFulfilmentRequirements } from "./fulfilment-requirements";
-import { isUuid, lockShipment, peekShipment, advanceOrder, transitionShipment, type ShipmentRow } from "./fulfilment-state";
+import { customerFulfilmentRequirements, requirementsFromSnapshot } from "./fulfilment-requirements";
+import { ORDER_HEADER_COLUMNS, isUuid, lockShipment, peekShipment, advanceOrder, transitionShipment, type ShipmentRow } from "./fulfilment-state";
 import { generateBoxingNoteForShipment } from "./boxing";
 
 /**
@@ -436,13 +436,13 @@ export async function completePacking(ctx: AuthContext, shipmentId: string, inpu
       throw new DomainError("conflict", `${missing.length} picked item(s) not verified yet: ${names.slice(0, 8).join(", ")}${names.length > 8 ? "…" : ""}. Scan them, or take them out of the pick.`, { code: "VERIFICATION_INCOMPLETE" });
     }
     // Partial shipment check (A-PROC-15): shipped before + this shipment vs ordered, per line.
-    const orderLines = await tx.select({ id: salesOrderLines.id, productId: salesOrderLines.productId, qty: salesOrderLines.qtyUnits, sku: products.skuCode }).from(salesOrderLines).innerJoin(products, eq(products.id, salesOrderLines.productId)).where(eq(salesOrderLines.salesOrderId, o.id));
+    const orderLines = await tx.select({ id: salesOrderLines.id, productId: salesOrderLines.productId, qty: salesOrderLines.qtyUnits, sku: products.skuCode, minRemainingShelfLifeDays: salesOrderLines.minRemainingShelfLifeDays, requirementSnapshot: salesOrderLines.requirementSnapshot }).from(salesOrderLines).innerJoin(products, eq(products.id, salesOrderLines.productId)).where(eq(salesOrderLines.salesOrderId, o.id));
     const before = await shippedByOrderLine(tx, o.id, s.id);
     const thisShip = new Map<string, Decimal>();
     for (const l of lines) thisShip.set(l.salesOrderLineId, (thisShip.get(l.salesOrderLineId) ?? new Decimal(0)).plus(l.qtyBase));
     const short = orderLines.filter((l) => (before.get(l.id) ?? new Decimal(0)).plus(thisShip.get(l.id) ?? 0).lt(l.qty));
     if (short.length) {
-      const full = (await Promise.all(orderLines.map((l) => customerFulfilmentRequirements(tx, o.organizationId, o.customerId, l.productId)))).some((r) => r.fullShipmentRequired);
+      const full = (await Promise.all(orderLines.map(async (l) => requirementsFromSnapshot(l) ?? (await customerFulfilmentRequirements(tx, o.organizationId, o.customerId, l.productId))))).some((r) => r.fullShipmentRequired);
       if (full) {
         const [ok] = await tx.select({ id: shipmentExceptions.id }).from(shipmentExceptions).where(and(eq(shipmentExceptions.shipmentId, s.id), eq(shipmentExceptions.kind, "partial_shipment"))).limit(1);
         if (!ok) {
@@ -504,7 +504,7 @@ export async function getPackingView(ctx: AuthContext, shipmentId: string) {
   const [s] = await db.select().from(shipments).where(and(eq(shipments.id, shipmentId), eq(shipments.organizationId, ctx.organizationId), inArray(shipments.siteId, ctx.allowedSiteIds))).limit(1);
   if (!s) throw new DomainError("not_found", "Shipment not found in your sites.");
   ctx.requireSite(s.siteId);
-  const [order] = await db.select({ o: salesOrders, customerName: customers.name, customerCode: customers.code }).from(salesOrders).innerJoin(customers, eq(customers.id, salesOrders.customerId)).where(eq(salesOrders.id, s.salesOrderId));
+  const [order] = await db.select({ o: ORDER_HEADER_COLUMNS, customerName: customers.name, customerCode: customers.code }).from(salesOrders).innerJoin(customers, eq(customers.id, salesOrders.customerId)).where(eq(salesOrders.id, s.salesOrderId));
   const pick = await pickOf(db, s.id);
   const active = pick
     ? await db
@@ -527,7 +527,7 @@ export async function getPackingView(ctx: AuthContext, shipmentId: string) {
     .where(eq(shipmentLines.shipmentId, s.id))
     .orderBy(asc(shipmentLines.verifiedAt));
   const orderLines = await db
-    .select({ id: salesOrderLines.id, lineNo: salesOrderLines.lineNo, qty: salesOrderLines.qtyUnits, sku: products.skuCode, productName: products.name, productId: products.id })
+    .select({ id: salesOrderLines.id, lineNo: salesOrderLines.lineNo, qty: salesOrderLines.qtyUnits, sku: products.skuCode, productName: products.name, productId: products.id, minRemainingShelfLifeDays: salesOrderLines.minRemainingShelfLifeDays, requirementSnapshot: salesOrderLines.requirementSnapshot })
     .from(salesOrderLines)
     .innerJoin(products, eq(products.id, salesOrderLines.productId))
     .where(eq(salesOrderLines.salesOrderId, s.salesOrderId))
@@ -538,7 +538,7 @@ export async function getPackingView(ctx: AuthContext, shipmentId: string) {
   const scans = pack
     ? await db.select({ sc: packVerificationScans, by: users.displayName }).from(packVerificationScans).innerJoin(users, eq(users.id, packVerificationScans.scannedBy)).where(eq(packVerificationScans.packId, pack.id)).orderBy(desc(packVerificationScans.scannedAt)).limit(40)
     : [];
-  const req = await Promise.all(orderLines.map((l) => customerFulfilmentRequirements(db, ctx.organizationId, order.o.customerId, l.productId)));
+  const req = await Promise.all(orderLines.map(async (l) => requirementsFromSnapshot(l) ?? (await customerFulfilmentRequirements(db, ctx.organizationId, order.o.customerId, l.productId))));
   const verifiedPickLines = new Set(lines.map((l) => l.l.pickLineId).filter(Boolean));
   const pickers = new Set(active.map((a) => a.pl.pickedBy));
   if (pick?.completedBy) pickers.add(pick.completedBy);

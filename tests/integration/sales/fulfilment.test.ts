@@ -22,6 +22,7 @@ import {
   packVerificationScans,
   packs,
   products,
+  salesOrderLines,
   salesOrders,
   shipmentLines,
   shipments,
@@ -29,7 +30,7 @@ import {
   stockMovements,
   users,
 } from "@/db/schema";
-import type { AuthContext } from "@/lib/auth/context";
+import { AuthContext } from "@/lib/auth/context";
 import { runExport } from "@/lib/export";
 import { createBox, findLedgerDifferences, postMovement } from "@/modules/inventory";
 import {
@@ -39,9 +40,14 @@ import {
   availableStock,
   completePacking,
   completePick,
+  approveRequirement,
   confirmOrder,
+  createCustomer,
   createOrder,
   customerFulfilmentRequirements,
+  draftRequirement,
+  releaseAllocations,
+  submitRequirement,
   dispatchShipment,
   generateDraftDeliveryReceipt,
   getPick,
@@ -87,6 +93,15 @@ async function order(customerCode: string, qty: string, pid = productId) {
   await confirmOrder(sales, o.id);
   return o;
 }
+/** The allocated order of this file's own test product (seeded demo orders are allocated too). */
+async function allocatedTestOrder() {
+  const [r] = await db
+    .selectDistinct({ id: salesOrders.id })
+    .from(salesOrders)
+    .innerJoin(salesOrderLines, eq(salesOrderLines.salesOrderId, salesOrders.id))
+    .where(and(eq(salesOrders.status, "allocated"), eq(salesOrderLines.productId, productId)));
+  return r.id;
+}
 const orderRow = async (id: string) => (await db.select().from(salesOrders).where(eq(salesOrders.id, id)))[0];
 const shipmentRow = async (id: string) => (await db.select().from(shipments).where(eq(shipments.id, id)))[0];
 
@@ -113,7 +128,6 @@ beforeAll(async () => {
 }, 180_000);
 
 afterAll(async () => {
-  await db.execute(sql`drop table if exists customer_requirements`);
   process.env.FILE_STORAGE = saved.FILE_STORAGE;
   process.env.FILE_STORAGE_DIR = saved.FILE_STORAGE_DIR;
 });
@@ -139,21 +153,26 @@ describe("US-4-09 allocation by FEFO with boxes and customer rules", () => {
     expect(ev).toHaveLength(1);
   });
 
-  it("fefo.min_shelf_life_customer: an approved customer requirement filters lots (W3D contract, safe default without the table)", async () => {
-    const c3 = await customerId("CUS-003");
-    const before = await customerFulfilmentRequirements(db, kit.orgId, c3, productId);
-    expect(before.source).toBe("customer_default");
-    expect(before.fullShipmentRequired).toBe(false);
-    // Simulates the W3D table shape the reader expects (docs/data-model.md customer_requirements).
-    await db.execute(sql`create table if not exists customer_requirements (id uuid primary key default gen_random_uuid(), organization_id uuid, customer_id uuid not null, product_id uuid, requirement_kind text not null, value_numeric numeric, value_text text, status text not null default 'approved')`);
-    await db.execute(sql`insert into customer_requirements (organization_id, customer_id, product_id, requirement_kind, value_numeric) values (${kit.orgId}, ${c3}, ${productId}, 'min_remaining_shelf_life_days', 700)`);
-    await db.execute(sql`insert into customer_requirements (organization_id, customer_id, requirement_kind, value_numeric, status) values (${kit.orgId}, ${c3}, 'carton_count', 6, 'draft')`);
-    const after = await customerFulfilmentRequirements(db, kit.orgId, c3, productId);
-    expect(after).toMatchObject({ source: "customer_requirement", minRemainingShelfLifeDays: 700, unitsPerBox: null });
-    const o = await order("CUS-003", "5");
-    const err = await allocateOrder(wh, o.id).catch((e) => e);
+  it("fefo.min_shelf_life_customer: the order line's requirement snapshot (W3D) filters lots; a requirement approved later leaves a submitted order alone", async () => {
+    const c = await createCustomer(sales, { code: `T3E-${Date.now().toString(36).toUpperCase()}`, name: "Fictional Shelf Life Buyer", minShelfLifeDays: 0, shipToAddress: "1 Ilang-Ilang St., Santa Rosa, Laguna" });
+    expect(await customerFulfilmentRequirements(db, kit.orgId, c.id, productId)).toMatchObject({ source: "customer_default", minRemainingShelfLifeDays: 0, fullShipmentRequired: false });
+    const early = await order(c.code, "5"); // submitted before the requirement: snapshot 0 days
+    // W3D requirement versions: drafted by sales, approved by QA (≠ drafter). A draft never applies.
+    const req = await draftRequirement(sales, { customerId: c.id, productId, requirementKind: "min_remaining_shelf_life_days", valueNumeric: "700", effectiveFrom: manilaToday() });
+    await submitRequirement(sales, req.id);
+    await approveRequirement(qa, req.id);
+    await draftRequirement(sales, { customerId: c.id, requirementKind: "carton_count", valueNumeric: "6", effectiveFrom: manilaToday() });
+    expect(await customerFulfilmentRequirements(db, kit.orgId, c.id, productId)).toMatchObject({ source: "customer_requirement", minRemainingShelfLifeDays: 700, unitsPerBox: null });
+    const late = await order(c.code, "5");
+    expect((await db.select().from(salesOrderLines).where(eq(salesOrderLines.salesOrderId, late.id)))[0].minRemainingShelfLifeDays).toBe(700);
+    const err = await allocateOrder(wh, late.id).catch((e) => e);
     expect(err).toMatchObject({ code: "insufficient_stock" });
     expect(String(err.message)).toMatch(/minimum shelf life of 700 days/);
+    const ok = await allocateOrder(wh, early.id);
+    expect(ok).toMatchObject({ fullyAllocated: true, requirementSource: "order_line_snapshot", minShelfLifeDays: 0 });
+    // Give the stock back for the next cases; the order returns to confirmed with the reason.
+    await releaseAllocations(wh, early.id, { reason: "Test: stock needed for the pick cases" });
+    expect((await orderRow(early.id)).status).toBe("confirmed");
   });
 });
 
@@ -162,7 +181,7 @@ describe("US-4-10 pick list and pick scans", () => {
   let pickId: string;
   let shipmentId: string;
   it("starts a pick (draft shipment, order picking) only with sales.pick.create at the order's site", async () => {
-    o1 = (await db.select().from(salesOrders).where(eq(salesOrders.status, "allocated")))[0].id;
+    o1 = await allocatedTestOrder();
     await expectCode(startPick(prodOp, o1, { idempotencyKey: key() }), "forbidden");
     await expectCode(startPick(whRvs, o1, { idempotencyKey: key() }), "not_found");
     const k = key();
@@ -289,7 +308,7 @@ describe("US-4-12/13 dispatch again, acknowledgment and the action centre", () =
   let shipmentId: string;
   let o1: string;
   it("ships the re-opened allocations through the full flow (partial: order partially_shipped)", async () => {
-    o1 = (await db.select().from(salesOrders).where(eq(salesOrders.status, "allocated")))[0].id;
+    o1 = await allocatedTestOrder();
     const s = await shipOrder({ picker: wh, checker: mgr, dispatcher: wh }, o1);
     shipmentId = s.id;
     expect(s.status).toBe("dispatched");
@@ -327,9 +346,11 @@ describe("US-4-12/13 dispatch again, acknowledgment and the action centre", () =
   it("the remainder is allocated again from partially_shipped and the CX-SHIP partial rule applies to full-shipment customers", async () => {
     await allocateOrder(wh, o1);
     expect((await orderRow(o1)).status).toBe("partially_shipped");
-    const c1 = await customerId("CUS-001");
-    await db.execute(sql`insert into customer_requirements (organization_id, customer_id, requirement_kind, value_text) values (${kit.orgId}, ${c1}, 'full_shipment_required', 'true')`);
-    const o3 = await order("CUS-001", "30");
+    const c1 = await createCustomer(sales, { code: `T3E-F${Date.now().toString(36).toUpperCase()}`, name: "Fictional Full Shipment Buyer", minShelfLifeDays: 0, shipToAddress: "2 Kamuning St., Calamba, Laguna" });
+    const req = await draftRequirement(sales, { customerId: c1.id, requirementKind: "full_shipment_required", valueText: "true", effectiveFrom: manilaToday() });
+    await submitRequirement(sales, req.id);
+    await approveRequirement(qa, req.id);
+    const o3 = await order(c1.code, "30");
     await allocateOrder(wh, o3.id);
     const { pickId, shipmentId: sid } = await startPick(wh, o3.id, { idempotencyKey: key() });
     const row = (await getPick(wh, pickId)).rows.find((r) => r.boxNumber)!;
@@ -349,7 +370,11 @@ describe("US-4-14 interim shipment export and box-level traceability", () => {
   it("exports dispatched/delivered shipments with lots and boxes; prices masked without sales.price_list.view; audited", async () => {
     const f = { siteId: kit.nfd.id, from: manilaToday(), to: manilaToday() };
     f.from = new Date(Date.now() - 10 * 86_400_000).toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
-    const file = await runExport(sales, shipmentExport, f, "csv");
+    // sales_cs without the W3D price permission: prices are masked (and never read by the query).
+    const noPrices = new AuthContext(sales.userId, sales.organizationId, sales.displayName, sales.email, sales.roleCodes, new Set([...sales.permissions].filter((p) => p !== "sales.price_list.view")), sales.allowedSites, kit.nfd.id);
+    const priced = (await runExport(sales, shipmentExport, f, "csv")).body.toString("utf8");
+    expect(priced.split("\r\n").find((l) => l.startsWith('"Dispatched (Asia/Manila)"'))).toContain("Unit price");
+    const file = await runExport(noPrices, shipmentExport, f, "csv");
     const text = file.body.toString("utf8");
     expect(text).toContain(lotA.lotNumber);
     expect(text).toMatch(/DR-\d{2}-\d{5}/);
@@ -361,7 +386,7 @@ describe("US-4-14 interim shipment export and box-level traceability", () => {
     await expectCode(runExport(wh, shipmentExport, f, "csv"), "forbidden");
     await expectCode(runExport(salesRvsOnly, shipmentExport, f, "csv"), "not_found");
     const ev = await db.select().from(auditEvents).where(and(eq(auditEvents.action, "platform.export.created"), eq(auditEvents.entityNumber, "sales.shipments")));
-    expect(ev).toHaveLength(1);
+    expect(ev).toHaveLength(2);
   });
 
   it("genealogy: every shipped box of a lot resolves to its shipment and customer", async () => {
