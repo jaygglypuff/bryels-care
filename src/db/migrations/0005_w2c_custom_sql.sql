@@ -1,5 +1,5 @@
 -- Custom SQL migration (drizzle-kit generate --custom). Verbatim copy of src/db/sql/w2c.sql;
--- tests/integration/quality/w2c-custom-sql.test.ts fails if the two differ.
+-- its drift test fails if the two differ.
 -- Wave 2 stream W2C (QA release, genealogy, deviations): SQL Drizzle cannot express.
 -- Shipped as the Drizzle custom migration src/db/migrations/0004_w2c_custom_sql.sql (verbatim copy,
 -- drift-tested); runs after the generated migration that creates the W2C tables. Idempotent.

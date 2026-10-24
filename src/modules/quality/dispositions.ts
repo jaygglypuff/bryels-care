@@ -29,6 +29,7 @@ import { deviationBlockerMessages, deviationFacts, deviationsFor } from "./devia
 import { batchInspectionFacts, inspectionsFor, lotInspectionFacts } from "./inspections";
 import { liveResults } from "./inspection-rules";
 import { queueStatusLabel } from "./status-labels";
+import { assertPaperRecordsReviewed } from "@/modules/production";
 import {
   BATCH_AWAITING_DECISION,
   BATCH_DECIDED_STATUSES,
@@ -678,6 +679,8 @@ export async function decideBatchInTx(tx: Tx, ctx: AuthContext, input: { batchId
     if (!batch) throw new DomainError("not_found", "Batch not found.");
     ctx.requireSite(batch.siteId);
     if (!t.from.includes(batch.status)) throw new DomainError("state", `The batch is ${batch.status.replace(/_/g, " ")}; it can only be decided while awaiting QC or quarantined.`);
+    // Wave 2 W2D (US-3-20, data-model §6.2): leaving awaiting_qc needs every paper page reviewed.
+    await assertPaperRecordsReviewed(tx, batch.id, batch.batchNumber);
 
     const lot = batch.outputLotId
       ? ((await tx.select().from(inventoryLots).where(eq(inventoryLots.id, batch.outputLotId)).for("update").limit(1))[0] ?? null)

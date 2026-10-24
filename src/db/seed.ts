@@ -429,6 +429,7 @@ async function main() {
   await (await import("./seeds/w2g")).seedW2G(db, O); // W2G: units, conversions, reason codes, org structure, SKUs
   await (await import("./seeds/w2b")).seedW2B(db); // W2B: released wrapper lot for the packaging step
   await (await import("./seeds/w2c")).seedW2C(db); // W2C: incoming inspection in progress, deviations
+  await (await import("./seeds/w2d")).seedW2d(db); // W2D: BMR and paper page templates
 
   console.log(`Seeded demo organization with ${mats.length} materials, ${counters.LOT} lots, ${counters.BATCH} batches, ${counters.SO} orders.`);
   await client.end();

@@ -394,6 +394,23 @@ export async function releaseReservation(ctx: AuthContext, id: string, reason: s
   });
 }
 
+/**
+ * Releases every active reservation of one demand inside the caller's transaction (Wave 2 W2D:
+ * batch closure releases what was still reserved for the batch, US-3-19). The caller has checked
+ * its own permission on the demand; one audit event per reservation.
+ */
+export async function releaseReservationsForDemand(tx: DbOrTx, ctx: AuthContext, demandType: string, demandId: string, reason: string) {
+  const rows = await tx
+    .update(stockReservations)
+    .set({ status: "released", releasedAt: new Date(), releasedBy: ctx.userId, releasedReason: reason })
+    .where(and(eq(stockReservations.organizationId, ctx.organizationId), eq(stockReservations.demandType, demandType), eq(stockReservations.demandId, demandId), eq(stockReservations.status, "active")))
+    .returning({ id: stockReservations.id, number: stockReservations.reservationNumber, siteId: stockReservations.siteId });
+  for (const r of rows) {
+    await audit(tx, ctx, { action: "inventory.stock_reservation.released", entityType: "stock_reservation", entityId: r.id, entityNumber: r.number, siteId: r.siteId, reason, before: { status: "active" }, after: { status: "released" } });
+  }
+  return rows.length;
+}
+
 /** Marks reservations past their TTL as expired (run by the list page and, later, a nightly job). */
 export async function expireReservations(q: DbOrTx, siteId: string) {
   const rows = await q

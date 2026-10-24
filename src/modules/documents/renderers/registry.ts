@@ -1,5 +1,7 @@
 import { sha256Hex } from "../checksum";
 import { templateDefinitionSchema, type TemplateDefinition } from "../schemas";
+import { bmrPaperPageRendererV1 } from "./bmr-paper-page-v1";
+import { bmrRendererV1 } from "./bmr-v1";
 import { labelRendererV1 } from "./label-v1";
 import { testPageRendererV1 } from "./test-page-v1";
 import type { FrozenDataset, RenderOutput, Renderer } from "./types";
@@ -8,7 +10,7 @@ import type { FrozenDataset, RenderOutput, Renderer } from "./types";
  * Code renderers known to this build. A template version may only reference a renderer listed
  * here (US-2-11 AC1); adding a document kind means adding a renderer file and a line below.
  */
-const RENDERERS: readonly Renderer[] = [labelRendererV1, testPageRendererV1];
+const RENDERERS: readonly Renderer[] = [labelRendererV1, testPageRendererV1, bmrRendererV1, bmrPaperPageRendererV1];
 
 export function findRenderer(id: string, version: number): Renderer | null {
   return RENDERERS.find((r) => r.id === id && r.version === version) ?? null;
@@ -38,6 +40,8 @@ export function checkDefinition(raw: unknown, templateKind: string): DefinitionC
   if (!renderer.datasets.includes(def.dataset)) return { ok: false, errors: [`dataset: "${def.dataset}" is not supported by renderer ${renderer.id} v${renderer.version} (use ${renderer.datasets.join(", ")}).`] };
   if (templateKind === "label" && def.page.size !== "label") return { ok: false, errors: ["page.size: label templates take their size from the label media; use \"label\"."] };
   if (templateKind !== "label" && def.page.size === "label") return { ok: false, errors: ["page.size: only label templates may use \"label\"."] };
+  const own = renderer.validateDefinition?.(def) ?? [];
+  if (own.length) return { ok: false, errors: own };
   return { ok: true, definition: def, renderer };
 }
 

@@ -49,3 +49,8 @@ export { LABEL_DATASETS } from "./renderers/label-v1";
 export { LABEL_FIELD_KEYS, DEFAULT_LABEL_FIELDS } from "./schemas";
 export { approvedLabelTemplatesFor } from "./label-templates";
 export { activeStationsAt } from "./stations";
+// Wave 2 W2D: documents generated for other modules' records (BMR, paper pages) and the BMR dataset contract.
+export { resolveTemplateVersion, generateForSource, documentsForSource, documentsForSourceRead, renderPreview, type SourceTemplate } from "./source-documents";
+export { bmrDataSchema, bmrPaperPageDataSchema, BMR_SECTIONS, BMR_REQUIRED_SECTIONS, type BmrData, type BmrPaperPageData, type BmrSectionId } from "./renderers/bmr-data";
+export { bmrContentHash, defaultBmrDefinition } from "./renderers/bmr-v1";
+export { defaultBmrPaperPageDefinition } from "./renderers/bmr-paper-page-v1";

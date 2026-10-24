@@ -380,7 +380,14 @@ async function documentCard(ctx: AuthContext, value: string, payload: string): P
       ["Watermark", d.watermark ?? "—"],
     ],
     risk: d.status === "superseded" || d.status === "void" ? { tone: "warn", title: `This document is ${d.status}`, body: "Do not use this printed copy; get the current one." } : null,
-    actions: [{ key: "open", label: "Open document record", href: `/documents/${d.id}`, allowed: true, primary: true }],
+    actions:
+      d.sourceEntityType === "batch"
+        ? // Wave 2 W2D: a BMR / paper page QR opens the batch (after sign-in and batch permission, A-RPT-26).
+          [
+            { key: "open", label: "Open batch", href: `/production/${d.sourceEntityId}`, allowed: true, primary: true },
+            { key: "document", label: "Open document record", href: `/documents/${d.id}`, allowed: true },
+          ]
+        : [{ key: "open", label: "Open document record", href: `/documents/${d.id}`, allowed: true, primary: true }],
   };
 }
 

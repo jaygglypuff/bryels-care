@@ -8,6 +8,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { applyBulkDisposition, bulkDispositionCandidates, labelVerificationLocations, labelVerificationZone, verifyLabelScan } from "@/modules/quality";
 import { resetTestDatabase } from "../../support/db";
 import { asUser, expectCode, loadKit, loc, makeLot, type Kit } from "../../support/kit";
+import { customMigration } from "../../support/custom-sql";
 
 let kit: Kit;
 let manager: AuthContext;
@@ -30,11 +31,8 @@ beforeAll(async () => {
 
 describe("W2C custom SQL", () => {
   it("the custom migration is a verbatim copy of src/db/sql/w2c.sql and is in the journal", () => {
-    const migration = readFileSync(path.join(root, "src/db/migrations/0004_w2c_custom_sql.sql"), "utf8");
-    const canonical = readFileSync(path.join(root, "src/db/sql/w2c.sql"), "utf8");
+    const { migration, canonical } = customMigration("w2c");
     expect(migration.endsWith(canonical)).toBe(true);
-    const journal = JSON.parse(readFileSync(path.join(root, "src/db/migrations/meta/_journal.json"), "utf8")) as { entries: { tag: string }[] };
-    expect(journal.entries.map((e) => e.tag)).toContain("0004_w2c_custom_sql");
   });
 });
 

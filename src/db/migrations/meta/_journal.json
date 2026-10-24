@@ -26,15 +26,36 @@
     {
       "idx": 3,
       "version": "7",
-      "when": 1792776605029,
-      "tag": "0003_w2g_masterdata",
+      "when": 1792803669144,
+      "tag": "0003_wave2",
       "breakpoints": true
     },
     {
       "idx": 4,
       "version": "7",
-      "when": 1792776651405,
-      "tag": "0004_w2g_custom_sql",
+      "when": 1792803670501,
+      "tag": "0004_w2b_custom_sql",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792803671914,
+      "tag": "0005_w2c_custom_sql",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792803673252,
+      "tag": "0006_w2d_custom_sql",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792803674588,
+      "tag": "0007_w2g_custom_sql",
       "breakpoints": true
     }
   ]

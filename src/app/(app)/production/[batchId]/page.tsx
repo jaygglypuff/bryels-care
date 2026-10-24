@@ -290,6 +290,9 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
               <LinkButton href={`/print/bmr/${batch.id}`} variant="secondary" target="_blank">
                 Print BMR
               </LinkButton>
+              <LinkButton href={`/production/${batch.id}/closure`} variant="secondary">
+                Closure &amp; paper pages
+              </LinkButton>
               {batch.status === "planned" && ctx.can("production.batch.edit") && <StartBatchForm batchId={batch.id} />}
             </>
           }

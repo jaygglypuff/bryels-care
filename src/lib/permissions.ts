@@ -198,9 +198,17 @@ export const PERMISSIONS = [
   "quality.deviation.approve",
   "quality.deviation.export",
   "quality.genealogy.export",
+  // Wave 2 W2D: BMR closure, controlled reopen/amend, hybrid paper pages (US-3-19, US-3-20; docs/permissions-matrix.md §2.5, §3.5, §5.3)
+  "production.batch.approve",
+  "production.batch.admin",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
+{
+  // Parallel streams append to this catalogue; a duplicate string would break the role_permissions seed.
+  const dup = PERMISSIONS.filter((p, i) => PERMISSIONS.indexOf(p) !== i);
+  if (dup.length) throw new Error(`Duplicate permission strings: ${dup.join(", ")}`);
+}
 
 const VIEW_ALL = PERMISSIONS.filter((p) => p.endsWith(".view"));
 
@@ -678,3 +686,15 @@ const W2C_NOT_FOR_OWNER: readonly Permission[] = [
 ROLE_BUNDLES.owner_director.permissions = ROLE_BUNDLES.owner_director.permissions.filter((p) => !W2C_NOT_FOR_OWNER.includes(p));
 const W2C_NOT_FOR_ADMIN: readonly Permission[] = ["quality.inspection.view", "quality.test_result.view", "quality.deviation.view"];
 ROLE_BUNDLES.system_admin.permissions = ROLE_BUNDLES.system_admin.permissions.filter((p) => !W2C_NOT_FOR_ADMIN.includes(p));
+
+// Wave 2 W2D: closure (production.batch.approve, SM), reopen request (production.batch.admin, SM;
+// QA co-approves with quality.disposition.approve, A-PM-07) and paper-page review
+// (production.process_step_record.approve: SM, PO as checker, QA) per docs/permissions-matrix.md §3.5.
+const W2D_GRANTS: Record<string, readonly Permission[]> = {
+  site_manager: ["production.batch.approve", "production.batch.admin", "production.process_step_record.approve"],
+  production_operator: ["production.process_step_record.approve", "documents.file_attachment.view", "documents.file_attachment.create"],
+  qa_qc: ["production.process_step_record.approve"],
+};
+for (const [role, grants] of Object.entries(W2D_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}

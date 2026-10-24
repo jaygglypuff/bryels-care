@@ -49,6 +49,7 @@ export {
   recommendLots,
   createReservation,
   releaseReservation,
+  releaseReservationsForDemand,
   expireReservations,
   listReservations,
   reservedByLotLocation,

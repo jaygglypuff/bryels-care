@@ -8,6 +8,8 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
 import { fmtDateTime } from "@/lib/qty";
+import { getSetting } from "@/lib/settings";
+import { notifyRoles } from "@/modules/platform";
 import { pdfFilesAvailable, pdfSetupMessage } from "./config";
 import { reprintReason } from "./reasons";
 import { renderFrozen } from "./renderers/registry";
@@ -189,6 +191,10 @@ export function assertSourceVisible(ctx: AuthContext, d: { sourceEntityType: str
     case "document_template_version":
       if (!ctx.can("documents.template.view")) throw hidden();
       break;
+    case "batch":
+      // Wave 2 W2D: BMR and paper pages follow the batch's permission and site.
+      if (!ctx.can("production.batch.view")) throw hidden();
+      break;
     default:
       throw hidden();
   }
@@ -317,6 +323,21 @@ export async function reprintDocument(ctx: AuthContext, id: string, raw: unknown
       reprint: { root, reasonCode: input.reason.code, note: input.note },
     });
     if (row.status !== "ready") throw new DomainError("state", `The reprint could not be rendered: ${row.errorMessage ?? "unknown error"}.`);
+    // A-OPS-07 (Wave 2 W2D): QA is told about reprints of controlled documents (kinds in the setting).
+    const notifyKinds = await getSetting(tx, ctx.organizationId, "documents.reprint.notify_qa_kinds");
+    if (notifyKinds.includes(root.documentKind)) {
+      await notifyRoles(tx, { roleCodes: ["qa_qc"], siteId: root.siteId }, {
+        organizationId: ctx.organizationId,
+        siteId: root.siteId,
+        kind: "documents.reprint",
+        severity: "info",
+        title: `Reprint ${row.reprintNo} of ${root.documentNumber}`,
+        body: `${ctx.displayName} reprinted ${root.documentKind.replace(/_/g, " ")} ${root.documentNumber} as ${row.documentNumber}. Reason: ${input.reason.label}${input.note ? ` (${input.note})` : ""}.`,
+        entityType: "generated_document",
+        entityId: row.id,
+        link: `/documents/${row.id}`,
+      });
+    }
     return { id: row.id, documentNumber: row.documentNumber, reprintNo: row.reprintNo, replayed: false };
   });
 }

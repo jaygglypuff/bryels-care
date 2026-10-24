@@ -109,7 +109,7 @@ describe("document templates (US-2-11 AC1)", () => {
     await expectDomain(updateDraftDefinition(managerNfd, v.id, JSON.stringify({ ...def, header: { show_logo: false, title: "<img src=x onerror=alert(1)>", identity_fields: [] } })), "validation");
     await expectDomain(updateDraftDefinition(managerNfd, v.id, JSON.stringify({ ...def, renderer: { id: "free_html", version: 1 } })), "validation");
     await expectDomain(updateDraftDefinition(managerNfd, v.id, "{not json"), "validation");
-    await expectDomain(createTemplate(managerNfd, { code: "BMR-X", name: "BMR", templateKind: "bmr" }), "validation");
+    await expectDomain(createTemplate(managerNfd, { code: "PAYSLIP-X", name: "Payslip", templateKind: "payslip" }), "validation");
 
     const ok = await updateDraftDefinition(managerNfd, v.id, JSON.stringify({ ...def, header: { show_logo: false, title: "QA PRINTER CHECK", identity_fields: [] } }));
     expect(ok.checksum).not.toBe(v.definitionChecksum);

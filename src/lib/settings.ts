@@ -121,6 +121,16 @@ export const SETTINGS = {
   "labels.reprint_on_status_change": { scopes: ["organization", "site"], schema: z.boolean(), default: true, assumption: "A-RPT-10" },
   /** MC-06: share of labels in a zone that must be scan-verified before the zone counts as done. */
   "inventory.label_verification.target_pct": { scopes: ["organization"], schema: z.number().min(0).max(100), default: 99, assumption: "MC-06" },
+
+  // Wave 2 W2D: BMR documents, closure and hybrid paper records (E-3-06).
+  /** Code of the document template used for batch BMRs (kind `bmr`, renderer `bmr` v1). A product-specific template field comes with SKUs. */
+  "documents.bmr.template_code": { scopes: ["organization", "site"], schema: z.string().regex(/^[A-Z0-9][A-Z0-9._-]{0,63}$/), default: "BMR-STD", assumption: "A-W2D-01" },
+  /** Code of the template for blank hybrid paper pages (kind `bmr`, renderer `bmr_paper_page` v1). */
+  "documents.bmr.paper_page_template_code": { scopes: ["organization", "site"], schema: z.string().regex(/^[A-Z0-9][A-Z0-9._-]{0,63}$/), default: "BMR-PAPER", assumption: "A-W2D-01" },
+  /** Which copy is the controlled record until QA validates electronic sign-offs (A-RPT-06, Q-QA-05). Printed on the BMR. */
+  "documents.controlled_record": { scopes: ["organization", "site"], schema: z.enum(["paper", "electronic"]), default: "paper" as "paper" | "electronic", assumption: "A-RPT-06" },
+  /** Document kinds whose reprint notifies QA in-app (A-OPS-07). */
+  "documents.reprint.notify_qa_kinds": { scopes: ["organization"], schema: z.array(z.string().regex(/^[a-z_]{1,40}$/)).max(20), default: ["bmr"] as string[], assumption: "A-OPS-07" },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS;

@@ -28,3 +28,34 @@ export { issuePackaging, countPackaging } from "./packaging";
 export { recordYield, approveYield, recordScrapRework, decideScrapRework } from "./yield";
 export { postBatchToQuarantine, quarantineLocations, transferBlockers, type PostToQuarantineInput } from "./output";
 export { getBatchExecution, batchSiteId, equipmentOptions, packagingLotOptions, signerOptions, type BatchExecution, type ExecStep } from "./execution-queries";
+// Wave 2 W2D: BMR documents, closure and controlled reopen/amend, hybrid paper pages (E-3-06).
+export { buildBmrDataset, generateBmr, generateBmrInTx, bmrPrintView, bmrDocuments, bmrWatermark, BMR_KIND, PAPER_PAGE_KIND, type BmrPrintView } from "./bmr";
+export {
+  closeBatch,
+  closureChecks,
+  requestReopen,
+  decideReopen,
+  withdrawReopen,
+  recordAmendment,
+  getClosureView,
+  BATCH_REOPEN_POLICY,
+  REOPEN_TRANSITIONS,
+  type ClosureView,
+  type ClosureCheck,
+  type ReopenInput,
+  type AmendmentInput,
+} from "./closure";
+export {
+  issuePaperPage,
+  attachPaperScan,
+  reviewPaperRecord,
+  voidPaperPage,
+  paperRecordBlockers,
+  assertPaperRecordsReviewed,
+  listPaperRecords,
+  paperScanDownloadUrl,
+  redeemPaperScan,
+  PAPER_STATUS_TRANSITIONS,
+  NEVER_PAPER_ONLY_STEP_KINDS,
+} from "./bmr-paper";
+export { bmrLineClearanceChecks, bmrProcessReadings, bmrEquipmentUses, bmrYieldRecord, bmrBatchOutputs, bmrInspections, bmrDeviations, openDeviationNumbers } from "./bmr-sources";

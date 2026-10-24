@@ -1,5 +1,5 @@
 {
-  "id": "ba916182-c476-4615-aa66-046da2073ffa",
+  "id": "d17b9ea6-6157-4215-b96e-df0ee39cfd8e",
   "prevId": "97bd7975-f69c-4d91-aa8a-58019bb1213b",
   "version": "7",
   "dialect": "postgresql",
@@ -6209,6 +6209,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "sequence": {
+          "name": "sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
         "lot_id": {
           "name": "lot_id",
           "type": "uuid",
@@ -6227,6 +6234,37 @@
           "primaryKey": false,
           "notNull": true
         },
+        "entered_qty": {
+          "name": "entered_qty",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "entered_uom": {
+          "name": "entered_uom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tare_qty_g": {
+          "name": "tare_qty_g",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gross_qty_g": {
+          "name": "gross_qty_g",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_partial": {
+          "name": "is_partial",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "is_within_tolerance": {
           "name": "is_within_tolerance",
           "type": "boolean",
@@ -6236,6 +6274,12 @@
         "scale_code": {
           "name": "scale_code",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "equipment_id": {
+          "name": "equipment_id",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
@@ -6249,11 +6293,65 @@
           "name": "checker_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "checked_at": {
+          "name": "checked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "exception_approved_by": {
+          "name": "exception_approved_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "exception_reason": {
           "name": "exception_reason",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deviation_id": {
+          "name": "deviation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "supersedes_id": {
+          "name": "supersedes_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "correction_reason": {
+          "name": "correction_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "voided_at": {
+          "name": "voided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "voided_by": {
+          "name": "voided_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "void_reason": {
+          "name": "void_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "production_posting_id": {
+          "name": "production_posting_id",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
@@ -6265,7 +6363,45 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "dispense_records_line_seq_uq": {
+          "name": "dispense_records_line_seq_uq",
+          "columns": [
+            {
+              "expression": "batch_material_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "dispense_records_supersedes_uq": {
+          "name": "dispense_records_supersedes_uq",
+          "columns": [
+            {
+              "expression": "supersedes_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"dispense_records\".\"supersedes_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "dispense_records_batch_material_id_batch_materials_id_fk": {
           "name": "dispense_records_batch_material_id_batch_materials_id_fk",
@@ -6306,6 +6442,19 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+        "dispense_records_equipment_id_equipment_id_fk": {
+          "name": "dispense_records_equipment_id_equipment_id_fk",
+          "tableFrom": "dispense_records",
+          "tableTo": "equipment",
+          "columnsFrom": [
+            "equipment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "dispense_records_operator_id_users_id_fk": {
           "name": "dispense_records_operator_id_users_id_fk",
           "tableFrom": "dispense_records",
@@ -6331,12 +6480,72 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "dispense_records_exception_approved_by_users_id_fk": {
+          "name": "dispense_records_exception_approved_by_users_id_fk",
+          "tableFrom": "dispense_records",
+          "tableTo": "users",
+          "columnsFrom": [
+            "exception_approved_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dispense_records_supersedes_id_dispense_records_id_fk": {
+          "name": "dispense_records_supersedes_id_dispense_records_id_fk",
+          "tableFrom": "dispense_records",
+          "tableTo": "dispense_records",
+          "columnsFrom": [
+            "supersedes_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dispense_records_voided_by_users_id_fk": {
+          "name": "dispense_records_voided_by_users_id_fk",
+          "tableFrom": "dispense_records",
+          "tableTo": "users",
+          "columnsFrom": [
+            "voided_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "dispense_records_qty_ck": {
+          "name": "dispense_records_qty_ck",
+          "value": "\"dispense_records\".\"actual_qty_g\" > 0"
+        },
+        "dispense_records_sod_ck": {
+          "name": "dispense_records_sod_ck",
+          "value": "\"dispense_records\".\"checker_id\" is null or \"dispense_records\".\"checker_id\" <> \"dispense_records\".\"operator_id\""
+        },
+        "dispense_records_exception_sod_ck": {
+          "name": "dispense_records_exception_sod_ck",
+          "value": "\"dispense_records\".\"exception_approved_by\" is null or (\"dispense_records\".\"exception_approved_by\" <> \"dispense_records\".\"operator_id\" and \"dispense_records\".\"exception_reason\" is not null)"
+        },
+        "dispense_records_correction_ck": {
+          "name": "dispense_records_correction_ck",
+          "value": "\"dispense_records\".\"supersedes_id\" is null or \"dispense_records\".\"correction_reason\" is not null"
+        },
+        "dispense_records_void_ck": {
+          "name": "dispense_records_void_ck",
+          "value": "\"dispense_records\".\"voided_at\" is null or (\"dispense_records\".\"voided_by\" is not null and \"dispense_records\".\"void_reason\" is not null)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.process_step_records": {
@@ -6373,6 +6582,25 @@
           "primaryKey": false,
           "notNull": true
         },
+        "step_kind": {
+          "name": "step_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "area": {
+          "name": "area",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'completed'"
+        },
         "conducted_by": {
           "name": "conducted_by",
           "type": "uuid",
@@ -6385,9 +6613,46 @@
           "primaryKey": false,
           "notNull": false
         },
+        "checked_at": {
+          "name": "checked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "readings": {
           "name": "readings",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "blocked_reason": {
+          "name": "blocked_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "earliest_completion_at": {
+          "name": "earliest_completion_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "performed_at": {
+          "name": "performed_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
@@ -6395,11 +6660,50 @@
           "name": "completed_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+          "notNull": false
+        },
+        "exception_approved_by": {
+          "name": "exception_approved_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "exception_reason": {
+          "name": "exception_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deviation_id": {
+          "name": "deviation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "process_step_records_batch_step_uq": {
+          "name": "process_step_records_batch_step_uq",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "step_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "process_step_records_batch_id_batches_id_fk": {
           "name": "process_step_records_batch_id_batches_id_fk",
@@ -6452,12 +6756,42 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "process_step_records_exception_approved_by_users_id_fk": {
+          "name": "process_step_records_exception_approved_by_users_id_fk",
+          "tableFrom": "process_step_records",
+          "tableTo": "users",
+          "columnsFrom": [
+            "exception_approved_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "process_step_records_status_ck": {
+          "name": "process_step_records_status_ck",
+          "value": "\"process_step_records\".\"status\" in ('pending', 'in_progress', 'awaiting_check', 'completed', 'skipped')"
+        },
+        "process_step_records_sod_ck": {
+          "name": "process_step_records_sod_ck",
+          "value": "\"process_step_records\".\"checked_by\" is null or \"process_step_records\".\"checked_by\" <> \"process_step_records\".\"conducted_by\""
+        },
+        "process_step_records_completed_ck": {
+          "name": "process_step_records_completed_ck",
+          "value": "\"process_step_records\".\"status\" <> 'completed' or \"process_step_records\".\"completed_at\" is not null"
+        },
+        "process_step_records_exception_ck": {
+          "name": "process_step_records_exception_ck",
+          "value": "\"process_step_records\".\"exception_approved_by\" is null or (\"process_step_records\".\"exception_approved_by\" <> \"process_step_records\".\"conducted_by\" and \"process_step_records\".\"exception_reason\" is not null)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.test_results": {
@@ -6474,7 +6808,7 @@
           "name": "batch_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "test_name": {
           "name": "test_name",
@@ -6519,9 +6853,115 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "inspection_id": {
+          "name": "inspection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "inspection_plan_test_id": {
+          "name": "inspection_plan_test_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "test_code": {
+          "name": "test_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "value_numeric": {
+          "name": "value_numeric",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "value_text": {
+          "name": "value_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "value_pass": {
+          "name": "value_pass",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "uom": {
+          "name": "uom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "instrument_equipment_id": {
+          "name": "instrument_equipment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "supersedes_id": {
+          "name": "supersedes_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "correction_reason": {
+          "name": "correction_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "test_results_batch_idx": {
+          "name": "test_results_batch_idx",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "test_results_inspection_idx": {
+          "name": "test_results_inspection_idx",
+          "columns": [
+            {
+              "expression": "inspection_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_test_results_supersedes": {
+          "name": "uq_test_results_supersedes",
+          "columns": [
+            {
+              "expression": "supersedes_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "test_results_batch_id_batches_id_fk": {
           "name": "test_results_batch_id_batches_id_fk",
@@ -6548,12 +6988,77 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "test_results_inspection_id_inspections_id_fk": {
+          "name": "test_results_inspection_id_inspections_id_fk",
+          "tableFrom": "test_results",
+          "tableTo": "inspections",
+          "columnsFrom": [
+            "inspection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "test_results_inspection_plan_test_id_inspection_plan_tests_id_fk": {
+          "name": "test_results_inspection_plan_test_id_inspection_plan_tests_id_fk",
+          "tableFrom": "test_results",
+          "tableTo": "inspection_plan_tests",
+          "columnsFrom": [
+            "inspection_plan_test_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "test_results_instrument_equipment_id_equipment_id_fk": {
+          "name": "test_results_instrument_equipment_id_equipment_id_fk",
+          "tableFrom": "test_results",
+          "tableTo": "equipment",
+          "columnsFrom": [
+            "instrument_equipment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "test_results_supersedes_id_test_results_id_fk": {
+          "name": "test_results_supersedes_id_test_results_id_fk",
+          "tableFrom": "test_results",
+          "tableTo": "test_results",
+          "columnsFrom": [
+            "supersedes_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "ck_test_results_subject": {
+          "name": "ck_test_results_subject",
+          "value": "num_nonnulls(\"test_results\".\"batch_id\", \"test_results\".\"inspection_id\") >= 1"
+        },
+        "ck_test_results_correction": {
+          "name": "ck_test_results_correction",
+          "value": "(\"test_results\".\"supersedes_id\" is null) = (\"test_results\".\"correction_reason\" is null)"
+        },
+        "ck_test_results_plan_test": {
+          "name": "ck_test_results_plan_test",
+          "value": "\"test_results\".\"inspection_id\" is null or \"test_results\".\"inspection_plan_test_id\" is not null"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.dispositions": {
@@ -6626,6 +7131,30 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "requested_by": {
+          "name": "requested_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "conditions": {
+          "name": "conditions",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "review_date": {
+          "name": "review_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "inspection_id": {
+          "name": "inspection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -6690,12 +7219,34 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
+        },
+        "dispositions_requested_by_users_id_fk": {
+          "name": "dispositions_requested_by_users_id_fk",
+          "tableFrom": "dispositions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "requested_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "ck_dispositions_requester_not_decider": {
+          "name": "ck_dispositions_requester_not_decider",
+          "value": "\"dispositions\".\"requested_by\" is null or \"dispositions\".\"requested_by\" <> \"dispositions\".\"decided_by\""
+        },
+        "ck_dispositions_conditional": {
+          "name": "ck_dispositions_conditional",
+          "value": "\"dispositions\".\"decision\" <> 'conditional_release' or (\"dispositions\".\"conditions\" is not null and \"dispositions\".\"review_date\" is not null and \"dispositions\".\"requested_by\" is not null)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.sales_order_lines": {
@@ -17091,6 +17642,5473 @@
         "warehouse_special_locations_role_ck": {
           "name": "warehouse_special_locations_role_ck",
           "value": "\"warehouse_special_locations\".\"role\" in ('receiving', 'staging', 'quarantine', 'hold', 'rejected', 'recall')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.batch_outputs": {
+      "name": "batch_outputs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "line_no": {
+          "name": "line_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "output_kind": {
+          "name": "output_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "material_id": {
+          "name": "material_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "qty_base": {
+          "name": "qty_base",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base_uom": {
+          "name": "base_uom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mass_g": {
+          "name": "mass_g",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_location_id": {
+          "name": "to_location_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lot_id": {
+          "name": "lot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "production_posting_id": {
+          "name": "production_posting_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recorded_by": {
+          "name": "recorded_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "checked_by": {
+          "name": "checked_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "batch_outputs_line_uq": {
+          "name": "batch_outputs_line_uq",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "line_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "batch_outputs_organization_id_organizations_id_fk": {
+          "name": "batch_outputs_organization_id_organizations_id_fk",
+          "tableFrom": "batch_outputs",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_outputs_site_id_sites_id_fk": {
+          "name": "batch_outputs_site_id_sites_id_fk",
+          "tableFrom": "batch_outputs",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_outputs_batch_id_batches_id_fk": {
+          "name": "batch_outputs_batch_id_batches_id_fk",
+          "tableFrom": "batch_outputs",
+          "tableTo": "batches",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_outputs_product_id_products_id_fk": {
+          "name": "batch_outputs_product_id_products_id_fk",
+          "tableFrom": "batch_outputs",
+          "tableTo": "products",
+          "columnsFrom": [
+            "product_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_outputs_material_id_materials_id_fk": {
+          "name": "batch_outputs_material_id_materials_id_fk",
+          "tableFrom": "batch_outputs",
+          "tableTo": "materials",
+          "columnsFrom": [
+            "material_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_outputs_to_location_id_locations_id_fk": {
+          "name": "batch_outputs_to_location_id_locations_id_fk",
+          "tableFrom": "batch_outputs",
+          "tableTo": "locations",
+          "columnsFrom": [
+            "to_location_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_outputs_lot_id_inventory_lots_id_fk": {
+          "name": "batch_outputs_lot_id_inventory_lots_id_fk",
+          "tableFrom": "batch_outputs",
+          "tableTo": "inventory_lots",
+          "columnsFrom": [
+            "lot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_outputs_recorded_by_users_id_fk": {
+          "name": "batch_outputs_recorded_by_users_id_fk",
+          "tableFrom": "batch_outputs",
+          "tableTo": "users",
+          "columnsFrom": [
+            "recorded_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_outputs_checked_by_users_id_fk": {
+          "name": "batch_outputs_checked_by_users_id_fk",
+          "tableFrom": "batch_outputs",
+          "tableTo": "users",
+          "columnsFrom": [
+            "checked_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "batch_outputs_kind_ck": {
+          "name": "batch_outputs_kind_ck",
+          "value": "\"batch_outputs\".\"output_kind\" in ('finished', 'intermediate', 'by_product', 'sample')"
+        },
+        "batch_outputs_item_ck": {
+          "name": "batch_outputs_item_ck",
+          "value": "num_nonnulls(\"batch_outputs\".\"product_id\", \"batch_outputs\".\"material_id\") = 1"
+        },
+        "batch_outputs_qty_ck": {
+          "name": "batch_outputs_qty_ck",
+          "value": "\"batch_outputs\".\"qty_base\" > 0"
+        },
+        "batch_outputs_sod_ck": {
+          "name": "batch_outputs_sod_ck",
+          "value": "\"batch_outputs\".\"checked_by\" is null or \"batch_outputs\".\"checked_by\" <> \"batch_outputs\".\"recorded_by\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.equipment_uses": {
+      "name": "equipment_uses",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "equipment_id": {
+          "name": "equipment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "process_step_record_id": {
+          "name": "process_step_record_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "operator_id": {
+          "name": "operator_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "ended_at": {
+          "name": "ended_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_at_start": {
+          "name": "status_at_start",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cleaning_status_at_start": {
+          "name": "cleaning_status_at_start",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "calibration_due_date_at_use": {
+          "name": "calibration_due_date_at_use",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "maintenance_due_date_at_use": {
+          "name": "maintenance_due_date_at_use",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "availability_reasons": {
+          "name": "availability_reasons",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "override_request_id": {
+          "name": "override_request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "exception_approved_by": {
+          "name": "exception_approved_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "exception_reason": {
+          "name": "exception_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deviation_id": {
+          "name": "deviation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "equipment_uses_batch_idx": {
+          "name": "equipment_uses_batch_idx",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "equipment_uses_equipment_idx": {
+          "name": "equipment_uses_equipment_idx",
+          "columns": [
+            {
+              "expression": "equipment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "equipment_uses_open_uq": {
+          "name": "equipment_uses_open_uq",
+          "columns": [
+            {
+              "expression": "equipment_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "process_step_record_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"equipment_uses\".\"ended_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "equipment_uses_organization_id_organizations_id_fk": {
+          "name": "equipment_uses_organization_id_organizations_id_fk",
+          "tableFrom": "equipment_uses",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "equipment_uses_site_id_sites_id_fk": {
+          "name": "equipment_uses_site_id_sites_id_fk",
+          "tableFrom": "equipment_uses",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "equipment_uses_batch_id_batches_id_fk": {
+          "name": "equipment_uses_batch_id_batches_id_fk",
+          "tableFrom": "equipment_uses",
+          "tableTo": "batches",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "equipment_uses_equipment_id_equipment_id_fk": {
+          "name": "equipment_uses_equipment_id_equipment_id_fk",
+          "tableFrom": "equipment_uses",
+          "tableTo": "equipment",
+          "columnsFrom": [
+            "equipment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "equipment_uses_process_step_record_id_process_step_records_id_fk": {
+          "name": "equipment_uses_process_step_record_id_process_step_records_id_fk",
+          "tableFrom": "equipment_uses",
+          "tableTo": "process_step_records",
+          "columnsFrom": [
+            "process_step_record_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "equipment_uses_operator_id_users_id_fk": {
+          "name": "equipment_uses_operator_id_users_id_fk",
+          "tableFrom": "equipment_uses",
+          "tableTo": "users",
+          "columnsFrom": [
+            "operator_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "equipment_uses_override_request_id_equipment_override_requests_id_fk": {
+          "name": "equipment_uses_override_request_id_equipment_override_requests_id_fk",
+          "tableFrom": "equipment_uses",
+          "tableTo": "equipment_override_requests",
+          "columnsFrom": [
+            "override_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "equipment_uses_exception_approved_by_users_id_fk": {
+          "name": "equipment_uses_exception_approved_by_users_id_fk",
+          "tableFrom": "equipment_uses",
+          "tableTo": "users",
+          "columnsFrom": [
+            "exception_approved_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "equipment_uses_range_ck": {
+          "name": "equipment_uses_range_ck",
+          "value": "\"equipment_uses\".\"ended_at\" is null or \"equipment_uses\".\"ended_at\" >= \"equipment_uses\".\"started_at\""
+        },
+        "equipment_uses_override_ck": {
+          "name": "equipment_uses_override_ck",
+          "value": "(\"equipment_uses\".\"override_request_id\" is null) = (\"equipment_uses\".\"exception_approved_by\" is null) and (\"equipment_uses\".\"exception_approved_by\" is null or \"equipment_uses\".\"exception_reason\" is not null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.packaging_reconciliations": {
+      "name": "packaging_reconciliations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "process_step_record_id": {
+          "name": "process_step_record_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "material_id": {
+          "name": "material_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lot_id": {
+          "name": "lot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_location_id": {
+          "name": "from_location_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base_uom": {
+          "name": "base_uom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issued_qty": {
+          "name": "issued_qty",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "used_qty": {
+          "name": "used_qty",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "damaged_qty": {
+          "name": "damaged_qty",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "returned_qty": {
+          "name": "returned_qty",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "variance_qty": {
+          "name": "variance_qty",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tolerance_qty": {
+          "name": "tolerance_qty",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_within_tolerance": {
+          "name": "is_within_tolerance",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "issued_by": {
+          "name": "issued_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issued_at": {
+          "name": "issued_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "counted_by": {
+          "name": "counted_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "counted_at": {
+          "name": "counted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "supersedes_id": {
+          "name": "supersedes_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "correction_reason": {
+          "name": "correction_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "voided_at": {
+          "name": "voided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "production_posting_id": {
+          "name": "production_posting_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deviation_id": {
+          "name": "deviation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "packaging_reconciliations_batch_idx": {
+          "name": "packaging_reconciliations_batch_idx",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "packaging_reconciliations_supersedes_uq": {
+          "name": "packaging_reconciliations_supersedes_uq",
+          "columns": [
+            {
+              "expression": "supersedes_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"packaging_reconciliations\".\"supersedes_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "packaging_reconciliations_organization_id_organizations_id_fk": {
+          "name": "packaging_reconciliations_organization_id_organizations_id_fk",
+          "tableFrom": "packaging_reconciliations",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "packaging_reconciliations_site_id_sites_id_fk": {
+          "name": "packaging_reconciliations_site_id_sites_id_fk",
+          "tableFrom": "packaging_reconciliations",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "packaging_reconciliations_batch_id_batches_id_fk": {
+          "name": "packaging_reconciliations_batch_id_batches_id_fk",
+          "tableFrom": "packaging_reconciliations",
+          "tableTo": "batches",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "packaging_reconciliations_process_step_record_id_process_step_records_id_fk": {
+          "name": "packaging_reconciliations_process_step_record_id_process_step_records_id_fk",
+          "tableFrom": "packaging_reconciliations",
+          "tableTo": "process_step_records",
+          "columnsFrom": [
+            "process_step_record_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "packaging_reconciliations_material_id_materials_id_fk": {
+          "name": "packaging_reconciliations_material_id_materials_id_fk",
+          "tableFrom": "packaging_reconciliations",
+          "tableTo": "materials",
+          "columnsFrom": [
+            "material_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "packaging_reconciliations_lot_id_inventory_lots_id_fk": {
+          "name": "packaging_reconciliations_lot_id_inventory_lots_id_fk",
+          "tableFrom": "packaging_reconciliations",
+          "tableTo": "inventory_lots",
+          "columnsFrom": [
+            "lot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "packaging_reconciliations_from_location_id_locations_id_fk": {
+          "name": "packaging_reconciliations_from_location_id_locations_id_fk",
+          "tableFrom": "packaging_reconciliations",
+          "tableTo": "locations",
+          "columnsFrom": [
+            "from_location_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "packaging_reconciliations_issued_by_users_id_fk": {
+          "name": "packaging_reconciliations_issued_by_users_id_fk",
+          "tableFrom": "packaging_reconciliations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "issued_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "packaging_reconciliations_counted_by_users_id_fk": {
+          "name": "packaging_reconciliations_counted_by_users_id_fk",
+          "tableFrom": "packaging_reconciliations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "counted_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "packaging_reconciliations_supersedes_id_packaging_reconciliations_id_fk": {
+          "name": "packaging_reconciliations_supersedes_id_packaging_reconciliations_id_fk",
+          "tableFrom": "packaging_reconciliations",
+          "tableTo": "packaging_reconciliations",
+          "columnsFrom": [
+            "supersedes_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "packaging_reconciliations_issued_ck": {
+          "name": "packaging_reconciliations_issued_ck",
+          "value": "\"packaging_reconciliations\".\"issued_qty\" > 0"
+        },
+        "packaging_reconciliations_nonneg_ck": {
+          "name": "packaging_reconciliations_nonneg_ck",
+          "value": "coalesce(\"packaging_reconciliations\".\"used_qty\", 0) >= 0 and coalesce(\"packaging_reconciliations\".\"damaged_qty\", 0) >= 0 and coalesce(\"packaging_reconciliations\".\"returned_qty\", 0) >= 0"
+        },
+        "packaging_reconciliations_returned_ck": {
+          "name": "packaging_reconciliations_returned_ck",
+          "value": "coalesce(\"packaging_reconciliations\".\"returned_qty\", 0) <= \"packaging_reconciliations\".\"issued_qty\""
+        },
+        "packaging_reconciliations_correction_ck": {
+          "name": "packaging_reconciliations_correction_ck",
+          "value": "\"packaging_reconciliations\".\"supersedes_id\" is null or \"packaging_reconciliations\".\"correction_reason\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.process_step_checklist_results": {
+      "name": "process_step_checklist_results",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "process_step_record_id": {
+          "name": "process_step_record_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "routing_step_checklist_item_id": {
+          "name": "routing_step_checklist_item_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "item_no": {
+          "name": "item_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "item_text": {
+          "name": "item_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_blocking": {
+          "name": "is_blocking",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "answer": {
+          "name": "answer",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "photo_attachment_id": {
+          "name": "photo_attachment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "answered_by": {
+          "name": "answered_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "answered_at": {
+          "name": "answered_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "supersedes_id": {
+          "name": "supersedes_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "checklist_results_record_idx": {
+          "name": "checklist_results_record_idx",
+          "columns": [
+            {
+              "expression": "process_step_record_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "checklist_results_supersedes_uq": {
+          "name": "checklist_results_supersedes_uq",
+          "columns": [
+            {
+              "expression": "supersedes_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"process_step_checklist_results\".\"supersedes_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "process_step_checklist_results_organization_id_organizations_id_fk": {
+          "name": "process_step_checklist_results_organization_id_organizations_id_fk",
+          "tableFrom": "process_step_checklist_results",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "process_step_checklist_results_site_id_sites_id_fk": {
+          "name": "process_step_checklist_results_site_id_sites_id_fk",
+          "tableFrom": "process_step_checklist_results",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "process_step_checklist_results_process_step_record_id_process_step_records_id_fk": {
+          "name": "process_step_checklist_results_process_step_record_id_process_step_records_id_fk",
+          "tableFrom": "process_step_checklist_results",
+          "tableTo": "process_step_records",
+          "columnsFrom": [
+            "process_step_record_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "process_step_checklist_results_routing_step_checklist_item_id_routing_step_checklist_items_id_fk": {
+          "name": "process_step_checklist_results_routing_step_checklist_item_id_routing_step_checklist_items_id_fk",
+          "tableFrom": "process_step_checklist_results",
+          "tableTo": "routing_step_checklist_items",
+          "columnsFrom": [
+            "routing_step_checklist_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "process_step_checklist_results_photo_attachment_id_file_attachments_id_fk": {
+          "name": "process_step_checklist_results_photo_attachment_id_file_attachments_id_fk",
+          "tableFrom": "process_step_checklist_results",
+          "tableTo": "file_attachments",
+          "columnsFrom": [
+            "photo_attachment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "process_step_checklist_results_answered_by_users_id_fk": {
+          "name": "process_step_checklist_results_answered_by_users_id_fk",
+          "tableFrom": "process_step_checklist_results",
+          "tableTo": "users",
+          "columnsFrom": [
+            "answered_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "process_step_checklist_results_supersedes_id_process_step_checklist_results_id_fk": {
+          "name": "process_step_checklist_results_supersedes_id_process_step_checklist_results_id_fk",
+          "tableFrom": "process_step_checklist_results",
+          "tableTo": "process_step_checklist_results",
+          "columnsFrom": [
+            "supersedes_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "checklist_results_answer_ck": {
+          "name": "checklist_results_answer_ck",
+          "value": "\"process_step_checklist_results\".\"answer\" in ('yes', 'no', 'na')"
+        },
+        "checklist_results_no_note_ck": {
+          "name": "checklist_results_no_note_ck",
+          "value": "\"process_step_checklist_results\".\"answer\" <> 'no' or \"process_step_checklist_results\".\"note\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.process_step_readings": {
+      "name": "process_step_readings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "process_step_record_id": {
+          "name": "process_step_record_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "routing_step_parameter_id": {
+          "name": "routing_step_parameter_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "parameter_code": {
+          "name": "parameter_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "parameter_name": {
+          "name": "parameter_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value_kind": {
+          "name": "value_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "uom": {
+          "name": "uom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "min_value": {
+          "name": "min_value",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "target_value": {
+          "name": "target_value",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_value": {
+          "name": "max_value",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "value_numeric": {
+          "name": "value_numeric",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "value_text": {
+          "name": "value_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "value_boolean": {
+          "name": "value_boolean",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_within_limits": {
+          "name": "is_within_limits",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "equipment_id": {
+          "name": "equipment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recorded_by": {
+          "name": "recorded_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "supersedes_id": {
+          "name": "supersedes_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "correction_reason": {
+          "name": "correction_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "step_readings_record_idx": {
+          "name": "step_readings_record_idx",
+          "columns": [
+            {
+              "expression": "process_step_record_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "step_readings_supersedes_uq": {
+          "name": "step_readings_supersedes_uq",
+          "columns": [
+            {
+              "expression": "supersedes_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"process_step_readings\".\"supersedes_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "process_step_readings_organization_id_organizations_id_fk": {
+          "name": "process_step_readings_organization_id_organizations_id_fk",
+          "tableFrom": "process_step_readings",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "process_step_readings_site_id_sites_id_fk": {
+          "name": "process_step_readings_site_id_sites_id_fk",
+          "tableFrom": "process_step_readings",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "process_step_readings_process_step_record_id_process_step_records_id_fk": {
+          "name": "process_step_readings_process_step_record_id_process_step_records_id_fk",
+          "tableFrom": "process_step_readings",
+          "tableTo": "process_step_records",
+          "columnsFrom": [
+            "process_step_record_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "process_step_readings_routing_step_parameter_id_routing_step_parameters_id_fk": {
+          "name": "process_step_readings_routing_step_parameter_id_routing_step_parameters_id_fk",
+          "tableFrom": "process_step_readings",
+          "tableTo": "routing_step_parameters",
+          "columnsFrom": [
+            "routing_step_parameter_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "process_step_readings_equipment_id_equipment_id_fk": {
+          "name": "process_step_readings_equipment_id_equipment_id_fk",
+          "tableFrom": "process_step_readings",
+          "tableTo": "equipment",
+          "columnsFrom": [
+            "equipment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "process_step_readings_recorded_by_users_id_fk": {
+          "name": "process_step_readings_recorded_by_users_id_fk",
+          "tableFrom": "process_step_readings",
+          "tableTo": "users",
+          "columnsFrom": [
+            "recorded_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "process_step_readings_supersedes_id_process_step_readings_id_fk": {
+          "name": "process_step_readings_supersedes_id_process_step_readings_id_fk",
+          "tableFrom": "process_step_readings",
+          "tableTo": "process_step_readings",
+          "columnsFrom": [
+            "supersedes_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "step_readings_one_value_ck": {
+          "name": "step_readings_one_value_ck",
+          "value": "num_nonnulls(\"process_step_readings\".\"value_numeric\", \"process_step_readings\".\"value_text\", \"process_step_readings\".\"value_boolean\") = 1"
+        },
+        "step_readings_kind_ck": {
+          "name": "step_readings_kind_ck",
+          "value": "\"process_step_readings\".\"value_kind\" in ('numeric', 'text', 'boolean')"
+        },
+        "step_readings_correction_ck": {
+          "name": "step_readings_correction_ck",
+          "value": "\"process_step_readings\".\"supersedes_id\" is null or \"process_step_readings\".\"correction_reason\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.production_postings": {
+      "name": "production_postings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "posting_type": {
+          "name": "posting_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_material_id": {
+          "name": "batch_material_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dispense_record_id": {
+          "name": "dispense_record_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "packaging_reconciliation_id": {
+          "name": "packaging_reconciliation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "batch_output_id": {
+          "name": "batch_output_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "process_step_record_id": {
+          "name": "process_step_record_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lot_id": {
+          "name": "lot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "qty_base": {
+          "name": "qty_base",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base_uom": {
+          "name": "base_uom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stock_movement_id": {
+          "name": "stock_movement_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reversal_of_id": {
+          "name": "reversal_of_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "posted_by": {
+          "name": "posted_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "posted_at": {
+          "name": "posted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "production_postings_movement_uq": {
+          "name": "production_postings_movement_uq",
+          "columns": [
+            {
+              "expression": "stock_movement_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "production_postings_reversal_uq": {
+          "name": "production_postings_reversal_uq",
+          "columns": [
+            {
+              "expression": "reversal_of_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"production_postings\".\"reversal_of_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "production_postings_batch_idx": {
+          "name": "production_postings_batch_idx",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "posting_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "production_postings_lot_idx": {
+          "name": "production_postings_lot_idx",
+          "columns": [
+            {
+              "expression": "lot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "posting_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "production_postings_organization_id_organizations_id_fk": {
+          "name": "production_postings_organization_id_organizations_id_fk",
+          "tableFrom": "production_postings",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "production_postings_site_id_sites_id_fk": {
+          "name": "production_postings_site_id_sites_id_fk",
+          "tableFrom": "production_postings",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "production_postings_batch_id_batches_id_fk": {
+          "name": "production_postings_batch_id_batches_id_fk",
+          "tableFrom": "production_postings",
+          "tableTo": "batches",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "production_postings_batch_material_id_batch_materials_id_fk": {
+          "name": "production_postings_batch_material_id_batch_materials_id_fk",
+          "tableFrom": "production_postings",
+          "tableTo": "batch_materials",
+          "columnsFrom": [
+            "batch_material_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "production_postings_dispense_record_id_dispense_records_id_fk": {
+          "name": "production_postings_dispense_record_id_dispense_records_id_fk",
+          "tableFrom": "production_postings",
+          "tableTo": "dispense_records",
+          "columnsFrom": [
+            "dispense_record_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "production_postings_packaging_reconciliation_id_packaging_reconciliations_id_fk": {
+          "name": "production_postings_packaging_reconciliation_id_packaging_reconciliations_id_fk",
+          "tableFrom": "production_postings",
+          "tableTo": "packaging_reconciliations",
+          "columnsFrom": [
+            "packaging_reconciliation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "production_postings_batch_output_id_batch_outputs_id_fk": {
+          "name": "production_postings_batch_output_id_batch_outputs_id_fk",
+          "tableFrom": "production_postings",
+          "tableTo": "batch_outputs",
+          "columnsFrom": [
+            "batch_output_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "production_postings_process_step_record_id_process_step_records_id_fk": {
+          "name": "production_postings_process_step_record_id_process_step_records_id_fk",
+          "tableFrom": "production_postings",
+          "tableTo": "process_step_records",
+          "columnsFrom": [
+            "process_step_record_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "production_postings_lot_id_inventory_lots_id_fk": {
+          "name": "production_postings_lot_id_inventory_lots_id_fk",
+          "tableFrom": "production_postings",
+          "tableTo": "inventory_lots",
+          "columnsFrom": [
+            "lot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "production_postings_stock_movement_id_stock_movements_id_fk": {
+          "name": "production_postings_stock_movement_id_stock_movements_id_fk",
+          "tableFrom": "production_postings",
+          "tableTo": "stock_movements",
+          "columnsFrom": [
+            "stock_movement_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "production_postings_reversal_of_id_production_postings_id_fk": {
+          "name": "production_postings_reversal_of_id_production_postings_id_fk",
+          "tableFrom": "production_postings",
+          "tableTo": "production_postings",
+          "columnsFrom": [
+            "reversal_of_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "production_postings_posted_by_users_id_fk": {
+          "name": "production_postings_posted_by_users_id_fk",
+          "tableFrom": "production_postings",
+          "tableTo": "users",
+          "columnsFrom": [
+            "posted_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "production_postings_type_ck": {
+          "name": "production_postings_type_ck",
+          "value": "\"production_postings\".\"posting_type\" in ('consumption', 'output', 'scrap', 'rework_return', 'reversal')"
+        },
+        "production_postings_reversal_ck": {
+          "name": "production_postings_reversal_ck",
+          "value": "(\"production_postings\".\"posting_type\" = 'reversal') = (\"production_postings\".\"reversal_of_id\" is not null)"
+        },
+        "production_postings_qty_ck": {
+          "name": "production_postings_qty_ck",
+          "value": "\"production_postings\".\"qty_base\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.scrap_rework_records": {
+      "name": "scrap_rework_records",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "record_kind": {
+          "name": "record_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason_code": {
+          "name": "reason_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "qty": {
+          "name": "qty",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "uom": {
+          "name": "uom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'recorded'"
+        },
+        "requires_approval": {
+          "name": "requires_approval",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_by": {
+          "name": "recorded_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "decided_by": {
+          "name": "decided_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decision_note": {
+          "name": "decision_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "production_posting_id": {
+          "name": "production_posting_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "voided_at": {
+          "name": "voided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "scrap_rework_batch_idx": {
+          "name": "scrap_rework_batch_idx",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "scrap_rework_records_organization_id_organizations_id_fk": {
+          "name": "scrap_rework_records_organization_id_organizations_id_fk",
+          "tableFrom": "scrap_rework_records",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "scrap_rework_records_site_id_sites_id_fk": {
+          "name": "scrap_rework_records_site_id_sites_id_fk",
+          "tableFrom": "scrap_rework_records",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "scrap_rework_records_batch_id_batches_id_fk": {
+          "name": "scrap_rework_records_batch_id_batches_id_fk",
+          "tableFrom": "scrap_rework_records",
+          "tableTo": "batches",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "scrap_rework_records_recorded_by_users_id_fk": {
+          "name": "scrap_rework_records_recorded_by_users_id_fk",
+          "tableFrom": "scrap_rework_records",
+          "tableTo": "users",
+          "columnsFrom": [
+            "recorded_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "scrap_rework_records_decided_by_users_id_fk": {
+          "name": "scrap_rework_records_decided_by_users_id_fk",
+          "tableFrom": "scrap_rework_records",
+          "tableTo": "users",
+          "columnsFrom": [
+            "decided_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "scrap_rework_kind_ck": {
+          "name": "scrap_rework_kind_ck",
+          "value": "\"scrap_rework_records\".\"record_kind\" in ('scrap', 'rework')"
+        },
+        "scrap_rework_status_ck": {
+          "name": "scrap_rework_status_ck",
+          "value": "\"scrap_rework_records\".\"status\" in ('recorded', 'approved', 'rejected')"
+        },
+        "scrap_rework_qty_ck": {
+          "name": "scrap_rework_qty_ck",
+          "value": "\"scrap_rework_records\".\"qty\" > 0"
+        },
+        "scrap_rework_sod_ck": {
+          "name": "scrap_rework_sod_ck",
+          "value": "\"scrap_rework_records\".\"decided_by\" is null or \"scrap_rework_records\".\"decided_by\" <> \"scrap_rework_records\".\"recorded_by\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.yield_records": {
+      "name": "yield_records",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "theoretical_base": {
+          "name": "theoretical_base",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actual_base": {
+          "name": "actual_base",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actual_units": {
+          "name": "actual_units",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "variance_base": {
+          "name": "variance_base",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "yield_pct": {
+          "name": "yield_pct",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "variance_pct": {
+          "name": "variance_pct",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "min_pct": {
+          "name": "min_pct",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_pct": {
+          "name": "max_pct",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_within_limits": {
+          "name": "is_within_limits",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "labels_issued": {
+          "name": "labels_issued",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "labels_used": {
+          "name": "labels_used",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "labels_destroyed": {
+          "name": "labels_destroyed",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recorded_by": {
+          "name": "recorded_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "approved_by": {
+          "name": "approved_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approval_reason": {
+          "name": "approval_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deviation_id": {
+          "name": "deviation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_current": {
+          "name": "is_current",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "supersedes_id": {
+          "name": "supersedes_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "correction_reason": {
+          "name": "correction_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "yield_records_current_uq": {
+          "name": "yield_records_current_uq",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"yield_records\".\"is_current\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "yield_records_organization_id_organizations_id_fk": {
+          "name": "yield_records_organization_id_organizations_id_fk",
+          "tableFrom": "yield_records",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "yield_records_site_id_sites_id_fk": {
+          "name": "yield_records_site_id_sites_id_fk",
+          "tableFrom": "yield_records",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "yield_records_batch_id_batches_id_fk": {
+          "name": "yield_records_batch_id_batches_id_fk",
+          "tableFrom": "yield_records",
+          "tableTo": "batches",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "yield_records_recorded_by_users_id_fk": {
+          "name": "yield_records_recorded_by_users_id_fk",
+          "tableFrom": "yield_records",
+          "tableTo": "users",
+          "columnsFrom": [
+            "recorded_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "yield_records_approved_by_users_id_fk": {
+          "name": "yield_records_approved_by_users_id_fk",
+          "tableFrom": "yield_records",
+          "tableTo": "users",
+          "columnsFrom": [
+            "approved_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "yield_records_supersedes_id_yield_records_id_fk": {
+          "name": "yield_records_supersedes_id_yield_records_id_fk",
+          "tableFrom": "yield_records",
+          "tableTo": "yield_records",
+          "columnsFrom": [
+            "supersedes_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "yield_records_sod_ck": {
+          "name": "yield_records_sod_ck",
+          "value": "\"yield_records\".\"approved_by\" is null or \"yield_records\".\"approved_by\" <> \"yield_records\".\"recorded_by\""
+        },
+        "yield_records_correction_ck": {
+          "name": "yield_records_correction_ck",
+          "value": "\"yield_records\".\"supersedes_id\" is null or \"yield_records\".\"correction_reason\" is not null"
+        },
+        "yield_records_labels_ck": {
+          "name": "yield_records_labels_ck",
+          "value": "\"yield_records\".\"labels_issued\" is null or coalesce(\"yield_records\".\"labels_used\", 0) + coalesce(\"yield_records\".\"labels_destroyed\", 0) <= \"yield_records\".\"labels_issued\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.deviation_holds": {
+      "name": "deviation_holds",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "deviation_id": {
+          "name": "deviation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quality_hold_id": {
+          "name": "quality_hold_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "uq_deviation_holds_pair": {
+          "name": "uq_deviation_holds_pair",
+          "columns": [
+            {
+              "expression": "deviation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "quality_hold_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ix_deviation_holds_hold": {
+          "name": "ix_deviation_holds_hold",
+          "columns": [
+            {
+              "expression": "quality_hold_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "deviation_holds_deviation_id_deviations_id_fk": {
+          "name": "deviation_holds_deviation_id_deviations_id_fk",
+          "tableFrom": "deviation_holds",
+          "tableTo": "deviations",
+          "columnsFrom": [
+            "deviation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviation_holds_quality_hold_id_quality_holds_id_fk": {
+          "name": "deviation_holds_quality_hold_id_quality_holds_id_fk",
+          "tableFrom": "deviation_holds",
+          "tableTo": "quality_holds",
+          "columnsFrom": [
+            "quality_hold_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviation_holds_created_by_users_id_fk": {
+          "name": "deviation_holds_created_by_users_id_fk",
+          "tableFrom": "deviation_holds",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.deviation_state_transitions": {
+      "name": "deviation_state_transitions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deviation_id": {
+          "name": "deviation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_state": {
+          "name": "from_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_state": {
+          "name": "to_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ix_deviation_transitions_deviation": {
+          "name": "ix_deviation_transitions_deviation",
+          "columns": [
+            {
+              "expression": "deviation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "deviation_state_transitions_organization_id_organizations_id_fk": {
+          "name": "deviation_state_transitions_organization_id_organizations_id_fk",
+          "tableFrom": "deviation_state_transitions",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviation_state_transitions_site_id_sites_id_fk": {
+          "name": "deviation_state_transitions_site_id_sites_id_fk",
+          "tableFrom": "deviation_state_transitions",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviation_state_transitions_deviation_id_deviations_id_fk": {
+          "name": "deviation_state_transitions_deviation_id_deviations_id_fk",
+          "tableFrom": "deviation_state_transitions",
+          "tableTo": "deviations",
+          "columnsFrom": [
+            "deviation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviation_state_transitions_actor_id_users_id_fk": {
+          "name": "deviation_state_transitions_actor_id_users_id_fk",
+          "tableFrom": "deviation_state_transitions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.deviations": {
+      "name": "deviations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deviation_number": {
+          "name": "deviation_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'open'"
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'manual'"
+        },
+        "severity": {
+          "name": "severity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "step_ref": {
+          "name": "step_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lot_id": {
+          "name": "lot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "process_step_record_id": {
+          "name": "process_step_record_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dispense_record_id": {
+          "name": "dispense_record_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "inspection_id": {
+          "name": "inspection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "test_result_id": {
+          "name": "test_result_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "raised_by": {
+          "name": "raised_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raised_at": {
+          "name": "raised_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "classified_by": {
+          "name": "classified_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "classified_at": {
+          "name": "classified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "investigation": {
+          "name": "investigation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "impact_assessment": {
+          "name": "impact_assessment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "root_cause": {
+          "name": "root_cause",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolution": {
+          "name": "resolution",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "release_permitted": {
+          "name": "release_permitted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "effectiveness_check_on": {
+          "name": "effectiveness_check_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "closed_by": {
+          "name": "closed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_changed_at": {
+          "name": "status_changed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "status_changed_by": {
+          "name": "status_changed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "uq_deviations_org_number": {
+          "name": "uq_deviations_org_number",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "deviation_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_deviations_org_idem": {
+          "name": "uq_deviations_org_idem",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ix_deviations_site_status": {
+          "name": "ix_deviations_site_status",
+          "columns": [
+            {
+              "expression": "site_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ix_deviations_batch": {
+          "name": "ix_deviations_batch",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ix_deviations_lot": {
+          "name": "ix_deviations_lot",
+          "columns": [
+            {
+              "expression": "lot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ix_deviations_test_result": {
+          "name": "ix_deviations_test_result",
+          "columns": [
+            {
+              "expression": "test_result_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "deviations_organization_id_organizations_id_fk": {
+          "name": "deviations_organization_id_organizations_id_fk",
+          "tableFrom": "deviations",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviations_site_id_sites_id_fk": {
+          "name": "deviations_site_id_sites_id_fk",
+          "tableFrom": "deviations",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviations_batch_id_batches_id_fk": {
+          "name": "deviations_batch_id_batches_id_fk",
+          "tableFrom": "deviations",
+          "tableTo": "batches",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviations_lot_id_inventory_lots_id_fk": {
+          "name": "deviations_lot_id_inventory_lots_id_fk",
+          "tableFrom": "deviations",
+          "tableTo": "inventory_lots",
+          "columnsFrom": [
+            "lot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviations_process_step_record_id_process_step_records_id_fk": {
+          "name": "deviations_process_step_record_id_process_step_records_id_fk",
+          "tableFrom": "deviations",
+          "tableTo": "process_step_records",
+          "columnsFrom": [
+            "process_step_record_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviations_dispense_record_id_dispense_records_id_fk": {
+          "name": "deviations_dispense_record_id_dispense_records_id_fk",
+          "tableFrom": "deviations",
+          "tableTo": "dispense_records",
+          "columnsFrom": [
+            "dispense_record_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviations_inspection_id_inspections_id_fk": {
+          "name": "deviations_inspection_id_inspections_id_fk",
+          "tableFrom": "deviations",
+          "tableTo": "inspections",
+          "columnsFrom": [
+            "inspection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviations_test_result_id_test_results_id_fk": {
+          "name": "deviations_test_result_id_test_results_id_fk",
+          "tableFrom": "deviations",
+          "tableTo": "test_results",
+          "columnsFrom": [
+            "test_result_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviations_raised_by_users_id_fk": {
+          "name": "deviations_raised_by_users_id_fk",
+          "tableFrom": "deviations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "raised_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviations_classified_by_users_id_fk": {
+          "name": "deviations_classified_by_users_id_fk",
+          "tableFrom": "deviations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "classified_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviations_closed_by_users_id_fk": {
+          "name": "deviations_closed_by_users_id_fk",
+          "tableFrom": "deviations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "closed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "deviations_status_changed_by_users_id_fk": {
+          "name": "deviations_status_changed_by_users_id_fk",
+          "tableFrom": "deviations",
+          "tableTo": "users",
+          "columnsFrom": [
+            "status_changed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_deviations_status": {
+          "name": "ck_deviations_status",
+          "value": "\"deviations\".\"status\" in ('open','investigating','closed')"
+        },
+        "ck_deviations_source": {
+          "name": "ck_deviations_source",
+          "value": "\"deviations\".\"source\" in ('manual','cx_tol','cx_cal','in_process_check','yield','reconciliation','oos','other')"
+        },
+        "ck_deviations_subject": {
+          "name": "ck_deviations_subject",
+          "value": "num_nonnulls(\"deviations\".\"batch_id\", \"deviations\".\"lot_id\") >= 1"
+        },
+        "ck_deviations_closed": {
+          "name": "ck_deviations_closed",
+          "value": "(\"deviations\".\"status\" = 'closed') = (\"deviations\".\"closed_by\" is not null and \"deviations\".\"closed_at\" is not null and \"deviations\".\"root_cause\" is not null and \"deviations\".\"resolution\" is not null and \"deviations\".\"release_permitted\" is not null and \"deviations\".\"severity\" is not null)"
+        },
+        "ck_deviations_closer_not_raiser": {
+          "name": "ck_deviations_closer_not_raiser",
+          "value": "\"deviations\".\"closed_by\" is null or \"deviations\".\"closed_by\" <> \"deviations\".\"raised_by\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.disposition_requests": {
+      "name": "disposition_requests",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decision": {
+          "name": "decision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'conditional_release'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "conditions": {
+          "name": "conditions",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "review_date": {
+          "name": "review_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "requested_by": {
+          "name": "requested_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "requested_at": {
+          "name": "requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "decided_by": {
+          "name": "decided_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decision_note": {
+          "name": "decision_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "disposition_id": {
+          "name": "disposition_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "uq_disposition_requests_batch_pending": {
+          "name": "uq_disposition_requests_batch_pending",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"disposition_requests\".\"status\" = 'pending'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "disposition_requests_organization_id_organizations_id_fk": {
+          "name": "disposition_requests_organization_id_organizations_id_fk",
+          "tableFrom": "disposition_requests",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "disposition_requests_site_id_sites_id_fk": {
+          "name": "disposition_requests_site_id_sites_id_fk",
+          "tableFrom": "disposition_requests",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "disposition_requests_batch_id_batches_id_fk": {
+          "name": "disposition_requests_batch_id_batches_id_fk",
+          "tableFrom": "disposition_requests",
+          "tableTo": "batches",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "disposition_requests_requested_by_users_id_fk": {
+          "name": "disposition_requests_requested_by_users_id_fk",
+          "tableFrom": "disposition_requests",
+          "tableTo": "users",
+          "columnsFrom": [
+            "requested_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "disposition_requests_decided_by_users_id_fk": {
+          "name": "disposition_requests_decided_by_users_id_fk",
+          "tableFrom": "disposition_requests",
+          "tableTo": "users",
+          "columnsFrom": [
+            "decided_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_disposition_requests_status": {
+          "name": "ck_disposition_requests_status",
+          "value": "\"disposition_requests\".\"status\" in ('pending','approved','rejected','cancelled')"
+        },
+        "ck_disposition_requests_decision": {
+          "name": "ck_disposition_requests_decision",
+          "value": "\"disposition_requests\".\"decision\" in ('conditional_release')"
+        },
+        "ck_disposition_requests_sod": {
+          "name": "ck_disposition_requests_sod",
+          "value": "\"disposition_requests\".\"decided_by\" is null or \"disposition_requests\".\"decided_by\" <> \"disposition_requests\".\"requested_by\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.inspection_samples": {
+      "name": "inspection_samples",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "inspection_id": {
+          "name": "inspection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sample_no": {
+          "name": "sample_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lot_id": {
+          "name": "lot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "container_id": {
+          "name": "container_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "from_location_id": {
+          "name": "from_location_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "qty_base": {
+          "name": "qty_base",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base_uom": {
+          "name": "base_uom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sampled_by": {
+          "name": "sampled_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sampled_at": {
+          "name": "sampled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "consumption_movement_id": {
+          "name": "consumption_movement_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "uq_inspection_samples_no": {
+          "name": "uq_inspection_samples_no",
+          "columns": [
+            {
+              "expression": "inspection_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sample_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_inspection_samples_org_idem": {
+          "name": "uq_inspection_samples_org_idem",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "inspection_samples_organization_id_organizations_id_fk": {
+          "name": "inspection_samples_organization_id_organizations_id_fk",
+          "tableFrom": "inspection_samples",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspection_samples_site_id_sites_id_fk": {
+          "name": "inspection_samples_site_id_sites_id_fk",
+          "tableFrom": "inspection_samples",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspection_samples_inspection_id_inspections_id_fk": {
+          "name": "inspection_samples_inspection_id_inspections_id_fk",
+          "tableFrom": "inspection_samples",
+          "tableTo": "inspections",
+          "columnsFrom": [
+            "inspection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspection_samples_lot_id_inventory_lots_id_fk": {
+          "name": "inspection_samples_lot_id_inventory_lots_id_fk",
+          "tableFrom": "inspection_samples",
+          "tableTo": "inventory_lots",
+          "columnsFrom": [
+            "lot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspection_samples_container_id_containers_id_fk": {
+          "name": "inspection_samples_container_id_containers_id_fk",
+          "tableFrom": "inspection_samples",
+          "tableTo": "containers",
+          "columnsFrom": [
+            "container_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspection_samples_from_location_id_locations_id_fk": {
+          "name": "inspection_samples_from_location_id_locations_id_fk",
+          "tableFrom": "inspection_samples",
+          "tableTo": "locations",
+          "columnsFrom": [
+            "from_location_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspection_samples_sampled_by_users_id_fk": {
+          "name": "inspection_samples_sampled_by_users_id_fk",
+          "tableFrom": "inspection_samples",
+          "tableTo": "users",
+          "columnsFrom": [
+            "sampled_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspection_samples_consumption_movement_id_stock_movements_id_fk": {
+          "name": "inspection_samples_consumption_movement_id_stock_movements_id_fk",
+          "tableFrom": "inspection_samples",
+          "tableTo": "stock_movements",
+          "columnsFrom": [
+            "consumption_movement_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_inspection_samples_qty": {
+          "name": "ck_inspection_samples_qty",
+          "value": "\"inspection_samples\".\"qty_base\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.inspection_state_transitions": {
+      "name": "inspection_state_transitions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "inspection_id": {
+          "name": "inspection_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_state": {
+          "name": "from_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_state": {
+          "name": "to_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ix_inspection_transitions_inspection": {
+          "name": "ix_inspection_transitions_inspection",
+          "columns": [
+            {
+              "expression": "inspection_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "inspection_state_transitions_organization_id_organizations_id_fk": {
+          "name": "inspection_state_transitions_organization_id_organizations_id_fk",
+          "tableFrom": "inspection_state_transitions",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspection_state_transitions_site_id_sites_id_fk": {
+          "name": "inspection_state_transitions_site_id_sites_id_fk",
+          "tableFrom": "inspection_state_transitions",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspection_state_transitions_inspection_id_inspections_id_fk": {
+          "name": "inspection_state_transitions_inspection_id_inspections_id_fk",
+          "tableFrom": "inspection_state_transitions",
+          "tableTo": "inspections",
+          "columnsFrom": [
+            "inspection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspection_state_transitions_actor_id_users_id_fk": {
+          "name": "inspection_state_transitions_actor_id_users_id_fk",
+          "tableFrom": "inspection_state_transitions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.inspections": {
+      "name": "inspections",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "inspection_number": {
+          "name": "inspection_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "inspection_kind": {
+          "name": "inspection_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "inspection_plan_id": {
+          "name": "inspection_plan_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lot_id": {
+          "name": "lot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "process_step_record_id": {
+          "name": "process_step_record_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sampled_at": {
+          "name": "sampled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sampled_by": {
+          "name": "sampled_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sample_qty_base": {
+          "name": "sample_qty_base",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sample_uom": {
+          "name": "sample_uom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "performed_by": {
+          "name": "performed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_by": {
+          "name": "reviewed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "review_note": {
+          "name": "review_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cancel_reason": {
+          "name": "cancel_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "due_at": {
+          "name": "due_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "status_changed_at": {
+          "name": "status_changed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "status_changed_by": {
+          "name": "status_changed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "uq_inspections_org_number": {
+          "name": "uq_inspections_org_number",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "inspection_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_inspections_org_idem": {
+          "name": "uq_inspections_org_idem",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_inspections_batch_plan_live": {
+          "name": "uq_inspections_batch_plan_live",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "inspection_plan_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"inspections\".\"batch_id\" is not null and \"inspections\".\"status\" <> 'cancelled'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_inspections_lot_plan_live": {
+          "name": "uq_inspections_lot_plan_live",
+          "columns": [
+            {
+              "expression": "lot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "inspection_plan_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"inspections\".\"batch_id\" is null and \"inspections\".\"lot_id\" is not null and \"inspections\".\"status\" <> 'cancelled'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ix_inspections_site_status": {
+          "name": "ix_inspections_site_status",
+          "columns": [
+            {
+              "expression": "site_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ix_inspections_lot": {
+          "name": "ix_inspections_lot",
+          "columns": [
+            {
+              "expression": "lot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ix_inspections_batch": {
+          "name": "ix_inspections_batch",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "inspections_organization_id_organizations_id_fk": {
+          "name": "inspections_organization_id_organizations_id_fk",
+          "tableFrom": "inspections",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspections_site_id_sites_id_fk": {
+          "name": "inspections_site_id_sites_id_fk",
+          "tableFrom": "inspections",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspections_inspection_plan_id_inspection_plans_id_fk": {
+          "name": "inspections_inspection_plan_id_inspection_plans_id_fk",
+          "tableFrom": "inspections",
+          "tableTo": "inspection_plans",
+          "columnsFrom": [
+            "inspection_plan_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspections_lot_id_inventory_lots_id_fk": {
+          "name": "inspections_lot_id_inventory_lots_id_fk",
+          "tableFrom": "inspections",
+          "tableTo": "inventory_lots",
+          "columnsFrom": [
+            "lot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspections_batch_id_batches_id_fk": {
+          "name": "inspections_batch_id_batches_id_fk",
+          "tableFrom": "inspections",
+          "tableTo": "batches",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspections_process_step_record_id_process_step_records_id_fk": {
+          "name": "inspections_process_step_record_id_process_step_records_id_fk",
+          "tableFrom": "inspections",
+          "tableTo": "process_step_records",
+          "columnsFrom": [
+            "process_step_record_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspections_sampled_by_users_id_fk": {
+          "name": "inspections_sampled_by_users_id_fk",
+          "tableFrom": "inspections",
+          "tableTo": "users",
+          "columnsFrom": [
+            "sampled_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspections_performed_by_users_id_fk": {
+          "name": "inspections_performed_by_users_id_fk",
+          "tableFrom": "inspections",
+          "tableTo": "users",
+          "columnsFrom": [
+            "performed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspections_reviewed_by_users_id_fk": {
+          "name": "inspections_reviewed_by_users_id_fk",
+          "tableFrom": "inspections",
+          "tableTo": "users",
+          "columnsFrom": [
+            "reviewed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspections_created_by_users_id_fk": {
+          "name": "inspections_created_by_users_id_fk",
+          "tableFrom": "inspections",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "inspections_status_changed_by_users_id_fk": {
+          "name": "inspections_status_changed_by_users_id_fk",
+          "tableFrom": "inspections",
+          "tableTo": "users",
+          "columnsFrom": [
+            "status_changed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_inspections_status": {
+          "name": "ck_inspections_status",
+          "value": "\"inspections\".\"status\" in ('pending','in_progress','awaiting_review','approved','rejected','cancelled')"
+        },
+        "ck_inspections_kind": {
+          "name": "ck_inspections_kind",
+          "value": "\"inspections\".\"inspection_kind\" in ('incoming','in_process','finished_product')"
+        },
+        "ck_inspections_outcome": {
+          "name": "ck_inspections_outcome",
+          "value": "\"inspections\".\"outcome\" is null or \"inspections\".\"outcome\" in ('pass','fail','conditional')"
+        },
+        "ck_inspections_subject": {
+          "name": "ck_inspections_subject",
+          "value": "num_nonnulls(\"inspections\".\"lot_id\", \"inspections\".\"batch_id\") >= 1"
+        },
+        "ck_inspections_reviewer_not_performer": {
+          "name": "ck_inspections_reviewer_not_performer",
+          "value": "\"inspections\".\"reviewed_by\" is null or \"inspections\".\"performed_by\" is null or \"inspections\".\"reviewed_by\" <> \"inspections\".\"performed_by\""
+        },
+        "ck_inspections_reviewed": {
+          "name": "ck_inspections_reviewed",
+          "value": "(\"inspections\".\"status\" in ('approved','rejected')) = (\"inspections\".\"reviewed_by\" is not null and \"inspections\".\"reviewed_at\" is not null and \"inspections\".\"outcome\" is not null)"
+        },
+        "ck_inspections_cancelled": {
+          "name": "ck_inspections_cancelled",
+          "value": "\"inspections\".\"status\" <> 'cancelled' or \"inspections\".\"cancel_reason\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.label_verifications": {
+      "name": "label_verifications",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "container_id": {
+          "name": "container_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lot_id": {
+          "name": "lot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "location_id": {
+          "name": "location_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scan_payload": {
+          "name": "scan_payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "verified_by": {
+          "name": "verified_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "verified_at": {
+          "name": "verified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "client_sequence": {
+          "name": "client_sequence",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "uq_label_verifications_container": {
+          "name": "uq_label_verifications_container",
+          "columns": [
+            {
+              "expression": "container_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"label_verifications\".\"container_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_label_verifications_lot_location": {
+          "name": "uq_label_verifications_lot_location",
+          "columns": [
+            {
+              "expression": "lot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "location_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"label_verifications\".\"container_id\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ix_label_verifications_location": {
+          "name": "ix_label_verifications_location",
+          "columns": [
+            {
+              "expression": "location_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "label_verifications_organization_id_organizations_id_fk": {
+          "name": "label_verifications_organization_id_organizations_id_fk",
+          "tableFrom": "label_verifications",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "label_verifications_site_id_sites_id_fk": {
+          "name": "label_verifications_site_id_sites_id_fk",
+          "tableFrom": "label_verifications",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "label_verifications_container_id_containers_id_fk": {
+          "name": "label_verifications_container_id_containers_id_fk",
+          "tableFrom": "label_verifications",
+          "tableTo": "containers",
+          "columnsFrom": [
+            "container_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "label_verifications_lot_id_inventory_lots_id_fk": {
+          "name": "label_verifications_lot_id_inventory_lots_id_fk",
+          "tableFrom": "label_verifications",
+          "tableTo": "inventory_lots",
+          "columnsFrom": [
+            "lot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "label_verifications_location_id_locations_id_fk": {
+          "name": "label_verifications_location_id_locations_id_fk",
+          "tableFrom": "label_verifications",
+          "tableTo": "locations",
+          "columnsFrom": [
+            "location_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "label_verifications_verified_by_users_id_fk": {
+          "name": "label_verifications_verified_by_users_id_fk",
+          "tableFrom": "label_verifications",
+          "tableTo": "users",
+          "columnsFrom": [
+            "verified_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_label_verifications_subject": {
+          "name": "ck_label_verifications_subject",
+          "value": "num_nonnulls(\"label_verifications\".\"container_id\", \"label_verifications\".\"lot_id\") = 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.batch_amendments": {
+      "name": "batch_amendments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reopen_request_id": {
+          "name": "reopen_request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amendment_no": {
+          "name": "amendment_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "section": {
+          "name": "section",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reference": {
+          "name": "reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "previous_value": {
+          "name": "previous_value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "corrected_value": {
+          "name": "corrected_value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "supersedes_id": {
+          "name": "supersedes_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "recorded_by": {
+          "name": "recorded_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recorded_at": {
+          "name": "recorded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "batch_amendments_batch_no_uq": {
+          "name": "batch_amendments_batch_no_uq",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "amendment_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "batch_amendments_org_idem_uq": {
+          "name": "batch_amendments_org_idem_uq",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"batch_amendments\".\"idempotency_key\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "batch_amendments_organization_id_organizations_id_fk": {
+          "name": "batch_amendments_organization_id_organizations_id_fk",
+          "tableFrom": "batch_amendments",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_amendments_site_id_sites_id_fk": {
+          "name": "batch_amendments_site_id_sites_id_fk",
+          "tableFrom": "batch_amendments",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_amendments_batch_id_batches_id_fk": {
+          "name": "batch_amendments_batch_id_batches_id_fk",
+          "tableFrom": "batch_amendments",
+          "tableTo": "batches",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_amendments_reopen_request_id_batch_reopen_requests_id_fk": {
+          "name": "batch_amendments_reopen_request_id_batch_reopen_requests_id_fk",
+          "tableFrom": "batch_amendments",
+          "tableTo": "batch_reopen_requests",
+          "columnsFrom": [
+            "reopen_request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_amendments_supersedes_id_batch_amendments_id_fk": {
+          "name": "batch_amendments_supersedes_id_batch_amendments_id_fk",
+          "tableFrom": "batch_amendments",
+          "tableTo": "batch_amendments",
+          "columnsFrom": [
+            "supersedes_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_amendments_recorded_by_users_id_fk": {
+          "name": "batch_amendments_recorded_by_users_id_fk",
+          "tableFrom": "batch_amendments",
+          "tableTo": "users",
+          "columnsFrom": [
+            "recorded_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "batch_amendments_section_ck": {
+          "name": "batch_amendments_section_ck",
+          "value": "\"batch_amendments\".\"section\" in ('header', 'materials', 'process_steps', 'line_clearance', 'packaging_reconciliation', 'output_yield', 'qc', 'deviations', 'remarks', 'attachments', 'other')"
+        },
+        "batch_amendments_reason_ck": {
+          "name": "batch_amendments_reason_ck",
+          "value": "length(trim(\"batch_amendments\".\"reason\")) >= 5"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.batch_closures": {
+      "name": "batch_closures",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "closure_no": {
+          "name": "closure_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_state": {
+          "name": "from_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_state_transition_id": {
+          "name": "batch_state_transition_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "generated_document_id": {
+          "name": "generated_document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "checks": {
+          "name": "checks",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reservations_released": {
+          "name": "reservations_released",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "closed_by": {
+          "name": "closed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "batch_closures_batch_no_uq": {
+          "name": "batch_closures_batch_no_uq",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "closure_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "batch_closures_organization_id_organizations_id_fk": {
+          "name": "batch_closures_organization_id_organizations_id_fk",
+          "tableFrom": "batch_closures",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_closures_site_id_sites_id_fk": {
+          "name": "batch_closures_site_id_sites_id_fk",
+          "tableFrom": "batch_closures",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_closures_batch_id_batches_id_fk": {
+          "name": "batch_closures_batch_id_batches_id_fk",
+          "tableFrom": "batch_closures",
+          "tableTo": "batches",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_closures_batch_state_transition_id_batch_state_transitions_id_fk": {
+          "name": "batch_closures_batch_state_transition_id_batch_state_transitions_id_fk",
+          "tableFrom": "batch_closures",
+          "tableTo": "batch_state_transitions",
+          "columnsFrom": [
+            "batch_state_transition_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_closures_generated_document_id_generated_documents_id_fk": {
+          "name": "batch_closures_generated_document_id_generated_documents_id_fk",
+          "tableFrom": "batch_closures",
+          "tableTo": "generated_documents",
+          "columnsFrom": [
+            "generated_document_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_closures_closed_by_users_id_fk": {
+          "name": "batch_closures_closed_by_users_id_fk",
+          "tableFrom": "batch_closures",
+          "tableTo": "users",
+          "columnsFrom": [
+            "closed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "batch_closures_no_ck": {
+          "name": "batch_closures_no_ck",
+          "value": "\"batch_closures\".\"closure_no\" >= 1"
+        },
+        "batch_closures_from_ck": {
+          "name": "batch_closures_from_ck",
+          "value": "\"batch_closures\".\"from_state\" in ('released', 'rejected')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.batch_paper_records": {
+      "name": "batch_paper_records",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "routing_step_id": {
+          "name": "routing_step_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "step_no": {
+          "name": "step_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "step_name": {
+          "name": "step_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "record_mode": {
+          "name": "record_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "page_no": {
+          "name": "page_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "paper_reference": {
+          "name": "paper_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'issued'"
+        },
+        "generated_document_id": {
+          "name": "generated_document_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "file_attachment_id": {
+          "name": "file_attachment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "transcription_note": {
+          "name": "transcription_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "transcribed_by": {
+          "name": "transcribed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "transcribed_at": {
+          "name": "transcribed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_by": {
+          "name": "reviewed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "review_note": {
+          "name": "review_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "voided_by": {
+          "name": "voided_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "voided_at": {
+          "name": "voided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "void_reason": {
+          "name": "void_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "issued_by": {
+          "name": "issued_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "issued_at": {
+          "name": "issued_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "batch_paper_records_batch_page_uq": {
+          "name": "batch_paper_records_batch_page_uq",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "page_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "batch_paper_records_org_idem_uq": {
+          "name": "batch_paper_records_org_idem_uq",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"batch_paper_records\".\"idempotency_key\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "batch_paper_records_batch_idx": {
+          "name": "batch_paper_records_batch_idx",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "batch_paper_records_organization_id_organizations_id_fk": {
+          "name": "batch_paper_records_organization_id_organizations_id_fk",
+          "tableFrom": "batch_paper_records",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_paper_records_site_id_sites_id_fk": {
+          "name": "batch_paper_records_site_id_sites_id_fk",
+          "tableFrom": "batch_paper_records",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_paper_records_batch_id_batches_id_fk": {
+          "name": "batch_paper_records_batch_id_batches_id_fk",
+          "tableFrom": "batch_paper_records",
+          "tableTo": "batches",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_paper_records_routing_step_id_routing_steps_id_fk": {
+          "name": "batch_paper_records_routing_step_id_routing_steps_id_fk",
+          "tableFrom": "batch_paper_records",
+          "tableTo": "routing_steps",
+          "columnsFrom": [
+            "routing_step_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_paper_records_generated_document_id_generated_documents_id_fk": {
+          "name": "batch_paper_records_generated_document_id_generated_documents_id_fk",
+          "tableFrom": "batch_paper_records",
+          "tableTo": "generated_documents",
+          "columnsFrom": [
+            "generated_document_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_paper_records_file_attachment_id_file_attachments_id_fk": {
+          "name": "batch_paper_records_file_attachment_id_file_attachments_id_fk",
+          "tableFrom": "batch_paper_records",
+          "tableTo": "file_attachments",
+          "columnsFrom": [
+            "file_attachment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_paper_records_transcribed_by_users_id_fk": {
+          "name": "batch_paper_records_transcribed_by_users_id_fk",
+          "tableFrom": "batch_paper_records",
+          "tableTo": "users",
+          "columnsFrom": [
+            "transcribed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_paper_records_reviewed_by_users_id_fk": {
+          "name": "batch_paper_records_reviewed_by_users_id_fk",
+          "tableFrom": "batch_paper_records",
+          "tableTo": "users",
+          "columnsFrom": [
+            "reviewed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_paper_records_voided_by_users_id_fk": {
+          "name": "batch_paper_records_voided_by_users_id_fk",
+          "tableFrom": "batch_paper_records",
+          "tableTo": "users",
+          "columnsFrom": [
+            "voided_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_paper_records_issued_by_users_id_fk": {
+          "name": "batch_paper_records_issued_by_users_id_fk",
+          "tableFrom": "batch_paper_records",
+          "tableTo": "users",
+          "columnsFrom": [
+            "issued_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "batch_paper_records_status_ck": {
+          "name": "batch_paper_records_status_ck",
+          "value": "\"batch_paper_records\".\"status\" in ('issued', 'attached', 'returned', 'reviewed', 'void')"
+        },
+        "batch_paper_records_mode_ck": {
+          "name": "batch_paper_records_mode_ck",
+          "value": "\"batch_paper_records\".\"record_mode\" in ('electronic', 'paper_then_transcribe', 'paper_only')"
+        },
+        "batch_paper_records_page_ck": {
+          "name": "batch_paper_records_page_ck",
+          "value": "\"batch_paper_records\".\"page_no\" >= 1"
+        },
+        "batch_paper_records_sod_ck": {
+          "name": "batch_paper_records_sod_ck",
+          "value": "\"batch_paper_records\".\"reviewed_by\" is null or \"batch_paper_records\".\"transcribed_by\" is null or \"batch_paper_records\".\"reviewed_by\" <> \"batch_paper_records\".\"transcribed_by\""
+        },
+        "batch_paper_records_attached_ck": {
+          "name": "batch_paper_records_attached_ck",
+          "value": "\"batch_paper_records\".\"status\" not in ('attached', 'reviewed') or (\"batch_paper_records\".\"file_attachment_id\" is not null and \"batch_paper_records\".\"transcribed_by\" is not null and \"batch_paper_records\".\"transcribed_at\" is not null)"
+        },
+        "batch_paper_records_reviewed_ck": {
+          "name": "batch_paper_records_reviewed_ck",
+          "value": "\"batch_paper_records\".\"status\" <> 'reviewed' or (\"batch_paper_records\".\"reviewed_by\" is not null and \"batch_paper_records\".\"reviewed_at\" is not null)"
+        },
+        "batch_paper_records_void_ck": {
+          "name": "batch_paper_records_void_ck",
+          "value": "\"batch_paper_records\".\"status\" <> 'void' or (\"batch_paper_records\".\"voided_by\" is not null and \"batch_paper_records\".\"voided_at\" is not null and \"batch_paper_records\".\"void_reason\" is not null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.batch_reopen_requests": {
+      "name": "batch_reopen_requests",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "closure_no": {
+          "name": "closure_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "target_state": {
+          "name": "target_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amendment_scope": {
+          "name": "amendment_scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "requested_by": {
+          "name": "requested_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "requested_at": {
+          "name": "requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "decision_note": {
+          "name": "decision_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reopen_no": {
+          "name": "reopen_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reopened_at": {
+          "name": "reopened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "batch_state_transition_id": {
+          "name": "batch_state_transition_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "batch_reopen_requests_one_pending_uq": {
+          "name": "batch_reopen_requests_one_pending_uq",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"batch_reopen_requests\".\"status\" = 'pending'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "batch_reopen_requests_reopen_no_uq": {
+          "name": "batch_reopen_requests_reopen_no_uq",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "reopen_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"batch_reopen_requests\".\"reopen_no\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "batch_reopen_requests_org_idem_uq": {
+          "name": "batch_reopen_requests_org_idem_uq",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"batch_reopen_requests\".\"idempotency_key\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "batch_reopen_requests_batch_idx": {
+          "name": "batch_reopen_requests_batch_idx",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "batch_reopen_requests_organization_id_organizations_id_fk": {
+          "name": "batch_reopen_requests_organization_id_organizations_id_fk",
+          "tableFrom": "batch_reopen_requests",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_reopen_requests_site_id_sites_id_fk": {
+          "name": "batch_reopen_requests_site_id_sites_id_fk",
+          "tableFrom": "batch_reopen_requests",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_reopen_requests_batch_id_batches_id_fk": {
+          "name": "batch_reopen_requests_batch_id_batches_id_fk",
+          "tableFrom": "batch_reopen_requests",
+          "tableTo": "batches",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_reopen_requests_requested_by_users_id_fk": {
+          "name": "batch_reopen_requests_requested_by_users_id_fk",
+          "tableFrom": "batch_reopen_requests",
+          "tableTo": "users",
+          "columnsFrom": [
+            "requested_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_reopen_requests_batch_state_transition_id_batch_state_transitions_id_fk": {
+          "name": "batch_reopen_requests_batch_state_transition_id_batch_state_transitions_id_fk",
+          "tableFrom": "batch_reopen_requests",
+          "tableTo": "batch_state_transitions",
+          "columnsFrom": [
+            "batch_state_transition_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "batch_reopen_requests_status_ck": {
+          "name": "batch_reopen_requests_status_ck",
+          "value": "\"batch_reopen_requests\".\"status\" in ('pending', 'reopened', 'rejected', 'withdrawn')"
+        },
+        "batch_reopen_requests_target_ck": {
+          "name": "batch_reopen_requests_target_ck",
+          "value": "\"batch_reopen_requests\".\"target_state\" in ('released', 'rejected', 'quarantined')"
+        },
+        "batch_reopen_requests_reason_ck": {
+          "name": "batch_reopen_requests_reason_ck",
+          "value": "length(trim(\"batch_reopen_requests\".\"reason\")) >= 10 and length(trim(\"batch_reopen_requests\".\"amendment_scope\")) >= 5"
+        },
+        "batch_reopen_requests_reopened_ck": {
+          "name": "batch_reopen_requests_reopened_ck",
+          "value": "(\"batch_reopen_requests\".\"status\" = 'reopened') = (\"batch_reopen_requests\".\"reopen_no\" is not null and \"batch_reopen_requests\".\"reopened_at\" is not null)"
         }
       },
       "isRLSEnabled": false

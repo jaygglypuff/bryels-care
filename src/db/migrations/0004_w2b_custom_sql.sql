@@ -1,3 +1,5 @@
+-- Custom SQL migration (drizzle-kit generate --custom). Verbatim copy of src/db/sql/w2b.sql;
+-- its drift test fails if the two differ.
 -- Wave 2 W2B (batch execution): append-only ledgers and evidence tables.
 -- production_postings is a ledger (docs/data-model.md §5.7): corrections are reversal rows.
 -- process_step_readings and process_step_checklist_results are evidence: a correction is a new row

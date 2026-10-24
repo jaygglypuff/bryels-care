@@ -16,6 +16,7 @@ import { createUom, decideConversion, findConversionStep, listConversions, listU
 import { resetTestDatabase } from "../../support/db";
 import { asUser, expectCode, type Kit, loadKit, loc, makeLot } from "../../support/kit";
 import { expectDbError } from "./helpers";
+import { customMigration } from "../../support/custom-sql";
 
 const root = path.resolve(__dirname, "../../..");
 const read = (p: string) => readFileSync(path.join(root, p), "utf8");
@@ -40,9 +41,8 @@ beforeAll(async () => {
 
 describe("W2G custom SQL is part of the normal migrate path", () => {
   it("the custom migration is a verbatim copy of src/db/sql/w2g.sql and installs the triggers", async () => {
-    expect(read("src/db/migrations/0004_w2g_custom_sql.sql").endsWith(read("src/db/sql/w2g.sql"))).toBe(true);
-    const journal = JSON.parse(read("src/db/migrations/meta/_journal.json")) as { entries: { tag: string }[] };
-    expect(journal.entries.map((e) => e.tag)).toContain("0004_w2g_custom_sql");
+    const { migration, canonical } = customMigration("w2g");
+    expect(migration.endsWith(canonical)).toBe(true);
     const t = await db.execute<{ tgname: string }>(sql`select tgname from pg_trigger where not tgisinternal and tgname in ('tg_uom_conversions_dimension', 'tg_uom_conversions_immutable', 'tg_uoms_code_immutable', 'tg_reason_codes_code_immutable')`);
     expect(t.map((r) => r.tgname).sort()).toEqual(["tg_reason_codes_code_immutable", "tg_uom_conversions_dimension", "tg_uom_conversions_immutable", "tg_uoms_code_immutable"]);
   });

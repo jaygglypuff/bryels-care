@@ -1,5 +1,5 @@
 -- Custom SQL migration (drizzle-kit generate --custom). Verbatim copy of src/db/sql/w2g.sql;
--- tests/integration/masterdata/w2g-uom.test.ts fails if the two differ.
+-- its drift test fails if the two differ.
 -- Wave 2 stream W2G (master data administration, US-1-20..US-1-24): SQL Drizzle cannot express.
 -- Shipped as the Drizzle custom migration src/db/migrations/0004_w2g_custom_sql.sql (verbatim copy,
 -- drift-tested in tests/integration/masterdata/w2g-uom.test.ts); runs after the generated migration
