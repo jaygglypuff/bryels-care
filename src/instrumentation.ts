@@ -1,4 +1,15 @@
 /**
+ * Server start (Next.js `register`): wires the cross-module hooks once per process (src/modules/wiring.ts:
+ * execution → QA deviations, in-process and finished-product inspections). Node runtime only.
+ */
+export async function register() {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { registerAppHooks } = await import("@/modules/wiring");
+    registerAppHooks();
+  }
+}
+
+/**
  * Next.js instrumentation hook (US-1-25 AC2): every uncaught server error (render, route handler,
  * server action) goes to the error-reporting adapter with the route pattern and kind only; the
  * request headers, cookies, body and query string are never forwarded.

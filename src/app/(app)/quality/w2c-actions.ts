@@ -23,6 +23,10 @@ import {
   verifyLabelScan,
   type ReviewDecision,
 } from "@/modules/quality";
+import { registerAppHooks } from "@/modules/wiring";
+
+// Execution ↔ QA hooks (idempotent; also registered at server start in src/instrumentation.ts).
+registerAppHooks();
 
 /**
  * Server actions for Wave 2 W2C quality screens (inspections, deviations, conditional release, bulk
@@ -42,7 +46,7 @@ export async function startInspectionAction(_p: ActionState, fd: FormData): Prom
   let id: string;
   try {
     const ctx = await requireContext();
-    const r = await createInspection(ctx, { batchId: opt(fd, "batchId"), lotId: opt(fd, "lotId"), idempotencyKey: opt(fd, "idempotencyKey") });
+    const r = await createInspection(ctx, { batchId: opt(fd, "batchId"), lotId: opt(fd, "lotId"), processStepRecordId: opt(fd, "processStepRecordId"), idempotencyKey: opt(fd, "idempotencyKey") });
     id = r.inspectionId;
   } catch (e) {
     return toActionState(e);

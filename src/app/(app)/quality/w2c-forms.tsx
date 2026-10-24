@@ -77,8 +77,8 @@ function ActionForm({
   );
 }
 
-export function StartInspectionButton({ batchId, lotId }: { batchId?: string; lotId?: string }) {
-  return <ActionForm action={startInspectionAction} hidden={{ batchId, lotId }} submit="Start inspection" pending="Starting…" variant="secondary" />;
+export function StartInspectionButton({ batchId, lotId, processStepRecordId }: { batchId?: string; lotId?: string; processStepRecordId?: string }) {
+  return <ActionForm action={startInspectionAction} hidden={{ batchId, lotId, processStepRecordId }} submit="Start inspection" pending="Starting…" variant="secondary" />;
 }
 
 export function SampleForm({ inspectionId, locations, uom }: { inspectionId: string; locations: { id: string; code: string; qty: string }[]; uom: string }) {

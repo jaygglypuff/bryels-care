@@ -29,7 +29,7 @@ import { deviationBlockerMessages, deviationFacts, deviationsFor } from "./devia
 import { batchInspectionFacts, inspectionsFor, lotInspectionFacts } from "./inspections";
 import { liveResults } from "./inspection-rules";
 import { queueStatusLabel } from "./status-labels";
-import { assertPaperRecordsReviewed, syncWorkOrderProgress } from "@/modules/production";
+import { assertPaperRecordsReviewed, paperRecordBlockers, syncWorkOrderProgress } from "@/modules/production";
 import {
   BATCH_AWAITING_DECISION,
   BATCH_DECIDED_STATUSES,
@@ -463,8 +463,12 @@ async function batchFacts(q: Tx | typeof db, ctx: AuthContext, batch: typeof bat
     await q.select({ id: testResults.id, testName: testResults.testName, passed: testResults.passed, supersedesId: testResults.supersedesId, testedBy: testResults.testedBy }).from(testResults).where(eq(testResults.batchId, batch.id)),
   );
   const steps = (batch.formulaSnapshot as Snapshot).steps ?? [];
-  const done = await q.select({ routingStepId: processStepRecords.routingStepId, conductedBy: processStepRecords.conductedBy, checkedBy: processStepRecords.checkedBy }).from(processStepRecords).where(eq(processStepRecords.batchId, batch.id));
-  const doneIds = new Set(done.map((d) => d.routingStepId));
+  const done = await q
+    .select({ routingStepId: processStepRecords.routingStepId, status: processStepRecords.status, conductedBy: processStepRecords.conductedBy, checkedBy: processStepRecords.checkedBy })
+    .from(processStepRecords)
+    .where(eq(processStepRecords.batchId, batch.id));
+  // W2B step records exist from the moment a step starts: only completed (or skipped) steps count as done.
+  const doneIds = new Set(done.filter((d) => d.status === "completed" || d.status === "skipped").map((d) => d.routingStepId));
   const lines = await q
     .select({ lineNo: batchMaterials.lineNo, status: batchMaterials.status, name: materials.name })
     .from(batchMaterials)
@@ -499,6 +503,8 @@ async function batchFacts(q: Tx | typeof db, ctx: AuthContext, batch: typeof bat
     if (insp.inspection && insp.missing.length && !opts.conditional) extra.push(`Required test(s) without a result: ${insp.missing.join(", ")}.`);
   }
   extra.push(...deviationBlockerMessages(dev));
+  // W2D (data-model §6.2): every paper page reviewed or voided before the batch leaves QA.
+  extra.push(...(await paperRecordBlockers(q, batch.id)).map((p) => p.message));
   if (lot) extra.push(...(await lotReleaseBlockers(q, lot.id)));
   const failed = (insp ? insp.failed : tests.filter((x) => !x.passed).map((x) => ({ resultId: x.id, testName: x.testName }))).filter((f) => !dev.permittedResultIds.has(f.resultId));
 

@@ -42,6 +42,10 @@ import {
   type Person,
   type ScaleOpt,
 } from "./exec-forms";
+import { registerAppHooks } from "@/modules/wiring";
+
+// Execution ↔ QA hooks (idempotent; also registered at server start in src/instrumentation.ts).
+registerAppHooks();
 
 export const metadata: Metadata = { title: "Batch" };
 

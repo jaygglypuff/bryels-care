@@ -5,9 +5,10 @@ import type { AuthContext } from "@/lib/auth/context";
 /**
  * Integration points of batch execution (W2B) with modules built by other Wave 2 streams.
  *
- * Execution never imports those modules directly: each stream (or the integrator) registers its
- * implementation here once, from a server module that is always loaded (for example the module's
- * own index.ts: `registerExecutionHooks({ openDeviation })`). Until a hook is registered the
+ * Execution never imports those modules directly (quality imports production, not the reverse).
+ * The implementations are registered by `registerAppHooks()` in src/modules/wiring.ts, called at
+ * web start (src/instrumentation.ts `register`), worker start (src/worker.ts), by the execution
+ * server actions and API routes (belt and braces) and by the test setup. Until a hook is registered the
  * default keeps the batch safe: an exception that needs a deviation is refused with a clear
  * message, a work-order transition is simply not made (there are no work orders yet), and an
  * in-process inspection required by the routing blocks the step.
@@ -44,9 +45,9 @@ export type InProcessQcStatus = { status: "not_required" | "pending" | "passed" 
 export type ExecutionHooks = {
   /** W2C: open a deviation (rule DEV) for a controlled exception; returns its id. */
   openDeviation?: (tx: Tx, ctx: AuthContext, input: OpenDeviationInput) => Promise<{ deviationId: string; deviationNumber?: string }>;
-  /** W2A: the batch entered in_process (first signed clearance) → work order released → in_progress. */
+  /** Optional extra listener: the batch entered in_process. Work orders are synced directly (same module). */
   onBatchInProcess?: (tx: Tx, ctx: AuthContext, batch: { id: string; batchNumber: string; siteId: string }) => Promise<void>;
-  /** W2A: the batch was posted to quarantine (awaiting_qc) → work order completed when it was the last batch. */
+  /** Optional extra listener: the batch was posted to quarantine (awaiting_qc). */
   onBatchSubmitted?: (tx: Tx, ctx: AuthContext, batch: { id: string; batchNumber: string; siteId: string }) => Promise<void>;
   /** W2C: status of the in-process inspection a routing step requires (W05-12). */
   inProcessQcStatus?: (tx: Tx, ctx: AuthContext, input: { batchId: string; processStepRecordId: string; inspectionPlanId: string }) => Promise<InProcessQcStatus>;
@@ -54,7 +55,11 @@ export type ExecutionHooks = {
   createFinishedProductInspection?: (tx: Tx, ctx: AuthContext, input: { batchId: string; lotId: string; inspectionPlanId: string | null; siteId: string }) => Promise<{ inspectionId: string } | null>;
 };
 
-const hooks: ExecutionHooks = {};
+// One registry per process, kept on globalThis: Next compiles instrumentation, route handlers and
+// server actions into separate bundles/layers, each with its own copy of this module.
+const REGISTRY = Symbol.for("bryels.production.executionHooks");
+const g = globalThis as unknown as Record<symbol, ExecutionHooks | undefined>;
+const hooks: ExecutionHooks = (g[REGISTRY] ??= {});
 
 /** Registers hook implementations (later registrations replace earlier ones per key). */
 export function registerExecutionHooks(h: ExecutionHooks) {

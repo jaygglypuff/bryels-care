@@ -54,6 +54,28 @@ export default async function InspectionsPage({ searchParams }: { searchParams: 
           </Card>
         )}
 
+        {candidates.steps.length > 0 && (
+          <Card>
+            <CardTitle>Steps waiting for an in-process check</CardTitle>
+            <p className="mb-2 text-[13px] text-muted">The step stays blocked until a second QA user approves a passing in-process inspection.</p>
+            <ul className="flex flex-col divide-y divide-line">
+              {candidates.steps.map((st) => (
+                <li key={st.processStepRecordId} className="flex flex-wrap items-center justify-between gap-3 py-2">
+                  <div className="min-w-0">
+                    <Link className="font-medium text-primary-text hover:underline" href={`/production/${st.batchId}`}>
+                      {st.batchNumber} · step {st.stepNo}
+                    </Link>
+                    <p className="text-[13px] text-muted">
+                      {st.stepName} · plan {st.planCode} rev {st.planRevision}
+                    </p>
+                  </div>
+                  {ctx.can("quality.inspection.approve") && <StartInspectionButton batchId={st.batchId} processStepRecordId={st.processStepRecordId} />}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+
         <Card>
           <nav className="mb-3 flex flex-wrap gap-2" aria-label="Filter inspections">
             {FILTERS.map(([v, label]) => (

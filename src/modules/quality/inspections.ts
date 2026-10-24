@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gt, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import Decimal from "decimal.js";
 import { db, type DbOrTx, type Tx } from "@/db/client";
@@ -16,7 +16,9 @@ import {
   inventoryLots,
   locations,
   materials,
+  processStepRecords,
   products,
+  routingSteps,
   testResults,
   users,
 } from "@/db/schema";
@@ -27,7 +29,8 @@ import { nextNumber } from "@/lib/numbering";
 import { getSetting } from "@/lib/settings";
 import { postMovement } from "@/modules/inventory/ledger";
 import { equipmentAvailability, getInspectionPlan } from "@/modules/masterdata";
-import { transitionBatch } from "@/modules/production";
+import { paperRecordBlockers, transitionBatch } from "@/modules/production";
+import { openDeviation } from "./deviations";
 import {
   INSPECTION_OPEN_STATUSES,
   INSPECTION_STATUS_LABEL,
@@ -86,7 +89,11 @@ async function lockInspection(tx: Tx, ctx: AuthContext, inspectionId: string) {
 
 /* ------------------------------------------------------------------ create */
 
-export type InspectionSubject = { batchId: string; lotId?: never } | { lotId: string; batchId?: never };
+export type InspectionSubject =
+  | { batchId: string; lotId?: never; processStepRecordId?: never }
+  | { lotId: string; batchId?: never; processStepRecordId?: never }
+  /** In-process inspection of one executed routing step (W05-12): the step's own inspection plan. */
+  | { batchId: string; processStepRecordId: string; lotId?: never };
 
 /**
  * Creates (or returns the live) inspection for a subject inside the caller's transaction. Used by
@@ -101,8 +108,39 @@ async function createInspectionTx(tx: Tx, ctx: AuthContext, subject: InspectionS
   let lotId: string | null = null;
   let batchId: string | null = null;
   let label: string;
+  let stepRecordId: string | null = null;
 
-  if (subject.batchId) {
+  if (subject.batchId && subject.processStepRecordId) {
+    assertUuid(subject.batchId, "Batch");
+    assertUuid(subject.processStepRecordId, "Step");
+    const [b] = await tx.select().from(batches).where(and(eq(batches.id, subject.batchId), eq(batches.organizationId, ctx.organizationId))).for("update").limit(1);
+    if (!b || !ctx.allowedSiteIds.includes(b.siteId)) throw new DomainError("not_found", "Batch not found in your sites.");
+    ctx.requireSite(b.siteId);
+    if (b.status !== "in_process") throw new DomainError("state", `Batch ${b.batchNumber} is ${b.status.replace(/_/g, " ")}; in-process inspections are recorded while it is in process.`);
+    const [rec] = await tx
+      .select({ id: processStepRecords.id, batchId: processStepRecords.batchId, stepNo: processStepRecords.stepNo, name: processStepRecords.name, planId: routingSteps.inspectionPlanId })
+      .from(processStepRecords)
+      .innerJoin(routingSteps, eq(routingSteps.id, processStepRecords.routingStepId))
+      .where(eq(processStepRecords.id, subject.processStepRecordId))
+      .limit(1);
+    if (!rec || rec.batchId !== b.id) throw new DomainError("not_found", "Step not found on this batch.");
+    if (!rec.planId) throw new DomainError("state", `Step ${rec.stepNo} (${rec.name}) has no in-process inspection plan in its routing.`);
+    const [plan] = await tx.select().from(inspectionPlans).where(eq(inspectionPlans.id, rec.planId)).limit(1);
+    if (!plan || plan.status === "draft") throw new DomainError("state", `The in-process inspection plan of step ${rec.stepNo} is not approved.`);
+    siteId = b.siteId;
+    planId = plan.id;
+    kind = "in_process";
+    batchId = b.id;
+    lotId = null;
+    stepRecordId = rec.id;
+    label = `${b.batchNumber} step ${rec.stepNo}`;
+    const [live] = await tx
+      .select()
+      .from(inspections)
+      .where(and(eq(inspections.processStepRecordId, rec.id), eq(inspections.inspectionPlanId, plan.id), ne(inspections.status, "cancelled")))
+      .limit(1);
+    if (live) return { inspectionId: live.id, inspectionNumber: live.inspectionNumber, created: false };
+  } else if (subject.batchId) {
     assertUuid(subject.batchId, "Batch");
     const [b] = await tx.select().from(batches).where(and(eq(batches.id, subject.batchId), eq(batches.organizationId, ctx.organizationId))).for("update").limit(1);
     if (!b || !ctx.allowedSiteIds.includes(b.siteId)) throw new DomainError("not_found", "Batch not found in your sites.");
@@ -124,7 +162,7 @@ async function createInspectionTx(tx: Tx, ctx: AuthContext, subject: InspectionS
     const [live] = await tx
       .select()
       .from(inspections)
-      .where(and(eq(inspections.batchId, b.id), eq(inspections.inspectionPlanId, plan.id), ne(inspections.status, "cancelled")))
+      .where(and(eq(inspections.batchId, b.id), eq(inspections.inspectionPlanId, plan.id), isNull(inspections.processStepRecordId), ne(inspections.status, "cancelled")))
       .limit(1);
     if (live) return { inspectionId: live.id, inspectionNumber: live.inspectionNumber, created: false };
   } else if (subject.lotId) {
@@ -167,6 +205,7 @@ async function createInspectionTx(tx: Tx, ctx: AuthContext, subject: InspectionS
       inspectionPlanId: planId,
       lotId,
       batchId,
+      processStepRecordId: stepRecordId,
       dueAt: new Date(now.getTime() + dueHours * 3600_000),
       createdBy: ctx.userId,
       statusChangedBy: ctx.userId,
@@ -180,16 +219,20 @@ async function createInspectionTx(tx: Tx, ctx: AuthContext, subject: InspectionS
     entityId: ins.id,
     entityNumber: inspectionNumber,
     siteId,
-    after: { kind, subject: label, batchId, lotId, inspectionPlanId: planId },
+    after: { kind, subject: label, batchId, lotId, processStepRecordId: stepRecordId, inspectionPlanId: planId },
   });
   return { inspectionId: ins.id, inspectionNumber, created: true };
 }
 
 /** Starts the inspection of a batch (its frozen plan) or of a quarantined material lot (plan effective today). */
-export async function createInspection(ctx: AuthContext, input: { batchId?: string | null; lotId?: string | null; idempotencyKey?: string | null }) {
+export async function createInspection(ctx: AuthContext, input: { batchId?: string | null; lotId?: string | null; processStepRecordId?: string | null; idempotencyKey?: string | null }) {
   ctx.require("quality.inspection.create");
   if (!!input.batchId === !!input.lotId) throw new DomainError("validation", "Choose the lot or the batch to inspect.");
-  const subject: InspectionSubject = input.batchId ? { batchId: input.batchId } : { lotId: input.lotId! };
+  if (input.processStepRecordId && !input.batchId) throw new DomainError("validation", "An in-process inspection belongs to a batch step.");
+  // In-process inspections are QA work (W05-12): operators and the warehouse may start incoming and
+  // finished-product inspections, but the result of an in-process check decides whether a step may close.
+  if (input.processStepRecordId) ctx.require("quality.inspection.approve");
+  const subject: InspectionSubject = input.processStepRecordId ? { batchId: input.batchId!, processStepRecordId: input.processStepRecordId } : input.batchId ? { batchId: input.batchId } : { lotId: input.lotId! };
   return db.transaction((tx) => withIdempotency(tx, ctx, input.idempotencyKey ? `inspection:${input.idempotencyKey}` : null, "quality.inspection.create", () => createInspectionTx(tx, ctx, subject)));
 }
 
@@ -494,22 +537,48 @@ export async function reviewInspection(ctx: AuthContext, input: { inspectionId: 
     }
     const live = liveResults(all);
     let batchNote: string | null = null;
+    let reviewedOutcome: "pass" | "fail" | null = null;
     if (input.decision === "return") {
       await moveInspection(tx, ctx, ins, "in_progress", note, { reviewNote: note });
     } else if (input.decision === "reject") {
       await moveInspection(tx, ctx, ins, "rejected", note, { reviewedBy: ctx.userId, reviewedAt: new Date(), outcome: "fail", reviewNote: note });
+      reviewedOutcome = "fail";
     } else {
       const missing = missingRequiredTests(await planTests(tx, ins.inspectionPlanId), live);
       if (missing.length) throw new DomainError("state", `Required test(s) without a result: ${missing.map((m) => m.name).join(", ")}. Return the inspection for testing.`);
       const outcome = live.some((r) => !r.passed) ? "fail" : "pass";
       await moveInspection(tx, ctx, ins, "approved", note, { reviewedBy: ctx.userId, reviewedAt: new Date(), outcome, reviewNote: note });
+      reviewedOutcome = outcome;
       if (ins.batchId && ins.inspectionKind === "finished_product") {
         const [b] = await tx.select().from(batches).where(eq(batches.id, ins.batchId)).for("update").limit(1);
         if (b.status === "awaiting_qc") {
-          await transitionBatch(tx, ctx, b, "quarantined", { reason: `Inspection ${ins.inspectionNumber} reviewed (${outcome})` });
-          batchNote = "quarantined";
+          // data-model §6.2: leaving awaiting_qc needs every paper page reviewed (W2D). The inspection is
+          // approved regardless; the batch waits in awaiting_qc and the release view lists the pages.
+          if ((await paperRecordBlockers(tx, b.id)).length) batchNote = "awaiting_paper_review";
+          else {
+            await transitionBatch(tx, ctx, b, "quarantined", { reason: `Inspection ${ins.inspectionNumber} reviewed (${outcome})` });
+            batchNote = "quarantined";
+          }
         }
       }
+    }
+    // W05-12: a failed in-process inspection keeps its step blocked (inProcessQcStatus "failed": the
+    // batch cannot move on, the WIP hold) and opens an in-process deviation for QA to investigate.
+    if (ins.inspectionKind === "in_process" && ins.batchId && reviewedOutcome === "fail") {
+      const [stepRec] = ins.processStepRecordId ? await tx.select({ stepNo: processStepRecords.stepNo, name: processStepRecords.name }).from(processStepRecords).where(eq(processStepRecords.id, ins.processStepRecordId)).limit(1) : [];
+      await openDeviation(
+        ctx,
+        {
+          batchId: ins.batchId,
+          processStepRecordId: ins.processStepRecordId,
+          inspectionId: ins.id,
+          source: "in_process_check",
+          stepRef: stepRec ? `Step ${stepRec.stepNo} ${stepRec.name}` : null,
+          description: `In-process inspection ${ins.inspectionNumber} ${input.decision === "reject" ? "rejected" : "failed"}${note ? `: ${note}` : "."}`,
+          idempotencyKey: `in-process-fail:${ins.id}:${ins.status}`,
+        },
+        { tx },
+      );
     }
     await audit(tx, ctx, {
       action: input.decision === "return" ? "quality.inspection.returned" : "quality.inspection.reviewed",
@@ -554,7 +623,7 @@ export async function batchInspectionFacts(q: DbOrTx, batch: { id: string; inspe
   const [ins] = await q
     .select()
     .from(inspections)
-    .where(and(eq(inspections.batchId, batch.id), eq(inspections.inspectionPlanId, batch.inspectionPlanId), ne(inspections.status, "cancelled")))
+    .where(and(eq(inspections.batchId, batch.id), eq(inspections.inspectionPlanId, batch.inspectionPlanId), isNull(inspections.processStepRecordId), ne(inspections.status, "cancelled")))
     .limit(1);
   return factsFor(q, ins ?? null, batch.inspectionPlanId);
 }
@@ -622,6 +691,26 @@ export async function listInspections(ctx: AuthContext, f: { status?: string } =
   return rows.map((r) => ({ ...r, overdue: !!r.dueAt && (INSPECTION_OPEN_STATUSES as readonly string[]).includes(r.status) && r.dueAt.getTime() < now }));
 }
 
+/**
+ * For the execution hook (W2B `inProcessQcStatus`, W05-12): the state of the in-process inspection of
+ * one step record. Read-only. pending until QA approves it; failed when approved with a failing result
+ * or rejected (the step stays blocked; the deviation was opened at review).
+ */
+export async function inProcessQcStatus(q: DbOrTx, _ctx: AuthContext, input: { batchId: string; processStepRecordId: string; inspectionPlanId: string }): Promise<{ status: "pending" | "passed" | "failed"; message?: string }> {
+  const [ins] = await q
+    .select({ number: inspections.inspectionNumber, status: inspections.status, outcome: inspections.outcome })
+    .from(inspections)
+    .where(and(eq(inspections.batchId, input.batchId), eq(inspections.processStepRecordId, input.processStepRecordId), eq(inspections.inspectionPlanId, input.inspectionPlanId), ne(inspections.status, "cancelled")))
+    .orderBy(desc(inspections.createdAt))
+    .limit(1);
+  if (!ins) return { status: "pending", message: "The in-process inspection of this step has not been started. QA starts it from Inspections (steps waiting for an in-process check)." };
+  if (ins.status === "rejected" || (ins.status === "approved" && ins.outcome === "fail")) {
+    return { status: "failed", message: `In-process inspection ${ins.number} failed. The step is blocked; QA handles the deviation.` };
+  }
+  if (ins.status === "approved") return { status: "passed" };
+  return { status: "pending", message: `In-process inspection ${ins.number} is not complete yet (${INSPECTION_STATUS_LABEL[ins.status as InspectionStatus]?.toLowerCase() ?? ins.status}).` };
+}
+
 /** Lots and batches at the current site that could start an inspection (QA queue "Start inspection"). */
 export async function inspectionCandidates(ctx: AuthContext) {
   ctx.require("quality.inspection.view");
@@ -636,11 +725,35 @@ export async function inspectionCandidates(ctx: AuthContext) {
       and(
         eq(batches.siteId, siteId),
         inArray(batches.status, ["awaiting_qc", "in_process"]),
-        sql`not exists (select 1 from ${inspections} i where i.batch_id = ${batches.id} and i.inspection_plan_id = ${batches.inspectionPlanId} and i.status <> 'cancelled')`,
+        sql`not exists (select 1 from ${inspections} i where i.batch_id = ${batches.id} and i.inspection_plan_id = ${batches.inspectionPlanId} and i.process_step_record_id is null and i.status <> 'cancelled')`,
       ),
     )
     .orderBy(asc(batches.batchNumber));
-  return { batches: batchRows };
+  // W05-12: started steps whose routing step carries an in-process plan and that have no live inspection.
+  const stepRows = await db
+    .select({
+      batchId: batches.id,
+      batchNumber: batches.batchNumber,
+      processStepRecordId: processStepRecords.id,
+      stepNo: processStepRecords.stepNo,
+      stepName: processStepRecords.name,
+      planCode: inspectionPlans.code,
+      planRevision: inspectionPlans.revisionNo,
+    })
+    .from(processStepRecords)
+    .innerJoin(batches, eq(batches.id, processStepRecords.batchId))
+    .innerJoin(routingSteps, eq(routingSteps.id, processStepRecords.routingStepId))
+    .innerJoin(inspectionPlans, eq(inspectionPlans.id, routingSteps.inspectionPlanId))
+    .where(
+      and(
+        eq(batches.siteId, siteId),
+        eq(batches.status, "in_process"),
+        inArray(processStepRecords.status, ["in_progress", "awaiting_check"]),
+        sql`not exists (select 1 from ${inspections} i where i.process_step_record_id = ${processStepRecords.id} and i.status <> 'cancelled')`,
+      ),
+    )
+    .orderBy(asc(batches.batchNumber), asc(processStepRecords.stepNo));
+  return { batches: batchRows, steps: stepRows };
 }
 
 const sampler = alias(users, "sampler_user");

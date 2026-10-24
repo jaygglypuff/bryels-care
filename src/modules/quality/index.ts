@@ -10,6 +10,7 @@ export * from "./rules";
 export {
   createInspection,
   ensureBatchInspection,
+  inProcessQcStatus,
   recordSample,
   recordInspectionResult,
   correctInspectionResult,

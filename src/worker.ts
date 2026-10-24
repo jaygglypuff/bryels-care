@@ -31,6 +31,7 @@ import { queuedJobCount, writeHeartbeat } from "@/modules/platform/diagnostics";
 import { envPresence } from "@/modules/governance/variables";
 import { logger } from "@/lib/log";
 import { reportError } from "@/lib/log/error-reporter";
+import { registerAppHooks } from "@/modules/wiring";
 
 const DEAD_LETTER = "platform.dead_letter";
 const workerId = `${os.hostname()}-${process.pid}-${uuidv7().slice(-6)}`;
@@ -85,6 +86,7 @@ async function waitForMigrations() {
 }
 
 async function main() {
+  registerAppHooks(); // execution ↔ QA hooks for jobs that run batch services (src/modules/wiring.ts)
   const port = Number(process.env.PORT ?? 3001);
   // No host: Node binds "::" when IPv6 is available (Railway private networking) and 0.0.0.0 otherwise.
   server.listen(port, () => log("info", "health server listening", { port }));

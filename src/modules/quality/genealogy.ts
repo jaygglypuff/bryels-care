@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import {
   batchMaterials,
@@ -206,7 +206,7 @@ class Tracer {
       .select({ batchId: batchMaterials.batchId, qty: sql<string>`sum(${dispenseRecords.actualQtyG})::text` })
       .from(dispenseRecords)
       .innerJoin(batchMaterials, eq(batchMaterials.id, dispenseRecords.batchMaterialId))
-      .where(eq(dispenseRecords.lotId, lotId))
+      .where(and(eq(dispenseRecords.lotId, lotId), isNull(dispenseRecords.voidedAt))) // a voided weighing is not an input (W2B)
       .groupBy(batchMaterials.batchId);
     const out = new Map<string, string>();
     for (const r of dr) out.set(r.batchId, r.qty);
@@ -225,7 +225,7 @@ class Tracer {
       .select({ lotId: dispenseRecords.lotId, qty: sql<string>`sum(${dispenseRecords.actualQtyG})::text` })
       .from(dispenseRecords)
       .innerJoin(batchMaterials, eq(batchMaterials.id, dispenseRecords.batchMaterialId))
-      .where(eq(batchMaterials.batchId, batchId))
+      .where(and(eq(batchMaterials.batchId, batchId), isNull(dispenseRecords.voidedAt)))
       .groupBy(dispenseRecords.lotId);
     const out = new Map<string, string>();
     for (const r of dr) out.set(r.lotId, r.qty);

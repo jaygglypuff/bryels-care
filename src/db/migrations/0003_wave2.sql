@@ -1410,7 +1410,8 @@ CREATE UNIQUE INDEX "uq_inspection_samples_org_idem" ON "inspection_samples" USI
 CREATE INDEX "ix_inspection_transitions_inspection" ON "inspection_state_transitions" USING btree ("inspection_id","occurred_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_inspections_org_number" ON "inspections" USING btree ("organization_id","inspection_number");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_inspections_org_idem" ON "inspections" USING btree ("organization_id","idempotency_key");--> statement-breakpoint
-CREATE UNIQUE INDEX "uq_inspections_batch_plan_live" ON "inspections" USING btree ("batch_id","inspection_plan_id") WHERE "inspections"."batch_id" is not null and "inspections"."status" <> 'cancelled';--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_inspections_batch_plan_live" ON "inspections" USING btree ("batch_id","inspection_plan_id") WHERE "inspections"."batch_id" is not null and "inspections"."process_step_record_id" is null and "inspections"."status" <> 'cancelled';--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_inspections_step_plan_live" ON "inspections" USING btree ("process_step_record_id","inspection_plan_id") WHERE "inspections"."process_step_record_id" is not null and "inspections"."status" <> 'cancelled';--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_inspections_lot_plan_live" ON "inspections" USING btree ("lot_id","inspection_plan_id") WHERE "inspections"."batch_id" is null and "inspections"."lot_id" is not null and "inspections"."status" <> 'cancelled';--> statement-breakpoint
 CREATE INDEX "ix_inspections_site_status" ON "inspections" USING btree ("site_id","status");--> statement-breakpoint
 CREATE INDEX "ix_inspections_lot" ON "inspections" USING btree ("lot_id");--> statement-breakpoint

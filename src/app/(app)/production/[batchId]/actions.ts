@@ -27,6 +27,10 @@ import {
   voidDispense,
   batchSiteId,
 } from "@/modules/production";
+import { registerAppHooks } from "@/modules/wiring";
+
+// Execution ↔ QA hooks (idempotent; also registered at server start in src/instrumentation.ts).
+registerAppHooks();
 
 /**
  * Batch workspace server actions (W2B, US-3-09..13). Thin adapters: parse the form, build the

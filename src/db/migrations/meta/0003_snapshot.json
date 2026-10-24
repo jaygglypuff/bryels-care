@@ -1,5 +1,5 @@
 {
-  "id": "a7fc08a3-9163-4ed3-875b-be3cbe4e5007",
+  "id": "9694078e-fea6-45c3-98cb-5b1dd64fb2ef",
   "prevId": "97bd7975-f69c-4d91-aa8a-58019bb1213b",
   "version": "7",
   "dialect": "postgresql",
@@ -21875,7 +21875,29 @@
             }
           ],
           "isUnique": true,
-          "where": "\"inspections\".\"batch_id\" is not null and \"inspections\".\"status\" <> 'cancelled'",
+          "where": "\"inspections\".\"batch_id\" is not null and \"inspections\".\"process_step_record_id\" is null and \"inspections\".\"status\" <> 'cancelled'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_inspections_step_plan_live": {
+          "name": "uq_inspections_step_plan_live",
+          "columns": [
+            {
+              "expression": "process_step_record_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "inspection_plan_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"inspections\".\"process_step_record_id\" is not null and \"inspections\".\"status\" <> 'cancelled'",
           "concurrently": false,
           "method": "btree",
           "with": {}

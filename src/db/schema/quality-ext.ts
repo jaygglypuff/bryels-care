@@ -64,7 +64,9 @@ export const inspections = pgTable(
     uniqueIndex("uq_inspections_org_number").on(t.organizationId, t.inspectionNumber),
     uniqueIndex("uq_inspections_org_idem").on(t.organizationId, t.idempotencyKey),
     // One live inspection per subject and plan revision: concurrent "start inspection" calls create one row.
-    uniqueIndex("uq_inspections_batch_plan_live").on(t.batchId, t.inspectionPlanId).where(sql`${t.batchId} is not null and ${t.status} <> 'cancelled'`),
+    uniqueIndex("uq_inspections_batch_plan_live").on(t.batchId, t.inspectionPlanId).where(sql`${t.batchId} is not null and ${t.processStepRecordId} is null and ${t.status} <> 'cancelled'`),
+    // In-process inspections (W05-12): one live inspection per executed step and plan.
+    uniqueIndex("uq_inspections_step_plan_live").on(t.processStepRecordId, t.inspectionPlanId).where(sql`${t.processStepRecordId} is not null and ${t.status} <> 'cancelled'`),
     uniqueIndex("uq_inspections_lot_plan_live").on(t.lotId, t.inspectionPlanId).where(sql`${t.batchId} is null and ${t.lotId} is not null and ${t.status} <> 'cancelled'`),
     index("ix_inspections_site_status").on(t.siteId, t.status),
     index("ix_inspections_lot").on(t.lotId),
