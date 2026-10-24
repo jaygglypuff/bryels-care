@@ -4,6 +4,10 @@ import { ZodError, type z } from "zod";
 import { AuthContext, getContext } from "@/lib/auth/context";
 import { DomainError, HTTP_STATUS, type ErrorCode } from "@/lib/errors";
 import { completeIdempotencyKey, releaseIdempotencyKey, requestHash, reserveIdempotencyKey } from "@/lib/idempotency";
+import { acceptableRequestId, logger, withLogContext } from "@/lib/log";
+import { reportError } from "@/lib/log/error-reporter";
+import { READ_ONLY_MESSAGE } from "@/lib/maintenance";
+import { limitApi } from "@/lib/rate-limit";
 import { type CommandContract, type QueryContract, commandEnvelope } from "./contract";
 
 /**
@@ -34,6 +38,8 @@ const API_CODE: Partial<Record<ErrorCode, string>> = {
   unauthenticated: "UNAUTHENTICATED",
   reauth_required: "REAUTH_REQUIRED",
   too_large: "EXPORT_TOO_LARGE",
+  read_only: "READ_ONLY_MODE",
+  rate_limited: "RATE_LIMITED",
 };
 
 export function errorResult(status: number, code: string, message: string, details?: Record<string, unknown>): ApiResult {
@@ -71,6 +77,8 @@ export async function executeCommand<P extends z.ZodType>(
 ): Promise<ApiResult> {
   const requestId = req.requestId ?? uuidv7();
   if (!ctx) return errorResult(401, "UNAUTHENTICATED", "Sign in again to continue.");
+  // US-2-30: refused before the idempotency key is reserved, so a retry after the window succeeds.
+  if (ctx.readOnly) return errorResult(503, "READ_ONLY_MODE", READ_ONLY_MESSAGE);
   const key = req.idempotencyKey?.trim() || null;
   if (contract.idempotent && !key) return errorResult(422, "IDEMPOTENCY_KEY_REQUIRED", "This command needs an Idempotency-Key header (a UUID).");
   if (key && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key)) return errorResult(422, "IDEMPOTENCY_KEY_INVALID", "Idempotency-Key must be a UUID.");
@@ -113,7 +121,7 @@ export async function executeCommand<P extends z.ZodType>(
     const mapped = fromError(e);
     if (!mapped) {
       if (reservationId) await releaseIdempotencyKey(reservationId);
-      console.error(JSON.stringify({ level: "error", requestId, command: contract.name, error: e instanceof Error ? e.message : String(e) }));
+      await reportError(e, { requestId, command: contract.name, routeType: "command" });
       return errorResult(500, "INTERNAL", "Something went wrong. Nothing was saved; try again with the same Idempotency-Key.");
     }
     result = mapped;
@@ -134,10 +142,22 @@ function originAllowed(req: Request) {
   return origin === expected.replace(/\/$/, "");
 }
 
-const requestIdOf = (req: Request) => {
-  const h = req.headers.get("x-request-id");
-  return h && /^[A-Za-z0-9._-]{8,100}$/.test(h) ? h : uuidv7();
-};
+const requestIdOf = (req: Request) => acceptableRequestId(req.headers.get("x-request-id")) ?? uuidv7();
+
+/** US-1-25 AC3: authenticated API limit per user (setting `platform.rate_limits`); null = allowed. */
+async function rateLimited(ctx: AuthContext | null): Promise<ApiResult | null> {
+  if (!ctx) return null;
+  const r = await limitApi(ctx.organizationId, ctx.userId);
+  if (r.allowed) return null;
+  return { ...errorResult(429, "RATE_LIMITED", "Too many requests. Wait a moment, then try again."), headers: { "Retry-After": String(r.retryAfterSeconds) } };
+}
+
+/** One structured line per API call (docs/deployment-railway.md §7 fields). */
+function logCall(kind: "command" | "query", name: string, ctx: AuthContext | null, started: number, status: number) {
+  const fields = { module: name.split(".")[0], command: name, userId: ctx?.userId ?? null, siteId: ctx?.currentSiteId ?? null, durationMs: Date.now() - started, httpStatus: status, outcome: status < 400 ? "ok" : status >= 500 ? "error" : "rejected" };
+  if (status >= 500) logger.warn(`api ${kind}`, fields);
+  else logger.info(`api ${kind}`, fields);
+}
 
 export function commandRoute<P extends z.ZodType>(contract: CommandContract<P>, handler: (ctx: AuthContext, payload: z.output<P>, meta: CommandMeta) => Promise<unknown>) {
   return async function POST(req: Request): Promise<Response> {
@@ -149,9 +169,13 @@ export function commandRoute<P extends z.ZodType>(contract: CommandContract<P>, 
     } catch {
       return json(errorResult(422, "VALIDATION", "The request body must be JSON."), requestId);
     }
-    const ctx = await getContext();
-    const result = await executeCommand(contract, ctx, { body, idempotencyKey: req.headers.get("idempotency-key"), requestId }, handler);
-    return json(result, requestId);
+    return withLogContext({ requestId, module: contract.name.split(".")[0], command: contract.name }, async () => {
+      const started = Date.now();
+      const ctx = await getContext();
+      const result = (await rateLimited(ctx)) ?? (await executeCommand(contract, ctx, { body, idempotencyKey: req.headers.get("idempotency-key"), requestId }, handler));
+      logCall("command", contract.name, ctx, started, result.status);
+      return json(result, requestId);
+    });
   };
 }
 
@@ -174,7 +198,7 @@ export async function executeQuery<Q extends z.ZodType>(
   } catch (e) {
     const mapped = fromError(e);
     if (mapped) return mapped;
-    console.error(JSON.stringify({ level: "error", query: contract.name, error: e instanceof Error ? e.message : String(e) }));
+    await reportError(e, { command: contract.name, routeType: "query" });
     return errorResult(500, "INTERNAL", "Something went wrong.");
   }
 }
@@ -186,12 +210,18 @@ export function queryRoute<Q extends z.ZodType>(contract: QueryContract<Q>, hand
     const input: Record<string, unknown> = Object.fromEntries(url.searchParams.entries());
     const params = (await route?.params) ?? {};
     for (const [k, v] of Object.entries(params)) if (v !== undefined) input[k] = Array.isArray(v) ? v.join("/") : v;
-    const ctx = await getContext();
-    const out = await executeQuery(contract, ctx, input, handler);
-    if (out instanceof Response) {
-      out.headers.set("X-Request-Id", requestId);
-      return out;
-    }
-    return json(out, requestId);
+    return withLogContext({ requestId, module: contract.name.split(".")[0], command: contract.name }, async () => {
+      const started = Date.now();
+      const ctx = await getContext();
+      const limited = await rateLimited(ctx);
+      const out = limited ?? (await executeQuery(contract, ctx, input, handler));
+      if (out instanceof Response) {
+        out.headers.set("X-Request-Id", requestId);
+        logCall("query", contract.name, ctx, started, out.status);
+        return out;
+      }
+      logCall("query", contract.name, ctx, started, out.status);
+      return json(out, requestId);
+    });
   };
 }

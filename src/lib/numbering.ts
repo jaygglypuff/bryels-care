@@ -1,48 +1,180 @@
 import "server-only";
-import { sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, lte, or, gt, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/db/client";
+import { numberingRules, numberingRuleVersions } from "@/db/schema";
+import { DomainError } from "@/lib/errors";
 
-/** Default patterns for MVP document types (A-PRD-04; configurable later). */
-const RULES: Record<string, { prefix: string; width: number; period: "YY" | "YYMM" | "" }> = {
-  GR: { prefix: "GR", width: 5, period: "YY" },
-  LOT: { prefix: "L", width: 5, period: "YYMM" },
-  BATCH: { prefix: "B", width: 4, period: "YY" },
-  SO: { prefix: "SO", width: 5, period: "YY" },
-  DR: { prefix: "DR", width: 5, period: "YY" },
-  MOV: { prefix: "MOV", width: 6, period: "YY" },
-  QH: { prefix: "QH", width: 4, period: "YY" }, // Wave 1 W1B: quality holds (data-model §9.2)
+/**
+ * Document numbers (ADR-009, docs/data-model.md §9). A number is allocated inside the caller's
+ * transaction: the counter row of `numbering_rules` (one per document type and period key) is the
+ * last lock a command takes, so a rolled-back command rolls its number back.
+ *
+ * How a number looks comes from the effective approved `numbering_rule_versions` row of the
+ * document type (US-1-19), or the built-in default below (A-PRD-04) when no version was approved.
+ * A new version never changes numbers already issued and, because counters are keyed by the
+ * period key, continues the running sequence of the period (`continue_sequence_on_version`).
+ */
+export type ResetPeriod = "never" | "yearly" | "monthly" | "daily";
+export type NumberingRuleSpec = { prefix: string; pattern: string; resetPeriod: ResetPeriod; sequenceWidth: number; isGapless: boolean };
+
+const yearly = (prefix: string, width: number): NumberingRuleSpec => ({ prefix, pattern: "{PREFIX}-{YY}-{SEQ}", resetPeriod: "yearly", sequenceWidth: width, isGapless: false });
+
+/** Built-in defaults for the MVP document types (A-PRD-04; output identical to the pre-W2F formats). */
+export const NUMBERING_DEFAULTS = {
+  GR: yearly("GR", 5),
+  LOT: { prefix: "L", pattern: "{PREFIX}-{YYMM}-{SEQ}", resetPeriod: "monthly", sequenceWidth: 5, isGapless: false },
+  BATCH: yearly("B", 4),
+  SO: yearly("SO", 5),
+  DR: yearly("DR", 5),
+  MOV: yearly("MOV", 6),
+  QH: yearly("QH", 4), // Wave 1 W1B: quality holds (data-model §9.2)
   // Wave 1 W1C: boxes, transfers, counts, adjustments, reservations (data-model §9.2)
-  BOX: { prefix: "BX", width: 8, period: "" },
-  TR: { prefix: "TR", width: 6, period: "YY" },
-  CNT: { prefix: "CNT", width: 4, period: "YY" },
-  ADJ: { prefix: "ADJ", width: 5, period: "YY" },
-  RSV: { prefix: "RSV", width: 6, period: "YY" },
-  DOC: { prefix: "DOC", width: 7, period: "YY" }, // W1E: generated documents, organization scope (A-RPT-03)
+  BOX: { prefix: "BX", pattern: "{PREFIX}-{SEQ}", resetPeriod: "never", sequenceWidth: 8, isGapless: false },
+  TR: yearly("TR", 6),
+  CNT: yearly("CNT", 4),
+  ADJ: yearly("ADJ", 5),
+  RSV: yearly("RSV", 6),
+  DOC: yearly("DOC", 7), // W1E: generated documents, organization scope (A-RPT-03)
   // Wave 2 W2C: inspections and deviations (data-model §9.2)
-  INS: { prefix: "INS", width: 5, period: "YY" },
-  DEV: { prefix: "DEV", width: 4, period: "YY" },
-};
+  INS: yearly("INS", 5),
+  DEV: yearly("DEV", 4),
+} satisfies Record<string, NumberingRuleSpec>;
 
-function periodKey(kind: "YY" | "YYMM" | "", now = new Date()): string {
-  const local = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Manila" }));
-  const yy = String(local.getFullYear()).slice(2);
-  const mm = String(local.getMonth() + 1).padStart(2, "0");
-  return kind === "YY" ? yy : kind === "YYMM" ? yy + mm : "";
+export type DocumentType = keyof typeof NUMBERING_DEFAULTS;
+export const DOCUMENT_TYPES = Object.keys(NUMBERING_DEFAULTS) as DocumentType[];
+
+export function isDocumentType(t: string): t is DocumentType {
+  return Object.prototype.hasOwnProperty.call(NUMBERING_DEFAULTS, t);
+}
+
+/** Calendar parts in the business timezone (A-PRD: Asia/Manila; site timezones arrive with site-scoped rules). */
+function localParts(now: Date) {
+  const f = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" });
+  const [y, m, d] = f.format(now).split("-");
+  return { yyyy: y, yy: y.slice(2), mm: m, dd: d };
+}
+
+/** Business date (YYYY-MM-DD, Asia/Manila) used for effective dates. */
+export function numberingBusinessDate(now = new Date()): string {
+  const p = localParts(now);
+  return `${p.yyyy}-${p.mm}-${p.dd}`;
+}
+
+/** Counter key per reset period; identical to the pre-W2F keys so running sequences continue. */
+export function periodKeyFor(reset: ResetPeriod, now = new Date()): string {
+  const p = localParts(now);
+  return reset === "yearly" ? p.yy : reset === "monthly" ? p.yy + p.mm : reset === "daily" ? p.yy + p.mm + p.dd : "";
+}
+
+const TOKENS = ["PREFIX", "SITE", "YYYY", "YY", "YYMM", "YYMMDD", "SEQ"] as const;
+
+/**
+ * Pattern rules of docs/data-model.md §9.4 (mirrored by CHECK constraints on
+ * `numbering_rule_versions`). Returns field → message; empty when valid.
+ */
+export function validateNumberingRule(r: NumberingRuleSpec & { scope?: "organization" | "site" }): Record<string, string> {
+  const e: Record<string, string> = {};
+  if (!/^[A-Z0-9]{1,8}$/.test(r.prefix)) e.prefix = "Use 1 to 8 capital letters or digits.";
+  if (!Number.isInteger(r.sequenceWidth) || r.sequenceWidth < 1 || r.sequenceWidth > 12) e.sequenceWidth = "Width must be between 1 and 12.";
+  const p = r.pattern;
+  const unknown = [...p.matchAll(/\{([^}]*)\}/g)].map((m) => m[1]).filter((t) => !(TOKENS as readonly string[]).includes(t));
+  if (unknown.length) e.pattern = `Unknown token {${unknown[0]}}. Allowed: ${TOKENS.map((t) => `{${t}}`).join(", ")}.`;
+  else if (!/^([A-Z0-9._-]|\{(PREFIX|SITE|YYYY|YY|YYMM|YYMMDD|SEQ)\})+$/.test(p)) e.pattern = "Only capital letters, digits, '-', '.', '_' and the listed tokens are allowed.";
+  else if ((p.match(/\{SEQ\}/g) ?? []).length !== 1) e.pattern = "The pattern must contain {SEQ} exactly once.";
+  else if (r.scope === "site" && !p.includes("{SITE}")) e.pattern = "A site-specific rule must contain {SITE}.";
+  else if (r.scope !== "site" && p.includes("{SITE}")) e.pattern = "{SITE} is only allowed in a site-specific rule.";
+  else if (r.resetPeriod === "daily" && !p.includes("{YYMMDD}")) e.pattern = "A daily reset needs {YYMMDD} in the pattern.";
+  else if (r.resetPeriod === "monthly" && !/\{YYMM(DD)?\}/.test(p)) e.pattern = "A monthly reset needs {YYMM} or {YYMMDD} in the pattern.";
+  else if (r.resetPeriod === "yearly" && !/\{(YYYY|YY|YYMM|YYMMDD)\}/.test(p)) e.pattern = "A yearly reset needs a year token in the pattern.";
+  if (!["never", "yearly", "monthly", "daily"].includes(r.resetPeriod)) e.resetPeriod = "Choose never, yearly, monthly or daily.";
+  return e;
+}
+
+/** Pure formatter shared by allocation, preview and tests. */
+export function formatNumber(rule: Pick<NumberingRuleSpec, "prefix" | "pattern" | "sequenceWidth">, seq: number, now = new Date(), siteCode?: string): string {
+  const p = localParts(now);
+  const values: Record<string, string> = {
+    PREFIX: rule.prefix,
+    SITE: siteCode ?? "",
+    YYYY: p.yyyy,
+    YY: p.yy,
+    YYMM: p.yy + p.mm,
+    YYMMDD: p.yy + p.mm + p.dd,
+    SEQ: String(seq).padStart(rule.sequenceWidth, "0"),
+  };
+  return rule.pattern.replace(/\{(PREFIX|SITE|YYYY|YYMMDD|YYMM|YY|SEQ)\}/g, (_m, t: string) => values[t]);
+}
+
+export type EffectiveNumberingRule = NumberingRuleSpec & { source: "default" | "version"; versionId: string | null; versionNo: number | null; effectiveFrom: string | null };
+
+/** The rule in force for a document type on `now` (approved version, else the built-in default). */
+export async function effectiveNumberingRule(q: DbOrTx, organizationId: string, documentType: DocumentType, now = new Date()): Promise<EffectiveNumberingRule> {
+  const day = numberingBusinessDate(now);
+  const [v] = await q
+    .select()
+    .from(numberingRuleVersions)
+    .where(
+      and(
+        eq(numberingRuleVersions.organizationId, organizationId),
+        eq(numberingRuleVersions.documentType, documentType),
+        isNull(numberingRuleVersions.siteId),
+        eq(numberingRuleVersions.status, "approved"),
+        lte(numberingRuleVersions.effectiveFrom, day),
+        or(isNull(numberingRuleVersions.effectiveTo), gt(numberingRuleVersions.effectiveTo, day)),
+      ),
+    )
+    .orderBy(desc(numberingRuleVersions.effectiveFrom))
+    .limit(1);
+  if (v) {
+    return { prefix: v.prefix, pattern: v.pattern, resetPeriod: v.resetPeriod as ResetPeriod, sequenceWidth: v.sequenceWidth, isGapless: v.isGapless, source: "version", versionId: v.id, versionNo: v.versionNo, effectiveFrom: v.effectiveFrom };
+  }
+  const d = NUMBERING_DEFAULTS[documentType];
+  if (!d) throw new DomainError("setup_required", `NUMBERING_RULE_MISSING: no numbering rule for ${documentType}.`, { code: "NUMBERING_RULE_MISSING" });
+  return { ...d, source: "default", versionId: null, versionNo: null, effectiveFrom: null };
 }
 
 /**
- * Allocates the next number inside the caller's transaction (row lock via upsert),
- * e.g. GR-26-00012, L-2610-00171, B-26-0012.
+ * Allocates the next number inside the caller's transaction (row lock via upsert, the last lock
+ * of the command), e.g. GR-26-00012, L-2610-00171, B-26-0012.
  */
-export async function nextNumber(tx: DbOrTx, organizationId: string, documentType: keyof typeof RULES): Promise<string> {
-  const rule = RULES[documentType];
-  const pk = periodKey(rule.period);
+export async function nextNumber(tx: DbOrTx, organizationId: string, documentType: DocumentType, now = new Date()): Promise<string> {
+  if (!isDocumentType(documentType)) throw new DomainError("setup_required", `NUMBERING_RULE_MISSING: no numbering rule for ${String(documentType)}.`, { code: "NUMBERING_RULE_MISSING" });
+  const rule = await effectiveNumberingRule(tx, organizationId, documentType, now);
+  const pk = periodKeyFor(rule.resetPeriod, now);
   const rows = await tx.execute<{ value: string }>(sql`
     INSERT INTO numbering_rules (id, organization_id, document_type, prefix, sequence_width, period_key, next_value)
-    VALUES (gen_random_uuid(), ${organizationId}, ${documentType}, ${rule.prefix}, ${rule.width}, ${pk}, 2)
+    VALUES (gen_random_uuid(), ${organizationId}, ${documentType}, ${rule.prefix}, ${rule.sequenceWidth}, ${pk}, 2)
     ON CONFLICT (organization_id, document_type, period_key)
-    DO UPDATE SET next_value = numbering_rules.next_value + 1
+    DO UPDATE SET next_value = numbering_rules.next_value + 1, prefix = excluded.prefix, sequence_width = excluded.sequence_width
     RETURNING (next_value - 1)::text AS value`);
-  const n = String(rows[0].value).padStart(rule.width, "0");
-  return [rule.prefix, pk, n].filter(Boolean).join("-");
+  const seq = Number(rows[0].value);
+  if (String(seq).length > rule.sequenceWidth) {
+    throw new DomainError("conflict", `NUMBER_OVERFLOW: ${documentType} numbers of this period exceed ${rule.sequenceWidth} digits; approve a wider numbering rule.`, { code: "NUMBER_OVERFLOW" });
+  }
+  return formatNumber(rule, seq, now);
+}
+
+/**
+ * The number the next allocation would most likely produce ("expected", no lock). Refused for
+ * gapless types, whose numbers exist only once the posting commits (docs/data-model.md §9.3 rule 4).
+ */
+export async function peekNextNumber(q: DbOrTx, organizationId: string, documentType: DocumentType, now = new Date()): Promise<string> {
+  const rule = await effectiveNumberingRule(q, organizationId, documentType, now);
+  if (rule.isGapless) throw new DomainError("validation", `${documentType} numbers are gapless and cannot be previewed.`, { code: "PEEK_REFUSED_GAPLESS" });
+  const pk = periodKeyFor(rule.resetPeriod, now);
+  const [c] = await q
+    .select({ next: numberingRules.nextValue })
+    .from(numberingRules)
+    .where(and(eq(numberingRules.organizationId, organizationId), eq(numberingRules.documentType, documentType), eq(numberingRules.periodKey, pk)))
+    .limit(1);
+  return formatNumber(rule, c?.next ?? 1, now);
+}
+
+/** Counter rows of an organization (admin screen): one per document type and period. */
+export async function listNumberingCounters(q: DbOrTx, organizationId: string) {
+  return q
+    .select({ documentType: numberingRules.documentType, periodKey: numberingRules.periodKey, nextValue: numberingRules.nextValue, prefix: numberingRules.prefix })
+    .from(numberingRules)
+    .where(eq(numberingRules.organizationId, organizationId))
+    .orderBy(asc(numberingRules.documentType), desc(numberingRules.periodKey));
 }

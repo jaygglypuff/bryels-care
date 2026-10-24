@@ -1,9 +1,7 @@
 /**
- * Per-user sliding-window limiter for scan look-ups (US-2-13 AC1: 120 per minute per session).
- *
- * In-memory per web process: enough to stop a stuck scanner or a script from hammering look-ups
- * on one replica. With several replicas the effective limit is per replica; a shared limiter
- * (Postgres or Redis) is a later hardening item (docs/security.md rate limits).
+ * In-memory sliding-window limiter (Wave 1). The scan service now uses the shared Postgres store
+ * (src/lib/rate-limit, `limitScanLookup`, US-1-25), so every replica counts against one limit;
+ * this pure helper stays for unit tests and single-process tools only.
  */
 
 export const SCAN_LOOKUPS_PER_MINUTE = 120;

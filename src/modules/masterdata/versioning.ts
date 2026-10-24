@@ -4,7 +4,8 @@ import type { DbOrTx, Tx } from "@/db/client";
 import { approvalDecisions, users } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { APPROVAL_POLICIES, type ApprovalRecordType, type ApprovalStepPolicy } from "./approval-policy";
+import { evaluateApprovalRulesAudited } from "@/modules/governance";
+import { type ApprovalRecordType, type ApprovalRuleType, type ApprovalStepPolicy, loadApprovalPolicy, toStepPolicy } from "./approval-policy";
 
 /**
  * Version state machine shared by formula, routing, work-instruction revisions and inspection
@@ -76,8 +77,12 @@ export type ApprovalState = {
   nextStep: ApprovalStepPolicy | null;
 };
 
-/** Approval decisions recorded so far on a record, with the policy that applies. */
-export async function approvalState(dbx: DbOrTx, organizationId: string, recordType: ApprovalRecordType, recordId: string, policy = APPROVAL_POLICIES[recordType]): Promise<ApprovalState> {
+/**
+ * Approval decisions recorded so far on a record, with the policy that applies (from
+ * `approval_rules` via the governance evaluation unless a policy is passed, US-1-14).
+ */
+export async function approvalState(dbx: DbOrTx, organizationId: string, recordType: ApprovalRecordType, recordId: string, policyArg?: ApprovalStepPolicy[]): Promise<ApprovalState> {
+  const policy = policyArg ?? (await loadApprovalPolicy(dbx, organizationId, recordType));
   const rows = await dbx
     .select({ d: approvalDecisions, name: users.displayName })
     .from(approvalDecisions)
@@ -86,15 +91,15 @@ export async function approvalState(dbx: DbOrTx, organizationId: string, recordT
     .orderBy(asc(approvalDecisions.step), asc(approvalDecisions.decidedAt));
   const decisions = rows.map((r) => ({ step: r.d.step, decision: r.d.decision, decidedBy: r.d.decidedBy, decidedByName: r.name, decidedAt: r.d.decidedAt, note: r.d.note }));
   const rejected = decisions.some((d) => d.decision === "rejected");
-  const approvedSteps = new Set(decisions.filter((d) => d.decision === "approved").map((d) => d.step));
-  const nextStep = rejected ? null : (policy.find((p) => !approvedSteps.has(p.step)) ?? null);
+  const approvedCount = (step: number) => decisions.filter((d) => d.decision === "approved" && d.step === step).length;
+  const nextStep = rejected ? null : (policy.find((p) => approvedCount(p.step) < (p.requiredCount ?? 1)) ?? null);
   return { policy, decisions, nextStep };
 }
 
 /** True when the caller may decide the given step (role + permission), ignoring separation of duties. */
 export function canDecideStep(ctx: AuthContext, step: ApprovalStepPolicy | null) {
   if (!step) return false;
-  return ctx.can(step.permission) && step.roles.some((r) => ctx.roleCodes.includes(r));
+  return ctx.can(step.permission) && (step.roles.length === 0 || step.roles.some((r) => ctx.roleCodes.includes(r)));
 }
 
 /**
@@ -115,13 +120,22 @@ export async function recordApprovalDecision(
     decision: "approved" | "rejected";
     note?: string | null;
     policy?: ApprovalStepPolicy[];
+    /** Rule document type when it differs from the record type (sequencing-only routing change). */
+    ruleType?: ApprovalRuleType;
   },
 ): Promise<{ step: ApprovalStepPolicy; final: boolean; rejected: boolean }> {
-  const state = await approvalState(tx, ctx.organizationId, args.recordType, args.recordId, args.policy);
+  let policy = args.policy;
+  if (!policy) {
+    // US-1-14 AC2: the evaluation is audited (platform.approval_rule.evaluated) with the rule ids.
+    const ruleType = args.ruleType ?? args.recordType;
+    const ev = await evaluateApprovalRulesAudited(tx, ctx, { documentType: ruleType, siteId: args.siteId ?? null, recordId: args.recordId });
+    policy = ev.steps.length ? toStepPolicy(ev.steps, ruleType) : await loadApprovalPolicy(tx, ctx.organizationId, ruleType, args.siteId);
+  }
+  const state = await approvalState(tx, ctx.organizationId, args.recordType, args.recordId, policy);
   const step = state.nextStep;
   if (!step) throw new DomainError("state", "This record has no approval step waiting for a decision.");
   ctx.require(step.permission);
-  if (!step.roles.some((r) => ctx.roleCodes.includes(r))) {
+  if (step.roles.length > 0 && !step.roles.some((r) => ctx.roleCodes.includes(r))) {
     throw new DomainError("forbidden", `Step ${step.step} (${step.label}) must be decided by ${step.roles.map((r) => r.replace(/_/g, " ")).join(" or ")}.`);
   }
   if (args.excludedUserIds.some((u) => u && u === ctx.userId)) {
@@ -142,7 +156,8 @@ export async function recordApprovalDecision(
     note: args.note?.trim() || null,
   });
   const lastStep = Math.max(...state.policy.map((p) => p.step));
-  return { step, final: args.decision === "approved" && step.step === lastStep, rejected: args.decision === "rejected" };
+  const approvedHere = state.decisions.filter((d) => d.decision === "approved" && d.step === step.step).length + 1;
+  return { step, final: args.decision === "approved" && step.step === lastStep && approvedHere >= (step.requiredCount ?? 1), rejected: args.decision === "rejected" };
 }
 
 /**

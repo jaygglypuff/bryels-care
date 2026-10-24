@@ -28,14 +28,19 @@ import { organizations } from "@/db/schema";
 import { appJobRegistry } from "@/modules/platform/job-handlers";
 import { enqueueJob, failJobFromDeadLetter, jobsAwaitingRelay, markRelayed, runJob, systemContext } from "@/modules/platform/jobs";
 import { queuedJobCount, writeHeartbeat } from "@/modules/platform/diagnostics";
+import { envPresence } from "@/modules/governance/variables";
+import { logger } from "@/lib/log";
+import { reportError } from "@/lib/log/error-reporter";
 
 const DEAD_LETTER = "platform.dead_letter";
 const workerId = `${os.hostname()}-${process.pid}-${uuidv7().slice(-6)}`;
 const startedAt = new Date();
 const release = process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 12) ?? process.env.RELEASE_TAG ?? null;
 const concurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY ?? 2));
-const log = (level: "info" | "warn" | "error", msg: string, extra: Record<string, unknown> = {}) =>
-  console.log(JSON.stringify({ level, service: "worker", workerId, msg, ...extra, at: new Date().toISOString() }));
+// Structured JSON lines with service/release/RAILWAY_* fields (US-1-25, src/lib/log).
+process.env.SERVICE_NAME ??= "worker";
+const workerLog = logger.child({ workerId });
+const log = (level: "info" | "warn" | "error", msg: string, extra: Record<string, unknown> = {}) => workerLog[level](msg, extra);
 
 const state = { migrations: false, boss: false, lastHeartbeat: 0, stopping: false };
 
@@ -153,7 +158,7 @@ async function main() {
   };
   const heartbeat = async () => {
     try {
-      await writeHeartbeat({ workerId, hostname: os.hostname(), releaseTag: release, queueDepth: await queuedJobCount(), startedAt });
+      await writeHeartbeat({ workerId, hostname: os.hostname(), releaseTag: release, queueDepth: await queuedJobCount(), startedAt, envPresence: envPresence("worker") });
       state.lastHeartbeat = Date.now();
     } catch (e) {
       log("error", "heartbeat failed", { error: e instanceof Error ? e.message : String(e) });
@@ -177,8 +182,12 @@ async function main() {
   process.on("SIGINT", () => void shutdown("SIGINT"));
 }
 
-process.on("unhandledRejection", (e) => log("error", "unhandled rejection", { error: e instanceof Error ? e.message : String(e) }));
+// docs/deployment-railway.md §8.1: unhandled failures are reported, then the process exits 1 (Railway restarts it).
+process.on("unhandledRejection", (e) => {
+  log("error", "unhandled rejection", { error: e instanceof Error ? e.message : String(e) });
+  void reportError(e, { routeType: "worker" }).finally(() => process.exit(1));
+});
 main().catch((e) => {
   log("error", "worker failed to start", { error: e instanceof Error ? e.message : String(e) });
-  process.exit(1);
+  void reportError(e, { routeType: "worker" }).finally(() => process.exit(1));
 });

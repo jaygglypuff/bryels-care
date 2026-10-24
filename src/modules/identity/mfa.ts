@@ -8,7 +8,7 @@ import { auditEvents, mfaRecoveryCodes, mfaSecrets, sessions, users } from "@/db
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
-import { takeToken } from "@/lib/auth/rate-limit";
+import { limitAuth } from "@/lib/rate-limit";
 import { revokeUserSessions } from "@/lib/auth/session-store";
 import { decryptSecret, encryptSecret, newTotpSecret, otpauthUri, verifyTotp } from "@/lib/auth/totp";
 import { DomainError } from "@/lib/errors";
@@ -65,7 +65,7 @@ function newRecoveryCode(): string {
 export async function confirmMfaEnrolment(ctx: AuthContext, code: string, now: Date = new Date()): Promise<{ recoveryCodes: string[] }> {
   if (ctx.actor.kind !== "user") throw new DomainError("forbidden", "Only people enrol.");
   const c = z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code from the app.").parse(code);
-  if (!(await takeToken("mfa_user", ctx.userId, now))) throw new DomainError("validation", "Too many codes tried. Wait 15 minutes and try again.");
+  if (!(await limitAuth("mfa_user", ctx.userId, now))) throw new DomainError("validation", "Too many codes tried. Wait 15 minutes and try again.");
   const codes = Array.from({ length: RECOVERY_CODE_COUNT }, newRecoveryCode);
   const hashes = await Promise.all(codes.map((x) => hashPassword(x)));
   await db.transaction(async (tx) => {
@@ -91,7 +91,7 @@ export async function confirmMfaEnrolment(ctx: AuthContext, code: string, now: D
  * failures are audited. Returns the method used. Runs in the caller's transaction.
  */
 export async function verifySecondFactor(tx: Tx, user: { id: string; organizationId: string; email: string }, code: string, now: Date): Promise<"totp" | "recovery_code"> {
-  if (!(await takeToken("mfa_user", user.id, now))) throw new DomainError("validation", "Too many codes tried. Wait 15 minutes and try again.");
+  if (!(await limitAuth("mfa_user", user.id, now))) throw new DomainError("validation", "Too many codes tried. Wait 15 minutes and try again.");
   const [f] = await tx.select().from(mfaSecrets).where(eq(mfaSecrets.userId, user.id)).for("update").limit(1);
   if (!f?.confirmedAt) throw new DomainError("state", "Two-step sign-in is not set up for this account.");
   const clean = code.trim().toUpperCase();

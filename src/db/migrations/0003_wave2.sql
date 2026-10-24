@@ -603,15 +603,277 @@ CREATE TABLE "batch_reopen_requests" (
 	CONSTRAINT "batch_reopen_requests_reopened_ck" CHECK (("batch_reopen_requests"."status" = 'reopened') = ("batch_reopen_requests"."reopen_no" is not null and "batch_reopen_requests"."reopened_at" is not null))
 );
 --> statement-breakpoint
+CREATE TABLE "email_outbox" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"organization_id" uuid,
+	"to_address" text NOT NULL,
+	"subject" text NOT NULL,
+	"template" text NOT NULL,
+	"body_text" text,
+	"provider" text NOT NULL,
+	"status" text NOT NULL,
+	"provider_message_id" text,
+	"error" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "ck_email_outbox_status" CHECK ("email_outbox"."status" in ('captured','sent','failed','not_configured'))
+);
+--> statement-breakpoint
+CREATE TABLE "invitations" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"email" text NOT NULL,
+	"role_id" uuid,
+	"site_id" uuid,
+	"token_hash" text NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"accepted_at" timestamp with time zone,
+	"revoked_at" timestamp with time zone,
+	"revoked_reason" text,
+	"kind" text DEFAULT 'standard' NOT NULL,
+	"created_by" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "ck_invitations_kind" CHECK ("invitations"."kind" in ('standard','bootstrap'))
+);
+--> statement-breakpoint
+CREATE TABLE "mfa_recovery_codes" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"code_hash" text NOT NULL,
+	"used_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "mfa_secrets" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"secret_enc" text NOT NULL,
+	"key_id" text NOT NULL,
+	"confirmed_at" timestamp with time zone,
+	"last_used_step" bigint,
+	"last_used_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "password_history" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"password_hash" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "password_reset_tokens" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"token_hash" text NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"used_at" timestamp with time zone,
+	"voided_at" timestamp with time zone,
+	"requested_ip" text,
+	"requested_by" text DEFAULT 'self' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "ck_password_reset_requested_by" CHECK ("password_reset_tokens"."requested_by" in ('self','admin'))
+);
+--> statement-breakpoint
+CREATE TABLE "approval_rules" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"site_id" uuid,
+	"document_type" text NOT NULL,
+	"label" text NOT NULL,
+	"threshold_basis" text DEFAULT 'always' NOT NULL,
+	"min_value" numeric(18, 6),
+	"max_value" numeric(18, 6),
+	"currency" char(3),
+	"step" integer DEFAULT 1 NOT NULL,
+	"required_count" integer DEFAULT 1 NOT NULL,
+	"required_role_codes" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"required_permission_code" text,
+	"poster_may_equal_approver" boolean DEFAULT false NOT NULL,
+	"escalation_role_codes" jsonb,
+	"escalation_after_hours" integer,
+	"effective_from" date DEFAULT current_date NOT NULL,
+	"effective_to" date,
+	"source" text,
+	"reviewed_by" uuid,
+	"reviewed_at" timestamp with time zone,
+	"version" integer DEFAULT 1 NOT NULL,
+	"created_by" uuid,
+	"updated_by" uuid,
+	"deleted_at" timestamp with time zone,
+	"deleted_by" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "ck_approval_rules_document_type" CHECK ("approval_rules"."document_type" in ('purchase_request','purchase_order','sales_order','quote','stock_adjustment','stock_count_variance','expense_claim','invoice','supplier_bill','credit_note','payment_record','dispense_exception','over_shipment','formula_revision','routing_revision','routing_revision_sequencing','work_instruction_revision','inspection_plan','disposition_conditional_release','recall_case','batch_reopen','work_order_release','leave_request','overtime_request','payroll_period','period_lock_unlock','setting_change_request','retention_action','supplier_return','equipment_override','payroll_period_reopen')),
+	CONSTRAINT "ck_approval_rules_basis" CHECK ("approval_rules"."threshold_basis" in ('always','amount','qty_base','variance_pct','discount_pct','credit_check_failed')),
+	CONSTRAINT "ck_approval_rules_bounds" CHECK ("approval_rules"."min_value" is null or "approval_rules"."max_value" is null or "approval_rules"."min_value" <= "approval_rules"."max_value"),
+	CONSTRAINT "ck_approval_rules_always_unbounded" CHECK ("approval_rules"."threshold_basis" <> 'always' or ("approval_rules"."min_value" is null and "approval_rules"."max_value" is null)),
+	CONSTRAINT "ck_approval_rules_step" CHECK ("approval_rules"."step" >= 1 and "approval_rules"."required_count" >= 1),
+	CONSTRAINT "ck_approval_rules_who" CHECK (jsonb_typeof("approval_rules"."required_role_codes") = 'array' and (jsonb_array_length("approval_rules"."required_role_codes") > 0 or "approval_rules"."required_permission_code" is not null)),
+	CONSTRAINT "ck_approval_rules_escalation" CHECK (("approval_rules"."escalation_role_codes" is null) = ("approval_rules"."escalation_after_hours" is null)),
+	CONSTRAINT "ck_approval_rules_escalation_hours" CHECK ("approval_rules"."escalation_after_hours" is null or "approval_rules"."escalation_after_hours" >= 1),
+	CONSTRAINT "ck_approval_rules_dates" CHECK ("approval_rules"."effective_to" is null or "approval_rules"."effective_to" > "approval_rules"."effective_from")
+);
+--> statement-breakpoint
+CREATE TABLE "backup_runs" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"kind" text NOT NULL,
+	"label" text,
+	"started_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"finished_at" timestamp with time zone,
+	"status" text NOT NULL,
+	"bucket_key" text,
+	"offsite_bucket_key" text,
+	"size_bytes" bigint,
+	"checksum_sha256" text,
+	"pg_version" text,
+	"release_tag" text,
+	"error_message" text,
+	"triggered_by" uuid,
+	"row_counts" jsonb,
+	"hold" boolean DEFAULT false NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "ck_backup_runs_kind" CHECK ("backup_runs"."kind" in ('scheduled','manual')),
+	CONSTRAINT "ck_backup_runs_status" CHECK ("backup_runs"."status" in ('running','succeeded','failed'))
+);
+--> statement-breakpoint
+CREATE TABLE "metrics_samples" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"sampled_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"metric" text NOT NULL,
+	"value" numeric(18, 6) NOT NULL,
+	"labels" jsonb DEFAULT '{}'::jsonb NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "numbering_rule_versions" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"document_type" text NOT NULL,
+	"scope" text DEFAULT 'organization' NOT NULL,
+	"site_id" uuid,
+	"version_no" integer NOT NULL,
+	"status" text DEFAULT 'submitted' NOT NULL,
+	"prefix" text NOT NULL,
+	"pattern" text NOT NULL,
+	"reset_period" text NOT NULL,
+	"sequence_width" integer DEFAULT 5 NOT NULL,
+	"is_gapless" boolean DEFAULT false NOT NULL,
+	"effective_from" date NOT NULL,
+	"effective_to" date,
+	"supersedes_id" uuid,
+	"change_summary" text NOT NULL,
+	"submitted_by" uuid NOT NULL,
+	"submitted_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"approved_by" uuid,
+	"approved_at" timestamp with time zone,
+	"rejected_by" uuid,
+	"rejected_at" timestamp with time zone,
+	"rejection_reason" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "numbering_rule_versions_no_uq" UNIQUE NULLS NOT DISTINCT("organization_id","document_type","site_id","version_no"),
+	CONSTRAINT "ck_numbering_rule_versions_status" CHECK ("numbering_rule_versions"."status" in ('submitted','approved','rejected','cancelled')),
+	CONSTRAINT "ck_numbering_rule_versions_scope" CHECK (("numbering_rule_versions"."scope" = 'organization' and "numbering_rule_versions"."site_id" is null) or ("numbering_rule_versions"."scope" = 'site' and "numbering_rule_versions"."site_id" is not null)),
+	CONSTRAINT "ck_numbering_rule_versions_reset" CHECK ("numbering_rule_versions"."reset_period" in ('never','yearly','monthly','daily')),
+	CONSTRAINT "ck_numbering_rule_versions_width" CHECK ("numbering_rule_versions"."sequence_width" between 1 and 12),
+	CONSTRAINT "ck_numbering_rule_versions_prefix" CHECK ("numbering_rule_versions"."prefix" ~ '^[A-Z0-9]{1,8}$'),
+	CONSTRAINT "ck_numbering_rule_versions_pattern_chars" CHECK ("numbering_rule_versions"."pattern" ~ '^([A-Z0-9._-]|\{(PREFIX|SITE|YYYY|YY|YYMM|YYMMDD|SEQ)\})+$'),
+	CONSTRAINT "ck_numbering_rule_versions_pattern_seq" CHECK ((length("numbering_rule_versions"."pattern") - length(replace("numbering_rule_versions"."pattern", '{SEQ}', ''))) = 5),
+	CONSTRAINT "ck_numbering_rule_versions_pattern_site" CHECK ("numbering_rule_versions"."scope" <> 'site' or position('{SITE}' in "numbering_rule_versions"."pattern") > 0),
+	CONSTRAINT "ck_numbering_rule_versions_pattern_daily" CHECK ("numbering_rule_versions"."reset_period" <> 'daily' or position('{YYMMDD}' in "numbering_rule_versions"."pattern") > 0),
+	CONSTRAINT "ck_numbering_rule_versions_pattern_monthly" CHECK ("numbering_rule_versions"."reset_period" <> 'monthly' or position('{YYMM}' in "numbering_rule_versions"."pattern") > 0),
+	CONSTRAINT "ck_numbering_rule_versions_pattern_yearly" CHECK ("numbering_rule_versions"."reset_period" <> 'yearly' or "numbering_rule_versions"."pattern" ~ '\{(YYYY|YY|YYMM|YYMMDD)\}'),
+	CONSTRAINT "ck_numbering_rule_versions_sod" CHECK ("numbering_rule_versions"."approved_by" is null or "numbering_rule_versions"."approved_by" <> "numbering_rule_versions"."submitted_by"),
+	CONSTRAINT "ck_numbering_rule_versions_dates" CHECK ("numbering_rule_versions"."effective_to" is null or "numbering_rule_versions"."effective_to" > "numbering_rule_versions"."effective_from")
+);
+--> statement-breakpoint
+CREATE TABLE "rate_limit_buckets" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"scope" text NOT NULL,
+	"key" text NOT NULL,
+	"tokens" numeric(12, 3) NOT NULL,
+	"refilled_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"last_allowed" boolean DEFAULT true NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "rate_limit_buckets_scope_key_uq" UNIQUE("scope","key")
+);
+--> statement-breakpoint
+CREATE TABLE "setting_change_requests" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"organization_id" uuid NOT NULL,
+	"scope" text NOT NULL,
+	"site_id" uuid,
+	"user_id" uuid,
+	"key" text NOT NULL,
+	"old_value" jsonb,
+	"new_value" jsonb,
+	"reason" text NOT NULL,
+	"requires_approval" boolean NOT NULL,
+	"status" text NOT NULL,
+	"submitted_by" uuid NOT NULL,
+	"submitted_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"approved_by" uuid,
+	"approved_at" timestamp with time zone,
+	"approval_note" text,
+	"rejected_by" uuid,
+	"rejected_at" timestamp with time zone,
+	"rejection_reason" text,
+	"cancelled_at" timestamp with time zone,
+	"applied_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "ck_setting_change_requests_status" CHECK ("setting_change_requests"."status" in ('submitted','approved','rejected','applied','cancelled')),
+	CONSTRAINT "ck_setting_change_requests_scope" CHECK ("setting_change_requests"."scope" in ('organization','site','user')),
+	CONSTRAINT "ck_setting_change_requests_scope_target" CHECK (("setting_change_requests"."scope" = 'organization' and "setting_change_requests"."site_id" is null and "setting_change_requests"."user_id" is null)
+       or ("setting_change_requests"."scope" = 'site' and "setting_change_requests"."site_id" is not null and "setting_change_requests"."user_id" is null)
+       or ("setting_change_requests"."scope" = 'user' and "setting_change_requests"."user_id" is not null)),
+	CONSTRAINT "ck_setting_change_requests_sod" CHECK ("setting_change_requests"."approved_by" is null or "setting_change_requests"."approved_by" <> "setting_change_requests"."submitted_by"),
+	CONSTRAINT "ck_setting_change_requests_sod_reject" CHECK ("setting_change_requests"."rejected_by" is null or "setting_change_requests"."rejected_by" <> "setting_change_requests"."submitted_by"),
+	CONSTRAINT "ck_setting_change_requests_applied_approved" CHECK (not ("setting_change_requests"."requires_approval" and "setting_change_requests"."status" = 'applied' and "setting_change_requests"."approved_by" is null)),
+	CONSTRAINT "ck_setting_change_requests_applied_at" CHECK (("setting_change_requests"."status" = 'applied') = ("setting_change_requests"."applied_at" is not null))
+);
+--> statement-breakpoint
 ALTER TABLE "dispense_records" ALTER COLUMN "checker_id" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "process_step_records" ALTER COLUMN "completed_at" DROP DEFAULT;--> statement-breakpoint
 ALTER TABLE "process_step_records" ALTER COLUMN "completed_at" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "test_results" ALTER COLUMN "batch_id" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "roles" ADD COLUMN "description" text;--> statement-breakpoint
+ALTER TABLE "roles" ADD COLUMN "cloned_from_role_id" uuid;--> statement-breakpoint
+ALTER TABLE "roles" ADD COLUMN "status" text DEFAULT 'active' NOT NULL;--> statement-breakpoint
+ALTER TABLE "roles" ADD COLUMN "created_by" uuid;--> statement-breakpoint
+ALTER TABLE "roles" ADD COLUMN "updated_at" timestamp with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "idle_expires_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "ip" text;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "device_label" text;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "device_class" text DEFAULT 'standard' NOT NULL;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "privileged" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "stage" text DEFAULT 'active' NOT NULL;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "active_site_id" uuid;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "mfa_verified_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "reauthenticated_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "revoked_by" uuid;--> statement-breakpoint
+ALTER TABLE "sessions" ADD COLUMN "revoked_reason" text;--> statement-breakpoint
 ALTER TABLE "sites" ADD COLUMN "timezone" text DEFAULT 'Asia/Manila' NOT NULL;--> statement-breakpoint
 ALTER TABLE "sites" ADD COLUMN "address_line1" text;--> statement-breakpoint
 ALTER TABLE "sites" ADD COLUMN "city" text;--> statement-breakpoint
 ALTER TABLE "sites" ADD COLUMN "province" text;--> statement-breakpoint
 ALTER TABLE "sites" ADD COLUMN "country" text DEFAULT 'PH' NOT NULL;--> statement-breakpoint
+ALTER TABLE "user_site_assignments" ADD COLUMN "valid_from" timestamp with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
+ALTER TABLE "user_site_assignments" ADD COLUMN "valid_to" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "user_site_assignments" ADD COLUMN "scope" jsonb;--> statement-breakpoint
+ALTER TABLE "user_site_assignments" ADD COLUMN "created_by" uuid;--> statement-breakpoint
+ALTER TABLE "user_site_assignments" ADD COLUMN "revoked_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "user_site_assignments" ADD COLUMN "revoked_by" uuid;--> statement-breakpoint
+ALTER TABLE "user_site_assignments" ADD COLUMN "revoked_reason" text;--> statement-breakpoint
+ALTER TABLE "users" ADD COLUMN "password_changed_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "users" ADD COLUMN "deactivated_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "locations" ADD COLUMN "parent_location_id" uuid;--> statement-breakpoint
 ALTER TABLE "locations" ADD COLUMN "status" text DEFAULT 'active' NOT NULL;--> statement-breakpoint
 ALTER TABLE "locations" ADD COLUMN "is_pickable" boolean DEFAULT true NOT NULL;--> statement-breakpoint
@@ -668,6 +930,7 @@ ALTER TABLE "dispositions" ADD COLUMN "requested_by" uuid;--> statement-breakpoi
 ALTER TABLE "dispositions" ADD COLUMN "conditions" text;--> statement-breakpoint
 ALTER TABLE "dispositions" ADD COLUMN "review_date" date;--> statement-breakpoint
 ALTER TABLE "dispositions" ADD COLUMN "inspection_id" uuid;--> statement-breakpoint
+ALTER TABLE "worker_heartbeats" ADD COLUMN "env_presence" jsonb;--> statement-breakpoint
 ALTER TABLE "departments" ADD CONSTRAINT "departments_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "departments" ADD CONSTRAINT "departments_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "departments" ADD CONSTRAINT "departments_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -845,6 +1108,40 @@ ALTER TABLE "batch_reopen_requests" ADD CONSTRAINT "batch_reopen_requests_site_i
 ALTER TABLE "batch_reopen_requests" ADD CONSTRAINT "batch_reopen_requests_batch_id_batches_id_fk" FOREIGN KEY ("batch_id") REFERENCES "public"."batches"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "batch_reopen_requests" ADD CONSTRAINT "batch_reopen_requests_requested_by_users_id_fk" FOREIGN KEY ("requested_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "batch_reopen_requests" ADD CONSTRAINT "batch_reopen_requests_batch_state_transition_id_batch_state_transitions_id_fk" FOREIGN KEY ("batch_state_transition_id") REFERENCES "public"."batch_state_transitions"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "email_outbox" ADD CONSTRAINT "email_outbox_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "invitations" ADD CONSTRAINT "invitations_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "invitations" ADD CONSTRAINT "invitations_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "invitations" ADD CONSTRAINT "invitations_role_id_roles_id_fk" FOREIGN KEY ("role_id") REFERENCES "public"."roles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "invitations" ADD CONSTRAINT "invitations_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "invitations" ADD CONSTRAINT "invitations_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mfa_recovery_codes" ADD CONSTRAINT "mfa_recovery_codes_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mfa_recovery_codes" ADD CONSTRAINT "mfa_recovery_codes_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mfa_secrets" ADD CONSTRAINT "mfa_secrets_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mfa_secrets" ADD CONSTRAINT "mfa_secrets_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "password_history" ADD CONSTRAINT "password_history_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "password_history" ADD CONSTRAINT "password_history_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "password_reset_tokens" ADD CONSTRAINT "password_reset_tokens_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "password_reset_tokens" ADD CONSTRAINT "password_reset_tokens_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "approval_rules" ADD CONSTRAINT "approval_rules_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "approval_rules" ADD CONSTRAINT "approval_rules_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "approval_rules" ADD CONSTRAINT "approval_rules_reviewed_by_users_id_fk" FOREIGN KEY ("reviewed_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "approval_rules" ADD CONSTRAINT "approval_rules_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "approval_rules" ADD CONSTRAINT "approval_rules_updated_by_users_id_fk" FOREIGN KEY ("updated_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "approval_rules" ADD CONSTRAINT "approval_rules_deleted_by_users_id_fk" FOREIGN KEY ("deleted_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "backup_runs" ADD CONSTRAINT "backup_runs_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "backup_runs" ADD CONSTRAINT "backup_runs_triggered_by_users_id_fk" FOREIGN KEY ("triggered_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "metrics_samples" ADD CONSTRAINT "metrics_samples_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "numbering_rule_versions" ADD CONSTRAINT "numbering_rule_versions_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "numbering_rule_versions" ADD CONSTRAINT "numbering_rule_versions_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "numbering_rule_versions" ADD CONSTRAINT "numbering_rule_versions_submitted_by_users_id_fk" FOREIGN KEY ("submitted_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "numbering_rule_versions" ADD CONSTRAINT "numbering_rule_versions_approved_by_users_id_fk" FOREIGN KEY ("approved_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "numbering_rule_versions" ADD CONSTRAINT "numbering_rule_versions_rejected_by_users_id_fk" FOREIGN KEY ("rejected_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "setting_change_requests" ADD CONSTRAINT "setting_change_requests_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "setting_change_requests" ADD CONSTRAINT "setting_change_requests_site_id_sites_id_fk" FOREIGN KEY ("site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "setting_change_requests" ADD CONSTRAINT "setting_change_requests_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "setting_change_requests" ADD CONSTRAINT "setting_change_requests_submitted_by_users_id_fk" FOREIGN KEY ("submitted_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "setting_change_requests" ADD CONSTRAINT "setting_change_requests_approved_by_users_id_fk" FOREIGN KEY ("approved_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "setting_change_requests" ADD CONSTRAINT "setting_change_requests_rejected_by_users_id_fk" FOREIGN KEY ("rejected_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "departments_site_code_uq" ON "departments" USING btree ("site_id","code");--> statement-breakpoint
 CREATE UNIQUE INDEX "production_lines_site_code_uq" ON "production_lines" USING btree ("site_id","code");--> statement-breakpoint
 CREATE UNIQUE INDEX "reason_codes_org_code_uq" ON "reason_codes" USING btree ("organization_id","code");--> statement-breakpoint
@@ -908,6 +1205,28 @@ CREATE UNIQUE INDEX "batch_reopen_requests_one_pending_uq" ON "batch_reopen_requ
 CREATE UNIQUE INDEX "batch_reopen_requests_reopen_no_uq" ON "batch_reopen_requests" USING btree ("batch_id","reopen_no") WHERE "batch_reopen_requests"."reopen_no" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "batch_reopen_requests_org_idem_uq" ON "batch_reopen_requests" USING btree ("organization_id","idempotency_key") WHERE "batch_reopen_requests"."idempotency_key" is not null;--> statement-breakpoint
 CREATE INDEX "batch_reopen_requests_batch_idx" ON "batch_reopen_requests" USING btree ("batch_id");--> statement-breakpoint
+CREATE INDEX "email_outbox_to_idx" ON "email_outbox" USING btree ("to_address","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "invitations_token_uq" ON "invitations" USING btree ("token_hash");--> statement-breakpoint
+CREATE INDEX "invitations_user_idx" ON "invitations" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "mfa_recovery_codes_user_idx" ON "mfa_recovery_codes" USING btree ("user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "mfa_secrets_user_uq" ON "mfa_secrets" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "password_history_user_idx" ON "password_history" USING btree ("user_id","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "password_reset_tokens_token_uq" ON "password_reset_tokens" USING btree ("token_hash");--> statement-breakpoint
+CREATE INDEX "password_reset_tokens_user_idx" ON "password_reset_tokens" USING btree ("user_id","created_at");--> statement-breakpoint
+CREATE INDEX "approval_rules_lookup_idx" ON "approval_rules" USING btree ("organization_id","document_type","site_id");--> statement-breakpoint
+CREATE INDEX "backup_runs_org_time_idx" ON "backup_runs" USING btree ("organization_id","started_at");--> statement-breakpoint
+CREATE INDEX "metrics_samples_metric_time_idx" ON "metrics_samples" USING btree ("organization_id","metric","sampled_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "numbering_rule_versions_open_uq" ON "numbering_rule_versions" USING btree ("organization_id","document_type") WHERE "numbering_rule_versions"."status" = 'approved' and "numbering_rule_versions"."effective_to" is null and "numbering_rule_versions"."site_id" is null;--> statement-breakpoint
+CREATE INDEX "numbering_rule_versions_lookup_idx" ON "numbering_rule_versions" USING btree ("organization_id","document_type","status");--> statement-breakpoint
+CREATE INDEX "rate_limit_buckets_refilled_idx" ON "rate_limit_buckets" USING btree ("refilled_at");--> statement-breakpoint
+CREATE INDEX "setting_change_requests_status_idx" ON "setting_change_requests" USING btree ("organization_id","status","submitted_at");--> statement-breakpoint
+CREATE INDEX "setting_change_requests_key_idx" ON "setting_change_requests" USING btree ("organization_id","key","created_at");--> statement-breakpoint
+ALTER TABLE "roles" ADD CONSTRAINT "roles_cloned_from_role_id_roles_id_fk" FOREIGN KEY ("cloned_from_role_id") REFERENCES "public"."roles"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "roles" ADD CONSTRAINT "roles_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_active_site_id_sites_id_fk" FOREIGN KEY ("active_site_id") REFERENCES "public"."sites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_revoked_by_users_id_fk" FOREIGN KEY ("revoked_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_site_assignments" ADD CONSTRAINT "user_site_assignments_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "user_site_assignments" ADD CONSTRAINT "user_site_assignments_revoked_by_users_id_fk" FOREIGN KEY ("revoked_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "locations" ADD CONSTRAINT "locations_parent_location_id_locations_id_fk" FOREIGN KEY ("parent_location_id") REFERENCES "public"."locations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "equipment" ADD CONSTRAINT "equipment_production_line_id_production_lines_id_fk" FOREIGN KEY ("production_line_id") REFERENCES "public"."production_lines"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "dispense_records" ADD CONSTRAINT "dispense_records_equipment_id_equipment_id_fk" FOREIGN KEY ("equipment_id") REFERENCES "public"."equipment"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -920,6 +1239,9 @@ ALTER TABLE "test_results" ADD CONSTRAINT "test_results_inspection_plan_test_id_
 ALTER TABLE "test_results" ADD CONSTRAINT "test_results_instrument_equipment_id_equipment_id_fk" FOREIGN KEY ("instrument_equipment_id") REFERENCES "public"."equipment"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "test_results" ADD CONSTRAINT "test_results_supersedes_id_test_results_id_fk" FOREIGN KEY ("supersedes_id") REFERENCES "public"."test_results"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "dispositions" ADD CONSTRAINT "dispositions_requested_by_users_id_fk" FOREIGN KEY ("requested_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "sessions_user_idx" ON "sessions" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "sessions_expires_idx" ON "sessions" USING btree ("expires_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "usa_live_uq" ON "user_site_assignments" USING btree ("user_id","role_id",coalesce("site_id", '00000000-0000-0000-0000-000000000000'::uuid)) WHERE "user_site_assignments"."revoked_at" is null;--> statement-breakpoint
 CREATE INDEX "locations_parent_idx" ON "locations" USING btree ("parent_location_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "dispense_records_line_seq_uq" ON "dispense_records" USING btree ("batch_material_id","sequence");--> statement-breakpoint
 CREATE UNIQUE INDEX "dispense_records_supersedes_uq" ON "dispense_records" USING btree ("supersedes_id") WHERE "dispense_records"."supersedes_id" is not null;--> statement-breakpoint
@@ -927,6 +1249,12 @@ CREATE UNIQUE INDEX "process_step_records_batch_step_uq" ON "process_step_record
 CREATE INDEX "test_results_batch_idx" ON "test_results" USING btree ("batch_id");--> statement-breakpoint
 CREATE INDEX "test_results_inspection_idx" ON "test_results" USING btree ("inspection_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_test_results_supersedes" ON "test_results" USING btree ("supersedes_id");--> statement-breakpoint
+ALTER TABLE "roles" ADD CONSTRAINT "ck_roles_status" CHECK ("roles"."status" in ('active','inactive'));--> statement-breakpoint
+ALTER TABLE "roles" ADD CONSTRAINT "ck_roles_custom_clone" CHECK ("roles"."is_system" or "roles"."cloned_from_role_id" is not null);--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "ck_sessions_stage" CHECK ("sessions"."stage" in ('mfa_pending','active'));--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "ck_sessions_device_class" CHECK ("sessions"."device_class" in ('standard','shared'));--> statement-breakpoint
+ALTER TABLE "user_site_assignments" ADD CONSTRAINT "ck_usa_org_wide_site" CHECK (("user_site_assignments"."is_organization_wide" and "user_site_assignments"."site_id" is null) or (not "user_site_assignments"."is_organization_wide" and "user_site_assignments"."site_id" is not null));--> statement-breakpoint
+ALTER TABLE "user_site_assignments" ADD CONSTRAINT "ck_usa_validity" CHECK ("user_site_assignments"."valid_to" is null or "user_site_assignments"."valid_to" >= "user_site_assignments"."valid_from");--> statement-breakpoint
 ALTER TABLE "locations" ADD CONSTRAINT "locations_status_ck" CHECK ("locations"."status" in ('active', 'blocked', 'inactive'));--> statement-breakpoint
 ALTER TABLE "locations" ADD CONSTRAINT "locations_active_status_ck" CHECK ("locations"."is_active" = ("locations"."status" <> 'inactive'));--> statement-breakpoint
 ALTER TABLE "locations" ADD CONSTRAINT "locations_kind_ck" CHECK ("locations"."kind" in ('receiving', 'staging', 'storage', 'quarantine', 'hold', 'rejected', 'recall', 'production', 'shipping'));--> statement-breakpoint

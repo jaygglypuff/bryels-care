@@ -630,6 +630,16 @@ Five-step triage: (1) Health card, (2) Alerts card, (3) Jobs and Errors for the 
 report, (4) copy the `requestId` into the Railway log search and the audit log, (5) decide
 severity and open the incident entry.
 
+As built (Wave 2 W2F): Health, Backups and Variables are live next to Worker, Jobs and
+Reconciliation; Database, Imports, Alerts, Errors and Integrations show "Available in Phase 5",
+Sync "Available in Phase 7". Backups reads `backup_runs` only when `BACKUP_STATUS_SOURCE=table`
+(the backup service records each run with `pnpm backup:record --status ... --bucket-key ...`);
+otherwise the card says "not configured". The worker reports its variable presence with its
+heartbeat. Alerts already run every 5 minutes (`platform.alerts_evaluate`, settings `alerts.*`) and
+arrive as critical in-app notifications to system administrators. Every response carries
+`X-Request-Id`; the same id is the `correlation_id` of the request's audit rows and the `requestId`
+of its log lines.
+
 ## 17a. Go-live checklist and cutover (Gate 9)
 
 ### 17a.1 Go-live checklist
@@ -684,6 +694,13 @@ Two distinct switches are used, never interchangeably:
    cutover team's `warehouse_operator` and `qa_qc` accounts, so the import wizard, label
    printing and the QA bulk disposition keep working. Confirm with a non-listed test account
    that a command is refused. Note the time (T0 freeze) and the audit event id.
+   As built (W2F): Settings → Maintenance → Read-only maintenance mode → Change; value
+   `{"enabled": true, "allowed_role_codes": ["system_admin", "owner_director", "qa_qc"]}` (the
+   allow-list holds role codes; give the cutover accounts those roles), a reason and your password.
+   The confirmation shows the id of the `platform.setting.changed` audit event (also in the
+   audit log, entity number `platform.maintenance.read_only`); copy it into the cutover record.
+   Every page then shows "Read-only for maintenance"; `/api/v1` commands answer 503 `READ_ONLY_MODE`.
+   Scheduled system jobs keep running (A-W2F-08).
 3. **Take the restore point.** Run `node dist/backup.js --manual --label pre-load-<yyyy-mm-dd>`;
    set `hold = true` on the resulting `backup_runs` row so retention never prunes it; verify
    `status = 'succeeded'`, SHA-256, row counts and the offsite copy. Take a manual Railway

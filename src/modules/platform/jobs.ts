@@ -6,6 +6,7 @@ import { db, type DbOrTx } from "@/db/client";
 import { backgroundJobs } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import { type AuthContext, buildContextForUser } from "@/lib/auth/context";
+import { reportError } from "@/lib/log/error-reporter";
 import { systemContext } from "@/lib/auth/system";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
@@ -61,6 +62,8 @@ export async function enqueueJob<P>(q: DbOrTx, ctx: AuthContext, def: JobDefinit
   const parsed = def.payload.safeParse(payload);
   if (!parsed.success) throw new DomainError("validation", `Invalid payload for ${def.code}: ${zodMessage(parsed.error)}`);
   if (opts.siteId) ctx.requireSite(opts.siteId);
+  // US-2-30: no job is enqueued on behalf of a user while the read-only maintenance mode applies to them.
+  ctx.assertWritable();
   const key = jobIdempotencyKey(def, parsed.data);
   const actor = ctx.actor;
   const requestedBy = actor.kind === "user" ? ctx.userId : actor.onBehalfOf;
@@ -177,6 +180,8 @@ export async function runJob(jobId: string, opts: { registry?: JobRegistry; now?
     return { status: "succeeded", result: result ?? {} };
   } catch (e) {
     const message = (e instanceof Error ? e.message : String(e)).slice(0, 2000);
+    // US-1-25: an unexpected error that exhausts the attempts goes to the error reporter (expected DomainErrors never do).
+    if (!(e instanceof DomainError) && job.attempts >= job.maxAttempts) await reportError(e, { jobKind: job.jobKind, jobId: job.id, routeType: "job" });
     if (e instanceof DomainError || job.attempts >= job.maxAttempts) return finalizeFailure(job, message, now);
     await db
       .update(backgroundJobs)

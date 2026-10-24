@@ -1,11 +1,13 @@
 import "server-only";
 import { cache } from "react";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { rolePermissions, roles, sites, userSiteAssignments, users } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
+import { acceptableRequestId } from "@/lib/log";
+import { READ_ONLY_MESSAGE, getMaintenanceState, isReadAction, isReadOnlyFor } from "@/lib/maintenance";
 import type { Permission } from "@/lib/permissions";
 import { activeAssignment, parseScope } from "./assignments";
 import { SITE_COOKIE, readSession } from "./session";
@@ -35,7 +37,11 @@ export type AccessDetail = {
   warehouseScopes: ReadonlyMap<string, readonly string[] | null>;
 };
 
-export type ContextOptions = { actor?: Actor; correlationId?: string | null; session?: SessionInfo | null; access?: AccessDetail };
+/**
+ * `readOnly`: set when the read-only maintenance mode applies to this user (US-2-30); mutating
+ * permission checks and `assertWritable()` then refuse with `read_only` before any write.
+ */
+export type ContextOptions = { actor?: Actor; correlationId?: string | null; session?: SessionInfo | null; access?: AccessDetail; readOnly?: boolean };
 
 /**
  * The authorization context every service call receives (ADR-005).
@@ -84,6 +90,17 @@ export class AuthContext {
 
   require(p: Permission): void {
     if (!this.permissions.has(p)) throw new DomainError("forbidden", `You do not have permission for this action (${p}).`);
+    if (this.options.readOnly && !isReadAction(p)) throw new DomainError("read_only", READ_ONLY_MESSAGE, { code: "READ_ONLY_MODE" });
+  }
+
+  /** True while the read-only maintenance mode applies to this user (US-2-30). */
+  get readOnly(): boolean {
+    return this.options.readOnly === true;
+  }
+
+  /** Refuses any write while the read-only maintenance mode applies (stock ledger, job enqueue, API commands). */
+  assertWritable(): void {
+    if (this.options.readOnly) throw new DomainError("read_only", READ_ONLY_MESSAGE, { code: "READ_ONLY_MODE" });
   }
 
   /** Fails closed when the site is outside the user's scope. */
@@ -146,9 +163,11 @@ export async function buildContextForUser(userId: string, preferredSiteId?: stri
   const loaded = await loadAccess(userId);
   if (!loaded) return null;
   const current = loaded.siteRows.find((s) => s.id === preferredSiteId)?.id ?? loaded.siteRows[0].id;
+  const readOnly = options.readOnly ?? isReadOnlyFor(await getMaintenanceState(db, loaded.u.organizationId), loaded.roleCodes);
   return new AuthContext(loaded.u.id, loaded.u.organizationId, loaded.u.displayName, loaded.u.email, loaded.roleCodes, loaded.perms, loaded.siteRows, current, {
     access: loaded.access,
     ...options,
+    readOnly,
   });
 }
 
@@ -215,7 +234,10 @@ export const getContext = cache(async (): Promise<AuthContext | null> => {
   const s = await readSession();
   if (!s) return null;
   const jar = await cookies();
+  // The request id set by src/middleware.ts becomes the correlation id of every audit row of the request (US-1-25 AC1).
+  const requestId = acceptableRequestId((await headers()).get("x-request-id"));
   return buildContextForUser(s.userId, jar.get(SITE_COOKIE)?.value ?? s.activeSiteId, {
+    correlationId: requestId,
     session: { id: s.sessionId, reauthenticatedAt: s.reauthenticatedAt, mfaVerifiedAt: s.mfaVerifiedAt, privileged: s.privileged },
   });
 });

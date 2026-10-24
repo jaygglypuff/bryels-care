@@ -14,11 +14,8 @@ export const INVENTORY_SETTING_KEYS = [
   "inventory.move.duplicate_window_seconds",
   "inventory.count.recount_threshold_pct",
   "inventory.count.auto_approve_variance_pct",
-  "inventory.count.second_step_variance_pct",
-  "inventory.count.second_step_role",
-  "inventory.adjustment.second_step_value",
+  // The second-step thresholds and roles are `approval_rules` rows since Wave 2 (US-1-14).
   "inventory.adjustment.unknown_value_requires_second_step",
-  "inventory.adjustment.second_step_role",
   "inventory.reservation.ttl_hours",
   "inventory.container.allow_mixed_lots",
   "inventory.expiry.alert_days",

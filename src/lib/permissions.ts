@@ -213,6 +213,14 @@ export const PERMISSIONS = [
   "identity.session.view",
   "identity.session.void",
   "identity.mfa.admin",
+  // Wave 2 W2F: settings, setting change requests, approval rules, numbering (docs/permissions-matrix.md §2.12)
+  "platform.settings.view",
+  "platform.settings.admin",
+  "platform.settings.approve",
+  "platform.approval_rule.view",
+  "platform.approval_rule.admin",
+  "platform.numbering_rule.view",
+  "platform.numbering_rule.admin",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -731,3 +739,21 @@ for (const [role, grants] of Object.entries(W2E_GRANTS)) {
 }
 // Other people's sessions are for administrators and auditors only (matrix §3.1: site_manager has no identity.session).
 ROLE_BUNDLES.site_manager.permissions = ROLE_BUNDLES.site_manager.permissions.filter((p) => p !== "identity.session.view");
+
+// Wave 2 W2F: governance grants (docs/permissions-matrix.md §3.12). View strings reach the VIEW_ALL
+// roles automatically; owner_director holds every string, so the matrix's exclusions are removed here.
+const W2F_GRANTS: Record<string, readonly Permission[]> = {
+  system_admin: ["platform.settings.admin", "platform.settings.approve", "platform.numbering_rule.admin"],
+};
+for (const [role, grants] of Object.entries(W2F_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+const W2F_EXCLUDE: Record<string, readonly Permission[]> = {
+  // OD: settings v a, numbering_rule v (changes are system_admin work; the owner approves settings).
+  owner_director: ["platform.settings.admin", "platform.numbering_rule.admin"],
+  // SM: no settings access at all; approval rules and numbering view only.
+  site_manager: ["platform.settings.view", "platform.settings.admin", "platform.settings.approve"],
+};
+for (const [role, drop] of Object.entries(W2F_EXCLUDE)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => !drop.includes(p));
+}

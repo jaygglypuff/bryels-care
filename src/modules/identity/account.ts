@@ -4,7 +4,7 @@ import { db, type DbOrTx, type Tx } from "@/db/client";
 import { auditEvents, invitations, passwordHistory, passwordResetTokens, sessions, users } from "@/db/schema";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { passwordProblem } from "@/lib/auth/password-policy";
-import { takeToken } from "@/lib/auth/rate-limit";
+import { limitAuth } from "@/lib/rate-limit";
 import { revokeUserSessions } from "@/lib/auth/session-store";
 import { SYSTEM_USER_STATUS } from "@/lib/auth/system";
 import { looksLikeToken, newToken, sha256 } from "@/lib/auth/tokens";
@@ -79,7 +79,7 @@ export async function inspectInvitation(token: string, now: Date = new Date()): 
 
 /** Sets the password and activates the invited account (US-1-11 AC1). Single use. */
 export async function acceptInvitation(input: { token: string; password: string; ip?: string | null }, now: Date = new Date()): Promise<{ userId: string; email: string }> {
-  if (input.ip && !(await takeToken("token_ip", input.ip, now))) throw new DomainError("validation", "Too many attempts from this network. Wait a few minutes and try again.");
+  if (input.ip && !(await limitAuth("token_ip", input.ip, now))) throw new DomainError("validation", "Too many attempts from this network. Wait a few minutes and try again.");
   if (!looksLikeToken(input.token)) throw new DomainError("not_found", "This invitation link is not valid. Ask your administrator for a new one.");
   return db.transaction(async (tx) => {
     const [inv] = await tx.select().from(invitations).where(eq(invitations.tokenHash, sha256(input.token))).for("update").limit(1);
@@ -106,11 +106,11 @@ const GENERIC_RESET = "If an account exists for that email, we sent a link to re
  */
 export async function requestPasswordReset(input: { email: string; ip?: string | null }, now: Date = new Date()): Promise<{ message: string }> {
   const email = String(input.email ?? "").trim().toLowerCase().slice(0, 200);
-  if (input.ip && !(await takeToken("password_reset_ip", input.ip, now))) return { message: GENERIC_RESET };
+  if (input.ip && !(await limitAuth("password_reset_ip", input.ip, now))) return { message: GENERIC_RESET };
   if (!/^[^\s@]+@[^\s@]+$/.test(email)) return { message: GENERIC_RESET };
   const [u] = await db.select().from(users).where(sql`lower(${users.email}) = ${email}`).limit(1);
   if (!u || u.status !== "active") return { message: GENERIC_RESET };
-  if (!(await takeToken("password_reset_account", u.id, now))) return { message: GENERIC_RESET };
+  if (!(await limitAuth("password_reset_account", u.id, now))) return { message: GENERIC_RESET };
   const minutes = await getSetting(db, u.organizationId, "identity.password_reset.ttl_minutes");
   const token = newToken();
   await db.transaction(async (tx) => {
@@ -138,7 +138,7 @@ export async function inspectResetToken(token: string, now: Date = new Date()): 
 
 /** Sets a new password from a reset token; every session of the user is revoked (US-1-11 AC2). */
 export async function completePasswordReset(input: { token: string; password: string; ip?: string | null }, now: Date = new Date()): Promise<{ userId: string }> {
-  if (input.ip && !(await takeToken("token_ip", input.ip, now))) throw new DomainError("validation", "Too many attempts from this network. Wait a few minutes and try again.");
+  if (input.ip && !(await limitAuth("token_ip", input.ip, now))) throw new DomainError("validation", "Too many attempts from this network. Wait a few minutes and try again.");
   if (!looksLikeToken(input.token)) throw new DomainError("not_found", "This reset link is not valid. Request a new one.");
   const out = await db.transaction(async (tx) => {
     const [t] = await tx.select().from(passwordResetTokens).where(eq(passwordResetTokens.tokenHash, sha256(input.token))).for("update").limit(1);

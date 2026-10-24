@@ -6,7 +6,6 @@ import { bomLines, formulaRevisions, formulas, materials, products, users } from
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
-import { APPROVAL_POLICIES } from "./approval-policy";
 import { CreateFormulaInput, DecisionInput, RetireInput, SaveFormulaDraftInput, parseInput } from "./schemas";
 import {
   approvalState,
@@ -532,7 +531,7 @@ export async function getFormulaRevision(ctx: AuthContext, revisionId: string) {
     if (!new Decimal(baseRev.theoreticalYieldPct).eq(rev.theoreticalYieldPct)) headerChanges.push(`Theoretical yield ${baseRev.theoreticalYieldPct} % → ${rev.theoreticalYieldPct} %`);
   }
 
-  const approval = await approvalState(db, ctx.organizationId, "formula_revision", rev.id, APPROVAL_POLICIES.formula_revision);
+  const approval = await approvalState(db, ctx.organizationId, "formula_revision", rev.id);
   const names = await userNames(db, [rev.createdBy, rev.submittedBy, rev.approvedBy]);
   const nm = (id: string | null) => (id ? (names.get(id) ?? "Unknown user") : null);
   const excluded = [rev.createdBy, rev.submittedBy];

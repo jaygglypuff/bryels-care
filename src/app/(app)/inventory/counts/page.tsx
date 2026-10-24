@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Help } from "@/ui/help/help";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { COUNT_KINDS } from "@/db/schema";
@@ -24,7 +25,12 @@ export default async function CountsPage({ searchParams }: { searchParams: Promi
       <PageHeader
         title="Stock counts"
         subtitle={`${ctx.currentSite.code} · plan blind cycle or full counts; released counts freeze their locations until posted or cancelled`}
-        actions={canPlan && !sp.new ? <Link href="/inventory/counts?new=1" className="inline-flex min-h-[44px] items-center rounded-full bg-cta px-5 text-[14px] font-medium text-white">Plan a count</Link> : undefined}
+        actions={
+          <>
+            <Help screen="inventory.count" />
+            {canPlan && !sp.new ? <Link href="/inventory/counts?new=1" className="inline-flex min-h-[44px] items-center rounded-full bg-cta px-5 text-[14px] font-medium text-white">Plan a count</Link> : null}
+          </>
+        }
       />
       {canPlan && sp.new && (
         <Card>

@@ -10,7 +10,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { auditEvents, locations, rolePermissions, roles, settings, userSiteAssignments, warehouses } from "@/db/schema";
 import { buildContextForUser } from "@/lib/auth/context";
-import { PERMISSIONS } from "@/lib/permissions";
+import { type Permission, PERMISSIONS } from "@/lib/permissions";
 import {
   changeAssignmentScope,
   cloneRole,
@@ -97,7 +97,7 @@ describe("US-1-29 custom roles by cloning", () => {
     const owner = await signedIn("owner@bryels-care.test");
     const wo = await roleId(k.orgId, "warehouse_operator");
     const woPerms = (await db.select().from(rolePermissions).where(eq(rolePermissions.roleId, wo))).map((p) => p.permissionCode);
-    const id = await cloneRole(owner, { sourceRoleId: wo, code: "qa_sampler", name: "QA sampler", permissions: woPerms.filter((p) => p !== "sales.shipment.post") });
+    const id = await cloneRole(owner, { sourceRoleId: wo, code: "qa_sampler", name: "QA sampler", permissions: woPerms.filter((p) => p !== "sales.shipment.post" && owner.can(p as Permission)) });
     const [bg] = await db.select().from(auditEvents).where(and(eq(auditEvents.action, "identity.role.owner_break_glass"), eq(auditEvents.entityId, id)));
     expect(bg).toBeTruthy();
     const u = await userByEmail("warehouse.rvs@bryels-care.test");
@@ -154,7 +154,7 @@ describe("US-1-18 site assignments", () => {
     const owner = await signedIn("owner@bryels-care.test");
     const smRole = await roleId(k.orgId, "site_manager");
     const smPerms = (await db.select().from(rolePermissions).where(eq(rolePermissions.roleId, smRole))).map((p) => p.permissionCode);
-    const custom = await cloneRole(owner, { sourceRoleId: smRole, code: "site_user_admin", name: "Site user admin", permissions: [...smPerms, "identity.site_assignment.admin"] });
+    const custom = await cloneRole(owner, { sourceRoleId: smRole, code: "site_user_admin", name: "Site user admin", permissions: [...smPerms.filter((p) => owner.can(p as Permission)), "identity.site_assignment.admin"] });
     const mgr = await userByEmail("manager.nfd@bryels-care.test");
     await grantAssignment(owner, { userId: mgr.id, roleId: custom, siteId: k.nfd.id });
     const sm = await signedIn("manager.nfd@bryels-care.test");

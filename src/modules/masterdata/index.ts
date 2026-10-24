@@ -87,7 +87,7 @@ export {
   type EquipmentAvailability,
   type EquipmentListRow,
 } from "./equipment";
-export { APPROVAL_POLICIES, ROUTING_SEQUENCING_ONLY_POLICY, type ApprovalRecordType, type ApprovalStepPolicy } from "./approval-policy";
+export { APPROVAL_POLICIES, ROUTING_SEQUENCING_ONLY_POLICY, loadApprovalPolicy, type ApprovalRecordType, type ApprovalRuleType, type ApprovalStepPolicy } from "./approval-policy";
 export { VERSION_STATUSES, VERSION_TRANSITIONS, canVersionTransition, businessToday, effectiveLabel, type VersionStatus } from "./versioning";
 export { STEP_KINDS, AREAS, EQUIPMENT_KINDS } from "./schemas";
 

@@ -20,7 +20,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
 
 /** Left navigation (ux-system §3). Planned modules are shown disabled with their phase, never as fake links. */
 export const NAV: NavGroup[] = [
-  { label: "Home", icon: "home", items: [{ label: "Overview", href: "/dashboard" }, { label: "Notifications", href: "/notifications" }, { label: "My account", href: "/account" }] },
+  { label: "Home", icon: "home", items: [{ label: "Overview", href: "/dashboard" }, { label: "Notifications", href: "/notifications" }, { label: "Help & guides", href: "/help" }, { label: "My account", href: "/account" }] },
   {
     // Stock visibility: what is where, in which status, and what is free to use.
     label: "Inventory",
@@ -112,6 +112,9 @@ export const NAV: NavGroup[] = [
       { label: "Audit log", href: "/admin/audit", permission: "platform.audit.view" },
       { label: "Templates & labels", href: "/admin/templates", permission: "masterdata.label_template.view" },
       { label: "Diagnostics", href: "/admin/diagnostics", permission: "platform.job.view" },
+      { label: "Settings", href: "/admin/settings", permission: "platform.settings.view" },
+      { label: "Approval rules", href: "/admin/approval-rules", permission: "platform.approval_rule.view" },
+      { label: "Numbering", href: "/admin/numbering", permission: "platform.numbering_rule.view" },
     ],
   },
   {

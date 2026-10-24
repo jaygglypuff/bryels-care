@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, check, index, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, check, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { createdAt, id, updatedAt } from "./_common";
 import { organizations, roles, sites, users } from "./identity";
 
@@ -144,19 +144,4 @@ export const emailOutbox = pgTable(
   ],
 );
 
-/**
- * Postgres token buckets behind the auth rate limits (docs/security.md §3.3, §4.5). No organization:
- * buckets exist before authentication. scope = limit name; key = ip, lower(email) or user id.
- */
-export const rateLimitBuckets = pgTable(
-  "rate_limit_buckets",
-  {
-    id: id(),
-    scope: text("scope").notNull(),
-    key: text("key").notNull(),
-    tokens: numeric("tokens", { precision: 9, scale: 2 }).notNull(),
-    refilledAt: timestamp("refilled_at", { withTimezone: true }).notNull().defaultNow(),
-    createdAt: createdAt(),
-  },
-  (t) => [uniqueIndex("rate_limit_buckets_uq").on(t.scope, t.key)],
-);
+/* rate_limit_buckets lives in ./governance.ts (one shared store, src/lib/rate-limit; ADR-038). */

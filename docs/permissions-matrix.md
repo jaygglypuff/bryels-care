@@ -1073,6 +1073,22 @@ is not stored; restricted permissions of other modules do not yet require step-u
 administration does); label-job creation and draft documents are not yet checked against the
 warehouse sub-scope (their postings are).
 
+### 8.5 As built: Wave 2 W2F governance strings
+
+`platform.settings.{view,admin,approve}`, `platform.approval_rule.{view,admin}` and
+`platform.numbering_rule.{view,admin}` are in `src/lib/permissions.ts` (block `// Wave 2 W2F`) and
+granted per section 3.12: owner_director holds `settings.view/approve`, `approval_rule.view/admin`,
+`numbering_rule.view` (not `settings.admin`, not `numbering_rule.admin`); system_admin holds
+`settings.view/admin/approve`, `approval_rule.view`, `numbering_rule.view/admin`; site_manager holds
+`approval_rule.view` and `numbering_rule.view` and no settings string; auditor holds the view strings.
+The restricted (R) strings of this block require re-authentication (password in the same form,
+A-W2F-03). `platform.help_guide.admin` is not added yet (guides are repository files, A-W2F-06).
+Separation of duties: the submitter of a `setting_change_requests` row or a numbering rule version
+can never approve it (409 `SEPARATION_OF_DUTIES`, `identity.authorization.denied`, database CHECK).
+Thresholds of `stock_adjustment` and `stock_count_variance` now come from `approval_rules` (§5.2).
+While the read-only maintenance mode applies to a user, every permission check for an action other
+than `view` or `export` refuses with `read_only` (503 `READ_ONLY_MODE`) before any write (US-2-30).
+
 ## 9. Assumptions and open questions
 
 | Id | Assumption (default) | Needs confirmation from |

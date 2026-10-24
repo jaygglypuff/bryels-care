@@ -431,6 +431,7 @@ async function main() {
   await (await import("./seeds/w2c")).seedW2C(db); // W2C: incoming inspection in progress, deviations
   await (await import("./seeds/w2d")).seedW2d(db); // W2D: BMR and paper page templates
   await (await import("./seeds/w2e")).seedW2E(db); // W2E: custom role, pending invitation, temporary cover
+  await (await import("./seeds/w2f")).seedW2f(db, { organizationId: O, passwordHash: pw }); // W2F: approval rules, second admin
 
   console.log(`Seeded demo organization with ${mats.length} materials, ${counters.LOT} lots, ${counters.BATCH} batches, ${counters.SO} orders.`);
   await client.end();

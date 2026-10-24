@@ -31,6 +31,24 @@ import { postMovement } from "./ledger";
 import { isUuid } from "./lots";
 import { claimIdempotencyKey, stateMachine, storeIdempotentResult } from "./command-kit";
 import { getInventorySetting } from "./policy";
+import { canDecideEvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited } from "@/modules/governance";
+
+type CountLineRow = typeof stockCountLines.$inferSelect;
+
+/**
+ * Variance basis of the `stock_count_variance` approval rules (US-1-14): the largest variance %
+ * of the variant lines; a line without a % (nothing expected) counts as above every bound.
+ */
+function countVarianceBasis(lines: CountLineRow[]) {
+  let maxPct: Decimal | null = null;
+  for (const l of lines) {
+    if (l.isUnlabelled || new Decimal(l.varianceQtyBase ?? 0).isZero()) continue;
+    if (l.variancePct === null) return { variance_pct: "unbounded" as const };
+    const p = new Decimal(l.variancePct);
+    if (!maxPct || p.gt(maxPct)) maxPct = p;
+  }
+  return maxPct ? { variance_pct: maxPct.toString() } : {};
+}
 
 type CountStatus = "planned" | "in_progress" | "counted" | "recount" | "pending_approval" | "approved" | "posted" | "cancelled";
 
@@ -500,11 +518,11 @@ export async function approveCount(ctx: AuthContext, countId: string, input: App
           await tx.update(stockCountLines).set({ varianceReasonCode: r.reasonCode, varianceNote: r.note?.trim() || null }).where(eq(stockCountLines.id, l.id));
         }
       }
-      const secondPct = new Decimal(await getInventorySetting(tx, c.organizationId, c.siteId, "inventory.count.second_step_variance_pct"));
-      const needsSecond = lines.some((l) => {
-        if (l.isUnlabelled || new Decimal(l.varianceQtyBase ?? 0).isZero()) return false;
-        return l.variancePct === null || new Decimal(l.variancePct).gt(secondPct);
-      });
+      const ev = await evaluateApprovalRulesAudited(tx, ctx, { documentType: "stock_count_variance", siteId: c.siteId, recordId: c.id, recordNumber: c.countNumber, basis: countVarianceBasis(lines) });
+      if (ev.steps.length > 2) throw new DomainError("setup_required", "The approval rules for count variances define more than two steps; counts support two. Ask the owner to adjust the rules.");
+      const firstStep = ev.steps[0];
+      if (firstStep && !canDecideEvaluatedStep(ctx, firstStep, c.updatedAt)) throw new DomainError("forbidden", `This approval needs the ${firstStep.roleCodes.map((r) => r.replace(/_/g, " ")).join(" or ")} role.`);
+      const needsSecond = ev.steps.length > 1;
       await tx.insert(approvalDecisions).values({ organizationId: c.organizationId, siteId: c.siteId, recordType: "stock_count", recordId: c.id, cycle: await countApprovalCycle(tx, c.id), step: 1, decision: "approved", decidedBy: ctx.userId, note: input.note?.trim() || null });
       const next: CountStatus = needsSecond ? "pending_approval" : "approved";
       countMachine.assert(c.status, next, `Count ${c.countNumber}`);
@@ -531,8 +549,9 @@ export async function approveCount(ctx: AuthContext, countId: string, input: App
       return { status: next };
     }
     // Second step.
-    const role = await getInventorySetting(tx, c.organizationId, null, "inventory.count.second_step_role");
-    if (!ctx.roleCodes.includes(role)) throw new DomainError("forbidden", `The second approval of this count needs the ${role.replace(/_/g, " ")} role.`);
+    const ev2 = await evaluateApprovalRules(tx, c.organizationId, { documentType: "stock_count_variance", siteId: c.siteId, basis: countVarianceBasis(lines) });
+    const second = ev2.steps[1];
+    if (second && !canDecideEvaluatedStep(ctx, second, c.updatedAt)) throw new DomainError("forbidden", `The second approval of this count needs the ${second.roleCodes.map((r) => r.replace(/_/g, " ")).join(" or ")} role.`);
     const [first] = await tx
       .select()
       .from(approvalDecisions)

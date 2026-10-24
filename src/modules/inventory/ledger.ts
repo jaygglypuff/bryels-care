@@ -120,6 +120,8 @@ export async function lockLots(tx: Tx, lotIds: string[]) {
  * scope, locations, quantities and the role movement-type rule.
  */
 export async function postMovement(tx: Tx, ctx: AuthContext, input: PostMovementInput) {
+  // US-2-30: every stock change goes through here, so the read-only maintenance mode is enforced once more at the ledger.
+  ctx.assertWritable();
   const qty = new Decimal(input.qtyBase);
   if (!qty.isFinite() || qty.lte(0)) throw new DomainError("validation", "Quantity must be greater than zero.");
   checkSides(input);

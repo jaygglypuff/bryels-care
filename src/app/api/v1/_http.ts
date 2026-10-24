@@ -1,5 +1,6 @@
 import "server-only";
 import { DomainError, HTTP_STATUS } from "@/lib/errors";
+import { reportErrorInBackground } from "@/lib/log/error-reporter";
 
 /** JSON error envelope for /api/v1 route handlers (architecture §6); never leaks stack traces. */
 export function errorResponse(e: unknown): Response {
@@ -7,7 +8,7 @@ export function errorResponse(e: unknown): Response {
     const field = typeof e.details?.field === "string" ? e.details.field : undefined;
     return Response.json({ ok: false, code: e.code, message: e.message, ...(field ? { field } : {}) }, { status: HTTP_STATUS[e.code] });
   }
-  console.error(e);
+  reportErrorInBackground(e, { routeType: "route" });
   return Response.json({ ok: false, code: "internal", message: "Something went wrong. Nothing was saved." }, { status: 500 });
 }
 

@@ -5,6 +5,8 @@ import { z } from "zod";
 import { clearMfaCookie, clientIp, readMfaCookie, setMfaCookie, setSessionCookie } from "@/lib/auth/session";
 import { DomainError, type ActionState, toActionState } from "@/lib/errors";
 import { completeMfaSignIn, signInWithPassword } from "@/modules/identity";
+import { logger } from "@/lib/log";
+import { clientIp as limiterClientIp, limitLoginIp } from "@/lib/rate-limit";
 
 const Schema = z.object({ email: z.string().trim().toLowerCase().email(), password: z.string().min(1).max(256) });
 
@@ -18,6 +20,12 @@ export async function signIn(_: ActionState, formData: FormData): Promise<Action
   const parsed = Schema.safeParse({ email: formData.get("email"), password: formData.get("password") });
   if (!parsed.success) return { ok: false, message: "Enter your email and password." };
   const h = await headers();
+  // US-1-25 AC3 / docs/security.md §3.3: per-IP sign-in limits in the shared store (setting platform.rate_limits).
+  const limited = await limitLoginIp(limiterClientIp(h));
+  if (!limited.allowed) {
+    logger.warn("sign-in rate limited", { module: "identity", command: "identity.session.sign_in", outcome: "rate_limited" });
+    return { ok: false, message: `Too many sign-in attempts from this network. Wait ${limited.retryAfterSeconds} seconds, then try again.` };
+  }
   const r = await signInWithPassword({
     ...parsed.data,
     ip: await clientIp(),

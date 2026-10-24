@@ -4,7 +4,6 @@ import { db } from "@/db/client";
 import { auditEvents, mfaSecrets, sessions, users } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
-import { takeToken } from "@/lib/auth/rate-limit";
 import { type DeviceClass, type SessionRow, createSessionRecord, promoteMfaSession, rotateSessionToken, validateSessionToken } from "@/lib/auth/session-store";
 import { DomainError } from "@/lib/errors";
 import { verifySecondFactor } from "./mfa";
@@ -24,7 +23,7 @@ export type SignInResult =
 const GENERIC = "Email or password is incorrect.";
 
 export async function signInWithPassword(input: { email: string; password: string; ip?: string | null; userAgent?: string | null; deviceClass?: DeviceClass }, now: Date = new Date()): Promise<SignInResult> {
-  if (input.ip && !(await takeToken("login_ip", input.ip, now))) return { kind: "failed", message: "Too many sign-in attempts from this network. Wait a minute and try again." };
+  // Per-IP limits run once, in the sign-in action, against the shared store (src/lib/rate-limit limitLoginIp, ADR-038).
   const email = input.email.trim().toLowerCase();
   const [user] = await db.select().from(users).where(sql`lower(${users.email}) = ${email}`).limit(1);
   if (!user) {

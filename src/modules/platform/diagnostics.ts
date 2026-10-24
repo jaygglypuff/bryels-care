@@ -23,11 +23,11 @@ export async function workerStatus(ctx: AuthContext) {
 }
 
 /** Worker only: upsert this process's heartbeat row. */
-export async function writeHeartbeat(w: { workerId: string; hostname: string; releaseTag: string | null; queueDepth: number | null; startedAt: Date }) {
+export async function writeHeartbeat(w: { workerId: string; hostname: string; releaseTag: string | null; queueDepth: number | null; startedAt: Date; envPresence?: Record<string, boolean> | null }) {
   await db
     .insert(workerHeartbeats)
-    .values({ ...w, lastHeartbeatAt: new Date(), migrationsCurrent: true })
-    .onConflictDoUpdate({ target: workerHeartbeats.workerId, set: { lastHeartbeatAt: new Date(), queueDepth: w.queueDepth, releaseTag: w.releaseTag } });
+    .values({ ...w, envPresence: w.envPresence ?? null, lastHeartbeatAt: new Date(), migrationsCurrent: true })
+    .onConflictDoUpdate({ target: workerHeartbeats.workerId, set: { lastHeartbeatAt: new Date(), queueDepth: w.queueDepth, releaseTag: w.releaseTag, envPresence: w.envPresence ?? null } });
 }
 
 /** Queued jobs waiting (for the heartbeat's queue depth). */
