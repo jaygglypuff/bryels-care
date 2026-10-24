@@ -46,7 +46,7 @@ migration. Its canonical source is `src/db/sql/w1d.sql`; the migration is a verb
 | `pnpm db:generate` | Generate a SQL migration from schema changes (review before committing) |
 | `pnpm db:migrate` / `pnpm db:seed` / `pnpm db:reset` | Apply migrations / load demo data / wipe and reload demo data |
 | `pnpm worker` | Background worker (pg-boss): reconciliation, expiry check, reservation expiry, balance rebuilds, document renders; health on `PORT` (default 3001) |
-| `pnpm tsx scripts/install-reference-data.ts` | Installs the reference master data (units g/kg/mg/mL/L/pcs, SI conversions, default reason codes) for every organization that lacks them; idempotent, never overwrites company edits. Run once on a new production organization before stock moves (the demo seed runs it automatically) |
+| `pnpm db:reference` | Installs the reference master data (units g/kg/mg/mL/L/pcs, SI conversions, default reason codes) for every organization that lacks them; idempotent, never overwrites company edits. Runs automatically after the migrations in `scripts/start.sh` (every deploy) and in `pnpm admin:bootstrap`; the demo seed installs it too (ADR-040) |
 | `pnpm admin:bootstrap` | Production first administrator: invited owner + system admin and a one-time link (no demo seed, refuses once anyone is active; `--sync-roles` re-syncs seeded role templates). See "First administrator" below |
 | `pnpm api:contract` | Regenerate `docs/api/v1-contract.json` from `src/lib/api/contract.ts` (a test fails when it is stale) |
 
@@ -64,13 +64,14 @@ Environment variables (the full per-service table is `docs/deployment-railway.md
 | `PDF_RENDERER` | web, worker | Optional, default `disabled`: documents and labels print through the browser print dialog from their recorded dataset; "Download PDF" shows a "setup required" state until a PDF engine ships (ADR-026, `src/modules/documents/config.ts`). `chromium` is reserved for that engine |
 | `EMAIL_PROVIDER`, `EMAIL_FROM`, `RESEND_API_KEY` | web, worker | Email adapter for invitations, password resets and security notices (`src/lib/email`): unset/`none` = nothing is sent and admins see one-time links once to pass on by hand; `outbox` = development only (message stored in `email_outbox` and printed to the console); `resend` = HTTPS API (Railway blocks outbound SMTP below the Pro plan) |
 | `DATA_ENCRYPTION_KEY` | web, worker | `k1:<openssl rand -base64 32>`; encrypts TOTP secrets. Required in production for two-step sign-in; development uses a fixed development key |
-| `TRUSTED_PROXY_HEADER` | web | `x-forwarded-for` on Railway: client IP for sign-in and reset rate limits; unset = IP limits off (per-account limits still apply) |
+| `TRUSTED_PROXY_HEADER` | web | `x-forwarded-for` on Railway: the client IP for the per-IP limits of the shared rate-limit store (ADR-038). Unset (development only): sign-in attempts of all clients share one bucket and the reset/invitation IP limits are off (per-account and per-user limits still apply) |
 | `WORKER_CONCURRENCY` | worker | Parallel deliveries per job queue, default `2` |
 | `PORT` | web, worker | Set by Railway; the worker serves `/api/health` and `/api/ready` on it (default 3001 locally) |
 | `LOG_LEVEL`, `LOG_FORMAT` | web, worker | Structured logs (`src/lib/log`, US-1-25): level `debug`/`info`/`warn`/`error` (default `info`; `warn` under tests), format `json` (default) or `pretty` for local reading |
 | `RELEASE` | web, worker | Release tag on every log line and error report (staging/production: `${{RAILWAY_GIT_COMMIT_SHA}}`); default `dev` |
 | `ERROR_REPORTING_DSN` | web, worker | Error-reporting adapter (`src/lib/log/error-reporter.ts`): unset = disabled (logged once, never a failure); `console` = structured `error_report` log line; a Sentry-compatible DSN = events posted to the provider without cookies, headers, bodies or query strings |
-| `TRUSTED_PROXY_HEADER` | web | Header carrying the client IP for the sign-in rate limit (Railway: `x-forwarded-for`). Unset = all clients share one bucket (development only) |
+| `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_ROLES`, `BOOTSTRAP_ORG_NAME`, `BOOTSTRAP_SITE_CODE`, `BOOTSTRAP_SITE_NAME` | one-off shell | Read only by `pnpm admin:bootstrap` (first administrator, organization, first site and its reference data); set for the one run, then remove. See "First administrator" below |
+| `DATABASE_POOL_MAX` | web, worker | Connection pool size per process (default 10; `DB_POOL_MAX` is accepted as an older alias) |
 | `BACKUP_STATUS_SOURCE` | web, worker | `table` = the diagnostics Backups card and the backup-age alert read `backup_runs` (written by `pnpm backup:record` from the backup service). Unset = the card says "not configured" |
 
 Custom SQL: after migrating a database that already holds MVP receipts (not a fresh one), run

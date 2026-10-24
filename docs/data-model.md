@@ -699,7 +699,7 @@ As built in `src/db/schema/identity.ts` (minimal changes) and `src/db/schema/ide
 | `mfa_secrets` | `secret_enc` (base64url of iv, tag, ciphertext; AES-256-GCM), `key_id`, `confirmed_at`, `last_used_step` (replay guard), `last_used_at` | recovery codes in a separate table |
 | `mfa_recovery_codes` (new) | `user_id`, `code_hash` (argon2id), `used_at` | replaces `mfa_secrets.recovery_code_hashes` so each code is marked used individually |
 | `email_outbox` (new) | delivery log: to, subject, template, provider, status (`captured`/`sent`/`failed`/`not_configured`), `body_text` only for the dev/test `outbox` adapter | — |
-| `rate_limit_buckets` | as §3.1 (`scope`, `key`, `tokens`, `refilled_at`) | — |
+| `rate_limit_buckets` | one table for every limit since the Wave 2 integration: W2F's definition (`src/db/schema/governance.ts`, fixed window, see the W2F row) serves W2E's reset, invitation and TOTP limits through `limitAuth` (ADR-038) | W2E's own token-bucket table was dropped at integration |
 
 ### 3.2 Master data: product, formula, routing, partners
 
@@ -1321,6 +1321,19 @@ consumption/output/shipment, reversed rows excluded) rather than the `lot_geneal
 supplier-lot start node, the goods receipt of each material lot, an "as of" time, the depth limit
 (setting `quality.genealogy.max_depth`, default 20, A-DM-10) with a "limit reached" flag, and the export
 (`quality.genealogy.export`, audited `quality.genealogy.exported` + `platform.export.created`).
+
+
+#### 3.6.2 Wave 2 integration changes (2026-10-24)
+
+| Item | As integrated | Why |
+|---|---|---|
+| In-process inspections | `inspections` rows with `inspection_kind = 'in_process'` and `process_step_record_id` set, plan = the routing step's `inspection_plan_id`; started by QA (`quality.inspection.approve`) from Inspections; unique live inspection per (step record, plan) (`uq_inspections_step_plan_live`); the finished-product unique index excludes them | W05-12; the execution hook `inProcessQcStatus` reads them |
+| Failed in-process inspection | the step stays blocked (hook answers `failed`) and an `in_process_check` deviation is opened at review, linked to the step record and the inspection | WIP has no lot to hold before posting, so the blocked step is the WIP hold |
+| Execution exceptions | CX-TOL, CX-CAL, yield and reconciliation exceptions open deviations through `openDeviation` in the same transaction (`src/modules/wiring.ts`), source `cx_tol`/`cx_cal`/`yield`/`reconciliation`, without a lot reference | a raw-material lot used by many batches must not be blocked by one batch's deviation |
+| Finished-product inspection | created by `postBatchToQuarantine` (hook) in the posting transaction | W06-01 system trigger |
+| Leaving awaiting QC | inspection review leaves the batch in `awaiting_qc` while a paper page is unreviewed; release facts list the pages; release counts only completed or skipped steps | data-model §6.2, US-3-20 |
+| Genealogy | voided weighings (`dispense_records.voided_at`) are not inputs | US-3-16 |
+| Reason codes | services validate against `reason_codes` (categories reprint, hold, receipt, adjustment, count_variance, scrap, rework); `ck_stock_adjustments_reason` dropped | US-1-24, ADR-040 |
 
 ### 3.7 Sales and logistics
 

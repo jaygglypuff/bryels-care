@@ -37,6 +37,19 @@ Entries are numbered `ADR-nnn` and never deleted; a superseded entry points to i
 | ADR-027 | File storage: S3-compatible private bucket behind an adapter, downloads through signed user-bound links | Accepted (Wave 1 as built) | 2026-10-23 |
 | ADR-028 | One settings store and one approval-decision ledger shared by all modules | Accepted (Wave 1 integration) | 2026-10-23 |
 | ADR-029 | One system actor per organization (users row with status `system`) for scheduled work | Accepted (Wave 1 integration) | 2026-10-23 |
+| ADR-030 | Co-signatures on the operator's shared device: the second person types their own password (no second session) | Accepted (Wave 2 integration) | 2026-10-24 |
+| ADR-031 | Consumption posting timing is a setting: at transfer to quarantine (default) or at each dispense | Accepted (Wave 2 integration) | 2026-10-24 |
+| ADR-032 | Batch closure and controlled reopen/amend live in their own append-only tables, outside the batch state table | Accepted (Wave 2 integration) | 2026-10-24 |
+| ADR-033 | Email through an adapter: Resend over HTTPS in production (Railway blocks SMTP), outbox in development, honest "not set up" otherwise | Accepted (Wave 2 integration) | 2026-10-24 |
+| ADR-034 | One-time account tokens travel in the URL fragment and are stored only as sha256 | Accepted (Wave 2 integration) | 2026-10-24 |
+| ADR-035 | In-house TOTP with AES-256-GCM encrypted secrets and key rotation | Accepted (Wave 2 integration) | 2026-10-24 |
+| ADR-036 | `approval_rules` table and setting change requests replace typed step policies | Accepted (Wave 2 integration) | 2026-10-24 |
+| ADR-037 | Numbering rule versions: a new pattern never changes issued numbers; the period sequence continues | Accepted (Wave 2 integration) | 2026-10-24 |
+| ADR-038 | One shared Postgres rate-limit store (fixed window) for API, scan, sign-in and identity limits | Accepted (Wave 2 integration) | 2026-10-24 |
+| ADR-039 | Read-only maintenance mode as an application setting with a role allow-list | Accepted (Wave 2 integration) | 2026-10-24 |
+| ADR-040 | Reference master data installs itself (deploy start and first-admin bootstrap); shipped defaults stand in until then | Accepted (Wave 2 integration) | 2026-10-24 |
+| ADR-041 | Staging is recorded per scan in `batch_material_stagings` and re-reserves stock for the batch | Accepted (Wave 2 integration) | 2026-10-24 |
+| ADR-042 | Optional approval gate on production plans (off by default) | Accepted (Wave 2 integration) | 2026-10-24 |
 
 ---
 
@@ -455,3 +468,159 @@ actor columns on domain tables (weakens accountability everywhere).
 **Consequences.** Reports that group by person must exclude status `system`; the user list and
 user detail already do.
 
+
+## ADR-030 Co-signatures on the operator's shared device
+
+**Status.** Accepted (Wave 2 as built, W2B), 2026-10-24.
+
+**Decision.** Where the routing requires a checker (line clearance, weighing, step completion,
+transfer to quarantine) or an approver for a controlled exception, that person chooses their name
+on the operator's device and types their own password. The server verifies it once
+(`src/lib/auth/co-sign.ts`), checks the person's permission and site and that they differ from the
+operator, and records both identities; no second session is created and nothing is remembered on
+the device (A-W2B-01).
+
+**Alternatives.** Each checker signs from their own phone (slower on the floor, extra devices);
+badge or PIN signatures (need hardware and enrolment, possible later).
+
+**Consequences.** Not a validated electronic signature (Q-QA-05); the paper record stays the
+controlled copy until QA validates (`documents.controlled_record`). Failed co-signatures are audited.
+
+## ADR-031 Consumption posting timing is a setting
+
+**Status.** Accepted (Wave 2 as built, W2B), 2026-10-24.
+
+**Decision.** Ingredient and packaging consumption post at transfer to quarantine together with
+the output, in one transaction (default); setting `production.post_consumption_at_dispense`
+(organization or site, needs approval) posts each weighing and the packaging consumption as it
+happens. Either way every movement goes through `postMovement` with a `production_postings` row;
+a voided weighing is reversed or never posted.
+
+**Why.** A-PROC-31: some sites want stock to fall as it is weighed; the default keeps abandoned
+batches from leaving half-posted consumption.
+
+## ADR-032 Batch closure and reopen/amend in their own tables
+
+**Status.** Accepted (Wave 2 as built, W2D), 2026-10-24.
+
+**Decision.** `batch_closures`, `batch_reopen_requests` and `batch_amendments` are append-only
+tables beside the batch. `closed` is a normal batch state, but the transitions out of `closed`
+(reopen to the state it was closed from, or to `quarantined`) are in `REOPEN_TRANSITIONS` of
+`src/modules/production/closure.ts`, usable only by the reopen service after a site manager and a
+different QA user approve (`approval_decisions`, record type `batch_reopen`). Amendments record
+the previous and corrected value with a reason; closing again regenerates the BMR as "AMENDED".
+
+**Why.** Keeps `BATCH_TRANSITIONS` free of a backdoor and gives the BMR an auditable history.
+
+## ADR-033 Email adapter: Resend over HTTPS, outbox in development
+
+**Status.** Accepted (Wave 2 as built, W2E), 2026-10-24. Implements the email adapter of
+`docs/architecture.md` §2.
+
+**Decision.** `EMAIL_PROVIDER=resend` sends through Resend's HTTPS API (`RESEND_API_KEY`,
+`EMAIL_FROM`) because Railway blocks outbound SMTP below the Pro plan; only metadata is stored.
+`outbox` (development and tests, refused in production) stores the full message in `email_outbox`
+and prints it. Unset (`none`) sends nothing: the row says `not_configured`, screens say "Email is
+not set up" and administrators see the one-time link once to pass on.
+
+**Consequences.** A Resend account and a verified sending domain per environment; no fake "sent".
+
+## ADR-034 Account tokens in the URL fragment
+
+**Status.** Accepted (Wave 2 as built, W2E), 2026-10-24.
+
+**Decision.** Invitation and password-reset links put the 32-byte random token after `#`
+(`/invite#token=…`). The page reads it in the browser, removes it from the address bar and posts
+it with the form; servers, proxies and logs never see it in a URL. Only `sha256(token)` is stored;
+tokens are single use and expire (`identity.invitation.ttl_hours`, `identity.password_reset.ttl_minutes`).
+
+## ADR-035 In-house TOTP with encrypted secrets
+
+**Status.** Accepted (Wave 2 as built, W2E), 2026-10-24.
+
+**Decision.** RFC 6238 TOTP (HMAC-SHA-1, 6 digits, 30 s, ±1 step, a reused step refused) and
+one-time recovery codes, without a third-party library (`src/lib/auth/totp.ts`). Secrets are
+encrypted with AES-256-GCM under `DATA_ENCRYPTION_KEY` (`keyid:base64`); `DATA_ENCRYPTION_KEY_PREVIOUS`
+still decrypts during a rotation. Privileged roles must enrol after `identity.mfa.grace_days`.
+
+**Consequences.** Production needs `DATA_ENCRYPTION_KEY`; losing it means re-enrolling every user.
+
+## ADR-036 `approval_rules` and setting change requests
+
+**Status.** Accepted (Wave 2 as built, W2F), 2026-10-24. Completes ADR-028 item 2.
+
+**Decision.** Who approves what, above which amount or variance, is data in `approval_rules`
+(record type, step, role or permission, thresholds, site), evaluated by
+`src/modules/governance/approval-rules.ts` for stock adjustments, count variances, master-data
+revisions and setting changes; nobody approves their own submission. The configurable
+`approval?` types (sales order, quote, work order release, production plan, customer return)
+follow the separation-of-duties switches `approvals.sod.<type>`. Settings marked `requiresApproval` change through
+a `setting_change_requests` row approved by a different holder of `platform.settings.approve`.
+
+**Consequences.** Defaults are assumptions (A-PM-15) for the owner to confirm; changing rules and
+restricted settings needs step-up re-authentication.
+
+## ADR-037 Numbering rule versions
+
+**Status.** Accepted (Wave 2 as built, W2F), 2026-10-24. Refines ADR-009.
+
+**Decision.** How a document number looks comes from the effective approved
+`numbering_rule_versions` row (pattern tokens PREFIX, SITE, YYYY, YY, YYMM, YYMMDD, SEQ; reset
+never/yearly/monthly/daily), else the built-in default in `src/lib/numbering.ts`. A new version
+never changes issued numbers; counters are keyed by period, so the running sequence of the period
+continues. Versions are approved by a second person.
+
+## ADR-038 One shared Postgres rate-limit store
+
+**Status.** Accepted (Wave 2 integration), 2026-10-24.
+
+**Decision.** W2E (token buckets) and W2F (fixed window) each built a `rate_limit_buckets` table.
+One table and one store remain: `src/lib/rate-limit` (fixed window from the first request, one
+upsert per check, Retry-After). Configured limits (`platform.rate_limits`): API per user, scan
+look-ups per user, sign-in per IP per minute and hour (applied once, in the sign-in action). Fixed
+identity limits (`AUTH_LIMITS`): password reset 3 per account and 10 per IP per hour, TOTP 5 per
+user per 15 minutes, token forms 30 per IP per hour.
+
+**Why.** Every web replica must count in the same place (US-1-25 AC3); two stores would double-count.
+
+## ADR-039 Read-only maintenance mode as a setting
+
+**Status.** Accepted (Wave 2 as built, W2F), 2026-10-24.
+
+**Decision.** `platform.maintenance.read_only` (restricted setting) refuses every command of a
+user holding none of the allowed roles before any write (checked in the AuthContext), shows a
+banner, and keeps reads and sign-in working; scheduled system jobs keep running. `MAINTENANCE_MODE=1`
+stays the full outage switch for restores.
+
+## ADR-040 Reference master data installs itself
+
+**Status.** Accepted (Wave 2 integration), 2026-10-24.
+
+**Decision.** Units (g, kg, mg, mL, L, pcs), the SI conversions and the default reason codes are
+installed idempotently (existing rows untouched) by `pnpm db:reference`, which `scripts/start.sh`
+runs after the migrations on every deploy, and by the first-admin bootstrap for a new
+organization. Until a category has rows, services and forms use the shipped default reason codes,
+so no command loses its list. The in-code reason lists of Wave 1 and W2B are removed.
+
+**Why.** A fresh Railway database must work without a manual step; the company still owns the
+content (A-W2G-05).
+
+## ADR-041 Staging recorded per scan
+
+**Status.** Accepted (Wave 2 as built, W2A), 2026-10-24.
+
+**Decision.** Each staging scan is one append-only `batch_material_stagings` row and one ledger
+transfer to a staging location (`production.staging.location_kinds`); the work-order reservation
+becomes a batch reservation (`demand_type = 'batch'`). The batch becomes `materials_staged` when
+every ingredient is staged; substitutions of another lot of the same material are QA-approved
+`batch_material_substitutions`. Posting to quarantine ends the batch reservations (closure releases
+what is left). Weighing recommends the staged lots first.
+
+## ADR-042 Optional approval gate on production plans
+
+**Status.** Accepted (Wave 2 as built, W2A), 2026-10-24.
+
+**Decision.** A production plan can require approval before its lines become work orders
+(`production.production_plan.approval_required`, off by default, A-PROC-30); when on, the
+approver differs from the submitter (`approvals.sod.production_plan`). Nothing is created
+automatically: a planner converts each line.

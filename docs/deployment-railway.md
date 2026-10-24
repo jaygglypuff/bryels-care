@@ -236,14 +236,14 @@ variable (`docs/architecture.md` section 12).
 | `APP_ENV` | plain | base | x | x | x | `development` | `staging` | `production` | authoritative environment flag (seed guard, log tag, UI badge); never trust `RAILWAY_ENVIRONMENT` for this because both projects may name their environment `production` |
 | `PORT`, `HOSTNAME` | plain | base | x | x | – | `3000`, `localhost` | injected / `::` | injected / `::` | Railway injects `PORT` **(verified 2026-10-16)** |
 | `APP_ORIGIN` | plain | base | x | x | – | `http://localhost:3000` | `https://staging.<domain>` | `https://<domain>` | Origin checks, cookie `Secure`, absolute links in email |
-| `TRUSTED_PROXY_HEADER` | plain | base | x | – | – | unset | `x-forwarded-for` | `x-forwarded-for` | client IP for rate limits (`docs/security.md` 3.3); becomes `cf-connecting-ip` only if a Cloudflare proxy is placed in front (A-DEP-15) |
+| `TRUSTED_PROXY_HEADER` | plain | base | x | – | – | unset | `x-forwarded-for` | `x-forwarded-for` | client IP for the per-IP limits of the shared rate-limit store (`docs/security.md` 3.3, ADR-038); unset = sign-in attempts of all clients share one bucket and reset/invitation IP limits are off (development only); becomes `cf-connecting-ip` only if a Cloudflare proxy is placed in front (A-DEP-15) |
 | `LOG_LEVEL`, `LOG_FORMAT` | plain | observability | x | x | x | `debug`, `pretty` | `info`, `json` | `info`, `json` | |
 | `ERROR_REPORTING_DSN` | secret | observability | x | x | x | unset (disabled) | staging DSN | production DSN | Sentry-compatible (A-DEP-12) |
 | `RELEASE` | plain | observability | x | x | x | `dev` | `${{RAILWAY_GIT_COMMIT_SHA}}` | same | release tag for errors and logs; check V-14 |
 | `DATABASE_URL` | secret | db-app | x | x | – | local URL | `bc_app` role on the private host | same | runtime role (`docs/security.md` section 6); private `*.railway.internal` host, never the TCP proxy |
 | `DATABASE_MIGRATION_URL` | secret | db-migrate | x (pre-deploy only) | – | – | local URL | `bc_migrate` | same | schema owner; present only on `web` |
 | `DATABASE_BACKUP_URL` | secret | db-backup | – | – | x | local URL | `bc_backup` | same | read-only role for `pg_dump` (A-DEP-20) |
-| `DATABASE_POOL_MAX` | plain | db-app | x | x | – | `5` | `10` / `5` | `10` / `5` | web / worker (A-DEP-17) |
+| `DATABASE_POOL_MAX` | plain | db-app | x | x | – | `5` | `10` / `5` | `10` / `5` | web / worker (A-DEP-17); default 10 when unset; `DB_POOL_MAX` is read as an older alias |
 | `MIGRATION_ALLOW_DESTRUCTIVE`, `MIGRATION_MAX_BACKUP_AGE_HOURS` | plain | db-migrate | x | – | – | `1`, `0` | unset, `2` | unset, `2` | section 5.3; set to `1` for one deploy, then removed |
 | `MIGRATION_WINDOW_OPEN` | plain | db-migrate | x | x | – | `true` | unset | unset | `true` lets the opening-balance loader and `opening_balance` import jobs run against production (`docs/data-migration-plan.md` A-MIG-08); set only for the cutover window of section 9.1 and removed when check MC-16 passes; the change is logged in the runbook change log |
 | `SESSION_SECRET`, `SESSION_SECRET_PREVIOUS` | secret | auth | x | x | – | fixed dev value | generated | generated | `_PREVIOUS` holds the old key during the 24 h rotation window |
@@ -292,6 +292,10 @@ and audit tables), `bc_readonly` (SELECT for analytics views and ad-hoc owner qu
    network, **verified 2026-10-16**), then starts the new `web` and switches traffic after
    `/api/ready` returns 200.
 4. The promotion workflow (section 3.1) repeats step 3 on production after the staging soak.
+4a. After the migrations, `scripts/start.sh` runs `pnpm db:reference`: the reference master data
+   (units, SI conversions, default reason codes) is installed for every organization that lacks
+   it, idempotently and without touching company edits (ADR-040). A fresh database therefore needs
+   no manual step; `pnpm admin:bootstrap` installs it for the organization it creates.
 5. Every deploy is recorded in the deployment log (`docs/operations-runbook.md` appendix):
    commit, migrations applied (from the migrator's JSON output in the deploy log), who
    promoted, start and end time, result.

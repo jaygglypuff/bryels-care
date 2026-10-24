@@ -327,6 +327,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC2 Given "Forgot password", When requested, Then the response is identical whether or not the account exists, at most 3 requests per account per hour, the token lives 30 minutes and is single use, the newest token invalidates older ones, and on success all other sessions are revoked, the user is emailed (or the send is logged when `EMAIL_PROVIDER=none`), `identity.user.password_reset_completed` is written, and the last 5 hashes reject reuse.
 - AC3 Given a token in a URL, When any request logs, Then the logger redacts `token`, `code`, `password`, `secret`, `authorization`, `cookie` and 20+ character base64url values; tokens never appear in audit payloads.
 - States: L X V; expired/used token state with "request a new link" · Audit: `identity.invitation.sent`, `identity.invitation.accepted`, `identity.user.password_reset_requested`, `identity.user.password_reset_completed`, `identity.user.password_changed` · Depends: → US-1-10 · Tests: `auth.reset.single_use`, `auth.reset.expiry`, `auth.reset.revokes_sessions`, `auth.reset.token_bound`, `auth.enumeration.reset`; `docs/testing.md` §5.3
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2E). Invitations and resets with 32-byte tokens stored as sha256, carried in the URL fragment (ADR-034); email through the adapter (ADR-033): unset provider = the administrator sees the one-time link once. Limits on the shared store (ADR-038).
 
 #### US-1-12 Session management: listing, revocation, idle and absolute expiry (M, Must) — FR-identity-05, S1-05, S1-14, A-PRD-26
 **As** a user **I want** to see and revoke my own sessions; **as** a system_admin **I want** to revoke another user's sessions **so that** a lost or shared device stops acting as that person.
@@ -335,6 +336,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC2 Given a standard-role session idle beyond 12 h sliding (refreshed at most every 5 min) or a privileged session idle beyond 1 h, When a request arrives, Then it is rejected and the user must sign in again; a session within idle but past the absolute limit (7 d standard, 24 h privileged) is rejected; an active session within both continues (S1-14, clock injected).
 - AC3 Given the profile page, When opened, Then own sessions list device label, IP and last seen with a revoke action; a password change revokes all other sessions; a daily job deletes sessions 30 days after expiry or revocation (A-SEC-11) and audit rows keep `session_id`.
 - States: standard · Audit: `identity.session.revoked`, `identity.session.revoked_all` · Depends: → US-1-10 · Tests: `identity.revoke_all_sessions`, `authz.session.revoked`, `session.idle_expiry`, `session.absolute_expiry`, `session.active_continues`, `jobs.session_purge`, `audit.session_in_events`; `docs/testing.md` §9.15 S1-05, S1-14
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2E). Session list and revocation, sliding idle (standard / privileged / shared device) and absolute expiry from settings `session.*`.
 
 ### 3.6 E-1-05 Authorization framework and audit
 
@@ -356,6 +358,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC3 Given the default rules of `docs/permissions-matrix.md` §5.2 seeded, When amounts around each threshold are evaluated with an injected clock, Then the correct step list results (`authz.threshold.rule_evaluation`); editing a rule requires re-authentication and writes `platform.approval_rule.changed` with before/after.
 - AC4 Given a record type with `approval?` columns, When setting `approvals.sod.<record_type>` is `false`, Then the service skips the SoD check for that type only; mandatory types keep the database CHECK (`A-DM-31`).
 - States: standard; **A** banner on records awaiting approval · Audit: `platform.approval_rule.changed`, `platform.approval_rule.evaluated`, `platform.setting_change_request.approved`, `platform.setting.changed`, `identity.authorization.denied` · Depends: → US-1-13 · Tests: `authz.sod.approve_own`, `authz.sod.other_approver_ok`, `authz.sod.site_manager_cannot_approve_settings`, `authz.threshold.rule_evaluation`, `settings.versioned`, `platform.settings_admin_restricted`; `docs/testing.md` §5.1, §9.15 S1-03
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2F). `approval_rules` and `setting_change_requests` (ADR-036); approver ≠ submitter; SoD switches `approvals.sod.*` for the configurable types; W2A work order release and plan approval use them.
 
 #### US-1-15 Audit event writer and audit log viewer (M, Must) — FR-identity-08, FR-platform-02, S1-04, ADR-006
 **As** an auditor **I want** an append-only audit log with filters and export **so that** who did what, when, where and why can be verified without anyone being able to change it.
@@ -375,6 +378,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC2 Given an active user, When deactivated with a reason, Then in one transaction `status = deactivated`, all sessions revoked, invitation and reset tokens voided, assignments ended (`valid_to = today`), the row kept, `identity.user.deactivated` written; every subsequent request by that user is rejected (not only login); reactivation requires `identity.user.admin` with reason and grants nothing automatically.
 - AC3 Given a user with `identity.site_assignment.admin`, When they try to grant a role to themselves, Then 403 (`identity.no_self_grant`); the user list export requires `identity.user.export` and writes `platform.export.created`; admins never see or set passwords.
 - States: standard; detail tabs profile, status, sessions, assignments, audit · Audit: `identity.user.created/updated/locked/unlocked/deactivated/reactivated`, `identity.invitation.sent/revoked`, `platform.export.created` · Depends: → US-1-11, → US-1-15 · Tests: `identity.deactivated_denied_every_request`, `identity.no_self_grant`, `authz.role_escalation.missing_permission` (identity); `docs/testing.md` §5.2, runbook §2.1, §2.7
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2E). Invite, lock, unlock, deactivate, reactivate with audit; first administrator via `pnpm admin:bootstrap` (also installs reference data, ADR-040).
 
 #### US-1-17 Roles and permission catalogue administration (M, Must) — FR-identity-02, S1-04
 **As** a system_admin **I want** to see every role's permission bundle against the catalogue, with the seeded roles shown as read-only templates **so that** access is understood and no seeded bundle drifts; bundle changes are made on clones (US-1-29, Phase 1b; `docs/operations-runbook.md` §2.3).
@@ -383,6 +387,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC2 Given a system_admin with re-authentication, When they try to add `inventory.adjustment.approve` to the seeded `site_manager` role (`is_system = true`) through the API, Then the service rejects the change, `role_permissions` is unchanged, `permissions_version` does not bump and `identity.authorization.denied` is written; the screen shows seeded roles as read-only templates with no edit control (the clone action arrives with US-1-29) (S1-04 part a; part b is US-1-15 AC2).
 - AC3 Given system_admin, When any attempt grants `system_admin` quality release, finance posting, payroll or approval-rule permissions, Then the screen refuses and the service rejects (`docs/security.md` §2.11); SoD warnings appear when one role would both submit and approve a record type.
 - States: standard · Audit: `identity.role.updated` (Phase 1b clones, US-1-29), `identity.role.owner_break_glass` (owner use), `identity.authorization.denied` · Depends: → US-1-15 · Tests: `identity.seeded_role_read_only`, `authz.role_escalation.custom_role_sensitivity` (Phase 1b, with US-1-29); `docs/testing.md` §9.15 S1-04. Seeded roles are read-only templates; changes are made on a clone (US-1-29, runbook §2.3; decided at Gate 0 review, §7.1 item 9)
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2E). Role and permission catalogue screens; restricted grants need the owner (setting `identity.assignment.restricted_grant_requires_owner`).
 
 #### US-1-18 Site assignments and site switcher (M, Must) — FR-identity-03 (site), S1-11, A-PM-12
 **As** a system_admin **I want** to grant roles per site with validity dates **so that** each person holds exactly the access their job needs; **as** a user with several sites I want to switch the site I am looking at.
@@ -391,6 +396,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC2 Given an owner_director with an organization-wide assignment, When they open the switcher, Then every active site plus "All sites" is listed; given a warehouse_operator assigned to Site A only, Then only Site A is listed and the switcher is hidden; switching re-scopes lists, writes `?site=` and confirms when a form is dirty (S1-11).
 - AC3 Given a revoked assignment, When `valid_to` passes or the row is revoked, Then `identity.site_assignment.revoked` is written and the next request after the cache window denies the site; offline clients (Phase 7) receive `PERMISSIONS_CHANGED`.
 - States: standard · Audit: `identity.site_assignment.granted/revoked/scope_changed` · Depends: → US-1-16 · Tests: `identity.site_switcher_lists_allowed_sites`, `identity.org_wide_only_three_roles`, `identity.site_manager_cannot_grant`, e2e `flows/identity/site-switcher.spec.ts`; `docs/testing.md` §5.2, §9.15 S1-11
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2E). Site and organization-wide assignments with validity dates, site switcher.
 
 #### US-1-19 Settings registry and numbering rules (M, Must) — FR-platform-03, FR-platform-04, FR-masterdata-08 (numbering), S1-13, ADR-009
 **As** a system_admin **I want** typed settings per organization, site and user and versioned numbering rules per document type **so that** business configuration is data, never code, and every number issued is unique even under concurrent posting.
@@ -399,6 +405,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC2 Given a new rule version, When submitted and approved by a different restricted user with an effective date, Then the GiST exclusion prevents overlapping approved versions, the pattern trigger rejects malformed patterns (no `{SEQ}`, site scope without `{SITE}`, reset period without its date token), issued numbers keep their old pattern, and `platform.numbering_rule.changed` is written; `peekNextNumber()` refuses gapless types.
 - AC3 Given a setting key registered with `requires_approval`, When changed, Then it goes through `setting_change_requests` (US-1-14); otherwise `platform.settings.admin` writes it directly with `platform.setting.changed` before/after; session lifetimes, `scan.terminator`, `offline.*`, `alerts.*`, document and label keys from the reference seed are editable here.
 - States: standard · Audit: `platform.setting.changed`, `platform.numbering_rule.changed` · Depends: → US-1-14 · Tests: `numbering.unique_under_concurrency`, `numbering.locked_last`, `numbering.rollback_no_consume_gapless`, `numbering.reset_period`, `numbering.per_site_prefix`, `numbering.change_not_retroactive`, `settings.versioned`; `docs/testing.md` §4.10, §9.15 S1-13; runbook §4, §5
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2F). Settings admin (groups/labels for every key, restricted keys behind step-up re-authentication, approval keys through change requests) and numbering rule versions (ADR-037).
 
 ### 3.8 E-1-08 Master data basics
 
@@ -409,6 +416,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC2 Given a site code, When saved, Then it matches `^[A-Z0-9]{1,6}$` (numbering `{SITE}` token), timezone defaults to the organization's, and `masterdata.site.changed` records before/after; sites and locations are deactivated, never deleted; a location that will hold stock cannot be deactivated once Phase 2 balances exist (service check prepared now).
 - AC3 Given a site_manager at Site A, When they list locations with `?siteId=B`, Then only Site A rows; equipment records carry code (organization-unique for `BC:EQP`), kind, line, `blocking_rule` default `block` (A-DM-28), calibration/maintenance/cleaning fields; changing `blocking_rule` writes `masterdata.equipment.blocking_rule_changed`.
 - States: standard; location tree (zone → rack → bin) collapses to a card list on phones · Audit: `masterdata.site.changed`, `masterdata.location.special_designated`, `masterdata.equipment.blocking_rule_changed`, `masterdata.<entity>.created/updated/deactivated` · Depends: → US-1-13, → US-1-08 · Tests: `authz.cross_site.*` (masterdata.location), `masterdata.restricted_to_sites_hidden`; `docs/testing.md` §5.1, §9.1
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2G). Sites, departments, warehouses with special locations, locations, production lines (one table, also used by W2A work orders), equipment register.
 
 #### US-1-21 Units of measure and conversions (S, Must) — FR-masterdata-03, S1-12, ADR-010
 **As** a production_planner **I want** units and conversions that are dimensionally valid **so that** 2.5 kg becomes 2,500 g exactly and grams can never be converted to millilitres without a material density.
@@ -417,6 +425,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC2 Given `kg → g → kg` round trip of `0.1`, When computed with `src/lib/quantity.ts`, Then the result is exact (`decimal.js`); entered and base quantities are both returned by the helper that every later quantity-bearing row uses.
 - AC3 Given a UOM list, When opened by any role, Then it is readable (all roles hold `.view`); editing requires `admin`; a conversion version change is audited with before/after factor.
 - States: standard · Audit: `masterdata.uom_conversion.approved`, `masterdata.uom.updated` · Depends: → US-1-13 · Tests: `uom.dimension_mismatch_rejected`, `uom.density_requires_material`, `uom.mass_to_mass_exact`, `uom.entered_and_base_stored` (helper); `docs/testing.md` §4.12, §9.15 S1-12
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2G). Units and approved conversions; receiving converts through the UOM service since the integration (no factors in code).
 
 #### US-1-22 Products and SKUs (basic fields) (M, Must) — FR-masterdata-01
 **As** a production_planner **I want** products with families and SKUs with pack format, base unit, shelf life, storage conditions, allocation rule and status **so that** Phase 2 lots and Phase 3 batches have something to point at.
@@ -425,6 +434,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC2 Given a SKU with `shelf_life_days = 365`, When a Phase 3 batch computes expiry, Then the helper `expiryFor(sku, baseDate)` returns `baseDate + 365` (unit test now, used later; basis switchable per A-PRD-28).
 - AC3 Given a user without `masterdata.product.export`, When they export the product list, Then 403; with it the export runs the scoped query, neutralises formulas and writes `platform.export.created`.
 - States: standard; card list on phones with P1/P2 column priority · Audit: `masterdata.product.created/updated`, `masterdata.sku.created/updated`, `platform.export.created` · Depends: → US-1-21 · Tests: `authz.*` (masterdata.product, masterdata.sku), `export.formula_neutralized` (unit); `docs/testing.md` §5.1
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2G). Products and SKUs with status; batches and sales orders refuse non-active products (integration).
 
 #### US-1-23 Materials (basic fields) (M, Must) — FR-masterdata-04 (basics), A-PRD-27, A-DM-04
 **As** a production_planner **I want** raw, packaging, intermediate and consumable materials with INCI and common names, base unit, storage, retest/expiry rules, allergen/hazard notes and inspection flags **so that** receiving in Phase 2 and dispensing in Phase 3 identify the right thing.
@@ -433,6 +443,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC2 Given an `intermediate` such as "33.33% Lye Solution", When saved, Then it is a material like any other with its own shelf-life rule (A-PRD-27); INCI name is warned as missing for ingredients, never required for packaging.
 - AC3 Given a procurement user at any site, When they list materials, Then the organization-wide list is visible (master data class); cost fields are absent (Phase 2 `finance.cost.view` masking prepared by DTO allow-list).
 - States: standard · Audit: `masterdata.material.created/updated`, `platform.export.created` · Depends: → US-1-21 · Tests: `authz.*` (masterdata.material), `authz.sensitive_fields.masked` (cost placeholder); `docs/testing.md` §5.1
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2G). Materials with status; receiving and batch creation refuse draft, blocked and discontinued materials (integration).
 
 #### US-1-24 Reason codes (S, Must) — FR-masterdata-08 (reason codes)
 **As** a site_manager **I want** reason-code lists per transaction type **so that** adjustments, scrap, holds, reprints and reversals always carry a controlled reason (free text only where the code requires a note).
@@ -440,6 +451,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC1 Given the seeded lists, When a Phase 2 command needs a reason for `adjustment`, Then only codes whose `applies_to` contains `adjustment` are offered; `requires_note` forces a note (max 500 chars); `requires_approval` is read by the approval service.
 - AC2 Given an admin, When a code is deactivated, Then history keeps it and new records cannot select it; changes are audited with before/after.
 - States: standard · Audit: `masterdata.reason_code.updated` · Depends: → US-1-13 · Tests: `authz.*` (masterdata.reason_code); unit test on `applies_to` filtering
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2G + integration). One `reason_codes` table used by reprint, hold, unplanned receipt, adjustment, count variance, scrap and rework; in-code lists removed; shipped defaults stand in until reference data is installed (ADR-040).
 
 ### 3.9 E-1-09 Observability and diagnostics (Phase 1 part)
 
@@ -450,6 +462,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC2 Given an unexpected exception, When thrown, Then the adapter reports it with release, environment, service, `requestId`, module, command and no cookies, headers, bodies or query strings; expected `err(...)` results are never reported; an unset DSN disables reporting with a log line, not a failure.
 - AC3 Given the authenticated API limit of 600/min per session, When exceeded, Then 429 with `Retry-After`; limits are configurable (A-SEC-14) and the login limits of US-1-10 share the store.
 - States: n/a · Audit: n/a · Depends: → US-1-13 · Tests: `errors.no_stack_in_response`, log-field unit tests, `auth.ratelimit.login_ip`; `docs/deployment-railway.md` §7, §8.1
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2F). JSON logger with correlation ids, error-reporting adapter, one shared Postgres rate-limit store for API, scan, sign-in, reset, invitation and TOTP limits (ADR-038).
 
 #### US-1-26 Admin diagnostics: Health, Backups and Variables cards (S, Must) — FR-platform-09 (Phase 1 part), ADR-014
 **As** a system_admin **I want** a diagnostics page with the Health, Backups and Variables cards **so that** Gate 1 evidence and the first incident triage need no database access, and no secret ever renders.
@@ -457,6 +470,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC1 Given the page, When opened, Then Health shows web/worker ready, release, uptime, worker heartbeat age and migrations current; Backups shows last successful dump time and age, offsite copy ok, last restore drill (empty until Phase 9) and next due; Variables shows allow-listed variable **names** present or missing per service; values and connection strings never appear (`diagnostics.no_secrets`).
 - AC2 Given a user without the permission, When they open `/admin/diagnostics`, Then **D**; the remaining cards render as **S** states that name their phase, never fake data: Jobs and Reconciliation "Available in Phase 2" (US-2-03, US-2-04), Database, Imports, Alerts, Errors and Integrations "Available in Phase 5" (US-5-13), Sync "Available in Phase 7" (US-7-06) (`docs/PRD.md` FR-platform-09).
 - States: L X D S · Audit: n/a (read) · Depends: → US-1-05, → US-1-13 · Tests: `diagnostics.no_secrets`, `authz.role_escalation.missing_permission` (platform); runbook §17
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2F). Health, Backups (with `BACKUP_STATUS_SOURCE=table`), Variables cards; metrics sampling and alerts jobs.
 
 #### US-1-27 Gate 1 evidence pack, documentation sync and README (S, Must) — AC-22, AC-23 (deploy), S1-07, S1-15
 **As** the principal-architect **I want** the README, environment table, runbook entries and acceptance records updated with Slice 1 **so that** G1 can be reviewed from documents and CI output alone.
@@ -473,6 +487,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC1 Given a user whose role bundle contains an R permission, When 7 days pass after the grant without enrolment (A-SEC-13), Then restricted actions are blocked with an enrol prompt; enrolment requires re-auth, shows QR and manual key, verifies one code, stores the secret AES-GCM with key id and 10 argon2id-hashed single-use recovery codes shown once.
 - AC2 Given an enrolled owner, When signing in, Then a 6-digit `inputmode="numeric"` step is required, ±1 step window, last counter stored against replay, 5 attempts per 5 min then 15 min lock; a reset by `identity.mfa.admin` needs a reason, notifies the user and writes `identity.mfa.reset`.
 - States: L X V locked · Audit: `identity.mfa.enrolled/disabled/reset/failed` · Depends: → US-1-10, → US-1-19 · Tests: `finance.post_requires_reauth_and_totp` (prepared), `auth.mfa.*`; `docs/security.md` §3.7
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2E). In-house TOTP with AES-256-GCM secrets and recovery codes (ADR-035); grace period setting; step-up re-authentication window shared by all restricted changes (integration).
 
 #### US-1-29 Custom roles by cloning (S, Should, 1b) — FR-identity-02, `docs/permissions-matrix.md` §1
 **As** a system_admin **I want** to clone a seeded role into a custom role that can remove permissions or add normal ones **so that** a site's special job (for example "QA sampler") exists without widening a system role.
@@ -480,6 +495,7 @@ plus the staging checklist (`docs/deployment-railway.md` §14).
 - AC1 Given a clone, When an S or R permission is added, Then it is rejected unless the actor holds `identity.role.admin`, is re-authenticated, and the owner's weekly access report (Phase 5) lists it; `identity.role.created/updated` carry the diff with sensitivity.
 - AC2 Given a custom role in use, When deleted, Then refused while assignments exist; deactivation ends assignments with audit.
 - States: standard · Audit: `identity.role.created/updated` · Depends: → US-1-17 · Tests: `authz.role_escalation.custom_role_sensitivity`
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2E). Custom roles by cloning; the creator must hold every string (owner included, since the owner does not hold the QA-only strings).
 
 #### US-1-30 Shared-device quick-switch PIN evaluation (S, Should, 1b, spike) — R-20, R-27, A-UX-02, A-UX-08
 **As** a production_operator on a shared tablet **I want** a fast, attributable way to sign in as the checker on the same device **so that** two-person verification is practical without shared accounts.
@@ -503,6 +519,13 @@ Phase 7 can replay it (ADR-018).
 > streams (W1A ledger/jobs/exports/API, W1B receiving, W1E documents/labels/scan, W1C moves/boxes/
 > counts/adjustments/reservations, W1D engineering master data and equipment) and one integration
 > pass (shared settings, approvals and system actor; cross-stream guards; ADR-025 to ADR-029).
+>
+> **Wave 2 delivery (2026-10-24).** Seven streams (W2A work orders/board/staging/plans, W2B batch
+> execution, W2C QA/genealogy/deviations, W2D BMR/closure/paper pages, W2E identity, W2F governance and
+> operations, W2G master data) and one integration pass (cross-stream hooks in `src/modules/wiring.ts`,
+> one batch lifecycle, shared reason codes and UOM service, one rate-limit store, step-up
+> re-authentication, automatic reference data; ADR-030 to ADR-042). Statuses follow the stream reports
+> and the integration tests; acceptance criteria were not re-audited one by one at integration.
 
 #### E-2-01 Stock ledger core and jobs
 
@@ -702,6 +725,7 @@ Phase 7 can replay it (ADR-018).
 - Permissions: `quality.disposition.approve` (R) · Entities: `dispositions` (one row per lot), `inventory_lots`, `label_jobs`
 - AC1 Given a filter (site, warehouse, material class, status, expiry range), When qa_qc applies `release` with reason to n lots, Then n disposition rows post in batches inside transactions, lots past expiry are refused (stay `expired`), each lot's balances re-key, reprint jobs queue per `labels.reprint_on_status_change`, and `quality.disposition.approved` is written per lot with the bulk correlation id; a progress state shows done/remaining and failures per lot.
 - States: L X D V; progress · Audit: `quality.disposition.approved` · Depends: → US-2-10, [Q-MIG-13], [Q-MIG-05] · Tests: `quality.disposition_only_qa`, MC-07 on staging R1
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2C). Bulk disposition through the single-lot rules, one correlation id per run; re-authentication through the shared step-up rule (integration).
 
 #### US-2-24 Label verification scan screen (S, Should → Must if early go-live) — `docs/data-migration-plan.md` §10 step 5, MC-06
 - **Delivery status (Wave 1, 2026-10-23):** Not started (not in Wave 1).
@@ -709,6 +733,7 @@ Phase 7 can replay it (ADR-018).
 - Permissions: `inventory.container.edit`, `inventory.label_job.view` · Entities: `containers` (`verified_at`, `verified_by`, `verification_scan_payload`; `docs/data-model.md` §3.3), `label_jobs`
 - AC1 Given the containers of an opening receipt, When each `BC:BOX`/`BC:LOT` label is scanned, Then the container's `verified_at`/`verified_by`/`verification_scan_payload` are set (container state unchanged), the remaining list per location shrinks, a scan of an unknown or other-site code is "not found at your site", and the zone summary shows verified %, target ≥ 99 % (MC-06).
 - States: scanner states; progress · Audit: `inventory.container.verified` · Depends: → US-2-15, → US-2-12 · Tests: `authz.cross_site.scan`; MC-06
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2C). Label verification by scan with the target from `inventory.label_verification.target_pct`.
 
 #### US-2-25 Command-line migration loader with `MIGRATION_WINDOW_OPEN` guard (L, Should → Must if early go-live) — FR-platform-14, `docs/data-migration-plan.md` §9.4, A-MIG-08, R-08
 - **Delivery status (Wave 1, 2026-10-23):** Not started (not in Wave 1).
@@ -735,6 +760,7 @@ Phase 7 can replay it (ADR-018).
 - AC2 Given an author with `platform.help_guide.admin`, When a guide is edited, Then a new draft version is created and `platform.help_guide.updated` is written; a second holder of the permission (never the author) publishes it, writing `platform.help_guide.published`, and the previous version stays readable in the history; a user without the permission gets 403 on edit (`docs/data-model.md` `help_guides`).
 - AC3 Given a guide response, When served, Then it carries version and `updated_at` so the Phase 7 reference cache (US-7-01; `docs/offline-sync.md` cached-read set) stores published versions; until then the sheet shows the O state "Help needs a connection".
 - States: sheet L E X O; editor L X V D · Audit: `platform.help_guide.updated`, `platform.help_guide.published` · Depends: → US-1-08, ⇢ US-2-07, ⇢ US-2-14, ⇢ US-2-18 · Tests: `authz.*` (platform.help_guide); `docs/testing.md` §4.17: `help.guide_versioned`; to add: e2e help sheet keeps step state on both viewports. Each later phase adds guides for its screens; SOP mapping and training are US-9-08.
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2F). In-app help sheet and versioned quick guides for receive, move and count (`docs/help/`).
 
 #### US-2-29 Warehouse sub-scope on site assignments (M, Should) — FR-identity-03 (sub-scope), `docs/permissions-matrix.md` §4.4, A-PM-13
 - **Delivery status (Wave 1, 2026-10-23):** Not started (not in Wave 1).
@@ -743,6 +769,7 @@ Phase 7 can replay it (ADR-018).
 - AC1 Given an assignment with `{"warehouseIds": [W1]}`, When the user posts a movement, count, receipt, container or label job at a location of warehouse W2 at the same site, Then the request is refused as out of scope (404 `NOT_FOUND`, matrix §1) and nothing is written; at W1 it succeeds; reads stay site-wide while `scope.enforce_on_read` is off.
 - AC2 Given a scope change, When saved, Then `identity.site_assignment.scope_changed` records before/after, `permissions_version` bumps and the user's next request applies it; an absent key means the whole site; the line (P3) and department (P5) sub-scopes reuse the same column in their phases.
 - States: standard (assignment grid gains a scope column) · Audit: `identity.site_assignment.scope_changed` · Depends: → US-1-18, → US-2-01 · Tests: `authz.cross_site.*` (inventory); `docs/testing.md` §5.2: `authz.subscope.warehouse_write`
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2E). Warehouse write sub-scope on assignments, enforced by the ledger.
 
 #### US-2-30 Read-only maintenance mode with role allow-list and banner (S, Should → Must before any cutover; pull forward) — A-DEP-21, `docs/operations-runbook.md` §17a.2, `docs/deployment-railway.md` §9.1, `docs/data-migration-plan.md` §13
 - **Delivery status (Wave 1, 2026-10-23):** Not started (not in Wave 1).
@@ -751,6 +778,7 @@ Phase 7 can replay it (ADR-018).
 - AC1 Given the mode enabled with an allow-list, When a user whose roles are outside the list submits any mutating command (API, server action or job enqueue on their behalf), Then the service refuses it before any write and every page shows the banner "Read-only for maintenance"; reads, sign-in, `/api/health` and `/api/ready` keep working; allow-listed roles (for example the loader user of US-2-25 and qa_qc for US-2-23) write normally.
 - AC2 Given the toggle, When changed, Then `platform.setting.changed` records before/after and the cutover record cites its audit event id (runbook §17a.2); the mode is distinct from `MAINTENANCE_MODE=1` (full 503, restores only), which this story does not change.
 - States: banner on every page; forms show X with the maintenance message · Audit: `platform.setting.changed` · Depends: → US-1-19, → US-1-13 · Tests: `docs/testing.md` §5.2: `platform.read_only_mode_blocks_writes`, `platform.read_only_mode_allow_list`
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2F). Read-only maintenance mode with a role allow-list and banner (ADR-039).
 
 ### 4.2 Phase 3 Production + BMR
 
@@ -796,6 +824,7 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 - Permissions: `production.work_order.{view,create,edit,submit,export}`, `production.work_order.approve` (release, S; SoD configurable A-PM-14), `production.work_order.void` · Entities: `work_orders`, `work_order_state_transitions`, `stock_reservations` (`demand_type = work_order`); numbering `WO`
 - AC1 Given no approved effective formula or routing revision for the planned date, When the work order moves to `planned`, Then 422 V-REV; given release, Then reservations per BOM line pick released lots with expiry after planned end (configurable margin), shortages are listed, and release is refused unless `allow_release_with_shortage` is on; illegal transitions are 409 with a `*_state_transitions` row only for legal ones.
 - States: standard; work order detail tabs Overview/Batches/Materials/History · Audit: `production.work_order.released/cancelled` · Depends: → US-3-01, → US-3-02, → US-2-20 · Tests: `statemachine.*` (work order), `batch.snapshot.no_effective_revision`, `fefo.*`
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2A). Work orders plan (revisions frozen) and release (FEFO reservations) with release SoD; progress follows the batches (in progress at the first signed clearance, completed with the last batch at QC, closed at closure).
 
 #### US-3-06 Batch creation with frozen revision snapshot (M, Must) — FR-production-02, FR-masterdata-13, AC-13, W05-03, `docs/data-model.md` §4.4
 **As** a production_planner **I want** creating a batch to copy formula, routing, BMR template and inspection plan revisions and the scaled BOM with tolerances **so that** later revisions can never change this batch's record.
@@ -803,18 +832,21 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 - AC1 Given a 17,600 g formula and a batch size of 8,800 g, When the batch is created, Then proportional lines halve exactly (`decimal.js`), fixed lines copy, tolerance bounds are computed per line, one `process_step_records` row per routing step exists, and the BMR draft renders with watermark `NOT STARTED`.
 - AC2 Given formula revision v2 approved after creation, When the batch and its BMR are re-rendered, Then nothing changes (text diff empty); an `UPDATE batches SET formula_revision_id` after `planned` raises from the trigger (AC-13).
 - States: standard · Audit: `production.batch.created`, `production.batch.revisions_snapshotted` · Depends: → US-3-05, → US-3-19 · Tests: `batch.snapshot.*`; `docs/testing.md` §4.8, §9.4
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2A). Batches are created from planned or released work orders; direct creation is off by default (`production.batch.allow_without_work_order`, A-W2A-01).
 
 #### US-3-07 Production board (M, Must) — FR-production-11, `docs/ux-system.md` §9.3, A-UX-12
 **As** a site_manager **I want** a board of work orders and batches by state with filters and permitted drag transitions **so that** I see what is stuck without walking the floor.
 - Permissions: `production.work_order.view`, `production.batch.view`; transitions need their own permissions · Entities: read models over `work_orders`, `batches`
 - AC1 Given the board, When a card is dragged to a column whose transition is not permitted or not legal, Then a dialog explains and nothing changes; cards show batch number, product, size with unit, line, planned start, assignees, "step n of m" and a risk chip; columns are configurable per site; phones get a horizontal snap carousel.
 - States: L E X D; refetch holds content · Audit: none (reads) · Depends: → US-3-06 · Tests: e2e `flows/production/board.spec.ts` both viewports
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2A). Board with configurable columns; drags run the same commands (plan, release); a staged batch starts only by its signed line clearance, so the board explains instead of starting it.
 
 #### US-3-08 Material staging by scan, dispensing sheet and traveler (M, Must) — W05-05, FR-documents-09 (dispensing sheet, traveler), A-RPT-15
 **As** a warehouse_operator **I want** to pick reserved lots to the staging location by scan and print the dispensing sheet and traveler **so that** the operator weighs only staged, released lots.
 - Permissions: `inventory.movement.post`, `production.material_substitution.approve` (R: substitute another released lot of the same material), `documents.generated_document.create` · Entities: `transfer_requests` (`planned`), `stock_allocations` (`batch_material`), documents `dispensing_sheet`, `traveler`
 - AC1 Given a scanned lot that is not the reserved lot, When staged, Then blocked with the expected lot shown; a qa_qc substitution of the same material records both lots and a reason; a different material is never allowed; when all lines are staged the batch moves `planned → materials_staged`; the dispensing sheet prints expected lots, targets, tolerances and scales but no `BC:LOT` codes (the operator must scan the physical container).
 - States: scanner states · Audit: `inventory.stock_movement.posted`, `production.dispense_record.material_substituted`, `documents.generated_document.generated` · Depends: → US-3-06, → US-2-14, → US-2-11 · Tests: `production.material_substitution_requires_approver`, `production.wrong_material_never_allowed`, PDF text checks per `docs/testing.md` §2.2
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2A). Staging by scan to the staging location with substitutions; dispensing sheet and traveler print from the browser (ADR-026); weighing recommends the staged lots first (integration).
 
 #### E-3-04 Batch execution (W05-06..17)
 
@@ -823,6 +855,7 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 - Permissions: `production.line_clearance.create`, `production.line_clearance.approve` (checker ≠ conductor) · Entities: `process_step_records` (kind `line_clearance`, `area`), `process_step_checklist_results` (answer, photo)
 - AC1 Given a "no" answer, When the step is submitted, Then it stays blocked until resolved or a deviation is raised; the checker signing on the operator's session is refused (checker signs in on the device or their own); the first signed clearance moves the batch `materials_staged → in_process` and the work order to `in_progress`.
 - States: full-screen step with "Step n of 7" · Audit: `production.process_step_record.completed/checked` · Depends: → US-3-08 · Tests: `sod.line_clearance.checker_not_conductor`, `sod.same_session_cannot_check` (E)
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2B). Line clearance with conductor and co-signing checker (ADR-030); the first signed clearance moves the batch to in process.
 
 #### US-3-10 Dispensing and weighing with lot scan, tolerance and checker (L, Must) — FR-production-04, AC-12 (issue), AC-14, W05-07..09, `docs/ux-system.md` §9.3
 **As** a production_operator **I want** to pick the ingredient line, scan the lot, choose the scale and type the weight **so that** a wrong lot, blocked lot or out-of-tolerance weight is stopped at the scale.
@@ -831,18 +864,21 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 - AC2 Given target 3,723.2 g ±1 %, When 3,650.0 g is entered, Then 409 `OUT_OF_TOLERANCE`, re-weigh offered and the primary action becomes "Request exception"; a qa_qc approval (≠ operator, re-auth, reason) saves the row with `exception_approved_by`, `deviation_id` and writes `production.dispense_record.over_tolerance_approved`; 3,700.0 g saves within tolerance; 3.7 kg stores as 3,700 g.
 - AC3 Given a saved dispense, When the same user ticks "checked", Then 409 `SEPARATION_OF_DUTIES` (CHECK `checked_by <> dispensed_by`); a correction supersedes with a reason, never overwrites; when all lines are checked the dispensed total is shown against the theoretical total with the rounding note.
 - States: guided step, keypad, live tolerance chip, A banner · Audit: `production.dispense_record.recorded/checked/voided/over_tolerance_approved` · Depends: → US-3-09, → US-3-04, → US-2-10 · Tests: `dispense.*`, `tolerance.*`, `sod.dispense.checker_not_operator`, `sod.two_roles_no_escape`, `authz.exception.over_tolerance`, `uom.*`; `docs/testing.md` §4.6, §4.7, §9.5
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2B). Weighing by lot scan with tolerance and checker; over-tolerance exceptions open real CX-TOL deviations (integration, `src/modules/wiring.ts`).
 
 #### US-3-11 Process steps, parameters, equipment use, in-process QC hook and curing hold (L, Must) — FR-production-05, FR-production-08 (WIP holds), W05-11..13
 **As** a production_operator **I want** each process sub-step to record readings against limits, the equipment used, start/end and a checker where required **so that** the BMR procedure section is complete and a reading outside limits cannot be hidden.
 - Permissions: `production.process_step_record.{view,create}`, `production.process_step_record.approve`, `production.equipment_use.create`, `quality.inspection.create` (in-process) · Entities: `process_step_records`, `process_step_readings` (supersedes), `equipment_uses` (snapshot of calibration/cleaning), `inspections` (in-process), `quality_holds`
 - AC1 Given a reading outside `routing_step_parameters` limits, When recorded, Then `is_within_limits = false` and the step cannot complete without CX-TOL and a deviation; prerequisite steps must be complete (409 V-STATE); a failed in-process check blocks the step and places a WIP hold; a `hold` step cannot complete before its minimum duration without exception; two operators posting the same step get one success and one 409.
 - States: step screens; "?" opens the frozen instruction revision · Audit: `production.process_step_record.completed/checked`, `quality.hold.placed` · Depends: → US-3-10, → US-3-03 · Tests: `process.parameter_outside_limits`, `concurrency.batch_step_posted_once`, `sod.step.checker_not_performer`
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2B + W2C integration). Process steps, readings, equipment gate with CX-CAL deviations, curing holds; in-process QC: QA starts the step's in-process inspection, a failed one keeps the step blocked and opens an `in_process_check` deviation (the WIP hold, since WIP has no lot yet).
 
 #### US-3-12 Packaging and labelling step with component reconciliation (M, Must) — FR-production-12 (step part; boxing in Phase 4), W05-15, A-PROC-19
 **As** a production_operator **I want** to issue packaging and label lots by scan, record units packed and damaged items, and reconcile issued − used − damaged − returned **so that** no unaccounted label leaves the room.
 - Permissions: `production.process_step_record.create`, `production.scrap_rework_record.create`, `inventory.movement.post` (packaging consumption) · Entities: `batch_materials` (packaging lines), `yield_records.labels_*`, `scrap_rework_records`
 - AC1 Given a reconciliation mismatch beyond the configured tolerance (default 0 for labels), When the step is submitted, Then blocked until recounted or a deviation is raised; packaging lots are validated like ingredients (V-MAT, V-EXP, V-HOLD); the BMR reconciliation table shows the four quantities and the variance.
 - States: step screen · Audit: `production.process_step_record.completed` · Depends: → US-3-11 · Tests: T-14 precondition; `stock.blocked.matrix` (packaging lots)
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2B). Packaging issue and reconciliation per component lot.
 
 #### US-3-13 Yield, scrap/rework, output and consumption posting, transfer to quarantine (L, Must) — FR-production-09, FR-production-10, FR-production-14, AC-15, W05-16..17, A-PROC-21, A-PROC-31, A-PROC-33
 **As** a production_operator **I want** to record output, scrap and rework and post the transfer to quarantine with a checker **so that** consumption and output enter the ledger together and the finished lot starts life quarantined.
@@ -850,6 +886,7 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 - AC1 Given all required steps complete, When the quarantine `BC:LOC` is scanned and the checker confirms, Then one transaction posts consumption per material lot and one output movement creating the finished lot in `quarantine` with expiry = basis date + shelf life (A-PROC-08), creates the finished-product inspection, moves the batch `in_process → awaiting_qc` and the work order to `completed` when it was the last batch; yield outside the configured range requires a deviation first; scrap write-off above threshold needs approval.
 - AC2 Given an intermediate batch (lye solution), When posted, Then the output lot is a material lot (`output_kind = intermediate`) with its own expiry and prints the WIP label; it is dispensed into the soap batch like any material (FR-production-14).
 - States: guided step; confirm dialog "This posts consumption and output" · Audit: `production.production_posting.consumption_posted/output_posted`, `production.yield_record.approved`, `production.scrap_rework_record.approved`, `production.batch.submitted` · Depends: → US-3-12, → US-2-01 · Tests: `ledger.*`, `statemachine.*` (batch), `genealogy.forward_and_backward` (to finished lot); `docs/testing.md` §9.6 steps 1 to 2
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2B). Yield with limits and approval, scrap/rework with shared reason codes, consumption posting timing setting (ADR-031), post to quarantine creates the finished-product inspection, ends staging reservations and syncs the work order.
 
 #### E-3-05 QA release and genealogy (W06)
 
@@ -858,18 +895,21 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 - Permissions: `quality.inspection.{view,create,submit}`, `quality.test_result.{view,create}`, `quality.test_result.void` (correction), `quality.test_result.export` (S) · Entities: `inspections`, `test_results` (supersedes, correction reason), sample label, `stock_movements` (consumption, reason `sample`)
 - AC1 Given a result entered wrongly, When corrected, Then a new row supersedes the original with a reason, the original stays visible struck through on screen and in the BMR annex, and `quality.test_result.corrected` is written; a unit not matching the specification is 422; sampling posts a consumption movement with reason `sample`.
 - States: standard; inspection queue with due time · Audit: `quality.test_result.recorded/corrected`, `quality.inspection.sampled` · Depends: → US-3-03, → US-3-13 · Tests: `quality.test_result_void_appends`, `statemachine.*` (inspection)
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2C). Inspections against the frozen plan, sampling, append-only results and corrections, reviewer ≠ tester; plus in-process inspections per step (integration).
 
 #### US-3-15 Review and batch disposition (M, Must) — FR-quality-04, FR-quality-05 (block), W06-04..06, A-PROC-29, A-PROC-35, `docs/ux-system.md` §9.13
 **As** qa_qc **I want** a second QA user to review results and the BMR and then disposition the batch and its lot **so that** release is a recorded decision by someone who did not run or test the batch.
 - Permissions: `quality.inspection.approve` (reviewer ≠ performer), `quality.disposition.approve` (R), `quality.conditional_release.approve` (R, second qa_qc) · Entities: `inspections.reviewed_by`, `dispositions` (`conditions`, `review_date`), `batches.disposition_id`, `approval_decisions`
 - AC1 Given results and review complete, When the batch is `quarantined` and qa_qc approves `release`, Then lot and batch change status together, open deviations block release unless closed or waived with approval, the decider cannot be the result-entry user or the step-7 operator, a failed test blocks `release` without a documented OOS deviation, and a `conditional_release` needs a second qa_qc user plus conditions and a review date; the FG label reprint job queues with status `RELEASED`.
 - States: standard; disposition form with reason required except for release · Audit: `quality.inspection.reviewed`, `quality.disposition.approved` · Depends: → US-3-14, → US-2-10 · Tests: `sod.results.reviewer_not_tester`, `sod.disposition.decider_not_result_entry`, `quality.conditional_release_two_qa_users`, `quality.disposition_only_qa`; `docs/testing.md` §9.6 step 3
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2C). Release blockers (inspection, OOS, deviations, holds, paper pages since the integration); decider ≠ result entry; conditional release off by default.
 
 #### US-3-16 Genealogy explorer to finished lot (M, Must) — FR-quality-09 (to finished lot), `docs/data-model.md` §10, `docs/ux-system.md` §9.14 (traceability explorer)
 **As** qa_qc **I want** forward and reverse trace from any supplier lot, lot or batch **so that** an incoming problem finds every batch it touched in seconds.
 - Permissions: `quality.genealogy.view`, `quality.genealogy.export` (S) · Entities: view `lot_genealogy_edges`, recursive queries (depth 20, A-DM-10)
 - AC1 Given the seed data, When a forward trace runs from a supplier lot, Then receipt → storage → batch → output lot nodes return within 2 s, rows outside the user's sites are hidden, the trace carries an "as of" timestamp and export writes `platform.export.created`.
 - States: L E X D; graph collapses to an indented list on phones · Audit: `quality.genealogy.viewed`, `platform.export.created` · Depends: → US-3-13 · Tests: `genealogy.forward_and_backward`
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2C). Genealogy to the finished lot, forward and backward, with export; voided weighings are ignored (integration).
 
 #### E-3-06 BMR and production documents
 
@@ -878,6 +918,7 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 - Permissions: `documents.template.{view,create,edit,submit}`, `documents.template.approve` (QA, A-RPT-21) · Entities: `document_template_versions.definition` (`document_template/v1`), renderer `src/modules/documents/renderers/bmr/v1.tsx`; `skus.bmr_template_id`
 - AC1 Given a `bmr` template definition, When it disables sections C, E, H or J or names an unknown renderer, Then approval is refused; the renderer reads only `bom_snapshot` and the batch's own records (lint rule), prints quantities never percentages or costs (A-RPT-22), and groups materials by `phase_code`.
 - States: template editor L X V D; preview · Audit: `documents.template.approved` · Depends: → US-2-11 · Tests: `batch.snapshot.renderer_reads_snapshot_only` (static), T-10
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2D). Versioned BMR template definitions with a pure renderer; template approval.
 
 #### US-3-18 BMR PDF generation, preview, watermarks, QR and controlled reprint (L, Must) — FR-documents-07, AC-18, `docs/reports-and-templates.md` §2.3, §2.6, §10
 **As** a site_manager **I want** a print-ready BMR with batch identity on every page, page x of y, template version and checksum, signature areas and a `BC:DOC` QR, and reprints that require a reason **so that** the paper copy is complete and auditable.
@@ -885,18 +926,21 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 - AC1 Given a closed batch, When the final BMR is generated, Then every page carries batch number, product and document number, `Page x of y`, template version and checksum, the signature section starts a new page, struck-through superseded values show with reasons, the audit appendix is included, and PDF text equals preview text; a stress batch (60 lines, 30 steps) splits no row or signature block (T-09).
 - AC2 Given a reprint, When requested without a reason, Then 422; with a reason the PDF shows `REPRINT n`, the body hash matches the original, `documents.generated_document.reprinted` is written and QA is notified (A-OPS-07); scanning the QR while signed out requires login then opens the batch; an 11th pending PDF job for one user is 429.
 - States: preview with thumbnails, L X S (renderer disabled) · Audit: `documents.generated_document.generated/reprinted/downloaded` · Depends: → US-3-17, → US-3-15 · Tests: PDF checks of `docs/testing.md` §2.2, `documents.qr_requires_auth`, `documents.reprint_audit`, `documents.hash_recorded`, `jobs.pdf_queue_limit`, T-08, T-09, T-11, T-17, T-18; §9.9
+- **Delivery status (Wave 2, 2026-10-24):** Partial (W2D). Numbered, hashed BMR with watermarks, QR, preview and controlled reprint, printed from the browser; the BMR prints line clearance, readings, equipment, packaging, yield with its checker, outputs, inspections and deviations from the execution tables (integration). Gap: no stored PDF artefact (ADR-026).
 
 #### US-3-19 Batch closure and controlled reopen/amend (M, Must) — FR-production-09 (amendment), W05-20..21, A-PM-07
 **As** a site_manager **I want** to close a batch once reconciliation, deviations and documents are complete, and to reopen only with QA co-approval and a reason **so that** a closed record is final yet correctable with a full trail.
 - Permissions: `production.batch.approve` (closure), `production.batch.admin` (R, reopen: held by site_manager; qa_qc co-approves through `approval_decisions` under `approval_rules` `batch_reopen`, A-PM-07) · Entities: `batches` (`closed_at`, `reopen_count`), `batch_state_transitions`, `generated_documents` (BMR `CONTROLLED COPY`, `AMENDED rev n`)
 - AC1 Given open deviations or an unreviewed paper page, When closure is attempted, Then 409 with the blocking items listed; on closure the final BMR is enqueued and reservations released; a reopen needs two approvals, keeps revision ids, increments `reopen_count`, regenerates the BMR as `AMENDED rev n` and supersedes the previous document.
 - States: standard; confirm dialogs · Audit: `production.batch.closed/reopened/amended` · Depends: → US-3-18 · Tests: `production.reopen_requires_two_approvals`, `batch.snapshot.reopen_keeps_revisions`
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2D). Closure with completeness checks and controlled reopen/amend in their own tables (ADR-032); closure closes the work order when it was its last batch.
 
 #### US-3-20 Hybrid paper record pages (M, Should) — FR-documents-08, A-RPT-06, A-PROC-37
 **As** a production_operator at a site whose SOP requires handwriting for a step **I want** to attach the scanned page and have a different person confirm the transcription **so that** paper and electronic records are both retained and linked.
 - Permissions: `documents.file_attachment.create`, `production.process_step_record.approve` (reviewer ≠ transcriber) · Entities: `batch_paper_records`, routing step mode `paper_then_transcribe`, setting `documents.controlled_record`
 - AC1 Given a step in `paper_then_transcribe` mode, When the batch tries to leave `awaiting_qc` without a reviewed page, Then 409; dispensing, outputs and dispositions can never be `paper_only`; section L of the BMR lists pages with hashes.
 - States: upload states · Audit: `documents.file_attachment.uploaded`, `production.batch_paper_record.reviewed` · Depends: → US-3-18, [Q-QA-05] · Tests: `authz.*` (documents.file_attachment), e2e hybrid step
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2D). Hybrid paper pages; every path out of awaiting QC waits for reviewed or voided pages (integration).
 
 #### E-3-07 Deviations and holds (W07 part)
 
@@ -905,6 +949,7 @@ Gate G3 runs the representative Acapulco Soap batch on staging with the fixture 
 - Permissions: `quality.deviation.{view,create,submit}`, `quality.deviation.approve` (close, S, ≠ raiser), `quality.deviation.export`, `quality.hold.create` · Entities: `deviations` (numbering `DEV`), `quality_holds`, links to batch/lot/dispense/step
 - AC1 Given CX-TOL, CX-CAL, a failed in-process check, a yield out of range or a reconciliation mismatch, When approved or detected, Then a deviation is created automatically with references; severity is set by qa_qc; closure requires root cause and resolution and a user other than the raiser; the BMR section I lists deviations and exception approvals; CAPA links and recall cases are Phase 6 (US-6-18), so the CAPA tab shows the **S** state until then.
 - States: standard; raise sheet pre-filled from context · Audit: `quality.deviation.opened/closed`, `quality.hold.placed/lifted` · Depends: → US-3-10, → US-2-10 · Tests: `quality.hold_lift_not_creator`, deviation-blocks-release integration test
+- **Delivery status (Wave 2, 2026-10-24):** Done (W2C). Deviations from any step, containment holds, closure by another QA user.
 
 ### 4.3 Phase 4 Packaging + fulfilment + CRM
 
@@ -1053,7 +1098,7 @@ Key stories are listed as one row each: id, title (size, priority), requirements
 | US-5-12 Time summaries labelled "computed under rule set vX, not for pay" (M, Must) | FR-hr-04, §7 | Given posted events and the single draft rule set, When summaries compute, Then they are visible to `hr_payroll` only, reconcile to events (§7.3), and are never shown as pay. |
 | **E-5-06** US-5-13 Full diagnostics page: Database, Imports, Alerts, Errors and Integrations cards (M, Must) | FR-platform-09 (Phase 5 part) | Given `platform.diagnostics.view`, When opened, Then the Phase 5 cards join Health, Backups, Variables (Phase 1, US-1-26) and Jobs, Reconciliation (Phase 2, US-2-03, US-2-04) and render booleans, counts, names and versions only (`diagnostics.no_secrets`); Integrations shows configured / setup required per adapter; the Sync card stays **S** until Phase 7 (US-7-06). |
 | US-5-14 Weekly access-and-exceptions report (S, Must) | `docs/security.md` §5, §2.11 | Given the week, When generated, Then role grants, restricted-permission use, controlled exceptions, reprints by kind and S/R exports are listed for the owner, delivered per A-PRD-25. |
-| **E-5-07** US-5-15 Production plan from confirmed orders and forecast with availability and reservations (M, Should) | FR-production-13, W05-01, A-PROC-30, `docs/data-model.md` `production_plans`, `production_plan_lines` | Given confirmed sales orders, min-stock rules and (once FR-analytics-08 is scheduled) approved forecast overrides for a period, When a production_planner builds a plan (`production.production_plan.{view,create,edit}`), Then each line shows demand by source (forecast lines carry the Forecast label), on hand, reserved, open work orders and material availability with shortages; the optional approval gate (`production.production_plan.approve`, off by default, A-PROC-30; approver ≠ submitter, A-PM-14) applies when on; converting a plan line creates a `work_orders` row linked by `production_plan_line_id` whose release reserves materials by FEFO (US-3-05); nothing is created automatically. Tests: `authz.sod.approve_own` (production_plan); `docs/testing.md` §4.15: `production.plan_line_creates_work_order_with_reservations`. |
+| **E-5-07** US-5-15 Production plan from confirmed orders and forecast with availability and reservations (M, Should) | FR-production-13, W05-01, A-PROC-30, `docs/data-model.md` `production_plans`, `production_plan_lines` | Given confirmed sales orders, min-stock rules and (once FR-analytics-08 is scheduled) approved forecast overrides for a period, When a production_planner builds a plan (`production.production_plan.{view,create,edit}`), Then each line shows demand by source (forecast lines carry the Forecast label), on hand, reserved, open work orders and material availability with shortages; the optional approval gate (`production.production_plan.approve`, off by default, A-PROC-30; approver ≠ submitter, A-PM-14) applies when on; converting a plan line creates a `work_orders` row linked by `production_plan_line_id` whose release reserves materials by FEFO (US-3-05); nothing is created automatically. Tests: `authz.sod.approve_own` (production_plan); `docs/testing.md` §4.15: `production.plan_line_creates_work_order_with_reservations`. **Delivery status (Wave 2, 2026-10-24):** Partial (W2A): plans from confirmed orders and minimum stock with availability and shortages, optional approval gate (ADR-042), lines convert to work orders; gap: forecast lines wait for FR-analytics-08. |
 
 ### 5.2 Phase 6 Procurement + HR/finance scope
 
