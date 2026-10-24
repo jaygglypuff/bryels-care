@@ -62,6 +62,11 @@ Environment variables (the full per-service table is `docs/deployment-railway.md
 | `PDF_RENDERER` | web, worker | Optional, default `disabled`: documents and labels print through the browser print dialog from their recorded dataset; "Download PDF" shows a "setup required" state until a PDF engine ships (ADR-026, `src/modules/documents/config.ts`). `chromium` is reserved for that engine |
 | `WORKER_CONCURRENCY` | worker | Parallel deliveries per job queue, default `2` |
 | `PORT` | web, worker | Set by Railway; the worker serves `/api/health` and `/api/ready` on it (default 3001 locally) |
+| `LOG_LEVEL`, `LOG_FORMAT` | web, worker | Structured logs (`src/lib/log`, US-1-25): level `debug`/`info`/`warn`/`error` (default `info`; `warn` under tests), format `json` (default) or `pretty` for local reading |
+| `RELEASE` | web, worker | Release tag on every log line and error report (staging/production: `${{RAILWAY_GIT_COMMIT_SHA}}`); default `dev` |
+| `ERROR_REPORTING_DSN` | web, worker | Error-reporting adapter (`src/lib/log/error-reporter.ts`): unset = disabled (logged once, never a failure); `console` = structured `error_report` log line; a Sentry-compatible DSN = events posted to the provider without cookies, headers, bodies or query strings |
+| `TRUSTED_PROXY_HEADER` | web | Header carrying the client IP for the sign-in rate limit (Railway: `x-forwarded-for`). Unset = all clients share one bucket (development only) |
+| `BACKUP_STATUS_SOURCE` | web, worker | `table` = the diagnostics Backups card and the backup-age alert read `backup_runs` (written by `pnpm backup:record` from the backup service). Unset = the card says "not configured" |
 
 Custom SQL: after migrating a database that already holds MVP receipts (not a fresh one), run
 `src/db/sql/w1b.sql` once to mark those receipts as posted.
@@ -71,6 +76,16 @@ Background jobs (`docs/architecture.md` §8, ADR-025) run in the worker: `invent
 `expiring_lot` alerts), `inventory.reservation_expiry` (every 15 min), and on demand
 `inventory.rebuild_balances` and `documents.render`. Scheduled jobs act as the organization's
 system actor (ADR-029).
+Wave 2 W2F adds `platform.metrics_sample` and `platform.alerts_evaluate` (every 5 min: metrics into
+`metrics_samples`, in-app alerts to system administrators for a silent worker, dead-lettered jobs and
+backup age, thresholds in the `alerts.*` settings).
+
+Governance (Wave 2 W2F): `/admin/settings` (settings registry, change requests approved by a second
+person), `/admin/approval-rules` (owner), `/admin/numbering` (versioned numbering patterns),
+`/admin/diagnostics` (Health, Backups, Variables cards) and `/help` (quick guides from `docs/help/*.md`).
+Read-only maintenance mode for a cutover window: setting `platform.maintenance.read_only`
+(`docs/operations-runbook.md` §17a.2). Demo login for the second administrator:
+`admin2@bryels-care.test` / `demo1234`.
 
 ## Deploy to Railway (demo or staging)
 

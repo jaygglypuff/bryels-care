@@ -25,7 +25,7 @@ export async function audit(
   },
 ) {
   const actor = ctx.actor;
-  await tx.insert(auditEvents).values({
+  const [row] = await tx.insert(auditEvents).values({
     organizationId: ctx.organizationId,
     siteId: "siteId" in e ? (e.siteId ?? null) : ctx.currentSiteId,
     actorId: actor.kind === "user" ? ctx.userId : null,
@@ -39,5 +39,7 @@ export async function audit(
     before: (e.before as object) ?? null,
     after: (e.after as object) ?? null,
     correlationId: e.correlationId ?? ctx.correlationId,
-  });
+  }).returning({ id: auditEvents.id });
+  // The id lets a caller cite the event (e.g. the cutover record cites the read-only toggle, runbook §17a.2).
+  return row?.id ?? null;
 }

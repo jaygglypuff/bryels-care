@@ -7,6 +7,8 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     fileParallelism: false,
     testTimeout: 30000,
+    // W2F: resetTestDatabase (migrate + seed) can exceed the 10 s default on a loaded machine.
+    hookTimeout: 60000,
     env: { DATABASE_URL: process.env.TEST_DATABASE_URL ?? "postgres://postgres@localhost:5432/bryels_test" },
   },
   resolve: {

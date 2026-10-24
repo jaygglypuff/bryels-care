@@ -259,8 +259,8 @@ nowhere else may a new code be introduced. Rules:
 | `platform.reencrypt` | platform | on demand after `DATA_ENCRYPTION_KEY` rotation | `(from_key_id, to_key_id, table_name)` | 1 | re-encrypts rows carrying the previous key id in batches (`docs/operations-runbook.md` §15) |
 | `db.backfill` | db (migrations) | dedicated migration or post-deploy step | `(migration_id, table_name)` | 1 | expand/backfill/contract loops of 5,000 rows, resumable, row counts logged (`docs/data-model.md` §13.3) |
 | `platform.backup_dump` | platform | daily cron 18:17 UTC (02:17 Manila) | `(scheduled_for_date)` | 1 | **not a pg-boss job**: it is the Railway `backup` cron service (`docs/deployment-railway.md` §2, §9); registered here so `backup_runs`, the Backups card and alerts use one name |
-| `platform.metrics_sample` | platform | every 5 min | `(floor(now, 5 min))` | 1 | writes `metrics_samples` (queue depth, failed jobs, sync backlog, reconciliation differences, backup age) from the first staging deploy; web replicas also write request counters directly (`docs/deployment-railway.md` §8.2) |
-| `platform.alerts_evaluate` | platform | every 5 min, after the sample | `(floor(now, 5 min))` | 2 | evaluates alert rules, deduplicates per rule and window, delivers in-app/webhook (`docs/deployment-railway.md` §8) |
+| `platform.metrics_sample` | platform | every 5 min | `(floor(now, 5 min))` | 1 (implemented, Wave 2 W2F; `src/modules/governance/jobs/metrics.ts`) | writes `metrics_samples` (queue depth, failed jobs, sync backlog, reconciliation differences, backup age) from the first staging deploy; web replicas also write request counters directly (`docs/deployment-railway.md` §8.2) |
+| `platform.alerts_evaluate` | platform | every 5 min, after the sample | `(floor(now, 5 min))` | 2 (implemented, Wave 2 W2F: in-app only, conditions read live, so it does not depend on the sample order) | evaluates alert rules, deduplicates per rule and window, delivers in-app/webhook (`docs/deployment-railway.md` §8) |
 | `platform.notification_dispatch` | platform | domain events (approval requested, dead-lettered job, alert, action-centre item) | `(notification_id, channel)` | 2 in-app / 5 email | email only when `EMAIL_PROVIDER` is configured; otherwise in-app only, never a fake send |
 | `platform.import_job.process` | platform | upload completes and mapping approved (master-data and opening-balance imports) | `(import_job_id)` | 5 (loader rehearsal earlier per `docs/data-migration-plan.md`) | row-level results in `import_job_rows`; posting is a separate user command (`platform.import_job.post`) |
 | `platform.retention_sweep` | platform | weekly | `(retention_policy_id, iso_week)` | 2 | deletes or anonymises per `retention_policies`, honours `legal_holds` (`docs/data-model.md` §12.4, `docs/security.md` §7) |
@@ -367,7 +367,12 @@ service worker ships in Phase 7.
 ## 11. Observability and operations
 
 - Structured JSON logs with `requestId`, `userId`, `siteId`, `module`, `command`, duration
-  and outcome; no secrets or personal data in logs.
+  and outcome; no secrets or personal data in logs. As built (W2F): `src/lib/log` (JSON lines,
+  redaction, AsyncLocalStorage request context), `src/middleware.ts` sets and echoes `X-Request-Id`,
+  which becomes the AuthContext correlation id and so `audit_events.correlation_id`;
+  `src/instrumentation.ts` and the API pipeline send unexpected errors to
+  `src/lib/log/error-reporter.ts` (`ERROR_REPORTING_DSN`). Rate limits use the shared Postgres store
+  `src/lib/rate-limit` (`rate_limit_buckets`).
 - `/api/health` (process alive) and `/api/ready` (database reachable, migrations current,
   queue reachable) for Railway health checks.
 - Error reporting hook (provider adapter; Sentry-compatible) with release tagging.

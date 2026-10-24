@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { Help } from "@/ui/help/help";
 import { requireContext } from "@/lib/auth/context";
 import { receivingFormData } from "@/modules/inventory/receiving";
 import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
@@ -19,6 +20,7 @@ export default async function ReceivePage() {
         subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · unplanned receipt from a supplier delivery`}
         actions={
           <>
+            <Help screen="inventory.receive" />
             {ctx.can("procurement.goods_receipt.view") && <LinkButton href="/inventory/receipts" variant="secondary">Receipts & drafts</LinkButton>}
             {ctx.can("inventory.movement.post") && <LinkButton href="/inventory/receive/put-away" variant="secondary">Put away</LinkButton>}
           </>

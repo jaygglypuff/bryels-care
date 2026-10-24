@@ -3,6 +3,8 @@ import { requireContext } from "@/lib/auth/context";
 import { D, fmtDateTime } from "@/lib/qty";
 import { type LedgerDifference, getReconciliationRun, listReconciliationRuns } from "@/modules/inventory";
 import { JOB_STATUSES, jobCounts, listJobs, workerStatus } from "@/modules/platform";
+import { backupsCard, healthCard, variablesCard } from "@/modules/governance";
+import { OpsCards, PlannedCards } from "./ops-cards";
 import { Card, CardTitle, EmptyState, Input, PageHeader, Table, Td, buttonClass, cx } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
@@ -15,7 +17,11 @@ const RUN_TONE = { clean: "ok", differences: "bad", rebuilt: "info", failed: "ba
 
 type Search = { status?: string; job?: string; run?: string; ok?: string; error?: string };
 
-/** Admin diagnostics: Worker, Jobs (US-2-03) and Reconciliation (US-2-04) cards. No secrets are shown. */
+/**
+ * Admin diagnostics: Health, Backups, Variables (US-1-26), Worker, Jobs (US-2-03) and
+ * Reconciliation (US-2-04) cards, then the cards of later phases as honest "not yet" states.
+ * No secrets are shown: variables are names with present/missing only.
+ */
 export default async function DiagnosticsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const ctx = await requireContext();
   if (!ctx.can("platform.job.view") && !ctx.can("platform.diagnostics.view")) return <Forbidden what="diagnostics" />;
@@ -24,7 +30,9 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
   const canAdmin = ctx.can("platform.job.admin");
   const canBalanceAdmin = ctx.can("inventory.balance.admin");
   const status = sp.status && (JOB_STATUSES as readonly string[]).includes(sp.status) ? sp.status : undefined;
-  const [worker, counts, jobs, runs] = await Promise.all([
+  const canDiag = ctx.can("platform.diagnostics.view");
+  const [ops, worker, counts, jobs, runs] = await Promise.all([
+    canDiag ? Promise.all([healthCard(ctx), backupsCard(ctx), variablesCard(ctx)]) : null,
     workerStatus(ctx),
     canJobs ? jobCounts(ctx) : null,
     canJobs ? listJobs(ctx, { status, limit: 50 }) : [],
@@ -39,6 +47,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
       <PageHeader title="Diagnostics" subtitle="Background jobs, the worker and stock reconciliation. Payloads are summarised; secrets are never shown." />
       {sp.ok && <Banner tone="ok" title={sp.ok} />}
       {sp.error && <Banner tone="bad" title="Not done">{sp.error}</Banner>}
+      {ops && <OpsCards health={ops[0]} backups={ops[1]} variables={ops[2]} />}
 
       <Card id="worker">
         <CardTitle>Worker</CardTitle>
@@ -189,6 +198,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
           )}
         </Card>
       )}
+      {canDiag && <PlannedCards />}
     </div>
   );
 }

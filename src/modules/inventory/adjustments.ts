@@ -27,6 +27,17 @@ import { claimIdempotencyKey, stateMachine, storeIdempotentResult } from "./comm
 import { assertLocationsNotFrozen } from "./counts";
 import { looseQty } from "./moves";
 import { getInventorySetting } from "./policy";
+import { type ApprovalEvaluation, canDecideEvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited } from "@/modules/governance";
+
+/** Value basis of the `stock_adjustment` approval rules; an unknown value counts as above every bound when configured. */
+function adjustmentBasis(total: Decimal.Value, valueUnknown: boolean, unknownNeeds: boolean) {
+  return { amount: valueUnknown && unknownNeeds ? ("unbounded" as const) : new Decimal(total).toString() };
+}
+
+/** Wave 1 documents carry one boolean for a second step; more steps need a document change first. */
+function assertTwoSteps(ev: ApprovalEvaluation) {
+  if (ev.steps.length > 2) throw new DomainError("setup_required", "The approval rules for stock adjustments define more than two steps; adjustments support two. Ask the owner to adjust the rules.");
+}
 
 type AdjustmentStatus = "draft" | "submitted" | "approved" | "rejected" | "posted" | "cancelled";
 
@@ -167,9 +178,11 @@ export async function submitAdjustment(ctx: AuthContext, id: string) {
     const lines = await tx.select().from(stockAdjustmentLines).where(eq(stockAdjustmentLines.stockAdjustmentId, a.id));
     const valueUnknown = lines.some((l) => l.unitCostAmount === null);
     const total = lines.reduce((s, l) => (l.unitCostAmount === null ? s : s.plus(new Decimal(l.qtyBase).times(l.unitCostAmount))), new Decimal(0));
-    const threshold = new Decimal(await getInventorySetting(tx, a.organizationId, a.siteId, "inventory.adjustment.second_step_value"));
+    // US-1-14: the thresholds are `approval_rules` rows (document type stock_adjustment), evaluated and audited here.
     const unknownNeeds = await getInventorySetting(tx, a.organizationId, a.siteId, "inventory.adjustment.unknown_value_requires_second_step");
-    const requiresSecond = total.gt(threshold) || (valueUnknown && unknownNeeds);
+    const ev = await evaluateApprovalRulesAudited(tx, ctx, { documentType: "stock_adjustment", siteId: a.siteId, recordId: a.id, recordNumber: a.adjustmentNumber, basis: adjustmentBasis(total, valueUnknown, unknownNeeds) });
+    assertTwoSteps(ev);
+    const requiresSecond = ev.steps.length > 1;
     await tx
       .update(stockAdjustments)
       .set({ status: "submitted", submittedBy: ctx.userId, submittedAt: new Date(), totalValueAmount: total.toDecimalPlaces(4).toString(), valueUnknown, requiresSecondApproval: requiresSecond, updatedAt: new Date() })
@@ -209,11 +222,15 @@ export async function approveAdjustment(ctx: AuthContext, id: string, note?: str
       .from(approvalDecisions)
       .where(and(eq(approvalDecisions.recordType, "stock_adjustment"), eq(approvalDecisions.recordId, a.id), eq(approvalDecisions.decision, "approved")));
     const step = decisions.some((d) => d.step === 1) ? 2 : 1;
-    if (step === 2) {
-      const role = await getInventorySetting(tx, a.organizationId, null, "inventory.adjustment.second_step_role");
-      if (!ctx.roleCodes.includes(role)) throw new DomainError("forbidden", `This adjustment is above the approval threshold; the second approval needs the ${role.replace(/_/g, " ")} role.`);
-      if (decisions.some((d) => d.decidedBy === ctx.userId)) throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: the second approval must come from a different person than the first.");
+    const unknownNeeds = await getInventorySetting(tx, a.organizationId, a.siteId, "inventory.adjustment.unknown_value_requires_second_step");
+    const ev = await evaluateApprovalRules(tx, a.organizationId, { documentType: "stock_adjustment", siteId: a.siteId, basis: adjustmentBasis(a.totalValueAmount ?? 0, a.valueUnknown, unknownNeeds) });
+    const stepDef = ev.steps[step - 1];
+    const pendingSince = step === 1 ? a.submittedAt : (decisions.find((d) => d.step === 1)?.decidedAt ?? null);
+    if (stepDef && !canDecideEvaluatedStep(ctx, stepDef, pendingSince)) {
+      const roles = stepDef.roleCodes.map((r) => r.replace(/_/g, " ")).join(" or ");
+      throw new DomainError("forbidden", step === 2 ? `This adjustment is above the approval threshold; the second approval needs the ${roles} role.` : `This approval needs the ${roles} role.`);
     }
+    if (step === 2 && decisions.some((d) => d.decidedBy === ctx.userId)) throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: the second approval must come from a different person than the first.");
     await tx.insert(approvalDecisions).values({ organizationId: a.organizationId, siteId: a.siteId, recordType: "stock_adjustment", recordId: a.id, step, decision: "approved", decidedBy: ctx.userId, note: note?.trim() || null });
     const final = step === 2 || !a.requiresSecondApproval;
     if (final) {

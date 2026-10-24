@@ -6,7 +6,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { daysUntil, D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
 import { invalidScanMessage, parseScan, type ScanType } from "@/lib/scan/payload";
-import { scanRateLimiter } from "@/lib/scan/rate-limit";
+import { limitScanLookup } from "@/lib/rate-limit";
 import { activeStationsAt, approvedLabelTemplatesFor, findDocumentByNumber, labelHistory } from "@/modules/documents";
 import { activeCountsForLocations, describeBoxForScan, getContainer, getLotDetail, heldLocations, isPastExpiry, resolveScan } from "@/modules/inventory";
 import { equipmentAvailability } from "@/modules/masterdata";
@@ -386,12 +386,12 @@ async function documentCard(ctx: AuthContext, value: string, payload: string): P
 
 const NOT_TRACKED: Partial<Record<ScanType, string>> = {};
 
-/** Resolves one scan into a card. Rate limited per user (120 per minute). */
+/** Resolves one scan into a card. Rate limited per user (setting platform.rate_limits, 120 per minute) in the shared store (US-1-25). */
 export async function resolveScanCard(ctx: AuthContext, raw: string): Promise<ScanCard> {
   ctx.require("inventory.lot.view");
   const p = parseScan(raw);
   const payload = p.kind === "typed" ? p.payload : p.kind === "untyped" ? p.value : p.input;
-  if (!scanRateLimiter.hit(ctx.userId)) return { outcome: "rate_limited", payload, message: "Too many look-ups in a minute. Wait a moment, then scan again." };
+  if (!(await limitScanLookup(ctx.organizationId, ctx.userId)).allowed) return { outcome: "rate_limited", payload, message: "Too many look-ups in a minute. Wait a moment, then scan again." };
   if (p.kind === "invalid") return { outcome: "not_recognised", payload, message: invalidScanMessage(p) };
 
   try {

@@ -15,7 +15,7 @@ import {
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
-import { APPROVAL_POLICIES, ROUTING_SEQUENCING_ONLY_POLICY } from "./approval-policy";
+import { type ApprovalRuleType, loadApprovalPolicy } from "./approval-policy";
 import { CreateRoutingInput, DecisionInput, RetireInput, SaveRoutingDraftInput, parseInput } from "./schemas";
 import {
   approvalState,
@@ -37,8 +37,13 @@ import {
  */
 const lbl = (code: string, n: number) => `${code} revision ${n}`;
 
-function policyFor(changeScope: string | null) {
-  return changeScope === "sequencing_only" ? ROUTING_SEQUENCING_ONLY_POLICY : APPROVAL_POLICIES.routing_revision;
+/** A sequencing-only change has its own approval rules (A-PROC-41), read from `approval_rules` (US-1-14). */
+function ruleTypeFor(changeScope: string | null): ApprovalRuleType {
+  return changeScope === "sequencing_only" ? "routing_revision_sequencing" : "routing_revision";
+}
+
+function policyFor(q: DbOrTx, organizationId: string, changeScope: string | null) {
+  return loadApprovalPolicy(q, organizationId, ruleTypeFor(changeScope));
 }
 
 async function lockRevision(tx: Tx, ctx: AuthContext, revisionId: string) {
@@ -276,7 +281,7 @@ export async function withdrawRoutingRevision(ctx: AuthContext, revisionId: stri
     const { rev, routing } = await lockRevision(tx, ctx, revisionId);
     assertVersionTransition(lbl(routing.code, rev.revisionNo), rev.status, "draft");
     if (rev.submittedBy !== ctx.userId) throw new DomainError("forbidden", "Only the person who submitted the revision can withdraw it.");
-    const st = await approvalState(tx, ctx.organizationId, "routing_revision", rev.id, policyFor(rev.changeScope));
+    const st = await approvalState(tx, ctx.organizationId, "routing_revision", rev.id, await policyFor(tx, ctx.organizationId, rev.changeScope));
     if (st.decisions.length) throw new DomainError("state", "An approver has already decided on this revision; it can no longer be withdrawn.");
     await tx.update(routingRevisions).set({ status: "draft", submittedBy: null, submittedAt: null, changeScope: null }).where(eq(routingRevisions.id, rev.id));
     await audit(tx, ctx, { action: "masterdata.routing_revision.withdrawn", entityType: "routing_revision", entityId: rev.id, entityNumber: lbl(routing.code, rev.revisionNo), siteId: null, before: { status: rev.status }, after: { status: "draft" } });
@@ -305,7 +310,7 @@ export async function decideRoutingRevision(ctx: AuthContext, raw: unknown) {
       excludedUserIds: [rev.createdBy, rev.submittedBy],
       decision: input.decision,
       note: input.note,
-      policy: policyFor(rev.changeScope),
+      ruleType: ruleTypeFor(rev.changeScope),
     });
     const base = { entityType: "routing_revision", entityId: rev.id, entityNumber: name, siteId: null } as const;
     if (d.rejected) {
@@ -319,7 +324,7 @@ export async function decideRoutingRevision(ctx: AuthContext, raw: unknown) {
     }
     const closed = await supersedeOverlapping(tx, "routing_revisions", sql`routing_id = ${routing.id}`, rev.id, effectiveFrom);
     await tx.update(routingRevisions).set({ status: "approved", approvedBy: ctx.userId, approvedAt: new Date(), approvalNote: input.note, effectiveFrom }).where(eq(routingRevisions.id, rev.id));
-    const st = await approvalState(tx, ctx.organizationId, "routing_revision", rev.id, policyFor(rev.changeScope));
+    const st = await approvalState(tx, ctx.organizationId, "routing_revision", rev.id, await policyFor(tx, ctx.organizationId, rev.changeScope));
     await audit(tx, ctx, {
       ...base,
       action: "masterdata.routing_revision.approved",
@@ -439,7 +444,7 @@ export async function getRoutingRevision(ctx: AuthContext, revisionId: string) {
     .where(and(eq(routingRevisions.id, revisionId), eq(routings.organizationId, ctx.organizationId)));
   if (!r) return null;
   const steps = await loadRoutingSteps(db, r.rev.id);
-  const policy = policyFor(r.rev.changeScope);
+  const policy = await policyFor(db, ctx.organizationId, r.rev.changeScope);
   const approval = await approvalState(db, ctx.organizationId, "routing_revision", r.rev.id, policy);
   const ids = [r.rev.createdBy, r.rev.submittedBy, r.rev.approvedBy].filter((x): x is string => !!x);
   const names = ids.length ? new Map((await db.select({ id: users.id, n: users.displayName }).from(users).where(inArray(users.id, ids))).map((u) => [u.id, u.n])) : new Map<string, string>();

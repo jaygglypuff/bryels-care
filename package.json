@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "api:contract": "tsx scripts/api-contract.ts",
+    "backup:record": "tsx scripts/record-backup-run.ts",
     "worker": "tsx --require ./scripts/worker-preload.cjs src/worker.ts"
   },
   "packageManager": "pnpm@10.28.0",

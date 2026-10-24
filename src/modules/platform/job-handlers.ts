@@ -5,6 +5,7 @@
  * fails; the registry test checks every code against the table in docs/architecture.md §8.
  */
 import { documentsRenderJob } from "@/modules/documents/jobs/render";
+import { platformAlertsEvaluateJob, platformMetricsSampleJob } from "@/modules/governance/jobs/metrics";
 import { inventoryExpiryCheckJob, inventoryRebuildBalancesJob, inventoryReconcileJob, inventoryReservationExpiryJob } from "@/modules/inventory/jobs";
 import { type AnyJobDefinition, type JobRegistry, createJobRegistry } from "./job-definition";
 
@@ -19,6 +20,8 @@ export function jobDefinitions(): AnyJobDefinition[] {
     inventoryExpiryCheckJob,
     inventoryReservationExpiryJob,
     documentsRenderJob,
+    platformMetricsSampleJob,
+    platformAlertsEvaluateJob,
   ];
 }
 

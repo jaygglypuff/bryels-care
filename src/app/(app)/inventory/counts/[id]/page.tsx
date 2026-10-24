@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Help } from "@/ui/help/help";
 import { notFound } from "next/navigation";
 import { randomUUID } from "node:crypto";
 import Decimal from "decimal.js";
@@ -48,6 +49,7 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
         }
         actions={
           <>
+            <Help screen="inventory.count" />
             <CountStatusChip status={c.status} />
             <LinkButton href={`/inventory/counts/${c.id}/sheet`} variant="secondary" size="sm" target="_blank">Count sheet</LinkButton>
           </>

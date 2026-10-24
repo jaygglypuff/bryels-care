@@ -1,3 +1,5 @@
+import { reportErrorInBackground } from "@/lib/log/error-reporter";
+
 /** Typed domain errors mapped to HTTP codes and form messages (architecture §5). */
 export type ErrorCode =
   | "validation"
@@ -12,7 +14,9 @@ export type ErrorCode =
   | "out_of_tolerance"
   | "setup_required"
   | "reauth_required"
-  | "too_large";
+  | "too_large"
+  | "read_only"
+  | "rate_limited";
 
 export class DomainError extends Error {
   constructor(
@@ -39,6 +43,8 @@ export const HTTP_STATUS: Record<ErrorCode, number> = {
   setup_required: 503,
   reauth_required: 401,
   too_large: 413,
+  read_only: 503,
+  rate_limited: 429,
 };
 
 export type ActionState = { ok: boolean; message?: string; fieldErrors?: Record<string, string> } | null;
@@ -62,6 +68,6 @@ export function toActionState(e: unknown): ActionState {
     for (const i of issues) fieldErrors[String(i.path[0] ?? "form")] = i.message;
     return { ok: false, message: "Check the highlighted fields.", fieldErrors };
   }
-  console.error(e);
+  reportErrorInBackground(e, { routeType: "action" });
   return { ok: false, message: "Something went wrong. The change was not saved." };
 }

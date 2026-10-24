@@ -4,6 +4,8 @@ import { batches, inventoryLots } from "@/db/schema";
 import { requireContext } from "@/lib/auth/context";
 import { ROLE_BUNDLES } from "@/lib/permissions";
 import { unreadNotificationCount } from "@/modules/platform";
+import { getMaintenanceState } from "@/lib/maintenance";
+import { MaintenanceBanner } from "@/ui/maintenance-banner";
 import { NAV, QUICK_ACTIONS } from "./nav";
 import { Shell } from "./shell";
 import { signOut, switchSite } from "./actions";
@@ -22,6 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const quickActions = QUICK_ACTIONS.filter((q) => !q.permission || ctx.can(q.permission));
   const qaCount = ctx.can("quality.disposition.view") ? await openQaCount(ctx.currentSiteId) : null;
   const unreadCount = await unreadNotificationCount(ctx);
+  const maintenance = await getMaintenanceState(db, ctx.organizationId);
   return (
     <Shell
       nav={nav}
@@ -34,6 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       switchSite={switchSite}
       signOut={signOut}
     >
+      {maintenance.enabled && <MaintenanceBanner canWrite={!ctx.readOnly} />}
       {children}
     </Shell>
   );

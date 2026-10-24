@@ -160,6 +160,8 @@ export const workerHeartbeats = pgTable("worker_heartbeats", {
   lastHeartbeatAt: timestamp("last_heartbeat_at", { withTimezone: true }).notNull().defaultNow(),
   queueDepth: integer("queue_depth"),
   migrationsCurrent: boolean("migrations_current").notNull().default(true),
+  /** W2F (US-1-26): allow-listed variable names → present (true) or missing (false); never values. */
+  envPresence: jsonb("env_presence"),
 });
 
 /**

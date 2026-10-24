@@ -1,38 +1,50 @@
+import type { DbOrTx } from "@/db/client";
 import type { Permission } from "@/lib/permissions";
+import { type ApprovalDocumentType, BASE_APPROVE_PERMISSION, DEFAULT_APPROVAL_RULES, type EvaluatedStep, evaluateApprovalRules } from "@/modules/governance";
 
 /**
- * Default approval steps per record type (docs/permissions-matrix.md §5.2 defaults, A-PM-05,
- * A-PM-15, A-PROC-23, A-PROC-41). These are assumptions that need owner confirmation.
- *
- * They are kept as typed data here until the `approval_rules` table (US-1-14) exists; the
- * evaluation in versioning.ts already records every decision in `approval_decisions`, so moving
- * the policy into `approval_rules` rows later changes no stored data.
+ * Approval steps per master-data record type. Since Wave 2 (US-1-14) they are read from the
+ * shared `approval_rules` table through the governance evaluation (docs/permissions-matrix.md
+ * §5.2); the seeded rows equal the former typed defaults (A-PM-05, A-PM-15, A-PROC-23,
+ * A-PROC-41), which remain the fallback for an organization without rows. Every decision is still
+ * recorded in `approval_decisions`, so stored data did not change.
  */
 export type ApprovalRecordType = "formula_revision" | "routing_revision" | "work_instruction_revision" | "inspection_plan" | "equipment_override";
 
-export type ApprovalStepPolicy = { step: number; label: string; roles: string[]; permission: Permission };
+/** `roles` empty = any role holding the permission; `requiredCount` distinct approvers (default 1). */
+export type ApprovalStepPolicy = { step: number; label: string; roles: string[]; permission: Permission; requiredCount?: number };
 
+/** Rule document type for a record type (a sequencing-only routing change has its own rules, A-PROC-41). */
+export type ApprovalRuleType = ApprovalRecordType | "routing_revision_sequencing";
+
+export function toStepPolicy(steps: EvaluatedStep[], ruleType: ApprovalRuleType): ApprovalStepPolicy[] {
+  const base = BASE_APPROVE_PERMISSION[ruleType as ApprovalDocumentType] as Permission;
+  return steps.map((s) => ({ step: s.step, label: s.label, roles: s.roleCodes, permission: (s.permission as Permission | null) ?? base, requiredCount: s.requiredCount }));
+}
+
+/** No matching rule → one step: the base `.approve` permission, any role (permissions-matrix §5.2). */
+function baseOnly(ruleType: ApprovalRuleType): ApprovalStepPolicy[] {
+  return [{ step: 1, label: "Approval", roles: [], permission: BASE_APPROVE_PERMISSION[ruleType as ApprovalDocumentType] as Permission }];
+}
+
+/** The steps that apply now (organization-wide rules, or the record's site rules when `siteId` is given). */
+export async function loadApprovalPolicy(q: DbOrTx, organizationId: string, ruleType: ApprovalRuleType, siteId?: string | null): Promise<ApprovalStepPolicy[]> {
+  const ev = await evaluateApprovalRules(q, organizationId, { documentType: ruleType, siteId: siteId ?? null });
+  return ev.steps.length ? toStepPolicy(ev.steps, ruleType) : baseOnly(ruleType);
+}
+
+function defaultsFor(ruleType: ApprovalRuleType): ApprovalStepPolicy[] {
+  const base = BASE_APPROVE_PERMISSION[ruleType as ApprovalDocumentType] as Permission;
+  return DEFAULT_APPROVAL_RULES.filter((r) => r.documentType === ruleType).map((r) => ({ step: r.step, label: r.label, roles: r.requiredRoleCodes, permission: (r.requiredPermissionCode as Permission | null) ?? base }));
+}
+
+/** The built-in defaults (what the seed writes); kept for display and backwards compatibility. */
 export const APPROVAL_POLICIES: Record<ApprovalRecordType, ApprovalStepPolicy[]> = {
-  formula_revision: [
-    { step: 1, label: "QA approval", roles: ["qa_qc"], permission: "masterdata.formula.approve" },
-    { step: 2, label: "Site manager or owner approval", roles: ["site_manager", "owner_director"], permission: "masterdata.formula.approve" },
-  ],
-  routing_revision: [
-    { step: 1, label: "QA approval", roles: ["qa_qc"], permission: "masterdata.routing.approve" },
-    { step: 2, label: "Site manager or owner approval", roles: ["site_manager", "owner_director"], permission: "masterdata.routing.approve" },
-  ],
-  work_instruction_revision: [{ step: 1, label: "Approval", roles: ["qa_qc", "site_manager", "owner_director"], permission: "masterdata.work_instruction.approve" }],
-  inspection_plan: [{ step: 1, label: "Second QA approval", roles: ["qa_qc"], permission: "quality.inspection_plan.approve" }],
-  equipment_override: [
-    { step: 1, label: "Site manager approval", roles: ["site_manager"], permission: "production.equipment_override.approve" },
-    { step: 2, label: "QA co-approval", roles: ["qa_qc"], permission: "production.equipment_override.approve" },
-  ],
+  formula_revision: defaultsFor("formula_revision"),
+  routing_revision: defaultsFor("routing_revision"),
+  work_instruction_revision: defaultsFor("work_instruction_revision"),
+  inspection_plan: defaultsFor("inspection_plan"),
+  equipment_override: defaultsFor("equipment_override"),
 };
 
-/**
- * A routing revision whose steps equal the superseded revision except for their order is a
- * sequencing-only change: one approval by a site manager or owner suffices (A-PROC-41).
- */
-export const ROUTING_SEQUENCING_ONLY_POLICY: ApprovalStepPolicy[] = [
-  { step: 1, label: "Site manager or owner approval (sequencing-only change)", roles: ["site_manager", "owner_director"], permission: "masterdata.routing.approve" },
-];
+export const ROUTING_SEQUENCING_ONLY_POLICY: ApprovalStepPolicy[] = defaultsFor("routing_revision_sequencing");

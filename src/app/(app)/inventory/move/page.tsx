@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Help } from "@/ui/help/help";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { listRecentTransfers, listSiteLocations } from "@/modules/inventory/moves";
@@ -35,7 +36,7 @@ export default async function MovePage({ searchParams }: { searchParams: Promise
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
-      <PageHeader title="Scan to move" subtitle={`${ctx.currentSite.code} · scan the box or lot, the quantity, then the destination; confirm once`} />
+      <PageHeader title="Scan to move" subtitle={`${ctx.currentSite.code} · scan the box or lot, the quantity, then the destination; confirm once`} actions={<Help screen="inventory.move" />} />
       {locations.length === 0 ? (
         <EmptyState title="No locations at this site">Locations are set up by the system administrator.</EmptyState>
       ) : (
