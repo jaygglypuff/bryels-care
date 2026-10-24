@@ -6,10 +6,23 @@ import { Button, Card, CardTitle, Field, Input, Select, Textarea } from "@/ui/co
 import { FormMessage } from "@/ui/form";
 import { Chip } from "@/ui/status";
 import { fmtMoney, fmtQty } from "@/lib/qty";
+import type { ActionState } from "@/lib/errors";
 import { createOrderAction } from "../actions";
 import { useActionForm } from "../use-action-form";
 
-type CustomerOpt = { id: string; code: string; name: string; shipToAddress: string; minShelfLifeDays: number };
+type CustomerOpt = { id: string; code: string; name: string; status?: string; shipToAddress: string; minShelfLifeDays: number; addresses?: { id: string; label: string; text: string; isDefaultShipTo: boolean; isDefaultBillTo: boolean }[] };
+/** Per customer id, per product id: price breaks in force today (only for users who may see prices). */
+export type PriceBooks = Record<string, Record<string, { minQtyUnits: string; unitAmount: string; code: string; kind: string }[]>>;
+export type OrderFormInitial = { orderId: string; customerId: string; customerPoNumber: string; requestedDeliveryOn: string; notes: string; shipToAddressId: string; billToAddressId: string; lines: { productId: string; qtyUnits: string; unitPrice: string }[] };
+
+function listPrice(book: PriceBooks[string] | undefined, productId: string, qty: string): string | null {
+  const breaks = book?.[productId];
+  if (!breaks?.length) return null;
+  const n = Number(qty || "0");
+  let hit: (typeof breaks)[number] | null = null;
+  for (const b of breaks) if (Number(b.minQtyUnits) <= n) hit = b;
+  return (hit ?? breaks[0]).unitAmount;
+}
 type ProductOpt = { id: string; skuCode: string; name: string; available: string };
 type Line = { key: number; productId: string; qtyUnits: string; unitPrice: string };
 
@@ -27,36 +40,53 @@ export function NewOrderForm({
   today,
   initialCustomerId,
   siteName,
+  priceBooks,
+  pricesVisible = true,
+  initial,
+  action,
 }: {
   customers: CustomerOpt[];
   products: ProductOpt[];
   today: string;
   initialCustomerId?: string;
   siteName: string;
+  priceBooks?: PriceBooks;
+  pricesVisible?: boolean;
+  initial?: OrderFormInitial;
+  action?: (prev: ActionState, fd: FormData) => Promise<ActionState>;
 }) {
-  const { state, pending, onSubmit } = useActionForm(createOrderAction);
-  const [customerId, setCustomerId] = useState(initialCustomerId ?? "");
-  const [lines, setLines] = useState<Line[]>([{ key: 1, productId: "", qtyUnits: "", unitPrice: "" }]);
-  const [nextKey, setNextKey] = useState(2);
+  const { state, pending, onSubmit } = useActionForm(action ?? createOrderAction);
+  const [customerId, setCustomerId] = useState(initial?.customerId ?? initialCustomerId ?? "");
+  const [lines, setLines] = useState<Line[]>(initial ? initial.lines.map((l, i) => ({ key: i + 1, ...l })) : [{ key: 1, productId: "", qtyUnits: "", unitPrice: "" }]);
+  const [nextKey, setNextKey] = useState((initial?.lines.length ?? 1) + 1);
   // Controlled fields so values survive a failed submit (React resets uncontrolled forms after an action).
-  const [po, setPo] = useState("");
-  const [deliveryOn, setDeliveryOn] = useState("");
-  const [notes, setNotes] = useState("");
+  const [po, setPo] = useState(initial?.customerPoNumber ?? "");
+  const [deliveryOn, setDeliveryOn] = useState(initial?.requestedDeliveryOn ?? "");
+  const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [shipToId, setShipToId] = useState(initial?.shipToAddressId ?? "");
+  const [billToId, setBillToId] = useState(initial?.billToAddressId ?? "");
   const fe = state?.fieldErrors ?? {};
   const customer = customers.find((c) => c.id === customerId);
+  const book = priceBooks?.[customerId];
+  const addresses = customer?.addresses ?? [];
+  const shipTo = addresses.find((a) => a.id === shipToId) ?? addresses.find((a) => a.isDefaultShipTo);
+  /** Price shown: what the user typed, else the list price (the server resolves it again). */
+  const effectivePrice = (l: Line) => (l.unitPrice.trim() ? l.unitPrice : (listPrice(book, l.productId, l.qtyUnits) ?? ""));
 
-  const total = useMemo(() => lines.reduce((s, l) => s.plus(safeD(l.qtyUnits).times(safeD(l.unitPrice))), new Decimal(0)), [lines]);
+  const total = useMemo(() => lines.reduce((s, l) => s.plus(safeD(l.qtyUnits).times(safeD(effectivePrice(l)))), new Decimal(0)), [lines, book]); // eslint-disable-line react-hooks/exhaustive-deps
   const update = (key: number, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   const payload = JSON.stringify(lines.map(({ productId, qtyUnits, unitPrice }) => ({ productId, qtyUnits, unitPrice })));
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4 pb-24 sm:pb-0">
       <input type="hidden" name="lines" value={payload} />
+      {initial && <input type="hidden" name="orderId" value={initial.orderId} />}
+      {initial && <input type="hidden" name="customerId" value={initial.customerId} />}
       <Card>
         <CardTitle>Customer</CardTitle>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Customer" htmlFor="customerId" error={fe.customerId}>
-            <Select id="customerId" name="customerId" value={customerId} onChange={(e) => setCustomerId(e.target.value)} required>
+            <Select id="customerId" name={initial ? undefined : "customerId"} value={customerId} disabled={!!initial} onChange={(e) => { setCustomerId(e.target.value); setShipToId(""); setBillToId(""); }} required>
               <option value="">Choose a customer…</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -69,7 +99,12 @@ export function NewOrderForm({
             {customer ? (
               <>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Ship to</p>
-                <p className="text-fg">{customer.shipToAddress}</p>
+                <p className="text-fg">{shipTo?.text ?? customer.shipToAddress}</p>
+                {customer.status === "on_hold" && (
+                  <p className="mt-1.5">
+                    <Chip tone="hold">Credit hold: the order will need approval</Chip>
+                  </p>
+                )}
                 <p className="mt-1.5">
                   <Chip tone="info">Min shelf life at dispatch: {customer.minShelfLifeDays} days</Chip>
                 </p>
@@ -78,6 +113,30 @@ export function NewOrderForm({
               <p className="text-muted">Choose a customer to see the ship-to address and minimum shelf life.</p>
             )}
           </div>
+          {addresses.length > 1 && (
+            <>
+              <Field label="Ship to" htmlFor="shipToAddressId" error={fe.shipToAddressId}>
+                <Select id="shipToAddressId" name="shipToAddressId" value={shipToId} onChange={(e) => setShipToId(e.target.value)}>
+                  <option value="">Default ship-to</option>
+                  {addresses.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.label} — {a.text}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Bill to" htmlFor="billToAddressId" error={fe.billToAddressId}>
+                <Select id="billToAddressId" name="billToAddressId" value={billToId} onChange={(e) => setBillToId(e.target.value)}>
+                  <option value="">Default bill-to</option>
+                  {addresses.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </>
+          )}
           <Field label="Customer PO number" htmlFor="customerPoNumber" error={fe.customerPoNumber} hint="Optional">
             <Input id="customerPoNumber" name="customerPoNumber" maxLength={60} autoComplete="off" value={po} onChange={(e) => setPo(e.target.value)} />
           </Field>
@@ -133,11 +192,20 @@ export function NewOrderForm({
                   <Field label="Qty (pcs)" htmlFor={`q-${l.key}`} error={fe[`lines.${i}.qtyUnits`]}>
                     <Input id={`q-${l.key}`} inputMode="numeric" pattern="[0-9]*" value={l.qtyUnits} onChange={(e) => update(l.key, { qtyUnits: e.target.value })} required />
                   </Field>
-                  <Field label="Unit price (₱)" htmlFor={`u-${l.key}`} error={fe[`lines.${i}.unitPrice`]}>
-                    <Input id={`u-${l.key}`} inputMode="decimal" value={l.unitPrice} onChange={(e) => update(l.key, { unitPrice: e.target.value })} placeholder="0.00" required />
-                  </Field>
+                  {pricesVisible ? (
+                    <Field
+                      label="Unit price (₱)"
+                      htmlFor={`u-${l.key}`}
+                      error={fe[`lines.${i}.unitPrice`]}
+                      hint={listPrice(book, l.productId, l.qtyUnits) ? `List ${listPrice(book, l.productId, l.qtyUnits)} — leave empty to use it` : l.productId && customerId ? "No list price: enter the agreed price" : undefined}
+                    >
+                      <Input id={`u-${l.key}`} inputMode="decimal" value={l.unitPrice} onChange={(e) => update(l.key, { unitPrice: e.target.value })} placeholder={listPrice(book, l.productId, l.qtyUnits) ?? "0.00"} />
+                    </Field>
+                  ) : (
+                    <p className="pt-6 text-[12px] text-muted">Price from the approved price list</p>
+                  )}
                   <div className="col-span-2 flex items-center justify-between gap-2 md:col-span-1 md:flex-col md:items-end md:pt-6">
-                    <span className="text-[13px] font-medium tabular">{fmtMoney(safeD(l.qtyUnits).times(safeD(l.unitPrice)))}</span>
+                    <span className="text-[13px] font-medium tabular">{pricesVisible ? fmtMoney(safeD(l.qtyUnits).times(safeD(effectivePrice(l)))) : ""}</span>
                     {lines.length > 1 && (
                       <Button type="button" variant="ghost" size="sm" aria-label={`Remove line ${i + 1}`} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>
                         <Trash2 size={14} /> Remove
@@ -156,7 +224,7 @@ export function NewOrderForm({
         </ol>
         <div className="mt-3 flex justify-end border-t border-line pt-3 text-[14px]">
           <span className="text-muted">Order value&nbsp;</span>
-          <span className="font-semibold tabular">{fmtMoney(total)}</span>
+          <span className="font-semibold tabular">{pricesVisible ? fmtMoney(total) : "—"}</span>
         </div>
       </Card>
 
@@ -169,7 +237,7 @@ export function NewOrderForm({
       <FormMessage state={state} />
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-surface p-3 sm:static sm:border-0 sm:bg-transparent sm:p-0">
         <Button type="submit" variant="cta" size="lg" className="w-full sm:w-auto" disabled={pending}>
-          {pending ? "Creating order…" : "Create draft order"}
+          {pending ? "Saving…" : initial ? "Save draft" : "Create draft order"}
         </Button>
       </div>
     </form>

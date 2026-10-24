@@ -234,6 +234,29 @@ export const PERMISSIONS = [
   "production.production_plan.edit",
   "production.production_plan.approve",
   "production.material_substitution.approve",
+  // Wave 3 W3D: customers, requirements, price lists, quotations, sales orders (US-4-01..06; docs/permissions-matrix.md §2.2, §2.8, §2.10, §6)
+  "masterdata.customer.edit",
+  "masterdata.customer.export",
+  "masterdata.customer_requirement.view",
+  "masterdata.customer_requirement.create",
+  "masterdata.customer_requirement.edit",
+  "masterdata.customer_requirement.approve",
+  "finance.credit_terms.view",
+  "finance.credit_terms.approve",
+  "sales.price_list.view",
+  "sales.price_list.edit",
+  "sales.price_list.approve",
+  "sales.quote.view",
+  "sales.quote.create",
+  "sales.quote.edit",
+  "sales.quote.submit",
+  "sales.quote.void",
+  "sales.quote.approve",
+  "sales.quote.export",
+  "sales.sales_order.edit",
+  "sales.sales_order.submit",
+  "sales.sales_order.void",
+  "sales.sales_order.export",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -810,4 +833,85 @@ const W2A_GRANTS: Record<string, readonly Permission[]> = {
 };
 for (const [role, grants] of Object.entries(W2A_GRANTS)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+
+// Wave 3 W3D: role grants for customers, requirements, price lists, quotations and sales orders
+// (docs/permissions-matrix.md §3.2, §3.8, §3.10). `.view` strings reach VIEW_ALL roles automatically, so the
+// sensitive ones (prices, credit terms) are removed again where the matrix shows "–". owner_director holds
+// every string; the operational create/edit/submit/void strings the matrix does not give the owner are removed.
+// A finance role bundle is added (matrix column FI) if no other stream has added it yet: it approves credit
+// exceptions, price lists and quotes above thresholds (approval_rules sales_order / price_list / quote).
+ROLE_BUNDLES.finance ??= { name: "Finance", orgWide: true, permissions: [] };
+const W3D_GRANTS: Record<string, readonly Permission[]> = {
+  sales_cs: [
+    "masterdata.customer.edit",
+    "masterdata.customer.export",
+    "masterdata.customer_requirement.view",
+    "masterdata.customer_requirement.create",
+    "masterdata.customer_requirement.edit",
+    "finance.credit_terms.view",
+    "sales.price_list.view",
+    "sales.price_list.edit",
+    "sales.quote.view",
+    "sales.quote.create",
+    "sales.quote.edit",
+    "sales.quote.submit",
+    "sales.quote.void",
+    "sales.quote.export",
+    "sales.sales_order.edit",
+    "sales.sales_order.submit",
+    "sales.sales_order.void",
+    "sales.sales_order.export",
+  ],
+  finance: [
+    "masterdata.customer.view",
+    "masterdata.customer.export",
+    "masterdata.customer_requirement.view",
+    "masterdata.product.view",
+    "finance.credit_terms.view",
+    "finance.credit_terms.approve",
+    "sales.price_list.view",
+    "sales.price_list.approve",
+    "sales.quote.view",
+    "sales.quote.approve",
+    "sales.quote.export",
+    "sales.sales_order.view",
+    "sales.sales_order.approve",
+    "sales.sales_order.export",
+    "sales.shipment.view",
+  ],
+  site_manager: ["sales.quote.approve"],
+  qa_qc: ["masterdata.customer.view", "masterdata.customer_requirement.view", "masterdata.customer_requirement.approve", "sales.sales_order.view"],
+  warehouse_operator: ["masterdata.customer.view", "masterdata.customer_requirement.view"],
+  production_operator: ["masterdata.customer_requirement.view"],
+  production_planner: ["masterdata.customer_requirement.view"],
+  auditor: ["masterdata.customer.export", "sales.quote.export", "sales.sales_order.export"],
+};
+for (const [role, grants] of Object.entries(W3D_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+const W3D_EXCLUDE: Record<string, readonly Permission[]> = {
+  // SC: no approval of its own orders (matrix §3.8: sales_order v c e s x o; approval is finance/owner per rule).
+  sales_cs: ["sales.sales_order.approve"],
+  // SA: customers and requirements view only; no prices, quotes or credit terms (matrix §3.8, §3.10).
+  system_admin: ["sales.price_list.view", "sales.quote.view", "finance.credit_terms.view"],
+  // SM: quotes and orders view/approve; no price lists or credit terms (matrix §3.8, §3.10).
+  site_manager: ["sales.price_list.view", "finance.credit_terms.view"],
+  owner_director: [
+    "sales.sales_order.create",
+    "masterdata.customer.edit",
+    "masterdata.customer_requirement.create",
+    "masterdata.customer_requirement.edit",
+    "sales.price_list.edit",
+    "sales.quote.create",
+    "sales.quote.edit",
+    "sales.quote.submit",
+    "sales.quote.void",
+    "sales.sales_order.edit",
+    "sales.sales_order.submit",
+    "sales.sales_order.void",
+  ],
+};
+for (const [role, drop] of Object.entries(W3D_EXCLUDE)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => !drop.includes(p));
 }

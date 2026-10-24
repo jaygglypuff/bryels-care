@@ -307,6 +307,20 @@ export const SETTINGS = {
     }[],
     assumption: "A-UX-12", group: "Production", label: "Production board columns",
   },
+  // Wave 3 W3D: customers, price lists, quotations and sales orders (US-4-01..US-4-06)
+  /** Sales tax on quotes and orders, in percent of the subtotal. 0 = no tax line. Set only after the company's accountant reviews it (A-W3D-01). */
+  "sales.tax.rate_pct": {
+    scopes: ["organization"], schema: z.number().min(0).max(100), default: 0, assumption: "A-W3D-01", group: "Sales", label: "Sales tax rate on quotes and orders (%)",
+    description: "Tax rules are configuration validated by the company's accountant; the system does not decide which tax applies. 0 shows no tax line.", requiresApproval: true, restricted: true,
+  },
+  /** Customers without a credit limit: auto-confirm (false) or always need credit approval (true) (A-W3D-02). */
+  "sales.credit_check.require_limit": { scopes: ["organization"], schema: z.boolean(), default: false, assumption: "A-W3D-02", group: "Sales", label: "Orders of customers without a credit limit need approval", requiresApproval: true },
+  /** Order quantity below the customer's approved MOQ requirement: warn on the order, or block submission (US-4-05 AC1). */
+  "sales.order.moq_policy": { scopes: ["organization"], schema: z.enum(["warn", "block"]), default: "warn" as "warn" | "block", assumption: "A-W3D-04", group: "Sales", label: "Order below the customer's minimum order quantity" },
+  /** Lines without an approved price-list price: allow a manual price (recorded as price source "manual") or refuse. */
+  "sales.order.allow_manual_price": { scopes: ["organization"], schema: z.boolean(), default: true, assumption: "A-W3D-05", group: "Sales", label: "Allow manual prices when no price list applies", requiresApproval: true },
+  /** Default validity of a new quotation (days from today). */
+  "sales.quote.validity_days": { scopes: ["organization"], schema: z.number().int().min(1).max(365), default: 30, assumption: "A-W3D-06", group: "Sales", label: "Quotation valid for (days)" },
 } as const satisfies Record<string, SettingDefinition>;
 
 export type SettingKey = keyof typeof SETTINGS;

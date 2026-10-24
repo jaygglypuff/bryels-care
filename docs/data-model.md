@@ -1410,6 +1410,30 @@ supplier-lot start node, the goods receipt of each material lot, an "as of" time
 | **`customer_return_lines`** · P4 · T · `std +site` | | | | `customer_return_id`, `sku_id`, `lot_id`, `container_id`, `qty` set, `condition` (`sellable`,`damaged`,`expired`,`unknown`), `to_location_id`, `stock_movement_id`, `disposition_id` |
 | **`sales_order_state_transitions`**, **`shipment_state_transitions`** · P4 · L | | | | shape §6.1 |
 
+#### 3.7.1 As built: Wave 3 W3D (US-4-01..US-4-06)
+
+Schema: `src/db/schema/crm.ts` (new tables) and column additions in `masterdata.ts` (`customers`)
+and `sales.ts` (`sales_orders`, `sales_order_lines`, new `sales_order_state_transitions`).
+Differences from the target catalogue above:
+
+| Area | As built | Why |
+|---|---|---|
+| Item reference | Orders, quotes, price lists and requirements reference `products.id` (the sellable SKU code is `products.sku_code`), not `skus.id` | The MVP orders and allocation are product-based; `skus` (W2G) supply packaging defaults to `resolvePackagingConfig` |
+| `customers` | adds `status` (ck `prospect/active/on_hold/inactive`), `segment`, `currency`, `payment_terms_days`, `credit_limit_amount`, `default_lead_time_days`, `tax_identifier`, `notes_internal`, `updated_*`; keeps the MVP `ship_to_address`, `contact_*`, `min_shelf_life_days`, now mirrors of the default ship-to address and primary contact | DR and allocation code read them |
+| `customer_addresses` / `customer_contacts` | as catalogued; partial unique indexes enforce one default ship-to, one default bill-to and one primary contact per customer; soft delete | US-4-01 AC1 |
+| `customer_requirements` | `ver` columns; parent = (customer, product or all, kind); `artwork_version_id` added; unique open version per parent; SoD CHECK | US-4-02 |
+| `artwork_versions`, `customer_item_codes` | new: label artwork register (customer-specific or house) and customer SKU mapping | US-4-02 |
+| `price_lists` / `price_list_lines` | as catalogued; lines carry `min_qty_units` (quantity break) instead of `min_qty_base` + UOM (pieces only) | MVP orders are in pieces |
+| `quotes` / `quote_lines` | statuses add `pending_approval` and `voided`; `max_discount_pct` is the `discount_pct` basis of the `quote` rules; `converted_sales_order_id` has no FK (the FK is `sales_orders.quote_id`) | Approval and void flows of US-4-04 |
+| `sales_orders` | adds `ship_to_address_id`, `bill_to_address_id`, `ship_to_text` (frozen address), `quote_id`, money totals, `credit_check_status`, `approval_reasons`, `approval_basis`, `warnings`, the `approval?` columns, `cancel_reason`, `status_changed_*`; status CHECK lists the 12 states of §6.5 | US-4-05 |
+| `sales_order_lines` | adds `price_source` (`price_list`/`quote`/`manual`), `list_unit_price`, `price_list_id`, `price_list_line_id`, `discount_pct`, `requirement_snapshot` (schema `requirement_snapshot/v1`), `min_remaining_shelf_life_days`, `customer_item_code` | snapshot at submission (§4.1) |
+
+State machines: sales order transitions in `src/modules/sales/orders.ts` (`ORDER_TRANSITIONS`, adds
+`pending_approval → draft` "returned for changes" with a reason, and keeps the MVP direct
+`allocated → shipped`); `transitionOrder()` writes the transition row and is exported for the
+fulfilment services. Quote, price list, requirement and customer machines live next to their
+services. Approval decisions use `approval_decisions` with `cycle` (a return closes the cycle).
+
 ### 3.8 HR and payroll
 
 Employee personal data and payroll rows are readable only by `hr_payroll`, `finance`,

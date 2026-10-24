@@ -217,6 +217,24 @@ export const customers = pgTable(
     /** Minimum remaining shelf life required at shipment, in days. */
     minShelfLifeDays: integer("min_shelf_life_days").notNull().default(180),
     createdAt: createdAt(),
+    // Wave 3 W3D (US-4-01): profile, terms and credit. `ship_to_address`, `contact_*` above mirror the
+    // default ship-to address and the primary contact (customer_addresses / customer_contacts in crm.ts)
+    // so documents built before Wave 3 keep working. Credit and tax fields are sensitive
+    // (finance.credit_terms.view); `tax_identifier` format is configuration for qualified review.
+    status: text("status").notNull().default("active"),
+    segment: text("segment"),
+    currency: text("currency").notNull().default("PHP"),
+    paymentTermsDays: integer("payment_terms_days"),
+    creditLimitAmount: numeric("credit_limit_amount", { precision: 18, scale: 4 }),
+    defaultLeadTimeDays: integer("default_lead_time_days"),
+    taxIdentifier: text("tax_identifier"),
+    notesInternal: text("notes_internal"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: uuid("updated_by").references(() => users.id),
   },
-  (t) => [uniqueIndex("customers_org_code_uq").on(t.organizationId, t.code)],
+  (t) => [
+    uniqueIndex("customers_org_code_uq").on(t.organizationId, t.code),
+    check("customers_status_ck", sql`${t.status} in ('prospect', 'active', 'on_hold', 'inactive')`),
+    check("customers_credit_ck", sql`coalesce(${t.creditLimitAmount}, 0) >= 0 and coalesce(${t.paymentTermsDays}, 0) >= 0 and coalesce(${t.defaultLeadTimeDays}, 0) >= 0`),
+  ],
 );

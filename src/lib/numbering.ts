@@ -41,6 +41,8 @@ export const NUMBERING_DEFAULTS = {
   // Wave 2 W2A: work orders and production plans (data-model §9.2)
   WO: yearly("WO", 5),
   PP: { prefix: "PP", pattern: "{PREFIX}-{YYMM}-{SEQ}", resetPeriod: "monthly", sequenceWidth: 3, isGapless: false },
+  // Wave 3 W3D: quotations (data-model §9.2 QT-{YY}-{SEQ})
+  QT: yearly("QT", 5),
 } satisfies Record<string, NumberingRuleSpec>;
 
 export type DocumentType = keyof typeof NUMBERING_DEFAULTS;

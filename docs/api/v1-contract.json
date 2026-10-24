@@ -305,6 +305,58 @@
         ],
         "additionalProperties": false
       }
+    },
+    {
+      "name": "sales.sales_order.submit",
+      "method": "POST",
+      "path": "/api/v1/sales/orders/submit",
+      "summary": "Submit a draft order: requirements snapshot, MOQ, credit and approval rules; confirmed within limits, else pending approval with the reasons.",
+      "permission": "sales.sales_order.submit",
+      "idempotent": true,
+      "offline": "online_only",
+      "payload": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "orderId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sales.sales_order.approve",
+      "method": "POST",
+      "path": "/api/v1/sales/orders/approve",
+      "summary": "Approve the next step of a pending order (approval rules; the creator or submitter cannot approve while approvals.sod.sales_order is on).",
+      "permission": "sales.sales_order.approve",
+      "idempotent": true,
+      "offline": "online_only",
+      "payload": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "orderId"
+        ],
+        "additionalProperties": false
+      }
     }
   ],
   "queries": [
@@ -588,6 +640,114 @@
               "closed",
               "all"
             ]
+          },
+          "format": {
+            "default": "csv",
+            "type": "string",
+            "enum": [
+              "csv",
+              "xlsx"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "masterdata.customer.get",
+      "method": "GET",
+      "path": "/api/v1/sales/customers/{customerId}",
+      "summary": "Customer with addresses and contacts; credit limit, payment terms and tax id are absent (with a _masked hint) without finance.credit_terms.view.",
+      "permission": "masterdata.customer.view",
+      "response": "json",
+      "query": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "customerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "masterdata.customer.export",
+      "method": "GET",
+      "path": "/api/v1/sales/customers/export",
+      "summary": "CSV/XLSX of customers; credit columns only with finance.credit_terms.view (audited).",
+      "permission": "masterdata.customer.export",
+      "response": "file",
+      "query": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "format": {
+            "default": "csv",
+            "type": "string",
+            "enum": [
+              "csv",
+              "xlsx"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sales.sales_order.export",
+      "method": "GET",
+      "path": "/api/v1/sales/orders/export",
+      "summary": "CSV/XLSX of the current site's sales orders; values only with sales.price_list.view (audited).",
+      "permission": "sales.sales_order.export",
+      "response": "file",
+      "query": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "maxLength": 30
+          },
+          "format": {
+            "default": "csv",
+            "type": "string",
+            "enum": [
+              "csv",
+              "xlsx"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sales.quote.export",
+      "method": "GET",
+      "path": "/api/v1/sales/quotations/export",
+      "summary": "CSV/XLSX of the current site's quotations; amounts only with sales.price_list.view (audited).",
+      "permission": "sales.quote.export",
+      "response": "file",
+      "query": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "maxLength": 30
           },
           "format": {
             "default": "csv",
