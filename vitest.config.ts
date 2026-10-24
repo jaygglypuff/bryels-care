@@ -7,6 +7,8 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     fileParallelism: false,
     testTimeout: 30000,
+    // beforeAll hooks reset the database through migrate + seed (8–10 s alone, more on a loaded machine).
+    hookTimeout: 120000,
     env: { DATABASE_URL: process.env.TEST_DATABASE_URL ?? "postgres://postgres@localhost:5432/bryels_test" },
   },
   resolve: {

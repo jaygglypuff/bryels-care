@@ -17,6 +17,12 @@ export const sites = pgTable(
     code: text("code").notNull(),
     name: text("name").notNull(),
     isActive: boolean("is_active").notNull().default(true),
+    /** Dates of the site are interpreted here; defaults to the organization's time zone (W2G, US-1-20). */
+    timezone: text("timezone").notNull().default("Asia/Manila"),
+    addressLine1: text("address_line1"),
+    city: text("city"),
+    province: text("province"),
+    country: text("country").notNull().default("PH"),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("sites_org_code_uq").on(t.organizationId, t.code)],

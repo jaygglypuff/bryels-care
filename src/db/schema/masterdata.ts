@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { type AnyPgColumn, boolean, check, date, integer, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, boolean, check, date, index, integer, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { QTY, createdAt, id } from "./_common";
 import { organizations, sites, users } from "./identity";
 
@@ -10,11 +10,22 @@ export const warehouses = pgTable(
     siteId: uuid("site_id").notNull().references(() => sites.id),
     code: text("code").notNull(),
     name: text("name").notNull(),
+    /** raw_materials | packaging | finished_goods | general (W2G, US-1-20) */
+    warehouseKind: text("warehouse_kind").notNull().default("general"),
+    isActive: boolean("is_active").notNull().default(true),
   },
-  (t) => [uniqueIndex("warehouses_site_code_uq").on(t.siteId, t.code)],
+  (t) => [
+    uniqueIndex("warehouses_site_code_uq").on(t.siteId, t.code),
+    check("warehouses_kind_ck", sql`${t.warehouseKind} in ('raw_materials', 'packaging', 'finished_goods', 'general')`),
+  ],
 );
 
-/** kind: receiving | storage | quarantine | hold | rejected | production | shipping */
+/**
+ * kind (location class): receiving | staging | storage | quarantine | hold | rejected | recall |
+ * production | shipping. status: active | blocked (no movements in or out) | inactive
+ * (deactivated; is_active mirrors status <> 'inactive'). parent_location_id builds the
+ * zone → rack → bin tree (W2G, US-1-20).
+ */
 export const locations = pgTable(
   "locations",
   {
@@ -25,11 +36,25 @@ export const locations = pgTable(
     name: text("name").notNull(),
     kind: text("kind").notNull(),
     isActive: boolean("is_active").notNull().default(true),
+    parentLocationId: uuid("parent_location_id").references((): AnyPgColumn => locations.id),
+    status: text("status").notNull().default("active"),
+    isPickable: boolean("is_pickable").notNull().default(true),
   },
-  (t) => [uniqueIndex("locations_site_code_uq").on(t.siteId, t.code)],
+  (t) => [
+    uniqueIndex("locations_site_code_uq").on(t.siteId, t.code),
+    index("locations_parent_idx").on(t.parentLocationId),
+    check("locations_status_ck", sql`${t.status} in ('active', 'blocked', 'inactive')`),
+    check("locations_active_status_ck", sql`${t.isActive} = (${t.status} <> 'inactive')`),
+    check("locations_kind_ck", sql`${t.kind} in ('receiving', 'staging', 'storage', 'quarantine', 'hold', 'rejected', 'recall', 'production', 'shipping')`),
+  ],
 );
 
-/** Raw materials, intermediates and packaging. Base unit is g, mL or pcs. */
+/**
+ * Raw materials, intermediates, packaging and consumables. base_uom is the code of a base unit in
+ * `uoms` (g, mL, pcs; validated by the W2G service). material_kind raw_material = class "raw" of
+ * docs/data-model.md §3.2. status: draft | active | blocked | discontinued (MATERIAL_TRANSITIONS
+ * in src/modules/masterdata/materials.ts).
+ */
 export const materials = pgTable(
   "materials",
   {
@@ -47,12 +72,28 @@ export const materials = pgTable(
     requiresCoa: boolean("requires_coa").notNull().default(false),
     /** false = lots are created released at receipt (QA-configured "release on receipt" class, A-PROC-10). */
     requiresIncomingInspection: boolean("requires_incoming_inspection").notNull().default(true),
+    // W2G (US-1-23) basic fields
+    commonName: text("common_name"),
+    retestDays: integer("retest_days"),
+    allergenNotes: text("allergen_notes"),
+    hazardNotes: text("hazard_notes"),
+    allocationRule: text("allocation_rule").notNull().default("fefo"),
+    status: text("status").notNull().default("active"),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("materials_org_code_uq").on(t.organizationId, t.code)],
+  (t) => [
+    uniqueIndex("materials_org_code_uq").on(t.organizationId, t.code),
+    check("materials_kind_ck", sql`${t.materialKind} in ('raw_material', 'intermediate', 'packaging', 'consumable')`),
+    check("materials_status_ck", sql`${t.status} in ('draft', 'active', 'blocked', 'discontinued')`),
+    check("materials_allocation_ck", sql`${t.allocationRule} in ('fefo', 'fifo')`),
+  ],
 );
 
-/** Finished goods (SKU level for the MVP). */
+/**
+ * Finished goods (SKU level for the MVP: batches and order lines point here). sku_code is the
+ * product code (column name kept from the MVP). Sellable/packable variants live in `skus`
+ * (src/db/schema/org.ts). status: draft | active | discontinued (W2G, US-1-22).
+ */
 export const products = pgTable(
   "products",
   {
@@ -66,9 +107,11 @@ export const products = pgTable(
     unitNetMassG: numeric("unit_net_mass_g", QTY).notNull(),
     unitsPerBox: integer("units_per_box").notNull().default(24),
     shelfLifeDays: integer("shelf_life_days").notNull().default(730),
+    status: text("status").notNull().default("active"),
+    storageConditions: text("storage_conditions"),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("products_org_sku_uq").on(t.organizationId, t.skuCode)],
+  (t) => [uniqueIndex("products_org_sku_uq").on(t.organizationId, t.skuCode), check("products_status_ck", sql`${t.status} in ('draft', 'active', 'discontinued')`)],
 );
 
 export const formulas = pgTable(

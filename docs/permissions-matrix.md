@@ -520,6 +520,15 @@ Role philosophy (owners should read this part):
 
 `a` on equipment is `masterdata.equipment.approve` (QA review after a failed calibration, added by W1D).
 
+Implemented by W2G (US-1-20..US-1-24, `src/lib/permissions.ts` block "Wave 2 W2G") exactly as the
+row above, with these readings: blocking/unblocking a location needs `masterdata.location.edit`,
+deactivating or reactivating it needs `masterdata.location.admin`; assigning equipment to a line and
+changing its `blocking_rule` need `masterdata.equipment.admin`; a `uom_conversion` change is
+proposed and approved by two different holders of `masterdata.uom_conversion.admin`;
+`owner_director` holds every string (existing bundle rule). `masterdata.site.admin` is marked R but
+re-authentication (US-1-28) is not built yet, so it is enforced as a normal permission held only by
+the organization-wide `system_admin` and `owner_director`.
+
 Notes: formula and routing approval requires two approvals by default (`qa_qc` and
 `site_manager` or `owner_director`), neither being the submitter (A-PM-05). Operators see
 formulas only through the batch (target quantities), never percentages (section 6). `a` on

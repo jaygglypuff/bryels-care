@@ -1567,6 +1567,32 @@ Migration note: the generated migration adds `routing_steps.routing_revision_id`
 `batches.routing_revision_id` as `NOT NULL`; a database that already holds MVP batches or routing
 steps must be reset (`pnpm db:reset`) or backfilled before it applies.
 
+### 4.6 Implementation status (Wave 2 W2G, master data administration, US-1-20..US-1-24)
+
+Plain language: the company can now set up its own sites, warehouses, locations, lines, units,
+products, SKUs, materials and reason codes on screen. Nothing is deleted; records are deactivated
+or discontinued, and codes stop changing once anything uses them.
+
+| Item | As built | Differs from the catalogue above |
+|---|---|---|
+| Schema files | New `src/db/schema/org.ts` (`departments`, `production_lines`, `warehouse_special_locations`, `uoms`, `uom_conversions`, `skus`, `reason_codes`); column additions in `identity.ts` (`sites`), `masterdata.ts` (`warehouses`, `locations`, `materials`, `products`) and `engineering.ts` (`equipment.production_line_id`) | One schema file per stream |
+| `sites` | `+ timezone` (default `Asia/Manila`, service default = organization time zone), `address_line1`, `city`, `province`, `country` (default `PH`); code `^[A-Z0-9]{1,6}$` checked in the service | `is_active` instead of `status`; no code CHECK in the database (fixtures) |
+| `departments`, `production_lines` | As §3.1 plus `organization_id`, `created_by`, `updated_by`; line `status` `active, down, inactive` (state machine `LINE_TRANSITIONS`) | `departments.is_active` instead of the soft-delete set |
+| `warehouses` | `+ warehouse_kind` (CHECK `raw_materials, packaging, finished_goods, general`, default `general`), `is_active` | — |
+| `warehouse_special_locations` | New: one location per (warehouse, role) for `receiving, staging, quarantine, hold, rejected, recall`; the location's class must equal the role (service); `missingSpecialLocations()` lists the gaps (US-1-20 AC1) | Not in §3.1: the designation is a row, not a location flag |
+| `locations` | `kind` keeps the MVP class values and adds `staging`, `recall` (CHECK `receiving, staging, storage, quarantine, hold, rejected, recall, production, shipping`); `+ parent_location_id` (zone → rack → bin tree; same warehouse, no cycles), `status` (`active, blocked, inactive`; CHECK `is_active = (status <> 'inactive')`), `is_pickable` | Zone/rack/bin are tree levels of class `storage`, not kinds; organization-unique codes are enforced by the service for new and renamed codes only, because the demo seed and fixtures reuse codes per site (`RCV`, `FG-01`); the database keeps `uq (site_id, code)` |
+| `uoms` | As §3.2 plus `is_active`; seeded g, kg, mg, mL, L, pcs (`installReferenceData`) | Codes are case-sensitive text (`mL`) because lots and movements store the code as text |
+| `uom_conversions` | `factor numeric(24,12)`, `material_id` (density / pack units), `revision_no`, status `pending_approval → approved | rejected; approved → retired`, `submitted_by ≠ approved_by` (CHECK), `is_system` for installed SI rows, `effective_from/to`; partial unique indexes: one approved and one pending per (from, to[, material]) | A row is used in both directions; the reverse direction is used only when exact |
+| `skus` | As §3.2 (basic fields) with `uom_base_id → uoms` (must be a base unit), GTIN check digit validated in the service; status `draft, active, discontinued` | `label_template_id`, `bmr_template_id`, `legacy_number`, image not added; an SKU code may equal only its own product's code (BC:SKU scans still resolve `products.sku_code`) |
+| `products` | `+ status` (default `active` for existing rows; new products start `draft`), `storage_conditions`; `family` validated against setting `masterdata.product_families` | `sku_code` is the product code (column name kept); `product_family` is the configured label, not a CHECK |
+| `materials` | `+ common_name`, `retest_days`, `allergen_notes`, `hazard_notes`, `allocation_rule` (default `fefo`), `status` (`draft, active, blocked, discontinued`); CHECK `material_kind in (raw_material, intermediate, packaging, consumable)` | `material_kind` = `material_class` (`raw_material` = raw); `base_uom` text code validated against `uoms` (base units only) instead of `uom_base_id`; the DB default of `requires_coa` stays `false` (W1B), the W2G service defaults new materials to `true` |
+| `reason_codes` | As §3.2 plus `description`, `sort_order`, `is_active`, `is_system`; CHECK code `^[a-z][a-z0-9_]{0,39}$`, `applies_to` non-empty subset of the category list; GIN index on `applies_to` | Seeded with the W1E reprint, W1B receipt and hold, W1C adjustment and count-variance codes, merged by code, plus the migration and undo codes |
+| Custom SQL | `src/db/sql/w2g.sql`, applied as custom migration `0004_w2g_custom_sql` (verbatim copy, drift-tested): `tg_uom_conversions_dimension` (UOM_DIMENSION_MISMATCH), `tg_uom_conversions_immutable`, `tg_uoms_code_immutable` and `tg_reason_codes_code_immutable` | — |
+| Ledger | `postMovement` checks entered quantities against approved `uom_conversions` (material-specific first) instead of fixed factors, and refuses movements into or out of a `blocked`/`inactive` location | — |
+
+Codes become immutable once any other table references the row (`isReferenced()` reads the
+foreign keys from the catalogue, so later tables count automatically; audit rows do not count).
+
 ## 5. Ledger design (ADR-006)
 
 Plain language: stock is a diary, not a spreadsheet cell. Every receipt, move, consumption,

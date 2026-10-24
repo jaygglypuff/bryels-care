@@ -46,6 +46,7 @@ migration. Its canonical source is `src/db/sql/w1d.sql`; the migration is a verb
 | `pnpm db:generate` | Generate a SQL migration from schema changes (review before committing) |
 | `pnpm db:migrate` / `pnpm db:seed` / `pnpm db:reset` | Apply migrations / load demo data / wipe and reload demo data |
 | `pnpm worker` | Background worker (pg-boss): reconciliation, expiry check, reservation expiry, balance rebuilds, document renders; health on `PORT` (default 3001) |
+| `pnpm tsx scripts/install-reference-data.ts` | Installs the reference master data (units g/kg/mg/mL/L/pcs, SI conversions, default reason codes) for every organization that lacks them; idempotent, never overwrites company edits. Run once on a new production organization before stock moves (the demo seed runs it automatically) |
 | `pnpm api:contract` | Regenerate `docs/api/v1-contract.json` from `src/lib/api/contract.ts` (a test fails when it is stale) |
 
 Environment variables (the full per-service table is `docs/deployment-railway.md` §4):

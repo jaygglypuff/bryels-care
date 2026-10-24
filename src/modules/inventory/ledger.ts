@@ -7,6 +7,7 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
+import { assertLocationsOpen, checkEnteredQuantity } from "@/modules/masterdata";
 import { assertLocationsNotFrozen } from "./freeze";
 
 export type MovementType = "receipt" | "issue" | "transfer" | "consumption" | "output" | "adjustment" | "return" | "shipment" | "reversal";
@@ -36,28 +37,11 @@ export type PostMovementInput = {
 };
 
 /**
- * Same-dimension metric factors used to check entered vs base quantities (physics, not business
- * configuration). Pairs not listed must be entered in the base unit until UOM conversions
- * (US-1-21) are configurable.
+ * Entered vs base quantity (ADR-010, V-UOM): checked against the approved conversions of the
+ * organization's UOM table (masterdata `checkEnteredQuantity`, US-1-21). The MVP's fixed metric
+ * factors (g/kg/mg, mL/L) are installed as approved reference conversions, so behaviour is
+ * unchanged; material-specific conversions (pack units, density) now apply too.
  */
-const METRIC_FACTORS: Record<string, Record<string, string>> = {
-  g: { g: "1", kg: "1000", mg: "0.001" },
-  mL: { mL: "1", L: "1000" },
-  pcs: { pcs: "1" },
-};
-
-function checkEntered(qtyBase: Decimal, baseUom: string, entered?: { qty: Decimal.Value; uom: string }) {
-  if (!entered) return { qty: qtyBase, uom: baseUom };
-  const q = new Decimal(entered.qty);
-  if (!q.isFinite() || q.lte(0)) throw new DomainError("validation", "Entered quantity must be greater than zero.");
-  const factor = METRIC_FACTORS[baseUom]?.[entered.uom];
-  if (!factor) throw new DomainError("validation", `Quantities of this lot are entered in ${baseUom}; ${entered.uom} has no configured conversion.`);
-  if (!q.times(factor).eq(qtyBase)) {
-    throw new DomainError("validation", `Entered ${q.toString()} ${entered.uom} does not equal ${qtyBase.toString()} ${baseUom}.`);
-  }
-  return { qty: q, uom: entered.uom };
-}
-
 /** Location sides each movement type must carry (mirrors ck_stock_movements_locations). */
 const SIDES: Record<Exclude<MovementType, "reversal" | "adjustment">, { from: boolean; to: boolean }> = {
   receipt: { from: false, to: true },
@@ -167,7 +151,9 @@ export async function postMovement(tx: Tx, ctx: AuthContext, input: PostMovement
   await assertRoleMayPost(tx, ctx, lot.siteId, input.movementType, { from: fromLoc?.kind, to: toLoc?.kind });
   // V-FREEZE for every movement type and every caller (W1C counts): shares the location rows with a count release.
   await assertLocationsNotFrozen(tx, locIds, { exceptCountId: input.freezeExemptCountId });
-  const entered = checkEntered(qty, lot.baseUom, input.entered);
+  // US-1-20: a blocked or inactive location takes no movement in or out (W2G).
+  await assertLocationsOpen(tx, locIds);
+  const entered = await checkEnteredQuantity(tx, ctx.organizationId, qty, lot.baseUom, input.entered, lot.materialId);
 
   if (locIds.length) {
     await tx

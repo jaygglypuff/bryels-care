@@ -89,6 +89,12 @@ export const NAV: NavGroup[] = [
       { label: "Products", href: "/masterdata/products", permission: "masterdata.product.view" },
       { label: "Locations", href: "/masterdata/locations", permission: "masterdata.location.view" },
       { label: "Suppliers", href: "/masterdata/suppliers", permission: "masterdata.supplier.view" },
+      // Wave 2 W2G: master data administration
+      { label: "Sites", href: "/masterdata/sites", permission: "masterdata.site.view" },
+      { label: "Warehouses", href: "/masterdata/warehouses", permission: "masterdata.warehouse.view" },
+      { label: "Production lines", href: "/masterdata/lines", permission: "masterdata.production_line.view" },
+      { label: "Units of measure", href: "/masterdata/uom", permission: "masterdata.uom.view" },
+      { label: "Reason codes", href: "/masterdata/reason-codes", permission: "masterdata.reason_code.view" },
     ],
   },
   {

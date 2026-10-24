@@ -1,0 +1,170 @@
+"use client";
+import { createContext, useActionState, useContext, type ReactNode } from "react";
+import type { ActionState } from "@/lib/errors";
+import { Field, Input, LinkButton, Select, Textarea, cx } from "@/ui/core";
+import { FormMessage, SubmitButton } from "@/ui/form";
+
+/**
+ * Small form kit for the W2G master data screens: one server action per form, field errors from
+ * the service (DomainError → ActionState.fieldErrors) shown under the matching field, a pending
+ * submit button and the result message. No client-side business rules.
+ */
+type Action = (prev: ActionState, fd: FormData) => Promise<ActionState>;
+const Errors = createContext<Record<string, string>>({});
+const useErr = (name: string) => useContext(Errors)[name];
+
+export function ActionForm({
+  action,
+  submitLabel,
+  pendingText = "Saving…",
+  hidden = {},
+  cancelHref,
+  variant = "primary",
+  children,
+  className,
+}: {
+  action: Action;
+  submitLabel: string;
+  pendingText?: string;
+  hidden?: Record<string, string>;
+  cancelHref?: string;
+  variant?: "primary" | "cta" | "secondary" | "danger";
+  children?: ReactNode;
+  className?: string;
+}) {
+  const [state, formAction] = useActionState<ActionState, FormData>(action, null);
+  return (
+    <form action={formAction} className={cx("space-y-4", className)} noValidate>
+      {Object.entries(hidden).map(([k, v]) => (
+        <input key={k} type="hidden" name={k} value={v} />
+      ))}
+      <Errors.Provider value={state?.fieldErrors ?? {}}>{children}</Errors.Provider>
+      <FormMessage state={state} />
+      <div className="flex flex-wrap gap-2">
+        <SubmitButton variant={variant} pendingText={pendingText}>
+          {submitLabel}
+        </SubmitButton>
+        {cancelHref && (
+          <LinkButton href={cancelHref} variant="secondary">
+            Cancel
+          </LinkButton>
+        )}
+      </div>
+    </form>
+  );
+}
+
+export function Grid({ children }: { children: ReactNode }) {
+  return <div className="grid gap-4 sm:grid-cols-2">{children}</div>;
+}
+
+export function TextField({
+  name,
+  label,
+  defaultValue,
+  hint,
+  placeholder,
+  mono,
+  inputMode,
+  readOnly,
+}: {
+  name: string;
+  label: string;
+  defaultValue?: string | number | null;
+  hint?: string;
+  placeholder?: string;
+  mono?: boolean;
+  inputMode?: "numeric" | "decimal" | "text";
+  readOnly?: boolean;
+}) {
+  const error = useErr(name);
+  return (
+    <Field label={label} htmlFor={`f-${name}`} error={error} hint={hint}>
+      <Input
+        id={`f-${name}`}
+        name={name}
+        defaultValue={defaultValue ?? ""}
+        placeholder={placeholder}
+        inputMode={inputMode}
+        readOnly={readOnly}
+        autoComplete="off"
+        aria-invalid={!!error}
+        className={cx(mono && "font-mono", readOnly && "bg-surface-2 text-muted")}
+      />
+    </Field>
+  );
+}
+
+export function TextareaField({ name, label, defaultValue, hint, placeholder }: { name: string; label: string; defaultValue?: string | null; hint?: string; placeholder?: string }) {
+  const error = useErr(name);
+  return (
+    <Field label={label} htmlFor={`f-${name}`} error={error} hint={hint}>
+      <Textarea id={`f-${name}`} name={name} defaultValue={defaultValue ?? ""} placeholder={placeholder} aria-invalid={!!error} />
+    </Field>
+  );
+}
+
+export function SelectField({
+  name,
+  label,
+  options,
+  defaultValue,
+  hint,
+  emptyLabel,
+}: {
+  name: string;
+  label: string;
+  options: { value: string; label: string }[];
+  defaultValue?: string | null;
+  hint?: string;
+  emptyLabel?: string;
+}) {
+  const error = useErr(name);
+  return (
+    <Field label={label} htmlFor={`f-${name}`} error={error} hint={hint}>
+      <Select id={`f-${name}`} name={name} defaultValue={defaultValue ?? ""} aria-invalid={!!error}>
+        {emptyLabel !== undefined && <option value="">{emptyLabel}</option>}
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </Select>
+    </Field>
+  );
+}
+
+/** Checkbox that always submits a value ("false" when unchecked), so defaults never flip silently. */
+export function CheckField({ name, label, defaultChecked, hint }: { name: string; label: string; defaultChecked?: boolean; hint?: string }) {
+  const error = useErr(name);
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="flex min-h-[44px] items-center gap-2 text-[14px]">
+        <input type="hidden" name={name} value="false" />
+        <input type="checkbox" name={name} value="true" defaultChecked={defaultChecked} className="size-5 accent-[var(--color-primary,#2e7d32)]" />
+        {label}
+      </label>
+      {hint && !error && <p className="text-[12px] text-muted">{hint}</p>}
+      {error && <p className="text-[12px] text-[var(--bad-fg)]">{error}</p>}
+    </div>
+  );
+}
+
+export function MultiCheckField({ name, label, options, defaultValues = [], hint }: { name: string; label: string; options: { value: string; label: string }[]; defaultValues?: string[]; hint?: string }) {
+  const error = useErr(name);
+  return (
+    <fieldset className="flex min-w-0 flex-col gap-1.5">
+      <legend className="mb-1 text-[13px] font-medium text-fg">{label}</legend>
+      <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+        {options.map((o) => (
+          <label key={o.value} className="flex min-h-[36px] items-center gap-2 text-[13px]">
+            <input type="checkbox" name={name} value={o.value} defaultChecked={defaultValues.includes(o.value)} className="size-4" />
+            {o.label}
+          </label>
+        ))}
+      </div>
+      {hint && !error && <p className="text-[12px] text-muted">{hint}</p>}
+      {error && <p className="text-[12px] text-[var(--bad-fg)]">{error}</p>}
+    </fieldset>
+  );
+}

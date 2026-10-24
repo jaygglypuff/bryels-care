@@ -142,6 +142,31 @@ export const PERMISSIONS = [
   "platform.job.view",
   "platform.job.admin",
   "platform.diagnostics.view",
+  // Wave 2 W2G: master data administration (US-1-20..US-1-24; docs/permissions-matrix.md §2.2, §3.2)
+  "masterdata.site.admin",
+  "masterdata.department.view",
+  "masterdata.department.admin",
+  "masterdata.warehouse.view",
+  "masterdata.warehouse.admin",
+  "masterdata.production_line.view",
+  "masterdata.production_line.admin",
+  "masterdata.location.create",
+  "masterdata.location.edit",
+  "masterdata.location.admin",
+  "masterdata.uom.view",
+  "masterdata.uom.admin",
+  "masterdata.uom_conversion.view",
+  "masterdata.uom_conversion.admin",
+  "masterdata.product.edit",
+  "masterdata.product.export",
+  "masterdata.sku.view",
+  "masterdata.sku.create",
+  "masterdata.sku.edit",
+  "masterdata.sku.export",
+  "masterdata.material.edit",
+  "masterdata.material.export",
+  "masterdata.reason_code.view",
+  "masterdata.reason_code.admin",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -483,4 +508,48 @@ for (const [role, grants] of Object.entries(W1A_GRANTS)) {
 // Diagnostics (worker, jobs, reconciliation) are for system administrators, not every view-all role.
 for (const role of ["site_manager", "auditor"]) {
   ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => p !== "platform.diagnostics.view");
+}
+
+// Wave 2 W2G: role grants for master data administration (docs/permissions-matrix.md §3.2).
+// View strings reach VIEW_ALL roles (owner, system_admin, site_manager, qa_qc, auditor) automatically;
+// owner_director holds every string. Organization structure and reference lists are readable by every role.
+const W2G_ORG_VIEW: readonly Permission[] = [
+  "masterdata.site.view",
+  "masterdata.department.view",
+  "masterdata.warehouse.view",
+  "masterdata.production_line.view",
+  "masterdata.uom.view",
+  "masterdata.uom_conversion.view",
+  "masterdata.reason_code.view",
+];
+const W2G_GRANTS: Record<string, readonly Permission[]> = {
+  system_admin: [
+    "masterdata.site.admin",
+    "masterdata.department.admin",
+    "masterdata.warehouse.admin",
+    "masterdata.production_line.admin",
+    "masterdata.uom.admin",
+    "masterdata.uom_conversion.admin",
+    "masterdata.reason_code.admin",
+    "masterdata.location.create",
+    "masterdata.location.edit",
+    "masterdata.location.admin",
+    "masterdata.product.edit",
+    "masterdata.product.export",
+    "masterdata.sku.create",
+    "masterdata.sku.edit",
+    "masterdata.sku.export",
+    "masterdata.material.edit",
+  ],
+  site_manager: ["masterdata.location.create", "masterdata.location.edit"],
+  production_planner: [...W2G_ORG_VIEW, "masterdata.product.create", "masterdata.product.edit", "masterdata.sku.view", "masterdata.sku.create", "masterdata.sku.edit", "masterdata.material.create", "masterdata.material.edit"],
+  production_operator: [...W2G_ORG_VIEW, "masterdata.sku.view"],
+  warehouse_operator: [...W2G_ORG_VIEW, "masterdata.sku.view", "masterdata.location.create"],
+  qa_qc: ["masterdata.product.edit", "masterdata.sku.edit", "masterdata.material.edit"],
+  procurement: [...W2G_ORG_VIEW, "masterdata.product.view", "masterdata.sku.view", "masterdata.material.create", "masterdata.material.edit", "masterdata.material.export"],
+  sales_cs: [...W2G_ORG_VIEW, "masterdata.sku.view", "masterdata.product.export", "masterdata.sku.export"],
+  auditor: ["masterdata.product.export", "masterdata.sku.export", "masterdata.material.export"],
+};
+for (const [role, grants] of Object.entries(W2G_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
 }

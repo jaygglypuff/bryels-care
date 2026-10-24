@@ -58,6 +58,9 @@ export const SETTINGS = {
   "inventory.container.allow_mixed_lots": { scopes: ["organization"], schema: z.boolean(), default: false, assumption: "A-PROC-22" },
   /** Near-expiry buckets in days: Expiry alerts page and `expiring_lot` notifications (US-2-16). */
   "inventory.expiry.alert_days": { scopes: ["organization"], schema: z.array(z.number().int().min(1).max(3650)).min(1).max(6), default: [30, 60, 90] as number[], assumption: "A-KPI-03" },
+  // Wave 2 W2G: master data administration
+  /** Product families a product may belong to (US-1-22 AC1, docs/data-model.md §3.2 `product_family`). */
+  "masterdata.product_families": { scopes: ["organization"], schema: z.array(z.string().trim().min(1).max(40)).min(1).max(50), default: ["Soap", "Lotion", "Cream", "Oil", "Other"] as string[], assumption: "A-W2G-03" },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS;

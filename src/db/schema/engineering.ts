@@ -13,6 +13,7 @@ import { type AnyPgColumn, boolean, check, date, index, integer, numeric, pgTabl
 import { QTY, createdAt, id } from "./_common";
 import { organizations, sites, users } from "./identity";
 import { formulaRevisions, materials, products } from "./masterdata";
+import { productionLines } from "./org";
 
 const VERSION_STATUS_CK = `('draft', 'pending_approval', 'approved', 'rejected', 'retired')`;
 
@@ -159,6 +160,8 @@ export const equipment = pgTable(
     equipmentKind: text("equipment_kind").notNull(),
     /** Free-text line/area until production_lines exist (US-1-20). */
     lineLabel: text("line_label"),
+    /** Line the equipment belongs to (W2G, US-1-20); line_label mirrors the line name for display. */
+    productionLineId: uuid("production_line_id").references(() => productionLines.id),
     status: text("status").notNull().default("in_service"),
     calibrationIntervalDays: integer("calibration_interval_days"),
     lastCalibratedDate: date("last_calibrated_date"),
