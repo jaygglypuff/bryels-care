@@ -819,7 +819,16 @@ release, expired-lot release blocked, put-away move, batch plan, start, weigh 5 
 release, BMR PDF, sales order, FEFO allocation, dispatch, DR PDF, reverse and forward trace,
 owner KPIs before and after, audit log, and a 390 × 844 phone check (no horizontal scroll).
 The run asserts status chips, numbers and texts, and fails on any error page, console error or
-failed request (favicon excluded).
+failed request (favicon excluded). It also fails when a screen still looks unchanged after a
+successful in-place action: there is no reload fallback and no reload between staging scans
+(ADR-043).
+
+`tests/e2e/in-place-actions.cjs` is the focused regression check for ADR-043: on a fresh seed and a
+production build it takes 17 in-place actions across receipts, counts, adjustments, QA
+inspection and review, holds, settings, batch weighing, notifications and work orders, each right
+after a client-side navigation, and fails if any screen still looks unchanged after 10 s (no
+reload). Run it 10 times in a row on a fresh seed before changing forms, actions or route layout;
+the pre-fix build failed every run, the fixed build passes 10 of 10.
 
 | Run | Result | Evidence |
 |---|---|---|

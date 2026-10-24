@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ArrowRight, Boxes, MapPin, RotateCcw, ScanLine } from "lucide-react";
 import { Button, Card, Field, Input, Select, Textarea, inputClass } from "@/ui/core";
 import { Banner, StatusChip } from "@/ui/status";
@@ -69,7 +69,8 @@ function UndoToast({ result, onDone }: { result: MoveResult; onDone: () => void 
             onClick={() =>
               start(async () => {
                 const r = await undoMoveAction(result.transferId);
-                setMsg({ ok: r.ok, text: r.message, reversal: r.offerReversalRequest });
+                // Joins the action's transition: the message and the refreshed page commit together (ADR-043).
+                startTransition(() => setMsg({ ok: r.ok, text: r.message, reversal: r.offerReversalRequest }));
               })
             }
           >
@@ -292,8 +293,8 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
                   toLocationId: dest.id,
                   reason: reason || undefined,
                 });
-                if (!r.ok) return setError(r.message);
-                setResult(r.result);
+                // Joins the action's transition: the result and the refreshed page commit together (ADR-043).
+                startTransition(() => (r.ok ? setResult(r.result) : setError(r.message)));
               })
             }
           >

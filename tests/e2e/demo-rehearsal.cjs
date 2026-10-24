@@ -84,19 +84,15 @@ async function expectText(page, text, timeout = 15000) {
 }
 
 /**
- * Waits for the page to show the result of an action. Known issue (Wave 2 integration report): in
- * production builds the router sometimes does not apply the refreshed page after an in-place action
- * that follows a client-side navigation; the change is saved. The rehearsal then reloads once and
- * records it in facts.uiReloads so the run shows how often it happened.
+ * Waits for the page to show the result of an in-place action. There is no reload fallback: the
+ * action's response re-renders the page (ADR-043), so a screen that still looks unchanged after a
+ * successful action is a failure of the rehearsal.
  */
-async function settle(page, locator, label, timeout = 8000) {
+async function settle(page, locator, label, timeout = 15000) {
   try {
     await locator.waitFor({ timeout });
   } catch {
-    (facts.uiReloads ??= []).push(label);
-    log('UI did not refresh after', label, '- reloading');
-    await page.reload();
-    await locator.waitFor({ timeout: 15000 });
+    throw new Error(`ASSERTION FAILED: the page did not show the result of ${label} (${page.url()}); no reload fallback (ADR-043)`);
   }
 }
 
@@ -308,11 +304,13 @@ async function kpiValue(page, caption) {
       await page.fill('#lotCode', 'BC:LOT:' + lotNo);
       await page.fill('#toLocationCode', 'BC:LOC:PRD-01');
       await page.getByRole('button', { name: 'Confirm staging' }).click();
+      // No reload: the result and the refreshed pick list come back in the action's response and
+      // commit together (ADR-043), so the next iteration reads the new picks. After the last
+      // ingredient the page replaces the scanner with "All ingredients staged".
+      await settle(page, page.locator('[role=status]', { hasText: `(lot ${lotNo})` }).first().or(page.getByText('All ingredients staged').first()), 'staging ' + lotNo, 20000);
       await page.getByText(/^(Staged|Batch fully staged)$/).first().waitFor({ timeout: 20000 });
       (facts.staged[lineTitle.split('. ')[0]] ??= []).push(lotNo);
       log('staged', lineTitle, 'lot', lotNo);
-      await page.reload();
-      await page.locator('body').waitFor();
     }
     await expectText(page, 'All ingredients staged');
     assert(Object.keys(facts.staged).length >= 5, 'every ingredient staged: ' + JSON.stringify(facts.staged));

@@ -9,6 +9,7 @@ import {
 import type { NavBadges, NavGroup, QuickAction } from "./nav";
 import { cx } from "@/ui/core";
 import { Logo, LogoMark } from "@/ui/brand";
+import { NavigationProgress } from "@/ui/navigation-progress";
 
 const ICONS: Record<string, React.ReactNode> = {
   home: <Home size={18} />, boxes: <Boxes size={18} />, factory: <Factory size={18} />, shield: <ShieldCheck size={18} />,
@@ -91,6 +92,7 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
 
   return (
     <div className="min-h-dvh pb-[76px] lg:pb-0">
+      <NavigationProgress />
       {/* Top bar */}
       <header className="no-print sticky top-0 z-30 border-b border-line/70 bg-bg/90 backdrop-blur">
         <div className="mx-auto flex h-[68px] max-w-[1480px] items-center gap-3 px-4 sm:px-6">

@@ -43,6 +43,7 @@ export function MfaEnrolment() {
           ))}
         </ul>
         <div>
+          {/* finishEnrolment does not refresh, so the codes stay on screen; the page re-reads on confirm (ADR-043). */}
           <Button type="button" variant="cta" onClick={() => router.refresh()}>
             I saved them
           </Button>

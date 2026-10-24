@@ -31,7 +31,8 @@ function parseValue(kind: string, raw: string): unknown {
 export async function changeSettingAction(_prev: ActionState, f: FormData): Promise<ActionState> {
   const ctx = await requireContext();
   try {
-    const reset = f.get("reset") === "on";
+    // Not named "reset": a control with that name shadows HTMLFormElement.reset(), which React calls after the action.
+    const reset = f.get("clearValue") === "on";
     const value = reset ? null : parseValue(str(f, "kind"), String(f.get("value") ?? ""));
     const r = await changeSetting(ctx, { key: str(f, "key"), siteId: str(f, "siteId") || null, value, reason: str(f, "reason") }, String(f.get("password") ?? ""));
     revalidatePath("/admin/settings");

@@ -2,16 +2,15 @@
 import { revalidatePath } from "next/cache";
 
 /*
- * Response note (Wave 2 integration): actions that answer in place (no redirect) do not call
- * revalidatePath; the forms refresh the router after a success (ActionForm, BulkForm, VerifyScanForm).
- * With revalidatePath, under the pages' loading.tsx boundaries, the response never committed in
- * production builds and the form stayed on "Recording…" although the change was saved (a redirect
- * back to the same page hung the same way). The pages are dynamic, so a refresh is enough. Actions
- * that move to another page (start inspection, raise deviation) keep revalidate + redirect.
+ * In-place actions (the user stays on the inspection, deviation, batch or bulk page) end with
+ * refreshCurrentPage() on success: the action response carries the re-rendered page, so the result
+ * and the fresh data commit together (ADR-043). Actions that move to another page (start
+ * inspection, raise deviation) revalidate and redirect.
  */
 import { redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { toActionState, type ActionState } from "@/lib/errors";
+import { refreshCurrentPage } from "@/lib/in-place";
 import {
   applyBulkDisposition,
   cancelConditionalRelease,
@@ -39,7 +38,7 @@ registerAppHooks();
 
 /**
  * Server actions for Wave 2 W2C quality screens (inspections, deviations, conditional release, bulk
- * disposition, label verification). Thin adapters: parse the form, call the service, revalidate.
+ * disposition, label verification). Thin adapters: parse the form, call the service, refresh.
  */
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "");
@@ -64,16 +63,12 @@ export async function startInspectionAction(_p: ActionState, fd: FormData): Prom
   redirect(`/quality/inspections/${id}`);
 }
 
-function refreshInspection(_id: string) {
-  // No revalidatePath in place: see the note at the top of this file (the forms refresh the router).
-}
-
 export async function recordSampleAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const inspectionId = str(fd, "inspectionId");
   try {
     const ctx = await requireContext();
     const r = await recordSample(ctx, { inspectionId, fromLocationId: str(fd, "fromLocationId"), qty: str(fd, "qty"), containerRef: opt(fd, "containerRef"), note: opt(fd, "note"), idempotencyKey: str(fd, "idempotencyKey") });
-    refreshInspection(inspectionId);
+    refreshCurrentPage();
     return { ok: true, message: r.replayed ? `Sample ${r.sampleNo} was already recorded.` : `Sample ${r.sampleNo} recorded; the quantity was posted as a sample consumption.` };
   } catch (e) {
     return toActionState(e);
@@ -93,7 +88,7 @@ export async function recordResultAction(_p: ActionState, fd: FormData): Promise
       instrumentEquipmentId: opt(fd, "instrumentEquipmentId"),
       idempotencyKey: opt(fd, "idempotencyKey"),
     });
-    refreshInspection(inspectionId);
+    refreshCurrentPage();
     return { ok: true, message: `${r.testName}: ${r.result} — ${r.passed ? "within specification" : "OUT OF SPECIFICATION"}.` };
   } catch (e) {
     return toActionState(e);
@@ -105,7 +100,7 @@ export async function correctResultAction(_p: ActionState, fd: FormData): Promis
   try {
     const ctx = await requireContext();
     const r = await correctInspectionResult(ctx, { resultId: str(fd, "resultId"), value: opt(fd, "value"), uom: opt(fd, "uom"), conforms: bool(fd, "conforms"), reason: str(fd, "reason") });
-    refreshInspection(inspectionId);
+    refreshCurrentPage();
     return { ok: true, message: `Correction recorded: ${r.result}. The original entry stays visible, struck through.` };
   } catch (e) {
     return toActionState(e);
@@ -117,7 +112,7 @@ export async function submitInspectionAction(_p: ActionState, fd: FormData): Pro
   try {
     const ctx = await requireContext();
     await submitInspection(ctx, { inspectionId });
-    refreshInspection(inspectionId);
+    refreshCurrentPage();
     return { ok: true, message: "Submitted for review by a second QA user." };
   } catch (e) {
     return toActionState(e);
@@ -129,7 +124,7 @@ export async function reviewInspectionAction(_p: ActionState, fd: FormData): Pro
   try {
     const ctx = await requireContext();
     const r = await reviewInspection(ctx, { inspectionId, decision: str(fd, "decision") as ReviewDecision, note: opt(fd, "note") });
-    refreshInspection(inspectionId);
+    refreshCurrentPage();
     return { ok: true, message: `Inspection ${r.status === "in_progress" ? "returned for testing" : r.status}.${r.batchStatus ? " The batch is now quarantined and ready for its disposition." : ""}` };
   } catch (e) {
     return toActionState(e);
@@ -141,7 +136,7 @@ export async function cancelInspectionAction(_p: ActionState, fd: FormData): Pro
   try {
     const ctx = await requireContext();
     await cancelInspection(ctx, { inspectionId, reason: str(fd, "reason") });
-    refreshInspection(inspectionId);
+    refreshCurrentPage();
     return { ok: true, message: "Inspection cancelled." };
   } catch (e) {
     return toActionState(e);
@@ -172,16 +167,12 @@ export async function openDeviationAction(_p: ActionState, fd: FormData): Promis
   redirect(`/quality/deviations/${id}?opened=1`);
 }
 
-function refreshDeviation(_id: string) {
-  // No revalidatePath in place: see the note at the top of this file (the forms refresh the router).
-}
-
 export async function startInvestigationAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const deviationId = str(fd, "deviationId");
   try {
     const ctx = await requireContext();
     await startInvestigation(ctx, { deviationId, severity: str(fd, "severity"), investigation: str(fd, "investigation"), impactAssessment: opt(fd, "impactAssessment") });
-    refreshDeviation(deviationId);
+    refreshCurrentPage();
     return { ok: true, message: "Severity recorded; the deviation is under investigation." };
   } catch (e) {
     return toActionState(e);
@@ -193,7 +184,7 @@ export async function updateInvestigationAction(_p: ActionState, fd: FormData): 
   try {
     const ctx = await requireContext();
     await updateInvestigation(ctx, { deviationId, severity: opt(fd, "severity"), investigation: opt(fd, "investigation"), impactAssessment: opt(fd, "impactAssessment"), rootCause: opt(fd, "rootCause") });
-    refreshDeviation(deviationId);
+    refreshCurrentPage();
     return { ok: true, message: "Investigation record updated." };
   } catch (e) {
     return toActionState(e);
@@ -213,7 +204,7 @@ export async function containDeviationAction(_p: ActionState, fd: FormData): Pro
       reason: str(fd, "reason"),
       idempotencyKey: str(fd, "idempotencyKey"),
     });
-    refreshDeviation(deviationId);
+    refreshCurrentPage();
     return { ok: true, message: `Containment hold ${r.holdNumber} placed and linked.` };
   } catch (e) {
     return toActionState(e);
@@ -226,7 +217,7 @@ export async function closeDeviationAction(_p: ActionState, fd: FormData): Promi
     const ctx = await requireContext();
     const permitted = bool(fd, "releasePermitted");
     await closeDeviation(ctx, { deviationId, rootCause: str(fd, "rootCause"), resolution: str(fd, "resolution"), releasePermitted: permitted as boolean, effectivenessCheckOn: opt(fd, "effectivenessCheckOn") });
-    refreshDeviation(deviationId);
+    refreshCurrentPage();
     return { ok: true, message: "Deviation closed." };
   } catch (e) {
     return toActionState(e);
@@ -240,6 +231,7 @@ export async function requestConditionalAction(_p: ActionState, fd: FormData): P
   try {
     const ctx = await requireContext();
     await requestConditionalRelease(ctx, { batchId, conditions: str(fd, "conditions"), reviewDate: str(fd, "reviewDate"), reason: str(fd, "reason") });
+    refreshCurrentPage();
     return { ok: true, message: "Conditional release requested. A second approver must decide it." };
   } catch (e) {
     return toActionState(e);
@@ -251,6 +243,7 @@ export async function decideConditionalAction(_p: ActionState, fd: FormData): Pr
   try {
     const ctx = await requireContext();
     const r = await decideConditionalRelease(ctx, { requestId: str(fd, "requestId"), decision: str(fd, "decision") === "approve" ? "approve" : "reject", note: str(fd, "note") });
+    refreshCurrentPage();
     return { ok: true, message: r.status === "approved" ? `Conditional release approved; the batch and lot ${r.release?.lotNumber ?? ""} are released with conditions.` : "Conditional release rejected." };
   } catch (e) {
     return toActionState(e);
@@ -262,6 +255,7 @@ export async function cancelConditionalAction(_p: ActionState, fd: FormData): Pr
   try {
     const ctx = await requireContext();
     await cancelConditionalRelease(ctx, { requestId: str(fd, "requestId"), reason: str(fd, "reason") });
+    refreshCurrentPage();
     return { ok: true, message: "Request cancelled." };
   } catch (e) {
     return toActionState(e);
@@ -282,6 +276,8 @@ export async function bulkDispositionAction(_p: BulkState, fd: FormData): Promis
       note: opt(fd, "note"),
       password: str(fd, "password"),
     });
+    // Lots are decided one by one; refresh whenever at least one decision was recorded.
+    if (r.done > 0) refreshCurrentPage();
     return { ok: r.failed === 0, message: `${r.done} of ${r.total} lot(s) decided${r.failed ? `; ${r.failed} refused (see the list)` : ""}. Reference ${r.correlationId}.`, outcomes: r.outcomes, correlationId: r.correlationId };
   } catch (e) {
     return toActionState(e);
@@ -297,6 +293,7 @@ export async function verifyLabelAction(_p: VerifyState, fd: FormData): Promise<
   try {
     const ctx = await requireContext();
     const r = await verifyLabelScan(ctx, { locationId, scan: str(fd, "scan") });
+    refreshCurrentPage();
     return {
       ok: true,
       message: r.status === "verified" ? `${r.kind === "box" ? "Box" : "Lot"} ${r.number} verified.` : `${r.kind === "box" ? "Box" : "Lot"} ${r.number} was already verified${r.verifiedByName ? ` by ${r.verifiedByName}` : ""}.`,

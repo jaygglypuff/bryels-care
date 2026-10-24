@@ -219,6 +219,7 @@ export function AttachPaperForm({ paperRecordId }: { paperRecordId: string }) {
       }
       renew();
       setMsg({ ok: true, message: "Scan attached. A different person must now review the transcription." });
+      // A REST upload has no server-action response to carry the page: refresh it (ADR-043).
       router.refresh();
     } catch {
       setMsg({ ok: false, message: "The upload failed (connection). Nothing was saved; try again." });

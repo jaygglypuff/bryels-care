@@ -1,10 +1,7 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
-import type { ActionState } from "@/lib/errors";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { Field, Input, Select, Textarea, cx } from "@/ui/core";
-import { FormMessage, SubmitButton } from "@/ui/form";
-import type { ButtonVariant } from "@/ui/core";
+import { ActionForm, FormMessage, SubmitButton } from "@/ui/form";
 import {
   bulkDispositionAction,
   cancelConditionalAction,
@@ -26,77 +23,6 @@ import {
   type BulkState,
   type VerifyState,
 } from "./w2c-actions";
-
-type Action = (p: ActionState, fd: FormData) => Promise<ActionState>;
-
-/**
- * After a successful in-place action, re-fetch the current page (the W2C actions do not revalidate).
- * A refresh issued right after a client navigation into the page was sometimes dropped by the router
- * in production builds (found in the demo rehearsal), so a second refresh follows shortly after;
- * the pages are dynamic, so this is one extra render at most.
- */
-function useRefreshOnSuccess(state: { ok?: boolean } | null) {
-  const router = useRouter();
-  useEffect(() => {
-    if (!state?.ok) return;
-    router.refresh();
-    const again = setTimeout(() => router.refresh(), 700);
-    return () => clearTimeout(again);
-  }, [state, router]);
-}
-
-/**
- * Small form shell: hidden fields, a fresh idempotency key after every success, field errors from the
- * server, an optional confirm, one submit button. The server re-checks every rule.
- */
-function ActionForm({
-  action,
-  hidden,
-  submit,
-  pending = "Saving…",
-  variant = "primary",
-  confirm,
-  children,
-  className,
-}: {
-  action: Action;
-  hidden: Record<string, string | null | undefined>;
-  submit: string;
-  pending?: string;
-  variant?: ButtonVariant;
-  confirm?: string;
-  children?: (fe: Record<string, string>) => ReactNode;
-  className?: string;
-}) {
-  // The idempotency key is put into the form data at submit (no re-render of the form while React
-  // finishes the action). React resets the uncontrolled fields after the action.
-  // Same payload again (a retry) → same key; any other payload → a new key. Most actions redirect
-  // back to the page on success, so the component may never see an ok result to rotate on.
-  const last = useRef<{ payload: string; key: string } | null>(null);
-  const [state, dispatch] = useActionState<ActionState, FormData>(async (p, fd) => {
-    fd.delete("idempotencyKey");
-    const payload = JSON.stringify([...fd.entries()].map(([k, v]) => [k, typeof v === "string" ? v : v.name]));
-    if (!last.current || last.current.payload !== payload) last.current = { payload, key: crypto.randomUUID() };
-    fd.set("idempotencyKey", last.current.key);
-    const r = await action(p, fd);
-    if (r?.ok) last.current = null;
-    return r;
-  }, null);
-  useRefreshOnSuccess(state);
-  const fe = state?.fieldErrors ?? {};
-  return (
-    <form action={dispatch} className={cx("flex flex-col gap-3", className)} onSubmit={(e) => confirm && !window.confirm(confirm) && e.preventDefault()}>
-      {Object.entries(hidden).map(([k, v]) => (v ? <input key={k} type="hidden" name={k} value={v} /> : null))}
-      {children?.(fe)}
-      <FormMessage state={state} />
-      <div>
-        <SubmitButton variant={variant} pendingText={pending}>
-          {submit}
-        </SubmitButton>
-      </div>
-    </form>
-  );
-}
 
 export function StartInspectionButton({ batchId, lotId, processStepRecordId }: { batchId?: string; lotId?: string; processStepRecordId?: string }) {
   return <ActionForm action={startInspectionAction} hidden={{ batchId, lotId, processStepRecordId }} submit="Start inspection" pending="Starting…" variant="secondary" />;
@@ -418,7 +344,6 @@ type BulkRow = { id: string; lotNumber: string; itemName: string; itemCode: stri
 
 export function BulkForm({ rows, reasonCodes }: { rows: BulkRow[]; reasonCodes: { code: string; label: string }[] }) {
   const [state, dispatch] = useActionState<BulkState, FormData>(bulkDispositionAction, null);
-  useRefreshOnSuccess(state);
   const [picked, setPicked] = useState<Set<string>>(() => new Set(rows.filter((r) => !r.expired).map((r) => r.id)));
   useEffect(() => setPicked(new Set(rows.filter((r) => !r.expired).map((r) => r.id))), [rows]);
   const fe = state?.fieldErrors ?? {};
@@ -503,7 +428,6 @@ export function VerifyScanForm({ locationId }: { locationId: string }) {
     setTimeout(() => input.current?.focus(), 0);
     return r;
   }, null);
-  useRefreshOnSuccess(state);
   const ref = useRef<HTMLFormElement>(null);
   const input = useRef<HTMLInputElement>(null);
   return (

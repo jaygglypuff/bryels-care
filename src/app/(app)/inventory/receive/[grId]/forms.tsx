@@ -1,16 +1,17 @@
 "use client";
-import { useActionState, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Upload } from "lucide-react";
 import type { ActionState } from "@/lib/errors";
 import { Button, Field, Input, Select } from "@/ui/core";
-import { FormMessage, SubmitButton } from "@/ui/form";
+import { ActionForm as SharedActionForm } from "@/ui/form";
 
 type Action = (prev: ActionState, fd: FormData) => Promise<ActionState>;
 
 /**
  * A small server-action form: hidden fields, optional inputs, a submit button and the result message.
- * `confirm` asks before irreversible commands (post, reverse, cancel).
+ * `confirm` asks before irreversible commands (post, reverse, cancel). The shared in-place
+ * ActionForm (ADR-043) with this module's layout: the action's response re-renders the page.
  */
 export function ActionForm({
   action,
@@ -31,24 +32,10 @@ export function ActionForm({
   children?: ReactNode;
   className?: string;
 }) {
-  const [state, dispatch] = useActionState(action, null);
   return (
-    <form
-      action={dispatch}
-      className={className ?? "space-y-3"}
-      onSubmit={(e) => {
-        if (confirm && !window.confirm(confirm)) e.preventDefault();
-      }}
-    >
-      {Object.entries(hidden).map(([k, v]) => (
-        <input key={k} type="hidden" name={k} value={v} />
-      ))}
+    <SharedActionForm action={action} hidden={hidden} submit={submit} pending={pendingText ?? "Working…"} variant={variant} confirm={confirm} className={className ?? "space-y-3"}>
       {children}
-      <FormMessage state={state} />
-      <SubmitButton variant={variant} pendingText={pendingText ?? "Working…"}>
-        {submit}
-      </SubmitButton>
-    </form>
+    </SharedActionForm>
   );
 }
 
@@ -108,6 +95,7 @@ export function UploadWidget({ entityType, entityId, header = false, idPrefix }:
         setMsg({ ok: true, text: `${file.name} attached.` });
         if (fileRef.current) fileRef.current.value = "";
         setDocNo("");
+        // A REST upload has no server-action response to carry the page: refresh it (ADR-043).
         router.refresh();
       } else {
         setMsg({ ok: false, text: body.message ?? `Upload failed (HTTP ${xhr.status}). Nothing was attached.` });

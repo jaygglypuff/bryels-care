@@ -469,7 +469,7 @@ number of the component they expand.
 | 5.17 | Toast and undo | success, info, warning, error; undo where a safe reversal exists | 5 s; undo keeps toast until done; errors persist until dismissed; which actions offer undo: see 5.17 rules below |
 | 5.18 | Document preview and print layout | PDF/HTML preview, page thumbnails, print button, reprint reason | see section 10 |
 | 5.19 | Label preview | actual size at 100 % zoom, QR/Code 128, template version | shows the encoded payload text below the code for verification |
-| 5.20 | State components | loading skeleton, empty, error, permission denied, offline, not found | copy patterns in section 6 |
+| 5.20 | State components | navigation progress, empty, error, permission denied, offline, not found | copy patterns in section 6; never a route `loading.tsx` (ADR-043) |
 | 5.21 | Sync status indicator | chip + queue sheet: pending, synced, failed, conflict counts | tap opens queue; failed and conflict rows expose retry / review actions |
 | 5.22 | Avatar and avatar row | initials, photo, count badge, overflow "+n" | team load and approval queues; names on hover/tap |
 | 5.23 | Buttons | primary, cta (dark), secondary, ghost, destructive, icon, operator (large) | one cta per page; destructive never as the default focused button |
@@ -493,6 +493,23 @@ number of the component they expand.
 - Dirty forms warn before navigating away; drafts auto-save where the data model has a
   draft state.
 - Dates display `DD MMM YYYY` and times 24-hour in the site time zone (ADR-019).
+
+### Rules: 5.8a In-place actions (ADR-043)
+
+An in-place action is a form or button that changes data and leaves the user on the same page
+(record a result, release a work order, approve, mark read). One pattern, everywhere:
+
+| # | Rule | Where |
+|---|---|---|
+| 1 | The server action calls `refreshCurrentPage()` after the change and before it returns its `ActionState`. The response then carries the re-rendered page; the message and the new data appear together. A module helper that calls `revalidatePath` for the page is equivalent. | `src/lib/in-place.ts` |
+| 2 | The form uses the shared `ActionForm` (hidden fields, optional fields with server field errors, optional confirm, one submit button with pending text, the server's message) or `useInPlaceAction` when it needs its own layout. Both put an `idempotencyKey` into the form data at submit: a retry of the same payload reuses it. | `src/ui/form.tsx` |
+| 3 | The submit button shows its pending text until the refreshed page is on screen; there is no separate "refreshing" state. | `SubmitButton` |
+| 4 | Forms never call `router.refresh()` and never retry with timers. Exceptions: REST uploads (no action response) and the MFA recovery codes (refresh after the user confirms). | enforced by `tests/unit/in-place-actions.test.ts` |
+| 5 | Client code that calls a server action directly (board drop, staging scan, scan-to-move) wraps the state updates after the `await` in `startTransition`, so they commit with the refreshed page. | board, staging, move |
+| 6 | No route `loading.tsx` and no `<Suspense>` around pages: React 19.2 (as shipped by Next.js 15.5) can leave an in-place update uncommitted inside an already-visible Suspense boundary. Navigation feedback is `NavigationProgress` (section 6). | `src/app`, `src/ui` |
+| 7 | When the form is only offered in the old state (it disappears after success), the page must show the outcome itself: status chip, timeline row or banner. | page design |
+| 8 | Actions that open another page (create, start inspection, raise deviation) `revalidatePath` and `redirect`; the redirect target shows the result (for example `?placed=1` banners). | actions |
+| 9 | No form control may be named `reset` or `submit`: it hides the form's own method, and React calls `form.reset()` after every action. | forms |
 
 ### Rules: 5.9 Scan input and scan result card
 
@@ -605,7 +622,7 @@ words (work orders, lots, customers), never a table name.
 
 | State | Trigger | Presentation | Copy pattern |
 |---|---|---|---|
-| Loading (first) | data not yet available for > 300 ms | skeleton of the final layout (cards, rows), no spinner; screen reader announces "Loading {page}" | none visible |
+| Loading (first) | data not yet available for > 300 ms | client navigation: progress bar along the top edge of the screen (after 150 ms) and the previous page held at 60 % opacity (after 300 ms), `NavigationProgress`; screen reader announces "Loading page". No route skeletons (`loading.tsx`, ADR-043); a client-side data region may still show a skeleton | none visible |
 | Loading (refetch) | filters changed, background refresh | previous content held at 60 % opacity, no layout jump; small spinner in the header | none |
 | Empty (no data) | query returns nothing and no filters active | icon, title, one line, primary action if the user may create | "No {things} at {site} yet." + "Create {thing}" / for operators: "Nothing to do here right now." |
 | Empty (filtered) | filters active, nothing matches | title + "Clear filters" | "No {things} match these filters." |

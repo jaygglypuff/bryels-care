@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireContext } from "@/lib/auth/context";
 import { type ActionState, toActionState } from "@/lib/errors";
+import { refreshCurrentPage } from "@/lib/in-place";
 import {
   approveMaterialSubstitution,
   approveProductionPlan,
@@ -25,9 +26,10 @@ import {
 
 /**
  * Server actions of the W2A planning screens (thin adapters: parse the form, call the service,
- * return ActionState). Business rules live in src/modules/production. Every page here is
- * force-dynamic; actions that stay on the page return their message and the client refreshes
- * (router.refresh) instead of revalidating inside the action response.
+ * return ActionState). Business rules live in src/modules/production. Actions that stay on the
+ * page call refreshCurrentPage() on success, so their response carries the re-rendered page and
+ * the message and the new state commit together (ADR-043); actions that open another page
+ * revalidate and redirect.
  */
 
 const str = (fd: FormData, k: string) => {
@@ -70,6 +72,7 @@ export async function editWorkOrderAction(_: ActionState, fd: FormData): Promise
     const ctx = await requireContext();
     const id = uuid.parse(str(fd, "workOrderId"));
     const r = await editWorkOrder(ctx, id, woFields(fd));
+    refreshCurrentPage();
     return { ok: true, message: `Work order ${r.workOrderNumber} saved.` };
   } catch (e) {
     return toActionState(e);
@@ -98,7 +101,10 @@ export async function workOrderCommandAction(_: ActionState, fd: FormData): Prom
       message = `Batch ${r.batchNumber} created.`;
       goTo = `/production/staging/${r.batchId}`;
     }
-    if (!goTo) return { ok: true, message };
+    if (!goTo) {
+      refreshCurrentPage();
+      return { ok: true, message };
+    }
   } catch (e) {
     return toActionState(e);
   }
@@ -110,6 +116,7 @@ export async function cancelWorkOrderAction(_: ActionState, fd: FormData): Promi
     const ctx = await requireContext();
     const id = uuid.parse(str(fd, "workOrderId"));
     const r = await cancelWorkOrder(ctx, id, str(fd, "reason") ?? "");
+    refreshCurrentPage();
     return { ok: true, message: `Work order ${r.workOrderNumber} cancelled; ${r.reservationsEnded} reservation${r.reservationsEnded === 1 ? "" : "s"} ended.` };
   } catch (e) {
     return toActionState(e);
@@ -123,6 +130,7 @@ export async function boardMoveAction(input: { kind: "work_order" | "batch"; id:
   try {
     const ctx = await requireContext();
     const r = await moveBoardCard(ctx, input);
+    refreshCurrentPage();
     return { ok: true, message: r.message };
   } catch (e) {
     const s = toActionState(e);
@@ -136,6 +144,7 @@ export async function stageMaterialAction(input: { batchId: string; lotCode: str
   try {
     const ctx = await requireContext();
     const r = await stageMaterial(ctx, { ...input, qty: input.qty || null });
+    refreshCurrentPage();
     return { ok: true, batchStaged: r.batchStaged, message: `Staged ${r.qty} ${r.baseUom} of ${r.materialName} (lot ${r.lotNumber}) at ${r.toLocation}.${r.batchStaged ? " All ingredients are staged: the batch is ready to start." : ""}` };
   } catch (e) {
     const s = toActionState(e);
@@ -154,6 +163,7 @@ export async function substitutionAction(_: ActionState, fd: FormData): Promise<
       reason: str(fd, "reason") ?? "",
       idempotencyKey: str(fd, "idempotencyKey") || null,
     });
+    refreshCurrentPage();
     return { ok: true, message: `Substitution approved: lot ${r.lotNumber} at ${r.locationCode} is now reserved (${r.qty}).` };
   } catch (e) {
     return toActionState(e);
@@ -198,6 +208,7 @@ export async function planCommandAction(_: ActionState, fd: FormData): Promise<A
       const r = await convertPlanLine(ctx, { planLineId: uuid.parse(str(fd, "planLineId")), plannedStart: str(fd, "plannedStart") || null, idempotencyKey: str(fd, "idempotencyKey") || null });
       message = `Work order ${r.workOrderNumber} created (${r.batchCount} batch${r.batchCount === 1 ? "" : "es"}). Plan and release it from the work order.`;
     }
+    refreshCurrentPage();
     return { ok: true, message };
   } catch (e) {
     return toActionState(e);
@@ -208,6 +219,7 @@ export async function minStockAction(_: ActionState, fd: FormData): Promise<Acti
   try {
     const ctx = await requireContext();
     await setMinStock(ctx, { productId: str(fd, "productId") ?? "", minStockUnits: str(fd, "minStockUnits") ?? "" });
+    refreshCurrentPage();
     return { ok: true, message: "Minimum stock saved." };
   } catch (e) {
     return toActionState(e);

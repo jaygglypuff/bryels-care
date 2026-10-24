@@ -1,7 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { startTransition, useRef, useState, useTransition } from "react";
 import { fmtDate, fmtMass } from "@/lib/qty";
 import type { BoardCard, ProductionBoard } from "@/modules/production/board";
 import { Button, cx } from "@/ui/core";
@@ -100,7 +99,6 @@ function Card({ c, onMove, busy, columns, onDragStart }: { c: BoardCard; onMove:
  * opens the explanation; an allowed one calls the server, which re-checks everything.
  */
 export function BoardView({ board }: { board: ProductionBoard }) {
-  const router = useRouter();
   const dragged = useRef<BoardCard | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
@@ -117,8 +115,10 @@ export function BoardView({ board }: { board: ProductionBoard }) {
     }
     start(async () => {
       const r = await boardMoveAction({ kind: c.kind, id: c.id, toColumn: to, idempotencyKey: newKey() });
-      setDialog({ title: r.ok ? v.label : `${c.number} was not moved`, body: r.message, tone: r.ok ? "ok" : "warn" });
-      router.refresh();
+      // The action's response re-renders the board (refreshCurrentPage, ADR-043); wrapping the
+      // update after the await keeps it in that transition, so the dialog and the moved card
+      // commit together.
+      startTransition(() => setDialog({ title: r.ok ? v.label : `${c.number} was not moved`, body: r.message, tone: r.ok ? "ok" : "warn" }));
     });
   };
 

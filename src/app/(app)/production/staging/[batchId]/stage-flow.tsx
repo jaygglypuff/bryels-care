@@ -1,6 +1,5 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { startTransition, useEffect, useRef, useState, useTransition } from "react";
 import { MapPin, ScanLine } from "lucide-react";
 import { Button, Card, inputClass } from "@/ui/core";
 import { Banner } from "@/ui/status";
@@ -14,7 +13,6 @@ const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? 
  * unreserved lot comes back blocked with the expected lots; nothing is posted.
  */
 export function StageFlow({ batchId, stagingLocations }: { batchId: string; stagingLocations: { id: string; code: string; name: string }[] }) {
-  const router = useRouter();
   const lotRef = useRef<HTMLInputElement>(null);
   const [lot, setLot] = useState("");
   const [loc, setLoc] = useState(stagingLocations.length === 1 ? `BC:LOC:${stagingLocations[0].code}` : "");
@@ -26,15 +24,19 @@ export function StageFlow({ batchId, stagingLocations }: { batchId: string; stag
 
   const submit = () =>
     start(async () => {
+      // The action's response re-renders the staging page (refreshCurrentPage, ADR-043). Updates
+      // after the await are wrapped again so they join that transition: the result and the
+      // refreshed pick list commit together.
       const r = await stageMaterialAction({ batchId, lotCode: lot, toLocationCode: loc, qty, idempotencyKey: key });
-      setResult(r);
-      if (r.ok) {
-        setKey(newKey());
-        setLot("");
-        setQty("");
-        router.refresh();
-        lotRef.current?.focus();
-      }
+      startTransition(() => {
+        setResult(r);
+        if (r.ok) {
+          setKey(newKey());
+          setLot("");
+          setQty("");
+        }
+      });
+      if (r.ok) lotRef.current?.focus();
     });
 
   return (

@@ -1,13 +1,8 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState } from "react";
-import type { ActionState } from "@/lib/errors";
 import { Field, Textarea } from "@/ui/core";
 import { Banner } from "@/ui/status";
-import { FormMessage, SubmitButton } from "@/ui/form";
+import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { workOrderCommandAction } from "./actions";
-
-const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
 export type NextStepProps = {
   workOrderId: string;
@@ -21,21 +16,11 @@ export type NextStepProps = {
 
 /**
  * The work order's primary action (Plan → Release → Create batch). One component instance for
- * every state, so the result of the last command stays on screen after the page refreshes into
- * the next state (ux-system §9.3 "primary action by state").
+ * every state, so the result of the last command stays on screen when the action's response
+ * re-renders the page into the next state (ux-system §9.3 "primary action by state", ADR-043).
  */
 export function NextStep(p: NextStepProps) {
-  const [key, setKey] = useState(newKey);
-  const [state, action] = useActionState<ActionState, FormData>(workOrderCommandAction, null);
-  const router = useRouter();
-  useEffect(() => {
-    if (!state?.ok) return;
-    setKey(newKey());
-    router.refresh();
-    // A refresh right after a client navigation was sometimes dropped in production builds; refresh again.
-    const again = setTimeout(() => router.refresh(), 700);
-    return () => clearTimeout(again);
-  }, [state, router]);
+  const [state, action] = useInPlaceAction(workOrderCommandAction);
   return (
     <div className="flex flex-col gap-3">
       {p.blocked && (
@@ -47,7 +32,6 @@ export function NextStep(p: NextStepProps) {
         <form action={action} className="flex flex-col gap-2">
           <input type="hidden" name="workOrderId" value={p.workOrderId} />
           <input type="hidden" name="command" value={p.command} />
-          <input type="hidden" name="idempotencyKey" value={key} />
           {p.withNote && (
             <Field label="Release note (optional)" htmlFor="note">
               <Textarea id="note" name="note" maxLength={500} className="min-h-[56px]" />

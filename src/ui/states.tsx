@@ -11,18 +11,5 @@ export function SegmentError({ what, reset }: { what: string; reset: () => void 
   );
 }
 
-/** Loading skeleton for list pages (loading.tsx). */
-export function ListSkeleton({ label, cards = 3 }: { label: string; cards?: number }) {
-  return (
-    <div aria-busy="true" aria-live="polite" className="flex flex-col gap-4">
-      <span className="sr-only">Loading {label}…</span>
-      <div className="h-8 w-56 animate-pulse rounded-[10px] bg-surface-2" />
-      <div className="grid gap-4 sm:grid-cols-3">
-        {Array.from({ length: cards }, (_, i) => (
-          <div key={i} className="h-[110px] animate-pulse rounded-[16px] border border-line bg-surface" />
-        ))}
-      </div>
-      <div className="h-[320px] animate-pulse rounded-[16px] border border-line bg-surface" />
-    </div>
-  );
-}
+// Route `loading.tsx` skeletons were removed (ADR-043): navigation feedback is the shell's
+// NavigationProgress (src/ui/navigation-progress.tsx).

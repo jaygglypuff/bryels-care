@@ -1,8 +1,8 @@
 "use client";
 import { useFormStatus } from "react-dom";
-import type { ComponentProps } from "react";
+import { useActionState, useRef, type ComponentProps, type ReactNode } from "react";
 import type { ActionState } from "@/lib/errors";
-import { Button, cx } from "./core";
+import { Button, cx, type ButtonVariant } from "./core";
 
 export function SubmitButton({ children, pendingText = "Saving…", ...rest }: ComponentProps<typeof Button> & { pendingText?: string }) {
   const { pending } = useFormStatus();
@@ -25,5 +25,81 @@ export function FormMessage({ state }: { state: ActionState }) {
     >
       {state.message}
     </p>
+  );
+}
+
+export type FormAction<S extends ActionState = ActionState> = (prev: S, fd: FormData) => Promise<S>;
+
+const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+
+/**
+ * `useActionState` for an in-place server action (ADR-043, docs/ux-system.md "Rules: 5.8a").
+ *
+ * - Puts an `idempotencyKey` into the form data at submit: the same payload again (a retry or a
+ *   double tap) reuses the key, any other payload gets a new one, and a success clears it. The
+ *   form is not re-rendered to rotate the key.
+ * - Does not refresh anything. The server action calls `refreshCurrentPage()`, so its response
+ *   carries the re-rendered page and React commits the result and the fresh data together; the
+ *   submit button stays pending until both are on screen.
+ */
+export function useInPlaceAction<S extends ActionState>(action: FormAction<S>, initial = null as Awaited<S>) {
+  const last = useRef<{ payload: string; key: string } | null>(null);
+  return useActionState<S, FormData>(async (prev, fd) => {
+    fd.delete("idempotencyKey");
+    const payload = JSON.stringify([...fd.entries()].map(([k, v]) => [k, typeof v === "string" ? v : `${v.name}:${v.size}`]));
+    if (!last.current || last.current.payload !== payload) last.current = { payload, key: newKey() };
+    fd.set("idempotencyKey", last.current.key);
+    const r = await action(prev, fd);
+    if (r?.ok) last.current = null;
+    return r;
+  }, initial);
+}
+
+/**
+ * The shared in-place form: hidden fields, optional fields (a render function receives the server's
+ * field errors), an optional confirm, one submit button with pending text, and the server's message.
+ * The server re-checks every rule; this component only submits and shows the outcome.
+ */
+export function ActionForm<S extends ActionState = ActionState>({
+  action,
+  hidden = {},
+  submit,
+  pending = "Saving…",
+  variant = "primary",
+  size = "md",
+  confirm,
+  children,
+  className = "flex flex-col gap-3",
+  messageBelow = false,
+}: {
+  action: FormAction<S>;
+  hidden?: Record<string, string | null | undefined>;
+  submit: string;
+  pending?: string;
+  variant?: ButtonVariant;
+  size?: "sm" | "md" | "lg";
+  /** Asked with `window.confirm` before submitting; cancelling sends nothing. */
+  confirm?: string;
+  children?: ReactNode | ((fieldErrors: Record<string, string>) => ReactNode);
+  /** Replaces the default layout classes. */
+  className?: string;
+  /** Show the server's message under the button instead of above it. */
+  messageBelow?: boolean;
+}) {
+  const [state, dispatch] = useInPlaceAction<S>(action);
+  const fe = state?.fieldErrors ?? {};
+  const message = <FormMessage state={state} />;
+  return (
+    <form action={dispatch} className={className} onSubmit={(e) => confirm && !window.confirm(confirm) && e.preventDefault()}>
+      {Object.entries(hidden).map(([k, v]) => (v ? <input key={k} type="hidden" name={k} value={v} /> : null))}
+      {typeof children === "function" ? children(fe) : children}
+      {!messageBelow && message}
+      <div>
+        <SubmitButton variant={variant} size={size} pendingText={pending}>
+          {submit}
+        </SubmitButton>
+      </div>
+      {messageBelow && message}
+    </form>
   );
 }

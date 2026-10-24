@@ -41,7 +41,7 @@ export function SettingForm({ settingKey, kind, current, sites, requiresApproval
         </Field>
       </div>
       <label className="flex items-center gap-2 text-[13px]">
-        <input type="checkbox" name="reset" /> Remove the stored value (use the default or the organization value)
+        <input type="checkbox" name="clearValue" /> Remove the stored value (use the default or the organization value)
       </label>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Reason" htmlFor={id("reason")} error={fe.reason}>

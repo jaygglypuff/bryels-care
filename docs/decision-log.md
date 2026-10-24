@@ -50,6 +50,7 @@ Entries are numbered `ADR-nnn` and never deleted; a superseded entry points to i
 | ADR-040 | Reference master data installs itself (deploy start and first-admin bootstrap); shipped defaults stand in until then | Accepted (Wave 2 integration) | 2026-10-24 |
 | ADR-041 | Staging is recorded per scan in `batch_material_stagings` and re-reserves stock for the batch | Accepted (Wave 2 integration) | 2026-10-24 |
 | ADR-042 | Optional approval gate on production plans (off by default) | Accepted (Wave 2 integration) | 2026-10-24 |
+| ADR-043 | In-place actions re-render the page in the action response; no `loading.tsx` or `<Suspense>` around pages with in-place actions | Accepted (Wave 2 hardening) | 2026-10-24 |
 
 ---
 
@@ -624,3 +625,77 @@ what is left). Weighing recommends the staged lots first.
 (`production.production_plan.approval_required`, off by default, A-PROC-30); when on, the
 approver differs from the submitter (`approvals.sod.production_plan`). Nothing is created
 automatically: a planner converts each line.
+
+## ADR-043 In-place actions re-render the page in the action response
+
+**Status.** Accepted (Wave 2 hardening), 2026-10-24. Supersedes the ad-hoc refresh workarounds of
+W2A and W2C (double `router.refresh()`, rehearsal reload fallback).
+
+**Problem.** In production builds the screen sometimes stayed unchanged after a successful
+in-place action (the change was saved): the page kept its old data, or the form stayed on its
+pending text ("Recording…") until a manual reload. Seen after work-order release and QA results,
+reproduced on every module that has in-place forms (about 1 in 3 releases in a scripted loop).
+
+**Root cause.** A scheduling defect in the React build that Next.js 15.5 ships
+(`next/dist/compiled/react-dom`, React 19.2 canary), triggered by our route `loading.tsx` files.
+A server-action response with `revalidatePath`, and a `router.refresh()`, both apply a new React
+Server Components payload in a transition. Every page sat inside the Suspense boundary that
+`loading.tsx` creates, and that boundary is already showing content during an in-place update.
+When the transition render suspended there on a payload chunk that had arrived but was not yet
+decoded (status `resolved_model`), React marked the render "suspended with delay" first and then
+attached its retry listener; the chunk resolved that listener synchronously, inside the render,
+and React drops pings received during render in that state. At the end of the render React marked
+the update's lane suspended and cleared its ping, so nothing ever retried it: the transition
+never committed, and every later refresh joined the same stuck lane. The browser had received the
+whole payload (instrumented Flight and router logs). Timing decides whether the chunk is still
+pending or already decoded when React gets to it, which is why it was intermittent and more
+frequent right after a navigation. Without a Suspense boundary React attaches the listener before
+it marks the render, so the same race records the ping and retries.
+
+Things checked and excluded: the middleware and cache headers (responses complete and are
+`no-store`), `useActionState`/`useFormStatus` usage, form keys, prefetching, the router's action
+queue (the refresh result was applied to router state every time), and the "aborted" RSC requests
+shown by the browser (a symptom of the abandoned render, not the cause).
+
+**Decision.**
+
+1. A server action that leaves the user on the page calls `refreshCurrentPage()`
+   (`src/lib/in-place.ts`, `revalidatePath("/", "layout")`) after the change and before it
+   returns. Next.js renders the current page into the action's own response, so the result
+   message and the fresh data reach the browser together and commit in one transition; the submit
+   button stays pending until both are on screen. Module helpers that call `revalidatePath` for
+   the page are equivalent (any revalidation re-renders the current page) and stay. Actions that
+   open another page keep `revalidatePath` + `redirect`.
+2. Forms never refresh the router themselves and never retry with timers. The shared building
+   blocks are `ActionForm` and `useInPlaceAction` in `src/ui/form.tsx` (idempotency key chosen
+   at submit). Client code that calls a server action directly wraps state updates made after
+   the `await` in `startTransition`, so they join the action's transition.
+3. No `loading.tsx` and no `<Suspense>` in `src/app` or `src/ui`. Navigation feedback is the
+   shell's `NavigationProgress` (`src/ui/navigation-progress.tsx`): a progress bar along the top
+   edge of the screen after 150 ms and the previous page held at 60 % opacity after 300 ms
+   (ux-system §6).
+4. `router.refresh()` remains only where no action response exists: REST uploads (goods-receipt
+   documents, scanned paper pages) and the MFA recovery codes, which stay on screen until the user
+   confirms. `tests/unit/in-place-actions.test.ts` enforces points 2 to 4 and forbids form
+   controls named `reset` or `submit` (React calls `form.reset()` after an action; the settings
+   form had such a checkbox and threw after every save).
+
+**Alternatives.**
+
+- Keep `loading.tsx` and patch the vendored React (`pnpm patch next`, record render-phase pings).
+  It fixes the defect at its source and keeps skeletons, but it edits minified third-party code
+  that every Next.js upgrade replaces, outside our tests' reach. Rejected for now; revisit when
+  Next.js ships a React with the fix.
+- Refresh twice from the client (the W2A/W2C workaround): the second refresh joins the stuck lane
+  and fails the same way; it also costs a second request. Rejected.
+- `redirect()` to the same page: the redirect target is rendered into the same kind of
+  transition and hung the same way (observed during the Wave 2 integration). Rejected.
+- Full page reload after each action: always fresh, but slow on warehouse phones and loses
+  client state (scanner focus, messages). Rejected.
+
+**Consequences.** Client navigations no longer show route skeletons; the progress bar and the
+dimmed previous page replace them. A form that disappears in the new state (for example "Mark
+investigating" once a hold is under investigation) is not visible afterwards, so its outcome must
+show on the page itself (status chip, timeline, banner). The demo rehearsal
+(`tests/e2e/demo-rehearsal.cjs`) has no reload fallback: a screen that looks unchanged after a
+successful action fails it.

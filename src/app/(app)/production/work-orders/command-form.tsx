@@ -1,16 +1,13 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { ActionState } from "@/lib/errors";
 import type { ButtonVariant } from "@/ui/core";
-import { FormMessage, SubmitButton } from "@/ui/form";
-
-const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+import { ActionForm } from "@/ui/form";
 
 /**
- * Small form that posts hidden fields to a server action and shows its result. Each render gets
- * a fresh idempotency key after a completed submission, so a double click replays, a new click
- * after success is a new command.
+ * Small form that posts hidden fields (and optional fields) to a server action and shows its result
+ * under the button: the shared in-place ActionForm (ADR-043) with the W2A layout. A double click
+ * replays the same command (same idempotency key); a new click after a success is a new command.
  */
 export function CommandForm({
   action,
@@ -31,36 +28,9 @@ export function CommandForm({
   children?: ReactNode;
   confirm?: string;
 }) {
-  const [key, setKey] = useState(newKey);
-  const [state, formAction] = useActionState(action, null);
-  const router = useRouter();
-  useEffect(() => {
-    if (!state?.ok) return;
-    setKey(newKey());
-    router.refresh();
-    // A refresh right after a client navigation was sometimes dropped in production builds; refresh again.
-    const again = setTimeout(() => router.refresh(), 700);
-    return () => clearTimeout(again);
-  }, [state, router]);
   return (
-    <form
-      action={formAction}
-      className="flex min-w-0 flex-col gap-2"
-      onSubmit={(e) => {
-        if (confirm && !window.confirm(confirm)) e.preventDefault();
-      }}
-    >
-      {Object.entries(fields).map(([k, v]) => (
-        <input key={k} type="hidden" name={k} value={v} />
-      ))}
-      <input type="hidden" name="idempotencyKey" value={key} />
+    <ActionForm action={action} hidden={fields} submit={label} pending={pendingText} variant={variant} size={size} confirm={confirm} className="flex min-w-0 flex-col gap-2" messageBelow>
       {children}
-      <div>
-        <SubmitButton variant={variant} size={size} pendingText={pendingText}>
-          {label}
-        </SubmitButton>
-      </div>
-      <FormMessage state={state} />
-    </form>
+    </ActionForm>
   );
 }
