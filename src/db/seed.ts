@@ -427,6 +427,7 @@ async function main() {
   await seedW1e(db); // W1E: templates, label templates, print station
   await seedW1a(db, O);
   await (await import("./seeds/w2g")).seedW2G(db, O); // W2G: units, conversions, reason codes, org structure, SKUs
+  await (await import("./seeds/w2b")).seedW2B(db); // W2B: released wrapper lot for the packaging step
 
   console.log(`Seeded demo organization with ${mats.length} materials, ${counters.LOT} lots, ${counters.BATCH} batches, ${counters.SO} orders.`);
   await client.end();

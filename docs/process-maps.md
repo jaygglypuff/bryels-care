@@ -399,6 +399,16 @@ flowchart TD
 | W05-20 | production_planner (`production.batch.edit`) then site_manager | Desktop | Close batch: reconciliation complete, documents attached (scanned paper pages if SOP requires), costing snapshot (estimate vs actual, Phase 6), BMR final PDF generated. | `Batch.closed_at`, `GeneratedDocument` (BMR, template version, source revision). | All deviations closed or accepted by qa_qc; reservations released. | Batch: released/rejected/rework_approved → closed; WorkOrder: completed → closed | BMR final PDF (page numbers, batch id on every page, QR to record) | production.batch.closed; documents.generated_document.generated | Online-only |
 | W05-21 | site_manager (`production.batch.admin`) requests; qa_qc co-approves (second `approval_decisions` row, `batch_reopen` rule, A-PM-07 in `docs/permissions-matrix.md`) | Desktop | Controlled reopen/amend: reason, scope of amendment; original values retained; new BMR revision generated. | Amendment record. | CX-REOPEN. | Batch: closed → in_process / quarantined (reopen, `reopen_count + 1`) → … → closed | BMR revision n+1 with change note | production.batch.reopened; production.batch.amended | Online-only |
 
+**As built (Wave 2 W2B, 2026-10):** W05-06..17 run in the batch workspace one step at a time
+(`/production/<batch>`, phone layout). Differences from the table: the checker signs on the operator's
+device with their own password, or later from their own session (A-W2B-01); dispensing is refused until the
+weighing-area clearance is signed; a step's status is `in_progress → awaiting_check → completed`;
+consumption is posted at W05-17 by default (A-W2B-02); W05-12 (in-process inspection), the deviation of
+CX-TOL/CX-CAL and the finished-product inspection of W05-17 are integration hooks
+(`src/modules/production/execution-hooks.ts`) for the quality stream: until connected, a step that needs
+them stays blocked with a message; the work-order transitions of W05-06/17 are hooks for the planning stream.
+WIP holds on a failed in-process check (W05-12) are not built.
+
 **Worked example: Acapulco Soap (from the paper BMR; verify with authorized personnel before production use).**
 
 | BOM line | Ingredient (as printed) | Theoretical (g) | Share of 17,600 g | Tolerance (placeholder, per line; verify with authorized personnel before production use) | Modelled as | Scan at W05-07 |

@@ -1138,6 +1138,28 @@ Business owners: boxes, counts, adjustments and reservations now work as describ
 | `stock_movement_id` | uuid | no | → stock_movements, `uq` | one movement per posting row |
 | **`batch_state_transitions`**, **`work_order_state_transitions`** · P3 · L | | | | shape §6.1 |
 
+#### 3.5a As built: batch execution (Wave 2 W2B, US-3-09..13)
+
+New schema file `src/db/schema/execution.ts`; changes to `src/db/schema/production.ts` are additive.
+
+| Table | As built | Differences from the design above |
+|---|---|---|
+| `process_step_records` | adds `step_kind`, `area`, `status` (`pending`,`in_progress`,`awaiting_check`,`completed`,`skipped`; default `completed` for MVP rows), `checked_at`, `notes`, `blocked_reason`, `started_at`, `earliest_completion_at` (hold/curing), `performed_at`, `exception_approved_by`, `exception_reason`, `deviation_id`; `uq (batch_id, step_no)`; ck `checked_by <> conducted_by` | `conducted_by` is the performer; rows are created when a step starts (no skeleton rows at batch creation); `awaiting_check` added to the vocabulary (glossary) |
+| `dispense_records` | adds `sequence` (`uq (batch_material_id, sequence)`), `entered_qty`/`entered_uom`, `tare_qty_g`, `gross_qty_g`, `is_partial`, `equipment_id`, `checked_at`, `exception_approved_by`, `deviation_id`, `supersedes_id` + `correction_reason`, `voided_at`/`voided_by`/`void_reason`, `production_posting_id`; `checker_id` is now nullable (signed later); ck checker ≠ operator, approver ≠ operator | `batch_id` not added (reached through `batch_materials`); quantity columns keep the MVP `_g` names |
+| `batch_materials.status` | `pending`, `partial`, `dispensed` (= design `complete`), `exception` | `dispensed` kept for compatibility |
+| `process_step_checklist_results` | as designed plus item snapshot (`item_no`, `item_text`, `is_blocking`) and `supersedes_id` (a new answer supersedes, append-only trigger) | uniqueness is "one current answer" (superseded rows stay) |
+| `process_step_readings` | as designed plus parameter snapshot (code, name, kind, unit, min/target/max); append-only trigger | — |
+| `equipment_uses` | as designed plus `status_at_start`, `maintenance_due_date_at_use`, `override_request_id` (→ `equipment_override_requests`) | — |
+| `packaging_reconciliations` | new: one row per packaging/label lot issued to a step: issued, used, damaged, returned, variance, tolerance (snapshot), within flag; a recount supersedes | design kept these as `yield_records.labels_*` only |
+| `yield_records` | theoretical/actual (g), actual units, variance, yield %, configured min/max snapshot, approval (`approved_by` ≠ `recorded_by`) with `deviation_id`; one current row per batch (`is_current`, partial unique) | — |
+| `scrap_rework_records` | kind, reason code (setting), qty, status `recorded/approved/rejected`, `requires_approval`, decider ≠ recorder | `reason_code_id` is a code string until `reason_codes` exists |
+| `batch_outputs` | as designed; `checked_by` added | — |
+| `production_postings` | as designed plus `dispense_record_id`, `packaging_reconciliation_id`, `posted_by`; append-only trigger (`src/db/sql/w2b.sql`) | — |
+
+Process-step state machine: `src/modules/production/execution.ts` (`STEP_TRANSITIONS`). Batch transitions
+written by W2B: `materials_staged → in_process` on the first signed line clearance and `in_process →
+awaiting_qc` at transfer to quarantine (one transaction with every consumption and the output posting).
+
 ### 3.6 Quality
 
 | Table → column | Type | Null | Constraint / default | Notes |

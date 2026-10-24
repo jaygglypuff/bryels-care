@@ -49,7 +49,7 @@ export async function listBatches(ctx: AuthContext) {
       snapshot: batches.formulaSnapshot,
       productName: products.name,
       productSku: products.skuCode,
-      stepsDone: sql<number>`(select count(*)::int from ${processStepRecords} where ${processStepRecords.batchId} = ${batches.id})`,
+      stepsDone: sql<number>`(select count(*)::int from ${processStepRecords} where ${processStepRecords.batchId} = ${batches.id} and ${processStepRecords.status} = 'completed')`,
     })
     .from(batches)
     .innerJoin(products, eq(products.id, batches.productId))
@@ -95,7 +95,7 @@ export async function getBatchRecord(ctx: AuthContext, batchId: string) {
         .from(dispenseRecords)
         .innerJoin(inventoryLots, eq(inventoryLots.id, dispenseRecords.lotId))
         .innerJoin(locations, eq(locations.id, dispenseRecords.fromLocationId))
-        .where(inArray(dispenseRecords.batchMaterialId, mats.map((m) => m.bm.id)))
+        .where(and(inArray(dispenseRecords.batchMaterialId, mats.map((m) => m.bm.id)), isNull(dispenseRecords.voidedAt)))
         .orderBy(asc(dispenseRecords.recordedAt))
     : [];
   const stepRecs = await db.select().from(processStepRecords).where(eq(processStepRecords.batchId, batch.id)).orderBy(asc(processStepRecords.stepNo));
@@ -106,7 +106,7 @@ export async function getBatchRecord(ctx: AuthContext, batchId: string) {
     .where(
       and(
         eq(auditEvents.organizationId, ctx.organizationId),
-        or(eq(auditEvents.entityId, batch.id), and(eq(auditEvents.entityNumber, batch.batchNumber), inArray(auditEvents.entityType, ["dispense_record", "process_step_record", "batch"]))),
+        or(eq(auditEvents.entityId, batch.id), and(eq(auditEvents.entityNumber, batch.batchNumber), inArray(auditEvents.entityType, ["dispense_record", "process_step_record", "batch", "process_step_reading", "equipment_use", "packaging_reconciliation", "yield_record", "scrap_rework_record", "production_posting"]))),
       ),
     )
     .orderBy(asc(auditEvents.occurredAt));
@@ -120,7 +120,7 @@ export async function getBatchRecord(ctx: AuthContext, batchId: string) {
 
   const names = await userNames([
     batch.createdBy,
-    ...dispenses.flatMap((d) => [d.rec.operatorId, d.rec.checkerId]),
+    ...dispenses.flatMap((d) => [d.rec.operatorId, d.rec.checkerId, d.rec.exceptionApprovedBy]),
     ...stepRecs.flatMap((s) => [s.conductedBy, s.checkedBy]),
     ...transitions.map((t) => t.actorId),
     ...audits.map((a) => a.actorId),
@@ -159,6 +159,9 @@ export async function getBatchRecord(ctx: AuthContext, batchId: string) {
           operator: nm(d.rec.operatorId),
           checker: nm(d.rec.checkerId),
           exceptionReason: d.rec.exceptionReason,
+          exceptionApprovedBy: nm(d.rec.exceptionApprovedBy),
+          isPartial: d.rec.isPartial,
+          checkedAt: d.rec.checkedAt,
           recordedAt: d.rec.recordedAt,
         })),
     };
@@ -167,7 +170,8 @@ export async function getBatchRecord(ctx: AuthContext, batchId: string) {
   const steps = [...snapshot.steps]
     .sort((a, z) => a.stepNo - z.stepNo)
     .map((s) => {
-      const rec = stepRecs.find((r) => r.stepNo === s.stepNo);
+      // Only signed-off steps count as done on the record (W2B: in-progress rows exist while a step runs).
+      const rec = stepRecs.find((r) => r.stepNo === s.stepNo && r.status === "completed");
       return {
         ...s,
         record: rec ? { conductedBy: nm(rec.conductedBy), checkedBy: nm(rec.checkedBy), readings: rec.readings, completedAt: rec.completedAt } : null,
@@ -186,7 +190,7 @@ export async function getBatchRecord(ctx: AuthContext, batchId: string) {
     createdByName: nm(batch.createdBy),
     ingredients,
     totals: { theoreticalG: totalTheoG.toString(), actualG: totalActualG.toString() },
-    allWeighed: ingredients.every((i) => i.status !== "pending"),
+    allWeighed: ingredients.every((i) => i.status !== "pending" && i.status !== "partial"),
     steps,
     stepsDone,
     nextStep,

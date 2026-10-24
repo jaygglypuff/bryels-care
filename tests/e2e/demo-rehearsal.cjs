@@ -253,49 +253,129 @@ async function kpiValue(page, caption) {
     await context.close();
   }
 
-  // ---------------- f. Operator executes the batch ----------------
+  // ---------------- f. Operator executes the batch (W2B operator mode: one step at a time) ----------------
   {
     const { context, page } = await asUser('operator.nfd@bryels-care.test');
+    const CHECKER = 'Jun Dela Cruz';
+    // The checker signs on the operator's device with their own password (never the operator's session).
+    const coSign = async (scope) => {
+      const box = scope.locator('[data-testid=cosign-checker]');
+      await box.locator('select[name=checkerId]').selectOption({ label: CHECKER });
+      await box.locator('input[name=checkerPassword]').fill(PW);
+    };
+    const panel = (n) => page.locator(`[data-testid=step-panel-${n}]`);
+    const stepDone = async (n) => page.locator(`[data-testid=stepper-${n}]`).getByText('Done', { exact: true }).waitFor({ timeout: 20000 });
+    const signClearance = async (n) => {
+      const form = panel(n).locator('[data-testid=checklist-form]');
+      await form.waitFor({ timeout: 20000 });
+      const items = form.locator('[data-testid^=check-item-]');
+      for (let i = 0; i < (await items.count()); i++) await items.nth(i).getByText('Yes', { exact: true }).click();
+      await coSign(form);
+      await form.getByRole('button', { name: `Sign clearance (step ${n})` }).click();
+      await stepDone(n);
+    };
+    const completeWithChecker = async (n) => {
+      const form = panel(n).locator('[data-testid=complete-step-form]');
+      await coSign(form);
+      await form.getByRole('button', { name: `Complete step ${n}` }).click();
+      await stepDone(n);
+    };
+
     await page.goto(BASE + '/production/' + facts.batchId);
     await page.getByRole('button', { name: 'Start batch' }).click();
-    await page.getByRole('button', { name: /^Weigh / }).first().waitFor({ timeout: 20000 });
     await expectText(page, 'In process');
+
+    // Step 1: weighing-area line clearance, conductor + checker.
+    await signClearance(1);
+    log('step 1 clearance signed');
+
+    // Step 2: weighing. Scan each lot (FEFO recommendation shown), scale, weight, checker signs on device.
+    await panel(2).waitFor({ timeout: 20000 });
     for (let n = 1; n <= 5; n++) {
       const row = page.locator(`[data-testid=ingredient-${n}]`);
-      await row.getByRole('button', { name: /^Weigh / }).click();
+      await row.locator('summary', { hasText: /^Weigh / }).click();
       const form = row.locator('[data-testid=weigh-form]');
       await form.waitFor();
-      const lotText = await form.locator('select[name=lotLocation] option:checked').innerText();
-      assert(lotText.includes('recommended'), `ingredient ${n}: FEFO recommended lot preselected (${lotText})`);
-      if (n === 1) assert(lotText.includes(facts.coconutLot) && lotText.includes('A-01'), `coconut oil FEFO suggests the newly released lot ${facts.coconutLot}, got ${lotText}`);
-      const theo = (await form.locator('input[name=actualQtyG]').getAttribute('placeholder')).trim();
-      await form.locator('input[name=actualQtyG]').fill(theo);
-      await form.locator('select[name=checkerId]').selectOption({ label: 'Jun Dela Cruz' });
+      const hint = await form.getByText(/^Recommended \(FEFO\): /).innerText();
+      const lotNo = hint.replace(/^Recommended \(FEFO\): /, '').split(' at ')[0].trim();
+      if (n === 1) assert(lotNo === facts.coconutLot && hint.includes('A-01'), `coconut oil FEFO suggests the newly released lot ${facts.coconutLot}, got ${hint}`);
+      await form.locator('input[name=lotRef]').fill('BC:LOT:' + lotNo);
+      const label = await form.locator('label', { hasText: 'Net weight (target' }).innerText();
+      const theo = label.match(/target ([\d,.]+) g/)[1].replace(/,/g, '');
+      await form.locator('input[name=qty]').fill(theo);
       await form.getByText('Within tolerance').waitFor();
+      await coSign(form);
       if (n === 1) await shot(page, 'weigh-coconut-within-tolerance');
       await form.getByRole('button', { name: 'Confirm weight' }).click();
       await row.getByText('Dispensed', { exact: true }).waitFor({ timeout: 20000 });
-      log(`weighed ingredient ${n}: ${theo} g from ${lotText.split(' · ')[0]}`);
+      log(`weighed ingredient ${n}: ${theo} g from ${lotNo}`);
     }
-    await expectText(page, '5 of 5 weighed');
-    for (let s = 1; s <= 7; s++) {
-      const step = page.locator(`[data-testid=step-${s}]`);
-      const form = step.locator('[data-testid=step-form]');
-      await form.waitFor({ timeout: 20000 });
-      await form.locator('select[name=checkerId]').selectOption({ label: 'Jun Dela Cruz' });
-      if (s === 4) await form.locator('input[name=readings]').fill('Mix temp 48 °C, trace at 22 min, poured 10:40');
-      await form.getByRole('button', { name: `Complete step ${s}` }).click();
-      await step.getByText('Done', { exact: true }).waitFor({ timeout: 20000 });
+    await completeWithChecker(2);
+
+    // Step 3: production-area clearance.
+    await signClearance(3);
+
+    // Step 4: mixing and cutting: mixer from the equipment register, readings against the frozen routing.
+    {
+      const p = panel(4);
+      const eq = p.locator('[data-testid=equipment-form]');
+      await eq.locator('select[name=equipmentRef]').selectOption('MIX-01');
+      await eq.getByRole('button', { name: 'Record equipment' }).click();
+      await p.getByText(/Equipment: MIX-01/).waitFor({ timeout: 20000 });
+      for (const [code, v] of [['oil_temp', '48'], ['trace_time', '22'], ['mould_id', 'MLD-01 frame 3']]) {
+        const f = p.locator(`[data-testid=param-${code}]`);
+        await f.locator('input[name=value]').fill(v);
+        await f.getByRole('button', { name: 'Record' }).click();
+        await f.getByText(`Recorded ${v}`).waitFor({ timeout: 20000 });
+      }
+      await completeWithChecker(4);
     }
-    await expectText(page, '7 of 7 done');
-    await shot(page, 'batch-weighed-and-checklist', { full: true });
-    await page.fill('#actualUnits', '124');
+
+    // Step 5: packaging-area clearance.
+    await signClearance(5);
+
+    // Step 6: packaging and labelling: issue wrappers by scan, reconcile issued − used − damaged − returned.
+    {
+      const p = panel(6);
+      const issue = p.locator('[data-testid=packaging-issue-form]');
+      const hint = await issue.getByText(/^Released: /).innerText();
+      const wrapperLot = hint.replace(/^Released: /, '').split(' ')[0];
+      await issue.locator('input[name=lotRef]').fill('BC:LOT:' + wrapperLot);
+      await issue.locator('input[name=qty]').fill('130');
+      await issue.getByRole('button', { name: 'Issue to packaging' }).click();
+      const count = p.locator(`[data-testid=packaging-count-${wrapperLot}]`);
+      await count.waitFor({ timeout: 20000 });
+      await count.locator('input[name=used]').fill('124');
+      await count.locator('input[name=damaged]').fill('2');
+      await count.locator('input[name=returned]').fill('4');
+      await count.getByRole('button', { name: 'Save count' }).click();
+      await p.getByText('Reconciled', { exact: true }).waitFor({ timeout: 20000 });
+      for (const [code, v] of [['wrappers_used', '124'], ['wrappers_destroyed', '2']]) {
+        const f = p.locator(`[data-testid=param-${code}]`);
+        await f.locator('input[name=value]').fill(v);
+        await f.getByRole('button', { name: 'Record' }).click();
+        await f.getByText(`Recorded ${v}`).waitFor({ timeout: 20000 });
+      }
+      await completeWithChecker(6);
+    }
+    await expectText(page, 'Step 7 of 7');
+
+    // Yield (W05-16) and transfer to quarantine (W05-17): one posting with the checker.
+    const yt = page.locator('[data-testid=yield-transfer]');
+    await yt.locator('#actualUnits').fill('124');
     await expectText(page, 'Yield: 100.12 %');
-    await page.getByRole('button', { name: 'Complete batch and send to QA' }).click();
+    await yt.getByRole('button', { name: 'Record yield' }).click();
+    const transfer = yt.locator('[data-testid=transfer-form]');
+    await transfer.waitFor({ timeout: 20000 });
+    await transfer.locator('input[name=locationRef]').fill('BC:LOC:QUA-01');
+    await coSign(transfer);
+    await transfer.getByText('This posts consumption and output').click();
+    await shot(page, 'batch-weighed-and-checklist', { full: true });
+    await transfer.getByRole('button', { name: 'Post to quarantine and send to QA' }).click();
     await expectText(page, 'Awaiting QA decision', 30000);
-    facts.fgLot = (await page.locator('dd span.font-mono').first().innerText()).trim();
+    facts.fgLot = (await yt.locator('span.font-mono').first().innerText()).trim();
     assert(/^L-\d{4}-\d{5}$/.test(facts.fgLot), 'output lot ' + facts.fgLot);
-    log('batch completed, output lot', facts.fgLot);
+    log('batch posted to quarantine, output lot', facts.fgLot);
     await shot(page, 'batch-awaiting-qc', { top: true });
     await context.close();
   }
@@ -457,9 +537,9 @@ async function kpiValue(page, caption) {
     await page.getByRole('link', { name: /B-\d{2}-0004/ }).first().click();
     await page.waitForURL(/\/production\/[0-9a-f-]{36}$/);
     const row = page.locator('[data-testid=ingredient-1]');
-    await row.getByRole('button', { name: /^Weigh / }).click();
+    await row.locator('summary', { hasText: /^Weigh / }).click();
     await row.locator('[data-testid=weigh-form]').waitFor();
-    await row.locator('input[name=actualQtyG]').fill('3723.0');
+    await row.locator('input[name=qty]').fill('3723.0');
     await row.getByText('Within tolerance').waitFor();
     await row.scrollIntoViewIfNeeded();
     assert(await noHScroll(), 'weigh form has no horizontal scroll at 390 px');

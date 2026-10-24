@@ -427,7 +427,10 @@ async function batchFacts(q: Tx | typeof db, ctx: AuthContext, batch: typeof bat
     .innerJoin(batchMaterials, eq(batchMaterials.id, dispenseRecords.batchMaterialId))
     .where(eq(batchMaterials.batchId, batch.id));
   const involved = new Set<string>();
-  for (const p of people) involved.add(p.operatorId).add(p.checkerId);
+  for (const p of people) {
+    involved.add(p.operatorId);
+    if (p.checkerId) involved.add(p.checkerId); // W2B: null until the checker signs
+  }
   for (const d of done) {
     involved.add(d.conductedBy);
     if (d.checkedBy) involved.add(d.checkedBy);
