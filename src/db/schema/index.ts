@@ -16,3 +16,4 @@ export * from "./documents";
 export * from "./platform";
 export * from "./org";
 export * from "./execution";
+export * from "./quality-ext";

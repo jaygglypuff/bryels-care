@@ -4,11 +4,13 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
 import { getBatchRelease } from "@/modules/quality/dispositions";
+import { conditionalReleaseState } from "@/modules/quality";
 import { TESTABLE_BATCH_STATUSES } from "@/modules/quality/rules";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td, cx } from "@/ui/core";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
-import { DecisionChip, Transition, fmtLotQty, statusTone } from "../../_ui";
+import { DecisionChip, DeviationStatusChip, InspectionStatusChip, Transition, fmtLotQty, statusTone } from "../../_ui";
+import { ConditionalDecideForm, ConditionalRequestForm, StartInspectionButton } from "../../w2c-forms";
 import { decideBatchAction } from "../../actions";
 import { DecisionForm } from "../../decision-form";
 import { TestResultForm } from "./test-form";
@@ -34,9 +36,11 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
     throw e;
   }
   const { batch, lot } = v;
+  const cr = v.canDecide ? await conditionalReleaseState(ctx, batch.id) : null;
   const stepsDone = v.steps.filter((s) => s.record).length;
-  const passed = v.tests.filter((t) => t.passed).length;
-  const failed = v.tests.length - passed;
+  const liveTests = v.tests.filter((t) => t.live);
+  const passed = liveTests.filter((t) => t.passed).length;
+  const failed = liveTests.length - passed;
   const testable = (TESTABLE_BATCH_STATUSES as readonly string[]).includes(batch.status);
   const releaseBlocker = v.blockers.length ? v.blockers.map((b) => b.message).join(" ") : null;
 
@@ -62,7 +66,9 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
 
       <div className="flex flex-col gap-5">
         <Banner tone={statusTone(batch.status)} title={`Batch status: ${batch.status === "awaiting_qc" ? "awaiting QC" : batch.status.replace("_", " ")}`}>
-          {batch.status === "awaiting_qc"
+          {batch.status === "quarantined"
+            ? "The inspection was reviewed. Release or reject the batch; the output lot stays in quarantine until you decide."
+            : batch.status === "awaiting_qc"
             ? "Review the batch record and test results, then release or reject the batch. The output lot stays in quarantine until you decide."
             : batch.status === "released"
               ? "Released: the output lot is usable and was moved to finished-goods storage."
@@ -179,17 +185,73 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
         </Card>
 
         <Card>
-          <CardTitle action={v.tests.length > 0 ? <Chip tone={failed ? "bad" : "ok"}>{passed} passed{failed ? `, ${failed} failed` : ""}</Chip> : undefined}>Test results</CardTitle>
+          <CardTitle action={v.inspection ? <InspectionStatusChip status={v.inspection.status} outcome={v.inspection.outcome} /> : undefined}>Inspection</CardTitle>
+          {!v.planDriven ? (
+            <p className="text-[13px] text-muted">This batch has no frozen inspection plan (it was created before an approved finished-product plan existed). QA records its results below as free-form entries.</p>
+          ) : (
+            <>
+              <p className="text-[13px] text-fg-2">
+                Plan {v.plan?.code} rev {v.plan?.revisionNo} (frozen when the batch was created)
+                {v.plan?.isPlaceholder ? " · placeholder specification, QA must replace it before production use" : ""}.
+              </p>
+              {v.inspections.length > 0 ? (
+                <ul className="mt-2 flex flex-col gap-1 text-[14px]">
+                  {v.inspections.map((i) => (
+                    <li key={i.id} className="flex flex-wrap items-center gap-2">
+                      <Link className="font-medium text-primary-text hover:underline" href={`/quality/inspections/${i.id}`}>
+                        {i.number}
+                      </Link>
+                      <InspectionStatusChip status={i.status} outcome={i.outcome} />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-[13px] text-muted">The inspection has not been started.</p>
+              )}
+              {v.can.startInspection && (
+                <div className="mt-3">
+                  <StartInspectionButton batchId={batch.id} />
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+
+        <Card>
+          <CardTitle action={v.can.raiseDeviation ? <LinkButton href={`/quality/deviations/new?batchId=${batch.id}`} variant="secondary" size="sm">Raise deviation</LinkButton> : undefined}>Deviations</CardTitle>
+          {v.deviations.length === 0 ? (
+            <p className="text-[13px] text-muted">No deviation names this batch or its output lot.</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-line">
+              {v.deviations.map((d) => (
+                <li key={d.id} className="flex flex-wrap items-start gap-2 py-2 text-[14px]">
+                  <Link className="font-medium text-primary-text hover:underline" href={`/quality/deviations/${d.id}`}>
+                    {d.number}
+                  </Link>
+                  <DeviationStatusChip status={d.status} />
+                  {d.status === "closed" && d.releasePermitted === false && <Chip tone="rej">Release not permitted</Chip>}
+                  <span className="min-w-0 flex-1 text-[13px] text-fg-2">{d.stepRef ? `${d.stepRef}: ` : ""}{d.description}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card>
+          <CardTitle action={liveTests.length > 0 ? <Chip tone={failed ? "bad" : "ok"}>{passed} passed{failed ? `, ${failed} failed` : ""}</Chip> : undefined}>Test results</CardTitle>
           {v.tests.length === 0 ? (
             <EmptyState title="No test results yet">Record at least one test result before the batch can be released.</EmptyState>
           ) : (
             <Table head={["Test", "Specification", "Result", "Outcome", "Tested by", "When"]}>
               {v.tests.map((t) => (
-                <tr key={t.id} className={cx(!t.passed && "bg-[var(--bad-bg)]")}>
+                <tr key={t.id} className={cx(!t.live ? "text-muted" : !t.passed && "bg-[var(--bad-bg)]")}>
                   <Td className="font-medium">{t.testName}</Td>
                   <Td>{t.specification}</Td>
-                  <Td>{t.result}</Td>
-                  <Td>{t.passed ? <Chip tone="ok">Pass</Chip> : <Chip tone="bad">Fail</Chip>}</Td>
+                  <Td>
+                    <span className={cx(!t.live && "line-through")}>{t.result}</span>
+                    {t.correctionReason && <div className="text-[12px] text-muted">Correction: {t.correctionReason}</div>}
+                  </Td>
+                  <Td>{!t.live ? <Chip tone="neu">Superseded</Chip> : t.passed ? <Chip tone="ok">Pass</Chip> : <Chip tone="bad">Fail</Chip>}</Td>
                   <Td>{t.testedByName}</Td>
                   <Td className="whitespace-nowrap">{fmtDateTime(t.testedAt)}</Td>
                 </tr>
@@ -244,6 +306,26 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
             </>
           )}
         </Card>
+
+        {cr && (cr.enabled || cr.pending) && (
+          <Card>
+            <CardTitle>Conditional release</CardTitle>
+            {cr.pending ? (
+              <>
+                <p className="mb-3 text-[13px]">
+                  Requested by {cr.pending.requestedByName} on {fmtDateTime(cr.pending.requestedAt)}. Conditions: {cr.pending.conditions}. Review by {fmtDate(cr.pending.reviewDate)}.
+                </p>
+                {!cr.canDecide && <p className="mb-3 text-[13px] text-muted">A second approver (not the requester) must decide.</p>}
+                <ConditionalDecideForm batchId={batch.id} requestId={cr.pending.id} canDecide={cr.canDecide} canCancel={ctx.can("quality.disposition.approve")} />
+              </>
+            ) : cr.canRequest && v.canReject ? (
+              <ConditionalRequestForm batchId={batch.id} />
+            ) : (
+              <p className="text-[13px] text-muted">Only a batch awaiting QC or quarantined can be released conditionally.</p>
+            )}
+            <p className="mt-3 text-[12px] text-muted">Allowed by the company&apos;s QA policy (setting quality.conditional_release.enabled). It never bypasses deviations, holds, failed results or separation of duties.</p>
+          </Card>
+        )}
 
         <Card>
           <CardTitle>Decision history</CardTitle>

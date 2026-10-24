@@ -1022,6 +1022,19 @@ exception (CX-TOL on a step) uses `production.over_tolerance_dispense.approve` u
 (A-W2B-08). Second-person signatures on a shared device are co-signatures with the signer's own password
 (A-W2B-01).
 
+### 8.3 As built: Wave 2 W2C (inspections, deviations, genealogy export)
+
+Strings added: `quality.inspection.{view,create,submit,approve}`, `quality.test_result.{view,void}`,
+`quality.conditional_release.approve`, `quality.deviation.{view,create,submit,approve,export}` and
+`quality.genealogy.export`. Grants follow section 3.6: qa_qc holds all of them; production_operator and
+warehouse_operator get inspection `v c` and deviation `v c`; site_manager deviation `c s`; production_planner
+deviation `v`; procurement inspection `v`; auditor deviation and genealogy export; owner_director keeps only
+the view strings, `quality.genealogy.export` and `quality.conditional_release.approve` (second approver);
+system_admin does not see inspections, results or deviations. Not applied yet (A-W2C-05): genealogy view
+for PP, PO, WO, PR and SC. `quality.test_result.approve` and `quality.test_result.export` are not used yet
+(the inspection review is `quality.inspection.approve`). The bulk disposition (US-2-23) re-asks the user's
+password before deciding (interim re-authentication until US-1-28).
+
 ## 9. Assumptions and open questions
 
 | Id | Assumption (default) | Needs confirmation from |

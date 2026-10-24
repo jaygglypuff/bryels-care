@@ -48,6 +48,7 @@ export const NAV: NavGroup[] = [
       { label: "Stock counts", href: "/inventory/counts", permission: "inventory.stock_count.view" },
       { label: "Adjustments", href: "/inventory/adjustments", permission: "inventory.adjustment.view" },
       { label: "Label print station", href: "/labels", permission: "inventory.label_job.view" },
+      { label: "Label verification", href: "/quality/label-verification", permission: "inventory.container.edit" },
     ],
   },
   {
@@ -67,7 +68,10 @@ export const NAV: NavGroup[] = [
     icon: "shield",
     items: [
       { label: "QA queue", href: "/quality", permission: "quality.disposition.view" },
+      { label: "Inspections", href: "/quality/inspections", permission: "quality.inspection.view" },
+      { label: "Deviations", href: "/quality/deviations", permission: "quality.deviation.view" },
       { label: "QA holds", href: "/quality/holds", permission: "quality.hold.view" },
+      { label: "Bulk disposition", href: "/quality/bulk", permission: "quality.disposition.approve" },
       { label: "Traceability", href: "/quality/trace", permission: "quality.genealogy.view" },
       { label: "Inspection plans", href: "/masterdata/inspection-plans", permission: "quality.inspection_plan.view" },
     ],

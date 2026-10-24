@@ -25,7 +25,12 @@ import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { postMovement } from "@/modules/inventory/ledger";
 import { lotReleaseBlockers } from "@/modules/inventory";
+import { deviationBlockerMessages, deviationFacts, deviationsFor } from "./deviations";
+import { batchInspectionFacts, inspectionsFor, lotInspectionFacts } from "./inspections";
+import { liveResults } from "./inspection-rules";
+import { queueStatusLabel } from "./status-labels";
 import {
+  BATCH_AWAITING_DECISION,
   BATCH_DECIDED_STATUSES,
   BATCH_TRANSITIONS,
   LOT_DECISIONS,
@@ -134,13 +139,15 @@ export async function getQaQueue(ctx: AuthContext) {
       outputLotId: outLot.id,
       outputLotNumber: outLot.lotNumber,
       outputLotStatus: outLot.qualityStatus,
-      testCount: sql<number>`(select count(*)::int from ${testResults} where ${testResults.batchId} = ${batches.id})`,
-      failedCount: sql<number>`(select count(*)::int from ${testResults} where ${testResults.batchId} = ${batches.id} and not ${testResults.passed})`,
+      testCount: sql<number>`(select count(*)::int from ${testResults} r where r.batch_id = ${batches.id} and not exists (select 1 from ${testResults} s where s.supersedes_id = r.id))`,
+      failedCount: sql<number>`(select count(*)::int from ${testResults} r where r.batch_id = ${batches.id} and not r.passed and not exists (select 1 from ${testResults} s where s.supersedes_id = r.id))`,
+      inspectionStatus: sql<string | null>`(select i.status from inspections i where i.batch_id = ${batches.id} and i.status <> 'cancelled' order by i.created_at desc limit 1)`,
+      openDeviations: sql<number>`(select count(*)::int from deviations d where (d.batch_id = ${batches.id} or d.lot_id = ${batches.outputLotId}) and d.status <> 'closed')`,
     })
     .from(batches)
     .innerJoin(products, eq(products.id, batches.productId))
     .leftJoin(outLot, eq(outLot.id, batches.outputLotId))
-    .where(and(eq(batches.siteId, siteId), eq(batches.organizationId, ctx.organizationId), eq(batches.status, "awaiting_qc")))
+    .where(and(eq(batches.siteId, siteId), eq(batches.organizationId, ctx.organizationId), inArray(batches.status, [...BATCH_AWAITING_DECISION])))
     .orderBy(asc(batches.completedAt));
 
   const decisions = await recentDecisions(ctx, siteId, 20);
@@ -215,6 +222,26 @@ async function pendingBatchFor(tx: Tx | typeof db, lot: { sourceBatchId: string 
   return (BATCH_DECIDED_STATUSES as readonly string[]).includes(b.status) ? null : b;
 }
 
+/**
+ * W2C (US-3-14/15/21): what inspections and deviations say about releasing a lot. Open or rejected
+ * inspections, failed results without a permitting OOS closure, and open or "not releasable"
+ * deviations block release; result-entry users may not decide (separation of duties).
+ */
+async function lotQualityFacts(q: Tx | typeof db, lotId: string) {
+  const insp = await lotInspectionFacts(q, lotId);
+  const dev = await deviationFacts(q, { lotIds: [lotId] });
+  const blockers: string[] = [];
+  for (const f of insp) {
+    const i = f.inspection!;
+    if (i.status === "rejected") blockers.push(`Inspection ${i.number} was rejected by QA review.`);
+    else if (i.status !== "approved") blockers.push(`Inspection ${i.number} is ${i.status.replace(/_/g, " ")}; a second QA user must review and approve it before release.`);
+    const failed = f.failed.filter((x) => !dev.permittedResultIds.has(x.resultId));
+    if (failed.length) blockers.push(`Failed test(s) ${failed.map((x) => x.testName).join(", ")} on inspection ${i.number} need an OOS deviation closed with the conclusion that release may proceed.`);
+  }
+  blockers.push(...deviationBlockerMessages(dev));
+  return { blockers, testers: new Set(insp.flatMap((f) => f.testerIds)) };
+}
+
 export async function getLotDisposition(ctx: AuthContext, lotId: string) {
   ctx.require("quality.disposition.view");
   assertUuid(lotId, "Lot");
@@ -266,12 +293,14 @@ export async function getLotDisposition(ctx: AuthContext, lotId: string) {
   const pending = await pendingBatchFor(db, lot);
   const receivers = await receiverIds(db, lot);
   const isReceiver = receivers.has(ctx.userId);
-  const releaseBlockers = await lotReleaseBlockers(db, lot.id);
+  const qf = await lotQualityFacts(db, lot.id);
+  const releaseBlockers = [...(await lotReleaseBlockers(db, lot.id)), ...qf.blockers];
+  const isTester = qf.testers.has(ctx.userId);
   const decisions = LOT_DECISIONS.map((d) => ({
     decision: d,
     label: LOT_TRANSITIONS[d].label,
     toStatus: LOT_TRANSITIONS[d].to,
-    blocker: lotDecisionBlocker(d, lot, { isReceiver, pendingBatchNumber: pending?.number ?? null, releaseBlockers })?.message ?? null,
+    blocker: lotDecisionBlocker(d, lot, { isReceiver, isTester, pendingBatchNumber: pending?.number ?? null, releaseBlockers })?.message ?? null,
   }));
 
   return {
@@ -289,6 +318,12 @@ export async function getLotDisposition(ctx: AuthContext, lotId: string) {
     canDecide: ctx.can("quality.disposition.approve"),
     decisions,
     history: await historyFor("lot", lot.id),
+    inspections: lot.sourceBatchId ? [] : await inspectionsFor(db, { lotId: lot.id }),
+    deviations: await deviationsFor(db, { lotIds: [lot.id] }),
+    can: {
+      startInspection: lot.itemKind === "material" && ["quarantine", "on_hold"].includes(lot.qualityStatus) && ctx.can("quality.inspection.create"),
+      raiseDeviation: ctx.can("quality.deviation.create"),
+    },
   };
 }
 
@@ -346,7 +381,17 @@ async function moveLotStock(
   return moved;
 }
 
-export async function decideLot(ctx: AuthContext, input: DecideLotInput) {
+/**
+ * Records a lot decision. `opts.statusLabel` queues the new status label afterwards (A-RPT-10); the bulk
+ * disposition uses it, the single-lot screen leaves printing to the user's Print label action (W1E flow).
+ */
+export async function decideLot(ctx: AuthContext, input: DecideLotInput, opts: { statusLabel?: boolean } = {}) {
+  const r = await decideLotTx(ctx, input);
+  const label = opts.statusLabel ? await queueStatusLabel(ctx, { id: r.lotId, siteId: r.siteId, lotNumber: r.lotNumber }, r.dispositionId) : { queued: false, note: null };
+  return { ...r, labelQueued: label.queued, labelNote: label.note };
+}
+
+async function decideLotTx(ctx: AuthContext, input: DecideLotInput) {
   ctx.require("quality.disposition.approve");
   const t = LOT_TRANSITIONS[input.decision];
   if (!t) throw new DomainError("validation", "Choose a decision.", { field: "decision" });
@@ -366,8 +411,9 @@ export async function decideLot(ctx: AuthContext, input: DecideLotInput) {
 
     const pending = await pendingBatchFor(tx, lot);
     const receivers = await receiverIds(tx, lot);
-    const releaseBlockers = t.to === "released" ? await lotReleaseBlockers(tx, lot.id) : [];
-    const blocker = lotDecisionBlocker(input.decision, lot, { isReceiver: receivers.has(ctx.userId), pendingBatchNumber: pending?.number ?? null, releaseBlockers });
+    const qf = t.to === "released" ? await lotQualityFacts(tx, lot.id) : { blockers: [], testers: new Set<string>() };
+    const releaseBlockers = t.to === "released" ? [...(await lotReleaseBlockers(tx, lot.id)), ...qf.blockers] : [];
+    const blocker = lotDecisionBlocker(input.decision, lot, { isReceiver: receivers.has(ctx.userId), isTester: qf.testers.has(ctx.userId), pendingBatchNumber: pending?.number ?? null, releaseBlockers });
     if (blocker) throw new DomainError(blocker.code, blocker.message);
 
     const dispositionId = uuidv7();
@@ -402,7 +448,7 @@ export async function decideLot(ctx: AuthContext, input: DecideLotInput) {
       before: { qualityStatus: lot.qualityStatus },
       after: { qualityStatus: t.to, decision: input.decision, dispositionId, movedTo: toLocationCode, moved },
     });
-    return { dispositionId, lotNumber: lot.lotNumber, fromStatus: lot.qualityStatus, toStatus: t.to, movedTo: toLocationCode };
+    return { dispositionId, lotId: lot.id, siteId: lot.siteId, lotNumber: lot.lotNumber, fromStatus: lot.qualityStatus, toStatus: t.to, movedTo: toLocationCode };
   });
 }
 
@@ -411,8 +457,10 @@ export async function decideLot(ctx: AuthContext, input: DecideLotInput) {
 type Snapshot = { steps?: { stepNo: number; name: string; routingStepId: string }[] };
 
 /** Facts used for release blockers; works inside or outside a transaction. */
-async function batchFacts(q: Tx | typeof db, ctx: AuthContext, batch: typeof batches.$inferSelect, lot: typeof inventoryLots.$inferSelect | null) {
-  const tests = await q.select({ testName: testResults.testName, passed: testResults.passed }).from(testResults).where(eq(testResults.batchId, batch.id));
+async function batchFacts(q: Tx | typeof db, ctx: AuthContext, batch: typeof batches.$inferSelect, lot: typeof inventoryLots.$inferSelect | null, opts: { conditional?: boolean } = {}) {
+  const tests = liveResults(
+    await q.select({ id: testResults.id, testName: testResults.testName, passed: testResults.passed, supersedesId: testResults.supersedesId, testedBy: testResults.testedBy }).from(testResults).where(eq(testResults.batchId, batch.id)),
+  );
   const steps = (batch.formulaSnapshot as Snapshot).steps ?? [];
   const done = await q.select({ routingStepId: processStepRecords.routingStepId, conductedBy: processStepRecords.conductedBy, checkedBy: processStepRecords.checkedBy }).from(processStepRecords).where(eq(processStepRecords.batchId, batch.id));
   const doneIds = new Set(done.map((d) => d.routingStepId));
@@ -435,17 +483,44 @@ async function batchFacts(q: Tx | typeof db, ctx: AuthContext, batch: typeof bat
     involved.add(d.conductedBy);
     if (d.checkedBy) involved.add(d.checkedBy);
   }
+
+  // W2C: inspection of the frozen plan, deviations, holds/receiving rules of the output lot, OOS closures.
+  const dev = await deviationFacts(q, { batchId: batch.id, lotIds: lot ? [lot.id] : [] });
+  const insp = await batchInspectionFacts(q, batch);
+  const extra: string[] = [];
+  const testers = new Set(tests.map((t) => t.testedBy));
+  if (insp) {
+    for (const id of insp.testerIds) testers.add(id);
+    if (!insp.inspection) extra.push("The finished-product inspection has not been started. Start it from the QA queue and enter the plan's tests.");
+    else if (insp.inspection.status === "rejected") extra.push(`Inspection ${insp.inspection.number} was rejected by QA review.`);
+    // A conditional release (W06 exception path) is the one decision that may precede a complete, reviewed inspection.
+    else if (insp.inspection.status !== "approved" && !opts.conditional) extra.push(`Inspection ${insp.inspection.number} is ${insp.inspection.status.replace(/_/g, " ")}; a second QA user must review and approve it before release.`);
+    if (insp.inspection && insp.missing.length && !opts.conditional) extra.push(`Required test(s) without a result: ${insp.missing.join(", ")}.`);
+  }
+  extra.push(...deviationBlockerMessages(dev));
+  if (lot) extra.push(...(await lotReleaseBlockers(q, lot.id)));
+  const failed = (insp ? insp.failed : tests.filter((x) => !x.passed).map((x) => ({ resultId: x.id, testName: x.testName }))).filter((f) => !dev.permittedResultIds.has(f.resultId));
+
   return batchReleaseBlockers({
     status: batch.status,
     hasOutputLot: !!lot,
     outputLotStatus: lot?.qualityStatus ?? null,
     outputLotExpired: lot ? isLotExpired(lot) : false,
-    testCount: tests.length,
-    failedTests: tests.filter((x) => !x.passed).map((x) => x.testName),
+    testCount: insp ? insp.liveCount : opts.conditional ? Math.max(tests.length, 1) : tests.length,
+    failedTests: failed.map((x) => x.testName),
     missingSteps: steps.filter((s) => !doneIds.has(s.routingStepId)).map((s) => `${s.stepNo}. ${s.name}`),
     pendingLines: lines.filter((l) => l.status === "pending").map((l) => `${l.lineNo}. ${l.name}`),
     isOperatorOrChecker: involved.has(ctx.userId),
+    isTester: testers.has(ctx.userId),
+    planDriven: !!insp,
+    extraBlockers: extra,
   });
+}
+
+/** Blockers a conditional release would face for this batch (conditional-release.ts). */
+export async function conditionalReleaseBlockers(q: Tx | typeof db, ctx: AuthContext, batch: typeof batches.$inferSelect) {
+  const lot = batch.outputLotId ? ((await q.select().from(inventoryLots).where(eq(inventoryLots.id, batch.outputLotId)).limit(1))[0] ?? null) : null;
+  return batchFacts(q, ctx, batch, lot, { conditional: true });
 }
 
 export async function getBatchRelease(ctx: AuthContext, batchId: string) {
@@ -524,13 +599,19 @@ export async function getBatchRelease(ctx: AuthContext, batchId: string) {
       passed: testResults.passed,
       testedAt: testResults.testedAt,
       testedByName: users.displayName,
+      supersedesId: testResults.supersedesId,
+      correctionReason: testResults.correctionReason,
+      inspectionId: testResults.inspectionId,
     })
     .from(testResults)
     .innerJoin(users, eq(users.id, testResults.testedBy))
     .where(eq(testResults.batchId, batch.id))
     .orderBy(asc(testResults.testedAt), asc(testResults.id));
+  const liveIds = new Set(liveResults(tests).map((t) => t.id));
 
   const blockers = await batchFacts(db, ctx, batch, lot);
+  const inspection = await batchInspectionFacts(db, batch);
+  const snap = batch.formulaSnapshot as { inspectionPlan?: { code: string; revisionNo: number; isPlaceholder: boolean } | null };
   return {
     batch,
     productName: row.productName,
@@ -540,11 +621,21 @@ export async function getBatchRelease(ctx: AuthContext, batchId: string) {
     lines: lines.map((l) => ({ ...l, dispenses: dispenses.filter((d) => d.batchMaterialId === l.id) })),
     exceptionCount: lines.filter((l) => l.status === "exception").length + dispenses.filter((d) => !d.isWithinTolerance).length,
     steps: steps.map((s) => ({ ...s, record: stepRecords.find((r) => r.routingStepId === s.routingStepId) ?? null })),
-    tests,
+    tests: tests.map((t) => ({ ...t, live: liveIds.has(t.id) })),
     blockers,
     canReject: BATCH_TRANSITIONS.reject.from.includes(batch.status),
     canDecide: ctx.can("quality.disposition.approve"),
-    canRecordTest: ctx.can("quality.test_result.create"),
+    // Free-form MVP results only for batches without a frozen plan; planned batches use their inspection.
+    canRecordTest: ctx.can("quality.test_result.create") && !batch.inspectionPlanId,
+    planDriven: !!batch.inspectionPlanId,
+    plan: snap.inspectionPlan ? { code: snap.inspectionPlan.code, revisionNo: snap.inspectionPlan.revisionNo, isPlaceholder: snap.inspectionPlan.isPlaceholder } : null,
+    inspection: inspection?.inspection ?? null,
+    inspections: await inspectionsFor(db, { batchId: batch.id }),
+    deviations: await deviationsFor(db, { batchId: batch.id, lotIds: lot ? [lot.id] : [] }),
+    can: {
+      startInspection: !!batch.inspectionPlanId && !inspection?.inspection && ["in_process", "awaiting_qc"].includes(batch.status) && ctx.can("quality.inspection.create"),
+      raiseDeviation: ctx.can("quality.deviation.create"),
+    },
     history: await historyFor("batch", batch.id),
   };
 }
@@ -552,13 +643,32 @@ export async function getBatchRelease(ctx: AuthContext, batchId: string) {
 export type DecideBatchInput = { batchId: string; decision: BatchDecision; reason: string };
 
 export async function decideBatch(ctx: AuthContext, input: DecideBatchInput) {
+  const r = await decideBatchTx(ctx, input);
+  // US-3-15: the finished-goods label is reprinted with its new status (A-RPT-10) after the decision commits.
+  const label = r.lotId ? await queueStatusLabel(ctx, { id: r.lotId, siteId: r.siteId, lotNumber: r.lotNumber! }, r.lotDispositionId) : { queued: false, note: null };
+  return { ...r, labelQueued: label.queued, labelNote: label.note };
+}
+
+async function decideBatchTx(ctx: AuthContext, input: DecideBatchInput) {
   ctx.require("quality.disposition.approve");
-  const t = BATCH_TRANSITIONS[input.decision];
-  if (!t) throw new DomainError("validation", "Choose a decision.", { field: "decision" });
+  if (!BATCH_TRANSITIONS[input.decision]) throw new DomainError("validation", "Choose a decision.", { field: "decision" });
   assertUuid(input.batchId, "Batch");
   const reason = cleanReason(input.reason);
+  return db.transaction((tx) => decideBatchInTx(tx, ctx, { batchId: input.batchId, decision: input.decision, reason }));
+}
 
-  return db.transaction(async (tx) => {
+/** Conditional release (W06-05): the first qa_qc user requested it; the caller is the second approver. */
+export type ConditionalBasis = { requestedBy: string; conditions: string; reviewDate: string };
+
+/**
+ * Batch decision inside the caller's transaction (release, reject, or a conditional release when
+ * `conditional` is given). Locks the batch and its output lot, re-checks every blocker, moves stock and
+ * writes dispositions, transitions and audit events. Callers check permissions.
+ */
+export async function decideBatchInTx(tx: Tx, ctx: AuthContext, input: { batchId: string; decision: BatchDecision; reason: string; conditional?: ConditionalBasis | null }) {
+  const t = BATCH_TRANSITIONS[input.decision];
+  const reason = input.reason;
+  {
     const [batch] = await tx
       .select()
       .from(batches)
@@ -567,14 +677,14 @@ export async function decideBatch(ctx: AuthContext, input: DecideBatchInput) {
       .limit(1);
     if (!batch) throw new DomainError("not_found", "Batch not found.");
     ctx.requireSite(batch.siteId);
-    if (!t.from.includes(batch.status)) throw new DomainError("state", `The batch is ${batch.status.replace("_", " ")}; it can only be decided while awaiting QC.`);
+    if (!t.from.includes(batch.status)) throw new DomainError("state", `The batch is ${batch.status.replace(/_/g, " ")}; it can only be decided while awaiting QC or quarantined.`);
 
     const lot = batch.outputLotId
       ? ((await tx.select().from(inventoryLots).where(eq(inventoryLots.id, batch.outputLotId)).for("update").limit(1))[0] ?? null)
       : null;
 
     if (input.decision === "release") {
-      const blockers = await batchFacts(tx, ctx, batch, lot);
+      const blockers = await batchFacts(tx, ctx, batch, lot, { conditional: !!input.conditional });
       const sod = blockers.find((b) => b.code === "separation_of_duties");
       if (sod) throw new DomainError("separation_of_duties", sod.message);
       if (blockers.length) throw new DomainError("state", blockers.map((b) => b.message).join(" "));
@@ -582,6 +692,7 @@ export async function decideBatch(ctx: AuthContext, input: DecideBatchInput) {
 
     const batchDispositionId = uuidv7();
     const lotDispositionId = uuidv7();
+    const inspectionId = (await batchInspectionFacts(tx, batch))?.inspection?.id ?? null;
     let moved: { locationId: string; qty: string }[] = [];
     let toLocationCode: string | null = null;
     if (lot) {
@@ -604,11 +715,15 @@ export async function decideBatch(ctx: AuthContext, input: DecideBatchInput) {
       siteId: batch.siteId,
       subjectType: "batch",
       subjectId: batch.id,
-      decision: input.decision,
+      decision: input.conditional ? "conditional_release" : input.decision,
       fromStatus: batch.status,
       toStatus: t.to,
       reason,
       decidedBy: ctx.userId,
+      inspectionId,
+      requestedBy: input.conditional?.requestedBy ?? null,
+      conditions: input.conditional?.conditions ?? null,
+      reviewDate: input.conditional?.reviewDate ?? null,
     });
     await audit(tx, ctx, {
       action: `quality.disposition.${t.event}`,
@@ -629,11 +744,15 @@ export async function decideBatch(ctx: AuthContext, input: DecideBatchInput) {
         siteId: lot.siteId,
         subjectType: "lot",
         subjectId: lot.id,
-        decision: input.decision,
+        decision: input.conditional ? "conditional_release" : input.decision,
         fromStatus: lot.qualityStatus,
         toStatus: lotTo,
         reason,
         decidedBy: ctx.userId,
+        inspectionId,
+        requestedBy: input.conditional?.requestedBy ?? null,
+        conditions: input.conditional?.conditions ?? null,
+        reviewDate: input.conditional?.reviewDate ?? null,
       });
       await tx.update(inventoryLots).set({ qualityStatus: lotTo }).where(eq(inventoryLots.id, lot.id));
       await audit(tx, ctx, {
@@ -647,6 +766,6 @@ export async function decideBatch(ctx: AuthContext, input: DecideBatchInput) {
         after: { qualityStatus: lotTo, dispositionId: lotDispositionId, batch: batch.batchNumber, movedTo: toLocationCode, moved },
       });
     }
-    return { batchNumber: batch.batchNumber, toStatus: t.to, lotNumber: lot?.lotNumber ?? null, movedTo: toLocationCode };
-  });
+    return { batchNumber: batch.batchNumber, toStatus: t.to, lotNumber: lot?.lotNumber ?? null, lotId: lot?.id ?? null, siteId: batch.siteId, lotDispositionId, movedTo: toLocationCode };
+  }
 }

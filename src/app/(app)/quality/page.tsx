@@ -29,7 +29,14 @@ export default async function QaQueuePage() {
       <PageHeader
         title="QA queue"
         subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} — lots and batches waiting for a quality decision`}
-        actions={ctx.can("quality.genealogy.view") ? <LinkButton href="/quality/trace" variant="secondary">Traceability</LinkButton> : undefined}
+        actions={
+          <>
+            {ctx.can("quality.inspection.view") && <LinkButton href="/quality/inspections" variant="secondary">Inspections</LinkButton>}
+            {ctx.can("quality.deviation.view") && <LinkButton href="/quality/deviations" variant="secondary">Deviations</LinkButton>}
+            {ctx.can("quality.disposition.approve") && <LinkButton href="/quality/bulk" variant="secondary">Bulk disposition</LinkButton>}
+            {ctx.can("quality.genealogy.view") && <LinkButton href="/quality/trace" variant="secondary">Traceability</LinkButton>}
+          </>
+        }
       />
 
       <div className="flex flex-col gap-5">
@@ -102,13 +109,13 @@ export default async function QaQueuePage() {
 
         <Card>
           <CardTitle>
-            Batches awaiting QC
+            Batches awaiting a QA decision
             <Count n={q.batches.length} />
           </CardTitle>
           {q.batches.length === 0 ? (
             <EmptyState title="No batches awaiting QC">Batches appear here when production completes them and transfers the output to quarantine.</EmptyState>
           ) : (
-            <Table head={["Batch", "Product", "Output lot", "Yield", "Tests recorded", "Completed", ""]}>
+            <Table head={["Batch", "Product", "Output lot", "Yield", "Tests / inspection", "Completed", ""]}>
               {q.batches.map((b) => (
                 <tr key={b.id}>
                   <Td className="whitespace-nowrap font-medium">
@@ -135,6 +142,12 @@ export default async function QaQueuePage() {
                       <span className="ml-2">
                         <Chip tone="bad">{b.failedCount} failed</Chip>
                       </span>
+                    )}
+                    {b.inspectionStatus && <div className="mt-0.5 text-[12px] text-muted">Inspection {b.inspectionStatus.replace(/_/g, " ")}</div>}
+                    {b.openDeviations > 0 && (
+                      <div className="mt-0.5">
+                        <Chip tone="bad">{b.openDeviations} open deviation(s)</Chip>
+                      </div>
                     )}
                   </Td>
                   <Td>{fmtDateTime(b.completedAt)}</Td>

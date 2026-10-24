@@ -532,6 +532,74 @@
         },
         "additionalProperties": false
       }
+    },
+    {
+      "name": "quality.genealogy.export",
+      "method": "GET",
+      "path": "/api/v1/quality/genealogy/export",
+      "summary": "CSV/XLSX of a forward/reverse trace from a lot, batch or supplier lot (names customers and suppliers; audited).",
+      "permission": "quality.genealogy.export",
+      "response": "file",
+      "query": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "lotNumber": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "batchNumber": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "supplierLot": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "format": {
+            "default": "csv",
+            "type": "string",
+            "enum": [
+              "csv",
+              "xlsx"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "quality.deviation.export",
+      "method": "GET",
+      "path": "/api/v1/quality/deviations/export",
+      "summary": "CSV/XLSX of the current site's deviations (audited).",
+      "permission": "quality.deviation.export",
+      "response": "file",
+      "query": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "open",
+              "investigating",
+              "closed",
+              "all"
+            ]
+          },
+          "format": {
+            "default": "csv",
+            "type": "string",
+            "enum": [
+              "csv",
+              "xlsx"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
     }
   ]
 }

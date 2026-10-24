@@ -221,6 +221,34 @@ export const queries = {
     query: z.object({ show: z.enum(["open", "all"]).optional() }).strict(),
     response: "json",
   },
+  // Wave 2 W2C (US-3-16, US-3-21)
+  genealogyExport: {
+    kind: "query",
+    name: "quality.genealogy.export",
+    method: "GET",
+    path: "/api/v1/quality/genealogy/export",
+    summary: "CSV/XLSX of a forward/reverse trace from a lot, batch or supplier lot (names customers and suppliers; audited).",
+    permission: "quality.genealogy.export",
+    query: z
+      .object({
+        lotNumber: z.string().max(80).optional(),
+        batchNumber: z.string().max(80).optional(),
+        supplierLot: z.string().max(80).optional(),
+        format: z.enum(["csv", "xlsx"]).default("csv"),
+      })
+      .strict(),
+    response: "file",
+  },
+  deviationsExport: {
+    kind: "query",
+    name: "quality.deviation.export",
+    method: "GET",
+    path: "/api/v1/quality/deviations/export",
+    summary: "CSV/XLSX of the current site's deviations (audited).",
+    permission: "quality.deviation.export",
+    query: z.object({ status: z.enum(["active", "open", "investigating", "closed", "all"]).optional(), format: z.enum(["csv", "xlsx"]).default("csv") }).strict(),
+    response: "file",
+  },
 } as const satisfies Record<string, QueryContract>;
 
 export type Commands = typeof commands;

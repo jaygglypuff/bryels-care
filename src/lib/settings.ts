@@ -100,6 +100,27 @@ export const SETTINGS = {
   "production.output.expiry_basis": { scopes: ["organization"], schema: z.enum(["manufacture_date", "packaging_date"]), default: "manufacture_date" as "manufacture_date" | "packaging_date", assumption: "A-PROC-08" },
   /** W13-02: equipment with cleaning rule per_batch becomes "dirty" (cleaning required) when its use on a batch ends. */
   "production.equipment.mark_dirty_after_batch_use": { scopes: ["organization", "site"], schema: z.boolean(), default: true, assumption: "A-W2B-06" },
+
+  // Wave 2 W2C: QA release, deviations, genealogy, bulk disposition, label verification (A-W2C-nn in docs/PRD.md).
+  /** Hours from creation until an inspection shows as overdue in the QA queue (scheduling aid, not a quality rule). */
+  "quality.inspection.due_hours": { scopes: ["organization", "site"], schema: z.number().int().min(1).max(24 * 60), default: 48, assumption: "A-W2C-01" },
+  /** Deviation severity classes qa_qc chooses from (W07-01). The company's QA defines the classes and their meaning. */
+  "quality.deviation.severity_levels": {
+    scopes: ["organization"],
+    schema: z.array(z.string().regex(/^[a-z][a-z0-9_]{0,30}$/)).min(1).max(10),
+    default: ["minor", "major", "critical"] as string[],
+    assumption: "A-W2C-02",
+  },
+  /** Q-QA-03: conditional release (second approver, conditions and review date). Off until the company's QA policy allows it. */
+  "quality.conditional_release.enabled": { scopes: ["organization", "site"], schema: z.boolean(), default: false, assumption: "Q-QA-03" },
+  /** A-DM-10: depth limit of a genealogy trace (safety net; a trace that reaches it says so). */
+  "quality.genealogy.max_depth": { scopes: ["organization"], schema: z.number().int().min(2).max(50), default: 20, assumption: "A-DM-10" },
+  /** US-2-23: largest selection one bulk disposition may apply. */
+  "quality.bulk_disposition.max_lots": { scopes: ["organization"], schema: z.number().int().min(1).max(5000), default: 500, assumption: "A-W2C-03" },
+  /** A-RPT-10: a QA status change of a lot queues a label reprint for that lot (boxes inherit and are verified by scan). */
+  "labels.reprint_on_status_change": { scopes: ["organization", "site"], schema: z.boolean(), default: true, assumption: "A-RPT-10" },
+  /** MC-06: share of labels in a zone that must be scan-verified before the zone counts as done. */
+  "inventory.label_verification.target_pct": { scopes: ["organization"], schema: z.number().min(0).max(100), default: 99, assumption: "MC-06" },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS;

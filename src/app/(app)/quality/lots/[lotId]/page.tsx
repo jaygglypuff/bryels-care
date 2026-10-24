@@ -5,9 +5,10 @@ import { daysUntil, fmtDate, fmtDateTime } from "@/lib/qty";
 import { getLotDisposition } from "@/modules/quality/dispositions";
 import { issueDownloadUrl, listLotDocuments } from "@/modules/inventory/receiving-documents";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
-import { Banner, StatusChip } from "@/ui/status";
+import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
-import { DecisionChip, Transition, fmtLotQty, statusTone } from "../../_ui";
+import { DecisionChip, DeviationStatusChip, InspectionStatusChip, Transition, fmtLotQty, statusTone } from "../../_ui";
+import { StartInspectionButton } from "../../w2c-forms";
 import { decideLotAction } from "../../actions";
 import { DecisionForm, type DecisionOption } from "../../decision-form";
 
@@ -177,6 +178,51 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
                 </tr>
               ))}
             </Table>
+          )}
+        </Card>
+
+        {lot.itemKind === "material" && (
+          <Card>
+            <CardTitle>Incoming inspection</CardTitle>
+            {v.inspections.length === 0 ? (
+              <p className="text-[13px] text-muted">No inspection recorded for this lot. Start one to sample it and enter the approved incoming plan&apos;s tests.</p>
+            ) : (
+              <ul className="flex flex-col gap-1 text-[14px]">
+                {v.inspections.map((i) => (
+                  <li key={i.id} className="flex flex-wrap items-center gap-2">
+                    <Link className="font-medium text-primary-text hover:underline" href={`/quality/inspections/${i.id}`}>
+                      {i.number}
+                    </Link>
+                    <InspectionStatusChip status={i.status} outcome={i.outcome} />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {v.can.startInspection && !v.inspections.some((i) => i.status !== "cancelled") && (
+              <div className="mt-3">
+                <StartInspectionButton lotId={lot.id} />
+              </div>
+            )}
+          </Card>
+        )}
+
+        <Card>
+          <CardTitle action={v.can.raiseDeviation ? <LinkButton href={`/quality/deviations/new?lotId=${lot.id}`} variant="secondary" size="sm">Raise deviation</LinkButton> : undefined}>Deviations</CardTitle>
+          {v.deviations.length === 0 ? (
+            <p className="text-[13px] text-muted">No deviation names this lot.</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-line">
+              {v.deviations.map((d) => (
+                <li key={d.id} className="flex flex-wrap items-start gap-2 py-2 text-[14px]">
+                  <Link className="font-medium text-primary-text hover:underline" href={`/quality/deviations/${d.id}`}>
+                    {d.number}
+                  </Link>
+                  <DeviationStatusChip status={d.status} />
+                  {d.status === "closed" && d.releasePermitted === false && <Chip tone="rej">Release not permitted</Chip>}
+                  <span className="min-w-0 flex-1 text-[13px] text-fg-2">{d.description}</span>
+                </li>
+              ))}
+            </ul>
           )}
         </Card>
 

@@ -17,7 +17,8 @@ function required(v: string, field: string, label: string, max = 200) {
 }
 
 /**
- * Appends a QC test result to a batch (results are append-only; there is no edit or delete).
+ * Appends a free-form QC test result to a batch without a frozen inspection plan (MVP and legacy batches;
+ * results are append-only; there is no edit or delete). Planned batches use inspections (inspections.ts).
  * The specification text is entered by QA; the system does not define product specifications.
  */
 export async function recordTestResult(ctx: AuthContext, input: RecordTestResultInput) {
@@ -31,13 +32,17 @@ export async function recordTestResult(ctx: AuthContext, input: RecordTestResult
   return db.transaction(async (tx) => {
     // Lock the batch so a result cannot slip in while the batch is being released.
     const [batch] = await tx
-      .select({ id: batches.id, siteId: batches.siteId, status: batches.status, batchNumber: batches.batchNumber })
+      .select({ id: batches.id, siteId: batches.siteId, status: batches.status, batchNumber: batches.batchNumber, inspectionPlanId: batches.inspectionPlanId })
       .from(batches)
       .where(and(eq(batches.id, input.batchId), eq(batches.organizationId, ctx.organizationId)))
       .for("update")
       .limit(1);
     if (!batch) throw new DomainError("not_found", "Batch not found.");
     ctx.requireSite(batch.siteId);
+    if (batch.inspectionPlanId) {
+      // W2C (US-3-14): a batch with a frozen inspection plan records results on its inspection, against the plan.
+      throw new DomainError("state", `Batch ${batch.batchNumber} has a frozen inspection plan; record its results on the batch's inspection.`);
+    }
     if (!(TESTABLE_BATCH_STATUSES as readonly string[]).includes(batch.status)) {
       throw new DomainError("state", `Test results can only be recorded while the batch is in process or awaiting QC (it is ${batch.status.replace("_", " ")}).`);
     }

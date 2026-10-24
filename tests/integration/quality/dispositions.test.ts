@@ -24,6 +24,7 @@ let orgId: string;
 let nfd: SiteRef;
 let rvs: SiteRef;
 let qa: AuthContext;
+let qaLead: AuthContext;
 let qaRvsOnly: AuthContext;
 let warehouseWithApprove: AuthContext;
 let operatorWithApprove: AuthContext;
@@ -60,6 +61,7 @@ beforeAll(async () => {
   const qaPerms = ROLE_BUNDLES.qa_qc.permissions;
   qa = await ctxFor("qa.nfd@bryels-care.test", qaPerms, [nfd, rvs]);
   qaRvsOnly = await ctxFor("qa.nfd@bryels-care.test", qaPerms, [rvs]);
+  qaLead = await ctxFor("qa.lead@bryels-care.test", qaPerms, [nfd, rvs]);
   // Deliberately over-privileged contexts so the separation-of-duties rule is what blocks them.
   warehouseWithApprove = await ctxFor("warehouse.nfd@bryels-care.test", qaPerms, [nfd]);
   operatorWithApprove = await ctxFor("operator.nfd@bryels-care.test", qaPerms, [nfd]);
@@ -181,7 +183,11 @@ describe("test results and batch release", () => {
     const b = await batchByNumber("B-26-0003");
     await recordTestResult(qa, { batchId: b.id, testName: "Appearance", specification: "Smooth green bar, no cracks", result: "Conforms", passed: true });
     await recordTestResult(qa, { batchId: b.id, testName: "Net weight (n=10)", specification: "≥ 135 g each", result: "135.9 g avg", passed: true });
-    const view = await getBatchRelease(qa, b.id);
+    // W2C (US-3-15, sod.disposition.decider_not_result_entry): the user who entered results cannot release.
+    const own = await getBatchRelease(qa, b.id);
+    expect(own.blockers.map((x) => x.code)).toEqual(["separation_of_duties"]);
+    await expect(decideBatch(qa, { batchId: b.id, decision: "release", reason: "All tests within specification" })).rejects.toMatchObject({ code: "separation_of_duties" });
+    const view = await getBatchRelease(qaLead, b.id);
     expect(view.tests).toHaveLength(3);
     expect(view.blockers).toEqual([]);
 
@@ -189,7 +195,7 @@ describe("test results and batch release", () => {
     const fg = await loc(nfd.id, "FG-01");
     const outLot = await lot("L-2610-00017");
     const qty = await onHand(outLot.id, qua.id);
-    await decideBatch(qa, { batchId: b.id, decision: "release", reason: "All tests within specification; BMR reviewed" });
+    await decideBatch(qaLead, { batchId: b.id, decision: "release", reason: "All tests within specification; BMR reviewed" });
 
     expect((await batchByNumber("B-26-0003")).status).toBe("released");
     expect((await lot("L-2610-00017")).qualityStatus).toBe("released");
@@ -198,11 +204,11 @@ describe("test results and batch release", () => {
     const tr = await db.select().from(batchStateTransitions).where(and(eq(batchStateTransitions.batchId, b.id), eq(batchStateTransitions.toState, "released")));
     expect(tr).toHaveLength(1);
     expect(tr[0].fromState).toBe("awaiting_qc");
-    const disp = await db.select().from(dispositions).where(eq(dispositions.decidedBy, qa.userId));
+    const disp = await db.select().from(dispositions).where(eq(dispositions.decidedBy, qaLead.userId));
     expect(disp.filter((d) => d.subjectId === b.id && d.subjectType === "batch")).toHaveLength(1);
     expect(disp.filter((d) => d.subjectId === outLot.id && d.subjectType === "lot" && d.toStatus === "released")).toHaveLength(1);
 
-    await expect(decideBatch(qa, { batchId: b.id, decision: "release", reason: "Second attempt" })).rejects.toMatchObject({ code: "state" });
+    await expect(decideBatch(qaLead, { batchId: b.id, decision: "release", reason: "Second attempt" })).rejects.toMatchObject({ code: "state" });
   });
 
   it("does not release a batch with a failed test", async () => {

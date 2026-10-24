@@ -3,8 +3,9 @@ import { sql } from "drizzle-orm";
 import { QTY, createdAt, id } from "./_common";
 import { organizations, sites, users } from "./identity";
 import { bomLines, formulaRevisions, locations, materials, products } from "./masterdata";
-import { equipment, inspectionPlans, routingRevisions, routingSteps } from "./engineering";
+import { equipment, inspectionPlanTests, inspectionPlans, routingRevisions, routingSteps } from "./engineering";
 import { inventoryLots } from "./inventory";
+import { inspections } from "./quality-ext";
 
 /**
  * Batch = execution record with a BMR.
@@ -179,14 +180,42 @@ export const processStepRecords = pgTable(
   ],
 );
 
-export const testResults = pgTable("test_results", {
-  id: id(),
-  batchId: uuid("batch_id").notNull().references(() => batches.id),
-  testName: text("test_name").notNull(),
-  specification: text("specification").notNull(),
-  result: text("result").notNull(),
-  passed: boolean("passed").notNull(),
-  testedBy: uuid("tested_by").notNull().references(() => users.id),
-  testedAt: timestamp("tested_at", { withTimezone: true }).notNull().defaultNow(),
-  createdAt: createdAt(),
-});
+/**
+ * QC test results; append-only evidence. MVP rows are free-form per batch (test_name, specification,
+ * result, passed). Wave 2 W2C (US-3-14) rows belong to an inspection and a plan test, carry the typed
+ * value and unit, and are corrected only by a new row that supersedes the old one with a reason
+ * (docs/data-model.md §3.6). `passed` = is_within_spec. batch_id is null for a lot (incoming) inspection.
+ */
+export const testResults = pgTable(
+  "test_results",
+  {
+    id: id(),
+    batchId: uuid("batch_id").references(() => batches.id),
+    testName: text("test_name").notNull(),
+    specification: text("specification").notNull(),
+    result: text("result").notNull(),
+    passed: boolean("passed").notNull(),
+    testedBy: uuid("tested_by").notNull().references(() => users.id),
+    testedAt: timestamp("tested_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+    // Wave 2 W2C (US-3-14)
+    inspectionId: uuid("inspection_id").references((): AnyPgColumn => inspections.id),
+    inspectionPlanTestId: uuid("inspection_plan_test_id").references(() => inspectionPlanTests.id),
+    testCode: text("test_code"),
+    valueNumeric: numeric("value_numeric", QTY),
+    valueText: text("value_text"),
+    valuePass: boolean("value_pass"),
+    uom: text("uom"),
+    instrumentEquipmentId: uuid("instrument_equipment_id").references(() => equipment.id),
+    supersedesId: uuid("supersedes_id").references((): AnyPgColumn => testResults.id),
+    correctionReason: text("correction_reason"),
+  },
+  (t) => [
+    index("test_results_batch_idx").on(t.batchId),
+    index("test_results_inspection_idx").on(t.inspectionId),
+    uniqueIndex("uq_test_results_supersedes").on(t.supersedesId),
+    check("ck_test_results_subject", sql`num_nonnulls(${t.batchId}, ${t.inspectionId}) >= 1`),
+    check("ck_test_results_correction", sql`(${t.supersedesId} is null) = (${t.correctionReason} is null)`),
+    check("ck_test_results_plan_test", sql`${t.inspectionId} is null or ${t.inspectionPlanTestId} is not null`),
+  ],
+);

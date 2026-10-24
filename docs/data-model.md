@@ -1230,6 +1230,32 @@ awaiting_qc` at transfer to quarantine (one transaction with every consumption a
 | `notified_at`, `notified_by`, `notification_document_id`, `acknowledged_at`, `note` | ts / uuid / uuid / ts / text | yes | → users, → generated_documents (kind `recall_notice`) | `sales_cs` records the notification; the wording of the notice is company configuration |
 | **`inspection_state_transitions`**, **`quality_hold_state_transitions`** · P3 · L | | | | shape §6.1 |
 
+### 3.6.1 As built in Wave 2 W2C (US-3-14, US-3-15, US-3-16, US-3-21, US-2-23, US-2-24)
+
+New tables in `src/db/schema/quality-ext.ts`; differences from the target above:
+
+| Table | As built | Difference from §3.6 |
+|---|---|---|
+| `inspections` | `inspection_number` (rule `INS`), status §6.6, `inspection_kind`, `inspection_plan_id` (the batch's frozen plan or the incoming plan effective today), `lot_id` (incoming lot or the batch output lot), `batch_id`, `process_step_record_id`, sample projection, `performed_by`, `reviewed_by/at`, `outcome`, `review_note`, `cancel_reason`, `due_at`, `status_changed_*`; partial unique "one live inspection per subject and plan"; ck reviewer ≠ performer | `goods_receipt_line_id` and `sample_uom_id` not added (uom is text); `due_at` added for the queue |
+| `inspection_samples` | as §3.6 with `from_location_id`, `note`; sample removal posts `consumption` with reason `sample`, source document `inspection` | `uom_base_id` is the text `base_uom`; `label_job_id`, `device_registration_id`, `client_sequence` not added (sample labels and offline capture later) |
+| `inspection_state_transitions` | §6.1 shape | — |
+| `test_results` (extended, `src/db/schema/production.ts`) | `batch_id` now nullable; added `inspection_id`, `inspection_plan_test_id`, `test_code`, `value_numeric/text/pass`, `uom`, `instrument_equipment_id`, `supersedes_id` (unique), `correction_reason`; `passed` = `is_within_spec`; ck correction ⇔ supersedes | MVP columns kept for legacy free-form batch results; `checked_by`, `method_override`, `file_attachment_id` not added |
+| `dispositions` (extended) | added `requested_by`, `conditions`, `review_date`, `inspection_id`; ck requester ≠ decider; ck conditional needs conditions, review date, requester | still `subject_type/subject_id` (MVP shape) |
+| `deviations` | `deviation_number` (rule `DEV`), status open → investigating → closed, `source` (manual, cx_tol, cx_cal, in_process_check, yield, reconciliation, oos, other), `severity` (setting), `description`, `step_ref`, `batch_id`, `lot_id`, `process_step_record_id`, `dispense_record_id`, `inspection_id`, `test_result_id`, raise/classify/close actors, `investigation`, `impact_assessment`, `root_cause`, `resolution`, `release_permitted`, `effectiveness_check_on`, idempotency key; ck closed ⇔ all closure fields; ck closer ≠ raiser | new in this change (Phase 3 entity; `capa_id` arrives in Phase 6) |
+| `deviation_state_transitions`, `deviation_holds` | §6.1 shape; link to the W1B `quality_holds` used for containment | — |
+| `disposition_requests` | conditional-release request: pending → approved / rejected / cancelled, conditions, review date, requester, decider (≠ requester), resulting disposition | the target records the second approval only in `approval_decisions`; both steps are also written there (`record_type = conditional_release`) |
+| `label_verifications` | first verified scan of a box (`container_id`) or a loose lot label (`lot_id` + `location_id`), payload, verifier, time | replaces `containers.verified_at/verified_by/verification_scan_payload` of §3.3 so the container row stays owned by its state machine and lot labels can be verified |
+
+Custom SQL `src/db/sql/w2c.sql` (migration `0004_w2c_custom_sql`): `test_results`, `dispositions`,
+`inspection_samples`, `inspection_state_transitions`, `deviation_state_transitions`, `deviation_holds` and
+`label_verifications` are append-only (UPDATE/DELETE raise); a closed deviation can no longer change.
+
+Genealogy (§10): the explorer still walks the ledger in the application (stock movements of type
+consumption/output/shipment, reversed rows excluded) rather than the `lot_genealogy_edges` view; it adds the
+supplier-lot start node, the goods receipt of each material lot, an "as of" time, the depth limit
+(setting `quality.genealogy.max_depth`, default 20, A-DM-10) with a "limit reached" flag, and the export
+(`quality.genealogy.export`, audited `quality.genealogy.exported` + `platform.export.created`).
+
 ### 3.7 Sales and logistics
 
 | Table → column | Type | Null | Constraint / default | Notes |
