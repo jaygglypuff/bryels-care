@@ -11,6 +11,8 @@ import { inventoryExpiryCheckJob, inventoryRebuildBalancesJob, inventoryReconcil
 import { salesQuoteExpiryJob } from "@/modules/sales/quotations-expiry-job";
 import { salesDeliveryReceiptReminderJob } from "@/modules/sales/jobs/dr-reminder"; // W3E
 import { importJobProcessJob } from "@/modules/imports/jobs/process";
+import { analyticsAccessReportJob, analyticsScheduleDispatchJob, analyticsScheduledReportJob } from "@/modules/reports/jobs";
+import { platformActionCentreSweepJob } from "@/modules/action-centre/jobs";
 import { type AnyJobDefinition, type JobRegistry, createJobRegistry } from "./job-definition";
 
 /**
@@ -30,6 +32,11 @@ export function jobDefinitions(): AnyJobDefinition[] {
     salesQuoteExpiryJob,
     salesDeliveryReceiptReminderJob, // W3E (US-4-13)
     importJobProcessJob,
+    // Wave 3 W3B: scheduled reports, weekly access report, action centre
+    analyticsScheduleDispatchJob,
+    analyticsScheduledReportJob,
+    analyticsAccessReportJob,
+    platformActionCentreSweepJob,
   ];
 }
 

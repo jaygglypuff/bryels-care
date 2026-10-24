@@ -549,6 +549,8 @@ auth endpoints, and personal data that the action does not concern.
 | `documents.generated_document.generated`, `documents.generated_document.downloaded`, `documents.generated_document.reprinted`, `documents.generated_document.superseded`, `documents.label_job.printed`, `documents.label_job.reprinted`, `documents.label_job.voided` | document engine and label printing | template version, source revision, hash, reprint/void reason | normal (reprint, void: sensitive) | P2/P3 |
 | `documents.file_attachment.uploaded` / `.removed`, `documents.file_attachment.downloaded` | attachments (download audited for files of data class sensitive/restricted, e.g. attendance import files) | parent entity, size, sha-256 | normal (download of restricted files: restricted) | P2 |
 | `platform.export.created` | any export of class S/R | module, filters, row count, format, file hash | sensitive/restricted | P1 |
+| `analytics.report.exported`, `analytics.report.printed`, `analytics.report_run_file.downloaded`, `analytics.report_definition.changed`, `analytics.scheduled_report.created` / `.updated` / `.paused` / `.resumed` / `.dispatched` | reports (W3B, US-5-04/05): file export (besides `platform.export.created`), print page, download of a delivered file (recipient only, access re-checked), report switch/owner note, schedule changes | code, params, site scope, row count, hash; recipients; reason | sensitive | P5 |
+| `platform.action_item.acknowledged`, `platform.action_item.escalated`, `platform.action_item.resolved` | action centre (W3B, US-5-06/07): acknowledgement with note; escalation to the rule's roles after the delay; automatic resolution when the record resolves (system actor) | kind, entity, rule, note | normal | P5 |
 | `platform.setting.changed`, `platform.approval_rule.changed`, `platform.numbering_rule.changed`, `platform.integration.changed`, `platform.notification_rule.changed` | configuration | before/after (secrets never included) | restricted | P1 |
 | `platform.setting_change_request.approved` | approval of a setting change for a key flagged `requires_approval` (S1-03; a system_admin submits, an owner_director or a second system_admin approves with `platform.settings.approve`; approver ≠ submitter); the applied change also writes `platform.setting.changed` | setting key, old/new value, submitter, approver | restricted | P1 |
 | `platform.help_guide.updated`, `platform.help_guide.published` | a help/quick-guide draft version is saved (`.updated`, by the author) or published (`.published`, by a second holder of `platform.help_guide.admin`, never the author; FR-platform-16) | screen/workflow key, version, linked work instruction revision, author and publisher | normal | P2 |
@@ -560,7 +562,12 @@ Retention of audit events follows the longest retention of the records they refe
 (section 7). Audit reads require `platform.audit.view`; payload redaction by `data_class`
 is described in `docs/permissions-matrix.md` section 6. A weekly "access and exceptions"
 report (Phase 5) summarises role grants, restricted-permission use, controlled exceptions and
-S/R exports for the owner.
+S/R exports for the owner. As built (W3B, US-5-14): report `RPT-SEC-ACCESS`, job
+`analytics.access_report` every Monday 07:00 for the previous week; the event lists are settings
+`reports.access_report.restricted_actions` / `.exception_actions` (A-W3B-06); reprints are grouped by
+document kind. Diagnostics Phase 5 cards (US-5-13: Database, Imports, Alerts, Errors, Integrations)
+show counts, names, ages and versions only; error messages are passed through both redactors
+(`diagnostics.no_secrets`, tests/integration/platform/diagnostics-phase5.test.ts).
 
 ## 6. Secrets and infrastructure
 

@@ -101,11 +101,6 @@ export function OpsCards({ health, backups, variables }: { health: HealthCard; b
 /** Cards of later phases (US-1-26 AC2): honest S states that name the phase, never fake data. */
 export function PlannedCards() {
   const planned: [string, string][] = [
-    ["Database", "Phase 5 (US-5-13)"],
-    ["Imports", "Phase 5 (US-5-13)"],
-    ["Alerts", "Phase 5 (US-5-13); alert checks already run every 5 minutes and notify administrators in-app"],
-    ["Errors", "Phase 5 (US-5-13)"],
-    ["Integrations", "Phase 5 (US-5-13)"],
     ["Sync", "Phase 7 (US-7-06)"],
   ];
   return (

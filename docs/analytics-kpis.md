@@ -599,6 +599,10 @@ due_date)`; `notifications (site_id, resolved_at) WHERE resolved_at IS NULL`.
    page numbers, batch/period identity in the footer). CSV and XLSX are produced by the
    shared export layer.
 
+### 5.2a As built (Wave 3 W3B)
+
+Rules 1–3 are implemented with these differences: the cadence is daily / weekly / monthly at a local time rather than a cron expression (A-W3B-04); the report is rendered once per distinct (site scope, visible columns, organization-level rows for audit reports) group; files are CSV, XLSX or printable HTML (no server PDF, ADR-026) kept in `report_run_files` for 30 days; generated documents are not numbered (`generated_documents` is not used for report files). The weekly access-and-exceptions report is the system job `analytics.access_report`. KPI snapshots, refresh classes other than `live` and KPI-definition versions arrive with the analytics stream (W3A); every W3B report is `live` and labelled Actual.
+
 ### 5.3 Exports (W11-03; `docs/permissions-matrix.md` 6; `docs/security.md` 4.7)
 
 | Rule | Implementation |

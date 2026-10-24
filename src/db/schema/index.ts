@@ -25,3 +25,4 @@ export * from "./crm";
 export * from "./fulfilment"; // Wave 3 W3E
 export * from "./complaints";
 export * from "./imports";
+export * from "./reports";

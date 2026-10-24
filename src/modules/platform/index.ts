@@ -13,3 +13,5 @@ export {
   acknowledgeNotification,
 } from "./notifications";
 export { workerStatus } from "./diagnostics";
+// Wave 3 W3B (US-5-13): Phase 5 diagnostics cards
+export { databaseCard, importsCard, alertsCard, errorsCard, integrationsCard, registerImportStatsProvider, type DatabaseCard, type ImportsCard, type AlertsCard, type ErrorsCard, type IntegrationsCard } from "./diagnostics-phase5";

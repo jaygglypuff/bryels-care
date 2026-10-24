@@ -454,7 +454,7 @@ number of the component they expand.
 | 5.2 | Page header | title, context line, state chip, actions, breadcrumb (desktop) | one primary action; secondary actions overflow into a menu after two |
 | 5.3 | Site switcher | pill (desktop), chip (phone), "All sites" for org-wide roles | switching re-scopes lists and clears unsaved filters with a confirm if a form is dirty |
 | 5.4 | Global search | command palette, results grouped by entity, scan-payload aware | results limited to allowed sites; shows "n hidden by scope" never the hidden rows |
-| 5.5 | Action centre | panel with tabs Approvals / Exceptions / Alerts / Sync | each item: icon, title, record number, site, age, primary action; acknowledges with audit |
+| 5.5 | Action centre | panel with tabs Approvals / Exceptions / Alerts / Sync | each item: icon, title, record number, site, age, primary action; acknowledges with audit. As built (W3B): full page `/action-centre` (Home group), kind filter chips, "Group by site" for multi-site users (the §9.15 Exceptions page), acknowledged items stay listed below the others until their record resolves; the bell still opens `/notifications` |
 | 5.6 | Data table | dense desktop, card list mobile, column priority, bulk actions, sticky header, row selection, inline chips | numbers right-aligned tabular; units in header; max 50 rows per page; empty/error/loading rows |
 | 5.7 | Filters | filter bar (desktop), filter sheet (phone), saved views | filters reflected in URL; chips show active filters; "Clear all" |
 | 5.8 | Forms and fields | text, number with unit, select, combobox, date, time, toggle, radio cards, textarea, file/photo | see 5.8 rules below |
