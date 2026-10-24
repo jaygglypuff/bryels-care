@@ -22,6 +22,13 @@
       "when": 1792774258784,
       "tag": "0002_w1d_custom_sql",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792776635446,
+      "tag": "0003_flowery_mach_iv",
+      "breakpoints": true
     }
   ]
 }

@@ -1138,6 +1138,28 @@ Business owners: boxes, counts, adjustments and reservations now work as describ
 | `stock_movement_id` | uuid | no | → stock_movements, `uq` | one movement per posting row |
 | **`batch_state_transitions`**, **`work_order_state_transitions`** · P3 · L | | | | shape §6.1 |
 
+### 3.5.1 Implementation status (Wave 2 W2A: planning, work orders, staging; E-3-03, E-5-07)
+
+Plain language: a production planner builds a plan from confirmed orders and minimum stock, turns
+plan lines into work orders, plans them (the approved formula and routing revisions are frozen),
+a second person releases them (released lots are reserved by FEFO), batches are created from the
+work order, and the warehouse stages the reserved lots by scan; the batch becomes
+`materials_staged` when every ingredient is at the staging location.
+
+| Item | As built (`src/db/schema/planning.ts` unless noted) | Differs from the catalogue above |
+|---|---|---|
+| `production_lines` | `site_id`, `code` (`uq (site_id, code)`, scan grammar CHECK), `name`, `department_label`, `status` (`active`, `down`, `inactive`) | `department_id` is a text label until `departments` exists; no `+soft` |
+| `work_orders` | As §3.5 with `formula_id`, revision ids resolved at `planned` (CHECK: present unless `draft`/`cancelled`), `qty_planned_base` + `base_uom` text (`g`), `batch_count`, `batch_size_base`, `target_units`, `planned_start`/`planned_end` dates, `priority 1..9`, planner/supervisor, `release_shortages jsonb`, `released_with_shortage`, `cancel_reason` (CHECK on `cancelled`), `approval?` set (release fills `approved_*`, CHECK on released and later), `+status` | `sku_id`, `department_id` not added (SKUs are products; no departments table); `uom_base_id` is a text unit until `uoms` exists |
+| `work_order_state_transitions` | Shape §6.1 (`correlation_id` uuid; a non-uuid request id is replaced by a new UUIDv7) | — |
+| `batches.work_order_id` | Added in `src/db/schema/production.ts` with an index | Nullable: MVP and seed batches predate work orders; new batches get it from `createBatchFromWorkOrder`. Direct creation is governed by setting `production.batch.allow_without_work_order` (A-W2A-01) |
+| `production_plans`, `production_plan_lines` | As §3.5; lines also freeze `source` (`sales_order`, `min_stock`, `manual`), `sales_order_id`, `demand_units`, `on_hand_units`, `available_units`, `open_work_order_units`, `min_stock_units`, `qty_units` (pcs), `line_no` | Lines are per SKU in finished units; `qty_base`/`uom_base_id` become `qty_units`; material availability is computed live, not stored |
+| `product_min_stock` | New: `site_id`, `product_id` (`uq`), `min_stock_units ≥ 0` | Planning input owned by the owner/planner (A-W2A-06); not yet in §3.1 |
+| `batch_material_stagings` | New, append-only: one row per staging scan (batch, batch material, work order, lot, from → to location, qty, ledger `movement_id`, the batch reservation it created, optional substitution) | Replaces the catalogue's `stock_allocations (batch_material)` for staging; no `transfer_requests` row is written (the movement's source document is the batch) |
+| `batch_material_substitutions` | New, append-only: CX-MAT record (expected lot, substitute lot of the SAME material, location, qty, reason ≥ 5 chars, approver, new reservation) | Recorded at staging; dispensing (W2B) reads it |
+| Reservations | Work-order reservations are `stock_reservations` rows with `demand_type = 'work_order'`, lapsing at planned end + `production.work_order.reservation_grace_days`. Staging converts them (`converted`, partial remainders re-reserved under a new number) and re-reserves the staged quantity at the staging location with `demand_type = 'batch'` for `production.staging.reservation_ttl_hours` | `demand_type` values are the W1C list (`batch`, not `batch_material`) |
+| State machines | `src/modules/production/work-orders-state.ts` (§6.3); batch table gains `planned → rejected` (abandonment when the work order is cancelled before staging, §6.2) | `in_progress`/`completed`/`closed` follow the batches through `syncWorkOrderProgress` |
+| Numbering | `WO-{YY}-{SEQ5}`, `PP-{YYMM}-{SEQ3}` in `src/lib/numbering.ts` | — |
+
 ### 3.6 Quality
 
 | Table → column | Type | Null | Constraint / default | Notes |

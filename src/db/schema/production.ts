@@ -1,9 +1,10 @@
-import { boolean, index, integer, jsonb, numeric, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, boolean, index, integer, jsonb, numeric, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { QTY, createdAt, id } from "./_common";
 import { organizations, sites, users } from "./identity";
 import { bomLines, formulaRevisions, locations, materials, products } from "./masterdata";
 import { inspectionPlans, routingRevisions, routingSteps } from "./engineering";
 import { inventoryLots } from "./inventory";
+import { workOrders } from "./planning";
 
 /**
  * Batch = execution record with a BMR.
@@ -36,10 +37,12 @@ export const batches = pgTable(
     yieldPct: numeric("yield_pct", QTY),
     outputLotId: uuid("output_lot_id"),
     remarks: text("remarks"),
+    /** Work order the batch executes (W2A, US-3-06). Null only for MVP-era and seed batches created before work orders. */
+    workOrderId: uuid("work_order_id").references((): AnyPgColumn => workOrders.id),
     createdBy: uuid("created_by").notNull().references(() => users.id),
     createdAt: createdAt(),
   },
-  (t) => [index("batches_site_status_idx").on(t.siteId, t.status)],
+  (t) => [index("batches_site_status_idx").on(t.siteId, t.status), index("batches_work_order_idx").on(t.workOrderId)],
 );
 
 export const batchStateTransitions = pgTable("batch_state_transitions", {

@@ -176,7 +176,7 @@ export async function renderInTx(tx: DbOrTx, ctx: AuthContext, documentId: strin
 }
 
 /** Source-record scoping (docs/permissions-matrix.md §3.7: documents follow the source record's permission and site). */
-export function assertSourceVisible(ctx: AuthContext, d: { sourceEntityType: string; siteId: string | null }) {
+export function assertSourceVisible(ctx: AuthContext, d: { sourceEntityType: string; siteId: string | null; documentKind?: string }) {
   const hidden = () => new DomainError("not_found", "This document isn't available at your sites.");
   if (d.siteId && !ctx.allowedSiteIds.includes(d.siteId)) throw hidden();
   switch (d.sourceEntityType) {
@@ -188,6 +188,9 @@ export function assertSourceVisible(ctx: AuthContext, d: { sourceEntityType: str
       break;
     case "document_template_version":
       if (!ctx.can("documents.template.view")) throw hidden();
+      break;
+    case "batch": // W2A: batch documents follow the batch's permission and site; staging sheets also the stager's
+      if (!ctx.can("production.batch.view") && !(ctx.can("inventory.movement.post") && ["dispensing_sheet", "traveler"].includes(d.documentKind ?? ""))) throw hidden();
       break;
     default:
       throw hidden();

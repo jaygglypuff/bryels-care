@@ -142,6 +142,19 @@ export const PERMISSIONS = [
   "platform.job.view",
   "platform.job.admin",
   "platform.diagnostics.view",
+  // Wave 2 W2A: production planning, work orders, staging (E-3-03, E-5-07; docs/permissions-matrix.md §2.5, §3.5)
+  "production.work_order.view",
+  "production.work_order.create",
+  "production.work_order.edit",
+  "production.work_order.submit",
+  "production.work_order.approve",
+  "production.work_order.void",
+  "production.work_order.export",
+  "production.production_plan.view",
+  "production.production_plan.create",
+  "production.production_plan.edit",
+  "production.production_plan.approve",
+  "production.material_substitution.approve",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -483,4 +496,45 @@ for (const [role, grants] of Object.entries(W1A_GRANTS)) {
 // Diagnostics (worker, jobs, reconciliation) are for system administrators, not every view-all role.
 for (const role of ["site_manager", "auditor"]) {
   ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => p !== "platform.diagnostics.view");
+}
+
+// Wave 2 W2A: role grants for production planning, work orders and staging (docs/permissions-matrix.md §3.5).
+// View strings reach VIEW_ALL roles automatically; owner_director holds every string.
+const W2A_GRANTS: Record<string, readonly Permission[]> = {
+  site_manager: [
+    "production.work_order.create",
+    "production.work_order.edit",
+    "production.work_order.submit",
+    "production.work_order.approve",
+    "production.work_order.void",
+    "production.work_order.export",
+    "production.production_plan.create",
+    "production.production_plan.edit",
+    "production.production_plan.approve",
+  ],
+  production_planner: [
+    "production.work_order.view",
+    "production.work_order.create",
+    "production.work_order.edit",
+    "production.work_order.submit",
+    "production.work_order.export",
+    "production.production_plan.view",
+    "production.production_plan.create",
+    "production.production_plan.edit",
+    "inventory.reservation.view",
+    "inventory.balance.view",
+    "sales.sales_order.view",
+    "documents.generated_document.view",
+    "documents.generated_document.create",
+  ],
+  production_operator: ["production.work_order.view", "production.production_plan.view"],
+  // Warehouse stages reserved lots by scan (W05-05) with inventory.movement.post; batch records stay hidden (no production.batch.view).
+  warehouse_operator: ["production.work_order.view", "production.production_plan.view"],
+  qa_qc: ["production.material_substitution.approve"],
+  procurement: ["production.production_plan.view"],
+  sales_cs: ["production.work_order.view", "production.production_plan.view"],
+  auditor: ["production.work_order.export"],
+};
+for (const [role, grants] of Object.entries(W2A_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
 }

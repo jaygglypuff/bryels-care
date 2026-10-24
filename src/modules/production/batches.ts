@@ -9,6 +9,8 @@ import { nextNumber } from "@/lib/numbering";
 import { getEffectiveRouting, getInspectionPlan, isEffectiveOn, loadFormulaRevisionForSnapshot } from "@/modules/masterdata";
 import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
 import { transitionBatch } from "./state";
+import { assertWorkOrderAcceptsBatch, syncWorkOrderProgress } from "./work-orders";
+import { getSetting } from "@/lib/settings";
 
 export type CreateBatchInput = {
   formulaRevisionId: string;
@@ -16,6 +18,8 @@ export type CreateBatchInput = {
   plannedSizeKg: string;
   /** YYYY-MM-DD */
   plannedStartOn: string;
+  /** Work order the batch executes (W2A, US-3-06); use createBatchFromWorkOrder. */
+  workOrderId?: string | null;
   idempotencyKey?: string | null;
 };
 
@@ -46,6 +50,10 @@ export async function createBatch(ctx: AuthContext, input: CreateBatchInput): Pr
 
   return db.transaction(async (tx) => {
     const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.batch.create", async () => {
+      // W2A (US-3-06, W05-03): batches come from work orders; direct creation only while the transition setting allows it.
+      if (!input.workOrderId && !(await getSetting(tx, ctx.organizationId, "production.batch.allow_without_work_order", siteId))) {
+        throw new DomainError("validation", "Batches are created from a planned or released work order. Open the work order and choose Create batch.");
+      }
       const rev = await loadFormulaRevisionForSnapshot(tx, ctx.organizationId, input.formulaRevisionId);
       if (!rev) throw new DomainError("not_found", "Formula revision not found.");
       const revLabel = `Formula ${rev.formula.code} revision ${rev.rev.revisionNo}`;
@@ -64,6 +72,9 @@ export async function createBatch(ctx: AuthContext, input: CreateBatchInput): Pr
       if (!routing) {
         throw new DomainError("validation", `${rev.product.name} has no approved routing effective on ${input.plannedStartOn}. A routing revision must be approved first (V-REV).`, { rule: "V-REV" });
       }
+      const wo = input.workOrderId
+        ? await assertWorkOrderAcceptsBatch(tx, ctx, input.workOrderId, { siteId, formulaRevisionId: rev.rev.id, routingRevisionId: routing.rev.id, plannedSizeG, plannedStartOn: input.plannedStartOn })
+        : null;
       const plan = await getInspectionPlan(ctx, { planKind: "finished_product", productId: rev.product.id, date: input.plannedStartOn }, { tx });
       const { lines } = rev;
       const steps = routing.steps;
@@ -157,6 +168,7 @@ export async function createBatch(ctx: AuthContext, input: CreateBatchInput): Pr
           status: "planned",
           plannedStartOn: input.plannedStartOn,
           theoreticalYieldG: theoreticalYieldG.toString(),
+          workOrderId: wo?.id ?? null,
           createdBy: ctx.userId,
         })
         .returning();
@@ -184,6 +196,7 @@ export async function createBatch(ctx: AuthContext, input: CreateBatchInput): Pr
           plannedSizeG: plannedSizeG.toString(),
           plannedStartOn: input.plannedStartOn,
           theoreticalYieldG: theoreticalYieldG.toString(),
+          workOrder: wo?.workOrderNumber ?? null,
         },
       });
       await audit(tx, ctx, {
@@ -212,10 +225,13 @@ export async function startBatch(ctx: AuthContext, batchId: string): Promise<{ b
   ctx.require("production.batch.edit");
   return db.transaction(async (tx) => {
     const b = await lockBatch(tx, ctx, batchId);
-    if (b.status !== "planned") throw new DomainError("state", `Batch ${b.batchNumber} is already ${b.status.replace(/_/g, " ")}; only a planned batch can be started.`);
+    // W2A: a work-order batch starts only after its materials are staged by scan (W05-05).
+    if (b.workOrderId && b.status === "planned") throw new DomainError("state", `Stage the materials of batch ${b.batchNumber} first: scan the reserved lots to the staging location.`);
+    if (b.status !== "planned" && b.status !== "materials_staged") throw new DomainError("state", `Batch ${b.batchNumber} is already ${b.status.replace(/_/g, " ")}; only a planned or staged batch can be started.`);
     const before = { status: b.status };
-    await transitionBatch(tx, ctx, b, "materials_staged");
+    if (b.status === "planned") await transitionBatch(tx, ctx, b, "materials_staged");
     await transitionBatch(tx, ctx, b, "in_process", { set: { startedAt: new Date() } });
+    await syncWorkOrderProgress(tx, ctx, b.workOrderId);
     await audit(tx, ctx, {
       action: "production.batch.started",
       entityType: "batch",

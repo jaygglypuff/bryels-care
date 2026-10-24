@@ -26,7 +26,8 @@ export type BatchStatus = (typeof BATCH_STATUSES)[number];
 
 export const BATCH_TRANSITIONS: Record<BatchStatus, readonly BatchStatus[]> = {
   draft: ["planned"],
-  planned: ["materials_staged"],
+  // planned → rejected: abandonment after planning, e.g. its work order is cancelled (data-model §6.2, A-DM-24; W2A)
+  planned: ["materials_staged", "rejected"],
   materials_staged: ["in_process"],
   in_process: ["awaiting_qc"],
   awaiting_qc: ["quarantined", "released", "rejected"],

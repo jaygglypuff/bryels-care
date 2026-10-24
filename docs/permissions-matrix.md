@@ -593,6 +593,21 @@ batch) is `site_manager` plus `qa_qc` co-approval by default (A-PM-07). `equipme
 recorded as an `approval_decisions` row by a different user (A-PROC-23 in
 `docs/process-maps.md`; default rule in section 5.2).
 
+As built (Wave 2 W2A, `src/lib/permissions.ts` block "Wave 2 W2A"): `production.work_order.*`,
+`production.production_plan.*` and `production.material_substitution.approve` are granted as in
+the rows above. Supporting grants so the screens work: `production_planner` also gets
+`inventory.reservation.view`, `inventory.balance.view`, `sales.sales_order.view` (demand) and
+`documents.generated_document.{view,create}` (dispensing sheet, traveler). `warehouse_operator`
+stages reserved lots by scan with `inventory.movement.post`; the staging view and the dispensing
+sheet / traveler of a batch are visible with `production.batch.view` **or**
+`inventory.movement.post`, so the warehouse does not need `production.batch.view` (the matrix row
+"batch: v" for WO is not granted yet; the batch record and BMR stay hidden from the warehouse). The production board needs `production.work_order.view` and
+`production.batch.view`; each drag runs the command's own permission (plan:
+`production.work_order.submit`, release: `production.work_order.approve`, start:
+`production.batch.edit`). Work order release SoD follows setting `approvals.sod.work_order`
+(default on: releaser ≠ the person who planned it); plan approval follows
+`approvals.sod.production_plan`.
+
 ### 3.6 quality
 
 | Entity | OD | SA | SM | PP | PO | WO | QA | PR | SC | FI | HR | AU | CP |

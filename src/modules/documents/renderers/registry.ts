@@ -2,13 +2,20 @@ import { sha256Hex } from "../checksum";
 import { templateDefinitionSchema, type TemplateDefinition } from "../schemas";
 import { labelRendererV1 } from "./label-v1";
 import { testPageRendererV1 } from "./test-page-v1";
+import { dispensingSheetRendererV1 } from "./dispensing-sheet-v1"; // W2A
+import { travelerRendererV1 } from "./traveler-v1"; // W2A
 import type { FrozenDataset, RenderOutput, Renderer } from "./types";
 
 /**
  * Code renderers known to this build. A template version may only reference a renderer listed
  * here (US-2-11 AC1); adding a document kind means adding a renderer file and a line below.
  */
-const RENDERERS: readonly Renderer[] = [labelRendererV1, testPageRendererV1];
+const RENDERERS: readonly Renderer[] = [
+  labelRendererV1,
+  testPageRendererV1,
+  dispensingSheetRendererV1, // W2A (US-3-08)
+  travelerRendererV1, // W2A (US-3-08)
+];
 
 export function findRenderer(id: string, version: number): Renderer | null {
   return RENDERERS.find((r) => r.id === id && r.version === version) ?? null;
