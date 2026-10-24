@@ -57,6 +57,20 @@
       "when": 1792808065052,
       "tag": "0007_w2g_custom_sql",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792843996277,
+      "tag": "0008_tired_robin_chapel",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792844295560,
+      "tag": "0009_w3a_custom_sql",
+      "breakpoints": true
     }
   ]
 }

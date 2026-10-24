@@ -307,6 +307,10 @@ export const SETTINGS = {
     }[],
     assumption: "A-UX-12", group: "Production", label: "Production board columns",
   },
+  // Wave 3 W3A: KPI engine (docs/analytics-kpis.md §1.3, §8.1)
+  "analytics.fefo_window_days": { scopes: ["organization"], schema: z.number().int().min(1).max(365), default: 30, assumption: "A-KPI-03", group: "Analytics", label: "FEFO risk window (days)", description: "A released lot with stock on hand counts as at FEFO risk when it expires within this many days (owner tile and inventory dashboard)." },
+  "analytics.otif_grace_days": { scopes: ["organization"], schema: z.number().int().min(0).max(30), default: 0, assumption: "A-KPI-02", group: "Analytics", label: "OTIF grace days", description: "Days after the requested delivery date that a dispatch still counts as on time." },
+  "analytics.snapshot_stale_hours": { scopes: ["organization"], schema: z.number().int().min(1).max(24 * 14), default: 48, assumption: "A-KPI-11", group: "Analytics", label: "Snapshot charts are stale after (hours)", description: "Trend and sparkline data older than this (twice the nightly cadence) shows a Stale badge." },
 } as const satisfies Record<string, SettingDefinition>;
 
 export type SettingKey = keyof typeof SETTINGS;
