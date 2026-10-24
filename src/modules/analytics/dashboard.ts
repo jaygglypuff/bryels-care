@@ -439,8 +439,9 @@ async function recentActivity(ctx: AuthContext, scope: DashboardScope, siteCode:
       and(
         eq(auditEvents.organizationId, ctx.organizationId),
         siteFilter,
-        // Activity = changes. Read events (*.viewed) and sign-ins stay in the audit log only.
+        // Activity = changes. Read events (*.viewed), sign-ins and personal saved views stay in the audit log only.
         sql`${auditEvents.action} not like '%.viewed'`,
+        sql`${auditEvents.action} not like 'analytics.saved_view.%'`,
         sql`${auditEvents.action} not like 'identity.session.%'`,
       ),
     )

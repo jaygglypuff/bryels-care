@@ -161,14 +161,14 @@ const shippedValue = (p: KpiQueryParams) => sql`
 const outputVsPlan = (p: KpiQueryParams) => sql`
   select w.site_id, 'work_order'::text as ref_type, w.id as ref_id, w.work_order_number as ref_number,
          ((w.planned_end)::timestamp at time zone st.timezone) as basis_at, 0::numeric as num, w.qty_planned_base as den,
-         pr.name as item, 'Planned ' || w.qty_planned_base || ' ' || w.base_uom || ', due ' || w.planned_end as detail, 'planned'::text as category
+         pr.name as item, 'Planned ' || trim_scale(w.qty_planned_base) || ' ' || w.base_uom || ', due ' || w.planned_end as detail, 'planned'::text as category
     from work_orders w join products pr on pr.id = w.product_id join sites st on st.id = w.site_id
    where ${inSites("w.site_id", p.siteIds)} and w.planned_end >= ${dt(p.fromDate)} and w.planned_end < ${dt(p.toDate)}
      and w.created_at <= ${T(p)} and ${workOrderStatusAt("w", p.asOf)} not in ('draft', 'cancelled')
   union all
   select pp.site_id, 'batch'::text, b.id, b.batch_number, pp.posted_at,
          coalesce(bo.mass_g, case when pp.base_uom = 'g' then pp.qty_base else pp.qty_base * pr.unit_net_mass_g end) as num, 0::numeric,
-         pr.name, 'Output ' || pp.qty_base || ' ' || pp.base_uom, 'actual'::text
+         pr.name, 'Output ' || trim_scale(pp.qty_base) || ' ' || pp.base_uom, 'actual'::text
     from production_postings pp join batches b on b.id = pp.batch_id join products pr on pr.id = b.product_id
     left join batch_outputs bo on bo.id = pp.batch_output_id
    where ${inSites("pp.site_id", p.siteIds)} and pp.posting_type = 'output' and ${inPeriod("pp.posted_at", p)} and ${notReversedPosting("pp", p.asOf)}`;
@@ -177,7 +177,7 @@ const outputVsPlan = (p: KpiQueryParams) => sql`
 const yieldBase = (p: KpiQueryParams, num: SQL, den: SQL, category: SQL) => sql`
   select y.site_id, 'batch'::text as ref_type, b.id as ref_id, b.batch_number as ref_number, f.first_at as basis_at,
          ${num} as num, ${den} as den, pr.name as item,
-         'Yield ' || round(y.yield_pct, 2) || ' % (' || y.actual_units || ' units)' as detail, ${category} as category
+         'Yield ' || round(y.yield_pct, 2) || ' % (' || trim_scale(y.actual_units) || ' units)' as detail, ${category} as category
     from yield_records y join batches b on b.id = y.batch_id join products pr on pr.id = b.product_id
     join lateral (select min(f.recorded_at) as first_at from yield_records f where f.batch_id = y.batch_id) f on true
    where ${inSites("y.site_id", p.siteIds)} and y.recorded_at <= ${T(p)} and ${inPeriod("f.first_at", p)}
@@ -201,7 +201,7 @@ const stepOverrun = (p: KpiQueryParams) => sql`
 const dispenseFirstTime = (p: KpiQueryParams) => sql`
   select b.site_id, 'batch'::text as ref_type, b.id as ref_id, b.batch_number as ref_number, x.recorded_at as basis_at,
          case when x.is_within_tolerance then 1 else 0 end::numeric as num, 1::numeric as den, m.name as item,
-         x.actual_qty_g || ' g of ' || bm.theoretical_qty_g || ' g' as detail,
+         trim_scale(x.actual_qty_g) || ' g of ' || trim_scale(bm.theoretical_qty_g) || ' g' as detail,
          case when x.is_within_tolerance then 'within' else 'outside' end as category
     from dispense_records x join batch_materials bm on bm.id = x.batch_material_id join batches b on b.id = bm.batch_id
     join materials m on m.id = bm.material_id
@@ -230,7 +230,7 @@ const stockLots = (p: KpiQueryParams, where: SQL, num: SQL, category: SQL, detai
          ${num} as num, null::numeric as den, ${lotItemName("l")} as item, ${detail} as detail, ${category} as category
     from lots l where ${where}`;
 
-const qtyDetail = sql`l.on_hand || ' ' || l.base_uom || coalesce(', expires ' || l.expires_on, '')`;
+const qtyDetail = sql`trim_scale(l.on_hand) || ' ' || l.base_uom || coalesce(', expires ' || l.expires_on, '')`;
 const usable = sql`l.status_at = 'released' and not l.past_expiry`;
 
 const materialCoverage = (p: KpiQueryParams) => sql`

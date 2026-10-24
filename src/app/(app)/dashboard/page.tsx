@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
+import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
-import { getOperatorHome, getOwnerDashboard, resolveScope } from "@/modules/analytics";
-import { PageHeader, cx } from "@/ui/core";
+import { getOperatorHome, getOwnerDashboard, getOwnerOverview } from "@/modules/analytics";
+import { EmptyState, PageHeader } from "@/ui/core";
+import { ScopePeriodBar } from "../analytics/kpi-ui";
 import { OperatorHome } from "./operator-home";
 import { OwnerOverview } from "./owner-overview";
 
 export const dynamic = "force-dynamic";
 
-export default async function Dashboard({ searchParams }: { searchParams: Promise<{ scope?: string }> }) {
+export default async function Dashboard({ searchParams }: { searchParams: Promise<{ scope?: string; period?: string }> }) {
   const ctx = await requireContext();
   const sp = await searchParams;
 
@@ -23,41 +25,32 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     );
   }
 
-  const scope = resolveScope(ctx, sp.scope === "all");
-  const data = await getOwnerDashboard(ctx, scope);
-  const multi = ctx.allowedSites.length > 1;
+  let kpi;
+  try {
+    kpi = await getOwnerOverview(ctx, { scope: sp.scope ?? null, period: sp.period ?? null });
+  } catch (e) {
+    if (e instanceof DomainError && (e.code === "forbidden" || e.code === "not_found"))
+      return (
+        <>
+          <PageHeader title="Overview" />
+          <EmptyState title={e.code === "forbidden" ? "You don't have access to the all-sites view" : "This site isn't available to you"} action={<Link href="/dashboard" className="font-medium text-primary-text hover:underline">Open your site&apos;s overview</Link>}>
+            {e.message}
+          </EmptyState>
+        </>
+      );
+    throw e;
+  }
+  // The Batch journey board, near-expiry lots and activity come from the live operational read model, in the same scope.
+  const data = await getOwnerDashboard(ctx, { all: kpi.scope.all, siteIds: kpi.scope.siteIds, sites: kpi.scope.sites, label: kpi.scope.label });
 
   return (
     <>
       <PageHeader
         title={ctx.roleCodes.includes("owner_director") ? "Owner overview" : "Overview"}
-        subtitle={`${scope.label} · every number links to the list behind it`}
-        actions={
-          multi && (
-            <nav aria-label="Dashboard scope" className="inline-flex rounded-full border border-line-strong bg-surface p-0.5">
-              <ScopeLink href="/dashboard" active={!scope.all}>
-                {ctx.currentSite.code} only
-              </ScopeLink>
-              <ScopeLink href="/dashboard?scope=all" active={scope.all}>
-                All my sites
-              </ScopeLink>
-            </nav>
-          )
-        }
+        subtitle={`${kpi.scope.label} · ${kpi.period.label} · every number opens the records behind it`}
+        actions={<ScopePeriodBar basePath="/dashboard" scope={kpi.scope} period={kpi.period} sites={ctx.allowedSites} canAll={kpi.canCrossSite} />}
       />
-      <OwnerOverview data={data} canAudit={ctx.can("platform.audit.view")} />
+      <OwnerOverview data={data} kpi={kpi} canAudit={ctx.can("platform.audit.view")} />
     </>
-  );
-}
-
-function ScopeLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      aria-current={active ? "page" : undefined}
-      className={cx("inline-flex min-h-[40px] items-center rounded-full px-3.5 text-[13px] font-medium", active ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}
-    >
-      {children}
-    </Link>
   );
 }

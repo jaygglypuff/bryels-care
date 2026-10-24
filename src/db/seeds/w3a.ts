@@ -167,6 +167,9 @@ export async function seedW3a(db: Db, opts: W3aSeedOptions = {}) {
     db.insert(s.auditEvents).values({ organizationId: O, siteId, actorId: actor, action, entityType, entityId, entityNumber, occurredAt: when });
 
   // ---------------------------------------------------------------- opening finished-goods stock
+  // The month's finished goods are staged in the dispatch bay (a shipping location), so sales allocation
+  // (storage locations only, FEFO) at the base seed's finished-goods bays behaves exactly as without this seed.
+  const DISPATCH = "SHP";
   const openingAt = at(startDate, 6);
   const fgLots: Record<string, string> = {};
   for (const [site, sku, qty] of [
@@ -180,7 +183,7 @@ export async function seedW3a(db: Db, opts: W3aSeedOptions = {}) {
       .insert(s.inventoryLots)
       .values({ organizationId: O, siteId: site.id, lotNumber: num("LM", 4), itemKind: "product", productId: pr.id, manufacturedOn: addDays(startDate, -20), expiresOn: addDays(startDate, pr.shelfLifeDays - 20), qualityStatus: "released", baseUom: "pcs", createdBy: site.id === NFD.id ? whN : whR, createdAt: openingAt })
       .returning();
-    await move({ siteId: site.id, type: "receipt", lotId: lot.id, to: L(site.id, "FG-01"), qty: new Decimal(qty), uom: "pcs", doc: ["opening_balance", null, "Opening stock (demo month)"], by: site.id === NFD.id ? whN : whR, when: openingAt, reason: "Opening balance (demo)", status: "released" });
+    await move({ siteId: site.id, type: "receipt", lotId: lot.id, to: L(site.id, DISPATCH), qty: new Decimal(qty), uom: "pcs", doc: ["opening_balance", null, "Opening stock (demo month)"], by: site.id === NFD.id ? whN : whR, when: openingAt, reason: "Opening balance (demo)", status: "released" });
     fgLots[`${site.code}:${sku}`] = lot.id;
   }
 
@@ -528,7 +531,7 @@ export async function seedW3a(db: Db, opts: W3aSeedOptions = {}) {
         } else {
           await disposition(NFD.id, "batch", b.id, "release", "awaiting_qc", "released", reviewedAt, qa, "All tests within specification; BMR reviewed.", insp.id);
           await disposition(NFD.id, "lot", lot.id, "release", "quarantine", "released", reviewedAt, qa, "Finished-product inspection passed.", insp.id);
-          await move({ siteId: NFD.id, type: "transfer", lotId: lot.id, from: L(NFD.id, "QUA-01"), to: L(NFD.id, "FG-01"), qty: new Decimal(units), uom: "pcs", doc: ["putaway", b.id, batchNo], by: whN, when: new Date(reviewedAt.getTime() + 1800_000), status: "released" });
+          await move({ siteId: NFD.id, type: "transfer", lotId: lot.id, from: L(NFD.id, "QUA-01"), to: L(NFD.id, DISPATCH), qty: new Decimal(units), uom: "pcs", doc: ["putaway", b.id, batchNo], by: whN, when: new Date(reviewedAt.getTime() + 1800_000), status: "released" });
         }
         await audit(`quality.disposition.${failQc ? "rejected" : "released"}`, "batch", b.id, batchNo, qa, NFD.id, reviewedAt);
       }
@@ -611,7 +614,7 @@ export async function seedW3a(db: Db, opts: W3aSeedOptions = {}) {
       for (const [k, l] of lines.entries()) {
         const sku = productRows.find((p) => p.id === l.productId)!.skuCode;
         const qty = new Decimal(l.qtyUnits).mul(short && k === 0 ? 0.5 : 1);
-        await move({ siteId: site.id, type: "shipment", lotId: await shipFrom(site, sku), from: L(site.id, "FG-01"), qty, uom: "pcs", doc: ["shipment", sh.id, drNo], by: site.id === NFD.id ? whN : whR, when: dispatchAt, status: "released" });
+        await move({ siteId: site.id, type: "shipment", lotId: await shipFrom(site, sku), from: L(site.id, DISPATCH), qty, uom: "pcs", doc: ["shipment", sh.id, drNo], by: site.id === NFD.id ? whN : whR, when: dispatchAt, status: "released" });
       }
       await audit("sales.shipment.dispatched", "shipment", sh.id, drNo, site.id === NFD.id ? whN : whR, site.id, dispatchAt);
     }

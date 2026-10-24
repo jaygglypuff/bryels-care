@@ -275,8 +275,8 @@ nowhere else may a new code be introduced. Rules:
 | `hr.attendance.reconcile` | hr | nightly | `(as_of_date)` | 5 | compares events with summaries, reports differences (HR §5) |
 | `hr.payroll.compute` | hr | `hr.payroll_period.submit` (`locked → computed`) | `(payroll_period_id, run_no)` | 6 (gated by ADR-021) | one transaction per employee; `payroll_runs` row records inputs hash and rule-set versions (HR §8.4) |
 | `analytics.refresh_mv` | analytics | every 15 min, one job per materialized view, staggered | `(mv_name, floor(now, 15 min))` | 5 | `REFRESH MATERIALIZED VIEW CONCURRENTLY`; `refresh_log` (`docs/analytics-kpis.md` §4) |
-| `analytics.snapshot_kpis` | analytics | 01:30 site time, after `inventory.reconcile` | `(kpi_id, site_id, as_of_date, filters_hash)` | 5 | inserts `kpi_snapshots` |
-| `analytics.reconcile_kpis` | analytics | 02:00 site time | `(as_of_date)` | 5 | R-queries vs snapshots; mismatch raises a `critical` notification |
+| `analytics.snapshot_kpis` | analytics | 01:30 Asia/Manila, after `inventory.reconcile` | job `(business_date, schedule or minute)`; rows `(kpi, scope, grain, period_start, as_of_date, params_hash)` | 5 | inserts `kpi_snapshots` (W3A, `src/modules/analytics/jobs.ts`) |
+| `analytics.reconcile_kpis` | analytics | 02:00 Asia/Manila | `(business_date, schedule or minute)` | 5 | R-queries vs snapshots; mismatch raises a `critical` notification (W3A) |
 | `analytics.scheduled_report` | analytics | `scheduled_reports.cron_expression` in its timezone | `(scheduled_report_id, period_key)` | 5 | files kept 30 days (A-SEC-30) |
 | `analytics.forecast_baseline` | analytics | weekly, Sunday 03:00 | `(sku_id, site_id, iso_week)` | 6+ | after FR-analytics-08 is scheduled; produces nothing when data sufficiency fails (`docs/analytics-kpis.md` §6) |
 | `analytics.movers_classify` | analytics | weekly | `(site_id, iso_week)` | 5 | fast/slow mover classification (KPI-INV-05) |
