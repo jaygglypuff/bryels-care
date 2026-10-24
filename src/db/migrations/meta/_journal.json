@@ -22,6 +22,20 @@
       "when": 1792774258784,
       "tag": "0002_w1d_custom_sql",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792776692324,
+      "tag": "0003_w2d_bmr",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792777516968,
+      "tag": "0004_w2d_custom_sql",
+      "breakpoints": true
     }
   ]
 }

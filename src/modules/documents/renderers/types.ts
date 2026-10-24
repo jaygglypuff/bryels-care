@@ -48,6 +48,8 @@ export interface Renderer {
   title: string;
   /** Default definition offered when a template of `kind` is created. */
   defaultDefinition(kind: string, dataset?: string): TemplateDefinition;
+  /** Renderer-specific rules on the definition (e.g. BMR sections C, E, H, J are mandatory); empty = valid. */
+  validateDefinition?(definition: TemplateDefinition): string[];
   /** Throws when the dataset does not have the expected shape. */
   validateData(dataset: string, data: unknown): void;
   render(definition: TemplateDefinition, input: FrozenDataset): RenderOutput;

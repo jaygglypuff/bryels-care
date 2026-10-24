@@ -101,6 +101,35 @@ Each document kind has a typed dataset built by the owning module under the **ca
 | Page x of y | CSS `@page` margin boxes (Chrome 131+); running header and footer are in the page body | no Chromium `headerTemplate` in browser print |
 | Label test pages | `/print/labels/test/<label template>`: live, unrecorded, sample data, 50 mm ruler (40 mm on 50 mm media); A4 test pages are recorded documents (`test_page` kind) | T-01 needs a page before a template is approved |
 
+### 1.4.2 BMR as built (Wave 2 W2D, E-3-06) and the integration contract
+
+| Item | As built |
+|---|---|
+| Renderers | `bmr` v1 (`src/modules/documents/renderers/bmr-v1.ts`, dataset `bmr/v1`, schema in `bmr-data.ts`) and `bmr_paper_page` v1 (blank hybrid pages, dataset `bmr_paper_page/v1`), both template kind `bmr`. Pure functions of the frozen dataset (static test). The company mark is `bmr-logo.ts`, the vector of `src/ui/brand.tsx` with resolved colours (a test keeps the geometry in sync) |
+| Layout | Paper BMR order: title + logo block, Dispensing and weighing (with TOTAL and blank rows when `handwritten_lines`), Procedure, Checklist (conducted / checked), then the yield / test results / final disposition / QA signature / remarks block, then the sections the paper form lacks. Section order = order in the definition. Section J does **not** start a new page in the seeded `BMR-STD` so page 1 looks like the paper form; set `break_before: "page"` on `disposition_signatures` to apply A-RPT-05 (A-W2D-03). The audit appendix starts a new page |
+| Approval rule | `checkDefinition` calls the renderer's `validateDefinition`: a `bmr/v1` definition must contain `materials`, `checklist`, `qc`, `disposition_signatures` enabled (C, E, H, J), only known section ids, no duplicates; saving, submitting and approving all refuse otherwise |
+| Templates | Settings `documents.bmr.template_code` (default `BMR-STD`) and `documents.bmr.paper_page_template_code` (default `BMR-PAPER`). A batch keeps the template version of its first BMR; before that it uses the version effective at batch creation, else the current approved one (§11.1 item 4) — no column on `batches` needed |
+| Generation | `generateBmr` (on demand, `production.batch.view` + `documents.generated_document.create`) and closure. `source_revision_at` = latest timestamp of the batch and its records (document events excluded); if the current BMR already has that revision and watermark it is returned instead of a new number. A new revision supersedes the earlier ready BMR documents |
+| Watermarks | draft/planned `DRAFT`; materials_staged/in_process `IN PROGRESS`; awaiting_qc/quarantined `UNDER QA REVIEW`; released/rejected/rework_approved `FINAL – PENDING CLOSURE` (`AMENDMENT IN PROGRESS – rev n` while reopened); closed `CONTROLLED COPY` (first closure) or `AMENDED rev n`; reprints `REPRINT n`; void / superseded documents are shown with a `VOID` / `SUPERSEDED` overlay outside the hashed body |
+| Page identity | `@page` margin boxes: top right `Batch B-xx · product · DOC number · watermark`, bottom right `Batch B-xx · page x of y`. QR `BC:DOC:<document number>` in the header block and at the end; scanning it opens the batch after sign-in and batch permission |
+| Reprint | Through the document record (reason mandatory, 422 without). The reprint renders the same frozen data: the footer `content <8 hex>` (sha256 of the canonical dataset) is identical to the original's; QA is notified in-app for kinds in `documents.reprint.notify_qa_kinds` (default `bmr`, A-OPS-07) |
+| Print page | `/print/bmr/<batch>`: the current recorded BMR (hash-checked) with the browser print button, or an unrecorded preview that prints only "generate first" until **Generate BMR** is used; history of BMRs and paper pages. `/print/documents/<id>` prints paper pages |
+| Not built | Stored PDFs, the Chromium worker, the per-user PDF queue limit (US-3-18 AC2 "11th job is 429") and thumbnails, per ADR-026; the stress test T-09 is still to be run on real printers |
+
+**Contract for sections owned by other Wave 2 streams** (`src/modules/production/bmr-sources.ts`). Each function returns `{ available, rows }`; `available = false` when the table does not exist (the BMR prints "not captured electronically in this system version"); when the table exists but a listed column is missing the function throws `setup_required` naming the column, so a BMR never silently omits recorded data. The integrator aligns the SQL in that one file with the merged schema.
+
+| Function | BMR section | Table and columns read (docs/data-model.md names) | Owner |
+|---|---|---|---|
+| `bmrLineClearanceChecks` | line_clearance | `process_step_checklist_results` (`process_step_record_id`, `routing_step_checklist_item_id`, `answer`, `note`, `answered_by`, `answered_at`) + `process_step_records`, `routing_step_checklist_items` | W2B |
+| `bmrProcessReadings` | process_parameters | `process_step_readings` (`process_step_record_id`, `routing_step_parameter_id`, `value_numeric/text/boolean`, `is_within_limits`, `recorded_at`, `recorded_by`, `supersedes_id`, `correction_reason`) | W2B |
+| `bmrEquipmentUses` | equipment | `equipment_uses` (`batch_id`, `equipment_id`, `process_step_record_id`, `started_at`, `operator_id`, `cleaning_status_at_start`, `calibration_due_date_at_use`, `exception_reason`) | W2B |
+| `bmrYieldRecord` | packaging_reconciliation, output_yield; closure check "yield reconciliation checked" | `yield_records` (`batch_id`, `theoretical_base`, `actual_base`, `variance_base`, `variance_pct`, `labels_issued/used/destroyed`, `packaging_notes`, `recorded_by`, `checked_by`, `supersedes_id`) | W2B |
+| `bmrBatchOutputs` | output_yield | `batch_outputs` (`batch_id`, `line_no`, `output_kind`, `material_id`, `lot_id`, `to_location_id`, `qty_base`) | W2B |
+| `bmrInspections` | qc | `inspections` (`inspection_number`, `batch_id`, `status`, `reviewed_by`, `reviewed_at`); QC results still come from the MVP `test_results` (`batch_id`) | W2C |
+| `bmrDeviations`, `openDeviationNumbers` | deviations; closure check "deviations closed"; summary | `deviations` (`deviation_number`, `status`, `batch_id`, `deviation_kind`, `severity`, `description`, `raised_by/at`, `closed_by/at`) | W2C |
+
+Guards the integrator must keep wired: `assertPaperRecordsReviewed(tx, batchId, batchNumber)` is called by `decideBatch` (quality) before a batch leaves `awaiting_qc`; when W2C adds `awaiting_qc → quarantined` and dispositions from `quarantined`, those paths must call it too, and the disposition from `quarantined` is what lets a batch reopened to `quarantined` be closed again.
+
 ### 1.5 Header and footer on every page
 
 Running header and footer are rendered by Chromium's `headerTemplate` / `footerTemplate` (A-RPT-02) so that `page x of y` is exact and the identity line cannot be pushed off a page by content. The body reserves the margins in §10.

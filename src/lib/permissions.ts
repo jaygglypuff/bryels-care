@@ -142,6 +142,10 @@ export const PERMISSIONS = [
   "platform.job.view",
   "platform.job.admin",
   "platform.diagnostics.view",
+  // Wave 2 W2D: BMR closure, controlled reopen/amend, hybrid paper pages (US-3-19, US-3-20; docs/permissions-matrix.md §2.5, §3.5, §5.3)
+  "production.batch.approve",
+  "production.batch.admin",
+  "production.process_step_record.approve",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -483,4 +487,16 @@ for (const [role, grants] of Object.entries(W1A_GRANTS)) {
 // Diagnostics (worker, jobs, reconciliation) are for system administrators, not every view-all role.
 for (const role of ["site_manager", "auditor"]) {
   ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => p !== "platform.diagnostics.view");
+}
+
+// Wave 2 W2D: closure (production.batch.approve, SM), reopen request (production.batch.admin, SM;
+// QA co-approves with quality.disposition.approve, A-PM-07) and paper-page review
+// (production.process_step_record.approve: SM, PO as checker, QA) per docs/permissions-matrix.md §3.5.
+const W2D_GRANTS: Record<string, readonly Permission[]> = {
+  site_manager: ["production.batch.approve", "production.batch.admin", "production.process_step_record.approve"],
+  production_operator: ["production.process_step_record.approve", "documents.file_attachment.view", "documents.file_attachment.create"],
+  qa_qc: ["production.process_step_record.approve"],
+};
+for (const [role, grants] of Object.entries(W2D_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
 }

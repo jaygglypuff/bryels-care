@@ -593,6 +593,16 @@ batch) is `site_manager` plus `qa_qc` co-approval by default (A-PM-07). `equipme
 recorded as an `approval_decisions` row by a different user (A-PROC-23 in
 `docs/process-maps.md`; default rule in section 5.2).
 
+As built in Wave 2 W2D (US-3-19, US-3-20): `production.batch.approve` (close) and
+`production.batch.admin` (request a reopen) are granted to `site_manager`; the QA co-approval
+step of `batch_reopen` is checked with `quality.disposition.approve` (qa_qc only, A-W2D-02);
+recording an amendment while reopened needs `production.batch.edit`, `production.batch.admin` or
+`quality.disposition.approve`; `production.process_step_record.approve` (review a transcribed
+paper page, reviewer ≠ transcriber) is granted to `site_manager`, `production_operator` and
+`qa_qc`; `production_operator` also gets `documents.file_attachment.{view,create}` (§3.7 column
+PO) to attach scanned pages. Issuing a blank page needs `production.batch.edit` +
+`documents.generated_document.create`.
+
 ### 3.6 quality
 
 | Entity | OD | SA | SM | PP | PO | WO | QA | PR | SC | FI | HR | AU | CP |

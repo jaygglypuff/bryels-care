@@ -25,6 +25,7 @@ import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { postMovement } from "@/modules/inventory/ledger";
 import { lotReleaseBlockers } from "@/modules/inventory";
+import { assertPaperRecordsReviewed } from "@/modules/production";
 import {
   BATCH_DECIDED_STATUSES,
   BATCH_TRANSITIONS,
@@ -565,6 +566,8 @@ export async function decideBatch(ctx: AuthContext, input: DecideBatchInput) {
     if (!batch) throw new DomainError("not_found", "Batch not found.");
     ctx.requireSite(batch.siteId);
     if (!t.from.includes(batch.status)) throw new DomainError("state", `The batch is ${batch.status.replace("_", " ")}; it can only be decided while awaiting QC.`);
+    // Wave 2 W2D (US-3-20, data-model §6.2): leaving awaiting_qc needs every paper page reviewed.
+    await assertPaperRecordsReviewed(tx, batch.id, batch.batchNumber);
 
     const lot = batch.outputLotId
       ? ((await tx.select().from(inventoryLots).where(eq(inventoryLots.id, batch.outputLotId)).for("update").limit(1))[0] ?? null)

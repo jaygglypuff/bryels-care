@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 
 const SOURCE_HREF: Record<string, (id: string) => string> = {
   inventory_lot: (id) => `/inventory/${id}`,
+  batch: (id) => `/production/${id}`, // Wave 2 W2D: BMR and paper pages
 };
 
 /** Generated document record: identity, template version, hash, reprint history (ux-system §9.12). */
