@@ -2,6 +2,7 @@ import "server-only";
 import { and, count, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db/client";
 import { notifications, roles, userSiteAssignments, users } from "@/db/schema";
+import { activeAssignment } from "@/lib/auth/assignments";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 
@@ -70,6 +71,7 @@ export async function usersWithRoles(q: DbOrTx, organizationId: string, roleCode
         eq(users.organizationId, organizationId),
         eq(users.status, "active"),
         inArray(roles.code, roleCodes),
+        activeAssignment(), // W2E: ended or future assignments do not count
         siteId ? or(eq(userSiteAssignments.isOrganizationWide, true), eq(userSiteAssignments.siteId, siteId)) : eq(userSiteAssignments.isOrganizationWide, true),
       ),
     );

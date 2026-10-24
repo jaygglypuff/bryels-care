@@ -22,6 +22,7 @@ import {
   users,
   warehouses,
 } from "@/db/schema";
+import { activeAssignment } from "@/lib/auth/assignments";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -84,6 +85,7 @@ export async function eligibleCounters(ctx: AuthContext, siteId = ctx.currentSit
         eq(users.organizationId, ctx.organizationId),
         eq(users.status, "active"),
         eq(rolePermissions.permissionCode, "inventory.stock_count.submit"),
+        activeAssignment(), // W2E: ended or future assignments do not count
         or(eq(userSiteAssignments.siteId, siteId), eq(userSiteAssignments.isOrganizationWide, true)),
       ),
     )

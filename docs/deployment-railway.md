@@ -249,7 +249,7 @@ variable (`docs/architecture.md` section 12).
 | `SESSION_SECRET`, `SESSION_SECRET_PREVIOUS` | secret | auth | x | x | – | fixed dev value | generated | generated | `_PREVIOUS` holds the old key during the 24 h rotation window |
 | `CSRF_SECRET`, `CSRF_SECRET_PREVIOUS` | secret | auth | x | – | – | " | " | " | |
 | `FILE_URL_SECRET` | secret | auth | x | x | – | unset (per-process dev secret) | generated, 32+ characters | generated, 32+ characters | signs the 5-minute, user-bound application download links (`docs/security.md` 4.8, ADR-027); required when `NODE_ENV=production` (downloads show "setup required" without it) |
-| `DATA_ENCRYPTION_KEY`, `DATA_ENCRYPTION_KEY_PREVIOUS` | secret | auth | x | x | – | `k1:<base64>` | `k1:<base64>` | `k1:<base64>` | `keyid:base64(32 bytes)`; ciphertexts store the key id so rotation is a re-encrypt job |
+| `DATA_ENCRYPTION_KEY`, `DATA_ENCRYPTION_KEY_PREVIOUS` | secret | auth | x | x | – | unset (a fixed development key is used) | `k1:<base64>` | `k1:<base64>` | `keyid:base64(32 bytes)`; encrypts TOTP secrets (W2E, `mfa_secrets.key_id`); `_PREVIOUS` still decrypts during a rotation; unset in production = two-step enrolment shows "setup required" |
 | `AUTH_PEPPER` | secret | auth | x | – | – | unset | unset | unset | off by default (A-SEC-02) |
 | `AUTH_BREACH_CHECK` | plain | auth | x | – | – | `offline` | `offline` | `offline` | `hibp` enables the online check (A-SEC-04) |
 | `FILE_STORAGE`, `FILE_STORAGE_DIR` | plain | storage | x | – | – | `local`, `./.data/files` | `s3`, unset | `s3`, unset | storage adapter (`src/lib/storage`, ADR-027): `local` = files on disk (development only, never served statically), `s3` = private bucket via the `S3_*` variables; unset = uploads show "File storage isn't set up" and nothing is stored |
@@ -259,8 +259,9 @@ variable (`docs/architecture.md` section 12).
 | `BACKUP_PREFIX`, `BACKUP_RETENTION_DAILY`, `BACKUP_RETENTION_MONTHLY` | plain | backup | – | – | x | – | `backups/staging`, `7`, `0` | `backups/production`, `35`, `12` | A-SEC-31 |
 | `BACKUP_OFFSITE_ENDPOINT`, `BACKUP_OFFSITE_BUCKET`, `BACKUP_OFFSITE_REGION` | plain | backup | – | – | x | unset | offsite values | offsite values | second provider (A-DEP-08) |
 | `BACKUP_OFFSITE_ACCESS_KEY_ID`, `BACKUP_OFFSITE_SECRET_ACCESS_KEY` | secret | backup | – | – | x | unset | " | " | write-only credentials for the offsite bucket |
-| `EMAIL_PROVIDER`, `EMAIL_FROM` | plain | mail | x | x | – | `none` | `smtp`, `noreply@<domain>` | same | adapter; `none` renders "setup required" |
-| `SMTP_URL` | secret | mail | x | x | – | unset | staging credentials | production credentials | Phase 5 |
+| `EMAIL_PROVIDER`, `EMAIL_FROM` | plain | mail | x | x | – | `outbox` (or unset = `none`) | `resend`, `noreply@<domain>` | same | email adapter (`src/lib/email`, W2E): `none` = nothing sent, screens say "Email is not set up" and show one-time links to the administrator once; `outbox` = development/tests only, stores the full message in `email_outbox` and prints it to the console (refused in production); `resend` = HTTPS API. HTTPS, not SMTP, because Railway blocks outbound SMTP below the Pro plan |
+| `RESEND_API_KEY` | secret | mail | x | x | – | unset | staging key | production key | required with `EMAIL_PROVIDER=resend`; never displayed; only metadata of sent mail is stored (no body, so links never rest in the database) |
+| `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_ROLES`, `BOOTSTRAP_ORG_NAME`, `BOOTSTRAP_SITE_CODE`, `BOOTSTRAP_SITE_NAME` | plain | bootstrap | one-off | – | – | – | one-off | one-off | read only by `pnpm admin:bootstrap` (section 14a); set for the one run, then remove |
 | `WORKER_CONCURRENCY` | plain | worker | – | x | – | `2` | `4` | `4` | pg-boss `localConcurrency` per job queue (default 2 when unset) |
 | `PDF_RENDERER`, `PUPPETEER_EXECUTABLE_PATH` | plain | worker | x | x | – | `disabled` | `disabled` → `chromium` (Phase 3) | same | ADR-026 (amends ADR-016): Phase 2 prints from the browser and stores no PDF; `chromium` is reserved for the Phase 3 engine (`WITH_CHROMIUM=1` image) and has no effect until it ships |
 | `ALERT_WEBHOOK_URL` | secret | observability | – | x | – | unset | optional | optional | chat-tool webhook for alerts (A-DEP-10) |
@@ -610,6 +611,34 @@ Each line has a pass criterion; the completed list, with the deploy log, is Gate
     reviewer, but production project not yet created (Phase 9). Pass: workflow dry-run.
 15. Section 15 checks V-01 to V-10 executed; results written into section 15.
 16. Deployment log entry written; this document updated with every deviation found.
+
+## 14a. First administrator on a fresh production database (W2E)
+
+The demo seed never runs in production (`ALLOW_DEMO_SEED` unset), so the first person is created
+with a one-time command. It never sets or prints a password: it creates an **invited** account with
+organization-wide `owner_director` + `system_admin` assignments (override with
+`BOOTSTRAP_ADMIN_ROLES`, e.g. `system_admin`) and prints a single-use invitation link valid for
+72 hours (setting `identity.invitation.ttl_hours`). It also creates the organization and the first
+site when the database is empty and synchronises the seeded role templates with the code.
+
+1. Deploy once so migrations run (`scripts/start.sh`).
+2. In the `web` service shell (`railway ssh`, or `railway run` from a trusted machine) run:
+   ```sh
+   BOOTSTRAP_ADMIN_EMAIL=owner@<domain> BOOTSTRAP_ADMIN_NAME="<full name>" \
+   BOOTSTRAP_ORG_NAME="Bryel's Care Corporation" BOOTSTRAP_SITE_CODE=<CODE> BOOTSTRAP_SITE_NAME="<site name>" \
+   pnpm admin:bootstrap
+   ```
+   `APP_ORIGIN` must be the public address so the printed link is correct.
+3. Open the printed link (the token is in the `#fragment`, which browsers never send to the server,
+   so it cannot land in access logs), choose a password (12+ characters), sign in, and set up
+   two-step sign-in on **My account** within 7 days (`identity.mfa.grace_days`).
+4. Invite everyone else from **Admin → Users → Invite someone**.
+
+Safety rules: the command refuses when any account is already `active` or `locked`; running it again
+before the link is used replaces the link (the old one stops working); it is audited as
+`identity.user.created`, `identity.site_assignment.granted`, `identity.invitation.sent` with actor
+`system:identity.bootstrap`. After a release that changes role bundles, `pnpm admin:bootstrap --sync-roles`
+re-synchronises the seeded templates (custom roles are never touched).
 
 ## 15. Railway capabilities to verify (do not assume)
 

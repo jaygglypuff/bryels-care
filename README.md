@@ -47,6 +47,7 @@ migration. Its canonical source is `src/db/sql/w1d.sql`; the migration is a verb
 | `pnpm db:migrate` / `pnpm db:seed` / `pnpm db:reset` | Apply migrations / load demo data / wipe and reload demo data |
 | `pnpm worker` | Background worker (pg-boss): reconciliation, expiry check, reservation expiry, balance rebuilds, document renders; health on `PORT` (default 3001) |
 | `pnpm tsx scripts/install-reference-data.ts` | Installs the reference master data (units g/kg/mg/mL/L/pcs, SI conversions, default reason codes) for every organization that lacks them; idempotent, never overwrites company edits. Run once on a new production organization before stock moves (the demo seed runs it automatically) |
+| `pnpm admin:bootstrap` | Production first administrator: invited owner + system admin and a one-time link (no demo seed, refuses once anyone is active; `--sync-roles` re-syncs seeded role templates). See "First administrator" below |
 | `pnpm api:contract` | Regenerate `docs/api/v1-contract.json` from `src/lib/api/contract.ts` (a test fails when it is stale) |
 
 Environment variables (the full per-service table is `docs/deployment-railway.md` §4):
@@ -61,6 +62,9 @@ Environment variables (the full per-service table is `docs/deployment-railway.md
 | `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE` | web | Bucket settings when `FILE_STORAGE=s3` (Railway: `${{Bucket.ENDPOINT}}` etc., path style `false`; MinIO: `true`) |
 | `FILE_URL_SECRET` | web | 32+ random characters; signs the 5-minute, user-bound download links (`docs/security.md` §4.8). Required in production; development uses a per-process secret |
 | `PDF_RENDERER` | web, worker | Optional, default `disabled`: documents and labels print through the browser print dialog from their recorded dataset; "Download PDF" shows a "setup required" state until a PDF engine ships (ADR-026, `src/modules/documents/config.ts`). `chromium` is reserved for that engine |
+| `EMAIL_PROVIDER`, `EMAIL_FROM`, `RESEND_API_KEY` | web, worker | Email adapter for invitations, password resets and security notices (`src/lib/email`): unset/`none` = nothing is sent and admins see one-time links once to pass on by hand; `outbox` = development only (message stored in `email_outbox` and printed to the console); `resend` = HTTPS API (Railway blocks outbound SMTP below the Pro plan) |
+| `DATA_ENCRYPTION_KEY` | web, worker | `k1:<openssl rand -base64 32>`; encrypts TOTP secrets. Required in production for two-step sign-in; development uses a fixed development key |
+| `TRUSTED_PROXY_HEADER` | web | `x-forwarded-for` on Railway: client IP for sign-in and reset rate limits; unset = IP limits off (per-account limits still apply) |
 | `WORKER_CONCURRENCY` | worker | Parallel deliveries per job queue, default `2` |
 | `PORT` | web, worker | Set by Railway; the worker serves `/api/health` and `/api/ready` on it (default 3001 locally) |
 
@@ -70,8 +74,15 @@ Custom SQL: after migrating a database that already holds MVP receipts (not a fr
 Background jobs (`docs/architecture.md` §8, ADR-025) run in the worker: `inventory.reconcile`
 (01:00 Asia/Manila), `inventory.expiry_check` (00:15 Asia/Manila: expiry, retest holds and
 `expiring_lot` alerts), `inventory.reservation_expiry` (every 15 min), and on demand
-`inventory.rebuild_balances` and `documents.render`. Scheduled jobs act as the organization's
-system actor (ADR-029).
+`inventory.rebuild_balances` and `documents.render`, plus `identity.session_purge` (02:30
+Asia/Manila: deletes sessions 30 days after expiry, closes assignments past their end date).
+Scheduled jobs act as the organization's system actor (ADR-029).
+
+Accounts (Wave 2 W2E): administrators invite people from Admin → Users (one-time link, the person
+sets their own password), lock, deactivate and reactivate accounts, grant roles per site with
+start/end dates and optional warehouse limits, clone roles into custom roles, and sign devices out.
+Everyone manages their password, devices and two-step sign-in (TOTP) on **My account**. Restricted
+changes ask for the password again (10 minutes) and, once enrolled, a code.
 
 ## Deploy to Railway (demo or staging)
 
@@ -87,6 +98,12 @@ system actor (ADR-029).
    Diagnostics shows its heartbeat (`docs/deployment-railway.md` §2.3).
 6. For file uploads add a Railway **Bucket** and set `FILE_STORAGE=s3`, the `S3_*` references
    and `FILE_URL_SECRET` on the app service (table above).
+
+**First administrator (production, no demo data):** after the first deploy, open the `web`
+service shell and run `BOOTSTRAP_ADMIN_EMAIL=you@<domain> BOOTSTRAP_ADMIN_NAME="Your Name"
+BOOTSTRAP_ORG_NAME="Bryel's Care Corporation" BOOTSTRAP_SITE_CODE=NFD BOOTSTRAP_SITE_NAME="<site>"
+pnpm admin:bootstrap`. It prints a single-use link (72 h) to set your password; it never sets
+or prints a password and refuses once any account is active (`docs/deployment-railway.md` §14a).
 
 The full production topology (bucket, backups, staging/production separation) is in
 `docs/deployment-railway.md` and arrives with later phases.

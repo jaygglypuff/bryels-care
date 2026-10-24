@@ -35,6 +35,8 @@ export function entityHref(entityType: string, entityId: string | null): string 
       return `/sales/${entityId}`;
     case "user":
       return `/admin/users/${entityId}`;
+    case "role":
+      return `/admin/roles/${entityId}`;
     case "stock_movement":
       return `/inventory/movements/${entityId}`;
     case "background_job":

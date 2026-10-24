@@ -122,7 +122,7 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
             </ul>
           </nav>
           <div className="ml-auto flex items-center gap-2 lg:ml-0">
-            <div className="hidden sm:block">{siteSwitcher}</div>
+            {sites.length > 1 && <div className="hidden sm:block">{siteSwitcher}</div>}
             <Link href="/inventory/scan" className="hidden size-10 place-items-center rounded-full bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg sm:grid" aria-label="Scan or search" title="Scan or search">
               <ScanLine size={18} />
             </Link>
@@ -140,6 +140,7 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
                 <p className="font-semibold text-fg">{user.name}</p>
                 <p className="text-[12px] text-muted">{user.roles}</p>
                 <p className="mt-2 text-[12px] text-muted">Site: {site?.code} · {site?.name}</p>
+                <Link href="/account" className="mt-3 block text-[13px] font-medium text-primary-text hover:underline">My account and devices</Link>
                 <form action={signOut} className="mt-3 border-t border-line pt-3">
                   <button className="flex items-center gap-1.5 text-[13px] font-medium text-primary-text hover:underline"><LogOut size={14} /> Sign out</button>
                 </form>
@@ -238,7 +239,7 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
               <Logo className="h-8 w-auto" />
               <button className="grid size-9 place-items-center rounded-full bg-surface-2" onClick={() => setDrawer(false)} aria-label="Close menu"><X size={18} /></button>
             </div>
-            <div className="mb-4 sm:hidden">{siteSwitcher}</div>
+            {sites.length > 1 && <div className="mb-4 sm:hidden">{siteSwitcher}</div>}
             {real.map((g) => (
               <div key={g.label} className="mb-3">
                 <p className="mb-1 flex items-center gap-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted">{ICONS[g.icon]} {g.label}</p>

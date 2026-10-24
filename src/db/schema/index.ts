@@ -18,3 +18,4 @@ export * from "./org";
 export * from "./execution";
 export * from "./quality-ext";
 export * from "./bmr";
+export * from "./identity-admin";

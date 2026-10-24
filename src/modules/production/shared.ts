@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, or, sql } from "drizzle-orm";
 import type { DbOrTx, Tx } from "@/db/client";
 import { batches, idempotencyKeys, rolePermissions, userSiteAssignments, users } from "@/db/schema";
+import { activeAssignment } from "@/lib/auth/assignments";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 
@@ -98,6 +99,7 @@ export async function eligibleCheckers(dbx: DbOrTx, organizationId: string, site
         eq(users.organizationId, organizationId),
         eq(users.status, "active"),
         eq(rolePermissions.permissionCode, CHECKER_PERMISSION),
+        activeAssignment(), // W2E: ended or future assignments do not count
         or(eq(userSiteAssignments.siteId, siteId), eq(userSiteAssignments.isOrganizationWide, true)),
       ),
     )

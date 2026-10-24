@@ -430,6 +430,7 @@ async function main() {
   await (await import("./seeds/w2b")).seedW2B(db); // W2B: released wrapper lot for the packaging step
   await (await import("./seeds/w2c")).seedW2C(db); // W2C: incoming inspection in progress, deviations
   await (await import("./seeds/w2d")).seedW2d(db); // W2D: BMR and paper page templates
+  await (await import("./seeds/w2e")).seedW2E(db); // W2E: custom role, pending invitation, temporary cover
 
   console.log(`Seeded demo organization with ${mats.length} materials, ${counters.LOT} lots, ${counters.BATCH} batches, ${counters.SO} orders.`);
   await client.end();

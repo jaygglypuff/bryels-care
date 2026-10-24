@@ -201,6 +201,18 @@ export const PERMISSIONS = [
   // Wave 2 W2D: BMR closure, controlled reopen/amend, hybrid paper pages (US-3-19, US-3-20; docs/permissions-matrix.md §2.5, §3.5, §5.3)
   "production.batch.approve",
   "production.batch.admin",
+  // Wave 2 W2E: identity administration (US-1-11, US-1-12, US-1-16..18, US-1-28, US-1-29, US-2-29; docs/permissions-matrix.md §2.1)
+  "identity.user.create",
+  "identity.user.edit",
+  "identity.user.export",
+  "identity.invitation.create",
+  "identity.role.admin",
+  "identity.site_assignment.view",
+  "identity.site_assignment.export",
+  "identity.site_assignment.admin",
+  "identity.session.view",
+  "identity.session.void",
+  "identity.mfa.admin",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -698,3 +710,24 @@ const W2D_GRANTS: Record<string, readonly Permission[]> = {
 for (const [role, grants] of Object.entries(W2D_GRANTS)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
 }
+
+// Wave 2 W2E: identity administration grants (docs/permissions-matrix.md §3.1). owner_director holds every
+// string (break-glass, audited as identity.role.owner_break_glass); `.view` strings reach VIEW_ALL roles.
+const W2E_GRANTS: Record<string, readonly Permission[]> = {
+  system_admin: [
+    "identity.user.create",
+    "identity.user.edit",
+    "identity.user.export",
+    "identity.invitation.create",
+    "identity.role.admin",
+    "identity.site_assignment.admin",
+    "identity.session.void",
+    "identity.mfa.admin",
+  ],
+  auditor: ["identity.user.export", "identity.site_assignment.export"],
+};
+for (const [role, grants] of Object.entries(W2E_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+// Other people's sessions are for administrators and auditors only (matrix §3.1: site_manager has no identity.session).
+ROLE_BUNDLES.site_manager.permissions = ROLE_BUNDLES.site_manager.permissions.filter((p) => p !== "identity.session.view");

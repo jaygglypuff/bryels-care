@@ -131,6 +131,34 @@ export const SETTINGS = {
   "documents.controlled_record": { scopes: ["organization", "site"], schema: z.enum(["paper", "electronic"]), default: "paper" as "paper" | "electronic", assumption: "A-RPT-06" },
   /** Document kinds whose reprint notifies QA in-app (A-OPS-07). */
   "documents.reprint.notify_qa_kinds": { scopes: ["organization"], schema: z.array(z.string().regex(/^[a-z_]{1,40}$/)).max(20), default: ["bmr"] as string[], assumption: "A-OPS-07" },
+
+  // Wave 2 W2E: identity and session policy (docs/security.md §3.2-§3.8). Organization scope only.
+  /** Idle timeout of a standard session, sliding (A-SEC-08). */
+  "session.idle_minutes": { scopes: ["organization"], schema: z.number().int().min(5).max(7 * 24 * 60), default: 12 * 60, assumption: "A-SEC-08" },
+  /** Idle timeout when the user holds a restricted (R) permission or an always-privileged role (A-SEC-09). */
+  "session.idle_minutes_privileged": { scopes: ["organization"], schema: z.number().int().min(5).max(24 * 60), default: 60, assumption: "A-SEC-09" },
+  /** Idle timeout when "This is a shared device" was ticked at sign-in (floor tablets; Q-OFF-02). */
+  "session.idle_minutes_shared_device": { scopes: ["organization"], schema: z.number().int().min(2).max(24 * 60), default: 30, assumption: "A-W2E-01" },
+  /** Absolute session lifetime, standard and privileged (A-SEC-10). */
+  "session.absolute_hours": { scopes: ["organization"], schema: z.number().int().min(1).max(90 * 24), default: 7 * 24, assumption: "A-SEC-10" },
+  "session.absolute_hours_privileged": { scopes: ["organization"], schema: z.number().int().min(1).max(7 * 24), default: 24, assumption: "A-SEC-10" },
+  /** Sessions are deleted this many days after expiry or revocation (A-SEC-11). */
+  "session.purge_after_days": { scopes: ["organization"], schema: z.number().int().min(1).max(3650), default: 30, assumption: "A-SEC-11" },
+  /** Restricted actions need a password (and TOTP when enrolled) re-entry within this window (A-SEC-12). */
+  "identity.reauth_window_minutes": { scopes: ["organization"], schema: z.number().int().min(1).max(120), default: 10, assumption: "A-SEC-12" },
+  /** Days a privileged user may work before TOTP enrolment is enforced (A-SEC-13). */
+  "identity.mfa.grace_days": { scopes: ["organization"], schema: z.number().int().min(0).max(90), default: 7, assumption: "A-SEC-13" },
+  "identity.invitation.ttl_hours": { scopes: ["organization"], schema: z.number().int().min(1).max(14 * 24), default: 72, assumption: "docs/security.md §3.8" },
+  "identity.password_reset.ttl_minutes": { scopes: ["organization"], schema: z.number().int().min(5).max(24 * 60), default: 30, assumption: "docs/security.md §3.8" },
+  /** Password rules: length-based, no composition rules (A-SEC-03); reuse of the last N hashes refused (A-SEC-05). */
+  "identity.password.min_length": { scopes: ["organization"], schema: z.number().int().min(8).max(64), default: 12, assumption: "A-SEC-03" },
+  /**
+   * A role carrying restricted (R) permissions the granting administrator does not hold can be granted
+   * only by owner_director ("grant requires owner approval", permissions-matrix §2). false lets any holder
+   * of identity.site_assignment.admin grant it (still audited with the restricted list).
+   */
+  "identity.assignment.restricted_grant_requires_owner": { scopes: ["organization"], schema: z.boolean(), default: true, assumption: "A-W2E-02" },
+  "identity.password.history_count": { scopes: ["organization"], schema: z.number().int().min(0).max(24), default: 5, assumption: "A-SEC-05" },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS;

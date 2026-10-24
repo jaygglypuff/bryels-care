@@ -142,7 +142,9 @@ export async function postMovement(tx: Tx, ctx: AuthContext, input: PostMovement
   }
 
   const locIds = [input.fromLocationId, input.toLocationId].filter((x): x is string => !!x);
-  const locs = await tx.select({ id: locations.id, siteId: locations.siteId, kind: locations.kind }).from(locations).where(inArray(locations.id, locIds));
+  const locs = await tx.select({ id: locations.id, siteId: locations.siteId, kind: locations.kind, warehouseId: locations.warehouseId }).from(locations).where(inArray(locations.id, locIds));
+  // W2E (US-2-29): warehouse write sub-scope of the user's assignment; a location outside it does not exist for this write.
+  for (const l of locs) ctx.requireWarehouseWrite(l.siteId, l.warehouseId);
   const fromLoc = locs.find((l) => l.id === input.fromLocationId);
   const toLoc = locs.find((l) => l.id === input.toLocationId);
   if ((input.fromLocationId && fromLoc?.siteId !== lot.siteId) || (input.toLocationId && toLoc?.siteId !== lot.siteId)) {

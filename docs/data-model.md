@@ -666,6 +666,25 @@ on the `equipment_uses` row and alerts the site manager; the controlled exceptio
 and opens a deviation. The reasons `docs/process-maps.md` W13 lists as states are therefore
 derived labels, not stored states (§14.3).
 
+### 3.1.1 Wave 2 W2E implementation notes (identity administration)
+
+As built in `src/db/schema/identity.ts` (minimal changes) and `src/db/schema/identity-admin.ts` (new):
+
+| Table | As built | Differs from §3.1 |
+|---|---|---|
+| `users` | + `password_changed_at`, `deactivated_at`; invited users carry `password_hash = '!'` (matches nothing) | `password_hash` stays not null; no `kind`, `locked_until`, `mfa_required` columns yet (MFA requirement is derived from the role bundle) |
+| `roles` | + `description`, `cloned_from_role_id` (→ roles), `status` (`active`/`inactive`), `created_by`, `updated_at`; ck custom roles must be clones | column name `allows_organization_wide` (MVP) |
+| `role_permissions` | unchanged: `permission_code` text validated against the code catalogue | no `permissions` table; the catalogue is `src/lib/permissions.ts` + `src/lib/auth/sensitivity.ts` |
+| `user_site_assignments` | + `valid_from`, `valid_to` (**timestamptz**, organization-local midnight computed by the service, so every query compares with `now()`), `scope` jsonb (`{"warehouseIds": [...]}`), `created_by`, `revoked_at/by/reason`; ck org-wide ⇔ `site_id is null`; partial unique `(user_id, role_id, coalesce(site_id))` where `revoked_at is null`. Active = `revoked_at is null and valid_from <= now() < coalesce(valid_to, ∞)` (`activeAssignment()` in `src/lib/auth/assignments.ts`; every "who holds role X" query uses it) | dates are timestamptz, not date |
+| `sessions` | + `idle_expires_at`, `ip`, `device_label`, `device_class` (`standard`/`shared`), `privileged`, `stage` (`mfa_pending`/`active`), `active_site_id`, `mfa_verified_at`, `reauthenticated_at`, `revoked_by`, `revoked_reason`; `expires_at` is the absolute expiry | no `permissions_version` (no context cache) |
+| `invitations` | as §3.1 plus `kind` (`standard`/`bootstrap`), `revoked_reason`; assignments are created at invitation, not at acceptance (A-W2E-06) | `role_id` nullable (primary grant shown in the email) |
+| `password_reset_tokens` | as §3.1 plus `voided_at` (newest token wins, deactivation), `requested_by` (`self`/`admin`) | — |
+| `password_history` | as §3.1; trimmed to the newest `identity.password.history_count` rows on each change | — |
+| `mfa_secrets` | `secret_enc` (base64url of iv, tag, ciphertext; AES-256-GCM), `key_id`, `confirmed_at`, `last_used_step` (replay guard), `last_used_at` | recovery codes in a separate table |
+| `mfa_recovery_codes` (new) | `user_id`, `code_hash` (argon2id), `used_at` | replaces `mfa_secrets.recovery_code_hashes` so each code is marked used individually |
+| `email_outbox` (new) | delivery log: to, subject, template, provider, status (`captured`/`sent`/`failed`/`not_configured`), `body_text` only for the dev/test `outbox` adapter | — |
+| `rate_limit_buckets` | as §3.1 (`scope`, `key`, `tokens`, `refilled_at`) | — |
+
 ### 3.2 Master data: product, formula, routing, partners
 
 | Table → column | Type | Null | Constraint / default | Notes |

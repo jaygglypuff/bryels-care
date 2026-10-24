@@ -254,9 +254,25 @@ change approval rules.
 | Email change | same scheme, sent to the **new** address, confirmation to the old | 30 minutes | re-auth required to start |
 | Portal invitation | same scheme in `portal_invitations` | 72 hours | tenant bound (Phase 8) |
 
-Tokens travel only in the URL path of a GET that renders a form; the form POST carries the
-token in the body; tokens are never logged (the logger redacts `token`, `code`, `password`,
-`secret`, `authorization`, `cookie` keys and 20+ character base64url values in URLs).
+As built (W2E): tokens travel in the URL **fragment** (`/invite#token=…`, `/reset-password#token=…`),
+which browsers never send to the server, so they cannot appear in proxy, access or Railway HTTP logs
+or in a `Referer`; the page reads the fragment, removes it from the address bar, checks the token
+through a server action and posts it in the form body with the new password. Tokens are never logged
+or audited (`redact()` in `src/lib/auth/tokens.ts` masks `token`, `code`, `password`, `secret`,
+`authorization`, `cookie` keys and 20+ character base64url values). The dev/test email adapter
+(`EMAIL_PROVIDER=outbox`) is the only place a link is stored, and it is refused in production.
+
+#### 3.10 As built: identity and sessions (Wave 2 W2E)
+
+| Control | Implementation | Deviation from the policy above |
+|---|---|---|
+| Session lifetimes | `sessions.idle_expires_at` (sliding, refreshed at most every 5 min) and `expires_at` (absolute) set at creation from settings `session.*`; privileged = holder of an R string or owner_director/system_admin; "shared device" tick box at sign-in uses `session.idle_minutes_shared_device` (30 min, A-W2E-01); the shortest applicable limit wins | cookie name stays `bc_session` (the `__Host-` prefix is US-1-10) |
+| Revocation | `revoked_at/by/reason`; read on every request; the context is rebuilt per request (no cache) | — |
+| Step-up | `sessions.reauthenticated_at` within `identity.reauth_window_minutes`; password plus TOTP when enrolled; the token rotates on re-authentication and after the TOTP step | only identity administration requires it so far |
+| TOTP | RFC 6238 in `src/lib/auth/totp.ts` (no dependency), AES-256-GCM with `DATA_ENCRYPTION_KEY` (`keyid:base64`), last used step stored (replay refused), 10 argon2id recovery codes, `mfa_user` bucket 5 tokens refilling over 15 min | rate limit is a token bucket, not a hard 15-minute lock |
+| Rate limits | `rate_limit_buckets` token buckets: `login_ip` 20/min, `password_reset_account` 3/h, `password_reset_ip` 10/h, `token_ip` 30/h, `mfa_user`; IP limits apply only when `TRUSTED_PROXY_HEADER` is set | per-account lockout stays the MVP rule (5 failures → locked) until US-1-10 |
+| Email | adapter `src/lib/email`: `none` / `outbox` (dev) / `resend` (HTTPS); sending happens after commit; with no provider the admin sees invitation or forced-reset links once (A-W2E-04) | SMTP not implemented (Railway blocks it below Pro) |
+| First administrator | `pnpm admin:bootstrap` (`docs/deployment-railway.md` §14a): invited account + one-time link; refuses when anyone is active or locked | — |
 
 ### 3.9 Account lifecycle
 
@@ -551,7 +567,7 @@ S/R exports for the owner.
 | Rule | Detail |
 |---|---|
 | Secrets live only in environment variables | Railway variables per environment (development, staging, production); never in the repository, images, logs, client bundles or the database; `.env.example` lists names only |
-| Variable groups (Railway shared variables) | `base` (`APP_ENV`, `APP_ORIGIN`, `TRUSTED_PROXY_HEADER` for the client IP used by rate limits, `MAINTENANCE_MODE`), `db-app` (`DATABASE_URL`, runtime role `bc_app`), `db-migrate` (`DATABASE_MIGRATION_URL`, `bc_migrate`, present only on `web` for the pre-deploy migration; `MIGRATION_WINDOW_OPEN`, set to `true` only for the cutover window so the opening-balance loader may run against production, `docs/data-migration-plan.md` A-MIG-08, and removed afterwards), `db-backup` (`DATABASE_BACKUP_URL`, `bc_backup`; `DATABASE_READONLY_URL` for `bc_readonly` where analytics needs it), `auth` (`SESSION_SECRET`/`SESSION_SECRET_PREVIOUS`, `CSRF_SECRET`/`CSRF_SECRET_PREVIOUS`, `FILE_URL_SECRET`, `DATA_ENCRYPTION_KEY`/`DATA_ENCRYPTION_KEY_PREVIOUS` for the dual-key rotation window, optional `AUTH_PEPPER`), `storage` (`S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`), `mail` (`SMTP_URL`), `observability` (`ERROR_REPORTING_DSN`), `payments` (Phase 8: `PAYMONGO_SECRET_KEY`, `PAYMONGO_WEBHOOK_SECRET`), `backup` (`BACKUP_ENCRYPTION_PUBLIC_KEY`, `BACKUP_PREFIX`, `BACKUP_RETENTION_DAILY`, `BACKUP_RETENTION_MONTHLY`, `BACKUP_OFFSITE_ENDPOINT`, `BACKUP_OFFSITE_BUCKET`, `BACKUP_OFFSITE_REGION`, `BACKUP_OFFSITE_ACCESS_KEY_ID`, `BACKUP_OFFSITE_SECRET_ACCESS_KEY`); `web`, `worker` and `backup` services reference the groups they need, nothing more; `docs/deployment-railway.md` section 4 is the authoritative variable list |
+| Variable groups (Railway shared variables) | `base` (`APP_ENV`, `APP_ORIGIN`, `TRUSTED_PROXY_HEADER` for the client IP used by rate limits, `MAINTENANCE_MODE`), `db-app` (`DATABASE_URL`, runtime role `bc_app`), `db-migrate` (`DATABASE_MIGRATION_URL`, `bc_migrate`, present only on `web` for the pre-deploy migration; `MIGRATION_WINDOW_OPEN`, set to `true` only for the cutover window so the opening-balance loader may run against production, `docs/data-migration-plan.md` A-MIG-08, and removed afterwards), `db-backup` (`DATABASE_BACKUP_URL`, `bc_backup`; `DATABASE_READONLY_URL` for `bc_readonly` where analytics needs it), `auth` (`SESSION_SECRET`/`SESSION_SECRET_PREVIOUS`, `CSRF_SECRET`/`CSRF_SECRET_PREVIOUS`, `FILE_URL_SECRET`, `DATA_ENCRYPTION_KEY`/`DATA_ENCRYPTION_KEY_PREVIOUS` for the dual-key rotation window, optional `AUTH_PEPPER`), `storage` (`S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`), `mail` (`EMAIL_PROVIDER`, `EMAIL_FROM`, `RESEND_API_KEY`; HTTPS email API, Railway blocks outbound SMTP below Pro), `observability` (`ERROR_REPORTING_DSN`), `payments` (Phase 8: `PAYMONGO_SECRET_KEY`, `PAYMONGO_WEBHOOK_SECRET`), `backup` (`BACKUP_ENCRYPTION_PUBLIC_KEY`, `BACKUP_PREFIX`, `BACKUP_RETENTION_DAILY`, `BACKUP_RETENTION_MONTHLY`, `BACKUP_OFFSITE_ENDPOINT`, `BACKUP_OFFSITE_BUCKET`, `BACKUP_OFFSITE_REGION`, `BACKUP_OFFSITE_ACCESS_KEY_ID`, `BACKUP_OFFSITE_SECRET_ACCESS_KEY`); `web`, `worker` and `backup` services reference the groups they need, nothing more; `docs/deployment-railway.md` section 4 is the authoritative variable list |
 | Client exposure | Only `NEXT_PUBLIC_*` variables reach the browser; CI greps the client bundle for secret names |
 | Database roles (least privilege) | `bc_migrate`: owner of schema, runs migrations only at deploy; `bc_app`: SELECT/INSERT/UPDATE on application tables, INSERT/SELECT only on ledger and audit tables, no DELETE on ledgers/audit (enforced by grants and triggers), no DDL; `bc_readonly`: SELECT for analytics views and ad-hoc owner queries (no SELECT on sessions, MFA secrets, idempotency keys or sensitive employee columns); `bc_backup`: SELECT on all tables and sequences, used only by the `backup` service for `pg_dump` (`DATABASE_BACKUP_URL`); `bc_rls` role switching evaluated with ADR-022 |
 | Key material | `DATA_ENCRYPTION_KEY` (32 bytes, base64) encrypts TOTP secrets and any field marked encrypted in `docs/data-model.md`; each ciphertext stores a key id so rotation is a background re-encrypt job |
