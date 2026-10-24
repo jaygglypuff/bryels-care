@@ -13,6 +13,10 @@
  * APP_ORIGIN (used to build the link).
  */
 import "dotenv/config";
+import { applyRuntimeDefaults } from "../src/lib/runtime-env";
+
+// APP_ORIGIN from Railway's public domain when unset (ADR-044), so the printed link is the public address.
+applyRuntimeDefaults(process.env);
 
 async function main() {
   // Uses the migration role when set (the bootstrap writes roles and the organization).

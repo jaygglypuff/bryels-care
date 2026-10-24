@@ -15,3 +15,5 @@ export {
 export { workerStatus } from "./diagnostics";
 // Wave 3 W3B (US-5-13): Phase 5 diagnostics cards
 export { databaseCard, importsCard, alertsCard, errorsCard, integrationsCard, registerImportStatsProvider, type DatabaseCard, type ImportsCard, type AlertsCard, type ErrorsCard, type IntegrationsCard } from "./diagnostics-phase5";
+// Demo mode (ADR-044): owner-only "Reset demo data"
+export { DEMO_RESET_CONFIRM_WORD, demoResetStatus, resetDemoData, type DemoResetStatus, type DemoResetRunner } from "./demo-reset";

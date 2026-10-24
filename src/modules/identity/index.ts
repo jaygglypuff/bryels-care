@@ -22,6 +22,8 @@ export type { Delivery, InviteInput } from "./lifecycle";
 export { acceptInvitation, changeOwnPassword, completePasswordReset, inspectInvitation, inspectResetToken, requestPasswordReset } from "./account";
 export type { TokenState } from "./account";
 export { completeMfaSignIn, reauthenticate, signInWithPassword } from "./sign-in";
+export { listDemoAccounts, signInAsDemoAccount } from "./demo";
+export type { DemoAccount, DemoAccountGroup } from "./demo";
 export type { SignInResult } from "./sign-in";
 export { adminResetMfa, beginMfaEnrolment, confirmMfaEnrolment, disableOwnMfa, myMfaState, verifySecondFactor } from "./mfa";
 export { listActiveSessions, listMySessions, purgeSessions, revokeSession } from "./sessions";

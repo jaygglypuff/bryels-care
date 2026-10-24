@@ -1,10 +1,11 @@
 import "server-only";
 import { and, asc, eq } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db/client";
-import { auditEvents, mfaSecrets, rolePermissions, roles, userSiteAssignments } from "@/db/schema";
+import { auditEvents, mfaSecrets, rolePermissions, roles, userSiteAssignments, users } from "@/db/schema";
 import { activeAssignment } from "@/lib/auth/assignments";
 import type { AuthContext } from "@/lib/auth/context";
 import { isPrivileged } from "@/lib/auth/sensitivity";
+import { isDemoEmail, isDemoMode } from "@/lib/demo";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
 
@@ -63,6 +64,11 @@ export async function mfaStateFor(q: DbOrTx, organizationId: string, userId: str
   const privilegedRows = rows.filter((r) => isPrivileged(r.perm ? [r.perm] : [], [r.roleCode]));
   const required = privilegedRows.length > 0;
   if (!required || enrolled) return { enrolled, pending: !!factor && !enrolled, required, graceEndsAt: null, overdue: false };
+  // Demo mode (ADR-044): demo accounts are never blocked by the enrolment deadline; enrolling stays possible.
+  if (isDemoMode()) {
+    const [u] = await q.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
+    if (isDemoEmail(u?.email)) return { enrolled, pending: !!factor, required, graceEndsAt: null, overdue: false };
+  }
   const graceDays = await getSetting(q, organizationId, "identity.mfa.grace_days");
   const since = privilegedRows[0].validFrom;
   const graceEndsAt = new Date(since.getTime() + graceDays * 86_400_000);

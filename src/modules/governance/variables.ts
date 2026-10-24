@@ -20,6 +20,8 @@ const common: VariableSpec[] = [
   { name: "S3_BUCKET", required: "optional", note: "when FILE_STORAGE=s3" },
   { name: "S3_ACCESS_KEY_ID", required: "optional", note: "when FILE_STORAGE=s3" },
   { name: "S3_SECRET_ACCESS_KEY", required: "optional", note: "when FILE_STORAGE=s3" },
+  { name: "DEMO_MODE", required: "optional", note: "true = fictional demo (ADR-044); never on production" },
+  { name: "APP_ROLE", required: "optional", note: "web | worker (scripts/start.sh); unset = from the service name" },
 ];
 
 export const VARIABLE_ALLOW_LIST: Record<ServiceName, VariableSpec[]> = {
