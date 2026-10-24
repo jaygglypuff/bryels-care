@@ -74,13 +74,14 @@ const days = (a: string, b: string) => sql`round(extract(epoch from (${sql.raw(a
 
 /**
  * When an order was confirmed, as known at T (A-W3A-03 resolved by the Wave 3 integration): the first
- * `confirmed` row of W3D's sales_order_state_transitions; orders entered before Wave 3 have no
- * transition rows and keep their entry time. Use as `cross join lateral (${confirmedAtLateral(p)}) ca`.
+ * `confirmed` row of W3D's sales_order_state_transitions. Orders entered before Wave 3 have no
+ * recorded entry (no transition into draft, submitted or pending approval; later fulfilment moves may
+ * be recorded) and keep their entry time. Use as `cross join lateral (${confirmedAtLateral(p)}) ca`.
  */
 const confirmedAtLateral = (p: KpiQueryParams) => sql`
   select coalesce(
            (select min(t.occurred_at) from sales_order_state_transitions t where t.sales_order_id = o.id and t.to_state = 'confirmed' and t.occurred_at <= ${T(p)}),
-           case when not exists (select 1 from sales_order_state_transitions t2 where t2.sales_order_id = o.id) then o.created_at end) as confirmed_at`;
+           case when not exists (select 1 from sales_order_state_transitions t2 where t2.sales_order_id = o.id and t2.to_state in ('draft', 'submitted', 'pending_approval')) then o.created_at end) as confirmed_at`;
 
 const confirmedOrders = (p: KpiQueryParams, value: boolean) => sql`
   select o.site_id, 'sales_order'::text as ref_type, o.id as ref_id, o.order_number as ref_number, ca.confirmed_at as basis_at,

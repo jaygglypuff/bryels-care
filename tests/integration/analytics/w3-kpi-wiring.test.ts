@@ -5,13 +5,13 @@
  * holds its matrix §3.11 analytics strings.
  */
 import { beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { salesOrders } from "@/db/schema";
+import { salesOrderStateTransitions, salesOrders } from "@/db/schema";
 import { AuthContext } from "@/lib/auth/context";
 import { ROLE_BUNDLES } from "@/lib/permissions";
 import { getKpiRecords } from "@/modules/analytics";
-import { createOrder, manilaToday, submitOrder } from "@/modules/sales";
+import { allocateOrder, createOrder, manilaToday, submitOrder } from "@/modules/sales";
 import { resetTestDatabase } from "../../support/db";
 import { expectCode } from "../../support/kit";
 import { inDays, loadW3d, newCustomer, productId, type W3d } from "../../support/w3d";
@@ -37,6 +37,20 @@ describe("KPI-SAL-01 on W3D transitions", () => {
     const entry = await getKpiRecords(w.owner, "KPI-SAL-01", { from: day(-46), to: day(-44) });
     expect(entry.rows.some((r) => r.refId === o.id)).toBe(false);
     expect(manilaToday()).toBe(day(0));
+  });
+
+  it("keeps an order entered before Wave 3 at its entry time when later fulfilment moves are recorded", async () => {
+    const c = await newCustomer(w, { creditLimit: "1000000", minShelfLifeDays: 0 });
+    const o = await createOrder(w.sales, { customerId: c.id, requestedDeliveryOn: inDays(10), lines: [{ productId: await productId("ACS-135"), qtyUnits: "4", unitPrice: "70" }] });
+    await submitOrder(w.sales, o.id);
+    // Simulate a pre-Wave-3 order: no recorded entry or confirmation, entered 45 days ago, then allocated today.
+    await db.execute(sql`alter table sales_order_state_transitions disable trigger tg_sales_order_state_transitions_append_only`);
+    await db.delete(salesOrderStateTransitions).where(eq(salesOrderStateTransitions.salesOrderId, o.id));
+    await db.execute(sql`alter table sales_order_state_transitions enable trigger tg_sales_order_state_transitions_append_only`);
+    await db.update(salesOrders).set({ createdAt: new Date(Date.now() - 45 * 86_400_000) }).where(eq(salesOrders.id, o.id));
+    await allocateOrder(w.warehouse, o.id);
+    expect((await getKpiRecords(w.owner, "KPI-SAL-01", { from: day(-46), to: day(-44) })).rows.some((r) => r.refId === o.id)).toBe(true);
+    expect((await getKpiRecords(w.owner, "KPI-SAL-01", { from: day(-1), to: day(1) })).rows.some((r) => r.refId === o.id)).toBe(false);
   });
 });
 
