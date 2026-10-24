@@ -9,6 +9,7 @@ import { DomainError } from "@/lib/errors";
 import { assertUuid, bool, diff, optInt, optText, reqText, uniqueConflict } from "./org-common";
 import { DEFAULT_REASON_CODES, REASON_NOTE_MAX, reasonCodesFor } from "./reason-codes-defaults";
 import { parseInput } from "./schemas";
+import { runInTx, type InTx } from "@/lib/tx";
 
 /**
  * Shared reason codes (US-1-24). One table, categories in `applies_to`. Commands that need a
@@ -135,10 +136,11 @@ export async function assertReasonCode(q: DbOrTx, organizationId: string, catego
   return { code: r.code, name: r.name, requiresNote: r.requiresNote, requiresApproval: r.requiresApproval, note: n || null };
 }
 
-export async function createReasonCode(ctx: AuthContext, raw: unknown) {
+/** `opts.tx`: run inside a caller's transaction (savepoint), e.g. an import chunk (W3C, src/lib/tx.ts). */
+export async function createReasonCode(ctx: AuthContext, raw: unknown, opts?: InTx) {
   ctx.require("masterdata.reason_code.admin");
   const v = parseInput(ReasonCodeCreate, raw);
-  return db.transaction(async (tx) => {
+  return runInTx(opts, async (tx) => {
     const [r] = await tx
       .insert(reasonCodes)
       .values({ organizationId: ctx.organizationId, ...v, sortOrder: v.sortOrder ?? 100, createdBy: ctx.userId, updatedBy: ctx.userId })

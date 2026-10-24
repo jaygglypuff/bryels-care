@@ -234,6 +234,15 @@ export const PERMISSIONS = [
   "production.production_plan.edit",
   "production.production_plan.approve",
   "production.material_substitution.approve",
+  // Wave 3 W3C: import wizard, go-live loader, legacy documents (US-5-08, US-5-09, US-2-25, US-2-26; docs/permissions-matrix.md §2.12, §2.7)
+  "platform.import_job.view",
+  "platform.import_job.create",
+  "platform.import_job.submit",
+  "platform.import_job.approve",
+  "platform.import_job.post",
+  "platform.import_job.void",
+  "documents.legacy_document.view",
+  "documents.legacy_document.approve",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -811,3 +820,20 @@ const W2A_GRANTS: Record<string, readonly Permission[]> = {
 for (const [role, grants] of Object.entries(W2A_GRANTS)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
 }
+
+// Wave 3 W3C: import jobs and legacy documents (docs/permissions-matrix.md §3.12 import_job row, §3.7
+// legacy_document row). View strings reach the VIEW_ALL roles automatically. Posting an import also needs
+// the create/post permission of every entity it creates (checked by the module services at run time).
+const W3C_GRANTS: Record<string, readonly Permission[]> = {
+  system_admin: ["platform.import_job.create", "platform.import_job.submit", "platform.import_job.approve", "platform.import_job.post", "platform.import_job.void"],
+  site_manager: ["platform.import_job.create", "platform.import_job.submit", "platform.import_job.approve", "platform.import_job.post"],
+  procurement: ["platform.import_job.view", "platform.import_job.create", "platform.import_job.submit"],
+  qa_qc: ["documents.legacy_document.approve"],
+  production_planner: ["documents.legacy_document.view"],
+};
+for (const [role, grants] of Object.entries(W3C_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+// OD: import_job v* only (matrix §3.12); legacy documents are verified by QA, not by the owner.
+const W3C_NOT_FOR_OWNER: readonly Permission[] = ["platform.import_job.create", "platform.import_job.submit", "platform.import_job.approve", "platform.import_job.post", "platform.import_job.void", "documents.legacy_document.approve"];
+ROLE_BUNDLES.owner_director.permissions = ROLE_BUNDLES.owner_director.permissions.filter((p) => !W3C_NOT_FOR_OWNER.includes(p));

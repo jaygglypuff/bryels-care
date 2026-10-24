@@ -23,7 +23,7 @@ export { acceptInvitation, changeOwnPassword, completePasswordReset, inspectInvi
 export type { TokenState } from "./account";
 export { completeMfaSignIn, reauthenticate, signInWithPassword } from "./sign-in";
 export type { SignInResult } from "./sign-in";
-export { adminResetMfa, beginMfaEnrolment, confirmMfaEnrolment, disableOwnMfa, myMfaState } from "./mfa";
+export { adminResetMfa, beginMfaEnrolment, confirmMfaEnrolment, disableOwnMfa, myMfaState, verifySecondFactor } from "./mfa";
 export { listActiveSessions, listMySessions, purgeSessions, revokeSession } from "./sessions";
 export type { SessionView } from "./sessions";
 export { cloneRole, deactivateCustomRole, deleteCustomRole, getRole, permissionCatalogue, roleMatrix, sodWarnings, updateCustomRole } from "./roles";

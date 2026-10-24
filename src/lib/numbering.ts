@@ -41,6 +41,9 @@ export const NUMBERING_DEFAULTS = {
   // Wave 2 W2A: work orders and production plans (data-model §9.2)
   WO: yearly("WO", 5),
   PP: { prefix: "PP", pattern: "{PREFIX}-{YYMM}-{SEQ}", resetPeriod: "monthly", sequenceWidth: 3, isGapless: false },
+  // Wave 3 W3C: import jobs and legacy documents (data-model §9.2)
+  IMP: { prefix: "IMP", pattern: "{PREFIX}-{YYMM}-{SEQ}", resetPeriod: "monthly", sequenceWidth: 3, isGapless: false },
+  LDOC: { prefix: "LDOC", pattern: "{PREFIX}-{SEQ}", resetPeriod: "never", sequenceWidth: 6, isGapless: false },
 } satisfies Record<string, NumberingRuleSpec>;
 
 export type DocumentType = keyof typeof NUMBERING_DEFAULTS;

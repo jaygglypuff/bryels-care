@@ -307,6 +307,39 @@ export const SETTINGS = {
     }[],
     assumption: "A-UX-12", group: "Production", label: "Production board columns",
   },
+  // Wave 3 W3C: import wizard and go-live loader (docs/data-migration-plan.md §9, docs/security.md §2.6)
+  "platform.imports.max_rows": { scopes: ["organization"], schema: z.number().int().min(1).max(100_000), default: 100_000, assumption: "A-SEC-18", group: "Imports", label: "Maximum rows per import file", description: "Files with more data rows are refused at upload." },
+  "platform.imports.max_file_mb": { scopes: ["organization"], schema: z.number().int().min(1).max(20), default: 20, assumption: "A-SEC-15", group: "Imports", label: "Maximum import file size (MB)" },
+  "platform.imports.chunk_size": { scopes: ["organization"], schema: z.number().int().min(10).max(5_000), default: 500, assumption: "A-W3C-01", group: "Imports", label: "Rows per posting transaction", description: "Validation and posting run in chunks of this many rows; a restart continues with the rows not yet posted." },
+  "platform.imports.inline_row_limit": { scopes: ["organization"], schema: z.number().int().min(0).max(5_000), default: 200, assumption: "A-W3C-02", group: "Imports", label: "Run small imports immediately (rows)", description: "Files up to this many rows are validated and posted in the request; larger files run in the background worker." },
+  "platform.imports.require_second_person": {
+    scopes: ["organization"],
+    schema: z.boolean(),
+    default: true as boolean,
+    assumption: "A-W3C-03",
+    group: "Imports",
+    label: "Import approver must differ from the uploader",
+    description: "When on, the person who uploaded or submitted an import cannot approve it (docs/data-migration-plan.md §9.1, §9.4).",
+    requiresApproval: true,
+  },
+  "imports.opening_stock.status_rules": {
+    scopes: ["organization", "site"],
+    schema: z
+      .object({
+        expiryRequiredClasses: z.array(z.enum(["raw_material", "intermediate", "packaging", "consumable", "product"])).max(5),
+        supplierLotRequiredClasses: z.array(z.enum(["raw_material", "intermediate", "packaging", "consumable", "product"])).max(5),
+      })
+      .strict(),
+    default: { expiryRequiredClasses: ["raw_material", "intermediate", "product"], supplierLotRequiredClasses: ["raw_material"] } as {
+      expiryRequiredClasses: ("raw_material" | "intermediate" | "packaging" | "consumable" | "product")[];
+      supplierLotRequiredClasses: ("raw_material" | "intermediate" | "packaging" | "consumable" | "product")[];
+    },
+    assumption: "A-MIG-06",
+    group: "Imports",
+    label: "Opening stock: classes put on hold when expiry or supplier lot is missing",
+    description: "Opening lots start in quarantine; past expiry → expired; missing expiry (or supplier lot) for these classes → on hold. QA confirms the lists before go-live; no lot is ever released by the import.",
+    requiresApproval: true,
+  },
 } as const satisfies Record<string, SettingDefinition>;
 
 export type SettingKey = keyof typeof SETTINGS;

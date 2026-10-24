@@ -9,6 +9,7 @@ import { DomainError } from "@/lib/errors";
 import { assertTransition, assertUuid, bool, diff, isReferenced, optUuid, reqText, scanCode } from "./org-common";
 import { parseInput } from "./schemas";
 import { locationsHoldStock } from "./warehouses";
+import { runInTx, type InTx } from "@/lib/tx";
 
 /**
  * Locations (US-1-20). The location class (`kind`) drives put-away and move rules elsewhere
@@ -156,10 +157,11 @@ async function assertParent(q: DbOrTx, warehouseId: string, parentId: string | n
   }
 }
 
-export async function createLocation(ctx: AuthContext, raw: unknown) {
+/** `opts.tx`: run inside a caller's transaction (savepoint), e.g. an import chunk (W3C, src/lib/tx.ts). */
+export async function createLocation(ctx: AuthContext, raw: unknown, opts?: InTx) {
   ctx.require("masterdata.location.create");
   const v = parseInput(LocationInput, raw);
-  return db.transaction(async (tx) => {
+  return runInTx(opts, async (tx) => {
     const [w] = await tx
       .select({ id: warehouses.id, siteId: warehouses.siteId, isActive: warehouses.isActive, organizationId: sites.organizationId })
       .from(warehouses)

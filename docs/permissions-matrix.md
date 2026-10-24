@@ -287,6 +287,8 @@ description, sensitivity and phase are listed on one row.
 | `documents.reprint.create` | Reprint a controlled document (reason mandatory, audit) | S | P2 |
 | `documents.file_attachment.{view,create,export}` | Upload/download FileAttachments on records the actor can view | N | P2 |
 | `documents.file_attachment.void` | Soft-delete an attachment (file retained per retention policy) | S | P2 |
+| `documents.legacy_document.view` | Read the legacy document index (scanned paper BMRs, DRs, test records) and its scans on the lot page and the legacy documents search; the index carries the QA name (personal data) (W3C, US-2-26) | S | P2 |
+| `documents.legacy_document.approve` | Second-person verification of a legacy document's index against its scan; never the person who indexed it (W3C) | S | P2 |
 | `documents.print_station.admin` | Add and change print stations (the PC or tablet next to a label printer) at the actor's sites; added in Wave 1 (E-2-03). Granted to `system_admin` and `site_manager`; seeing a station's queue needs `inventory.label_job.view` | N | P2 |
 
 ### 2.8 sales (Phase 4; portal Phase 8)
@@ -765,6 +767,7 @@ A-KPI-17 in `docs/analytics-kpis.md`); there is no separate `analytics.kpi_defin
 | file | – | m* | – | – | – | – | – | – | – | – | – | – | – |
 | help_guide | m* | m* | – | – | – | – | – | – | – | – | – | – | – |
 | import_job | v* | v c s a p o* | v c s a p | – | – | – | – | v c s | – | v c s | – | v* | – |
+| legacy_document (W3C) | v | v | v | v (planner) | – | – | v a | – | – | – | – | v | – |
 | settings | v a* | v m a* | – | – | – | – | – | – | – | – | – | v* | – |
 | approval_rule | v m* | v* | v | – | – | – | – | – | – | v* | – | v* | – |
 | integration | v* | m* | – | – | – | – | – | – | – | – | – | v* | – |

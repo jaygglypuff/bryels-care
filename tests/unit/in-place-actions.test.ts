@@ -32,6 +32,7 @@ const REFRESH_ALLOWED = new Set([
   "src/app/(app)/inventory/receive/[grId]/forms.tsx",
   "src/app/(app)/production/[batchId]/closure/forms.tsx",
   "src/app/(app)/account/forms.tsx",
+  "src/app/(app)/admin/imports/forms.tsx",
 ]);
 
 describe("in-place actions (ADR-043)", () => {

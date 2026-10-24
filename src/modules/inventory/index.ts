@@ -42,7 +42,7 @@ export { runExpiryCheck } from "./holds-expiry";
 // Wave 1 W1C: scan-move, undo, containers, counts, adjustments, reservations and FEFO/FIFO
 export { scanMove, undoMove, interSiteTransfer, looseQty, boxedQty, listRecentTransfers, listSiteLocations, type MoveResult, type ScanMoveInput, type UndoResult } from "./moves";
 export { describeBoxForScan, describeLocationForScan, describeLotForScan, type ScanCard } from "./moves-scan-cards";
-export { createBox, splitBox, mergeBoxes, repackBox, setBoxStatus, getContainer, listContainers, findContainerByNumber, boxAllowedActions, containerLineageGraph, type AllowedAction, type ContainerDetail } from "./containers";
+export { createBox, voidBoxesForReversal, splitBox, mergeBoxes, repackBox, setBoxStatus, getContainer, listContainers, findContainerByNumber, boxAllowedActions, containerLineageGraph, type AllowedAction, type ContainerDetail } from "./containers";
 export { assertLocationsNotFrozen, activeCountsForLocations, createCount, releaseCount, cancelCount, recordCount, submitCount, recordRecount, approveCount, rejectCountLines, postCount, listCounts, getCount, eligibleCounters, findLotForCount, type CountDetail } from "./counts";
 export { createAdjustment, submitAdjustment, approveAdjustment, rejectAdjustment, cancelAdjustment, postAdjustment, listAdjustments, getAdjustment, type AdjustmentDetail } from "./adjustments";
 export {

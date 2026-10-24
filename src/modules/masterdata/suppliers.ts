@@ -1,12 +1,13 @@
 import "server-only";
 import { and, asc, desc, eq, ilike, inArray, ne, or, sql, type SQL } from "drizzle-orm";
-import { db } from "@/db/client";
+import { db, type DbOrTx } from "@/db/client";
 import { goodsReceipts, supplierMaterials, suppliers, materials } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { toCsv } from "./csv";
 import { SUPPLIER_QUALITY_STATUSES, SupplierInputSchema, parseOrThrow, type SupplierInput } from "./supplier-schemas";
+import { runInTx, type InTx } from "@/lib/tx";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -89,8 +90,8 @@ export async function getSupplier(ctx: AuthContext, supplierId: string) {
   return { ...s, materials: mats, receipts };
 }
 
-async function assertUnique(ctx: AuthContext, v: { code: string; name: string }, exceptId?: string) {
-  const rows = await db
+async function assertUnique(ctx: AuthContext, v: { code: string; name: string }, exceptId?: string, q: DbOrTx = db) {
+  const rows = await q
     .select({ id: suppliers.id, code: suppliers.code, name: suppliers.name })
     .from(suppliers)
     .where(and(eq(suppliers.organizationId, ctx.organizationId), or(eq(suppliers.code, v.code), sql`lower(${suppliers.name}) = lower(${v.name})`)));
@@ -101,11 +102,12 @@ async function assertUnique(ctx: AuthContext, v: { code: string; name: string },
   }
 }
 
-export async function createSupplier(ctx: AuthContext, input: SupplierInput) {
+/** `opts.tx`: run inside a caller's transaction (savepoint), e.g. an import chunk (W3C, src/lib/tx.ts). */
+export async function createSupplier(ctx: AuthContext, input: SupplierInput, opts?: InTx) {
   ctx.require("masterdata.supplier.create");
   const v = parseOrThrow(SupplierInputSchema, input);
-  await assertUnique(ctx, v);
-  return db.transaction(async (tx) => {
+  await assertUnique(ctx, v, undefined, opts?.tx);
+  return runInTx(opts, async (tx) => {
     const [s] = await tx
       .insert(suppliers)
       .values({ organizationId: ctx.organizationId, ...v, createdBy: ctx.userId, updatedBy: ctx.userId })
