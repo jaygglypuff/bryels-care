@@ -38,6 +38,9 @@ export const NUMBERING_DEFAULTS = {
   // Wave 2 W2C: inspections and deviations (data-model §9.2)
   INS: yearly("INS", 5),
   DEV: yearly("DEV", 4),
+  // Wave 2 W2A: work orders and production plans (data-model §9.2)
+  WO: yearly("WO", 5),
+  PP: { prefix: "PP", pattern: "{PREFIX}-{YYMM}-{SEQ}", resetPeriod: "monthly", sequenceWidth: 3, isGapless: false },
 } satisfies Record<string, NumberingRuleSpec>;
 
 export type DocumentType = keyof typeof NUMBERING_DEFAULTS;

@@ -1204,6 +1204,28 @@ Process-step state machine: `src/modules/production/execution.ts` (`STEP_TRANSIT
 written by W2B: `materials_staged → in_process` on the first signed line clearance and `in_process →
 awaiting_qc` at transfer to quarantine (one transaction with every consumption and the output posting).
 
+### 3.5.1 Implementation status (Wave 2 W2A: planning, work orders, staging; E-3-03, E-5-07)
+
+Plain language: a production planner builds a plan from confirmed orders and minimum stock, turns
+plan lines into work orders, plans them (the approved formula and routing revisions are frozen),
+a second person releases them (released lots are reserved by FEFO), batches are created from the
+work order, and the warehouse stages the reserved lots by scan; the batch becomes
+`materials_staged` when every ingredient is at the staging location.
+
+| Item | As built (`src/db/schema/planning.ts` unless noted) | Differs from the catalogue above |
+|---|---|---|
+| `production_lines` | One table, owned by master data (W2G, `src/db/schema/org.ts`: `site_id`, `code` `uq (site_id, code)` with scan grammar CHECK, `name`, `department_id` → `departments`, `status` `active`/`down`/`inactive`); `work_orders.production_line_id` and `equipment.production_line_id` reference it | The W2A copy in `planning.ts` (with a `department_label` text) was dropped at integration; the BMR/traveler department comes from `departments.name` |
+| `work_orders` | As §3.5 with `formula_id`, revision ids resolved at `planned` (CHECK: present unless `draft`/`cancelled`), `qty_planned_base` + `base_uom` text (`g`), `batch_count`, `batch_size_base`, `target_units`, `planned_start`/`planned_end` dates, `priority 1..9`, planner/supervisor, `release_shortages jsonb`, `released_with_shortage`, `cancel_reason` (CHECK on `cancelled`), `approval?` set (release fills `approved_*`, CHECK on released and later), `+status` | `sku_id`, `department_id` not added (SKUs are products; no departments table); `uom_base_id` is a text unit until `uoms` exists |
+| `work_order_state_transitions` | Shape §6.1 (`correlation_id` uuid; a non-uuid request id is replaced by a new UUIDv7) | — |
+| `batches.work_order_id` | Added in `src/db/schema/production.ts` with an index | Nullable: MVP and seed batches predate work orders; new batches get it from `createBatchFromWorkOrder`. Direct creation is governed by setting `production.batch.allow_without_work_order` (A-W2A-01) |
+| `production_plans`, `production_plan_lines` | As §3.5; lines also freeze `source` (`sales_order`, `min_stock`, `manual`), `sales_order_id`, `demand_units`, `on_hand_units`, `available_units`, `open_work_order_units`, `min_stock_units`, `qty_units` (pcs), `line_no` | Lines are per SKU in finished units; `qty_base`/`uom_base_id` become `qty_units`; material availability is computed live, not stored |
+| `product_min_stock` | New: `site_id`, `product_id` (`uq`), `min_stock_units ≥ 0` | Planning input owned by the owner/planner (A-W2A-06); not yet in §3.1 |
+| `batch_material_stagings` | New, append-only: one row per staging scan (batch, batch material, work order, lot, from → to location, qty, ledger `movement_id`, the batch reservation it created, optional substitution) | Replaces the catalogue's `stock_allocations (batch_material)` for staging; no `transfer_requests` row is written (the movement's source document is the batch) |
+| `batch_material_substitutions` | New, append-only: CX-MAT record (expected lot, substitute lot of the SAME material, location, qty, reason ≥ 5 chars, approver, new reservation) | Recorded at staging; dispensing (W2B) reads it |
+| Reservations | Work-order reservations are `stock_reservations` rows with `demand_type = 'work_order'`, lapsing at planned end + `production.work_order.reservation_grace_days`. Staging converts them (`converted`, partial remainders re-reserved under a new number) and re-reserves the staged quantity at the staging location with `demand_type = 'batch'` for `production.staging.reservation_ttl_hours` | `demand_type` values are the W1C list (`batch`, not `batch_material`) |
+| State machines | `src/modules/production/work-orders-state.ts` (§6.3); batch table gains `planned → rejected` (abandonment when the work order is cancelled before staging, §6.2) | `in_progress`/`completed`/`closed` follow the batches through `syncWorkOrderProgress` |
+| Numbering | `WO-{YY}-{SEQ5}`, `PP-{YYMM}-{SEQ3}` in `src/lib/numbering.ts` | — |
+
 ### 3.6 Quality
 
 | Table → column | Type | Null | Constraint / default | Notes |
@@ -1867,6 +1889,7 @@ exception transitions, enforced by the state machine), `occurred_at timestamptz 
 | draft | planned | revisions frozen, batch number allocated |
 | planned | materials_staged | every `batch_materials` line staged: allocation exists and the lot is in the staging location (W05-05) |
 | materials_staged | in_process | weighing-area line clearance step (`step_kind = 'line_clearance'`, `area = 'weighing'`) completed and checked; equipment `in_service` (W05-06); dispensing (W05-07) happens in `in_process` |
+| | *as built (Wave 2 integration)* | one lifecycle for every batch: `planned → materials_staged` by staging every ingredient by scan for a work-order batch (`stageMaterial`, W2A) or, for a batch without a work order (only while `production.batch.allow_without_work_order` is on), by "Confirm materials at the line" (`startBatch`); `materials_staged → in_process` only by the first signed line clearance (W2B `submitChecklist`). `startBatch` never moves a batch to `in_process`, and the board refuses that drag. Each batch transition calls `syncWorkOrderProgress` in the same transaction (in_process: released → in_progress; awaiting_qc: last batch → completed; closure: → closed); posting to quarantine ends the batch's staging reservations |
 | in_process | awaiting_qc | every `requires_checker` dispense checked; all `blocks_until_complete` steps complete; consumption and output posted, output lots in a quarantine location (W05-17) |
 | awaiting_qc | quarantined | finished-product inspection results entered and BMR review complete (A-PROC-29, W05-18); every `paper_then_transcribe` step (`routing_steps.record_mode`) has a reviewed `batch_paper_records` row |
 | quarantined | released / rejected / rework_approved | `dispositions` row by `quality.disposition.approve`, decider ≠ requester |

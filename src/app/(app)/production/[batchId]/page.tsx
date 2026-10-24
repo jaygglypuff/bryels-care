@@ -293,7 +293,12 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
               <LinkButton href={`/production/${batch.id}/closure`} variant="secondary">
                 Closure &amp; paper pages
               </LinkButton>
-              {batch.status === "planned" && ctx.can("production.batch.edit") && <StartBatchForm batchId={batch.id} />}
+              {batch.status === "planned" && !batch.workOrderId && ctx.can("production.batch.edit") && <StartBatchForm batchId={batch.id} />}
+              {batch.status === "planned" && batch.workOrderId && (
+                <LinkButton href={`/production/staging/${batch.id}`} variant="cta">
+                  Stage materials
+                </LinkButton>
+              )}
             </>
           }
         />
@@ -301,7 +306,11 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
 
       {batch.status === "planned" && (
         <Banner tone="info" title="Planned, not started">
-          {ctx.can("production.batch.edit") ? "Start the batch when materials are at the weighing area." : "An operator starts the batch when materials are staged."}
+          {batch.workOrderId
+            ? "The warehouse stages the reserved lots by scan; the batch is ready when every ingredient is at the staging location."
+            : ctx.can("production.batch.edit")
+              ? "Confirm the materials when they are at the weighing area, then sign the line clearance."
+              : "An operator confirms the materials when they are at the weighing area."}
         </Banner>
       )}
       {batch.status === "materials_staged" && <Banner tone="info" title="Materials staged">Sign the weighing-area line clearance (step 1) to start the batch.</Banner>}

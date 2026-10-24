@@ -1,6 +1,6 @@
 {
-  "id": "225c9f7b-438b-40ca-a096-c2998b134658",
-  "prevId": "3f3fc89c-a709-43df-b9cf-6270957f979d",
+  "id": "cba9a53a-dd96-40bc-890a-bab53a7bb6d3",
+  "prevId": "822104ef-f0f4-47b6-9984-ca6081bb6c4c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -6376,6 +6376,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "work_order_id": {
+          "name": "work_order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -6402,6 +6408,21 @@
             },
             {
               "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "batches_work_order_idx": {
+          "name": "batches_work_order_idx",
+          "columns": [
+            {
+              "expression": "work_order_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6486,6 +6507,19 @@
             "inspection_plan_id"
           ],
           "tableTo": "inspection_plans",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batches_work_order_id_work_orders_id_fk": {
+          "name": "batches_work_order_id_work_orders_id_fk",
+          "tableFrom": "batches",
+          "columnsFrom": [
+            "work_order_id"
+          ],
+          "tableTo": "work_orders",
           "columnsTo": [
             "id"
           ],
@@ -25563,6 +25597,1948 @@
         "ck_setting_change_requests_applied_at": {
           "name": "ck_setting_change_requests_applied_at",
           "value": "(\"setting_change_requests\".\"status\" = 'applied') = (\"setting_change_requests\".\"applied_at\" is not null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.batch_material_stagings": {
+      "name": "batch_material_stagings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_material_id": {
+          "name": "batch_material_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "work_order_id": {
+          "name": "work_order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lot_id": {
+          "name": "lot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_location_id": {
+          "name": "from_location_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "to_location_id": {
+          "name": "to_location_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "qty_base": {
+          "name": "qty_base",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base_uom": {
+          "name": "base_uom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "movement_id": {
+          "name": "movement_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_reservation_id": {
+          "name": "batch_reservation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "substitution_id": {
+          "name": "substitution_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "staged_by": {
+          "name": "staged_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "staged_at": {
+          "name": "staged_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "batch_material_stagings_batch_idx": {
+          "name": "batch_material_stagings_batch_idx",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "batch_material_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "batch_material_stagings_wo_idx": {
+          "name": "batch_material_stagings_wo_idx",
+          "columns": [
+            {
+              "expression": "work_order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "batch_material_stagings_organization_id_organizations_id_fk": {
+          "name": "batch_material_stagings_organization_id_organizations_id_fk",
+          "tableFrom": "batch_material_stagings",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_stagings_site_id_sites_id_fk": {
+          "name": "batch_material_stagings_site_id_sites_id_fk",
+          "tableFrom": "batch_material_stagings",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "tableTo": "sites",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_stagings_batch_id_batches_id_fk": {
+          "name": "batch_material_stagings_batch_id_batches_id_fk",
+          "tableFrom": "batch_material_stagings",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "tableTo": "batches",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_stagings_batch_material_id_batch_materials_id_fk": {
+          "name": "batch_material_stagings_batch_material_id_batch_materials_id_fk",
+          "tableFrom": "batch_material_stagings",
+          "columnsFrom": [
+            "batch_material_id"
+          ],
+          "tableTo": "batch_materials",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_stagings_work_order_id_work_orders_id_fk": {
+          "name": "batch_material_stagings_work_order_id_work_orders_id_fk",
+          "tableFrom": "batch_material_stagings",
+          "columnsFrom": [
+            "work_order_id"
+          ],
+          "tableTo": "work_orders",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_stagings_lot_id_inventory_lots_id_fk": {
+          "name": "batch_material_stagings_lot_id_inventory_lots_id_fk",
+          "tableFrom": "batch_material_stagings",
+          "columnsFrom": [
+            "lot_id"
+          ],
+          "tableTo": "inventory_lots",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_stagings_from_location_id_locations_id_fk": {
+          "name": "batch_material_stagings_from_location_id_locations_id_fk",
+          "tableFrom": "batch_material_stagings",
+          "columnsFrom": [
+            "from_location_id"
+          ],
+          "tableTo": "locations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_stagings_to_location_id_locations_id_fk": {
+          "name": "batch_material_stagings_to_location_id_locations_id_fk",
+          "tableFrom": "batch_material_stagings",
+          "columnsFrom": [
+            "to_location_id"
+          ],
+          "tableTo": "locations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_stagings_movement_id_stock_movements_id_fk": {
+          "name": "batch_material_stagings_movement_id_stock_movements_id_fk",
+          "tableFrom": "batch_material_stagings",
+          "columnsFrom": [
+            "movement_id"
+          ],
+          "tableTo": "stock_movements",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_stagings_batch_reservation_id_stock_reservations_id_fk": {
+          "name": "batch_material_stagings_batch_reservation_id_stock_reservations_id_fk",
+          "tableFrom": "batch_material_stagings",
+          "columnsFrom": [
+            "batch_reservation_id"
+          ],
+          "tableTo": "stock_reservations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_stagings_substitution_id_batch_material_substitutions_id_fk": {
+          "name": "batch_material_stagings_substitution_id_batch_material_substitutions_id_fk",
+          "tableFrom": "batch_material_stagings",
+          "columnsFrom": [
+            "substitution_id"
+          ],
+          "tableTo": "batch_material_substitutions",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_stagings_staged_by_users_id_fk": {
+          "name": "batch_material_stagings_staged_by_users_id_fk",
+          "tableFrom": "batch_material_stagings",
+          "columnsFrom": [
+            "staged_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_batch_material_stagings_qty": {
+          "name": "ck_batch_material_stagings_qty",
+          "value": "\"batch_material_stagings\".\"qty_base\" > 0"
+        },
+        "ck_batch_material_stagings_locations": {
+          "name": "ck_batch_material_stagings_locations",
+          "value": "\"batch_material_stagings\".\"from_location_id\" <> \"batch_material_stagings\".\"to_location_id\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.batch_material_substitutions": {
+      "name": "batch_material_substitutions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_material_id": {
+          "name": "batch_material_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "work_order_id": {
+          "name": "work_order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "material_id": {
+          "name": "material_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expected_lot_id": {
+          "name": "expected_lot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "substitute_lot_id": {
+          "name": "substitute_lot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "substitute_location_id": {
+          "name": "substitute_location_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "qty_base": {
+          "name": "qty_base",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "new_reservation_id": {
+          "name": "new_reservation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approved_by": {
+          "name": "approved_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "batch_material_substitutions_batch_idx": {
+          "name": "batch_material_substitutions_batch_idx",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "batch_material_substitutions_organization_id_organizations_id_fk": {
+          "name": "batch_material_substitutions_organization_id_organizations_id_fk",
+          "tableFrom": "batch_material_substitutions",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_substitutions_site_id_sites_id_fk": {
+          "name": "batch_material_substitutions_site_id_sites_id_fk",
+          "tableFrom": "batch_material_substitutions",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "tableTo": "sites",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_substitutions_batch_id_batches_id_fk": {
+          "name": "batch_material_substitutions_batch_id_batches_id_fk",
+          "tableFrom": "batch_material_substitutions",
+          "columnsFrom": [
+            "batch_id"
+          ],
+          "tableTo": "batches",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_substitutions_batch_material_id_batch_materials_id_fk": {
+          "name": "batch_material_substitutions_batch_material_id_batch_materials_id_fk",
+          "tableFrom": "batch_material_substitutions",
+          "columnsFrom": [
+            "batch_material_id"
+          ],
+          "tableTo": "batch_materials",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_substitutions_work_order_id_work_orders_id_fk": {
+          "name": "batch_material_substitutions_work_order_id_work_orders_id_fk",
+          "tableFrom": "batch_material_substitutions",
+          "columnsFrom": [
+            "work_order_id"
+          ],
+          "tableTo": "work_orders",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_substitutions_material_id_materials_id_fk": {
+          "name": "batch_material_substitutions_material_id_materials_id_fk",
+          "tableFrom": "batch_material_substitutions",
+          "columnsFrom": [
+            "material_id"
+          ],
+          "tableTo": "materials",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_substitutions_expected_lot_id_inventory_lots_id_fk": {
+          "name": "batch_material_substitutions_expected_lot_id_inventory_lots_id_fk",
+          "tableFrom": "batch_material_substitutions",
+          "columnsFrom": [
+            "expected_lot_id"
+          ],
+          "tableTo": "inventory_lots",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_substitutions_substitute_lot_id_inventory_lots_id_fk": {
+          "name": "batch_material_substitutions_substitute_lot_id_inventory_lots_id_fk",
+          "tableFrom": "batch_material_substitutions",
+          "columnsFrom": [
+            "substitute_lot_id"
+          ],
+          "tableTo": "inventory_lots",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_substitutions_substitute_location_id_locations_id_fk": {
+          "name": "batch_material_substitutions_substitute_location_id_locations_id_fk",
+          "tableFrom": "batch_material_substitutions",
+          "columnsFrom": [
+            "substitute_location_id"
+          ],
+          "tableTo": "locations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_substitutions_new_reservation_id_stock_reservations_id_fk": {
+          "name": "batch_material_substitutions_new_reservation_id_stock_reservations_id_fk",
+          "tableFrom": "batch_material_substitutions",
+          "columnsFrom": [
+            "new_reservation_id"
+          ],
+          "tableTo": "stock_reservations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "batch_material_substitutions_approved_by_users_id_fk": {
+          "name": "batch_material_substitutions_approved_by_users_id_fk",
+          "tableFrom": "batch_material_substitutions",
+          "columnsFrom": [
+            "approved_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_batch_material_substitutions_qty": {
+          "name": "ck_batch_material_substitutions_qty",
+          "value": "\"batch_material_substitutions\".\"qty_base\" > 0"
+        },
+        "ck_batch_material_substitutions_lots": {
+          "name": "ck_batch_material_substitutions_lots",
+          "value": "\"batch_material_substitutions\".\"expected_lot_id\" is null or \"batch_material_substitutions\".\"expected_lot_id\" <> \"batch_material_substitutions\".\"substitute_lot_id\""
+        },
+        "ck_batch_material_substitutions_reason": {
+          "name": "ck_batch_material_substitutions_reason",
+          "value": "length(btrim(\"batch_material_substitutions\".\"reason\")) >= 5"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.product_min_stock": {
+      "name": "product_min_stock",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "min_stock_units": {
+          "name": "min_stock_units",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "product_min_stock_site_product_uq": {
+          "name": "product_min_stock_site_product_uq",
+          "columns": [
+            {
+              "expression": "site_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "product_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "product_min_stock_organization_id_organizations_id_fk": {
+          "name": "product_min_stock_organization_id_organizations_id_fk",
+          "tableFrom": "product_min_stock",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "product_min_stock_site_id_sites_id_fk": {
+          "name": "product_min_stock_site_id_sites_id_fk",
+          "tableFrom": "product_min_stock",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "tableTo": "sites",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "product_min_stock_product_id_products_id_fk": {
+          "name": "product_min_stock_product_id_products_id_fk",
+          "tableFrom": "product_min_stock",
+          "columnsFrom": [
+            "product_id"
+          ],
+          "tableTo": "products",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "product_min_stock_updated_by_users_id_fk": {
+          "name": "product_min_stock_updated_by_users_id_fk",
+          "tableFrom": "product_min_stock",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_product_min_stock_qty": {
+          "name": "ck_product_min_stock_qty",
+          "value": "\"product_min_stock\".\"min_stock_units\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.production_plan_lines": {
+      "name": "production_plan_lines",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "production_plan_id": {
+          "name": "production_plan_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "line_no": {
+          "name": "line_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sales_order_id": {
+          "name": "sales_order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sales_order_line_id": {
+          "name": "sales_order_line_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "demand_units": {
+          "name": "demand_units",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "on_hand_units": {
+          "name": "on_hand_units",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "available_units": {
+          "name": "available_units",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "open_work_order_units": {
+          "name": "open_work_order_units",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "min_stock_units": {
+          "name": "min_stock_units",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "qty_units": {
+          "name": "qty_units",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_date": {
+          "name": "target_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "production_plan_lines_plan_line_uq": {
+          "name": "production_plan_lines_plan_line_uq",
+          "columns": [
+            {
+              "expression": "production_plan_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "line_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "production_plan_lines_organization_id_organizations_id_fk": {
+          "name": "production_plan_lines_organization_id_organizations_id_fk",
+          "tableFrom": "production_plan_lines",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "production_plan_lines_site_id_sites_id_fk": {
+          "name": "production_plan_lines_site_id_sites_id_fk",
+          "tableFrom": "production_plan_lines",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "tableTo": "sites",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "production_plan_lines_production_plan_id_production_plans_id_fk": {
+          "name": "production_plan_lines_production_plan_id_production_plans_id_fk",
+          "tableFrom": "production_plan_lines",
+          "columnsFrom": [
+            "production_plan_id"
+          ],
+          "tableTo": "production_plans",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "production_plan_lines_product_id_products_id_fk": {
+          "name": "production_plan_lines_product_id_products_id_fk",
+          "tableFrom": "production_plan_lines",
+          "columnsFrom": [
+            "product_id"
+          ],
+          "tableTo": "products",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "production_plan_lines_sales_order_id_sales_orders_id_fk": {
+          "name": "production_plan_lines_sales_order_id_sales_orders_id_fk",
+          "tableFrom": "production_plan_lines",
+          "columnsFrom": [
+            "sales_order_id"
+          ],
+          "tableTo": "sales_orders",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "production_plan_lines_sales_order_line_id_sales_order_lines_id_fk": {
+          "name": "production_plan_lines_sales_order_line_id_sales_order_lines_id_fk",
+          "tableFrom": "production_plan_lines",
+          "columnsFrom": [
+            "sales_order_line_id"
+          ],
+          "tableTo": "sales_order_lines",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "production_plan_lines_created_by_users_id_fk": {
+          "name": "production_plan_lines_created_by_users_id_fk",
+          "tableFrom": "production_plan_lines",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_production_plan_lines_source": {
+          "name": "ck_production_plan_lines_source",
+          "value": "\"production_plan_lines\".\"source\" in ('sales_order','min_stock','manual')"
+        },
+        "ck_production_plan_lines_qty": {
+          "name": "ck_production_plan_lines_qty",
+          "value": "\"production_plan_lines\".\"qty_units\" > 0 and \"production_plan_lines\".\"demand_units\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.production_plans": {
+      "name": "production_plans",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plan_number": {
+          "name": "plan_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "period_start": {
+          "name": "period_start",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "period_end": {
+          "name": "period_end",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submitted_by": {
+          "name": "submitted_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approved_by": {
+          "name": "approved_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approval_note": {
+          "name": "approval_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_changed_at": {
+          "name": "status_changed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "status_changed_by": {
+          "name": "status_changed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "production_plans_org_number_uq": {
+          "name": "production_plans_org_number_uq",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "plan_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "production_plans_site_status_idx": {
+          "name": "production_plans_site_status_idx",
+          "columns": [
+            {
+              "expression": "site_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "production_plans_organization_id_organizations_id_fk": {
+          "name": "production_plans_organization_id_organizations_id_fk",
+          "tableFrom": "production_plans",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "production_plans_site_id_sites_id_fk": {
+          "name": "production_plans_site_id_sites_id_fk",
+          "tableFrom": "production_plans",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "tableTo": "sites",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "production_plans_submitted_by_users_id_fk": {
+          "name": "production_plans_submitted_by_users_id_fk",
+          "tableFrom": "production_plans",
+          "columnsFrom": [
+            "submitted_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "production_plans_approved_by_users_id_fk": {
+          "name": "production_plans_approved_by_users_id_fk",
+          "tableFrom": "production_plans",
+          "columnsFrom": [
+            "approved_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "production_plans_status_changed_by_users_id_fk": {
+          "name": "production_plans_status_changed_by_users_id_fk",
+          "tableFrom": "production_plans",
+          "columnsFrom": [
+            "status_changed_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "production_plans_created_by_users_id_fk": {
+          "name": "production_plans_created_by_users_id_fk",
+          "tableFrom": "production_plans",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "production_plans_updated_by_users_id_fk": {
+          "name": "production_plans_updated_by_users_id_fk",
+          "tableFrom": "production_plans",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_production_plans_status": {
+          "name": "ck_production_plans_status",
+          "value": "\"production_plans\".\"status\" in ('draft','approved','closed')"
+        },
+        "ck_production_plans_period": {
+          "name": "ck_production_plans_period",
+          "value": "\"production_plans\".\"period_start\" <= \"production_plans\".\"period_end\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.work_order_state_transitions": {
+      "name": "work_order_state_transitions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "work_order_id": {
+          "name": "work_order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_state": {
+          "name": "from_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "to_state": {
+          "name": "to_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "correlation_id": {
+          "name": "correlation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "work_order_transitions_wo_idx": {
+          "name": "work_order_transitions_wo_idx",
+          "columns": [
+            {
+              "expression": "work_order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "work_order_state_transitions_organization_id_organizations_id_fk": {
+          "name": "work_order_state_transitions_organization_id_organizations_id_fk",
+          "tableFrom": "work_order_state_transitions",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_order_state_transitions_site_id_sites_id_fk": {
+          "name": "work_order_state_transitions_site_id_sites_id_fk",
+          "tableFrom": "work_order_state_transitions",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "tableTo": "sites",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_order_state_transitions_work_order_id_work_orders_id_fk": {
+          "name": "work_order_state_transitions_work_order_id_work_orders_id_fk",
+          "tableFrom": "work_order_state_transitions",
+          "columnsFrom": [
+            "work_order_id"
+          ],
+          "tableTo": "work_orders",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_order_state_transitions_actor_id_users_id_fk": {
+          "name": "work_order_state_transitions_actor_id_users_id_fk",
+          "tableFrom": "work_order_state_transitions",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.work_orders": {
+      "name": "work_orders",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "work_order_number": {
+          "name": "work_order_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "product_id": {
+          "name": "product_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "formula_id": {
+          "name": "formula_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "formula_revision_id": {
+          "name": "formula_revision_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "routing_revision_id": {
+          "name": "routing_revision_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "production_line_id": {
+          "name": "production_line_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "production_plan_line_id": {
+          "name": "production_plan_line_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sales_order_id": {
+          "name": "sales_order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "qty_planned_base": {
+          "name": "qty_planned_base",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "base_uom": {
+          "name": "base_uom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'g'"
+        },
+        "batch_count": {
+          "name": "batch_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_size_base": {
+          "name": "batch_size_base",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_units": {
+          "name": "target_units",
+          "type": "numeric(18, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "planned_start": {
+          "name": "planned_start",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "planned_end": {
+          "name": "planned_end",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "priority": {
+          "name": "priority",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 5
+        },
+        "assigned_planner_id": {
+          "name": "assigned_planner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "assigned_supervisor_id": {
+          "name": "assigned_supervisor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "release_shortages": {
+          "name": "release_shortages",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "released_with_shortage": {
+          "name": "released_with_shortage",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "cancel_reason": {
+          "name": "cancel_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submitted_by": {
+          "name": "submitted_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approved_by": {
+          "name": "approved_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "approval_note": {
+          "name": "approval_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status_changed_at": {
+          "name": "status_changed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "status_changed_by": {
+          "name": "status_changed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "work_orders_org_number_uq": {
+          "name": "work_orders_org_number_uq",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "work_order_number",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "work_orders_site_status_idx": {
+          "name": "work_orders_site_status_idx",
+          "columns": [
+            {
+              "expression": "site_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "work_orders_plan_line_idx": {
+          "name": "work_orders_plan_line_idx",
+          "columns": [
+            {
+              "expression": "production_plan_line_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "work_orders_organization_id_organizations_id_fk": {
+          "name": "work_orders_organization_id_organizations_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_orders_site_id_sites_id_fk": {
+          "name": "work_orders_site_id_sites_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "tableTo": "sites",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_orders_product_id_products_id_fk": {
+          "name": "work_orders_product_id_products_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "product_id"
+          ],
+          "tableTo": "products",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_orders_formula_id_formulas_id_fk": {
+          "name": "work_orders_formula_id_formulas_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "formula_id"
+          ],
+          "tableTo": "formulas",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_orders_formula_revision_id_formula_revisions_id_fk": {
+          "name": "work_orders_formula_revision_id_formula_revisions_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "formula_revision_id"
+          ],
+          "tableTo": "formula_revisions",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_orders_routing_revision_id_routing_revisions_id_fk": {
+          "name": "work_orders_routing_revision_id_routing_revisions_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "routing_revision_id"
+          ],
+          "tableTo": "routing_revisions",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_orders_production_line_id_production_lines_id_fk": {
+          "name": "work_orders_production_line_id_production_lines_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "production_line_id"
+          ],
+          "tableTo": "production_lines",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_orders_production_plan_line_id_production_plan_lines_id_fk": {
+          "name": "work_orders_production_plan_line_id_production_plan_lines_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "production_plan_line_id"
+          ],
+          "tableTo": "production_plan_lines",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_orders_sales_order_id_sales_orders_id_fk": {
+          "name": "work_orders_sales_order_id_sales_orders_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "sales_order_id"
+          ],
+          "tableTo": "sales_orders",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_orders_assigned_planner_id_users_id_fk": {
+          "name": "work_orders_assigned_planner_id_users_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "assigned_planner_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_orders_assigned_supervisor_id_users_id_fk": {
+          "name": "work_orders_assigned_supervisor_id_users_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "assigned_supervisor_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_orders_submitted_by_users_id_fk": {
+          "name": "work_orders_submitted_by_users_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "submitted_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_orders_approved_by_users_id_fk": {
+          "name": "work_orders_approved_by_users_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "approved_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_orders_status_changed_by_users_id_fk": {
+          "name": "work_orders_status_changed_by_users_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "status_changed_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_orders_created_by_users_id_fk": {
+          "name": "work_orders_created_by_users_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "work_orders_updated_by_users_id_fk": {
+          "name": "work_orders_updated_by_users_id_fk",
+          "tableFrom": "work_orders",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_work_orders_status": {
+          "name": "ck_work_orders_status",
+          "value": "\"work_orders\".\"status\" in ('draft','planned','released','in_progress','completed','closed','cancelled')"
+        },
+        "ck_work_orders_qty": {
+          "name": "ck_work_orders_qty",
+          "value": "\"work_orders\".\"qty_planned_base\" > 0 and \"work_orders\".\"batch_size_base\" > 0 and \"work_orders\".\"batch_count\" > 0"
+        },
+        "ck_work_orders_dates": {
+          "name": "ck_work_orders_dates",
+          "value": "\"work_orders\".\"planned_end\" >= \"work_orders\".\"planned_start\""
+        },
+        "ck_work_orders_priority": {
+          "name": "ck_work_orders_priority",
+          "value": "\"work_orders\".\"priority\" between 1 and 9"
+        },
+        "ck_work_orders_revisions": {
+          "name": "ck_work_orders_revisions",
+          "value": "\"work_orders\".\"status\" in ('draft','cancelled') or (\"work_orders\".\"formula_revision_id\" is not null and \"work_orders\".\"routing_revision_id\" is not null)"
+        },
+        "ck_work_orders_release": {
+          "name": "ck_work_orders_release",
+          "value": "\"work_orders\".\"status\" not in ('released','in_progress','completed','closed') or (\"work_orders\".\"approved_by\" is not null and \"work_orders\".\"approved_at\" is not null)"
+        },
+        "ck_work_orders_cancel": {
+          "name": "ck_work_orders_cancel",
+          "value": "\"work_orders\".\"status\" <> 'cancelled' or \"work_orders\".\"cancel_reason\" is not null"
         }
       },
       "isRLSEnabled": false

@@ -29,7 +29,7 @@ import { deviationBlockerMessages, deviationFacts, deviationsFor } from "./devia
 import { batchInspectionFacts, inspectionsFor, lotInspectionFacts } from "./inspections";
 import { liveResults } from "./inspection-rules";
 import { queueStatusLabel } from "./status-labels";
-import { assertPaperRecordsReviewed } from "@/modules/production";
+import { assertPaperRecordsReviewed, syncWorkOrderProgress } from "@/modules/production";
 import {
   BATCH_AWAITING_DECISION,
   BATCH_DECIDED_STATUSES,
@@ -712,6 +712,8 @@ export async function decideBatchInTx(tx: Tx, ctx: AuthContext, input: { batchId
 
     await tx.update(batches).set({ status: t.to }).where(eq(batches.id, batch.id));
     await tx.insert(batchStateTransitions).values({ batchId: batch.id, fromState: batch.status, toState: t.to, actorId: ctx.userId, reason });
+    // W2A: the work order follows its batches (completed → closed happens at batch closure).
+    await syncWorkOrderProgress(tx, ctx, batch.workOrderId);
     await tx.insert(dispositions).values({
       id: batchDispositionId,
       organizationId: ctx.organizationId,

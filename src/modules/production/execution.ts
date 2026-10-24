@@ -10,6 +10,7 @@ import { getSetting } from "@/lib/settings";
 import { executionHooks } from "./execution-hooks";
 import { type FormulaSnapshot, idempotent, isWeighingStep, lockBatch } from "./shared";
 import { transitionBatch } from "./state";
+import { syncWorkOrderProgress } from "./work-orders";
 
 /**
  * Process step records (W05-06..17, US-3-09..13): the step state machine, prerequisites, start and
@@ -281,6 +282,8 @@ async function afterStepCompleted(tx: Tx, ctx: AuthContext, batch: BatchRow, ste
       before: { status: "materials_staged" },
       after: { status: "in_process", trigger: `step ${step.stepNo} ${step.name}` },
     });
+    // W2A: the work order follows its batches (released → in_progress), same transaction.
+    await syncWorkOrderProgress(tx, ctx, batch.workOrderId);
     await executionHooks().onBatchInProcess?.(tx, ctx, { id: batch.id, batchNumber: batch.batchNumber, siteId: batch.siteId });
   }
 }

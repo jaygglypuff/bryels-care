@@ -432,6 +432,7 @@ async function main() {
   await (await import("./seeds/w2d")).seedW2d(db); // W2D: BMR and paper page templates
   await (await import("./seeds/w2e")).seedW2E(db); // W2E: custom role, pending invitation, temporary cover
   await (await import("./seeds/w2f")).seedW2f(db, { organizationId: O, passwordHash: pw }); // W2F: approval rules, second admin
+  await (await import("./seeds/w2a")).seedW2a(db); // W2A: production lines, sheet templates, min stock, demo work orders
 
   console.log(`Seeded demo organization with ${mats.length} materials, ${counters.LOT} lots, ${counters.BATCH} batches, ${counters.SO} orders.`);
   await client.end();

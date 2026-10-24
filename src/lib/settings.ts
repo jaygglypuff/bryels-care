@@ -271,6 +271,54 @@ export const SETTINGS = {
   "alerts.failed_jobs_window_minutes": { scopes: ["organization"], schema: z.number().int().min(5).max(1440), default: 15, assumption: "A-DEP-11", group: "Alerts", label: "Dead-lettered job look-back (minutes)" },
   "alerts.dedupe_minutes": { scopes: ["organization"], schema: z.number().int().min(5).max(1440), default: 60, assumption: "A-DEP-11", group: "Alerts", label: "Repeat an open alert after (minutes)" },
   "platform.metrics.retention_days": { scopes: ["organization"], schema: z.number().int().min(7).max(730), default: 90, assumption: "A-DEP-11", group: "Platform", label: "Keep metrics samples (days)" },
+  // Wave 2 W2A: production planning, work orders, staging and the production board (E-3-03, E-5-07)
+  /** Batches without a work order (legacy/service callers). Off: batches come from work orders (W05-03); tests that need direct creation turn it on explicitly. */
+  "production.batch.allow_without_work_order": { scopes: ["organization", "site"], schema: z.boolean(), default: false, assumption: "A-W2A-01", group: "Production", label: "Allow batches without a work order", requiresApproval: true },
+  /** Release a work order although some materials could not be reserved (W05-04: default off). */
+  "production.work_order.allow_release_with_shortage": { scopes: ["organization", "site"], schema: z.boolean(), default: false, assumption: "W05-04", group: "Production", label: "Release work orders with material shortages", requiresApproval: true },
+  /** A reserved lot must expire more than this many days after the work order's planned end (W05-04 "configurable margin"). */
+  "production.work_order.lot_expiry_margin_days": { scopes: ["organization", "site"], schema: z.number().int().min(0).max(3650), default: 0, assumption: "A-W2A-02", group: "Production", label: "Reserved lot must outlive the planned end by (days)" },
+  /** Work order reservations lapse this many days after the planned end unless staged or released earlier. */
+  "production.work_order.reservation_grace_days": { scopes: ["organization", "site"], schema: z.number().int().min(0).max(365), default: 3, assumption: "A-W2A-03", group: "Production", label: "Work order reservations lapse after planned end (days)" },
+  /** Location kinds that count as a production staging area (scan destination at W05-05). */
+  "production.staging.location_kinds": { scopes: ["organization", "site"], schema: z.array(z.string().min(1)).min(1).max(5), default: ["production"] as string[], assumption: "A-W2A-04", group: "Production", label: "Staging location kinds" },
+  /** Staged stock stays reserved for its batch this long (hours) unless consumed or released earlier. */
+  "production.staging.reservation_ttl_hours": { scopes: ["organization", "site"], schema: z.number().int().min(1).max(24 * 90), default: 168, assumption: "A-W2A-05", group: "Production", label: "Staged stock reserved for (hours)" },
+  /** Optional approval gate on production plans before lines become work orders (A-PROC-30: off by default). */
+  "production.production_plan.approval_required": { scopes: ["organization", "site"], schema: z.boolean(), default: false, assumption: "A-PROC-30", group: "Production", label: "Production plans need approval", requiresApproval: true },
+  /** Production board columns (ux-system §9.3 "configurable set", A-UX-12). Each column lists the work order and batch states it shows. */
+  "production.board.columns": {
+    scopes: ["organization", "site"],
+    schema: z
+      .array(
+        z
+          .object({
+            key: z.string().regex(/^[a-z][a-z0-9_]{0,30}$/),
+            title: z.string().min(1).max(40),
+            workOrderStatuses: z.array(z.enum(["draft", "planned", "released", "in_progress", "completed", "closed", "cancelled"])),
+            batchStatuses: z.array(z.enum(["draft", "planned", "materials_staged", "in_process", "awaiting_qc", "quarantined", "released", "rejected", "rework_approved", "closed"])),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(12),
+    default: [
+      { key: "to_plan", title: "To plan", workOrderStatuses: ["draft"], batchStatuses: [] },
+      { key: "planned", title: "Planned", workOrderStatuses: ["planned"], batchStatuses: ["draft", "planned"] },
+      { key: "ready", title: "Released · to stage", workOrderStatuses: ["released"], batchStatuses: [] },
+      { key: "staged", title: "Materials staged", workOrderStatuses: [], batchStatuses: ["materials_staged"] },
+      { key: "in_process", title: "In process", workOrderStatuses: [], batchStatuses: ["in_process", "rework_approved"] },
+      { key: "awaiting_qc", title: "Awaiting QC", workOrderStatuses: [], batchStatuses: ["awaiting_qc"] },
+      { key: "quarantined", title: "Quarantined", workOrderStatuses: [], batchStatuses: ["quarantined"] },
+      { key: "released", title: "Released", workOrderStatuses: [], batchStatuses: ["released"] },
+    ] as {
+      key: string;
+      title: string;
+      workOrderStatuses: ("draft" | "planned" | "released" | "in_progress" | "completed" | "closed" | "cancelled")[];
+      batchStatuses: ("draft" | "planned" | "materials_staged" | "in_process" | "awaiting_qc" | "quarantined" | "released" | "rejected" | "rework_approved" | "closed")[];
+    }[],
+    assumption: "A-UX-12", group: "Production", label: "Production board columns",
+  },
 } as const satisfies Record<string, SettingDefinition>;
 
 export type SettingKey = keyof typeof SETTINGS;

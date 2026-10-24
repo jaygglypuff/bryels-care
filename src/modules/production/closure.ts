@@ -27,6 +27,7 @@ import { openDeviationNumbers, bmrYieldRecord } from "./bmr-sources";
 import { paperRecordBlockers } from "./bmr-paper";
 import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
 import { transitionBatch } from "./state";
+import { syncWorkOrderProgress } from "./work-orders";
 
 /**
  * Batch closure and controlled reopen / amendment (US-3-19; W05-20..21, CX-REOPEN,
@@ -162,6 +163,7 @@ export async function closeBatch(ctx: AuthContext, input: { batchId: string; not
       await transitionBatch(tx, ctx, b, "closed", { reason: note ?? "Batch record closed" });
       const [t] = await tx.select({ id: batchStateTransitions.id }).from(batchStateTransitions).where(eq(batchStateTransitions.batchId, b.id)).orderBy(desc(batchStateTransitions.at), desc(batchStateTransitions.id)).limit(1);
       const released = await releaseReservationsForDemand(tx, ctx, "batch", b.id, `Batch ${b.batchNumber} closed`);
+      await syncWorkOrderProgress(tx, ctx, b.workOrderId); // W2A: completed → closed with its last batch
       const watermark = bmrWatermark("closed", reopenCount);
       const { doc } = await generateBmrInTx(tx, ctx, b.id, { force: true, watermark, idempotencyKey: `close:${input.idempotencyKey}` });
       const closureNo = closures.length + 1;

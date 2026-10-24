@@ -45,7 +45,7 @@ export async function startBatchAction(_: ActionState, fd: FormData): Promise<Ac
     const r = await startBatch(ctx, batchId);
     revalidatePath(`/production/${batchId}`);
     revalidatePath("/production");
-    return { ok: true, message: `Batch ${r.batchNumber} started. Begin with step 1.` };
+    return { ok: true, message: `Materials confirmed for batch ${r.batchNumber}. Sign the weighing-area line clearance to start it.` };
   } catch (e) {
     return toActionState(e);
   }

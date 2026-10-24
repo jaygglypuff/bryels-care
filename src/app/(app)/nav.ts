@@ -55,6 +55,10 @@ export const NAV: NavGroup[] = [
     label: "Production",
     icon: "factory",
     items: [
+      { label: "Board", href: "/production/board", permission: "production.work_order.view" },
+      { label: "Work orders", href: "/production/work-orders", permission: "production.work_order.view" },
+      { label: "Production plan", href: "/production/plan", permission: "production.production_plan.view" },
+      { label: "Stage materials", href: "/production/staging", permission: "inventory.movement.post" },
       { label: "Batches", href: "/production", permission: "production.batch.view" },
       { label: "New batch", href: "/production/new", permission: "production.batch.create" },
       { label: "Formulas", href: "/masterdata/formulas", permission: "masterdata.formula.view" },

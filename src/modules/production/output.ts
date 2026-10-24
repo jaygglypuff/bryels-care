@@ -17,6 +17,8 @@ import { postBatchMovement, postDispenseConsumption, postPackagingConsumption } 
 import { currentPackaging } from "./packaging";
 import { type FormulaSnapshot, addDays, idempotent, lockBatch, manilaToday } from "./shared";
 import { transitionBatch } from "./state";
+import { releaseBatchStagingReservations } from "./staging";
+import { syncWorkOrderProgress } from "./work-orders";
 import { currentYield, yieldBlockers } from "./yield";
 
 export type PostToQuarantineInput = {
@@ -202,6 +204,9 @@ export async function postBatchToQuarantine(ctx: AuthContext, input: PostToQuara
       // 5. Hooks (same transaction): finished-product inspection (W2C) and work order (W2A).
       const inspection = (await executionHooks().createFinishedProductInspection?.(tx, ctx, { batchId: batch.id, lotId: lot.id, inspectionPlanId: batch.inspectionPlanId, siteId: batch.siteId })) ?? null;
       await executionHooks().onBatchSubmitted?.(tx, ctx, { id: batch.id, batchNumber: batch.batchNumber, siteId: batch.siteId });
+      // W2A: staged stock is consumed now, so its batch reservations end; the work order completes with its last batch.
+      const stagingReleased = await releaseBatchStagingReservations(tx, ctx, batch.id, `Batch ${batch.batchNumber} posted to quarantine; staged stock consumed`);
+      await syncWorkOrderProgress(tx, ctx, batch.workOrderId);
 
       const base = { entityNumber: batch.batchNumber, siteId: batch.siteId } as const;
       if (consumptionCount) {
@@ -236,6 +241,7 @@ export async function postBatchToQuarantine(ctx: AuthContext, input: PostToQuara
           location: loc.code,
           expiresOn,
           inspectionId: inspection?.inspectionId ?? null,
+          stagingReservationsReleased: stagingReleased,
         },
       });
       return { lotNumber, lotId: lot.id, yieldPct: y.yieldPct, consumptionPostings: consumptionCount, expiresOn, location: loc.code };

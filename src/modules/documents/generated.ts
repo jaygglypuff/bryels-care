@@ -178,7 +178,7 @@ export async function renderInTx(tx: DbOrTx, ctx: AuthContext, documentId: strin
 }
 
 /** Source-record scoping (docs/permissions-matrix.md §3.7: documents follow the source record's permission and site). */
-export function assertSourceVisible(ctx: AuthContext, d: { sourceEntityType: string; siteId: string | null }) {
+export function assertSourceVisible(ctx: AuthContext, d: { sourceEntityType: string; siteId: string | null; documentKind?: string }) {
   const hidden = () => new DomainError("not_found", "This document isn't available at your sites.");
   if (d.siteId && !ctx.allowedSiteIds.includes(d.siteId)) throw hidden();
   switch (d.sourceEntityType) {
@@ -192,8 +192,9 @@ export function assertSourceVisible(ctx: AuthContext, d: { sourceEntityType: str
       if (!ctx.can("documents.template.view")) throw hidden();
       break;
     case "batch":
-      // Wave 2 W2D: BMR and paper pages follow the batch's permission and site.
-      if (!ctx.can("production.batch.view")) throw hidden();
+      // Wave 2 W2D: BMR and paper pages follow the batch's permission and site. W2A: the staging sheets
+      // (dispensing sheet, traveler) are also visible to the stager (inventory.movement.post).
+      if (!ctx.can("production.batch.view") && !(ctx.can("inventory.movement.post") && ["dispensing_sheet", "traveler"].includes(d.documentKind ?? ""))) throw hidden();
       break;
     default:
       throw hidden();

@@ -20,3 +20,4 @@ export * from "./quality-ext";
 export * from "./bmr";
 export * from "./identity-admin";
 export * from "./governance";
+export * from "./planning";
