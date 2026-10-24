@@ -18,9 +18,9 @@ import {
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { toCsv } from "@/modules/masterdata";
+import { enterableUnits, reasonCodeOptions, reasonLabels, toCsv } from "@/modules/masterdata";
 import { isUuid } from "./lots";
-import { DISCREPANCY_LABELS, UNPLANNED_REASON_CODES, receiptLocationKinds, unitsFor, type DiscrepancyKind } from "./receiving-state";
+import { DISCREPANCY_LABELS, receiptLocationKinds, type DiscrepancyKind } from "./receiving-state";
 
 type Q = Tx | typeof db;
 
@@ -44,7 +44,7 @@ export async function receivingFormData(ctx: AuthContext) {
         requiresIncomingInspection: materials.requiresIncomingInspection,
       })
       .from(materials)
-      .where(eq(materials.organizationId, ctx.organizationId))
+      .where(and(eq(materials.organizationId, ctx.organizationId), eq(materials.status, "active"))) // W2G: only active materials are received
       .orderBy(asc(materials.code)),
     db
       .select({ id: locations.id, code: locations.code, name: locations.name, kind: locations.kind })
@@ -58,10 +58,11 @@ export async function receivingFormData(ctx: AuthContext) {
       .orderBy(asc(suppliers.name)),
   ]);
   return {
-    materials: mats.map((m) => ({ ...m, units: unitsFor(m.baseUom) })),
+    // Units from the approved conversions (W2G UOM service), incl. a material's own pack units.
+    materials: await Promise.all(mats.map(async (m) => ({ ...m, units: await enterableUnits(db, ctx.organizationId, m.baseUom, m.id) }))),
     locations: locs,
     suppliers: sups,
-    reasonCodes: UNPLANNED_REASON_CODES.map((r) => ({ ...r })),
+    reasonCodes: (await reasonCodeOptions(db, ctx.organizationId, "receipt")).map((r) => ({ code: r.code, label: r.label })),
   };
 }
 
@@ -230,7 +231,7 @@ export async function getReceiptDocument(ctx: AuthContext, receiptId: string) {
     reversedByName: row.reversedByName,
     supplier: gr.supplierId ? { id: gr.supplierId, code: row.supplierCode, qualityStatus: row.supplierQualityStatus, reason: row.supplierQualityReason, isActive: row.supplierActive } : null,
     supplierBlocked,
-    reasonLabel: UNPLANNED_REASON_CODES.find((r) => r.code === gr.unplannedReasonCode)?.label ?? gr.unplannedReasonCode,
+    reasonLabel: gr.unplannedReasonCode ? ((await reasonLabels(db, ctx.organizationId, [gr.unplannedReasonCode])).get(gr.unplannedReasonCode) ?? gr.unplannedReasonCode) : null,
     lines,
     headerDocuments: files.filter((f) => f.entityType === "goods_receipt"),
     can: {

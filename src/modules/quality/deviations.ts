@@ -23,7 +23,7 @@ import { DomainError } from "@/lib/errors";
 import type { ExportDefinition } from "@/lib/export";
 import { nextNumber } from "@/lib/numbering";
 import { getSetting } from "@/lib/settings";
-import { HOLD_REASON_CODES, placeHold } from "@/modules/inventory";
+import { holdReasonOptions, placeHold } from "@/modules/inventory";
 import { notifyRoles } from "@/modules/platform";
 import { assertUuid, isIsoDate, isUuid, optionalText, reasonText, requiredText } from "./shared";
 
@@ -345,7 +345,8 @@ export async function containDeviation(ctx: AuthContext, input: ContainInput) {
     }
     if (!lotRef) throw new DomainError("validation", "Scan or type the lot to hold.", { field: "lotRef" });
   }
-  const reasonCode = input.reasonCode && HOLD_REASON_CODES.some((r) => r.code === input.reasonCode) ? input.reasonCode : "investigation";
+  const holdCodes = await holdReasonOptions(db, ctx.organizationId);
+  const reasonCode = input.reasonCode && holdCodes.some((r) => r.code === input.reasonCode) ? input.reasonCode : "investigation";
   const hold = await placeHold(ctx, { scope: input.scope, lotRef: lotRef ?? undefined, locationId: input.locationId ?? undefined, reasonCode, reason: `Deviation ${d.deviationNumber}: ${reason}`, idempotencyKey: input.idempotencyKey });
   await db.transaction(async (tx) => {
     const again = await lockDeviation(tx, ctx, d.id);
@@ -465,7 +466,7 @@ export async function getDeviation(ctx: AuthContext, deviationId: string) {
     holds,
     timeline,
     severityLevels: levels,
-    holdReasonCodes: HOLD_REASON_CODES.map((r) => ({ ...r })),
+    holdReasonCodes: await holdReasonOptions(db, ctx.organizationId),
     can: {
       investigate: d.status === "open" && ctx.can("quality.deviation.submit"),
       update: active && ctx.can("quality.deviation.submit"),

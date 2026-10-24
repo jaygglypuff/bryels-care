@@ -47,40 +47,10 @@ export const DISCREPANCY_LABELS: Record<DiscrepancyKind, string> = {
  */
 export const DISCREPANCY_BLOCKS_POSTING: readonly DiscrepancyKind[] = ["over", "wrong_item"];
 
-/**
- * Reason codes for an unplanned receipt (A-PROC-26). Assumption A-W1B-01: the reason-code catalogue
- * (data-model reason_codes) is not built yet; these defaults are vocabulary for the owner to confirm.
- */
-export const UNPLANNED_REASON_CODES = [
-  { code: "no_purchase_order", label: "No purchase order in the system (purchasing not yet live)" },
-  { code: "urgent_purchase", label: "Urgent purchase, PO to follow" },
-  { code: "replacement_delivery", label: "Replacement for a rejected delivery" },
-  { code: "sample_or_free_goods", label: "Sample or free goods" },
-  { code: "other", label: "Other (explain in notes)" },
-] as const;
-export const UNPLANNED_REASON_CODE_VALUES = UNPLANNED_REASON_CODES.map((r) => r.code) as readonly string[];
+/** Unplanned-receipt reasons are shared reason codes (category `receipt`, US-1-24, A-PROC-26); this is the default code. */
 export const DEFAULT_UNPLANNED_REASON = "no_purchase_order";
 
-/**
- * Units an operator may enter per base unit (V-UOM). These are SI conversions, not business rules;
- * material-specific pack units (drum, sack) arrive with the UOM tables (ADR-010).
- */
-export const UOM_FACTORS: Record<string, Record<string, string>> = {
-  g: { g: "1", kg: "1000", mg: "0.001" },
-  mL: { mL: "1", L: "1000" },
-  pcs: { pcs: "1" },
-};
-
-export function unitsFor(baseUom: string): string[] {
-  return Object.keys(UOM_FACTORS[baseUom] ?? { [baseUom]: "1" });
-}
-
-/** Converts an entered quantity to the base unit; null when the unit cannot be converted (V-UOM). */
-export function toBaseQty(qty: Decimal.Value, uom: string, baseUom: string): Decimal | null {
-  const factor = (UOM_FACTORS[baseUom] ?? { [baseUom]: "1" })[uom];
-  if (!factor) return null;
-  return new Decimal(qty).mul(factor);
-}
+/* Units and conversions come from the UOM service (src/modules/masterdata uom.ts, W2G): no factors in code. */
 
 /** Location kinds a receipt line may be put into for the lot's initial status (V-LOC at receipt). */
 export function receiptLocationKinds(initialStatus: "quarantine" | "released"): string[] {

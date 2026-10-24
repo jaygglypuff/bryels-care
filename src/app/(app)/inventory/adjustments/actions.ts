@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireContext } from "@/lib/auth/context";
 import type { ActionState } from "@/lib/errors";
-import { ADJUSTMENT_REASONS } from "@/db/schema";
 import { approveAdjustment, cancelAdjustment, createAdjustment, postAdjustment, rejectAdjustment, submitAdjustment } from "@/modules/inventory/adjustments";
 import { actionError, str } from "../_kit/action-state";
 
@@ -21,7 +20,7 @@ const Line = z
 
 const Draft = z
   .object({
-    reasonCode: z.enum(ADJUSTMENT_REASONS, { message: "Choose a reason." }),
+    reasonCode: z.string().trim().min(1, { message: "Choose a reason." }).max(40),
     reasonNote: z.string().max(500),
     lines: z.array(Line).min(1, { message: "Add at least one line." }).max(100),
     idempotencyKey: z.uuid(),

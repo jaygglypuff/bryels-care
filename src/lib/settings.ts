@@ -148,19 +148,7 @@ export const SETTINGS = {
   },
   /** Scrap or rework above this % of the theoretical unit count needs approval (production.scrap_rework_record.approve). */
   "production.scrap.approval_threshold_pct": { scopes: ["organization", "site"], schema: z.number().min(0).max(100), default: 2, assumption: "A-W2B-04", group: "Production", label: "Scrap or rework needs approval above (%)", requiresApproval: true },
-  /** Reason codes offered for scrap and rework records. */
-  "production.scrap_rework.reason_codes": {
-    scopes: ["organization"],
-    schema: z.array(z.object({ code: z.string().regex(/^[a-z0-9_]{2,40}$/), label: z.string().min(2).max(80) })).min(1),
-    default: [
-      { code: "broken_bar", label: "Broken or cracked unit" },
-      { code: "underweight", label: "Underweight unit" },
-      { code: "appearance", label: "Appearance defect" },
-      { code: "packaging_damage", label: "Damaged in packaging" },
-      { code: "other", label: "Other (explain in the note)" },
-    ] as { code: string; label: string }[],
-    assumption: "A-W2B-05", group: "Production", label: "Scrap and rework reasons (fallback list)",
-  },
+  // Scrap and rework reasons moved to the shared reason codes (categories scrap / rework, US-1-24).
   /** A-PROC-08: finished-lot expiry basis: manufacture (batch start) date or packaging date, plus product shelf life. */
   "production.output.expiry_basis": { scopes: ["organization"], schema: z.enum(["manufacture_date", "packaging_date"]), default: "manufacture_date" as "manufacture_date" | "packaging_date", assumption: "A-PROC-08", group: "Production", label: "Finished-lot expiry basis", requiresApproval: true },
   /** W13-02: equipment with cleaning rule per_batch becomes "dirty" (cleaning required) when its use on a batch ends. */

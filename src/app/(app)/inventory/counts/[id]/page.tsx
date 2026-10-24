@@ -6,7 +6,8 @@ import Decimal from "decimal.js";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
-import { COUNT_VARIANCE_REASONS } from "@/db/schema";
+import { db } from "@/db/client";
+import { reasonCodeOptions } from "@/modules/masterdata";
 import { getCount, type CountDetail } from "@/modules/inventory/counts";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
@@ -131,7 +132,7 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
           <ApproveForm
             countId={c.id}
             step={firstStepDone ? 2 : 1}
-            reasons={COUNT_VARIANCE_REASONS}
+            reasons={await reasonCodeOptions(db, ctx.organizationId, "count_variance")}
             lines={variant.map((l) => ({
               id: l.id,
               label: label(l),

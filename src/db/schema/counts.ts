@@ -15,7 +15,7 @@ export const COUNT_STATUSES = ["planned", "in_progress", "counted", "recount", "
 export const COUNT_FROZEN_STATUSES = ["in_progress", "counted", "recount", "pending_approval", "approved"] as const;
 export const COUNT_LINE_STATUSES = ["open", "counted", "recount_required", "final"] as const;
 /** Variance reason codes (W03-07). Seeded vocabulary; the company's list replaces it when reason_codes ships. */
-export const COUNT_VARIANCE_REASONS = ["damage", "mis_location", "unrecorded_issue", "unrecorded_receipt", "data_entry", "loss", "found", "other"] as const;
+/** Count variance reasons are shared reason codes (category `count_variance`, src/modules/masterdata reason codes, US-1-24). */
 
 /** A stock count plan (rule CNT). Expected quantities are snapshotted at release (frozen_at). */
 export const stockCounts = pgTable(
@@ -145,7 +145,7 @@ export const stockCountEntries = pgTable(
 
 export const ADJUSTMENT_STATUSES = ["draft", "submitted", "approved", "rejected", "posted", "cancelled"] as const;
 /** Header reason codes for manual adjustments (seeded vocabulary; replaced by reason_codes later). */
-export const ADJUSTMENT_REASONS = ["found", "found_unlabelled", "lost", "damaged", "spillage", "expired_disposal", "data_correction", "other"] as const;
+/** Adjustment reasons are shared reason codes (category `adjustment`, US-1-24); no DB list, so the company can add codes. */
 
 /** Approvable adjustment document (rule ADJ); posts one adjustment movement per line (A-DM-32). */
 export const stockAdjustments = pgTable(
@@ -185,7 +185,6 @@ export const stockAdjustments = pgTable(
     uniqueIndex("stock_adjustments_org_number_uq").on(t.organizationId, t.adjustmentNumber),
     index("stock_adjustments_site_status_idx").on(t.siteId, t.status),
     check("ck_stock_adjustments_status", sql`${t.status} in (${inList(ADJUSTMENT_STATUSES)})`),
-    check("ck_stock_adjustments_reason", sql`${t.reasonCode} in (${inList(ADJUSTMENT_REASONS)})`),
     check("ck_stock_adjustments_sod", sql`${t.approvedBy} is null or (${t.approvedBy} <> ${t.submittedBy} and ${t.approvedBy} <> ${t.createdBy})`),
   ],
 );

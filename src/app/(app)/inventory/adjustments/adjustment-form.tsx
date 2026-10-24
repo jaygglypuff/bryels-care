@@ -9,7 +9,7 @@ import { createAdjustmentAction } from "./actions";
 type LotOpt = { id: string; label: string; uom: string; locations: { id: string; code: string; qty: string }[] };
 type Loc = { id: string; code: string };
 
-export function AdjustmentForm({ lots, locations, reasons, idempotencyKey }: { lots: LotOpt[]; locations: Loc[]; reasons: readonly string[]; idempotencyKey: string }) {
+export function AdjustmentForm({ lots, locations, reasons, idempotencyKey }: { lots: LotOpt[]; locations: Loc[]; reasons: readonly { code: string; label: string; requiresNote: boolean }[]; idempotencyKey: string }) {
   const { state, pending, onSubmit } = useActionForm(createAdjustmentAction);
   const [rows, setRows] = useState<{ key: number; lotId: string; locationId: string }[]>([{ key: 0, lotId: "", locationId: "" }]);
   const fe = state?.fieldErrors ?? {};
@@ -21,12 +21,12 @@ export function AdjustmentForm({ lots, locations, reasons, idempotencyKey }: { l
         <Field label="Reason" htmlFor="reasonCode" error={fe.reasonCode}>
           <Select id="reasonCode" name="reasonCode" defaultValue="" required>
             <option value="" disabled>Choose…</option>
-            {reasons.filter((r) => r !== "found_unlabelled").map((r) => (
-              <option key={r} value={r}>{r.replace(/_/g, " ")}</option>
+            {reasons.filter((r) => r.code !== "found_unlabelled").map((r) => (
+              <option key={r.code} value={r.code}>{r.label}</option>
             ))}
           </Select>
         </Field>
-        <Field label="Details" htmlFor="reasonNote" error={fe.reasonNote} hint="Required when the reason is Other.">
+        <Field label="Details" htmlFor="reasonNote" error={fe.reasonNote} hint="Required for reasons that need an explanation (e.g. Other).">
           <Input id="reasonNote" name="reasonNote" maxLength={500} placeholder="e.g. Drum dented during unloading" />
         </Field>
       </div>

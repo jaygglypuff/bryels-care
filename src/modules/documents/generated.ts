@@ -11,7 +11,7 @@ import { fmtDateTime } from "@/lib/qty";
 import { getSetting } from "@/lib/settings";
 import { notifyRoles } from "@/modules/platform";
 import { pdfFilesAvailable, pdfSetupMessage } from "./config";
-import { reprintReason } from "./reasons";
+import { reasonCodeOptions } from "@/modules/masterdata";
 import { renderFrozen } from "./renderers/registry";
 import { shortHash } from "./renderers/shared";
 import type { DocumentMeta, FrozenDataset } from "./renderers/types";
@@ -285,21 +285,30 @@ export async function findDocumentByNumber(ctx: AuthContext, documentNumber: str
   return d;
 }
 
-/** Validates a reprint reason (422 without one; `other` needs a note). */
-export function parseReprint(raw: unknown) {
+/**
+ * Validates a reprint reason against the shared reason codes (category `reprint`, US-1-24): 422 without
+ * one; a code that requires a note (e.g. `other`) needs at least 5 characters.
+ */
+export async function parseReprint(q: DbOrTx, organizationId: string, raw: unknown) {
   const r = reprintInput.safeParse(raw);
   if (!r.success) throw new DomainError("validation", r.error.issues[0]?.message ?? "Choose a reason for the reprint.", { field: "reasonCode" });
-  const reason = reprintReason(r.data.reasonCode);
-  if (!reason) throw new DomainError("validation", "Choose a reason for the reprint.", { field: "reasonCode" });
+  const options = await reasonCodeOptions(q, organizationId, "reprint");
+  const opt = options.find((o) => o.code === r.data.reasonCode);
+  if (!opt) throw new DomainError("validation", "Choose a reason for the reprint.", { field: "reasonCode" });
   const note = r.data.note?.trim() || null;
-  if (reason.requiresNote && (!note || note.length < 5)) throw new DomainError("validation", "Explain the reason for this reprint (at least 5 characters).", { field: "note" });
-  return { ...r.data, note, reason };
+  if (opt.requiresNote && (!note || note.length < 5)) throw new DomainError("validation", "Explain the reason for this reprint (at least 5 characters).", { field: "note" });
+  return { ...r.data, note, reason: { code: opt.code, label: opt.label, requiresNote: opt.requiresNote } };
+}
+
+/** Reprint reasons offered by the reprint forms (shared reason codes, category `reprint`). */
+export async function reprintReasonOptions(ctx: AuthContext) {
+  return reasonCodeOptions(db, ctx.organizationId, "reprint");
 }
 
 /** Controlled reprint of a non-label document (labels reprint through their label job). */
 export async function reprintDocument(ctx: AuthContext, id: string, raw: unknown) {
   ctx.require("documents.reprint.create");
-  const input = parseReprint(raw);
+  const input = await parseReprint(db, ctx.organizationId, raw);
   return db.transaction(async (tx) => {
     const key = `reprint:${input.idempotencyKey}`;
     const [replay] = await tx.select().from(generatedDocuments).where(and(eq(generatedDocuments.organizationId, ctx.organizationId), eq(generatedDocuments.idempotencyKey, key))).limit(1);

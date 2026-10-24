@@ -10,7 +10,7 @@ import type { ReasonCategory } from "../../db/schema/org";
  * Sources: W1E reprint reasons (src/modules/documents/reasons.ts, A-PRD-45); W1B unplanned-receipt
  * reasons (src/modules/inventory/receiving-state.ts, A-W1B-01) and hold reasons
  * (src/modules/inventory/holds.ts, A-W1B-04); W1C adjustment and count-variance reasons
- * (src/db/schema/counts.ts).
+ * (src/db/schema/counts.ts); W2B scrap/rework reasons (formerly a setting).
  */
 export type ReasonCodeSeed = { code: string; name: string; appliesTo: ReasonCategory[]; requiresNote?: boolean; requiresApproval?: boolean; sortOrder: number };
 
@@ -47,6 +47,11 @@ export const DEFAULT_REASON_CODES: readonly ReasonCodeSeed[] = [
   { code: "status_change", name: "Status changed (new status word needed)", appliesTo: ["reprint"], sortOrder: 52 },
   { code: "repack", name: "Repacked into a new container", appliesTo: ["reprint"], sortOrder: 53 },
   { code: "customer_copy", name: "Extra copy for a customer", appliesTo: ["reprint"], sortOrder: 54 },
+  // Scrap and rework of finished units (W2B, formerly setting production.scrap_rework.reason_codes, A-W2B-05)
+  { code: "broken_bar", name: "Broken or cracked unit", appliesTo: ["scrap", "rework"], sortOrder: 70 },
+  { code: "underweight", name: "Underweight unit", appliesTo: ["scrap", "rework"], sortOrder: 71 },
+  { code: "appearance", name: "Appearance defect", appliesTo: ["scrap", "rework"], sortOrder: 72 },
+  { code: "packaging_damage", name: "Damaged in packaging", appliesTo: ["scrap", "rework"], sortOrder: 73 },
   // Migration and undo (docs/data-model.md §3.2, §13.5)
   { code: "opening_balance", name: "Opening balance (data migration)", appliesTo: ["receipt", "adjustment"], sortOrder: 60 },
   { code: "expiry_unknown", name: "Expiry date unknown at migration", appliesTo: ["receipt", "hold"], requiresNote: true, sortOrder: 61 },
@@ -54,7 +59,7 @@ export const DEFAULT_REASON_CODES: readonly ReasonCodeSeed[] = [
   { code: "legacy_release", name: "Released under the previous paper system", appliesTo: ["disposition"], requiresNote: true, sortOrder: 63 },
   { code: "undo_by_actor", name: "Undone by the person who posted it", appliesTo: ["reversal"], sortOrder: 64 },
   // Shared
-  { code: "other", name: "Other (explain)", appliesTo: ["receipt", "hold", "adjustment", "count_variance", "reprint"], requiresNote: true, sortOrder: 99 },
+  { code: "other", name: "Other (explain)", appliesTo: ["receipt", "hold", "adjustment", "count_variance", "reprint", "scrap", "rework"], requiresNote: true, sortOrder: 99 },
 ];
 
 /** Active codes offered for a category, in display order (US-1-24 AC1). Pure, unit-tested. */

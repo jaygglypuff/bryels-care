@@ -24,7 +24,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import type { Permission } from "@/lib/permissions";
 import { getSetting } from "@/lib/settings";
-import { businessToday, deriveAvailability, equipmentAvailability } from "@/modules/masterdata";
+import { businessToday, deriveAvailability, equipmentAvailability, reasonCodeOptions } from "@/modules/masterdata";
 import { type SnapshotStep, type StepRecord, eligibleSigners, routingStepDetails, sortedSteps, stepRecords } from "./execution";
 import { currentChecklistAnswers } from "./line-clearance";
 import { currentPackaging } from "./packaging";
@@ -223,7 +223,10 @@ export async function getBatchExecution(ctx: AuthContext, batchId: string) {
 
   const cy = yields.find((y) => y.isCurrent) ?? null;
   const limits = await yieldLimits(db, ctx.organizationId, batch.siteId, product.skuCode);
-  const reasonCodes = await getSetting(db, ctx.organizationId, "production.scrap_rework.reason_codes");
+  // Scrap and rework reasons (shared reason codes; one list in the form, validated per kind).
+  const reasonCodes = [...(await reasonCodeOptions(db, ctx.organizationId, "scrap")), ...(await reasonCodeOptions(db, ctx.organizationId, "rework"))]
+    .filter((r, i, all) => all.findIndex((x) => x.code === r.code) === i)
+    .map((r) => ({ code: r.code, label: r.label }));
   const postAtDispense = await getSetting(db, ctx.organizationId, "production.post_consumption_at_dispense", batch.siteId);
   const transferStep = ordered.find((s) => s.stepKind === "transfer") ?? null;
   const readyForTransfer = batch.status === "in_process" && ordered.filter((s) => s.stepKind !== "transfer").every((s) => recs.find((r) => r.stepNo === s.stepNo)?.status === "completed");

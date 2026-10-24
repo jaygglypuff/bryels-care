@@ -1,6 +1,6 @@
 {
-  "id": "29897077-aca0-488b-ab73-69885e34023e",
-  "prevId": "d90d12a2-c010-4daa-a76c-f521a25c1410",
+  "id": "0d550ada-bdfe-42a3-a609-e6797a8c1e97",
+  "prevId": "17f0725a-ba6e-460c-a94e-70fd2c7e1983",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -12102,10 +12102,6 @@
         "ck_stock_adjustments_status": {
           "name": "ck_stock_adjustments_status",
           "value": "\"stock_adjustments\".\"status\" in ('draft','submitted','approved','rejected','posted','cancelled')"
-        },
-        "ck_stock_adjustments_reason": {
-          "name": "ck_stock_adjustments_reason",
-          "value": "\"stock_adjustments\".\"reason_code\" in ('found','found_unlabelled','lost','damaged','spillage','expired_disposal','data_correction','other')"
         },
         "ck_stock_adjustments_sod": {
           "name": "ck_stock_adjustments_sod",

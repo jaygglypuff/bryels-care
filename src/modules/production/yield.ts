@@ -7,6 +7,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
+import { assertReasonCode } from "@/modules/masterdata";
 import { DEVIATION_UNAVAILABLE, executionHooks } from "./execution-hooks";
 import { type BatchRow, sortedSteps, stepRecords } from "./execution";
 import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
@@ -158,10 +159,14 @@ export async function recordScrapRework(ctx: AuthContext, input: { batchId: stri
     const batch = await lockBatch(tx, ctx, input.batchId);
     const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.scrap_rework_record.create", async () => {
       if (batch.status !== "in_process") throw new DomainError("state", `Batch ${batch.batchNumber} is ${batch.status.replace(/_/g, " ")}.`);
-      const codes = await getSetting(tx, ctx.organizationId, "production.scrap_rework.reason_codes");
-      const code = codes.find((c) => c.code === input.reasonCode);
-      if (!code) throw new DomainError("validation", "Choose a reason.", { field: "reasonCode" });
-      if (input.reasonCode === "other" && !(input.note ?? "").trim()) throw new DomainError("validation", "Explain the reason in the note.", { field: "note" });
+      // Shared reason codes, category `scrap` or `rework` (US-1-24; formerly a setting, A-W2B-05).
+      let code: { code: string; name: string };
+      try {
+        code = await assertReasonCode(tx, ctx.organizationId, input.kind, input.reasonCode, input.note);
+      } catch (e) {
+        if (e instanceof DomainError && e.details?.field === "reasonNote") throw new DomainError("validation", "Explain the reason in the note.", { field: "note" });
+        throw e;
+      }
       const [product] = await tx.select().from(products).where(eq(products.id, batch.productId)).limit(1);
       const theoUnits = new Decimal(batch.theoreticalYieldG ?? 0).div(product.unitNetMassG);
       const pct = await getSetting(tx, ctx.organizationId, "production.scrap.approval_threshold_pct", batch.siteId);
@@ -192,7 +197,7 @@ export async function recordScrapRework(ctx: AuthContext, input: { batchId: stri
         entityId: r.id,
         entityNumber: batch.batchNumber,
         siteId: batch.siteId,
-        after: { kind: input.kind, reason: code.label, qty: qty.toString(), uom: product.baseUom, requiresApproval, thresholdPct: pct },
+        after: { kind: input.kind, reason: code.name, qty: qty.toString(), uom: product.baseUom, requiresApproval, thresholdPct: pct },
       });
       return { scrapReworkRecordId: r.id, requiresApproval };
     });

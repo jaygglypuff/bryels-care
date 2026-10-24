@@ -267,7 +267,7 @@ export async function cancelLabelJob(ctx: AuthContext, jobId: string) {
 export async function reprintLabelJob(ctx: AuthContext, jobId: string, raw: unknown) {
   ctx.require("documents.reprint.create");
   ctx.require("inventory.label_job.create");
-  const input = parseReprint(raw);
+  const input = await parseReprint(db, ctx.organizationId, raw);
   const key = `label-reprint:${input.idempotencyKey}`;
   // Read the record's current state before the transaction (scoped read through the inventory
   // module), so the transaction never waits on a second pool connection.

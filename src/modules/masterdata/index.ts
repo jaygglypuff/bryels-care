@@ -184,6 +184,6 @@ export {
   type MaterialClass,
   type MaterialStatus,
 } from "./materials";
-export { REASON_CATEGORY_LABELS, listReasonCodes, getReasonCode, reasonCodeOptions, assertReasonCode, createReasonCode, updateReasonCode } from "./reason-codes";
+export { REASON_CATEGORY_LABELS, listReasonCodes, getReasonCode, reasonCodeOptions, reasonLabels, assertReasonCode, createReasonCode, updateReasonCode } from "./reason-codes";
 export { DEFAULT_REASON_CODES, REASON_NOTE_MAX, reasonCodesFor } from "./reason-codes-defaults";
 export { installReferenceData } from "./org-reference";

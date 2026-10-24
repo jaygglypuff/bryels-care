@@ -8,6 +8,7 @@ import { DomainError } from "@/lib/errors";
 import { ROLE_BUNDLES } from "@/lib/permissions";
 import { issueInvitation } from "./lifecycle";
 import { invitationLink } from "./messages";
+import { installReferenceData } from "@/modules/masterdata/org-reference";
 
 /**
  * First-administrator bootstrap for a fresh production database (no demo seed): `pnpm admin:bootstrap`.
@@ -39,7 +40,7 @@ const Input = z.object({
 });
 export type BootstrapInput = z.input<typeof Input>;
 
-export type BootstrapResult = { organizationId: string; userId: string; link: string; expiresAt: Date; createdOrganization: boolean; createdSite: boolean; roleSync: RoleSyncResult };
+export type BootstrapResult = { organizationId: string; userId: string; link: string; expiresAt: Date; createdOrganization: boolean; createdSite: boolean; roleSync: RoleSyncResult; referenceData: { uoms: number; conversions: number; reasonCodes: number } };
 
 export type RoleSyncResult = { created: string[]; added: number; removed: number };
 
@@ -87,6 +88,8 @@ export async function bootstrapFirstAdmin(raw: BootstrapInput, now: Date = new D
       throw new DomainError("conflict", `Refusing to bootstrap: ${people.length} account(s) are already active or locked. Use the Users page to invite more administrators.`);
     }
     const roleSync = await syncSystemRoles(tx, org.id);
+    // Reference master data (units, SI conversions, reason codes) the operational modules need (ADR-040, idempotent).
+    const referenceData = await installReferenceData(tx, org.id);
 
     let createdSite = false;
     const activeSites = await tx.select({ id: sites.id }).from(sites).where(and(eq(sites.organizationId, org.id), eq(sites.isActive, true)));
@@ -131,7 +134,7 @@ export async function bootstrapFirstAdmin(raw: BootstrapInput, now: Date = new D
     const { token, invitation } = await issueInvitation(tx, null, { organizationId: org.id, userId: u.id, email: u.email, roleId: roleRows[0]?.id ?? null, siteId: null, kind: "bootstrap", now });
     ev({ action: "identity.invitation.sent", entityType: "user", entityId: u.id, entityNumber: u.email, after: { invitationId: invitation.id, expiresAt: invitation.expiresAt, kind: "bootstrap", roleSync } });
     if (audits.length) await tx.insert(auditEvents).values(audits);
-    return { organizationId: org.id, userId: u.id, link: invitationLink(token), expiresAt: invitation.expiresAt, createdOrganization, createdSite, roleSync };
+    return { organizationId: org.id, userId: u.id, link: invitationLink(token), expiresAt: invitation.expiresAt, createdOrganization, createdSite, roleSync, referenceData };
   });
   return result;
 }

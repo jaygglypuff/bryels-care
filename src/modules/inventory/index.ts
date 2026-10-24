@@ -32,7 +32,7 @@ export {
   assertLocationNotHeld,
   heldLocations,
   resolveLotRef,
-  HOLD_REASON_CODES,
+  holdReasonOptions,
   HOLD_RESOLUTIONS,
   HELD_ISSUE_PURPOSES,
   type HoldResolution,

@@ -4,7 +4,7 @@ import { Printer } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
-import { getGeneratedDocument, pdfSetupMessage, REPRINT_REASONS, reprintReason, type GeneratedDocumentDetail } from "@/modules/documents";
+import { getGeneratedDocument, pdfSetupMessage, reprintReasonOptions, type GeneratedDocumentDetail } from "@/modules/documents";
 import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
@@ -21,6 +21,8 @@ const SOURCE_HREF: Record<string, (id: string) => string> = {
 /** Generated document record: identity, template version, hash, reprint history (ux-system §9.12). */
 export default async function DocumentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ reprinted?: string }> }) {
   const ctx = await requireContext();
+  const reprintReasons = await reprintReasonOptions(ctx);
+  const reprintReason = (code: string) => reprintReasons.find((r) => r.code === code) ?? null;
   if (!ctx.can("documents.generated_document.view")) return <Forbidden what="documents" />;
   const { id } = await params;
   const { reprinted } = await searchParams;
@@ -97,7 +99,7 @@ export default async function DocumentPage({ params, searchParams }: { params: P
           {ctx.can("documents.reprint.create") && root?.status === "ready" && (
             <Card>
               <CardTitle>Reprint</CardTitle>
-              <DocReprintForm id={root.id} reasons={REPRINT_REASONS} />
+              <DocReprintForm id={root.id} reasons={reprintReasons} />
             </Card>
           )}
           {ctx.can("documents.generated_document.void") && d.status === "ready" && (

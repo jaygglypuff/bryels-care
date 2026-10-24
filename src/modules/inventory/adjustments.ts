@@ -4,7 +4,6 @@ import Decimal from "decimal.js";
 import { randomUUID } from "node:crypto";
 import { db, type Tx } from "@/db/client";
 import {
-  ADJUSTMENT_REASONS,
   containerContents,
   containers,
   inventoryBalances,
@@ -21,6 +20,7 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
+import { assertReasonCode } from "@/modules/masterdata";
 import { postMovement } from "./ledger";
 import { isUuid } from "./lots";
 import { claimIdempotencyKey, stateMachine, storeIdempotentResult } from "./command-kit";
@@ -80,8 +80,8 @@ async function lockAdjustment(tx: Tx, ctx: AuthContext, id: string) {
 export async function createAdjustment(ctx: AuthContext, input: CreateAdjustmentInput) {
   ctx.require("inventory.adjustment.create");
   ctx.requireSite(ctx.currentSiteId);
-  if (!(ADJUSTMENT_REASONS as readonly string[]).includes(input.reasonCode)) throw new DomainError("validation", "Choose a reason for the adjustment.");
-  if (input.reasonCode === "other" && !input.reasonNote?.trim()) throw new DomainError("validation", "Describe the reason when you choose Other.");
+  // Shared reason codes, category `adjustment` (US-1-24): active code; codes that need a note (Other) get one.
+  await assertReasonCode(db, ctx.organizationId, "adjustment", input.reasonCode, input.reasonNote);
   if (!input.lines?.length) throw new DomainError("validation", "Add at least one line.");
   if (input.lines.length > 100) throw new DomainError("validation", "An adjustment can have at most 100 lines.");
   const key = `adjustment_create:${input.idempotencyKey}`;

@@ -32,10 +32,6 @@ import {
   updateReasonCode,
   updateSku,
 } from "@/modules/masterdata";
-import { REPRINT_REASONS } from "@/modules/documents/reasons";
-import { HOLD_REASON_CODES } from "@/modules/inventory/holds";
-import { UNPLANNED_REASON_CODES } from "@/modules/inventory/receiving-state";
-import { ADJUSTMENT_REASONS, COUNT_VARIANCE_REASONS } from "@/db/schema";
 import { resetTestDatabase } from "../../support/db";
 import { asUser, expectCode, type Kit, loadKit } from "../../support/kit";
 import { expectDbError } from "./helpers";
@@ -180,17 +176,24 @@ describe("materials (US-1-23)", () => {
 });
 
 describe("reason codes (US-1-24)", () => {
-  it("seeds every code the Wave 1 modules hold in code, merged by code with the same categories", async () => {
+  // The lists Wave 1 and W2B held in code before the shared table (now removed from the code).
+  const WAVE1_CODES = {
+    reprint: ["lost_copy", "damaged_label", "status_change", "repack", "customer_copy", "other"],
+    hold: ["supplier_complaint", "suspected_contamination", "damaged_packaging", "documentation_issue", "investigation", "retest_due", "other"],
+    receipt: ["no_purchase_order", "urgent_purchase", "replacement_delivery", "sample_or_free_goods", "other"],
+    adjustment: ["found", "found_unlabelled", "lost", "damaged", "spillage", "expired_disposal", "data_correction", "other"],
+    count_variance: ["damage", "mis_location", "unrecorded_issue", "unrecorded_receipt", "data_entry", "loss", "found", "other"],
+    scrap: ["broken_bar", "underweight", "appearance", "packaging_damage", "other"],
+    rework: ["broken_bar", "underweight", "appearance", "packaging_damage", "other"],
+  } as const;
+
+  it("seeds every code the Wave 1 modules held in code, merged by code with the same categories", async () => {
     const all = await listReasonCodes(operator, { includeInactive: true });
     const has = (category: string, codes: readonly string[]) => {
       const inCat = all.filter((r) => r.appliesTo.includes(category)).map((r) => r.code);
       for (const c of codes) expect(inCat, `${category} has ${c}`).toContain(c);
     };
-    has("reprint", REPRINT_REASONS.map((r) => r.code));
-    has("hold", HOLD_REASON_CODES.map((r) => r.code));
-    has("receipt", UNPLANNED_REASON_CODES.map((r) => r.code));
-    has("adjustment", ADJUSTMENT_REASONS);
-    has("count_variance", COUNT_VARIANCE_REASONS);
+    for (const [category, codes] of Object.entries(WAVE1_CODES)) has(category, codes);
     expect(all.length).toBe(DEFAULT_REASON_CODES.length);
     // Reprint "other" required a note in W1E; the merged row keeps that.
     expect(all.find((r) => r.code === "other")!.requiresNote).toBe(true);

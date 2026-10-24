@@ -81,6 +81,12 @@ export async function createBatch(ctx: AuthContext, input: CreateBatchInput): Pr
       if (lines.length === 0) throw new DomainError("state", "The formula revision has no ingredient lines.");
       if (steps.length === 0) throw new DomainError("state", "The routing revision has no steps.");
 
+      // W2G (US-1-22/23): the product must be active, and no ingredient draft, blocked or discontinued.
+      if (rev.product.status !== "active") throw new DomainError("validation", `${rev.product.name} is ${rev.product.status} in master data; batches are made only for active products.`);
+      const notActive = rev.lines.filter(({ material }) => material.status !== "active");
+      if (notActive.length) {
+        throw new DomainError("validation", `Ingredient${notActive.length > 1 ? "s" : ""} not available in master data: ${notActive.map(({ material }) => `${material.name} (${material.status})`).join(", ")}.`);
+      }
       const refSize = new Decimal(rev.rev.referenceBatchSizeG);
       const factor = plannedSizeG.div(refSize);
       // Proportional lines scale with the batch size; fixed lines copy (docs/data-model.md §4.4).

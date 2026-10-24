@@ -4,7 +4,7 @@ import { Printer } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
-import { getLabelJob, labelHistory, REPRINT_REASONS, reprintReason, type LabelJobView } from "@/modules/documents";
+import { getLabelJob, labelHistory, reprintReasonOptions, type LabelJobView } from "@/modules/documents";
 import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -16,6 +16,8 @@ export const dynamic = "force-dynamic";
 
 export default async function LabelJobPage({ params, searchParams }: { params: Promise<{ jobId: string }>; searchParams: Promise<{ sent?: string }> }) {
   const ctx = await requireContext();
+  const reprintReasons = await reprintReasonOptions(ctx);
+  const reprintReason = (code: string) => reprintReasons.find((r) => r.code === code) ?? null;
   if (!ctx.can("inventory.label_job.view")) return <Forbidden what="label jobs" />;
   const { jobId } = await params;
   const { sent } = await searchParams;
@@ -103,7 +105,7 @@ export default async function LabelJobPage({ params, searchParams }: { params: P
         <Card>
           <CardTitle>Reprint this label</CardTitle>
           <p className="mb-3 text-[13px] text-muted">For a lost or damaged label with the same content. The reprint is marked REPRINT n, linked to the original and logged with your reason.</p>
-          <ReprintForm jobId={rootId} reasons={REPRINT_REASONS} maxCopies={Math.max(1, root?.copies ?? 1)} />
+          <ReprintForm jobId={rootId} reasons={reprintReasons} maxCopies={Math.max(1, root?.copies ?? 1)} />
         </Card>
       ) : (
         root?.status === "printed" && !root.voidedAt && <p className="text-[13px] text-muted">Your role cannot reprint labels.</p>

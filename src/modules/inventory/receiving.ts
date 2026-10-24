@@ -18,6 +18,7 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
+import { assertReasonCode, findConversionStep, toBasePair } from "@/modules/masterdata";
 import { postMovement } from "./ledger";
 import { isUuid } from "./lots";
 import {
@@ -25,10 +26,8 @@ import {
   DISCREPANCY_BLOCKS_POSTING,
   DISCREPANCY_KINDS,
   DISCREPANCY_LABELS,
-  UNPLANNED_REASON_CODE_VALUES,
   assertReceiptTransition,
   receiptLocationKinds,
-  toBaseQty,
   type DiscrepancyKind,
 } from "./receiving-state";
 
@@ -156,11 +155,21 @@ async function normalizeLines(tx: Tx, ctx: AuthContext, siteId: string, lines: R
   const mats = matIds.length ? await tx.select().from(materials).where(and(eq(materials.organizationId, ctx.organizationId), inArray(materials.id, matIds))) : [];
   const locs = locIds.length ? await tx.select().from(locations).where(and(eq(locations.siteId, siteId), inArray(locations.id, locIds))) : [];
 
+  // Approved conversion steps for every entered unit (W2G UOM service), looked up before validating the lines.
+  const steps = new Map<string, Awaited<ReturnType<typeof findConversionStep>>>();
+  for (const l of lines) {
+    const mat = mats.find((m) => m.id === l.materialId);
+    const uom = (l.uom || mat?.baseUom || "").trim();
+    if (!mat || !uom || uom === mat.baseUom || steps.has(`${mat.id}|${uom}`)) continue;
+    steps.set(`${mat.id}|${uom}`, await findConversionStep(tx, ctx.organizationId, uom, mat.baseUom, mat.id));
+  }
   return lines.map((l, i) => {
     const n = i + 1;
     const f = (k: string) => `lines.${i}.${k}`;
     const mat = mats.find((m) => m.id === l.materialId);
     if (!mat) throw new DomainError("validation", `Line ${n}: choose a material.`, { field: f("materialId") });
+    // W2G (US-1-23): only an active material is received; draft, blocked and discontinued ones are refused.
+    if (mat.status !== "active") throw new DomainError("validation", `Line ${n}: ${mat.name} is ${mat.status} in master data and cannot be received.`, { field: f("materialId") });
     const initialQualityStatus = mat.requiresIncomingInspection ? "quarantine" : "released";
     const loc = locs.find((x) => x.id === l.locationId);
     const kinds = receiptLocationKinds(initialQualityStatus);
@@ -176,8 +185,10 @@ async function normalizeLines(tx: Tx, ctx: AuthContext, siteId: string, lines: R
     if (!qtyEntered.isFinite() || qtyEntered.lte(0)) throw new DomainError("validation", `Line ${n}: quantity must be greater than zero.`, { field: f("qty") });
     if (qtyEntered.decimalPlaces() > 6) throw new DomainError("validation", `Line ${n}: use at most 6 decimal places.`, { field: f("qty") });
     const uomEntered = (l.uom || mat.baseUom).trim();
-    const qtyBase = toBaseQty(qtyEntered, uomEntered, mat.baseUom);
-    if (!qtyBase) throw new DomainError("validation", `Line ${n}: ${uomEntered} cannot be converted to ${mat.name}'s base unit ${mat.baseUom}.`, { field: f("uom") });
+    // V-UOM through the approved conversions of the UOM service (W2G, US-1-21), incl. the material's own pack units.
+    const pair = toBasePair({ qty: qtyEntered.toString(), uom: uomEntered }, mat.baseUom, steps.get(`${mat.id}|${uomEntered}`) ?? null);
+    if (!pair) throw new DomainError("validation", `Line ${n}: ${uomEntered} cannot be converted to ${mat.name}'s base unit ${mat.baseUom}.`, { field: f("uom") });
+    const qtyBase = new Decimal(pair.base.qty);
     if (mat.baseUom === "pcs" && !qtyBase.isInteger()) throw new DomainError("validation", `Line ${n}: ${mat.name} is counted in pieces; enter a whole number.`, { field: f("qty") });
     if (qtyBase.decimalPlaces() > 6) throw new DomainError("validation", `Line ${n}: the quantity is finer than 0.000001 ${mat.baseUom}.`, { field: f("qty") });
     const supplierLotNumber = (l.supplierLotNumber ?? "").trim();
@@ -244,10 +255,16 @@ function lineValues(l: NormalizedLine) {
   };
 }
 
-function headerReason(input: ReceiptHeaderInput) {
+/** Why the delivery has no PO: a shared reason code of category `receipt` (US-1-24); "other" needs the notes. */
+async function headerReason(tx: Tx, ctx: AuthContext, input: ReceiptHeaderInput) {
   const code = (input.unplannedReasonCode || DEFAULT_UNPLANNED_REASON).trim();
-  if (!UNPLANNED_REASON_CODE_VALUES.includes(code)) throw new DomainError("validation", "Choose why this delivery has no purchase order.", { field: "unplannedReasonCode" });
-  return code;
+  try {
+    return (await assertReasonCode(tx, ctx.organizationId, "receipt", code, input.notes)).code;
+  } catch (e) {
+    if (e instanceof DomainError && e.details?.field === "reasonNote") throw new DomainError("validation", e.message, { field: "notes" });
+    if (e instanceof DomainError) throw new DomainError("validation", "Choose why this delivery has no purchase order.", { field: "unplannedReasonCode" });
+    throw e;
+  }
 }
 
 function headerDocNo(input: ReceiptHeaderInput) {
@@ -278,7 +295,7 @@ async function insertDraft(tx: Tx, ctx: AuthContext, input: ReceiptDraftInput) {
   const siteId = ctx.currentSiteId;
   const { supplier, supplierName } = await resolveSupplier(tx, ctx, input);
   const supplierDocumentNumber = headerDocNo(input);
-  const unplannedReasonCode = headerReason(input);
+  const unplannedReasonCode = await headerReason(tx, ctx, input);
   const notes = cleanText(input.notes, 1000, "notes", "Notes");
   const lines = await normalizeLines(tx, ctx, siteId, input.lines);
 
@@ -370,7 +387,7 @@ export async function updateReceiptDraft(ctx: AuthContext, receiptId: string, in
     assertReceiptTransition("edit", gr.status, receiptLabel(gr));
     const { supplier, supplierName } = await resolveSupplier(tx, ctx, input);
     const supplierDocumentNumber = headerDocNo(input);
-    const unplannedReasonCode = headerReason(input);
+    const unplannedReasonCode = await headerReason(tx, ctx, input);
     const notes = cleanText(input.notes, 1000, "notes", "Notes");
     const lines = await normalizeLines(tx, ctx, gr.siteId, input.lines);
     const existing = await tx.select().from(goodsReceiptLines).where(eq(goodsReceiptLines.goodsReceiptId, gr.id));

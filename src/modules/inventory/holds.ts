@@ -21,7 +21,13 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
+import { assertReasonCode, reasonCodeOptions, reasonLabels } from "@/modules/masterdata";
 import { postMovement } from "./ledger";
+
+/** Hold reason picker (shared reason codes, category `hold`). */
+export async function holdReasonOptions(q: typeof db | Tx, organizationId: string) {
+  return (await reasonCodeOptions(q, organizationId, "hold")).map((r) => ({ code: r.code, label: r.label }));
+}
 import { isPastExpiry, isUuid } from "./lots";
 
 /**
@@ -38,17 +44,7 @@ export const HOLD_TRANSITIONS = {
   lift: { from: ["open", "investigating"], to: "closed" },
 } as const;
 
-/** Assumption A-W1B-04: default hold reason codes until the reason-code catalogue exists (QA to confirm). */
-export const HOLD_REASON_CODES = [
-  { code: "supplier_complaint", label: "Supplier complaint or notice" },
-  { code: "suspected_contamination", label: "Suspected contamination" },
-  { code: "damaged_packaging", label: "Damaged packaging" },
-  { code: "documentation_issue", label: "Documentation issue (CoA, label)" },
-  { code: "investigation", label: "Investigation / deviation" },
-  { code: "retest_due", label: "Retest due" },
-  { code: "other", label: "Other (explain)" },
-] as const;
-const HOLD_REASON_VALUES = HOLD_REASON_CODES.map((r) => r.code) as readonly string[];
+/** Hold reasons are shared reason codes (category `hold`, US-1-24; defaults in masterdata reason-codes-defaults). */
 
 export const HOLD_RESOLUTIONS = ["released", "rejected"] as const;
 export type HoldResolution = (typeof HOLD_RESOLUTIONS)[number];
@@ -145,8 +141,8 @@ export type PlaceHoldInput = { scope: "lot" | "location"; lotRef?: string; locat
 export async function placeHold(ctx: AuthContext, input: PlaceHoldInput) {
   ctx.require("quality.hold.create");
   if (!isUuid(input.idempotencyKey)) throw new DomainError("validation", "The form is missing its submission key. Reload the page and try again.");
-  if (!HOLD_REASON_VALUES.includes(input.reasonCode)) throw new DomainError("validation", "Choose a reason code.", { field: "reasonCode" });
   const reason = reasonText(input.reason);
+  await assertReasonCode(db, ctx.organizationId, "hold", input.reasonCode, reason);
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"qh:" + input.idempotencyKey}))`);
     const [dup] = await tx
@@ -396,7 +392,7 @@ export async function getHold(ctx: AuthContext, holdId: string) {
     lotNumber: row.lotNumber,
     locationCode: row.locationCode,
     locationName: row.locationName,
-    reasonLabel: HOLD_REASON_CODES.find((r) => r.code === row.hold.reasonCode)?.label ?? row.hold.reasonCode,
+    reasonLabel: (await reasonLabels(db, ctx.organizationId, [row.hold.reasonCode])).get(row.hold.reasonCode) ?? row.hold.reasonCode,
     lots,
     timeline,
     can: {
@@ -417,7 +413,7 @@ export async function holdFormData(ctx: AuthContext) {
     .where(and(eq(locations.siteId, ctx.currentSiteId), eq(locations.isActive, true)))
     .orderBy(asc(locations.code));
   const held = new Set((await heldLocations(db, ctx.currentSiteId)).map((h) => h.locationId));
-  return { locations: locs.map((l) => ({ ...l, held: held.has(l.id) })), reasonCodes: HOLD_REASON_CODES.map((r) => ({ ...r })) };
+  return { locations: locs.map((l) => ({ ...l, held: held.has(l.id) })), reasonCodes: await holdReasonOptions(db, ctx.organizationId) };
 }
 
 /* ------------------------------------------------------------------ held stock issue (CX-LOT) */

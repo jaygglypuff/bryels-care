@@ -95,7 +95,7 @@ export async function productAvailability(ctx: AuthContext) {
   const prods = await db
     .select({ id: products.id, skuCode: products.skuCode, name: products.name })
     .from(products)
-    .where(eq(products.organizationId, ctx.organizationId))
+    .where(and(eq(products.organizationId, ctx.organizationId), eq(products.status, "active"))) // W2G: only active products are sold
     .orderBy(products.skuCode);
   const stock = await availableStock(db, ctx.currentSiteId);
   return prods.map((p) => ({

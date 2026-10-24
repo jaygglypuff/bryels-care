@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import Decimal from "decimal.js";
 import { requireContext } from "@/lib/auth/context";
-import { ADJUSTMENT_REASONS } from "@/db/schema";
+import { reasonCodeOptions } from "@/modules/masterdata";
+import { db } from "@/db/client";
 import { getLocationDetail } from "@/modules/inventory/lots-admin";
 import { listSiteLocations } from "@/modules/inventory/moves";
 import { Card, PageHeader } from "@/ui/core";
@@ -14,6 +15,7 @@ export default async function NewAdjustmentPage() {
   const ctx = await requireContext();
   if (!ctx.can("inventory.adjustment.create") || !ctx.can("masterdata.location.view") || !ctx.can("inventory.lot.view")) return <Forbidden what="drafting adjustments" />;
   const locs = await listSiteLocations(ctx);
+  const reasons = await reasonCodeOptions(db, ctx.organizationId, "adjustment");
   const lots = new Map<string, { id: string; label: string; uom: string; locations: { id: string; code: string; qty: string }[] }>();
   for (const l of locs) {
     const d = await getLocationDetail(ctx, l.id);
@@ -27,7 +29,7 @@ export default async function NewAdjustmentPage() {
     <div className="mx-auto max-w-4xl space-y-4">
       <PageHeader title="New stock adjustment" subtitle="Draft now; it posts only after someone else approves it." />
       <Card>
-        <AdjustmentForm lots={[...lots.values()].sort((a, b) => a.label.localeCompare(b.label))} locations={locs} reasons={ADJUSTMENT_REASONS} idempotencyKey={randomUUID()} />
+        <AdjustmentForm lots={[...lots.values()].sort((a, b) => a.label.localeCompare(b.label))} locations={locs} reasons={reasons} idempotencyKey={randomUUID()} />
       </Card>
     </div>
   );

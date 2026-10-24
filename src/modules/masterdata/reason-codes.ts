@@ -1,5 +1,5 @@
 import "server-only";
-import { and, arrayContains, asc, eq } from "drizzle-orm";
+import { and, arrayContains, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db, type DbOrTx } from "@/db/client";
 import { REASON_CATEGORIES, type ReasonCategory, reasonCodes } from "@/db/schema";
@@ -7,7 +7,7 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { assertUuid, bool, diff, optInt, optText, reqText, uniqueConflict } from "./org-common";
-import { REASON_NOTE_MAX, reasonCodesFor } from "./reason-codes-defaults";
+import { DEFAULT_REASON_CODES, REASON_NOTE_MAX, reasonCodesFor } from "./reason-codes-defaults";
 import { parseInput } from "./schemas";
 
 /**
@@ -78,13 +78,44 @@ export async function getReasonCode(ctx: AuthContext, id: string) {
   return r;
 }
 
-/** Codes a command may offer for a category (active only, display order). */
-export async function reasonCodeOptions(q: DbOrTx, organizationId: string, category: ReasonCategory) {
+type CategoryRow = { code: string; name: string; appliesTo: string[]; requiresNote: boolean; requiresApproval: boolean; isActive: boolean; sortOrder: number };
+
+/**
+ * The organization's codes for a category. When the organization has none for it (reference data not
+ * installed yet: a fresh database before `pnpm db:reference`), the shipped defaults stand in, so a
+ * command never loses its reason list; installing writes the same codes as rows.
+ */
+async function categoryRows(q: DbOrTx, organizationId: string, category: ReasonCategory): Promise<CategoryRow[]> {
   const rows = await q
     .select({ code: reasonCodes.code, name: reasonCodes.name, appliesTo: reasonCodes.appliesTo, requiresNote: reasonCodes.requiresNote, requiresApproval: reasonCodes.requiresApproval, isActive: reasonCodes.isActive, sortOrder: reasonCodes.sortOrder })
     .from(reasonCodes)
-    .where(and(eq(reasonCodes.organizationId, organizationId), eq(reasonCodes.isActive, true), arrayContains(reasonCodes.appliesTo, [category])));
-  return reasonCodesFor(rows, category).map((r) => ({ code: r.code, label: r.name, requiresNote: r.requiresNote, requiresApproval: r.requiresApproval }));
+    .where(and(eq(reasonCodes.organizationId, organizationId), arrayContains(reasonCodes.appliesTo, [category])));
+  if (rows.length) return rows;
+  return DEFAULT_REASON_CODES.filter((r) => r.appliesTo.includes(category)).map((r) => ({
+    code: r.code,
+    name: r.name,
+    appliesTo: [...r.appliesTo],
+    requiresNote: r.requiresNote ?? false,
+    requiresApproval: r.requiresApproval ?? false,
+    isActive: true,
+    sortOrder: r.sortOrder,
+  }));
+}
+
+/** Codes a command may offer for a category (active only, display order). */
+export async function reasonCodeOptions(q: DbOrTx, organizationId: string, category: ReasonCategory) {
+  return reasonCodesFor(await categoryRows(q, organizationId, category), category).map((r) => ({ code: r.code, label: r.name, requiresNote: r.requiresNote, requiresApproval: r.requiresApproval }));
+}
+
+/** Display labels of stored codes (history keeps the code; a deactivated or unknown code shows as itself). */
+export async function reasonLabels(q: DbOrTx, organizationId: string, codes: readonly (string | null | undefined)[]): Promise<Map<string, string>> {
+  const wanted = [...new Set(codes.filter((c): c is string => !!c))];
+  const out = new Map<string, string>();
+  if (!wanted.length) return out;
+  const rows = await q.select({ code: reasonCodes.code, name: reasonCodes.name }).from(reasonCodes).where(and(eq(reasonCodes.organizationId, organizationId), inArray(reasonCodes.code, wanted)));
+  for (const r of rows) out.set(r.code, r.name);
+  for (const c of wanted) if (!out.has(c)) out.set(c, DEFAULT_REASON_CODES.find((d) => d.code === c)?.name ?? c);
+  return out;
 }
 
 /**
@@ -95,8 +126,8 @@ export async function reasonCodeOptions(q: DbOrTx, organizationId: string, categ
 export async function assertReasonCode(q: DbOrTx, organizationId: string, category: ReasonCategory, code: string | null | undefined, note?: string | null) {
   const c = (code ?? "").trim();
   if (!c) throw new DomainError("validation", "Choose a reason.", { field: "reasonCode" });
-  const [r] = await q.select().from(reasonCodes).where(and(eq(reasonCodes.organizationId, organizationId), eq(reasonCodes.code, c))).limit(1);
-  if (!r || !r.appliesTo.includes(category)) throw new DomainError("validation", "Choose a reason from the list.", { field: "reasonCode" });
+  const r = (await categoryRows(q, organizationId, category)).find((x) => x.code === c);
+  if (!r) throw new DomainError("validation", "Choose a reason from the list.", { field: "reasonCode" });
   if (!r.isActive) throw new DomainError("validation", `Reason "${r.name}" is no longer in use. Choose another reason.`, { field: "reasonCode" });
   const n = (note ?? "").trim();
   if (n.length > REASON_NOTE_MAX) throw new DomainError("validation", `Keep the note to ${REASON_NOTE_MAX} characters.`, { field: "reasonNote" });

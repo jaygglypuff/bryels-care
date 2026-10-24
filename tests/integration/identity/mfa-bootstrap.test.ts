@@ -131,6 +131,9 @@ describe("first-administrator bootstrap", () => {
     });
     expect(r.createdOrganization && r.createdSite).toBe(true);
     expect(r.roleSync.created.sort()).toEqual(Object.keys(ROLE_BUNDLES).sort());
+    // ADR-040: a fresh database gets the reference master data with its first organization.
+    expect(r.referenceData).toMatchObject({ uoms: 6, conversions: 3 });
+    expect(r.referenceData.reasonCodes).toBeGreaterThan(30);
     expect(await db.select().from(organizations)).toHaveLength(1);
     expect((await db.select().from(sites))[0].code).toBe("HQ");
     expect((await db.select().from(roles)).length).toBe(Object.keys(ROLE_BUNDLES).length);

@@ -45,6 +45,7 @@ async function main() {
       r.createdOrganization ? "Created the organization." : "Organization found.",
       r.createdSite ? "Created the first site." : "Site(s) found.",
       `Seeded roles: created ${r.roleSync.created.length}, permissions added ${r.roleSync.added}, removed ${r.roleSync.removed}.`,
+      `Reference data: +${r.referenceData.uoms} units, +${r.referenceData.conversions} conversions, +${r.referenceData.reasonCodes} reason codes.`,
       "",
       "Open this one-time link to set the password (it is not stored anywhere and works once):",
       r.link,

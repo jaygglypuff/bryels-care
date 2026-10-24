@@ -134,7 +134,7 @@ export function RecountForm({ countId, lineId, label }: { countId: string; lineI
 type ReviewLine = { id: string; label: string; expected: string; first: string; recount: string | null; final: string; variance: string; pct: string | null; reasonCode: string | null; auto: boolean; uom: string };
 
 /** Variance review table (ux §9.6): expected, counted, recount, variance, reason per line; approve or send back. */
-export function ApproveForm({ countId, lines, reasons, step }: { countId: string; lines: ReviewLine[]; reasons: readonly string[]; step: 1 | 2 }) {
+export function ApproveForm({ countId, lines, reasons, step }: { countId: string; lines: ReviewLine[]; reasons: readonly { code: string; label: string }[]; step: 1 | 2 }) {
   const { state, pending, onSubmit } = useActionForm(approveCountAction.bind(null, countId), step === 2 ? "Give the second approval for these variances?" : undefined);
   const fe = state?.fieldErrors ?? {};
   return (
@@ -160,7 +160,7 @@ export function ApproveForm({ countId, lines, reasons, step }: { countId: string
                       <Select name={`reason_${l.id}`} defaultValue={l.reasonCode ?? ""} aria-label={`Reason for ${l.label}`} className="min-w-[160px]">
                         <option value="">Choose…</option>
                         {reasons.map((r) => (
-                          <option key={r} value={r}>{r.replace(/_/g, " ")}</option>
+                          <option key={r.code} value={r.code}>{r.label}</option>
                         ))}
                       </Select>
                       {fe[`reason_${l.id}`] && <p className="text-[12px] text-[var(--bad-fg)]">{fe[`reason_${l.id}`]}</p>}

@@ -1001,6 +1001,7 @@ CREATE TABLE "work_orders" (
 	CONSTRAINT "ck_work_orders_cancel" CHECK ("work_orders"."status" <> 'cancelled' or "work_orders"."cancel_reason" is not null)
 );
 --> statement-breakpoint
+ALTER TABLE "stock_adjustments" DROP CONSTRAINT "ck_stock_adjustments_reason";--> statement-breakpoint
 ALTER TABLE "dispense_records" ALTER COLUMN "checker_id" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "process_step_records" ALTER COLUMN "completed_at" DROP DEFAULT;--> statement-breakpoint
 ALTER TABLE "process_step_records" ALTER COLUMN "completed_at" DROP NOT NULL;--> statement-breakpoint

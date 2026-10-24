@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
+    "db:reference": "tsx scripts/install-reference-data.ts",
     "db:seed": "tsx src/db/seed.ts",
     "db:reset": "tsx src/db/reset.ts && pnpm db:migrate && pnpm db:seed",
     "test": "vitest run",

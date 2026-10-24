@@ -172,10 +172,13 @@ export async function createOrder(ctx: AuthContext, input: NewOrderInput) {
       .limit(1);
     if (!c) throw new DomainError("validation", "Choose a customer.");
     const prods = await tx
-      .select({ id: products.id })
+      .select({ id: products.id, name: products.name, status: products.status })
       .from(products)
       .where(and(inArray(products.id, productIds), eq(products.organizationId, ctx.organizationId)));
     if (prods.length !== productIds.length) throw new DomainError("validation", "One of the products was not found.");
+    // W2G (US-1-22): only active products are sold; draft and discontinued ones are refused.
+    const notSold = prods.filter((p) => p.status !== "active");
+    if (notSold.length) throw new DomainError("validation", `Not available for sale: ${notSold.map((p) => `${p.name} (${p.status})`).join(", ")}.`);
     const orderNumber = await nextNumber(tx, ctx.organizationId, "SO");
     const [order] = await tx
       .insert(salesOrders)

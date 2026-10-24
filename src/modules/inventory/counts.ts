@@ -5,7 +5,6 @@ import { db, type Tx } from "@/db/client";
 import {
   COUNT_FROZEN_STATUSES,
   COUNT_KINDS,
-  COUNT_VARIANCE_REASONS,
   inventoryBalances,
   inventoryLots,
   locations,
@@ -27,6 +26,7 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
+import { reasonCodeOptions } from "@/modules/masterdata";
 import { postMovement } from "./ledger";
 import { isUuid } from "./lots";
 import { claimIdempotencyKey, stateMachine, storeIdempotentResult } from "./command-kit";
@@ -506,10 +506,14 @@ export async function approveCount(ctx: AuthContext, countId: string, input: App
     const lines = await tx.select().from(stockCountLines).where(eq(stockCountLines.stockCountId, c.id));
     if (c.status === "counted") {
       const fieldErrors: Record<string, string> = {};
+      // Shared reason codes, category `count_variance` (US-1-24); a code that needs a note gets one.
+      const options = await reasonCodeOptions(tx, ctx.organizationId, "count_variance");
       for (const l of lines) {
         if (l.isUnlabelled || l.autoApproved || new Decimal(l.varianceQtyBase ?? 0).isZero()) continue;
         const r = input.lines?.[l.id];
-        if (!r || !(COUNT_VARIANCE_REASONS as readonly string[]).includes(r.reasonCode)) fieldErrors[`reason_${l.id}`] = "Choose a reason code for this variance.";
+        const opt = r ? options.find((o) => o.code === r.reasonCode) : undefined;
+        if (!r || !opt) fieldErrors[`reason_${l.id}`] = "Choose a reason code for this variance.";
+        else if (opt.requiresNote && !r.note?.trim()) fieldErrors[`reason_${l.id}`] = `Add a note: "${opt.label}" needs an explanation.`;
       }
       if (Object.keys(fieldErrors).length) throw new DomainError("validation", "Every variance needs a reason code before approval.", { fieldErrors });
       for (const l of lines) {

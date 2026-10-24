@@ -230,7 +230,7 @@ export const scrapReworkRecords = pgTable(
     batchId: uuid("batch_id").notNull().references(() => batches.id),
     /** scrap | rework */
     recordKind: text("record_kind").notNull(),
-    /** Reason code from setting production.scrap_rework.reason_codes. */
+    /** Shared reason code (reason_codes, category scrap / rework). */
     reasonCode: text("reason_code").notNull(),
     qty: numeric("qty", QTY).notNull(),
     uom: text("uom").notNull(),
