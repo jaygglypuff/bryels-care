@@ -117,7 +117,7 @@ export async function availabilityRows(ctx: AuthContext, f: AvailabilityFilter, 
         from stock_allocations a
         join sales_order_lines sol on sol.id = a.sales_order_line_id
         join sales_orders so on so.id = sol.sales_order_id
-       where so.status in ('confirmed', 'allocated') and so.site_id = ${f.siteId}
+       where a.status = 'open' and so.status in ('confirmed', 'allocated', 'picking', 'packed', 'partially_shipped') and so.site_id = ${f.siteId}
        group by 1, 2
     ), base as (
       select b.lot_id, b.location_id, l.lot_number, l.item_kind,

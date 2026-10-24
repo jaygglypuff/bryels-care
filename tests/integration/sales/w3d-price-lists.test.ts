@@ -7,10 +7,16 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { auditEvents, salesOrderLines, salesOrders, shipments } from "@/db/schema";
 import {
+  allocateOrder,
   approvePriceList,
   createOrder,
   createPriceList,
-  getDeliveryReceipt,
+  deliveryReceiptData,
+  dispatchShipment,
+  getPackingView,
+  getPick,
+  getShipment,
+  submitOrder,
   getOrder,
   getPriceList,
   listOrders,
@@ -23,6 +29,7 @@ import {
 } from "@/modules/sales";
 import { resetTestDatabase } from "../../support/db";
 import { expectCode } from "../../support/kit";
+import { key, pickAll, verifyAll } from "../../support/w3e";
 import { auditCount, bundle, inDays, loadW3d, newCustomer, productId, withPermissions, type W3d } from "../../support/w3d";
 
 let w: W3d;
@@ -126,12 +133,22 @@ describe("US-4-03 price lists", () => {
     await expectCode(createOrder(noPrice, { customerId: c.id, requestedDeliveryOn: inDays(7), lines: [{ productId: await productId("ACS-135"), qtyUnits: "1", unitPrice: "1" }] }), "forbidden");
   });
 
-  it("sales.pricing_masked_on_pick_pack_dr: the delivery receipt carries no price", async () => {
-    const [sh] = await db.select().from(shipments).limit(1);
-    const dr = await getDeliveryReceipt(w.sales, sh.id);
-    // The printed lines (items) carry lots, boxes and quantities only. (The header row object of the
-    // order is W3E's DTO; the page prints none of its money columns.)
-    expect(JSON.stringify(dr.items)).not.toMatch(/unitPrice|unit_price|totalAmount|subtotal|price/i);
-    expect(dr.items.length).toBeGreaterThan(0);
+  it("sales.pricing_masked_on_pick_pack_dr: the pick list, packing view and delivery receipt carry no price", async () => {
+    // Drive a real order through W3E's pick → pack verification → dispatch (picker ≠ checker).
+    const c = await newCustomer(w, { creditLimit: "1000000", minShelfLifeDays: 0 });
+    const o = await createOrder(w.sales, { customerId: c.id, requestedDeliveryOn: inDays(7), lines: [{ productId: await productId("ACS-135"), qtyUnits: "6", unitPrice: "70" }] });
+    await submitOrder(w.sales, o.id);
+    await allocateOrder(w.warehouse, o.id);
+    const { pickId, shipmentId } = await pickAll(w.warehouse, o.id);
+    const noMoney = /unitPrice|unit_price|unitAmount|totalAmount|subtotal|price/i;
+    expect(JSON.stringify(await getPick(w.warehouse, pickId))).not.toMatch(noMoney);
+    await verifyAll(w.manager, w.warehouse, pickId, shipmentId);
+    expect(JSON.stringify(await getPackingView(w.manager, shipmentId))).not.toMatch(noMoney);
+    await dispatchShipment(w.warehouse, shipmentId, { driverName: "Jun Dela Cruz", vehiclePlate: "NFD 2468", idempotencyKey: key() });
+    const [sh] = await db.select().from(shipments).where(eq(shipments.id, shipmentId));
+    const dr = await deliveryReceiptData(db, sh.id, { drNumber: sh.deliveryReceiptNumber });
+    expect(JSON.stringify(dr)).not.toMatch(noMoney);
+    expect(dr.lines.length).toBeGreaterThan(0);
+    expect(JSON.stringify(await getShipment(w.warehouse, sh.id))).not.toMatch(noMoney);
   });
 });

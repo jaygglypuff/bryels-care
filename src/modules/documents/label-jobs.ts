@@ -344,6 +344,28 @@ export async function reprintLabelJob(ctx: AuthContext, jobId: string, raw: unkn
   });
 }
 
+/**
+ * W3E (US-4-08 repack, box removal): in the caller's transaction, voids every printed label of a
+ * record that no longer matches it ("superseded label — destroy") and cancels jobs not yet printed.
+ */
+export async function voidLabelsForEntityInTx(tx: DbOrTx, ctx: AuthContext, entityType: string, entityId: string, reason: string) {
+  const live = await tx
+    .select({ j: labelJobs, doc: generatedDocuments })
+    .from(labelJobs)
+    .leftJoin(generatedDocuments, eq(generatedDocuments.id, labelJobs.generatedDocumentId))
+    .where(and(eq(labelJobs.organizationId, ctx.organizationId), eq(labelJobs.entityType, entityType), eq(labelJobs.entityId, entityId), inArray(labelJobs.status, [...LIVE]), isNull(labelJobs.voidedAt)))
+    .for("update", { of: labelJobs });
+  for (const r of live) {
+    if (r.j.status === "printed") await voidJobInTx(tx, ctx, r.j, reason);
+    else {
+      await tx.update(labelJobs).set({ status: "cancelled", cancelledBy: ctx.userId, cancelledAt: new Date() }).where(eq(labelJobs.id, r.j.id));
+      await audit(tx, ctx, { action: "documents.label_job.cancelled", entityType: "label_job", entityId: r.j.id, entityNumber: r.j.entityNumber, siteId: r.j.siteId, reason });
+    }
+    if (r.doc && r.doc.status === "ready") await markDocumentVoid(tx, ctx, r.doc, reason);
+  }
+  return live.length;
+}
+
 async function voidJobInTx(tx: DbOrTx, ctx: AuthContext, j: LabelJobRow, reason: string) {
   await tx.update(labelJobs).set({ voidedAt: new Date(), voidedBy: ctx.userId, voidReason: reason }).where(eq(labelJobs.id, j.id));
   await audit(tx, ctx, { action: "documents.label_job.voided", entityType: "label_job", entityId: j.id, entityNumber: j.entityNumber, siteId: j.siteId, reason });

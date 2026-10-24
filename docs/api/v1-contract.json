@@ -760,6 +760,47 @@
         },
         "additionalProperties": false
       }
+    },
+    {
+      "name": "sales.shipment.export",
+      "method": "GET",
+      "path": "/api/v1/sales/shipments/export",
+      "summary": "CSV/XLSX of dispatched and delivered shipments of a period for the accountant (lots, boxes, quantities; prices only for price-list viewers; audited).",
+      "permission": "sales.shipment.export",
+      "response": "file",
+      "query": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "siteId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "from": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "to": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "format": {
+            "default": "csv",
+            "type": "string",
+            "enum": [
+              "csv",
+              "xlsx"
+            ]
+          }
+        },
+        "required": [
+          "siteId",
+          "from",
+          "to"
+        ],
+        "additionalProperties": false
+      }
     }
   ]
 }

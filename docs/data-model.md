@@ -1433,6 +1433,34 @@ State machines: sales order transitions in `src/modules/sales/orders.ts` (`ORDER
 `allocated → shipped`); `transitionOrder()` writes the transition row and is exported for the
 fulfilment services. Quote, price list, requirement and customer machines live next to their
 services. Approval decisions use `approval_decisions` with `cycle` (a return closes the cycle).
+### 3.7a Boxing and fulfilment as built (Wave 3 W3E)
+
+Schema file `src/db/schema/fulfilment.ts` (tables created by W3E) plus minimal changes to `sales.ts`. Differences from §3.7 above:
+
+| Item | As built | Why |
+|---|---|---|
+| `packs` | as §3.7, plus `shipment_id` (the W09-07 verification pack of a shipment), `location_id` (boxing location), `submitted_at` (packer done; the sample is fixed here), `cancelled_*`; `product_id` instead of `sku_id` (products are the SKUs in this codebase); `label_template_version_id` stays null (the label job pins the layout version) | one live verification pack per shipment (`packs_shipment_live_uq`) |
+| `pack_boxes` (new) | `pack_id`, `container_id`, `box_no`, `lot_id`, `qty_base`, `is_partial`, `status` (`packed`,`removed`,`repacked`), `source_container_ids` (repack summary), `removed_reason` | replaces `containers.pack_id` (no change to the W1C `containers` table); "box n of N" and the boxing note read it |
+| `pack_verification_scans` | as §3.7 plus `lot_id`, `qty_base` (loose counts at W09-07) and `idempotency_key`; refused scans (over-shipment, unknown box) are written in their own transaction so the evidence survives the 409 | KPI "pack verification failures" = `packs.verification_failure_count` |
+| `picks` | as §3.7 plus `shipment_id` (the draft shipment created with the pick), `completed_by`, `short_pick_reason`, `cancelled_*`; one open pick per order (`picks_order_open_uq`) | |
+| `pick_lines` | as §3.7 with `base_uom` text (the codebase stores base units as text), `substituted_for_container_id` (A-W3E-01) and `voided_*` (a mis-scan is taken back, never deleted) | |
+| `shipment_lines` | as §3.7 plus `allocation_id`, `pick_line_id`, `from_location_id`, `is_over_shipment`, `verified_by/at`; one line per box (`shipment_lines_box_uq`) | genealogy edge lot → box → shipment → customer |
+| `shipment_exceptions` (new) | CX-SHIP approvals: `kind` (`over_shipment` with `sales_order_line_id` + `extra_qty_base`, or `partial_shipment`), `reason`, `customer_reference`, `approved_by/at`; `shipments.over_shipment_approved_by` is set too | both CX-SHIP cases of W09-07 |
+| `delivery_receipts` | as §3.7; `dr_number` null while `draft`; one live DR per shipment; checks for issued / acknowledged / voided columns | the number is allocated by the dispatch posting |
+| `shipment_state_transitions` | §6.1 shape (`from_state`, `to_state`, `actor_id`, `reason`, `correlation_id`, `at`) | |
+| `shipments` (changed) | added `shipment_number` (rule `SH`), `status` (default `dispatched` for rows from before Wave 3; new rows are always written `draft`), `ship_to_address`, `tracking_number`, `gross_weight`/`weight_uom`, `packed_by/at`, `over_shipment_approved_by`, `reversed_*`, `cancelled_*`, `idempotency_key`, `correlation_id`, `created_by/at`; `delivery_receipt_number`, `dispatched_by`, `dispatched_at` became nullable (set at dispatch; check `ck_shipments_dispatched`). Statuses add `cancelled` and `reversed` to §3.7 | `carrier` keeps its MVP name (= `carrier_name`) |
+| `stock_allocations` (changed) | added `container_id` (box-level allocation), `status` (`open`,`fulfilled`,`released`), `fulfilled_shipment_id`, `released_*`, `created_by` | open allocations of open orders (`confirmed`,`allocated`,`picking`,`packed`,`partially_shipped`) reduce ATP |
+| `sales_order_lines` projections | not added (`qty_allocated_base`, `qty_picked_base`, `qty_shipped_base` are computed from allocations and shipment lines) | W3D owns `sales_order_lines`; the integrator may add the projections |
+| Numbering | `PA` (`PA-{YY}-{SEQ}` 6), `PK` (6), `SH` (5) | §9.2 |
+
+**Customer requirements contract (W3D table, read by W3E).** `customerFulfilmentRequirements` in
+`src/modules/sales/fulfilment-requirements.ts` reads `customer_requirements` when it exists:
+`customer_id`, `requirement_kind`, `value_numeric`, `value_text`, optional `organization_id`,
+`product_id` or `sku_id` (null = all SKUs; a product row wins), `status = 'approved'` when a status
+column exists and `effective_from`/`effective_to` when present. Kinds used:
+`min_remaining_shelf_life_days`, `lot_age_max_days`, `carton_count`, `full_shipment_required`
+(`value_text` true/false), `shipping_marks`. Without the table the defaults apply (customer
+`min_shelf_life_days`, SKU units per box, partial shipments allowed, no marks).
 
 ### 3.8 HR and payroll
 

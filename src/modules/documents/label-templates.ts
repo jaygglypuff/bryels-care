@@ -22,6 +22,7 @@ export const LABEL_DATASET_FOR: Partial<Record<string, string>> = {
   wip: "label/wip/v1",
   finished_good: "label/finished_good/v1",
   location: "label/location/v1",
+  carton: "label/carton/v1", // W3E: box labels
 };
 
 const editor = alias(users, "editor");

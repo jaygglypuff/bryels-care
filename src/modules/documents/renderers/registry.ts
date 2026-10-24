@@ -6,6 +6,9 @@ import { labelRendererV1 } from "./label-v1";
 import { testPageRendererV1 } from "./test-page-v1";
 import { dispensingSheetRendererV1 } from "./dispensing-sheet-v1"; // W2A
 import { travelerRendererV1 } from "./traveler-v1"; // W2A
+import { boxingNoteRendererV1 } from "./boxing-note-v1"; // W3E
+import { pickListRendererV1 } from "./pick-list-v1"; // W3E
+import { deliveryReceiptRendererV1 } from "./delivery-receipt-v1"; // W3E
 import type { FrozenDataset, RenderOutput, Renderer } from "./types";
 
 /**
@@ -19,6 +22,9 @@ const RENDERERS: readonly Renderer[] = [
   bmrPaperPageRendererV1, // W2D (US-3-20)
   dispensingSheetRendererV1, // W2A (US-3-08)
   travelerRendererV1, // W2A (US-3-08)
+  boxingNoteRendererV1, // W3E (US-4-07, US-4-08, US-4-11)
+  pickListRendererV1, // W3E (US-4-10)
+  deliveryReceiptRendererV1, // W3E (US-4-12, US-4-13)
 ];
 
 export function findRenderer(id: string, version: number): Renderer | null {

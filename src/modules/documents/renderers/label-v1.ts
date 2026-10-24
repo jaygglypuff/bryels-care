@@ -13,7 +13,7 @@ import type { FrozenDataset, Renderer } from "./types";
  * code/version and the job reference in 5 pt for reprint tracing.
  */
 
-export const LABEL_DATASETS = ["label/material/v1", "label/wip/v1", "label/finished_good/v1", "label/location/v1", "label/test/v1"] as const;
+export const LABEL_DATASETS = ["label/material/v1", "label/wip/v1", "label/finished_good/v1", "label/location/v1", "label/test/v1", "label/carton/v1"] as const;
 
 const text = z.string().max(200).nullable().optional();
 export const labelDataSchema = z.object({
@@ -48,6 +48,11 @@ export const labelDataSchema = z.object({
     warehouseCode: text,
     locationKindWord: text,
     allowedStatuses: text,
+    // W3E box / carton labels
+    packedOn: text,
+    packerInitials: text,
+    customerMarks: text,
+    boxOfText: text,
   }),
   /** Test pages only: draw the 50 mm (or 40 mm) scaling ruler for T-01. */
   testPage: z.boolean().optional(),
@@ -118,6 +123,10 @@ const FIELD_ROWS: [LabelFieldKey, string, (e: LabelData["entity"]) => string | n
   ["location_name", "Name", (e) => e.locationName],
   ["warehouse", "Warehouse", (e) => e.warehouseCode],
   ["allowed_statuses", "Accepts", (e) => e.allowedStatuses],
+  ["packed", "Packed", (e) => e.packedOn],
+  ["packer", "Packer", (e) => e.packerInitials],
+  ["box_of", "Box", (e) => e.boxOfText],
+  ["customer_marks", "Marks", (e) => e.customerMarks],
 ];
 
 function oneLabel(d: LabelData, f: FrozenDataset["meta"], copyNo: number): SafeHtml {

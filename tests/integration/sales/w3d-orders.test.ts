@@ -170,8 +170,10 @@ describe("US-4-05 order state machine", () => {
     const ev = await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, o.id), eq(auditEvents.action, "sales.sales_order.cancelled")));
     expect(ev[0].reason).toBe("Customer withdrew the PO");
     expect((ev[0].before as { status: string }).status).toBe("allocated");
+    // W3E: allocations are released with the reason, never deleted.
     const left = await db.select().from(stockAllocations).where(eq(stockAllocations.salesOrderLineId, view.lines[0].id));
-    expect(left).toHaveLength(0);
+    expect(left.length).toBeGreaterThan(0);
+    expect(left.every((a) => a.status === "released" && a.releaseReason === "Order cancelled: Customer withdrew the PO")).toBe(true);
     const rsv = await db.select().from(stockReservations).where(and(eq(stockReservations.demandId, view.lines[0].id), eq(stockReservations.status, "active")));
     expect(rsv).toHaveLength(0);
     // sales.cancel_after_dispatch_rejected: the seeded shipped order SO-…-00001

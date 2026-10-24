@@ -9,6 +9,7 @@ import { identitySessionPurgeJob } from "@/modules/identity/jobs";
 import { platformAlertsEvaluateJob, platformMetricsSampleJob } from "@/modules/governance/jobs/metrics";
 import { inventoryExpiryCheckJob, inventoryRebuildBalancesJob, inventoryReconcileJob, inventoryReservationExpiryJob } from "@/modules/inventory/jobs";
 import { salesQuoteExpiryJob } from "@/modules/sales/quotations-expiry-job";
+import { salesDeliveryReceiptReminderJob } from "@/modules/sales/jobs/dr-reminder"; // W3E
 import { type AnyJobDefinition, type JobRegistry, createJobRegistry } from "./job-definition";
 
 /**
@@ -26,6 +27,7 @@ export function jobDefinitions(): AnyJobDefinition[] {
     platformMetricsSampleJob,
     platformAlertsEvaluateJob,
     salesQuoteExpiryJob,
+    salesDeliveryReceiptReminderJob, // W3E (US-4-13)
   ];
 }
 

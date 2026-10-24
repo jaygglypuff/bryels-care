@@ -18,7 +18,8 @@ import {
 } from "@/db/schema";
 import { AuthContext, type SiteRef } from "@/lib/auth/context";
 import { ROLE_BUNDLES } from "@/lib/permissions";
-import { allocateOrder, cancelOrder, confirmOrder, createOrder, dispatchOrder, getOrder, manilaToday, recordDelivery } from "@/modules/sales";
+import { allocateOrder, cancelOrder, confirmOrder, createOrder, dispatchOrder, dispatchShipment, getOrder, manilaToday, recordDelivery } from "@/modules/sales";
+import { key, pickAll, verifyAll } from "../../support/w3e";
 import { resetTestDatabase } from "../../support/db";
 
 let orgId: string;
@@ -27,6 +28,8 @@ let rvs: SiteRef;
 let sales: AuthContext;
 let warehouse: AuthContext;
 let warehouseRvs: AuthContext;
+let manager: AuthContext;
+let qa: AuthContext;
 
 async function ctxFor(email: string, perms: readonly string[], siteList: SiteRef[]) {
   const [u] = await db.select().from(users).where(eq(users.email, email));
@@ -82,6 +85,8 @@ beforeAll(async () => {
   sales = await ctxFor("sales@bryels-care.test", ROLE_BUNDLES.sales_cs.permissions, [nfd, rvs]);
   warehouse = await ctxFor("warehouse.nfd@bryels-care.test", ROLE_BUNDLES.warehouse_operator.permissions, [nfd]);
   warehouseRvs = await ctxFor("warehouse.rvs@bryels-care.test", ROLE_BUNDLES.warehouse_operator.permissions, [rvs]);
+  manager = await ctxFor("manager.nfd@bryels-care.test", ROLE_BUNDLES.site_manager.permissions, [nfd]);
+  qa = await ctxFor("qa.nfd@bryels-care.test", ROLE_BUNDLES.qa_qc.permissions, [nfd]);
 });
 
 describe("sales order → FEFO allocation → dispatch (W09)", () => {
@@ -97,9 +102,9 @@ describe("sales order → FEFO allocation → dispatch (W09)", () => {
     expect(view.total).toBe("1740");
   });
 
-  it("refuses allocation without sales.allocation.post (role escalation)", async () => {
+  it("refuses allocation without inventory.allocation.create (role escalation)", async () => {
     const so2 = await orderByNumberSuffix("00002");
-    await expect(allocateOrder(sales, so2.id)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(allocateOrder(qa, so2.id)).rejects.toMatchObject({ code: "forbidden" });
   });
 
   it("hides another site's order from a user without that site (cross-site)", async () => {
@@ -152,15 +157,24 @@ describe("sales order → FEFO allocation → dispatch (W09)", () => {
     expect(await db.select().from(stockAllocations).where(eq(stockAllocations.salesOrderLineId, (await getOrder(sales, o.id)).lines[0].id))).toHaveLength(0);
   });
 
+  let shipmentId = "";
+  it("refuses the MVP direct dispatch (AC-17: pick and pack verification first)", async () => {
+    const so2 = await orderByNumberSuffix("00002");
+    await expect(dispatchOrder(warehouse, so2.id, { carrier: "Own truck", driverName: "T", vehiclePlate: "ABC 123", packageCount: 2 })).rejects.toMatchObject({ code: "state" });
+  });
+
   it("blocks dispatch when an allocated lot was put on hold, posting nothing", async () => {
     const so2 = await orderByNumberSuffix("00002");
+    const { pickId, shipmentId: sid } = await pickAll(warehouse, so2.id);
+    shipmentId = sid;
+    await verifyAll(manager, warehouse, pickId, sid);
     const gbs = await releasedLot("GBS-135");
     const loc = await fg01();
     const before = await onHand(gbs.id, loc.id);
     await db.update(inventoryLots).set({ qualityStatus: "on_hold" }).where(eq(inventoryLots.id, gbs.id));
-    await expect(dispatchOrder(warehouse, so2.id, { carrier: "Own truck", driverName: "T", vehiclePlate: "ABC 123", packageCount: 2 })).rejects.toMatchObject({ code: "blocked_lot" });
+    await expect(dispatchShipment(warehouse, sid, { driverName: "T", vehiclePlate: "ABC 123", idempotencyKey: key() })).rejects.toMatchObject({ code: "blocked_lot" });
     expect(await onHand(gbs.id, loc.id)).toBe(before);
-    expect(await db.select().from(shipments).where(eq(shipments.salesOrderId, so2.id))).toHaveLength(0);
+    expect((await db.select().from(shipments).where(eq(shipments.id, sid)))[0].status).toBe("packed");
     await db.update(inventoryLots).set({ qualityStatus: "released" }).where(eq(inventoryLots.id, gbs.id));
   });
 
@@ -170,8 +184,10 @@ describe("sales order → FEFO allocation → dispatch (W09)", () => {
     const gbs = await releasedLot("GBS-135");
     const loc = await fg01();
     const [a0, g0] = [await onHand(acs.id, loc.id), await onHand(gbs.id, loc.id)];
-    const s = await dispatchOrder(warehouse, so2.id, { carrier: "Own truck", driverName: "Jun", vehiclePlate: "NFD 2468", packageCount: 2 });
-    expect(s.deliveryReceiptNumber).toMatch(/^DR-\d{2}-\d{5}$/);
+    const r = await dispatchShipment(warehouse, shipmentId, { driverName: "Jun", vehiclePlate: "NFD 2468", idempotencyKey: key() });
+    const [s] = await db.select().from(shipments).where(eq(shipments.id, shipmentId));
+    expect(r.drNumber).toMatch(/^DR-\d{2}-\d{5}$/);
+    expect(s.deliveryReceiptNumber).toBe(r.drNumber);
     expect(await onHand(acs.id, loc.id)).toBe(a0 - 48);
     expect(await onHand(gbs.id, loc.id)).toBe(g0 - 48);
     const mv = await db.select().from(stockMovements).where(eq(stockMovements.sourceDocumentId, s.id));
@@ -180,7 +196,7 @@ describe("sales order → FEFO allocation → dispatch (W09)", () => {
       ["shipment", 48, null],
     ]);
     expect((await getOrder(warehouse, so2.id)).order.status).toBe("shipped");
-    await expect(dispatchOrder(warehouse, so2.id, { carrier: "Own truck", driverName: "Jun", vehiclePlate: "NFD 2468", packageCount: 2 })).rejects.toMatchObject({ code: "state" });
+    await expect(dispatchShipment(warehouse, shipmentId, { driverName: "Jun", vehiclePlate: "NFD 2468", idempotencyKey: key() })).rejects.toMatchObject({ code: "state" });
     expect(await onHand(acs.id, loc.id)).toBe(a0 - 48);
 
     await recordDelivery(warehouse, s.id, { receivedByName: "Marco Tan", deliveredAt: new Date() });

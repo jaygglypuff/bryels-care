@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { uuidv7 } from "uuidv7";
 import { db, type Tx } from "@/db/client";
@@ -43,6 +43,10 @@ import { itemCodeMap, requirementSnapshot, type RequirementSnapshot } from "./re
  *   pending_approval → draft (returned for changes, reason)
  *   confirmed → allocated → picking → packed → partially_shipped / shipped → invoiced → closed
  *   allocated → shipped (direct dispatch of the MVP flow); partially_shipped → picking (remainder)
+ *   partially_shipped → partially_shipped (another partial dispatch)
+ *   undo paths (W3E, with reason): allocated → confirmed (allocation released), picking / packed →
+ *   allocated | partially_shipped (pick or shipment cancelled before dispatch), shipped /
+ *   partially_shipped → allocated | partially_shipped (dispatch reversed)
  *   draft … packed → cancelled (reason; allocations and reservations released)
  *
  * Fulfilment (allocated onwards) belongs to the allocation / picking / packing / dispatch services;
@@ -55,11 +59,11 @@ export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   submitted: ["confirmed", "pending_approval", "cancelled"],
   pending_approval: ["confirmed", "draft", "cancelled"],
   confirmed: ["allocated", "cancelled"],
-  allocated: ["picking", "shipped", "cancelled"],
-  picking: ["packed", "cancelled"],
-  packed: ["partially_shipped", "shipped", "cancelled"],
-  partially_shipped: ["picking", "shipped"],
-  shipped: ["invoiced"],
+  allocated: ["picking", "shipped", "confirmed", "cancelled"],
+  picking: ["packed", "allocated", "partially_shipped", "cancelled"],
+  packed: ["partially_shipped", "shipped", "allocated", "cancelled"],
+  partially_shipped: ["picking", "shipped", "allocated", "partially_shipped"],
+  shipped: ["invoiced", "allocated", "partially_shipped"],
   invoiced: ["closed"],
   closed: [],
   cancelled: [],
@@ -81,7 +85,18 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
 };
 
 /** Transitions that must carry a reason (§6.1: backward, cancel, exception). */
-const REASON_REQUIRED: readonly string[] = ["pending_approval>draft", "*>cancelled"];
+const REASON_REQUIRED: readonly string[] = [
+  "pending_approval>draft",
+  "*>cancelled",
+  // W3E undo paths: allocation released, pick / shipment cancelled before dispatch, dispatch reversed.
+  "allocated>confirmed",
+  "picking>allocated",
+  "picking>partially_shipped",
+  "packed>allocated",
+  "shipped>allocated",
+  "shipped>partially_shipped",
+  "partially_shipped>allocated",
+];
 
 export function isOrderStatus(s: string): s is OrderStatus {
   return (ORDER_STATUSES as readonly string[]).includes(s);
@@ -246,7 +261,7 @@ export async function getOrder(ctx: AuthContext, orderId: string) {
         .from(stockAllocations)
         .innerJoin(inventoryLots, eq(inventoryLots.id, stockAllocations.lotId))
         .innerJoin(locations, eq(locations.id, stockAllocations.locationId))
-        .where(inArray(stockAllocations.salesOrderLineId, lines.map((l) => l.line.id)))
+        .where(and(inArray(stockAllocations.salesOrderLineId, lines.map((l) => l.line.id)), ne(stockAllocations.status, "released")))
         .orderBy(asc(inventoryLots.expiresOn), asc(inventoryLots.lotNumber))
     : [];
   const [shipmentRows, transitions, addresses, quote] = await Promise.all([
@@ -785,7 +800,14 @@ export async function cancelOrder(ctx: AuthContext, orderId: string, reason: str
       throw new DomainError("state", `Order ${o.orderNumber} is ${ORDER_STATUS_LABEL[o.status as OrderStatus]?.toLowerCase() ?? o.status}. After dispatch an order cannot be cancelled; record a customer return instead.`, { machine: "sales_order", from: o.status, to: "cancelled" });
     }
     const lineIds = (await tx.select({ id: salesOrderLines.id }).from(salesOrderLines).where(eq(salesOrderLines.salesOrderId, o.id))).map((l) => l.id);
-    const released = lineIds.length ? await tx.delete(stockAllocations).where(inArray(stockAllocations.salesOrderLineId, lineIds)).returning() : [];
+    // W3E: allocations are released with the reason, never deleted (pick lines and shipment lines may reference them).
+    const released = lineIds.length
+      ? await tx
+          .update(stockAllocations)
+          .set({ status: "released", releasedAt: new Date(), releasedBy: ctx.userId, releaseReason: `Order cancelled: ${reason.trim()}` })
+          .where(and(inArray(stockAllocations.salesOrderLineId, lineIds), eq(stockAllocations.status, "open")))
+          .returning()
+      : [];
     let reservations = 0;
     for (const id of lineIds) reservations += await releaseReservationsForDemand(tx, ctx, "sales_order_line", id, `Order ${o.orderNumber} cancelled: ${reason.trim()}`);
     await transitionOrder(tx, ctx, o, "cancelled", { reason: reason.trim(), set: { cancelReason: reason.trim() } });

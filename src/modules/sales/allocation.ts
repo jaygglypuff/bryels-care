@@ -1,17 +1,40 @@
 import "server-only";
-import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
-import { db, type DbOrTx } from "@/db/client";
-import { customers, inventoryBalances, inventoryLots, locations, products, salesOrderLines, salesOrders, stockAllocations } from "@/db/schema";
+import { db, type DbOrTx, type Tx } from "@/db/client";
+import {
+  containerContents,
+  containers,
+  inventoryBalances,
+  inventoryLots,
+  locations,
+  pickLines,
+  picks,
+  products,
+  salesOrderLines,
+  salesOrders,
+  stockAllocations,
+} from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { D, daysUntil, fmtQty } from "@/lib/qty";
-import { assertTransition, lockOrder } from "./orders";
-import { convertReservationsForDemands, reservedByLotLocation, resolveAllocationStrategy, sortCandidates } from "@/modules/inventory";
+import { lockOrder } from "./orders";
+import { advanceOrder } from "./fulfilment-state";
+import { customerFulfilmentRequirements } from "./fulfilment-requirements";
+import {
+  convertReservationsForDemands,
+  looseQty,
+  OPEN_ALLOCATION_ORDER_STATUSES,
+  reservedByLotLocation,
+  resolveAllocationStrategy,
+  sortCandidates,
+} from "@/modules/inventory";
 
-/** Orders whose allocations still hold stock (shipped allocations were already issued from stock). */
-const OPEN_ALLOCATION_STATUSES = ["confirmed", "allocated"];
+/** Orders whose open allocations still hold stock (fulfilled allocations were already issued from stock). */
+export const OPEN_ALLOCATION_STATUSES = OPEN_ALLOCATION_ORDER_STATUSES;
+/** Order states from which (more) stock may be allocated: a confirmed order, or the backorder of a partial shipment. */
+const ALLOCATABLE_STATUSES = ["confirmed", "partially_shipped"];
 
 export type StockCandidate = {
   lotId: string;
@@ -28,8 +51,8 @@ export type StockCandidate = {
 };
 
 /**
- * Released finished-goods stock in storage locations of a site, net of open allocations,
- * in FEFO order (earliest expiry first, lots without expiry last). Expired lots are excluded.
+ * Released finished-goods stock in storage locations of a site, net of open allocations and active
+ * reservations, in FEFO order (earliest expiry first, lots without expiry last). Expired lots are excluded.
  */
 export async function availableStock(q: DbOrTx, siteId: string, productIds?: string[], opts: { excludeDemandIds?: string[] } = {}): Promise<StockCandidate[]> {
   const where = [
@@ -53,7 +76,7 @@ export async function availableStock(q: DbOrTx, siteId: string, productIds?: str
     .from(stockAllocations)
     .innerJoin(salesOrderLines, eq(salesOrderLines.id, stockAllocations.salesOrderLineId))
     .innerJoin(salesOrders, eq(salesOrders.id, salesOrderLines.salesOrderId))
-    .where(inArray(salesOrders.status, OPEN_ALLOCATION_STATUSES))
+    .where(and(eq(stockAllocations.status, "open"), inArray(salesOrders.status, OPEN_ALLOCATION_STATUSES)))
     .groupBy(stockAllocations.lotId, stockAllocations.locationId)
     .as("reserved");
   const rows = await q
@@ -104,30 +127,111 @@ export async function productAvailability(ctx: AuthContext) {
   }));
 }
 
+export type AllocationRow = { sku: string; lotNumber: string; locationCode: string; qty: string; boxNumber: string | null; partialBox: boolean };
+
 export type AllocationResult = {
   orderNumber: string;
   fullyAllocated: boolean;
-  created: { sku: string; lotNumber: string; locationCode: string; qty: string }[];
+  created: AllocationRow[];
   shortfalls: { sku: string; ordered: string; short: string }[];
   skippedForShelfLife: { lotNumber: string; daysLeft: number }[];
+  skippedForLotAge: { lotNumber: string; ageDays: number }[];
   minShelfLifeDays: number;
+  maxLotAgeDays: number | null;
+  requirementSource: "customer_requirement" | "customer_default";
+};
+
+type Insert = { salesOrderLineId: string; lotId: string; locationId: string; qtyUnits: string; containerId: string | null };
+
+/** Boxes at a location holding only this lot, not allocated to any open allocation, full boxes first. */
+async function freeBoxes(q: DbOrTx, lotId: string, locationId: string) {
+  return q
+    .select({ id: containers.id, number: containers.containerNumber, qty: containerContents.qtyBase, isPartial: containers.isPartial })
+    .from(containers)
+    .innerJoin(containerContents, and(eq(containerContents.containerId, containers.id), eq(containerContents.lotId, lotId), gt(containerContents.qtyBase, "0")))
+    .where(
+      and(
+        eq(containers.currentLocationId, locationId),
+        inArray(containers.status, ["open", "sealed"]),
+        sql`not exists (select 1 from ${containerContents} o where o.container_id = ${containers.id} and o.lot_id <> ${lotId} and o.qty_base > 0)`,
+        sql`not exists (select 1 from ${stockAllocations} a where a.container_id = ${containers.id} and a.status = 'open')`,
+      ),
+    )
+    .orderBy(asc(containers.isPartial), asc(containers.containerNumber));
+}
+
+/** Loose (unboxed) quantity of a lot at a location that no open allocation already claims. */
+async function freeLoose(q: Tx, lotId: string, locationId: string) {
+  const loose = await looseQty(q, lotId, locationId);
+  const [a] = await q
+    .select({ qty: sql<string>`coalesce(sum(${stockAllocations.qtyUnits}), 0)::text` })
+    .from(stockAllocations)
+    .innerJoin(salesOrderLines, eq(salesOrderLines.id, stockAllocations.salesOrderLineId))
+    .innerJoin(salesOrders, eq(salesOrders.id, salesOrderLines.salesOrderId))
+    // Rows from before Wave 3 keep status open after shipping; only open orders hold stock.
+    .where(and(eq(stockAllocations.lotId, lotId), eq(stockAllocations.locationId, locationId), eq(stockAllocations.status, "open"), isNull(stockAllocations.containerId), inArray(salesOrders.status, OPEN_ALLOCATION_STATUSES)));
+  return Decimal.max(loose.minus(a?.qty ?? 0), 0);
+}
+
+/**
+ * Splits a lot/location quantity into allocation rows: whole boxes first, then loose units, then
+ * (only when nothing else fits) part of a box, which the picker takes out of the box at the shelf.
+ */
+async function boxPlan(tx: Tx, lotId: string, locationId: string, want: Decimal, usedBoxes: Set<string>, looseUsed: Map<string, Decimal>) {
+  const out: { containerId: string | null; boxNumber: string | null; qty: Decimal; partialBox: boolean }[] = [];
+  let left = want;
+  const boxes = (await freeBoxes(tx, lotId, locationId)).filter((b) => !usedBoxes.has(b.id));
+  for (const b of boxes) {
+    if (left.lte(0)) break;
+    const q = D(b.qty);
+    if (q.lte(left)) {
+      out.push({ containerId: b.id, boxNumber: b.number, qty: q, partialBox: false });
+      usedBoxes.add(b.id);
+      left = left.minus(q);
+    }
+  }
+  if (left.gt(0)) {
+    const key = `${lotId}|${locationId}`;
+    const loose = (await freeLoose(tx, lotId, locationId)).minus(looseUsed.get(key) ?? 0);
+    const take = Decimal.min(Decimal.max(loose, 0), left);
+    if (take.gt(0)) {
+      out.push({ containerId: null, boxNumber: null, qty: take, partialBox: false });
+      looseUsed.set(key, (looseUsed.get(key) ?? new Decimal(0)).plus(take));
+      left = left.minus(take);
+    }
+  }
+  if (left.gt(0)) {
+    const b = boxes.filter((x) => !usedBoxes.has(x.id) && D(x.qty).gt(left)).sort((a, z) => D(a.qty).comparedTo(z.qty))[0];
+    if (b) {
+      out.push({ containerId: b.id, boxNumber: b.number, qty: left, partialBox: true });
+      usedBoxes.add(b.id);
+      left = new Decimal(0);
+    }
+  }
+  return out;
+}
+
+const ageInDays = (manufacturedOn: string | null, createdAt: Date) => {
+  const from = manufacturedOn ? new Date(manufacturedOn + "T00:00:00+08:00") : createdAt;
+  return Math.floor((Date.now() - from.getTime()) / 86_400_000);
 };
 
 /**
- * FEFO allocation (W09-05, A-PROC-09): for each order line, reserves released finished-goods lots of
- * the product at the order's site, earliest expiry first, skipping lots whose remaining shelf life
- * is below the customer's minimum. Partial allocation is kept and the order stays confirmed.
- * Serialization: the order row, then the candidate lot rows (sorted by id) are locked, matching the
- * lock order of dispatch posting.
+ * FEFO/FIFO allocation (W09-05, US-4-09, A-PROC-09): for each order line, allocates released,
+ * unexpired finished-goods lots of the product at the order's site by the configured rule (US-2-20),
+ * skipping lots below the customer's minimum remaining shelf life or above its maximum lot age
+ * (customer requirements, read through `customerFulfilmentRequirements`), and proposes boxes
+ * (whole boxes, then loose units). Partial allocation is kept; the order moves `confirmed → allocated`
+ * only when every line is covered. Serialization: the order row, then the candidate lot rows
+ * (sorted by id) are locked, the lock order of dispatch posting.
  */
 export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<AllocationResult> {
-  ctx.require("sales.allocation.post");
+  ctx.require("inventory.allocation.create");
   return db.transaction(async (tx) => {
     const o = await lockOrder(tx, ctx, orderId);
+    ctx.requireAt("inventory.allocation.create", o.siteId);
     if (o.status === "allocated") throw new DomainError("state", `Order ${o.orderNumber} is already fully allocated.`);
-    if (o.status !== "confirmed") throw new DomainError("state", `Order ${o.orderNumber} is ${o.status}; only confirmed orders can be allocated.`);
-    const [cust] = await tx.select({ minShelfLifeDays: customers.minShelfLifeDays }).from(customers).where(eq(customers.id, o.customerId)).limit(1);
-    const minShelf = cust?.minShelfLifeDays ?? 0;
+    if (!ALLOCATABLE_STATUSES.includes(o.status)) throw new DomainError("state", `Order ${o.orderNumber} is ${o.status.replace(/_/g, " ")}; only confirmed orders (or the remainder of a partial shipment) can be allocated.`);
 
     const lines = await tx
       .select({ id: salesOrderLines.id, productId: salesOrderLines.productId, qty: salesOrderLines.qtyUnits, sku: products.skuCode })
@@ -136,7 +240,7 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
       .where(eq(salesOrderLines.salesOrderId, o.id))
       .orderBy(asc(salesOrderLines.lineNo));
     const existing = lines.length
-      ? await tx.select().from(stockAllocations).where(inArray(stockAllocations.salesOrderLineId, lines.map((l) => l.id)))
+      ? await tx.select().from(stockAllocations).where(and(inArray(stockAllocations.salesOrderLineId, lines.map((l) => l.id)), ne(stockAllocations.status, "released")))
       : [];
 
     const productIds = [...new Set(lines.map((l) => l.productId))];
@@ -152,16 +256,33 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
     const candidates = await availableStock(tx, o.siteId, productIds, { excludeDemandIds: lines.map((l) => l.id) });
     const remaining = new Map(candidates.map((c) => [`${c.lotId}|${c.locationId}`, D(c.available)]));
 
-    const result: AllocationResult = { orderNumber: o.orderNumber, fullyAllocated: true, created: [], shortfalls: [], skippedForShelfLife: [], minShelfLifeDays: minShelf };
+    const firstReq = await customerFulfilmentRequirements(tx, o.organizationId, o.customerId, lines[0]?.productId ?? null);
+    const result: AllocationResult = {
+      orderNumber: o.orderNumber,
+      fullyAllocated: true,
+      created: [],
+      shortfalls: [],
+      skippedForShelfLife: [],
+      skippedForLotAge: [],
+      minShelfLifeDays: firstReq.minRemainingShelfLifeDays,
+      maxLotAgeDays: firstReq.maxLotAgeDays,
+      requirementSource: firstReq.source,
+    };
     const skipped = new Map<string, number>();
-    const inserts: { salesOrderLineId: string; lotId: string; locationId: string; qtyUnits: string }[] = [];
+    const tooOld = new Map<string, number>();
+    const inserts: Insert[] = [];
+    const usedBoxes = new Set<string>();
+    const looseUsed = new Map<string, Decimal>();
 
     for (const line of lines) {
       const already = existing.filter((a) => a.salesOrderLineId === line.id).reduce((s, a) => s.plus(a.qtyUnits), new Decimal(0));
       let need = D(line.qty).minus(already);
+      if (need.lte(0)) continue;
+      const req = await customerFulfilmentRequirements(tx, o.organizationId, o.customerId, line.productId);
       // FEFO/FIFO rule per product and customer (US-2-20), the same order the recommendation shows.
       const rule = await resolveAllocationStrategy(tx, o.organizationId, { productId: line.productId, customerId: o.customerId });
-      const lineMin = Math.max(minShelf, rule.minShelfLifeDays ?? 0);
+      const lineMin = Math.max(req.minRemainingShelfLifeDays, rule.minShelfLifeDays ?? 0);
+      result.minShelfLifeDays = Math.max(result.minShelfLifeDays, lineMin);
       for (const c of sortCandidates(candidates.filter((x) => x.productId === line.productId), rule.strategy)) {
         if (need.lte(0)) break;
         const left = daysUntil(c.expiresOn);
@@ -169,14 +290,24 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
           skipped.set(c.lotNumber, left);
           continue;
         }
+        if (req.maxLotAgeDays !== null) {
+          const age = ageInDays(c.manufacturedOn, c.lotCreatedAt);
+          if (age > req.maxLotAgeDays) {
+            tooOld.set(c.lotNumber, age);
+            continue;
+          }
+        }
         const key = `${c.lotId}|${c.locationId}`;
         const avail = remaining.get(key) ?? new Decimal(0);
         if (avail.lte(0)) continue;
-        const take = Decimal.min(avail, need);
-        remaining.set(key, avail.minus(take));
-        need = need.minus(take);
-        inserts.push({ salesOrderLineId: line.id, lotId: c.lotId, locationId: c.locationId, qtyUnits: take.toString() });
-        result.created.push({ sku: line.sku, lotNumber: c.lotNumber, locationCode: c.locationCode, qty: take.toString() });
+        const want = Decimal.min(avail, need);
+        const plan = await boxPlan(tx, c.lotId, c.locationId, want, usedBoxes, looseUsed);
+        for (const p of plan) {
+          remaining.set(key, (remaining.get(key) ?? new Decimal(0)).minus(p.qty));
+          need = need.minus(p.qty);
+          inserts.push({ salesOrderLineId: line.id, lotId: c.lotId, locationId: c.locationId, qtyUnits: p.qty.toString(), containerId: p.containerId });
+          result.created.push({ sku: line.sku, lotNumber: c.lotNumber, locationCode: c.locationCode, qty: p.qty.toString(), boxNumber: p.boxNumber, partialBox: p.partialBox });
+        }
       }
       if (need.gt(0)) {
         result.fullyAllocated = false;
@@ -184,32 +315,114 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
       }
     }
     result.skippedForShelfLife = [...skipped].map(([lotNumber, daysLeft]) => ({ lotNumber, daysLeft }));
+    result.skippedForLotAge = [...tooOld].map(([lotNumber, ageDays]) => ({ lotNumber, ageDays }));
 
     if (inserts.length === 0) {
-      if (result.fullyAllocated) {
-        // Nothing to add but nothing short (e.g. a previous partial allocation has since been completed).
-      } else {
-        throw new DomainError("insufficient_stock", describeShortfall(result, "No stock could be allocated."));
-      }
+      if (!result.fullyAllocated) throw new DomainError("insufficient_stock", describeShortfall(result, "No stock could be allocated."));
     } else {
-      await tx.insert(stockAllocations).values(inserts);
+      await tx.insert(stockAllocations).values(inserts.map((i) => ({ ...i, status: "open", createdBy: ctx.userId })));
     }
     if (result.fullyAllocated) await convertReservationsForDemands(tx, lines.map((l) => l.id));
-    if (result.fullyAllocated) {
-      assertTransition(o.status, "allocated", o.orderNumber);
-      await tx.update(salesOrders).set({ status: "allocated" }).where(eq(salesOrders.id, o.id));
-    }
+    const before = o.status;
+    if (result.fullyAllocated && o.status === "confirmed") await advanceOrder(tx, ctx, o, "allocated");
     await audit(tx, ctx, {
-      action: "sales.allocation.posted",
+      action: "inventory.stock_allocation.created",
       entityType: "sales_order",
       entityId: o.id,
       entityNumber: o.orderNumber,
       siteId: o.siteId,
-      before: { status: o.status },
-      after: { status: result.fullyAllocated ? "allocated" : o.status, allocations: result.created, shortfalls: result.shortfalls, skippedForShelfLife: result.skippedForShelfLife },
+      before: { status: before },
+      after: {
+        status: o.status,
+        allocations: result.created,
+        shortfalls: result.shortfalls,
+        skippedForShelfLife: result.skippedForShelfLife,
+        skippedForLotAge: result.skippedForLotAge,
+        minShelfLifeDays: result.minShelfLifeDays,
+        requirementSource: result.requirementSource,
+      },
     });
     return result;
   });
+}
+
+/**
+ * Releases open allocations of an order (all, or the listed ones) with a reason (inventory.allocation.void).
+ * Allocations on an open pick must be un-picked or the pick cancelled first. An allocated order whose
+ * lines are no longer covered returns to confirmed.
+ */
+export async function releaseAllocations(ctx: AuthContext, orderId: string, input: { allocationIds?: string[]; reason: string }) {
+  ctx.require("inventory.allocation.void");
+  const reason = input.reason?.trim() ?? "";
+  if (reason.length < 3) throw new DomainError("validation", "Say why the allocation is released (at least 3 characters).", { field: "reason" });
+  return db.transaction(async (tx) => {
+    const o = await lockOrder(tx, ctx, orderId);
+    ctx.requireAt("inventory.allocation.void", o.siteId);
+    if (!["confirmed", "allocated", "partially_shipped"].includes(o.status)) throw new DomainError("state", `Order ${o.orderNumber} is ${o.status.replace(/_/g, " ")}; allocations can be released before picking starts.`);
+    const lineIds = (await tx.select({ id: salesOrderLines.id }).from(salesOrderLines).where(eq(salesOrderLines.salesOrderId, o.id))).map((l) => l.id);
+    if (lineIds.length === 0) throw new DomainError("state", "The order has no lines.");
+    const conds = [inArray(stockAllocations.salesOrderLineId, lineIds), eq(stockAllocations.status, "open")];
+    if (input.allocationIds?.length) conds.push(inArray(stockAllocations.id, input.allocationIds));
+    const rows = await tx.select().from(stockAllocations).where(and(...conds)).for("update");
+    if (rows.length === 0) throw new DomainError("state", "Nothing open to release on this order.");
+    const onPick = await tx
+      .select({ id: pickLines.id })
+      .from(pickLines)
+      .innerJoin(picks, eq(picks.id, pickLines.pickId))
+      .where(and(inArray(pickLines.allocationId, rows.map((r) => r.id)), isNull(pickLines.voidedAt), inArray(picks.status, ["draft", "in_progress"])))
+      .limit(1);
+    if (onPick.length) throw new DomainError("state", "Some of these allocations are already picked on an open pick list. Cancel the pick first.");
+    await tx
+      .update(stockAllocations)
+      .set({ status: "released", releasedAt: new Date(), releasedBy: ctx.userId, releaseReason: reason })
+      .where(inArray(stockAllocations.id, rows.map((r) => r.id)));
+    const before = o.status;
+    if (o.status === "allocated") await advanceOrder(tx, ctx, o, "confirmed", reason);
+    await audit(tx, ctx, {
+      action: "inventory.stock_allocation.released",
+      entityType: "sales_order",
+      entityId: o.id,
+      entityNumber: o.orderNumber,
+      siteId: o.siteId,
+      reason,
+      before: { status: before, allocations: rows.map((r) => ({ id: r.id, lotId: r.lotId, qty: r.qtyUnits, containerId: r.containerId })) },
+      after: { status: o.status },
+    });
+    return { released: rows.length };
+  });
+}
+
+/** Open allocations of an order with lot, box and location (pick list rows, allocation summary). */
+export async function openAllocationsForOrder(q: DbOrTx, orderId: string) {
+  return q
+    .select({
+      id: stockAllocations.id,
+      salesOrderLineId: stockAllocations.salesOrderLineId,
+      lotId: stockAllocations.lotId,
+      locationId: stockAllocations.locationId,
+      containerId: stockAllocations.containerId,
+      qty: stockAllocations.qtyUnits,
+      status: stockAllocations.status,
+      lotNumber: inventoryLots.lotNumber,
+      expiresOn: inventoryLots.expiresOn,
+      qualityStatus: inventoryLots.qualityStatus,
+      baseUom: inventoryLots.baseUom,
+      locationCode: locations.code,
+      locationName: locations.name,
+      boxNumber: containers.containerNumber,
+      sku: products.skuCode,
+      productName: products.name,
+      productId: products.id,
+      lineNo: salesOrderLines.lineNo,
+    })
+    .from(stockAllocations)
+    .innerJoin(salesOrderLines, eq(salesOrderLines.id, stockAllocations.salesOrderLineId))
+    .innerJoin(products, eq(products.id, salesOrderLines.productId))
+    .innerJoin(inventoryLots, eq(inventoryLots.id, stockAllocations.lotId))
+    .innerJoin(locations, eq(locations.id, stockAllocations.locationId))
+    .leftJoin(containers, eq(containers.id, stockAllocations.containerId))
+    .where(and(eq(salesOrderLines.salesOrderId, orderId), eq(stockAllocations.status, "open")))
+    .orderBy(asc(locations.code), sql`${inventoryLots.expiresOn} asc nulls last`, asc(inventoryLots.lotNumber), asc(containers.containerNumber));
 }
 
 export function describeShortfall(r: AllocationResult, prefix: string): string {
@@ -217,6 +430,9 @@ export function describeShortfall(r: AllocationResult, prefix: string): string {
   let msg = `${prefix} Not enough released stock — ${parts.join("; ")}. The order stays confirmed; allocate again when more stock is released.`;
   if (r.skippedForShelfLife.length) {
     msg += ` Skipped lot(s) below the customer's minimum shelf life of ${r.minShelfLifeDays} days: ${r.skippedForShelfLife.map((s) => `${s.lotNumber} (${s.daysLeft} days left)`).join(", ")}.`;
+  }
+  if (r.skippedForLotAge.length) {
+    msg += ` Skipped lot(s) older than the customer's maximum lot age of ${r.maxLotAgeDays} days: ${r.skippedForLotAge.map((s) => `${s.lotNumber} (${s.ageDays} days old)`).join(", ")}.`;
   }
   return msg;
 }

@@ -8,24 +8,19 @@ import { getOrder, manilaToday } from "@/modules/sales";
 import { Card, CardTitle, Dl, LinkButton, PageHeader, Table, Td } from "@/ui/core";
 import { Banner, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
-import { AllocateForm, DeliveryForm, DispatchForm } from "./order-actions";
+import { AllocateForm } from "./order-actions";
+import { FulfilmentPanel } from "./fulfilment-panel"; // W3E
 import { ApproveOrderForm, CancelOrderPanel, ReorderForm, ReturnOrderForm, SubmitOrderForm } from "../orders/order-commercial";
 import { MaskedNote, Money, SalesStatus } from "../orders/sales-ui";
 
 export const metadata = { title: "Sales order" };
-
-function manilaNowLocal(): string {
-  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
-  const g = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
-  return `${g("year")}-${g("month")}-${g("day")}T${g("hour")}:${g("minute")}`;
-}
 
 const DONE: Record<string, string> = {
   confirmed: "Order confirmed within limits. The warehouse can now allocate stock.",
   pending_approval: "Submitted. The order needs approval before the warehouse can allocate it.",
   edited: "Draft saved.",
   reordered: "New draft created from the earlier order at today's prices. Check it, then submit.",
-  allocated: "Fully allocated by FEFO. Pick the lots on the pick list, then dispatch.",
+  allocated: "Fully allocated by FEFO. Next: start the pick list (Fulfilment).",
   dispatched: "Dispatched: stock issued. Delivery receipt",
   delivered: "Delivery recorded.",
   cancelled: "Order cancelled. Any allocated stock was released.",
@@ -49,11 +44,10 @@ export default async function OrderDetailPage({ params, searchParams }: { params
   const hasAllocations = allocations.length > 0;
   const shortLines = lines.filter((l) => D(l.shortfall).gt(0));
   const totalPcs = lines.reduce((s, l) => s.plus(l.qtyUnits), new Decimal(0));
-  const showAlloc = status === "confirmed" || status === "allocated" || status === "shipped";
+  const showAlloc = ["confirmed", "allocated", "picking", "packed", "partially_shipped", "shipped"].includes(status);
   const canVoid = ctx.can("sales.sales_order.void") && ["draft", "submitted", "pending_approval", "confirmed", "allocated", "picking", "packed"].includes(status);
   const reasons = order.approvalReasons ?? [];
   const warnings = order.warnings ?? [];
-  const suggestedPackages = Math.max(1, lines.reduce((n, l) => n + D(l.qtyUnits).div(l.unitsPerBox || 1).ceil().toNumber(), 0));
 
   return (
     <>
@@ -269,7 +263,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                 <p className="text-[13px] text-fg-2">
                   Reserves released finished-goods lots at this site, earliest expiry first, skipping lots with less than {customer.minShelfLifeDays} days of shelf life left.
                 </p>
-                {ctx.can("sales.allocation.post") ? (
+                {ctx.can("inventory.allocation.create") ? (
                   <AllocateForm orderId={order.id} label={hasAllocations ? "Allocate remaining (FEFO)" : "Allocate stock (FEFO)"} />
                 ) : (
                   <p className="text-[13px] text-muted">Waiting for the warehouse to allocate stock.</p>
@@ -279,24 +273,13 @@ export default async function OrderDetailPage({ params, searchParams }: { params
             </Card>
           )}
 
-          {status === "allocated" && (
+          {/* W3E: allocation → pick → pack verification → dispatch → delivery receipt live on the fulfilment screens. */}
+          <FulfilmentPanel orderId={order.id} />
+
+          {canVoid && ["allocated", "picking", "packed"].includes(status) && (
             <Card>
-              <CardTitle>Dispatch</CardTitle>
-              {ctx.can("sales.shipment.post") ? (
-                <div className="flex flex-col gap-3">
-                  <p className="text-[13px] text-fg-2">
-                    Pick the lots on the pick list, load them, then post the dispatch. Exactly the allocated quantities ship; lots are re-checked (released, not expired) at posting.
-                  </p>
-                  <DispatchForm orderId={order.id} suggestedPackages={suggestedPackages} />
-                </div>
-              ) : (
-                <p className="text-[13px] text-muted">Allocated. Waiting for the warehouse to pick and dispatch.</p>
-              )}
-              {canVoid && (
-                <div className="mt-3">
-                  <CancelOrderPanel orderId={order.id} hasAllocations={hasAllocations} />
-                </div>
-              )}
+              <CardTitle>Cancel order</CardTitle>
+              <CancelOrderPanel orderId={order.id} hasAllocations={hasAllocations} />
             </Card>
           )}
 
@@ -305,32 +288,6 @@ export default async function OrderDetailPage({ params, searchParams }: { params
               This order was cancelled; see the audit log for the reason.
             </Banner>
           )}
-
-          {shipments.map((s) => (
-            <Card key={s.id}>
-              <CardTitle>Shipment {s.deliveryReceiptNumber}</CardTitle>
-              {ctx.can("sales.shipment.view") && (
-                <LinkButton href={`/print/delivery-receipt/${s.id}`} target="_blank" variant="primary" className="mb-4 w-full">
-                  Print delivery receipt
-                </LinkButton>
-              )}
-              <Dl
-                items={[
-                  ["Dispatched", fmtDateTime(s.dispatchedAt)],
-                  ["Carrier", s.carrier ?? "—"],
-                  ["Driver", s.driverName ?? "—"],
-                  ["Vehicle", s.vehiclePlate ?? "—"],
-                  ["Packages", s.packageCount ?? "—"],
-                  ["Delivered", s.deliveredAt ? `${fmtDateTime(s.deliveredAt)} · ${s.receivedByName ?? ""}` : "Not yet recorded"],
-                ]}
-              />
-              {!s.deliveredAt && ctx.can("sales.shipment.post") && (
-                <div className="mt-4 border-t border-line pt-4">
-                  <DeliveryForm shipmentId={s.id} orderId={order.id} now={manilaNowLocal()} />
-                </div>
-              )}
-            </Card>
-          ))}
 
           {ctx.can("sales.sales_order.create") && ["shipped", "invoiced", "closed", "cancelled"].includes(status) && (
             <Card>

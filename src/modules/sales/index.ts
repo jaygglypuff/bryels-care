@@ -13,3 +13,12 @@ export * from "./customer-360";
 export { CREDIT_FIELDS, canSeePrices, formatAddress, businessDate as salesBusinessDate } from "./crm-support";
 export { approvalProgress as salesApprovalProgress, type ApprovalProgress as SalesApprovalProgress } from "./crm-approvals";
 export { salesQuoteExpiryJob } from "./quotations-expiry-job";
+// Wave 3 W3E: boxing and fulfilment
+export * from "./fulfilment-state";
+export { customerFulfilmentRequirements, type FulfilmentRequirements } from "./fulfilment-requirements";
+export * from "./boxing";
+export * from "./picking";
+export * from "./packing";
+export * from "./dispatch";
+export * from "./delivery-receipts";
+export * from "./shipment-export";

@@ -255,8 +255,9 @@ class Tracer {
       .select({
         shipmentId: shipments.id,
         siteId: shipments.siteId,
-        drNumber: shipments.deliveryReceiptNumber,
-        dispatchedAt: shipments.dispatchedAt,
+        // W3E: both are set by the dispatch posting that wrote these shipment movements.
+        drNumber: sql<string>`coalesce(${shipments.deliveryReceiptNumber}, ${shipments.shipmentNumber}, '')`,
+        dispatchedAt: sql<Date>`coalesce(${shipments.dispatchedAt}, min(${stockMovements.postedAt}))`.mapWith(shipments.dispatchedAt),
         orderId: salesOrders.id,
         orderNumber: salesOrders.orderNumber,
         orderStatus: salesOrders.status,

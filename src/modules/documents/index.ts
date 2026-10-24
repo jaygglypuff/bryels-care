@@ -55,3 +55,9 @@ export { resolveTemplateVersion, generateForSource, documentsForSource, document
 export { bmrDataSchema, bmrPaperPageDataSchema, BMR_SECTIONS, BMR_REQUIRED_SECTIONS, type BmrData, type BmrPaperPageData, type BmrSectionId } from "./renderers/bmr-data";
 export { bmrContentHash, defaultBmrDefinition } from "./renderers/bmr-v1";
 export { defaultBmrPaperPageDefinition } from "./renderers/bmr-paper-page-v1";
+// Wave 3 W3E: box labels, fulfilment documents (boxing note, pick list, delivery receipt)
+export { voidLabelsForEntityInTx } from "./label-jobs";
+export { markDocumentVoid } from "./generated";
+export { boxingNoteDataSchema, type BoxingNoteData } from "./renderers/boxing-note-v1";
+export { pickListDataSchema, type PickListData } from "./renderers/pick-list-v1";
+export { deliveryReceiptDataSchema, type DeliveryReceiptData } from "./renderers/delivery-receipt-v1";

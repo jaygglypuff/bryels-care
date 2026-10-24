@@ -530,7 +530,7 @@ async function kpiValue(page, caption) {
     await context.close();
   }
 
-  // ---------------- j. Warehouse allocates (FEFO) and dispatches ----------------
+  // ---------------- j. Warehouse allocates (FEFO), picks; the site manager verifies; warehouse dispatches (W3E) ----------------
   {
     const page = wh.page;
     await page.goto(BASE + '/sales');
@@ -547,14 +547,57 @@ async function kpiValue(page, caption) {
     await page.waitForURL(/done=allocated/, { timeout: 30000 });
     await expectText(page, facts.fgLot);
     await shot(page, 'order-allocated-fefo', { full: true });
+    // Pick: the finished lot is loose (not boxed), so the lot label is scanned with the counted quantity.
+    await page.getByRole('button', { name: 'Start pick list' }).click();
+    await page.waitForURL(/\/sales\/picking\/[0-9a-f-]{36}/, { timeout: 30000 });
+    // FEFO may split the order over the older lot and the new finished lot: scan every row of the list.
+    await expectText(page, facts.fgLot);
+    const rows = await page.getByTestId('pick-row').evaluateAll((els) => els.map((e) => ({ lot: e.dataset.lot, box: e.dataset.box, qty: e.dataset.qty })));
+    for (const r of rows) {
+      if (r.box) {
+        await page.fill('#scan-input', 'BC:BOX:' + r.box);
+      } else {
+        await page.fill('#scan-qty', r.qty);
+        await page.fill('#scan-input', 'BC:LOT:' + r.lot);
+      }
+      await page.press('#scan-input', 'Enter');
+      await page.getByTestId('scan-result').getByText(new RegExp('Picked .*' + (r.box || r.lot))).waitFor({ timeout: 30000 });
+    }
+    await shot(page, 'pick-scanned');
+    await page.getByRole('button', { name: 'Complete pick' }).click();
+    await page.waitForURL(/\/sales\/shipments\/[0-9a-f-]{36}\?done=picked/, { timeout: 30000 });
+    facts.shipmentId = page.url().split('/').pop().split('?')[0];
+    log('picked', facts.orderNumber);
+  }
+  {
+    // Pack verification by someone who did not pick (checker ≠ packer).
+    const { context, page } = await asUser('manager.nfd@bryels-care.test');
+    await page.goto(BASE + '/sales/packing/' + facts.shipmentId);
+    const picked = await page.getByTestId('picked-row').evaluateAll((els) => els.map((e) => ({ lot: e.dataset.lot, box: e.dataset.box, qty: e.dataset.qty })));
+    for (const r of picked) {
+      if (r.box) {
+        await page.fill('#scan-input', 'BC:BOX:' + r.box);
+      } else {
+        await page.fill('#scan-qty', r.qty);
+        await page.fill('#scan-input', 'BC:LOT:' + r.lot);
+      }
+      await page.press('#scan-input', 'Enter');
+      await page.getByTestId('scan-result').getByText(r.box ? new RegExp('Box ' + r.box + ' verified') : new RegExp('Verified .*' + r.lot)).waitFor({ timeout: 30000 });
+    }
+    await shot(page, 'pack-verified');
+    await page.getByRole('button', { name: 'Complete packing' }).click();
+    await page.waitForURL(/done=packed/, { timeout: 30000 });
+    await context.close();
+  }
+  {
+    const page = wh.page;
+    await page.goto(BASE + '/sales/shipments/' + facts.shipmentId);
     page.once('dialog', (d) => d.accept());
-    await page.fill('#carrier', 'Own truck');
     await page.fill('#driverName', 'Ramon Aquino');
     await page.fill('#vehiclePlate', 'NBC 1234');
-    await page.fill('#packageCount', '2');
-    await page.getByRole('button', { name: 'Dispatch' }).click();
+    await page.getByRole('button', { name: 'Dispatch shipment' }).click();
     await page.waitForURL(/done=dispatched/, { timeout: 30000 });
-    await expectText(page, 'Shipped');
+    await expectText(page, 'Dispatched');
     await shot(page, 'order-shipped');
     const drHref = await page.locator('a[href^="/print/delivery-receipt/"]').first().getAttribute('href');
     await page.goto(BASE + drHref);
