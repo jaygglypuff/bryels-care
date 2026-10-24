@@ -699,3 +699,38 @@ investigating" once a hold is under investigation) is not visible afterwards, so
 show on the page itself (status chip, timeline, banner). The demo rehearsal
 (`tests/e2e/demo-rehearsal.cjs`) has no reload fallback: a screen that looks unchanged after a
 successful action fails it.
+
+## ADR-044 Demo mode and dashboard-only Railway start-up
+
+**Status.** Accepted (Railway demo), 2026-10-24. Refines ADR-014 (topology) and ADR-025 (worker
+service); `ALLOW_DEMO_SEED` becomes an alias of `DEMO_MODE`.
+
+**Context.** The owner deploys the demo on Railway from the web dashboard only, from a GitHub
+branch that redeploys on every push. Railway no longer lets new services opt into config as code
+(`railway.json`, read until 2026-12-01) and Infrastructure as Code needs the CLI, so nothing may
+depend on a start or pre-deploy command typed per service. Railway has no secret generator for
+service variables.
+
+**Decision.**
+1. One image, one start command (`scripts/start.sh`): `APP_ROLE=worker` (or a service named
+   `worker`) runs the worker; otherwise web: self-check → migrations (advisory lock) → reference
+   data → demo data when `DEMO_MODE=true` and the database is empty → Next.js. Only web migrates.
+2. A start-up self-check prints plain-language `[setup]` lines and is fatal only without a usable
+   `DATABASE_URL`. `APP_ORIGIN` defaults to `https://$RAILWAY_PUBLIC_DOMAIN`,
+   `TRUSTED_PROXY_HEADER` to `x-real-ip` on Railway, `FILE_STORAGE` to `s3` when every `S3_*` is
+   set; in demo mode only, missing `FILE_URL_SECRET`/`DATA_ENCRYPTION_KEY` are derived from
+   `DATABASE_URL`.
+3. Demo mode (`DEMO_MODE=true`, never with `APP_ENV=production`): auto-load into an empty
+   database with a completeness marker, "Try the demo" one-click sign-in for demo accounts only,
+   a demo banner, owner-only reset (step-up, typed confirmation, truncate-and-reload keeping the
+   schema) and no TOTP-deadline block for demo accounts.
+4. Demo data and real data never mix: seed, auto-load and resets refuse while any account's email
+   is not a demo address; demo mode refuses invitations to real addresses.
+
+**Why.** Every push must give a working demo without anyone typing commands, and the same code must
+be unable to harm a real database. Truncating rather than dropping keeps the worker and pg-boss
+running during a reset.
+
+**Consequences.** Assumptions A-DEMO-01 to A-DEMO-08 (`docs/PRD.md`). The derived demo secrets are
+as safe as `DATABASE_URL` itself and are never used outside demo mode. Real deployments use a
+separate Railway project with `APP_ENV=production` (`docs/railway-for-dummies.md` "Going live").

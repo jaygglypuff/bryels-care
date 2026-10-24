@@ -141,24 +141,60 @@ repository root and the worker runs the TypeScript sources directly:
 | Item | Current implementation |
 |---|---|
 | Image | one image for both services; the runner stage carries `src/`, `tsconfig.json` and `scripts/` so the worker can start |
-| `web` start command | default `CMD` (`sh scripts/start.sh`: migrate, optional demo seed, `next start`) |
-| `worker` start command | `pnpm worker` (= `tsx --require ./scripts/worker-preload.cjs src/worker.ts`; the preload maps the `server-only` guard to an empty module for this server process) |
+| `web` start command | default `CMD` (`sh scripts/start.sh`: self-check, migrate, reference data, demo data when `DEMO_MODE=true` and the database is empty, `next start`); section 2.4 |
+| `worker` start command | the same default `CMD`: `scripts/start.sh` runs `pnpm worker` when `APP_ROLE=worker` (or, with `APP_ROLE` unset, when `RAILWAY_SERVICE_NAME` contains `worker`). A Custom Start Command of `pnpm worker` still works. `pnpm worker` = `tsx --require ./scripts/worker-preload.cjs src/worker.ts`; the preload maps the `server-only` guard to an empty module for this server process |
 | Worker health | `/api/health` (process up) and `/api/ready` (migrations current, pg-boss started, heartbeat < 90 s) on `PORT`; `railway.json`'s `/api/health` healthcheck works for both services |
 | Schema wait | the worker polls `drizzle.__drizzle_migrations` every 10 s until it matches the bundled journal (web applies migrations), gives up after 15 min |
 | pg-boss | v12, schema `pgboss` (created on first start), pool `max: 2`; one queue per registered job code with exponential retry and dead-letter queue `platform.dead_letter`; our `background_jobs` table stays the source of truth |
 | Variables | `DATABASE_URL` (same runtime role as web; needs CREATE on the database for the `pgboss` schema on first start, or create it once as the migration role), `WORKER_CONCURRENCY` (default 2), `PORT` (set by Railway) |
 | Draining | on `SIGTERM` the relay stops, pg-boss stops gracefully (50 s), then exit 0; set the worker's draining time to 60 s |
 
-Railway setup (ADR-025): add a second service from the same repository (Dockerfile builder), set its
-**Custom Start Command** to `pnpm worker`, give it the same `DATABASE_URL` reference, no public
-domain, one replica. Registered jobs as of Wave 1: `inventory.reconcile` (01:00 Asia/Manila),
+Railway setup (ADR-025, ADR-044): add a second service from the same repository (Dockerfile builder),
+name it `worker`, set the variable `APP_ROLE=worker` (no start command needed), give it the same
+`DATABASE_URL` reference and `APP_ORIGIN=https://${{web.RAILWAY_PUBLIC_DOMAIN}}`, no public
+domain, one replica. Only `web` runs migrations; `src/db/migrate.ts` also holds the advisory lock
+`bc_migrate`, so two `web` replicas starting together apply them one after the other. Registered jobs as of Wave 1: `inventory.reconcile` (01:00 Asia/Manila),
 `inventory.expiry_check` (00:15 Asia/Manila), `inventory.reservation_expiry` (every 15 min),
 `inventory.rebuild_balances` and `documents.render` (on demand). Without this service nothing
 breaks in the request path, but these jobs never run (lots are not expired or put on retest hold
 automatically, reservations do not lapse, no reconciliation) and Admin → Diagnostics shows "The
 worker is not running".
 
+### 2.4 Demo mode and Railway defaults (as built, ADR-044)
+
+The owner deploys the demo from the Railway dashboard only (`docs/railway-for-dummies.md`). The
+minimum is a Postgres service plus `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `DEMO_MODE=true` and
+`PORT=3000` on `web`; everything else is derived or optional.
+
+| Concern | Behaviour | Code |
+|---|---|---|
+| Start-up self-check | prints `[setup] ok/CHECK/PROBLEM <setting>: <plain instruction>` lines; exits 1 only without a usable `DATABASE_URL` (missing, unresolved `${{…}}`, not a postgres URL) | `scripts/self-check.ts`, `src/lib/runtime-env.ts` |
+| `APP_ORIGIN` | unset → `https://$RAILWAY_PUBLIC_DOMAIN` (`http://` only for `localhost`); a pasted value without scheme or with a trailing slash is normalised; an explicit value always wins | `applyRuntimeDefaults` (Next.js `register`, worker, bootstrap script) |
+| `TRUSTED_PROXY_HEADER` | unset on Railway → `x-real-ip`, the header Railway documents for the client's remote IP (**verified 2026-10-24**, Specs & Limits); Railway does not document its `X-Forwarded-For` append/overwrite rules, so the leftmost XFF entry is not trusted by default | same |
+| `FILE_STORAGE` | unset with all five `S3_*` present → `s3`; unset in demo mode with a Railway volume attached → `local` under `$RAILWAY_VOLUME_MOUNT_PATH/files` (web only: the worker cannot read a volume of another service, so import result files written by the worker need the bucket) | same |
+| Demo secrets | demo mode with `FILE_URL_SECRET` / `DATA_ENCRYPTION_KEY` unset → HMAC-SHA256 of `DATABASE_URL` (`demo:` key id); stable across restarts and identical in `web` and `worker`; logged as "Demo only"; never outside demo mode | same |
+| Demo switch | `DEMO_MODE=true` (also `1/yes/on`); `ALLOW_DEMO_SEED=true` is read as an alias; `APP_ENV=production` forces it off | `src/lib/demo.ts` |
+| Demo data at start | `pnpm db:demo auto` after migrations and reference data: empty database → seed + reference data; complete demo (audit marker `platform.demo.seeded`) → nothing; organization without the marker (interrupted load) → wipe and load again; a failed load leaves the database empty so the next start retries. Advisory lock `bc_demo_data` | `src/db/demo.ts` |
+| Real-data guard | seed, `db:demo auto|reset` and `db:reset` refuse (exit 2/1) while any user's email is not `@bryels-care.test` or the system actor; demo mode refuses invitations to non-demo addresses | `src/lib/demo.ts`, `src/db/*.ts`, `inviteUser` |
+| Reset demo data | owner_director only, step-up, typed `RESET`; runs `node --import tsx src/db/demo.ts reset` (TRUNCATE … RESTART IDENTITY CASCADE of every `public` table, keeps schema, migrations and `pgboss`, so the worker keeps running), then records `platform.demo.reset` in the new data and a structured log line before and after | `src/modules/platform/demo-reset.ts`, `/admin/demo` |
+| One-click sign-in | sign-in page "Try the demo" switch, accounts grouped by role from the database, `signInAsDemo` server action: demo mode + demo address + per-IP limit + normal password path; audited `identity.session.demo_sign_in` | `src/modules/identity/demo.ts`, `src/app/(auth)/sign-in` |
+| TOTP deadline | demo accounts in demo mode are never `overdue` for enrolment (enrolment stays possible) | `mfaStateFor` |
+| First administrator without a terminal | `BOOTSTRAP_ADMIN_EMAIL` set on `web` → `scripts/start.sh` runs `pnpm admin:bootstrap` and the one-time link appears in the deploy log; refused (and ignored) once any account is active | section 14a |
+
+Measured in the container rehearsal (production build, `pnpm install --prod`, `NODE_ENV=production`,
+2026-10-24): first start with demo load 16 s plus `next start`; restart without reload a few
+seconds; in-app reset 13–14 s; worker ready (`/api/ready` 200) about 5 s after start.
+
 ## 3. Railway service configuration
+
+**Config as code for new services (verified 2026-10-24).** Railway's config-as-code page now says
+"New services cannot opt into Config as Code" and existing files stop being read on 2026-12-01;
+Infrastructure as Code needs the Railway CLI. The owner's demo therefore relies on nothing in
+`railway.json`: the image's default `CMD` (`scripts/start.sh`) picks the role, and the healthcheck
+path/timeout are typed into the dashboard (`docs/railway-for-dummies.md` steps 2 and 8).
+`railway.json` stays for services that still read it (Dockerfile builder, `/api/health`, 300 s,
+`ON_FAILURE` ×10); it holds no start or pre-deploy command because it would apply to `web` and
+`worker` alike.
 
 Railway's `railway.json`/`railway.toml` "config as code" is deprecated in favour of
 Infrastructure as Code in `.railway/railway.ts` (TypeScript GA; applied with
@@ -235,8 +271,10 @@ variable (`docs/architecture.md` section 12).
 | `NODE_ENV` | plain | base | x | x | x | `development` | `production` | `production` | set in the image |
 | `APP_ENV` | plain | base | x | x | x | `development` | `staging` | `production` | authoritative environment flag (seed guard, log tag, UI badge); never trust `RAILWAY_ENVIRONMENT` for this because both projects may name their environment `production` |
 | `PORT`, `HOSTNAME` | plain | base | x | x | – | `3000`, `localhost` | injected / `::` | injected / `::` | Railway injects `PORT` **(verified 2026-10-16)** |
-| `APP_ORIGIN` | plain | base | x | x | – | `http://localhost:3000` | `https://staging.<domain>` | `https://<domain>` | Origin checks, cookie `Secure`, absolute links in email |
-| `TRUSTED_PROXY_HEADER` | plain | base | x | – | – | unset | `x-forwarded-for` | `x-forwarded-for` | client IP for the per-IP limits of the shared rate-limit store (`docs/security.md` 3.3, ADR-038); unset = sign-in attempts of all clients share one bucket and reset/invitation IP limits are off (development only); becomes `cf-connecting-ip` only if a Cloudflare proxy is placed in front (A-DEP-15) |
+| `APP_ORIGIN` | plain | base | x | x | – | `http://localhost:3000` | `https://staging.<domain>` | `https://<domain>` | Origin checks, cookie `Secure`, absolute links in email. Unset on `web` → derived from `RAILWAY_PUBLIC_DOMAIN` (section 2.4); the worker has no domain, so it gets `https://${{web.RAILWAY_PUBLIC_DOMAIN}}` |
+| `DEMO_MODE` | plain | base | x | x | – | `true` for the demo | unset | unset (and `APP_ENV=production` forces it off) | fictional demo (ADR-044, section 2.4); `ALLOW_DEMO_SEED=true` is the older alias |
+| `APP_ROLE` | plain | base | `web` (default) | `worker` | – | – | set on `worker` | set on `worker` | role chosen by `scripts/start.sh`; unset = from `RAILWAY_SERVICE_NAME` |
+| `TRUSTED_PROXY_HEADER` | plain | base | x | – | – | unset | `x-real-ip` (default on Railway when unset, section 2.4) | `x-real-ip` | client IP for the per-IP limits of the shared rate-limit store (`docs/security.md` 3.3, ADR-038); unset = sign-in attempts of all clients share one bucket and reset/invitation IP limits are off (development only); becomes `cf-connecting-ip` only if a Cloudflare proxy is placed in front (A-DEP-15) |
 | `LOG_LEVEL`, `LOG_FORMAT` | plain | observability | x | x | x | `debug`, `pretty` | `info`, `json` | `info`, `json` | |
 | `ERROR_REPORTING_DSN` | secret | observability | x | x | x | unset (disabled) | staging DSN | production DSN | Sentry-compatible (A-DEP-12) |
 | `RELEASE` | plain | observability | x | x | x | `dev` | `${{RAILWAY_GIT_COMMIT_SHA}}` | same | release tag for errors and logs; check V-14 |
@@ -619,7 +657,7 @@ Each line has a pass criterion; the completed list, with the deploy log, is Gate
 
 ## 14a. First administrator on a fresh production database (W2E)
 
-The demo seed never runs in production (`ALLOW_DEMO_SEED` unset), so the first person is created
+The demo seed never runs in production (`DEMO_MODE` unset and `APP_ENV=production`), so the first person is created
 with a one-time command. It never sets or prints a password: it creates an **invited** account with
 organization-wide `owner_director` + `system_admin` assignments (override with
 `BOOTSTRAP_ADMIN_ROLES`, e.g. `system_admin`) and prints a single-use invitation link valid for
@@ -638,6 +676,11 @@ site when the database is empty and synchronises the seeded role templates with 
    so it cannot land in access logs), choose a password (12+ characters), sign in, and set up
    two-step sign-in on **My account** within 7 days (`identity.mfa.grace_days`).
 4. Invite everyone else from **Admin → Users → Invite someone**.
+
+Without a terminal (ADR-044): set the `BOOTSTRAP_*` variables on `web` and deploy; `scripts/start.sh`
+runs the same command and the link appears in the deploy log. Remove the variables after the first
+sign-in (later starts are refused by the rule below and ignored). Logs are visible to project
+members only; the link works once and expires after 72 hours.
 
 Safety rules: the command refuses when any account is already `active` or `locked`; running it again
 before the link is used replaces the link (the old one stops working); it is audited as
