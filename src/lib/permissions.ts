@@ -234,6 +234,16 @@ export const PERMISSIONS = [
   "production.production_plan.edit",
   "production.production_plan.approve",
   "production.material_substitution.approve",
+  // Wave 3 W3B: reports, scheduled reports, notification rules, audit export (US-5-04..07, US-5-14; docs/permissions-matrix.md §2.11, §2.12)
+  "analytics.report.view",
+  "analytics.report.export",
+  "analytics.report.admin",
+  "analytics.scheduled_report.view",
+  "analytics.scheduled_report.create",
+  "analytics.scheduled_report.admin",
+  "platform.notification_rule.view",
+  "platform.notification_rule.admin",
+  "platform.audit.export",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -810,4 +820,29 @@ const W2A_GRANTS: Record<string, readonly Permission[]> = {
 };
 for (const [role, grants] of Object.entries(W2A_GRANTS)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+
+// Wave 3 W3B: reports, schedules and notification rules (docs/permissions-matrix.md §3.11, §3.12). View strings
+// reach the VIEW_ALL roles (owner, system_admin, site_manager, qa_qc without platform.*, auditor) automatically.
+const W3B_GRANTS: Record<string, readonly Permission[]> = {
+  system_admin: ["analytics.report.admin", "analytics.scheduled_report.admin", "platform.notification_rule.admin"],
+  site_manager: ["analytics.report.export", "analytics.scheduled_report.create"],
+  production_planner: ["analytics.report.view", "analytics.report.export", "analytics.scheduled_report.view", "analytics.scheduled_report.create"],
+  production_operator: ["analytics.report.view"],
+  warehouse_operator: ["analytics.report.view"],
+  qa_qc: ["analytics.report.export", "analytics.scheduled_report.create"],
+  procurement: ["analytics.report.view", "analytics.report.export", "analytics.scheduled_report.view", "analytics.scheduled_report.create"],
+  sales_cs: ["analytics.report.view", "analytics.report.export", "analytics.scheduled_report.view", "analytics.scheduled_report.create"],
+  auditor: ["analytics.report.export", "platform.audit.export"],
+};
+for (const [role, grants] of Object.entries(W3B_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+// Matrix §3.11/§3.12: the owner views and schedules but does not administer report definitions, other
+// people's schedules or notification rules (system_admin work).
+const W3B_EXCLUDE: Record<string, readonly Permission[]> = {
+  owner_director: ["analytics.report.admin", "analytics.scheduled_report.admin", "platform.notification_rule.admin"],
+};
+for (const [role, drop] of Object.entries(W3B_EXCLUDE)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => !drop.includes(p));
 }

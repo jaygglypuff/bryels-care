@@ -20,7 +20,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
 
 /** Left navigation (ux-system §3). Planned modules are shown disabled with their phase, never as fake links. */
 export const NAV: NavGroup[] = [
-  { label: "Home", icon: "home", items: [{ label: "Overview", href: "/dashboard" }, { label: "Notifications", href: "/notifications" }, { label: "Help & guides", href: "/help" }, { label: "My account", href: "/account" }] },
+  { label: "Home", icon: "home", items: [{ label: "Overview", href: "/dashboard" }, { label: "Action centre", href: "/action-centre" }, { label: "Notifications", href: "/notifications" }, { label: "Help & guides", href: "/help" }, { label: "My account", href: "/account" }] },
   {
     // Stock visibility: what is where, in which status, and what is free to use.
     label: "Inventory",
@@ -90,6 +90,15 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    // Wave 3 W3B: report library and scheduled delivery (US-5-04, US-5-05)
+    label: "Reports",
+    icon: "audit",
+    items: [
+      { label: "Report library", href: "/reports", permission: "analytics.report.view" },
+      { label: "Scheduled reports", href: "/reports/schedules", permission: "analytics.scheduled_report.view" },
+    ],
+  },
+  {
     label: "Master data",
     icon: "database",
     items: [
@@ -119,6 +128,7 @@ export const NAV: NavGroup[] = [
       { label: "Settings", href: "/admin/settings", permission: "platform.settings.view" },
       { label: "Approval rules", href: "/admin/approval-rules", permission: "platform.approval_rule.view" },
       { label: "Numbering", href: "/admin/numbering", permission: "platform.numbering_rule.view" },
+      { label: "Notification rules", href: "/admin/notification-rules", permission: "platform.notification_rule.view" },
     ],
   },
   {

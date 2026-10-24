@@ -753,6 +753,13 @@ Note: KPI definitions are changed under `analytics.report.admin` (the `report (a
 A-KPI-17 in `docs/analytics-kpis.md`); there is no separate `analytics.kpi_definition.admin`.
 `financial_kpi` is enforced from Phase 5 for the Estimate tiles (A-KPI-10).
 
+As built (Wave 3 W3B): `analytics.report.{view,export,admin}`, `analytics.scheduled_report.{view,create,admin}`,
+`platform.notification_rule.{view,admin}` and `platform.audit.export` are in `src/lib/permissions.ts` with
+the grants of §3.11/§3.12 (FI and HR bundles do not exist yet). A report runs at the sites where the user
+holds the report's module view permission; files additionally need `analytics.report.export` and the
+module `.export` string where the module has one (A-W3B-02). Scheduled-report recipients need the same
+strings at delivery time.
+
 ### 3.12 platform
 
 | Entity | OD | SA | SM | PP | PO | WO | QA | PR | SC | FI | HR | AU | CP |

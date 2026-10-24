@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { D, fmtDateTime } from "@/lib/qty";
 import { type LedgerDifference, getReconciliationRun, listReconciliationRuns } from "@/modules/inventory";
-import { JOB_STATUSES, jobCounts, listJobs, workerStatus } from "@/modules/platform";
+import { JOB_STATUSES, alertsCard, databaseCard, errorsCard, importsCard, integrationsCard, jobCounts, listJobs, workerStatus } from "@/modules/platform";
+import { Phase5Cards } from "./phase5-cards";
 import { backupsCard, healthCard, variablesCard } from "@/modules/governance";
 import { OpsCards, PlannedCards } from "./ops-cards";
 import { Card, CardTitle, EmptyState, Input, PageHeader, Table, Td, buttonClass, cx } from "@/ui/core";
@@ -38,6 +39,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
     canJobs ? listJobs(ctx, { status, limit: 50 }) : [],
     canJobs || canBalanceAdmin ? listReconciliationRuns(ctx, 15) : [],
   ]);
+  const phase5 = canDiag ? { database: await databaseCard(ctx), imports: await importsCard(ctx), alerts: await alertsCard(ctx), errors: await errorsCard(ctx), integrations: integrationsCard(ctx) } : null;
   const focusRunId = sp.run ?? runs.find((r) => r.status === "differences")?.id;
   const focusRun = focusRunId ? await getReconciliationRun(ctx, focusRunId).catch(() => null) : null;
   const diffs = focusRun && focusRun.kind === "inventory_balances" ? (focusRun.report as LedgerDifference[]) : [];
@@ -198,6 +200,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
           )}
         </Card>
       )}
+      {phase5 && <Phase5Cards {...phase5} />}
       {canDiag && <PlannedCards />}
     </div>
   );

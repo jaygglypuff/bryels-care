@@ -8,6 +8,8 @@ import { documentsRenderJob } from "@/modules/documents/jobs/render";
 import { identitySessionPurgeJob } from "@/modules/identity/jobs";
 import { platformAlertsEvaluateJob, platformMetricsSampleJob } from "@/modules/governance/jobs/metrics";
 import { inventoryExpiryCheckJob, inventoryRebuildBalancesJob, inventoryReconcileJob, inventoryReservationExpiryJob } from "@/modules/inventory/jobs";
+import { analyticsAccessReportJob, analyticsScheduleDispatchJob, analyticsScheduledReportJob } from "@/modules/reports/jobs";
+import { platformActionCentreSweepJob } from "@/modules/action-centre/jobs";
 import { type AnyJobDefinition, type JobRegistry, createJobRegistry } from "./job-definition";
 
 /**
@@ -24,6 +26,11 @@ export function jobDefinitions(): AnyJobDefinition[] {
     identitySessionPurgeJob,
     platformMetricsSampleJob,
     platformAlertsEvaluateJob,
+    // Wave 3 W3B: scheduled reports, weekly access report, action centre
+    analyticsScheduleDispatchJob,
+    analyticsScheduledReportJob,
+    analyticsAccessReportJob,
+    platformActionCentreSweepJob,
   ];
 }
 
