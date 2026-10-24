@@ -26,3 +26,4 @@ export * from "./fulfilment"; // Wave 3 W3E
 export * from "./complaints";
 export * from "./imports";
 export * from "./reports";
+export * from "./analytics";

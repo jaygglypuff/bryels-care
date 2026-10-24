@@ -1672,6 +1672,25 @@ What `src/db/schema/documents.ts` adds or narrows relative to the catalogue abov
 
 Audit events written: `documents.template.created`, `documents.template_version.{created,updated,submitted,approved,returned,retired}`, `documents.generated_document.{generated,reprinted,superseded}`, `documents.label_job.{created,printed,failed,retried,cancelled,reprinted,voided}`, `masterdata.label_template.{created,updated,approved,retired}`, `documents.print_station.{created,updated}`. Numbering rule `DOC` (`DOC-{YY}-{SEQ7}`) is in `src/lib/numbering.ts`.
 
+### 3.10.2 Phase 5 implementation notes: KPI engine (Wave 3 W3A, E-5-01)
+
+`src/db/schema/analytics.ts` catalogues the analytics tables requested by `docs/analytics-kpis.md`
+§8.3 (§13.7 row "P5/P6 analytics"). They live in `public` (A-W3A-01), are written only by
+`src/modules/analytics`, and three of them are append-only by trigger (`src/db/sql/w3a.sql`).
+
+| Table | Columns (beyond `id`) | Rules |
+|---|---|---|
+| **`kpi_definitions`** | `kpi_code`, `version_no`, `name`, `definition`, `formula_text`, `time_basis`, `sources` jsonb, `refresh_class` (`post`,`live`,`mv15`,`night`,`wk`), `value_label` (`actual`,`estimate`,`forecast`,`overridden`), `unit`, `aggregate`, `drill_route`, `permissions` jsonb, `checksum` (sha256 of the definition content), `effective_from`, `created_at` | uq `(kpi_code, version_no)`, uq `(kpi_code, checksum)`; mirrors the typed catalogue; a changed definition is a new version (A-KPI-17); append-only |
+| **`kpi_refresh_log`** | `organization_id`, `run_kind` (`snapshot`,`reconcile`), `status` (`running`,`succeeded`,`failed`), `business_date`, `as_of`, `background_job_id` → background_jobs, `snapshots_written`, `checked`, `mismatches`, `error_message`, `started_at`, `finished_at` | one row per job run; drives "Updated HH:MM" and the Stale badge |
+| **`kpi_snapshots`** | `organization_id`, `kpi_code`, `kpi_definition_id` → kpi_definitions, `scope_key` (`site:<uuid>` or `all`), `site_id` (null for `all`), `site_ids` jsonb, `grain` (`day`,`week`,`month`), `period_start`, `period_end` (exclusive), `as_of`, `as_of_date`, `value` numeric(30,10) (null = n/a), `numerator`, `denominator`, `row_count`, `value_label`, `params` jsonb (enough to rerun the R-query), `params_hash`, `refresh_log_id`, `computed_at` | uq `(organization_id, kpi_code, scope_key, grain, period_start, as_of_date, params_hash)` = the job idempotency key; ck `(scope_key = 'all') = (site_id is null)`; append-only |
+| **`kpi_reconciliation_results`** | `organization_id`, `refresh_log_id`, `kpi_snapshot_id`, `kpi_code`, `scope_key`, `grain`, `period_start`, `status` (`match`,`mismatch`), snapshot and recomputed value / numerator / denominator / row count, `tolerance`, `detail`, `checked_at` | uq `(refresh_log_id, kpi_snapshot_id)`; append-only |
+| **`kpi_saved_views`** | `organization_id`, `user_id` → users, `name` (1–80 chars), `config` jsonb (`codes`, `grain`, `span`, `comparison`, `scope`), `created_at`, `updated_at` | uq `(user_id, name)`; private to the user; audit `analytics.saved_view.{saved,deleted}` |
+
+Audit events written: `analytics.kpi_snapshot.computed`, `analytics.kpi_reconciliation.completed`
+(system actor), `analytics.saved_view.saved`, `analytics.saved_view.deleted`. Notification kinds:
+`kpi_reconciliation_mismatch` (critical, system_admin and owner_director), `kpi_reconciliation_empty`
+(warning, system_admin).
+
 ## 4. Versioned and effective-dated records
 
 Plain language: an approved formula, routing, work instruction, document template, customer

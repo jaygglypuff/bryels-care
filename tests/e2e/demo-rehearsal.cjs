@@ -96,6 +96,13 @@ async function settle(page, locator, label, timeout = 15000) {
   }
 }
 
+/** W3A overview: output mass from the "Output vs plan" meter caption ("X kg output of Y kg planned"). */
+async function outputKg(page) {
+  const txt = await page.locator('a[aria-label^="Output vs plan:"]').getByText(/output of/).first().innerText();
+  const m = txt.replace(/,/g, '').match(/([0-9.]+)\s*(kg|g)\s+output/);
+  return m ? Number(m[1]) / (m[2] === 'g' ? 1000 : 1) : 0;
+}
+
 async function kpiValue(page, caption) {
   const card = page.locator(`a[aria-label^="${caption}:"]`);
   const txt = await card.locator('div.tabular').first().innerText();
@@ -109,11 +116,11 @@ async function kpiValue(page, caption) {
   {
     const { context, page } = await asUser('owner@bryels-care.test');
     await expectText(page, 'Owner overview');
-    for (const t of ['Orders this week', 'Production output', 'Stock at FEFO risk', 'QA queue', 'Batch journey', 'Near-expiry lots', 'Order fulfilment', 'Recent activity']) await expectText(page, t);
-    facts.ordersBefore = await kpiValue(page, 'Orders this week');
-    facts.outputBefore = await kpiValue(page, 'Production output');
-    log('owner KPIs before: orders', facts.ordersBefore, 'output units', facts.outputBefore);
-    assert(await page.locator('svg[aria-label^="Orders created in the last 30 days"], [aria-label^="Orders created in the last 30 days"]').count() > 0, 'donut present');
+    for (const t of ['Orders', 'Output vs plan', 'FEFO risk', 'QA holds', 'Batch journey', 'Near-expiry lots', 'Order fulfilment', 'Site comparison', 'Recent activity']) await expectText(page, t);
+    facts.ordersBefore = await kpiValue(page, 'Orders confirmed');
+    facts.outputBefore = await outputKg(page);
+    log('owner KPIs before: orders', facts.ordersBefore, 'output kg', facts.outputBefore);
+    assert(await page.locator('section', { hasText: 'Order fulfilment' }).count() > 0, 'fulfilment chart present');
     await shot(page, 'owner-overview');
     await shot(page, 'owner-overview-full', { full: true });
     await context.close();
@@ -635,11 +642,12 @@ async function kpiValue(page, caption) {
   // ---------------- l. Owner sees the changes ----------------
   {
     const { context, page } = await asUser('owner@bryels-care.test');
-    const ordersAfter = await kpiValue(page, 'Orders this week');
-    const outputAfter = await kpiValue(page, 'Production output');
-    log('owner KPIs after: orders', ordersAfter, 'output units', outputAfter);
+    const ordersAfter = await kpiValue(page, 'Orders confirmed');
+    const outputAfter = await outputKg(page);
+    log('owner KPIs after: orders', ordersAfter, 'output kg', outputAfter);
     assert(ordersAfter === facts.ordersBefore + 1, `orders KPI ${facts.ordersBefore} -> ${ordersAfter}`);
-    assert(outputAfter === facts.outputBefore + 124, `output KPI ${facts.outputBefore} -> ${outputAfter}`);
+    // 124 units × 135 g posted as output this week (KPI-OPS-01 numerator, shown to 0.1 kg).
+    assert(Math.abs(outputAfter - facts.outputBefore - 16.74) < 0.15, `output KPI ${facts.outputBefore} kg -> ${outputAfter} kg`);
     await expectText(page, facts.batchNumber);
     await shot(page, 'owner-overview-after');
     // Wave 2 flows write many more events; look each document up by number (the audit filter).

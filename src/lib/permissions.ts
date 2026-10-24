@@ -305,6 +305,10 @@ export const PERMISSIONS = [
   "platform.notification_rule.view",
   "platform.notification_rule.admin",
   "platform.audit.export",
+  // Wave 3 W3A: KPI engine and dashboards (US-5-01..03, US-5-16; docs/permissions-matrix.md §2.11, §3.11)
+  "analytics.owner_dashboard.view",
+  "analytics.financial_kpi.view",
+  "analytics.kpi_definition.view",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -1079,4 +1083,24 @@ const W3B_EXCLUDE: Record<string, readonly Permission[]> = {
 };
 for (const [role, drop] of Object.entries(W3B_EXCLUDE)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => !drop.includes(p));
+}
+
+// Wave 3 W3A: analytics grants (docs/permissions-matrix.md §3.11). owner_director holds every string and
+// VIEW_ALL roles (system_admin, site_manager, qa_qc, auditor) receive the `.view` strings; the matrix keeps
+// the cross-site overview and financial KPIs from all but owner and auditor, and gives KPI definitions to every operational role.
+const W3A_GRANTS: Record<string, readonly Permission[]> = {
+  site_manager: ["analytics.kpi_definition.view"],
+  production_operator: ["analytics.kpi_definition.view"],
+  warehouse_operator: ["analytics.kpi_definition.view"],
+  qa_qc: ["analytics.kpi_definition.view"],
+  procurement: ["analytics.kpi_definition.view"],
+  sales_cs: ["analytics.kpi_definition.view"],
+  production_planner: ["analytics.kpi_definition.view"],
+};
+for (const [role, grants] of Object.entries(W3A_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+// Matrix §3.11: owner_dashboard and financial_kpi are OD, FI and AU only; roles built on VIEW_ALL lose them.
+for (const role of ["system_admin", "site_manager", "qa_qc"]) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => p !== "analytics.owner_dashboard.view" && p !== "analytics.financial_kpi.view");
 }

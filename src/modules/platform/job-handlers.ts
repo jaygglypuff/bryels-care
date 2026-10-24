@@ -4,6 +4,7 @@
  * ONE import line and ONE list entry below. Enqueuing or running a code that is not in this list
  * fails; the registry test checks every code against the table in docs/architecture.md §8.
  */
+import { analyticsReconcileKpisJob, analyticsSnapshotKpisJob } from "@/modules/analytics/jobs";
 import { documentsRenderJob } from "@/modules/documents/jobs/render";
 import { identitySessionPurgeJob } from "@/modules/identity/jobs";
 import { platformAlertsEvaluateJob, platformMetricsSampleJob } from "@/modules/governance/jobs/metrics";
@@ -37,6 +38,8 @@ export function jobDefinitions(): AnyJobDefinition[] {
     analyticsScheduledReportJob,
     analyticsAccessReportJob,
     platformActionCentreSweepJob,
+    analyticsSnapshotKpisJob,
+    analyticsReconcileKpisJob,
   ];
 }
 

@@ -424,6 +424,16 @@ qualified reviewer's sign-off is recorded on the version. Any reference to
 | `analytics.financial_kpi.view` | Revenue, margin, receivables, payables, cash indicators; P5 for Estimate tiles (shipped value at order price, A-KPI-10), invoice-based figures from P6 | S | P5 |
 | `analytics.labor_kpi.view` | Attendance/labour summaries (aggregated, no per-person pay) | S | P5 |
 
+Implemented in Wave 3 (W3A, `src/lib/permissions.ts`): `analytics.dashboard.view` (existing),
+`analytics.owner_dashboard.view`, `analytics.financial_kpi.view`, `analytics.kpi_definition.view`.
+Bundles follow §3.11: owner_director and auditor hold all three; system_admin, site_manager and
+qa_qc (built on every `.view` string) are stripped of `owner_dashboard` and `financial_kpi`;
+`kpi_definition.view` is granted to every operational role. Without `owner_dashboard.view` a
+multi-site user still sees the site comparison of exactly their own sites, but never an all-sites
+aggregate. Order value and shipped value (Estimate) need `financial_kpi.view` until
+`sales.price_list.view` exists (A-W3A-06). Saved trend views are self-service under
+`analytics.dashboard.view`. The remaining strings of this section are not implemented yet.
+
 ### 2.12 platform
 
 | Permission(s) | Description | Sens. | Phase |

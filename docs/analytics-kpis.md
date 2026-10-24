@@ -784,3 +784,43 @@ defined there and this document reads them as sources; "pending" rows are accept
 | `stock_movements.unit_cost_amount` at posting | period valuation and count-variance value that ties to the ledger (KPI-INV-08, INV-12 over time) | 3.3 `stock_movements` (A-DM-34) | applied |
 | `sync_commands.replayed_at` | KPI-INV-15 (Phase 7) | 11.2 `sync_commands` | applied |
 | `reconciliation_runs` | KPI-INV-14 reads the stored result instead of `background_jobs` | 3.10 `reconciliation_runs` (P2) | applied (added by the devops items, used here) |
+
+## 9. Implementation (Wave 3 W3A, US-5-01..03, US-5-16)
+
+Plain language: every KPI below the line "available" is computed from the posted records and can be
+opened down to those records. The nightly check recomputes every stored value a second way and
+raises an alarm when the two differ.
+
+### 9.1 How a KPI is computed
+
+| Piece | Implementation |
+|---|---|
+| Catalogue | `src/modules/analytics/kpi/catalogue.ts`: one **record query** per KPI returning `site_id, ref_type, ref_id, ref_number, basis_at, num, den, item, detail, category`; mirrored into `kpi_definitions` (versioned by checksum) |
+| Value | sum, ratio (Σ num ÷ Σ den; n/a when Σ den = 0), median / p90 (`percentile_disc`, lower middle for an even count) or max of the records, aggregated with decimal.js (`src/modules/analytics/kpi/engine.ts`) |
+| R-query | `R-<code>` = the same record query aggregated by PostgreSQL; stock on hand comes from the **ledger** (Σ stock_movements to the as-of) instead of the balance projection |
+| Drill-down | `/analytics/kpi/<code>?scope=&from=&to=` lists the records of the record query; its total row equals the card (W11-02) |
+| As-of | every query reads records known by the as-of instant (posted, created, decided ≤ as-of; reversals posted ≤ as-of net out); lot, work order and inspection status at a past instant are derived backwards from dispositions and state transitions (A-W3A-05) |
+| Snapshots | `analytics.snapshot_kpis` (01:30 Manila): for the business day, week to date and month to date (period KPIs) or the day end (point-in-time KPIs), per site and all sites, as of the end of the business day, in one repeatable-read transaction |
+| Reconciliation | `analytics.reconcile_kpis` (02:00): reruns the R-query of every snapshot of the day and checks all sites = Σ sites for additive KPIs; tolerance 0 (₱0.01 for money); any difference → `kpi_reconciliation_results` row `mismatch` and a critical notification; nothing is corrected |
+| Live cards | dashboards aggregate the record query at page view (projection for stock); "Updated HH:MM · scope · period" on every card; sparklines and trends read snapshots and show "Stale" when the last run failed or is older than `analytics.snapshot_stale_hours` |
+| Visibility | §1.5 in the DTO: a KPI whose permissions the caller lacks at any site of the scope is returned masked (no value); "All sites" needs `analytics.owner_dashboard.view`; site comparison lists only the caller's sites |
+
+### 9.2 KPIs built (35) and differences from section 2
+
+| Id | Built as | Difference from section 2 |
+|---|---|---|
+| KPI-SAL-01, KPI-SAL-01V | orders entered in the period that are confirmed or further (count; value at order price) | time basis = order entry, no transition log yet (A-W3A-03); value needs `analytics.financial_kpi.view` (A-W3A-06) |
+| KPI-SAL-02 | OTIF over orders due in the period; categories on_time / late / open | in full per product (Σ shipped ≥ Σ ordered); shipped = non-reversed shipment movements |
+| KPI-SAL-03, KPI-SAL-04, KPI-SAL-11 | fill rate on first shipment; median order-to-ship days; unshipped past requested date | order-to-ship starts at order entry (A-W3A-03) |
+| KPI-FIN-02 | shipped value at the order's weighted unit price per product, Estimate | as section 2.8 |
+| KPI-OPS-01 | output mass posted ÷ planned mass of work orders due | output mass = `batch_outputs.mass_g` (units × unit mass) |
+| KPI-OPS-02, -03, -13 | yield, yield loss, right first time over the current yield record of batches first yielded in the period | time basis = first yield record, not closure (A-W3A-04) |
+| KPI-OPS-05, -07, -14, -16 | open work orders by status; step overrun minutes; late work orders; first weighing within tolerance | OPS-07 is 0 until routing steps carry `expected_duration_minutes` |
+| KPI-INV-01G / 01P | usable (released, unexpired) stock per dimension | split by base unit g / pcs (§1.6: never summed across dimensions) |
+| KPI-INV-02, -04, -04E, -07, -09, -10, -14 | blocked lots; lots at FEFO risk (window setting `analytics.fefo_window_days`); expired lots on hand; material coverage; dock-to-stock median hours; receipt discrepancy rate; ledger differences of the last check | INV-04 split into "expiring" (04) and "expired" (04E) |
+| KPI-QUA-01, -01P, -02, -03, -03A, -04, -05, -06, -06T, -11 | turnaround median and p90; first-pass rate; holds open and oldest age; OOS rate; rejections; deviations raised and median days to close; incoming backlog | p90, oldest age and days to close are separate KPI codes |
+| KPI-OWN-13 | distinct open action-centre items | per alert key, not per recipient; owner-class (A-W3A-08) |
+| KPI-OWN-03, -07, -11, -12 | not built: tiles say "Not available yet" with the reason | no lot costs, invoices, attendance or payments yet (A-W3A-07) |
+
+Materialized views (§4.2) and `analytics.refresh_mv` are not built yet (A-W3A-02); the refresh
+classes in the catalogue describe the target cadence.

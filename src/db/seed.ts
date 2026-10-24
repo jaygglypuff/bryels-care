@@ -438,6 +438,8 @@ async function main() {
   await (await import("./seeds/w3f")).seedW3F(db); // W3F: returns location, complaints, a return in quarantine
   await (await import("./seeds/w3c")).seedW3c(db); // W3C: demo import mapping profiles
   await (await import("./seeds/w3b")).seedW3b(db); // W3B: notification rules, demo scheduled report
+  // W3A: a month of fictional activity plus its nightly KPI snapshots (skipped inside vitest: tests seed their own fixed month).
+  if (!process.env.VITEST) await (await import("./seeds/w3a")).seedW3a(db, { backfill: true });
 
   console.log(`Seeded demo organization with ${mats.length} materials, ${counters.LOT} lots, ${counters.BATCH} batches, ${counters.SO} orders.`);
   await client.end();
