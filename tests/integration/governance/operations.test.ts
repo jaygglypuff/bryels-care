@@ -13,6 +13,7 @@ import { auditEvents, backgroundJobs, backupRuns, metricsSamples, notifications,
 import { commands } from "@/lib/api/contract";
 import { executeCommand } from "@/lib/api/server";
 import { audit } from "@/lib/audit";
+import { getSetting } from "@/lib/settings";
 import type { AuthContext } from "@/lib/auth/context";
 import { consume, limitApi, sweepBuckets } from "@/lib/rate-limit";
 import { backupsCard, healthCard, variablesCard } from "@/modules/governance";
@@ -159,7 +160,10 @@ describe("platform.metrics_sample and platform.alerts_evaluate", () => {
   });
 
   it("alerts: a silent worker and a dead-lettered job notify system_admin once per window", async () => {
-    const now = new Date();
+    // Frozen clock at the start of a dedupe window, so "a minute later" is always the same window (the
+    // test used to fail when a run crossed the window boundary, e.g. the hour).
+    const windowMs = (await getSetting(db, kit.orgId, "alerts.dedupe_minutes")) * 60_000;
+    const now = new Date(Math.floor(Date.now() / windowMs) * windowMs + 5_000);
     await db.update(workerHeartbeats).set({ lastHeartbeatAt: new Date(now.getTime() - 900_000) });
     await db.insert(backgroundJobs).values({ organizationId: kit.orgId, jobKind: "inventory.reconcile", status: "failed", payload: {}, idempotencyKey: `test:${randomUUID()}`, correlationId: "c", deadLetteredAt: new Date(now.getTime() - 60_000), finishedAt: new Date(now.getTime() - 60_000) });
     const f = await evaluateAlerts(kit.orgId, now);
