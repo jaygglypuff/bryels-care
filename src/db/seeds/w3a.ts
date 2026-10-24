@@ -205,7 +205,8 @@ export async function seedW3a(db: Db, opts: W3aSeedOptions = {}) {
       const m = M(code);
       const qty = new Decimal(code === "MAT-0043" ? 2000 : 20000 + Math.round(rand() * 4) * 5000);
       // A few lots expire soon (FEFO risk) and one is past expiry by the end of the window.
-      const expiresOn = i === 3 && li === 1 ? addDays(endDate, -3) : i === 6 && li === 0 ? addDays(endDate, 12) : i === 12 && li === 1 ? addDays(endDate, 24) : addDays(date, 365);
+      // Regular lots get 400 days so FEFO at the base seed's lots (and lots received in a demo, 365 days) is unchanged.
+      const expiresOn = i === 3 && li === 1 ? addDays(endDate, -3) : i === 6 && li === 0 ? addDays(endDate, 12) : i === 12 && li === 1 ? addDays(endDate, 24) : addDays(date, 400);
       const [lot] = await db
         .insert(s.inventoryLots)
         .values({ organizationId: O, siteId: NFD.id, lotNumber: num("LM", 4), itemKind: "material", materialId: m.id, supplierName: supplier, supplierLotNumber: `SL-${series}-${i}${li}`, manufacturedOn: addDays(date, -10), expiresOn, qualityStatus: "quarantine", baseUom: m.baseUom, createdBy: whN, createdAt: receivedAt })

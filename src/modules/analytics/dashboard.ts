@@ -325,6 +325,7 @@ async function productionBoard(siteIds: string[], tz: string, today: string, sit
   const local = (d: Date | null) => (d ? d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: tz }) : "");
   const localTime = (d: Date | null) => (d ? d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tz }) : "");
   const col = { planned: [] as BoardCard[], inProcess: [] as BoardCard[], awaitingQc: [] as BoardCard[], released: [] as BoardCard[] };
+  const releasedAtOf = new Map<string, number>();
   for (const r of rows) {
     const rel = toDate(r.releasedAt);
     const base = {
@@ -343,10 +344,14 @@ async function productionBoard(siteIds: string[], tz: string, today: string, sit
     else if (r.status === "awaiting_qc") col.awaitingQc.push({ ...base, meta: r.completedAt ? `Completed ${local(r.completedAt)}` : "Awaiting QC" });
     else if (r.status === "released" && rel) {
       const relLocal = rel.toLocaleDateString("en-CA", { timeZone: tz });
-      if (Date.parse(relLocal + "T00:00:00Z") >= releasedFrom) col.released.push({ ...base, meta: `Released ${local(rel)}` });
+      if (Date.parse(relLocal + "T00:00:00Z") >= releasedFrom) {
+        col.released.push({ ...base, meta: `Released ${local(rel)}` });
+        releasedAtOf.set(r.id, rel.getTime());
+      }
     }
   }
-  col.released.sort((a, b) => b.batchNumber.localeCompare(a.batchNumber));
+  // Most recently released first (then by number), so a batch released today is always on the board.
+  col.released.sort((a, b) => (releasedAtOf.get(b.id) ?? 0) - (releasedAtOf.get(a.id) ?? 0) || b.batchNumber.localeCompare(a.batchNumber));
   return {
     planned: col.planned,
     inProcess: col.inProcess,
