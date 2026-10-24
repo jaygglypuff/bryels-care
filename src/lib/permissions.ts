@@ -276,6 +276,16 @@ export const PERMISSIONS = [
   "sales.delivery_receipt.view",
   "sales.delivery_receipt.create",
   "sales.delivery_receipt.export",
+  // Wave 3 W3F: complaints, customer returns, recall explorer (E-4-05; docs/permissions-matrix.md §2.6, §2.8, §3.6, §3.8)
+  "quality.complaint.view",
+  "quality.complaint.create",
+  "quality.complaint.submit",
+  "quality.complaint.approve",
+  "sales.customer_return.view",
+  "sales.customer_return.create",
+  "sales.customer_return.submit",
+  "sales.customer_return.approve",
+  "sales.customer_return.post",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -992,3 +1002,20 @@ const W3E_GRANTS: Record<string, readonly Permission[]> = {
 for (const [role, grants] of Object.entries(W3E_GRANTS)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
 }
+
+// Wave 3 W3F: role grants for complaints and customer returns (docs/permissions-matrix.md §3.6, §3.8).
+// `.view` strings reach the VIEW_ALL roles (owner_director, site_manager, qa_qc, auditor) automatically; the
+// matrix keeps system_admin away from both and gives owner_director view plus return approval only.
+const W3F_GRANTS: Record<string, readonly Permission[]> = {
+  site_manager: ["sales.customer_return.approve", "sales.customer_return.post"],
+  warehouse_operator: ["sales.customer_return.view", "sales.customer_return.create", "sales.customer_return.submit"],
+  qa_qc: ["quality.complaint.create", "quality.complaint.submit", "quality.complaint.approve", "sales.customer_return.approve"],
+  sales_cs: ["quality.complaint.view", "quality.complaint.create", "quality.complaint.submit", "sales.customer_return.view", "sales.customer_return.create", "sales.customer_return.submit"],
+};
+for (const [role, grants] of Object.entries(W3F_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+const W3F_NOT_FOR_OWNER: readonly Permission[] = ["quality.complaint.create", "quality.complaint.submit", "quality.complaint.approve", "sales.customer_return.create", "sales.customer_return.submit", "sales.customer_return.post"];
+ROLE_BUNDLES.owner_director.permissions = ROLE_BUNDLES.owner_director.permissions.filter((p) => !W3F_NOT_FOR_OWNER.includes(p));
+const W3F_NOT_FOR_ADMIN: readonly Permission[] = ["quality.complaint.view", "sales.customer_return.view"];
+ROLE_BUNDLES.system_admin.permissions = ROLE_BUNDLES.system_admin.permissions.filter((p) => !W3F_NOT_FOR_ADMIN.includes(p));

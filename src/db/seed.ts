@@ -435,6 +435,7 @@ async function main() {
   await (await import("./seeds/w2a")).seedW2a(db); // W2A: production lines, sheet templates, min stock, demo work orders
   await (await import("./seeds/w3d")).seedW3d(db, { passwordHash: pw }); // W3D: customers, requirements, price lists, quotes, orders, finance + sales2 accounts
   await (await import("./seeds/w3e")).seedW3e(db); // W3E: fulfilment document templates, box label template
+  await (await import("./seeds/w3f")).seedW3F(db); // W3F: returns location, complaints, a return in quarantine
 
   console.log(`Seeded demo organization with ${mats.length} materials, ${counters.LOT} lots, ${counters.BATCH} batches, ${counters.SO} orders.`);
   await client.end();

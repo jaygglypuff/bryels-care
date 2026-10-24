@@ -324,6 +324,25 @@ export const queries = {
     query: z.object({ siteId: z.uuid(), from: DATE, to: DATE, format: z.enum(["csv", "xlsx"]).default("csv") }).strict(),
     response: "file",
   },
+  // Wave 3 W3F (US-4-17)
+  recallExport: {
+    kind: "query",
+    name: "quality.recall.export",
+    method: "GET",
+    path: "/api/v1/quality/recall/export",
+    summary: "CSV/XLSX of the recall explorer: affected customers, shipments, boxes, stock, lots and batches from a lot, box, batch, supplier lot or complaint (names customers; audited).",
+    permission: "quality.genealogy.export",
+    query: z
+      .object({
+        code: z.string().max(120).optional(),
+        supplierLot: z.string().max(80).optional(),
+        complaintId: z.uuid().optional(),
+        mode: z.enum(["forward", "reverse"]).optional(),
+        format: z.enum(["csv", "xlsx"]).default("csv"),
+      })
+      .strict(),
+    response: "file",
+  },
 } as const satisfies Record<string, QueryContract>;
 
 export type Commands = typeof commands;

@@ -23,3 +23,4 @@ export * from "./governance";
 export * from "./planning";
 export * from "./crm";
 export * from "./fulfilment"; // Wave 3 W3E
+export * from "./complaints";

@@ -47,6 +47,9 @@ export const NUMBERING_DEFAULTS = {
   PA: yearly("PA", 6),
   PK: yearly("PK", 6),
   SH: yearly("SH", 5),
+  // Wave 3 W3F: complaints and customer returns (data-model §9.2)
+  CMP: yearly("CMP", 4),
+  RT: yearly("RT", 4),
 } satisfies Record<string, NumberingRuleSpec>;
 
 export type DocumentType = keyof typeof NUMBERING_DEFAULTS;

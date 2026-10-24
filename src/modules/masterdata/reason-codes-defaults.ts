@@ -58,8 +58,15 @@ export const DEFAULT_REASON_CODES: readonly ReasonCodeSeed[] = [
   { code: "import_voided", name: "Imported record voided", appliesTo: ["reversal", "cancel"], requiresNote: true, sortOrder: 62 },
   { code: "legacy_release", name: "Released under the previous paper system", appliesTo: ["disposition"], requiresNote: true, sortOrder: 63 },
   { code: "undo_by_actor", name: "Undone by the person who posted it", appliesTo: ["reversal"], sortOrder: 64 },
+  // Customer returns (Wave 3 W3F, US-4-16; the company's sales and QA leads confirm the list, A-W3F-06)
+  { code: "customer_refused", name: "Refused by the customer at delivery", appliesTo: ["return"], sortOrder: 80 },
+  { code: "damaged_in_transit", name: "Damaged in transit", appliesTo: ["return"], sortOrder: 81 },
+  { code: "wrong_item", name: "Wrong item or quantity delivered", appliesTo: ["return"], sortOrder: 82 },
+  { code: "quality_complaint", name: "Returned with a quality complaint", appliesTo: ["return"], sortOrder: 83 },
+  { code: "short_dated", name: "Shelf life shorter than agreed", appliesTo: ["return"], sortOrder: 84 },
+  { code: "recall_return", name: "Returned under a recall or withdrawal", appliesTo: ["return"], sortOrder: 85 },
   // Shared
-  { code: "other", name: "Other (explain)", appliesTo: ["receipt", "hold", "adjustment", "count_variance", "reprint", "scrap", "rework"], requiresNote: true, sortOrder: 99 },
+  { code: "other", name: "Other (explain)", appliesTo: ["receipt", "hold", "adjustment", "count_variance", "reprint", "scrap", "rework", "return"], requiresNote: true, sortOrder: 99 },
 ];
 
 /** Active codes offered for a category, in display order (US-1-24 AC1). Pure, unit-tested. */

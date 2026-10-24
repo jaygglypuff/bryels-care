@@ -42,7 +42,7 @@ export type TraceNode = {
   qty?: string | null;
   uom?: string | null;
   /** What the quantity means on this edge: consumed, produced, shipped. */
-  qtyRole?: "consumed" | "produced" | "shipped" | "on_order";
+  qtyRole?: "consumed" | "produced" | "shipped" | "on_order" | "relotted";
   supplierName?: string | null;
   supplierLot?: string | null;
   itemKind?: string;
@@ -101,6 +101,8 @@ class Tracer {
   private lotCache = new Map<string, TraceNode | null>();
   /** Source batch per lot, kept for reverse tracing. */
   private sourceBatch = new Map<string, string | null>();
+  /** Origin lot per lot (re-lot edge, W3F). */
+  private originLot = new Map<string, string | null>();
   private siteCodes = new Map<string, string>();
   readonly customers: AffectedCustomer[] = [];
   private seenShipLine = new Set<string>();
@@ -167,6 +169,7 @@ class Tracer {
     };
     this.lotCache.set(lotId, node);
     this.sourceBatch.set(lotId, l.lot.sourceBatchId);
+    this.originLot.set(lotId, l.lot.originLotId);
     return { ...node, children: [] };
   }
 
@@ -333,6 +336,20 @@ class Tracer {
       out.push(b);
     }
     out.push(...(await this.shipmentNodes(lot)));
+    // W3F: lots re-lotted from this one (inter-site transfer, customer return) with the quantity received into them.
+    const relots = await db.select({ id: inventoryLots.id }).from(inventoryLots).where(and(eq(inventoryLots.originLotId, lot.id), eq(inventoryLots.organizationId, this.ctx.organizationId)));
+    for (const r of relots) {
+      const n = await this.lotNode(r.id);
+      if (!n) continue;
+      const [q] = await db
+        .select({ qty: sql<string>`sum(${stockMovements.qtyBase})::text` })
+        .from(stockMovements)
+        .where(and(eq(stockMovements.lotId, r.id), inArray(stockMovements.movementType, ["receipt", "return"]), notReversed));
+      n.qty = q?.qty ?? null;
+      n.qtyRole = "relotted";
+      n.children = await this.forwardOfLot(n, depth + 1, nextPath);
+      out.push(n);
+    }
     return out;
   }
 
@@ -368,7 +385,16 @@ class Tracer {
 
   async reverseOfLot(lot: TraceNode, depth: number, path: Set<string>): Promise<TraceNode[]> {
     const src = this.sourceBatch.get(lot.id);
-    if (!src) return [];
+    if (!src) {
+      // W3F: a re-lotted lot (inter-site transfer, customer return) traces back to its origin lot.
+      const origin = this.originLot.get(lot.id);
+      if (!origin || path.has(origin) || this.tooDeep(depth)) return [];
+      const o = await this.lotNode(origin);
+      if (!o) return [];
+      o.qtyRole = "relotted";
+      o.children = await this.reverseOfLot(o, depth + 1, new Set(path).add(lot.id));
+      return [o];
+    }
     const b = await this.batchNode(src);
     if (!b) return [];
     b.children = await this.reverseOfBatch(b, depth + 1, path);
