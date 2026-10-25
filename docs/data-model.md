@@ -2710,6 +2710,18 @@ accept in a review list for a supervisor. These tables are that memory. They are
 (ids and columns stable) and created in the Phase 7 migration, except where noted.
 Behaviour is specified in `docs/offline-sync.md` §2, §4, §5 and §6 (ADR-018).
 
+As built (Wave 4 W4D, `src/db/schema/offline.ts`): the three tables below exist with these
+differences. `device_registrations` has `site_id` NOT NULL (a device is registered to one site),
+`requested_by` / `requested_at` for the self-service request, `registered_by` / `registered_at`
+nullable until activation (CHECK: required when `active` or `suspended`), and
+`status_changed_at` / `status_changed_by` / `status_reason`. `sync_commands` has
+`client_sequence` nullable (server-created resolution commands have none), plus
+`auth_snapshot_session_id`, `resolution_of_conflict_id` and `created_by`; `clock_skew_seconds` is
+server time minus the device clock at send (`docs/offline-sync.md` §11.3 item 4). `sync_conflicts`
+carries `organization_id`, `site_id`, `created_at`, `updated_at`; CHECKs require a note, resolver
+and time on every resolution and both-or-neither escalation columns limited to `deviation` /
+`stock_adjustment`. Statuses, workflows and reason codes are CHECK-enforced lists.
+
 ### 11.1 `device_registrations` (P7 · M · `std +site?`)
 
 | Column | Type | Null | Constraint / default | Notes |

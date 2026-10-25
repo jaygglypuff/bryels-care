@@ -470,7 +470,7 @@ number of the component they expand.
 | 5.18 | Document preview and print layout | PDF/HTML preview, page thumbnails, print button, reprint reason | see section 10 |
 | 5.19 | Label preview | actual size at 100 % zoom, QR/Code 128, template version | shows the encoded payload text below the code for verification |
 | 5.20 | State components | navigation progress, empty, error, permission denied, offline, not found | copy patterns in section 6; never a route `loading.tsx` (ADR-043) |
-| 5.21 | Sync status indicator | chip + queue sheet: pending, synced, failed, conflict counts | tap opens queue; failed and conflict rows expose retry / review actions |
+| 5.21 | Sync status indicator | chip + queue sheet: pending, synced, failed, conflict counts | tap opens queue; failed and conflict rows expose retry / review actions. As built (W4D): `SyncChip` in the top bar (icon and count on phones, text from `sm`), `/sync` page as the queue sheet (Sync now, remove from queue, links to reviews), `FreshnessBadge` "Data as of", `OutboxChip` (Pending sync / Syncing / Synced / Could not reach the server · n attempts / Needs review), `SignOutButton` with the unsent-changes warning (`src/ui/sync-status.tsx`) |
 | 5.22 | Avatar and avatar row | initials, photo, count badge, overflow "+n" | team load and approval queues; names on hover/tap |
 | 5.23 | Buttons | primary, cta (dark), secondary, ghost, destructive, icon, operator (large) | one cta per page; destructive never as the default focused button |
 | 5.24 | Bottom sheet / drawer / dialog | phone sheets, tablet/desktop dialogs and side panels | sheets for pickers and "More"; dialogs for confirm and short forms; side panel for detail on xl |

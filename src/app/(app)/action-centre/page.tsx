@@ -7,6 +7,7 @@ import { Card, CardTitle, EmptyState, LinkButton, PageHeader, cx } from "@/ui/co
 import { Banner, Chip } from "@/ui/status";
 import { AcknowledgeForm } from "./forms";
 import { registerAppHooks } from "@/modules/wiring";
+import { SyncConflictSummary } from "../sync/conflict-summary"; // W4D (US-7-05)
 
 registerAppHooks(); // Wave 3 cross-module registrations (src/modules/wiring.ts); cheap and idempotent
 
@@ -99,9 +100,7 @@ export default async function ActionCentrePage({ searchParams }: { searchParams:
       </nav>
 
       {tab === "sync" ? (
-        <Card>
-          <EmptyState title="Offline sync arrives in Phase 7">Conflicts from offline devices will be listed here (US-7-06). Nothing is queued on devices yet.</EmptyState>
-        </Card>
+        <SyncConflictSummary ctx={ctx} />
       ) : tab === "alerts" ? (
         <Card>
           <CardTitle action={<LinkButton href="/notifications" variant="ghost" size="sm">All notifications</LinkButton>}>Alerts for you</CardTitle>

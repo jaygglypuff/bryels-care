@@ -20,7 +20,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
 
 /** Left navigation (ux-system §3). Planned modules are shown disabled with their phase, never as fake links. */
 export const NAV: NavGroup[] = [
-  { label: "Home", icon: "home", items: [{ label: "Overview", href: "/dashboard" }, { label: "Action centre", href: "/action-centre" }, { label: "Dashboards", href: "/analytics", permission: "analytics.dashboard.view" }, { label: "Trends", href: "/analytics/trends", permission: "analytics.dashboard.view" }, { label: "KPI definitions", href: "/analytics/definitions", permission: "analytics.kpi_definition.view" }, { label: "Notifications", href: "/notifications" }, { label: "Help & guides", href: "/help" }, { label: "My account", href: "/account" }] },
+  { label: "Home", icon: "home", items: [{ label: "Overview", href: "/dashboard" }, { label: "Action centre", href: "/action-centre" }, { label: "Dashboards", href: "/analytics", permission: "analytics.dashboard.view" }, { label: "Trends", href: "/analytics/trends", permission: "analytics.dashboard.view" }, { label: "KPI definitions", href: "/analytics/definitions", permission: "analytics.kpi_definition.view" }, { label: "Notifications", href: "/notifications" }, { label: "Help & guides", href: "/help" }, { label: "My account", href: "/account" }, { label: "Sync & offline", href: "/sync" }] },
   {
     // Stock visibility: what is where, in which status, and what is free to use.
     label: "Inventory",
@@ -147,6 +147,9 @@ export const NAV: NavGroup[] = [
       { label: "Imports", href: "/admin/imports", permission: "platform.import_job.view" },
       { label: "Legacy documents", href: "/admin/imports/legacy-documents", permission: "documents.legacy_document.view" },
       { label: "Notification rules", href: "/admin/notification-rules", permission: "platform.notification_rule.view" },
+      // Wave 4 W4D: offline devices and the sync conflict queue
+      { label: "Devices", href: "/admin/devices", permission: "platform.device.view" },
+      { label: "Sync conflicts", href: "/sync/conflicts", permission: "platform.sync_conflict.view" },
     ],
   },
   {
@@ -156,7 +159,6 @@ export const NAV: NavGroup[] = [
       { label: "Procurement", href: "#", planned: "Phase 6" },
       { label: "HR & attendance", href: "#", planned: "Phase 5–6" },
       { label: "Finance", href: "#", planned: "Phase 6" },
-      { label: "Offline mode", href: "#", planned: "Phase 7" },
       { label: "Customer portal", href: "#", planned: "Phase 8" },
     ],
   },

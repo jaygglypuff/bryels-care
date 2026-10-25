@@ -27,3 +27,4 @@ export * from "./complaints";
 export * from "./imports";
 export * from "./reports";
 export * from "./analytics";
+export * from "./offline"; // Wave 4 W4D

@@ -5,7 +5,9 @@ import { type LedgerDifference, getReconciliationRun, listReconciliationRuns } f
 import { JOB_STATUSES, alertsCard, databaseCard, errorsCard, importsCard, integrationsCard, jobCounts, listJobs, workerStatus } from "@/modules/platform";
 import { Phase5Cards } from "./phase5-cards";
 import { backupsCard, healthCard, variablesCard } from "@/modules/governance";
-import { OpsCards, PlannedCards } from "./ops-cards";
+import { OpsCards } from "./ops-cards";
+import { syncDiagnostics } from "@/lib/offline/server/conflicts"; // W4D (US-7-06): Sync card
+import { SyncDiagnosticsCard } from "@/ui/sync-status-diagnostics";
 import { Card, CardTitle, EmptyState, Input, PageHeader, Table, Td, buttonClass, cx } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
@@ -204,7 +206,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
         </Card>
       )}
       {phase5 && <Phase5Cards {...phase5} />}
-      {canDiag && <PlannedCards />}
+      {canDiag && <SyncDiagnosticsCard d={await syncDiagnostics(ctx)} />}
     </div>
   );
 }

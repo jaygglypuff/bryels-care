@@ -462,6 +462,7 @@ aggregate. Order value and shipped value (Estimate) need `financial_kpi.view` un
 | `platform.sync_conflict.{view,edit}` | SyncConflict queue and resolution proposals | N | P7 |
 | `platform.sync_conflict.approve` | Resolve a conflict (chooses server or client version with reason) | S | P7 |
 | `platform.sync_command.view`, `platform.sync_command.void` | Inspect and discard queued SyncCommands | S | P7 |
+| `platform.device.view`, `platform.device.admin` | Device registrations: list; approve with offline workflows, suspend, remove (W4D, US-7-06) | S | P7 |
 
 Self-service capabilities that need no permission string (always allowed for an active user,
 on own records only): view/edit own profile, change own password, manage own sessions and
@@ -799,6 +800,16 @@ strings at delivery time.
 | diagnostics | v* | v* | – | – | – | – | – | – | – | – | – | – | – |
 | sync_conflict | v* | v* | v e a | – | v (own) | v (own) | – | – | – | – | – | v* | – |
 | sync_command | v* | v o* | v o | – | – | – | – | – | – | – | – | v* | – |
+| device (W4D) | v* | v m* | v m | – | – | – | – | – | – | – | – | v* | – |
+
+As built (Wave 4 W4D): `platform.sync_conflict.{view,edit,approve}`, `platform.sync_command.{view,void}`
+and the new `platform.device.{view,admin}` are in `src/lib/permissions.ts` with the grants above
+(`.view` through the VIEW_ALL bundles; qa_qc gets no `platform.*`). Resolving a conflict needs
+`platform.sync_conflict.approve` at the conflict's site and is refused to the person who queued the
+change (discard of one's own conflict only with `offline.allow_self_resolve_discard`, A-DM-11).
+Operators see their own conflicts and discard their own unsent queue without a permission string.
+`platform.sync_conflict.edit` and `platform.sync_command.view/void` are granted but no screen uses
+them yet (server-side queue discards are not built; device discards are self-service).
 
 Note: `platform.approval_rule.admin` belongs to the owner, not the system administrator,
 because approval rules are financial and quality controls; `system_admin` may view them to

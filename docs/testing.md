@@ -542,6 +542,21 @@ integration tests against `POST /api/v1/sync/commands`.
 | `offline.reference_freshness_badge` | Cached lot card 25 h old | "data as of" badge; full reference refresh on reconnect (A-OFF-01) |
 | `offline.no_sensitive_cache` | Inspect IndexedDB after use by finance and HR users | No pricing, cost, payroll or personal data tables present |
 
+As built (Wave 4 W4D): the server side of these rows runs as integration tests in
+`tests/integration/platform/offline-sync.test.ts` (replay after lost response, online-only,
+clock skew, snapshot too old, queue age, revoked session, device changed hands, permission
+revoked, cross-site, device policy, dependency_failed, count_plan_closed, dispense capture rules,
+conflict queue visibility and each resolution, no sensitive cache, logout discards, diagnostics);
+the device side (persistence across restarts, backoff, max attempts, terminal decisions, 401,
+wipe) in `tests/unit/offline/outbox.test.ts` on fake-indexeddb; and one browser run,
+`tests/e2e/offline-sync.cjs` (390 px, `context.setOffline`, the service worker serving `/offline`):
+register and approve a device, download data, count offline, close the tab, replay online, sign
+out (store deleted), weigh offline as another person, replay online. The e2e needs a production
+build (`pnpm build && pnpm next start`), like the other `tests/e2e/*.cjs` scripts. Rows not
+automated yet: `offline.duplicate_scan_same_box` (no offline move screen),
+`offline.retry_max_attempts_failed` and `offline.queue_age_exceeded_to_conflict` in the browser
+(covered by unit and integration tests). The manual run is `docs/offline-acceptance-checklist.md`.
+
 Phase 7 exit (G7) requires every row above green in CI on `mobile-360` plus the manual run of
 section 9 AC-20 on the company's phones.
 

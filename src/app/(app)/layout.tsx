@@ -30,7 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <Shell
       nav={nav}
       quickActions={quickActions}
-      user={{ name: ctx.displayName, roles: ctx.roleCodes.map((r) => ROLE_BUNDLES[r]?.name ?? r).join(", ") }}
+      user={{ id: ctx.userId, name: ctx.displayName, roles: ctx.roleCodes.map((r) => ROLE_BUNDLES[r]?.name ?? r).join(", ") }}
       sites={ctx.allowedSites}
       currentSiteId={ctx.currentSiteId}
       qaCount={qaCount}

@@ -1,6 +1,6 @@
 # Offline and sync strategy
 
-Owner: `principal-architect` with `frontend-engineer` and `security-engineer`. Status:
+Owner: `principal-architect` with `frontend-engineer` and `security-engineer`. Status (W4D): built for counting, weighing and stock moves; see §11 "As built". Original status:
 Proposed (ADR-018). Implementation phase: 7 (PWA hardening), with the command API designed
 for replay from Phase 2.
 
@@ -212,3 +212,56 @@ response (no duplicate posting); conflict routed to the queue and resolved each 
 | Q-OFF-01 | Which areas actually lack connectivity, and for how long? | — | IT / site managers |
 | Q-OFF-02 | Are devices shared between operators or individually assigned? (affects device registration and re-auth) | — | site managers |
 | Q-OFF-03 | Are managed tablets (MDM) available for dispensing stations? | — | IT |
+
+## 11. As built (Wave 4 W4D, US-7-01 .. US-7-06)
+
+Plain language: a registered phone or tablet can count stock and weigh ingredients without signal.
+What it records waits on the device and is sent when the connection returns; the server checks each
+change again as if it were typed online and parks anything it cannot accept for a site manager.
+Signing out deletes the device's offline data.
+
+### 11.1 Pieces and where they live
+
+| Piece | Where | Notes |
+|---|---|---|
+| Protocol (isomorphic) | `src/lib/offline/protocol.ts` | Command catalogue `OFFLINE_COMMANDS` (`inventory.movement.transfer` → `movement_request`, `inventory.stock_count.record` → `stock_count`, `production.dispense_record.create` → `dispensing`), wire schemas, snapshot and reference DTO types, reason labels |
+| Device rules | `src/lib/offline/policy.ts` | Retry schedule (A-OFF-08), `canQueueOffline` (snapshot age, session expiry, device grant, site policy, permission), queue-age warning, reference staleness |
+| Local store | `src/lib/offline/store.ts` (Dexie, database `bryels-care-offline`) | `outbox`, `meta` (snapshot, reference times), reference tables, `syncLog`; `wipe()` |
+| Device identity | `src/lib/offline/device.ts` | Random 32-byte key and a monotonic `client_sequence` in `localStorage` (`bc.device.v1`); survives sign-out because it belongs to the device, not the person |
+| Outbox | `src/lib/offline/outbox.ts` | `enqueue`, `flush` (FIFO batches of 50, unchanged resends), backoff, `failed` after `max_attempts`, terminal server decisions, local `dependency_failed` |
+| Agent | `src/lib/offline/agent.ts` | One per tab; flush on `online`, visibility, every 15 s while online and "Sync now"; snapshot every sync and every 30 min; change of person and device removal handling; sign-out cleanup |
+| Server | `src/lib/offline/server/*` | `replay.ts` (batch replay), `commands.ts` (adapters to `transferStock`, `recordCount`, `recordDispense`, unchanged), `snapshot.ts`, `reference.ts`, `devices.ts`, `conflicts.ts` (queue, resolution, discards, diagnostics), `http.ts` |
+| Endpoints | `src/app/api/v1/sync/{commands,snapshot,reference,device,discards}/route.ts` | Same-origin check on POST, per-user rate limit, `Cache-Control: no-store`; device key in the `X-Device-Key` header |
+| Service worker | `src/app/sw.ts` → `public/sw.js` (Serwist, `next.config.ts`) | Precache: build assets, icons, the static `/offline` page. Runtime: `/_next/static` cache-first, images/fonts stale-while-revalidate. Pages, RSC payloads and `/api/**` network-only; a failed navigation falls back to `/offline`. Disabled in `next dev` |
+| Manifest | `src/app/manifest.ts`, `public/icons/*` | `/manifest.webmanifest`, brand colours, maskable icon, shortcuts to `/offline` and `/sync` |
+| Screens | `/sync` (device panel), `/offline` (static workspace: count, weighing, queue), `/sync/conflicts`, `/sync/conflicts/[id]`, `/admin/devices`; sync chip and sign-out warning in the shell (`src/ui/sync-status.tsx`); Sync card on Admin › Diagnostics; Sync tab of the action centre | |
+
+### 11.2 Endpoints
+
+| Method and path | Who | Body / query | Answer |
+|---|---|---|---|
+| `POST /api/v1/sync/commands` | signed-in person | `{ deviceSentAt, commands: SyncCommandWire[1..50] }` | `{ batchId, serverTime, results: [{ id, status: applied\|rejected\|conflict\|superseded\|retry, reasonCode, errorCode, errorMessage, conflictId, appliedEntityNumber }], permissionsChanged, snapshot }`; 401 keeps the queue |
+| `GET /api/v1/sync/snapshot` | signed-in person | — | the authorization snapshot (`AuthSnapshot`) |
+| `GET /api/v1/sync/reference?siteId=` | signed-in person, sections by permission at the site | — | `ReferencePayload` (full refresh) |
+| `POST /api/v1/sync/device` | signed-in person (self-service) | `{ deviceKey, label, platform, browser, deviceClass, siteId }` | `{ deviceId, status }` (pending) |
+| `POST /api/v1/sync/discards` | signed-in person (own queue) | `{ reason: signed_out\|removed_from_queue\|device_reset, commands[] }` | audit `platform.sync_command.discarded` per command |
+
+### 11.3 Decisions taken while building (for the integrator's ADRs)
+
+1. **Static offline shell, never cached authenticated HTML.** The service worker caches no page of the signed-in app. `/offline` is a static page with no user data in its HTML; it reads only the device's IndexedDB, which belongs to the person signed in and is deleted at sign-out and at a change of person. Reference data is kept in IndexedDB, not in the service worker's caches (§2 said "runtime-cache approved reference endpoints"); this is what makes clearing per person possible.
+2. **Re-authorization with the current context, not the snapshot.** The snapshot only decides what the device may queue offline. On replay the server checks the CURRENT site scope and permission at the site; a permission removed meanwhile answers `PERMISSIONS_CHANGED` (`permission_denied`).
+3. **Snapshot and session rules on replay.** Parked (`rejected`) when: captured more than `offline.auth_snapshot_max_age_hours` after the snapshot (`auth_snapshot_expired` / `AUTH_SNAPSHOT_EXPIRED`); queued more than `offline.max_queue_age_hours` ago (`QUEUE_AGE_EXCEEDED`); the snapshot's session was revoked or the work was captured after its absolute expiry (`session_revoked`); the device's snapshot belongs to another person than the session (`DEVICE_USER_CHANGED`). A session that only **idle-expired** while offline is not a reason to park: an offline device cannot show activity (A-W4D-02).
+4. **Clock skew** is measured as the server time minus the device clock at send (`deviceSentAt`), not `received_at − client_created_at` (§4 wording), because queued work is legitimately old. Stored per command (`clock_skew_seconds`, `is_clock_skew_flagged`) and per device (`max_clock_skew_seen_seconds`).
+5. **Out-of-tolerance weighings** captured offline are refused locally when the cached data shows it; when the server finds it on replay, the dispensing service is unchanged (it needs a QA co-signer present), so no `dispense_records` row is written: the capture is parked as `out_of_tolerance` with the full payload, and a deviation stub (`source = cx_tol`) is opened for QA when the operator may open deviations (§3 and data-model §11.5 asked for an exception row; that needs a change to W2B's service, A-W4D-05).
+6. **Re-apply runs as the person who queued the change**, rebuilt with their current permissions, with actor `system:sync.reapply` on behalf of the reviewer; it creates a new `sync_commands` row (`resolution_of_conflict_id`, `created_by`); the original becomes `superseded`. A failed re-apply leaves the conflict open (audit `platform.sync_conflict.reapply_failed`).
+7. **Checker signatures** are not captured offline: the co-sign needs the checker's password checked by the server (ADR-030). The checker signs the synced weighing from their own session.
+8. **Device registration** is requested from the device (self-service, `pending`) and approved by `platform.device.admin` at the device's site; new permission strings `platform.device.view` / `platform.device.admin` (matrix §2.12).
+9. **Reference refresh is always full** (`full: true`); the master tables have no change cursor yet (A-W4D-04). `device_registrations.reference_cursor` stores the refresh time.
+
+### 11.4 Not built in this stream
+
+- Offline capture screens for stock moves (the server accepts `inventory.movement.transfer` replays; the scan-to-move page is not wired to the outbox), process steps, receiving and pick/pack.
+- `client_sequence` copied onto posted rows (`stock_movements`, `dispense_records`): those services were not changed.
+- `sessions.device_registration_id` (data-model §3.1): sessions are not linked to devices.
+- Background Sync API (iOS has none); flushing happens while the app is open.
+- Help guides in the offline cache (§7 row "Help guides").
