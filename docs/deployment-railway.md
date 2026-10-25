@@ -581,6 +581,18 @@ cutting over a restored database; a rollback during the data-migration cutover w
 are always on the same commit after a rollback; every rollback is an incident record (runbook
 section 12) even when brief.
 
+## 11a. Installable app and service worker (W4D, US-7-01)
+
+- `pnpm build` generates `public/sw.js` (Serwist; not committed). The image copies `public/` into
+  the runner stage (`Dockerfile`), so `/sw.js`, `/icons/*` and `/manifest.webmanifest` are served by
+  `next start`. `/sw.js` is sent with `Cache-Control: no-cache, no-store, must-revalidate`.
+- Service workers and installing the app need **HTTPS** (the Railway domain or a custom domain
+  with TLS, §12); `http://localhost` also works for development and the e2e run.
+- The precached `/offline` page carries the build revision `RAILWAY_GIT_COMMIT_SHA` (set by
+  Railway; a random value otherwise), so each deploy replaces the device's precache. No new
+  variable is required.
+- `next dev` disables the service worker; test offline behaviour on a production build.
+
 ## 12. Custom domain and TLS
 
 | Item | Value |

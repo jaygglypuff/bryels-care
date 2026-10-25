@@ -98,19 +98,4 @@ export function OpsCards({ health, backups, variables }: { health: HealthCard; b
   );
 }
 
-/** Cards of later phases (US-1-26 AC2): honest S states that name the phase, never fake data. */
-export function PlannedCards() {
-  const planned: [string, string][] = [
-    ["Sync", "Phase 7 (US-7-06)"],
-  ];
-  return (
-    <div className="grid gap-3 md:grid-cols-3">
-      {planned.map(([title, when]) => (
-        <Card key={title}>
-          <CardTitle>{title}</CardTitle>
-          <p className="text-[13px] text-muted">Available in {when}.</p>
-        </Card>
-      ))}
-    </div>
-  );
-}
+/** Cards of later phases (US-1-26 AC2) were honest "Available in Phase N" states; the last one (Sync) shipped in W4D (US-7-06). */

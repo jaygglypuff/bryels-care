@@ -32,3 +32,4 @@ export * from "./finance"; // Wave 4 W4B
 export * from "./quality-system"; // Wave 4 W4C
 export * from "./maintenance"; // Wave 4 W4C
 export * from "./portal"; // Wave 4 W4E
+export * from "./offline"; // Wave 4 W4D

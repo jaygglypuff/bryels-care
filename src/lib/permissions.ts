@@ -406,6 +406,14 @@ export const PERMISSIONS = [
   "sales.portal_user.admin",
   "sales.portal_catalog.view",
   "sales.portal_catalog.admin",
+  // Wave 4 W4D: offline devices, sync commands and conflicts (US-7-03, US-7-05, US-7-06; docs/permissions-matrix.md §2.12, §3.12)
+  "platform.device.view",
+  "platform.device.admin",
+  "platform.sync_conflict.view",
+  "platform.sync_conflict.edit",
+  "platform.sync_conflict.approve",
+  "platform.sync_command.view",
+  "platform.sync_command.void",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -1483,3 +1491,18 @@ const W4E_EXCLUDE: Record<string, readonly Permission[]> = {
 for (const [role, drop] of Object.entries(W4E_EXCLUDE)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => !drop.includes(p));
 }
+
+// Wave 4 W4D: offline sync grants (docs/permissions-matrix.md §3.12 sync_conflict, sync_command and device rows).
+// `.view` strings reach the VIEW_ALL roles (system_admin, site_manager, auditor; qa_qc gets no platform.* views).
+// Operators see and discard their own queue without a permission string (self-service, matrix §2.12).
+const W4D_GRANTS: Record<string, readonly Permission[]> = {
+  system_admin: ["platform.sync_command.void", "platform.device.admin"],
+  site_manager: ["platform.sync_conflict.edit", "platform.sync_conflict.approve", "platform.sync_command.void", "platform.device.admin"],
+};
+for (const [role, grants] of Object.entries(W4D_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+// Matrix §3.12: the owner views sync queues and devices organization-wide; resolving, discarding and device
+// administration are site manager and system administrator work.
+const W4D_NOT_FOR_OWNER: readonly Permission[] = ["platform.sync_conflict.edit", "platform.sync_conflict.approve", "platform.sync_command.void", "platform.device.admin"];
+ROLE_BUNDLES.owner_director.permissions = ROLE_BUNDLES.owner_director.permissions.filter((p) => !W4D_NOT_FOR_OWNER.includes(p));

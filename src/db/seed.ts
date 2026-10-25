@@ -455,6 +455,7 @@ async function main() {
   await (await import("./seeds/w4a")).seedW4a(db); // W4A: PO template, approved-supplier list, requests, POs in every state, a supplier return
   await (await import("./seeds/w4c")).seedW4c(db); // W4C: CAPA, change control, mock recall drill, PM plans, maintenance work orders
   await (await import("./seeds/w4e")).seedW4e(db, { passwordHash: pw }); // W4E: customer portal tenants, demo portal accounts, a portal order and a quotation
+  await (await import("./seeds/w4d")).seedW4d(db); // W4D: demo device registrations and one open sync conflict
   // W3A: a month of fictional activity plus its nightly KPI snapshots (skipped inside vitest: tests seed their own fixed month).
   if (!process.env.VITEST) await (await import("./seeds/w3a")).seedW3a(db, { backfill: true });
   await (await import("./seeds/w4b")).seedW4b(db, { passwordHash: pw, documents: !process.env.VITEST }); // W4B: finance2 account, FICTIONAL tax placeholders, finance documents (demo)

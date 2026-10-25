@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  Bell, Boxes, ClipboardList, Clock, Database, Factory, FlaskConical, GitBranch, Home, LogOut, Menu, PackagePlus, ScanLine,
+  Bell, Boxes, ClipboardList, Clock, Database, Factory, FlaskConical, GitBranch, Home, Menu, PackagePlus, ScanLine,
   ScrollText, Settings, ShieldCheck, ShoppingCart, Truck, Warehouse, X,
 } from "lucide-react";
 import type { NavBadges, NavGroup, QuickAction } from "./nav";
@@ -11,6 +11,7 @@ import { cx } from "@/ui/core";
 import { Logo, LogoMark } from "@/ui/brand";
 import { NavigationProgress } from "@/ui/navigation-progress";
 import { DemoBanner } from "@/ui/demo-banner";
+import { SignOutButton, SyncChip } from "@/ui/sync-status";
 
 const ICONS: Record<string, React.ReactNode> = {
   home: <Home size={18} />, boxes: <Boxes size={18} />, factory: <Factory size={18} />, shield: <ShieldCheck size={18} />,
@@ -22,7 +23,7 @@ const ICONS: Record<string, React.ReactNode> = {
 type Props = {
   nav: NavGroup[];
   quickActions: QuickAction[];
-  user: { name: string; roles: string };
+  user: { id: string; name: string; roles: string };
   sites: { id: string; code: string; name: string }[];
   currentSiteId: string;
   /** Open QA queue items at the current site (QA users only): badge on the QA rail icon, phone tab and QA queue tab. */
@@ -132,6 +133,7 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
             <Link href="/inventory/scan" className="hidden size-10 place-items-center rounded-full bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg sm:grid" aria-label="Scan or search" title="Scan or search">
               <ScanLine size={18} />
             </Link>
+            <SyncChip userId={user.id} />
             <Link href="/notifications" className="relative grid size-10 place-items-center rounded-full bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg" aria-label={`Notifications, ${unreadCount} unread`} title="Notifications">
               <Bell size={18} />
               {unreadCount > 0 && (
@@ -148,9 +150,9 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
                 <p className="mt-2 text-[12px] text-muted">Site: {site?.code} · {site?.name}</p>
                 <Link href="/account" className="mt-3 block text-[13px] font-medium text-primary-text hover:underline">My account and devices</Link>
                 {demo?.canReset && <Link href="/admin/demo" className="mt-2 block text-[13px] font-medium text-primary-text hover:underline">Reset demo data</Link>}
-                <form action={signOut} className="mt-3 border-t border-line pt-3">
-                  <button className="flex items-center gap-1.5 text-[13px] font-medium text-primary-text hover:underline"><LogOut size={14} /> Sign out</button>
-                </form>
+                <div className="mt-3 border-t border-line pt-3">
+                  <SignOutButton signOut={signOut} variant="menu" />
+                </div>
               </div>
             </details>
           </div>
@@ -202,11 +204,7 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
               );
             })}
           </div>
-          <form action={signOut}>
-            <button className="mt-2 grid size-11 place-items-center rounded-full bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg" title="Sign out" aria-label="Sign out">
-              <LogOut size={18} />
-            </button>
-          </form>
+          <SignOutButton signOut={signOut} variant="rail" />
         </aside>
         <main className="min-w-0 flex-1 py-5 sm:py-7">{children}</main>
       </div>
