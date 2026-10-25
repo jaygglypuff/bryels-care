@@ -53,6 +53,12 @@ export const NUMBERING_DEFAULTS = {
   // Wave 3 W3C: import jobs and legacy documents (data-model §9.2)
   IMP: { prefix: "IMP", pattern: "{PREFIX}-{YYMM}-{SEQ}", resetPeriod: "monthly", sequenceWidth: 3, isGapless: false },
   LDOC: { prefix: "LDOC", pattern: "{PREFIX}-{SEQ}", resetPeriod: "never", sequenceWidth: 6, isGapless: false },
+  // Wave 4 W4C: CAPA, change control, recall cases (data-model §9.2) and maintenance (US-6-19)
+  CAPA: yearly("CAPA", 3),
+  CC: yearly("CC", 3),
+  RC: { prefix: "RC", pattern: "{PREFIX}-{YYYY}-{SEQ}", resetPeriod: "yearly", sequenceWidth: 2, isGapless: false },
+  PM: { prefix: "PM", pattern: "{PREFIX}-{SEQ}", resetPeriod: "never", sequenceWidth: 4, isGapless: false },
+  MWO: yearly("MWO", 4),
 } satisfies Record<string, NumberingRuleSpec>;
 
 export type DocumentType = keyof typeof NUMBERING_DEFAULTS;

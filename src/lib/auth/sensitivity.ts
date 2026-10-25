@@ -79,7 +79,7 @@ const SENSITIVE: ReadonlySet<string> = new Set([
   "production.work_order.void", "production.yield_record.approve", "quality.capa.approve",
   "quality.change_control.approve", "quality.complaint.approve", "quality.deviation.approve",
   "quality.deviation.export", "quality.genealogy.export", "quality.hold.create", "quality.inspection.approve",
-  "quality.inspection_plan.approve", "quality.recall_case.create", "quality.recall_case.view",
+  "quality.inspection_plan.approve", "quality.recall_case.create", "quality.recall_case.edit", "quality.recall_case.export", "quality.recall_case.view",
   "quality.test_result.approve", "quality.test_result.export", "quality.test_result.void",
   "sales.customer_return.approve", "sales.customer_return.post", "sales.portal_catalog.admin",
   "sales.portal_catalog.view", "sales.portal_user.view", "sales.price_list.approve", "sales.price_list.edit",

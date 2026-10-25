@@ -272,8 +272,20 @@ description, sensitivity and phase are listed on one row.
 | `quality.recall_case.{view,create}` | RecallCase (the Phase 4 recall explorer uses `quality.genealogy.view`) | S | P6 |
 | `quality.recall_case.approve` | Initiate/close a recall (two approvals by default) | R | P6 |
 | `quality.recall_case.admin` | Mark lots/containers `recalled` in bulk from a case | R | P6 |
+| `quality.recall_case.edit` | Record customer notifications, acknowledgements and accounted quantities on a case (W4C: `sales_cs` records the notification, data-model §3.6) | S | P6 (W4C) |
+| `quality.recall_case.export` | Export a case's customer notification list (names customers) | S | P6 (W4C) |
 | `quality.genealogy.view` | Forward/backward trace explorer | N | P3 |
 | `quality.genealogy.export` | Export a trace (contains customers and suppliers) | S | P3 |
+
+### 2.6a maintenance (Wave 4 W4C, US-6-19; FR-production-15)
+
+| Permission(s) | Description | Sens. | Phase |
+|---|---|---|---|
+| `maintenance.plan.{view,create,edit}` | Preventive-maintenance plans (time or usage based) on the equipment register; edit = change, pause, resume, retire | N | P6 (W4C) |
+| `maintenance.work_order.{view,create,edit}` | Maintenance work orders: report a problem, start, hold, assign, complete (completing also needs `masterdata.equipment.edit`, it writes the service record) | N | P6 (W4C) |
+| `maintenance.work_order.post` | Issue spare parts to a work order (posts an `issue` stock movement) | N | P6 (W4C) |
+| `maintenance.work_order.void` | Cancel a maintenance work order | N | P6 (W4C) |
+| `maintenance.spare_part.{view,edit}` | Spare-parts list per site (materials kept as spares, minimum stock) | N | P6 (W4C) |
 
 ### 2.7 documents (Phase 2; BMR/DR templates Phase 3/4)
 
@@ -655,6 +667,21 @@ sheet / traveler of a batch are visible with `production.batch.view` **or**
 | complaint | v* | – | v | – | – | – | v c s a | – | v c s | – | – | v* | – |
 | recall_case | v a* | – | v | – | – | v | v c a m | – | v | – | – | v* | – |
 | genealogy | v x* | – | v | v | v | v | v x | v | v | – | – | v x* | – |
+
+As built (Wave 4 W4C, `src/lib/permissions.ts` block "Wave 4 W4C"): capa, change_control and recall_case
+as in the rows above; `quality.recall_case.edit` (notifications, accounted quantities) goes to `sales_cs` and
+`qa_qc`, `quality.recall_case.export` (notification list) to `qa_qc`, `sales_cs`, `auditor` and the owner; the
+owner keeps view + approve (+ export) only; system_admin has no CAPA, change-control or recall-case access.
+"Mark recalled" also needs `quality.disposition.approve` (it writes a `recall` disposition per lot).
+
+| Entity (W4C maintenance) | OD | SA | SM | PP | PO | WO | QA | PR | SC | FI | HR | AU | CP |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| maintenance_plan | v | v | v c e | v | v | – | v | – | – | – | – | v | – |
+| maintenance_work_order | v | v | v c e p d | v | v c e | v p | v | – | – | – | – | v | – |
+| spare_part | v | v | v e | – | v | v | v | – | – | – | – | v | – |
+
+Technicians are site managers or production operators (process map W13; no separate technician role); the
+warehouse issues spare parts (`p` = `maintenance.work_order.post`, `d` = `.void`).
 
 Notes: owner_director holds `a*` on conditional_release and recall_case as the **second**
 approver only; the first approval is always `qa_qc`. Nobody but `qa_qc` can approve a

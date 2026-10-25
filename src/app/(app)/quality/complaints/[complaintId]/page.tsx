@@ -48,6 +48,12 @@ export default async function ComplaintPage({ params, searchParams }: { params: 
             <a className={linkCls} href={`/print/complaint-acknowledgement/${c.id}`}>
               Acknowledgement
             </a>
+            {/* Wave 4 W4C (US-6-18): CAPA from a complaint */}
+            {ctx.can("quality.capa.create") && (
+              <LinkButton href={`/quality/capa/new?complaintId=${c.id}`} variant="secondary">
+                Open CAPA
+              </LinkButton>
+            )}
             <LinkButton href="/quality/complaints" variant="secondary">
               Complaints
             </LinkButton>

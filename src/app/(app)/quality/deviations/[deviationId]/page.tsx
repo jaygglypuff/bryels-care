@@ -2,11 +2,12 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
-import { getDeviation } from "@/modules/quality";
+import { getDeviation, listCapas } from "@/modules/quality";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { DeviationStatusChip } from "../../_ui";
+import { CapaStatusChip } from "../../capa/_ui";
 import { CloseDeviationForm, ContainForm, InvestigateForm, UpdateInvestigationForm } from "../../w2c-forms";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,8 @@ export default async function DeviationPage({ params, searchParams }: { params: 
     throw e;
   }
   const d = v.deviation;
+  // Wave 4 W4C: the CAPA tab shows the CAPAs opened from this deviation (US-6-18).
+  const capaRows = ctx.can("quality.capa.view") ? await listCapas(ctx, { deviationId: d.id, status: "all" }) : null;
   return (
     <>
       <PageHeader title={d.deviationNumber} subtitle={d.sourceLabel} actions={<LinkButton href="/quality/deviations" variant="secondary">Deviations</LinkButton>} />
@@ -107,8 +110,25 @@ export default async function DeviationPage({ params, searchParams }: { params: 
         </Card>
 
         <Card>
-          <CardTitle>CAPA</CardTitle>
-          <p className="text-[13px] text-muted">Corrective and preventive actions arrive in Phase 6 (US-6-18). Record the actions agreed in the resolution until then.</p>
+          <CardTitle action={capaRows && ctx.can("quality.capa.create") ? <LinkButton href={`/quality/capa/new?deviationId=${d.id}`} variant="secondary" size="sm">Open CAPA</LinkButton> : undefined}>CAPA</CardTitle>
+          {!capaRows ? (
+            <p className="text-[13px] text-muted">Corrective and preventive actions are visible to holders of quality.capa.view.</p>
+          ) : capaRows.length === 0 ? (
+            <p className="text-[13px] text-muted">No CAPA for this deviation{ctx.can("quality.capa.create") ? "; open one when corrective or preventive action is needed (W07-04)." : "."}</p>
+          ) : (
+            <ul className="flex flex-col gap-1 text-[14px]">
+              {capaRows.map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center gap-2">
+                  <Link className="font-medium text-primary-text hover:underline" href={`/quality/capa/${c.id}`}>
+                    {c.number}
+                  </Link>
+                  <CapaStatusChip status={c.status} />
+                  <span className="text-[13px] text-fg-2">{c.title}</span>
+                  {c.overdue && <Chip tone="bad">Overdue</Chip>}
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
 
         {d.status !== "closed" && (

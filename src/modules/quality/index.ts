@@ -63,3 +63,58 @@ export {
 } from "./complaints";
 export { COMPLAINT_TRANSITIONS, COMPLAINT_STATUS_LABEL, COMPLAINT_CHANNEL_LABEL, TRACE_MATCH_LABEL, toCustomerFacing, type ComplaintStatus, type CustomerFacingComplaint } from "./complaints-rules";
 export { recallScope, recallExport, flattenRecall, type RecallScope, type RecallQuery, type RecallMode } from "./recall";
+// Wave 4 W4C: CAPA, change control and recall cases (US-6-18)
+export {
+  openCapa,
+  updateCapa,
+  addCapaAction,
+  completeCapaAction,
+  verifyCapaAction,
+  reopenOrCancelCapaAction,
+  submitCapaForClosure,
+  recordEffectivenessCheck,
+  closeCapa,
+  cancelCapa,
+  listCapas,
+  getCapa,
+  capaFormContext,
+  capaExport,
+  overdueCapaActionCandidates,
+  type OpenCapaInput,
+  type AddCapaActionInput,
+} from "./capa";
+export {
+  createChangeControl,
+  updateChangeControl,
+  submitChangeControl,
+  decideChangeControl,
+  implementChangeControl,
+  closeChangeControl,
+  cancelChangeControl,
+  listChangeControls,
+  getChangeControl,
+  changeControlFormContext,
+  changeControlApprovalCandidates,
+  type CreateChangeControlInput,
+} from "./change-control";
+export {
+  openRecallCase,
+  refreshRecallScope,
+  updateRecallCase,
+  submitRecallCase,
+  decideRecallCase,
+  markRecallCaseLots,
+  startRecallDrill,
+  recordRecallNotification,
+  startRecallRecovery,
+  recordRecallAccounted,
+  closeRecallCase,
+  cancelRecallCase,
+  listRecallCases,
+  getRecallCase,
+  recallCaseCandidates,
+  recallNotificationExport,
+  recallCasesForLot,
+  type OpenRecallCaseInput,
+} from "./recall-cases";
+export * from "./capa-rules";

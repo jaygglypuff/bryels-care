@@ -37,6 +37,9 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   { kind: "approval.customer_requirement", tab: "approvals", label: "Customer requirement to approve", severity: "info", permission: "masterdata.customer_requirement.approve", actionLabel: "Review requirement" },
   { kind: "approval.import_job", tab: "approvals", label: "Import to approve", severity: "info", permission: "platform.import_job.approve", actionLabel: "Review import" },
   { kind: "approval.customer_return", tab: "approvals", label: "Customer return to approve", severity: "warning", permission: "sales.customer_return.approve", actionLabel: "Review return" },
+  // Wave 4 W4C: recall case and change control approvals (US-6-18)
+  { kind: "approval.recall_case", tab: "approvals", label: "Recall case to approve", severity: "critical", permission: "quality.recall_case.approve", actionLabel: "Review recall case" },
+  { kind: "approval.change_control", tab: "approvals", label: "Change control to approve", severity: "info", permission: "quality.change_control.approve", actionLabel: "Review change" },
   // Exceptions
   { kind: "late_work_order", tab: "exceptions", label: "Late work order", severity: "warning", permission: "production.work_order.view", actionLabel: "Open work order" },
   { kind: "low_stock", tab: "exceptions", label: "Finished goods below minimum stock", severity: "warning", permission: "inventory.balance.view", actionLabel: "Plan production" },
@@ -52,6 +55,11 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   { kind: "credit_hold", tab: "exceptions", label: "Customer on credit hold", severity: "warning", permission: "finance.credit_terms.view", actionLabel: "Open customer" },
   { kind: "open_complaint", tab: "exceptions", label: "Open customer complaint", severity: "warning", permission: "quality.complaint.view", actionLabel: "Open complaint" },
   { kind: "return_awaiting_qa", tab: "exceptions", label: "Customer return waiting for QA", severity: "warning", permission: "quality.disposition.approve", actionLabel: "Open return" },
+  // Wave 4 W4C: CAPA actions, recall cases, preventive maintenance (US-6-18, US-6-19)
+  { kind: "overdue_capa_action", tab: "exceptions", label: "CAPA action overdue", severity: "warning", permission: "quality.capa.view", actionLabel: "Open CAPA" },
+  { kind: "open_recall_case", tab: "exceptions", label: "Open recall case", severity: "critical", permission: "quality.recall_case.view", actionLabel: "Open recall case" },
+  { kind: "pm_due", tab: "exceptions", label: "Preventive maintenance due", severity: "info", permission: "maintenance.plan.view", actionLabel: "Open PM plan" },
+  { kind: "pm_overdue", tab: "exceptions", label: "Preventive maintenance overdue", severity: "warning", permission: "maintenance.plan.view", actionLabel: "Open PM plan" },
 ];
 
 export function actionKind(kind: string): ActionKind | undefined {

@@ -27,3 +27,5 @@ export * from "./complaints";
 export * from "./imports";
 export * from "./reports";
 export * from "./analytics";
+export * from "./quality-system"; // Wave 4 W4C
+export * from "./maintenance"; // Wave 4 W4C

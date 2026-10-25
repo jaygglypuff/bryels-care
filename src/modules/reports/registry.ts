@@ -4,6 +4,7 @@ import { expiryReport, movementsReport, receiptsReport, stockOnHandReport } from
 import { batchYieldReport, workOrdersReport } from "./defs/production";
 import { deviationsReport, dispositionsReport, holdsReport } from "./defs/quality";
 import { salesOrdersReport, shipmentsReport } from "./defs/sales";
+import { capaReport, maintenanceReport } from "./defs/quality-system"; // Wave 4 W4C
 import type { ReportDefinition } from "./types";
 
 /**
@@ -21,6 +22,8 @@ export const REPORTS: readonly ReportDefinition[] = [
   dispositionsReport,
   deviationsReport,
   holdsReport,
+  capaReport, // Wave 4 W4C
+  maintenanceReport, // Wave 4 W4C
   salesOrdersReport,
   shipmentsReport,
   auditExtractReport,

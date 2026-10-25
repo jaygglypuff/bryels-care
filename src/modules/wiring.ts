@@ -2,7 +2,18 @@ import "server-only";
 import type { Tx } from "@/db/client";
 import type { AuthContext } from "@/lib/auth/context";
 import { type DeviationKind, type OpenDeviationInput, registerExecutionHooks } from "@/modules/production";
-import { type DeviationSource, ensureBatchInspection, inProcessQcStatus, listComplaints, openDeviation } from "@/modules/quality";
+import {
+  type DeviationSource,
+  changeControlApprovalCandidates,
+  ensureBatchInspection,
+  inProcessQcStatus,
+  listComplaints,
+  openDeviation,
+  overdueCapaActionCandidates,
+  recallCaseCandidates,
+} from "@/modules/quality";
+import { pmDueCandidates, usageAvailabilityReasons } from "@/modules/maintenance";
+import { registerEquipmentAvailabilityProvider } from "@/modules/masterdata";
 import { registerActionItemSource } from "@/modules/action-centre";
 import { customersKind, failedImportCandidates, importApprovalCandidates, importWizardStats, registerImportKind } from "@/modules/imports";
 import { registerImportStatsProvider } from "@/modules/platform/diagnostics-phase5";
@@ -13,7 +24,9 @@ import { listCustomerReturns, registerCustomer360Section, RETURN_STATUS_LABEL, t
  * the quality module (quality imports production), so quality's services are plugged into the
  * execution hooks here. Wave 3: complaints and returns as customer-360 sections (sales must not import
  * quality), the customers import kind on W3D's customer service, and the import wizard's action-centre
- * items and diagnostics statistics (the action centre and diagnostics never import the imports module). `registerAppHooks()` is idempotent and is called:
+ * items and diagnostics statistics (the action centre and diagnostics never import the imports module). Wave 4 W4C:
+ * CAPA, recall-case, change-control and PM items in the action centre, and usage-based PM plans in the W1D
+ * equipment gate (masterdata must not import maintenance). `registerAppHooks()` is idempotent and is called:
  *
  * - at web server start (src/instrumentation.ts `register`),
  * - at worker start (src/worker.ts),
@@ -97,4 +110,13 @@ export function registerAppHooks() {
   registerActionItemSource({ kind: "failed_import", detect: (org) => failedImportCandidates(org) });
   registerActionItemSource({ kind: "approval.import_job", detect: (org) => importApprovalCandidates(org) });
   registerImportStatsProvider("import_wizard", (org) => importWizardStats(org));
+  // Wave 4 W4C (US-6-18, US-6-19): overdue CAPA actions, recall cases and their approval, change control
+  // approval and PM plans due/overdue in the action centre; usage-based PM plans in the equipment gate.
+  registerActionItemSource({ kind: "overdue_capa_action", detect: (org, now) => overdueCapaActionCandidates(org, now) });
+  registerActionItemSource({ kind: "open_recall_case", detect: async (org) => (await recallCaseCandidates(org)).filter((c) => c.kind === "open_recall_case") });
+  registerActionItemSource({ kind: "approval.recall_case", detect: async (org) => (await recallCaseCandidates(org)).filter((c) => c.kind === "approval.recall_case") });
+  registerActionItemSource({ kind: "approval.change_control", detect: (org) => changeControlApprovalCandidates(org) });
+  registerActionItemSource({ kind: "pm_due", detect: async (org, now) => (await pmDueCandidates(org, now)).filter((c) => c.kind === "pm_due") });
+  registerActionItemSource({ kind: "pm_overdue", detect: async (org, now) => (await pmDueCandidates(org, now)).filter((c) => c.kind === "pm_overdue") });
+  registerEquipmentAvailabilityProvider("maintenance.usage_plans", (q, ids) => usageAvailabilityReasons(q, ids));
 }

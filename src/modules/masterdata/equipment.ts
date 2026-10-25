@@ -35,7 +35,12 @@ export type AvailabilityReason = {
  * cleaning and qualification block when blocking_rule = block, are recorded as warnings when
  * warn, and are informational when none (A-DM-28; assumption A-W1D-04).
  */
-export function deriveAvailability(e: Pick<EquipmentRow, "status" | "calibrationDueDate" | "maintenanceDueDate" | "cleaningStatus" | "cleaningRule" | "qualificationStatus" | "blockingRule">, onDate: string) {
+export function deriveAvailability(
+  e: Pick<EquipmentRow, "status" | "calibrationDueDate" | "maintenanceDueDate" | "cleaningStatus" | "cleaningRule" | "qualificationStatus" | "blockingRule">,
+  onDate: string,
+  /** W4C: derived reasons from registered providers (usage-based PM plans overdue), subject to the blocking rule. */
+  extra: readonly AvailabilityReason[] = [],
+) {
   const statusReasons: AvailabilityReason[] = [];
   const derived: AvailabilityReason[] = [];
   if (e.status !== "in_service") statusReasons.push({ code: "out_of_service", detail: e.status === "maintenance" ? "In maintenance" : "Out of service" });
@@ -43,6 +48,7 @@ export function deriveAvailability(e: Pick<EquipmentRow, "status" | "calibration
   if (e.maintenanceDueDate && e.maintenanceDueDate < onDate) derived.push({ code: "maintenance_due", detail: `Maintenance was due ${e.maintenanceDueDate}`, dueDate: e.maintenanceDueDate });
   if (e.cleaningRule !== "none" && e.cleaningStatus !== "clean") derived.push({ code: "cleaning_required", detail: e.cleaningStatus === "in_progress" ? "Cleaning in progress" : "Cleaning not recorded since last use" });
   if (e.qualificationStatus === "pending" || e.qualificationStatus === "failed") derived.push({ code: "qualification_pending", detail: e.qualificationStatus === "failed" ? "Qualification failed" : "Qualification pending" });
+  derived.push(...extra);
   const reasons = [...statusReasons, ...derived];
   const blocking = [...statusReasons, ...(e.blockingRule === "block" ? derived : [])];
   return {
@@ -54,6 +60,30 @@ export function deriveAvailability(e: Pick<EquipmentRow, "status" | "calibration
     blockingReasons: blocking,
     warnings: e.blockingRule === "warn" ? derived : [],
   };
+}
+
+/**
+ * W4C (US-6-19): extra derived availability reasons from other modules, e.g. the maintenance module's
+ * usage-based PM plans that reached their interval (time-based plans keep `maintenance_due_date` in step,
+ * so they need no provider). Registered by src/modules/wiring.ts; the registry lives on globalThis.
+ */
+export type AvailabilityProvider = (q: DbOrTx, equipmentIds: string[], onDate: string) => Promise<Map<string, AvailabilityReason[]>>;
+const PROVIDERS_KEY = "__bc_equipment_availability_providers__";
+function providers(): Map<string, AvailabilityProvider> {
+  const g = globalThis as unknown as Record<string, Map<string, AvailabilityProvider> | undefined>;
+  g[PROVIDERS_KEY] ??= new Map();
+  return g[PROVIDERS_KEY]!;
+}
+export function registerEquipmentAvailabilityProvider(key: string, provider: AvailabilityProvider) {
+  providers().set(key, provider);
+}
+async function extraReasons(q: DbOrTx, equipmentIds: string[], onDate: string): Promise<Map<string, AvailabilityReason[]>> {
+  const out = new Map<string, AvailabilityReason[]>();
+  if (!equipmentIds.length) return out;
+  for (const p of providers().values()) {
+    for (const [id, reasons] of await p(q, equipmentIds, onDate)) out.set(id, [...(out.get(id) ?? []), ...reasons]);
+  }
+  return out;
 }
 
 /** Business date of an instant in the plant time zone. */
@@ -129,10 +159,11 @@ export async function createEquipment(ctx: AuthContext, raw: unknown) {
  * status, and the administrative status (a failed calibration blocks until a QA review; a passing
  * service returns maintenance/out-of-service equipment to service).
  */
-export async function recordServiceRecord(ctx: AuthContext, raw: unknown) {
+export async function recordServiceRecord(ctx: AuthContext, raw: unknown, opts: { tx?: Tx } = {}) {
   ctx.require("masterdata.equipment.edit");
   const input = parseInput(ServiceRecordInput, raw);
-  return db.transaction(async (tx) => {
+  // W4C: the maintenance work order completes inside its own transaction (opts.tx).
+  const run = async (tx: Tx) => {
     const e = await lockEquipment(tx, ctx, input.equipmentId);
     const { result } = await idempotent(tx, ctx, input.idempotencyKey, "masterdata.equipment.serviced", async () => {
       const performedAt = input.performedAt ?? new Date();
@@ -221,7 +252,8 @@ export async function recordServiceRecord(ctx: AuthContext, raw: unknown) {
       return { recordId: rec.id, status: e.status, statusChange };
     });
     return result;
-  });
+  };
+  return opts.tx ? run(opts.tx) : db.transaction(run);
 }
 
 /**
@@ -264,13 +296,28 @@ export async function reviewServiceRecord(ctx: AuthContext, input: { recordId: s
 }
 
 /** Manual status change with a reason (masterdata.equipment.edit), through the state machine. */
-export async function changeEquipmentStatus(ctx: AuthContext, raw: unknown) {
+export async function changeEquipmentStatus(ctx: AuthContext, raw: unknown, opts: { tx?: Tx } = {}) {
   ctx.require("masterdata.equipment.edit");
   const input = parseInput(EquipmentStatusInput, raw);
-  return db.transaction(async (tx) => {
+  const run = async (tx: Tx) => {
     const e = await lockEquipment(tx, ctx, input.equipmentId);
     return transitionEquipment(tx, ctx, e, input.toStatus, input.reason);
-  });
+  };
+  return opts.tx ? run(opts.tx) : db.transaction(run);
+}
+
+/**
+ * W4C (US-6-19): sets the stored next-maintenance date from the maintenance module's active time-based
+ * PM plans (earliest due date), inside the caller's transaction, audited when it changes. `null` keeps the
+ * stored date unless it was the plan's own date (`clearIfEquals`).
+ */
+export async function syncMaintenanceDueDate(tx: Tx, ctx: AuthContext, equipmentId: string, next: string | null, opts: { clearIfEquals?: string | null; reason: string }) {
+  const e = await lockEquipment(tx, ctx, equipmentId);
+  const value = next ?? (opts.clearIfEquals && e.maintenanceDueDate === opts.clearIfEquals ? null : e.maintenanceDueDate);
+  if (value === e.maintenanceDueDate) return { changed: false, maintenanceDueDate: value };
+  await tx.update(equipment).set({ maintenanceDueDate: value }).where(eq(equipment.id, e.id));
+  await audit(tx, ctx, { action: "masterdata.equipment.updated", entityType: "equipment", entityId: e.id, entityNumber: e.code, siteId: e.siteId, reason: opts.reason, before: { maintenanceDueDate: e.maintenanceDueDate }, after: { maintenanceDueDate: value } });
+  return { changed: true, maintenanceDueDate: value };
 }
 
 /**
@@ -360,7 +407,8 @@ export async function equipmentAvailability(ctx: AuthContext, equipmentId: strin
     .limit(1);
   if (!e) throw new DomainError("not_found", "Equipment not found.");
   ctx.requireSite(e.siteId);
-  const av = deriveAvailability(e, dateOf(at));
+  const day = dateOf(at);
+  const av = deriveAvailability(e, day, (await extraReasons(q, [e.id], day)).get(e.id));
   const [override] = av.selectable
     ? []
     : await q
@@ -390,7 +438,8 @@ export async function listEquipment(ctx: AuthContext, filter: { siteId?: string;
     .where(and(eq(equipment.organizationId, ctx.organizationId), inArray(equipment.siteId, siteIds), filter.kind ? eq(equipment.equipmentKind, filter.kind) : undefined))
     .orderBy(asc(sites.code), asc(equipment.code));
   const today = businessToday();
-  return rows.map(({ e, siteCode }) => ({ ...e, siteCode, availability: deriveAvailability(e, today) }));
+  const extra = await extraReasons(db, rows.map((r) => r.e.id), today);
+  return rows.map(({ e, siteCode }) => ({ ...e, siteCode, availability: deriveAvailability(e, today, extra.get(e.id)) }));
 }
 export type EquipmentListRow = Awaited<ReturnType<typeof listEquipment>>[number];
 

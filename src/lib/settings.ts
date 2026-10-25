@@ -473,6 +473,31 @@ export const SETTINGS = {
   "analytics.fefo_window_days": { scopes: ["organization"], schema: z.number().int().min(1).max(365), default: 30, assumption: "A-KPI-03", group: "Analytics", label: "FEFO risk window (days)", description: "A released lot with stock on hand counts as at FEFO risk when it expires within this many days (owner tile and inventory dashboard)." },
   "analytics.otif_grace_days": { scopes: ["organization"], schema: z.number().int().min(0).max(30), default: 0, assumption: "A-KPI-02", group: "Analytics", label: "OTIF grace days", description: "Days after the requested delivery date that a dispatch still counts as on time." },
   "analytics.snapshot_stale_hours": { scopes: ["organization"], schema: z.number().int().min(1).max(24 * 14), default: 48, assumption: "A-KPI-11", group: "Analytics", label: "Snapshot charts are stale after (hours)", description: "Trend and sparkline data older than this (twice the nightly cadence) shows a Stale badge." },
+  // Wave 4 W4C: CAPA, change control, recall cases, equipment maintenance (US-6-18, US-6-19; A-W4C-nn in docs/PRD.md).
+  // Every value is a placeholder for the company's QA / maintenance lead to confirm or replace; none is a regulatory rule.
+  /** Days after "Submit for closure" before the CAPA effectiveness check may be recorded (QA may set a later date per CAPA). */
+  "quality.capa.effectiveness_check_days": {
+    scopes: ["organization", "site"], schema: z.number().int().min(0).max(730), default: 30,
+    assumption: "A-W4C-01", group: "Quality", label: "CAPA effectiveness check after (days)", description: "Placeholder; the company's QA defines how long to wait before judging whether a CAPA worked.", requiresApproval: true,
+  },
+  /** Risk levels QA chooses from when assessing a change control (their meaning is the company's QA definition). */
+  "quality.change_control.risk_levels": {
+    scopes: ["organization"], schema: z.array(z.string().regex(/^[a-z][a-z0-9_]{0,30}$/)).min(1).max(10), default: ["low", "medium", "high"] as string[],
+    assumption: "A-W4C-02", group: "Quality", label: "Change control risk levels", requiresApproval: true,
+  },
+  /**
+   * Wording of the customer recall / withdrawal notice that sales_cs sends (printed with the notification list).
+   * The default is a placeholder that must be replaced by text approved by QA / regulatory personnel.
+   */
+  "quality.recall_case.notice_text": {
+    scopes: ["organization"], schema: z.string().min(10).max(4000),
+    default: "PLACEHOLDER: replace with the recall / withdrawal notice wording approved by the company's QA and regulatory personnel before any real notification is sent." as string,
+    assumption: "A-W4C-03", group: "Quality", label: "Recall notice wording", requiresApproval: true,
+  },
+  /** Days before a PM plan's due date that it shows as due soon in the action centre (a plan's own lead days win). */
+  "maintenance.pm.due_soon_days": { scopes: ["organization", "site"], schema: z.number().int().min(0).max(90), default: 7, assumption: "A-W4C-04", group: "Maintenance", label: "PM plan due soon (days before due)" },
+  /** Share of a usage-based interval at which the plan shows as due soon (e.g. 90 = at 90 % of the interval). */
+  "maintenance.pm.usage_due_soon_pct": { scopes: ["organization", "site"], schema: z.number().int().min(50).max(100), default: 90, assumption: "A-W4C-04", group: "Maintenance", label: "Usage-based PM due soon at (% of interval)" },
 } as const satisfies Record<string, SettingDefinition>;
 
 export type SettingKey = keyof typeof SETTINGS;
