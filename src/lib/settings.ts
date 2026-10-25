@@ -473,6 +473,23 @@ export const SETTINGS = {
   "analytics.fefo_window_days": { scopes: ["organization"], schema: z.number().int().min(1).max(365), default: 30, assumption: "A-KPI-03", group: "Analytics", label: "FEFO risk window (days)", description: "A released lot with stock on hand counts as at FEFO risk when it expires within this many days (owner tile and inventory dashboard)." },
   "analytics.otif_grace_days": { scopes: ["organization"], schema: z.number().int().min(0).max(30), default: 0, assumption: "A-KPI-02", group: "Analytics", label: "OTIF grace days", description: "Days after the requested delivery date that a dispatch still counts as on time." },
   "analytics.snapshot_stale_hours": { scopes: ["organization"], schema: z.number().int().min(1).max(24 * 14), default: 48, assumption: "A-KPI-11", group: "Analytics", label: "Snapshot charts are stale after (hours)", description: "Trend and sparkline data older than this (twice the nightly cadence) shows a Stale badge." },
+  // Wave 4 W4E: customer portal (US-8-01, US-8-02; docs/security.md §2.10, §3.4, §4.5; docs/permissions-matrix.md §7)
+  "portal.session.idle_minutes": { scopes: ["organization"], schema: z.number().int().min(5).max(24 * 60), default: 30, assumption: "A-W4E-03", group: "Customer portal", label: "Portal session idle timeout (minutes)", restricted: true },
+  "portal.session.absolute_hours": { scopes: ["organization"], schema: z.number().int().min(1).max(7 * 24), default: 24, assumption: "A-W4E-03", group: "Customer portal", label: "Portal session absolute lifetime (hours)", restricted: true },
+  "portal.auth.max_failed_attempts": { scopes: ["organization"], schema: z.number().int().min(3).max(20), default: 5, assumption: "A-W4E-03", group: "Customer portal", label: "Failed portal sign-ins before the account locks", description: "Bryel's Care staff unlock a locked portal account from the customer's Portal access panel.", restricted: true },
+  "portal.rate_limits": {
+    scopes: ["organization"],
+    schema: z.object({ unauthenticated_per_minute: z.number().int().min(5).max(10_000), authenticated_per_minute: z.number().int().min(10).max(10_000) }).strict(),
+    default: { unauthenticated_per_minute: 30, authenticated_per_minute: 120 },
+    assumption: "A-W4E-03",
+    group: "Customer portal",
+    label: "Portal request limits",
+    description: "Unauthenticated portal requests (sign-in, invitation) per client IP and minute; signed-in portal requests per portal user and minute.",
+    restricted: true,
+  },
+  "portal.invitation.ttl_hours": { scopes: ["organization"], schema: z.number().int().min(1).max(14 * 24), default: 72, assumption: "A-W4E-03", group: "Customer portal", label: "Portal invitation link lifetime (hours)" },
+  "portal.order.max_lines": { scopes: ["organization"], schema: z.number().int().min(1).max(200), default: 30, assumption: "A-W4E-04", group: "Customer portal", label: "Most lines in one portal order", description: "Order size cap against abuse (docs/security.md §2.10); larger orders go through the sales team." },
+  "portal.order.max_qty_per_line": { scopes: ["organization"], schema: z.number().int().min(1).max(10_000_000), default: 50_000, assumption: "A-W4E-04", group: "Customer portal", label: "Most pieces per portal order line" },
 } as const satisfies Record<string, SettingDefinition>;
 
 export type SettingKey = keyof typeof SETTINGS;

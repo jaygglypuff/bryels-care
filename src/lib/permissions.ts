@@ -309,6 +309,11 @@ export const PERMISSIONS = [
   "analytics.owner_dashboard.view",
   "analytics.financial_kpi.view",
   "analytics.kpi_definition.view",
+  // Wave 4 W4E: customer portal administration (US-8-01, US-8-02; docs/permissions-matrix.md §2.8, §3.8 portal rows, §7)
+  "sales.portal_user.view",
+  "sales.portal_user.admin",
+  "sales.portal_catalog.view",
+  "sales.portal_catalog.admin",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -1135,5 +1140,28 @@ const W3_INTEGRATION_EXCLUDE: Record<string, readonly Permission[]> = {
   qa_qc: ["sales.price_list.view", "sales.quote.view", "finance.credit_terms.view"],
 };
 for (const [role, drop] of Object.entries(W3_INTEGRATION_EXCLUDE)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => !drop.includes(p));
+}
+
+// Wave 4 W4E: customer portal administration (docs/permissions-matrix.md §3.8 rows portal_user, portal_catalog).
+// SC v m (both, at the assignment's sites); SA v m* (portal users only); OD v* (catalogue only); AU v* (both).
+// The VIEW_ALL roles received the two `.view` strings at definition; the matrix keeps them from SM and QA,
+// the catalogue from SA and portal users from OD. Portal users themselves hold no internal permission:
+// their capabilities live in src/modules/portal/capabilities.ts (matrix §7).
+const W4E_GRANTS: Record<string, readonly Permission[]> = {
+  sales_cs: ["sales.portal_user.view", "sales.portal_user.admin", "sales.portal_catalog.view", "sales.portal_catalog.admin"],
+  system_admin: ["sales.portal_user.view", "sales.portal_user.admin"],
+  auditor: ["sales.portal_user.view", "sales.portal_catalog.view"],
+};
+for (const [role, grants] of Object.entries(W4E_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+const W4E_EXCLUDE: Record<string, readonly Permission[]> = {
+  owner_director: ["sales.portal_user.view", "sales.portal_user.admin", "sales.portal_catalog.admin"],
+  system_admin: ["sales.portal_catalog.view", "sales.portal_catalog.admin"],
+  site_manager: ["sales.portal_user.view", "sales.portal_user.admin", "sales.portal_catalog.view", "sales.portal_catalog.admin"],
+  qa_qc: ["sales.portal_user.view", "sales.portal_user.admin", "sales.portal_catalog.view", "sales.portal_catalog.admin"],
+};
+for (const [role, drop] of Object.entries(W4E_EXCLUDE)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => !drop.includes(p));
 }

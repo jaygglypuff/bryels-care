@@ -22,6 +22,7 @@ import {
   StatusForm,
 } from "./customer-forms";
 import { registerAppHooks } from "@/modules/wiring";
+import { PortalAccessPanel } from "./portal-access";
 
 registerAppHooks(); // Wave 3 cross-module registrations (src/modules/wiring.ts); cheap and idempotent
 
@@ -327,6 +328,8 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
               )}
             </Card>
           )}
+
+          <PortalAccessPanel ctx={ctx} customerId={c.id} />
 
           {d.sections.map((s) => (
             <Card key={s.key}>

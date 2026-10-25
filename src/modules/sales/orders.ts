@@ -580,7 +580,13 @@ export type SubmitResult = { orderNumber: string; status: "confirmed" | "pending
  */
 export async function submitOrder(ctx: AuthContext, orderId: string, opts: { idempotencyKey?: string | null } = {}): Promise<SubmitResult> {
   ctx.require("sales.sales_order.submit");
-  return db.transaction(async (tx) => {
+  return db.transaction((tx) => submitOrderInTx(tx, ctx, orderId, opts));
+}
+
+/** submitOrder inside the caller's transaction (W4E: a portal order is created and submitted atomically). */
+export async function submitOrderInTx(tx: Tx, ctx: AuthContext, orderId: string, opts: { idempotencyKey?: string | null } = {}): Promise<SubmitResult> {
+  ctx.require("sales.sales_order.submit");
+  {
     const { result } = await idempotent(tx, ctx, opts.idempotencyKey, "sales.sales_order.submit", async () => {
       const o = await lockOrder(tx, ctx, orderId);
       ctx.requireAt("sales.sales_order.submit", o.siteId);
@@ -684,7 +690,7 @@ export async function submitOrder(ctx: AuthContext, orderId: string, opts: { ide
       return { orderNumber: o.orderNumber, status: "pending_approval" as const, reasons: why, warnings };
     });
     return result;
-  });
+  }
 }
 
 /**
