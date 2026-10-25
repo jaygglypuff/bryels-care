@@ -308,11 +308,7 @@ export const SETTINGS = {
     assumption: "A-UX-12", group: "Production", label: "Production board columns",
   },
   // Wave 3 W3D: customers, price lists, quotations and sales orders (US-4-01..US-4-06)
-  /** Sales tax on quotes and orders, in percent of the subtotal. 0 = no tax line. Set only after the company's accountant reviews it (A-W3D-01). */
-  "sales.tax.rate_pct": {
-    scopes: ["organization"], schema: z.number().min(0).max(100), default: 0, assumption: "A-W3D-01", group: "Sales", label: "Sales tax rate on quotes and orders (%)",
-    description: "Tax rules are configuration validated by the company's accountant; the system does not decide which tax applies. 0 shows no tax line.", requiresApproval: true, restricted: true,
-  },
+  // (W4B: the former `sales.tax.rate_pct` moved to the reviewed tax configuration; see finance.tax.default_sales_code.)
   /** Customers without a credit limit: auto-confirm (false) or always need credit approval (true) (A-W3D-02). */
   "sales.credit_check.require_limit": { scopes: ["organization"], schema: z.boolean(), default: false, assumption: "A-W3D-02", group: "Sales", label: "Orders of customers without a credit limit need approval", requiresApproval: true },
   /** Order quantity below the customer's approved MOQ requirement: warn on the order, or block submission (US-4-05 AC1). */
@@ -472,6 +468,49 @@ export const SETTINGS = {
   // Wave 3 W3A: KPI engine (docs/analytics-kpis.md §1.3, §8.1)
   "analytics.fefo_window_days": { scopes: ["organization"], schema: z.number().int().min(1).max(365), default: 30, assumption: "A-KPI-03", group: "Analytics", label: "FEFO risk window (days)", description: "A released lot with stock on hand counts as at FEFO risk when it expires within this many days (owner tile and inventory dashboard)." },
   "analytics.otif_grace_days": { scopes: ["organization"], schema: z.number().int().min(0).max(30), default: 0, assumption: "A-KPI-02", group: "Analytics", label: "OTIF grace days", description: "Days after the requested delivery date that a dispatch still counts as on time." },
+  // Wave 4 W4B: operational finance (docs/modules/finance.md §10.1). Every value is a placeholder for owner / accountant confirmation.
+  "finance.currency": { scopes: ["organization"], schema: z.string().regex(/^[A-Z]{3}$/), default: "PHP", assumption: "A-FIN-26", group: "Finance", label: "Document currency", description: "Single currency of invoices, bills and payments (ISO code). Multi-currency documents are out of scope.", requiresApproval: true },
+  "finance.tax.default_sales_code": {
+    scopes: ["organization"], schema: z.string().regex(/^[A-Z0-9_-]{1,20}$/).nullable(), default: null as string | null, assumption: "A-W4B-02", group: "Finance", label: "Tax code for sales (quotes, orders, invoice lines)",
+    description: "A code of the reviewed tax configuration (Finance → Tax configuration). Empty = no tax line. The system does not decide which tax applies; the accountant does.", requiresApproval: true, restricted: true,
+  },
+  "finance.tax.default_purchase_code": {
+    scopes: ["organization"], schema: z.string().regex(/^[A-Z0-9_-]{1,20}$/).nullable(), default: null as string | null, assumption: "A-W4B-02", group: "Finance", label: "Tax code for supplier bill lines",
+    description: "A code of the reviewed tax configuration used as the default on new supplier bill lines. Empty = no input tax.", requiresApproval: true, restricted: true,
+  },
+  "finance.invoice.default_terms_days": { scopes: ["organization"], schema: z.number().int().min(0).max(365), default: 30, assumption: "A-FIN-04", group: "Finance", label: "Invoice due after (days) when the customer has no terms", requiresApproval: true },
+  "finance.bill.default_terms_days": { scopes: ["organization"], schema: z.number().int().min(0).max(365), default: 30, assumption: "A-FIN-04", group: "Finance", label: "Bill due after (days) when the supplier has no terms", requiresApproval: true },
+  "finance.payment.apply_oldest_first": { scopes: ["organization"], schema: z.boolean(), default: true, assumption: "A-FIN-07", group: "Finance", label: "Apply payments to the oldest due document first", description: "When a payment is recorded without a manual allocation, it settles the counterparty's open documents oldest due date first." },
+  "finance.match.qty_tolerance_pct": { scopes: ["organization", "site"], schema: z.number().min(0).max(100), default: 0, assumption: "A-FIN-08", group: "Finance", label: "Three-way match: quantity tolerance (%)", requiresApproval: true },
+  "finance.match.price_tolerance_pct": { scopes: ["organization", "site"], schema: z.number().min(0).max(100), default: 2, assumption: "A-FIN-08", group: "Finance", label: "Three-way match: price tolerance (%)", requiresApproval: true },
+  "finance.match.price_tolerance_amount": { scopes: ["organization", "site"], schema: z.number().min(0).max(1_000_000), default: 100, assumption: "A-FIN-08", group: "Finance", label: "Three-way match: price tolerance per line (amount)", description: "The larger of the percentage and this amount applies.", requiresApproval: true },
+  "finance.bill.no_po_categories": {
+    scopes: ["organization"], schema: z.array(z.string().regex(/^[a-z_]{2,30}$/)).max(30), default: ["utilities", "services", "rent"] as string[], assumption: "A-FIN-09", group: "Finance", label: "Bill categories allowed without a PO or receipt",
+    description: "Non-stock bills (utilities, services, rent) may be entered without a purchase order or goods receipt; they always need finance approval.", requiresApproval: true,
+  },
+  "finance.expense.categories": {
+    scopes: ["organization"], schema: z.array(z.object({ code: z.string().regex(/^[a-z_]{2,30}$/), label: z.string().min(2).max(60) }).strict()).min(1).max(40),
+    default: [
+      { code: "travel", label: "Travel and fares" },
+      { code: "meals", label: "Meals (business)" },
+      { code: "supplies", label: "Office and plant supplies" },
+      { code: "transport", label: "Delivery and courier" },
+      { code: "other", label: "Other" },
+    ] as { code: string; label: string }[],
+    assumption: "A-FIN-22", group: "Finance", label: "Expense claim categories",
+  },
+  "finance.credit_note.reasons": {
+    scopes: ["organization"], schema: z.array(z.object({ code: z.string().regex(/^[a-z_]{2,30}$/), label: z.string().min(2).max(80) }).strict()).min(1).max(30),
+    default: [
+      { code: "goods_returned", label: "Goods returned by the customer" },
+      { code: "pricing_error", label: "Pricing or quantity error on the invoice" },
+      { code: "damaged_goods", label: "Damaged or short-delivered goods (no return)" },
+      { code: "invoice_void", label: "Invoice issued in error (full void)" },
+      { code: "other", label: "Other (explain)" },
+    ] as { code: string; label: string }[],
+    assumption: "A-W4B-08", group: "Finance", label: "Credit note reasons",
+  },
+  "finance.expense.receipt_required_above": { scopes: ["organization"], schema: z.number().min(0).max(1_000_000), default: 500, assumption: "A-FIN-21", group: "Finance", label: "Receipt attachment required above (amount)", requiresApproval: true },
   "analytics.snapshot_stale_hours": { scopes: ["organization"], schema: z.number().int().min(1).max(24 * 14), default: 48, assumption: "A-KPI-11", group: "Analytics", label: "Snapshot charts are stale after (hours)", description: "Trend and sparkline data older than this (twice the nightly cadence) shows a Stale badge." },
 } as const satisfies Record<string, SettingDefinition>;
 

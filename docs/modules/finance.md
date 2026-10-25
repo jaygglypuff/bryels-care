@@ -207,7 +207,7 @@ the history stays traceable; only the pending rows still require data-model work
 | `numbering_rules` | codes `BILL`, `CN`, `EXP`, `COST`, `RCN`; `is_gapless` on `INV` only (A-DM-05) | §2.7 | applied (§9.1, §9.2, §14.1) |
 | `costing_runs` | add `supersedes_run_id`, `overhead_pool_id`, `labour_rate_set_id`; add basis `direct_cost_pct` | correcting runs; allocation method traceability | pending (arrives with the costing tables, §14.3) |
 | `costing_run_lines` | add `good_output_qty_base`, `labour_hours`, `allocation_fallback bool`, `unit_cost_estimate_amount`, `unit_cost_actual_amount` | estimate and actual side by side | pending (§14.3) |
-| new `tax_configurations` | §5 | no tax values in code | pending; listed in §13.7 |
+| new `tax_configurations` | §5 | no tax values in code | applied (Wave 4 W4B, §11) |
 | new `lot_cost_history` (ledger) | §4.3 | lot cost changes must be traceable | pending; listed in §13.7 |
 | new `overhead_pools`, `labour_rates`, `standard_costs` (config) | §4 | allocation inputs are data | pending; listed in §13.7 |
 | new `accountant_export_profiles`, `export_account_mappings`, `accountant_export_runs` | §6 | export layouts are configuration; runs are audited and reconcilable | pending; listed in §13.7 |
@@ -564,3 +564,52 @@ For the accountant:
 | Jobs (pg-boss) | `finance.period_maintenance`, `finance.statements`, `finance.overdue_scan`, `finance.costing.compute`, `finance.accountant_export`, `finance.provider.process_event` (P8) | §3, §4, §6, §7 |
 | Glossary (`docs/PRD.md` §12) | Posting date, Period lock, Three-way match, Landed cost, Open item, Statement of account, Payment application, Costing run, Overhead pool, Provider event | shared vocabulary |
 | Doc alignment | `docs/permissions-matrix.md` §7 "`pending_reconciliation`" → `recorded` (applied; the matrix uses `recorded`) | consistency |
+
+## 11. As built (Wave 4 W4B, 2026-10-25: US-6-10 to US-6-14)
+
+Plain language for owners: finance can now bill dispatched shipments, record what suppliers bill
+us (checked against what we received), record money in and out, credit customers, approve staff
+expenses, lock finished months and keep tax rates as reviewed data. Every posted figure is frozen;
+mistakes are corrected by a reversal with a reason. It is still not the company's books: the
+accountant's system remains the ledger (ADR-020).
+
+### 11.1 What exists
+
+| Area | Built | Code | Screens |
+|---|---|---|---|
+| Ledger | `financial_postings` (append-only trigger, one reversal per posting, idempotency key), `finance_state_transitions` (one transition log for the five document types, append-only), open-period check `FOR SHARE` before numbering | `src/modules/finance/shared.ts`, `src/db/sql/w4b.sql` | Postings card on every document |
+| Invoices (US-6-10) | From a `dispatched`/`delivered` shipment only (W3E `shipment_lines`, or the ledger for pre-Wave-3 shipments); price = the order line's unit price (W3D snapshot); approval rules `invoice`; issue = posting + gapless `INV` number inside the transaction; due date = issue date + customer terms; order `shipped → invoiced` once all its dispatched shipments are invoiced; void by reversal (nothing applied) or full-void credit note (order back to `shipped`) | `invoices.ts` | `/finance`, `/finance/invoices`, `/finance/invoices/[id]`, `/print/invoice/[id]` |
+| Statements | Open-item statement per customer as of a date: aging buckets (current, 1–30, 31–60, 61–90, over 90), payments and credits of the last 90 days, unapplied payments on account | `customerStatement` | `/finance/statements`, `/print/statement/[customerId]` |
+| Supplier bills (US-6-11) | Against a posted goods receipt, or a non-stock category without receipt (always a finance approver, A-FIN-09); three-way match at submit (quantity vs unbilled received quantity; price vs PO line through the W4A contract `registerPurchaseOrderMatchSource`); variance → `disputed` until a different person approves it with a reason or a re-match passes; supplier credits (`bill_kind = credit`) reduce their bill; posting dated on the bill date | `bills.ts`, `procurement-contract.ts` | `/finance/bills`, `/new`, `/[id]` (match panel) |
+| Payments (US-6-12) | Inbound (customer) and outbound (supplier, expense claimant); approval rules `payment_record`; recording applies the plan or oldest-due-first (A-FIN-07), remainder on account; withholding amount; void reverses the posting and every application (negative rows) and reopens the documents | `payments.ts` | `/finance/payments`, `/new`, `/[id]` |
+| Credit notes (US-6-12) | Against an issued invoice, optionally from an approved W3F customer return (amount defaults to returned qty × invoiced price); ≤ open amount; issue posts, numbers (`CN`) and applies in one transaction; full void voids the invoice | `credit-notes.ts` | `/finance/credit-notes`, `/new?invoiceId=`, `/[id]`, `/print/credit-note/[id]` |
+| Expense claims (US-6-12) | Self-service claim + receipt upload (mandatory above the setting); approval rules `expense_claim` (site manager, then finance above PHP 5,000); claimant never approves; one person never approves two steps; poster ≠ claimant and ≠ approver unless the rule allows; posting dated on the approval date; paid by an outbound payment | `expenses.ts` | `/finance/expenses`, `/new`, `/[id]` |
+| Periods (US-6-13) | Calendar months created on demand; lock with pre-lock checklist (acknowledge with reason); unlock = finance request (step 1) + a different holder of `finance.period_lock.void` in the owner step | `periods.ts` | `/finance/periods` |
+| Tax (US-6-14) | `tax_configurations` versions; effective only after a second person approves (`reviewed_by`, DB CHECK); default codes are settings; documents snapshot code, version and rate; quotes and orders take their rate from the reviewed sales code (the W3D setting `sales.tax.rate_pct` was removed) | `tax.ts` | `/finance/tax` |
+| Action centre | `approval.invoice`, `overdue_invoice`, `disputed_bill`, `approval.expense_claim` | `action-items.ts`, `src/modules/wiring.ts` | `/action-centre` |
+
+### 11.2 Differences from the design above (for the integrator and the accountant)
+
+| Design | As built | Why |
+|---|---|---|
+| `invoice_state_transitions` per entity | one `finance_state_transitions` table with `document_type` | five machines, one shape (§6.1); fewer tables |
+| `payment_records.paid_at` (timestamp) | `paid_on` (date) | the posting date is a business date |
+| `expense_claims.employee_id` | `claimant_user_id` | no employees table outside HR scope (A-W4B-06) |
+| `finance.period_maintenance` job creates 12 periods | periods are created on first use; the screen lists the last 12 months | no job needed for correctness |
+| `finance.overdue_scan` job | the action-centre detector `overdue_invoice` (5-minute sweep) | the queue already notifies and escalates |
+| Invoice PDF as a generated document (DOC number, hash) | browser print page of the posted (immutable) invoice, like the W3D quotation | a documents-module renderer for `invoice`/`statement` is a follow-up (owned by documents) |
+| Credit note refunds (`is_refund`) | not built (Phase 8 `finance.refund.*`); money out to a customer is refused | refund approval needs the provider design |
+| Payment application to an open document after recording | not built: the plan is fixed at recording; a remainder stays on account | follow-up story |
+| Exports (`*.export` per entity, accountant registers) | only `finance.invoice.export` (statement print) | US-6-17 builds the registers |
+| Three-way match price leg | needs W4A purchase orders; until the source is registered the price is reported as "no PO data" and only the received quantity is matched | parallel stream |
+
+### 11.3 Assumptions (A-W4B-nn, `docs/PRD.md` §2.2)
+
+A-W4B-01 terms default 30 days; A-W4B-02 default tax codes are settings, empty = no tax line;
+A-W4B-03 below PHP 100,000 the approver may also post (A-PM-10 applied to the default rules);
+A-W4B-04 unlock = finance request (step 1) + owner approval (step 2) by a different person;
+A-W4B-05 bills match quantities in the material's base unit; under-billing is allowed (partial
+bills), over-billing beyond tolerance is a variance; A-W4B-06 claimant = user; A-W4B-07 credit
+note tax share pro rata to the invoice; A-W4B-08 credit-note reasons are a setting;
+A-W4B-09 a configured tax code without a reviewed rate refuses quotes, orders and invoices
+(TAX_CONFIG_MISSING) rather than dropping the tax.

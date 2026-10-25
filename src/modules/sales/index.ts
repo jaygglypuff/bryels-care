@@ -10,7 +10,7 @@ export * from "./quotations";
 export * from "./credit";
 export * from "./orders-board";
 export * from "./customer-360";
-export { CREDIT_FIELDS, canSeePrices, formatAddress, businessDate as salesBusinessDate } from "./crm-support";
+export { CREDIT_FIELDS, canSeePrices, formatAddress, businessDate as salesBusinessDate, registerSalesTaxRateResolver, salesTaxRatePct, type SalesTaxRateResolver } from "./crm-support";
 export { approvalProgress as salesApprovalProgress, type ApprovalProgress as SalesApprovalProgress } from "./crm-approvals";
 export { salesQuoteExpiryJob } from "./quotations-expiry-job";
 // Wave 3 W3E: boxing and fulfilment

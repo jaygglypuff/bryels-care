@@ -1192,6 +1192,22 @@ Block "Wave 3 integration" at the end of `src/lib/permissions.ts`:
   `sales.shipment.view`; failed import `platform.import_job.view` (was `platform.job.view`).
 - Customer 360 sections: complaints (`quality.complaint.view`), returns (`sales.customer_return.view`).
 
+### 8.9 As built: Wave 4 W4B operational finance
+
+Block `// Wave 4 W4B` in `src/lib/permissions.ts`: `finance.invoice.{view,create,edit,submit,approve,post,void,export}`,
+`finance.supplier_bill.{view,create,edit,submit,approve,post,void}`, `finance.payment_record.{view,create,approve,post,void}`,
+`finance.credit_note.{view,create,submit,approve,post,void}`, `finance.expense_claim.{create,submit,view,approve,post,void}`,
+`finance.period_lock.{view,post,void}`, `finance.tax_config.{view,admin}`. Grants follow §3.10: finance holds all of them except
+`finance.period_lock.void` (FI "v p"); owner_director keeps view/approve, `finance.invoice.export`, `finance.period_lock.void` (OD "v o")
+and `finance.tax_config.view`; site_manager invoice/bill view and expense view + approve; sales_cs invoice v c s, payment v, credit
+note v c s; procurement bill v c s; every operational role expense c s; auditor view plus invoice export; system_admin and qa_qc none
+(the VIEW_ALL strings are removed). The per-entity export strings other than `finance.invoice.export` are not catalogued yet: they
+arrive with the accountant registers (US-6-17). Approval decisions use `approval_rules` `invoice`, `supplier_bill`, `credit_note`,
+`payment_record`, `expense_claim` and `period_lock_unlock`; the ≤ PHP 100,000 finance step allows the approver to post (A-W4B-03).
+Restricted strings (`*.post`, `*.void`, `period_lock.*`, `tax_config.admin`) re-authenticate through `requireReauthentication`.
+Action-centre kinds: `approval.invoice` (`finance.invoice.approve`), `approval.expense_claim` (`finance.expense_claim.approve`),
+`overdue_invoice` (`finance.invoice.view`), `disputed_bill` (`finance.supplier_bill.view`).
+
 ## 9. Assumptions and open questions
 
 | Id | Assumption (default) | Needs confirmation from |

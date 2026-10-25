@@ -37,6 +37,9 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   { kind: "approval.customer_requirement", tab: "approvals", label: "Customer requirement to approve", severity: "info", permission: "masterdata.customer_requirement.approve", actionLabel: "Review requirement" },
   { kind: "approval.import_job", tab: "approvals", label: "Import to approve", severity: "info", permission: "platform.import_job.approve", actionLabel: "Review import" },
   { kind: "approval.customer_return", tab: "approvals", label: "Customer return to approve", severity: "warning", permission: "sales.customer_return.approve", actionLabel: "Review return" },
+  // Wave 4 W4B: finance (sources registered in src/modules/wiring.ts)
+  { kind: "approval.invoice", tab: "approvals", label: "Invoice to approve", severity: "info", permission: "finance.invoice.approve", actionLabel: "Review invoice" },
+  { kind: "approval.expense_claim", tab: "approvals", label: "Expense claim to approve", severity: "info", permission: "finance.expense_claim.approve", actionLabel: "Review claim" },
   // Exceptions
   { kind: "late_work_order", tab: "exceptions", label: "Late work order", severity: "warning", permission: "production.work_order.view", actionLabel: "Open work order" },
   { kind: "low_stock", tab: "exceptions", label: "Finished goods below minimum stock", severity: "warning", permission: "inventory.balance.view", actionLabel: "Plan production" },
@@ -52,6 +55,9 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   { kind: "credit_hold", tab: "exceptions", label: "Customer on credit hold", severity: "warning", permission: "finance.credit_terms.view", actionLabel: "Open customer" },
   { kind: "open_complaint", tab: "exceptions", label: "Open customer complaint", severity: "warning", permission: "quality.complaint.view", actionLabel: "Open complaint" },
   { kind: "return_awaiting_qa", tab: "exceptions", label: "Customer return waiting for QA", severity: "warning", permission: "quality.disposition.approve", actionLabel: "Open return" },
+  // Wave 4 W4B: finance
+  { kind: "overdue_invoice", tab: "exceptions", label: "Overdue invoice", severity: "warning", permission: "finance.invoice.view", actionLabel: "Open invoice" },
+  { kind: "disputed_bill", tab: "exceptions", label: "Supplier bill in dispute", severity: "warning", permission: "finance.supplier_bill.view", actionLabel: "Resolve dispute" },
 ];
 
 export function actionKind(kind: string): ActionKind | undefined {

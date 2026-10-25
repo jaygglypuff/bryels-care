@@ -29,7 +29,7 @@ import { evaluateApprovalRules, evaluateApprovalRulesAudited, sodRequired } from
 import { releaseReservationsForDemand } from "@/modules/inventory";
 import { notifyRoles, notifyUsers } from "@/modules/platform";
 import { approvalProgress, canDecide, recordDecision, stepRoles } from "./crm-approvals";
-import { addDaysIso, businessDate, canSeePrices, discountPct, formatAddress, idempotent, isUuid, money, totals } from "./crm-support";
+import { addDaysIso, businessDate, canSeePrices, discountPct, formatAddress, idempotent, isUuid, money, salesTaxRatePct, totals } from "./crm-support";
 import { evaluateCredit } from "./credit";
 import { resolvePrice } from "./price-lists";
 import { itemCodeMap, requirementSnapshot, type RequirementSnapshot } from "./requirements";
@@ -44,6 +44,7 @@ import { itemCodeMap, requirementSnapshot, type RequirementSnapshot } from "./re
  *   confirmed → allocated → picking → packed → partially_shipped / shipped → invoiced → closed
  *   allocated → shipped (direct dispatch of the MVP flow); partially_shipped → picking (remainder)
  *   partially_shipped → partially_shipped (another partial dispatch)
+ *   invoiced → shipped (W4B: the invoice was voided, with reason)
  *   undo paths (W3E, with reason): allocated → confirmed (allocation released), picking / packed →
  *   allocated | partially_shipped (pick or shipment cancelled before dispatch), shipped /
  *   partially_shipped → allocated | partially_shipped (dispatch reversed)
@@ -64,7 +65,7 @@ export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   packed: ["partially_shipped", "shipped", "allocated", "cancelled"],
   partially_shipped: ["picking", "shipped", "allocated", "partially_shipped"],
   shipped: ["invoiced", "allocated", "partially_shipped"],
-  invoiced: ["closed"],
+  invoiced: ["closed", "shipped"],
   closed: [],
   cancelled: [],
 };
@@ -96,6 +97,8 @@ const REASON_REQUIRED: readonly string[] = [
   "shipped>allocated",
   "shipped>partially_shipped",
   "partially_shipped>allocated",
+  // W4B: invoice voided (reversal or full credit note).
+  "invoiced>shipped",
 ];
 
 export function isOrderStatus(s: string): s is OrderStatus {
@@ -485,7 +488,7 @@ export async function createOrderInTx(tx: Tx, ctx: AuthContext, input: NewOrderI
       const c = await loadSellableCustomer(tx, ctx, input.customerId);
       const priced = await priceLines(tx, ctx, c.id, input.lines, { quotePrices: input.quotePrices });
       const addr = await resolveAddresses(tx, c, input.shipToAddressId, input.billToAddressId);
-      const rate = await getSetting(tx, ctx.organizationId, "sales.tax.rate_pct");
+      const rate = await salesTaxRatePct(tx, ctx.organizationId);
       const t = totals(priced.map((l) => ({ qty: l.qtyUnits, price: l.unitPrice })), rate);
       const orderNumber = await nextNumber(tx, ctx.organizationId, "SO");
       const [order] = await tx
@@ -546,7 +549,7 @@ export async function editOrder(ctx: AuthContext, orderId: string, input: Omit<N
     const c = await loadSellableCustomer(tx, ctx, o.customerId);
     const priced = await priceLines(tx, ctx, c.id, input.lines);
     const addr = await resolveAddresses(tx, c, input.shipToAddressId, input.billToAddressId);
-    const rate = await getSetting(tx, ctx.organizationId, "sales.tax.rate_pct");
+    const rate = await salesTaxRatePct(tx, ctx.organizationId);
     const t = totals(priced.map((l) => ({ qty: l.qtyUnits, price: l.unitPrice })), rate);
     const beforeLines = await tx.select().from(salesOrderLines).where(eq(salesOrderLines.salesOrderId, o.id));
     await tx.delete(salesOrderLines).where(eq(salesOrderLines.salesOrderId, o.id));
@@ -617,7 +620,7 @@ export async function submitOrder(ctx: AuthContext, orderId: string, opts: { ide
       }
       if (moqErrors.length) throw new DomainError("validation", `Below the minimum order quantity: ${moqErrors.join("; ")}.`, { field: "lines" });
 
-      const rate = await getSetting(tx, ctx.organizationId, "sales.tax.rate_pct");
+      const rate = await salesTaxRatePct(tx, ctx.organizationId);
       const t = totals(lines.map((l) => ({ qty: l.line.qtyUnits, price: l.line.unitPrice })), rate);
       const credit = await evaluateCredit(tx, ctx.organizationId, c, t.total, o.id);
       const maxDiscount = lines.reduce((m, l) => Decimal.max(m, l.line.discountPct), new Decimal(0));
