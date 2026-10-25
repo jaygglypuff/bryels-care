@@ -33,6 +33,12 @@ export default async function SupplierPage({ params, searchParams }: { params: P
             <Link href="/masterdata/suppliers" className="text-primary-text hover:underline">Suppliers</Link> · {s.code} · <SupplierStatusChip status={s.qualityStatus} />
           </>
         }
+        actions={
+          // Wave 4 W4A: approved-material list, prices, MOQ and lead times live on the procurement screen.
+          <Link href={`/procurement/suppliers/${s.id}`} className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2">
+            Approved list and prices
+          </Link>
+        }
       />
       {saved && <Banner tone="ok" title="Supplier saved" />}
       {s.qualityStatus === "suspended" && <Banner tone="bad" title="Suspended: receipt lines from this supplier cannot be posted">{s.qualityStatusReason}</Banner>}

@@ -7,6 +7,17 @@ import { registerActionItemSource } from "@/modules/action-centre";
 import { customersKind, failedImportCandidates, importApprovalCandidates, importWizardStats, registerImportKind } from "@/modules/imports";
 import { registerImportStatsProvider } from "@/modules/platform/diagnostics-phase5";
 import { listCustomerReturns, registerCustomer360Section, RETURN_STATUS_LABEL, type CustomerReturnStatus } from "@/modules/sales";
+import { registerReceivingPoHooks } from "@/modules/inventory";
+import {
+  aslApprovalCandidates,
+  latePoCandidates,
+  overDeliveryCandidates,
+  poApprovalCandidates,
+  prApprovalCandidates,
+  purchaseOrderReceivingHooks,
+  srApprovalCandidates,
+  supplierMaterialsKind,
+} from "@/modules/procurement";
 
 /**
  * Cross-module wiring (Wave 2 and Wave 3 integration). Batch execution (production) must not import
@@ -97,4 +108,13 @@ export function registerAppHooks() {
   registerActionItemSource({ kind: "failed_import", detect: (org) => failedImportCandidates(org) });
   registerActionItemSource({ kind: "approval.import_job", detect: (org) => importApprovalCandidates(org) });
   registerImportStatsProvider("import_wizard", (org) => importWizardStats(org));
+  // Wave 4 W4A: PO receipts (inventory receiving ← procurement rules), procurement action items, supplier-material import kind.
+  registerReceivingPoHooks(purchaseOrderReceivingHooks);
+  registerActionItemSource({ kind: "approval.purchase_order", detect: (org) => poApprovalCandidates(org) });
+  registerActionItemSource({ kind: "approval.purchase_request", detect: (org) => prApprovalCandidates(org) });
+  registerActionItemSource({ kind: "approval.supplier_return", detect: (org) => srApprovalCandidates(org) });
+  registerActionItemSource({ kind: "approval.asl_change", detect: (org) => aslApprovalCandidates(org) });
+  registerActionItemSource({ kind: "late_purchase_order", detect: (org, now) => latePoCandidates(org, now) });
+  registerActionItemSource({ kind: "over_delivery", detect: (org) => overDeliveryCandidates(org) });
+  registerImportKind(supplierMaterialsKind);
 }

@@ -21,6 +21,7 @@ import { nextNumber } from "@/lib/numbering";
 import { assertReasonCode, findConversionStep, toBasePair } from "@/modules/masterdata";
 import { postMovement } from "./ledger";
 import { isUuid } from "./lots";
+import { receivingPoHooks, type PoReceiptLine } from "./receiving-po";
 import {
   DEFAULT_UNPLANNED_REASON,
   DISCREPANCY_BLOCKS_POSTING,
@@ -52,6 +53,8 @@ export type ReceiptLineInput = {
   locationId: string;
   discrepancyKind?: DiscrepancyKind | null;
   discrepancyNote?: string | null;
+  /** W4A (US-6-03): the PO line received; on an edit, omitted = keep the draft line's PO line. */
+  purchaseOrderLineId?: string | null;
 };
 
 export type ReceiptHeaderInput = {
@@ -62,6 +65,8 @@ export type ReceiptHeaderInput = {
   unplannedReasonCode?: string | null;
   notes?: string | null;
   lines: ReceiptLineInput[];
+  /** W4A (US-6-03): receive against this purchase order (receipt_kind purchase_order, no unplanned reason). */
+  purchaseOrderId?: string | null;
 };
 
 export type ReceiptDraftInput = ReceiptHeaderInput & { idempotencyKey: string };
@@ -143,6 +148,7 @@ export type NormalizedLine = {
   initialQualityStatus: "quarantine" | "released";
   discrepancyKind: DiscrepancyKind | null;
   discrepancyNote: string | null;
+  purchaseOrderLineId: string | null | undefined;
 };
 
 /** Field-level validation of receipt lines (V-UOM, dates, location of the receipt's site). */
@@ -234,6 +240,7 @@ async function normalizeLines(tx: Tx, ctx: AuthContext, siteId: string, lines: R
       initialQualityStatus,
       discrepancyKind,
       discrepancyNote,
+      purchaseOrderLineId: l.purchaseOrderLineId === undefined ? undefined : l.purchaseOrderLineId || null,
     };
   });
 }
@@ -291,20 +298,38 @@ const receiptLabel = (gr: { receiptNumber: string | null; id: string }) => gr.re
 
 /* ------------------------------------------------------------------ create / edit draft */
 
+/** W4A: a PO receipt takes its supplier from the PO and needs no unplanned reason (the PO is the reason). */
+async function poHeader(tx: Tx, ctx: AuthContext, siteId: string, purchaseOrderId: string, lines: NormalizedLine[]) {
+  if (!isUuid(purchaseOrderId)) throw new DomainError("validation", "Choose a purchase order.", { field: "purchaseOrderId" });
+  const po = await receivingPoHooks().validateDraft(tx, ctx, {
+    purchaseOrderId,
+    siteId,
+    lines: lines.map((l) => ({ index: l.index, purchaseOrderLineId: l.purchaseOrderLineId ?? null, materialId: l.mat.id })),
+  });
+  return { supplierId: po.supplierId, supplierName: po.supplierName };
+}
+
 async function insertDraft(tx: Tx, ctx: AuthContext, input: ReceiptDraftInput) {
   const siteId = ctx.currentSiteId;
-  const { supplier, supplierName } = await resolveSupplier(tx, ctx, input);
   const supplierDocumentNumber = headerDocNo(input);
-  const unplannedReasonCode = await headerReason(tx, ctx, input);
   const notes = cleanText(input.notes, 1000, "notes", "Notes");
   const lines = await normalizeLines(tx, ctx, siteId, input.lines);
+  const poId = input.purchaseOrderId || null;
+  const { supplier, supplierName } = poId
+    ? await (async () => {
+        const h = await poHeader(tx, ctx, siteId, poId, lines);
+        return { supplier: { id: h.supplierId }, supplierName: h.supplierName };
+      })()
+    : await resolveSupplier(tx, ctx, input);
+  const unplannedReasonCode = poId ? null : await headerReason(tx, ctx, input);
 
   const [gr] = await tx
     .insert(goodsReceipts)
     .values({
       organizationId: ctx.organizationId,
       siteId,
-      receiptKind: "unplanned",
+      receiptKind: poId ? "purchase_order" : "unplanned",
+      purchaseOrderId: poId,
       status: "draft",
       supplierId: supplier?.id ?? null,
       supplierName,
@@ -322,6 +347,7 @@ async function insertDraft(tx: Tx, ctx: AuthContext, input: ReceiptDraftInput) {
       goodsReceiptId: gr.id,
       lineNo: l.index + 1,
       ...lineValues(l),
+      purchaseOrderLineId: poId ? (l.purchaseOrderLineId ?? null) : null,
       discrepancyKind: l.discrepancyKind,
       discrepancyNote: l.discrepancyNote,
       discrepancyRecordedBy: l.discrepancyKind ? ctx.userId : null,
@@ -339,7 +365,8 @@ async function insertDraft(tx: Tx, ctx: AuthContext, input: ReceiptDraftInput) {
       supplierId: supplier?.id ?? null,
       supplierDocumentNumber,
       unplannedReasonCode,
-      lines: lines.map((l) => ({ material: l.mat.code, qtyEntered: l.qtyEntered.toString(), uom: l.uomEntered, qtyBase: l.qtyBase.toString(), location: l.loc.code })),
+      purchaseOrderId: poId,
+      lines: lines.map((l) => ({ material: l.mat.code, qtyEntered: l.qtyEntered.toString(), uom: l.uomEntered, qtyBase: l.qtyBase.toString(), location: l.loc.code, purchaseOrderLineId: l.purchaseOrderLineId ?? null })),
     },
   });
   for (const l of lines.filter((x) => x.discrepancyKind)) {
@@ -385,12 +412,22 @@ export async function updateReceiptDraft(ctx: AuthContext, receiptId: string, in
   return db.transaction(async (tx) => {
     const gr = await lockReceipt(tx, ctx, receiptId);
     assertReceiptTransition("edit", gr.status, receiptLabel(gr));
-    const { supplier, supplierName } = await resolveSupplier(tx, ctx, input);
     const supplierDocumentNumber = headerDocNo(input);
-    const unplannedReasonCode = await headerReason(tx, ctx, input);
     const notes = cleanText(input.notes, 1000, "notes", "Notes");
     const lines = await normalizeLines(tx, ctx, gr.siteId, input.lines);
     const existing = await tx.select().from(goodsReceiptLines).where(eq(goodsReceiptLines.goodsReceiptId, gr.id));
+    // W4A: a PO receipt keeps its PO and supplier; a line edited without naming its PO line keeps the stored one.
+    for (const l of lines) {
+      if (l.purchaseOrderLineId === undefined) l.purchaseOrderLineId = gr.purchaseOrderId ? (existing.find((e) => e.id === l.lineId)?.purchaseOrderLineId ?? null) : null;
+      if (!gr.purchaseOrderId) l.purchaseOrderLineId = null;
+    }
+    const { supplier, supplierName } = gr.purchaseOrderId
+      ? await (async () => {
+          const h = await poHeader(tx, ctx, gr.siteId, gr.purchaseOrderId!, lines);
+          return { supplier: { id: h.supplierId }, supplierName: h.supplierName };
+        })()
+      : await resolveSupplier(tx, ctx, input);
+    const unplannedReasonCode = gr.purchaseOrderId ? null : await headerReason(tx, ctx, input);
     for (const l of lines) {
       if (l.lineId && !existing.some((e) => e.id === l.lineId)) throw new DomainError("validation", `Line ${l.index + 1} does not belong to this receipt. Reload the page.`);
     }
@@ -426,10 +463,10 @@ export async function updateReceiptDraft(ctx: AuthContext, receiptId: string, in
       if (prev) {
         await tx
           .update(goodsReceiptLines)
-          .set({ lineNo: l.index + 1, ...lineValues(l), ...disc, updatedAt: now })
+          .set({ lineNo: l.index + 1, ...lineValues(l), purchaseOrderLineId: l.purchaseOrderLineId ?? null, ...disc, updatedAt: now })
           .where(eq(goodsReceiptLines.id, prev.id));
       } else {
-        await tx.insert(goodsReceiptLines).values({ goodsReceiptId: gr.id, lineNo: l.index + 1, ...lineValues(l), ...disc, createdBy: ctx.userId });
+        await tx.insert(goodsReceiptLines).values({ goodsReceiptId: gr.id, lineNo: l.index + 1, ...lineValues(l), purchaseOrderLineId: l.purchaseOrderLineId ?? null, ...disc, createdBy: ctx.userId });
       }
     }
     await tx
@@ -459,6 +496,19 @@ async function lineHasCoa(tx: Tx, lineId: string) {
     .where(and(eq(supplierLotDocuments.goodsReceiptLineId, lineId), eq(supplierLotDocuments.documentKind, "coa"), isNull(fileAttachments.deletedAt)))
     .limit(1);
   return !!r;
+}
+
+type LineRow = typeof goodsReceiptLines.$inferSelect;
+function poLinesOf(rows: LineRow[], lines?: NormalizedLine[]): PoReceiptLine[] {
+  return rows.map((r, i) => ({
+    lineId: r.id,
+    lineNo: r.lineNo ?? i + 1,
+    purchaseOrderLineId: r.purchaseOrderLineId,
+    materialId: r.materialId,
+    qtyBase: lines?.[i]?.qtyBase ?? new Decimal(r.qtyBase),
+    discrepancyKind: r.discrepancyKind,
+    discrepancyApproved: !!r.discrepancyApprovedBy,
+  }));
 }
 
 /**
@@ -505,6 +555,7 @@ async function postInTx(tx: Tx, ctx: AuthContext, gr: typeof goodsReceipts.$infe
       // Discrepancies are checked below from the stored row (they may have been recorded after the draft was saved).
       discrepancyKind: null,
       discrepancyNote: null,
+      purchaseOrderLineId: r.purchaseOrderLineId,
     })),
   );
   for (const l of lines) {
@@ -529,6 +580,11 @@ async function postInTx(tx: Tx, ctx: AuthContext, gr: typeof goodsReceipts.$infe
         field: `lines.${l.index}.storageConditionsConfirmed`,
       });
     }
+  }
+
+  // W4A (US-6-03): PO receipts check V-OVER and move the PO lines and the PO state in this transaction.
+  if (gr.purchaseOrderId) {
+    await receivingPoHooks().onPost(tx, ctx, { receiptId: gr.id, receiptLabel: receiptLabel(gr), purchaseOrderId: gr.purchaseOrderId, siteId: gr.siteId, lines: poLinesOf(rows, lines) });
   }
 
   const receiptNumber = await nextNumber(tx, ctx.organizationId, "GR");
@@ -721,6 +777,9 @@ export async function reverseReceipt(ctx: AuthContext, input: { receiptId: strin
         }
         throw e;
       }
+    }
+    if (gr.purchaseOrderId) {
+      await receivingPoHooks().onReverse(tx, ctx, { receiptId: gr.id, receiptNumber: gr.receiptNumber, purchaseOrderId: gr.purchaseOrderId, siteId: gr.siteId, reason, lines: poLinesOf(rows.map((r) => r.line)) });
     }
     const now = new Date();
     await tx.update(goodsReceipts).set({ status: to, reversedAt: now, reversedBy: ctx.userId, reversalReason: reason, updatedAt: now }).where(eq(goodsReceipts.id, gr.id));

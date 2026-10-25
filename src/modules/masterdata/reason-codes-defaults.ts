@@ -65,6 +65,9 @@ export const DEFAULT_REASON_CODES: readonly ReasonCodeSeed[] = [
   { code: "quality_complaint", name: "Returned with a quality complaint", appliesTo: ["return"], sortOrder: 83 },
   { code: "short_dated", name: "Shelf life shorter than agreed", appliesTo: ["return"], sortOrder: 84 },
   { code: "recall_return", name: "Returned under a recall or withdrawal", appliesTo: ["return"], sortOrder: 85 },
+  // Supplier returns (Wave 4 W4A, US-6-21; procurement and QA leads confirm the list, A-W4A-09)
+  { code: "rejected_at_inspection", name: "Rejected at incoming inspection", appliesTo: ["return"], sortOrder: 86 },
+  { code: "over_delivery", name: "Over-delivered surplus sent back", appliesTo: ["return"], sortOrder: 87 },
   // Shared
   { code: "other", name: "Other (explain)", appliesTo: ["receipt", "hold", "adjustment", "count_variance", "reprint", "scrap", "rework", "return"], requiresNote: true, sortOrder: 99 },
 ];

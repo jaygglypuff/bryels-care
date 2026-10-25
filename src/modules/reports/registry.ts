@@ -4,11 +4,12 @@ import { expiryReport, movementsReport, receiptsReport, stockOnHandReport } from
 import { batchYieldReport, workOrdersReport } from "./defs/production";
 import { deviationsReport, dispositionsReport, holdsReport } from "./defs/quality";
 import { salesOrdersReport, shipmentsReport } from "./defs/sales";
+import { openPurchaseOrdersReport, supplierPerformanceReport } from "./defs/procurement"; // W4A
 import type { ReportDefinition } from "./types";
 
 /**
  * The report registry (US-5-04). Codes follow docs/analytics-kpis.md §5.1. Reports whose data does
- * not exist yet (valuation, OTIF, supplier performance, finance, HR) are not registered; the library
+ * not exist yet (valuation, OTIF, finance, HR) are not registered; the library
  * lists them as planned with their phase instead of faking output.
  */
 export const REPORTS: readonly ReportDefinition[] = [
@@ -23,6 +24,8 @@ export const REPORTS: readonly ReportDefinition[] = [
   holdsReport,
   salesOrdersReport,
   shipmentsReport,
+  openPurchaseOrdersReport, // W4A
+  supplierPerformanceReport, // W4A
   auditExtractReport,
   accessReport,
 ];
@@ -44,6 +47,5 @@ export const PLANNED_REPORTS: { code: string; title: string; phase: string }[] =
   { code: "RPT-INV-VALUATION", title: "Stock valuation and aging", phase: "Phase 6 (costing)" },
   { code: "RPT-SAL-OTIF", title: "Customer service monthly (OTIF, fill rate)", phase: "with order-line due dates and pricing" },
   { code: "RPT-HR-IMPORT", title: "Attendance import exception report", phase: "Phase 5 HR (attendance imports)" },
-  { code: "RPT-PRO-SUPPLIER", title: "Supplier performance", phase: "Phase 6 (procurement)" },
   { code: "RPT-FIN-AGING", title: "AR / AP aging", phase: "Phase 6 (finance)" },
 ];

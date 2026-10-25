@@ -41,6 +41,7 @@ export const NAV: NavGroup[] = [
     icon: "warehouse",
     items: [
       { label: "Receive materials", href: "/inventory/receive", permission: "procurement.goods_receipt.create" },
+      { label: "Expected receipts", href: "/procurement/expected", permission: "procurement.purchase_order.view" }, // W4A
       { label: "Goods receipts", href: "/inventory/receipts", permission: "procurement.goods_receipt.view" },
       { label: "Put away", href: "/inventory/receive/put-away", permission: "inventory.movement.post" },
       { label: "Scan to move", href: "/inventory/move", permission: "inventory.movement.post" },
@@ -105,6 +106,21 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    // Wave 4 W4A: procurement (E-6-01)
+    label: "Procurement",
+    icon: "order",
+    items: [
+      { label: "Overview", href: "/procurement", permission: "procurement.purchase_request.view" },
+      { label: "Purchase requests", href: "/procurement/requests", permission: "procurement.purchase_request.view" },
+      { label: "Purchase orders", href: "/procurement/orders", permission: "procurement.purchase_order.view" },
+      { label: "Supplier returns", href: "/procurement/returns", permission: "procurement.supplier_return.view" },
+      { label: "Approved suppliers", href: "/procurement/suppliers", permission: "masterdata.supplier.view" },
+      { label: "Reorder suggestions", href: "/procurement/reorder", permission: "procurement.reorder_suggestion.view" },
+      { label: "Supplier performance", href: "/procurement/performance", permission: "procurement.supplier_performance.view" },
+      { label: "Forecast assumptions", href: "/procurement/forecast", permission: "analytics.forecast.view" },
+    ],
+  },
+  {
     // Wave 3 W3B: report library and scheduled delivery (US-5-04, US-5-05)
     label: "Reports",
     icon: "audit",
@@ -153,7 +169,6 @@ export const NAV: NavGroup[] = [
     label: "Coming next",
     icon: "clock",
     items: [
-      { label: "Procurement", href: "#", planned: "Phase 6" },
       { label: "HR & attendance", href: "#", planned: "Phase 5–6" },
       { label: "Finance", href: "#", planned: "Phase 6" },
       { label: "Offline mode", href: "#", planned: "Phase 7" },
