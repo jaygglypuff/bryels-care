@@ -71,6 +71,11 @@ export const NAV: NavGroup[] = [
       { label: "Routings", href: "/masterdata/routings", permission: "masterdata.routing.view" },
       { label: "Work instructions", href: "/masterdata/work-instructions", permission: "masterdata.work_instruction.view" },
       { label: "Equipment", href: "/masterdata/equipment", permission: "masterdata.equipment.view" },
+      // Wave 4 W4C: equipment maintenance (US-6-19)
+      { label: "Maintenance", href: "/maintenance", permission: "maintenance.work_order.view" },
+      { label: "PM plans", href: "/maintenance/plans", permission: "maintenance.plan.view" },
+      { label: "Maintenance work orders", href: "/maintenance/work-orders", permission: "maintenance.work_order.view" },
+      { label: "Spare parts", href: "/maintenance/spare-parts", permission: "maintenance.spare_part.view" },
     ],
   },
   {
@@ -86,6 +91,10 @@ export const NAV: NavGroup[] = [
       // Wave 3 W3F
       { label: "Complaints", href: "/quality/complaints", permission: "quality.complaint.view" },
       { label: "Recall explorer", href: "/quality/recall", permission: "quality.genealogy.view" },
+      // Wave 4 W4C: CAPA, change control, recall cases (US-6-18)
+      { label: "CAPA", href: "/quality/capa", permission: "quality.capa.view" },
+      { label: "Change control", href: "/quality/changes", permission: "quality.change_control.view" },
+      { label: "Recall cases", href: "/quality/recalls", permission: "quality.recall_case.view" },
       { label: "Inspection plans", href: "/masterdata/inspection-plans", permission: "quality.inspection_plan.view" },
     ],
   },

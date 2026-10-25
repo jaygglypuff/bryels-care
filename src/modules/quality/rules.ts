@@ -9,17 +9,20 @@
 
 import { fmtDate } from "@/lib/qty";
 
-export type LotDecision = "release" | "reject" | "hold" | "release_from_hold";
+/** `recall` (W4C, US-6-18) is applied only from an approved recall case ("Mark recalled", recall-cases.ts). */
+export type LotDecision = "release" | "reject" | "hold" | "release_from_hold" | "recall";
 export type BatchDecision = "release" | "reject";
 
 export const LOT_DECISIONS: readonly LotDecision[] = ["release", "release_from_hold", "hold", "reject"];
 
 /** Lot quality-status machine: decision -> allowed from-states and target state. */
-export const LOT_TRANSITIONS: Record<LotDecision, { from: readonly string[]; to: string; label: string; event: "released" | "rejected" | "held" }> = {
+export const LOT_TRANSITIONS: Record<LotDecision, { from: readonly string[]; to: string; label: string; event: "released" | "rejected" | "held" | "recalled" }> = {
   release: { from: ["quarantine"], to: "released", label: "Release", event: "released" },
   release_from_hold: { from: ["on_hold"], to: "released", label: "Release from hold", event: "released" },
   hold: { from: ["quarantine", "released"], to: "on_hold", label: "Place on hold", event: "held" },
   reject: { from: ["quarantine", "on_hold", "expired"], to: "rejected", label: "Reject", event: "rejected" },
+  // Wave 4 W4C: rejected stock is already blocked and stays rejected; recalled stock is never released through normal flows.
+  recall: { from: ["quarantine", "released", "on_hold", "expired"], to: "recalled", label: "Mark recalled", event: "recalled" },
 };
 
 /** Batch disposition machine (only the QA part of the batch state machine). */
@@ -53,7 +56,8 @@ export function lotDecisionBlocker(
   opts: { isReceiver: boolean; pendingBatchNumber?: string | null; now?: Date; releaseBlockers?: string[]; isTester?: boolean },
 ): { code: "state" | "blocked_lot" | "separation_of_duties"; message: string } | null {
   const t = LOT_TRANSITIONS[decision];
-  if (opts.pendingBatchNumber) {
+  // A recall applies to every affected lot, whatever the state of its batch (W07-08).
+  if (opts.pendingBatchNumber && decision !== "recall") {
     return { code: "state", message: `Lot ${lot.lotNumber} is the output of batch ${opts.pendingBatchNumber}; decide it through batch release.` };
   }
   if (t.to === "released" && isLotExpired(lot, opts.now)) {

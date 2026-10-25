@@ -533,7 +533,7 @@ Types: `num6` = `numeric(18,6)`, `money` = `numeric(18,4)`, `pct` = `numeric(9,4
 | `code`, `name` | text | no | `uq (site_id, code)` partial | |
 | `department_id` | uuid | yes | → departments | default "Department" printed on the BMR header (`docs/reports-and-templates.md` §2.1); `work_orders.department_id` overrides |
 | `status` | text | no | ck in (`active`,`down`,`inactive`) | |
-| **`equipment`** · P1 · M · `std +site +soft` | | | | scales, mixers, cutters; register in P1, service records, downtime and blocking in P3; preventive-maintenance plans, maintenance work orders and spare parts are deferred (`A-DM-30`, §13.7) |
+| **`equipment`** · P1 · M · `std +site +soft` | | | | scales, mixers, cutters; register in P1, service records, downtime and blocking in P3; preventive-maintenance plans, maintenance work orders and spare parts were deferred (`A-DM-30`, §13.7) and are built in Wave 4 W4C (§3.6.3) |
 | `production_line_id` | uuid | yes | → production_lines | |
 | `code`, `name` | text | no | `uq (organization_id, code)` partial; ck code `~ '^[A-Z0-9][A-Z0-9._-]{0,63}$'` | organization-wide so the scan payload `BC:EQP:<code>` resolves without a site (§9.5) |
 | `equipment_kind` | text | no | ck in (`scale`,`mixer`,`heater`,`kettle`,`homogenizer`,`mould`,`cutter`,`filler`,`labeller`,`other`) | extendable by migration |
@@ -1358,6 +1358,45 @@ supplier-lot start node, the goods receipt of each material lot, an "as of" time
 | Genealogy | voided weighings (`dispense_records.voided_at`) are not inputs | US-3-16 |
 | Reason codes | services validate against `reason_codes` (categories reprint, hold, receipt, adjustment, count_variance, scrap, rework); `ck_stock_adjustments_reason` dropped | US-1-24, ADR-040 |
 
+### 3.6.3 As built in Wave 4 W4C (US-6-18 CAPA, change control, recall cases; US-6-19 maintenance)
+
+New tables in `src/db/schema/quality-system.ts` and `src/db/schema/maintenance.ts`; differences from the
+targets in §3.6 and the deferred list of §13.7 (A-DM-30 is now built):
+
+| Table | As built | Difference from the target |
+|---|---|---|
+| `capas` | `capa_number` (rule `CAPA`, `CAPA-{YY}-{SEQ}`), status §6.12, `source_kind` (deviation, complaint, audit, change_control, other) with `deviation_id` / `complaint_id` (ck: the source names its record), `source_reference`, `title`, `problem_statement`, `owner_id`, `due_date`, `root_cause`, `corrective_action`, `preventive_action`, `effectiveness_criteria`, `effectiveness_due_on` (submission + setting `quality.capa.effectiveness_check_days` or a later QA date), `effectiveness_result` (effective, not_effective) + evidence + checker, `submitted_by/at`, `closed_by/at`, `closure_note`, `cancel_reason`, idempotency key; ck closed ⇔ closer + effective check + root cause; ck closer ≠ submitter | `deviations.capa_id` is not added: the CAPA points at the deviation (`capas.deviation_id`), so W2C's table is unchanged; `cancelled` state and the problem statement / criterion columns added |
+| `capa_actions` | as §3.6 plus `completion_note`, `verification_note`, `cancel_reason`; ck done ⇒ completion fields; ck verified ⇔ verifier; ck verifier ≠ completer | — |
+| `capa_state_transitions` | §6.1 shape | append-only (`src/db/sql/w4c.sql`) |
+| `change_controls` | `change_number` (rule `CC`), status §6.13, `title`, `description`, `justification`, `entity_type` (formula_revision, routing_revision, inspection_plan, work_instruction_revision, other), `entity_id` (nullable until implementation; the revision usually exists only after approval), `entity_label`, `capa_id`, `risk_level` (setting `quality.change_control.risk_levels`), `impact_assessment`, `implementation_plan`, `target_date`, submit / decide / implement / close actors and notes; ck submitted ⇒ impact + risk; ck implemented ⇒ implementer + note; ck closer ≠ implementer | approvals in `approval_decisions` (record type `change_control`, cycles) through `approval_rules` document type `change_control` (default one QA step, A-W4C-05); `site_id` nullable (organization-wide master data) |
+| `change_control_state_transitions` | §6.1 shape (`site_id` nullable) | append-only |
+| `recall_cases` | `recall_number` (rule `RC`, `RC-{YYYY}-{SEQ}`), status §6.14, `recall_kind` (recall, withdrawal, mock), `title`, `description`, `classification` and `regulatory_notes` (free text by QA / regulatory, never computed), `complaint_id`, `origin_site_id`, `subject_code` / `subject_kind` / `trace_mode` / `scope_as_of` / `hidden_at_opening` (the explorer query the scope was copied from), submit / approve / mark / recovery / close stamps, `closure_report`, `reconciliation_explanation`, `cancel_reason`, idempotency key | statuses add `draft`, `submitted`, `approved`, `cancelled` around the target's open → notifying → recovering → closed, so the two approvals happen before any stock is marked |
+| `recall_case_lots` | `lot_id`, `site_id`, `trace_role` (start, downstream), status and on-hand at opening, `outcome` (pending, recalled, already_recalled, not_marked), `disposition_id` (the `recall` disposition), marker | `dispositions.recall_case_id` is not added; the link is `recall_case_lots.disposition_id` and the disposition reason names the case |
+| `recall_case_containers` | boxes from the forward trace with the shipment that carried them and their status at opening | — |
+| `recall_case_customers` | one row per customer × shipment × lot (not per customer × shipment) with DR number, shipped / returned / accounted quantities in the lot's base unit, notified (by, method), acknowledged, `accounted_note` (required when accounted > 0) | keyed per lot so units are never mixed; `notification_document_id` not added (the notice wording is setting `quality.recall_case.notice_text`, printed on the case page and the exported list) |
+| `recall_case_state_transitions` | §6.1 shape without site | append-only |
+| `maintenance_plans` | `plan_number` (rule `PM`), equipment, `title`, `instructions`, `trigger_kind` time (`interval_days`, `next_due_on`) or usage (`usage_metric` batches / hours, `usage_interval`, counted from `usage_since` over `equipment_uses`), `lead_days`, `takes_equipment_down`, `responsible_user_id`, status active / paused / retired with reason, `last_completed_at`, `last_work_order_id` | new (deferred `equipment_maintenance_plans` of §13.7) |
+| `maintenance_work_orders` | `work_order_number` (rule `MWO`), equipment, `plan_id` (required for kind preventive), `kind` (preventive, corrective, inspection), status §6.15, `priority`, `title`, `description`, `due_date`, `assigned_to`, `takes_equipment_down`, `reported_down`, start / complete actors, `work_done`, `result` (completed, pass, fail), `service_record_id` (the W1D `equipment_service_records` row written at completion), hold / cancel reasons, idempotency key; one live preventive order per plan (partial unique index) | new |
+| `maintenance_work_order_state_transitions` | §6.1 shape | append-only |
+| `maintenance_work_order_parts` | material, lot, from location, quantity in the lot's base unit, the `issue` stock movement (unique), issuer | new (deferred `spare_parts` of §13.7: the parts are ordinary materials and lots); append-only |
+| `maintenance_spare_parts` | spare-parts list per site (optionally per equipment) with a minimum stock | new |
+
+Equipment availability (W1D, §3.1): a time-based plan keeps `equipment.maintenance_due_date` equal to the
+earliest due date of the equipment's active time-based plans, so the existing derivation gives the
+`maintenance_due` reason; a usage-based plan that reached its interval adds a `maintenance_due` reason
+through the availability provider registered in `src/modules/wiring.ts` (`registerEquipmentAvailabilityProvider`);
+a work order in progress that takes the equipment down moves it to `maintenance` (a reported breakdown to
+`out_of_service`) through the §6.11 state machine, and completion writes the service record that returns it to
+service. Spare parts leave stock through `postMovement` (`issue`, source document `maintenance_work_order`).
+
+Recall marking: "Mark recalled" applies a `recall` lot decision through the W2C disposition service
+(`decideLot`, decision `recall`, allowed only from an approved case with `quality.recall_case.admin`), one
+transaction per lot sharing a correlation id; boxes inherit the lot status; the existing V-REC checks
+(allocation, pick, pack, dispatch: `assertLotUsable`) then block shipment. A mock recall never marks stock.
+
+Custom SQL `src/db/sql/w4c.sql` (migration `<nnnn>_w4c_custom_sql`): the four new transition logs and
+`maintenance_work_order_parts` are append-only.
+
 ### 3.7 Sales and logistics
 
 | Table → column | Type | Null | Constraint / default | Notes |
@@ -2135,6 +2174,35 @@ reason, and by the nightly `production.equipment_status` job when a due date pas
 equipment whose `blocking_rule = 'block'` (to `maintenance`, reason `calibration_due` or
 `maintenance_due`). Every transition opens or closes a `downtime_events` row. Availability for
 a step is derived (§3.1) and never stored as a state.
+
+### 6.12 CAPA (W4C)
+
+`open → in_progress` (first action added) `→ verification` ("Submit for closure", `quality.capa.submit`: root
+cause, effectiveness criterion, every action verified or cancelled) `→ closed` ("Close CAPA",
+`quality.capa.approve`, effectiveness check `effective`, closer ≠ submitter); `verification → in_progress` when the
+check is recorded `not_effective`; `open | in_progress → cancelled` (reason). Actions: `open → done → verified`
+(verifier ≠ completer), `done → open` (sent back), `open | done → cancelled`.
+
+### 6.13 Change control (W4C)
+
+`draft → submitted` (impact assessment + risk level) `→ approved | rejected` (approval rules `change_control`;
+creator and submitter never approve), `submitted → draft` (returned); `approved → implemented` (the linked
+revision is `approved`, or kind `other` with a note) `→ closed` (closer ≠ implementer); `draft | submitted |
+approved → cancelled`.
+
+### 6.14 Recall case (W4C)
+
+`draft → submitted → approved` (every approval step; default qa_qc then owner_director, opener and submitter
+excluded, re-authentication) `→ notifying` (lots marked recalled, or the drill started for a mock recall) `→
+recovering` (every customer line notified) `→ closed` (closure report; explanation when shipped − returned −
+accounted ≠ 0); `submitted → draft` on a rejection or return (new approval cycle); `draft | submitted | approved →
+cancelled`.
+
+### 6.15 Maintenance work order (W4C)
+
+`open → in_progress ⇄ on_hold` (reason) `→ completed` (work done, result, W1D service record written);
+`open | in_progress | on_hold → cancelled` (reason, `maintenance.work_order.void`). PM plans: `active ⇄ paused →
+retired` (reason; retiring needs no live work order).
 
 ## 7. Identity and authorization tables
 

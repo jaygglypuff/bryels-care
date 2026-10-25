@@ -328,7 +328,8 @@ export async function getLotDisposition(ctx: AuthContext, lotId: string) {
   };
 }
 
-export type DecideLotInput = { lotId: string; decision: LotDecision; reason: string };
+/** `recallCaseId` is required for (and only for) the `recall` decision, which only recall-cases.ts applies (W4C). */
+export type DecideLotInput = { lotId: string; decision: LotDecision; reason: string; recallCaseId?: string | null };
 
 async function siteLocation(tx: Tx, siteId: string, kind: "rejected" | "fg") {
   const where =
@@ -398,6 +399,15 @@ async function decideLotTx(ctx: AuthContext, input: DecideLotInput) {
   if (!t) throw new DomainError("validation", "Choose a decision.", { field: "decision" });
   assertUuid(input.lotId, "Lot");
   const reason = cleanReason(input.reason);
+  // W4C: a lot is marked recalled only from an approved recall case, by a holder of quality.recall_case.admin.
+  if (input.decision === "recall") {
+    ctx.require("quality.recall_case.admin");
+    if (!input.recallCaseId) throw new DomainError("validation", "A lot is marked recalled only from an approved recall case.", { field: "decision" });
+    const [rc] = (await db.execute(sql`select status from recall_cases where id = ${input.recallCaseId}::uuid and organization_id = ${ctx.organizationId}::uuid`)) as unknown as { status: string }[];
+    if (!rc || !["approved", "notifying"].includes(rc.status)) throw new DomainError("state", "The recall case is not approved.");
+  } else if (input.recallCaseId) {
+    throw new DomainError("validation", "Only a recall decision names a recall case.");
+  }
 
   return db.transaction(async (tx) => {
     // Lock the lot row: concurrent decisions on the same lot serialize here and re-check state.

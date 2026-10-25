@@ -29,3 +29,5 @@ export * from "./reports";
 export * from "./analytics";
 export * from "./procurement"; // Wave 4 W4A
 export * from "./finance"; // Wave 4 W4B
+export * from "./quality-system"; // Wave 4 W4C
+export * from "./maintenance"; // Wave 4 W4C

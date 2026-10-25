@@ -42,16 +42,25 @@ export default async function RecallPage({ searchParams }: { searchParams: Promi
     <>
       <PageHeader
         title="Recall explorer"
-        subtitle="Read-only: every lot, batch, box, shipment and customer affected, from the stock ledger. Recall cases themselves arrive in Phase 6."
+        subtitle="Read-only: every lot, batch, box, shipment and customer affected, from the stock ledger. Open a recall case from this scope to act on it."
         actions={
-          r.subject && ctx.can("quality.genealogy.export") ? (
+          r.subject && (ctx.can("quality.genealogy.export") || ctx.can("quality.recall_case.create")) ? (
             <>
-              <a className={linkCls} href={`/api/v1/quality/recall/export?${queryString(q, r.mode)}&format=csv`}>
-                Export CSV
-              </a>
-              <a className={linkCls} href={`/api/v1/quality/recall/export?${queryString(q, r.mode)}&format=xlsx`}>
-                Export XLSX
-              </a>
+              {ctx.can("quality.recall_case.create") && (
+                <a className={linkCls} href={`/quality/recalls/new?${queryString(q, r.mode)}`}>
+                  Open recall case
+                </a>
+              )}
+              {ctx.can("quality.genealogy.export") && (
+                <>
+                  <a className={linkCls} href={`/api/v1/quality/recall/export?${queryString(q, r.mode)}&format=csv`}>
+                    Export CSV
+                  </a>
+                  <a className={linkCls} href={`/api/v1/quality/recall/export?${queryString(q, r.mode)}&format=xlsx`}>
+                    Export XLSX
+                  </a>
+                </>
+              )}
             </>
           ) : undefined
         }

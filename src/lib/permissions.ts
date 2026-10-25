@@ -376,6 +376,31 @@ export const PERMISSIONS = [
   "finance.period_lock.void",
   "finance.tax_config.view",
   "finance.tax_config.admin",
+  // Wave 4 W4C: CAPA, change control, recall cases, equipment maintenance (US-6-18, US-6-19; docs/permissions-matrix.md §2.6, §2.5, §3.6, §3.5)
+  "quality.capa.view",
+  "quality.capa.create",
+  "quality.capa.submit",
+  "quality.capa.approve",
+  "quality.change_control.view",
+  "quality.change_control.create",
+  "quality.change_control.submit",
+  "quality.change_control.approve",
+  "quality.recall_case.view",
+  "quality.recall_case.create",
+  "quality.recall_case.edit",
+  "quality.recall_case.approve",
+  "quality.recall_case.admin",
+  "quality.recall_case.export",
+  "maintenance.plan.view",
+  "maintenance.plan.create",
+  "maintenance.plan.edit",
+  "maintenance.work_order.view",
+  "maintenance.work_order.create",
+  "maintenance.work_order.edit",
+  "maintenance.work_order.post",
+  "maintenance.work_order.void",
+  "maintenance.spare_part.view",
+  "maintenance.spare_part.edit",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -1365,4 +1390,68 @@ const W4B_KEEP: Record<string, readonly Permission[]> = {
 };
 for (const [role, keep] of Object.entries(W4B_KEEP)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => !W4B_FINANCE_ALL.includes(p) || keep.includes(p));
+}
+
+// Wave 4 W4C: CAPA, change control, recall cases (docs/permissions-matrix.md §3.6 capa, change_control,
+// recall_case rows) and equipment maintenance (§3.5 maintenance rows, new in W4C). `.view` strings reach the
+// VIEW_ALL roles (owner, system_admin, site_manager, qa_qc, auditor) automatically; the matrix keeps
+// system_admin away from CAPA, change control and recall cases, and gives the owner view plus the approve
+// strings only (second recall approver, CAPA closure and change approval as `a*`). Technicians are
+// site_manager or production_operator (process map W13); the warehouse issues spare parts.
+const W4C_GRANTS: Record<string, readonly Permission[]> = {
+  site_manager: [
+    "quality.capa.create",
+    "quality.change_control.create",
+    "quality.change_control.submit",
+    "maintenance.plan.create",
+    "maintenance.plan.edit",
+    "maintenance.work_order.create",
+    "maintenance.work_order.edit",
+    "maintenance.work_order.post",
+    "maintenance.work_order.void",
+    "maintenance.spare_part.edit",
+  ],
+  production_planner: ["quality.change_control.view", "quality.change_control.create", "quality.change_control.submit", "maintenance.plan.view", "maintenance.work_order.view"],
+  production_operator: ["maintenance.plan.view", "maintenance.work_order.view", "maintenance.work_order.create", "maintenance.work_order.edit", "maintenance.spare_part.view"],
+  warehouse_operator: ["quality.recall_case.view", "maintenance.work_order.view", "maintenance.work_order.post", "maintenance.spare_part.view"],
+  qa_qc: [
+    "quality.capa.create",
+    "quality.capa.submit",
+    "quality.capa.approve",
+    "quality.change_control.create",
+    "quality.change_control.submit",
+    "quality.change_control.approve",
+    "quality.recall_case.create",
+    "quality.recall_case.edit",
+    "quality.recall_case.approve",
+    "quality.recall_case.admin",
+    "quality.recall_case.export",
+  ],
+  sales_cs: ["quality.recall_case.view", "quality.recall_case.edit", "quality.recall_case.export"],
+  auditor: ["quality.recall_case.export"],
+};
+for (const [role, grants] of Object.entries(W4C_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+const W4C_EXCLUDE: Record<string, readonly Permission[]> = {
+  owner_director: [
+    "quality.capa.create",
+    "quality.capa.submit",
+    "quality.change_control.create",
+    "quality.change_control.submit",
+    "quality.recall_case.create",
+    "quality.recall_case.edit",
+    "quality.recall_case.admin",
+    "maintenance.plan.create",
+    "maintenance.plan.edit",
+    "maintenance.work_order.create",
+    "maintenance.work_order.edit",
+    "maintenance.work_order.post",
+    "maintenance.work_order.void",
+    "maintenance.spare_part.edit",
+  ],
+  system_admin: ["quality.capa.view", "quality.change_control.view", "quality.recall_case.view"],
+};
+for (const [role, drop] of Object.entries(W4C_EXCLUDE)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => !drop.includes(p));
 }

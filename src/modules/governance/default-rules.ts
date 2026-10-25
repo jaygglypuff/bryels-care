@@ -41,6 +41,9 @@ export const BASE_APPROVE_PERMISSION: Partial<Record<ApprovalDocumentType, Permi
   purchase_request: "procurement.purchase_request.approve",
   purchase_order: "procurement.purchase_order.approve",
   supplier_return: "procurement.supplier_return.approve",
+  // Wave 4 W4C (US-6-18)
+  recall_case: "quality.recall_case.approve",
+  change_control: "quality.change_control.approve",
 };
 
 /** Record types whose separation of duties is configurable (A-PM-14); every other type is mandatory. */
@@ -127,4 +130,6 @@ export const DEFAULT_APPROVAL_RULES: ApprovalRuleSpec[] = [
   rule({ documentType: "work_order_release", step: 1, label: "Planner or site manager approval", requiredRoleCodes: ["production_planner", "site_manager"] }),
   // Wave 3 W3D (US-4-03): a customer or general price list version is approved by finance or the owner (≠ the editor).
   rule({ documentType: "price_list", step: 1, label: "Finance or owner approval", requiredRoleCodes: ["finance", "owner_director"], requiredPermissionCode: "sales.price_list.approve", source: "A-W3D-03" }),
+  // Wave 4 W4C (US-6-18): a change control is approved by QA (≠ the submitter); the owner can add steps (A-W4C-05).
+  rule({ documentType: "change_control", step: 1, label: "QA approval", requiredRoleCodes: ["qa_qc"], requiredPermissionCode: "quality.change_control.approve", source: "A-W4C-05" }),
 ];

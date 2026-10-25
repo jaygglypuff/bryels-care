@@ -45,6 +45,9 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   // Wave 4 W4B: finance (sources registered in src/modules/wiring.ts)
   { kind: "approval.invoice", tab: "approvals", label: "Invoice to approve", severity: "info", permission: "finance.invoice.approve", actionLabel: "Review invoice" },
   { kind: "approval.expense_claim", tab: "approvals", label: "Expense claim to approve", severity: "info", permission: "finance.expense_claim.approve", actionLabel: "Review claim" },
+  // Wave 4 W4C: recall case and change control approvals (US-6-18)
+  { kind: "approval.recall_case", tab: "approvals", label: "Recall case to approve", severity: "critical", permission: "quality.recall_case.approve", actionLabel: "Review recall case" },
+  { kind: "approval.change_control", tab: "approvals", label: "Change control to approve", severity: "info", permission: "quality.change_control.approve", actionLabel: "Review change" },
   // Exceptions
   { kind: "late_work_order", tab: "exceptions", label: "Late work order", severity: "warning", permission: "production.work_order.view", actionLabel: "Open work order" },
   { kind: "low_stock", tab: "exceptions", label: "Finished goods below minimum stock", severity: "warning", permission: "inventory.balance.view", actionLabel: "Plan production" },
@@ -66,6 +69,11 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   // Wave 4 W4B: finance
   { kind: "overdue_invoice", tab: "exceptions", label: "Overdue invoice", severity: "warning", permission: "finance.invoice.view", actionLabel: "Open invoice" },
   { kind: "disputed_bill", tab: "exceptions", label: "Supplier bill in dispute", severity: "warning", permission: "finance.supplier_bill.view", actionLabel: "Resolve dispute" },
+  // Wave 4 W4C: CAPA actions, recall cases, preventive maintenance (US-6-18, US-6-19)
+  { kind: "overdue_capa_action", tab: "exceptions", label: "CAPA action overdue", severity: "warning", permission: "quality.capa.view", actionLabel: "Open CAPA" },
+  { kind: "open_recall_case", tab: "exceptions", label: "Open recall case", severity: "critical", permission: "quality.recall_case.view", actionLabel: "Open recall case" },
+  { kind: "pm_due", tab: "exceptions", label: "Preventive maintenance due", severity: "info", permission: "maintenance.plan.view", actionLabel: "Open PM plan" },
+  { kind: "pm_overdue", tab: "exceptions", label: "Preventive maintenance overdue", severity: "warning", permission: "maintenance.plan.view", actionLabel: "Open PM plan" },
 ];
 
 export function actionKind(kind: string): ActionKind | undefined {

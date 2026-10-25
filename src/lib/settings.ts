@@ -522,6 +522,31 @@ export const SETTINGS = {
   "analytics.forecast.ses_alpha": { scopes: ["organization"], schema: z.number().min(0.05).max(0.95), default: 0.3, assumption: "A-KPI-13", group: "Analytics", label: "Exponential smoothing alpha", description: "Weight of the latest month in the simple exponential smoothing baseline (docs/analytics-kpis.md §6.2)." },
   "analytics.forecast.history_months": { scopes: ["organization"], schema: z.number().int().min(6).max(60), default: 36, assumption: "A-KPI-13", group: "Analytics", label: "Forecast history used (months)" },
   "approvals.sod.forecast_override": sodSetting("Separation of duties: forecast overrides"),
+  // Wave 4 W4C: CAPA, change control, recall cases, equipment maintenance (US-6-18, US-6-19; A-W4C-nn in docs/PRD.md).
+  // Every value is a placeholder for the company's QA / maintenance lead to confirm or replace; none is a regulatory rule.
+  /** Days after "Submit for closure" before the CAPA effectiveness check may be recorded (QA may set a later date per CAPA). */
+  "quality.capa.effectiveness_check_days": {
+    scopes: ["organization", "site"], schema: z.number().int().min(0).max(730), default: 30,
+    assumption: "A-W4C-01", group: "Quality", label: "CAPA effectiveness check after (days)", description: "Placeholder; the company's QA defines how long to wait before judging whether a CAPA worked.", requiresApproval: true,
+  },
+  /** Risk levels QA chooses from when assessing a change control (their meaning is the company's QA definition). */
+  "quality.change_control.risk_levels": {
+    scopes: ["organization"], schema: z.array(z.string().regex(/^[a-z][a-z0-9_]{0,30}$/)).min(1).max(10), default: ["low", "medium", "high"] as string[],
+    assumption: "A-W4C-02", group: "Quality", label: "Change control risk levels", requiresApproval: true,
+  },
+  /**
+   * Wording of the customer recall / withdrawal notice that sales_cs sends (printed with the notification list).
+   * The default is a placeholder that must be replaced by text approved by QA / regulatory personnel.
+   */
+  "quality.recall_case.notice_text": {
+    scopes: ["organization"], schema: z.string().min(10).max(4000),
+    default: "PLACEHOLDER: replace with the recall / withdrawal notice wording approved by the company's QA and regulatory personnel before any real notification is sent." as string,
+    assumption: "A-W4C-03", group: "Quality", label: "Recall notice wording", requiresApproval: true,
+  },
+  /** Days before a PM plan's due date that it shows as due soon in the action centre (a plan's own lead days win). */
+  "maintenance.pm.due_soon_days": { scopes: ["organization", "site"], schema: z.number().int().min(0).max(90), default: 7, assumption: "A-W4C-04", group: "Maintenance", label: "PM plan due soon (days before due)" },
+  /** Share of a usage-based interval at which the plan shows as due soon (e.g. 90 = at 90 % of the interval). */
+  "maintenance.pm.usage_due_soon_pct": { scopes: ["organization", "site"], schema: z.number().int().min(50).max(100), default: 90, assumption: "A-W4C-04", group: "Maintenance", label: "Usage-based PM due soon at (% of interval)" },
 } as const satisfies Record<string, SettingDefinition>;
 
 export type SettingKey = keyof typeof SETTINGS;

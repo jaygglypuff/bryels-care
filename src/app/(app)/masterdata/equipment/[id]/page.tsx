@@ -3,6 +3,7 @@ import Link from "next/link";
 import { uuidv7 } from "uuidv7";
 import { requireContext } from "@/lib/auth/context";
 import { D, fmtDate, fmtDateTime } from "@/lib/qty";
+import { equipmentMaintenanceSummary } from "@/modules/maintenance";
 import { businessToday, getEquipment } from "@/modules/masterdata";
 import { Banner, Chip } from "@/ui/status";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
@@ -23,6 +24,7 @@ export default async function EquipmentDetail({ params }: { params: Promise<{ id
   const e = v.equipment;
   const a = v.availability;
   const today = businessToday();
+  const maintenance = await equipmentMaintenanceSummary(ctx, e.id);
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -54,6 +56,29 @@ export default async function EquipmentDetail({ params }: { params: Promise<{ id
           ]}
         />
       </Card>
+
+      {/* Wave 4 W4C (US-6-19): live maintenance and PM plans of this equipment */}
+      {maintenance && (
+        <Card>
+          <CardTitle action={ctx.can("maintenance.work_order.create") ? <LinkButton href={`/maintenance/work-orders/new?equipmentId=${e.id}`} variant="secondary" size="sm">Report a problem</LinkButton> : undefined}>Maintenance</CardTitle>
+          {maintenance.orders.length === 0 && maintenance.plans.length === 0 ? (
+            <p className="text-[13px] text-muted">No PM plan and no open maintenance work order.{ctx.can("maintenance.plan.create") ? " " : ""}{ctx.can("maintenance.plan.create") && <Link className="text-primary-text hover:underline" href={`/maintenance/plans/new?equipmentId=${e.id}`}>Create a PM plan</Link>}</p>
+          ) : (
+            <ul className="flex flex-col gap-1 text-[14px]">
+              {maintenance.plans.map((p) => (
+                <li key={p.id}>
+                  <Link className="text-primary-text hover:underline" href={`/maintenance/plans/${p.id}`}>{p.planNumber}</Link> {p.title} · {p.triggerKind === "time" ? `due ${p.nextDueOn ? fmtDate(p.nextDueOn) : "—"}` : `every ${D(p.usageInterval ?? "0").toString()} ${p.usageMetric}`}
+                </li>
+              ))}
+              {maintenance.orders.map((o) => (
+                <li key={o.id}>
+                  <Link className="text-primary-text hover:underline" href={`/maintenance/work-orders/${o.id}`}>{o.workOrderNumber}</Link> {o.title} <Chip tone={o.status === "in_progress" ? "appr" : "info"}>{o.status.replace(/_/g, " ")}</Chip>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-2">
         {v.can.service && (

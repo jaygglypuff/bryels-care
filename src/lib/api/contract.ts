@@ -343,6 +343,27 @@ export const queries = {
       .strict(),
     response: "file",
   },
+  // Wave 4 W4C: CAPA register and recall-case customer notification list (US-6-18)
+  capaExport: {
+    kind: "query",
+    name: "quality.capa.export",
+    method: "GET",
+    path: "/api/v1/quality/capa/export",
+    summary: "CSV/XLSX of the CAPA register at the caller's sites (owners named; audited).",
+    permission: "quality.capa.view",
+    query: z.object({ status: z.enum(["active", "open", "in_progress", "verification", "closed", "cancelled", "all"]).optional(), format: z.enum(["csv", "xlsx"]).default("csv") }).strict(),
+    response: "file",
+  },
+  recallNotificationExport: {
+    kind: "query",
+    name: "quality.recall_case.notification_list",
+    method: "GET",
+    path: "/api/v1/quality/recalls/{recallCaseId}/notification-list",
+    summary: "CSV/XLSX customer notification list of a recall case with shipped, returned, accounted and outstanding quantities (names customers; audited).",
+    permission: "quality.recall_case.export",
+    query: z.object({ recallCaseId: z.uuid(), format: z.enum(["csv", "xlsx"]).default("csv") }).strict(),
+    response: "file",
+  },
 } as const satisfies Record<string, QueryContract>;
 
 export type Commands = typeof commands;

@@ -63,6 +63,12 @@ export const NUMBERING_DEFAULTS = {
   PAY: yearly("PAY", 6),
   CN: { prefix: "CN", pattern: "{PREFIX}-{YYYY}-{SEQ}", resetPeriod: "yearly", sequenceWidth: 5, isGapless: false },
   EXP: yearly("EXP", 5),
+  // Wave 4 W4C: CAPA, change control, recall cases (data-model §9.2) and maintenance (US-6-19)
+  CAPA: yearly("CAPA", 3),
+  CC: yearly("CC", 3),
+  RC: { prefix: "RC", pattern: "{PREFIX}-{YYYY}-{SEQ}", resetPeriod: "yearly", sequenceWidth: 2, isGapless: false },
+  PM: { prefix: "PM", pattern: "{PREFIX}-{SEQ}", resetPeriod: "never", sequenceWidth: 4, isGapless: false },
+  MWO: yearly("MWO", 4),
 } satisfies Record<string, NumberingRuleSpec>;
 
 export type DocumentType = keyof typeof NUMBERING_DEFAULTS;

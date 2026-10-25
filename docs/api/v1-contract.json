@@ -844,6 +844,72 @@
         },
         "additionalProperties": false
       }
+    },
+    {
+      "name": "quality.capa.export",
+      "method": "GET",
+      "path": "/api/v1/quality/capa/export",
+      "summary": "CSV/XLSX of the CAPA register at the caller's sites (owners named; audited).",
+      "permission": "quality.capa.view",
+      "response": "file",
+      "query": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "open",
+              "in_progress",
+              "verification",
+              "closed",
+              "cancelled",
+              "all"
+            ]
+          },
+          "format": {
+            "default": "csv",
+            "type": "string",
+            "enum": [
+              "csv",
+              "xlsx"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "quality.recall_case.notification_list",
+      "method": "GET",
+      "path": "/api/v1/quality/recalls/{recallCaseId}/notification-list",
+      "summary": "CSV/XLSX customer notification list of a recall case with shipped, returned, accounted and outstanding quantities (names customers; audited).",
+      "permission": "quality.recall_case.export",
+      "response": "file",
+      "query": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "recallCaseId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "format": {
+            "default": "csv",
+            "type": "string",
+            "enum": [
+              "csv",
+              "xlsx"
+            ]
+          }
+        },
+        "required": [
+          "recallCaseId"
+        ],
+        "additionalProperties": false
+      }
     }
   ]
 }
