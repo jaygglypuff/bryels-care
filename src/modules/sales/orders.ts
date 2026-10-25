@@ -168,7 +168,8 @@ export async function lockOrder(tx: Tx, ctx: AuthContext, orderId: string) {
 
 /* ------------------------------------------------------------------ queries */
 
-export async function listOrders(ctx: AuthContext, status?: string) {
+/** `limit`: the list screen shows the newest orders only (W4F load test: the full list of a year of orders took seconds to render). */
+export async function listOrders(ctx: AuthContext, status?: string, limit?: number) {
   ctx.require("sales.sales_order.view");
   ctx.requireSite(ctx.currentSiteId);
   const where = [eq(salesOrders.siteId, ctx.currentSiteId)];
@@ -189,7 +190,8 @@ export async function listOrders(ctx: AuthContext, status?: string) {
     .from(salesOrders)
     .innerJoin(customers, eq(customers.id, salesOrders.customerId))
     .where(and(...where))
-    .orderBy(desc(salesOrders.orderNumber));
+    .orderBy(desc(salesOrders.orderNumber))
+    .limit(limit ?? 1_000_000);
   const lines = orders.length
     ? await db
         .select({ orderId: salesOrderLines.salesOrderId, sku: products.skuCode, qty: salesOrderLines.qtyUnits, price: salesOrderLines.unitPrice })
@@ -198,9 +200,11 @@ export async function listOrders(ctx: AuthContext, status?: string) {
         .where(inArray(salesOrderLines.salesOrderId, orders.map((o) => o.id)))
         .orderBy(asc(salesOrderLines.lineNo))
     : [];
+  const byOrder = new Map<string, typeof lines>();
+  for (const l of lines) byOrder.set(l.orderId, [...(byOrder.get(l.orderId) ?? []), l]);
   const prices = canSeePrices(ctx);
   return orders.map((o) => {
-    const ls = lines.filter((l) => l.orderId === o.id);
+    const ls = byOrder.get(o.id) ?? [];
     const base = { ...o, lines: ls.map((l) => ({ sku: l.sku, qty: l.qty })) };
     if (!prices) return { ...base, value: undefined as string | undefined, _masked: ["value"] as string[] | undefined };
     return { ...base, value: ls.reduce((s, l) => s.plus(D(l.qty).times(l.price)), new Decimal(0)).toString() as string | undefined, _masked: undefined as string[] | undefined };

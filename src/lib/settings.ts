@@ -258,7 +258,21 @@ export const SETTINGS = {
   "alerts.backup_max_age_hours": { scopes: ["organization"], schema: z.number().int().min(1).max(24 * 14), default: 26, assumption: "A-DEP-11", group: "Alerts", label: "Backup older than (hours)" },
   "alerts.failed_jobs_window_minutes": { scopes: ["organization"], schema: z.number().int().min(5).max(1440), default: 15, assumption: "A-DEP-11", group: "Alerts", label: "Dead-lettered job look-back (minutes)" },
   "alerts.dedupe_minutes": { scopes: ["organization"], schema: z.number().int().min(5).max(1440), default: 60, assumption: "A-DEP-11", group: "Alerts", label: "Repeat an open alert after (minutes)" },
+  "alerts.restore_drill_max_age_days": { scopes: ["organization"], schema: z.number().int().min(7).max(400), default: 100, assumption: "A-W4F-05", group: "Alerts", label: "Restore drill overdue after (days)", description: "W4F: the owner is reminded in-app when the newest restore drill is older than this (quarterly drills, docs/deployment-railway.md §10). Checked only when BACKUP_STATUS_SOURCE=table." },
   "platform.metrics.retention_days": { scopes: ["organization"], schema: z.number().int().min(7).max(730), default: 90, assumption: "A-DEP-11", group: "Platform", label: "Keep metrics samples (days)" },
+  // Wave 4 W4F: retention sweep (US-9-05, docs/data-model.md §12.4). Report-only until the owner switches it.
+  "platform.retention.sweep_mode": {
+    scopes: ["organization"],
+    schema: z.enum(["report", "execute"]),
+    default: "report" as "report" | "execute",
+    assumption: "A-W4F-03",
+    group: "Retention",
+    label: "Weekly retention sweep",
+    description: "report = the weekly sweep only writes a dry-run report; execute = it deletes rows of confirmed delete policies (never held records, never ledgers or audit).",
+    restricted: true,
+    requiresApproval: true,
+  },
+  "platform.retention.max_rows_per_target": { scopes: ["organization"], schema: z.number().int().min(100).max(200_000), default: 10_000, assumption: "A-W4F-04", group: "Retention", label: "Rows deleted per target per run", description: "Caps one run so a purge never holds long locks; the next run continues." },
   // Wave 2 W2A: production planning, work orders, staging and the production board (E-3-03, E-5-07)
   /** Batches without a work order (legacy/service callers). Off: batches come from work orders (W05-03); tests that need direct creation turn it on explicitly. */
   "production.batch.allow_without_work_order": { scopes: ["organization", "site"], schema: z.boolean(), default: false, assumption: "A-W2A-01", group: "Production", label: "Allow batches without a work order", requiresApproval: true },

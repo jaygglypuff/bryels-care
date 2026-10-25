@@ -11,7 +11,20 @@ export default async function HelpPage() {
   const guides = listGuides();
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <PageHeader title="Help & guides" subtitle="Short guides for the warehouse tasks. On each task screen the “?” opens the same guide without leaving the task." />
+      <PageHeader title="Help & guides" subtitle="Short guides for the main tasks. On each task screen the “?” opens the same guide without leaving the task." />
+      {guides.length > 1 && (
+        <nav aria-label="Guides" className="rounded-[14px] border border-line bg-surface p-3">
+          <ul className="grid gap-1 text-[13px] sm:grid-cols-2">
+            {guides.map((g) => (
+              <li key={g.key}>
+                <a href={`#${g.key}`} className="text-primary-text underline-offset-2 hover:underline">
+                  {g.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
       {guides.length === 0 ? (
         <EmptyState title="No guides yet">Guides are added with each release.</EmptyState>
       ) : (

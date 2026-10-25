@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { PLANNED_REPORTS, REPORT_CATEGORIES, listReportLibrary } from "@/modules/reports";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Help } from "@/ui/help/help";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../forbidden";
 
@@ -17,7 +18,7 @@ export default async function ReportLibraryPage() {
       <PageHeader
         title="Report library"
         subtitle="Live reports from posted records, scoped to your sites and role. Each one shows its filters, freshness and definitions, and exports to CSV, Excel or a printable page."
-        actions={ctx.can("analytics.scheduled_report.view") ? <LinkButton href="/reports/schedules" variant="secondary" size="sm">Scheduled reports</LinkButton> : undefined}
+        actions={<><Help screen="analytics.reports" />{ctx.can("analytics.scheduled_report.view") ? <LinkButton href="/reports/schedules" variant="secondary" size="sm">Scheduled reports</LinkButton> : undefined}</>}
       />
       {entries.length === 0 ? (
         <Card>

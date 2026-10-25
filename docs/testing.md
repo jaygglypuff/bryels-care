@@ -928,6 +928,25 @@ excluding expected 409/429, zero reconciliation differences afterwards, worker q
 within 5 minutes, no connection-pool exhaustion (Railway Postgres connection ceiling respected).
 Rate limits (`docs/security.md` 4.5) are verified to engage with 429 and `Retry-After`.
 
+### 11.3 As built (Wave 4 W4F, US-9-01): harness and commands
+
+No k6: the harness is Node only, so it runs anywhere the repository runs. Results and the
+method are in `docs/load-test-report.md`.
+
+| Step | Command | What it does |
+|---|---|---|
+| Volume seed | `pnpm load:seed --months 3` on a scratch database (name must contain `load`, `perf` or `scratch`) after `db:migrate` and `db:seed` | 500 materials, 300 SKUs, 200 lots/month, 2,000 movements/day (receipt + transfers, balances projected from the ledger), one audit event per movement, 20 orders/day with lines and shipments, 100 batches/month with yield records, 20,000 notifications; one transaction |
+| Posting server time | `LOAD_DATABASE_URL=… pnpm load:postings` (tests/load/posting-timing.load.ts, own vitest config) | receipts, transfers, weighings (recordDispense with checker), dispatches, availability and full reconciliation, timed inside the process through the real services |
+| HTTP load | `pnpm build`, `pnpm next start -p <port>`, then `DATABASE_URL=… pnpm load:run --vus 25 --duration 600` (tests/load/run.ts) | 25 virtual users sign in through the real server action and loop over role flows; a burst of 10 parallel moves per warehouse user; then the API rate limit check (429 + Retry-After), reconciliation and the job queue |
+
+Integration test ids added by W4F (`tests/integration/platform/retention.test.ts`):
+`retention.unconfirmed_reports_only`, `retention.dry_run_deletes_nothing`,
+`retention.legal_hold_blocks_purge`, `retention.implicit_hold_open_complaint`,
+`retention.protected_classes_never_purged`, `retention.confirm_not_editor`,
+`legal_hold.release_not_placer`, `authz.cross_site.legal_hold`, `authz.role_escalation.retention`,
+`restore_drill.signoff_not_performer`, `alerts.restore_drill_overdue`, `health.worker_stale_is_503`;
+unit `US-9-08` guide coverage in `tests/unit/help/guides.test.ts`.
+
 ---
 
 ## 12. Open questions

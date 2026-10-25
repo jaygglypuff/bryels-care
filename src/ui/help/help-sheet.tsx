@@ -6,7 +6,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
  * nothing navigates, so closing it returns to the same step with entered values intact. On a
  * phone it is a bottom sheet; on wider screens a centred panel.
  */
-export function HelpSheet({ title, meta, children, label = "Help for this screen" }: { title: string; meta: string | null; children: ReactNode; label?: string }) {
+export function HelpSheet({ title, meta, children, label = "Help for this screen", text }: { title: string; meta: string | null; children: ReactNode; label?: string; text?: string }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [online, setOnline] = useState(true);
   useEffect(() => {
@@ -26,9 +26,9 @@ export function HelpSheet({ title, meta, children, label = "Help for this screen
         aria-label={label}
         title={label}
         onClick={() => ref.current?.showModal()}
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-surface text-[15px] font-semibold text-primary-text hover:bg-primary-soft focus-visible:outline-2"
+        className={`inline-flex h-9 ${text ? "px-3 gap-1 text-[13px]" : "w-9 text-[15px]"} shrink-0 items-center justify-center rounded-full border border-line bg-surface font-semibold text-primary-text hover:bg-primary-soft focus-visible:outline-2`}
       >
-        ?
+        ?{text ? <span>{text}</span> : null}
       </button>
       <dialog
         ref={ref}

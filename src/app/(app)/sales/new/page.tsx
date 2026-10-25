@@ -3,6 +3,7 @@ import { canSeePrices, customerOptions, manilaToday, priceBook, productAvailabil
 import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Forbidden } from "../../forbidden";
 import { NewOrderForm, type PriceBooks } from "./order-form";
+import { Help } from "@/ui/help/help";
 
 export const metadata = { title: "New order" };
 
@@ -16,7 +17,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
   if (prices) for (const c of customers) books[c.id] = await priceBook(ctx, c.id);
   return (
     <>
-      <PageHeader title="New order" subtitle={`Creates a draft order at ${ctx.currentSite.code} · ${ctx.currentSite.name}. Prices come from the customer's approved price list; submit it on the next screen.`} />
+      <PageHeader title="New order" subtitle={`Creates a draft order at ${ctx.currentSite.code} · ${ctx.currentSite.name}. Prices come from the customer's approved price list; submit it on the next screen.`} actions={<><Help screen="sales.order" /></>} />
       {customers.length === 0 ? (
         <EmptyState title="No customers yet" action={ctx.can("masterdata.customer.create") ? <LinkButton href="/sales/customers/new">Add a customer</LinkButton> : undefined}>
           Add the customer before entering an order.

@@ -11,6 +11,7 @@ import { DecisionChip, DeviationStatusChip, InspectionStatusChip, Transition, fm
 import { StartInspectionButton } from "../../w2c-forms";
 import { decideLotAction } from "../../actions";
 import { DecisionForm, type DecisionOption } from "../../decision-form";
+import { Help } from "@/ui/help/help";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,7 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
         }
         actions={
           <>
+            <Help screen="quality.release" />
             <LinkButton href="/quality" variant="secondary">
               QA queue
             </LinkButton>

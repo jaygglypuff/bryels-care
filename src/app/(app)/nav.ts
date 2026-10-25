@@ -192,6 +192,8 @@ export const NAV: NavGroup[] = [
       // Wave 4 W4D: offline devices and the sync conflict queue
       { label: "Devices", href: "/admin/devices", permission: "platform.device.view" },
       { label: "Sync conflicts", href: "/sync/conflicts", permission: "platform.sync_conflict.view" },
+      // Wave 4 W4F: retention, legal holds, purge runs, restore drills
+      { label: "Retention & holds", href: "/admin/retention", permission: "platform.retention_policy.view" },
     ],
   },
   {

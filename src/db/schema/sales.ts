@@ -103,7 +103,10 @@ export const salesOrderLines = pgTable("sales_order_lines", {
   /** Customer minimum remaining shelf life at dispatch for this line (from the approved requirement, else the customer default). */
   minRemainingShelfLifeDays: integer("min_remaining_shelf_life_days"),
   customerItemCode: text("customer_item_code"),
-});
+},
+  // W4F load test (US-9-01): every order page, list and allocation reads lines by order; without it each read scanned the table.
+  (t) => [index("sales_order_lines_order_idx").on(t.salesOrderId, t.lineNo)],
+);
 
 /** One row per sales order state change, written by transitionOrder (docs/data-model.md §6.1). */
 export const salesOrderStateTransitions = pgTable(

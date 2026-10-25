@@ -4,6 +4,7 @@ import { returnFormContext } from "@/modules/sales";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Forbidden } from "../../../forbidden";
 import { NewReturnForm } from "../forms";
+import { Help } from "@/ui/help/help";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export default async function NewReturnPage({ searchParams }: { searchParams: Pr
   }
   return (
     <>
-      <PageHeader title="New customer return" subtitle="Choose the delivery receipt the goods left on; then scan each returned box or lot." />
+      <PageHeader title="New customer return" subtitle="Choose the delivery receipt the goods left on; then scan each returned box or lot." actions={<><Help screen="sales.return" /></>} />
       <Card className="max-w-3xl">
         <CardTitle>Return</CardTitle>
         <NewReturnForm

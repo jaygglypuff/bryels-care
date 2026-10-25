@@ -12,6 +12,7 @@ import { AllocateForm } from "./order-actions";
 import { FulfilmentPanel } from "./fulfilment-panel"; // W3E
 import { ApproveOrderForm, CancelOrderPanel, ReorderForm, ReturnOrderForm, SubmitOrderForm } from "../orders/order-commercial";
 import { MaskedNote, Money, SalesStatus } from "../orders/sales-ui";
+import { Help } from "@/ui/help/help";
 
 export const metadata = { title: "Sales order" };
 

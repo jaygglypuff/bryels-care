@@ -17,3 +17,8 @@ export { workerStatus } from "./diagnostics";
 export { databaseCard, importsCard, alertsCard, errorsCard, integrationsCard, registerImportStatsProvider, type DatabaseCard, type ImportsCard, type AlertsCard, type ErrorsCard, type IntegrationsCard } from "./diagnostics-phase5";
 // Demo mode (ADR-055): owner-only "Reset demo data"
 export { DEMO_RESET_CONFIRM_WORD, demoResetStatus, resetDemoData, type DemoResetStatus, type DemoResetRunner } from "./demo-reset";
+// Wave 4 W4F (US-9-03, US-9-05): retention policies, legal holds, retention sweep, restore drills
+export { RETENTION_DEFAULTS, PROTECTED_CLASSES, listRetentionPolicies, saveRetentionPolicy, confirmRetentionPolicy, periodLabel, policyKey, type PolicyView } from "./retention-policies";
+export { ENTITY_LABELS, placeLegalHold, releaseLegalHold, listLegalHolds, resolveHeldSet, type LegalHoldRow } from "./retention-holds";
+export { runRetentionSweep, executePurgeNow, listPurgeRuns, platformRetentionSweepJob, cutoffFor, type PurgeRunView, type TargetReport } from "./retention-sweep";
+export { recordRestoreDrill, listRestoreDrills, latestRestoreDrill, signOffRestoreDrill, drillResult, type RestoreDrillView } from "./retention-drills";

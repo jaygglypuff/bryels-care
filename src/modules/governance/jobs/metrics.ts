@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, isNotNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { backgroundJobs, backupRuns, metricsSamples, reconciliationRuns, workerHeartbeats } from "@/db/schema";
+import { backgroundJobs, backupRuns, metricsSamples, reconciliationRuns, restoreDrills, workerHeartbeats } from "@/db/schema";
 import { logger } from "@/lib/log";
 import { sweepBuckets } from "@/lib/rate-limit";
 import { getSetting } from "@/lib/settings";
@@ -68,7 +68,8 @@ export const platformMetricsSampleJob = defineJob<SlotPayload>({
 
 /* ------------------------------------------------------------------ alerts */
 
-export type AlertFinding = { code: string; severity: "warning" | "critical"; title: string; body: string; link: string };
+/** `roles`: who receives it in-app (default system_admin, docs/deployment-railway.md §8.3 Route column). */
+export type AlertFinding = { code: string; severity: "warning" | "critical"; title: string; body: string; link: string; roles?: string[] };
 
 /** Evaluates the alert conditions with the `alerts.*` settings (exported for tests). */
 export async function evaluateAlerts(organizationId: string, now: Date): Promise<AlertFinding[]> {
@@ -91,6 +92,12 @@ export async function evaluateAlerts(organizationId: string, now: Date): Promise
     const age = b?.at ? (now.getTime() - b.at.getTime()) / 3_600_000 : null;
     if (age === null || age > maxAge) findings.push({ code: "backup_age", severity: "critical", title: "No recent successful backup", body: age === null ? "No successful logical dump is recorded. Runbook §9, §13." : `The newest successful dump is ${Math.round(age)} hours old (limit ${maxAge} h). Runbook §9, §13.`, link: "/admin/diagnostics#backups" });
     else if (!b?.offsite) findings.push({ code: "backup_offsite", severity: "warning", title: "Newest backup has no offsite copy", body: "The newest successful dump was not copied to the offsite bucket. Runbook §9.", link: "/admin/diagnostics#backups" });
+    // W4F (US-9-03/04): restore drill overdue (S4, to the owner, docs/deployment-railway.md §8.3).
+    const drillMax = await getSetting(db, organizationId, "alerts.restore_drill_max_age_days");
+    const [d] = await db.select({ at: restoreDrills.performedAt }).from(restoreDrills).where(and(eq(restoreDrills.organizationId, organizationId), eq(restoreDrills.result, "passed"))).orderBy(desc(restoreDrills.performedAt)).limit(1);
+    const drillAge = d ? (now.getTime() - d.at.getTime()) / 86_400_000 : null;
+    if (drillAge === null || drillAge > drillMax)
+      findings.push({ code: "restore_drill_overdue", severity: "warning", title: "Restore drill overdue", body: drillAge === null ? "No passed restore drill is recorded. Runbook §13.6." : `The newest passed restore drill is ${Math.round(drillAge)} days old (limit ${drillMax}). Runbook §13.6.`, link: "/admin/retention", roles: ["owner_director"] });
   }
   return findings;
 }
@@ -103,7 +110,8 @@ export async function deliverAlerts(organizationId: string, now: Date) {
   let delivered = 0;
   const admins = findings.length ? await usersWithRoles(db, organizationId, ["system_admin"]) : [];
   for (const f of findings) {
-    const got = await notifyUsers(db, admins, { organizationId, kind: `alert.${f.code}`, severity: f.severity, title: f.title, body: f.body, link: f.link, dedupeKey: `alert:${f.code}:${window}` });
+    const to = f.roles ? await usersWithRoles(db, organizationId, f.roles) : admins;
+    const got = await notifyUsers(db, to, { organizationId, kind: `alert.${f.code}`, severity: f.severity, title: f.title, body: f.body, link: f.link, dedupeKey: `alert:${f.code}:${window}` });
     delivered += got.length;
     if (got.length) logger.warn("alert raised", { alert: f.code, severity: f.severity, recipients: got.length });
   }

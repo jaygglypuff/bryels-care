@@ -6,6 +6,7 @@ import { LocationKindChip } from "@/ui/inventory/bits";
 import { Banner, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { PutAwayForm } from "./put-away-form";
+import { Help } from "@/ui/help/help";
 
 export const metadata = { title: "Put away" };
 
@@ -27,7 +28,7 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
   const from = opts?.balances.find((b) => b.kind === "receiving") ?? opts?.balances[0];
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <PageHeader title="Put away" subtitle={`${ctx.currentSite.code} · scan the lot label, then the destination location`} />
+      <PageHeader title="Put away" subtitle={`${ctx.currentSite.code} · scan the lot label, then the destination location`} actions={<><Help screen="inventory.putaway" /></>} />
       <Card>
         <form method="get" className="flex flex-wrap items-end gap-3">
           <div className="min-w-[220px] flex-1">

@@ -599,6 +599,12 @@ deleted while a legal hold, open complaint, recall or audit references the recor
 expectations must be validated by qualified reviewers; the defaults below are engineering
 placeholders, not legal advice.
 
+As built (Wave 4 W4F, US-9-05): Admin → Retention & holds; the reviewers' confirmation is recorded by
+the owner (`platform.retention_policy.approve`, re-authentication, never the last editor); legal holds are
+placed and released by different people; the weekly sweep is report-only by default; ledgers, quality,
+finance, payroll and audit are protected classes the sweep never deletes (`docs/data-model.md` §12.1 as
+built, runbook §17c).
+
 | Data class | Examples | Default retention | After retention | Access |
 |---|---|---|---|---|
 | Quality and batch records | Batch, BMR PDFs, dispense/step records, test results, dispositions, deviations, CAPA, genealogy | 5 years after batch expiry date, minimum 7 years (A-SEC-25) | archive to cold storage, never delete without QA sign-off | QA, production per matrix; immutable |

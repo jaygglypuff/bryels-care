@@ -9,6 +9,7 @@ import { Banner, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { acknowledgeAction, cancelShipmentAction, dispatchShipmentAction, draftDeliveryReceiptAction, generateDeliveryReceiptAction, reverseShipmentAction } from "../../fulfilment-actions";
 import { AcknowledgeForm, Cmd, ReasonCmd } from "../../fulfilment-forms";
+import { Help } from "@/ui/help/help";
 
 export const metadata = { title: "Shipment" };
 

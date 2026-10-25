@@ -102,6 +102,8 @@ export const stockMovements = pgTable(
     uniqueIndex("movements_idem_uq").on(t.organizationId, t.idempotencyKey),
     uniqueIndex("movements_reversal_of_uq").on(t.reversalOfId).where(sql`${t.reversalOfId} is not null`),
     index("movements_correlation_idx").on(t.correlationId),
+    // W4F load test (US-9-01): KPI, document-trail and reversal look-ups find movements by source document; without it each look-up scanned the whole ledger.
+    index("movements_source_doc_idx").on(t.sourceDocumentType, t.sourceDocumentId),
     check("ck_stock_movements_qty_positive", sql`${t.qtyBase} > 0`),
     check(
       "ck_stock_movements_type",

@@ -7,6 +7,7 @@ import { StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { startPickAction } from "../fulfilment-actions";
 import { Cmd } from "../fulfilment-forms";
+import { Help } from "@/ui/help/help";
 
 export const metadata = { title: "Picking" };
 
@@ -18,7 +19,7 @@ export default async function PickingPage() {
   const canStart = ctx.can("sales.pick.create");
   return (
     <>
-      <PageHeader title="Picking" subtitle={`${ctx.currentSite.code} · scan every allocated box or lot at the shelf`} />
+      <PageHeader title="Picking" subtitle={`${ctx.currentSite.code} · scan every allocated box or lot at the shelf`} actions={<><Help screen="sales.fulfilment" /></>} />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardTitle>Ready to pick</CardTitle>

@@ -4,15 +4,17 @@
 #   web    (default)  self-check → migrations → reference data → demo data if DEMO_MODE=true and the
 #                     database is empty → Next.js on $PORT. Only this service runs migrations.
 #   worker            self-check → background jobs (it waits until web has applied the migrations).
+#   backup            one logical dump to the bucket and the offsite copy, then exit (Railway cron service).
 #
-# The role comes from APP_ROLE (web|worker); when APP_ROLE is unset, a Railway service whose name
-# contains "worker" runs as the worker. A Custom Start Command of `pnpm worker` still works too.
+# The role comes from APP_ROLE (web|worker|backup); when APP_ROLE is unset, a Railway service whose name
+# contains "worker" (or "backup") runs that role. A Custom Start Command of `pnpm worker` still works too.
 set -e
 
 ROLE="${APP_ROLE:-}"
 if [ -z "$ROLE" ]; then
   case "$(printf '%s' "${RAILWAY_SERVICE_NAME:-}" | tr '[:upper:]' '[:lower:]')" in
     *worker*) ROLE=worker ;;
+    *backup*) ROLE=backup ;;
     *) ROLE=web ;;
   esac
 fi
@@ -23,9 +25,15 @@ case "$ROLE" in
     pnpm -s self-check worker
     exec pnpm -s worker
     ;;
+  backup)
+    # Railway cron service (US-9-03, docs/deployment-railway.md §9): one encrypted dump, then exit.
+    # The image needs WITH_BACKUP_TOOLS=1 (pg_dump, age). Exit code 1 marks the cron run failed.
+    echo "[start] Running the logical backup (service ${RAILWAY_SERVICE_NAME:-local})."
+    exec pnpm -s backup:dump
+    ;;
   web) ;;
   *)
-    echo "[start] PROBLEM APP_ROLE must be web or worker (it is \"$ROLE\")."
+    echo "[start] PROBLEM APP_ROLE must be web, worker or backup (it is \"$ROLE\")."
     exit 1
     ;;
 esac

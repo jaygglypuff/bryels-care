@@ -9,6 +9,7 @@ import { fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
 const g = (v: string) => fmtQty(v, "g", 1);
 import { batchSheets, canSeeStaging, getStagingView, type StagingView } from "@/modules/production";
 import { Card, CardTitle, Field, Input, LinkButton, PageHeader, Select, Textarea } from "@/ui/core";
+import { Help } from "@/ui/help/help";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { generateSheetAction, substitutionAction } from "../../work-orders/actions";
@@ -45,7 +46,7 @@ export default async function StageBatchPage({ params }: { params: Promise<{ bat
             </span>
           </span>
         }
-        actions={v.workOrder ? <LinkButton href={`/production/work-orders/${v.workOrder.id}?tab=materials`} variant="secondary">Work order</LinkButton> : undefined}
+        actions={<><Help screen="production.staging" />{v.workOrder ? <LinkButton href={`/production/work-orders/${v.workOrder.id}?tab=materials`} variant="secondary">Work order</LinkButton> : undefined}</>}
       />
       {!v.workOrder && <Banner tone="info" title="No work order">This batch was created without a work order, so no lots are reserved for it. Staging by scan applies to work-order batches.</Banner>}
       {v.workOrder && !["released", "in_progress"].includes(v.workOrder.status) && (

@@ -9,6 +9,7 @@ import { Forbidden } from "../../../forbidden";
 import { fmtLotQty } from "../../../quality/_ui";
 import { ReturnStatusChip } from "../_ui";
 import { ApproveReturnForm, CancelReturnForm, CloseReturnButton, InspectReturnButton, PostReturnButton, RemoveLineButton, ScanLineForm, SendBackForm, SubmitReturnButton } from "../forms";
+import { Help } from "@/ui/help/help";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,7 @@ export default async function ReturnPage({ params }: { params: Promise<{ returnI
         subtitle={`${h.customerName} · ${h.drNumber} · ${h.siteCode}`}
         actions={
           <>
+            <Help screen="sales.return" />
             {h.receivedAt && (
               <a className={linkCls} href={`/print/return-receipt/${h.id}`}>
                 Return receipt

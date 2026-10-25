@@ -6,6 +6,7 @@ import { Card, CardTitle, EmptyState, LinkButton, PageHeader, Table, Td } from "
 import { Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../forbidden";
 import { DecisionChip, Transition, fmtLotQty } from "./_ui";
+import { Help } from "@/ui/help/help";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export default async function QaQueuePage() {
         subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} — lots and batches waiting for a quality decision`}
         actions={
           <>
+            <Help screen="quality.release" />
             {ctx.can("quality.inspection.view") && <LinkButton href="/quality/inspections" variant="secondary">Inspections</LinkButton>}
             {ctx.can("quality.deviation.view") && <LinkButton href="/quality/deviations" variant="secondary">Deviations</LinkButton>}
             {ctx.can("quality.disposition.approve") && <LinkButton href="/quality/bulk" variant="secondary">Bulk disposition</LinkButton>}

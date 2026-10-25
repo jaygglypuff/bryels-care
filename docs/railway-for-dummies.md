@@ -275,3 +275,35 @@ Never switch an existing demo to real data. Real data gets its own, separate Rai
    **My account**.
 4. Before relying on it: backups, a custom domain and email are in `docs/deployment-railway.md`
    (sections 9, 12 and 14a). The engineers handle those with you.
+
+## Backups for real data (do this before go-live)
+
+The demo does not need these. A real-data project does. There are three layers, and you want
+all three (details: `docs/deployment-railway.md` §9–§10.1, runbook §13).
+
+1. **Railway's own backups.** Click the **Postgres** box → **Backups**. Turn on the daily,
+   weekly and monthly schedule. Then click **Enable PITR** ("point-in-time recovery"). It can
+   rewind the database to any minute of the last four weeks. It only covers time after you turn
+   it on, so do it early.
+2. **A nightly encrypted copy that you control.** The engineers make a key pair with you.
+   You keep the private half offline: two copies, in two locked places, never in Railway or
+   email (runbook §13.7). Then add one more service:
+   - **+ Create** → **GitHub Repo** → the same repository; name the service `backup`.
+   - **Settings** → **Cron Schedule**: `17 18 * * *` (02:17 Manila time every night). No domain.
+   - **Variables** → **Raw Editor**:
+     ```
+     APP_ROLE=backup
+     WITH_BACKUP_TOOLS=1
+     DATABASE_URL=${{Postgres.DATABASE_URL}}
+     BACKUP_ENCRYPTION_PUBLIC_KEY=age1...   (the public half; the engineers give it to you)
+     APP_ENV=production
+     ```
+     plus the five `S3_...` lines of step 7, and the `BACKUP_OFFSITE_S3_...` lines for a
+     bucket at a different provider (the engineers set this up with you).
+   - On **web** add `BACKUP_STATUS_SOURCE=table`. The Backups card on Admin → Diagnostics
+     then shows the last successful copy, and you get an alert when a night is missed.
+3. **Prove it works.** Before go-live, and then every three months, the engineers run a
+   restore drill with you. It takes the newest copy and restores it into a scratch database
+   on staging, then checks it. They record how long it took. You sign it off on
+   **Admin → Retention & holds → Restore drills**. If the private key does not open the copy,
+   the drill fails, and that is exactly what the drill is for.

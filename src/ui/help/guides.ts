@@ -16,6 +16,20 @@ export const GUIDE_FILES: Record<string, string> = {
   "inventory.receive": "receive.md",
   "inventory.move": "move.md",
   "inventory.count": "count.md",
+  // Wave 4 W4F (US-9-08): one quick guide per major flow
+  "inventory.putaway": "putaway.md",
+  "production.work_order": "work-order.md",
+  "production.staging": "staging.md",
+  "production.weighing": "weighing.md",
+  "production.line_clearance": "line-clearance.md",
+  "quality.release": "qa-release.md",
+  "production.bmr": "bmr.md",
+  "sales.order": "order.md",
+  "sales.fulfilment": "pick-pack-dispatch.md",
+  "quality.complaint": "complaint.md",
+  "sales.return": "return.md",
+  "platform.import": "import.md",
+  "analytics.reports": "run-a-report.md",
 };
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");

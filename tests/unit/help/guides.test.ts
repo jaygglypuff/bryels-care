@@ -15,7 +15,17 @@ describe("quick guides", () => {
       expect(g!.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(g!.blocks.some((b) => b.kind === "h")).toBe(true);
     }
-    expect(listGuides().map((g) => g.key).sort()).toEqual(["inventory.count", "inventory.move", "inventory.receive"]);
+    expect(listGuides().map((g) => g.key).sort()).toEqual(Object.keys(GUIDE_FILES).sort());
+  });
+
+  it("US-9-08: a quick guide exists for every major flow and names its SOP mapping", () => {
+    const flows = ["inventory.receive", "inventory.putaway", "inventory.move", "inventory.count", "production.work_order", "production.staging", "production.weighing", "production.line_clearance", "quality.release", "production.bmr", "sales.order", "sales.fulfilment", "quality.complaint", "sales.return", "platform.import", "analytics.reports"];
+    for (const k of flows) {
+      const g = loadGuide(k);
+      expect(g, k).not.toBeNull();
+      expect(g!.sop, `${k} sop`).toMatch(/SOP/);
+      expect(g!.blocks.filter((b) => b.kind === "ol").length, k).toBeGreaterThanOrEqual(1);
+    }
   });
 
   it("parses headings, numbered and bulleted lists and paragraphs; no guide → null", () => {

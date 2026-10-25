@@ -14,6 +14,7 @@ import { ConditionalDecideForm, ConditionalRequestForm, StartInspectionButton } 
 import { decideBatchAction } from "../../actions";
 import { DecisionForm } from "../../decision-form";
 import { TestResultForm } from "./test-form";
+import { Help } from "@/ui/help/help";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,7 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
         subtitle={`${v.productName} · ${v.productSku} · batch release`}
         actions={
           <>
+            <Help screen="quality.release" />
             <LinkButton href="/quality" variant="secondary">
               QA queue
             </LinkButton>

@@ -43,6 +43,7 @@ import {
   type ScaleOpt,
 } from "./exec-forms";
 import { registerAppHooks } from "@/modules/wiring";
+import { Help } from "@/ui/help/help";
 
 // Execution ↔ QA hooks (idempotent; also registered at server start in src/instrumentation.ts).
 registerAppHooks();
@@ -291,6 +292,7 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
           }
           actions={
             <>
+              <Help screen="production.weighing" label="Help: weighing" text="Weighing" /><Help screen="production.line_clearance" label="Help: line clearance" text="Line clearance" />
               <LinkButton href={`/print/bmr/${batch.id}`} variant="secondary" target="_blank">
                 Print BMR
               </LinkButton>

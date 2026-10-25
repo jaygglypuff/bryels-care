@@ -6,6 +6,7 @@ import { Card, EmptyState, Kpi, LinkButton, PageHeader, Table, Td, cx } from "@/
 import { Banner } from "@/ui/status";
 import { Money, SalesStatus } from "./orders/sales-ui";
 import { Forbidden } from "../forbidden";
+import { Help } from "@/ui/help/help";
 
 export const metadata = { title: "Sales orders" };
 
@@ -18,12 +19,15 @@ const TABS = [
   { key: "shipped", label: "Shipped" },
 ] as const;
 
+/** The list shows the newest orders (W4F load test, docs/load-test-report.md §5); the order report and the export cover the rest. */
+const LIST_LIMIT = 200;
+
 export default async function SalesOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("sales.sales_order.view")) return <Forbidden what="sales orders" />;
   const { status = "" } = await searchParams;
   const active = TABS.some((t) => t.key === status) ? status : "";
-  const [orders, counts, awaiting] = await Promise.all([listOrders(ctx, active || undefined), orderCounts(ctx), ordersAwaitingApproval(ctx)]);
+  const [orders, counts, awaiting] = await Promise.all([listOrders(ctx, active || undefined, LIST_LIMIT), orderCounts(ctx), ordersAwaitingApproval(ctx)]);
   const mine = awaiting.filter((a) => a.siteId === ctx.currentSiteId);
 
   return (
@@ -33,6 +37,7 @@ export default async function SalesOrdersPage({ searchParams }: { searchParams: 
         subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · draft → submitted → confirmed (or pending approval) → allocated → shipped`}
         actions={
           <>
+            <Help screen="sales.order" />
             <LinkButton href="/sales/board" variant="secondary">Board</LinkButton>
             {ctx.can("sales.sales_order.create") ? <LinkButton href="/sales/new" variant="cta">New order</LinkButton> : null}
           </>
@@ -74,6 +79,7 @@ export default async function SalesOrdersPage({ searchParams }: { searchParams: 
         })}
       </nav>
 
+      {orders.length >= LIST_LIMIT && <p className="mb-2 text-[13px] text-muted">Showing the newest {LIST_LIMIT} orders. Filter by status, or use the order report for the full list.</p>}
       {orders.length === 0 ? (
         <EmptyState
           title={active ? `No ${active} orders` : "No sales orders yet"}
