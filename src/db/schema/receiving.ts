@@ -1,10 +1,11 @@
-import { boolean, check, date, index, integer, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, char, check, date, index, integer, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { QTY, createdAt, id, updatedAt } from "./_common";
+import { MONEY, QTY, createdAt, id, updatedAt } from "./_common";
 import { organizations, sites, users } from "./identity";
 import { locations, materials } from "./masterdata";
 import { inventoryLots, stockMovements } from "./inventory";
 import { fileAttachments } from "./files";
+import { purchaseOrderLines, purchaseOrders } from "./procurement"; // Wave 4 W4A (lazy FK references only)
 
 /* ------------------------------------------------------------------ suppliers (US-2-06) */
 
@@ -61,8 +62,32 @@ export const supplierMaterials = pgTable(
     createdAt: createdAt(),
     createdBy: uuid("created_by").notNull().references(() => users.id),
     updatedAt: updatedAt(),
+    // Wave 4 W4A (US-6-01, W04-11): ASL decision columns (decided state; proposals in supplier_material_changes),
+    // MOQ, price (sensitive: masterdata.supplier_price.view) per `price_uom`.
+    requestedBy: uuid("requested_by").references(() => users.id),
+    requestedAt: timestamp("requested_at", { withTimezone: true }),
+    approvedBy: uuid("approved_by").references(() => users.id),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    auditDate: date("audit_date"),
+    evidenceAttachmentId: uuid("evidence_attachment_id").references(() => fileAttachments.id),
+    suspendedReason: text("suspended_reason"),
+    moqQty: numeric("moq_qty", QTY),
+    moqUom: text("moq_uom"),
+    unitPrice: numeric("unit_price", MONEY),
+    priceUom: text("price_uom"),
+    currency: char("currency", { length: 3 }),
+    priceEffectiveFrom: date("price_effective_from"),
+    updatedBy: uuid("updated_by").references(() => users.id),
   },
-  (t) => [uniqueIndex("uq_supplier_materials_pair").on(t.supplierId, t.materialId), index("ix_supplier_materials_material").on(t.materialId)],
+  (t) => [
+    uniqueIndex("uq_supplier_materials_pair").on(t.supplierId, t.materialId),
+    index("ix_supplier_materials_material").on(t.materialId),
+    check("ck_supplier_materials_requested", sql`(${t.requestedBy} is null) = (${t.requestedAt} is null)`),
+    check("ck_supplier_materials_sod", sql`${t.approvedBy} is null or ${t.requestedBy} is null or ${t.approvedBy} <> ${t.requestedBy}`),
+    check("ck_supplier_materials_moq", sql`${t.moqQty} is null or (${t.moqQty} > 0 and ${t.moqUom} is not null)`),
+    check("ck_supplier_materials_price", sql`${t.unitPrice} is null or (${t.unitPrice} >= 0 and ${t.priceUom} is not null and ${t.currency} is not null)`),
+    check("ck_supplier_materials_lead_time", sql`${t.leadTimeDays} is null or ${t.leadTimeDays} >= 0`),
+  ],
 );
 
 /* ------------------------------------------------------------------ goods receipts (US-2-07) */
@@ -105,8 +130,12 @@ export const goodsReceipts = pgTable(
     createdBy: uuid("created_by").references(() => users.id),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    /** Wave 4 W4A (US-6-03): the purchase order delivered against (receipt_kind purchase_order). */
+    purchaseOrderId: uuid("purchase_order_id").references(() => purchaseOrders.id),
   },
   (t) => [
+    index("ix_goods_receipts_po").on(t.purchaseOrderId),
+    check("ck_goods_receipts_po_kind", sql`(${t.receiptKind} = 'purchase_order') = (${t.purchaseOrderId} is not null)`),
     uniqueIndex("uq_goods_receipts_org_number").on(t.organizationId, t.receiptNumber),
     uniqueIndex("uq_goods_receipts_org_idem").on(t.organizationId, t.idempotencyKey),
     index("ix_goods_receipts_site_status").on(t.siteId, t.status),
@@ -159,8 +188,11 @@ export const goodsReceiptLines = pgTable(
     createdBy: uuid("created_by").references(() => users.id),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    /** Wave 4 W4A (US-6-03): the PO line received; null = an unplanned line (also on a PO receipt). */
+    purchaseOrderLineId: uuid("purchase_order_line_id").references(() => purchaseOrderLines.id),
   },
   (t) => [
+    index("ix_goods_receipt_lines_po_line").on(t.purchaseOrderLineId),
     uniqueIndex("uq_goods_receipt_lines_no").on(t.goodsReceiptId, t.lineNo),
     index("ix_goods_receipt_lines_lot").on(t.lotId),
     check("ck_goods_receipt_lines_qty", sql`${t.qtyBase} > 0 and (${t.qtyEntered} is null or ${t.qtyEntered} > 0)`),

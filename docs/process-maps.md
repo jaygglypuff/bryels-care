@@ -346,6 +346,16 @@ flowchart LR
 **KPIs touched.** PR-to-PO cycle time, PO approval lead time, supplier OTIF, price variance, stockouts avoided by suggestions.
 **Open questions.** Q-WH-10..Q-WH-12.
 
+**As built (Wave 4 W4A, 2026-10-25).** Screens under `/procurement` (overview, requests, purchase orders,
+expected receipts, supplier returns, approved suppliers, reorder, performance, forecast) and
+`/print/purchase-order/[id]`. W04-01 suggestions are computed nightly (`procurement.reorder_suggest`) or on
+"Recompute now" from `material_reorder_policies`; W04-04 lines are limited to approved pairs; W04-05 uses
+`approval_rules` (`purchase_order`, A-PM-15); W04-06 records the PO document and emails a text summary
+(A-W4A-04); W04-07/08 receipts against a PO go through `/procurement/expected/[poId]` and the inventory
+receiving service (PO hooks, V-OVER, CX-QTY); W04-09 supplier returns post `issue` movements; W04-11 ASL
+proposals and QA decisions are kept in `supplier_material_changes`. PO amendments (versioned) are not built
+yet: short-close and re-order instead (A-W4A-01).
+
 ### W05 Planning and executing a batch
 
 **Purpose.** From demand to a closed batch with a complete electronic BMR: plan, work order, batch with snapshotted revisions, staging, line clearances, dispensing under tolerance with operator and checker, process steps with parameters, in-process QC, filling/cutting, packaging with component reconciliation, output, yield and closure.

@@ -80,3 +80,4 @@ export { availabilityExport, stockCardExport } from "./exports";
 export { containerMachine, lockContainers, contentsOf, addContent, takeContent, newBox, emptyIfDrained } from "./containers";
 export { OPEN_ALLOCATION_ORDER_STATUSES } from "./reservations";
 export { claimIdempotencyKey, storeIdempotentResult, stateMachine } from "./command-kit";
+export { registerReceivingPoHooks, receivingPoHooks, type ReceivingPoHooks, type PoReceiptLine } from "./receiving-po"; // Wave 4 W4A

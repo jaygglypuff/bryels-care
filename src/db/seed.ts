@@ -452,6 +452,7 @@ async function main() {
   await (await import("./seeds/w3f")).seedW3F(db); // W3F: returns location, complaints, a return in quarantine
   await (await import("./seeds/w3c")).seedW3c(db); // W3C: demo import mapping profiles
   await (await import("./seeds/w3b")).seedW3b(db); // W3B: notification rules, demo scheduled report
+  await (await import("./seeds/w4a")).seedW4a(db); // W4A: PO template, approved-supplier list, requests, POs in every state, a supplier return
   // W3A: a month of fictional activity plus its nightly KPI snapshots (skipped inside vitest: tests seed their own fixed month).
   if (!process.env.VITEST) await (await import("./seeds/w3a")).seedW3a(db, { backfill: true });
 

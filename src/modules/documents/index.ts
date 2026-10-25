@@ -61,3 +61,5 @@ export { markDocumentVoid } from "./generated";
 export { boxingNoteDataSchema, type BoxingNoteData } from "./renderers/boxing-note-v1";
 export { pickListDataSchema, type PickListData } from "./renderers/pick-list-v1";
 export { deliveryReceiptDataSchema, type DeliveryReceiptData } from "./renderers/delivery-receipt-v1";
+// Wave 4 W4A: purchase order document (US-6-02)
+export { purchaseOrderDataSchema, type PurchaseOrderData } from "./renderers/purchase-order-v1";

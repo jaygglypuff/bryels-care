@@ -7,7 +7,7 @@ import type { Permission } from "@/lib/permissions";
  * The organization switches a report on/off and adds an owner note (report_definitions).
  */
 
-export const REPORT_CATEGORIES = ["Inventory", "Production", "Quality", "Sales", "Audit and access"] as const;
+export const REPORT_CATEGORIES = ["Inventory", "Production", "Quality", "Sales", "Procurement", "Audit and access"] as const; // Procurement: Wave 4 W4A
 export type ReportCategory = (typeof REPORT_CATEGORIES)[number];
 
 export type ReportValue = string | number | null;

@@ -37,6 +37,10 @@ export const BASE_APPROVE_PERMISSION: Partial<Record<ApprovalDocumentType, Permi
   stock_adjustment: "inventory.adjustment.approve",
   stock_count_variance: "inventory.stock_count.approve",
   setting_change_request: "platform.settings.approve",
+  // Wave 4 W4A (US-6-02, US-6-21)
+  purchase_request: "procurement.purchase_request.approve",
+  purchase_order: "procurement.purchase_order.approve",
+  supplier_return: "procurement.supplier_return.approve",
 };
 
 /** Record types whose separation of duties is configurable (A-PM-14); every other type is mandatory. */

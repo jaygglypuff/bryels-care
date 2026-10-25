@@ -37,6 +37,11 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   { kind: "approval.customer_requirement", tab: "approvals", label: "Customer requirement to approve", severity: "info", permission: "masterdata.customer_requirement.approve", actionLabel: "Review requirement" },
   { kind: "approval.import_job", tab: "approvals", label: "Import to approve", severity: "info", permission: "platform.import_job.approve", actionLabel: "Review import" },
   { kind: "approval.customer_return", tab: "approvals", label: "Customer return to approve", severity: "warning", permission: "sales.customer_return.approve", actionLabel: "Review return" },
+  // Wave 4 W4A: procurement approvals (sources registered in src/modules/wiring.ts)
+  { kind: "approval.purchase_order", tab: "approvals", label: "Purchase order to approve", severity: "warning", permission: "procurement.purchase_order.approve", actionLabel: "Review PO" },
+  { kind: "approval.purchase_request", tab: "approvals", label: "Purchase request to approve", severity: "info", permission: "procurement.purchase_request.approve", actionLabel: "Review request" },
+  { kind: "approval.supplier_return", tab: "approvals", label: "Supplier return to approve", severity: "info", permission: "procurement.supplier_return.approve", actionLabel: "Review return" },
+  { kind: "approval.asl_change", tab: "approvals", label: "Approved-supplier list change to decide", severity: "info", permission: "masterdata.supplier.approve", actionLabel: "Review supplier" },
   // Exceptions
   { kind: "late_work_order", tab: "exceptions", label: "Late work order", severity: "warning", permission: "production.work_order.view", actionLabel: "Open work order" },
   { kind: "low_stock", tab: "exceptions", label: "Finished goods below minimum stock", severity: "warning", permission: "inventory.balance.view", actionLabel: "Plan production" },
@@ -51,6 +56,9 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   { kind: "unshipped_order", tab: "exceptions", label: "Order unshipped past its date", severity: "warning", permission: "sales.sales_order.view", actionLabel: "Open order" },
   { kind: "credit_hold", tab: "exceptions", label: "Customer on credit hold", severity: "warning", permission: "finance.credit_terms.view", actionLabel: "Open customer" },
   { kind: "open_complaint", tab: "exceptions", label: "Open customer complaint", severity: "warning", permission: "quality.complaint.view", actionLabel: "Open complaint" },
+  // Wave 4 W4A: procurement exceptions
+  { kind: "late_purchase_order", tab: "exceptions", label: "Purchase order late", severity: "warning", permission: "procurement.purchase_order.view", actionLabel: "Open PO" },
+  { kind: "over_delivery", tab: "exceptions", label: "Over-delivery or unplanned line to approve", severity: "warning", permission: "procurement.receipt_discrepancy.approve", actionLabel: "Open receipt" },
   { kind: "return_awaiting_qa", tab: "exceptions", label: "Customer return waiting for QA", severity: "warning", permission: "quality.disposition.approve", actionLabel: "Open return" },
 ];
 

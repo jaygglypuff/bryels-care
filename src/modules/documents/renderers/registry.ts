@@ -9,6 +9,7 @@ import { travelerRendererV1 } from "./traveler-v1"; // W2A
 import { boxingNoteRendererV1 } from "./boxing-note-v1"; // W3E
 import { pickListRendererV1 } from "./pick-list-v1"; // W3E
 import { deliveryReceiptRendererV1 } from "./delivery-receipt-v1"; // W3E
+import { purchaseOrderRendererV1 } from "./purchase-order-v1"; // W4A
 import type { FrozenDataset, RenderOutput, Renderer } from "./types";
 
 /**
@@ -25,6 +26,7 @@ const RENDERERS: readonly Renderer[] = [
   boxingNoteRendererV1, // W3E (US-4-07, US-4-08, US-4-11)
   pickListRendererV1, // W3E (US-4-10)
   deliveryReceiptRendererV1, // W3E (US-4-12, US-4-13)
+  purchaseOrderRendererV1, // W4A (US-6-02)
 ];
 
 export function findRenderer(id: string, version: number): Renderer | null {

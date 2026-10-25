@@ -588,6 +588,24 @@ differences) is held by `system_admin` and `site_manager` (A-PM-19).
 | reorder_suggestion | v* | – | v | v | – | – | – | v a | – | – | – | v* | – |
 | supplier_performance | v* | – | v | – | – | – | v | v | – | v | – | v* | – |
 
+### 3.4.1 As built: Wave 4 W4A procurement grants (`src/lib/permissions.ts`, block "Wave 4 W4A")
+
+The §3.2 supplier / supplier_price rows, the §3.4 rows and the §3.11 forecast row are implemented as
+shown, with these build notes:
+
+- `.view` strings reach the VIEW_ALL bundles automatically; they are removed again where the matrix
+  shows "–": system_admin (no procurement records, prices or forecasts), site_manager and qa_qc (no
+  supplier prices), qa_qc (no reorder suggestions or forecasts).
+- owner_director keeps view, approve and (PO) export of procurement records and the forecast approve;
+  ASL decisions (`masterdata.supplier.approve`) are QA's only.
+- procurement also holds `documents.generated_document.{view,create}`: sending a PO records the PO
+  document (ADR-026).
+- finance (bundle added by W3D) holds supplier view, supplier prices, PR/PO view, PO export, supplier
+  return view and supplier performance (matrix FI column).
+- Separation of duties (§5.1) is enforced in the services and by CHECKs: PR/PO/supplier-return
+  approver ≠ creator and submitter, one person per approval step, supplier-return poster ≠ approver,
+  ASL decider ≠ proposer; forecast overrides follow `approvals.sod.forecast_override` (default on).
+
 ### 3.5 production
 
 | Entity | OD | SA | SM | PP | PO | WO | QA | PR | SC | FI | HR | AU | CP |

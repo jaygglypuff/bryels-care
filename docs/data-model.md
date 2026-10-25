@@ -1073,6 +1073,29 @@ Business owners: boxes, counts, adjustments and reservations now work as describ
 | `on_hand_base`, `reserved_base`, `open_po_qty_base`, `forecast_qty_base`, `safety_stock_base`, `expiry_risk_qty_base`, `lead_time_days`, `explanation` | num6 ×6 / int / text | yes | | the drivers shown to procurement |
 | `status`, `reviewed_by`, `reviewed_at`, `purchase_request_id` | text / uuid / ts / uuid | no / yes / yes / yes | ck status in (`open`,`accepted`,`dismissed`,`superseded`); → purchase_requests | `superseded` when the next run replaces an unreviewed row; `accepted` links the request created from it |
 
+#### 3.4.1 As built: Wave 4 W4A procurement (US-6-01..04, US-6-20, US-6-21)
+
+Schema file `src/db/schema/procurement.ts` (new tables) plus minimal columns on the Wave 1 tables in
+`src/db/schema/receiving.ts`. Services in `src/modules/procurement`. Differences from the target above:
+
+| Table | As built | Differs from §3.4 / §3.2 |
+|---|---|---|
+| `supplier_materials` (+ columns) | `requested_by`/`requested_at` (proposer of the decided state, both or neither, ck), `approved_by`/`approved_at` (QA decider; ck `approved_by <> requested_by`), `audit_date`, `evidence_attachment_id`, `suspended_reason`, `moq_qty` + `moq_uom` (text unit), `unit_price` (numeric 18,4) per `price_uom` + `currency` + `price_effective_from`, `updated_by` | units are text codes (`kg`, `pcs`) like the rest of the MVP, converted through the W2G UOM service; one current price per pair (history in the audit trail `masterdata.supplier_price.updated` before/after) |
+| `supplier_material_changes` (new) | one row per ASL proposal: `action` (`approve`,`suspend`), `status` (`pending`,`approved`,`rejected`,`withdrawn`), `proposed_by/at`, `note`, `audit_date`, `evidence_attachment_id`, `decided_by/at` (ck decider ≠ proposer), `decision_note`; one pending row per pair (partial uq); a decided row is immutable (trigger, `src/db/sql/w4a.sql`) | not in §3.2; keeps the proposal history the single `requested_by` column cannot |
+| `purchase_requests`, `purchase_request_lines`, `purchase_request_state_transitions` | as §3.4 plus `estimated_total_amount` (approval basis; null = unknown → treated as above every bound), `reorder_suggestion_id`, submitted/approved/reject/cancel columns, `idempotency_key`; lines keep `qty_entered`/`uom_entered` + `qty_base`/`base_uom`, `estimated_unit_amount` per entered unit, `suggested_supplier_id`, `converted_po_line_id` | status `converted` set when every line is on a PO |
+| `purchase_orders` | as §3.4 plus `site_id`, `promised_date`, `sent_to`/`send_result` (email adapter outcome or `download`), `generated_document_id` (latest PO document), close/cancel columns, `idempotency_key`; `ship_to_warehouse_id` nullable (site default) | no `purchase_order_amendments` yet (amend = cancel and re-create before sending; after sending: short-close a line) |
+| `purchase_order_lines` | **finance contract (W4B three-way match):** `id`, `purchase_order_id`, `line_no`, `material_id`, `supplier_material_id`, `qty_entered` + `uom_entered` (ordered, purchase unit), `qty_base` + `base_uom` (ordered, base unit), `unit_amount` (price per `uom_entered`, numeric 18,4), `line_amount` (= qty_entered × unit_amount, 4 dp), `currency`, `expected_date`, `qty_received_base` (projection of posted `goods_receipt_lines.qty_base` with `purchase_order_line_id` = this line, reversals subtracted, row-locked by the posting), `line_status` (`open`,`received`,`short_closed`,`cancelled`), short-close actor/time/reason | `line_status` and short-close columns are new |
+| `goods_receipts.purchase_order_id`, `goods_receipt_lines.purchase_order_line_id` (+ columns) | ck `(receipt_kind = 'purchase_order') = (purchase_order_id is not null)`; a PO receipt line without a PO line is an unplanned line that needs an approved discrepancy (CX-QTY) | — |
+| `purchase_order_state_transitions` | §6.1 shape, append-only (trigger) | — |
+| `supplier_returns`, `supplier_return_lines`, `supplier_return_state_transitions` | as §3.4; `reason_code` is the code text of category `return` (reason codes are text in the MVP), `credit_expected_amount` header total (null when any line has no credit), `post_idempotency_key`; lines with `qty_entered`/`uom_entered` + `qty_base`/`base_uom`, `credit_expected_amount` (entered, else the PO line price of the lot's receipt) | posting writes `stock_movements` `issue`, `source_document_type = 'supplier_return'`, idempotency key `srt:<return id>:<line no>` |
+| `material_reorder_policies` (new) | per site × material: `min_stock_base` (reorder point), `safety_stock_base`, `preferred_supplier_id`, `is_active` | not in §3.4; the drivers' configuration (A-W4A-05) |
+| `reorder_suggestions` | as §3.4 plus `site_id`, `base_uom` (text), `min_stock_base`, `moq_base`, `supplier_id`, `need_by_date`, `review_note`; one `open` row per site × material (partial uq) | `forecast_qty_base` stays null (no material forecast) |
+| `forecast_overrides` | `docs/analytics-kpis.md` §6.4 with `product_id` (a `products` row is the SKU in this build), `baseline_method`, `baseline_snapshot` (jsonb `forecast_snapshot/v1`), `decided_by/at`, `decision_note`; status `submitted`,`approved`,`rejected`,`retired`; at most one approved per product × site × period (partial uq) | no `draft` status (an override is submitted when entered) |
+
+PO state machine as built (`PO_TRANSITIONS`, `src/modules/procurement/state.ts`): §6.4 plus `sent | partially_received → closed`
+(reason; open lines short-closed) and the receipt-reversal paths `partially_received → sent`, `received → partially_received | sent`
+(reason = the reversal reason). A closed PO's receipts cannot be reversed.
+
 ### 3.5 Production and BMR
 
 | Table → column | Type | Null | Constraint / default | Notes |
@@ -2036,6 +2059,7 @@ when every batch has reached `awaiting_qc` or beyond (W05-17); `closed` when eve
 `approved` requires `approval_rules` for `purchase_order` satisfied by a user ≠ submitter;
 `partially_received`/`received` are set by goods receipt posting; `closed` by procurement
 after all lines received or short-closed with reason.
+As built (W4A): see §3.4.1 for the close and receipt-reversal transitions.
 
 ### 6.5 Sales order
 
@@ -3125,7 +3149,7 @@ still differs from §3. Differences are deliberate MVP simplifications, listed s
 | Table | As built | Differs from §3 |
 |---|---|---|
 | `suppliers` | `code`, `name` (unique per organization, name case-insensitive), contact fields, `payment_terms_days`, `default_lead_time_days`, `quality_status` (`new`,`approved`,`conditional`,`suspended`) + `quality_status_reason`, `is_active`, `notes`, created/updated by | `is_active` instead of `+soft`; `tax_identifier` not stored yet (needs masking, §6 of the permissions matrix) |
-| `supplier_materials` | table only (`supplier_id`, `material_id`, `supplier_part_number`, `is_approved`, `lead_time_days`); approval flow Phase 6 | proposer/approver columns arrive with W04-11 |
+| `supplier_materials` | table only (`supplier_id`, `material_id`, `supplier_part_number`, `is_approved`, `lead_time_days`); approval flow Phase 6 | proposer/approver, MOQ and price columns added in Wave 4 W4A (§3.4.1) |
 | `goods_receipts` | adds `receipt_kind`, `status` (`draft`,`posted`,`cancelled`,`reversed`), nullable `receipt_number` (allocated at posting, §9.3), `supplier_id` (nullable: an unregistered supplier name posts but blocks release until procurement links it), `unplanned_reason_code` (code list, A-W1B-01), `idempotency_key` (unique), `correlation_id`, posted/cancelled/reversed actor, time and reason with checks | status `reversed` added (receipt void, US-2-07 AC3); no `warehouse_id` (one warehouse per site in the MVP) |
 | `goods_receipt_lines` | `line_no`, nullable `lot_id` (set at posting), `qty_entered`/`uom_entered` + `qty_base`, supplier lot and dates incl. `retest_on`, `container_count`, `storage_conditions_confirmed`, `initial_quality_status`, discrepancy kind/note/recorded/approved (check approver ≠ recorder), `document_missing`, `stock_movement_id` | units are text (`g`,`kg`,`mg`,`mL`,`L`,`pcs`) until the UOM tables exist |
 | `supplier_lot_documents` | per line, `lot_id` filled at posting, kind `coa`,`sds`,`specification`,`photo`,`other`, document number/dates, `verified_by/at` | — |
