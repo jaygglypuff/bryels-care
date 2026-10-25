@@ -1062,6 +1062,21 @@ Export restrictions (all phases):
 | Rate limits and abuse | Stricter limits than internal (`docs/security.md` section 4.5); account enumeration prevented; portal downloads via signed URLs bound to the portal user. |
 | Tests | Tenant isolation negative tests (another tenant's order id → 404; document id → 404), permission tests, webhook replay tests; part of Gate 8. |
 
+**As built (Wave 4 W4E).** `src/modules/portal` (public `index.ts`), pages under `/portal/*` (route group
+`src/app/(portal)`), route handlers under `/api/portal/v1/*`. Cookie `bc_portal` (Path `/`, HttpOnly,
+SameSite=Lax, Secure in production; the staff cookie is likewise `bc_session`, not the `__Host-` names
+of `docs/security.md` §3.4). `PortalAuthContext { portalUserId, tenantId, customerId, organizationId,
+fulfilmentSiteId, portalRole, capabilities }` has no internal user id, permissions or sites; a cast into
+an internal service fails `forbidden`. Portal roles are code (A-W4E-06), not a `portal_roles` table:
+`portal_buyer` = `portal.catalog.view`, `portal.order.create`, `portal.order.view`, `portal.quote.view`,
+`portal.document.view`, `portal.account.edit`; `portal_viewer` = the same without `portal.order.create`.
+`portal.user.admin` and `portal.payment.create` are catalogued but granted to no role. Internal grants
+(§3.8 rows portal_user, portal_catalog): SC v m (both), SA v m* (portal_user), OD v* (portal_catalog),
+AU v* (both); `sales.portal_user.admin` is R, so every staff change needs step-up and makes the
+holder privileged (shorter sessions, TOTP after the grace period). Orders: A-W4E-01. Documents: one link
+function `portalDocumentHref(kind, id)` and a source registry (`registerPortalDocumentSource`);
+quotation and delivery receipt are built in, invoices register with finance.
+
 ## 8. Test requirements
 
 Every module ships the following automated negative tests in CI (ADR-012). Names follow the

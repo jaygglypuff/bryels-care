@@ -1745,6 +1745,24 @@ issue posting), `BILL-{YY}-{SEQ}` (5), `PAY-{YY}-{SEQ}` (6), `CN-{YYYY}-{SEQ}` (
 | **`portal_users`** · P8 · M · `std` | | | | `customer_portal_tenant_id`, `email` (unique per tenant), `password_hash`, `status`, `mfa_required`; never joined to internal `users` |
 | **`portal_sessions`**, **`portal_invitations`** · P8 · T | | | | same shape as `sessions` and `invitations` with `portal_user_id` / `customer_portal_tenant_id` instead of `user_id` / `role_id`; separate cookie and lockout counters (`docs/permissions-matrix.md` §7) |
 
+### 3.10.0 As built: customer portal (Wave 4 W4E, US-8-01 / US-8-02)
+
+What `src/db/schema/portal.ts` builds relative to the catalogue rows above (keep in sync):
+
+| Table | Columns (beyond id) | Rules |
+|---|---|---|
+| `customer_portal_tenants` | `organization_id`, `customer_id` (unique: one tenant per customer), `status` (`active`,`suspended`), `site_id` (site that fulfils and approves portal orders), `catalog_mode` (`all_priced`,`customer_price_list`,`curated`), `status_reason` (required when suspended), `created_by`/`updated_by` → users, timestamps | Replaces `customers.portal_tenant_id` (not added): the tenant points at the customer. Suspension revokes every portal session of the tenant |
+| `portal_users` | `organization_id`, `tenant_id`, `email` (unique `lower(email)` per organization, A-W4E-02), `display_name`, `password_hash` (`!` until accepted), `status` (`invited`,`active`,`locked`,`suspended`), `portal_role` (`portal_buyer`,`portal_viewer`), `failed_login_count`, `last_login_at`, `password_changed_at`, TOTP columns (`totp_secret_enc`, `totp_key_id`, `totp_confirmed_at`, `totp_last_step`), `status_reason`, `created_by` → users | Never references `users` except the inviting staff member; machine in `src/modules/portal/states.ts` |
+| `portal_sessions` | `portal_user_id`, `tenant_id`, `token_hash` (unique, sha256), `stage` (`mfa_pending`,`active`), `last_seen_at`, `idle_expires_at`, `expires_at`, `mfa_verified_at`, `ip`, `user_agent`, `revoked_at`, `revoked_reason` | Same shape as `sessions`; cookie `bc_portal` |
+| `portal_invitations` | `organization_id`, `tenant_id`, `portal_user_id`, `email`, `token_hash` (unique), `expires_at`, `accepted_at`, `revoked_at`, `revoked_reason`, `created_by` → users | Single use, tenant bound, resend revokes the previous row |
+| `portal_catalog_items` | `organization_id`, `tenant_id`, `product_id`, `created_by` | `uq (tenant_id, product_id)`; used when `catalog_mode = 'curated'` |
+| `sales_orders` (+2 columns) | `source` (`internal`,`portal`, default `internal`), `portal_user_id` → portal_users | CHECK `(source = 'portal') = (portal_user_id is not null)`; portal orders are created by the system actor and carry the portal user |
+
+Audit: portal actions write `audit_events` with `actor_id` null and `actor_label` `portal_user:<id>` (the
+column `actor_kind` of §8 is not built; the label carries the kind). Events: `sales.portal_tenant.{enabled,suspended,reactivated}`,
+`sales.portal_catalog.{mode_changed,item_added,item_removed}`, `sales.portal_user.{invited,invitation_accepted,signed_in,sign_in_failed,locked,unlocked,suspended,reactivated,signed_out,password_changed,mfa_enrolled,mfa_disabled,mfa_failed,mfa_reset,demo_sign_in}`,
+`sales.sales_order.placed_in_portal` (plus the W3D order events written by `system:portal.order_intake` with the same correlation id).
+
 ### 3.10.1 Phase 2 implementation notes (Wave 1, E-2-03)
 
 What `src/db/schema/documents.ts` adds or narrows relative to the catalogue above (keep in sync):

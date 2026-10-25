@@ -34,7 +34,8 @@ beforeAll(async () => {
 
 describe("US-1-12 AC2 idle and absolute expiry (clock injected)", () => {
   it("standard session: 12 h idle sliding, 7 d absolute; activity keeps it alive", async () => {
-    const u = await userByEmail("sales@bryels-care.test"); // sales_cs holds no restricted permission
+    // W4E: sales_cs now holds sales.portal_user.admin (R, matrix §2.8), so a warehouse operator is the standard-session example.
+    const u = await userByEmail("warehouse.nfd@bryels-care.test"); // warehouse_operator holds no restricted permission
     const t0 = new Date("2026-11-02T00:00:00Z");
     const { token, session } = await createSessionRecord({ userId: u.id, now: t0 });
     expect(session.privileged).toBe(false);
@@ -69,7 +70,7 @@ describe("US-1-12 AC2 idle and absolute expiry (clock injected)", () => {
 
   it("timeouts are settings: an organization row overrides the default", async () => {
     await db.insert(settings).values({ organizationId: k.orgId, scope: "organization", key: "session.idle_minutes", value: 30 });
-    const u = await userByEmail("sales@bryels-care.test");
+    const u = await userByEmail("warehouse.nfd@bryels-care.test");
     const t0 = new Date("2026-11-04T00:00:00Z");
     const { token } = await createSessionRecord({ userId: u.id, now: t0 });
     expect(await validateSessionToken(token, { now: new Date(t0.getTime() + 31 * 60_000) })).toBeNull();

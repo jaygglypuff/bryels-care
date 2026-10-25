@@ -547,6 +547,23 @@ export const SETTINGS = {
   "maintenance.pm.due_soon_days": { scopes: ["organization", "site"], schema: z.number().int().min(0).max(90), default: 7, assumption: "A-W4C-04", group: "Maintenance", label: "PM plan due soon (days before due)" },
   /** Share of a usage-based interval at which the plan shows as due soon (e.g. 90 = at 90 % of the interval). */
   "maintenance.pm.usage_due_soon_pct": { scopes: ["organization", "site"], schema: z.number().int().min(50).max(100), default: 90, assumption: "A-W4C-04", group: "Maintenance", label: "Usage-based PM due soon at (% of interval)" },
+  // Wave 4 W4E: customer portal (US-8-01, US-8-02; docs/security.md §2.10, §3.4, §4.5; docs/permissions-matrix.md §7)
+  "portal.session.idle_minutes": { scopes: ["organization"], schema: z.number().int().min(5).max(24 * 60), default: 30, assumption: "A-W4E-03", group: "Customer portal", label: "Portal session idle timeout (minutes)", restricted: true },
+  "portal.session.absolute_hours": { scopes: ["organization"], schema: z.number().int().min(1).max(7 * 24), default: 24, assumption: "A-W4E-03", group: "Customer portal", label: "Portal session absolute lifetime (hours)", restricted: true },
+  "portal.auth.max_failed_attempts": { scopes: ["organization"], schema: z.number().int().min(3).max(20), default: 5, assumption: "A-W4E-03", group: "Customer portal", label: "Failed portal sign-ins before the account locks", description: "Bryel's Care staff unlock a locked portal account from the customer's Portal access panel.", restricted: true },
+  "portal.rate_limits": {
+    scopes: ["organization"],
+    schema: z.object({ unauthenticated_per_minute: z.number().int().min(5).max(10_000), authenticated_per_minute: z.number().int().min(10).max(10_000) }).strict(),
+    default: { unauthenticated_per_minute: 30, authenticated_per_minute: 120 },
+    assumption: "A-W4E-03",
+    group: "Customer portal",
+    label: "Portal request limits",
+    description: "Unauthenticated portal requests (sign-in, invitation) per client IP and minute; signed-in portal requests per portal user and minute.",
+    restricted: true,
+  },
+  "portal.invitation.ttl_hours": { scopes: ["organization"], schema: z.number().int().min(1).max(14 * 24), default: 72, assumption: "A-W4E-03", group: "Customer portal", label: "Portal invitation link lifetime (hours)" },
+  "portal.order.max_lines": { scopes: ["organization"], schema: z.number().int().min(1).max(200), default: 30, assumption: "A-W4E-04", group: "Customer portal", label: "Most lines in one portal order", description: "Order size cap against abuse (docs/security.md §2.10); larger orders go through the sales team." },
+  "portal.order.max_qty_per_line": { scopes: ["organization"], schema: z.number().int().min(1).max(10_000_000), default: 50_000, assumption: "A-W4E-04", group: "Customer portal", label: "Most pieces per portal order line" },
 } as const satisfies Record<string, SettingDefinition>;
 
 export type SettingKey = keyof typeof SETTINGS;

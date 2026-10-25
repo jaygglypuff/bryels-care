@@ -1,8 +1,10 @@
 "use client";
+import Link from "next/link";
 import { useActionState, useId, useState } from "react";
 import { cx } from "@/ui/core";
 import { FormMessage, SubmitButton } from "@/ui/form";
 import type { DemoAccountGroup } from "@/modules/identity/demo";
+import type { PortalDemoAccount } from "@/modules/portal/demo";
 import { signInAsDemo } from "./actions";
 
 /**
@@ -10,7 +12,7 @@ import { signInAsDemo } from "./actions";
  * fictional accounts grouped by role, each with a one-click "Sign in as …" (server action
  * `signInAsDemo`, which checks demo mode and the demo address again).
  */
-export function DemoPanel({ groups, password }: { groups: DemoAccountGroup[]; password: string }) {
+export function DemoPanel({ groups, password, portalAccounts = [] }: { groups: DemoAccountGroup[]; password: string; portalAccounts?: PortalDemoAccount[] }) {
   const [open, setOpen] = useState(false);
   const [state, action] = useActionState(signInAsDemo, null);
   const id = useId();
@@ -74,6 +76,28 @@ export function DemoPanel({ groups, password }: { groups: DemoAccountGroup[]; pa
                   </ul>
                 </div>
               ))}
+              {/* W4E: customers sign in on the separate customer portal, never here. */}
+              {portalAccounts.length > 0 && (
+                <div role="group" aria-label="Customer portal">
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">Customer portal</p>
+                  <ul className="flex flex-col gap-1.5">
+                    {portalAccounts.map((a) => (
+                      <li key={a.email}>
+                        <Link
+                          href={`/portal/sign-in?email=${encodeURIComponent(a.email)}`}
+                          className="flex min-h-[34px] w-full items-center justify-between gap-2 rounded-full border border-line bg-surface px-3.5 text-[13px] font-medium text-fg hover:border-line-strong hover:bg-surface-2"
+                          aria-label={`Open the customer portal sign-in as ${a.displayName}, ${a.roleName} at ${a.customerName}`}
+                        >
+                          <span className="min-w-0 truncate">
+                            <span className="font-semibold">{a.displayName}</span> · {a.customerName}
+                          </span>
+                          <span className="shrink-0 text-[11.5px] text-muted">{a.roleName} →</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </div>

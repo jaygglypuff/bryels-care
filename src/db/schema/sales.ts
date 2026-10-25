@@ -6,6 +6,7 @@ import { customers, locations, products } from "./masterdata";
 import { inventoryLots } from "./inventory";
 import { customerAddresses, priceListLines, priceLists, quotes } from "./crm";
 import { containers } from "./containers";
+import { portalUsers } from "./portal";
 
 /** Sales order states (docs/data-model.md §6.5; transition table in src/modules/sales/orders.ts). */
 export const SALES_ORDER_STATUSES = [
@@ -70,9 +71,13 @@ export const salesOrders = pgTable(
     statusChangedAt: timestamp("status_changed_at", { withTimezone: true }).notNull().defaultNow(),
     statusChangedBy: uuid("status_changed_by").references(() => users.id),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    // Wave 4 W4E (US-8-02): where the order came from; portal orders carry the portal user who placed it.
+    source: text("source").notNull().default("internal"),
+    portalUserId: uuid("portal_user_id").references(() => portalUsers.id),
   },
   (t) => [
     index("so_site_status_idx").on(t.siteId, t.status),
+    check("so_source_ck", sql`${t.source} in ('internal','portal') and (${t.source} = 'portal') = (${t.portalUserId} is not null)`),
     index("so_customer_idx").on(t.customerId, t.status),
     check("so_status_ck", sql`${t.status} in (${inList(SALES_ORDER_STATUSES)})`),
     check("so_credit_check_ck", sql`${t.creditCheckStatus} in (${inList(CREDIT_CHECK_STATUSES)})`),

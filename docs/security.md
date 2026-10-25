@@ -203,7 +203,7 @@ ships, and the automated test that proves it (names resolve in `docs/testing.md`
 | Absolute expiry | 7 days standard, 24 hours privileged (A-SEC-10) |
 | Remember device | not offered in Phase 1; evaluated with MFA in Phase 1b |
 | Rotation | new token at login, after re-authentication, after MFA verification, when assignments change role sensitivity |
-| Portal | `__Host-bc_portal`, idle 30 min, absolute 24 h (Phase 8) |
+| Portal | `__Host-bc_portal`, idle 30 min, absolute 24 h (Phase 8). As built (W4E): cookie `bc_portal` (Path `/`, HttpOnly, SameSite=Lax, Secure in production), table `portal_sessions`, settings `portal.session.idle_minutes` / `portal.session.absolute_hours`; the staff context never reads it and the portal context never reads `bc_session` |
 
 All lifetimes are `platform.settings` keys (`session.idle_minutes`, `session.idle_minutes_privileged`,
 `session.absolute_hours`, `session.absolute_hours_privileged`) editable with
@@ -374,6 +374,7 @@ are served with `Content-Disposition: attachment` and `X-Content-Type-Options: n
 | Uploads per user | 60 / hour, 500 MB / day | 429 |
 | Webhooks (Phase 8) | 300 / minute per provider IP range | 429, provider retries |
 | Portal unauthenticated | 30 / minute per IP | 429 |
+| Portal signed in (W4E) | 120 / minute per portal user (setting `portal.rate_limits`) | 429 with `Retry-After` |
 
 Implementation: Postgres-backed token buckets in Phase 1 (one table, `rate_limit_buckets`,
 `docs/data-model.md` §3.1; `ON CONFLICT` update),
