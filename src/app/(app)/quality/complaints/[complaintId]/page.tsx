@@ -8,6 +8,7 @@ import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { ComplaintStatusChip, TraceMatchChip } from "../_ui";
 import { ClassifyForm, CloseForm, RaiseDeviationForm, ReopenForm, ResolveForm, StartInvestigationForm, UpdateComplaintForm } from "../forms";
+import { Help } from "@/ui/help/help";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,7 @@ export default async function ComplaintPage({ params, searchParams }: { params: 
         subtitle={`${c.customerName} · ${c.categoryLabel} · ${c.siteCode}`}
         actions={
           <>
+            <Help screen="quality.complaint" />
             {v.can.trace && (
               <LinkButton href={`/quality/recall?complaintId=${c.id}`} variant="secondary">
                 Trace this lot

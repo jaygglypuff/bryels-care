@@ -6,6 +6,7 @@ import { listWorkOrders, WORK_ORDER_STATUSES } from "@/modules/production";
 import { Card, EmptyState, LinkButton, PageHeader, Select, Table, Td } from "@/ui/core";
 import { Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
+import { Help } from "@/ui/help/help";
 
 export const metadata: Metadata = { title: "Work orders" };
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
         subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · plan, release with material reservation, then create batches`}
         actions={
           <>
+            <Help screen="production.work_order" />
             <LinkButton href="/production/board" variant="secondary">Board</LinkButton>
             {ctx.can("production.work_order.create") && <LinkButton href="/production/work-orders/new" variant="cta">New work order</LinkButton>}
           </>

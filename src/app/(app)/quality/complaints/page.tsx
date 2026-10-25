@@ -4,6 +4,7 @@ import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { listComplaints } from "@/modules/quality";
 import { Card, EmptyState, Input, LinkButton, PageHeader, Table, Td, buttonClass, cx } from "@/ui/core";
+import { Help } from "@/ui/help/help";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { ComplaintStatusChip, TraceMatchChip } from "./_ui";
@@ -26,7 +27,7 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
       <PageHeader
         title="Complaints"
         subtitle={`Customer complaints at your sites (${ctx.allowedSites.map((s) => s.code).join(", ")}), traced from the label's lot or box`}
-        actions={ctx.can("quality.complaint.create") ? <LinkButton href="/quality/complaints/new" variant="cta">Log complaint</LinkButton> : undefined}
+        actions={<><Help screen="quality.complaint" />{ctx.can("quality.complaint.create") ? <LinkButton href="/quality/complaints/new" variant="cta">Log complaint</LinkButton> : undefined}</>}
       />
       <Card>
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

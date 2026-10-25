@@ -454,7 +454,79 @@ Evidence kept: request ids, audit event ids, job ids, backup object keys
 Owner sign-off: <name, date>
 ```
 
+### 12.4 Alert routing (as built, Wave 4 W4F, US-9-04)
+
+The alert list and thresholds are `docs/deployment-railway.md` §8.3 (settings `alerts.*`). The
+table shows what is wired today, where each alert lands, and how to simulate it for the go-live
+record (checklist item 9). The worker cannot report its own death, and the app cannot report
+that it is down, so the two S1 rows depend on the external monitor (12.5).
+
+| Alert | Built | Route today | Simulate (staging) | Expected result |
+|---|---|---|---|---|
+| Web down | external monitor (12.5) | monitor → SMS/email to operations contact and owner | add a temporary monitor check on `https://<staging domain>/api/ready-test` (answers 404), wait 3 minutes, then delete it. (`MAINTENANCE_MODE=1` is documented as a full 503 but is not built yet, A-W4F-15, so it cannot be used for this test) | monitor alert within 2 to 3 minutes; recovery notice after the check is deleted or fixed |
+| Worker down | yes: `/api/health/worker` (W4F) answers 503 when the newest heartbeat is older than 300 s; the in-app `worker_down` check runs inside the worker, so it cannot fire while the worker is down | external monitor on `/api/health/worker` → SMS/email (12.5) | stop the staging `worker` service for 6 minutes | monitor alert within 7 minutes (5 min stale + 2 failed checks); `/api/health/worker` back to 200 within a minute of the restart |
+| Failed jobs | yes (`failed_jobs`) | in-app critical → `system_admin` | Admin → Diagnostics → Jobs: cancel is not enough; enqueue a job against a missing record (for example a reconcile for a removed site) so it dead-letters | critical notification within 5 minutes |
+| Backup age | yes (`backup_age`, `alerts.backup_max_age_hours`; needs `BACKUP_STATUS_SOURCE=table`) | in-app critical → `system_admin` | pause the `backup` cron for a day, or set the threshold to 1 h for the test | critical "No recent successful backup" |
+| Offsite copy missing | yes (`backup_offsite`) | in-app warning → `system_admin` | run `pnpm backup:dump --manual --label offsite-test` with the `BACKUP_OFFSITE_*` variables removed | warning "Newest backup has no offsite copy" |
+| Restore drill overdue | yes (W4F, `restore_drill_overdue`, `alerts.restore_drill_max_age_days` 100) | in-app warning → `owner_director` | staging without a passed drill, `BACKUP_STATUS_SOURCE=table` | owner (not system_admin) gets "Restore drill overdue" |
+| Reconciliation difference | yes (`inventory.reconcile` notifies `system_admin` and site managers) | in-app critical | not simulated on purpose (it would need a damaged ledger); covered by `tests/integration/inventory/reconciliation.test.ts` | – |
+| Error rate, p95 latency, database capacity, audit default partition, deploy failed, chat webhook | not built (Phase 9 follow-up; A-W4F-13) | Railway service metrics and deploy notifications by email (Railway project settings) meanwhile | – | – |
+
+Record each simulation in the incident register (appendix A) as "drill", with the time sent and
+the time received. The automated test `alerts.restore_drill_overdue` in
+`tests/integration/platform/retention.test.ts` proves the role routing on every CI run.
+
+### 12.5 External uptime monitor: set up in plain language
+
+Why: if the whole app or Railway is down, nothing inside the app can send an alert. A small
+outside service checks the app every minute and texts or emails people when it stops
+answering. Any monitor that can call a web address works (for example UptimeRobot, Better
+Stack or Healthchecks.io). The owner chooses one (A-W4F-14); free plans are usually enough for
+two checks.
+
+1. Create an account with the monitor provider using the company operations email address (not
+   a personal one), and turn on two-step sign-in.
+2. Add a check of type **HTTP(s)** for `https://<your app domain>/api/ready`.
+   - Interval: 1 minute. Alert after: 2 failed checks in a row.
+   - Expected answer: status 200. (The page says whether the database and the job queue
+     answer. It shows no data and needs no password.)
+3. Add a second check for `https://<your app domain>/api/health` (the app process answers at
+   all). It helps to tell "app down" from "database down".
+4. Add a third check for `https://<your app domain>/api/health/worker`, interval 1 minute,
+   alert after 2 failures. It turns red when the background worker (labels, reports, imports,
+   alerts) has been silent for 5 minutes.
+5. Add the people to alert: the operations contact and the owner by SMS and email. Add the
+   support channel's email address too.
+6. Test it without taking anything down: add a fourth, temporary check on
+   `https://<your app domain>/api/ready-test` (a page that does not exist, so it answers 404).
+   You should get an alert within 2 to 3 minutes. Delete the temporary check afterwards.
+7. Write the monitor name, account owner and test date in section 1 and in appendix A. Repeat
+   the test every quarter (section 18).
+
+Do not point the monitor at a page that needs signing in, and never put a password or token in
+the monitor's address.
+
+### 12.6 Severity, response times and on-call: agreement
+
+The severities (12.1), response targets (A-OPS-02) and support hours (section 16, A-OPS-01)
+are proposals until the owner signs this table. Changes are made here and in section 20.
+
+| Item | Proposed | Agreed value | Signed (owner) | Date |
+|---|---|---|---|---|
+| S1 acknowledge in support hours / outside | 15 min / best effort 2 h | | | |
+| S2 acknowledge | 1 h | | | |
+| S3 | next business day | | | |
+| L2 support hours | Mon–Sat 07:00–19:00 Asia/Manila | | | |
+| Night-shift production cover | none (owner decides) | | | |
+| Who is phoned for S1 (in order) | operations contact, L2 administrator, owner | | | |
+
 ## 13. Restore from backup (production)
+
+As built (Wave 4 W4F): the logical backup is `pnpm backup:dump` (scripts/backup-dump.ts; the
+Railway `backup` cron service runs it through `APP_ROLE=backup`), and the drill is
+`pnpm restore:drill` (scripts/restore-drill.ts, 13.6). Where this section says
+`node dist/backup.js`, use `pnpm backup:dump` with the same flags (`--manual`, `--label`,
+`--hold`). The `--files` mode for bucket objects (13.4) is not built yet (A-W4F-07).
 
 Backup layers, their retention and the quarterly drill are in `docs/deployment-railway.md`
 sections 9 and 10; roles and variables in sections 4 and 11. Restores are S1 incidents led
@@ -539,6 +611,62 @@ identity, timings (measured RTO), data gap (measured RPO), verification results,
 and witnessed it, re-entered work. Run `inventory.reconcile` on demand. Review the backup
 alerts: a failed `platform.backup_dump` is fixed the same day (bucket credentials, key,
 disk), and the next scheduled run is watched.
+
+### 13.6 Restore drill (as built: `pnpm restore:drill`)
+
+The drill proves that the dump, the key and the people work (`docs/deployment-railway.md`
+§10). Run it before Gate 9 and then every quarter (A-OPS-11). It restores into a new scratch
+database, never into the live one, and records a `restore_drills` row in the source database.
+The owner then signs the row on Admin → Retention & holds → Restore drills.
+
+| Step | Command or action | Who |
+|---|---|---|
+| 1 | Open a drill entry in appendix A; the key holder brings the offline key (13.7) | operations contact, key holder |
+| 2 | On a trusted laptop with `pg_restore` (the server's major version or newer) and `age`: open a tunnel to the **staging** Postgres (`railway connect Postgres` in the staging project) and to production read access | operations contact |
+| 3 | `DATABASE_URL=<production, read access> DRILL_ADMIN_URL=<staging server>/postgres BACKUP_OFFSITE_S3_…=<offsite bucket> pnpm restore:drill --performed-by <your email> --witness <witness email> --identity backup-key.txt --environment staging` | operations contact, witness watching |
+| 4 | The script picks the newest succeeded `backup_runs` row (or `--backup-run <id>`), downloads it from the **offsite** bucket (`--from primary` to test the Railway bucket), checks the SHA-256, decrypts, creates `restore_drill_<timestamp>`, runs `pg_restore --exit-on-error`, checks that every bundled migration is applied, compares exact row counts with the dump-time counts, runs the ledger reconciliation (must be 0 rows), reads the audit trail, lots and batches, drops the scratch database (`--keep` keeps it for the manual smoke) and records the row | script |
+| 5 | Manual smoke on staging only, with `--keep`: point a temporary staging `web` at the kept database, sign in, open the audit log, a lot, a batch and a document; then drop the database | operations contact |
+| 6 | Owner opens Admin → Retention & holds and signs the drill (re-authentication; the signer cannot be the performer) | owner |
+
+The exit code is 1 when any check failed; the failed row is still recorded, with the reason in
+`notes`. A key that does not decrypt is a failed drill and a key-custody finding (13.7).
+
+Measured locally (2026-10-25, development machine, fictional A-PRD-12 volume database of
+152 MB: 180,000 stock movements, 180,000 audit events, 669 lots, 1,835 orders):
+
+| Step | Result |
+|---|---|
+| `pnpm backup:dump` (snapshot counts, pg_dump custom format, `age` encryption, upload to the local primary and offsite targets, verify by re-download) | 3 s, 26.1 MB encrypted |
+| `pnpm restore:drill` from the offsite copy (checksum, decrypt, create, restore, migrations, row counts, reconciliation, smoke reads, drop) | 5 s measured RTO, all checks passed, 0 reconciliation rows, 14 counted tables equal |
+| Same drill with a wrong key | failed at decryption, recorded as `failed`, no scratch database left behind |
+
+These numbers exclude the human steps (tunnel, key retrieval, manual smoke), which dominate a
+real drill. The first staging drill on Railway replaces them in `docs/load-test-report.md` §7
+and in appendix A.
+
+### 13.7 Backup key custody
+
+| Rule | Detail |
+|---|---|
+| Key pair | `age-keygen -o backup-key.txt` on an offline or trusted laptop at setup; only the public key (`age1…`) goes into the Railway variable `BACKUP_ENCRYPTION_PUBLIC_KEY` of the `backup` service |
+| Holders | two people: the owner and the operations contact (A-DEP-15). Each keeps one copy on an encrypted USB drive in a separate locked place (for example office safe and home safe), plus one printed copy in a sealed envelope with the owner |
+| Never | in Railway, in the repository, in chat, in email, in the password manager shared with developers, on the server |
+| Test | every restore drill decrypts with the key from storage, not with a copy left on the laptop; the laptop copy is deleted (`shred -u backup-key.txt`) at the end |
+| Rotation | when a holder leaves, or yearly: make a new pair, set the new public key, keep the old private key until the last dump made with it has aged out (35 days daily + 12 monthly) |
+| Loss | if both copies are lost, existing dumps cannot be read: make a new pair at once, run `pnpm backup:dump --manual --label rekey`, and record an S2 incident |
+
+Write the holders and storage places (not the key) in section 1 and in appendix A.
+
+### 13.8 Logical backup service (as built)
+
+| Item | Value |
+|---|---|
+| Service | Railway service `backup` from the same repository and Dockerfile; variables `APP_ROLE=backup`, `WITH_BACKUP_TOOLS=1` (installs `postgresql-client-${PG_CLIENT_MAJOR}`, default 18, and `age`), Cron Schedule `17 18 * * *` (02:17 Manila) |
+| Variables | `DATABASE_URL` (reference to the Postgres service), `DATABASE_BACKUP_URL` (read-only role, optional), `BACKUP_ENCRYPTION_PUBLIC_KEY`, `BACKUP_PREFIX` (default `backups/<APP_ENV>`), bucket `BACKUP_S3_*` or the app's `S3_*`, offsite `BACKUP_OFFSITE_S3_ENDPOINT`, `_BUCKET`, `_REGION`, `_ACCESS_KEY_ID`, `_SECRET_ACCESS_KEY`, `_FORCE_PATH_STYLE`; `web` gets `BACKUP_STATUS_SOURCE=table` |
+| What one run does | `backup_runs` row → counts and `pg_dump` in one snapshot → `pg_restore --list` check → `age` encryption → SHA-256 → upload and re-download check → offsite copy → row `succeeded` → prune beyond 35 daily + 12 monthly (never a held run; each prune is an audit event `platform.backup_run.pruned`) |
+| Manual run | `pnpm backup:dump --manual --label <why> [--hold]` from a Railway shell of the `backup` service (before destructive migrations, at cutover) |
+| Failure | the row becomes `failed` with the error (connection strings redacted); exit 1 marks the cron run failed; the backup-age alert follows (12.4) |
+| Memory | the dump is uploaded in one request, read into memory: fine for a database of a few GB (A-W4F-06); larger databases need multipart upload first |
 
 ## 14. Migration failure recovery
 
@@ -748,6 +876,39 @@ Owner's guide: `docs/railway-for-dummies.md`; platform facts: `docs/deployment-r
 | `[setup] PROBLEM` line in a deploy log | Follow the instruction in the line; only a missing or unresolved `DATABASE_URL` stops the start |
 | Demo variables reach a production project by mistake | `APP_ENV=production` keeps demo mode off; remove `DEMO_MODE` and record it in the change log |
 
+## 17c. Retention, legal holds and purges (as built, Wave 4 W4F, US-9-05)
+
+Screen: Admin → Retention & holds (`/admin/retention`). Plain language: the company's
+reviewers decide how long each kind of record is kept. Until a reviewer's confirmation is
+recorded for a class, the system only reports what is past its period and deletes nothing. A
+legal hold stops every retention action on a record until a different person releases it.
+Ledgers, batch and quality records, finance, payroll and the audit trail are never deleted by
+the sweep, whatever is configured.
+
+| Task | Who (permission) | Steps |
+|---|---|---|
+| Change a period or action | `system_admin` (`platform.retention_policy.edit`, re-authentication) | open the class → "Change or confirm" → period, basis, action, effective date, the source of the value (reviewer memo) → Save. The change clears any earlier confirmation. Protected classes offer only archive or keep |
+| Record the reviewers' confirmation | owner (`platform.retention_policy.approve`, re-authentication) | after the legal, accounting or HR reviewer's written confirmation: "Confirm" → name the reviewer and the document → Record confirmation. The person who last changed the row cannot confirm it |
+| Place a legal hold | `qa_qc` or owner (`platform.legal_hold.create`) | Legal holds → Place a legal hold → kind, record type, number or code (lot, batch, customer, complaint, order, user email), reason. A held lot also holds the batch that made it; a held batch holds its output lots; open complaints and deviations hold their records automatically |
+| Release a legal hold | a different `qa_qc` or the owner (`platform.legal_hold.void`) | Release with a note. The person who placed it cannot release it |
+| See what would be purged | `system_admin`, owner (`platform.purge_run.create`) | Retention sweep → Run a dry run → open "Report of the latest run": per target, rows past the period, held rows, and the outcome (unconfirmed: report only; would delete; archive candidates; handled by another job; not in this release; protected) |
+| Purge now | `system_admin`, owner (`platform.purge_run.post`, re-authentication) | only after a dry run was reviewed: Run a purge now → password → confirm. Deletes only rows of confirmed delete policies that are not held, at most `platform.retention.max_rows_per_target` per target (default 10,000) |
+| Weekly sweep | system (`platform.retention_sweep`, Sunday 03:00 Manila) | writes a dry-run report each week. It deletes only when the restricted setting "Weekly retention sweep" (`platform.retention.sweep_mode`) is `execute`, which itself needs a second administrator's approval |
+
+What the sweep can delete in this release (confirmed delete policies only): password reset
+tokens, completed idempotency keys, succeeded or cancelled background jobs, notifications
+(not unacknowledged critical ones, not ones about held records) and stale worker heartbeats.
+Sessions, metrics samples, report files and backup dumps are purged by their own jobs and are
+reported as "handled by another job". Archive manifests and anonymisation (customer contacts,
+former users) are counted only. They need an owner-approved procedure and their own decision
+record before anything is changed (A-W4F-01).
+
+Evidence: every run is a `purge_runs` row (report per target) and an audit event
+`platform.purge_run.completed` with the deleted counts. Policy changes and confirmations are
+`platform.retention_policy.updated` / `.confirmed`, and holds are `platform.legal_hold.placed` /
+`.released`. Go-live checklist item 7 needs one confirmed class, one dry-run report and one hold
+placed and released by two people.
+
 ## 18. Periodic checklists
 
 | Cadence | Who | Items |
@@ -830,3 +991,24 @@ never secret values) and are updated in the same PR as the change they record (A
    used only for restores; 17a.2 is the single procedure. The settings-catalogue entry in
    `docs/data-model.md`, the PRD glossary term "Read-only maintenance mode" and the
    `docs/data-migration-plan.md` 13 wording are maintained in those documents.
+
+## 22. Runbook sign-off (US-9-04)
+
+A section of this runbook is in force when its owner and the company reviewer have signed it
+for the release in use. Re-sign after any change to the section and at the yearly review
+(section 18). Unsigned sections are drafts; the go-live checklist (17a.1 items 9, 10 and 15)
+needs at least the rows marked "Gate 9".
+
+| Section | Owner (persona) | Company reviewer | Gate 9 | Release / date signed | Signatures |
+|---|---|---|---|---|---|
+| 1 Who does what | devops-engineer | Owner/Director | yes | | |
+| 2 Routine administration (incl. 2.9 training) | devops-engineer, product-manager | system administrator, HR | yes | | |
+| 6–9 Jobs, imports, sync, reconciliation | devops-engineer | system administrator | yes | | |
+| 12 Incident process, 12.4 alert routing, 12.5 uptime monitor, 12.6 agreement | devops-engineer | operations contact, Owner/Director | yes | | |
+| 13 Restore, 13.6 drill, 13.7 key custody, 13.8 backup service | devops-engineer | operations contact, both key holders | yes | | |
+| 14 Migration failure recovery | devops-engineer | operations contact | yes | | |
+| 15 Secrets rotation | security-engineer | operations contact | yes | | |
+| 16 Support and on-call | devops-engineer | Owner/Director | yes | | |
+| 17, 17a, 17b Diagnostics, go-live, demo | devops-engineer | system administrator | yes | | |
+| 17c Retention, legal holds, purges | devops-engineer, security-engineer | Owner/Director, QA process owner | yes | | |
+| 18 Periodic checklists | devops-engineer | operations contact | yes | | |

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { backupRuns, workerHeartbeats } from "@/db/schema";
+import { backupRuns, restoreDrills, workerHeartbeats } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { getMaintenanceState } from "@/lib/maintenance";
 import { VARIABLE_ALLOW_LIST, type ServiceName, envPresence } from "./variables";
@@ -83,13 +83,13 @@ export type BackupsCard =
       lastRun: { status: string; startedAt: Date; errorMessage: string | null } | null;
       nextDueAt: Date | null;
       overdue: boolean;
-      lastRestoreDrill: null;
+      lastRestoreDrill: { performedAt: Date; result: string; measuredRtoSeconds: number; dumpAgeSeconds: number | null; signedOff: boolean } | null;
     };
 
 /**
  * Backups card. The status source is configurable (BACKUP_STATUS_SOURCE): `table` reads the
  * `backup_runs` rows the backup service writes; unset says "not configured" instead of showing
- * anything that looks like a backup. Restore drills arrive in Phase 9 (empty until then).
+ * anything that looks like a backup. The newest restore drill (W4F) is shown with it.
  */
 export async function backupsCard(ctx: AuthContext, now = new Date()): Promise<BackupsCard> {
   ctx.require("platform.diagnostics.view");
@@ -102,6 +102,7 @@ export async function backupsCard(ctx: AuthContext, now = new Date()): Promise<B
     .orderBy(desc(backupRuns.finishedAt))
     .limit(1);
   const [last] = await db.select().from(backupRuns).where(eq(backupRuns.organizationId, ctx.organizationId)).orderBy(desc(backupRuns.startedAt)).limit(1);
+  const [drill] = await db.select().from(restoreDrills).where(eq(restoreDrills.organizationId, ctx.organizationId)).orderBy(desc(restoreDrills.performedAt)).limit(1);
   const finished = ok?.finishedAt ?? null;
   const nextDueAt = finished ? new Date(finished.getTime() + 24 * 3_600_000) : null;
   return {
@@ -111,7 +112,7 @@ export async function backupsCard(ctx: AuthContext, now = new Date()): Promise<B
     lastRun: last ? { status: last.status, startedAt: last.startedAt, errorMessage: last.errorMessage ? last.errorMessage.slice(0, 300) : null } : null,
     nextDueAt,
     overdue: !nextDueAt || nextDueAt.getTime() < now.getTime(),
-    lastRestoreDrill: null,
+    lastRestoreDrill: drill ? { performedAt: drill.performedAt, result: drill.result, measuredRtoSeconds: drill.measuredRtoSeconds, dumpAgeSeconds: drill.dumpAgeSeconds, signedOff: !!drill.signedOffBy } : null,
   };
 }
 

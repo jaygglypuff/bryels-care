@@ -3,6 +3,7 @@ import { complaintFormContext } from "@/modules/quality";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Forbidden } from "../../../forbidden";
 import { LogComplaintForm } from "../forms";
+import { Help } from "@/ui/help/help";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export default async function NewComplaintPage({ searchParams }: { searchParams:
   }
   return (
     <>
-      <PageHeader title="Log complaint" subtitle="Scan or type the lot or box from the customer's label so QA can start the trace from a verified record." />
+      <PageHeader title="Log complaint" subtitle="Scan or type the lot or box from the customer's label so QA can start the trace from a verified record." actions={<><Help screen="quality.complaint" /></>} />
       <Card className="max-w-3xl">
         <CardTitle>Complaint</CardTitle>
         <LogComplaintForm customers={f.customers} products={f.products} categories={f.categories} channels={f.channels} defaultCustomerId={sp.customerId} defaultCode={sp.code} />

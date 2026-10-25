@@ -5,6 +5,7 @@ import { listShipments, unacknowledgedDeliveryReceipts } from "@/modules/sales";
 import { Card, CardTitle, EmptyState, PageHeader } from "@/ui/core";
 import { Banner, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
+import { Help } from "@/ui/help/help";
 
 export const metadata = { title: "Dispatch" };
 
@@ -16,7 +17,7 @@ export default async function DispatchPage() {
   const overdue = ctx.can("sales.delivery_receipt.view") ? await unacknowledgedDeliveryReceipts(ctx) : [];
   return (
     <>
-      <PageHeader title="Dispatch" subtitle={`${ctx.currentSite.code} · stock is issued when a shipment is dispatched, never when a draft DR is printed`} />
+      <PageHeader title="Dispatch" subtitle={`${ctx.currentSite.code} · stock is issued when a shipment is dispatched, never when a draft DR is printed`} actions={<><Help screen="sales.fulfilment" /></>} />
       {overdue.length > 0 && <div className="mb-4"><Banner tone="warn" title={`${overdue.length} delivery receipt(s) not acknowledged`}>{overdue.map((o) => `${o.drNumber ?? o.shipmentNumber} (${o.customerName}, ${o.days} days)`).join("; ")}</Banner></div>}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {[

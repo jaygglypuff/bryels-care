@@ -562,6 +562,31 @@ duration, migrate check result, row-count comparison, reconciliation result, smo
 measured RTO (start of step 1 to end of step 7), findings, owner sign-off. Drill findings
 that touch procedure change this document in the same PR.
 
+### 10.1 As built (Wave 4 W4F, US-9-03) and Railway findings of 2026-10-25
+
+| Item | As built |
+|---|---|
+| Dump | `pnpm backup:dump` (scripts/backup-dump.ts): `backup_runs` row, exact counts of 14 tables and `pg_dump --format=custom --no-owner --no-privileges --exclude-schema=pgboss` in **one exported snapshot**, `pg_restore --list` check, `age -r $BACKUP_ENCRYPTION_PUBLIC_KEY`, SHA-256, upload, re-download and checksum compare, offsite copy, prune (35 daily + 12 monthly; held runs never; each prune audited as `platform.backup_run.pruned`). Refuses to run unencrypted outside development |
+| Service | the same image with `APP_ROLE=backup` (scripts/start.sh) or a service named `backup`; build variable `WITH_BACKUP_TOOLS=1` adds `postgresql-client-${PG_CLIENT_MAJOR}` (default 18) and `age` from the PGDG and Debian repositories. `web` and `worker` builds skip that layer. Cron Schedule `17 18 * * *` |
+| Drill | `pnpm restore:drill` (scripts/restore-drill.ts): steps 1–6 and 8 of section 10 automated (offsite download by default, checksum, decrypt, scratch database, restore, migrations current, row counts, reconciliation, smoke reads, drop unless `--keep`); step 7 (sign-in smoke on a temporary `web`) stays manual. Writes `restore_drills` with measured RTO and RPO; the owner signs it off on Admin → Retention & holds |
+| Not built | `--files` mode for bucket objects (weekly offsite copy of attachments, §9 last paragraph) (A-W4F-07); multipart upload (the dump is uploaded in one request) (A-W4F-06); a separate `bc_backup` role (the dump uses `DATABASE_BACKUP_URL` when set, else `DATABASE_URL`) |
+| Measured locally | 152 MB A-PRD-12 volume database: dump 3 s (26 MB encrypted); drill from the offsite copy 5 s, all checks passed; a wrong key fails the drill at decryption and is recorded (runbook §13.6) |
+
+Railway facts re-read on 2026-10-25 (docs.railway.com "Postgres backups and restores" and
+"Point-in-time recovery"):
+
+| Topic | Finding | Effect here |
+|---|---|---|
+| Postgres version | the current Railway Postgres template image is `postgres-ssl:18` (new services default to 18; existing services keep their major) | pg_dump must be at least the server major: the image installs client 18 by default (`PG_CLIENT_MAJOR`), which also dumps 16 and 17 servers. Check `select version()` on each project (V-08) and pin the major tag (PITR needs a major-version tag, not a minor pin) |
+| PITR | pgBackRest: WAL archived continuously (`archive_timeout` 60 s), full base backup weekly and differential daily, last 4 fulls kept (about 4 weeks); restore creates a new service `<source>-restored-YYYYMMDD-HHMM`, the source is untouched, cut-over is manual; the window starts at the first base backup after enabling; the fork does not archive until PITR is enabled on it; no separate fee (bucket storage plus upload egress); CLI `railway postgres pitr restore --service <name> --at <timestamp>` | matches §9 and runbook §13.1; enable PITR at T-28 (go-live checklist) |
+| Volume backups | daily kept 6 days, weekly kept 1 month, monthly kept 3 months; manual backups limited to 50 % of the volume size; restoring removes newer backups; wiping a volume deletes its backups | matches §9; the pre-restore manual dump of runbook §13 stays mandatory |
+| Logical dumps | Railway recommends `--format=custom --no-owner`, a cron service using the private `DATABASE_URL`, and notes that bucket uploads count as egress; cron runs in UTC, minimum 5-minute granularity, and a run still active when the next trigger fires is skipped, so the script must exit | as built; the dump exits 0 or 1 |
+| Bucket storage | $0.015 per GB-month, API operations free | 35 daily + 12 monthly dumps of about 26 MB at A-PRD-12 volumes cost well under $1 per month (section 13) |
+
+Sources: [Postgres backups and restores](https://docs.railway.com/guides/postgres-backups-restores),
+[Point-in-time recovery](https://docs.railway.com/volumes/point-in-time-recovery),
+[Railway Postgres template](https://railway.com/deploy/postgres.md).
+
 ## 11. Rollback
 
 Decide with this table; details in `docs/operations-runbook.md` sections 13 and 14.
@@ -703,8 +728,8 @@ assumptions or risk-register items.
 | V-05 | Access control: can variable visibility be limited per environment inside one project? | read workspace/project member settings | if yes, A-DEP-01 may collapse to one project; if no, two projects stand | |
 | V-06 | Healthcheck works on a service without a public domain (`worker`) | configure `/api/ready` on `worker` | deploy gated by the check; failure keeps the previous worker | |
 | V-07 | Pre-deploy runs exactly once per deployment (not per replica) and can reach `postgres.railway.internal` | set replicas to 2 on staging briefly; read logs | one migrator run; advisory lock never contended | |
-| V-08 | Postgres version is 16.x; `max_connections` default; whether `pg_stat_statements` and `uuid`-related extensions are enabled | `SELECT version(); SHOW max_connections;` | 16.x; pools in A-DEP-17 fit under 80 % of `max_connections` | |
-| V-09 | PITR: enable, measure archive bucket growth per day and the restore-to-new-service time | enable on staging; restore to a timestamp | restored service has the expected rows; time and cost recorded | |
+| V-08 | Postgres version is 16.x; `max_connections` default; whether `pg_stat_statements` and `uuid`-related extensions are enabled | `SELECT version(); SHOW max_connections;` | 16.x; pools in A-DEP-17 fit under 80 % of `max_connections` | docs read 2026-10-25 (W4F): the Railway template now creates Postgres 18; still to run on each project; pg_dump client follows `PG_CLIENT_MAJOR` (§10.1) |
+| V-09 | PITR: enable, measure archive bucket growth per day and the restore-to-new-service time | enable on staging; restore to a timestamp | restored service has the expected rows; time and cost recorded | docs read 2026-10-25 (W4F): mechanics and costs as in §10.1; staging measurement still to do |
 | V-10 | Volume backup schedules and manual snapshot before a destructive migration; restore staging from one | Backups tab | restore completes; newer backups are removed as documented | |
 | V-11 | Log retention per plan and whether a log drain / export exists | plan settings; docs | 30 days on Pro confirmed, or A-DEP-13 activated | |
 | V-12 | Metrics: what the Railway dashboard exposes (CPU, memory, disk, network) and whether a metrics API or alerting exists | dashboard | documented; application metrics remain in Postgres (section 8.2) | |

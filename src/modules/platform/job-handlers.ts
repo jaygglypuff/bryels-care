@@ -14,6 +14,7 @@ import { salesDeliveryReceiptReminderJob } from "@/modules/sales/jobs/dr-reminde
 import { importJobProcessJob } from "@/modules/imports/jobs/process";
 import { analyticsAccessReportJob, analyticsScheduleDispatchJob, analyticsScheduledReportJob } from "@/modules/reports/jobs";
 import { platformActionCentreSweepJob } from "@/modules/action-centre/jobs";
+import { platformRetentionSweepJob } from "./retention-sweep"; // W4F (US-9-05)
 import { type AnyJobDefinition, type JobRegistry, createJobRegistry } from "./job-definition";
 
 /**
@@ -40,6 +41,7 @@ export function jobDefinitions(): AnyJobDefinition[] {
     platformActionCentreSweepJob,
     analyticsSnapshotKpisJob,
     analyticsReconcileKpisJob,
+    platformRetentionSweepJob, // W4F (US-9-05)
   ];
 }
 

@@ -12,6 +12,7 @@ import { cancelWorkOrderAction, workOrderCommandAction } from "../actions";
 import { CommandForm } from "../command-form";
 import { WorkOrderForm } from "../wo-form";
 import { NextStep, type NextStepProps } from "../next-step";
+import { Help } from "@/ui/help/help";
 
 export const metadata: Metadata = { title: "Work order" };
 export const dynamic = "force-dynamic";

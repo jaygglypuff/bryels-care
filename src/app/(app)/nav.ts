@@ -147,6 +147,8 @@ export const NAV: NavGroup[] = [
       { label: "Imports", href: "/admin/imports", permission: "platform.import_job.view" },
       { label: "Legacy documents", href: "/admin/imports/legacy-documents", permission: "documents.legacy_document.view" },
       { label: "Notification rules", href: "/admin/notification-rules", permission: "platform.notification_rule.view" },
+      // Wave 4 W4F: retention, legal holds, purge runs, restore drills
+      { label: "Retention & holds", href: "/admin/retention", permission: "platform.retention_policy.view" },
     ],
   },
   {

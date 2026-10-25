@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { fmtDateTime } from "@/lib/qty";
 import type { BackupsCard, HealthCard, VariablesCard } from "@/modules/governance";
 import { Card, CardTitle, EmptyState } from "@/ui/core";
@@ -65,7 +66,19 @@ export function OpsCards({ health, backups, variables }: { health: HealthCard; b
                 Last run {backups.lastRun.status} at {fmtDateTime(backups.lastRun.startedAt)}{backups.lastRun.errorMessage ? `: ${backups.lastRun.errorMessage}` : ""}
               </li>
             )}
-            <li className="text-muted">Restore drill: none recorded yet (the first drill is due before Gate 9, Phase 9).</li>
+            {backups.lastRestoreDrill ? (
+              <li className="flex flex-wrap items-center gap-2">
+                <Chip tone={backups.lastRestoreDrill.result === "passed" ? "ok" : "bad"}>{`Restore drill ${backups.lastRestoreDrill.result}`}</Chip>
+                <span className="text-muted">
+                  {fmtDateTime(backups.lastRestoreDrill.performedAt)} · restore {Math.round(backups.lastRestoreDrill.measuredRtoSeconds / 60)} min{backups.lastRestoreDrill.signedOff ? " · signed off" : " · waiting for sign-off"} ·{" "}
+                  <Link href="/admin/retention" className="underline">
+                    drills
+                  </Link>
+                </span>
+              </li>
+            ) : (
+              <li className="text-muted">Restore drill: none recorded yet (the first drill is due before Gate 9; runbook §13.6).</li>
+            )}
           </ul>
         )}
       </Card>

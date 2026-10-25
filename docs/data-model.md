@@ -666,7 +666,7 @@ Schema file `src/db/schema/governance.ts`; services in `src/modules/governance`.
 | `numbering_rules` + `numbering_rule_versions` | The counters stay in `numbering_rules` (one row per document type and period key, the last lock of a command). The `ver` part of §9.1 is the new table `numbering_rule_versions` (`prefix`, `pattern`, `reset_period`, `sequence_width`, `is_gapless`, `effective_from/to`, `version_no`, `status` submitted/approved/rejected/cancelled, `supersedes_id`, `change_summary`, approval columns with SoD CHECK). The §9.4 pattern trigger is expressed as CHECK constraints. Overlap is prevented by the approval service (closes the previous version on the new effective date) plus a partial unique index (one open-ended approved version per type), not a GiST exclusion. Counter keys per reset period are `YY`, `YYMM`, `YYMMDD` or empty, so a new version continues the running sequence of the period | Organization scope only (`{SITE}` and site-scoped rules wait until `nextNumber` callers pass the site); `NUMBER_OVERFLOW` and `NUMBERING_RULE_MISSING` are domain errors |
 | `rate_limit_buckets` | §3.1 plus `last_allowed` (decision of the single-statement upsert). Semantics: fixed window starting at the first request (`refilled_at` = window start, `tokens` = remaining); refused requests do not consume. Swept after 24 h idle by `platform.metrics_sample` | fixed window instead of a continuous token refill |
 | `metrics_samples` | As §3.10; written by `platform.metrics_sample` only (web replica counters not yet); pruned after `platform.metrics.retention_days` | not partitioned (A-W2F-07) |
-| `backup_runs` | As §3.10 (no `pg_version` writer yet); rows written by `pnpm backup:record`; read when `BACKUP_STATUS_SOURCE=table`. `restore_drills` not built (Phase 9) | |
+| `backup_runs` | As §3.10; written by `pnpm backup:dump` (W4F: `pg_version`, `row_counts` of 14 tables taken in the dump snapshot plus `toc_entries`) or `pnpm backup:record`; read when `BACKUP_STATUS_SOURCE=table`. `restore_drills` built in W4F (§12.1 "As built") | |
 | `worker_heartbeats.env_presence` | jsonb: allow-listed variable name → present (boolean); never values (Variables card) | new column |
 | `help_guides` | Not built: guides are versioned markdown files in `docs/help/` reviewed like code (A-W2F-06) | the table and its draft/publish editor are deferred |
 
@@ -2869,6 +2869,30 @@ record-keeping expectations must be validated by qualified reviewers.
 
 Open complaints, open recall cases and open deviations act as implicit holds on everything
 the genealogy of their lots touches (§10.4 `affected` set).
+
+**As built (Wave 4 W4F, US-9-03, US-9-05; `src/db/schema/retention.ts`, migration 0012).**
+Differences from the table above, and the two tables it did not detail:
+
+| Table → column | Type | Notes |
+|---|---|---|
+| `retention_policies.target` | text, default `*` | uq is `(organization_id, data_class, target)`: a class can hold sub-targets with their own period (`jobs_notifications/notifications` 180 days vs `/background_jobs` 90 days, `platform_ops/worker_heartbeats` 7 days) |
+| `retention_policies.retention_months` / `retention_days` | int, nullable | exactly one is set unless `action = 'keep'` (ck `ck_retention_policies_period`); days cover the sub-month classes of §12.2 (idempotency 7 days, sessions 30 days) |
+| `retention_policies.updated_by`, `assumption_id` | uuid / text | the last editor; ck `confirmed_by <> updated_by` (the editor never confirms). Any edit clears `is_confirmed` |
+| (shipped defaults) | – | classes without a row use `RETENTION_DEFAULTS` (`src/modules/platform/retention-defaults.ts`, the §12.2 values), always unconfirmed. The demo seed stores and confirms two operational classes with a "fictional reviewer" note |
+| `legal_holds.entity_type` | text | ck in (`inventory_lot`, `batch`, `customer`, `complaint`, `sales_order`, `user`); `entity_label` keeps the human reference at placement; ck release complete (`released_at`, `released_by`, `release_note` together) |
+| **`purge_runs`** (P9 · T) | | one row per sweep: `mode` (`dry_run`,`execute`), `trigger` (`manual`,`scheduled`), `as_of`, `status` (`running`,`succeeded`,`failed`), `requested_by` (null for the weekly job), `candidate_rows`, `held_rows`, `deleted_rows` (ck: a dry run deletes 0), `report` jsonb (per target: outcome, candidates, held, deleted, note; and the held-set size), `error_message`, `idempotency_key` uq per organization |
+| **`restore_drills`** (P2 → built P9 · T) | | as §3.10 plus `source_key`, `row_counts_match`, `migrations_current`, `details` jsonb, `sign_off_note`; `result` is computed by the drill (`passed` only when checksum, decryption, row counts, migrations and reconciliation are all good and the RTO/RPO targets are met); ck signer ≠ performer and sign-off complete |
+| `stock_movements` index `movements_source_doc_idx (source_document_type, source_document_id)`; `sales_order_lines` index `sales_order_lines_order_idx (sales_order_id, line_no)` | | load-test fixes (US-9-01, `docs/load-test-report.md` §5) |
+
+Sweep rules as built (`src/modules/platform/retention-sweep.ts`): protected classes
+(`quality_batch`, `stock_ledger`, `financial`, `payroll`, `audit`, `master_data`,
+`documents_generated`) are never deleted or anonymised, even if a row says so; `keep`,
+`archive` and `anonymise` are counted only; `delete` acts only for a confirmed policy, in an
+execution, for a target with a purger (password reset tokens, idempotency keys, succeeded or
+cancelled jobs, notifications, worker heartbeats), never on a held id, capped per target by
+`platform.retention.max_rows_per_target`. The held set is the active `legal_holds` plus open
+complaints (complaint, lot, customer, order, shipment) and open deviations (deviation, batch,
+lot), expanded one genealogy step (lot → source batch and re-lotted lots; batch → output lots).
 
 ### 12.2 Retention per entity class
 

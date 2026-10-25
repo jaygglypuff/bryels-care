@@ -6,6 +6,7 @@ import { canSeeStaging, listBatchesToStage } from "@/modules/production";
 import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
+import { Help } from "@/ui/help/help";
 
 export const metadata: Metadata = { title: "Stage materials" };
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export default async function StagingQueuePage() {
   const rows = await listBatchesToStage(ctx);
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader title="Stage materials" subtitle={`${ctx.currentSite.code} · batches of released work orders · pick reserved lots to the staging area by scan`} />
+      <PageHeader title="Stage materials" subtitle={`${ctx.currentSite.code} · batches of released work orders · pick reserved lots to the staging area by scan`} actions={<><Help screen="production.staging" /></>} />
       {rows.length === 0 ? (
         <EmptyState title="Nothing to stage" action={ctx.can("production.work_order.view") ? <LinkButton href="/production/work-orders" variant="secondary">Work orders</LinkButton> : undefined}>
           A batch appears here when its work order is released (materials reserved) and the batch is created.

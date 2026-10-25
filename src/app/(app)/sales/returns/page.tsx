@@ -3,6 +3,7 @@ import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { RETURN_STATUS_LABEL, listCustomerReturns, type CustomerReturnStatus } from "@/modules/sales";
 import { Card, EmptyState, LinkButton, PageHeader, Table, Td, cx } from "@/ui/core";
+import { Help } from "@/ui/help/help";
 import { Forbidden } from "../../forbidden";
 import { ReturnStatusChip } from "./_ui";
 
@@ -25,7 +26,7 @@ export default async function ReturnsPage({ searchParams }: { searchParams: Prom
       <PageHeader
         title="Customer returns"
         subtitle="Returned boxes are scanned against the delivery receipt, approved, and received into quarantine for QA to disposition."
-        actions={ctx.can("sales.customer_return.create") ? <LinkButton href="/sales/returns/new" variant="cta">New return</LinkButton> : undefined}
+        actions={<><Help screen="sales.return" />{ctx.can("sales.customer_return.create") ? <LinkButton href="/sales/returns/new" variant="cta">New return</LinkButton> : undefined}</>}
       />
       <Card>
         <nav className="mb-3 flex flex-wrap gap-2" aria-label="Filter returns">

@@ -462,6 +462,17 @@ aggregate. Order value and shipped value (Estimate) need `financial_kpi.view` un
 | `platform.sync_conflict.{view,edit}` | SyncConflict queue and resolution proposals | N | P7 |
 | `platform.sync_conflict.approve` | Resolve a conflict (chooses server or client version with reason) | S | P7 |
 | `platform.sync_command.view`, `platform.sync_command.void` | Inspect and discard queued SyncCommands | S | P7 |
+| `platform.retention_policy.view` | Retention policies (class, period, basis, action, confirmation status) | S | P9 (W4F) |
+| `platform.retention_policy.edit` | Change a retention policy; clears its confirmation; protected classes only archive or keep | R | P9 (W4F) |
+| `platform.retention_policy.approve` | Record the qualified reviewers' confirmation of a policy (never the last editor) | R | P9 (W4F) |
+| `platform.legal_hold.view` | Legal holds on lots, batches, customers, complaints, orders and users (site-scoped entities filtered to allowed sites) | S | P9 (W4F) |
+| `platform.legal_hold.create` | Place a legal hold (owner_director or qa_qc, data-model §12.1) | S | P9 (W4F) |
+| `platform.legal_hold.void` | Release a legal hold with a note (never the person who placed it) | S | P9 (W4F) |
+| `platform.purge_run.view` | Retention sweep runs and their per-target reports | S | P9 (W4F) |
+| `platform.purge_run.create` | Run a retention dry run (deletes nothing) | S | P9 (W4F) |
+| `platform.purge_run.post` | Execute a purge of confirmed delete policies (re-authentication) | R | P9 (W4F) |
+| `platform.restore_drill.view` | Restore drill evidence | S | P9 (W4F) |
+| `platform.restore_drill.approve` | Owner sign-off of a restore drill (never the performer; re-authentication) | R | P9 (W4F) |
 
 Self-service capabilities that need no permission string (always allowed for an active user,
 on own records only): view/edit own profile, change own password, manage own sessions and
@@ -799,6 +810,10 @@ strings at delivery time.
 | diagnostics | v* | v* | – | – | – | – | – | – | – | – | – | – | – |
 | sync_conflict | v* | v* | v e a | – | v (own) | v (own) | – | – | – | – | – | v* | – |
 | sync_command | v* | v o* | v o | – | – | – | – | – | – | – | – | v* | – |
+| retention_policy (W4F) | v e* a* | v e* | – | – | – | – | v | – | – | – | – | v | – |
+| legal_hold (W4F) | v c o | v | – | – | – | – | v c o | – | – | – | – | v | – |
+| purge_run (W4F) | v c p* | v c p* | – | – | – | – | – | – | – | – | – | v | – |
+| restore_drill (W4F) | v a* | v | – | – | – | – | – | – | – | – | – | v | – |
 
 Note: `platform.approval_rule.admin` belongs to the owner, not the system administrator,
 because approval rules are financial and quality controls; `system_admin` may view them to
@@ -1191,6 +1206,18 @@ Block "Wave 3 integration" at the end of `src/lib/permissions.ts`:
   `quality.complaint.view`; return waiting for QA `quality.disposition.approve`; unacknowledged DR
   `sales.shipment.view`; failed import `platform.import_job.view` (was `platform.job.view`).
 - Customer 360 sections: complaints (`quality.complaint.view`), returns (`sales.customer_return.view`).
+
+### 8.9 As built: Wave 4 W4F retention, legal holds, purge runs, restore drills
+
+The eleven `platform.retention_policy.*`, `platform.legal_hold.*`, `platform.purge_run.*` and
+`platform.restore_drill.*` strings of §2.12 are in `src/lib/permissions.ts` (block `// Wave 4 W4F`)
+with the §3.12 grants: `owner_director` holds all of them; `system_admin` edits policies and runs
+purges but cannot confirm a policy or sign off a drill; `qa_qc` reads policies and places and releases
+legal holds; `auditor` reads all four (VIEW_ALL); `site_manager` loses the four `.view` strings it
+would get from VIEW_ALL. Services enforce separation of duties (confirmer ≠ last editor, releaser ≠
+placer, drill signer ≠ performer, each refusal audited as `identity.authorization.denied`), site scope
+for holds on site-scoped records (404 for another site), and re-authentication for the R strings.
+Tests: `tests/integration/platform/retention.test.ts`.
 
 ## 9. Assumptions and open questions
 

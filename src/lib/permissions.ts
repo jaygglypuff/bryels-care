@@ -309,6 +309,18 @@ export const PERMISSIONS = [
   "analytics.owner_dashboard.view",
   "analytics.financial_kpi.view",
   "analytics.kpi_definition.view",
+  // Wave 4 W4F: retention policies, legal holds, purge runs, restore drills (US-9-03, US-9-05; docs/permissions-matrix.md §2.12, §3.12)
+  "platform.retention_policy.view",
+  "platform.retention_policy.edit",
+  "platform.retention_policy.approve",
+  "platform.legal_hold.view",
+  "platform.legal_hold.create",
+  "platform.legal_hold.void",
+  "platform.purge_run.view",
+  "platform.purge_run.create",
+  "platform.purge_run.post",
+  "platform.restore_drill.view",
+  "platform.restore_drill.approve",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -1136,4 +1148,21 @@ const W3_INTEGRATION_EXCLUDE: Record<string, readonly Permission[]> = {
 };
 for (const [role, drop] of Object.entries(W3_INTEGRATION_EXCLUDE)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => !drop.includes(p));
+}
+
+// Wave 4 W4F: retention, legal holds, purge runs and restore drills (docs/permissions-matrix.md §3.12).
+// owner_director holds every string (confirms policies as the qualified reviewers' signatory, signs off
+// restore drills); system_admin edits policies and runs purges but cannot confirm them; qa_qc places and
+// releases legal holds (data-model §12.1: owner_director or qa_qc); auditor reads everything (VIEW_ALL).
+// Site managers do not see these organisation-wide platform screens.
+const W4F_GRANTS: Record<string, readonly Permission[]> = {
+  system_admin: ["platform.retention_policy.edit", "platform.purge_run.create", "platform.purge_run.post"],
+  qa_qc: ["platform.retention_policy.view", "platform.legal_hold.view", "platform.legal_hold.create", "platform.legal_hold.void"],
+};
+for (const [role, grants] of Object.entries(W4F_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+const W4F_VIEWS: readonly Permission[] = ["platform.retention_policy.view", "platform.legal_hold.view", "platform.purge_run.view", "platform.restore_drill.view"];
+for (const role of ["site_manager"]) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => !W4F_VIEWS.includes(p));
 }

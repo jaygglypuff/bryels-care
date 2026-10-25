@@ -8,6 +8,7 @@ import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { AmendmentForm, AttachPaperForm, CloseBatchForm, DecideReopenForm, IssuePaperForm, ReopenRequestForm, ReviewPaperForm, VoidPaperForm, WithdrawReopenForm } from "./forms";
+import { Help } from "@/ui/help/help";
 
 export const metadata = { title: "Batch closure and records" };
 export const dynamic = "force-dynamic";
@@ -42,6 +43,7 @@ export default async function ClosurePage({ params }: { params: Promise<{ batchI
         subtitle={`${v.batch.productName} · site ${v.batch.siteCode}${v.reopenCount ? ` · reopened ${v.reopenCount} time(s)` : ""}`}
         actions={
           <>
+            <Help screen="production.bmr" />
             <LinkButton href={`/production/${v.batch.id}`} variant="secondary">
               Batch
             </LinkButton>

@@ -56,6 +56,9 @@ migration. Its canonical source is `src/db/sql/w1d.sql`; the migration is a verb
 | `pnpm admin:bootstrap` | Production first administrator: invited owner + system admin and a one-time link (no demo seed, refuses once anyone is active; `--sync-roles` re-syncs seeded role templates). See "First administrator" below |
 | `pnpm migrate:load …` / `pnpm migrate:approve <IMP> --as <email>` | Go-live loader (US-2-25): `--kind <kind> --file <path> --site <code> --as <email>` validates a file (dry run, results CSV next to the file) and submits it; a second person approves; `--post --job <IMP> --as <email>` posts. Asks for the password interactively. Production needs `MIGRATION_WINDOW_OPEN=true`; `--post` also needs the read-only maintenance mode on. Same engine as Admin → Imports (`docs/data-migration-plan.md` §9.4, §9.5) |
 | `pnpm api:contract` | Regenerate `docs/api/v1-contract.json` from `src/lib/api/contract.ts` (a test fails when it is stale) |
+| `pnpm backup:dump [--manual] [--label …] [--hold]` | Logical backup (US-9-03): counts and `pg_dump` in one snapshot, `age` encryption, upload and offsite copy, `backup_runs` row, prune 35 daily + 12 monthly. The Railway `backup` cron service runs it via `APP_ROLE=backup` (runbook §13.8) |
+| `pnpm restore:drill --performed-by <email> --identity <key>` | Restore drill into a scratch database with checks; records `restore_drills` (runbook §13.6) |
+| `pnpm load:seed` / `pnpm load:postings` / `pnpm load:run` | Load test at A-PRD-12 volumes on a scratch database (`docs/load-test-report.md`, `docs/testing.md` §11.3) |
 
 Environment variables (the full per-service table is `docs/deployment-railway.md` §4):
 
@@ -82,6 +85,11 @@ Environment variables (the full per-service table is `docs/deployment-railway.md
 | `MIGRATION_WINDOW_OPEN` | web, worker, one-off shell | `true` only during the cutover window: lets the migration loader run against production (`APP_ENV=production`) and lets opening-stock imports post there; also required by `migrate:load --post` everywhere. Remove when check MC-16 passes (`docs/operations-runbook.md` §17a.2) |
 | `DATABASE_POOL_MAX` | web, worker | Connection pool size per process (default 10; `DB_POOL_MAX` is accepted as an older alias) |
 | `BACKUP_STATUS_SOURCE` | web, worker | `table` = the diagnostics Backups card and the backup-age alert read `backup_runs` (written by `pnpm backup:record` from the backup service). Unset = the card says "not configured" |
+| `APP_ROLE=backup`, `WITH_BACKUP_TOOLS`, `PG_CLIENT_MAJOR` | backup | Role and build arguments of the backup cron service (`WITH_BACKUP_TOOLS=1` installs pg_dump of `PG_CLIENT_MAJOR`, default 18, and `age`) |
+| `BACKUP_ENCRYPTION_PUBLIC_KEY`, `BACKUP_PREFIX`, `DATABASE_BACKUP_URL` | backup | `age` recipient (required outside development), object prefix (default `backups/<APP_ENV>`), optional read-only dump role |
+| `BACKUP_S3_*`, `BACKUP_OFFSITE_S3_*` (`ENDPOINT`, `BUCKET`, `REGION`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `FORCE_PATH_STYLE`) | backup, drill | Primary bucket (falls back to the app `S3_*`) and offsite bucket; `BACKUP_LOCAL_DIR` / `BACKUP_OFFSITE_LOCAL_DIR` for development drills |
+| `DRILL_ADMIN_URL`, `BACKUP_AGE_IDENTITY_FILE` | drill (laptop) | Server where the scratch database is created (staging in production drills); path of the offline private key |
+| `WORKER_HEARTBEAT_STALE_SECONDS` | web | `/api/health/worker` answers 503 after this many seconds without a heartbeat (default 300) |
 
 Custom SQL: after migrating a database that already holds MVP receipts (not a fresh one), run
 `src/db/sql/w1b.sql` once to mark those receipts as posted.

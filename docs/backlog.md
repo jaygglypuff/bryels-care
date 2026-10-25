@@ -1191,6 +1191,13 @@ Wave 3 integration (2026-10-24): the action centre also detects W3D order, quote
 | **E-9-04** US-9-08 Quick guides, SOP mapping, training plan and operator feedback loop (M, Must) | R-26, R-30, brief Phase 9, FR-platform-16 (SOP mapping), `docs/operations-runbook.md` §2.9 | Given each operator task, When the quick guide (`help_guides`, US-2-27) is opened from "?", Then it matches the shipped flow and names the SOP it maps to; training attendance per role is recorded. |
 | US-9-09 Go-live checklist, support roster, hypercare and exit review (M, Must) | charter G9, migration plan §12.6, `docs/operations-runbook.md` §17a.1 | Given go-live, When hypercare runs for 14 days, Then daily reconciliation is clean for 5 consecutive days, adoption metrics meet R-26 triggers, open issues ≤ 5 minor, and the support handover is signed by the owner. |
 
+- **US-9-01 Delivery status (Wave 4 W4F, 2026-10-25):** Partial. Node load harness (`tests/load/`), A-PRD-12 volume seed, posting harness and 25-user HTTP run done locally with two index fixes and a capped order list (`docs/load-test-report.md`); the 30-minute staging run on Railway is still to do.
+- **US-9-03 Delivery status (Wave 4 W4F, 2026-10-25):** Partial. `pnpm backup:dump`, `pnpm restore:drill`, `restore_drills` with owner sign-off, key custody (runbook §13.6–13.8) and a local drill done; the first drill on Railway staging from a production dump is still to do.
+- **US-9-04 Delivery status (Wave 4 W4F, 2026-10-25):** Partial. Alert routing table and simulations, `/api/health/worker`, restore-drill-overdue alert to the owner, uptime-monitor steps, severity agreement and runbook sign-off (runbook §12.4–12.6, §22); severities and on-call need the owner, five alerts of §8.3 are not built (A-W4F-13).
+- **US-9-05 Delivery status (Wave 4 W4F, 2026-10-25):** Done (W4F) for the mechanism: retention policies, legal holds, report-only weekly sweep and purge with protected classes (Admin → Retention & holds); owner-confirmed values and the RLS decision record are for the owner and the integrator.
+- **US-9-08 Delivery status (Wave 4 W4F, 2026-10-25):** Done (W4F) for content: 16 quick guides behind "?" on the flow screens, `docs/training-plan.md` with the SOP register; SOP numbers and attendance records come from the company.
+- **US-9-09 Delivery status (Wave 4 W4F, 2026-10-25):** Done (W4F) for the documents: `docs/go-live-checklist.md` (timeline, support roster, Gate 9 sign-off sheet, hypercare log, exit review); hypercare itself happens at go-live.
+
 ---
 
 ## 6. Traceability

@@ -8,6 +8,7 @@ import { Banner, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { approveExceptionAction, completePackingAction, removeShipmentLineAction, verifyScanAction } from "../../fulfilment-actions";
 import { Cmd, ReasonCmd, ScanPanel } from "../../fulfilment-forms";
+import { Help } from "@/ui/help/help";
 
 export const metadata = { title: "Pack verification" };
 

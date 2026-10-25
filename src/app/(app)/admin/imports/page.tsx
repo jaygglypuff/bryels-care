@@ -3,6 +3,7 @@ import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { IMPORT_STATUS_LABELS, importKindCatalogue, listImportJobs, listMappingProfiles, type ImportJobStatus } from "@/modules/imports";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Help } from "@/ui/help/help";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { UploadForm } from "./forms";
@@ -31,7 +32,7 @@ export default async function ImportsPage({ searchParams }: { searchParams: Prom
       <PageHeader
         title="Imports"
         subtitle="Load master data, opening stock and scanned records from spreadsheets: upload → map columns → validate → review → approve → post."
-        actions={ctx.can("documents.legacy_document.view") ? <LinkButton href="/admin/imports/legacy-documents" variant="secondary">Legacy documents</LinkButton> : undefined}
+        actions={<><Help screen="platform.import" />{ctx.can("documents.legacy_document.view") ? <LinkButton href="/admin/imports/legacy-documents" variant="secondary">Legacy documents</LinkButton> : undefined}</>}
       />
       {canCreate && uploadSites.length > 0 ? (
         <Card>
