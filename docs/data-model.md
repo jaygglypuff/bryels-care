@@ -1429,9 +1429,11 @@ Differences from the target catalogue above:
 | `sales_order_lines` | adds `price_source` (`price_list`/`quote`/`manual`), `list_unit_price`, `price_list_id`, `price_list_line_id`, `discount_pct`, `requirement_snapshot` (schema `requirement_snapshot/v1`), `min_remaining_shelf_life_days`, `customer_item_code` | snapshot at submission (§4.1) |
 
 State machines: sales order transitions in `src/modules/sales/orders.ts` (`ORDER_TRANSITIONS`, adds
-`pending_approval → draft` "returned for changes" with a reason, and keeps the MVP direct
-`allocated → shipped`); `transitionOrder()` writes the transition row and is exported for the
-fulfilment services. Quote, price list, requirement and customer machines live next to their
+`pending_approval → draft` "returned for changes" with a reason, keeps the MVP direct
+`allocated → shipped`, and since the Wave 3 integration W3E's fulfilment states and undo paths, which
+need a reason); `transitionOrder()` writes the transition row and is used by every fulfilment service
+(`advanceOrder` in `fulfilment-state.ts`), ADR-052. `sales_order_state_transitions` and
+`shipment_state_transitions` are append-only by trigger (`src/db/sql/w3i.sql`). Quote, price list, requirement and customer machines live next to their
 services. Approval decisions use `approval_decisions` with `cycle` (a return closes the cycle).
 ### 3.7a Boxing and fulfilment as built (Wave 3 W3E)
 
@@ -1453,14 +1455,17 @@ Schema file `src/db/schema/fulfilment.ts` (tables created by W3E) plus minimal c
 | `sales_order_lines` projections | not added (`qty_allocated_base`, `qty_picked_base`, `qty_shipped_base` are computed from allocations and shipment lines) | W3D owns `sales_order_lines`; the integrator may add the projections |
 | Numbering | `PA` (`PA-{YY}-{SEQ}` 6), `PK` (6), `SH` (5) | §9.2 |
 
-**Customer requirements contract (W3D table, read by W3E).** `customerFulfilmentRequirements` in
-`src/modules/sales/fulfilment-requirements.ts` reads `customer_requirements` when it exists:
-`customer_id`, `requirement_kind`, `value_numeric`, `value_text`, optional `organization_id`,
-`product_id` or `sku_id` (null = all SKUs; a product row wins), `status = 'approved'` when a status
-column exists and `effective_from`/`effective_to` when present. Kinds used:
-`min_remaining_shelf_life_days`, `lot_age_max_days`, `carton_count`, `full_shipment_required`
-(`value_text` true/false), `shipping_marks`. Without the table the defaults apply (customer
-`min_shelf_life_days`, SKU units per box, partial shipments allowed, no marks).
+**Customer requirements (W3D table, read by W3E; reconciled at the Wave 3 integration).**
+`customerFulfilmentRequirements` in `src/modules/sales/fulfilment-requirements.ts` resolves W3D's
+`customer_requirements` through `effectiveRequirements` (approved version in force on the business
+date; a product version wins over the all-products one). Kinds used: `min_remaining_shelf_life_days`,
+`lot_age_max_days`, `carton_count`, `full_shipment_required` (`value_text` `true`), `shipping_marks`.
+Without an approved requirement the customer's `min_shelf_life_days`, the SKU's units per box, partial
+shipments allowed and no marks apply; an approved requirement replaces the customer default
+(A-W3I-01). Allocation and the full-shipment check of a submitted order use the line's snapshot
+instead (`sales_order_lines.min_remaining_shelf_life_days`, `requirement_snapshot`;
+`requirementsFromSnapshot`), ADR-052. `stock_allocations` are read by status everywhere: planning
+counts open allocations of open orders as held stock and open + fulfilled ones as cover.
 ### 3.7b As built in Wave 3 W3F (US-4-15, US-4-16, US-4-17)
 
 New tables in `src/db/schema/complaints.ts`; differences from §3.6 / §3.7:
@@ -1469,7 +1474,7 @@ New tables in `src/db/schema/complaints.ts`; differences from §3.6 / §3.7:
 |---|---|---|
 | `complaints` | `complaint_number` (rule `CMP`), status open → investigating → resolved → closed (resolved → investigating to reopen), `category` and `severity` from settings, `channel`, `customer_id`, `customer_reference`, `product_id`, `lot_id`, `container_id`, `sales_order_id`, `shipment_id`, `reported_code`, `trace_match` (`verified`, `unverified`, `mismatch`, `not_given`; ck verified ⇒ shipment), `description` and `customer_response` (customer-facing), `internal_notes`, `investigation`, `root_cause`, `resolution` (internal), `qty_affected`, `sample_returned`, `deviation_id`, `recall_review_flagged`, received/classified/resolved/closed actors, idempotency key; ck resolved ⇒ resolution, closed ⇔ closer + severity | `site_id` is required (the shipment's or lot's site, else the logger's site); `received_by` is the logger |
 | `complaint_links` | complaint → deviation, customer_return, extra lot, container or shipment, with the number; unique per (complaint, kind, entity) | new |
-| `complaint_state_transitions`, `customer_return_state_transitions` | §6.1 shape | not append-only by trigger yet (W2C tables are) |
+| `complaint_state_transitions`, `customer_return_state_transitions` | §6.1 shape | append-only by trigger (`src/db/sql/w3f.sql`, Wave 3 integration) |
 | `customer_returns` | `return_number` (rule `RT`), status draft → submitted → approved → received → inspected → closed, submitted → draft, draft/submitted/approved → cancelled; `shipment_id` required, `complaint_id`, `reason_code` (reason codes, category `return`), `to_location_id`, approval column set without CHECK (SoD by setting), received/inspected/closed actors, `cancel_reason` | `submitted` and `approved` states added for the approval step; `reason_code` is the code text, not an id |
 | `customer_return_lines` | `lot_id` (shipped lot), `container_id` (unique per return, V-DUP), `qty_base` + `base_uom`, `condition`, `to_location_id`, `return_lot_id` (the quarantine lot created at posting, `origin_lot_id` = `lot_id`), `stock_movement_id` (ck posted ⇔ both set), `scan_payload`, `manual_entry`, `note` | `disposition_id` is not stored: the QA decision is read from `dispositions` of the return lot |
 
@@ -1479,8 +1484,10 @@ Posting a return writes a `return` movement (source document `customer_return`, 
 (transfers and returns) both ways, and `src/modules/quality/recall.ts` implements §10.3/§10.4 (forward,
 and reverse with sibling batches) with boxes, shipments, customers, quantities shipped/returned/still at
 the customer and stock on hand. Boxes on a shipment are read only through `shipmentBoxes()` in
-`src/modules/sales/returns-shipments.ts` (MVP: `meta.containerId` on shipment movements; W3E's
-`shipment_boxes` replaces it). `deviations.source` adds `complaint`.
+`src/modules/sales/returns-shipments.ts`: W3E's posted `shipment_lines` of shipments that left and were
+not reversed; shipments from before Wave 3 fall back to `meta.containerId` on their shipment movements.
+Complaints, returns and recall consider only shipments in `dispatched`, `delivered`, `returned`; a fully
+returned shipment moves to `returned` (ADR-046, ADR-052). `deviations.source` adds `complaint`.
 
 ### 3.8 HR and payroll
 

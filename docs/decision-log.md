@@ -51,6 +51,17 @@ Entries are numbered `ADR-nnn` and never deleted; a superseded entry points to i
 | ADR-041 | Staging is recorded per scan in `batch_material_stagings` and re-reserves stock for the batch | Accepted (Wave 2 integration) | 2026-10-24 |
 | ADR-042 | Optional approval gate on production plans (off by default) | Accepted (Wave 2 integration) | 2026-10-24 |
 | ADR-043 | In-place actions re-render the page in the action response; no `loading.tsx` or `<Suspense>` around pages with in-place actions | Accepted (Wave 2 hardening) | 2026-10-24 |
+| ADR-044 | Price lists are approved through `approval_rules` (document type `price_list`); a seeded organization-wide `finance` role holds credit terms, price approval and order approval | Accepted (Wave 3 integration, W3D) | 2026-10-25 |
+| ADR-045 | `sales_cs` no longer approves sales orders; submission confirms within limits, the approval rules route the rest | Accepted (Wave 3 integration, W3D) | 2026-10-25 |
+| ADR-046 | Customer returns are re-lotted into quarantine (new lot, origin = shipped lot), never put back into the shipped lot | Accepted (Wave 3 integration, W3F) | 2026-10-25 |
+| ADR-047 | Opening stock is posted as `opening_balance` goods receipts with `opening_balance_lines`, not `goods_receipt_lines` | Accepted (Wave 3 integration, W3C) | 2026-10-25 |
+| ADR-048 | Scheduled reports: daily/weekly/monthly cadence at a local time; delivered files stored in the database for 30 days; email carries a link only | Accepted (Wave 3 integration, W3B) | 2026-10-25 |
+| ADR-049 | Action-centre items are materialised (`action_items`) by detectors and registered sources, refreshed by a sweep, resolved automatically | Accepted (Wave 3 integration, W3B) | 2026-10-25 |
+| ADR-050 | Allocation proposes whole boxes first, then loose units, then part of a box | Accepted (Wave 3 integration, W3E) | 2026-10-25 |
+| ADR-051 | Pack verification is always by a person other than the picker | Accepted (Wave 3 integration, W3E) | 2026-10-25 |
+| ADR-052 | One sales order state machine for commerce and fulfilment; every move logged; allocation uses the order line's requirement snapshot; transition logs append-only | Accepted (Wave 3 integration) | 2026-10-25 |
+| ADR-053 | The import poster needs the entity's create permission; system_admin creates suppliers; customers import through the customer service | Accepted (Wave 3 integration) | 2026-10-25 |
+| ADR-054 | KPI engine: one record query per KPI, nightly snapshots reconciled by re-running the query in SQL; no materialized views yet | Accepted (Wave 3 integration, W3A) | 2026-10-25 |
 
 ---
 
@@ -699,3 +710,174 @@ investigating" once a hold is under investigation) is not visible afterwards, so
 show on the page itself (status chip, timeline, banner). The demo rehearsal
 (`tests/e2e/demo-rehearsal.cjs`) has no reload fallback: a screen that looks unchanged after a
 successful action fails it.
+
+## ADR-044 Price-list approval and the finance role
+
+**Status.** Accepted (Wave 3 integration, as built by W3D), 2026-10-25. Content of the default rule
+is an assumption for the owner (A-W3D-03, A-W3D-10).
+
+**Decision.** A price-list version is approved through the same `approval_rules` engine as orders
+and quotations (ADR-028), with the new document type `price_list`; the seeded rule is one step by
+`finance` or `owner_director` holding `sales.price_list.approve`. The editor, creator and submitter of
+a version can never approve it (mandatory separation of duties). An organization-wide `finance` role
+bundle exists (matrix column FI): credit terms view/approve, price-list view/approve, quotation and
+order view/approve/export, customer view/export and its analytics strings (A-W3I-02).
+
+**Why.** Prices are money the warehouse never sees (matrix §6); the approval needs the same evidence
+(rule evaluated, decision, cycle) as other approvals, and finance is the natural approver.
+
+**Alternatives.** A dedicated price-list approval table (rejected: a second approval engine);
+owner-only approval (rejected: does not scale and the matrix gives FI `a`).
+
+## ADR-045 Sales customer service does not approve orders
+
+**Status.** Accepted (Wave 3 integration, W3D), 2026-10-25.
+
+**Decision.** `sales.sales_order.approve` is removed from `sales_cs` (matrix §3.8: SC `v c e s x o`).
+A draft is submitted with `sales.sales_order.submit`; within the credit limit and below every rule
+threshold it confirms itself; otherwise it waits in `pending_approval` for the role the rule names
+(finance, site manager, owner), who must not be its creator or submitter. The approval shows in the
+approver's action centre (ADR-049).
+
+**Why.** The person taking the order should not also waive credit and amount limits.
+
+## ADR-046 Customer returns are re-lotted into quarantine
+
+**Status.** Accepted (Wave 3 integration, W3F), 2026-10-25.
+
+**Decision.** Posting an approved return creates, per returned lot line, a new lot (`origin_lot_id` =
+the shipped lot, status `quarantine`) and a `return` movement into a quarantine location (default the
+site's customer-returns cage, `sales.customer_return.location_kinds`). QA decides each return lot with
+the normal lot decision; the shipped lot's history is never changed. The genealogy follows the
+re-lot edge both ways (trace, recall explorer). A fully returned shipment moves to `returned` (ADR-052).
+
+**Why.** Returned goods have an unknown history since dispatch; mixing them into the original lot
+would release them silently and break the ledger's meaning of that lot.
+
+**Alternatives.** Return into the original lot on hold (rejected: one lot with two histories);
+scrap on arrival (rejected: QA may release or rework).
+
+## ADR-047 Opening stock lines outside goods_receipt_lines
+
+**Status.** Accepted (Wave 3 integration, W3C), 2026-10-25.
+
+**Decision.** The go-live opening stock count is posted as one `opening_balance` goods receipt per
+warehouse with `opening_balance_lines` (count sheet, counter ≠ checker, initial status quarantine /
+on hold / expired, container count, the import row), each line posting one ledger movement through
+`postMovement`. `goods_receipt_lines` stays for supplier receipts.
+
+**Why.** Opening stock includes finished-product lots and lots without expiry or supplier lot that the
+receipt line's constraints (materials, supplier lot, CoA) correctly refuse for real receipts; loosening
+them would weaken receiving.
+
+## ADR-048 Scheduled report cadence and file storage
+
+**Status.** Accepted (Wave 3 integration, W3B), 2026-10-25. Retention and cadence are assumptions
+A-W3B-04, A-W3B-05.
+
+**Decision.** A schedule runs daily, weekly (weekday) or monthly (day 1–28) at a local time in the
+organization's time zone, not a free cron expression; a missed slot produces one catch-up run. Each run
+rebuilds the AuthContext of every recipient, writes one file per distinct permission/site group into
+`report_run_files.content` (database), deleted after 30 days; the email carries a sign-in link only,
+and only a recipient of the run can download its file.
+
+**Why.** Owners understand "every Monday 07:00"; data never leaves in an email; the database is
+already backed up and access-controlled, and files are small.
+
+**Alternatives.** Cron strings (rejected: unreadable for owners); files in the bucket (possible later
+for large files; needs the S3 adapter in every environment).
+
+## ADR-049 Materialised action-centre items
+
+**Status.** Accepted (Wave 3 integration, W3B), 2026-10-25.
+
+**Decision.** The action centre lists rows of `action_items`, written by detectors (one per kind,
+SQL over the source tables) and by sources other modules register (`registerActionItemSource`, wired
+in `src/modules/wiring.ts`: W3C imports). `platform.action_centre_sweep` (every 5 minutes and when the
+page opens) opens new items, resolves items whose record no longer matches (audited), and escalates by
+`notification_rules`. Visibility is the kind's permission at the item's site. Wave 3 integration adds
+the W3D, W3E, W3F and W3C kinds (A-W3I-04).
+
+**Why.** Acknowledgement, escalation and history need a row per item; computing the list on every page
+view would also be slow on phones.
+
+**Alternatives.** Notifications only (rejected: they do not clear when the record resolves); live
+queries per view (rejected: no acknowledgement or escalation state).
+
+## ADR-050 Allocation by whole boxes first
+
+**Status.** Accepted (Wave 3 integration, W3E), 2026-10-25. Assumption A-W3E-07.
+
+**Decision.** Within each FEFO/FIFO candidate lot and location, allocation proposes whole single-lot
+boxes (full before partial), then loose units, and only when nothing else fits part of a box, which
+the picker takes out at the shelf. Allocations are lot-, location- and box-specific, and are released
+with a reason, never deleted.
+
+**Why.** Shipping whole sealed boxes keeps labels and box-level traceability intact and makes picking
+and verification a scan per box.
+
+## ADR-051 Verifier is never the picker
+
+**Status.** Accepted (Wave 3 integration, W3E), 2026-10-25. Owner to confirm staffing (A-W3E-08).
+
+**Decision.** Whoever scanned or completed the pick cannot verify the pack (`packs.checked_by <>
+packed_by`, service rule and database check); there is no switch.
+
+**Why.** The backlog acceptance criterion (US-4-11) makes the four-eyes check mandatory; a switch
+would quietly remove the only independent count before goods leave.
+
+## ADR-052 One sales order machine across commerce and fulfilment
+
+**Status.** Accepted (Wave 3 integration), 2026-10-25.
+
+**Decision.**
+
+1. `ORDER_TRANSITIONS` in `src/modules/sales/orders.ts` is the only sales order machine: draft →
+   submitted → confirmed | pending_approval (→ confirmed, or → draft with a reason) → allocated →
+   picking → packed → partially_shipped | shipped → invoiced → closed, cancellation up to packed, and
+   W3E's undo paths (allocation released, pick or shipment cancelled, dispatch reversed), which need a
+   reason.
+2. Every move, including fulfilment moves, goes through `transitionOrder()`, which writes
+   `sales_order_state_transitions`; W3E's `advanceOrder` wraps it and adds the audit event.
+3. Allocation and the full-shipment check read the requirement snapshot frozen on the order line at
+   submission; lines from before Wave 3 read the approved requirements in force today through W3D's
+   `effectiveRequirements` (A-W3I-01).
+4. The sales order, shipment, complaint and customer-return transition logs are append-only by trigger
+   (`src/db/sql/w3i.sql`, `w3f.sql`). A fully returned shipment moves to `returned` through the
+   shipment machine.
+5. Fulfilment reads (pick, packing, shipment, delivery receipt) select explicit order and customer
+   columns, never the full rows that carry money and credit terms.
+
+**Why.** Two streams built two halves of the same lifecycle; one table and one log keep reports, KPIs
+(KPI-SAL-01 now uses the confirmed transition, ADR-054) and audits consistent.
+
+## ADR-053 Import posting needs the entity permission
+
+**Status.** Accepted (Wave 3 integration), 2026-10-25. Who posts is an assumption for the owner
+(A-W3I-03).
+
+**Decision.** Posting an import needs `platform.import_job.post` and the create permission of every
+entity the kind creates (checked again by the module services at run time). `system_admin` now holds
+`masterdata.supplier.create` (it already created materials, products and customers), so a seeded role
+can post supplier imports prepared by procurement. The `customers` kind posts through W3D's
+`createCustomer(ctx, input, { tx })`; credit terms in a file are refused unless the poster holds
+`finance.credit_terms.approve`. Registered import kinds live on `globalThis`, like the other registries.
+
+**Alternatives.** Posting as a system actor (rejected: bypasses the services' permission checks);
+giving procurement `platform.import_job.post` (rejected: the matrix keeps posting with SA/SM).
+
+## ADR-054 KPI engine without materialized views
+
+**Status.** Accepted (Wave 3 integration, W3A), 2026-10-25. Assumptions A-W3A-01, A-W3A-02.
+
+**Decision.** Each KPI is one SQL record query (`src/modules/analytics/kpi/catalogue.ts`) whose rows
+are both the drill-down list and the input of the value. Definitions are mirrored and versioned in
+`kpi_definitions` by checksum (a changed query records a new version). `analytics.snapshot_kpis`
+writes nightly `kpi_snapshots`; `analytics.reconcile_kpis` re-runs the query aggregated in SQL (the
+R-query, stock from the ledger) and records a mismatch with a critical notification, correcting
+nothing. Snapshots, reconciliation results and definitions are append-only (`src/db/sql/w3a.sql`).
+Dashboards run the record queries live; no materialized views yet.
+
+**Why.** One query per KPI makes the number explain itself and makes reconciliation exact; the data
+volume does not need materialized views yet (revisit when a dashboard card exceeds its time budget).
+

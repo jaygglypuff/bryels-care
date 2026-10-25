@@ -694,8 +694,8 @@ plus `inventory.allocation.{view,create,void}` and `inventory.pack.{view,create,
 (§3.3) are in the catalogue and granted per these columns; `sales.allocation.post` (MVP) is kept
 in the catalogue but no longer checked (allocation requires `inventory.allocation.create`).
 `sales.over_shipment.approve` also requires re-authentication and an approver who is not the
-order's creator. Prices in the shipment export need `sales.price_list.view` (added by W3D; until
-then every holder sees them masked).
+order's creator. Prices in the shipment export need `sales.price_list.view` (W3D); without it the
+export does not read them at all.
 
 ### 3.9 hr
 
@@ -1169,6 +1169,28 @@ approver may not be its creator or submitter while `approvals.sod.customer_retur
 genealogy view, so "Trace this lot" shows for QA, managers, owner and auditor only). Raising a
 deviation from a complaint needs `quality.deviation.create` as well. Every service checks the
 permission at the record's site (`requireAt`) and scopes queries to the user's sites.
+
+### 8.8 As built: Wave 3 integration (W3A–W3F wired together)
+
+Block "Wave 3 integration" at the end of `src/lib/permissions.ts`:
+
+- `system_admin` gains `masterdata.supplier.create` (supplier SA "v c*"), so a seeded role can post a
+  supplier import; the poster of any import needs the created entity's permission (ADR-053).
+- `qa_qc` loses `sales.price_list.view`, `sales.quote.view` and `finance.credit_terms.view`, which had
+  reached it through VIEW_ALL (matrix §3.8/§3.10 give QA "–"); W3D had removed them from
+  system_admin and site_manager.
+- `finance` gains its §3.11 analytics strings (dashboard, owner dashboard, financial KPIs, KPI
+  definitions, report view/export, scheduled report view/create); report administration stays with
+  system_admin (A-W3I-02).
+- Money in analytics follows the price permission: KPI-SAL-01V and KPI-FIN-02 need
+  `analytics.financial_kpi.view` and `sales.price_list.view`.
+- Action-centre kinds (ADR-049) and their permissions: order approval `sales.sales_order.approve`,
+  quotation `sales.quote.approve`, price list `sales.price_list.approve`, requirement
+  `masterdata.customer_requirement.approve`, return `sales.customer_return.approve`, import
+  `platform.import_job.approve`; credit hold `finance.credit_terms.view`; open complaint
+  `quality.complaint.view`; return waiting for QA `quality.disposition.approve`; unacknowledged DR
+  `sales.shipment.view`; failed import `platform.import_job.view` (was `platform.job.view`).
+- Customer 360 sections: complaints (`quality.complaint.view`), returns (`sales.customer_return.view`).
 
 ## 9. Assumptions and open questions
 

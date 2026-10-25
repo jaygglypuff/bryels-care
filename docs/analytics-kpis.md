@@ -809,9 +809,9 @@ raises an alarm when the two differ.
 
 | Id | Built as | Difference from section 2 |
 |---|---|---|
-| KPI-SAL-01, KPI-SAL-01V | orders entered in the period that are confirmed or further (count; value at order price) | time basis = order entry, no transition log yet (A-W3A-03); value needs `analytics.financial_kpi.view` (A-W3A-06) |
+| KPI-SAL-01, KPI-SAL-01V | orders entered in the period that are confirmed or further (count; value at order price) | time basis = first `confirmed` transition (`sales_order_state_transitions`; entry time for orders from before Wave 3, A-W3A-03); value needs `analytics.financial_kpi.view` and `sales.price_list.view` (A-W3A-06) |
 | KPI-SAL-02 | OTIF over orders due in the period; categories on_time / late / open | in full per product (Σ shipped ≥ Σ ordered); shipped = non-reversed shipment movements |
-| KPI-SAL-03, KPI-SAL-04, KPI-SAL-11 | fill rate on first shipment; median order-to-ship days; unshipped past requested date | order-to-ship starts at order entry (A-W3A-03) |
+| KPI-SAL-03, KPI-SAL-04, KPI-SAL-11 | fill rate on first shipment; median order-to-ship days; unshipped past requested date | order-to-ship starts at confirmation (A-W3A-03) |
 | KPI-FIN-02 | shipped value at the order's weighted unit price per product, Estimate | as section 2.8 |
 | KPI-OPS-01 | output mass posted ÷ planned mass of work orders due | output mass = `batch_outputs.mass_g` (units × unit mass) |
 | KPI-OPS-02, -03, -13 | yield, yield loss, right first time over the current yield record of batches first yielded in the period | time basis = first yield record, not closure (A-W3A-04) |
