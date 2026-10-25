@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
-import type { Tx } from "@/db/client";
+import type { DbOrTx, Tx } from "@/db/client";
 import { idempotencyKeys } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -83,8 +83,24 @@ export function discountPct(listPrice: Decimal.Value | null | undefined, price: 
   return d.lte(0) ? "0" : d.toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toString();
 }
 
-/** Subtotal, tax at `ratePct` (configuration, A-W3D-01) and total of priced lines. */
-export function totals(lines: { qty: Decimal.Value; price: Decimal.Value }[], ratePct: number) {
+/**
+ * Wave 4 W4B: the sales tax rate of quotes and orders comes from finance's reviewed tax configuration
+ * (finance.tax.default_sales_code → an approved, effective tax_configurations row; US-6-14), which replaced
+ * the setting `sales.tax.rate_pct` (A-W3D-01). Finance registers the resolver in src/modules/wiring.ts
+ * (sales must not import finance, which imports sales); no resolver or no configured code = 0 % (no tax line).
+ */
+export type SalesTaxRateResolver = (q: DbOrTx, organizationId: string, onDate: string) => Promise<Decimal.Value>;
+const TAX_RESOLVER_KEY = "__bc_sales_tax_rate_resolver__";
+export function registerSalesTaxRateResolver(fn: SalesTaxRateResolver) {
+  (globalThis as unknown as Record<string, SalesTaxRateResolver>)[TAX_RESOLVER_KEY] = fn;
+}
+export async function salesTaxRatePct(q: DbOrTx, organizationId: string, now = new Date()): Promise<Decimal> {
+  const fn = (globalThis as unknown as Record<string, SalesTaxRateResolver | undefined>)[TAX_RESOLVER_KEY];
+  return new Decimal(fn ? await fn(q, organizationId, businessDate(now)) : 0);
+}
+
+/** Subtotal, tax at `ratePct` (finance tax configuration, see salesTaxRatePct) and total of priced lines. */
+export function totals(lines: { qty: Decimal.Value; price: Decimal.Value }[], ratePct: Decimal.Value) {
   const subtotal = lines.reduce((s, l) => s.plus(new Decimal(l.qty).times(l.price)), new Decimal(0));
   const tax = subtotal.times(ratePct).div(100).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
   return { subtotal: money(subtotal), tax: money(tax), total: money(subtotal.plus(tax)) };

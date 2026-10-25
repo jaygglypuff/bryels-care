@@ -1618,6 +1618,24 @@ snapshots and exports unless explicitly permitted (`A-DM-15`).
 | **`journal_entries`**, **`journal_lines`** · Deferred | | | | only if a GL is approved: `journal_entries(entry_number, accounting_period_id, status posted/reversed, reversal_of_id)`, `journal_lines(account_code, debit_amount, credit_amount)` with ck balanced per entry |
 | **`invoice_state_transitions`** · P6 · L | | | | shape §6.1 |
 
+### 3.9.1 As built: Wave 4 W4B (US-6-10..US-6-14), file `src/db/schema/finance.ts`
+
+| Table | As built | Differences from §3.9 |
+|---|---|---|
+| `accounting_periods` | `period_code` (CHECK `YYYY-MM`), start/end, `status` open/locked, lock by/at/reason, `lock_acknowledgements` jsonb (pre-lock checklist), unlock by/at, `version` | created on first use instead of by a job; no GiST exclusion (one row per month code, unique) |
+| `period_unlock_requests` | request (reason, requested_by), status pending/applied/rejected/cancelled, one pending per period (partial unique), decider ≠ requester (CHECK); decisions in `approval_decisions` (`period_lock_unlock`) | new table |
+| `tax_configurations` | code + `version_no`, name, kind, `rate_pct` numeric(9,4), inclusive, applies_to, rounding, effective_from/to, status proposed/approved/rejected/retired, `is_fictional`, proposed/reviewed/rejected/retired by+at; CHECK: approved or retired ⇒ reviewer set; reviewer ≠ proposer | finance.md §5 shape, plus status and proposer |
+| `financial_postings` | as §3.9 plus `document_number`, `posting_date`, `tax_amount`, counterparty (customer / supplier / user), `reason`, `idempotency_key` (partial unique), `correlation_id`, `posted_by/at`; partial unique on `reversal_of_id`; append-only trigger (`src/db/sql/w4b.sql`) | — |
+| `finance_state_transitions` | §6.1 shape with `document_type` (invoice, supplier_bill, payment_record, credit_note, expense_claim); append-only trigger | one table instead of `invoice_state_transitions` per entity |
+| `invoices`, `invoice_lines` | as §3.9 plus `credited_amount` (credit notes) next to `paid_amount` (payments), `customer_po_number`, `payment_terms_days` snapshot; partial unique "one live invoice per shipment"; lines carry `tax_code`, `tax_configuration_id`, `tax_inclusive`, `tax_amount`, `total_amount` | — |
+| `credit_notes` | as §3.9 plus `customer_id`, `tax_amount`, `voids_invoice`, `issue_date`; `reason_code` is text (setting `finance.credit_note.reasons`) | `is_refund` not built (Phase 8) |
+| `supplier_bills`, `supplier_bill_lines` | as §3.9 plus `category_code` (non-stock), `credit_for_bill_id`, `match_summary` jsonb, variance approval by/at/reason (≠ creator), `paid_amount`; partial unique (supplier, lower(supplier_reference)); lines `match_result` adds `no_receipt`, `match_detail` jsonb; `purchase_order_id`, `purchase_order_line_id` have no FK until W4A | — |
+| `payment_records`, `payment_applications` | as §3.9 with `paid_on` (date), statuses add `submitted`, `approved`, `applied_amount`, `application_plan` jsonb, `claimant_user_id` (not `employee_id`); applications append-only with negative reversal rows (`reversal_of_id`), target invoice / bill / expense claim (exactly one) | `paid_at` → `paid_on`; reversal rows instead of edits |
+| `expense_claims` | as §3.9 with `claimant_user_id`, `expense_date`, `paid_amount`, rejection by/at/reason, void by/at/reason; status adds `voided` | no `employees` table outside HR scope (A-W4B-06) |
+
+Numbering defaults (src/lib/numbering.ts): `INV-{YYYY}-{SEQ}` (6, gapless, allocated inside the
+issue posting), `BILL-{YY}-{SEQ}` (5), `PAY-{YY}-{SEQ}` (6), `CN-{YYYY}-{SEQ}` (5), `EXP-{YY}-{SEQ}` (5).
+
 ### 3.10 Documents, jobs, imports and sync
 
 | Table → column | Type | Null | Constraint / default | Notes |

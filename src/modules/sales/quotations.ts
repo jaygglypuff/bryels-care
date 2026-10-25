@@ -13,7 +13,7 @@ import { getSetting } from "@/lib/settings";
 import { evaluateApprovalRulesAudited, sodRequired } from "@/modules/governance";
 import { notifyRoles, notifyUsers } from "@/modules/platform";
 import { approvalProgress, canDecide, decisionsOf, recordDecision, stepRoles } from "./crm-approvals";
-import { addDaysIso, businessDate, canSeePrices, discountPct, formatAddress, idempotent, isUuid, money, totals } from "./crm-support";
+import { addDaysIso, businessDate, canSeePrices, discountPct, formatAddress, idempotent, isUuid, money, salesTaxRatePct, totals } from "./crm-support";
 import { createOrderInTx } from "./orders";
 import { resolvePrice } from "./price-lists";
 
@@ -259,7 +259,7 @@ export async function createQuote(ctx: AuthContext, input: QuoteInput) {
     const { result } = await idempotent(tx, ctx, input.idempotencyKey, "sales.quote.create", async () => {
       const { c, validUntil, shipToAddressId } = await quoteHeader(tx, ctx, input);
       const lines = await priceQuoteLines(tx, ctx, c.id, input.lines);
-      const rate = await getSetting(tx, ctx.organizationId, "sales.tax.rate_pct");
+      const rate = await salesTaxRatePct(tx, ctx.organizationId);
       const t = totals(lines.map((l) => ({ qty: l.qtyUnits, price: l.unitAmount })), rate);
       const quoteNumber = await nextNumber(tx, ctx.organizationId, "QT");
       const [q] = await tx
@@ -300,7 +300,7 @@ export async function editQuote(ctx: AuthContext, id: string, input: Omit<QuoteI
     if (input.customerId !== q.customerId) throw new DomainError("validation", "The customer of a quotation cannot change.", { field: "customerId" });
     const { validUntil, shipToAddressId } = await quoteHeader(tx, ctx, input);
     const lines = await priceQuoteLines(tx, ctx, q.customerId, input.lines);
-    const rate = await getSetting(tx, ctx.organizationId, "sales.tax.rate_pct");
+    const rate = await salesTaxRatePct(tx, ctx.organizationId);
     const t = totals(lines.map((l) => ({ qty: l.qtyUnits, price: l.unitAmount })), rate);
     const before = await tx.select().from(quoteLines).where(eq(quoteLines.quoteId, q.id));
     await tx.delete(quoteLines).where(eq(quoteLines.quoteId, q.id));

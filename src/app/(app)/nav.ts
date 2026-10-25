@@ -121,6 +121,23 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    // Wave 4 W4B: operational finance (ADR-020; US-6-10..14)
+    label: "Finance",
+    icon: "audit",
+    items: [
+      { label: "Finance overview", href: "/finance", permission: "finance.invoice.view" },
+      { label: "Invoices", href: "/finance/invoices", permission: "finance.invoice.view" },
+      { label: "Statements", href: "/finance/statements", permission: "finance.invoice.view" },
+      { label: "Payments", href: "/finance/payments", permission: "finance.payment_record.view" },
+      { label: "Credit notes", href: "/finance/credit-notes", permission: "finance.credit_note.view" },
+      { label: "Supplier bills", href: "/finance/bills", permission: "finance.supplier_bill.view" },
+      { label: "Expense claims", href: "/finance/expenses", permission: "finance.expense_claim.create" },
+      { label: "Expense approvals", href: "/finance/expenses?status=to_approve", permission: "finance.expense_claim.approve" },
+      { label: "Periods and locks", href: "/finance/periods", permission: "finance.period_lock.view" },
+      { label: "Tax configuration", href: "/finance/tax", permission: "finance.tax_config.view" },
+    ],
+  },
+  {
     // Wave 3 W3B: report library and scheduled delivery (US-5-04, US-5-05)
     label: "Reports",
     icon: "audit",
@@ -170,7 +187,6 @@ export const NAV: NavGroup[] = [
     icon: "clock",
     items: [
       { label: "HR & attendance", href: "#", planned: "Phase 5–6" },
-      { label: "Finance", href: "#", planned: "Phase 6" },
       { label: "Offline mode", href: "#", planned: "Phase 7" },
       { label: "Customer portal", href: "#", planned: "Phase 8" },
     ],

@@ -57,6 +57,12 @@ export const NUMBERING_DEFAULTS = {
   PR: yearly("PR", 5),
   PO: yearly("PO", 5),
   SRT: yearly("SRT", 4),
+  // Wave 4 W4B: finance documents (data-model §9.2; only INV is gapless, A-DM-05 / A-FIN-05)
+  INV: { prefix: "INV", pattern: "{PREFIX}-{YYYY}-{SEQ}", resetPeriod: "yearly", sequenceWidth: 6, isGapless: true },
+  BILL: yearly("BILL", 5),
+  PAY: yearly("PAY", 6),
+  CN: { prefix: "CN", pattern: "{PREFIX}-{YYYY}-{SEQ}", resetPeriod: "yearly", sequenceWidth: 5, isGapless: false },
+  EXP: yearly("EXP", 5),
 } satisfies Record<string, NumberingRuleSpec>;
 
 export type DocumentType = keyof typeof NUMBERING_DEFAULTS;

@@ -338,6 +338,44 @@ export const PERMISSIONS = [
   "analytics.forecast.view",
   "analytics.forecast.edit",
   "analytics.forecast.approve",
+  // Wave 4 W4B: operational finance — invoices, supplier bills, payments, credit notes, expense claims, periods, tax (E-6-04, E-6-05; docs/permissions-matrix.md §2.10, §3.10)
+  "finance.invoice.view",
+  "finance.invoice.create",
+  "finance.invoice.edit",
+  "finance.invoice.submit",
+  "finance.invoice.approve",
+  "finance.invoice.post",
+  "finance.invoice.void",
+  "finance.invoice.export",
+  "finance.supplier_bill.view",
+  "finance.supplier_bill.create",
+  "finance.supplier_bill.edit",
+  "finance.supplier_bill.submit",
+  "finance.supplier_bill.approve",
+  "finance.supplier_bill.post",
+  "finance.supplier_bill.void",
+  "finance.payment_record.view",
+  "finance.payment_record.create",
+  "finance.payment_record.approve",
+  "finance.payment_record.post",
+  "finance.payment_record.void",
+  "finance.credit_note.view",
+  "finance.credit_note.create",
+  "finance.credit_note.submit",
+  "finance.credit_note.approve",
+  "finance.credit_note.post",
+  "finance.credit_note.void",
+  "finance.expense_claim.create",
+  "finance.expense_claim.submit",
+  "finance.expense_claim.view",
+  "finance.expense_claim.approve",
+  "finance.expense_claim.post",
+  "finance.expense_claim.void",
+  "finance.period_lock.view",
+  "finance.period_lock.post",
+  "finance.period_lock.void",
+  "finance.tax_config.view",
+  "finance.tax_config.admin",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -1285,4 +1323,46 @@ const W4A_EXCLUDE: Record<string, readonly Permission[]> = {
 };
 for (const [role, drop] of Object.entries(W4A_EXCLUDE)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => !drop.includes(p));
+}
+
+// Wave 4 W4B: operational finance grants (docs/permissions-matrix.md §3.10, ADR-020). owner_director holds every
+// string, so the operational ones the matrix does not give the owner (create, edit, submit, post, void of
+// money documents; lock; tax administration) are removed; VIEW_ALL roles (system_admin, site_manager, qa_qc,
+// auditor) received every finance `.view`, so the ones the matrix shows as "–" are removed again.
+const W4B_FINANCE_ALL: readonly Permission[] = PERMISSIONS.filter((p) => /^finance\.(invoice|supplier_bill|payment_record|credit_note|expense_claim|period_lock|tax_config)\./.test(p));
+const W4B_GRANTS: Record<string, readonly Permission[]> = {
+  // FI: v c e s a p o x on the money documents; period_lock v p (unlock is the owner's .void); tax_config v m.
+  finance: W4B_FINANCE_ALL.filter((p) => p !== "finance.period_lock.void"),
+  sales_cs: ["finance.invoice.view", "finance.invoice.create", "finance.invoice.submit", "finance.payment_record.view", "finance.credit_note.view", "finance.credit_note.create", "finance.credit_note.submit", "finance.expense_claim.create", "finance.expense_claim.submit"],
+  procurement: ["finance.supplier_bill.view", "finance.supplier_bill.create", "finance.supplier_bill.submit", "finance.expense_claim.create", "finance.expense_claim.submit"],
+  site_manager: ["finance.invoice.view", "finance.supplier_bill.view", "finance.expense_claim.view", "finance.expense_claim.approve"],
+  production_planner: ["finance.expense_claim.create", "finance.expense_claim.submit"],
+  production_operator: ["finance.expense_claim.create", "finance.expense_claim.submit"],
+  warehouse_operator: ["finance.expense_claim.create", "finance.expense_claim.submit"],
+  qa_qc: ["finance.expense_claim.create", "finance.expense_claim.submit"],
+  auditor: ["finance.invoice.view", "finance.invoice.export", "finance.supplier_bill.view", "finance.payment_record.view", "finance.credit_note.view", "finance.expense_claim.view", "finance.period_lock.view", "finance.tax_config.view"],
+};
+for (const [role, grants] of Object.entries(W4B_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
+}
+// Roles that received finance strings through PERMISSIONS (owner) or VIEW_ALL keep exactly their matrix
+// strings of these finance entities and lose the rest.
+const W4B_KEEP: Record<string, readonly Permission[]> = {
+  // OD: invoice v a x, supplier_bill v a, payment_record v a, credit_note v a, expense_claim v a, period_lock v o, tax_config v.
+  owner_director: [
+    "finance.invoice.view", "finance.invoice.approve", "finance.invoice.export",
+    "finance.supplier_bill.view", "finance.supplier_bill.approve",
+    "finance.payment_record.view", "finance.payment_record.approve",
+    "finance.credit_note.view", "finance.credit_note.approve",
+    "finance.expense_claim.view", "finance.expense_claim.approve",
+    "finance.period_lock.view", "finance.period_lock.void",
+    "finance.tax_config.view",
+  ],
+  system_admin: [],
+  qa_qc: W4B_GRANTS.qa_qc,
+  site_manager: W4B_GRANTS.site_manager,
+  auditor: W4B_GRANTS.auditor,
+};
+for (const [role, keep] of Object.entries(W4B_KEEP)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => !W4B_FINANCE_ALL.includes(p) || keep.includes(p));
 }

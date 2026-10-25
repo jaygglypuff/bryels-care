@@ -330,6 +330,24 @@ are corrected with a reversal that is itself recorded."
 **Say:** "Operators get a task screen, not an ERP. Each role sees only what it needs, for its own
 site only."
 
+### Scene 14 (optional, Wave 4): Billing and money (3 min). Sign in as `finance@` (Rosa Lim)
+
+1. Left menu: **Finance → Finance overview**: receivables outstanding and overdue, aging buckets,
+   payables and the bills in dispute (fictional figures from the demo seed).
+2. **Invoices**: the card *Shipments awaiting invoice* lists dispatched shipments; the seeded invoices
+   show each state (draft, waiting for approval, approved, issued, partly paid, paid). Open the one
+   *waiting for approval* and click **Approve invoice** (Mara from sales submitted it, so Rosa may
+   approve). Then **Issue invoice** (password `demo1234`): it gets its `INV-…` number only now, and
+   the order moves to *Invoiced*. Click **Print invoice**.
+3. **Supplier bills → In dispute**: the match panel shows the supplier billed more than was received.
+   Rosa can approve the variance with a reason because Ben (`finance2@`) entered the bill.
+4. **Periods and locks**: two months back is locked; try nothing there. **Tax configuration** shows
+   the FICTIONAL placeholder rates; one is *Pending accountant review* and has no effect.
+
+**Say:** "Every posted figure is frozen. A mistake is reversed with a reason, never edited, and a
+locked month cannot be touched without two people agreeing. Your accountant's system stays the
+books; this is the operational side."
+
 ---
 
 ## 3. If something goes wrong

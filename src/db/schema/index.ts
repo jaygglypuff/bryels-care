@@ -28,3 +28,4 @@ export * from "./imports";
 export * from "./reports";
 export * from "./analytics";
 export * from "./procurement"; // Wave 4 W4A
+export * from "./finance"; // Wave 4 W4B

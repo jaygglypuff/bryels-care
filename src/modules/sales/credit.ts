@@ -6,7 +6,7 @@ import { customers, salesOrderLines, salesOrders } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
-import { isUuid, money } from "./crm-support";
+import { isUuid, money, salesTaxRatePct } from "./crm-support";
 
 /**
  * Credit check at order submission (W09-03, A-PROC-14, docs/modules/finance.md A-FIN-27).
@@ -32,7 +32,7 @@ export async function creditExposure(q: DbOrTx, organizationId: string, customer
     .from(salesOrderLines)
     .innerJoin(salesOrders, eq(salesOrders.id, salesOrderLines.salesOrderId))
     .where(and(...where));
-  const rate = await getSetting(q, organizationId, "sales.tax.rate_pct");
+  const rate = await salesTaxRatePct(q, organizationId);
   return new Decimal(r?.v ?? 0).times(new Decimal(100).plus(rate)).div(100);
 }
 

@@ -111,7 +111,8 @@ export const DEFAULT_APPROVAL_RULES: ApprovalRuleSpec[] = [
   rule({ documentType: "quote", step: 2, label: "Finance approval above 10 % discount", thresholdBasis: "discount_pct", minValue: "10", requiredRoleCodes: ["finance"] }),
   rule({ documentType: "over_shipment", step: 1, label: "Site manager approval", requiredRoleCodes: ["site_manager"] }),
   ...(["invoice", "supplier_bill", "credit_note", "payment_record"] as const).flatMap((t) => [
-    rule({ documentType: t, step: 1, label: "Finance approval", thresholdBasis: "amount", maxValue: "100000", currency: "PHP", requiredRoleCodes: ["finance"] }),
+    // A-PM-10 (permissions-matrix §3.10 note): below the threshold the approver may also post (W4B).
+    rule({ documentType: t, step: 1, label: "Finance approval", thresholdBasis: "amount", maxValue: "100000", currency: "PHP", requiredRoleCodes: ["finance"], posterMayEqualApprover: true, source: "A-PM-15, A-PM-10" }),
     rule({ documentType: t, step: 1, label: "Finance approval", thresholdBasis: "amount", minValue: "100000", currency: "PHP", requiredRoleCodes: ["finance"] }),
     rule({ documentType: t, step: 2, label: "Owner approval above PHP 100,000", thresholdBasis: "amount", minValue: "100000", currency: "PHP", requiredRoleCodes: ["owner_director"] }),
   ]),

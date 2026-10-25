@@ -6,7 +6,6 @@ import { type DeviationSource, ensureBatchInspection, inProcessQcStatus, listCom
 import { registerActionItemSource } from "@/modules/action-centre";
 import { customersKind, failedImportCandidates, importApprovalCandidates, importWizardStats, registerImportKind } from "@/modules/imports";
 import { registerImportStatsProvider } from "@/modules/platform/diagnostics-phase5";
-import { listCustomerReturns, registerCustomer360Section, RETURN_STATUS_LABEL, type CustomerReturnStatus } from "@/modules/sales";
 import { registerReceivingPoHooks } from "@/modules/inventory";
 import {
   aslApprovalCandidates,
@@ -18,6 +17,8 @@ import {
   srApprovalCandidates,
   supplierMaterialsKind,
 } from "@/modules/procurement";
+import { listCustomerReturns, registerCustomer360Section, registerSalesTaxRateResolver, RETURN_STATUS_LABEL, type CustomerReturnStatus } from "@/modules/sales";
+import { disputedBills, expenseClaimsToApprove, invoicesToApprove, overdueInvoices, salesTaxRateFor } from "@/modules/finance";
 
 /**
  * Cross-module wiring (Wave 2 and Wave 3 integration). Batch execution (production) must not import
@@ -117,4 +118,11 @@ export function registerAppHooks() {
   registerActionItemSource({ kind: "late_purchase_order", detect: (org, now) => latePoCandidates(org, now) });
   registerActionItemSource({ kind: "over_delivery", detect: (org) => overDeliveryCandidates(org) });
   registerImportKind(supplierMaterialsKind);
+  // Wave 4 W4B: quotes and orders take the sales tax rate from finance's reviewed tax configuration (US-6-14;
+  // replaces W3D's setting sales.tax.rate_pct), and finance feeds the action centre.
+  registerSalesTaxRateResolver((q, org, onDate) => salesTaxRateFor(q, org, onDate));
+  registerActionItemSource({ kind: "approval.invoice", detect: (org) => invoicesToApprove(org) });
+  registerActionItemSource({ kind: "overdue_invoice", detect: (org, now) => overdueInvoices(org, now) });
+  registerActionItemSource({ kind: "disputed_bill", detect: (org) => disputedBills(org) });
+  registerActionItemSource({ kind: "approval.expense_claim", detect: (org) => expenseClaimsToApprove(org) });
 }
