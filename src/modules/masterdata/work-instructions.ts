@@ -154,7 +154,7 @@ export async function getWorkInstruction(ctx: AuthContext, id: string) {
         approvedByName: r.approvedBy ? names.get(r.approvedBy) : null,
         approval,
         canDecide:
-          r.status === "pending_approval" && canDecideStep(ctx, approval.nextStep) && ![r.createdBy, r.submittedBy].includes(ctx.userId),
+          r.status === "pending_approval" && canDecideStep(ctx, approval.nextStep) && ![r.createdBy, r.submittedBy].some((u) => ctx.sodConflict(u)),
       };
     }),
   );

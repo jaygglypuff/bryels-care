@@ -276,7 +276,7 @@ export async function reviewServiceRecord(ctx: AuthContext, input: { recordId: s
     const e = await lockEquipment(tx, ctx, rec.equipmentId);
     if (rec.result !== "fail") throw new DomainError("state", "Only a failed service record needs a QA review.");
     if (rec.reviewedBy) throw new DomainError("state", "This record has already been reviewed.");
-    if (rec.performedBy === ctx.userId || rec.createdBy === ctx.userId) throw new DomainError("separation_of_duties", "The person who performed or recorded the service cannot review it.");
+    ctx.assertSeparation(rec.performedBy === ctx.userId || rec.createdBy === ctx.userId, "The person who performed or recorded the service cannot review it.");
     await tx.update(equipmentServiceRecords).set({ reviewedBy: ctx.userId, reviewedAt: new Date(), reviewNote: note }).where(eq(equipmentServiceRecords.id, rec.id));
     let statusChange: { from: string; to: string } | null = null;
     if (e.status !== "in_service" && !(await unreviewedFailedCalibration(tx, e.id))) {
@@ -475,8 +475,8 @@ export async function getEquipment(ctx: AuthContext, equipmentId: string) {
           o.status === "pending_approval" &&
           o.validUntil.getTime() > Date.now() &&
           canDecideStep(ctx, approval.nextStep) &&
-          o.requestedBy !== ctx.userId &&
-          !approval.decisions.some((d) => d.decidedBy === ctx.userId),
+          !ctx.sodConflict(o.requestedBy) &&
+          !approval.decisions.some((d) => ctx.sodConflict(d.decidedBy)),
       };
     }),
   );
@@ -488,7 +488,7 @@ export async function getEquipment(ctx: AuthContext, equipmentId: string) {
       ...r,
       performedByName: r.performedByExternal ?? nm(r.performedBy),
       reviewedByName: nm(r.reviewedBy),
-      canReview: r.result === "fail" && !r.reviewedBy && ctx.can("masterdata.equipment.approve") && r.performedBy !== ctx.userId && r.createdBy !== ctx.userId,
+      canReview: r.result === "fail" && !r.reviewedBy && ctx.can("masterdata.equipment.approve") && !ctx.sodConflict(r.performedBy) && !ctx.sodConflict(r.createdBy),
     })),
     transitions: transitions.map((t) => ({ ...t, actorName: nm(t.actorId) })),
     downtime,

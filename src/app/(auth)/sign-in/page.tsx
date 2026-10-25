@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getContext } from "@/lib/auth/context";
 import { DEMO_PASSWORD } from "@/lib/demo";
-import { listDemoAccounts } from "@/modules/identity";
+import { listDemoAccounts, listSandboxAccounts } from "@/modules/identity";
 import { listPortalDemoAccounts } from "@/modules/portal";
 import { AuthFrame } from "../frame";
 import { DemoPanel } from "./demo-panel";
@@ -22,9 +22,10 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
   const notice = NOTICES[(await searchParams).notice ?? ""] ?? null;
   // Demo mode only (ADR-055): null when off, so no demo panel and no demo query exist outside the demo.
   const demoGroups = await listDemoAccounts();
+  const sandboxGroups = demoGroups ? await listSandboxAccounts() : null; // ADR-072: the empty sandbox company
   const portalDemo = demoGroups ? await listPortalDemoAccounts() : null; // W4E: fictional customer portal accounts
   return (
-    <AuthFrame below={demoGroups && <DemoPanel groups={demoGroups} password={DEMO_PASSWORD} portalAccounts={portalDemo ?? []} />}>
+    <AuthFrame below={demoGroups && <DemoPanel groups={demoGroups} sandboxGroups={sandboxGroups ?? []} password={DEMO_PASSWORD} portalAccounts={portalDemo ?? []} />}>
       <SignInForm notice={notice} />
     </AuthFrame>
   );

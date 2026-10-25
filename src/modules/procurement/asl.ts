@@ -199,8 +199,8 @@ export async function decideAslChange(ctx: AuthContext, input: { changeId: strin
     const sm = await lockPair(tx, ctx, c0.supplierMaterialId);
     const [c] = await tx.select().from(supplierMaterialChanges).where(eq(supplierMaterialChanges.id, c0.id)).for("update").limit(1);
     if (c.status !== "pending") throw new DomainError("state", "This proposal was already decided or withdrawn.");
-    if (c.proposedBy === ctx.userId) {
-      throw new DomainError("separation_of_duties", "You proposed this approved-list change, so another QA person must decide it (separation of duties).", { code: "SEPARATION_OF_DUTIES" });
+    if (ctx.sodBlocks(c.proposedBy === ctx.userId, "You proposed this approved-list change, so another QA person must decide it (separation of duties).")) {
+      throw new DomainError("separation_of_duties", "You proposed this approved-list change, so another QA person must decide it (separation of duties).", { ...ctx.refusalDetails(), code: "SEPARATION_OF_DUTIES" });
     }
     const now = new Date();
     await tx.update(supplierMaterialChanges).set({ status: input.decision, decidedBy: ctx.userId, decidedAt: now, decisionNote: note }).where(eq(supplierMaterialChanges.id, c.id));

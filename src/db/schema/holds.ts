@@ -46,7 +46,6 @@ export const qualityHolds = pgTable(
     check("ck_quality_holds_scope", sql`num_nonnulls(${t.lotId}, ${t.locationId}) >= 1`),
     check("ck_quality_holds_resolution", sql`${t.resolution} is null or ${t.resolution} in ('released','rejected','rework','recalled')`),
     check("ck_quality_holds_closed", sql`(${t.status} = 'closed') = (${t.closedBy} is not null and ${t.closedAt} is not null and ${t.resolution} is not null)`),
-    check("ck_quality_holds_closer_not_opener", sql`${t.closedBy} is null or ${t.closedBy} <> ${t.openedBy}`),
   ],
 );
 

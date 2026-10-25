@@ -101,8 +101,8 @@ describe("portal.auth.lockout and enumeration", () => {
     expect(right.kind).toBe("failed");
     expect(right.kind === "failed" && right.message).toMatch(/locked/);
     // Staff unlock (sales.portal_user.admin, step-up) goes back to active.
-    await expectCode(changePortalUser(w.salesNoReauth, u.id, "unlock"), "reauth_required");
-    await changePortalUser(w.sales, u.id, "unlock");
+    await expectCode(changePortalUser(w.portalAdminNoReauth, u.id, "unlock"), "reauth_required");
+    await changePortalUser(w.portalAdmin, u.id, "unlock");
     expect((await portalUserByEmail(email)).status).toBe("active");
     expect((await signInPortal({ email, password: "demo1234", ip: nextIp() })).kind).toBe("ok");
   });
@@ -113,7 +113,7 @@ describe("portal.auth.lockout and enumeration", () => {
     for (let i = 0; i < 3; i++) await signInPortal({ email, password: `bad-pass-${i}-abc`, ip: nextIp() });
     expect((await portalUserByEmail(email)).status).toBe("locked");
     await clearOrgSetting(w.orgId, "portal.auth.max_failed_attempts");
-    await changePortalUser(w.sales, (await portalUserByEmail(email)).id, "unlock");
+    await changePortalUser(w.portalAdmin, (await portalUserByEmail(email)).id, "unlock");
   });
 });
 
@@ -148,7 +148,7 @@ describe("staff Portal access panel: permissions, scope, step-up", () => {
     expect(a.users?.length).toBeGreaterThan(0);
     expect("canAdminUsers" in a && a.canAdminUsers).toBe(false);
     await expectCode(getPortalAccess(w.warehouse, w.mabuhayId), "forbidden");
-    const r = await getPortalAccess(w.salesRvs, w.mabuhayId);
+    const r = await getPortalAccess(w.portalAdminRvs, w.mabuhayId);
     expect(r.outOfScope).toBe(true);
     expect(r.users).toBeNull();
   });
@@ -158,18 +158,20 @@ describe("staff Portal access panel: permissions, scope, step-up", () => {
     await expectCode(invitePortalUser(w.warehouse, w.mabuhayTenantId, input), "forbidden");
     await expectCode(invitePortalUser(w.auditor, w.mabuhayTenantId, input), "forbidden");
     await expectCode(invitePortalUser(w.owner, w.mabuhayTenantId, input), "forbidden"); // matrix: OD has no portal_user rights
-    await expectCode(invitePortalUser(w.salesRvs, w.mabuhayTenantId, input), "not_found"); // cross-site: the tenant does not exist for RVS
-    await expectCode(invitePortalUser(w.salesNoReauth, w.mabuhayTenantId, input), "reauth_required");
+    await expectCode(invitePortalUser(w.portalAdminRvs, w.mabuhayTenantId, input), "not_found"); // cross-site: the tenant does not exist for RVS
+    await expectCode(invitePortalUser(w.portalAdminNoReauth, w.mabuhayTenantId, input), "reauth_required");
+    // ADR-071: portal-user administration moved from sales_cs to site_manager/system_admin (sales stays non-privileged).
+    await expectCode(invitePortalUser(w.salesNoReauth, w.mabuhayTenantId, input), "forbidden");
     expect(await portalUserByEmail(input.email)).toBeUndefined();
   });
 
   it("refuses staff addresses, duplicates and (demo mode) non-demo addresses", async () => {
-    await expectCode(invitePortalUser(w.sales, w.mabuhayTenantId, { email: "finance@bryels-care.test", displayName: "Rosa Lim", portalRole: "portal_buyer" }), "conflict");
-    await expectCode(invitePortalUser(w.sales, w.mabuhayTenantId, { email: "portal.salon@bryels-care.test", displayName: "Carla Dizon", portalRole: "portal_buyer" }), "conflict");
+    await expectCode(invitePortalUser(w.portalAdmin, w.mabuhayTenantId, { email: "finance@bryels-care.test", displayName: "Rosa Lim", portalRole: "portal_buyer" }), "conflict");
+    await expectCode(invitePortalUser(w.portalAdmin, w.mabuhayTenantId, { email: "portal.salon@bryels-care.test", displayName: "Carla Dizon", portalRole: "portal_buyer" }), "conflict");
     const prev = process.env.DEMO_MODE;
     process.env.DEMO_MODE = "true";
     try {
-      await expectCode(invitePortalUser(w.sales, w.mabuhayTenantId, { email: "real.person@example.com", displayName: "Real Person", portalRole: "portal_buyer" }), "validation");
+      await expectCode(invitePortalUser(w.portalAdmin, w.mabuhayTenantId, { email: "real.person@example.com", displayName: "Real Person", portalRole: "portal_buyer" }), "validation");
     } finally {
       process.env.DEMO_MODE = prev;
     }
@@ -177,21 +179,21 @@ describe("staff Portal access panel: permissions, scope, step-up", () => {
 
   it("enablePortal: one tenant per customer, at an allowed site, active customers only, audited", async () => {
     const [isla] = await db.query.customers.findMany({ where: (c, { eq }) => eq(c.code, "CUS-002") });
-    await expectCode(enablePortal(w.salesNoReauth, isla.id, { siteId: w.nfd.id }), "reauth_required");
+    await expectCode(enablePortal(w.portalAdminNoReauth, isla.id, { siteId: w.nfd.id }), "reauth_required");
     await expectCode(enablePortal(w.warehouse, isla.id, { siteId: w.nfd.id }), "forbidden");
-    await expectCode(enablePortal(w.salesRvs, isla.id, { siteId: w.nfd.id }), "not_found");
-    const { tenantId } = await enablePortal(w.sales, isla.id, { siteId: w.rvs.id, catalogMode: "curated" });
+    await expectCode(enablePortal(w.portalAdminRvs, isla.id, { siteId: w.nfd.id }), "not_found");
+    const { tenantId } = await enablePortal(w.portalAdmin, isla.id, { siteId: w.rvs.id, catalogMode: "curated" });
     expect((await auditOf(tenantId, "sales.portal_tenant.enabled")).length).toBe(1);
-    await expectCode(enablePortal(w.sales, isla.id, { siteId: w.nfd.id }), "conflict");
+    await expectCode(enablePortal(w.portalAdmin, isla.id, { siteId: w.nfd.id }), "conflict");
     const [prospect] = await db.query.customers.findMany({ where: (c, { eq }) => eq(c.code, "CUS-007") });
-    await expectCode(enablePortal(w.sales, prospect.id, { siteId: w.nfd.id }), "state");
+    await expectCode(enablePortal(w.portalAdmin, prospect.id, { siteId: w.nfd.id }), "state");
   });
 });
 
 describe("invitation: tenant bound, single use, expiry", () => {
   it("invite → link → accept (password policy) → sign in; the link works once", async () => {
     const email = "portal.invitee@bryels-care.test";
-    const out = await invitePortalUser(w.sales, w.mabuhayTenantId, { email, displayName: "Nina Invitee", portalRole: "portal_viewer" });
+    const out = await invitePortalUser(w.portalAdmin, w.mabuhayTenantId, { email, displayName: "Nina Invitee", portalRole: "portal_viewer" });
     expect(out.delivery.status).toBe("captured");
     const u = await portalUserByEmail(email);
     expect(u.status).toBe("invited");
@@ -212,13 +214,13 @@ describe("invitation: tenant bound, single use, expiry", () => {
 
   it("an expired link is refused; resend replaces the previous link", async () => {
     const email = "portal.late@bryels-care.test";
-    await invitePortalUser(w.sales, w.salonTenantId, { email, displayName: "Leo Late", portalRole: "portal_buyer" });
+    await invitePortalUser(w.portalAdmin, w.salonTenantId, { email, displayName: "Leo Late", portalRole: "portal_buyer" });
     const first = await lastPortalLinkToken(email);
     const u = await portalUserByEmail(email);
     await db.update(portalInvitations).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(portalInvitations.portalUserId, u.id));
     expect(await inspectPortalInvitation(first)).toEqual({ state: "expired" });
     await expectCode(acceptPortalInvitation({ token: first, password: "a long fictional passphrase 44", ip: nextIp() }), "state");
-    await resendPortalInvitation(w.sales, u.id);
+    await resendPortalInvitation(w.portalAdmin, u.id);
     const second = await lastPortalLinkToken(email);
     expect(second).not.toBe(first);
     expect(await inspectPortalInvitation(first)).toEqual({ state: "used" });
@@ -247,21 +249,21 @@ describe("sessions: idle, absolute, revocation, suspension", () => {
 
     const b = await portalSignIn("portal.mabuhay@bryels-care.test");
     const joy = await portalUserByEmail("portal.mabuhay@bryels-care.test");
-    await expectCode(changePortalUser(w.sales, joy.id, "suspend", ""), "validation");
-    await changePortalUser(w.sales, joy.id, "suspend", "Left the company (fictional)");
+    await expectCode(changePortalUser(w.portalAdmin, joy.id, "suspend", ""), "validation");
+    await changePortalUser(w.portalAdmin, joy.id, "suspend", "Left the company (fictional)");
     expect(await buildPortalContext(b.token)).toBeNull();
     expect((await signInPortal({ email: joy.email, password: "demo1234", ip: nextIp() })).kind).toBe("failed");
-    await changePortalUser(w.sales, joy.id, "reactivate");
+    await changePortalUser(w.portalAdmin, joy.id, "reactivate");
     expect((await portalUserByEmail(joy.email)).status).toBe("active");
 
     const c = await portalSignIn("portal.mabuhay@bryels-care.test");
-    await expectCode(setPortalTenantStatus(w.sales, w.mabuhayTenantId, "suspended", "x"), "validation");
-    await setPortalTenantStatus(w.sales, w.mabuhayTenantId, "suspended", "Contract under review (fictional)");
+    await expectCode(setPortalTenantStatus(w.portalAdmin, w.mabuhayTenantId, "suspended", "x"), "validation");
+    await setPortalTenantStatus(w.portalAdmin, w.mabuhayTenantId, "suspended", "Contract under review (fictional)");
     expect(await buildPortalContext(c.token)).toBeNull();
     const refused = await signInPortal({ email: joy.email, password: "demo1234", ip: nextIp() });
     expect(refused.kind === "failed" && refused.message).toMatch(/paused/);
-    await expectCode(setPortalTenantStatus(w.sales, w.mabuhayTenantId, "suspended", "again please"), "state");
-    await setPortalTenantStatus(w.sales, w.mabuhayTenantId, "active", "Contract renewed (fictional)");
+    await expectCode(setPortalTenantStatus(w.portalAdmin, w.mabuhayTenantId, "suspended", "again please"), "state");
+    await setPortalTenantStatus(w.portalAdmin, w.mabuhayTenantId, "active", "Contract renewed (fictional)");
     const [t] = await db.select().from(customerPortalTenants).where(eq(customerPortalTenants.id, w.mabuhayTenantId));
     expect(t.status).toBe("active");
     expect((await auditOf(w.mabuhayTenantId, "sales.portal_tenant.suspended")).length).toBe(1);
@@ -304,7 +306,7 @@ describe("optional TOTP for portal users", () => {
     const out = await completePortalMfa(r.pendingToken, totpAt(secret, stepAt(later)), later);
     expect(await buildPortalContext(out.token, { now: later })).not.toBeNull();
     const u = await portalUserByEmail(email);
-    await changePortalUser(w.sales, u.id, "reset_mfa", "Lost phone (fictional)");
+    await changePortalUser(w.portalAdmin, u.id, "reset_mfa", "Lost phone (fictional)");
     expect((await portalUserByEmail(email)).totpConfirmedAt).toBeNull();
     expect(await buildPortalContext(out.token, { now: later })).toBeNull();
     expect((await signInPortal({ email, password: "another fine passphrase 77", ip: nextIp() })).kind).toBe("ok");

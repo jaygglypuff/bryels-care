@@ -91,7 +91,6 @@ export const packs = pgTable(
       "ck_packs_source_ref",
       sql`(${t.sourceKind} <> 'batch_output' or ${t.batchOutputId} is not null) and (${t.sourceKind} <> 'sales_order' or ${t.salesOrderId} is not null)`,
     ),
-    check("ck_packs_checker_not_packer", sql`${t.checkedBy} is null or ${t.checkedBy} <> ${t.packedBy}`),
     check("ck_packs_verified", sql`${t.status} not in ('verified','closed') or (${t.checkedBy} is not null and ${t.verifiedAt} is not null)`),
     check("ck_packs_cancelled", sql`${t.status} <> 'cancelled' or (${t.cancelledBy} is not null and ${t.cancelReason} is not null)`),
     check("ck_packs_units_per_box", sql`${t.unitsPerBox} > 0`),

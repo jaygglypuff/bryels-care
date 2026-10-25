@@ -916,3 +916,71 @@ running during a reset.
 **Consequences.** Assumptions A-DEMO-01 to A-DEMO-08 (`docs/PRD.md`). The derived demo secrets are
 as safe as `DATABASE_URL` itself and are never used outside demo mode. Real deployments use a
 separate Railway project with `APP_ENV=production` (`docs/railway-for-dummies.md` "Going live").
+
+ADR-056 to ADR-070 are reserved for the Wave 4 stream decisions (procurement, finance operations,
+quality system, offline, portal, readiness) that are being written up from the stream notes.
+
+## ADR-071 Portal-user administration sits with site managers
+
+**Status.** Accepted (Wave 4 integration).
+
+**Context.** `sales.portal_user.admin` is a restricted string: holding it makes a session privileged
+(1 h idle timeout, enforced TOTP). Granting it to `sales_cs` would put every salesperson under those
+rules for a task a few people do.
+
+**Decision.** `site_manager` and `system_admin` administer portal users (invite, suspend, reset);
+`sales_cs` keeps portal-user view and the portal catalogue.
+
+**Consequences.** Sales asks the site manager to invite a customer contact. Tests:
+`tests/integration/portal/w4e-portal-access.test.ts`.
+
+## ADR-072 An empty sandbox company next to the demo
+
+**Status.** Accepted (owner request, 2026-10-25).
+
+**Context.** The demo company is full of fictional records, which overwhelms a first-time user who
+wants to learn by building their own data from nothing.
+
+**Decision.** In demo mode only, `pnpm db:sandbox ensure` (run by `db:demo auto|reset`) creates a
+second organization, "Bryel's Care Sandbox (empty)", with one site (SBX), a warehouse with the basic
+locations designated, the role templates, reference data (units, conversions, reason codes), the
+approved print templates copied from the demo company, one print station, and 14 accounts
+`sandbox.*@bryels-care.test` (two per checker/approver role). No materials, products, suppliers,
+customers, stock or orders. The sign-in page shows the accounts under "Start from scratch"; a
+sandbox banner links to the end-to-end guide `docs/help/getting-started.md` (/help). Same safety
+rules as ADR-055: demo addresses only, refused while any real account exists, demo mode only.
+
+**Consequences.** Organization-scoped look-ups that used "the first organization" order by
+`created_at`, so the demo company stays first. "Start over" (owner reset) recreates both the demo
+and the empty sandbox.
+
+## ADR-073 Owner override and "who can do this"
+
+**Status.** Accepted (owner request, 2026-10-25). Regulatory use flagged for qualified review.
+
+**Context.** The owner, testing alone, could not move work forward: steps such as releasing a work
+order they planned, approving a formula they submitted, checking their own weighing or QA release
+need a different person or another role, and the screen did not say who that is.
+
+**Decision.**
+1. Setting `governance.owner_override` (organization, restricted: re-authentication to change; off
+   by default; on in the demo and the sandbox). When on, a user with the Owner/Director role and an
+   organization-wide assignment holds every permission and passes every same-person rule
+   (`ctx.assertSeparation` / `ctx.sodBlocks`, role-restricted approval steps via `ctx.actsAsAnyRole`,
+   co-signing with their own password).
+2. Every use is recorded: `audit()` writes `governance.owner_override.used` (the action it enabled
+   and the rules or permissions bypassed) in the same transaction.
+3. The database same-person rules that were CHECK constraints become deferred constraint triggers
+   (`bc_sod_distinct`, `src/db/sql/adr073.sql`) that accept a row only when the transaction carries
+   `bc.owner_override = on`, which `audit()` sets transaction-locally when it records an override.
+   Without an override the database refuses the same rows as before (SQLSTATE 23514, same name).
+4. "Who can do this": a refused step carries the permission it needs; forms and the work order's
+   next step show the roles and the colleagues who hold it at the site (`GET /api/who-can-do`).
+
+**Why.** In a small company the owner must be able to finish the work and to try the system alone;
+the audit trail, not a hard block, then shows that one person did both sides.
+
+**Consequences.** Independent QA release and second-person checks are GMP controls (ISO 22716 /
+FDA Philippines): switching the override on for real production is the owner's documented decision
+after QA advice (assumption A-GOV-OWNER). Other roles are unchanged. Tests:
+`tests/integration/governance/owner-override.test.ts`.

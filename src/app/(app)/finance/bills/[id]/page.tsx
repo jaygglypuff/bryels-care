@@ -55,6 +55,21 @@ export default async function BillPage({ params, searchParams }: { params: Promi
         <div className="mb-4">
           <Banner tone="bad" title="In dispute: the three-way match found a variance beyond tolerance">
             Resolve it by amending the purchase order and matching again, entering a supplier credit, or having a different person approve the variance with a reason.
+            {d.expectedSupplierCredits.length > 0 && (
+              <span className="mt-2 block">
+                Supplier returns of {d.supplier.name} that expect a credit:{" "}
+                {d.expectedSupplierCredits.map((c, i) => (
+                  <span key={c.returnId}>
+                    {i > 0 && ", "}
+                    <Link className="underline" href={`/procurement/returns/${c.returnId}`}>
+                      {c.returnNumber}
+                    </Link>{" "}
+                    (<Money value={c.creditExpectedAmount} /> {c.currency}, {c.status})
+                  </span>
+                ))}
+                .
+              </span>
+            )}
           </Banner>
         </div>
       )}

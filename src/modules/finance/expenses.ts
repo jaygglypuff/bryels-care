@@ -216,7 +216,7 @@ export async function postExpenseClaim(ctx: AuthContext, id: string, input: { pa
     const c = await lockClaim(tx, ctx, id);
     ctx.requireAt("finance.expense_claim.post", c.siteId);
     if (c.status !== "approved") throw new DomainError("state", `${label(c)} is ${EXPENSE_STATUS_LABEL[c.status].toLowerCase()}; only an approved claim can be posted.`);
-    if (c.claimantUserId === ctx.userId) throw new DomainError("separation_of_duties", "You cannot post your own expense claim.", { code: "SEPARATION_OF_DUTIES" });
+    ctx.assertSeparation(c.claimantUserId === ctx.userId, "You cannot post your own expense claim.", { code: "SEPARATION_OF_DUTIES" });
     await assertPosterAllowed(tx, ctx, { recordType: "expense_claim", recordId: c.id, siteId: c.siteId, basis: { amount: c.amount } });
     const postingDate = businessDate(c.approvedAt ?? new Date());
     await postFinancial(tx, ctx, { siteId: c.siteId, postingType: "expense", documentType: "expense_claim", documentId: c.id, documentNumber: c.claimNumber, postingDate, amount: c.amount, currency: c.currency, direction: "debit", counterpartyUserId: c.claimantUserId, idempotencyKey: input.idempotencyKey ?? null });
@@ -290,7 +290,7 @@ export async function getExpenseClaim(ctx: AuthContext, id: string) {
     isClaimant: c.claimantUserId === ctx.userId,
     progress,
     canApprove: c.status === "submitted" && canDecide(ctx, "expense_claim", progress, c.submittedAt, [c.claimantUserId]),
-    posterBlocked: c.status === "approved" && (c.claimantUserId === ctx.userId || (!!progress && !progress.posterMayEqualApprover && progress.approvers.includes(ctx.userId))),
+    posterBlocked: c.status === "approved" && (ctx.sodConflict(c.claimantUserId) || (!!progress && !progress.posterMayEqualApprover && progress.approvers.some((u) => ctx.sodConflict(u)))),
     decisions: await decisionsOf(db, ctx.organizationId, "expense_claim", c.id),
     names: Object.fromEntries(await namesOf(db, [c.claimantUserId, c.approvedBy, c.rejectedBy, c.postedBy, c.voidedBy])),
     postings: await postingsOf(db, ctx.organizationId, "expense_claim", [c.id]),

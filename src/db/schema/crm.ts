@@ -189,7 +189,6 @@ export const customerRequirements = pgTable(
       .where(sql`${t.status} in ('draft', 'pending_approval')`),
     check("customer_requirements_kind_ck", sql`${t.requirementKind} in (${inList(REQUIREMENT_KINDS)})`),
     check("customer_requirements_status_ck", sql`${t.status} in (${inList(VERSION_STATES)})`),
-    check("customer_requirements_sod_ck", sql`${t.approvedBy} is null or ${t.approvedBy} is distinct from ${t.submittedBy}`),
     check("customer_requirements_dates_ck", sql`${t.effectiveTo} is null or ${t.effectiveTo} > ${t.effectiveFrom}`),
     check("customer_requirements_value_ck", sql`num_nonnulls(${t.valueNumeric}, ${t.valueText}, ${t.artworkVersionId}, ${t.labelTemplateId}) >= 1`),
   ],
@@ -228,7 +227,6 @@ export const priceLists = pgTable(
     index("price_lists_customer_idx").on(t.customerId, t.status),
     check("price_lists_kind_ck", sql`(${t.partyKind} = 'customer' and ${t.customerId} is not null) or (${t.partyKind} = 'general' and ${t.customerId} is null)`),
     check("price_lists_status_ck", sql`${t.status} in (${inList(VERSION_STATES)})`),
-    check("price_lists_sod_ck", sql`${t.approvedBy} is null or ${t.approvedBy} is distinct from ${t.submittedBy}`),
     check("price_lists_dates_ck", sql`${t.effectiveTo} is null or ${t.effectiveTo} > ${t.effectiveFrom}`),
   ],
 );

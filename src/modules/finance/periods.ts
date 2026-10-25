@@ -186,7 +186,7 @@ export async function requestPeriodUnlock(ctx: AuthContext, periodCode: string, 
     const prog = await unlockProgress(tx, ctx, req.id, periodCode);
     const first = prog.steps[0];
     const roles = rolesAllowedNow(first, null);
-    if (roles.length > 0 && !roles.some((r) => ctx.roleCodes.includes(r))) {
+    if (roles.length > 0 && !ctx.actsAsAnyRole(roles)) {
       throw new DomainError("forbidden", `An unlock is requested by ${roles.map((r) => r.replace(/_/g, " ")).join(" or ")} (step 1 of the unlock approval).`);
     }
     await tx.insert(approvalDecisions).values({ organizationId: ctx.organizationId, siteId: null, recordType: UNLOCK_RECORD, recordId: req.id, step: first.step, cycle: 1, decision: "approved", decidedBy: ctx.userId, note: reason });
@@ -208,13 +208,13 @@ export async function approvePeriodUnlock(ctx: AuthContext, requestId: string, i
     if (req.status !== "pending") throw new DomainError("state", `This unlock request is ${req.status}.`);
     const [p] = await tx.select().from(accountingPeriods).where(eq(accountingPeriods.id, req.accountingPeriodId)).for("update").limit(1);
     const prog = await unlockProgress(tx, ctx, req.id, p.periodCode);
-    if (req.requestedBy === ctx.userId || prog.deciders.has(ctx.userId)) {
-      throw new DomainError("separation_of_duties", "Unlocking a period needs two different people: you already approved this request.", { code: "SEPARATION_OF_DUTIES" });
+    if (ctx.sodBlocks(req.requestedBy === ctx.userId || prog.deciders.has(ctx.userId), "Unlocking a period needs two different people: you already approved this request.")) {
+      throw new DomainError("separation_of_duties", "Unlocking a period needs two different people: you already approved this request.", { ...ctx.refusalDetails(), code: "SEPARATION_OF_DUTIES" });
     }
     const step = prog.next;
     if (!step) throw new DomainError("state", "Every approval step is already complete.");
     const roles = rolesAllowedNow(step, req.requestedAt);
-    if (roles.length > 0 && !roles.some((r) => ctx.roleCodes.includes(r))) {
+    if (roles.length > 0 && !ctx.actsAsAnyRole(roles)) {
       throw new DomainError("forbidden", `Step ${step.step} (${step.label}) must be decided by ${roles.map((r) => r.replace(/_/g, " ")).join(" or ")}.`);
     }
     await tx.insert(approvalDecisions).values({ organizationId: ctx.organizationId, siteId: null, recordType: UNLOCK_RECORD, recordId: req.id, step: step.step, cycle: 1, decision: "approved", decidedBy: ctx.userId, note: input.note?.trim() || null });
@@ -243,7 +243,7 @@ export async function rejectPeriodUnlock(ctx: AuthContext, requestId: string, in
   return db.transaction(async (tx) => {
     const req = await lockRequest(tx, ctx, requestId);
     if (req.status !== "pending") throw new DomainError("state", `This unlock request is ${req.status}.`);
-    if (req.requestedBy === ctx.userId) throw new DomainError("separation_of_duties", "You requested this unlock; another person decides on it.", { code: "SEPARATION_OF_DUTIES" });
+    ctx.assertSeparation(req.requestedBy === ctx.userId, "You requested this unlock; another person decides on it.", { code: "SEPARATION_OF_DUTIES" });
     await tx.update(periodUnlockRequests).set({ status: "rejected", decidedBy: ctx.userId, decidedAt: new Date(), decisionNote: reason }).where(eq(periodUnlockRequests.id, req.id));
     await tx.insert(approvalDecisions).values({ organizationId: ctx.organizationId, siteId: null, recordType: UNLOCK_RECORD, recordId: req.id, step: 2, cycle: 1, decision: "rejected", decidedBy: ctx.userId, note: reason });
     await audit(tx, ctx, { action: "finance.accounting_period.unlock_rejected", entityType: "accounting_period", entityId: req.accountingPeriodId, siteId: null, reason, after: { requestId: req.id } });

@@ -179,6 +179,22 @@ service to do that.
    green strip at the top: **Demo environment — fictional data**.
 5. To switch person: click your initials (top right) → **Sign out**, then pick another account.
 
+### Start from scratch (the empty sandbox)
+
+The sample company is full of example records. To learn by building your own from nothing:
+
+1. Switch on **Try the demo**, then pick the tab **Start from scratch**.
+2. Click **Sign in as Sandbox Owner**. The sandbox has one site, a warehouse with its basic
+   locations, units, reason codes and print templates, and nothing else.
+3. The yellow strip at the top links to the **Getting started guide** (also under Help & guides).
+   It walks you from your first material to a shipped and invoiced order, step by step.
+4. As the owner you can do every step yourself, including approvals that normally need a second
+   person ("owner override"; every use is written to the audit log). It is on in the demo and the
+   sandbox. In a real company it is off until you switch it on under **Admin → Settings →
+   Approvals** (ask your QA adviser first: GMP normally needs an independent second person).
+5. When a step is blocked for someone else, the message lists the role and the people who can do it.
+6. The sandbox appears by itself on the next start after this update (no command needed).
+
 ## Step 10. How updates reach the app (automatic)
 
 1. Every time a change is pushed to the branch `claude/vigilant-babbage-6zu1jo` on GitHub, Railway
@@ -202,7 +218,8 @@ Do this after a demo session in which people changed lots of things.
 2. If the page asks **Confirm it's you**, type `demo1234` and click **Confirm**.
 3. Type `RESET` in the box and click **Reset demo data**. Keep the page open; it takes about a
    minute and shows "Resetting…".
-4. You are signed out and see "The demo data was reset to a fresh copy". Everyone else is signed
+4. You are signed out and see "The demo data was reset to a fresh copy". The empty sandbox is
+   emptied again at the same time (everything you built there is removed). Everyone else is signed
    out too. Sign in again with **Try the demo**.
 
 The reset refuses if the database contains any account whose email does not end in

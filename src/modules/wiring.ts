@@ -24,12 +24,13 @@ import {
   overDeliveryCandidates,
   poApprovalCandidates,
   prApprovalCandidates,
+  purchaseOrderMatchSourceImpl,
   purchaseOrderReceivingHooks,
   srApprovalCandidates,
   supplierMaterialsKind,
 } from "@/modules/procurement";
-import { listCustomerReturns, registerCustomer360Section, registerSalesTaxRateResolver, RETURN_STATUS_LABEL, type CustomerReturnStatus } from "@/modules/sales";
-import { disputedBills, expenseClaimsToApprove, invoicesToApprove, overdueInvoices, salesTaxRateFor } from "@/modules/finance";
+import { listCustomerReturns, registerCustomer360Section, registerSalesTaxRateResolver, registerShipmentReversalGuard, RETURN_STATUS_LABEL, type CustomerReturnStatus } from "@/modules/sales";
+import { disputedBills, expenseClaimsToApprove, invoiceBlockingShipmentReversal, invoicesToApprove, overdueInvoices, registerPurchaseOrderMatchSource, salesTaxRateFor } from "@/modules/finance";
 
 /**
  * Cross-module wiring (Wave 2 and Wave 3 integration). Batch execution (production) must not import
@@ -138,6 +139,11 @@ export function registerAppHooks() {
   registerActionItemSource({ kind: "overdue_invoice", detect: (org, now) => overdueInvoices(org, now) });
   registerActionItemSource({ kind: "disputed_bill", detect: (org) => disputedBills(org) });
   registerActionItemSource({ kind: "approval.expense_claim", detect: (org) => expenseClaimsToApprove(org) });
+  // Wave 4 integration (W4A ↔ W4B): the supplier bill's three-way match reads purchase order lines (price per base
+  // unit), the PO line of each PO receipt line and the supplier returns that expect a credit.
+  registerPurchaseOrderMatchSource(purchaseOrderMatchSourceImpl);
+  // Wave 4 integration (W3E ↔ W4B): an invoiced dispatch is not reversed (cancel or fully credit the invoice first).
+  registerShipmentReversalGuard((tx, org, shipmentId) => invoiceBlockingShipmentReversal(tx, org, shipmentId));
   // Wave 4 W4C (US-6-18, US-6-19): overdue CAPA actions, recall cases and their approval, change control
   // approval and PM plans due/overdue in the action centre; usage-based PM plans in the equipment gate.
   registerActionItemSource({ kind: "overdue_capa_action", detect: (org, now) => overdueCapaActionCandidates(org, now) });

@@ -82,7 +82,6 @@ export const documentTemplateVersions = pgTable(
     /** One effective (approved) version per template at a time; approving the next one retires it. */
     uniqueIndex("document_template_versions_one_approved_uq").on(t.documentTemplateId).where(sql`${t.status} = 'approved'`),
     check("document_template_versions_status_ck", inList(t.status, TEMPLATE_VERSION_STATUSES)),
-    check("document_template_versions_sod_ck", sql`${t.approvedBy} is null or ${t.submittedBy} is null or ${t.approvedBy} <> ${t.submittedBy}`),
     check("document_template_versions_approved_ck", sql`${t.status} <> 'approved' or (${t.approvedBy} is not null and ${t.approvedAt} is not null and ${t.effectiveFrom} is not null)`),
     check("document_template_versions_retired_ck", sql`${t.status} <> 'retired' or (${t.retiredBy} is not null and ${t.retiredAt} is not null)`),
   ],
@@ -128,7 +127,6 @@ export const labelTemplates = pgTable(
     check("label_templates_copies_ck", sql`${t.copiesDefault} between 1 and 99`),
     check("label_templates_media_ck", sql`${t.mediaWidthMm} between 20 and 220 and ${t.mediaHeightMm} between 15 and 300`),
     check("label_templates_dpi_ck", sql`${t.dpi} in (203, 300, 600)`),
-    check("label_templates_sod_ck", sql`${t.approvedBy} is null or ${t.approvedBy} <> ${t.updatedBy}`),
     check("label_templates_code_ck", sql`${t.code} ~ '^[A-Z0-9][A-Z0-9._-]{0,63}$'`),
   ],
 );

@@ -27,7 +27,7 @@ export type CoSignInput = {
  * US-3-10 AC2/AC3). The operator's session can never sign as checker: the checker proves who they
  * are with their own password, and gets an AuthContext of their own (their current permissions and
  * sites) that the service then uses exactly like a signed-in session. Refused when the signer is the
- * signed-in operator, inactive, locked, outside the site, or lacks the permission.
+ * signed-in operator (unless the owner override applies, ADR-073), inactive, locked, outside the site, or lacks the permission.
  *
  * This is a re-authentication of the second person, not a session: nothing is stored on the device.
  * Failures are audited and lock the account after MAX_FAILURES like the sign-in page.
@@ -35,9 +35,7 @@ export type CoSignInput = {
 export async function coSign(operator: AuthContext, input: CoSignInput): Promise<AuthContext> {
   const what = input.role === "checker" ? "checker" : "approver";
   if (!input.userId) throw new DomainError("validation", `Choose the ${what}.`, { field: "checkerId" });
-  if (input.userId === operator.userId) {
-    throw new DomainError("separation_of_duties", `You cannot sign as ${what} for your own work. The ${what} signs with their own password, or checks from their own device.`);
-  }
+  operator.assertSeparation(input.userId === operator.userId, `You cannot sign as ${what} for your own work. The ${what} signs with their own password, or checks from their own device.`);
   if (!input.password) throw new DomainError("validation", `The ${what} must type their own password to sign.`, { field: "checkerPassword" });
   const [u] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
   if (!u || u.organizationId !== operator.organizationId) throw new DomainError("validation", `The selected ${what} was not found.`, { field: "checkerId" });
@@ -63,6 +61,9 @@ export async function coSign(operator: AuthContext, input: CoSignInput): Promise
     throw new DomainError("validation", `Password for ${u.displayName} is incorrect.`, { field: "checkerPassword" });
   }
   if (u.failedLoginCount > 0) await db.update(users).set({ failedLoginCount: 0 }).where(eq(users.id, u.id));
+  // ADR-073: the owner override let the owner sign for their own work (password re-typed above); the
+  // operator's context carries the override record, so it signs too.
+  if (u.id === operator.userId) return operator;
   const signer = await buildContextForUser(u.id, input.siteId, { correlationId: operator.correlationId });
   if (!signer || !signer.allowedSiteIds.includes(input.siteId)) {
     throw new DomainError("validation", `${u.displayName} is not assigned to this site and cannot sign here.`, { field: "checkerId" });

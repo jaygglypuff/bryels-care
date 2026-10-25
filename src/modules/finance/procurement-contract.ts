@@ -7,6 +7,9 @@ import type { DbOrTx } from "@/db/client";
  * ordered quantity and unit price of the purchase order lines named on bill lines (docs/data-model.md §3.4
  * `purchase_order_lines`: `qty_base`, `unit_amount`, `currency`, `purchase_order_id`; `purchase_orders.po_number`).
  *
+ * Wired (Wave 4 integration): src/modules/wiring.ts registers W4A's `purchaseOrderMatchSourceImpl`
+ * (src/modules/procurement/finance-match.ts). Original integration note:
+ *
  * Integration (for the integrator): register the source in src/modules/wiring.ts, e.g.
  *
  *   registerPurchaseOrderMatchSource(async (q, orgId, ids) => rows of purchase_order_lines ⨝ purchase_orders
@@ -23,6 +26,7 @@ export type PoLineForMatch = {
   supplierId: string;
   materialId: string | null;
   qtyOrderedBase: string;
+  /** PO price per BASE unit (bill quantities are base units, A-W4B-05); W4A reports line_amount / qty_base. */
   unitAmount: string;
   currency: string;
 };
@@ -31,7 +35,11 @@ export type PurchaseOrderMatchSource = {
   linesById: (q: DbOrTx, organizationId: string, purchaseOrderLineIds: string[]) => Promise<PoLineForMatch[]>;
   /** PO line of a goods receipt line, when receipts are PO-based (null otherwise). */
   poLineOfReceiptLine?: (q: DbOrTx, goodsReceiptLineIds: string[]) => Promise<Map<string, string>>;
+  /** Approved or posted supplier returns of the supplier with an expected credit (shown on the bill as a dispute aid). */
+  expectedSupplierCredits?: (q: DbOrTx, organizationId: string, supplierId: string, siteIds: string[]) => Promise<ExpectedSupplierCredit[]>;
 };
+
+export type ExpectedSupplierCredit = { returnId: string; returnNumber: string; status: string; creditExpectedAmount: string; currency: string; postedAt: Date | null };
 
 const KEY = "__bc_finance_po_match_source__";
 

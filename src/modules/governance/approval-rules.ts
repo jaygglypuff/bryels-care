@@ -186,7 +186,7 @@ export function rolesAllowedNow(step: EvaluatedStep, pendingSince: Date | null, 
 export function canDecideEvaluatedStep(ctx: AuthContext, step: EvaluatedStep, pendingSince: Date | null = null, now = new Date()): boolean {
   if (step.permission && !ctx.can(step.permission as never)) return false;
   const roles = rolesAllowedNow(step, pendingSince, now);
-  return roles.length === 0 || roles.some((r) => ctx.roleCodes.includes(r));
+  return roles.length === 0 || ctx.hasAnyRole(roles);
 }
 
 /**

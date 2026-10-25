@@ -4,7 +4,7 @@ import { db } from "@/db/client";
 import { auditEvents, roles, sites, userSiteAssignments, users } from "@/db/schema";
 import { activeAssignment } from "@/lib/auth/assignments";
 import { verifyPassword } from "@/lib/auth/password";
-import { DEMO_EMAIL_DOMAIN, DEMO_PASSWORD, DEMO_SYSTEM_EMAIL, isDemoEmail, isDemoMode } from "@/lib/demo";
+import { DEMO_EMAIL_DOMAIN, DEMO_PASSWORD, DEMO_SYSTEM_EMAIL, SANDBOX_EMAIL_PREFIX, isDemoEmail, isDemoMode } from "@/lib/demo";
 import { DomainError } from "@/lib/errors";
 import { ROLE_BUNDLES } from "@/lib/permissions";
 import { type SignInResult, signInWithPassword } from "./sign-in";
@@ -26,16 +26,26 @@ const rank = (code: string) => {
 export type DemoAccount = { email: string; displayName: string; roles: string[]; scope: string };
 export type DemoAccountGroup = { roleCode: string; roleName: string; accounts: DemoAccount[] };
 
-/** Active demo accounts grouped by their main role; null when demo mode is off (nothing is queried). */
+/** Active demo accounts of the fictional demo company, grouped by main role; null when demo mode is off. */
 export async function listDemoAccounts(now: Date = new Date()): Promise<DemoAccountGroup[] | null> {
+  return listAccounts("demo", now);
+}
+
+/** Accounts of the empty sandbox company (ADR-072, `sandbox.*@bryels-care.test`); null when demo mode is off. */
+export async function listSandboxAccounts(now: Date = new Date()): Promise<DemoAccountGroup[] | null> {
+  return listAccounts("sandbox", now);
+}
+
+async function listAccounts(which: "demo" | "sandbox", now: Date): Promise<DemoAccountGroup[] | null> {
   if (!isDemoMode()) return null;
+  const prefix = sql`lower(${users.email}) like ${SANDBOX_EMAIL_PREFIX + "%"}`;
   const rows = await db
     .select({ email: users.email, displayName: users.displayName, roleCode: roles.code, roleName: roles.name, orgWide: userSiteAssignments.isOrganizationWide, siteCode: sites.code })
     .from(users)
     .innerJoin(userSiteAssignments, eq(userSiteAssignments.userId, users.id))
     .innerJoin(roles, eq(roles.id, userSiteAssignments.roleId))
     .leftJoin(sites, eq(sites.id, userSiteAssignments.siteId))
-    .where(and(eq(users.status, "active"), eq(roles.status, "active"), sql`lower(${users.email}) like ${"%@" + DEMO_EMAIL_DOMAIN}`, activeAssignment(now)));
+    .where(and(eq(users.status, "active"), eq(roles.status, "active"), sql`lower(${users.email}) like ${"%@" + DEMO_EMAIL_DOMAIN}`, which === "sandbox" ? prefix : sql`not (${prefix})`, activeAssignment(now)));
   const byUser = new Map<string, { email: string; displayName: string; roles: Map<string, string>; orgWide: boolean; sites: Set<string> }>();
   for (const r of rows) {
     const u = byUser.get(r.email) ?? { email: r.email, displayName: r.displayName, roles: new Map(), orgWide: false, sites: new Set<string>() };

@@ -99,7 +99,7 @@ export async function approvalState(dbx: DbOrTx, organizationId: string, recordT
 /** True when the caller may decide the given step (role + permission), ignoring separation of duties. */
 export function canDecideStep(ctx: AuthContext, step: ApprovalStepPolicy | null) {
   if (!step) return false;
-  return ctx.can(step.permission) && (step.roles.length === 0 || step.roles.some((r) => ctx.roleCodes.includes(r)));
+  return ctx.can(step.permission) && (step.roles.length === 0 || ctx.hasAnyRole(step.roles));
 }
 
 /**
@@ -135,14 +135,14 @@ export async function recordApprovalDecision(
   const step = state.nextStep;
   if (!step) throw new DomainError("state", "This record has no approval step waiting for a decision.");
   ctx.require(step.permission);
-  if (step.roles.length > 0 && !step.roles.some((r) => ctx.roleCodes.includes(r))) {
+  if (step.roles.length > 0 && !ctx.actsAsAnyRole(step.roles)) {
     throw new DomainError("forbidden", `Step ${step.step} (${step.label}) must be decided by ${step.roles.map((r) => r.replace(/_/g, " ")).join(" or ")}.`);
   }
-  if (args.excludedUserIds.some((u) => u && u === ctx.userId)) {
-    throw new DomainError("separation_of_duties", "You prepared or requested this record, so another person must approve it.");
+  if (ctx.sodBlocks(args.excludedUserIds.some((u) => u && u === ctx.userId), "You prepared or requested this record, so another person must approve it.")) {
+    throw new DomainError("separation_of_duties", "You prepared or requested this record, so another person must approve it.", ctx.refusalDetails());
   }
-  if (state.decisions.some((d) => d.decidedBy === ctx.userId)) {
-    throw new DomainError("separation_of_duties", "You already approved an earlier step. A different person must decide this step.");
+  if (ctx.sodBlocks(state.decisions.some((d) => d.decidedBy === ctx.userId), "You already approved an earlier step. A different person must decide this step.")) {
+    throw new DomainError("separation_of_duties", "You already approved an earlier step. A different person must decide this step.", ctx.refusalDetails());
   }
   if (args.decision === "rejected" && !args.note?.trim()) throw new DomainError("validation", "Enter the reason for rejecting.");
   await tx.insert(approvalDecisions).values({

@@ -58,7 +58,6 @@ export const workInstructionRevisions = pgTable(
     uniqueIndex("wi_rev_uq").on(t.workInstructionId, t.revisionNo),
     uniqueIndex("wi_rev_one_open_uq").on(t.workInstructionId).where(sql`${t.status} in ('draft', 'pending_approval')`),
     check("wi_rev_status_ck", sql.raw(`status in ${VERSION_STATUS_CK}`)),
-    check("wi_rev_sod_ck", sql`${t.approvedBy} is null or ${t.approvedBy} is distinct from ${t.submittedBy}`),
     check("wi_rev_effective_ck", sql`${t.status} not in ('approved', 'retired') or (${t.effectiveFrom} is not null and ${t.approvedBy} is not null)`),
     check("wi_rev_range_ck", sql`${t.effectiveTo} is null or ${t.effectiveFrom} is null or ${t.effectiveTo} > ${t.effectiveFrom}`),
   ],
@@ -107,7 +106,6 @@ export const inspectionPlans = pgTable(
     check("inspection_plans_status_ck", sql.raw(`status in ${VERSION_STATUS_CK}`)),
     check("inspection_plans_kind_ck", sql`${t.planKind} in ('incoming', 'in_process', 'finished_product')`),
     check("inspection_plans_subject_ck", sql`(${t.planKind} = 'incoming' and ${t.materialId} is not null and ${t.productId} is null) or (${t.planKind} <> 'incoming' and ${t.productId} is not null and ${t.materialId} is null)`),
-    check("inspection_plans_sod_ck", sql`${t.approvedBy} is null or ${t.approvedBy} is distinct from ${t.submittedBy}`),
     check("inspection_plans_effective_ck", sql`${t.status} not in ('approved', 'retired') or (${t.effectiveFrom} is not null and ${t.approvedBy} is not null)`),
     check("inspection_plans_range_ck", sql`${t.effectiveTo} is null or ${t.effectiveFrom} is null or ${t.effectiveTo} > ${t.effectiveFrom}`),
   ],
@@ -229,7 +227,6 @@ export const equipmentServiceRecords = pgTable(
     check("equipment_service_result_ck", sql`${t.result} in ('pass', 'fail', 'completed')`),
     check("equipment_service_performer_ck", sql`num_nonnulls(${t.performedBy}, ${t.performedByExternal}) >= 1`),
     check("equipment_service_reviewer_ck", sql`${t.reviewedBy} is null or ${t.reviewedBy} is distinct from ${t.performedBy}`),
-    check("equipment_service_reviewer_creator_ck", sql`${t.reviewedBy} is null or ${t.reviewedBy} <> ${t.createdBy}`),
     check("equipment_service_correction_ck", sql`${t.supersedesId} is null or ${t.correctionReason} is not null`),
   ],
 );
@@ -303,7 +300,6 @@ export const equipmentOverrideRequests = pgTable(
     index("equipment_override_eq_idx").on(t.equipmentId, t.status),
     check("equipment_override_status_ck", sql`${t.status} in ('pending_approval', 'approved', 'rejected', 'cancelled')`),
     check("equipment_override_window_ck", sql`${t.validUntil} > ${t.validFrom}`),
-    check("equipment_override_sod_ck", sql`${t.approvedBy} is null or ${t.approvedBy} <> ${t.requestedBy}`),
   ],
 );
 
@@ -355,7 +351,6 @@ export const routingRevisions = pgTable(
     uniqueIndex("routing_rev_one_open_uq").on(t.routingId).where(sql`${t.status} in ('draft', 'pending_approval')`),
     check("routing_rev_status_ck", sql.raw(`status in ${VERSION_STATUS_CK}`)),
     check("routing_rev_scope_ck", sql`${t.changeScope} is null or ${t.changeScope} in ('sequencing_only', 'quality_relevant')`),
-    check("routing_rev_sod_ck", sql`${t.approvedBy} is null or ${t.approvedBy} is distinct from ${t.submittedBy}`),
     check("routing_rev_effective_ck", sql`${t.status} not in ('approved', 'retired') or (${t.effectiveFrom} is not null and ${t.approvedBy} is not null)`),
     check("routing_rev_range_ck", sql`${t.effectiveTo} is null or ${t.effectiveFrom} is null or ${t.effectiveTo} > ${t.effectiveFrom}`),
   ],

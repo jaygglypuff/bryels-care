@@ -532,8 +532,8 @@ export async function reviewInspection(ctx: AuthContext, input: { inspectionId: 
     const ins = await lockInspection(tx, ctx, input.inspectionId);
     if (ins.status !== "awaiting_review") throw new DomainError("state", `Inspection ${ins.inspectionNumber} is ${INSPECTION_STATUS_LABEL[ins.status].toLowerCase()}; only an inspection awaiting review can be reviewed.`);
     const all = await inspectionResults(tx, ins.id);
-    if (ins.performedBy === ctx.userId || all.some((r) => r.testedBy === ctx.userId)) {
-      throw new DomainError("separation_of_duties", "You entered results on this inspection, so another QA user must review it (separation of duties).");
+    if (ctx.sodBlocks(ins.performedBy === ctx.userId || all.some((r) => r.testedBy === ctx.userId), "You entered results on this inspection, so another QA user must review it (separation of duties).")) {
+      throw new DomainError("separation_of_duties", "You entered results on this inspection, so another QA user must review it (separation of duties).", ctx.refusalDetails());
     }
     const live = liveResults(all);
     let batchNote: string | null = null;
@@ -821,7 +821,7 @@ export async function getInspection(ctx: AuthContext, inspectionId: string) {
     .from(deviations)
     .where(eq(deviations.inspectionId, ins.id));
   const open = (INSPECTION_OPEN_STATUSES as readonly string[]).includes(ins.status);
-  const isTester = ins.performedBy === ctx.userId || results.some((x) => x.r.testedBy === ctx.userId);
+  const isTester = ctx.sodConflict(ins.performedBy) || results.some((x) => ctx.sodConflict(x.r.testedBy));
   const liveRows = results.filter((x) => live.has(x.r.id)).map((x) => x.r);
   return {
     inspection: { ...ins, reviewerName: row.reviewerName, samplerName: row.samplerName, statusLabel: INSPECTION_STATUS_LABEL[ins.status] ?? ins.status },

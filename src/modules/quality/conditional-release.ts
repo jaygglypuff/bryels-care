@@ -45,7 +45,7 @@ export async function conditionalReleaseState(ctx: AuthContext, batchId: string)
     enabled,
     pending: pending ? { ...pending.r, requestedByName: pending.requestedByName } : null,
     canRequest: enabled && !pending && ctx.can("quality.disposition.approve"),
-    canDecide: !!pending && ctx.can("quality.conditional_release.approve") && pending.r.requestedBy !== ctx.userId,
+    canDecide: !!pending && ctx.can("quality.conditional_release.approve") && !ctx.sodConflict(pending.r.requestedBy),
   };
 }
 
@@ -63,8 +63,9 @@ export async function requestConditionalRelease(ctx: AuthContext, input: { batch
     if (!BATCH_TRANSITIONS.release.from.includes(batch.status)) throw new DomainError("state", `Batch ${batch.batchNumber} is ${batch.status.replace(/_/g, " ")}; it cannot be released.`);
     const blockers = await conditionalReleaseBlockers(tx, ctx, batch);
     const sod = blockers.find((b) => b.code === "separation_of_duties");
-    if (sod) throw new DomainError("separation_of_duties", sod.message);
-    if (blockers.length) throw new DomainError("state", blockers.map((b) => b.message).join(" "));
+    if (sod) ctx.assertSeparation(true, sod.message);
+    const others = blockers.filter((b) => b.code !== "separation_of_duties");
+    if (others.length) throw new DomainError("state", others.map((b) => b.message).join(" "));
     const [open] = await tx.select({ id: dispositionRequests.id }).from(dispositionRequests).where(and(eq(dispositionRequests.batchId, batch.id), eq(dispositionRequests.status, "pending"))).limit(1);
     if (open) throw new DomainError("conflict", "A conditional release request is already waiting for this batch.");
     const [r] = await tx
@@ -95,7 +96,7 @@ export async function decideConditionalRelease(ctx: AuthContext, input: { reques
     if (!r || !ctx.allowedSiteIds.includes(r.siteId)) throw new DomainError("not_found", "Request not found in your sites.");
     ctx.requireSite(r.siteId);
     if (r.status !== "pending") throw new DomainError("state", `This request is already ${r.status}.`);
-    if (r.requestedBy === ctx.userId) throw new DomainError("separation_of_duties", "You requested this conditional release; a second approver must decide it (separation of duties).");
+    ctx.assertSeparation(r.requestedBy === ctx.userId, "You requested this conditional release; a second approver must decide it (separation of duties).");
     await assertEnabled(ctx, r.siteId);
     await tx.insert(approvalDecisions).values({ organizationId: ctx.organizationId, siteId: r.siteId, recordType: RECORD_TYPE, recordId: r.id, step: 2, decision: input.decision === "approve" ? "approved" : "rejected", decidedBy: ctx.userId, note });
     if (input.decision === "reject") {

@@ -181,9 +181,9 @@ export async function confirmRetentionPolicy(ctx: AuthContext, input: { dataClas
     .select({ id: retentionPolicies.id, updatedBy: retentionPolicies.updatedBy })
     .from(retentionPolicies)
     .where(and(eq(retentionPolicies.organizationId, ctx.organizationId), eq(retentionPolicies.dataClass, dataClass), eq(retentionPolicies.target, input.target)));
-  if (existing?.updatedBy === ctx.userId) {
+  if (ctx.sodBlocks(existing?.updatedBy === ctx.userId, "You changed this policy; a different person must confirm it.")) {
     await auditDenied(ctx, { permission: "platform.retention_policy.approve", entityType: "retention_policies", entityId: existing.id, siteId: null, rule: "confirmer_is_editor" });
-    throw new DomainError("separation_of_duties", "You changed this policy; a different person must confirm it.");
+    throw new DomainError("separation_of_duties", "You changed this policy; a different person must confirm it.", ctx.refusalDetails());
   }
   return db.transaction(async (tx) => {
     let [row] = await tx
@@ -200,7 +200,7 @@ export async function confirmRetentionPolicy(ctx: AuthContext, input: { dataClas
         .returning();
     }
     if (row.isConfirmed) throw new DomainError("conflict", "This policy is already confirmed. Change it first if the reviewers set a different period.");
-    if (row.updatedBy && row.updatedBy === ctx.userId) throw new DomainError("separation_of_duties", "You changed this policy; a different person must confirm it.");
+    ctx.assertSeparation(!!row.updatedBy && row.updatedBy === ctx.userId, "You changed this policy; a different person must confirm it.");
     const now = new Date();
     const [after] = await tx.update(retentionPolicies).set({ isConfirmed: true, confirmedBy: ctx.userId, confirmedAt: now, confirmationNote: note, updatedAt: now }).where(eq(retentionPolicies.id, row.id)).returning();
     await audit(tx, ctx, { action: "platform.retention_policy.confirmed", entityType: "retention_policies", entityId: after.id, entityNumber: policyKey(after), siteId: null, reason: note, before: pick(row), after: pick(after) });

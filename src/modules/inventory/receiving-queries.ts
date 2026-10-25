@@ -192,7 +192,7 @@ export async function getReceiptDocument(ctx: AuthContext, receiptId: string) {
     .orderBy(asc(fileAttachments.createdAt));
 
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
-  const isReceiver = gr.receivedBy === ctx.userId || gr.createdBy === ctx.userId;
+  const isReceiver = ctx.sodConflict(gr.receivedBy) || ctx.sodConflict(gr.createdBy);
   const lines = lineRows.map((r) => {
     const l = r.line;
     const docs = files.filter((f) => f.entityType === "goods_receipt_line" && f.entityId === l.id);

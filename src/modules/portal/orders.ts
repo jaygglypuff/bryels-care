@@ -134,6 +134,16 @@ export async function placePortalOrder(ctx: PortalAuthContext, raw: PortalOrderI
   const correlationId = ctx.correlationId && isUuid(ctx.correlationId) ? ctx.correlationId : uuidv7();
   const sys = await systemContext(ctx.organizationId, { code: "portal.order_intake", systemPermissions: ["sales.sales_order.create", "sales.sales_order.submit"] }, { correlationId });
 
+  return placeInTx().catch((e: unknown) => {
+    // W4B tax: a configured sales tax code without a reviewed rate refuses every order (A-W4B-09). The customer
+    // gets a plain message, not the staff instruction about Finance → Tax configuration.
+    if (e instanceof DomainError && (e.details as { code?: string } | undefined)?.code === "TAX_CONFIG_MISSING") {
+      throw new DomainError("validation", "Online ordering is paused while Bryel's Care updates its price settings. Please try again later or contact your Bryel's Care sales representative.", { code: "TAX_CONFIG_MISSING" });
+    }
+    throw e;
+  });
+
+  function placeInTx() {
   return db.transaction(async (tx) => {
     if (key) {
       const inserted = await tx.insert(idempotencyKeys).values({ organizationId: ctx.organizationId, key, command: IDEM_COMMAND }).onConflictDoNothing().returning({ id: idempotencyKeys.id });
@@ -178,6 +188,7 @@ export async function placePortalOrder(ctx: PortalAuthContext, raw: PortalOrderI
     if (key) await tx.update(idempotencyKeys).set({ result: sql`${JSON.stringify(result)}::jsonb` }).where(and(eq(idempotencyKeys.organizationId, ctx.organizationId), eq(idempotencyKeys.key, key)));
     return result;
   });
+  }
 }
 
 /* ------------------------------------------------------------------ reads */

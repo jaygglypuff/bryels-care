@@ -239,6 +239,21 @@ export async function dispatchOrder(ctx: AuthContext, orderId: string, input: Di
   });
 }
 
+/**
+ * Guard consulted before a dispatch is reversed (Wave 4 integration): finance registers one in
+ * src/modules/wiring.ts that refuses when the shipment has a live invoice (sales must not import finance).
+ * It returns the refusal message, or null when the reversal may go ahead. Runs after the shipment row is
+ * locked, and invoice creation locks the same row, so the two serialize.
+ */
+export type ShipmentReversalGuard = (tx: Tx, organizationId: string, shipmentId: string) => Promise<string | null>;
+const REVERSAL_GUARD_KEY = "__bc_sales_shipment_reversal_guard__";
+export function registerShipmentReversalGuard(fn: ShipmentReversalGuard) {
+  (globalThis as unknown as Record<string, ShipmentReversalGuard>)[REVERSAL_GUARD_KEY] = fn;
+}
+function shipmentReversalGuard(): ShipmentReversalGuard | null {
+  return (globalThis as unknown as Record<string, ShipmentReversalGuard | undefined>)[REVERSAL_GUARD_KEY] ?? null;
+}
+
 /** Reverses a dispatched shipment (sales.shipment.void, S) with a reason: stock returns to where it left. */
 export async function reverseShipment(ctx: AuthContext, shipmentId: string, input: { reason: string; idempotencyKey: string }) {
   ctx.require("sales.shipment.void");
@@ -255,6 +270,8 @@ export async function reverseShipment(ctx: AuthContext, shipmentId: string, inpu
     const s = await lockShipment(tx, ctx, shipmentId);
     ctx.requireAt("sales.shipment.void", s.siteId);
     if (s.status !== "dispatched") throw new DomainError("state", s.status === "delivered" ? `Shipment ${s.shipmentNumber} was delivered; goods coming back are a customer return, not a reversal.` : `Shipment ${s.shipmentNumber ?? s.deliveryReceiptNumber} is ${s.status}; only a dispatched shipment can be reversed.`);
+    const blocked = await shipmentReversalGuard()?.(tx, ctx.organizationId, s.id);
+    if (blocked) throw new DomainError("conflict", blocked, { code: "SHIPMENT_INVOICED" });
     const lines = await tx.select().from(shipmentLines).where(and(eq(shipmentLines.shipmentId, s.id), isNotNull(shipmentLines.stockMovementId))).orderBy(asc(shipmentLines.lotId), asc(shipmentLines.id));
     const legacy = lines.length === 0;
     const movements = await tx.select().from(stockMovements).where(and(eq(stockMovements.sourceDocumentType, "shipment"), eq(stockMovements.sourceDocumentId, s.id), eq(stockMovements.movementType, "shipment")));

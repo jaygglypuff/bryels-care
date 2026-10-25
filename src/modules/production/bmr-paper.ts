@@ -234,7 +234,7 @@ export async function reviewPaperRecord(ctx: AuthContext, input: { paperRecordId
     ctx.requireSite(p.siteId);
     const to = input.decision === "confirm" ? "reviewed" : "returned";
     assertPaperTransition(p.status, to, p.paperReference);
-    if (p.transcribedBy === ctx.userId) throw new DomainError("separation_of_duties", "You transcribed this page, so another person must review it.");
+    ctx.assertSeparation(p.transcribedBy === ctx.userId, "You transcribed this page, so another person must review it.");
     const now = new Date();
     await tx
       .update(batchPaperRecords)

@@ -446,7 +446,7 @@ export async function getPayment(ctx: AuthContext, id: string) {
     preview: preview.map((x) => ({ ...x, number: open.find((o) => o.documentId === x.documentId)?.number ?? "—" })),
     progress,
     canApprove: p.status === "submitted" && canDecide(ctx, "payment_record", progress, p.submittedAt, [p.createdBy, p.submittedBy]),
-    posterBlocked: p.status === "approved" && !!progress && !progress.posterMayEqualApprover && progress.approvers.includes(ctx.userId),
+    posterBlocked: p.status === "approved" && !!progress && !progress.posterMayEqualApprover && progress.approvers.some((u) => ctx.sodConflict(u)),
     decisions: await decisionsOf(db, ctx.organizationId, "payment_record", p.id),
     names: Object.fromEntries(await namesOf(db, [p.createdBy, p.submittedBy, p.approvedBy, p.postedBy, p.voidedBy])),
     postings: await postingsOf(db, ctx.organizationId, "payment_record", [p.id]),

@@ -183,7 +183,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
                   </p>
                   {!l.discrepancyApprovedBy && gr.can.approveDiscrepancy && (
                     <div className="mt-2">
-                      {gr.can.isReceiver || l.discrepancyRecordedBy === ctx.userId ? (
+                      {gr.can.isReceiver || ctx.sodConflict(l.discrepancyRecordedBy) ? (
                         <p className="text-[12px] text-muted">You received these goods or recorded this discrepancy, so another procurement user must approve it.</p>
                       ) : (
                         <ActionForm action={approveDiscrepancyAction} hidden={{ ...hidden, lineId: l.id }} submit="Approve discrepancy" variant="secondary" className="space-y-2">

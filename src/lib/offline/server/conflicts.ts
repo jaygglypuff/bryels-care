@@ -157,7 +157,7 @@ export async function resolveConflict(ctx: AuthContext, input: ResolveInput): Pr
   if (!c0 || c0.organizationId !== ctx.organizationId || (!own && !ctx.allowedSiteIds.includes(c0.siteId))) throw new DomainError("not_found", "Conflict not found in your sites.");
   if (own) {
     const selfDiscard = await getSetting(db, ctx.organizationId, "offline.allow_self_resolve_discard");
-    if (!(input.action === "discard" && selfDiscard)) throw new DomainError("separation_of_duties", "Someone other than the person who queued this change must resolve it.");
+    ctx.assertSeparation(!(input.action === "discard" && selfDiscard), "Someone other than the person who queued this change must resolve it.");
   } else {
     ctx.requireAt("platform.sync_conflict.approve", c0.siteId);
   }

@@ -124,9 +124,9 @@ async function lockVersion(tx: Parameters<Parameters<typeof db.transaction>[0]>[
 export async function approveNumberingRuleVersion(ctx: AuthContext, id: string, password: string | null | undefined) {
   ctx.require("platform.numbering_rule.admin");
   const peek = await db.transaction((tx) => lockVersion(tx, ctx, id));
-  if (peek.submittedBy === ctx.userId) {
+  if (ctx.sodBlocks(peek.submittedBy === ctx.userId, "SEPARATION_OF_DUTIES: you submitted this numbering change, so a different administrator must approve it.")) {
     await auditDenied(ctx, { permission: "platform.numbering_rule.admin", entityType: "numbering_rule", entityId: peek.id, rule: "authz.sod.approve_own" });
-    throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: you submitted this numbering change, so a different administrator must approve it.");
+    throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: you submitted this numbering change, so a different administrator must approve it.", ctx.refusalDetails());
   }
   await requireReauthentication(ctx, password, "platform.numbering_rule.admin");
   return db.transaction(async (tx) => {

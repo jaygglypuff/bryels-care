@@ -301,7 +301,7 @@ export async function closeDeviation(ctx: AuthContext, input: CloseDeviationInpu
   return db.transaction(async (tx) => {
     const d = await lockDeviation(tx, ctx, input.deviationId);
     if (d.status === "closed") throw new DomainError("state", `Deviation ${d.deviationNumber} is already closed.`);
-    if (d.raisedBy === ctx.userId) throw new DomainError("separation_of_duties", "You raised this deviation, so another QA user must close it (separation of duties).");
+    ctx.assertSeparation(d.raisedBy === ctx.userId, "You raised this deviation, so another QA user must close it (separation of duties).");
     if (!d.severity) throw new DomainError("state", "Classify the deviation's severity before closing it.", { field: "severity" });
     const open = await tx
       .select({ n: qualityHolds.holdNumber })
@@ -472,7 +472,7 @@ export async function getDeviation(ctx: AuthContext, deviationId: string) {
       investigate: d.status === "open" && ctx.can("quality.deviation.submit"),
       update: active && ctx.can("quality.deviation.submit"),
       contain: active && ctx.can("quality.hold.create"),
-      close: active && ctx.can("quality.deviation.approve") && d.raisedBy !== ctx.userId && !!d.severity && openHolds.length === 0,
+      close: active && ctx.can("quality.deviation.approve") && !ctx.sodConflict(d.raisedBy) && !!d.severity && openHolds.length === 0,
       closeBlockedReason: !active || !ctx.can("quality.deviation.approve")
         ? null
         : d.raisedBy === ctx.userId

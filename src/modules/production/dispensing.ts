@@ -231,7 +231,7 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
           }
           approver.require("production.over_tolerance_dispense.approve");
           approver.requireSite(batch.siteId);
-          if (approver.userId === ctx.userId) throw new DomainError("separation_of_duties", "The exception must be approved by someone other than the operator.");
+          ctx.assertSeparation(approver.userId === ctx.userId, "The exception must be approved by someone other than the operator.");
           if (reason.length < 10) throw new DomainError("validation", "The approver must give the reason for accepting this weight (at least 10 characters).", { field: "exceptionReason" });
           const opener = executionHooks().openDeviation;
           if (!opener) throw new DomainError("state", DEVIATION_UNAVAILABLE, { rule: "CX-TOL" });
@@ -250,7 +250,7 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
 
       const checker = signers.checker ?? null;
       if (checker) {
-        if (checker.userId === ctx.userId) throw new DomainError("separation_of_duties", "The checker must be a different person from the operator.", { rule: "V-SOD" });
+        ctx.assertSeparation(checker.userId === ctx.userId, "The checker must be a different person from the operator.", { rule: "V-SOD" });
         checker.require("production.dispense_record.approve");
         checker.requireSite(batch.siteId);
       }
@@ -364,8 +364,8 @@ export async function checkDispense(checker: AuthContext, input: { dispenseRecor
       const [rec] = await tx.select().from(dispenseRecords).where(eq(dispenseRecords.id, r.rec.id)).for("update").limit(1);
       if (rec.voidedAt) throw new DomainError("state", "This weighing was voided.");
       if (rec.checkerId) throw new DomainError("state", "This weighing is already checked.");
-      if (rec.operatorId === checker.userId) {
-        throw new DomainError("separation_of_duties", "You weighed this ingredient; another person must check it.", { rule: "V-SOD" });
+      if (checker.sodBlocks(rec.operatorId === checker.userId, "You weighed this ingredient; another person must check it.")) {
+        throw new DomainError("separation_of_duties", "You weighed this ingredient; another person must check it.", { ...checker.refusalDetails(), rule: "V-SOD" });
       }
       const now = new Date();
       await tx.update(dispenseRecords).set({ checkerId: checker.userId, checkedAt: now }).where(eq(dispenseRecords.id, rec.id));

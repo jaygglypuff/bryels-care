@@ -28,7 +28,8 @@
     "worker": "tsx --require ./scripts/worker-preload.cjs src/worker.ts",
     "admin:bootstrap": "tsx --require ./scripts/worker-preload.cjs scripts/bootstrap-admin.ts",
     "migrate:load": "tsx --require ./scripts/worker-preload.cjs scripts/migration-loader.ts",
-    "migrate:approve": "tsx --require ./scripts/worker-preload.cjs scripts/migration-loader.ts approve"
+    "migrate:approve": "tsx --require ./scripts/worker-preload.cjs scripts/migration-loader.ts approve",
+    "db:sandbox": "tsx src/db/sandbox.ts"
   },
   "packageManager": "pnpm@10.28.0",
   "dependencies": {

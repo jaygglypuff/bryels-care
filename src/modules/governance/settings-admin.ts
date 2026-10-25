@@ -157,15 +157,15 @@ async function lockRequest(tx: Parameters<Parameters<typeof db.transaction>[0]>[
 export async function approveSettingChange(ctx: AuthContext, id: string, input: { note?: string | null; password?: string | null }) {
   ctx.require("platform.settings.approve");
   const peek = await db.transaction((tx) => lockRequest(tx, ctx, id));
-  if (peek.submittedBy === ctx.userId) {
+  if (ctx.sodBlocks(peek.submittedBy === ctx.userId, "SEPARATION_OF_DUTIES: you submitted this change, so a different person must approve it.")) {
     await auditDenied(ctx, { permission: "platform.settings.approve", entityType: "setting_change_request", entityId: peek.id, siteId: peek.siteId, rule: "authz.sod.approve_own" });
-    throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: you submitted this change, so a different person must approve it.", { rule: "authz.sod.approve_own" });
+    throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: you submitted this change, so a different person must approve it.", { ...ctx.refusalDetails(), rule: "authz.sod.approve_own" });
   }
   await requireReauthentication(ctx, input.password, "platform.settings.approve");
   return db.transaction(async (tx) => {
     const r = await lockRequest(tx, ctx, id);
     if (r.status !== "submitted") throw new DomainError("state", `This change request is ${r.status}; only a submitted request can be approved.`);
-    if (r.submittedBy === ctx.userId) throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: you submitted this change, so a different person must approve it.");
+    ctx.assertSeparation(r.submittedBy === ctx.userId, "SEPARATION_OF_DUTIES: you submitted this change, so a different person must approve it.");
     if (!isSettingKey(r.key)) throw new DomainError("state", "This setting no longer exists in the registry; reject the request.");
     const ev = await evaluateApprovalRulesAudited(tx, ctx, { documentType: "setting_change_request", siteId: r.siteId, recordId: r.id, recordNumber: r.key });
     const step = ev.steps[0];
@@ -206,7 +206,7 @@ export async function rejectSettingChange(ctx: AuthContext, id: string, reason: 
   return db.transaction(async (tx) => {
     const r = await lockRequest(tx, ctx, id);
     if (r.status !== "submitted") throw new DomainError("state", `This change request is ${r.status}; only a submitted request can be rejected.`);
-    if (r.submittedBy === ctx.userId) throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: cancel your own request instead of rejecting it.");
+    ctx.assertSeparation(r.submittedBy === ctx.userId, "SEPARATION_OF_DUTIES: cancel your own request instead of rejecting it.");
     const now = new Date();
     await tx.insert(approvalDecisions).values({ organizationId: ctx.organizationId, siteId: r.siteId, recordType: "setting_change_request", recordId: r.id, step: 1, decision: "rejected", decidedBy: ctx.userId, note: why });
     await tx.update(settingChangeRequests).set({ status: "rejected", rejectedBy: ctx.userId, rejectedAt: now, rejectionReason: why, updatedAt: now }).where(eq(settingChangeRequests.id, r.id));

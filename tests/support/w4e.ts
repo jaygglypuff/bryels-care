@@ -14,6 +14,12 @@ export type W4e = Kit & {
   salesNoReauth: AuthContext;
   /** sales_cs at RVS only (the seeded tenants are fulfilled by NFD). */
   salesRvs: AuthContext;
+  /** Portal-user administrator (site_manager, ADR-071) at NFD and RVS with a fresh step-up. */
+  portalAdmin: AuthContext;
+  /** The same person without step-up. */
+  portalAdminNoReauth: AuthContext;
+  /** site_manager at RVS only (the seeded tenants are fulfilled by NFD). */
+  portalAdminRvs: AuthContext;
   warehouse: AuthContext;
   auditor: AuthContext;
   owner: AuthContext;
@@ -38,6 +44,9 @@ export async function loadW4e(): Promise<W4e> {
     sales: await asUser(kit, "sales@bryels-care.test", "sales_cs", both, fresh()),
     salesNoReauth: await asUser(kit, "sales@bryels-care.test", "sales_cs", both, { session: { id: uuidv7(), reauthenticatedAt: null, mfaVerifiedAt: null, privileged: true } }),
     salesRvs: await asUser(kit, "sales2@bryels-care.test", "sales_cs", [kit.rvs], fresh()),
+    portalAdmin: await asUser(kit, "manager.nfd@bryels-care.test", "site_manager", both, fresh()),
+    portalAdminNoReauth: await asUser(kit, "manager.nfd@bryels-care.test", "site_manager", both, { session: { id: uuidv7(), reauthenticatedAt: null, mfaVerifiedAt: null, privileged: true } }),
+    portalAdminRvs: await asUser(kit, "manager.nfd@bryels-care.test", "site_manager", [kit.rvs], fresh()),
     warehouse: await asUser(kit, "warehouse.nfd@bryels-care.test", "warehouse_operator", [kit.nfd], fresh()),
     auditor: await asUser(kit, "auditor@bryels-care.test", "auditor", both, fresh()),
     owner: await asUser(kit, "owner@bryels-care.test", "owner_director", both, fresh()),

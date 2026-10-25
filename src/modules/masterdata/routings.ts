@@ -460,8 +460,8 @@ export async function getRoutingRevision(ctx: AuthContext, revisionId: string) {
       canDecide:
         r.rev.status === "pending_approval" &&
         canDecideStep(ctx, approval.nextStep) &&
-        ![r.rev.createdBy, r.rev.submittedBy].includes(ctx.userId) &&
-        !approval.decisions.some((d) => d.decidedBy === ctx.userId),
+        ![r.rev.createdBy, r.rev.submittedBy].some((u) => ctx.sodConflict(u)) &&
+        !approval.decisions.some((d) => ctx.sodConflict(d.decidedBy)),
     },
     can: {
       edit: r.rev.status === "draft" && ctx.can("masterdata.routing.edit"),

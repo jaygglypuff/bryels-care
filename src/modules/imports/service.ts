@@ -368,8 +368,8 @@ export async function approveImport(ctx: AuthContext, jobId: string, note?: stri
     ctx.requireAt("platform.import_job.approve", job.siteId);
     assertImportTransition(job.status, "approved", job.importNumber);
     const sod = await getSetting(tx, ctx.organizationId, "platform.imports.require_second_person");
-    if (sod && (ctx.userId === job.uploadedBy || ctx.userId === job.submittedBy)) {
-      throw new DomainError("separation_of_duties", "You uploaded or submitted this import, so a different person must approve it (second-person check).");
+    if (ctx.sodBlocks(sod && (ctx.userId === job.uploadedBy || ctx.userId === job.submittedBy), "You uploaded or submitted this import, so a different person must approve it (second-person check).")) {
+      throw new DomainError("separation_of_duties", "You uploaded or submitted this import, so a different person must approve it (second-person check).", ctx.refusalDetails());
     }
     const n = (note ?? "").trim() || null;
     await tx.update(importJobs).set({ status: "approved", approvedBy: ctx.userId, approvedAt: new Date(), approvalNote: n, updatedAt: new Date() }).where(eq(importJobs.id, job.id));

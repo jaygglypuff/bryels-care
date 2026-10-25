@@ -101,9 +101,9 @@ export async function releaseLegalHold(ctx: AuthContext, input: { id: string; no
   if (!hold) throw new DomainError("not_found", "Legal hold not found.");
   const site = await entitySite(db, hold.entityType as LegalHoldEntityType, hold.entityId);
   if (site && !ctx.allowedSiteIds.includes(site)) throw new DomainError("not_found", "Legal hold not found.");
-  if (hold.placedBy === ctx.userId) {
+  if (ctx.sodBlocks(hold.placedBy === ctx.userId, "You placed this hold; a different person must release it.")) {
     await auditDenied(ctx, { permission: "platform.legal_hold.void", entityType: "legal_holds", entityId: hold.id, siteId: site, rule: "releaser_is_placer" });
-    throw new DomainError("separation_of_duties", "You placed this hold; a different person must release it.");
+    throw new DomainError("separation_of_duties", "You placed this hold; a different person must release it.", ctx.refusalDetails());
   }
   return db.transaction(async (tx) => {
     const now = new Date();

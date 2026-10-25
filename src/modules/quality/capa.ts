@@ -369,7 +369,7 @@ export async function verifyCapaAction(ctx: AuthContext, input: { actionId: stri
     ctx.requireAt("quality.capa.submit", c.siteId);
     assertCapaLive(c);
     assertActionMove(a, "verified");
-    if (a.completedBy === ctx.userId) throw new DomainError("separation_of_duties", "You recorded this action as done, so another person must verify it (separation of duties).");
+    ctx.assertSeparation(a.completedBy === ctx.userId, "You recorded this action as done, so another person must verify it (separation of duties).");
     await tx.update(capaActions).set({ status: "verified", verifiedAt: new Date(), verifiedBy: ctx.userId, verificationNote: note }).where(eq(capaActions.id, a.id));
     await audit(tx, ctx, { action: "quality.capa.action_verified", entityType: "capa", entityId: c.id, entityNumber: c.capaNumber, siteId: c.siteId, reason: note, before: { actionNo: a.actionNo, status: a.status }, after: { actionNo: a.actionNo, status: "verified" } });
     return { status: "verified" as const };
@@ -467,7 +467,7 @@ export async function closeCapa(ctx: AuthContext, input: { capaId: string; note?
     ctx.requireAt("quality.capa.approve", c.siteId);
     if (c.status !== "verification") throw new DomainError("state", `CAPA ${c.capaNumber} is ${c.status.replace(/_/g, " ")}; only a CAPA in verification can be closed.`);
     if (c.effectivenessResult !== "effective") throw new DomainError("state", "Record an effectiveness check with the result “effective” before closing (FR-quality-07).");
-    if (c.submittedBy === ctx.userId) throw new DomainError("separation_of_duties", "You submitted this CAPA for closure, so another person must close it (separation of duties).");
+    ctx.assertSeparation(c.submittedBy === ctx.userId, "You submitted this CAPA for closure, so another person must close it (separation of duties).");
     if (!c.rootCause) throw new DomainError("state", "The root cause is missing.");
     await move(tx, ctx, c, "closed", note ?? "Closed", { closedBy: ctx.userId, closedAt: new Date(), closureNote: note });
     await audit(tx, ctx, { action: "quality.capa.closed", entityType: "capa", entityId: c.id, entityNumber: c.capaNumber, siteId: c.siteId, reason: note, before: { status: "verification" }, after: { status: "closed", effectivenessResult: c.effectivenessResult } });
@@ -569,7 +569,7 @@ export async function getCapa(ctx: AuthContext, capaId: string) {
       verifiedByName: nm(a.verifiedBy),
       overdue: isActionOverdue(a, today),
       canComplete: c.status === "in_progress" && a.status === "open" && (qa || (a.ownerId === ctx.userId && ctx.canAt("quality.capa.view", c.siteId))),
-      canVerify: c.status === "in_progress" && a.status === "done" && qa && a.completedBy !== ctx.userId,
+      canVerify: c.status === "in_progress" && a.status === "done" && qa && !ctx.sodConflict(a.completedBy),
       canReopen: c.status === "in_progress" && a.status === "done" && qa,
       canCancel: c.status === "in_progress" && (a.status === "open" || a.status === "done") && qa,
     })),
@@ -584,7 +584,7 @@ export async function getCapa(ctx: AuthContext, capaId: string) {
       addAction: live && (qa || ctx.canAt("quality.capa.create", c.siteId)),
       submit: c.status === "in_progress" && qa && blockers.length === 0,
       recordEffectiveness: c.status === "verification" && qa && !c.effectivenessResult && (!c.effectivenessDueOn || today >= c.effectivenessDueOn),
-      close: c.status === "verification" && ctx.canAt("quality.capa.approve", c.siteId) && c.effectivenessResult === "effective" && c.submittedBy !== ctx.userId,
+      close: c.status === "verification" && ctx.canAt("quality.capa.approve", c.siteId) && c.effectivenessResult === "effective" && !ctx.sodConflict(c.submittedBy),
       closeBlockedReason:
         c.status !== "verification" || !ctx.canAt("quality.capa.approve", c.siteId)
           ? null

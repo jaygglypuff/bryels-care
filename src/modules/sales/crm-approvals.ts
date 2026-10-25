@@ -69,8 +69,8 @@ export function canDecide(ctx: AuthContext, recordType: RecordType, step: Evalua
   if (!ctx.can(BASE[recordType])) return false;
   if (step.permission && !ctx.can(step.permission as Permission)) return false;
   const roles = rolesAllowedNow(step, pendingSince);
-  if (roles.length > 0 && !roles.some((r) => ctx.roleCodes.includes(r))) return false;
-  if (sod && excludedUserIds.some((u) => u && u === ctx.userId)) return false;
+  if (roles.length > 0 && !ctx.hasAnyRole(roles)) return false;
+  if (sod && excludedUserIds.some((u) => ctx.sodConflict(u))) return false;
   return true;
 }
 
@@ -99,17 +99,17 @@ export async function recordDecision(
   await evaluateApprovalRulesAudited(tx, ctx, { documentType: args.recordType as ApprovalDocumentType, siteId: args.siteId, basis: args.basis, recordId: args.recordId, recordNumber: args.recordNumber });
   const progress = await approvalProgress(tx, ctx.organizationId, args);
   const step = progress.next;
-  if (args.sod && args.excludedUserIds.some((u) => u && u === ctx.userId)) {
-    throw new DomainError("separation_of_duties", "You created or submitted this record, so another person must decide on it.", { code: "SEPARATION_OF_DUTIES" });
+  if (ctx.sodBlocks(args.sod && args.excludedUserIds.some((u) => u && u === ctx.userId), "You created or submitted this record, so another person must decide on it.")) {
+    throw new DomainError("separation_of_duties", "You created or submitted this record, so another person must decide on it.", { ...ctx.refusalDetails(), code: "SEPARATION_OF_DUTIES" });
   }
   if (step) {
     if (step.permission) ctx.require(step.permission as Permission);
     const roles = rolesAllowedNow(step, args.pendingSince);
-    if (roles.length > 0 && !roles.some((r) => ctx.roleCodes.includes(r))) {
+    if (roles.length > 0 && !ctx.actsAsAnyRole(roles)) {
       throw new DomainError("forbidden", `Step ${step.step} (${step.label}) must be decided by ${roles.map((r) => r.replace(/_/g, " ")).join(" or ")}.`);
     }
-    if (args.decision === "approved" && progress.steps.some((s) => s.approvals.some((a) => a.by === ctx.userId))) {
-      throw new DomainError("separation_of_duties", "You already approved a step of this record. A different person must decide this step.", { code: "SEPARATION_OF_DUTIES" });
+    if (ctx.sodBlocks(args.decision === "approved" && progress.steps.some((s) => s.approvals.some((a) => a.by === ctx.userId)), "You already approved a step of this record. A different person must decide this step.")) {
+      throw new DomainError("separation_of_duties", "You already approved a step of this record. A different person must decide this step.", { ...ctx.refusalDetails(), code: "SEPARATION_OF_DUTIES" });
     }
   }
   if (args.decision !== "approved" && !args.note?.trim()) throw new DomainError("validation", "Give the reason.", { field: "reason" });

@@ -325,7 +325,7 @@ export async function closeChangeControl(ctx: AuthContext, input: { changeContro
     const c = await lockCc(tx, ctx, input.changeControlId);
     requireHere(ctx, "quality.change_control.approve", c);
     if (c.status !== "implemented") throw new DomainError("state", `Change ${c.changeNumber} is ${c.status}; only an implemented change can be closed.`);
-    if (c.implementedBy === ctx.userId) throw new DomainError("separation_of_duties", "You implemented this change, so another person must confirm and close it (separation of duties).");
+    ctx.assertSeparation(c.implementedBy === ctx.userId, "You implemented this change, so another person must confirm and close it (separation of duties).");
     await move(tx, ctx, c, "closed", note, { closedBy: ctx.userId, closedAt: new Date(), closureNote: note });
     await audit(tx, ctx, { action: "quality.change_control.closed", entityType: "change_control", entityId: c.id, entityNumber: c.changeNumber, siteId: c.siteId, reason: note, before: { status: "implemented" }, after: { status: "closed" } });
     return { status: "closed" as const };
@@ -425,7 +425,7 @@ export async function getChangeControl(ctx: AuthContext, id: string) {
               : entity.status !== "approved"
                 ? `${entity.label} is ${entity.status.replace(/_/g, " ")}; approve it through its own workflow first.`
                 : null,
-      close: c.status === "implemented" && canHere(ctx, "quality.change_control.approve", c) && c.implementedBy !== ctx.userId,
+      close: c.status === "implemented" && canHere(ctx, "quality.change_control.approve", c) && !ctx.sodConflict(c.implementedBy),
       cancel: ["draft", "submitted", "approved"].includes(c.status) && (c.createdBy === ctx.userId ? canHere(ctx, "quality.change_control.create", c) : canHere(ctx, "quality.change_control.approve", c)),
     },
   };

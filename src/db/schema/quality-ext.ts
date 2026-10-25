@@ -250,7 +250,6 @@ export const dispositionRequests = pgTable(
     uniqueIndex("uq_disposition_requests_batch_pending").on(t.batchId).where(sql`${t.status} = 'pending'`),
     check("ck_disposition_requests_status", sql`${t.status} in ('pending','approved','rejected','cancelled')`),
     check("ck_disposition_requests_decision", sql`${t.decision} in ('conditional_release')`),
-    check("ck_disposition_requests_sod", sql`${t.decidedBy} is null or ${t.decidedBy} <> ${t.requestedBy}`),
   ],
 );
 

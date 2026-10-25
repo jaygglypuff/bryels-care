@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, eq, asc } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db/client";
 import { auditEvents, customerPortalTenants, customers, organizations, portalUsers } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
@@ -46,8 +46,9 @@ export async function portalAudit(
 export const portalActor = (portalUserId: string) => `portal_user:${portalUserId}`;
 
 async function defaultOrganizationId(): Promise<string | null> {
-  // Before sign-in there is no organization yet; the deployment serves one (ADR-011).
-  const [o] = await db.select({ id: organizations.id }).from(organizations).limit(1);
+  // Before sign-in there is no organization yet: use the first one created (the demo environment also
+    // holds the empty sandbox company, ADR-072; a production deployment serves one, ADR-011).
+  const [o] = await db.select({ id: organizations.id }).from(organizations).orderBy(asc(organizations.createdAt)).limit(1);
   return o?.id ?? null;
 }
 

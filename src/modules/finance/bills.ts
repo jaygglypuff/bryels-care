@@ -389,7 +389,7 @@ export async function resolveBillDispute(ctx: AuthContext, id: string, input: { 
     if (input.action === "approve_variance") {
       ctx.requireAt("finance.supplier_bill.approve", b.siteId);
       const reason = requireReason(input.reason);
-      if (b.createdBy === ctx.userId || b.submittedBy === ctx.userId) throw new DomainError("separation_of_duties", "You entered or submitted this bill; another person approves the variance.", { code: "SEPARATION_OF_DUTIES" });
+      ctx.assertSeparation(b.createdBy === ctx.userId || b.submittedBy === ctx.userId, "You entered or submitted this bill; another person approves the variance.", { code: "SEPARATION_OF_DUTIES" });
       const now = new Date();
       await tx.update(supplierBills).set({ varianceApprovedBy: ctx.userId, varianceApprovedAt: now, varianceReason: reason, updatedAt: now }).where(eq(supplierBills.id, b.id));
       await logTransition(tx, ctx, doc(b), "disputed", "submitted", `Variance approved: ${reason}`);
@@ -548,6 +548,9 @@ export async function getSupplierBill(ctx: AuthContext, id: string) {
   const progress: Progress | null = ["submitted", "approved"].includes(b.status) ? await approvalProgress(db, ctx.organizationId, { recordType: "supplier_bill", recordId: b.id, siteId: b.siteId, basis: { amount: b.totalAmount } }) : null;
   const [creditFor] = b.creditForBillId ? await db.select({ id: supplierBills.id, billNumber: supplierBills.billNumber }).from(supplierBills).where(eq(supplierBills.id, b.creditForBillId)).limit(1) : [];
   const credits = await db.select({ id: supplierBills.id, billNumber: supplierBills.billNumber, status: supplierBills.status, total: supplierBills.totalAmount }).from(supplierBills).where(eq(supplierBills.creditForBillId, b.id));
+  // W4A supplier returns expecting a credit from this supplier: a dispute can be resolved by entering that credit.
+  const source = purchaseOrderMatchSource();
+  const expectedSupplierCredits = b.billKind === "bill" && ["draft", "submitted", "disputed", "approved", "posted", "partially_paid"].includes(b.status) && source?.expectedSupplierCredits ? await source.expectedSupplierCredits(db, ctx.organizationId, b.supplierId, ctx.allowedSiteIds) : [];
   return {
     bill: { ...b, openAmount: m4(billOpenAmount(b)) },
     supplier: { id: row.s.id, code: row.s.code, name: row.s.name },
@@ -555,10 +558,11 @@ export async function getSupplierBill(ctx: AuthContext, id: string) {
     lines,
     creditFor: creditFor ?? null,
     credits,
+    expectedSupplierCredits,
     progress,
-    canApprove: b.status === "submitted" && canDecide(ctx, "supplier_bill", progress, b.submittedAt, [b.createdBy, b.submittedBy]) && (!!b.goodsReceiptId || !!b.purchaseOrderId || ctx.roleCodes.includes("finance")),
-    canApproveVariance: b.status === "disputed" && ctx.canAt("finance.supplier_bill.approve", b.siteId) && b.createdBy !== ctx.userId && b.submittedBy !== ctx.userId,
-    posterBlocked: b.status === "approved" && !!progress && !progress.posterMayEqualApprover && progress.approvers.includes(ctx.userId),
+    canApprove: b.status === "submitted" && canDecide(ctx, "supplier_bill", progress, b.submittedAt, [b.createdBy, b.submittedBy]) && (!!b.goodsReceiptId || !!b.purchaseOrderId || ctx.hasAnyRole(["finance"])),
+    canApproveVariance: b.status === "disputed" && ctx.canAt("finance.supplier_bill.approve", b.siteId) && !ctx.sodConflict(b.createdBy) && !ctx.sodConflict(b.submittedBy),
+    posterBlocked: b.status === "approved" && !!progress && !progress.posterMayEqualApprover && progress.approvers.some((u) => ctx.sodConflict(u)),
     decisions: await decisionsOf(db, ctx.organizationId, "supplier_bill", b.id),
     names: Object.fromEntries(await namesOf(db, [b.createdBy, b.submittedBy, b.approvedBy, b.postedBy, b.voidedBy, b.varianceApprovedBy])),
     postings: await postingsOf(db, ctx.organizationId, "supplier_bill", [b.id]),

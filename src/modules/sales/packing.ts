@@ -106,9 +106,9 @@ async function ensurePack(tx: Tx, ctx: AuthContext, s: ShipmentRow, pick: typeof
 /** SoD (sod.pack.checker_not_packer): the verifier is neither the person who completed the pick nor anyone who scanned it. */
 async function assertNotPicker(tx: Tx, ctx: AuthContext, s: ShipmentRow, pick: typeof picks.$inferSelect) {
   const scanners = await tx.selectDistinct({ by: pickLines.pickedBy }).from(pickLines).where(and(eq(pickLines.pickId, pick.id), isNull(pickLines.voidedAt)));
-  if (pick.completedBy === ctx.userId || scanners.some((x) => x.by === ctx.userId)) {
+  if (ctx.sodBlocks(pick.completedBy === ctx.userId || scanners.some((x) => x.by === ctx.userId), "Pack verification must be done by someone other than the picker (checker ≠ packer). Ask a colleague to verify.")) {
     await auditDenied(ctx, { permission: "inventory.pack.approve", entityType: "shipment", entityId: s.id, siteId: s.siteId, rule: "sod.pack.checker_not_packer" });
-    throw new DomainError("separation_of_duties", "Pack verification must be done by someone other than the picker (checker ≠ packer). Ask a colleague to verify.", { rule: "sod.pack.checker_not_packer" });
+    throw new DomainError("separation_of_duties", "Pack verification must be done by someone other than the picker (checker ≠ packer). Ask a colleague to verify.", { ...ctx.refusalDetails(), rule: "sod.pack.checker_not_packer" });
   }
 }
 
@@ -362,9 +362,9 @@ export async function approveShipmentException(ctx: AuthContext, shipmentId: str
   if (!peek[0] || !ctx.allowedSiteIds.includes(peek[0].siteId)) throw new DomainError("not_found", "Shipment not found in your sites.");
   ctx.requireAt("sales.over_shipment.approve", peek[0].siteId);
   const [order] = await db.select().from(salesOrders).where(eq(salesOrders.id, peek[0].orderId)).limit(1);
-  if (order.createdBy === ctx.userId) {
+  if (ctx.sodBlocks(order.createdBy === ctx.userId, "You created this order, so someone else must approve the exception.")) {
     await auditDenied(ctx, { permission: "sales.over_shipment.approve", entityType: "shipment", entityId: shipmentId, siteId: order.siteId, rule: "sod.over_shipment.not_order_creator" });
-    throw new DomainError("separation_of_duties", "You created this order, so someone else must approve the exception.", { rule: "sod.over_shipment.not_order_creator" });
+    throw new DomainError("separation_of_duties", "You created this order, so someone else must approve the exception.", { ...ctx.refusalDetails(), rule: "sod.over_shipment.not_order_creator" });
   }
   await requireReauthentication(ctx, input.password, "sales.over_shipment.approve");
   return db.transaction(async (tx) => {
@@ -559,7 +559,7 @@ export async function getPackingView(ctx: AuthContext, shipmentId: string) {
     pack: pack ?? null,
     scans: scans.map((x) => ({ ...x.sc, scannedByName: x.by })),
     fullShipmentRequired: req.some((r) => r.fullShipmentRequired),
-    isPicker: pickers.has(ctx.userId),
-    canOverApprove: ctx.can("sales.over_shipment.approve") && order.o.createdBy !== ctx.userId,
+    isPicker: pickers.has(ctx.userId) && !ctx.ownerOverride,
+    canOverApprove: ctx.can("sales.over_shipment.approve") && !ctx.sodConflict(order.o.createdBy),
   };
 }

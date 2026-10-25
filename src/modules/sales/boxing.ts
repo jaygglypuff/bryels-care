@@ -304,9 +304,9 @@ function assertReconciled(p: PackRow) {
 }
 
 async function assertChecker(ctx: AuthContext, p: PackRow) {
-  if (p.packedBy === ctx.userId) {
+  if (ctx.sodBlocks(p.packedBy === ctx.userId, "The checker cannot be the packer (checker ≠ packer). Ask a colleague to verify this pack.")) {
     await auditDeniedLocal(ctx, p);
-    throw new DomainError("separation_of_duties", "The checker cannot be the packer (checker ≠ packer). Ask a colleague to verify this pack.", { rule: "sod.pack.checker_not_packer" });
+    throw new DomainError("separation_of_duties", "The checker cannot be the packer (checker ≠ packer). Ask a colleague to verify this pack.", { ...ctx.refusalDetails(), rule: "sod.pack.checker_not_packer" });
   }
 }
 
@@ -835,7 +835,7 @@ export async function getPack(ctx: AuthContext, packId: string) {
     checkedCount: boxes.filter((b) => b.b.status === "packed" && okIds.has(b.b.containerId)).length,
     required: p.verificationMode === "all" ? boxes.filter((b) => b.b.status === "packed").length : Math.min(p.verificationSampleSize ?? 1, boxes.filter((b) => b.b.status === "packed").length),
     labelTemplate: tpl ? { id: tpl.id, code: tpl.code } : null,
-    isPacker: p.packedBy === ctx.userId,
+    isPacker: ctx.sodConflict(p.packedBy),
   };
 }
 

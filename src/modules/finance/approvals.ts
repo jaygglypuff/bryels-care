@@ -89,9 +89,9 @@ export function canDecide(ctx: AuthContext, recordType: FinanceRecordType, progr
   if (!ctx.can(BASE_APPROVE[recordType])) return false;
   if (step.permission && !ctx.can(step.permission as Permission)) return false;
   const roles = rolesAllowedNow(step, pendingSince);
-  if (roles.length > 0 && !roles.some((r) => ctx.roleCodes.includes(r))) return false;
-  if (excludedUserIds.some((u) => u && u === ctx.userId)) return false;
-  if (progress.approvers.includes(ctx.userId)) return false;
+  if (roles.length > 0 && !ctx.hasAnyRole(roles)) return false;
+  if (excludedUserIds.some((u) => ctx.sodConflict(u))) return false;
+  if (progress.approvers.some((u) => ctx.sodConflict(u))) return false;
   return true;
 }
 
@@ -115,8 +115,8 @@ export async function recordDecision(
   const base = BASE_APPROVE[args.recordType];
   if (args.siteId) ctx.requireAt(base, args.siteId);
   else ctx.require(base);
-  if (args.excludedUserIds.some((u) => u && u === ctx.userId)) {
-    throw new DomainError("separation_of_duties", "You created or submitted this record, so another person must decide on it.", SOD_CODE);
+  if (ctx.sodBlocks(args.excludedUserIds.some((u) => u && u === ctx.userId), "You created or submitted this record, so another person must decide on it.")) {
+    throw new DomainError("separation_of_duties", "You created or submitted this record, so another person must decide on it.", { ...ctx.refusalDetails(), ...SOD_CODE });
   }
   await evaluateApprovalRulesAudited(tx, ctx, { documentType: args.recordType as ApprovalDocumentType, siteId: args.siteId, basis: args.basis, recordId: args.recordId, recordNumber: args.recordNumber });
   const progress = await approvalProgress(tx, ctx.organizationId, args);
@@ -124,15 +124,15 @@ export async function recordDecision(
   if (step) {
     if (step.permission) ctx.require(step.permission as Permission);
     const roles = rolesAllowedNow(step, args.pendingSince);
-    if (roles.length > 0 && !roles.some((r) => ctx.roleCodes.includes(r))) {
+    if (roles.length > 0 && !ctx.actsAsAnyRole(roles)) {
       throw new DomainError("forbidden", `Step ${step.step} (${step.label}) must be decided by ${roles.map((r) => r.replace(/_/g, " ")).join(" or ")}.`);
     }
   }
-  if (args.requireRole && args.decision === "approved" && !ctx.roleCodes.includes(args.requireRole)) {
+  if (args.requireRole && args.decision === "approved" && !ctx.actsAsAnyRole([args.requireRole])) {
     throw new DomainError("forbidden", `This record must be approved by ${args.requireRole.replace(/_/g, " ")}.`);
   }
-  if (args.decision === "approved" && progress.approvers.includes(ctx.userId)) {
-    throw new DomainError("separation_of_duties", "You already approved a step of this record. A different person must decide this step.", SOD_CODE);
+  if (ctx.sodBlocks(args.decision === "approved" && progress.approvers.includes(ctx.userId), "You already approved a step of this record. A different person must decide this step.")) {
+    throw new DomainError("separation_of_duties", "You already approved a step of this record. A different person must decide this step.", { ...ctx.refusalDetails(), ...SOD_CODE });
   }
   if (args.decision !== "approved" && !(args.note ?? "").trim()) throw new DomainError("validation", "Give the reason.", { field: "reason" });
   await tx.insert(approvalDecisions).values({
@@ -157,8 +157,8 @@ export async function recordDecision(
  */
 export async function assertPosterAllowed(tx: Tx, ctx: AuthContext, args: ApprovalArgs) {
   const progress = await approvalProgress(tx, ctx.organizationId, args);
-  if (!progress.posterMayEqualApprover && progress.approvers.includes(ctx.userId)) {
-    throw new DomainError("separation_of_duties", "You approved this record. Above the threshold another person must post it (poster ≠ approver).", SOD_CODE);
+  if (ctx.sodBlocks(!progress.posterMayEqualApprover && progress.approvers.includes(ctx.userId), "You approved this record. Above the threshold another person must post it (poster ≠ approver).")) {
+    throw new DomainError("separation_of_duties", "You approved this record. Above the threshold another person must post it (poster ≠ approver).", { ...ctx.refusalDetails(), ...SOD_CODE });
   }
   return progress;
 }

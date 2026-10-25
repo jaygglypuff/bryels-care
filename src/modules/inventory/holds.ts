@@ -256,7 +256,7 @@ export async function liftHold(ctx: AuthContext, input: { holdId: string; resolu
   return db.transaction(async (tx) => {
     const h = await lockHold(tx, ctx, input.holdId);
     if (!(HOLD_TRANSITIONS.lift.from as readonly string[]).includes(h.status)) throw new DomainError("state", `Hold ${h.holdNumber} is already ${h.status}.`);
-    if (h.openedBy === ctx.userId) throw new DomainError("separation_of_duties", "You placed this hold, so another QA user must lift it (separation of duties).");
+    ctx.assertSeparation(h.openedBy === ctx.userId, "You placed this hold, so another QA user must lift it (separation of duties).");
     const rows = await tx.select().from(qualityHoldLots).where(eq(qualityHoldLots.qualityHoldId, h.id)).orderBy(asc(qualityHoldLots.lotId));
     const results: { lotNumber: string; to: string; note?: string }[] = [];
     for (const r of rows) {
@@ -396,8 +396,8 @@ export async function getHold(ctx: AuthContext, holdId: string) {
     lots,
     timeline,
     can: {
-      lift: active && ctx.can("quality.hold.approve") && row.hold.openedBy !== ctx.userId,
-      liftBlockedReason: active && ctx.can("quality.hold.approve") && row.hold.openedBy === ctx.userId ? "You placed this hold; another QA user must lift it." : null,
+      lift: active && ctx.can("quality.hold.approve") && !ctx.sodConflict(row.hold.openedBy),
+      liftBlockedReason: active && ctx.can("quality.hold.approve") && ctx.sodConflict(row.hold.openedBy) ? "You placed this hold; another QA user must lift it." : null,
       investigate: row.hold.status === "open" && ctx.can("quality.hold.create"),
     },
   };

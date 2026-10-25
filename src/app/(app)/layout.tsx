@@ -6,7 +6,7 @@ import { ROLE_BUNDLES } from "@/lib/permissions";
 import { unreadNotificationCount } from "@/modules/platform";
 import { getMaintenanceState } from "@/lib/maintenance";
 import { MaintenanceBanner } from "@/ui/maintenance-banner";
-import { isDemoMode } from "@/lib/demo";
+import { isDemoMode, isSandboxEmail } from "@/lib/demo";
 import { NAV, QUICK_ACTIONS } from "./nav";
 import { Shell } from "./shell";
 import { signOut, switchSite } from "./actions";
@@ -37,7 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       unreadCount={unreadCount}
       switchSite={switchSite}
       signOut={signOut}
-      demo={isDemoMode() ? { canReset: ctx.roleCodes.includes("owner_director") } : null}
+      demo={isDemoMode() ? { canReset: ctx.roleCodes.includes("owner_director"), sandbox: isSandboxEmail(ctx.email) } : null}
     >
       {maintenance.enabled && <MaintenanceBanner canWrite={!ctx.readOnly} />}
       {children}

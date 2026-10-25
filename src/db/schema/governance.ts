@@ -159,8 +159,6 @@ export const settingChangeRequests = pgTable(
        or (${t.scope} = 'user' and ${t.userId} is not null)`,
     ),
     // Separation of duties (S1-03): the approver and the rejecter are never the submitter.
-    check("ck_setting_change_requests_sod", sql`${t.approvedBy} is null or ${t.approvedBy} <> ${t.submittedBy}`),
-    check("ck_setting_change_requests_sod_reject", sql`${t.rejectedBy} is null or ${t.rejectedBy} <> ${t.submittedBy}`),
     check("ck_setting_change_requests_applied_approved", sql`not (${t.requiresApproval} and ${t.status} = 'applied' and ${t.approvedBy} is null)`),
     check("ck_setting_change_requests_applied_at", sql`(${t.status} = 'applied') = (${t.appliedAt} is not null)`),
   ],
@@ -224,7 +222,6 @@ export const numberingRuleVersions = pgTable(
     check("ck_numbering_rule_versions_pattern_daily", sql`${t.resetPeriod} <> 'daily' or position('{YYMMDD}' in ${t.pattern}) > 0`),
     check("ck_numbering_rule_versions_pattern_monthly", sql`${t.resetPeriod} <> 'monthly' or position('{YYMM}' in ${t.pattern}) > 0`),
     check("ck_numbering_rule_versions_pattern_yearly", sql`${t.resetPeriod} <> 'yearly' or ${t.pattern} ~ '\\{(YYYY|YY|YYMM|YYMMDD)\\}'`),
-    check("ck_numbering_rule_versions_sod", sql`${t.approvedBy} is null or ${t.approvedBy} <> ${t.submittedBy}`),
     check("ck_numbering_rule_versions_dates", sql`${t.effectiveTo} is null or ${t.effectiveTo} > ${t.effectiveFrom}`),
   ],
 );

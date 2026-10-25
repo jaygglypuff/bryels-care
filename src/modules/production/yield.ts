@@ -121,7 +121,7 @@ export async function approveYield(approver: AuthContext, input: { yieldRecordId
     if (!y.isCurrent) throw new DomainError("state", "This yield record was corrected; approve the current one.");
     if (y.isWithinLimits) throw new DomainError("state", "This yield is within the configured range and needs no approval.");
     if (y.approvedBy) throw new DomainError("state", "This yield is already approved.");
-    if (y.recordedBy === approver.userId) throw new DomainError("separation_of_duties", "You recorded this yield; another person must approve it.");
+    approver.assertSeparation(y.recordedBy === approver.userId, "You recorded this yield; another person must approve it.");
     const opener = executionHooks().openDeviation;
     if (!opener) throw new DomainError("state", DEVIATION_UNAVAILABLE, { rule: "A-PROC-33" });
     const { deviationId } = await opener(tx, approver, {
@@ -216,7 +216,7 @@ export async function decideScrapRework(approver: AuthContext, input: { scrapRew
     const batch = await lockBatch(tx, approver, head.batchId);
     const [r] = await tx.select().from(scrapReworkRecords).where(eq(scrapReworkRecords.id, input.scrapReworkRecordId)).for("update").limit(1);
     if (r.status !== "recorded") throw new DomainError("state", `This record is already ${r.status}.`);
-    if (r.recordedBy === approver.userId) throw new DomainError("separation_of_duties", "You recorded this; another person must decide.");
+    approver.assertSeparation(r.recordedBy === approver.userId, "You recorded this; another person must decide.");
     const status = input.decision === "approve" ? "approved" : "rejected";
     await tx
       .update(scrapReworkRecords)

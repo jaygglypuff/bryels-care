@@ -215,7 +215,6 @@ export const yieldRecords = pgTable(
   },
   (t) => [
     uniqueIndex("yield_records_current_uq").on(t.batchId).where(sql`${t.isCurrent}`),
-    check("yield_records_sod_ck", sql`${t.approvedBy} is null or ${t.approvedBy} <> ${t.recordedBy}`),
     check("yield_records_correction_ck", sql`${t.supersedesId} is null or ${t.correctionReason} is not null`),
     check("yield_records_labels_ck", sql`${t.labelsIssued} is null or coalesce(${t.labelsUsed}, 0) + coalesce(${t.labelsDestroyed}, 0) <= ${t.labelsIssued}`),
   ],
@@ -251,7 +250,6 @@ export const scrapReworkRecords = pgTable(
     check("scrap_rework_kind_ck", sql`${t.recordKind} in ('scrap', 'rework')`),
     check("scrap_rework_status_ck", sql`${t.status} in ('recorded', 'approved', 'rejected')`),
     check("scrap_rework_qty_ck", sql`${t.qty} > 0`),
-    check("scrap_rework_sod_ck", sql`${t.decidedBy} is null or ${t.decidedBy} <> ${t.recordedBy}`),
   ],
 );
 
@@ -285,7 +283,6 @@ export const batchOutputs = pgTable(
     check("batch_outputs_kind_ck", sql`${t.outputKind} in ('finished', 'intermediate', 'by_product', 'sample')`),
     check("batch_outputs_item_ck", sql`num_nonnulls(${t.productId}, ${t.materialId}) = 1`),
     check("batch_outputs_qty_ck", sql`${t.qtyBase} > 0`),
-    check("batch_outputs_sod_ck", sql`${t.checkedBy} is null or ${t.checkedBy} <> ${t.recordedBy}`),
   ],
 );
 

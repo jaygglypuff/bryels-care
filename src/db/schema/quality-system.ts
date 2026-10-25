@@ -128,7 +128,6 @@ export const capaActions = pgTable(
     check("ck_capa_actions_status", sql`${t.status} in (${inList(CAPA_ACTION_STATUSES)})`),
     check("ck_capa_actions_done", sql`${t.status} not in ('done', 'verified') or (${t.completedAt} is not null and ${t.completedBy} is not null and ${t.completionNote} is not null)`),
     check("ck_capa_actions_verified", sql`(${t.status} = 'verified') = (${t.verifiedBy} is not null and ${t.verifiedAt} is not null)`),
-    check("ck_capa_actions_verifier", sql`${t.verifiedBy} is null or ${t.verifiedBy} <> ${t.completedBy}`),
     check("ck_capa_actions_cancelled", sql`${t.status} <> 'cancelled' or ${t.cancelReason} is not null`),
   ],
 );

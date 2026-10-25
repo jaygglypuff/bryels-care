@@ -82,7 +82,6 @@ export const periodUnlockRequests = pgTable(
   (t) => [
     uniqueIndex("uq_period_unlock_requests_pending").on(t.accountingPeriodId).where(sql`${t.status} = 'pending'`),
     check("ck_period_unlock_requests_status", sql`${t.status} in (${inList(PERIOD_UNLOCK_STATUSES)})`),
-    check("ck_period_unlock_requests_sod", sql`${t.decidedBy} is null or ${t.decidedBy} <> ${t.requestedBy}`),
   ],
 );
 
@@ -143,7 +142,6 @@ export const taxConfigurations = pgTable(
     check("ck_tax_configurations_dates", sql`${t.effectiveTo} is null or ${t.effectiveTo} > ${t.effectiveFrom}`),
     // Saved without a reviewer = not effective (US-6-14); the reviewer is a second person.
     check("ck_tax_configurations_reviewed", sql`${t.status} not in ('approved','retired') or (${t.reviewedBy} is not null and ${t.reviewedAt} is not null)`),
-    check("ck_tax_configurations_sod", sql`${t.reviewedBy} is null or ${t.reviewedBy} <> ${t.proposedBy}`),
   ],
 );
 
@@ -282,7 +280,6 @@ export const invoices = pgTable(
     check("ck_invoices_issued", sql`${t.status} in ('draft','submitted','approved','cancelled') or (${t.invoiceNumber} is not null and ${t.issueDate} is not null and ${t.dueDate} is not null and ${t.postedBy} is not null)`),
     check("ck_invoices_amounts", sql`${t.subtotalAmount} >= 0 and ${t.taxAmount} >= 0 and ${t.totalAmount} >= 0 and ${t.paidAmount} >= 0 and ${t.creditedAmount} >= 0`),
     check("ck_invoices_not_overpaid", sql`${t.paidAmount} + ${t.creditedAmount} <= ${t.totalAmount}`),
-    check("ck_invoices_sod", sql`${t.approvedBy} is null or ${t.approvedBy} <> ${t.submittedBy}`),
     check("ck_invoices_voided", sql`${t.status} <> 'voided' or (${t.voidedBy} is not null and ${t.voidReason} is not null)`),
   ],
 );
@@ -367,7 +364,6 @@ export const creditNotes = pgTable(
     check("ck_credit_notes_status", sql`${t.status} in (${inList(CREDIT_NOTE_STATUSES)})`),
     check("ck_credit_notes_amount", sql`${t.amount} > 0 and ${t.taxAmount} >= 0 and ${t.taxAmount} <= ${t.amount}`),
     check("ck_credit_notes_issued", sql`${t.status} not in ('issued','applied','voided') or (${t.creditNoteNumber} is not null and ${t.postedBy} is not null)`),
-    check("ck_credit_notes_sod", sql`${t.approvedBy} is null or ${t.approvedBy} <> ${t.submittedBy}`),
   ],
 );
 
@@ -443,8 +439,6 @@ export const supplierBills = pgTable(
     check("ck_supplier_bills_amounts", sql`${t.subtotalAmount} >= 0 and ${t.taxAmount} >= 0 and ${t.totalAmount} >= 0 and ${t.paidAmount} >= 0 and ${t.paidAmount} <= ${t.totalAmount}`),
     check("ck_supplier_bills_posted", sql`${t.status} not in ('posted','partially_paid','paid','closed','voided') or (${t.postedBy} is not null and ${t.dueDate} is not null)`),
     check("ck_supplier_bills_credit_ref", sql`(${t.billKind} = 'credit') = (${t.creditForBillId} is not null)`),
-    check("ck_supplier_bills_sod", sql`${t.approvedBy} is null or ${t.approvedBy} <> ${t.submittedBy}`),
-    check("ck_supplier_bills_variance_sod", sql`${t.varianceApprovedBy} is null or ${t.varianceApprovedBy} <> ${t.createdBy}`),
   ],
 );
 
@@ -533,7 +527,6 @@ export const expenseClaims = pgTable(
     check("ck_expense_claims_kind", sql`${t.claimKind} in ('claim','request')`),
     check("ck_expense_claims_amount", sql`${t.amount} > 0 and ${t.paidAmount} >= 0 and ${t.paidAmount} <= ${t.amount}`),
     // The claimant never approves (here and in the service); poster ≠ approver is the service's rule (A-PM-10).
-    check("ck_expense_claims_sod", sql`${t.approvedBy} is null or ${t.approvedBy} <> ${t.claimantUserId}`),
     check("ck_expense_claims_rejected", sql`${t.status} <> 'rejected' or (${t.rejectedBy} is not null and ${t.rejectionReason} is not null)`),
   ],
 );
@@ -602,7 +595,6 @@ export const paymentRecords = pgTable(
     check("ck_payment_records_direction_party", sql`(${t.direction} = 'inbound') = (${t.customerId} is not null)`),
     check("ck_payment_records_amounts", sql`${t.amount} > 0 and ${t.withheldAmount} >= 0 and ${t.appliedAmount} >= 0 and ${t.appliedAmount} <= ${t.amount} + ${t.withheldAmount}`),
     check("ck_payment_records_posted", sql`${t.status} not in ('recorded','reconciled','voided') or ${t.postedBy} is not null`),
-    check("ck_payment_records_sod", sql`${t.approvedBy} is null or ${t.approvedBy} <> ${t.submittedBy}`),
   ],
 );
 

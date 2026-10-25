@@ -175,7 +175,7 @@ export async function approveLabelTemplate(ctx: AuthContext, id: string) {
   return db.transaction(async (tx) => {
     const t = await load(tx, ctx, id, true);
     if (t.status !== "draft") throw new DomainError("state", `This label template is ${t.status}; only a draft can be approved.`);
-    if (t.updatedBy === ctx.userId) throw new DomainError("separation_of_duties", "You made the last change to this label template, so someone else must approve it.");
+    ctx.assertSeparation(t.updatedBy === ctx.userId, "You made the last change to this label template, so someone else must approve it.");
     const { version } = await checkLayout(tx, ctx, t.documentTemplateId, t.appliesTo, true);
     await tx.update(labelTemplates).set({ status: "approved", approvedBy: ctx.userId, approvedAt: new Date() }).where(eq(labelTemplates.id, t.id));
     await audit(tx, ctx, { action: "masterdata.label_template.approved", entityType: "label_template", entityId: t.id, entityNumber: t.code, siteId: t.siteId, after: { layoutVersionId: version.id, symbology: t.symbology, media: `${t.mediaWidthMm}x${t.mediaHeightMm}` } });

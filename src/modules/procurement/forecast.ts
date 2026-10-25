@@ -163,7 +163,7 @@ export async function decideForecastOverride(ctx: AuthContext, input: { override
     ctx.requireAt("analytics.forecast.approve", o.siteId);
     if (o.status !== "submitted") throw new DomainError("state", `This override is already ${o.status}.`);
     const sod = await getSetting(tx, ctx.organizationId, "approvals.sod.forecast_override");
-    if (sod && o.submittedBy === ctx.userId) throw new DomainError("separation_of_duties", "You entered this override, so another person must decide it (separation of duties).", { code: "SEPARATION_OF_DUTIES" });
+    ctx.assertSeparation(sod && o.submittedBy === ctx.userId, "You entered this override, so another person must decide it (separation of duties).", { code: "SEPARATION_OF_DUTIES" });
     if (input.decision === "approved") {
       await tx.update(forecastOverrides).set({ status: "retired", decisionNote: "Replaced by a newer approved override" }).where(and(eq(forecastOverrides.siteId, o.siteId), eq(forecastOverrides.productId, o.productId), eq(forecastOverrides.periodStart, o.periodStart), eq(forecastOverrides.status, "approved")));
     }

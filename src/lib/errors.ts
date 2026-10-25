@@ -47,7 +47,8 @@ export const HTTP_STATUS: Record<ErrorCode, number> = {
   rate_limited: 429,
 };
 
-export type ActionState = { ok: boolean; message?: string; fieldErrors?: Record<string, string> } | null;
+/** `needs`: the permission a refused step needs, so the form can name who can do it (ADR-073 "who can do this"). */
+export type ActionState = { ok: boolean; message?: string; fieldErrors?: Record<string, string>; needs?: { permission: string; siteId: string | null } } | null;
 
 /** Converts thrown errors into a form-friendly state for server actions. */
 export function toActionState(e: unknown): ActionState {
@@ -60,7 +61,11 @@ export function toActionState(e: unknown): ActionState {
     const issues = Array.isArray(e.details?.issues) ? (e.details.issues as { path: string; message: string }[]) : [];
     for (const i of issues) fieldErrors[i.path || "form"] ??= i.message;
     if (typeof e.details?.field === "string") fieldErrors[e.details.field] ??= e.message;
-    return { ok: false, message: issues.length > 1 ? "Check the highlighted fields." : e.message, ...(Object.keys(fieldErrors).length ? { fieldErrors } : {}) };
+    const needs =
+      (e.code === "forbidden" || e.code === "separation_of_duties") && typeof e.details?.permission === "string"
+        ? { permission: e.details.permission, siteId: typeof e.details.siteId === "string" ? e.details.siteId : null }
+        : null;
+    return { ok: false, message: issues.length > 1 ? "Check the highlighted fields." : e.message, ...(Object.keys(fieldErrors).length ? { fieldErrors } : {}), ...(needs ? { needs } : {}) };
   }
   if (e && typeof e === "object" && "issues" in e) {
     const issues = (e as { issues: { path: (string | number)[]; message: string }[] }).issues;

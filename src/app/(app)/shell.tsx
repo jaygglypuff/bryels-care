@@ -33,7 +33,7 @@ type Props = {
   switchSite: (fd: FormData) => Promise<void>;
   signOut: () => Promise<void>;
   /** Demo mode (ADR-055): the strip above the top bar; `canReset` adds the owner's reset link. Null outside the demo. */
-  demo?: { canReset: boolean } | null;
+  demo?: { canReset: boolean; sandbox?: boolean } | null;
   children: React.ReactNode;
 };
 
@@ -99,7 +99,7 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
       <NavigationProgress />
       {/* Top bar */}
       <header className="no-print sticky top-0 z-30 border-b border-line/70 bg-bg/90 backdrop-blur">
-        {demo && <DemoBanner canReset={demo.canReset} />}
+        {demo && <DemoBanner canReset={demo.canReset} sandbox={demo.sandbox} />}
         <div className="mx-auto flex h-[68px] max-w-[1480px] items-center gap-3 px-4 sm:px-6">
           <button className="grid size-10 place-items-center rounded-full bg-surface shadow-[var(--shadow-card)] lg:hidden" onClick={() => setDrawer(true)} aria-label="Open menu">
             <Menu size={18} />

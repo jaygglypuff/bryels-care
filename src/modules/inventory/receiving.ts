@@ -848,8 +848,8 @@ export async function approveLineDiscrepancy(ctx: AuthContext, input: { lineId: 
     if (line.discrepancyApprovedBy) throw new DomainError("state", "This discrepancy is already approved.");
     if (gr.status !== "draft" && gr.status !== "posted") throw new DomainError("state", `Receipt ${receiptLabel(gr)} is ${gr.status}.`);
     const excluded = new Set([gr.receivedBy, gr.createdBy, line.discrepancyRecordedBy, line.createdBy].filter(Boolean) as string[]);
-    if (excluded.has(ctx.userId)) {
-      throw new DomainError("separation_of_duties", "You received these goods or recorded this discrepancy, so another procurement user must approve it (separation of duties).");
+    if (ctx.sodBlocks(excluded.has(ctx.userId), "You received these goods or recorded this discrepancy, so another procurement user must approve it (separation of duties).")) {
+      throw new DomainError("separation_of_duties", "You received these goods or recorded this discrepancy, so another procurement user must approve it (separation of duties).", ctx.refusalDetails());
     }
     const now = new Date();
     await tx

@@ -163,7 +163,6 @@ export const formulaRevisions = pgTable(
     /** At most one open (draft or pending) revision per formula. */
     uniqueIndex("formula_rev_one_open_uq").on(t.formulaId).where(sql`${t.status} in ('draft', 'pending_approval')`),
     check("formula_rev_status_ck", sql`${t.status} in ('draft', 'pending_approval', 'approved', 'rejected', 'retired')`),
-    check("formula_rev_sod_ck", sql`${t.approvedBy} is null or ${t.approvedBy} is distinct from ${t.submittedBy}`),
     check("formula_rev_effective_ck", sql`${t.status} not in ('approved', 'retired') or (${t.effectiveFrom} is not null and ${t.approvedBy} is not null)`),
     check("formula_rev_range_ck", sql`${t.effectiveTo} is null or ${t.effectiveFrom} is null or ${t.effectiveTo} > ${t.effectiveFrom}`),
     check("formula_rev_size_ck", sql`${t.referenceBatchSizeG} > 0`),

@@ -74,4 +74,5 @@ export { forecastSeries, backtest, forecastNext, METHOD_LABEL, type ForecastResu
 export { PR_TRANSITIONS, PO_TRANSITIONS, SR_TRANSITIONS, PR_STATUS_LABEL, PO_STATUS_LABEL, SR_STATUS_LABEL, canMove, type PrStatus, type PoStatus, type SrStatus } from "./state";
 export { poApprovalCandidates, prApprovalCandidates, srApprovalCandidates, aslApprovalCandidates, latePoCandidates, overDeliveryCandidates } from "./action-items";
 export { supplierMaterialsKind } from "./import-kind";
+export { purchaseOrderMatchSourceImpl } from "./finance-match"; // W4B three-way match (src/modules/wiring.ts)
 export { procurementReorderSuggestJob } from "./jobs";

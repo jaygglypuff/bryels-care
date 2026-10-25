@@ -201,8 +201,8 @@ export async function submitAdjustment(ctx: AuthContext, id: string) {
 }
 
 function assertNotOwn(a: { createdBy: string; submittedBy: string | null }, ctx: AuthContext) {
-  if (a.createdBy === ctx.userId || a.submittedBy === ctx.userId) {
-    throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: you drafted or submitted this adjustment, so someone else must approve it.", { rule: "authz.sod.approve_own" });
+  if (ctx.sodBlocks(a.createdBy === ctx.userId || a.submittedBy === ctx.userId, "SEPARATION_OF_DUTIES: you drafted or submitted this adjustment, so someone else must approve it.")) {
+    throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: you drafted or submitted this adjustment, so someone else must approve it.", { ...ctx.refusalDetails(), rule: "authz.sod.approve_own" });
   }
 }
 
@@ -230,7 +230,7 @@ export async function approveAdjustment(ctx: AuthContext, id: string, note?: str
       const roles = stepDef.roleCodes.map((r) => r.replace(/_/g, " ")).join(" or ");
       throw new DomainError("forbidden", step === 2 ? `This adjustment is above the approval threshold; the second approval needs the ${roles} role.` : `This approval needs the ${roles} role.`);
     }
-    if (step === 2 && decisions.some((d) => d.decidedBy === ctx.userId)) throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: the second approval must come from a different person than the first.");
+    ctx.assertSeparation(step === 2 && decisions.some((d) => d.decidedBy === ctx.userId), "SEPARATION_OF_DUTIES: the second approval must come from a different person than the first.");
     await tx.insert(approvalDecisions).values({ organizationId: a.organizationId, siteId: a.siteId, recordType: "stock_adjustment", recordId: a.id, step, decision: "approved", decidedBy: ctx.userId, note: note?.trim() || null });
     const final = step === 2 || !a.requiresSecondApproval;
     if (final) {
@@ -312,8 +312,8 @@ export async function postAdjustment(ctx: AuthContext, id: string, idempotencyKe
     if (claimed) return { ...claimed.replay, replayed: true };
     const a = await lockAdjustment(tx, ctx, id);
     if (a.status !== "approved") throw new DomainError("state", `Adjustment ${a.adjustmentNumber} is ${a.status}; only an approved adjustment can be posted.`, { rule: "inventory.adjustment_post_requires_approval" });
-    if (a.requiresSecondApproval && a.approvedBy === ctx.userId) {
-      throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: above the approval threshold the person who posts must differ from the final approver.");
+    if (ctx.sodBlocks(a.requiresSecondApproval && a.approvedBy === ctx.userId, "SEPARATION_OF_DUTIES: above the approval threshold the person who posts must differ from the final approver.")) {
+      throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: above the approval threshold the person who posts must differ from the final approver.", ctx.refusalDetails());
     }
     const lines = await tx.select().from(stockAdjustmentLines).where(eq(stockAdjustmentLines.stockAdjustmentId, a.id)).orderBy(asc(stockAdjustmentLines.lineNo));
     const boxIds = [...new Set(lines.map((l) => l.containerId).filter((x): x is string => !!x))].sort();
@@ -490,7 +490,7 @@ export async function getAdjustment(ctx: AuthContext, id: string) {
     postedByName: name(a.postedBy),
     can: {
       submit: a.status === "draft" && ctx.can("inventory.adjustment.submit"),
-      approve: a.status === "submitted" && ctx.can("inventory.adjustment.approve") && !own && !decisions.some((d) => d.byId === ctx.userId && d.decision === "approved"),
+      approve: a.status === "submitted" && ctx.can("inventory.adjustment.approve") && !(own && !ctx.ownerOverride) && !decisions.some((d) => ctx.sodConflict(d.byId) && d.decision === "approved"),
       post: a.status === "approved" && ctx.can("inventory.adjustment.post"),
       cancel: ["draft", "submitted", "approved"].includes(a.status) && (a.createdBy === ctx.userId ? ctx.can("inventory.adjustment.create") : ctx.can("inventory.adjustment.approve")),
       awaitingSecondStep: a.status === "submitted" && a.requiresSecondApproval && stepDone,

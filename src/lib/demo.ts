@@ -17,6 +17,16 @@
 export const DEMO_EMAIL_DOMAIN = "bryels-care.test";
 /** The organization's system actor (src/lib/auth/system.ts SYSTEM_ACTOR_EMAIL); never signs in. */
 export const DEMO_SYSTEM_EMAIL = "system@bryels-care.invalid";
+/**
+ * The empty sandbox company (ADR-072, src/db/sandbox.ts): a second organization next to the demo
+ * company, with no business data, for practising from scratch. Its accounts are demo addresses too
+ * (`sandbox.<role>@bryels-care.test`), so every demo-mode safety rule applies to them unchanged.
+ */
+export const SANDBOX_ORG_NAME = "Bryel's Care Sandbox (empty)";
+export const SANDBOX_EMAIL_PREFIX = "sandbox.";
+export const SANDBOX_OWNER_EMAIL = "sandbox.owner@bryels-care.test";
+export const isSandboxEmail = (email: string | null | undefined) => (email ?? "").trim().toLowerCase().startsWith(SANDBOX_EMAIL_PREFIX) && isDemoEmail(email);
+
 /** Password of every seeded demo account (src/db/seed.ts). Shown on the sign-in page in demo mode only. */
 export const DEMO_PASSWORD = "demo1234";
 

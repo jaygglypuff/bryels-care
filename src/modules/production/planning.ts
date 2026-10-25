@@ -218,8 +218,8 @@ export async function approveProductionPlan(ctx: AuthContext, planId: string, no
   return db.transaction(async (tx) => {
     const p = await lockPlan(tx, ctx, planId);
     planMachine.assert(p.status, "approved", `Plan ${p.planNumber}`);
-    if ((await getSetting(tx, ctx.organizationId, "approvals.sod.production_plan", p.siteId)) && p.submittedBy === ctx.userId) {
-      throw new DomainError("separation_of_duties", "You built this plan; another person with approval permission must approve it.");
+    if (ctx.sodBlocks((await getSetting(tx, ctx.organizationId, "approvals.sod.production_plan", p.siteId)) && p.submittedBy === ctx.userId, "You built this plan; another person with approval permission must approve it.")) {
+      throw new DomainError("separation_of_duties", "You built this plan; another person with approval permission must approve it.", ctx.refusalDetails());
     }
     const now = new Date();
     await tx.update(productionPlans).set({ status: "approved", approvedBy: ctx.userId, approvedAt: now, approvalNote: note?.trim() || null, statusChangedAt: now, statusChangedBy: ctx.userId, updatedAt: now, updatedBy: ctx.userId }).where(eq(productionPlans.id, p.id));
@@ -387,7 +387,7 @@ export async function getProductionPlan(ctx: AuthContext, planId: string) {
     lines: out,
     approvalRequired,
     actions: {
-      canApprove: ctx.can("production.production_plan.approve") && p.status === "draft" && !(sod && p.submittedBy === ctx.userId),
+      canApprove: ctx.can("production.production_plan.approve") && p.status === "draft" && !(sod && ctx.sodConflict(p.submittedBy)),
       canClose: ctx.can("production.production_plan.edit") && p.status !== "closed",
       canConvert: ctx.can("production.work_order.create") && p.status !== "closed" && (!approvalRequired || p.status === "approved") && p.siteId === ctx.currentSiteId,
     },

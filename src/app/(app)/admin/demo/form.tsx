@@ -14,7 +14,7 @@ function ResetButton() {
       </Button>
       {pending && (
         <p role="status" className="text-[13px] text-muted">
-          Clearing every table and loading the fictional data again. When it is done you are signed out and taken to the sign-in page.
+          Clearing every table and loading the fictional data and the empty sandbox again. When it is done you are signed out and taken to the sign-in page.
         </p>
       )}
     </div>

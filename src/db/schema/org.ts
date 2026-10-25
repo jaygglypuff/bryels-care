@@ -152,7 +152,6 @@ export const uomConversions = pgTable(
     check("uom_conv_factor_ck", sql`${t.factor} > 0`),
     check("uom_conv_distinct_ck", sql`${t.fromUomId} <> ${t.toUomId}`),
     check("uom_conv_status_ck", sql`${t.status} in ('pending_approval', 'approved', 'rejected', 'retired')`),
-    check("uom_conv_sod_ck", sql`${t.approvedBy} is null or ${t.approvedBy} is distinct from ${t.submittedBy}`),
     check("uom_conv_approved_ck", sql`${t.status} not in ('approved', 'retired') or (${t.approvedAt} is not null and (${t.approvedBy} is not null or ${t.isSystem}))`),
   ],
 );

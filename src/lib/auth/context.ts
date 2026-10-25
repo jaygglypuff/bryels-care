@@ -8,7 +8,8 @@ import { rolePermissions, roles, sites, userSiteAssignments, users } from "@/db/
 import { DomainError } from "@/lib/errors";
 import { acceptableRequestId } from "@/lib/log";
 import { READ_ONLY_MESSAGE, getMaintenanceState, isReadAction, isReadOnlyFor } from "@/lib/maintenance";
-import type { Permission } from "@/lib/permissions";
+import { PERMISSIONS, type Permission } from "@/lib/permissions";
+import { getSetting } from "@/lib/settings";
 import { activeAssignment, parseScope } from "./assignments";
 import { SITE_COOKIE, readSession } from "./session";
 
@@ -41,7 +42,14 @@ export type AccessDetail = {
  * `readOnly`: set when the read-only maintenance mode applies to this user (US-2-30); mutating
  * permission checks and `assertWritable()` then refuse with `read_only` before any write.
  */
-export type ContextOptions = { actor?: Actor; correlationId?: string | null; session?: SessionInfo | null; access?: AccessDetail; readOnly?: boolean };
+export type ContextOptions = { actor?: Actor; correlationId?: string | null; session?: SessionInfo | null; access?: AccessDetail; readOnly?: boolean; ownerOverride?: OwnerOverride };
+
+/**
+ * ADR-073 owner override (setting `governance.owner_override`): the owner holds every permission and
+ * passes every separation-of-duties check. `basePermissions` are the permissions the roles grant;
+ * `used` collects what the override let through until `audit()` records it.
+ */
+export type OwnerOverride = { basePermissions: ReadonlySet<string>; used: string[] };
 
 /**
  * The authorization context every service call receives (ADR-005).
@@ -88,9 +96,76 @@ export class AuthContext {
     return this.permissions.has(p);
   }
 
+  /** The permission most recently checked: a same-person refusal names who else holds it. */
+  private lastRequired: { permission: string; siteId: string | null } | null = null;
+
   require(p: Permission): void {
-    if (!this.permissions.has(p)) throw new DomainError("forbidden", `You do not have permission for this action (${p}).`);
+    this.lastRequired = { permission: p, siteId: null };
+    if (!this.permissions.has(p)) throw new DomainError("forbidden", `You do not have permission for this action (${p}).`, { permission: p });
     if (this.options.readOnly && !isReadAction(p)) throw new DomainError("read_only", READ_ONLY_MESSAGE, { code: "READ_ONLY_MODE" });
+    this.noteOverriddenPermission(p);
+  }
+
+  /** True when the owner override applies to this user (ADR-073). */
+  get ownerOverride(): boolean {
+    return !!this.options.ownerOverride;
+  }
+
+  /**
+   * Separation of duties (ADR-073): true when `conflict` must block this person. Under the owner override
+   * it never blocks; the bypass is remembered and recorded by the next `audit()` of the operation.
+   * Use as `if (ctx.sodBlocks(x.submittedBy === ctx.userId, "…")) throw new DomainError("separation_of_duties", …)`.
+   */
+  sodBlocks(conflict: boolean, rule: string): boolean {
+    if (!conflict) return false;
+    const o = this.options.ownerOverride;
+    if (!o) return true;
+    if (!o.used.includes(rule)) o.used.push(rule);
+    return false;
+  }
+
+  /** For screens (records nothing): whether `userId` is this person for a same-person rule (ADR-073). */
+  sodConflict(userId: string | null | undefined): boolean {
+    return !this.ownerOverride && !!userId && userId === this.userId;
+  }
+
+  /** For screens (records nothing): whether this person holds one of `roles`, or the owner override applies. */
+  hasAnyRole(roles: readonly string[]): boolean {
+    return this.ownerOverride || roles.some((r) => this.roleCodes.includes(r));
+  }
+
+  /** For decisions: like `hasAnyRole`, and a pass through the owner override is recorded for the audit. */
+  actsAsAnyRole(roles: readonly string[]): boolean {
+    if (roles.some((r) => this.roleCodes.includes(r))) return true;
+    if (!this.ownerOverride) return false;
+    const note = `role ${roles.join(" or ")}`;
+    if (!this.options.ownerOverride!.used.includes(note)) this.options.ownerOverride!.used.push(note);
+    return true;
+  }
+
+  /** Details for a refusal: the permission last checked, so the screen can name who else holds it. */
+  refusalDetails(): Record<string, unknown> {
+    return { ...this.lastRequired };
+  }
+
+  /** Throws `separation_of_duties` when `conflict` blocks this person (see `sodBlocks`). */
+  assertSeparation(conflict: boolean, message: string, details?: Record<string, unknown>): void {
+    if (this.sodBlocks(conflict, message)) throw new DomainError("separation_of_duties", message, { ...this.lastRequired, ...details });
+  }
+
+  /** The owner-override uses since the last call, emptied (read by `audit()`). */
+  takeOwnerOverrides(): string[] {
+    const o = this.options.ownerOverride;
+    if (!o || o.used.length === 0) return [];
+    return o.used.splice(0, o.used.length);
+  }
+
+  private noteOverriddenPermission(p: string) {
+    const o = this.options.ownerOverride;
+    if (o && !o.basePermissions.has(p)) {
+      const note = `permission ${p}`;
+      if (!o.used.includes(note)) o.used.push(note);
+    }
   }
 
   /** True while the read-only maintenance mode applies to this user (US-2-30). */
@@ -139,7 +214,9 @@ export class AuthContext {
   /** Site scope (404) first, then the permission at that site (403). */
   requireAt(p: Permission, siteId: string): void {
     this.requireSite(siteId);
-    if (!this.canAt(p, siteId)) throw new DomainError("forbidden", `You do not have permission for this action at this site (${p}).`);
+    this.lastRequired = { permission: p, siteId };
+    if (!this.canAt(p, siteId)) throw new DomainError("forbidden", `You do not have permission for this action at this site (${p}).`, { permission: p, siteId });
+    this.noteOverriddenPermission(p);
   }
 
   /** Warehouses the user may write in at the site; null = the whole site (US-2-29). */
@@ -164,8 +241,17 @@ export async function buildContextForUser(userId: string, preferredSiteId?: stri
   if (!loaded) return null;
   const current = loaded.siteRows.find((s) => s.id === preferredSiteId)?.id ?? loaded.siteRows[0].id;
   const readOnly = options.readOnly ?? isReadOnlyFor(await getMaintenanceState(db, loaded.u.organizationId), loaded.roleCodes);
-  return new AuthContext(loaded.u.id, loaded.u.organizationId, loaded.u.displayName, loaded.u.email, loaded.roleCodes, loaded.perms, loaded.siteRows, current, {
-    access: loaded.access,
+  let { perms, access } = loaded;
+  let ownerOverride: OwnerOverride | undefined;
+  // ADR-073: the owner override grants every permission at every site (organization-wide) and lifts separation of duties.
+  if (loaded.roleCodes.includes("owner_director") && loaded.access.orgWide && (await getSetting(db, loaded.u.organizationId, "governance.owner_override"))) {
+    ownerOverride = { basePermissions: perms, used: [] };
+    perms = new Set<string>(PERMISSIONS);
+    access = { ...access, orgPermissions: perms };
+  }
+  return new AuthContext(loaded.u.id, loaded.u.organizationId, loaded.u.displayName, loaded.u.email, loaded.roleCodes, perms, loaded.siteRows, current, {
+    access,
+    ownerOverride,
     ...options,
     readOnly,
   });

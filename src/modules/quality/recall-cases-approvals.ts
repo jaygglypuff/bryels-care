@@ -70,9 +70,9 @@ export function canDecideQualityStep(ctx: AuthContext, recordType: QualityApprov
   if (!ctx.can(BASE[recordType])) return false;
   if (step.permission && !ctx.can(step.permission as Permission)) return false;
   const roles = rolesAllowedNow(step, pendingSince);
-  if (roles.length > 0 && !roles.some((r) => ctx.roleCodes.includes(r))) return false;
-  if (excludedUserIds.some((u) => u && u === ctx.userId)) return false;
-  if (p.steps.some((s) => s.approvals.some((a) => a.by === ctx.userId))) return false;
+  if (roles.length > 0 && !ctx.hasAnyRole(roles)) return false;
+  if (excludedUserIds.some((u) => ctx.sodConflict(u))) return false;
+  if (p.steps.some((s) => s.approvals.some((a) => ctx.sodConflict(a.by)))) return false;
   return true;
 }
 
@@ -100,16 +100,16 @@ export async function recordQualityDecision(
   const progress = await qualityApprovalProgress(tx, ctx.organizationId, args);
   const step = progress.next;
   if (!step) throw new DomainError("state", "This record has no approval step waiting for a decision.");
-  if (args.excludedUserIds.some((u) => u && u === ctx.userId)) {
-    throw new DomainError("separation_of_duties", "You opened or submitted this record, so another person must decide on it (separation of duties).", { code: "SEPARATION_OF_DUTIES" });
+  if (ctx.sodBlocks(args.excludedUserIds.some((u) => u && u === ctx.userId), "You opened or submitted this record, so another person must decide on it (separation of duties).")) {
+    throw new DomainError("separation_of_duties", "You opened or submitted this record, so another person must decide on it (separation of duties).", { ...ctx.refusalDetails(), code: "SEPARATION_OF_DUTIES" });
   }
   if (step.permission) ctx.require(step.permission as Permission);
   const roles = rolesAllowedNow(step, args.pendingSince);
-  if (roles.length > 0 && !roles.some((r) => ctx.roleCodes.includes(r))) {
+  if (roles.length > 0 && !ctx.actsAsAnyRole(roles)) {
     throw new DomainError("forbidden", `Step ${step.step} (${step.label}) must be decided by ${roles.map((r) => r.replace(/_/g, " ")).join(" or ")}.`);
   }
-  if (progress.steps.some((s) => s.approvals.some((a) => a.by === ctx.userId))) {
-    throw new DomainError("separation_of_duties", "You already approved a step of this record. A different person must decide this step.", { code: "SEPARATION_OF_DUTIES" });
+  if (ctx.sodBlocks(progress.steps.some((s) => s.approvals.some((a) => a.by === ctx.userId)), "You already approved a step of this record. A different person must decide this step.")) {
+    throw new DomainError("separation_of_duties", "You already approved a step of this record. A different person must decide this step.", { ...ctx.refusalDetails(), code: "SEPARATION_OF_DUTIES" });
   }
   const note = args.note?.trim() || null;
   if (args.decision !== "approved" && (!note || note.length < 5)) throw new DomainError("validation", "Give the reason (at least 5 characters).", { field: "note" });

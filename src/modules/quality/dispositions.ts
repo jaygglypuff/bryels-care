@@ -293,10 +293,10 @@ export async function getLotDisposition(ctx: AuthContext, lotId: string) {
     : null;
   const pending = await pendingBatchFor(db, lot);
   const receivers = await receiverIds(db, lot);
-  const isReceiver = receivers.has(ctx.userId);
+  const isReceiver = receivers.has(ctx.userId) && !ctx.ownerOverride;
   const qf = await lotQualityFacts(db, lot.id);
   const releaseBlockers = [...(await lotReleaseBlockers(db, lot.id)), ...qf.blockers];
-  const isTester = qf.testers.has(ctx.userId);
+  const isTester = qf.testers.has(ctx.userId) && !ctx.ownerOverride;
   const decisions = LOT_DECISIONS.map((d) => ({
     decision: d,
     label: LOT_TRANSITIONS[d].label,
@@ -424,7 +424,9 @@ async function decideLotTx(ctx: AuthContext, input: DecideLotInput) {
     const receivers = await receiverIds(tx, lot);
     const qf = t.to === "released" ? await lotQualityFacts(tx, lot.id) : { blockers: [], testers: new Set<string>() };
     const releaseBlockers = t.to === "released" ? [...(await lotReleaseBlockers(tx, lot.id)), ...qf.blockers] : [];
-    const blocker = lotDecisionBlocker(input.decision, lot, { isReceiver: receivers.has(ctx.userId), isTester: qf.testers.has(ctx.userId), pendingBatchNumber: pending?.number ?? null, releaseBlockers });
+    const sameActor = { isReceiver: receivers.has(ctx.userId), isTester: qf.testers.has(ctx.userId), pendingBatchNumber: pending?.number ?? null, releaseBlockers };
+    let blocker = lotDecisionBlocker(input.decision, lot, sameActor);
+    if (blocker?.code === "separation_of_duties" && !ctx.sodBlocks(true, blocker.message)) blocker = lotDecisionBlocker(input.decision, lot, { ...sameActor, isReceiver: false, isTester: false });
     if (blocker) throw new DomainError(blocker.code, blocker.message);
 
     const dispositionId = uuidv7();
@@ -626,7 +628,8 @@ export async function getBatchRelease(ctx: AuthContext, batchId: string) {
     .orderBy(asc(testResults.testedAt), asc(testResults.id));
   const liveIds = new Set(liveResults(tests).map((t) => t.id));
 
-  const blockers = await batchFacts(db, ctx, batch, lot);
+  // ADR-073: under the owner override the same-person rules are no blocker (the decision records the override).
+  const blockers = (await batchFacts(db, ctx, batch, lot)).filter((b) => !(ctx.ownerOverride && b.code === "separation_of_duties"));
   const inspection = await batchInspectionFacts(db, batch);
   const snap = batch.formulaSnapshot as { inspectionPlan?: { code: string; revisionNo: number; isPlaceholder: boolean } | null };
   return {
@@ -705,8 +708,9 @@ export async function decideBatchInTx(tx: Tx, ctx: AuthContext, input: { batchId
     if (input.decision === "release") {
       const blockers = await batchFacts(tx, ctx, batch, lot, { conditional: !!input.conditional });
       const sod = blockers.find((b) => b.code === "separation_of_duties");
-      if (sod) throw new DomainError("separation_of_duties", sod.message);
-      if (blockers.length) throw new DomainError("state", blockers.map((b) => b.message).join(" "));
+      if (sod) ctx.assertSeparation(true, sod.message);
+      const others = blockers.filter((b) => b.code !== "separation_of_duties");
+      if (others.length) throw new DomainError("state", others.map((b) => b.message).join(" "));
     }
 
     const batchDispositionId = uuidv7();

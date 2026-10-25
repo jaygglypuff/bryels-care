@@ -346,8 +346,8 @@ export async function submitCustomerReturn(ctx: AuthContext, input: { returnId: 
 
 async function assertNotSubmitter(tx: Tx, ctx: AuthContext, r: ReturnRow) {
   if (!(await getSetting(tx, ctx.organizationId, "approvals.sod.customer_return"))) return;
-  if (r.submittedBy === ctx.userId || r.createdBy === ctx.userId) {
-    throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: you created or submitted this return, so a different person must approve it.", { rule: "authz.sod.approve_own" });
+  if (ctx.sodBlocks(r.submittedBy === ctx.userId || r.createdBy === ctx.userId, "SEPARATION_OF_DUTIES: you created or submitted this return, so a different person must approve it.")) {
+    throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: you created or submitted this return, so a different person must approve it.", { ...ctx.refusalDetails(), rule: "authz.sod.approve_own" });
   }
 }
 
@@ -609,7 +609,7 @@ export async function getCustomerReturn(ctx: AuthContext, returnId: string) {
   const shipmentState = await shipmentReturnState(db, r.shipmentId);
   const reasonName = (await reasonLabels(db, ctx.organizationId, [r.reasonCode])).get(r.reasonCode) ?? r.reasonCode;
   const sodOn = await getSetting(db, ctx.organizationId, "approvals.sod.customer_return");
-  const own = r.createdBy === ctx.userId || r.submittedBy === ctx.userId;
+  const own = ctx.sodConflict(r.createdBy) || ctx.sodConflict(r.submittedBy);
   const allDispositioned = lines.length > 0 && lines.every((l) => l.returnLotStatus && l.returnLotStatus !== "quarantine");
   return {
     header: { ...r, customerName: row.customerName, customerCode: row.customerCode, siteCode: row.siteCode, drNumber: row.drNumber, dispatchedAt: row.dispatchedAt, deliveredAt: row.deliveredAt, orderNumber: row.orderNumber, createdByName: row.createdByName, approvedByName: row.approvedByName, receivedByName: row.receivedByName, toLocationCode: row.toLocationCode, complaintNumber: row.complaintNumber, reasonName, statusLabel: RETURN_STATUS_LABEL[r.status as CustomerReturnStatus] ?? r.status },

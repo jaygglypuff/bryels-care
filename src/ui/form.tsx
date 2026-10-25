@@ -3,6 +3,7 @@ import { useFormStatus } from "react-dom";
 import { useActionState, useRef, type ComponentProps, type ReactNode } from "react";
 import type { ActionState } from "@/lib/errors";
 import { Button, cx, type ButtonVariant } from "./core";
+import { WhoCanHelp } from "./who-can-help";
 
 export function SubmitButton({ children, pendingText = "Saving…", ...rest }: ComponentProps<typeof Button> & { pendingText?: string }) {
   const { pending } = useFormStatus();
@@ -16,7 +17,7 @@ export function SubmitButton({ children, pendingText = "Saving…", ...rest }: C
 export function FormMessage({ state }: { state: ActionState }) {
   if (!state?.message) return null;
   return (
-    <p
+    <div
       role={state.ok ? "status" : "alert"}
       className={cx(
         "rounded-[10px] border px-3 py-2 text-[13px]",
@@ -24,7 +25,8 @@ export function FormMessage({ state }: { state: ActionState }) {
       )}
     >
       {state.message}
-    </p>
+      {!state.ok && state.needs && <WhoCanHelp permission={state.needs.permission} siteId={state.needs.siteId} />}
+    </div>
   );
 }
 

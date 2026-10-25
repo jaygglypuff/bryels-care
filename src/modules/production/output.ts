@@ -77,7 +77,7 @@ export async function postBatchToQuarantine(ctx: AuthContext, input: PostToQuara
       const checker = signers.checker ?? null;
       if ((transfer?.requiresChecker ?? true) && !checker) throw new DomainError("validation", "The checker must sign the transfer to quarantine.", { field: "checkerId", rule: "V-SOD" });
       if (checker) {
-        if (checker.userId === ctx.userId) throw new DomainError("separation_of_duties", "The checker must be a different person from the operator.", { rule: "V-SOD" });
+        ctx.assertSeparation(checker.userId === ctx.userId, "The checker must be a different person from the operator.", { rule: "V-SOD" });
         checker.require("production.process_step_record.approve");
         checker.requireSite(batch.siteId);
       }

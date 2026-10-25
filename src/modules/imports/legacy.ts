@@ -121,7 +121,7 @@ export async function verifyLegacyDocument(ctx: AuthContext, documentId: string,
     if (d.siteId) ctx.requireAt("documents.legacy_document.approve", d.siteId);
     if (d.voidedAt) throw new DomainError("state", `${d.documentNumber} is void.`);
     if (d.verifiedAt) throw new DomainError("state", `${d.documentNumber} is already verified.`);
-    if (d.indexedBy === ctx.userId) throw new DomainError("separation_of_duties", "You indexed this document, so a different person must verify it against the scan.");
+    ctx.assertSeparation(d.indexedBy === ctx.userId, "You indexed this document, so a different person must verify it against the scan.");
     const now = new Date();
     await tx.update(legacyDocuments).set({ verifiedBy: ctx.userId, verifiedAt: now }).where(eq(legacyDocuments.id, d.id));
     await audit(tx, ctx, { action: "documents.legacy_document.verified", entityType: "legacy_document", entityId: d.id, entityNumber: d.documentNumber, siteId: d.siteId, reason: note?.trim() || null, before: { verified: false }, after: { verified: true, legacyNumber: d.legacyNumber } });

@@ -51,6 +51,15 @@ function run(file: string) {
   execFileSync(process.execPath, ["--import", "tsx", file], { stdio: "inherit", env: process.env, cwd: process.cwd() });
 }
 
+/** The empty sandbox company (ADR-072, src/db/sandbox.ts); its own refusals are printed, never fatal here. */
+function runSandbox() {
+  try {
+    run("src/db/sandbox.ts");
+  } catch {
+    say("The empty sandbox company could not be created (see the lines above); the demo itself is unaffected.");
+  }
+}
+
 async function main(): Promise<number> {
   const mode = process.argv[2];
   if (mode !== "auto" && mode !== "reset") {
@@ -86,6 +95,7 @@ async function main(): Promise<number> {
     if (mode === "auto") {
       if (orgs > 0 && seeded) {
         say("Demo data is already loaded; nothing to do (use Reset demo data in the app to start over).");
+        runSandbox(); // ADR-072: the empty sandbox company is added to databases seeded before it existed
         return 0;
       }
       if (orgs > 0) say("Found an interrupted demo load; clearing it and loading again.");
@@ -97,6 +107,7 @@ async function main(): Promise<number> {
     try {
       run("src/db/seed.ts");
       run("scripts/install-reference-data.ts");
+      runSandbox();
     } catch (e) {
       // Leave an empty database rather than half a demo; the next start or reset loads it again.
       await wipe(sql).catch(() => undefined);

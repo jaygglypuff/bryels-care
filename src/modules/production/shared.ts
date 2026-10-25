@@ -109,8 +109,8 @@ export async function eligibleCheckers(dbx: DbOrTx, organizationId: string, site
 /** Separation of duties: the checker must be another eligible person at the batch site. */
 export async function assertChecker(tx: Tx, ctx: AuthContext, siteId: string, checkerId: string | null | undefined) {
   if (!checkerId) throw new DomainError("validation", "Choose the checker who verified this.");
-  if (checkerId === ctx.userId) {
-    throw new DomainError("separation_of_duties", "The checker must be a different person from the operator. Ask a colleague to check and sign.");
+  if (ctx.sodBlocks(checkerId === ctx.userId, "The checker must be a different person from the operator. Ask a colleague to check and sign.")) {
+    throw new DomainError("separation_of_duties", "The checker must be a different person from the operator. Ask a colleague to check and sign.", ctx.refusalDetails());
   }
   const list = await eligibleCheckers(tx, ctx.organizationId, siteId);
   const found = list.find((u) => u.id === checkerId);

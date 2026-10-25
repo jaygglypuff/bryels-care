@@ -1,4 +1,5 @@
 import "server-only";
+import { sql } from "drizzle-orm";
 import type { DbOrTx } from "@/db/client";
 import { auditEvents } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
@@ -40,6 +41,24 @@ export async function audit(
     after: (e.after as object) ?? null,
     correlationId: e.correlationId ?? ctx.correlationId,
   }).returning({ id: auditEvents.id });
+  // ADR-073: what the owner override let through in this operation is recorded next to the event it enabled.
+  const overrides = ctx.takeOwnerOverrides();
+  if (overrides.length) {
+    // Lets the deferred same-person triggers (src/db/sql/adr073.sql) accept this transaction's rows.
+    await tx.execute(sql`select set_config('bc.owner_override', 'on', true)`);
+    await tx.insert(auditEvents).values({
+      organizationId: ctx.organizationId,
+      siteId: "siteId" in e ? (e.siteId ?? null) : ctx.currentSiteId,
+      actorId: ctx.userId,
+      action: "governance.owner_override.used",
+      entityType: e.entityType,
+      entityId: e.entityId ?? null,
+      entityNumber: e.entityNumber ?? null,
+      reason: "Owner override (setting governance.owner_override)",
+      after: { forAction: e.action, overridden: overrides },
+      correlationId: e.correlationId ?? ctx.correlationId,
+    });
+  }
   // The id lets a caller cite the event (e.g. the cutover record cites the read-only toggle, runbook §17a.2).
   return row?.id ?? null;
 }

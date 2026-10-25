@@ -340,8 +340,8 @@ export async function approveStepException(
     const step = findStep(batch, input.stepNo);
     const rec = await stepRecord(tx, batch.id, step.stepNo);
     if (!rec || rec.status !== "in_progress") throw new DomainError("state", `${stepLabel(step)} is not in progress.`);
-    if (approver.userId === ctx.userId || approver.userId === rec.conductedBy) {
-      throw new DomainError("separation_of_duties", "The exception must be approved by someone other than the operator.");
+    if (approver.sodBlocks(approver.userId === ctx.userId || approver.userId === rec.conductedBy, "The exception must be approved by someone other than the operator.")) {
+      throw new DomainError("separation_of_duties", "The exception must be approved by someone other than the operator.", approver.refusalDetails());
     }
     if (rec.deviationId) throw new DomainError("state", "This step already has an approved exception.");
     const opener = executionHooks().openDeviation;

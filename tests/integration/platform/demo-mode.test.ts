@@ -4,6 +4,7 @@ import { and, count, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { auditEvents, organizations, userSiteAssignments, users } from "@/db/schema";
+import { SANDBOX_ORG_NAME } from "@/lib/demo";
 import { DomainError } from "@/lib/errors";
 import { inviteUser, listDemoAccounts, mfaStateFor, signInAsDemoAccount } from "@/modules/identity";
 import { resetDemoData } from "@/modules/platform";
@@ -242,24 +243,28 @@ describe("start-up and reset scripts (demo database)", () => {
     expect(auto).toEqual({ code: 0, out: "" });
   });
   it("auto never reloads a complete demo, reloads an interrupted one, and reset loads a fresh copy", { timeout: 240_000 }, async () => {
-    const [before] = await db.select().from(organizations);
+    // ADR-072: every run also ensures the empty sandbox company; the demo company is the other one.
+    const demoOrgs = async () => (await db.select().from(organizations)).filter((o) => o.name !== SANDBOX_ORG_NAME);
+    const [before] = await demoOrgs();
     const again = runScript("src/db/demo.ts", ["auto"], { DEMO_MODE: "true" });
     expect(again.code).toBe(0);
     expect(again.out).toContain("already loaded");
-    expect((await db.select().from(organizations))[0].id).toBe(before.id);
+    expect((await demoOrgs())[0].id).toBe(before.id);
+    expect((await db.select().from(organizations)).filter((o) => o.name === SANDBOX_ORG_NAME)).toHaveLength(1);
 
     // An organization without the completeness marker is an interrupted load: cleared and loaded again.
     await db.delete(auditEvents).where(eq(auditEvents.action, "platform.demo.seeded"));
     const resumed = runScript("src/db/demo.ts", ["auto"], { DEMO_MODE: "true" });
     expect(resumed.code).toBe(0);
     expect(resumed.out).toContain("interrupted demo load");
-    const [mid] = await db.select().from(organizations);
+    const [mid] = await demoOrgs();
     expect(mid.id).not.toBe(before.id);
 
     const reset = runScript("src/db/demo.ts", ["reset"], { DEMO_MODE: "true" });
     expect(reset.code).toBe(0);
-    const orgs = await db.select().from(organizations);
+    const orgs = await demoOrgs();
     expect(orgs).toHaveLength(1);
+    expect((await db.select().from(organizations)).filter((o) => o.name === SANDBOX_ORG_NAME)).toHaveLength(1);
     expect(orgs[0].id).not.toBe(mid.id);
     const [marker] = await db.select({ n: count() }).from(auditEvents).where(eq(auditEvents.action, "platform.demo.seeded"));
     expect(Number(marker.n)).toBe(1);

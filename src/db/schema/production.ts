@@ -128,8 +128,7 @@ export const dispenseRecords = pgTable(
     uniqueIndex("dispense_records_line_seq_uq").on(t.batchMaterialId, t.sequence),
     uniqueIndex("dispense_records_supersedes_uq").on(t.supersedesId).where(sql`${t.supersedesId} is not null`),
     check("dispense_records_qty_ck", sql`${t.actualQtyG} > 0`),
-    check("dispense_records_sod_ck", sql`${t.checkerId} is null or ${t.checkerId} <> ${t.operatorId}`),
-    check("dispense_records_exception_sod_ck", sql`${t.exceptionApprovedBy} is null or (${t.exceptionApprovedBy} <> ${t.operatorId} and ${t.exceptionReason} is not null)`),
+    check("dispense_records_exception_reason_ck", sql`${t.exceptionApprovedBy} is null or ${t.exceptionReason} is not null`),
     check("dispense_records_correction_ck", sql`${t.supersedesId} is null or ${t.correctionReason} is not null`),
     check("dispense_records_void_ck", sql`${t.voidedAt} is null or (${t.voidedBy} is not null and ${t.voidReason} is not null)`),
   ],
@@ -177,7 +176,6 @@ export const processStepRecords = pgTable(
   (t) => [
     uniqueIndex("process_step_records_batch_step_uq").on(t.batchId, t.stepNo),
     check("process_step_records_status_ck", sql`${t.status} in ('pending', 'in_progress', 'awaiting_check', 'completed', 'skipped')`),
-    check("process_step_records_sod_ck", sql`${t.checkedBy} is null or ${t.checkedBy} <> ${t.conductedBy}`),
     check("process_step_records_completed_ck", sql`${t.status} <> 'completed' or ${t.completedAt} is not null`),
     check("process_step_records_exception_ck", sql`${t.exceptionApprovedBy} is null or (${t.exceptionApprovedBy} <> ${t.conductedBy} and ${t.exceptionReason} is not null)`),
   ],

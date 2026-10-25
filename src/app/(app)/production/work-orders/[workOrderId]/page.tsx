@@ -31,11 +31,17 @@ function nextStep(d: WorkOrderDetail): NextStepProps {
   const base = { workOrderId: id, command: null, label: null } as const;
   if (a.canPlan) return { workOrderId: id, command: "plan", label: "Plan (resolve revisions)", pendingText: "Planning…" };
   if (status === "planned" && a.canRelease) {
-    if (a.releaseBlockedBySod) return { ...base, blocked: { title: "Release by another person", body: "You planned this work order; separation of duties needs another person with release permission." } };
+    if (a.releaseBlockedBySod) return { ...base, blocked: { title: "Release by another person", body: "You planned this work order; separation of duties needs another person with release permission." }, who: { permission: "production.work_order.approve", siteId: d.workOrder.siteId } };
     return { workOrderId: id, command: "release", label: "Release and reserve materials", pendingText: "Reserving…", withNote: true };
   }
   if (a.canCreateBatch) return { workOrderId: id, command: "create_batch", label: `Create batch ${d.batches.length + 1} of ${d.workOrder.batchCount}`, pendingText: "Creating…" };
-  return { ...base, idle: ["in_progress", "completed", "closed", "cancelled"].includes(status) ? "Progress follows the batches." : "No action for your role at this step." };
+  // ADR-073: when the next step belongs to another role, say who can do it.
+  const needed = status === "draft" ? "production.work_order.submit" : status === "planned" ? "production.work_order.approve" : status === "released" ? "production.batch.create" : null;
+  return {
+    ...base,
+    idle: ["in_progress", "completed", "closed", "cancelled"].includes(status) ? "Progress follows the batches." : "No action for your role at this step.",
+    who: needed ? { permission: needed, siteId: d.workOrder.siteId } : null,
+  };
 }
 
 export default async function WorkOrderPage({ params, searchParams }: { params: Promise<{ workOrderId: string }>; searchParams: Promise<{ tab?: string }> }) {

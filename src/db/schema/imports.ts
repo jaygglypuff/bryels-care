@@ -306,7 +306,6 @@ export const legacyDocuments = pgTable(
     check("ck_legacy_documents_disposition", sql`${t.disposition} is null or ${t.disposition} in (${inList(LEGACY_DISPOSITIONS)})`),
     check("ck_legacy_documents_batch_size", sql`${t.batchSizeQty} is null or ${t.batchSizeQty} > 0`),
     check("ck_legacy_documents_dates", sql`${t.endDate} is null or ${t.startDate} is null or ${t.endDate} >= ${t.startDate}`),
-    check("ck_legacy_documents_verifier", sql`${t.verifiedBy} is null or ${t.verifiedBy} <> ${t.indexedBy}`),
     check("ck_legacy_documents_verified", sql`(${t.verifiedBy} is null) = (${t.verifiedAt} is null)`),
     check("ck_legacy_documents_voided", sql`(${t.voidedAt} is null) = (${t.voidReason} is null)`),
   ],

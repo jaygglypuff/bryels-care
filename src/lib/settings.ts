@@ -253,6 +253,24 @@ export const SETTINGS = {
   "approvals.sod.work_order_release": sodSetting("Separation of duties: work order release"),
   "approvals.sod.production_plan": sodSetting("Separation of duties: production plans"),
   "approvals.sod.customer_return": sodSetting("Separation of duties: customer returns"),
+  /**
+   * ADR-073: the owner may carry any step through alone. When on, a user holding the Owner/Director role
+   * holds every permission and passes every separation-of-duties check (second person, checker,
+   * approver other than the submitter); each use is audited as `governance.owner_override.used`.
+   * Off by default for a real company because QA release and second-person checks are regulatory
+   * controls (ISO 22716 / FDA Philippines GMP) — flagged for qualified review before switching it on.
+   * On in the demo and the sandbox (src/db/seed.ts, src/db/sandbox.ts).
+   */
+  "governance.owner_override": {
+    scopes: ["organization"],
+    schema: z.boolean(),
+    default: false as boolean,
+    assumption: "A-GOV-OWNER",
+    group: "Approvals",
+    label: "Owner can do every step alone (owner override)",
+    description: "When on, the Owner/Director can do any step, including approvals and checks that normally need a different person or another role (for example QA release). Every such step is recorded in the audit log as an owner override. Quality and GMP rules normally require an independent second person: confirm with your QA adviser before switching this on for real production.",
+    restricted: true,
+  },
   /** Alert thresholds evaluated by `platform.alerts_evaluate` (docs/deployment-railway.md §8.3, A-DEP-11). */
   "alerts.worker_heartbeat_max_seconds": { scopes: ["organization"], schema: z.number().int().min(60).max(86_400), default: 300, assumption: "A-DEP-11", group: "Alerts", label: "Worker silent after (seconds)" },
   "alerts.backup_max_age_hours": { scopes: ["organization"], schema: z.number().int().min(1).max(24 * 14), default: 26, assumption: "A-DEP-11", group: "Alerts", label: "Backup older than (hours)" },

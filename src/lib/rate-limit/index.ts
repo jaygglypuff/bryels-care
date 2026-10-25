@@ -1,5 +1,5 @@
 import "server-only";
-import { sql } from "drizzle-orm";
+import { sql, asc } from "drizzle-orm";
 import type { DbOrTx } from "@/db/client";
 import { db } from "@/db/client";
 import { organizations } from "@/db/schema";
@@ -60,8 +60,9 @@ export type RateLimits = { api_per_minute: number; scan_lookups_per_minute: numb
 export async function rateLimitsFor(organizationId: string | null): Promise<RateLimits> {
   let org = organizationId;
   if (!org) {
-    // Before sign-in there is no organization yet; the deployment serves one (ADR-011).
-    const [o] = await db.select({ id: organizations.id }).from(organizations).limit(1);
+    // Before sign-in there is no organization yet: use the first one created (the demo environment also
+    // holds the empty sandbox company, ADR-072; a production deployment serves one, ADR-011).
+    const [o] = await db.select({ id: organizations.id }).from(organizations).orderBy(asc(organizations.createdAt)).limit(1);
     org = o?.id ?? null;
   }
   if (!org) return { api_per_minute: 600, scan_lookups_per_minute: 120, login_ip_per_minute: 20, login_ip_per_hour: 200 };

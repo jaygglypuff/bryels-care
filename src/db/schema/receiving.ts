@@ -83,7 +83,6 @@ export const supplierMaterials = pgTable(
     uniqueIndex("uq_supplier_materials_pair").on(t.supplierId, t.materialId),
     index("ix_supplier_materials_material").on(t.materialId),
     check("ck_supplier_materials_requested", sql`(${t.requestedBy} is null) = (${t.requestedAt} is null)`),
-    check("ck_supplier_materials_sod", sql`${t.approvedBy} is null or ${t.requestedBy} is null or ${t.approvedBy} <> ${t.requestedBy}`),
     check("ck_supplier_materials_moq", sql`${t.moqQty} is null or (${t.moqQty} > 0 and ${t.moqUom} is not null)`),
     check("ck_supplier_materials_price", sql`${t.unitPrice} is null or (${t.unitPrice} >= 0 and ${t.priceUom} is not null and ${t.currency} is not null)`),
     check("ck_supplier_materials_lead_time", sql`${t.leadTimeDays} is null or ${t.leadTimeDays} >= 0`),
@@ -202,7 +201,6 @@ export const goodsReceiptLines = pgTable(
       "ck_goods_receipt_lines_discrepancy_kind",
       sql`${t.discrepancyKind} is null or ${t.discrepancyKind} in ('short','over','damaged','wrong_item','missing_documents')`,
     ),
-    check("ck_goods_receipt_lines_discrepancy_sod", sql`${t.discrepancyApprovedBy} is null or ${t.discrepancyApprovedBy} <> ${t.discrepancyRecordedBy}`),
     check("ck_goods_receipt_lines_dates", sql`${t.expiresOn} is null or ${t.manufacturedOn} is null or ${t.expiresOn} > ${t.manufacturedOn}`),
   ],
 );

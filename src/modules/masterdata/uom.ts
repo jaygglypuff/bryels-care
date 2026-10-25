@@ -244,7 +244,7 @@ export async function decideConversion(ctx: AuthContext, raw: unknown) {
     if (!(UOM_CONVERSION_TRANSITIONS[row.status as keyof typeof UOM_CONVERSION_TRANSITIONS] as readonly string[]).includes(v.decision)) {
       throw new DomainError("state", `This conversion is ${row.status.replace("_", " ")}; it cannot be ${v.decision}.`);
     }
-    if (row.submittedBy === ctx.userId) throw new DomainError("separation_of_duties", "You proposed this conversion; a second administrator must decide it.");
+    ctx.assertSeparation(row.submittedBy === ctx.userId, "You proposed this conversion; a second administrator must decide it.");
     if (v.decision === "rejected" && !v.note) throw new DomainError("validation", "Give the reason for rejecting.", { field: "note" });
     const [units] = await tx
       .select({ from: fromU.code, to: toU.code })

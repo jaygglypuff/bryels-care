@@ -220,7 +220,7 @@ export async function approveVersion(ctx: AuthContext, versionId: string) {
   return db.transaction(async (tx) => {
     const { v, t } = await loadVersion(tx, ctx, versionId);
     if (v.status !== "pending_approval") throw new DomainError("state", `Version ${v.versionNo} is ${v.status.replace("_", " ")}; only a submitted version can be approved.`);
-    if (v.submittedBy === ctx.userId) throw new DomainError("separation_of_duties", "You submitted this version, so someone else must approve it.");
+    ctx.assertSeparation(v.submittedBy === ctx.userId, "You submitted this version, so someone else must approve it.");
     const check = checkDefinition(v.definition, t.templateKind);
     if (!check.ok) throw new DomainError("validation", check.errors.join(" "));
     const now = new Date();

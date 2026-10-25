@@ -280,7 +280,7 @@ export async function requestReopen(ctx: AuthContext, raw: ReopenInput) {
     });
     // The request is the requester's step-1 approval when they hold a step-1 role.
     const step1 = BATCH_REOPEN_POLICY[0];
-    if (step1.requesterMayDecide && ctx.can(step1.permission) && step1.roles.some((r) => ctx.roleCodes.includes(r))) {
+    if (step1.requesterMayDecide && ctx.can(step1.permission) && ctx.actsAsAnyRole(step1.roles)) {
       await tx.insert(approvalDecisions).values({ organizationId: ctx.organizationId, siteId: b.siteId, recordType: "batch_reopen", recordId: req.id, step: 1, decision: "approved", decidedBy: ctx.userId, note: "Requested by the site manager (step 1)." });
     }
     const { nextStep } = await reopenState(tx, ctx.organizationId, req.id);
@@ -318,11 +318,11 @@ export async function decideReopen(ctx: AuthContext, raw: z.input<typeof decideI
     const { decisions, nextStep } = await reopenState(tx, ctx.organizationId, req.id);
     if (!nextStep) throw new DomainError("state", "This request has no approval step waiting.");
     ctx.require(nextStep.permission);
-    if (!nextStep.roles.some((r) => ctx.roleCodes.includes(r))) {
+    if (!ctx.actsAsAnyRole(nextStep.roles)) {
       throw new DomainError("forbidden", `Step ${nextStep.step} (${nextStep.label}) must be decided by ${nextStep.roles.map((r) => r.replace(/_/g, " ")).join(" or ")}.`);
     }
-    if (!nextStep.requesterMayDecide && req.requestedBy === ctx.userId) throw new DomainError("separation_of_duties", "You requested this reopen, so another person must approve it.");
-    if (decisions.some((d) => d.decidedBy === ctx.userId)) throw new DomainError("separation_of_duties", "You already approved an earlier step. A different person must decide this step.");
+    ctx.assertSeparation(!nextStep.requesterMayDecide && req.requestedBy === ctx.userId, "You requested this reopen, so another person must approve it.");
+    ctx.assertSeparation(decisions.some((d) => d.decidedBy === ctx.userId), "You already approved an earlier step. A different person must decide this step.");
     const note = input.note?.trim() || null;
     if (input.decision === "rejected" && (!note || note.length < 5)) throw new DomainError("validation", "Enter the reason for rejecting (at least 5 characters).", { field: "note" });
     await tx.insert(approvalDecisions).values({ organizationId: ctx.organizationId, siteId: req.siteId, recordType: "batch_reopen", recordId: req.id, step: nextStep.step, decision: input.decision, decidedBy: ctx.userId, note });
@@ -493,9 +493,9 @@ export async function getClosureView(ctx: AuthContext, batchId: string) {
     !!pending &&
     !!next &&
     ctx.can(next.permission) &&
-    next.roles.some((r) => ctx.roleCodes.includes(r)) &&
-    !(pendingState?.decisions ?? []).some((d) => d.decidedBy === ctx.userId) &&
-    (next.requesterMayDecide || pending.requestedBy !== ctx.userId);
+    ctx.hasAnyRole(next.roles) &&
+    !(pendingState?.decisions ?? []).some((d) => ctx.sodConflict(d.decidedBy)) &&
+    (next.requesterMayDecide || !ctx.sodConflict(pending.requestedBy));
   const lastClosure = closures[closures.length - 1] ?? null;
   return {
     batch: { id: batch.id, number: batch.batchNumber, status: batch.status, siteId: batch.siteId, siteCode, productName: product.name, formulaRevisionId: batch.formulaRevisionId, routingRevisionId: batch.routingRevisionId },

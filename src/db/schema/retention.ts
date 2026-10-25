@@ -82,7 +82,6 @@ export const retentionPolicies = pgTable(
     check("ck_retention_policies_months_positive", sql`${t.retentionMonths} is null or ${t.retentionMonths} > 0`),
     check("ck_retention_policies_days_positive", sql`${t.retentionDays} is null or ${t.retentionDays} > 0`),
     check("ck_retention_policies_confirmed", sql`(not ${t.isConfirmed}) or (${t.confirmedBy} is not null and ${t.confirmedAt} is not null)`),
-    check("ck_retention_policies_confirm_sod", sql`${t.confirmedBy} is null or ${t.updatedBy} is null or ${t.confirmedBy} <> ${t.updatedBy}`),
   ],
 );
 
@@ -110,7 +109,6 @@ export const legalHolds = pgTable(
     index("legal_holds_org_idx").on(t.organizationId, t.placedAt),
     check("ck_legal_holds_kind", sql`${t.holdKind} in (${inList(LEGAL_HOLD_KINDS)})`),
     check("ck_legal_holds_entity_type", sql`${t.entityType} in (${inList(LEGAL_HOLD_ENTITY_TYPES)})`),
-    check("ck_legal_holds_release_sod", sql`${t.releasedBy} is null or ${t.releasedBy} <> ${t.placedBy}`),
     check("ck_legal_holds_release_complete", sql`(${t.releasedAt} is null) = (${t.releasedBy} is null) and (${t.releasedAt} is null or ${t.releaseNote} is not null)`),
   ],
 );
@@ -185,7 +183,6 @@ export const restoreDrills = pgTable(
   (t) => [
     index("restore_drills_org_time_idx").on(t.organizationId, t.performedAt),
     check("ck_restore_drills_result", sql`${t.result} in ('passed','failed')`),
-    check("ck_restore_drills_signoff_sod", sql`${t.signedOffBy} is null or ${t.signedOffBy} <> ${t.performedBy}`),
     check("ck_restore_drills_signoff_complete", sql`(${t.signedOffBy} is null) = (${t.signedOffAt} is null)`),
     check("ck_restore_drills_durations", sql`${t.durationSeconds} >= 0 and ${t.measuredRtoSeconds} >= 0`),
   ],

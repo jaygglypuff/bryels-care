@@ -12,11 +12,24 @@ import { signInAsDemo } from "./actions";
  * fictional accounts grouped by role, each with a one-click "Sign in as …" (server action
  * `signInAsDemo`, which checks demo mode and the demo address again).
  */
-export function DemoPanel({ groups, password, portalAccounts = [] }: { groups: DemoAccountGroup[]; password: string; portalAccounts?: PortalDemoAccount[] }) {
+export function DemoPanel({
+  groups,
+  sandboxGroups = [],
+  password,
+  portalAccounts = [],
+}: {
+  groups: DemoAccountGroup[];
+  sandboxGroups?: DemoAccountGroup[];
+  password: string;
+  portalAccounts?: PortalDemoAccount[];
+}) {
   const [open, setOpen] = useState(false);
+  // ADR-072: "Sample company" (full fictional data) or "Start from scratch" (the empty sandbox company).
+  const [view, setView] = useState<"demo" | "sandbox">("demo");
   const [state, action] = useActionState(signInAsDemo, null);
   const id = useId();
-  const count = groups.reduce((n, g) => n + g.accounts.length, 0);
+  const shown = view === "sandbox" ? sandboxGroups : groups;
+  const count = shown.reduce((n, g) => n + g.accounts.length, 0);
   return (
     <section aria-labelledby={`${id}-title`} className="mt-5 rounded-[20px] bg-surface p-5 shadow-[var(--shadow-card)]">
       <div className="flex items-center justify-between gap-3">
@@ -40,8 +53,36 @@ export function DemoPanel({ groups, password, portalAccounts = [] }: { groups: D
       </div>
       {open && (
         <div id={`${id}-list`} className="mt-4">
+          {sandboxGroups.length > 0 && (
+            <div role="tablist" aria-label="Which company" className="mb-3 grid grid-cols-2 gap-1 rounded-full bg-surface-2 p-1">
+              {(
+                [
+                  ["demo", "Sample company"],
+                  ["sandbox", "Start from scratch"],
+                ] as const
+              ).map(([v, label]) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === v}
+                  onClick={() => setView(v)}
+                  className={cx("min-h-[34px] rounded-full px-3 text-[13px] font-semibold transition-colors", view === v ? "bg-[var(--brand-600)] text-white" : "text-muted hover:text-fg")}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <p className="mb-3 rounded-[12px] bg-[var(--lime-100)] px-3 py-2 text-[12.5px] text-[var(--brand-800)]">
-            Pick a role to see the system through that person&apos;s eyes. Every demo account uses the password{" "}
+            {view === "sandbox" ? (
+              <>
+                An <span className="font-semibold">empty practice company</span>: no materials, products, customers or stock. Build everything yourself, step by
+                step, with <span className="font-semibold">Help &amp; guides → Getting started</span> (start as Sandbox Owner). Every account uses the password{" "}
+              </>
+            ) : (
+              <>A fictional company already full of sample data. Pick a role to see the system through that person&apos;s eyes. Every demo account uses the password </>
+            )}
             <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[12px]">{password}</code>.
           </p>
           <FormMessage state={state} />
@@ -49,7 +90,7 @@ export function DemoPanel({ groups, password, portalAccounts = [] }: { groups: D
             <p className="text-[13px] text-muted">The demo data is still loading or was cleared. Wait a minute and reload this page.</p>
           ) : (
             <div className="flex flex-col gap-4">
-              {groups.map((g) => (
+              {shown.map((g) => (
                 <div key={g.roleCode} role="group" aria-label={g.roleName}>
                   <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">{g.roleName}</p>
                   <ul className="flex flex-col gap-1.5">
@@ -77,7 +118,7 @@ export function DemoPanel({ groups, password, portalAccounts = [] }: { groups: D
                 </div>
               ))}
               {/* W4E: customers sign in on the separate customer portal, never here. */}
-              {portalAccounts.length > 0 && (
+              {view === "demo" && portalAccounts.length > 0 && (
                 <div role="group" aria-label="Customer portal">
                   <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">Customer portal</p>
                   <ul className="flex flex-col gap-1.5">

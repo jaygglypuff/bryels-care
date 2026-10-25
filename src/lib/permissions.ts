@@ -1486,8 +1486,12 @@ for (const [role, drop] of Object.entries(W4C_EXCLUDE)) {
 // The VIEW_ALL roles received the two `.view` strings at definition; the matrix keeps them from SM and QA,
 // the catalogue from SA and portal users from OD. Portal users themselves hold no internal permission:
 // their capabilities live in src/modules/portal/capabilities.ts (matrix §7).
+// Wave 4 integration (ADR-071): portal-user administration (`sales.portal_user.admin`, R) sits with site_manager
+// and system_admin, not sales_cs, so the sales team keeps standard sessions (a restricted string would make every
+// sales user privileged: 1 h idle and enforced TOTP). sales_cs keeps portal-user view and the catalogue (S).
 const W4E_GRANTS: Record<string, readonly Permission[]> = {
-  sales_cs: ["sales.portal_user.view", "sales.portal_user.admin", "sales.portal_catalog.view", "sales.portal_catalog.admin"],
+  sales_cs: ["sales.portal_user.view", "sales.portal_catalog.view", "sales.portal_catalog.admin"],
+  site_manager: ["sales.portal_user.view", "sales.portal_user.admin"],
   system_admin: ["sales.portal_user.view", "sales.portal_user.admin"],
   auditor: ["sales.portal_user.view", "sales.portal_catalog.view"],
 };
@@ -1497,7 +1501,7 @@ for (const [role, grants] of Object.entries(W4E_GRANTS)) {
 const W4E_EXCLUDE: Record<string, readonly Permission[]> = {
   owner_director: ["sales.portal_user.view", "sales.portal_user.admin", "sales.portal_catalog.admin"],
   system_admin: ["sales.portal_catalog.view", "sales.portal_catalog.admin"],
-  site_manager: ["sales.portal_user.view", "sales.portal_user.admin", "sales.portal_catalog.view", "sales.portal_catalog.admin"],
+  site_manager: ["sales.portal_catalog.view", "sales.portal_catalog.admin"],
   qa_qc: ["sales.portal_user.view", "sales.portal_user.admin", "sales.portal_catalog.view", "sales.portal_catalog.admin"],
 };
 for (const [role, drop] of Object.entries(W4E_EXCLUDE)) {

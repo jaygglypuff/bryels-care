@@ -166,7 +166,7 @@ export async function approveTaxConfiguration(ctx: AuthContext, id: string, inpu
   return db.transaction(async (tx) => {
     const r = await loadForUpdate(tx, ctx, id);
     if (r.status !== "proposed") throw new DomainError("state", `This version is ${r.status}; only a proposed version can be approved.`);
-    if (r.proposedBy === ctx.userId) throw new DomainError("separation_of_duties", "You proposed this rate, so a second person (the reviewer) must approve it.", { code: "SEPARATION_OF_DUTIES" });
+    ctx.assertSeparation(r.proposedBy === ctx.userId, "You proposed this rate, so a second person (the reviewer) must approve it.", { code: "SEPARATION_OF_DUTIES" });
     const before = await resolveTaxConfiguration(tx, ctx.organizationId, r.code, r.appliesTo as TaxAppliesTo, r.effectiveFrom);
     const [after] = await tx
       .update(taxConfigurations)

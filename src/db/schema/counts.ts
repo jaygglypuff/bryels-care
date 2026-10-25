@@ -185,7 +185,6 @@ export const stockAdjustments = pgTable(
     uniqueIndex("stock_adjustments_org_number_uq").on(t.organizationId, t.adjustmentNumber),
     index("stock_adjustments_site_status_idx").on(t.siteId, t.status),
     check("ck_stock_adjustments_status", sql`${t.status} in (${inList(ADJUSTMENT_STATUSES)})`),
-    check("ck_stock_adjustments_sod", sql`${t.approvedBy} is null or (${t.approvedBy} <> ${t.submittedBy} and ${t.approvedBy} <> ${t.createdBy})`),
   ],
 );
 

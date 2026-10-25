@@ -446,6 +446,24 @@ export async function voidInvoice(ctx: AuthContext, id: string, input: { reason:
 }
 
 /** Downstream of a void (§2.5): the order moves invoiced → shipped; stock is untouched. */
+/**
+ * Shipment reversal guard (registered for the sales module in src/modules/wiring.ts): a dispatch whose
+ * shipment has a live invoice is not reversed. A draft/submitted/approved invoice is cancelled first; an
+ * issued one is credited in full (the full-void credit note voids it) — never edited.
+ */
+export async function invoiceBlockingShipmentReversal(q: DbOrTx, organizationId: string, shipmentId: string): Promise<string | null> {
+  const [inv] = await q
+    .select({ id: invoices.id, status: invoices.status, invoiceNumber: invoices.invoiceNumber })
+    .from(invoices)
+    .where(and(eq(invoices.organizationId, organizationId), eq(invoices.shipmentId, shipmentId), notInArray(invoices.status, ["cancelled", "voided"])))
+    .limit(1);
+  if (!inv) return null;
+  if (["draft", "submitted", "approved"].includes(inv.status)) {
+    return `This shipment already has an invoice draft (${INVOICE_STATUS_LABEL[inv.status].toLowerCase()}). Ask finance to cancel it before reversing the dispatch.`;
+  }
+  return `This shipment is invoiced (${inv.invoiceNumber ?? "invoice"}, ${INVOICE_STATUS_LABEL[inv.status].toLowerCase()}). Finance must credit the invoice in full with a credit note before the dispatch can be reversed.`;
+}
+
 export async function revertOrderInvoiced(tx: Tx, ctx: AuthContext, orderId: string, reason: string) {
   const o = await lockOrder(tx, ctx, orderId);
   if (o.status === "invoiced") await transitionOrder(tx, ctx, o, "shipped", { reason });
@@ -519,7 +537,7 @@ export async function getInvoice(ctx: AuthContext, id: string) {
     lines,
     progress,
     canApprove: inv.status === "submitted" && canDecide(ctx, "invoice", progress, inv.submittedAt, [inv.createdBy, inv.submittedBy]),
-    posterBlocked: inv.status === "approved" && !!progress && !progress.posterMayEqualApprover && progress.approvers.includes(ctx.userId),
+    posterBlocked: inv.status === "approved" && !!progress && !progress.posterMayEqualApprover && progress.approvers.some((u) => ctx.sodConflict(u)),
     decisions,
     names: Object.fromEntries(names),
     postings,

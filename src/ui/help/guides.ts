@@ -13,6 +13,8 @@ export type Guide = { key: string; title: string; version: number; updatedAt: st
 
 /** Screen key → file in docs/help. */
 export const GUIDE_FILES: Record<string, string> = {
+  // ADR-072: the end-to-end walkthrough for the empty sandbox company (listed first on /help)
+  "start.getting_started": "getting-started.md",
   "inventory.receive": "receive.md",
   "inventory.move": "move.md",
   "inventory.count": "count.md",

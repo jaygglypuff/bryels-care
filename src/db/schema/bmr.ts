@@ -191,7 +191,6 @@ export const batchPaperRecords = pgTable(
     check("batch_paper_records_status_ck", inList(t.status, PAPER_RECORD_STATUSES)),
     check("batch_paper_records_mode_ck", inList(t.recordMode, ["electronic", "paper_then_transcribe", "paper_only"])),
     check("batch_paper_records_page_ck", sql`${t.pageNo} >= 1`),
-    check("batch_paper_records_sod_ck", sql`${t.reviewedBy} is null or ${t.transcribedBy} is null or ${t.reviewedBy} <> ${t.transcribedBy}`),
     check(
       "batch_paper_records_attached_ck",
       sql`${t.status} not in ('attached', 'reviewed') or (${t.fileAttachmentId} is not null and ${t.transcribedBy} is not null and ${t.transcribedAt} is not null)`,

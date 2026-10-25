@@ -235,7 +235,7 @@ export async function getInspectionPlanDetail(ctx: AuthContext, planId: string) 
     revisions: revisions.map((r) => ({ ...r, label: effectiveLabel(r) })),
     approval: {
       ...approval,
-      canDecide: p.status === "pending_approval" && canDecideStep(ctx, approval.nextStep) && ![p.createdBy, p.submittedBy].includes(ctx.userId) && !approval.decisions.some((d) => d.decidedBy === ctx.userId),
+      canDecide: p.status === "pending_approval" && canDecideStep(ctx, approval.nextStep) && ![p.createdBy, p.submittedBy].some((u) => ctx.sodConflict(u)) && !approval.decisions.some((d) => ctx.sodConflict(d.decidedBy)),
     },
     can: {
       edit: p.status === "draft" && ctx.can("quality.inspection_plan.edit"),

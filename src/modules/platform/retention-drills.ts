@@ -52,9 +52,9 @@ export async function signOffRestoreDrill(ctx: AuthContext, input: { id: string;
   if (!id.success) throw new DomainError("not_found", "Restore drill not found.");
   const [drill] = await db.select().from(restoreDrills).where(and(eq(restoreDrills.id, id.data), eq(restoreDrills.organizationId, ctx.organizationId)));
   if (!drill) throw new DomainError("not_found", "Restore drill not found.");
-  if (drill.performedBy === ctx.userId) {
+  if (ctx.sodBlocks(drill.performedBy === ctx.userId, "You performed this drill; a different person must sign it off.")) {
     await auditDenied(ctx, { permission: "platform.restore_drill.approve", entityType: "restore_drills", entityId: drill.id, siteId: null, rule: "signer_is_performer" });
-    throw new DomainError("separation_of_duties", "You performed this drill; a different person must sign it off.");
+    throw new DomainError("separation_of_duties", "You performed this drill; a different person must sign it off.", ctx.refusalDetails());
   }
   if (drill.signedOffBy) throw new DomainError("conflict", "This drill is already signed off.");
   await requireReauthentication(ctx, password, "sign off a restore drill");

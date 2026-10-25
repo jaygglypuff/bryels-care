@@ -2,6 +2,7 @@
 import { Field, Textarea } from "@/ui/core";
 import { Banner } from "@/ui/status";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
+import { WhoCanHelp } from "@/ui/who-can-help";
 import { workOrderCommandAction } from "./actions";
 
 export type NextStepProps = {
@@ -12,6 +13,8 @@ export type NextStepProps = {
   withNote?: boolean;
   blocked?: { title: string; body: string } | null;
   idle?: string | null;
+  /** Who can do the step when this person cannot (ADR-073 "who can do this"). */
+  who?: { permission: string; siteId: string } | null;
 };
 
 /**
@@ -26,6 +29,7 @@ export function NextStep(p: NextStepProps) {
       {p.blocked && (
         <Banner tone="info" title={p.blocked.title}>
           {p.blocked.body}
+          {p.who && <WhoCanHelp permission={p.who.permission} siteId={p.who.siteId} />}
         </Banner>
       )}
       {p.command && p.label && !p.blocked && (
@@ -44,7 +48,12 @@ export function NextStep(p: NextStepProps) {
           </div>
         </form>
       )}
-      {!p.command && !p.blocked && p.idle && <p className="text-[13px] text-muted">{p.idle}</p>}
+      {!p.command && !p.blocked && p.idle && (
+        <div className="text-[13px] text-muted">
+          {p.idle}
+          {p.who && <WhoCanHelp permission={p.who.permission} siteId={p.who.siteId} />}
+        </div>
+      )}
       <FormMessage state={state} />
     </div>
   );

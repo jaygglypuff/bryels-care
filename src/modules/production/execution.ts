@@ -182,8 +182,8 @@ const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** A co-signed checker must hold the check permission at the batch site and not be the conductor. */
 export function assertCheckerFor(checker: AuthContext, conductorId: string, kind: string, siteId: string) {
-  if (checker.userId === conductorId) {
-    throw new DomainError("separation_of_duties", "The checker must be a different person from the one who conducted the step.", { rule: "V-SOD" });
+  if (checker.sodBlocks(checker.userId === conductorId, "The checker must be a different person from the one who conducted the step.")) {
+    throw new DomainError("separation_of_duties", "The checker must be a different person from the one who conducted the step.", { ...checker.refusalDetails(), rule: "V-SOD" });
   }
   checker.require(checkPermission(kind));
   checker.requireSite(siteId);
@@ -332,7 +332,7 @@ export async function returnStep(checker: AuthContext, input: { batchId: string;
     checker.require(checkPermission(step.stepKind));
     const rec = await stepRecord(tx, batch.id, step.stepNo);
     if (!rec || rec.status !== "awaiting_check") throw new DomainError("state", `${capital(stepLabel(step))} is not waiting for a checker.`);
-    if (rec.conductedBy === checker.userId) throw new DomainError("separation_of_duties", "You conducted this step; another person must check it.");
+    checker.assertSeparation(rec.conductedBy === checker.userId, "You conducted this step; another person must check it.");
     await tx.update(processStepRecords).set({ status: "in_progress", performedAt: null, blockedReason: `Returned by the checker: ${reason}` }).where(eq(processStepRecords.id, rec.id));
     await audit(tx, checker, {
       action: "production.process_step_record.returned",

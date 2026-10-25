@@ -547,7 +547,7 @@ export async function getFormulaRevision(ctx: AuthContext, revisionId: string) {
     headerChanges,
     approval: {
       ...approval,
-      canDecide: rev.status === "pending_approval" && canDecideStep(ctx, approval.nextStep) && !excluded.includes(ctx.userId) && !approval.decisions.some((d) => d.decidedBy === ctx.userId),
+      canDecide: rev.status === "pending_approval" && canDecideStep(ctx, approval.nextStep) && !excluded.some((u) => ctx.sodConflict(u)) && !approval.decisions.some((d) => ctx.sodConflict(d.decidedBy)),
     },
     can: {
       edit: rev.status === "draft" && ctx.can("masterdata.formula.edit"),

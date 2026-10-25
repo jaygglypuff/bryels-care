@@ -55,7 +55,6 @@ export const supplierMaterialChanges = pgTable(
     uniqueIndex("uq_supplier_material_changes_pending").on(t.supplierMaterialId).where(sql`${t.status} = 'pending'`),
     check("ck_supplier_material_changes_action", sql`${t.action} in (${inList(SUPPLIER_MATERIAL_CHANGE_ACTIONS)})`),
     check("ck_supplier_material_changes_status", sql`${t.status} in (${inList(SUPPLIER_MATERIAL_CHANGE_STATUSES)})`),
-    check("ck_supplier_material_changes_sod", sql`${t.decidedBy} is null or ${t.decidedBy} <> ${t.proposedBy}`),
     check("ck_supplier_material_changes_decided", sql`${t.status} in ('pending','withdrawn') or (${t.decidedBy} is not null and ${t.decidedAt} is not null)`),
   ],
 );
@@ -99,7 +98,6 @@ export const purchaseRequests = pgTable(
     uniqueIndex("uq_purchase_requests_idem").on(t.organizationId, t.idempotencyKey).where(sql`${t.idempotencyKey} is not null`),
     index("ix_purchase_requests_site_status").on(t.siteId, t.status),
     check("ck_purchase_requests_status", sql`${t.status} in (${inList(PURCHASE_REQUEST_STATUSES)})`),
-    check("ck_purchase_requests_sod", sql`${t.approvedBy} is null or (${t.approvedBy} <> ${t.requestedBy} and (${t.submittedBy} is null or ${t.approvedBy} <> ${t.submittedBy}))`),
     check("ck_purchase_requests_amount", sql`${t.estimatedTotalAmount} is null or ${t.estimatedTotalAmount} >= 0`),
   ],
 );
@@ -216,7 +214,6 @@ export const purchaseOrders = pgTable(
     check("ck_purchase_orders_status", sql`${t.status} in (${inList(PURCHASE_ORDER_STATUSES)})`),
     check("ck_purchase_orders_amounts", sql`${t.subtotalAmount} >= 0 and ${t.taxAmount} >= 0 and ${t.totalAmount} >= 0`),
     check("ck_purchase_orders_urgent", sql`not ${t.isUrgent} or ${t.urgentReason} is not null`),
-    check("ck_purchase_orders_sod", sql`${t.approvedBy} is null or (${t.approvedBy} <> ${t.createdBy} and (${t.submittedBy} is null or ${t.approvedBy} <> ${t.submittedBy}))`),
     check("ck_purchase_orders_sent", sql`${t.status} not in ('sent','partially_received','received','closed') or (${t.sentAt} is not null and ${t.sentBy} is not null)`),
     check("ck_purchase_orders_terms", sql`${t.paymentTermsDays} is null or ${t.paymentTermsDays} >= 0`),
   ],
@@ -328,7 +325,6 @@ export const supplierReturns = pgTable(
     index("ix_supplier_returns_site_status").on(t.siteId, t.status),
     index("ix_supplier_returns_supplier").on(t.supplierId),
     check("ck_supplier_returns_status", sql`${t.status} in (${inList(SUPPLIER_RETURN_STATUSES)})`),
-    check("ck_supplier_returns_sod", sql`${t.approvedBy} is null or (${t.approvedBy} <> ${t.createdBy} and (${t.submittedBy} is null or ${t.approvedBy} <> ${t.submittedBy}))`),
     check("ck_supplier_returns_poster", sql`${t.postedBy} is null or ${t.approvedBy} is null or ${t.postedBy} <> ${t.approvedBy}`),
     check("ck_supplier_returns_posted", sql`${t.status} <> 'posted' or (${t.postedAt} is not null and ${t.postedBy} is not null and ${t.approvedBy} is not null)`),
   ],
