@@ -9,6 +9,7 @@ import { revokeUserSessions } from "@/lib/auth/session-store";
 import { SYSTEM_USER_STATUS } from "@/lib/auth/system";
 import { newToken, sha256 } from "@/lib/auth/tokens";
 import type { SendResult } from "@/lib/email";
+import { isDemoEmail, isDemoMode } from "@/lib/demo";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
 import { grantInTx } from "./assignments";
@@ -103,6 +104,10 @@ export async function inviteUser(ctx: AuthContext, raw: InviteInput, now: Date =
   ctx.require("identity.invitation.create");
   ctx.require("identity.site_assignment.admin");
   const input = InviteSchema.parse(raw);
+  // Demo mode (ADR-055): only made-up addresses, so the demo never holds a real person and stays resettable.
+  if (isDemoMode() && !isDemoEmail(input.email)) {
+    throw new DomainError("validation", "This is the demo: invite only made-up addresses ending in @bryels-care.test (for example new.person@bryels-care.test).", { field: "email" });
+  }
   await assertStepUp(ctx, "invite people", now);
   const out = await db.transaction(async (tx) => {
     const [dup] = await tx

@@ -62,6 +62,7 @@ Entries are numbered `ADR-nnn` and never deleted; a superseded entry points to i
 | ADR-052 | One sales order state machine for commerce and fulfilment; every move logged; allocation uses the order line's requirement snapshot; transition logs append-only | Accepted (Wave 3 integration) | 2026-10-25 |
 | ADR-053 | The import poster needs the entity's create permission; system_admin creates suppliers; customers import through the customer service | Accepted (Wave 3 integration) | 2026-10-25 |
 | ADR-054 | KPI engine: one record query per KPI, nightly snapshots reconciled by re-running the query in SQL; no materialized views yet | Accepted (Wave 3 integration, W3A) | 2026-10-25 |
+| ADR-055 | Demo mode (`DEMO_MODE`) and dashboard-only Railway start-up: one start script for web and worker, self-check, advisory-locked migrations, demo auto-load and owner reset | Accepted (Railway demo) | 2026-10-24 |
 
 ---
 
@@ -881,3 +882,37 @@ Dashboards run the record queries live; no materialized views yet.
 **Why.** One query per KPI makes the number explain itself and makes reconciliation exact; the data
 volume does not need materialized views yet (revisit when a dashboard card exceeds its time budget).
 
+## ADR-055 Demo mode and dashboard-only Railway start-up
+
+**Status.** Accepted (Railway demo), 2026-10-24. Refines ADR-014 (topology) and ADR-025 (worker
+service); `ALLOW_DEMO_SEED` becomes an alias of `DEMO_MODE`.
+
+**Context.** The owner deploys the demo on Railway from the web dashboard only, from a GitHub
+branch that redeploys on every push. Railway no longer lets new services opt into config as code
+(`railway.json`, read until 2026-12-01) and Infrastructure as Code needs the CLI, so nothing may
+depend on a start or pre-deploy command typed per service. Railway has no secret generator for
+service variables.
+
+**Decision.**
+1. One image, one start command (`scripts/start.sh`): `APP_ROLE=worker` (or a service named
+   `worker`) runs the worker; otherwise web: self-check → migrations (advisory lock) → reference
+   data → demo data when `DEMO_MODE=true` and the database is empty → Next.js. Only web migrates.
+2. A start-up self-check prints plain-language `[setup]` lines and is fatal only without a usable
+   `DATABASE_URL`. `APP_ORIGIN` defaults to `https://$RAILWAY_PUBLIC_DOMAIN`,
+   `TRUSTED_PROXY_HEADER` to `x-real-ip` on Railway, `FILE_STORAGE` to `s3` when every `S3_*` is
+   set; in demo mode only, missing `FILE_URL_SECRET`/`DATA_ENCRYPTION_KEY` are derived from
+   `DATABASE_URL`.
+3. Demo mode (`DEMO_MODE=true`, never with `APP_ENV=production`): auto-load into an empty
+   database with a completeness marker, "Try the demo" one-click sign-in for demo accounts only,
+   a demo banner, owner-only reset (step-up, typed confirmation, truncate-and-reload keeping the
+   schema) and no TOTP-deadline block for demo accounts.
+4. Demo data and real data never mix: seed, auto-load and resets refuse while any account's email
+   is not a demo address; demo mode refuses invitations to real addresses.
+
+**Why.** Every push must give a working demo without anyone typing commands, and the same code must
+be unable to harm a real database. Truncating rather than dropping keeps the worker and pg-boss
+running during a reset.
+
+**Consequences.** Assumptions A-DEMO-01 to A-DEMO-08 (`docs/PRD.md`). The derived demo secrets are
+as safe as `DATABASE_URL` itself and are never used outside demo mode. Real deployments use a
+separate Railway project with `APP_ENV=production` (`docs/railway-for-dummies.md` "Going live").

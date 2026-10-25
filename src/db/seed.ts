@@ -14,9 +14,16 @@ import { ROLE_BUNDLES } from "../lib/permissions";
 import { LOTION_ROUTING, SOAP_ROUTING, type SeedStep, seedApprovedFormulaAndRouting, seedW1D } from "./seeds/w1d";
 import { seedReceivingW1B } from "./seeds/w1b";
 import { seedW1e } from "./seeds/w1e";
+import { NON_DEMO_USER_PREDICATE, demoModeState, realAccountsRefusal } from "../lib/demo";
 
-if (process.env.ALLOW_DEMO_SEED !== "true") {
-  console.error("Refusing to seed: ALLOW_DEMO_SEED is not true. Demo data must never reach production.");
+// Demo mode only (ADR-055, src/lib/demo.ts): DEMO_MODE=true or the older ALLOW_DEMO_SEED=true; never with APP_ENV=production.
+const demo = demoModeState(process.env);
+if (!demo.on) {
+  console.error(
+    demo.blockedByProduction
+      ? "Refusing to seed: APP_ENV=production. Demo data must never reach production."
+      : "Refusing to seed: demo mode is off (set DEMO_MODE=true on a demo database only). Demo data must never reach production.",
+  );
   process.exit(1);
 }
 
@@ -39,6 +46,13 @@ const at = (offsetDays: number, hour = 9) => {
 };
 
 async function main() {
+  // Never mix demo data into a database that holds real accounts (ADR-055).
+  const [real] = await client.unsafe<{ n: number }[]>(`select count(*)::int as n from users where ${NON_DEMO_USER_PREDICATE}`);
+  if (Number(real?.n ?? 0) > 0) {
+    console.error(realAccountsRefusal(Number(real.n)));
+    await client.end();
+    process.exit(2);
+  }
   const existing = await db.select().from(s.organizations).limit(1);
   if (existing.length) {
     console.log("Seed skipped: data already present. Run pnpm db:reset to start over.");
@@ -441,6 +455,8 @@ async function main() {
   // W3A: a month of fictional activity plus its nightly KPI snapshots (skipped inside vitest: tests seed their own fixed month).
   if (!process.env.VITEST) await (await import("./seeds/w3a")).seedW3a(db, { backfill: true });
 
+  // Completeness marker read by `pnpm db:demo auto` (src/db/demo.ts): written last, so its absence means an interrupted load.
+  await db.insert(s.auditEvents).values({ organizationId: O, actorLabel: "system:demo.seed", action: "platform.demo.seeded", entityType: "organization", entityId: O, entityNumber: org.name, after: { fictional: true } });
   console.log(`Seeded demo organization with ${mats.length} materials, ${counters.LOT} lots, ${counters.BATCH} batches, ${counters.SO} orders.`);
   await client.end();
 }

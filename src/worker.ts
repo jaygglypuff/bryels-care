@@ -32,6 +32,10 @@ import { envPresence } from "@/modules/governance/variables";
 import { logger } from "@/lib/log";
 import { reportError } from "@/lib/log/error-reporter";
 import { registerAppHooks } from "@/modules/wiring";
+import { applyRuntimeDefaults } from "@/lib/runtime-env";
+
+// Railway defaults (APP_ORIGIN, demo-only secrets; ADR-055): the same values the web process derives.
+applyRuntimeDefaults(process.env);
 
 const DEAD_LETTER = "platform.dead_letter";
 const workerId = `${os.hostname()}-${process.pid}-${uuidv7().slice(-6)}`;

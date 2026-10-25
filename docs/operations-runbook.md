@@ -736,6 +736,18 @@ Two distinct switches are used, never interchangeably:
    volume backup until hypercare exit plus 90 days (A-OPS-20). After go-live is declared, no
    restore is performed; corrections are reversals (ADR-006).
 
+## 17b. Demo environment on Railway (ADR-055)
+
+Owner's guide: `docs/railway-for-dummies.md`; platform facts: `docs/deployment-railway.md` §2.4.
+
+| Situation | Procedure |
+|---|---|
+| Demo looks wrong after many sessions | Owner signs in as `owner@bryels-care.test` → banner → **Reset demo data** (step-up, type `RESET`). Takes about a minute; everyone is signed out |
+| Reset says "not a demo address" | A real address was added to the demo database. Do not work around it: identify the account (Admin → Users), confirm with the owner that the database is a demo, and recreate the demo in a new Railway database instead of deleting rows by hand |
+| Deploy log shows `[demo] Loading the demo data failed` | The database was left empty on purpose; fix the cause from the log and redeploy (`web` → Deployments → Redeploy); the next start loads the demo again |
+| `[setup] PROBLEM` line in a deploy log | Follow the instruction in the line; only a missing or unresolved `DATABASE_URL` stops the start |
+| Demo variables reach a production project by mistake | `APP_ENV=production` keeps demo mode off; remove `DEMO_MODE` and record it in the change log |
+
 ## 18. Periodic checklists
 
 | Cadence | Who | Items |

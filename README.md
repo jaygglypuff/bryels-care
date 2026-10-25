@@ -13,6 +13,11 @@ delivery receipt → traceability, plus the owner overview and audit log. Procur
 finance, offline mode and the customer portal are planned (shown as "Coming next" in the app).
 See `docs/demo-script.md` for the presenter's guide.
 
+**Put the demo online:** `docs/railway-for-dummies.md` is a click-by-click guide for the Railway
+web dashboard (no terminal): GitHub repository, branch, database, three variables, done. The
+deployed demo has a "Try the demo" switch with one-click sign-in per role and updates itself on
+every push.
+
 ## Run the MVP locally
 
 Prerequisites: Node.js 22, pnpm 10, PostgreSQL 16.
@@ -21,7 +26,7 @@ Prerequisites: Node.js 22, pnpm 10, PostgreSQL 16.
 pnpm install
 cp .env.example .env             # set DATABASE_URL to your Postgres database
 pnpm db:migrate                  # apply migrations
-pnpm db:seed                     # load the fictional demo data (requires ALLOW_DEMO_SEED=true)
+pnpm db:seed                     # load the fictional demo data (requires DEMO_MODE=true or ALLOW_DEMO_SEED=true)
 pnpm dev                         # http://localhost:3000
 ```
 
@@ -58,15 +63,16 @@ Environment variables (the full per-service table is `docs/deployment-railway.md
 |---|---|---|
 | `DATABASE_URL` | web, worker | Required. Runtime database role |
 | `DATABASE_MIGRATION_URL` | web (pre-deploy) | Optional separate migration role; falls back to `DATABASE_URL` |
-| `APP_ORIGIN` | web | Public URL, used for Origin checks on mutating requests |
-| `ALLOW_DEMO_SEED` | web | `true` only on demo and staging environments; never in production |
+| `APP_ORIGIN` | web, worker | Public URL, used for Origin checks on mutating requests and links in emails. On Railway it defaults to `https://$RAILWAY_PUBLIC_DOMAIN` when unset (web); the worker needs `https://${{web.RAILWAY_PUBLIC_DOMAIN}}` |
+| `DEMO_MODE` | web, worker | `true` = fictional demo (ADR-055): demo data loads itself into an empty database at start, "Try the demo" one-click sign-in, demo banner, owner-only Reset demo data. Never in production (`APP_ENV=production` forces it off). `ALLOW_DEMO_SEED=true` is read as the older name. Seed and resets refuse while any non-`@bryels-care.test` account exists |
+| `APP_ROLE` | web, worker | `web` (default) or `worker`: what `scripts/start.sh` runs; unset = `worker` when the Railway service name contains "worker" |
 | `FILE_STORAGE` | web | `local` (development: files under `FILE_STORAGE_DIR`, default `./.data/files`, excluded from version control, never served statically) or `s3` (staging/production: private S3-compatible bucket, e.g. the Railway Bucket). Unset = uploads (supplier CoA, delivery photos) show "File storage isn't set up" and nothing is stored (ADR-027) |
 | `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE` | web | Bucket settings when `FILE_STORAGE=s3` (Railway: `${{Bucket.ENDPOINT}}` etc., path style `false`; MinIO: `true`) |
-| `FILE_URL_SECRET` | web | 32+ random characters; signs the 5-minute, user-bound download links (`docs/security.md` §4.8). Required in production; development uses a per-process secret |
+| `FILE_URL_SECRET` | web | 32+ random characters; signs the 5-minute, user-bound download links (`docs/security.md` §4.8). Required in production; development uses a per-process secret; demo mode derives a stable demo-only value from `DATABASE_URL` when unset |
 | `PDF_RENDERER` | web, worker | Optional, default `disabled`: documents and labels print through the browser print dialog from their recorded dataset; "Download PDF" shows a "setup required" state until a PDF engine ships (ADR-026, `src/modules/documents/config.ts`). `chromium` is reserved for that engine |
 | `EMAIL_PROVIDER`, `EMAIL_FROM`, `RESEND_API_KEY` | web, worker | Email adapter for invitations, password resets and security notices (`src/lib/email`): unset/`none` = nothing is sent and admins see one-time links once to pass on by hand; `outbox` = development only (message stored in `email_outbox` and printed to the console); `resend` = HTTPS API (Railway blocks outbound SMTP below the Pro plan) |
 | `DATA_ENCRYPTION_KEY` | web, worker | `k1:<openssl rand -base64 32>`; encrypts TOTP secrets. Required in production for two-step sign-in; development uses a fixed development key |
-| `TRUSTED_PROXY_HEADER` | web | `x-forwarded-for` on Railway: the client IP for the per-IP limits of the shared rate-limit store (ADR-038). Unset (development only): sign-in attempts of all clients share one bucket and the reset/invitation IP limits are off (per-account and per-user limits still apply) |
+| `TRUSTED_PROXY_HEADER` | web | Defaults to `x-real-ip` on Railway (Railway's documented client-IP header): the client IP for the per-IP limits of the shared rate-limit store (ADR-038). Unset (development only): sign-in attempts of all clients share one bucket and the reset/invitation IP limits are off (per-account and per-user limits still apply) |
 | `WORKER_CONCURRENCY` | worker | Parallel deliveries per job queue, default `2` |
 | `PORT` | web, worker | Set by Railway; the worker serves `/api/health` and `/api/ready` on it (default 3001 locally) |
 | `LOG_LEVEL`, `LOG_FORMAT` | web, worker | Structured logs (`src/lib/log`, US-1-25): level `debug`/`info`/`warn`/`error` (default `info`; `warn` under tests), format `json` (default) or `pretty` for local reading |
@@ -107,21 +113,29 @@ Read-only maintenance mode for a cutover window: setting `platform.maintenance.r
 
 ## Deploy to Railway (demo or staging)
 
-1. Create a Railway project, add a **PostgreSQL** service, and add a service from this GitHub
-   repository. Railway builds the `Dockerfile` (see `railway.json`).
-2. On the app service set variables: `DATABASE_URL=${{Postgres.DATABASE_URL}}`,
-   `APP_ORIGIN=https://<your-app>.up.railway.app`, and for a demo `ALLOW_DEMO_SEED=true`.
-3. Deploy. On start the container applies migrations, loads the demo data if allowed and empty,
-   and serves on `$PORT`; Railway checks `/api/health`. `/api/ready` reports database status.
-4. Generate a public domain in the service's Networking settings and sign in with a demo account.
-5. Add a second service from the same repository named `worker`: same `DATABASE_URL`, **Custom
-   Start Command** `pnpm worker`, no public domain. It runs queued and scheduled jobs; Admin →
-   Diagnostics shows its heartbeat (`docs/deployment-railway.md` §2.3).
-6. For file uploads add a Railway **Bucket** and set `FILE_STORAGE=s3`, the `S3_*` references
-   and `FILE_URL_SECRET` on the app service (table above).
+Owner's click-by-click guide: `docs/railway-for-dummies.md`. In short:
 
-**First administrator (production, no demo data):** after the first deploy, open the `web`
-service shell and run `BOOTSTRAP_ADMIN_EMAIL=you@<domain> BOOTSTRAP_ADMIN_NAME="Your Name"
+1. Railway project from this GitHub repository (Dockerfile builder; the image's `CMD` is
+   `scripts/start.sh`), service named `web`, branch as agreed; add **PostgreSQL**.
+2. `web` variables: `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `DEMO_MODE=true`, `PORT=3000`;
+   healthcheck path `/api/health`; Generate Domain (port 3000). `APP_ORIGIN`, the client-IP header
+   and (demo only) `FILE_URL_SECRET`/`DATA_ENCRYPTION_KEY` are derived; the deploy log's `[setup]`
+   lines say what was derived and what is missing.
+3. On start `web` runs the self-check, migrations (advisory-locked), reference data, the demo data
+   when the database is empty, then Next.js on `$PORT`. Restarts and redeploys never reseed or wipe.
+4. Second service from the same repository named `worker`: `APP_ROLE=worker`, the same
+   `DATABASE_URL` and `DEMO_MODE`, `APP_ORIGIN=https://${{web.RAILWAY_PUBLIC_DOMAIN}}`, no domain.
+5. Uploads: a Railway **Bucket** named `Bucket` and `S3_ENDPOINT=${{Bucket.ENDPOINT}}`,
+   `S3_BUCKET=${{Bucket.BUCKET}}`, `S3_REGION=${{Bucket.REGION}}`,
+   `S3_ACCESS_KEY_ID=${{Bucket.ACCESS_KEY_ID}}`, `S3_SECRET_ACCESS_KEY=${{Bucket.SECRET_ACCESS_KEY}}`
+   on both services (a complete set switches `FILE_STORAGE=s3` on).
+
+Container rehearsal without Docker: `tests/e2e/demo-mode.cjs` (header comment) checks the running
+build: one-click sign-in for two roles, banner, reset, and no demo UI with demo mode off.
+
+**First administrator (production, no demo data):** without a terminal, set the `BOOTSTRAP_*`
+variables on `web` and deploy; the one-time link appears in the deploy log (remove the variables
+afterwards). With a terminal, open the `web` service shell (`railway ssh`) and run `BOOTSTRAP_ADMIN_EMAIL=you@<domain> BOOTSTRAP_ADMIN_NAME="Your Name"
 BOOTSTRAP_ORG_NAME="Bryel's Care Corporation" BOOTSTRAP_SITE_CODE=NFD BOOTSTRAP_SITE_NAME="<site>"
 pnpm admin:bootstrap`. It prints a single-use link (72 h) to set your password; it never sets
 or prints a password and refuses once any account is active (`docs/deployment-railway.md` §14a).
@@ -173,6 +187,7 @@ The full production topology (bucket, backups, staging/production separation) is
 | `docs/testing.md` | Test strategy, invariants, device matrix, acceptance procedures |
 | `docs/demo-script.md` | Presenter's guide for the 15 to 20 minute client demo, with screenshots in `docs/demo/` |
 | `docs/deployment-railway.md` | Services, Postgres, storage, secrets, migrations, backups, rollback |
+| `docs/railway-for-dummies.md` | Owner's step-by-step guide: put the demo on Railway from the web dashboard, updates, reset, troubleshooting, going live |
 | `docs/operations-runbook.md` | Routine admin, failed jobs/imports, sync conflicts, incidents, restore |
 | `docs/risk-register.md` | Risks, likelihood, impact, owner, mitigation, trigger |
 | `docs/data-migration-plan.md` | What history is migrated, identifier rules, reconciliation, sign-off |

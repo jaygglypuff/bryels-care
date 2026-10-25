@@ -4,6 +4,10 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    // Railway defaults (APP_ORIGIN from the public domain, client-IP header, demo-only secrets; ADR-055)
+    // before the first request. scripts/self-check.ts already printed the same notes at start.
+    const { applyRuntimeDefaults } = await import("@/lib/runtime-env");
+    applyRuntimeDefaults(process.env);
     const { registerAppHooks } = await import("@/modules/wiring");
     registerAppHooks();
   }

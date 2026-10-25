@@ -10,6 +10,7 @@ import type { NavBadges, NavGroup, QuickAction } from "./nav";
 import { cx } from "@/ui/core";
 import { Logo, LogoMark } from "@/ui/brand";
 import { NavigationProgress } from "@/ui/navigation-progress";
+import { DemoBanner } from "@/ui/demo-banner";
 
 const ICONS: Record<string, React.ReactNode> = {
   home: <Home size={18} />, boxes: <Boxes size={18} />, factory: <Factory size={18} />, shield: <ShieldCheck size={18} />,
@@ -30,6 +31,8 @@ type Props = {
   unreadCount: number;
   switchSite: (fd: FormData) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Demo mode (ADR-055): the strip above the top bar; `canReset` adds the owner's reset link. Null outside the demo. */
+  demo?: { canReset: boolean } | null;
   children: React.ReactNode;
 };
 
@@ -50,7 +53,7 @@ function matchLen(pathname: string, href: string) {
   return -1;
 }
 
-export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, unreadCount, switchSite, signOut, children }: Props) {
+export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, unreadCount, switchSite, signOut, demo = null, children }: Props) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   useEffect(() => setDrawer(false), [pathname]);
@@ -95,6 +98,7 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
       <NavigationProgress />
       {/* Top bar */}
       <header className="no-print sticky top-0 z-30 border-b border-line/70 bg-bg/90 backdrop-blur">
+        {demo && <DemoBanner canReset={demo.canReset} />}
         <div className="mx-auto flex h-[68px] max-w-[1480px] items-center gap-3 px-4 sm:px-6">
           <button className="grid size-10 place-items-center rounded-full bg-surface shadow-[var(--shadow-card)] lg:hidden" onClick={() => setDrawer(true)} aria-label="Open menu">
             <Menu size={18} />
@@ -143,6 +147,7 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
                 <p className="text-[12px] text-muted">{user.roles}</p>
                 <p className="mt-2 text-[12px] text-muted">Site: {site?.code} · {site?.name}</p>
                 <Link href="/account" className="mt-3 block text-[13px] font-medium text-primary-text hover:underline">My account and devices</Link>
+                {demo?.canReset && <Link href="/admin/demo" className="mt-2 block text-[13px] font-medium text-primary-text hover:underline">Reset demo data</Link>}
                 <form action={signOut} className="mt-3 border-t border-line pt-3">
                   <button className="flex items-center gap-1.5 text-[13px] font-medium text-primary-text hover:underline"><LogOut size={14} /> Sign out</button>
                 </form>

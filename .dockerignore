@@ -1,7 +1,12 @@
 node_modules
 .next
 .git
-docs
+.data
+.claude
 tests
-*.md
 .env
+.env.local
+# Documentation stays out of the image, except the quick guides the app reads at runtime (/help).
+docs
+!docs/help
+*.md
