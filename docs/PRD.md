@@ -337,6 +337,10 @@ Every assumption below is a default the team will build unless the owner says ot
 | A-W4F-14 | Uptime monitor provider (W4F) | Any HTTP monitor (UptimeRobot, Better Stack, Healthchecks.io), free plan, checks on `/api/ready`, `/api/health`, `/api/health/worker` | The app cannot report its own outage | runbook §12.5 | Yes (Owner) | 9 |
 | A-W4F-15 | `MAINTENANCE_MODE=1` (W4F finding) | Documented as a full 503 for restores but not implemented; restores rely on stopping `web` and `worker` until it is built | Found while writing runbook §12.4 | backlog follow-up | Yes (devops) | 9 |
 | A-W4F-16 | Order list length (W4F load test) | The sales order list shows the newest 200 orders of the site; filter by status or use the order report for more | A year of orders took seconds to render | `LIST_LIMIT` in `src/app/(app)/sales/page.tsx` | No | 9 |
+| A-S6-01 | Warehouse sections (S6, ADR-077) | Sections are Raw materials, Packaging, Finished goods, Waiting for QA / on hold, Returns, Production, Other areas; a location without a section gets one from its class and warehouse kind; sections group and suggest only and never change a stock rule | Owner complaint: cannot find raw materials vs finished goods | `locations.section` (Master data → Locations) | Yes (owner, warehouse lead) | 6 |
+| A-S6-02 | Section suggestion on receiving (S6) | Raw material → Raw materials, packaging → Packaging, intermediate → Production, product → Finished goods; lots that need the QA check still go to a QA-area place first and the screen names the section to store them in after the check | Owner request | Code (`sectionForItem`) | Yes (warehouse lead, QA) | 6 |
+| A-S6-03 | After-the-fact purchase order (S6) | Only from a posted unplanned receipt; one live PO per receipt; reason required; normal approval chain on the PO total; on approval the PO becomes Received without being sent; the receipt can no longer be reversed while that PO is live (cancel the draft first, or use a supplier return) | Owner request: urgent buys without a PO | Code (`createPoFromReceipt`) | Yes (owner, procurement) | 6 |
+| A-S6-04 | Receive defaults (S6) | On a PO receipt the quantity defaults to the still-to-come quantity in the order's unit; the operator changes it or ticks "Not in this delivery" | Owner request: fewer fields | Code (`/inventory/receive`) | Yes (warehouse lead) | 6 |
 
 ---
 
@@ -850,11 +854,13 @@ Indicative sequencing:
 |---|---|
 | Allocation | Assignment of specific lots and boxes to a confirmed sales order line, done before picking; distinct from a reservation. |
 | Approved-supplier list (ASL) | The supplier × material pairs QA has approved (`supplier_materials.is_approved`); only these pairs can be put on a purchase order (V-ASL). Procurement proposes, QA decides, never the same person. |
+| After-the-fact purchase order | A purchase order made from an urgent delivery that was received without one (`purchase_orders.after_the_fact`); its lines are already received, so nothing more is expected (ADR-077). |
 | Approval decision | One row in the `approval_decisions` ledger recording who approved or rejected one step of an approvable record, when and why; never edited. |
 | Approval threshold | A configured value (quantity, amount or always) above which a transaction needs a second person's approval. |
 | ATP (available-to-promise) | Stock that can be promised to a new order: on-hand minus reserved, allocated, quarantined, on-hold, expired and recalled quantities. |
 | Attestation | A recorded "I did/checked this" by an authenticated user with re-entered credentials; not a validated regulated e-signature. |
 | Awaiting check (`awaiting_check`) | Process step state (W2B): the conductor finished the step and it waits for a second person (the checker) to sign; the next step cannot start until it is signed. |
+| Warehouse section | The part of the warehouse a place belongs to (Raw materials, Packaging, Finished goods, Waiting for QA / on hold, Returns, Production, Other areas; `locations.section`, ADR-077). Groups stock on screens; does not change stock rules. |
 | Expected receipt | An open line of a sent purchase order: what the warehouse is waiting for, with its due date (promised, else expected). |
 | Import job | One uploaded CSV/XLSX file of one import kind for one site, taken through mapping, validation (dry run), duplicate review, approval and posting; rows keep their raw values and the record they created (crosswalk). |
 | Legacy document | A scanned historical paper record (BMR, DR, invoice, test record) indexed by its header fields; history only, never a batch or stock (A-DM-09). |

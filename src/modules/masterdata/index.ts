@@ -134,6 +134,8 @@ export {
   type LocationKind,
   type LocationStatus,
 } from "./locations";
+// S6 (ADR-077): warehouse sections
+export { LOCATION_SECTIONS, SECTION_LABELS, SECTION_HINTS, SECTION_ORDER, isSection, sectionOf, sectionSql, sectionForItem, type LocationSection } from "./location-sections";
 export { LINE_STATUSES, LINE_TRANSITIONS, listLines, getLine, createLine, updateLine, changeLineStatus, lineFormOptions } from "./lines";
 export { assignEquipmentToLine, changeEquipmentBlockingRule } from "./lines-equipment";
 export {

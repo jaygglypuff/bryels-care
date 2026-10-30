@@ -48,6 +48,10 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
           <p className="mb-3 text-[13px] text-muted">
             {opts.lot.itemCode} · {opts.lot.itemName} · may go to {opts.allowedKinds.map((k) => <LocationKindChip key={k} kind={k} />)}
           </p>
+          <p className="mb-3 rounded-[10px] bg-surface-2 px-3 py-2 text-[14px]" data-testid="putaway-suggested-section">
+            Belongs in: <strong>{opts.suggestedSectionLabel}</strong>
+            {opts.suggestedCodes.length ? ` · ${opts.suggestedCodes.join(", ")}` : " · no allowed place in that section right now"}
+          </p>
           {opts.balances.length === 0 ? (
             <EmptyState title="No stock to put away">This lot has no stock on hand (not yet posted, consumed or reversed).</EmptyState>
           ) : opts.destinations.length === 0 ? (

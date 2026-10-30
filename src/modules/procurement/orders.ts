@@ -74,7 +74,7 @@ export type PoInput = {
 
 export type PoWarning = { code: "moq" | "lead_time"; lineNo: number; message: string };
 
-async function normalizePo(tx: Tx, ctx: AuthContext, siteId: string, input: PoInput, orderDate: string) {
+export async function normalizePo(tx: Tx, ctx: AuthContext, siteId: string, input: PoInput, orderDate: string) {
   if (!isUuid(input.supplierId)) throw new DomainError("validation", "Choose a supplier.", { field: "supplierId" });
   if (!Array.isArray(input.lines) || input.lines.length === 0) throw new DomainError("validation", "Add at least one line.", { field: "lines" });
   if (input.lines.length > 100) throw new DomainError("validation", "A purchase order can have at most 100 lines.", { field: "lines" });
@@ -262,6 +262,8 @@ export async function updatePurchaseOrder(ctx: AuthContext, poId: string, input:
     const po = await lockPo(tx, ctx, poId);
     ctx.requireAt("procurement.purchase_order.edit", po.siteId);
     if (po.status !== "draft") throw new DomainError("state", `Purchase order ${po.poNumber} is ${PO_STATUS_LABEL[po.status as PoStatus].toLowerCase()}; only drafts can be changed.`);
+    // S6 (ADR-077): an after-the-fact PO's lines come from its receipt; cancel it and create it again to change them.
+    if (po.afterTheFact) throw new DomainError("state", `Purchase order ${po.poNumber} was made from a goods receipt. Cancel it and create it again from the receipt to change it.`);
     const v = await normalizePo(tx, ctx, po.siteId, input, po.orderDate);
     await writeLines(tx, ctx, po, v.lines);
     await tx
@@ -313,7 +315,11 @@ export async function decidePurchaseOrder(ctx: AuthContext, input: { purchaseOrd
     });
     if (decision === "approved" && r.final) {
       await transitionPo(tx, ctx, po, "approved", { set: { approvedBy: ctx.userId, approvedAt: new Date(), approvalNote: input.note?.trim() || null } });
-      await notifyRoles(tx, { roleCodes: ["procurement"], siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_approved", severity: "info", title: `Purchase order ${po.poNumber} approved`, body: "Send it to the supplier.", entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
+      if (po.afterTheFact) {
+        // S6 (ADR-077): the goods are already in (source receipt), so the PO is not sent; it is received now.
+        const [gr] = await tx.select({ receiptNumber: goodsReceipts.receiptNumber }).from(goodsReceipts).where(eq(goodsReceipts.id, po.sourceGoodsReceiptId!));
+        await transitionPo(tx, ctx, po, "received", { reason: `Made after the goods arrived on receipt ${gr?.receiptNumber ?? ""}`.trim() });
+      } else await notifyRoles(tx, { roleCodes: ["procurement"], siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_approved", severity: "info", title: `Purchase order ${po.poNumber} approved`, body: "Send it to the supplier.", entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
     } else if (decision === "approved" && r.nextStep) {
       const roles = r.nextStep.roleCodes.length ? r.nextStep.roleCodes : ["owner_director"];
       await notifyRoles(tx, { roleCodes: roles, siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_submitted", severity: "info", title: `Purchase order ${po.poNumber} waits for step ${r.nextStep.step}`, body: r.nextStep.label, entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
@@ -470,7 +476,8 @@ export async function cancelPurchaseOrder(ctx: AuthContext, input: { purchaseOrd
     const po = await lockPo(tx, ctx, input.purchaseOrderId);
     ctx.requireAt("procurement.purchase_order.void", po.siteId);
     const lines = await tx.select().from(purchaseOrderLines).where(eq(purchaseOrderLines.purchaseOrderId, po.id)).for("update");
-    if (lines.some((l) => new Decimal(l.qtyReceivedBase).gt(0))) throw new DomainError("state", `Goods were already received against ${po.poNumber}; short-close the remaining lines and close the order instead.`);
+    // S6 (ADR-077): an after-the-fact draft may be cancelled (its "received" lines mirror the receipt; the stock stays).
+    if (!po.afterTheFact && lines.some((l) => new Decimal(l.qtyReceivedBase).gt(0))) throw new DomainError("state", `Goods were already received against ${po.poNumber}; short-close the remaining lines and close the order instead.`);
     const drafts = await tx.select({ id: goodsReceipts.id }).from(goodsReceipts).where(and(eq(goodsReceipts.purchaseOrderId, po.id), eq(goodsReceipts.status, "draft")));
     if (drafts.length) throw new DomainError("state", `A draft goods receipt exists for ${po.poNumber}; cancel it first.`);
     await transitionPo(tx, ctx, po, "cancelled", { reason, set: { cancelReason: reason } });
@@ -703,6 +710,9 @@ export async function getPurchaseOrder(ctx: AuthContext, poId: string) {
         .where(eq(goodsReceipts.purchaseOrderId, po.id))
         .orderBy(desc(goodsReceipts.receivedAt))
     : [];
+  const [sourceReceipt] = po.sourceGoodsReceiptId
+    ? await db.select({ id: goodsReceipts.id, receiptNumber: goodsReceipts.receiptNumber, receivedAt: goodsReceipts.receivedAt, supplierDocumentNumber: goodsReceipts.supplierDocumentNumber }).from(goodsReceipts).where(eq(goodsReceipts.id, po.sourceGoodsReceiptId))
+    : [];
   const progress = await approvalProgress(db, ctx.organizationId, { recordType: "purchase_order", recordId: po.id, siteId: po.siteId, basis: basisOf(po) });
   const decisions = await decisionsOf(db, ctx.organizationId, "purchase_order", po.id);
   const documents = ctx.can("documents.generated_document.view") ? (await documentsForSourceRead(ctx.organizationId, "purchase_order", po.id, ["purchase_order"])).map((d) => ({ id: d.d.id, documentNumber: d.d.documentNumber, status: d.d.status, generatedAt: d.d.generatedAt, generatedByName: d.generatedByName })) : [];
@@ -724,17 +734,19 @@ export async function getPurchaseOrder(ctx: AuthContext, poId: string) {
     })),
     transitions: transitions.map((t) => ({ ...t.t, actorName: t.actorName })),
     receipts,
+    /** S6 (ADR-077): the unplanned receipt an after-the-fact PO was made from. */
+    sourceReceipt: sourceReceipt ?? null,
     documents,
     progress,
     decisions,
     can: {
-      edit: po.status === "draft" && ctx.canAt("procurement.purchase_order.edit", po.siteId),
+      edit: po.status === "draft" && !po.afterTheFact && ctx.canAt("procurement.purchase_order.edit", po.siteId),
       submit: po.status === "draft" && ctx.canAt("procurement.purchase_order.submit", po.siteId),
       decide: po.status === "submitted" && canDecide(ctx, "purchase_order", progress, po.siteId, po.submittedAt, excluded),
       send: po.status === "approved" && ctx.canAt("procurement.purchase_order.post", po.siteId) && ctx.can("documents.generated_document.create"),
       confirm: RECEIVABLE.includes(po.status) && ctx.canAt("procurement.purchase_order.edit", po.siteId),
       receive: RECEIVABLE.includes(po.status) && ctx.canAt("procurement.goods_receipt.create", po.siteId) && ctx.currentSiteId === po.siteId,
-      cancel: ["draft", "submitted", "approved", "sent"].includes(po.status) && live.every((l) => new Decimal(l.l.qtyReceivedBase).isZero()) && ctx.canAt("procurement.purchase_order.void", po.siteId),
+      cancel: ["draft", "submitted", "approved", "sent"].includes(po.status) && (po.afterTheFact || live.every((l) => new Decimal(l.l.qtyReceivedBase).isZero())) && ctx.canAt("procurement.purchase_order.void", po.siteId),
       close: ["sent", "partially_received", "received"].includes(po.status) && ctx.canAt("procurement.purchase_order.edit", po.siteId),
       shortClose: RECEIVABLE.includes(po.status) && ctx.canAt("procurement.purchase_order.edit", po.siteId),
       print: !!po.generatedDocumentId && ctx.can("documents.generated_document.view") && prices,

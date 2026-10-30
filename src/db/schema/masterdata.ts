@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { type AnyPgColumn, boolean, check, date, index, integer, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { QTY, createdAt, id } from "./_common";
 import { organizations, sites, users } from "./identity";
+import { LOCATION_SECTIONS } from "../../lib/location-sections";
 
 export const warehouses = pgTable(
   "warehouses",
@@ -25,7 +26,11 @@ export const warehouses = pgTable(
  * production | shipping. status: active | blocked (no movements in or out) | inactive
  * (deactivated; is_active mirrors status <> 'inactive'). parent_location_id builds the
  * zone → rack → bin tree (W2G, US-1-20).
+ * section (S6, ADR-077): the warehouse section an operator sees (LOCATION_SECTIONS); null = derived
+ * from kind and warehouse kind (src/modules/inventory/sections.ts `sectionOf`).
  */
+export { LOCATION_SECTIONS };
+
 export const locations = pgTable(
   "locations",
   {
@@ -39,9 +44,11 @@ export const locations = pgTable(
     parentLocationId: uuid("parent_location_id").references((): AnyPgColumn => locations.id),
     status: text("status").notNull().default("active"),
     isPickable: boolean("is_pickable").notNull().default(true),
+    section: text("section"),
   },
   (t) => [
     uniqueIndex("locations_site_code_uq").on(t.siteId, t.code),
+    check("locations_section_ck", sql`${t.section} is null or ${t.section} in (${sql.raw(LOCATION_SECTIONS.map((x) => `'${x}'`).join(", "))})`),
     index("locations_parent_idx").on(t.parentLocationId),
     check("locations_status_ck", sql`${t.status} in ('active', 'blocked', 'inactive')`),
     check("locations_active_status_ck", sql`${t.isActive} = (${t.status} <> 'inactive')`),

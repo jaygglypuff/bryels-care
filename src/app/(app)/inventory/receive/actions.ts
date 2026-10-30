@@ -6,6 +6,10 @@ import { requireContext } from "@/lib/auth/context";
 import { toActionState, type ActionState } from "@/lib/errors";
 import { createReceiptDraft, postReceipt, receiveAndPost, updateReceiptDraft } from "@/modules/inventory/receiving";
 import { DISCREPANCY_KINDS } from "@/modules/inventory/receiving-state";
+import { receiveAgainstPurchaseOrder } from "@/modules/procurement";
+import { registerAppHooks } from "@/modules/wiring";
+
+registerAppHooks(); // PO receiving hooks (src/modules/wiring.ts); cheap and idempotent
 
 const QTY_RE = /^\d{1,12}(\.\d{1,6})?$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -26,6 +30,8 @@ const LineSchema = z
     locationId: z.uuid({ message: "Choose where the material is put away." }),
     discrepancyKind: z.union([z.literal(""), z.enum(DISCREPANCY_KINDS)]).optional(),
     discrepancyNote: z.string().trim().max(1000).optional(),
+    /** S6: PO mode; "" = an item not on the order. */
+    purchaseOrderLineId: z.union([z.literal(""), z.uuid()]).optional(),
   })
   .strict();
 
@@ -33,14 +39,17 @@ const ReceiptSchema = z
   .object({
     idempotencyKey: z.uuid({ message: "Reload the page and try again." }),
     receiptId: z.union([z.literal(""), z.uuid()]).optional(),
+    /** S6 (ADR-077): the tablet form also receives against a purchase order (supplier comes from the PO). */
+    purchaseOrderId: z.union([z.literal(""), z.uuid()]).optional(),
     intent: z.enum(["draft", "post"]),
-    supplierName: z.string().trim().min(2, { message: "Enter the supplier name." }).max(200),
+    supplierName: z.string().trim().max(200).optional(),
     supplierDocumentNumber: z.string().trim().min(1, { message: "Enter the delivery document number (DR / invoice)." }).max(80),
     unplannedReasonCode: z.string().trim().max(40).optional(),
     notes: z.string().trim().max(1000).optional(),
     lines: z.array(LineSchema).min(1, { message: "Add at least one line." }).max(50),
   })
-  .strict();
+  .strict()
+  .refine((d) => !!d.purchaseOrderId || (d.supplierName ?? "").length >= 2, { message: "Enter the supplier name.", path: ["supplierName"] });
 
 /** Saves a receipt draft or posts the receipt (one step from the phone form, or edit-then-post from a draft). */
 export async function saveReceiptAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -56,8 +65,9 @@ export async function saveReceiptAction(_prev: ActionState, formData: FormData):
     const parsed = ReceiptSchema.safeParse({
       idempotencyKey: formData.get("idempotencyKey"),
       receiptId: formData.get("receiptId") ?? "",
+      purchaseOrderId: formData.get("purchaseOrderId") ?? "",
       intent: formData.get("intent") === "draft" ? "draft" : "post",
-      supplierName: formData.get("supplierName"),
+      supplierName: formData.get("supplierName") ?? undefined,
       supplierDocumentNumber: formData.get("supplierDocumentNumber"),
       unplannedReasonCode: formData.get("unplannedReasonCode") ?? undefined,
       notes: formData.get("notes") ?? undefined,
@@ -71,7 +81,7 @@ export async function saveReceiptAction(_prev: ActionState, formData: FormData):
     }
     const d = parsed.data;
     const header = {
-      supplierName: d.supplierName,
+      supplierName: d.supplierName ?? "",
       supplierDocumentNumber: d.supplierDocumentNumber,
       unplannedReasonCode: d.unplannedReasonCode || null,
       notes: d.notes || null,
@@ -91,7 +101,17 @@ export async function saveReceiptAction(_prev: ActionState, formData: FormData):
         discrepancyNote: l.discrepancyNote || null,
       })),
     };
-    if (d.receiptId) {
+    if (d.purchaseOrderId && !d.receiptId) {
+      const r = await receiveAgainstPurchaseOrder(ctx, {
+        purchaseOrderId: d.purchaseOrderId,
+        supplierDocumentNumber: d.supplierDocumentNumber,
+        notes: d.notes || null,
+        idempotencyKey: d.idempotencyKey,
+        intent: d.intent,
+        lines: header.lines.map((l, i) => ({ ...l, purchaseOrderLineId: d.lines[i].purchaseOrderLineId || null })),
+      });
+      target = `/inventory/receive/${r.receiptId}?${r.posted ? "posted" : "saved"}=1`;
+    } else if (d.receiptId) {
       await updateReceiptDraft(ctx, d.receiptId, header);
       if (d.intent === "post") await postReceipt(ctx, { receiptId: d.receiptId });
       target = `/inventory/receive/${d.receiptId}?${d.intent === "post" ? "posted" : "saved"}=1`;

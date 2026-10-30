@@ -107,7 +107,9 @@ async function main(): Promise<number> {
       const [site] = await tx.insert(s.sites).values({ organizationId: O, code: "SBX", name: "Sandbox Plant" }).returning();
       const [wh] = await tx.insert(s.warehouses).values({ siteId: site.id, code: "WH1", name: "Main warehouse" }).returning();
       for (const [code, name, kind, role] of LOCATIONS) {
-        const [loc] = await tx.insert(s.locations).values({ siteId: site.id, warehouseId: wh.id, code, name, kind }).returning();
+        // S6 (ADR-077): storage places get their warehouse section; the others are worked out from the class.
+        const section = code === "RM-01" ? "raw_materials" : code === "PKG-01" ? "packaging" : code === "FG-01" ? "finished_goods" : null;
+        const [loc] = await tx.insert(s.locations).values({ siteId: site.id, warehouseId: wh.id, code, name, kind, section }).returning();
         if (role) await tx.insert(s.warehouseSpecialLocations).values({ organizationId: O, siteId: site.id, warehouseId: wh.id, role, locationId: loc.id });
       }
 

@@ -40,6 +40,7 @@ export const NAV: NavGroup[] = [
     label: "Warehouse",
     icon: "warehouse",
     items: [
+      { label: "Warehouse sections", href: "/warehouse", permission: "inventory.lot.view" }, // S6 (ADR-077)
       { label: "Receive materials", href: "/inventory/receive", permission: "procurement.goods_receipt.create" },
       { label: "Expected receipts", href: "/procurement/expected", permission: "procurement.purchase_order.view" }, // W4A
       { label: "Goods receipts", href: "/inventory/receipts", permission: "procurement.goods_receipt.view" },

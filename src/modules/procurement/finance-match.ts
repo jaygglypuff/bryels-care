@@ -1,6 +1,6 @@
 import "server-only";
 import Decimal from "decimal.js";
-import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import type { DbOrTx } from "@/db/client";
 import { goodsReceiptLines, purchaseOrderLines, purchaseOrders, supplierReturns } from "@/db/schema";
 
@@ -32,14 +32,24 @@ export async function purchaseOrderLinesForMatch(q: DbOrTx, organizationId: stri
   }));
 }
 
-/** PO line of each goods receipt line received against a purchase order (unplanned lines are absent). */
+/**
+ * PO line of each goods receipt line received against a purchase order. Unplanned lines are absent unless an
+ * after-the-fact PO (S6, ADR-077) was made from them: then its live line is their PO line.
+ */
 export async function purchaseOrderLineOfReceiptLines(q: DbOrTx, goodsReceiptLineIds: string[]) {
   if (!goodsReceiptLineIds.length) return new Map<string, string>();
   const rows = await q
     .select({ id: goodsReceiptLines.id, po: goodsReceiptLines.purchaseOrderLineId })
     .from(goodsReceiptLines)
     .where(and(inArray(goodsReceiptLines.id, goodsReceiptLineIds), isNotNull(goodsReceiptLines.purchaseOrderLineId)));
-  return new Map(rows.map((r) => [r.id, r.po!]));
+  const out = new Map(rows.map((r) => [r.id, r.po!]));
+  const atf = await q
+    .select({ id: purchaseOrderLines.sourceGoodsReceiptLineId, po: purchaseOrderLines.id })
+    .from(purchaseOrderLines)
+    .innerJoin(purchaseOrders, eq(purchaseOrders.id, purchaseOrderLines.purchaseOrderId))
+    .where(and(inArray(purchaseOrderLines.sourceGoodsReceiptLineId, goodsReceiptLineIds), ne(purchaseOrders.status, "cancelled"), ne(purchaseOrderLines.lineStatus, "cancelled")));
+  for (const r of atf) if (r.id && !out.has(r.id)) out.set(r.id, r.po);
+  return out;
 }
 
 /**

@@ -36,7 +36,7 @@ export async function seedW3F(db: Db) {
   // 1. Customer-returns cage (quarantine class) next to the quarantine cage.
   const [qua] = await db.select().from(s.locations).where(and(eq(s.locations.siteId, nfd.id), eq(s.locations.code, "QUA-01")));
   if (!qua) return;
-  const [ret] = await db.insert(s.locations).values({ siteId: nfd.id, warehouseId: qua.warehouseId, code: "RET-01", name: "Customer returns cage", kind: "quarantine" }).returning();
+  const [ret] = await db.insert(s.locations).values({ siteId: nfd.id, warehouseId: qua.warehouseId, code: "RET-01", name: "Customer returns cage", kind: "quarantine", section: "returns" }).returning();
 
   // The seeded, delivered shipment to Luntian Wellness Stores (48 bars of the batch-1 lot).
   const [luntian] = await db.select().from(s.customers).where(and(eq(s.customers.organizationId, O), eq(s.customers.code, "CUS-001")));

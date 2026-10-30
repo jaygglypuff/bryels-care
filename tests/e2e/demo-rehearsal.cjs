@@ -130,17 +130,19 @@ async function kpiValue(page, caption) {
   const wh = await asUser('warehouse.nfd@bryels-care.test');
   {
     const page = wh.page;
-    await page.goto(BASE + '/inventory/receive');
-    await expectText(page, 'Receive materials');
+    // S6 (ADR-077): step 1 offers the open orders; this delivery has no purchase order.
+    await page.goto(BASE + '/inventory/receive?nopo=1');
+    await expectText(page, 'Receive a delivery');
     await page.fill('#supplierName', 'Laguna Oleo Supply');
     await page.fill('#supplierDocumentNumber', 'DR-88213');
+    await page.getByText('More details').first().click();
     await page.fill('#notes', 'Seals intact, drums clean and dry.');
     await page.selectOption('#line-1-material', { label: 'MAT-0012 · Coconut Oil' });
     await page.fill('#line-1-qty', '25000');
     await page.fill('#line-1-slot', 'LOS-25190');
     facts.coconutExpiry = manilaDate(365);
     await page.fill('#line-1-exp', facts.coconutExpiry);
-    const locLabel = await page.locator('#line-1-loc option:checked').innerText();
+    const locLabel = await page.locator('#line-1-loc option:checked').textContent();
     assert(/QUA-01/.test(locLabel), 'default receiving location is quarantine, got ' + locLabel);
     await shot(page, 'receive-form');
     await page.getByRole('button', { name: 'Post receipt' }).click();
