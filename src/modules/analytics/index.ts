@@ -5,6 +5,7 @@ export {
   getOperatorHome,
   getOwnerDashboard,
   isOrganizationWide,
+  listRecentActivity,
   resolveScope,
 } from "./dashboard";
 export type { ActivityRow, BoardCard, DashboardScope, NearExpiryLot, OperatorTile, OwnerDashboard } from "./dashboard";
@@ -24,6 +25,7 @@ export {
   drillHref,
   getAreaDashboard,
   getKpiRecords,
+  getKpiTile,
   getOwnerOverview,
   getTrends,
   listKpiDefinitions,
@@ -64,3 +66,6 @@ export { analyticsReconcileKpisJob, analyticsSnapshotKpisJob } from "./jobs";
 // ADR-081: Operations Center pipeline (five-destination navigation)
 export { ACTIVE_BATCH_LIMIT, PIPELINE_STAGE_KEYS, getOperationsCenter } from "./operations-center";
 export type { ActiveBatch, OperationsCenter, PipelinePart, PipelineStage, PipelineStageKey } from "./operations-center";
+// Owner Home (ADR-083 §4, mockup panel 1): one source per label, see owner-home.ts
+export { getOwnerHome, listStockAlerts, listWeekBatches, stockAlertCounts } from "./owner-home";
+export type { OwnerHome, SalesDay, StockAlertCounts, StockAlertLot, StockAlerts, WeekBatch, WeekBatches } from "./owner-home";
