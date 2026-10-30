@@ -170,11 +170,35 @@ export async function lockOrder(tx: Tx, ctx: AuthContext, orderId: string) {
 /* ------------------------------------------------------------------ queries */
 
 /** `limit`: the list screen shows the newest orders only (W4F load test: the full list of a year of orders took seconds to render). */
-export async function listOrders(ctx: AuthContext, status?: string, limit?: number) {
+/**
+ * The search words of the order list ("Customer, product or order number"): case-insensitive, every
+ * word must match the customer name, the order number, the customer's order number, or the name or
+ * SKU of a product on the order. At most 8 words of 60 characters; LIKE wildcards are escaped.
+ */
+export function orderSearchWords(q: string | null | undefined): string[] {
+  return (q ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 8)
+    .map((w) => w.slice(0, 60));
+}
+
+const likeOf = (w: string) => `%${w.replace(/[%_\\]/g, (c) => "\\" + c)}%`;
+
+function orderWordMatches(word: string) {
+  const like = likeOf(word);
+  return sql`(${customers.name} ilike ${like} or ${salesOrders.orderNumber} ilike ${like} or coalesce(${salesOrders.customerPoNumber}, '') ilike ${like}
+    or exists (select 1 from ${salesOrderLines} sl join ${products} sp on sp.id = sl.product_id
+               where sl.sales_order_id = ${salesOrders.id} and (sp.name ilike ${like} or sp.sku_code ilike ${like})))`;
+}
+
+export async function listOrders(ctx: AuthContext, status?: string, limit?: number, opts: { q?: string | null } = {}) {
   ctx.require("sales.sales_order.view");
   ctx.requireSite(ctx.currentSiteId);
   const where = [eq(salesOrders.siteId, ctx.currentSiteId)];
   if (status && isOrderStatus(status)) where.push(eq(salesOrders.status, status));
+  for (const w of orderSearchWords(opts.q)) where.push(orderWordMatches(w));
   const orders = await db
     .select({
       id: salesOrders.id,
@@ -272,7 +296,7 @@ export async function getOrder(ctx: AuthContext, orderId: string) {
         .where(and(inArray(stockAllocations.salesOrderLineId, lines.map((l) => l.line.id)), ne(stockAllocations.status, "released")))
         .orderBy(asc(inventoryLots.expiresOn), asc(inventoryLots.lotNumber))
     : [];
-  const [shipmentRows, transitions, addresses, quote] = await Promise.all([
+  const [shipmentRows, transitions, addresses, quote, creator] = await Promise.all([
     db.select().from(shipments).where(eq(shipments.salesOrderId, o.order.id)).orderBy(desc(shipments.dispatchedAt)),
     db
       .select({ t: salesOrderStateTransitions, actorName: users.displayName })
@@ -285,6 +309,8 @@ export async function getOrder(ctx: AuthContext, orderId: string) {
       .from(customerAddresses)
       .where(inArray(customerAddresses.id, [o.order.shipToAddressId, o.order.billToAddressId].filter((x): x is string => !!x).concat(["00000000-0000-0000-0000-000000000000"]))),
     o.order.quoteId ? db.select({ id: quotes.id, quoteNumber: quotes.quoteNumber }).from(quotes).where(eq(quotes.id, o.order.quoteId)).limit(1) : Promise.resolve([]),
+    // History fallback for orders entered before transitions were recorded: who entered the order.
+    db.select({ name: users.displayName }).from(users).where(eq(users.id, o.order.createdBy)).limit(1),
   ]);
   const prices = canSeePrices(ctx);
   const lineViews = lines.map(({ line, product }) => {
@@ -323,8 +349,10 @@ export async function getOrder(ctx: AuthContext, orderId: string) {
     billTo: addresses.find((a) => a.id === o.order.billToAddressId) ?? null,
     quote: quote[0] ?? null,
     approval: await orderApproval(ctx, o.order),
+    createdByName: creator[0]?.name ?? null,
     ...(prices ? { total } : { _masked: ["total"] as string[] }),
   } as {
+    createdByName: string | null;
     order: typeof order & Partial<Pick<OrderRow, "subtotalAmount" | "taxAmount" | "totalAmount">>;
     customer: typeof customer & Partial<Pick<typeof o.customer, "creditLimitAmount" | "paymentTermsDays" | "taxIdentifier">>;
     lines: (typeof lineViews[number] & { unitPrice?: string; listUnitPrice?: string | null; discountPct?: string; priceSource?: string; value?: string })[];

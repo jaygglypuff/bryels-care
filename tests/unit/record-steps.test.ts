@@ -94,6 +94,15 @@ describe("record progress strip", () => {
     expect(salesOrderSteps("pending_approval").find((s) => s.state === "current")?.label).toBe("Approval");
   });
 
+  it("a customer order's steps use the owner's words (mockup review): Stock reserved, Packing, Billed, Done", () => {
+    expect(salesOrderSteps("draft").map((s) => s.label)).toEqual(["Draft", "Approval", "Confirmed", "Stock reserved", "Packing", "Shipped", "Billed", "Done"]);
+    expect(salesOrderSteps("allocated").find((s) => s.state === "current")?.label).toBe("Stock reserved");
+    expect(salesOrderSteps("picking").find((s) => s.state === "current")?.label).toBe("Picking");
+    expect(salesOrderSteps("invoiced").find((s) => s.state === "current")?.label).toBe("Billed");
+    expect(salesOrderSteps("closed").find((s) => s.state === "current")?.label).toBe("Done");
+    for (const old of ["Allocated", "Pick & pack", "Invoiced", "Closed"]) expect(salesOrderSteps("draft").map((s) => s.label)).not.toContain(old);
+  });
+
   it("an after-the-fact purchase order never shows a Sent stage", () => {
     const steps = purchaseOrderSteps("received", { afterTheFact: true });
     expect(steps.map((s) => s.label)).not.toContain("Sent");

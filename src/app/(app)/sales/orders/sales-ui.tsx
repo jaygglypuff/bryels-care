@@ -37,6 +37,30 @@ export function SalesStatus({ status }: { status: string }) {
   return <Chip tone={t.tone}>{t.label}</Chip>;
 }
 
+/**
+ * Customer order status in the owner's words (mockup panel 6 chips; same words as the order's step strip
+ * in src/ui/record-steps.ts). Display only; the state machine is ORDER_TRANSITIONS in the sales module.
+ */
+const PLAIN_ORDER: Record<string, { tone: "ok" | "warn" | "info" | "neu" | "appr"; label: string }> = {
+  draft: { tone: "neu", label: "Draft" },
+  submitted: { tone: "warn", label: "Waiting for approval" },
+  pending_approval: { tone: "warn", label: "Waiting for approval" },
+  confirmed: { tone: "info", label: "Confirmed" },
+  allocated: { tone: "appr", label: "Stock reserved" },
+  picking: { tone: "appr", label: "Packing" },
+  packed: { tone: "appr", label: "Packing" },
+  partially_shipped: { tone: "warn", label: "Partly shipped" },
+  shipped: { tone: "ok", label: "Shipped" },
+  invoiced: { tone: "ok", label: "Billed" },
+  closed: { tone: "neu", label: "Done" },
+  cancelled: { tone: "neu", label: "Cancelled" },
+};
+
+export function OrderChip({ status }: { status: string }) {
+  const t = PLAIN_ORDER[status] ?? { tone: "neu" as const, label: status.replace(/_/g, " ") };
+  return <Chip tone={t.tone}>{t.label}</Chip>;
+}
+
 /** Money or a lock when the caller may not see prices (the value never reached the page). */
 export function Money({ value, className }: { value: string | null | undefined; className?: string }) {
   if (value === undefined)
@@ -72,26 +96,4 @@ export function linesSummary(lines: { sku: string; productName?: string | null; 
   return lines.map((l) => `${l.productName || l.sku} × ${fmtQty(l.qty, "", 0)}`).join(", ");
 }
 
-/** One order history entry in plain words, e.g. draft → submitted becomes "Submitted". */
-export function historyLabel(from: string | null, to: string): string {
-  if (to === "confirmed" && from === "pending_approval") return "Approved and confirmed";
-  if (to === "confirmed" && from && ["allocated", "picking", "packed"].includes(from)) return "Stock reservation released";
-  if (to === "draft" && from === "pending_approval") return "Sent back to draft";
-  if (to === "draft" && !from) return "Created as draft";
-  if (to === "allocated" && from && ["picking", "packed"].includes(from)) return "Pick cancelled, stock still reserved";
-  const plain: Record<string, string> = {
-    draft: "Back to draft",
-    submitted: "Submitted",
-    pending_approval: "Sent for approval",
-    confirmed: "Confirmed",
-    allocated: "Stock reserved",
-    picking: "Picking started",
-    packed: "Packed and checked",
-    partially_shipped: "Partly shipped",
-    shipped: "Shipped",
-    invoiced: "Invoiced",
-    closed: "Closed",
-    cancelled: "Cancelled",
-  };
-  return plain[to] ?? to.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
-}
+export { historyLabel } from "./order-history";

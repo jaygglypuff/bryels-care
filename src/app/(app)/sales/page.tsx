@@ -2,32 +2,37 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { listOrders, orderCounts, orderDaysLate, ordersAwaitingApproval, salesBusinessDate } from "@/modules/sales";
-import { Card, EmptyState, Kpi, LinkButton, PageHeader, Table, Td, cx } from "@/ui/core";
+import { Plus, Search } from "lucide-react";
+import { Card, EmptyState, Input, Kpi, LinkButton, PageHeader, Table, Td, buttonClass, cx } from "@/ui/core";
 import { Banner } from "@/ui/status";
 import { LateChip, Money, SalesStatus, linesSummary } from "./orders/sales-ui";
 import { Forbidden } from "../forbidden";
 import { Help } from "@/ui/help/help";
 
-export const metadata = { title: "Sales orders" };
+export const metadata = { title: "Customer orders" };
 
 const TABS = [
   { key: "", label: "All" },
   { key: "draft", label: "Draft" },
   { key: "pending_approval", label: "Pending approval" },
   { key: "confirmed", label: "Confirmed" },
-  { key: "allocated", label: "Allocated" },
+  { key: "allocated", label: "Stock reserved" },
   { key: "shipped", label: "Shipped" },
 ] as const;
 
 /** The list shows the newest orders (W4F load test, docs/load-test-report.md §5); the order report and the export cover the rest. */
 const LIST_LIMIT = 200;
 
-export default async function SalesOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+export default async function SalesOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.sales_order.view")) return <Forbidden what="sales orders" />;
-  const { status = "" } = await searchParams;
+  if (!ctx.can("sales.sales_order.view")) return <Forbidden what="customer orders" />;
+  const { status = "", q = "" } = await searchParams;
   const active = TABS.some((t) => t.key === status) ? status : "";
-  const [orders, counts, awaiting] = await Promise.all([listOrders(ctx, active || undefined, LIST_LIMIT), orderCounts(ctx), ordersAwaitingApproval(ctx)]);
+  const query = q.trim().slice(0, 200);
+  // The sales module searches on the server (orderSearchWords): every word must match the customer,
+  // a product on the order, or the order number.
+  const [orders, counts, awaiting] = await Promise.all([listOrders(ctx, active || undefined, LIST_LIMIT, { q: query }), orderCounts(ctx), ordersAwaitingApproval(ctx)]);
+  const withQ = (href: string) => (query ? `${href}${href.includes("?") ? "&" : "?"}q=${encodeURIComponent(query)}` : href);
   const mine = awaiting.filter((a) => a.siteId === ctx.currentSiteId);
   const today = salesBusinessDate();
   const late = new Map(orders.map((o) => [o.id, orderDaysLate(o, today)]));
@@ -36,13 +41,17 @@ export default async function SalesOrdersPage({ searchParams }: { searchParams: 
   return (
     <>
       <PageHeader
-        title="Sales orders"
+        title="Customer orders"
         subtitle={ctx.currentSite.name}
         actions={
           <>
             <Help screen="sales.order" />
             <LinkButton href="/sales/board" variant="secondary">Board</LinkButton>
-            {ctx.can("sales.sales_order.create") ? <LinkButton href="/sales/new" variant="cta">New order</LinkButton> : null}
+            {ctx.can("sales.sales_order.create") ? (
+              <LinkButton href="/sales/new" variant="cta">
+                <Plus size={16} aria-hidden /> New customer order
+              </LinkButton>
+            ) : null}
           </>
         }
       />
@@ -65,9 +74,25 @@ export default async function SalesOrdersPage({ searchParams }: { searchParams: 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label="Draft" value={counts.draft ?? 0} hint={`${counts.pending_approval ?? 0} pending approval`} href="/sales?status=draft" />
         <Kpi label="Confirmed" value={counts.confirmed ?? 0} hint="Stock not yet reserved" tone={(counts.confirmed ?? 0) > 0 ? "warn" : "neutral"} href="/sales?status=confirmed" />
-        <Kpi label="Allocated" value={counts.allocated ?? 0} hint="Stock reserved, ready to pick" href="/sales?status=allocated" />
+        <Kpi label="Stock reserved" value={counts.allocated ?? 0} hint="Ready to pick" href="/sales?status=allocated" />
         <Kpi label="Shipped" value={counts.shipped ?? 0} hint="Sent to the customer" tone="good" href="/sales?status=shipped" />
       </div>
+
+      <form role="search" action="/sales" className="mb-3 flex gap-2">
+        {active && <input type="hidden" name="status" value={active} />}
+        <div className="relative min-w-0 flex-1 sm:max-w-[420px]">
+          <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
+          <Input type="search" name="q" defaultValue={query} placeholder="Customer, product or order number" aria-label="Search customer orders" className="pl-10" />
+        </div>
+        <button type="submit" className={buttonClass("secondary", "md")}>
+          Search
+        </button>
+        {query && (
+          <Link href={active ? `/sales?status=${active}` : "/sales"} className={buttonClass("ghost", "md")}>
+            Clear
+          </Link>
+        )}
+      </form>
 
       <nav aria-label="Filter by status" className="mb-4 flex gap-1 overflow-x-auto rounded-[12px] border border-line bg-surface p-1">
         {TABS.map((t) => {
@@ -76,7 +101,7 @@ export default async function SalesOrdersPage({ searchParams }: { searchParams: 
           return (
             <Link
               key={t.key || "all"}
-              href={t.key ? `/sales?status=${t.key}` : "/sales"}
+              href={withQ(t.key ? `/sales?status=${t.key}` : "/sales")}
               aria-current={isActive ? "page" : undefined}
               className={cx(
                 "inline-flex min-h-[40px] items-center gap-1.5 whitespace-nowrap rounded-[9px] px-3 text-[13px] font-medium",
@@ -84,19 +109,26 @@ export default async function SalesOrdersPage({ searchParams }: { searchParams: 
               )}
             >
               {t.label}
-              <span className="rounded-full bg-surface-2 px-1.5 text-[11px] tabular text-muted">{n}</span>
+              {/* Tab counts are the site's totals; while searching they would not match the list, so they are hidden. */}
+              {!query && <span className="rounded-full bg-surface-2 px-1.5 text-[11px] tabular text-muted">{n}</span>}
             </Link>
           );
         })}
       </nav>
 
+      {query && (
+        <p className="mb-2 text-[13px] text-muted" role="status">
+          {orders.length === 0 ? "No orders" : `${orders.length} ${orders.length === 1 ? "order" : "orders"}`} matching “{query}”
+          {active ? ` with status ${(TABS.find((t) => t.key === active)?.label ?? active).toLowerCase()}` : ""}.
+        </p>
+      )}
       {orders.length >= LIST_LIMIT && <p className="mb-2 text-[13px] text-muted">Showing the newest {LIST_LIMIT} orders. Filter by status, or use the order report for the full list.</p>}
       {orders.length === 0 ? (
         <EmptyState
-          title={active ? `No ${(TABS.find((t) => t.key === active)?.label ?? active).toLowerCase()} orders` : "No sales orders yet"}
+          title={query ? "No orders match your search" : active ? `No ${(TABS.find((t) => t.key === active)?.label ?? active).toLowerCase()} orders` : "No customer orders yet"}
           action={ctx.can("sales.sales_order.create") ? <LinkButton href="/sales/new">Create an order</LinkButton> : undefined}
         >
-          Orders for {ctx.currentSite.name} appear here. Switch site in the top bar to see other sites.
+          {query ? "Try fewer or other words: a customer name, a product, or an order number." : <>Orders for {ctx.currentSite.name} appear here. Switch site in the top bar to see other sites.</>}
         </EmptyState>
       ) : (
         <>

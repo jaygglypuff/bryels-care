@@ -84,11 +84,13 @@ const SO_STAGES: readonly Stage[] = [
   { label: "Draft", statuses: ["draft"] },
   { label: "Approval", statuses: ["submitted", "pending_approval"] },
   { label: "Confirmed", statuses: ["confirmed"] },
-  { label: "Allocated", statuses: ["allocated"] },
-  { label: "Pick & pack", statuses: ["picking", "packed"], currentLabel: { picking: "Picking", packed: "Packed" } },
+  // Plain words (owner mockup review 2026-10-30): "Stock reserved" (allocated), "Packing" (picking and
+  // packed), "Billed" (invoiced), "Done" (closed). The statuses themselves are unchanged.
+  { label: "Stock reserved", statuses: ["allocated"] },
+  { label: "Packing", statuses: ["picking", "packed"], currentLabel: { picking: "Picking", packed: "Packed" } },
   { label: "Shipped", statuses: ["partially_shipped", "shipped"], currentLabel: { partially_shipped: "Partly shipped" } },
-  { label: "Invoiced", statuses: ["invoiced"] },
-  { label: "Closed", statuses: ["closed"] },
+  { label: "Billed", statuses: ["invoiced"] },
+  { label: "Done", statuses: ["closed"] },
 ];
 
 export function salesOrderSteps(status: string): RecordStep[] {
