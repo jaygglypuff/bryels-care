@@ -86,9 +86,11 @@ async function main() {
     [rvs.id, whR.id, "SHP", "Dispatch bay", "shipping"],
     [rvs.id, whR.id, "REJ", "Rejected goods cage", "rejected"],
   ];
+  // S6 (ADR-077): the warehouse section of each place (receiving and dispatch stay "Other areas").
+  const SECTION: Record<string, string> = { "QUA-01": "qa_hold", "HLD-01": "qa_hold", REJ: "qa_hold", "A-01": "raw_materials", "A-02": "raw_materials", "B-01": "raw_materials", "PKG-01": "packaging", "PRD-01": "production", "FG-01": "finished_goods" };
   const locs = await db
     .insert(s.locations)
-    .values(locDefs.map(([siteId, warehouseId, code, name, kind]) => ({ siteId, warehouseId, code, name, kind })))
+    .values(locDefs.map(([siteId, warehouseId, code, name, kind]) => ({ siteId, warehouseId, code, name, kind, section: SECTION[code] ?? null })))
     .returning();
   const L = (site: string, code: string) => locs.find((l) => l.siteId === site && l.code === code)!.id;
 

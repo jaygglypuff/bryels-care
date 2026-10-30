@@ -43,12 +43,13 @@ export const PR_TRANSITIONS: Record<PrStatus, readonly PrStatus[]> = {
  * submitted → draft (returned); draft|submitted|approved|sent → cancelled (reason). As built (W4A):
  * sent|partially_received → closed when every line is received or short-closed with a reason (A-W4A-01);
  * a reversed goods receipt moves partially_received → sent and received → partially_received | sent
- * (reason = the reversal reason).
+ * (reason = the reversal reason). S6 (ADR-077): approved → received only for an after-the-fact PO
+ * (made from a posted unplanned receipt; its goods are already in), on its final approval.
  */
 export const PO_TRANSITIONS: Record<PoStatus, readonly PoStatus[]> = {
   draft: ["submitted", "cancelled"],
   submitted: ["approved", "draft", "cancelled"],
-  approved: ["sent", "cancelled"],
+  approved: ["sent", "received", "cancelled"],
   sent: ["partially_received", "received", "closed", "cancelled"],
   partially_received: ["partially_received", "received", "closed", "sent"],
   received: ["closed", "partially_received", "sent"],
@@ -136,8 +137,9 @@ export async function transitionPr(tx: Tx, ctx: AuthContext, r: Rec<PrStatus> & 
   return { from, to };
 }
 
-export async function transitionPo(tx: Tx, ctx: AuthContext, r: Rec<PoStatus> & { poNumber: string }, to: PoStatus, opts: { reason?: string | null; set?: Partial<typeof purchaseOrders.$inferInsert> } = {}) {
+export async function transitionPo(tx: Tx, ctx: AuthContext, r: Rec<PoStatus> & { poNumber: string; afterTheFact?: boolean }, to: PoStatus, opts: { reason?: string | null; set?: Partial<typeof purchaseOrders.$inferInsert> } = {}) {
   assertMove("purchase_order", PO_TRANSITIONS, PO_STATUS_LABEL, r.status, to, `Purchase order ${r.poNumber}`);
+  if (r.status === "approved" && to === "received" && !r.afterTheFact) throw new DomainError("state", `Purchase order ${r.poNumber} must be sent to the supplier before goods are received.`);
   const reason = reasonFor(r.status, to, opts.reason);
   const now = new Date();
   await tx.update(purchaseOrders).set({ ...(opts.set ?? {}), status: to, statusChangedAt: now, statusChangedBy: ctx.userId, updatedAt: now }).where(eq(purchaseOrders.id, r.id));

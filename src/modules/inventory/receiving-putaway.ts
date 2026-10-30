@@ -1,8 +1,8 @@
 import "server-only";
-import { and, asc, eq, gt, inArray } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
-import { inventoryBalances, inventoryLots, locations, materials, stockMovements } from "@/db/schema";
+import { inventoryBalances, inventoryLots, locations, materials, stockMovements, warehouses } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -11,6 +11,7 @@ import { heldLocations, resolveLocationRef, resolveLotRef } from "./holds";
 import { assertLocationsNotFrozen } from "./freeze";
 import { postMovement } from "./ledger";
 import { allowedDestinationKinds, isUuid } from "./lots";
+import { SECTION_LABELS, SECTION_ORDER, isSection, sectionForItem, sectionSql, type LocationSection } from "@/modules/masterdata";
 
 /**
  * Put-away (W01-08, US-2-09): scan the lot label, then the destination location. Status-location rule
@@ -24,7 +25,9 @@ export async function putAwayOptions(ctx: AuthContext, lotRef: string) {
   ctx.require("inventory.movement.post");
   const lot = await resolveLotRef(db, ctx, lotRef);
   ctx.requireSite(lot.siteId);
-  const [mat] = lot.materialId ? await db.select({ code: materials.code, name: materials.name }).from(materials).where(eq(materials.id, lot.materialId)) : [];
+  const [mat] = lot.materialId ? await db.select({ code: materials.code, name: materials.name, materialKind: materials.materialKind }).from(materials).where(eq(materials.id, lot.materialId)) : [];
+  // S6 (ADR-077): suggest the section the item belongs in; its locations are listed first.
+  const suggestedSection: LocationSection = sectionForItem({ itemKind: lot.itemKind === "product" ? "product" : "material", materialKind: mat?.materialKind });
   const balances = await db
     .select({ locationId: locations.id, code: locations.code, name: locations.name, kind: locations.kind, qtyBase: inventoryBalances.qtyBase })
     .from(inventoryBalances)
@@ -35,16 +38,23 @@ export async function putAwayOptions(ctx: AuthContext, lotRef: string) {
   const held = new Set((await heldLocations(db, lot.siteId)).map((h) => h.locationId));
   const destinations = (
     await db
-      .select({ id: locations.id, code: locations.code, name: locations.name, kind: locations.kind })
+      .select({ id: locations.id, code: locations.code, name: locations.name, kind: locations.kind, section: sql<string>`${sectionSql("locations", "warehouses")}` })
       .from(locations)
+      .innerJoin(warehouses, eq(warehouses.id, locations.warehouseId))
       .where(and(eq(locations.siteId, lot.siteId), eq(locations.isActive, true), inArray(locations.kind, kinds)))
       .orderBy(asc(locations.code))
-  ).filter((l) => !held.has(l.id));
+  )
+    .filter((l) => !held.has(l.id))
+    .map((l) => ({ ...l, section: isSection(l.section) ? l.section : ("other" as LocationSection), sectionLabel: SECTION_LABELS[isSection(l.section) ? l.section : "other"] }))
+    .sort((a, b) => Number(b.section === suggestedSection) - Number(a.section === suggestedSection) || SECTION_ORDER[a.section] - SECTION_ORDER[b.section] || a.code.localeCompare(b.code));
   return {
     lot: { id: lot.id, lotNumber: lot.lotNumber, qualityStatus: lot.qualityStatus, expiresOn: lot.expiresOn, baseUom: lot.baseUom, itemCode: mat?.code ?? "", itemName: mat?.name ?? "" },
     balances,
     destinations,
     allowedKinds: kinds,
+    suggestedSection,
+    suggestedSectionLabel: SECTION_LABELS[suggestedSection],
+    suggestedCodes: destinations.filter((d) => d.section === suggestedSection).map((d) => d.code),
   };
 }
 

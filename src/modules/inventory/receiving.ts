@@ -11,6 +11,7 @@ import {
   inventoryLots,
   locations,
   materials,
+  purchaseOrders,
   supplierLotDocuments,
   suppliers,
 } from "@/db/schema";
@@ -751,6 +752,20 @@ export async function reverseReceipt(ctx: AuthContext, input: { receiptId: strin
     const to = assertReceiptTransition("reverse", gr.status, receiptLabel(gr));
     // W3C: opening stock lines live in opening_balance_lines; the import job void reverses them (docs/data-migration-plan.md §9.3).
     if (gr.receiptKind === "opening_balance") throw new DomainError("state", `Receipt ${receiptLabel(gr)} is an opening balance; reverse it by voiding its import job.`);
+    // S6 (ADR-077): a purchase order was made from this receipt after the fact; it must not point at stock that is gone.
+    const [atf] = await tx
+      .select({ poNumber: purchaseOrders.poNumber, status: purchaseOrders.status })
+      .from(purchaseOrders)
+      .where(and(eq(purchaseOrders.sourceGoodsReceiptId, gr.id), sql`${purchaseOrders.status} <> 'cancelled'`))
+      .limit(1);
+    if (atf) {
+      throw new DomainError(
+        "state",
+        ["draft", "submitted", "approved"].includes(atf.status)
+          ? `Purchase order ${atf.poNumber} was made from this receipt. Cancel that purchase order first, then reverse the receipt.`
+          : `Purchase order ${atf.poNumber} was made from this receipt and is ${atf.status}. Correct the stock with a supplier return or an adjustment instead.`,
+      );
+    }
     const rows = await tx
       .select({ line: goodsReceiptLines, lotNumber: inventoryLots.lotNumber, locationCode: locations.code })
       .from(goodsReceiptLines)

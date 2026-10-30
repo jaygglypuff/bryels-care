@@ -1095,6 +1095,11 @@ Schema file `src/db/schema/procurement.ts` (new tables) plus minimal columns on 
 PO state machine as built (`PO_TRANSITIONS`, `src/modules/procurement/state.ts`): §6.4 plus `sent | partially_received → closed`
 (reason; open lines short-closed) and the receipt-reversal paths `partially_received → sent`, `received → partially_received | sent`
 (reason = the reversal reason). A closed PO's receipts cannot be reversed.
+S6 (ADR-077): `approved → received` only for an after-the-fact PO (`after_the_fact`, `after_the_fact_reason`,
+`source_goods_receipt_id` → the posted unplanned receipt; lines carry `source_goods_receipt_line_id`, are
+created `received` with `qty_received_base` = the receipt quantity; one live PO per receipt). Locations carry
+an optional `section` (`raw_materials | packaging | finished_goods | qa_hold | returns | production | other`;
+null = derived from the class and warehouse kind).
 
 ### 3.5 Production and BMR
 

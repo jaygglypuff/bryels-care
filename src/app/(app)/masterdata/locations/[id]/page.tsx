@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { LOCATION_KINDS, LOCATION_KIND_LABELS, LOCATION_TRANSITIONS, SPECIAL_ROLE_LABELS, getLocation, locationFormOptions, type LocationKind, type LocationStatus, type SpecialRole } from "@/modules/masterdata";
+import { LOCATION_SECTIONS, SECTION_LABELS, isSection } from "@/lib/location-sections";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -43,6 +44,7 @@ export default async function LocationPage({ params, searchParams }: { params: P
             ["Section or zone", l.parent ? <Link className="font-mono underline" href={`/masterdata/locations/${l.parent.id}`}>{l.parent.code}</Link> : "—"],
             ["Special role", l.specialRoles.length ? l.specialRoles.map((r) => SPECIAL_ROLE_LABELS[r as SpecialRole] ?? r).join(", ") : "—"],
             ["Lots in stock", String(l.lotsInStock)],
+            ["Section", isSection(l.section) ? SECTION_LABELS[l.section] : "Not set (worked out from the class)"],
             ["Pickable", l.isPickable ? "Yes" : "No"],
             ["Contains", l.children.length ? l.children.map((c) => c.code).join(", ") : "—"],
           ]}
@@ -56,7 +58,8 @@ export default async function LocationPage({ params, searchParams }: { params: P
               <TextField name="code" label="Code" defaultValue={l.code} mono hint="Fixed once stock has been recorded here." />
               <TextField name="name" label="Name" defaultValue={l.name} />
               <SelectField name="kind" label="Type of place" defaultValue={l.kind} options={LOCATION_KINDS.map((k) => ({ value: k, label: LOCATION_KIND_LABELS[k] }))} hint="Changes only while the location is empty and not a designated special location." />
-              <SelectField name="parentLocationId" label="Section or zone (optional)" hint="The bigger place this one is inside, e.g. zone A." defaultValue={l.parentLocationId} emptyLabel="— top level —" options={parents.map((p) => ({ value: p.id, label: `${p.code} · ${p.name}` }))} />
+              <SelectField name="section" label="Warehouse section" defaultValue={l.section} emptyLabel="— work it out from the type —" options={LOCATION_SECTIONS.map((x) => ({ value: x, label: SECTION_LABELS[x] }))} hint="Groups stock on the warehouse screens (Raw materials, Packaging, Finished goods…). Does not change any stock rule." />
+              <SelectField name="parentLocationId" label="Inside (optional)" defaultValue={l.parentLocationId} emptyLabel="— top level —" options={parents.map((p) => ({ value: p.id, label: `${p.code} · ${p.name}` }))} />
             </Grid>
             <CheckField name="isPickable" label="Pickable" defaultChecked={l.isPickable} />
           </ActionForm>

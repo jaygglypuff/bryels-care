@@ -1,34 +1,41 @@
 ---
 key: inventory.receive
-title: Receive materials
+title: Receive a delivery
 version: 2
 updated_at: 2026-10-30
 sop: SOP to be mapped by the warehouse lead (US-9-08)
 ---
 
-Use this screen when a supplier delivery arrives. Everything you receive goes to quarantine until QA releases it.
+Use this screen when a supplier delivery arrives. New lots wait for the QA check before anyone uses them.
+
+## Which delivery is it?
+
+1. If the supplier sent goods for a purchase order, tap that order (supplier name and PO number).
+2. If nobody made a purchase order (an urgent buy), tap **No purchase order (urgent buy)**. Purchasing makes the PO later from the receipt.
 
 ## Delivery
 
-1. Choose the **Supplier**. If the supplier is not in the list, ask a site manager to add it first.
-2. Type the **Supplier delivery document no.** exactly as printed on the delivery receipt.
-3. No purchase order? Choose the reason under **Why no purchase order?**.
+1. Type the **Delivery receipt or invoice no.** exactly as printed on the supplier's paper.
+2. No purchase order? Type or pick the **Supplier** and choose **Why no purchase order?**.
 
-## Lines
+## Each item
 
-1. Choose the **Material**. If it has a usual pack size (for example an 18 kg tin), the form fills in one pack. Type the **Number of packs** and the quantity is worked out for you. You can still change the **Quantity**.
-2. Check the **Brand** printed on the containers. The form suggests the usual brand; change it if a different brand arrived.
-3. Copy the **Supplier lot no.** and the **Expiry date** from the container label. Do not guess dates.
-4. Choose the **Receiving location** (the quarantine or receiving area you put the goods in).
-5. Add one line per supplier lot. Two lots of the same material are two lines.
+1. Check the **Quantity received**. For an order it is filled in with what is still to come: change it if less came.
+2. Copy the **Supplier lot no.** and the **Expiry date** from the label on the sack, drum or box. Do not guess dates.
+3. If the item has storage rules, tick **I checked the storage**.
+4. An ordered item did not come? Tick **Not in this delivery**.
+5. Two supplier lots of the same item are two items: tap **Add another item**.
+6. Check the **Brand** printed on the containers. The form suggests the usual brand; change it if a different brand arrived.
 
-## Something is wrong
+## More details (only when needed)
 
-- Damaged, short or wrong goods: record it under **What was wrong**. A site manager approves the discrepancy.
-- Not sure about a label? Stop and ask QA before you post.
+- **Made on**, **Retest date** and **Containers** (one label per container).
+- **Put it in**: the place is chosen for you. New lots go to the QA area; the line under each item says which section they are stored in after the QA check (for example Raw materials or Packaging).
+- **Problem with the delivery?**: less than ordered, more than ordered, damaged, wrong item or papers missing. More than ordered and wrong items are saved as a draft; purchasing approves them first.
 
 ## After posting
 
-- The receipt gets a GR number and each line becomes a lot in quarantine.
+- The receipt gets a GR number and each item becomes a lot waiting for QA.
 - Print the lot labels and stick them on every container.
-- Put the goods away with **Put away** when QA tells you where.
+- Use **Put away** to store the goods. Put away shows the section the item belongs in.
+- Urgent buy with no purchase order: purchasing opens the receipt and taps **Create PO from this receipt**. Nothing is received twice.

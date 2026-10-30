@@ -1176,3 +1176,45 @@ must be removable, while posted history stays immutable.
 `adr075_transition_guard`) must be appended to the merged migration; no table or column changes.
 Tests: `tests/integration/masterdata/adr075-codes-and-draft-deletes.test.ts`,
 `tests/integration/action-centre/adr075-to-approve.test.ts`, `tests/unit/record-links.test.ts`.
+## ADR-077 Warehouse sections, after-the-fact purchase orders and the tablet receive screen
+
+**Status.** Accepted (owner request, 2026-10-30; stream S6). Builds on ADR-043 and W4A (US-6-03).
+
+**Context.** On an iPad the owner could not tell where raw materials and finished goods are ("it is all
+around the place"); urgent buys are received with no purchase order and there was no way to make the PO
+afterwards; and the PO receive screen was a 900-px table with eight columns per line that overlapped at
+tablet widths.
+
+**Decision.**
+1. *Sections.* `locations.section` (nullable; `raw_materials | packaging | finished_goods | qa_hold |
+   returns | production | other`, check `locations_section_ck`) set in Master data → Locations. Empty =
+   derived (`sectionOf` / `sectionSql`, `src/lib/location-sections.ts`, `src/modules/masterdata/location-sections.ts`):
+   quarantine/hold/rejected/recall → `qa_hold`, production/staging → `production`, else the warehouse kind
+   when it is raw_materials/packaging/finished_goods, else `other`. A section is display and suggestion only;
+   movement rules still come from the location class and lot status (V-LOC). Stock screens group by
+   section (`stockBySection`, `sectionSummary` in `src/modules/inventory/sections.ts`): `/warehouse` (new
+   warehouse home with section tiles), `/inventory`, `/inventory/locations`. Receiving and put-away
+   suggest the item's section (raw material → Raw materials, packaging → Packaging, product → Finished goods)
+   via `sectionForItem`; production output already lands in finished-goods locations by class.
+2. *After-the-fact PO.* `createPoFromReceipt` (`src/modules/procurement/after-the-fact.ts`,
+   `procurement.purchase_order.create` at the receipt's site, idempotency key): from a posted *unplanned*
+   receipt, a draft PO with `after_the_fact = true`, `after_the_fact_reason`, `source_goods_receipt_id`;
+   lines copy material, quantity and unit from the receipt lines (`source_goods_receipt_line_id`), the buyer
+   enters prices; `qty_received_base` = the receipt quantity and line status `received`, so nothing is
+   expected and the PO is never receivable. Normal V-ASL and approval rules apply; on final approval it
+   moves approved → received (new transition, only for after-the-fact POs; `ck_purchase_orders_sent`
+   exempts them since nothing is sent). One live PO per receipt (`uq_purchase_orders_source_receipt`,
+   receipt row locked). Editing such a draft is refused (cancel and re-create); cancelling a draft frees the
+   receipt. Reversing the source receipt is refused while a live PO points at it. The posted receipt is
+   never edited. Supplier bills map the receipt lines to the PO lines (`purchaseOrderLineOfReceiptLines`).
+3. *Tablet receive screen.* `/inventory/receive` asks "Which delivery is it?" (sent POs of the site, or
+   "No purchase order"), then one card per item: quantity (+unit), supplier lot no., expiry date and a
+   reserved brand slot (`brand-slot.tsx`); everything else under "More details". Layout uses container
+   queries so fields never overlap at 768–1180 px. PO receiving moved here (`?po=<id>`);
+   `/procurement/expected/<id>` redirects.
+
+**Consequences.** Schema change needs a migration (lead regenerates): `locations.section`,
+`purchase_orders.after_the_fact | after_the_fact_reason | source_goods_receipt_id`,
+`purchase_order_lines.source_goods_receipt_line_id`, the index and checks above, and the changed
+`ck_purchase_orders_sent`. Assumptions A-S6-01..04 (PRD). Tests:
+`tests/integration/inventory/s6-sections.test.ts`, `tests/integration/procurement/s6-po-from-receipt.test.ts`.

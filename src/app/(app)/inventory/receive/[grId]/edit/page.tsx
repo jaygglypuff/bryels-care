@@ -37,7 +37,6 @@ export default async function EditReceiptPage({ params }: { params: Promise<{ gr
         materials={data.materials}
         locations={data.locations}
         suppliers={data.suppliers}
-        supplierPacks={data.supplierPacks}
         reasonCodes={data.reasonCodes}
         defaultLocationId={data.locations[0]?.id ?? ""}
         canPost={ctx.can("procurement.goods_receipt.post")}

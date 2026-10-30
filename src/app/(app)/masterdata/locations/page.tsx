@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { LOCATION_KINDS, LOCATION_KIND_LABELS, SPECIAL_ROLE_LABELS, listLocations, locationFormOptions, type LocationKind, type SpecialRole } from "@/modules/masterdata";
+import { LOCATION_SECTIONS, SECTION_LABELS, isSection } from "@/lib/location-sections";
 import { Card, CardTitle, EmptyState, Input, LinkButton, PageHeader, Select } from "@/ui/core";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
@@ -114,7 +115,7 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
                       <Link href={`/masterdata/locations/${l.id}`} className="font-mono font-semibold text-primary-text hover:underline">{l.code}</Link>
                       <span className="ml-2 text-[13px]">{l.name}</span>
                       <p className="text-[12px] text-muted">
-                        {LOCATION_KIND_LABELS[l.kind as LocationKind] ?? l.kind} ·{" "}
+                        {isSection(l.effectiveSection) ? SECTION_LABELS[l.effectiveSection] : "Other areas"} · {LOCATION_KIND_LABELS[l.kind as LocationKind] ?? l.kind} ·{" "}
                         {canSeeLots && l.lotCount > 0 ? <Link className="underline" href={`/inventory?loc=${l.id}`}>{l.lotCount} lot{l.lotCount === 1 ? "" : "s"} in stock</Link> : `${l.lotCount} lots in stock`}
                         {!l.isPickable && " · not pickable"}
                       </p>
@@ -144,7 +145,8 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
               <SelectField name="kind" label="Type of place" defaultValue="storage" options={LOCATION_KINDS.map((k) => ({ value: k, label: LOCATION_KIND_LABELS[k] }))} hint="Receiving, quarantine, hold, rejected and recall locations can be designated per warehouse." />
               <TextField name="code" label="Code (optional)" placeholder="Automatic, e.g. LOC-0001" mono hint="Leave blank and the system gives the next number. Unique across the company; printed as BC:LOC:<code>." />
               <TextField name="name" label="Name" placeholder="Oils rack A-03" />
-              <SelectField name="parentLocationId" label="Section or zone (optional)" emptyLabel="— none —" options={opts.locations.map((l) => ({ value: l.id, label: `${l.code} · ${l.name}` }))} hint="The bigger place this one is inside, e.g. zone A. Same warehouse only." />
+              <SelectField name="section" label="Warehouse section" defaultValue={""} emptyLabel="— work it out from the type —" options={LOCATION_SECTIONS.map((x) => ({ value: x, label: SECTION_LABELS[x] }))} hint="Groups stock on the warehouse screens (Raw materials, Packaging, Finished goods…). Does not change any stock rule." />
+              <SelectField name="parentLocationId" label="Inside (optional)" emptyLabel="— top level —" options={opts.locations.map((l) => ({ value: l.id, label: `${l.code} · ${l.name}` }))} hint="Builds the zone → rack → bin tree; same warehouse only." />
             </Grid>
             <CheckField name="isPickable" label="Pickable (stock here may be picked for orders and batches)" defaultChecked />
           </ActionForm>

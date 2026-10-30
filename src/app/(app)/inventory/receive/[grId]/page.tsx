@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { randomUUID } from "node:crypto";
 import { notFound } from "next/navigation";
 import { AlertTriangle, CheckCircle2, FileText, Pencil, Printer } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
@@ -7,12 +8,13 @@ import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { getReceiptDocument, type ReceiptDocument } from "@/modules/inventory/receiving";
 import { issueDownloadUrl } from "@/modules/inventory/receiving-documents";
 import { supplierOptions } from "@/modules/masterdata";
-import { Card, CardTitle, Dl, Field, LinkButton, PageHeader, Select } from "@/ui/core";
+import { poFromReceiptOptions } from "@/modules/procurement";
+import { Card, CardTitle, Dl, Field, Input, LinkButton, PageHeader, Select, Textarea } from "@/ui/core";
 import { fmtLotQty } from "@/ui/inventory/bits";
 import { ReceiptStatusChip, fmtBytes } from "@/ui/receiving";
 import { Banner, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
-import { approveDiscrepancyAction, cancelDraftAction, linkSupplierAction, postDraftAction, recordDiscrepancyAction, reverseReceiptAction, voidFileAction } from "./actions";
+import { approveDiscrepancyAction, cancelDraftAction, createPoFromReceiptAction, linkSupplierAction, postDraftAction, recordDiscrepancyAction, reverseReceiptAction, voidFileAction } from "./actions";
 import { ActionForm, ReasonField, UploadWidget } from "./forms";
 
 export const metadata = { title: "Goods receipt" };
@@ -75,6 +77,8 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
   const lines = await Promise.all(gr.lines.map(async (l) => ({ ...l, docs: await withLinks(ctx, l.documents) })));
   const sups = gr.can.linkSupplier ? await supplierOptions(ctx) : [];
   const storageReady = !!process.env.FILE_STORAGE;
+  // S6 (ADR-077): an urgent receipt without a PO can get its purchase order afterwards.
+  const atf = gr.status === "posted" && !gr.purchaseOrderId ? await poFromReceiptOptions(ctx, gr.id) : null;
   const hidden = { receiptId: gr.id };
 
   return (
@@ -132,6 +136,62 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
           <p className="mb-3 text-[13px] text-muted">Creates one quarantined lot and one receipt movement per line, and allocates the receipt number.</p>
           <ActionForm action={postDraftAction} hidden={hidden} submit="Post receipt" variant="cta" pendingText="Posting receipt…" confirm="Post this receipt? Lots and stock are created and can only be corrected by reversal." />
         </Card>
+      )}
+
+      {atf?.purchaseOrder && (
+        <Banner tone="info" title={`Purchase order ${atf.purchaseOrder.poNumber} was made from this receipt`}>
+          {ctx.can("procurement.purchase_order.view") ? <Link className="font-medium text-primary-text underline" href={`/procurement/orders/${atf.purchaseOrder.id}`}>Open the purchase order</Link> : "Purchasing handles it."}
+        </Banner>
+      )}
+      {atf?.canCreate && (
+        <Card data-testid="create-po-from-receipt">
+          <CardTitle>No purchase order yet</CardTitle>
+          <p className="mb-3 text-[13px] text-muted">This was an urgent buy. Make the purchase order now from what was received: the items and quantities are filled in, you enter the prices. It goes for approval as usual and nothing more is expected from the supplier.</p>
+          <details className="group">
+            <summary className="inline-flex min-h-[44px] cursor-pointer list-none items-center rounded-full bg-cta px-5 text-[14px] font-medium text-white">Create PO from this receipt</summary>
+            <ActionForm action={createPoFromReceiptAction} hidden={{ ...hidden, idempotencyKey: randomUUID() }} submit="Create purchase order" variant="cta" pendingText="Creating…" className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Supplier" htmlFor="atf-supplier">
+                  <Select id="atf-supplier" name="supplierId" required defaultValue={atf.supplierId ?? ""}>
+                    <option value="" disabled>Choose…</option>
+                    {atf.suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>{s.code} · {s.name}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Tax amount (optional)" htmlFor="atf-tax">
+                  <Input id="atf-tax" name="taxAmount" inputMode="decimal" placeholder="From the supplier's invoice" />
+                </Field>
+              </div>
+              <ul className="space-y-2">
+                {atf.lines.map((l, i) => (
+                  <li key={l.id} className="grid grid-cols-1 items-end gap-3 rounded-[12px] border border-line p-3 sm:grid-cols-[1fr_200px]">
+                    <input type="hidden" name={`lines.${i}.receiptLineId`} value={l.id} />
+                    <label className="flex min-h-[44px] items-start gap-3 text-[14px]">
+                      <input type="checkbox" name={`lines.${i}.include`} value="yes" defaultChecked className="mt-0.5 size-5 shrink-0" />
+                      <span className="min-w-0">
+                        <span className="font-medium">{l.name}</span> <span className="text-muted">· {l.code}</span>
+                        <span className="block text-[13px] text-muted">Received {fmtLotQty(l.qtyBase, l.baseUom)}</span>
+                      </span>
+                    </label>
+                    <Field label={`Price per ${l.uomEntered ?? l.baseUom}`} htmlFor={`atf-price-${l.id}`}>
+                      <Input id={`atf-price-${l.id}`} name={`lines.${i}.unitAmount`} inputMode="decimal" placeholder="Supplier price if empty" />
+                    </Field>
+                  </li>
+                ))}
+              </ul>
+              <Field label="Why was there no purchase order?" htmlFor="atf-reason" hint="Kept on the purchase order and shown to the approver.">
+                <Textarea id="atf-reason" name="reason" required minLength={5} maxLength={1000} placeholder="e.g. ran out of coconut oil; owner ordered by phone" />
+              </Field>
+              <Field label="Notes (optional)" htmlFor="atf-notes">
+                <Input id="atf-notes" name="notes" maxLength={1000} />
+              </Field>
+            </ActionForm>
+          </details>
+        </Card>
+      )}
+      {atf && !atf.canCreate && !atf.purchaseOrder && ctx.can("procurement.purchase_order.create") && atf.blockedReason && (
+        <p className="text-[13px] text-muted">{atf.blockedReason}</p>
       )}
 
       <Card>

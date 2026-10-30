@@ -6,7 +6,7 @@ import { FormMessage, SubmitButton } from "@/ui/form";
 import { putAwayAction } from "./actions";
 
 type Bal = { locationId: string; code: string; name: string; kind: string; qtyBase: string };
-type Dest = { id: string; code: string; name: string; kind: string };
+type Dest = { id: string; code: string; name: string; kind: string; sectionLabel?: string };
 
 /** Step 2 of put-away: scan (or type) the destination location; a new key is used for each successful move. */
 export function PutAwayForm({ lotNumber, balances, destinations, defaultFrom, uom }: { lotNumber: string; balances: Bal[]; destinations: Dest[]; defaultFrom: string; uom: string }) {
@@ -35,7 +35,7 @@ export function PutAwayForm({ lotNumber, balances, destinations, defaultFrom, uo
           <Input id="location" name="location" required autoComplete="off" placeholder="BC:LOC:QUA-01 or QUA-01" autoFocus list="dest-options" />
           <datalist id="dest-options">
             {destinations.map((d) => (
-              <option key={d.id} value={d.code}>{d.name}</option>
+              <option key={d.id} value={d.code}>{d.name}{d.sectionLabel ? ` · ${d.sectionLabel}` : ""}</option>
             ))}
           </datalist>
         </Field>

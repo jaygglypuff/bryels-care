@@ -56,6 +56,8 @@ export {
   type PoLineInput,
   type PoWarning,
 } from "./orders";
+// S6 (ADR-077): purchase order made after an urgent delivery without a PO
+export { createPoFromReceipt, poFromReceiptOptions, poOfReceipt, type PoFromReceiptInput } from "./after-the-fact";
 export { receiveAgainstPurchaseOrder, type PoReceiptLineInput } from "./receipts";
 export {
   createSupplierReturn,

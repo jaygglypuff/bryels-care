@@ -11,6 +11,7 @@ import { assignMasterCode } from "@/lib/numbering";
 import { parseInput } from "./schemas";
 import { locationsHoldStock } from "./warehouses";
 import { runInTx, type InTx } from "@/lib/tx";
+import { LOCATION_SECTIONS, sectionSql } from "./location-sections";
 
 /**
  * Locations (US-1-20). The location class (`kind`) drives put-away and move rules elsewhere
@@ -48,6 +49,10 @@ const LocationInput = z
     kind: z.enum(LOCATION_KINDS, { message: "Choose the location class." }),
     parentLocationId: optUuid,
     isPickable: bool(true),
+    /** S6 (ADR-077): warehouse section; "" = derived from the class and warehouse kind; omitted = unchanged on edit. */
+    section: z
+      .union([z.enum(LOCATION_SECTIONS, { message: "Choose a section." }), z.literal(""), z.null(), z.undefined()])
+      .transform((v) => (v === undefined ? undefined : v || null)),
   })
   .strict();
 /** Create: the code may be left blank; the next LOC-nnnn is assigned (ADR-075). */
@@ -79,6 +84,8 @@ export async function listLocations(ctx: AuthContext, f: LocationFilter = {}) {
       status: locations.status,
       isActive: locations.isActive,
       isPickable: locations.isPickable,
+      section: locations.section,
+      effectiveSection: sql<string>`${sectionSql("locations", "warehouses")}`,
       parentLocationId: locations.parentLocationId,
       parentCode: sql<string | null>`(select p.code from ${locations} p where p.id = "locations"."parent_location_id")`,
       lotCount: sql<number>`(select count(distinct b.lot_id) from ${inventoryBalances} b where b.location_id = "locations"."id" and b.qty_base > 0)::int`,
@@ -185,7 +192,7 @@ export async function createLocation(ctx: AuthContext, raw: unknown, opts?: InTx
     await assertParent(tx, w.id, v.parentLocationId);
     const [l] = await tx
       .insert(locations)
-      .values({ siteId: w.siteId, warehouseId: w.id, code: v.code, name: v.name, kind: v.kind, parentLocationId: v.parentLocationId, isPickable: v.isPickable })
+      .values({ siteId: w.siteId, warehouseId: w.id, code: v.code, name: v.name, kind: v.kind, parentLocationId: v.parentLocationId, isPickable: v.isPickable, section: v.section ?? null })
       .returning();
     await audit(tx, ctx, { action: "masterdata.location.created", entityType: "location", entityId: l.id, entityNumber: l.code, siteId: l.siteId, after: { ...v } });
     return l;
@@ -211,8 +218,8 @@ export async function updateLocation(ctx: AuthContext, locationId: string, raw: 
       if (role) throw new DomainError("state", `Location ${before.code} is the warehouse's ${role.role} location; designate another location first.`, { field: "kind" });
     }
     await assertParent(tx, before.warehouseId, v.parentLocationId, before.id);
-    const [after] = await tx.update(locations).set({ code: v.code, name: v.name, kind: v.kind, parentLocationId: v.parentLocationId, isPickable: v.isPickable }).where(eq(locations.id, before.id)).returning();
-    const d = diff(before, after, ["code", "name", "kind", "parentLocationId", "isPickable"]);
+    const [after] = await tx.update(locations).set({ code: v.code, name: v.name, kind: v.kind, parentLocationId: v.parentLocationId, isPickable: v.isPickable, section: v.section === undefined ? before.section : v.section }).where(eq(locations.id, before.id)).returning();
+    const d = diff(before, after, ["code", "name", "kind", "parentLocationId", "isPickable", "section"]);
     if (d.changed.length) await audit(tx, ctx, { action: "masterdata.location.updated", entityType: "location", entityId: after.id, entityNumber: after.code, siteId: after.siteId, before: d.before, after: d.after });
     return after;
   });

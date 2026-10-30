@@ -9,6 +9,7 @@ import { daysUntil } from "@/lib/qty";
 import { activeCountsForLocations } from "./counts";
 import { isUuid } from "./lots";
 import { getInventorySetting } from "./policy";
+import { sectionSql } from "@/modules/masterdata";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const EDITABLE = ["manufacturedOn", "expiresOn", "supplierLotNumber", "supplierName", "brand"] as const;
@@ -126,6 +127,7 @@ export async function listLocationsWithStock(ctx: AuthContext) {
       kind: locations.kind,
       isActive: locations.isActive,
       warehouseCode: warehouses.code,
+      section: sql<string>`${sectionSql("locations", "warehouses")}`, // S6 (ADR-077)
       lots: sql<number>`(select count(distinct b.lot_id)::int from ${inventoryBalances} b where b.location_id = ${locations.id} and b.qty_base > 0)`,
       boxes: sql<number>`(select count(*)::int from ${containers} c where c.current_location_id = ${locations.id} and c.status in ('open','sealed'))`,
       blocked: sql<number>`(select count(distinct b.lot_id)::int from ${inventoryBalances} b join ${inventoryLots} l on l.id = b.lot_id where b.location_id = ${locations.id} and b.qty_base > 0 and l.quality_status <> 'released')`,

@@ -47,7 +47,7 @@ export default async function ExpectedPage() {
                 <Td className="whitespace-nowrap">
                   {r.expectedDate ? fmtDate(r.expectedDate) : "—"} {r.late && <Chip tone="warn">Late</Chip>}
                 </Td>
-                <Td>{canReceive && r.siteId === ctx.currentSiteId && byPo.find((p) => p.lineId === r.lineId) && <LinkButton href={`/procurement/expected/${r.purchaseOrderId}`} size="sm">Receive</LinkButton>}</Td>
+                <Td>{canReceive && r.siteId === ctx.currentSiteId && byPo.find((p) => p.lineId === r.lineId) && <LinkButton href={`/inventory/receive?po=${r.purchaseOrderId}`} size="sm">Receive</LinkButton>}</Td>
               </tr>
             ))}
           </Table>

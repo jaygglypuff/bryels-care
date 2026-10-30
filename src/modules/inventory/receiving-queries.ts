@@ -15,17 +15,30 @@ import {
   supplierMaterials,
   suppliers,
   users,
+  warehouses,
 } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { enterableUnits, reasonCodeOptions, reasonLabels, toCsv } from "@/modules/masterdata";
+import { enterableUnits, reasonCodeOptions, reasonLabels, sectionForItem, sectionSql, toCsv } from "@/modules/masterdata";
 import { isUuid } from "./lots";
 import { DISCREPANCY_LABELS, receiptLocationKinds, type DiscrepancyKind } from "./receiving-state";
 
 type Q = Tx | typeof db;
 
 const canViewReceipts = (ctx: AuthContext) => ctx.can("procurement.goods_receipt.view") || ctx.can("inventory.lot.view");
+
+async function storageCodesBySection(siteId: string): Promise<Record<string, string[]>> {
+  const rows = await db
+    .select({ code: locations.code, section: sql<string>`${sectionSql("locations", "warehouses")}` })
+    .from(locations)
+    .innerJoin(warehouses, eq(warehouses.id, locations.warehouseId))
+    .where(and(eq(locations.siteId, siteId), eq(locations.isActive, true), eq(locations.kind, "storage")))
+    .orderBy(asc(locations.code));
+  const out: Record<string, string[]> = {};
+  for (const r of rows) (out[r.section] ??= []).push(r.code);
+  return out;
+}
 
 /** Materials, put-away locations, suppliers and reason codes for the receive form (current site). */
 export async function receivingFormData(ctx: AuthContext) {
@@ -46,13 +59,15 @@ export async function receivingFormData(ctx: AuthContext) {
         brand: materials.brand,
         standardPackQty: materials.standardPackQty,
         standardPackUom: materials.standardPackUom,
+        materialKind: materials.materialKind,
       })
       .from(materials)
       .where(and(eq(materials.organizationId, ctx.organizationId), eq(materials.status, "active"))) // W2G: only active materials are received
       .orderBy(asc(materials.code)),
     db
-      .select({ id: locations.id, code: locations.code, name: locations.name, kind: locations.kind })
+      .select({ id: locations.id, code: locations.code, name: locations.name, kind: locations.kind, section: sql<string>`${sectionSql("locations", "warehouses")}` })
       .from(locations)
+      .innerJoin(warehouses, eq(warehouses.id, locations.warehouseId))
       .where(and(eq(locations.siteId, ctx.currentSiteId), eq(locations.isActive, true), inArray(locations.kind, kinds)))
       .orderBy(sql`case ${locations.kind} when 'quarantine' then 0 when 'receiving' then 1 when 'hold' then 2 else 3 end`, asc(locations.code)),
     db
@@ -69,8 +84,11 @@ export async function receivingFormData(ctx: AuthContext) {
   return {
     supplierPacks: packs,
     // Units from the approved conversions (W2G UOM service), incl. a material's own pack units.
-    materials: await Promise.all(mats.map(async (m) => ({ ...m, units: await enterableUnits(db, ctx.organizationId, m.baseUom, m.id) }))),
+    // S6 (ADR-077): the section the item belongs in (raw material → Raw materials, packaging → Packaging).
+    materials: await Promise.all(mats.map(async (m) => ({ ...m, section: sectionForItem({ itemKind: "material", materialKind: m.materialKind }), units: await enterableUnits(db, ctx.organizationId, m.baseUom, m.id) }))),
     locations: locs,
+    // Storage places per section, to tell the operator where the stock goes after the QA check.
+    storageBySection: await storageCodesBySection(ctx.currentSiteId),
     suppliers: sups,
     reasonCodes: (await reasonCodeOptions(db, ctx.organizationId, "receipt")).map((r) => ({ code: r.code, label: r.label })),
   };

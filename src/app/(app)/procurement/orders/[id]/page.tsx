@@ -44,7 +44,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
                 Print PO
               </a>
             )}
-            {can.receive && <LinkButton href={`/procurement/expected/${po.id}`} variant="cta">Receive delivery</LinkButton>}
+            {can.receive && <LinkButton href={`/inventory/receive?po=${po.id}`} variant="cta">Receive delivery</LinkButton>}
             <LinkButton href="/procurement/orders" variant="secondary">Purchase orders</LinkButton>
           </>
         }
@@ -52,6 +52,17 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
       <SubNav />
       <div className="flex flex-col gap-5">
         {po.isUrgent && <Banner tone="warn" title="Urgent purchase">{po.urgentReason}</Banner>}
+        {po.afterTheFact && (
+          <Banner tone="info" title="Made after the goods arrived">
+            {po.afterTheFactReason} · from receipt{" "}
+            {v.sourceReceipt ? (
+              <Link className="font-medium text-primary-text underline" href={`/inventory/receive/${v.sourceReceipt.id}`}>{v.sourceReceipt.receiptNumber}</Link>
+            ) : (
+              "—"
+            )}
+            . Everything on it is already received, so nothing is expected. {po.status === "draft" ? "Check the prices, then submit it for approval." : po.status === "submitted" ? "It becomes Received when approved." : ""}
+          </Banner>
+        )}
         {po.status === "submitted" && !can.decide && <Banner tone="info" title="Waiting for approval">The next approver per the approval rules decides. The creator and submitter never approve their own order.</Banner>}
         <Card>
           <CardTitle action={<PoChip status={po.status} />}>Order</CardTitle>

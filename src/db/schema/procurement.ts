@@ -1,4 +1,4 @@
-import { boolean, char, check, date, index, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, boolean, char, check, date, index, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { MONEY, QTY, createdAt, id, updatedAt } from "./_common";
 import { organizations, sites, users } from "./identity";
@@ -6,7 +6,7 @@ import { inventoryLots, stockMovements } from "./inventory";
 import { locations, materials, products, warehouses } from "./masterdata";
 import { containers } from "./containers";
 import { fileAttachments } from "./files";
-import { goodsReceipts, supplierMaterials, suppliers } from "./receiving";
+import { goodsReceiptLines, goodsReceipts, supplierMaterials, suppliers } from "./receiving";
 
 /**
  * Wave 4 W4A: procurement (E-6-01: US-6-01, US-6-02, US-6-03, US-6-21, US-6-04, US-6-20;
@@ -204,8 +204,18 @@ export const purchaseOrders = pgTable(
     createdBy: uuid("created_by").notNull().references(() => users.id),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    /**
+     * S6 (ADR-077): an after-the-fact PO made from a posted unplanned goods receipt (urgent buy with no
+     * PO). Its lines are already received; it is approved as usual and then goes approved → received
+     * without being sent. At most one live (not cancelled) PO per receipt.
+     */
+    afterTheFact: boolean("after_the_fact").notNull().default(false),
+    afterTheFactReason: text("after_the_fact_reason"),
+    sourceGoodsReceiptId: uuid("source_goods_receipt_id").references((): AnyPgColumn => goodsReceipts.id),
   },
   (t) => [
+    uniqueIndex("uq_purchase_orders_source_receipt").on(t.sourceGoodsReceiptId).where(sql`${t.sourceGoodsReceiptId} is not null and ${t.status} <> 'cancelled'`),
+    check("ck_purchase_orders_after_the_fact", sql`${t.afterTheFact} = (${t.sourceGoodsReceiptId} is not null) and (not ${t.afterTheFact} or ${t.afterTheFactReason} is not null)`),
     uniqueIndex("uq_purchase_orders_number").on(t.organizationId, t.poNumber),
     uniqueIndex("uq_purchase_orders_legacy").on(t.organizationId, t.legacyNumber).where(sql`${t.legacyNumber} is not null`),
     uniqueIndex("uq_purchase_orders_idem").on(t.organizationId, t.idempotencyKey).where(sql`${t.idempotencyKey} is not null`),
@@ -214,7 +224,7 @@ export const purchaseOrders = pgTable(
     check("ck_purchase_orders_status", sql`${t.status} in (${inList(PURCHASE_ORDER_STATUSES)})`),
     check("ck_purchase_orders_amounts", sql`${t.subtotalAmount} >= 0 and ${t.taxAmount} >= 0 and ${t.totalAmount} >= 0`),
     check("ck_purchase_orders_urgent", sql`not ${t.isUrgent} or ${t.urgentReason} is not null`),
-    check("ck_purchase_orders_sent", sql`${t.status} not in ('sent','partially_received','received','closed') or (${t.sentAt} is not null and ${t.sentBy} is not null)`),
+    check("ck_purchase_orders_sent", sql`${t.status} not in ('sent','partially_received','received','closed') or ${t.afterTheFact} or (${t.sentAt} is not null and ${t.sentBy} is not null)`),
     check("ck_purchase_orders_terms", sql`${t.paymentTermsDays} is null or ${t.paymentTermsDays} >= 0`),
   ],
 );
@@ -251,8 +261,11 @@ export const purchaseOrderLines = pgTable(
     shortCloseReason: text("short_close_reason"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    /** S6 (ADR-077): the posted receipt line an after-the-fact PO line was made from (already received). */
+    sourceGoodsReceiptLineId: uuid("source_goods_receipt_line_id").references((): AnyPgColumn => goodsReceiptLines.id),
   },
   (t) => [
+    index("ix_purchase_order_lines_source_gr_line").on(t.sourceGoodsReceiptLineId),
     uniqueIndex("uq_purchase_order_lines_no").on(t.purchaseOrderId, t.lineNo),
     index("ix_purchase_order_lines_material").on(t.materialId, t.lineStatus),
     check("ck_purchase_order_lines_qty", sql`${t.qtyEntered} > 0 and ${t.qtyBase} > 0 and ${t.qtyReceivedBase} >= 0`),
