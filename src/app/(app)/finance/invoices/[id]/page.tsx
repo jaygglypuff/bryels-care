@@ -176,7 +176,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
                 </LinkButton>
               )}
               {["issued", "partially_paid"].includes(i.status) && ctx.can("finance.payment_record.create") && (
-                <LinkButton href={`/finance/payments/new?counterparty=customer:${d.customer.id}`} variant="secondary">
+                <LinkButton href={`/finance/payments/new?counterparty=customer:${d.customer.id}&invoice=${i.id}`} variant="secondary">
                   Record a payment
                 </LinkButton>
               )}

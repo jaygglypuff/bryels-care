@@ -3,6 +3,7 @@ import { useState } from "react";
 import { fmtDate, fmtMoney } from "@/lib/qty";
 import { Card, CardTitle, Field, Input, Select, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
+import type { PaymentPrefill } from "@/modules/finance";
 import { createPaymentAction } from "../../actions";
 
 type OpenDoc = { documentType: string; documentId: string; number: string; dueDate: string | null; open: string };
@@ -10,11 +11,16 @@ type OpenDoc = { documentType: string; documentId: string; number: string; dueDa
 /**
  * Payment entry. The counterparty decides the direction (customer = money in; supplier or claimant = money
  * out). Allocation: oldest due first (A-FIN-07, default) or chosen amounts per open document; the server
- * re-checks every amount (V-FIN-APPLY) and shows field errors.
+ * re-checks every amount (V-FIN-APPLY) and shows field errors. Opened from an invoice (`prefill`), the form
+ * starts on "Choose amounts" with that invoice and its open amount; the amount applied follows the payment
+ * amount until it is typed over (a part payment needs one change).
  */
-export function PaymentForm({ parties, open, methods, today, initial }: { parties: { value: string; label: string }[]; open: Record<string, OpenDoc[]>; methods: { value: string; label: string }[]; today: string; initial: string }) {
+export function PaymentForm({ parties, open, methods, today, initial, prefill = null }: { parties: { value: string; label: string }[]; open: Record<string, OpenDoc[]>; methods: { value: string; label: string }[]; today: string; initial: string; prefill?: PaymentPrefill | null }) {
   const [party, setParty] = useState(initial);
-  const [manual, setManual] = useState(false);
+  const [manual, setManual] = useState(!!prefill);
+  const [amount, setAmount] = useState(prefill?.amount ?? "");
+  const [applied, setApplied] = useState<string | null>(null); // typed amount for the prefilled invoice; null = follows the payment amount
+  const prefilledHere = !!prefill && party === prefill.counterparty;
   const docs = open[party.split(":")[1]] ?? [];
   const isCustomer = party.startsWith("customer:");
   return (
@@ -46,7 +52,7 @@ export function PaymentForm({ parties, open, methods, today, initial }: { partie
                 </Select>
               </Field>
               <Field label="Amount" htmlFor="p-amount" error={fe.amount}>
-                <Input id="p-amount" name="amount" inputMode="decimal" required placeholder="0.00" />
+                <Input id="p-amount" name="amount" inputMode="decimal" required placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
               </Field>
               {isCustomer && (
                 <Field label="Withheld by the customer (optional)" htmlFor="p-wh" error={fe.withheldAmount} hint="Amount the customer withheld; the certificate stays with the accountant.">
@@ -72,6 +78,11 @@ export function PaymentForm({ parties, open, methods, today, initial }: { partie
             <label className="flex items-center gap-2 text-[14px]">
               <input type="radio" name="alloc-mode" checked={manual} onChange={() => setManual(true)} /> Choose amounts
             </label>
+            {prefilledHere && (
+              <p className="text-[13px] text-fg-2" role="status">
+                From invoice <b>{prefill!.number}</b>: open {fmtMoney(prefill!.amount)}. Change the amount for a part payment.
+              </p>
+            )}
             {fe.applications && <p className="text-[12px] text-[var(--bad-fg)]">{fe.applications}</p>}
             {docs.length === 0 ? (
               <p className="text-[13px] text-muted">No open documents for this counterparty: the payment stays unapplied on account.</p>
@@ -82,7 +93,12 @@ export function PaymentForm({ parties, open, methods, today, initial }: { partie
                     <span className="min-w-0">
                       <span className="font-medium">{d.number}</span> · due {fmtDate(d.dueDate)} · open {fmtMoney(d.open)}
                     </span>
-                    {manual && <Input aria-label={`Amount for ${d.number}`} name={`apply:${d.documentType}:${d.documentId}`} inputMode="decimal" placeholder="0.00" className="w-32" />}
+                    {manual &&
+                      (prefilledHere && d.documentId === prefill!.documentId ? (
+                        <Input aria-label={`Amount for ${d.number}`} name={`apply:${d.documentType}:${d.documentId}`} inputMode="decimal" placeholder="0.00" className="w-32" value={applied ?? amount} onChange={(e) => setApplied(e.target.value)} />
+                      ) : (
+                        <Input aria-label={`Amount for ${d.number}`} name={`apply:${d.documentType}:${d.documentId}`} inputMode="decimal" placeholder="0.00" className="w-32" />
+                      ))}
                   </li>
                 ))}
               </ul>

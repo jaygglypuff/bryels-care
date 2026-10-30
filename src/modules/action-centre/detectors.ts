@@ -66,10 +66,11 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
       kind: "approval.stock_count", siteId: String(r.site_id), entityType: "stock_count", entityId: String(r.id), recordNumber: String(r.count_number),
       title: `Count ${r.count_number} variance waits for approval`, detail: null, link: `/inventory/counts/${r.id}`, openedAt: d(r.at),
     })),
-  "approval.work_order_release": async (org) =>
-    (await run(sql`select id, site_id, work_order_number, planned_start::text as ps, coalesce(submitted_at, status_changed_at) as at from work_orders where organization_id = ${org}::uuid and status = 'planned'`)).map((r) => ({
-      kind: "approval.work_order_release", siteId: String(r.site_id), entityType: "work_order", entityId: String(r.id), recordNumber: String(r.work_order_number),
-      title: `Work order ${r.work_order_number} waits for release`, detail: `Planned start ${r.ps}`, link: `/production/work-orders/${r.id}`, openedAt: d(r.at),
+  // A production order (draft or planned work order) waits for Approve (approveProductionOrder); the row opens the order.
+  "approval.production_order": async (org) =>
+    (await run(sql`select id, site_id, work_order_number, coalesce(submitted_at, created_at) as at from work_orders where organization_id = ${org}::uuid and status in ('draft', 'planned')`)).map((r) => ({
+      kind: "approval.production_order", siteId: String(r.site_id), entityType: "work_order", entityId: String(r.id), recordNumber: String(r.work_order_number),
+      title: `Production order ${r.work_order_number} waits for approval`, detail: null, link: `/production/orders/${r.id}`, openedAt: d(r.at),
     })),
   "approval.batch_disposition": async (org) =>
     (await run(sql`

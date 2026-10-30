@@ -22,7 +22,9 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   // Approvals
   { kind: "approval.stock_adjustment", tab: "approvals", label: "Stock adjustment to approve", severity: "warning", permission: "inventory.adjustment.approve", actionLabel: "Review adjustment" },
   { kind: "approval.stock_count", tab: "approvals", label: "Count variance to approve", severity: "warning", permission: "inventory.stock_count.approve", actionLabel: "Review count" },
-  { kind: "approval.work_order_release", tab: "approvals", label: "Work order to release", severity: "info", permission: "production.work_order.approve", actionLabel: "Review and release" },
+  // Consultant review 2026-10-30: replaces "approval.work_order_release" (planned only, opened the old work-order
+  // screen). Draft and planned production orders, decided inline with approveProductionOrder (gate in wiring.ts).
+  { kind: "approval.production_order", tab: "approvals", label: "Production order to approve", severity: "info", permission: "production.work_order.approve", actionLabel: "Review and approve" },
   { kind: "approval.batch_disposition", tab: "approvals", label: "Batch waiting for a QA decision", severity: "warning", permission: "quality.disposition.approve", actionLabel: "Decide batch" },
   { kind: "approval.inspection_review", tab: "approvals", label: "Inspection to review", severity: "warning", permission: "quality.inspection.approve", actionLabel: "Review inspection" },
   { kind: "approval.conditional_release", tab: "approvals", label: "Conditional release to approve", severity: "warning", permission: "quality.conditional_release.approve", actionLabel: "Review request" },

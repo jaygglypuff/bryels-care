@@ -1,7 +1,7 @@
 import "server-only";
 import type { Tx } from "@/db/client";
 import type { AuthContext } from "@/lib/auth/context";
-import { type DeviationKind, type OpenDeviationInput, autoCloseReleasedBatch, registerExecutionHooks } from "@/modules/production";
+import { type DeviationKind, type OpenDeviationInput, autoCloseReleasedBatch, productionOrderApprovalVerdicts, registerExecutionHooks } from "@/modules/production";
 import {
   type DeviationSource,
   changeControlApprovalCandidates,
@@ -36,9 +36,9 @@ import {
   supplierMaterialsKind,
 } from "@/modules/procurement";
 import { customerRequirementApprovalVerdicts, priceListApprovalVerdicts, quoteApprovalVerdicts, salesOrderApprovalVerdicts } from "@/modules/sales";
-import { listCustomerReturns, registerCustomer360Section, registerSalesTaxRateResolver, registerShipmentReversalGuard, RETURN_STATUS_LABEL, type CustomerReturnStatus } from "@/modules/sales";
+import { listCustomerReturns, registerCustomer360Section, registerSalesTaxRateResolver, registerShipmentInvoicingHooks, registerShipmentReversalGuard, RETURN_STATUS_LABEL, type CustomerReturnStatus } from "@/modules/sales";
 import { expenseClaimApprovalVerdicts, invoiceApprovalVerdicts } from "@/modules/finance";
-import { disputedBills, expenseClaimsToApprove, invoiceBlockingShipmentReversal, invoicesToApprove, overdueInvoices, registerPurchaseOrderMatchSource, salesTaxRateFor } from "@/modules/finance";
+import { cancelDispatchDraftOnReversal, draftInvoiceAtDispatch, disputedBills, expenseClaimsToApprove, invoiceBlockingShipmentReversal, invoicesToApprove, overdueInvoices, registerPurchaseOrderMatchSource, salesTaxRateFor } from "@/modules/finance";
 
 /**
  * Cross-module wiring (Wave 2 and Wave 3 integration). Batch execution (production) must not import
@@ -154,6 +154,12 @@ export function registerAppHooks() {
   registerPurchaseOrderMatchSource(purchaseOrderMatchSourceImpl);
   // Wave 4 integration (W3E ↔ W4B): an invoiced dispatch is not reversed (cancel or fully credit the invoice first).
   registerShipmentReversalGuard((tx, org, shipmentId) => invoiceBlockingShipmentReversal(tx, org, shipmentId));
+  // Consultant review 2026-10-30 (flow C): the invoice draft is made at dispatch (once per shipment) and the
+  // untouched draft is cancelled when the dispatch is reversed.
+  registerShipmentInvoicingHooks({
+    onDispatched: async (tx, ctx, s) => void (await draftInvoiceAtDispatch(tx, ctx, s)),
+    onReversing: async (tx, ctx, s) => void (await cancelDispatchDraftOnReversal(tx, ctx, s)),
+  });
   // Wave 4 W4C (US-6-18, US-6-19): overdue CAPA actions, recall cases and their approval, change control
   // approval and PM plans due/overdue in the action centre; usage-based PM plans in the equipment gate.
   registerActionItemSource({ kind: "overdue_capa_action", detect: (org, now) => overdueCapaActionCandidates(org, now) });
@@ -176,4 +182,6 @@ export function registerAppHooks() {
   registerApprovalGate("approval.customer_requirement", customerRequirementApprovalVerdicts);
   registerApprovalGate("approval.change_control", changeControlApprovalVerdicts);
   registerApprovalGate("approval.recall_case", recallCaseApprovalVerdicts);
+  // Consultant review 2026-10-30 (flow B): production orders waiting for Approve, with the SoD rule of approveProductionOrder.
+  registerApprovalGate("approval.production_order", productionOrderApprovalVerdicts);
 }

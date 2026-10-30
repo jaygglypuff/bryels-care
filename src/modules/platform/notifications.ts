@@ -1,10 +1,11 @@
 import "server-only";
 import { and, count, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db/client";
-import { notifications, roles, userSiteAssignments, users } from "@/db/schema";
+import { notifications, rolePermissions, roles, userSiteAssignments, users } from "@/db/schema";
 import { activeAssignment } from "@/lib/auth/assignments";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
+import type { Permission } from "@/lib/permissions";
 
 export const SEVERITIES = ["info", "warning", "critical"] as const;
 export type Severity = (typeof SEVERITIES)[number];
@@ -73,6 +74,29 @@ export async function usersWithRoles(q: DbOrTx, organizationId: string, roleCode
         inArray(roles.code, roleCodes),
         activeAssignment(), // W2E: ended or future assignments do not count
         siteId ? or(eq(userSiteAssignments.isOrganizationWide, true), eq(userSiteAssignments.siteId, siteId)) : eq(userSiteAssignments.isOrganizationWide, true),
+      ),
+    );
+  return rows.map((r) => r.id);
+}
+
+/**
+ * Active users who hold `permission` at the site through a current role assignment (site assignment at
+ * that site, or organization-wide). Used to tell the people who must act next (hand-off notifications:
+ * production orders to approve, lots waiting for QA, invoice drafts to submit).
+ */
+export async function usersHoldingPermissionAt(q: DbOrTx, organizationId: string, permission: Permission, siteId: string): Promise<string[]> {
+  const rows = await q
+    .selectDistinct({ id: users.id })
+    .from(userSiteAssignments)
+    .innerJoin(users, eq(users.id, userSiteAssignments.userId))
+    .innerJoin(rolePermissions, eq(rolePermissions.roleId, userSiteAssignments.roleId))
+    .where(
+      and(
+        eq(users.organizationId, organizationId),
+        eq(users.status, "active"),
+        eq(rolePermissions.permissionCode, permission),
+        activeAssignment(),
+        or(eq(userSiteAssignments.isOrganizationWide, true), eq(userSiteAssignments.siteId, siteId)),
       ),
     );
   return rows.map((r) => r.id);

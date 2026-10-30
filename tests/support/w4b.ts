@@ -33,9 +33,13 @@ export type W4b = Kit & {
   procurement: AuthContext;
 };
 
-export async function loadW4b(): Promise<W4b> {
+export async function loadW4b(opts: { draftAtDispatch?: boolean } = {}): Promise<W4b> {
   registerAppHooks();
   const kit = await loadKit();
+  // The W4B suites exercise "Create invoice from a dispatched order" by hand, so the invoice draft made at
+  // dispatch (consultant review 2026-10-30, finance.invoice.draft_at_dispatch, default on) is switched off for
+  // them; tests/integration/finance/invoice-at-dispatch.test.ts covers the automatic draft.
+  await setOrgSetting(kit.orgId, "finance.invoice.draft_at_dispatch", opts.draftAtDispatch ?? false);
   const both = [kit.nfd, kit.rvs];
   return {
     ...kit,

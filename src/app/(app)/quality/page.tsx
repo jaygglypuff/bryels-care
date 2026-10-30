@@ -49,7 +49,7 @@ export default async function QaQueuePage() {
             <Count n={q.lots.length} />
           </CardTitle>
           <p className="-mt-2 mb-3 text-[13px] text-muted">
-            {quarantined.length} in quarantine, {held.length} on QA hold. Stock in these lots cannot be issued, allocated or shipped until QA decides.
+            {quarantined.length} in quarantine, {held.length} on QA hold, oldest received first. Stock in these lots cannot be issued, allocated or shipped until QA decides.
           </p>
           {q.lots.length === 0 ? (
             <EmptyState title="Nothing waiting">No material lots are in quarantine and no lots are on hold at this site.</EmptyState>
