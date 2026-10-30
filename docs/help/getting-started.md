@@ -64,7 +64,7 @@ Tip: when a button is missing or a step says it needs someone else, the message 
 
 ## 9. Plan production (production order)
 
-1. Open **Operations → New order**. Choose the product, type **How many (pieces)** and, if you have one, the **Needed by** date. It uses the approved formula and steps.
+1. Open **Operations → Production orders → New production order**. Choose the product, type **How many (pieces)** and, if you have one, the **Needed by** date. It uses the approved formula and steps.
 2. Open the order and press **Approve**. Approving checks that enough released material exists, sets it aside and creates the batch. If something is short, the screen says what is missing.
 3. Made for a customer? On the customer order press **Make for this order** instead: the product and the missing pieces are filled in.
 
@@ -87,7 +87,7 @@ Tip: when a button is missing or a step says it needs someone else, the message 
 
 1. Open **Sales & Customers → Customers** and create a customer (made-up name), then approve it.
 2. Open **Sales & Customers → Selling → Price lists** and give the product a price. Approve the price list.
-3. Open **Sales & Customers → New order**. Choose the customer, add the product and quantity, submit and confirm the order.
+3. Open **Sales & Customers → Customer orders → New customer order**. Choose the customer, add the product and quantity, submit and confirm the order.
 4. **Operations → Packing & dispatch → Picking**: pick the boxes (the system suggests the lots that expire first). Then **Boxing** and **Dispatch**: print the delivery receipt and mark the order dispatched.
 
 ## 13. Bill and get paid

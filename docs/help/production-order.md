@@ -59,9 +59,9 @@ A production order says what to make, how many and by when. You follow it on one
 
 1. Open the order. On the **Today** tab fill in **What happened?**, **Good pieces made** and the **Rejects** by type.
 2. Press **Save to daily log**. You can add more entries during the day.
-3. Made a mistake? Open **Daily log**, press **Correct this entry**, fix the numbers and say why. The old entry stays visible and no longer counts.
+3. Made a mistake? Open **Today's count**, press **Correct this entry**, fix the numbers and say why. The old entry stays visible and no longer counts.
 4. The reject types come from the setting **Reject types for the daily log**. The owner can change the list.
-5. **Operations → Daily log** shows everything written today for all orders of your site.
+5. **Operations → Today's count** shows everything written today for all orders of your site.
 
 ## Rejects summary
 
