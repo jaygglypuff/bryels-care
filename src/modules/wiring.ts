@@ -1,7 +1,7 @@
 import "server-only";
 import type { Tx } from "@/db/client";
 import type { AuthContext } from "@/lib/auth/context";
-import { type DeviationKind, type OpenDeviationInput, registerExecutionHooks } from "@/modules/production";
+import { type DeviationKind, type OpenDeviationInput, autoCloseReleasedBatch, registerExecutionHooks } from "@/modules/production";
 import {
   type DeviationSource,
   changeControlApprovalCandidates,
@@ -11,6 +11,7 @@ import {
   openDeviation,
   overdueCapaActionCandidates,
   recallCaseCandidates,
+  registerQualityReleaseHooks,
 } from "@/modules/quality";
 import { pmDueCandidates, usageAvailabilityReasons } from "@/modules/maintenance";
 import { registerEquipmentAvailabilityProvider } from "@/modules/masterdata";
@@ -87,6 +88,8 @@ export function registerAppHooks() {
       return r ? { inspectionId: r.inspectionId } : null;
     },
   });
+  // ADR-080 §9 (G3): a pass on Check quality closes the batch through production's closure (quality never imports it).
+  registerQualityReleaseHooks({ onBatchReleased: (tx, ctx, input) => autoCloseReleasedBatch(tx, ctx, input) });
   // Wave 3 W3F → W3D customer 360 (US-4-06): complaints and returns of the customer, each section only for
   // holders of its view permission; rows are scoped to the viewer's sites by the list services.
   registerCustomer360Section({

@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, inArray, ne, or } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db, type DbOrTx, type Tx } from "@/db/client";
 import {
@@ -158,6 +158,10 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
     .where(and(eq(dispositions.organizationId, ctx.organizationId), eq(dispositions.subjectType, "batch"), eq(dispositions.subjectId, batch.id)))
     .orderBy(asc(dispositions.decidedAt));
   const [outputLot] = batch.outputLotId ? await q.select().from(inventoryLots).where(eq(inventoryLots.id, batch.outputLotId)).limit(1) : [];
+  // ADR-080 §8: the Check quality record behind the latest decision (override reason, tester released).
+  const [qcheck] = (await q.execute(sql`
+    select decision, override_reason, tester_released, record_reviewed from batch_quality_checks
+    where batch_id = ${batch.id} and decision in ('pass', 'fail') order by decided_at desc limit 1`)) as unknown as { decision: string; override_reason: string | null; tester_released: boolean; record_reviewed: boolean }[];
   const holds = outputLot
     ? await q
         .selectDistinct({ number: qualityHolds.holdNumber, reason: qualityHolds.reason, status: qualityHolds.status })
@@ -424,6 +428,9 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
           decidedBy: latestDisposition!.decidedBy,
           decidedAt: latestDisposition!.decidedAt,
           reason: disposition.reason ?? null,
+          overrideReason: qcheck?.override_reason ?? null,
+          testerReleased: qcheck?.tester_released ?? false,
+          recordReviewed: qcheck?.record_reviewed ?? false,
         }
       : null,
     remarks: batch.remarks ?? null,

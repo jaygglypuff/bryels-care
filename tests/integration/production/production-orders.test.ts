@@ -90,7 +90,7 @@ describe("Approve in one step", () => {
 
     const view = await getProductionOrder(w.operator, orderId);
     expect(view.status).toBe("approved");
-    expect(view.nextAction).toMatchObject({ kind: "link", label: "Get materials", href: `/production/staging/${batchId}` });
+    expect(view.nextAction).toMatchObject({ kind: "link", label: "Get materials", href: `/production/orders/${orderId}/materials?batch=${batchId}` });
     expect(view.progress.steps!.map((s) => s.state)).toEqual(["done", "current", "todo", "todo", "todo"]);
   });
 

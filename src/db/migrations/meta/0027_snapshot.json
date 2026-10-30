@@ -1,5 +1,5 @@
 {
-  "id": "cfcf5668-f22b-4103-9f2c-89a2f4738485",
+  "id": "f5e6c163-5c99-48d6-a10f-f86d6e45d60e",
   "prevId": "24bddbd4-cbed-4f32-8332-9d5eb38ff289",
   "version": "7",
   "dialect": "postgresql",
@@ -7778,6 +7778,208 @@
         "ck_test_results_plan_test": {
           "name": "ck_test_results_plan_test",
           "value": "\"test_results\".\"inspection_id\" is null or \"test_results\".\"inspection_plan_test_id\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.batch_quality_checks": {
+      "name": "batch_quality_checks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "batch_id": {
+          "name": "batch_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decision": {
+          "name": "decision",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "record_reviewed": {
+          "name": "record_reviewed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "exceptions": {
+          "name": "exceptions",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "check_again_on": {
+          "name": "check_again_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "override_reason": {
+          "name": "override_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tester_released": {
+          "name": "tester_released",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "disposition_id": {
+          "name": "disposition_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decided_by": {
+          "name": "decided_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "batch_quality_checks_batch_idx": {
+          "name": "batch_quality_checks_batch_idx",
+          "columns": [
+            {
+              "expression": "batch_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "decided_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "batch_quality_checks_key_uq": {
+          "name": "batch_quality_checks_key_uq",
+          "columns": [
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "batch_quality_checks_organization_id_organizations_id_fk": {
+          "name": "batch_quality_checks_organization_id_organizations_id_fk",
+          "tableFrom": "batch_quality_checks",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_quality_checks_site_id_sites_id_fk": {
+          "name": "batch_quality_checks_site_id_sites_id_fk",
+          "tableFrom": "batch_quality_checks",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "batch_quality_checks_decided_by_users_id_fk": {
+          "name": "batch_quality_checks_decided_by_users_id_fk",
+          "tableFrom": "batch_quality_checks",
+          "tableTo": "users",
+          "columnsFrom": [
+            "decided_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "ck_batch_quality_checks_decision": {
+          "name": "ck_batch_quality_checks_decision",
+          "value": "\"batch_quality_checks\".\"decision\" in ('pass', 'not_yet', 'fail')"
+        },
+        "ck_batch_quality_checks_reviewed": {
+          "name": "ck_batch_quality_checks_reviewed",
+          "value": "\"batch_quality_checks\".\"decision\" <> 'pass' or \"batch_quality_checks\".\"record_reviewed\""
+        },
+        "ck_batch_quality_checks_reason": {
+          "name": "ck_batch_quality_checks_reason",
+          "value": "\"batch_quality_checks\".\"decision\" = 'pass' or \"batch_quality_checks\".\"reason\" is not null"
         }
       },
       "isRLSEnabled": false
@@ -23652,10 +23854,6 @@
           "name": "ck_inspections_subject",
           "value": "num_nonnulls(\"inspections\".\"lot_id\", \"inspections\".\"batch_id\") >= 1"
         },
-        "ck_inspections_reviewer_not_performer": {
-          "name": "ck_inspections_reviewer_not_performer",
-          "value": "\"inspections\".\"reviewed_by\" is null or \"inspections\".\"performed_by\" is null or \"inspections\".\"reviewed_by\" <> \"inspections\".\"performed_by\""
-        },
         "ck_inspections_reviewed": {
           "name": "ck_inspections_reviewed",
           "value": "(\"inspections\".\"status\" in ('approved','rejected')) = (\"inspections\".\"reviewed_by\" is not null and \"inspections\".\"reviewed_at\" is not null and \"inspections\".\"outcome\" is not null)"
@@ -28882,12 +29080,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "assigned_operator_id": {
-          "name": "assigned_operator_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "notes": {
           "name": "notes",
           "type": "text",
@@ -29179,19 +29371,6 @@
           "tableTo": "users",
           "columnsFrom": [
             "assigned_supervisor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "work_orders_assigned_operator_id_users_id_fk": {
-          "name": "work_orders_assigned_operator_id_users_id_fk",
-          "tableFrom": "work_orders",
-          "tableTo": "users",
-          "columnsFrom": [
-            "assigned_operator_id"
           ],
           "columnsTo": [
             "id"

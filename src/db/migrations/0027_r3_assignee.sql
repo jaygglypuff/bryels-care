@@ -1,2 +1,0 @@
-ALTER TABLE "work_orders" ADD COLUMN "assigned_operator_id" uuid;--> statement-breakpoint
-ALTER TABLE "work_orders" ADD CONSTRAINT "work_orders_assigned_operator_id_users_id_fk" FOREIGN KEY ("assigned_operator_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;

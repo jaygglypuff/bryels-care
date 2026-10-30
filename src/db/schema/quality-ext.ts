@@ -75,7 +75,8 @@ export const inspections = pgTable(
     check("ck_inspections_kind", sql`${t.inspectionKind} in (${inList(INSPECTION_KINDS)})`),
     check("ck_inspections_outcome", sql`${t.outcome} is null or ${t.outcome} in (${inList(INSPECTION_OUTCOMES)})`),
     check("ck_inspections_subject", sql`num_nonnulls(${t.lotId}, ${t.batchId}) >= 1`),
-    check("ck_inspections_reviewer_not_performer", sql`${t.reviewedBy} is null or ${t.performedBy} is null or ${t.reviewedBy} <> ${t.performedBy}`),
+    // ADR-080 §8 (G3): reviewer ≠ performer is the deferred constraint trigger ck_inspections_reviewer_not_performer
+    // (src/db/sql/g3.sql), lifted only for quality.release.tester_may_release or the owner override.
     check("ck_inspections_reviewed", sql`(${t.status} in ('approved','rejected')) = (${t.reviewedBy} is not null and ${t.reviewedAt} is not null and ${t.outcome} is not null)`),
     check("ck_inspections_cancelled", sql`${t.status} <> 'cancelled' or ${t.cancelReason} is not null`),
   ],

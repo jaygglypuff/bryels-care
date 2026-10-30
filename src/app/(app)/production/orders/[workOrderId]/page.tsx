@@ -113,7 +113,7 @@ function LogEntry({ e, v, types, canCorrect }: { e: DailyLogRow; v: ProductionOr
   );
 }
 
-export default async function ProductionOrderPage({ params, searchParams }: { params: Promise<{ workOrderId: string }>; searchParams: Promise<{ tab?: string }> }) {
+export default async function ProductionOrderPage({ params, searchParams }: { params: Promise<{ workOrderId: string }>; searchParams: Promise<{ tab?: string; finished?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("production.work_order.view")) return <Forbidden what="production orders" />;
   const { workOrderId } = await params;
@@ -170,6 +170,14 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
         }
       />
 
+      {sp.finished && v.batches.some((b) => b.batchNumber === sp.finished) && (
+        <div className="mb-4">
+          {/* ADR-080 G3: back from Finish batch (UX review S6). */}
+          <Banner tone="ok" title={`Batch ${sp.finished} finished`}>
+            It is in the hold area, waiting for the quality check.
+          </Banner>
+        </div>
+      )}
       {v.status === "cancelled" ? (
         <div className="mb-4">
           <Banner tone="neu" title="Cancelled">{wo.cancelReason}</Banner>

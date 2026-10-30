@@ -123,7 +123,19 @@ export const bmrDataSchema = z.object({
   deviations: section(z.object({ number: text, kind: text, severity: text, status: text, description: text, raisedBy: opt, raisedAt: opt, closedBy: opt, closedAt: opt })),
   exceptions: z.array(text).max(200),
   disposition: z
-    .object({ decision: z.enum(["release", "reject", "other"]), label: text, decidedBy: text, decidedAt: text, reason: opt })
+    .object({
+      decision: z.enum(["release", "reject", "other"]),
+      label: text,
+      decidedBy: text,
+      decidedAt: text,
+      reason: opt,
+      /** ADR-080 §8: the releaser worked on the batch; owner override with this typed reason. */
+      overrideReason: opt.optional(),
+      /** ADR-080 §8: the releaser also entered the test results (quality.release.tester_may_release). */
+      testerReleased: z.boolean().optional(),
+      /** ADR-080 §8: the "batch record reviewed" tick on Check quality. */
+      recordReviewed: z.boolean().optional(),
+    })
     .nullable(),
   remarks: opt,
   amendments: z

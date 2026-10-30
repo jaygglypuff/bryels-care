@@ -25,6 +25,8 @@ export { recordDispense, checkDispense, voidDispense, toleranceRange, toBaseQty,
 export { recordReading, selectEquipment, approveStepException, evaluateReading, limitsLabel } from "./process";
 export { startStep, completeStep, type CompleteStepInput } from "./steps";
 export { issuePackaging, countPackaging } from "./packaging";
+// ADR-080 G3: Finish batch (one transaction over the yield, rejects, packaging and hold-area bodies).
+export { finishBatch, getFinishView, defaultHoldLocation, type FinishBatchInput, type FinishReject, type FinishPackaging, type FinishView } from "./finish";
 export { recordYield, approveYield, recordScrapRework, decideScrapRework } from "./yield";
 export { postBatchToQuarantine, quarantineLocations, transferBlockers, type PostToQuarantineInput } from "./output";
 export { getBatchExecution, batchSiteId, equipmentOptions, packagingLotOptions, signerOptions, type BatchExecution, type ExecStep } from "./execution-queries";
@@ -33,6 +35,7 @@ export { buildBmrDataset, generateBmr, generateBmrInTx, bmrPrintView, bmrDocumen
 export {
   closeBatch,
   closureChecks,
+  autoCloseReleasedBatch,
   requestReopen,
   decideReopen,
   withdrawReopen,
@@ -90,6 +93,7 @@ export {
   progressSteps,
   isLate,
   piecesText,
+  pieceWord,
   shortDay,
   type ProductionOrderStatus,
   type ProductionOrderStatusView,
@@ -117,6 +121,7 @@ export {
   type ApproveResult,
   type MakeForLine,
 } from "./production-orders";
+export { batchLogCounts } from "./daily-log";
 export { addDailyLog, correctDailyLog, listDailyLogs, listSiteDailyLogs, defectSummary, defectTypes, type DailyLogEntryInput, type DailyLogRow, type DefectSummary, type DefectSummaryRow, type SiteDailyLog } from "./daily-log";
 export {
   buildProductionPlan,

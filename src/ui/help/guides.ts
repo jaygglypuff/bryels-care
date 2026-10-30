@@ -33,6 +33,9 @@ export const GUIDE_FILES: Record<string, string> = {
   "production.weigh": "weigh.md",
   "production.step": "step.md",
   "quality.release": "qa-release.md",
+  // ADR-080 G3: Finish batch and Check quality
+  "production.finish": "finish.md",
+  "quality.check": "check-quality.md",
   "production.bmr": "bmr.md",
   "sales.order": "order.md",
   "sales.fulfilment": "pick-pack-dispatch.md",

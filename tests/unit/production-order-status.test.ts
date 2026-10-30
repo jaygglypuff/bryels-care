@@ -209,6 +209,15 @@ describe("next action table (V2-2): one primary button per state", () => {
     expect(act("released", [batch("planned")], none).primary).toMatchObject({ kind: "wait", who: { permission: "inventory.movement.post", siteId: "s1" } });
   });
 
+  it("stage G3: Finish opens the Finish screen and Check quality the one-page check of that batch", () => {
+    const fin = act("in_progress", [batch("in_process", { stepRecords: SOAP_STEPS.map((s) => done(s.stepNo)) })]).primary;
+    expect(fin).toMatchObject({ kind: "link", label: "Finish" });
+    expect(fin.kind === "link" && fin.href).toMatch(/^\/production\/[^/]+\/finish$/);
+    const qb = batch("quarantined");
+    expect(act("completed", [qb]).primary).toMatchObject({ kind: "link", label: "Check quality", href: `/quality/check/${qb.id}` });
+    expect(act("completed", [batch("quarantined", { lotStatus: "on_hold" })]).primary).toMatchObject({ kind: "link", href: expect.stringMatching(/^\/quality\/check\//) });
+  });
+
   it("draft: separation of duties makes the creator wait for another approver", () => {
     expect(act("draft", [], all, { can: true, sodConflict: true }).primary).toMatchObject({ kind: "wait", title: "Another person approves" });
   });

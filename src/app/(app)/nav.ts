@@ -32,7 +32,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { label: "Receive materials", href: "/inventory/receive", icon: "receive", permission: "procurement.goods_receipt.create" },
   // ADR-074: a production order creates its batch on approval; operators never "create a batch".
   { label: "New production order", href: "/production/orders/new", icon: "batch", permission: "production.work_order.create" },
-  { label: "Quality check", href: "/quality", icon: "qa", permission: "quality.disposition.view" },
+  { label: "Quality check", href: "/quality/check", icon: "qa", permission: "quality.disposition.view" },
   { label: "New customer order", href: "/sales/new", icon: "order", permission: "sales.sales_order.create" },
   { label: "Traceability", href: "/quality/trace", icon: "trace", permission: "quality.genealogy.view" },
 ];
@@ -88,7 +88,8 @@ export const NAV: NavGroup[] = [
       { label: "Today", href: "/production/today", permission: "production.daily_log.view" },
       { label: "Rejects", href: "/production/defects", permission: "production.daily_log.view" },
       { label: "New order", href: "/production/orders/new", permission: "production.work_order.create" },
-      { label: "Quality check", href: "/quality", permission: "quality.disposition.view" },
+      // ADR-080 G3: the one-page check of finished batches; lots waiting for QA are under Quality → QA queue.
+      { label: "Quality check", href: "/quality/check", permission: "quality.disposition.view" },
       ...inSection("Receiving", [
         { label: "Expected deliveries", href: "/procurement/expected", permission: "procurement.purchase_order.view" },
         { label: "Receive materials", href: "/inventory/receive", permission: "procurement.goods_receipt.create" },
@@ -96,6 +97,7 @@ export const NAV: NavGroup[] = [
         { label: "Put away", href: "/inventory/receive/put-away", permission: "inventory.movement.post" },
       ]),
       ...inSection("Quality", [
+        { label: "QA queue", href: "/quality", permission: "quality.disposition.view" },
         { label: "Inspections", href: "/quality/inspections", permission: "quality.inspection.view" },
         { label: "Deviations", href: "/quality/deviations", permission: "quality.deviation.view" },
         { label: "QA holds", href: "/quality/holds", permission: "quality.hold.view" },
@@ -331,7 +333,7 @@ export function tabsFor(can: Can, roles: readonly string[]): Tab[] {
       : persona === "warehouse"
         ? [home, { label: "Receive", href: "/inventory/receive", icon: "receive", permission: "procurement.goods_receipt.create" }, scan, inventory, menu]
         : persona === "qa"
-          ? [home, { label: "Quality check", href: "/quality", icon: "shield", permission: "quality.disposition.view" }, operations, scan, menu]
+          ? [home, { label: "Quality check", href: "/quality/check", icon: "shield", permission: "quality.disposition.view" }, operations, scan, menu]
           : [home, operations, inventory, sales, menu];
   return tabs.filter((t) => !t.permission || can(t.permission));
 }
