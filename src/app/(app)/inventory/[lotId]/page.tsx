@@ -71,6 +71,9 @@ export default async function LotPage({ params, searchParams }: { params: Promis
   const expired = lot.qualityStatus === "expired" || isPastExpiry(lot.expiresOn);
   const boxes = ctx.can("inventory.container.view") && lot.siteId === ctx.currentSiteId ? await listContainers(ctx, { q: lot.lotNumber }) : [];
   const usable = lot.qualityStatus === "released" && !expired;
+  // The item page (every lot of this material / product, totals, suppliers, expiry); a lot of another site opens "All my sites".
+  const itemId = lot.itemKind === "product" ? lot.productId : lot.materialId;
+  const itemHref = itemId ? `/inventory/items/${lot.itemKind === "product" ? "product" : "material"}/${itemId}${lot.siteId !== ctx.currentSiteId ? "?all=1" : ""}` : null;
 
   // Allowed actions only; disallowed ones are shown greyed with the reason (ux-system §5.9).
   const actions: { key: string; label: string; href?: string; icon: React.ReactNode; reason?: string; newTab?: boolean }[] = [];
@@ -97,11 +100,13 @@ export default async function LotPage({ params, searchParams }: { params: Promis
         title={lot.lotNumber}
         subtitle={
           <>
-            <Link href="/inventory" className="text-primary-text hover:underline">Stock</Link> · {lot.itemName} · {lot.itemCode}
+            <Link href="/inventory" className="text-primary-text hover:underline">Stock</Link> ·{" "}
+            {itemHref ? <Link href={itemHref} className="text-primary-text hover:underline">{lot.itemName}</Link> : lot.itemName} · {lot.itemCode}
           </>
         }
         actions={
           <>
+            {itemHref && <LinkButton href={itemHref} variant="secondary" size="sm" data-testid="lot-item-link">All lots of this item</LinkButton>}
             {ctx.can("inventory.movement.view") && <LinkButton href={`/inventory/stock-card/${lot.id}`} variant="secondary" size="sm">Stock card</LinkButton>}
             <StatusChip status={lot.qualityStatus} className="px-3 py-1 text-[13px]" />
           </>

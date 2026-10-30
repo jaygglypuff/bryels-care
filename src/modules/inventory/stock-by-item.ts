@@ -6,7 +6,7 @@ import { inventoryBalances, inventoryLots, locations, materials, products, wareh
 import type { AuthContext } from "@/lib/auth/context";
 import { isSection, sectionSql } from "@/modules/masterdata";
 import { manilaToday } from "./availability";
-import { fmtStock, lowStockItems } from "./low-stock";
+import { fmtStock, fmtStockFriendly, lowStockItems } from "./low-stock";
 import { EXPIRY_WARN_DAYS } from "./lots";
 
 /**
@@ -43,6 +43,9 @@ export type StockItemLot = {
   lotId: string;
   lotNumber: string;
   supplierLotNumber: string | null;
+  /** Supplier name and brand as recorded at receipt (ADR-076); null when not recorded. */
+  supplierName: string | null;
+  brand: string | null;
   /** Plain location names, comma separated. */
   where: string;
   qty: string;
@@ -73,6 +76,11 @@ export type StockItem = {
   totalText: string;
   nearestExpiry: string | null;
   nearestDaysLeft: number | null;
+  /**
+   * The ONE total of the item (all of its lots here, whatever the status chip): total = ready + waiting for QA
+   * check + stopped by QA + expired + bad (rejected / recalled). Grade-5 usability test 2026-10-30.
+   */
+  breakdown: { totalText: string; readyText: string; waitingText: string; onHoldText: string; expiredText: string; badText: string };
   /** Earliest expiry first: the top lot is the one to use next. */
   lots: StockItemLot[];
 };
@@ -114,6 +122,8 @@ type LotRow = {
   lot_id: string;
   lot_number: string;
   supplier_lot_number: string | null;
+  supplier_name: string | null;
+  brand: string | null;
   quality_status: string;
   expires_on: string | null;
   days_left: number | null;
@@ -152,7 +162,7 @@ export async function stockByItem(ctx: AuthContext, f: StockByItemFilter = {}): 
   }
 
   const rows = (await db.execute(sql`
-    select lot.id as lot_id, lot.lot_number, lot.supplier_lot_number, lot.quality_status,
+    select lot.id as lot_id, lot.lot_number, lot.supplier_lot_number, lot.supplier_name, lot.brand, lot.quality_status,
            lot.expires_on::text as expires_on, (lot.expires_on - ${today}::date) as days_left,
            lot.item_kind, coalesce(m.id, p.id) as item_id, coalesce(m.code, p.sku_code) as item_code,
            coalesce(m.name, p.name) as item_name, lot.base_uom as unit,
@@ -186,6 +196,8 @@ export async function stockByItem(ctx: AuthContext, f: StockByItemFilter = {}): 
       lotId: r.lot_id,
       lotNumber: r.lot_number,
       supplierLotNumber: r.supplier_lot_number,
+      supplierName: r.supplier_name,
+      brand: r.brand,
       where: r.where_names,
       qty: new Decimal(r.qty).toString(),
       qtyText: fmtStock(r.qty, r.unit),
@@ -207,6 +219,7 @@ export async function stockByItem(ctx: AuthContext, f: StockByItemFilter = {}): 
   }
 
   const build = (a: Acc, lots: StockItemLot[], blockedGroup: boolean): StockItem => {
+    const all = (pred: (s: LotState) => boolean) => fmtStockFriendly(a.lots.filter((l) => pred(l.state)).reduce((t, l) => t.plus(l.qty), new Decimal(0)), a.unit);
     const sum = (pred: (s: LotState) => boolean) => lots.filter((l) => pred(l.state)).reduce((t, l) => t.plus(l.qty), new Decimal(0));
     const usable = sum((s) => s === "ok" || s === "expiring");
     const waiting = sum((s) => s === "waiting");
@@ -232,6 +245,14 @@ export async function stockByItem(ctx: AuthContext, f: StockByItemFilter = {}): 
       totalText: fmtStock(total, a.unit),
       nearestExpiry: firstDated?.expiresOn ?? null,
       nearestDaysLeft: firstDated?.daysLeft ?? null,
+      breakdown: {
+        totalText: all(() => true),
+        readyText: all((s) => s === "ok" || s === "expiring"),
+        waitingText: all((s) => s === "waiting"),
+        onHoldText: all((s) => s === "on_hold"),
+        expiredText: all((s) => s === "expired"),
+        badText: all((s) => s === "rejected" || s === "recalled"),
+      },
       lots,
     };
   };
