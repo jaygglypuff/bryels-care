@@ -90,6 +90,8 @@ export const NAV: NavGroup[] = [
       { label: "Rejects", href: "/production/defects", permission: "production.daily_log.view" },
       // ADR-080 G3: the one-page check of finished batches; lots waiting for QA are under Quality → QA queue.
       { label: "Quality check", href: "/quality/check", permission: "quality.disposition.view" },
+      // ADR-084: the full-screen production TV (no menus); floor personas keep it out of their menu (FLOOR_MENU).
+      { label: "Floor screen (TV)", href: "/floor", permission: "production.batch.view" },
       ...inSection("Receiving", [
         { label: "Expected deliveries", href: "/procurement/expected", permission: "procurement.purchase_order.view" },
         { label: "Receive materials", href: "/inventory/receive", permission: "procurement.goods_receipt.create" },
@@ -258,6 +260,14 @@ export function productionPersona(can: Can, roles: readonly string[]): Productio
   return "viewer";
 }
 
+/** ADR-084: roles that only drive a wall screen. An account holding nothing else lands on the screen, not on Home. */
+export const DISPLAY_ROLES: readonly string[] = ["floor_display"];
+
+/** Where "Home" is for this person: "/floor" for a display-only account (the production TV), else "/dashboard". */
+export function homeHref(roles: readonly string[]): string {
+  return roles.length > 0 && roles.every((r) => DISPLAY_ROLES.includes(r)) ? "/floor" : "/dashboard";
+}
+
 /** The production tabs of Operations for one person: operators "My work" and "Today"; everyone else the orders list. */
 export function productionItems(persona: ProductionPersona): NavItem[] {
   if (persona === "operator")
@@ -312,7 +322,8 @@ function trimForFloor(groups: NavGroup[], persona: ProductionPersona): NavGroup[
 export function buildNav(can: Can, roles: readonly string[], opts: { approver?: boolean } = {}): NavGroup[] {
   const persona = productionPersona(can, roles);
   const approver = opts.approver ?? true;
-  const groups = NAV.filter((g) => !(g.label === "Management" && FLOOR_PERSONAS.includes(persona))).map((g) => {
+  const displayOnly = roles.length > 0 && roles.every((r) => r === "floor_display"); // ADR-084: the TV account
+  const groups = NAV.filter((g) => !(g.label === "Management" && (FLOOR_PERSONAS.includes(persona) || displayOnly))).map((g) => {
     if (g.label !== "Operations") return g;
     const hub = g.items.filter((i) => i.hub);
     const rest = g.items.filter((i) => !i.hub && !PRODUCTION_TAB_HREFS.has(i.href));

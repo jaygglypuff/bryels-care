@@ -1511,3 +1511,39 @@ run with testers playing a non-technical owner and floor staff (`docs/USABILITY_
 9. **Low stock** (`lowStockItems`, A-INV-LOW-01): usable released stock below the active reorder minimum
    (materials) or product minimum, shown in Home → Needs your attention. Reorder suggestions are worked out
    on page load when the nightly job has not run for 26 hours (`ensureReorderSuggestionsFresh`).
+
+## ADR-084 Floor screen (production TV)
+
+**Status.** Accepted (2026-10-30). Owner request: "a dashboard that is flashed on a screen in real time in
+the production area". Plan: `docs/FLOOR_DISPLAY.md`. Builds on ADR-080 (flow facts, status v2), ADR-081
+(Operations destination) and ADR-083 (floor menus).
+
+**Decisions.**
+1. **One read model, no new tables.** `getFloorDisplay(ctx, { siteId? })` (`src/modules/production/floor-display.ts`)
+   reuses `batchFlowFacts`/`currentStepOf`/`waitLabel`, `loadBatchFacts` + `productionOrderStatus` and
+   `defectSummary`. Panels: Making now (batches `materials_staged`/`in_process`, max 6 + "N more"), Next up
+   (orders whose status v2 is Approved and whose batches have not reached `materials_staged`, by needed-by
+   then planned start, max 5, "Late"), Waiting (curing/resting, `awaiting_qc`/`quarantined` with the oldest
+   age, approved orders whose approval recorded shortages), Today (daily log good and rejects of the
+   plant's day; "planned" = expected pieces of the orders In progress, the bar is hidden when that is 0).
+2. **Authorization on the server.** `production.batch.view` at the site (`requireAt`: 404 outside the
+   caller's sites, 403 without the permission). "Today" also needs `production.daily_log.view` at the site,
+   else the panel says so. The payload holds no prices, no customer or supplier names and only first names.
+3. **Route `/floor` outside the `(app)` group** (no menus, nothing to press), signed in with `requireContext()`
+   like the print pages; `?site=<code>` picks one of the caller's sites. Sizes in vw so 1920 × 1080 and
+   1280 × 720 show the same layout. Icons + words for every tone (green on track, amber waiting, red late).
+4. **Refresh = server render every 30 s** (`router.refresh()`), "Updated hh:mm:ss"; when the data is older
+   than 75 s or the browser is offline the screen says "Connection lost — showing hh:mm data". The error
+   boundary retries by itself every 30 s. No websockets at this volume (SSE stays a later option). The timed
+   `router.refresh()` is listed as an allowed exception of ADR-043 (no form, no server action on this page);
+   the route has no `loading.tsx` (ADR-043 §3).
+5. **Role "Floor display"** (`floor_display`, site-scoped, three `.view` strings), defined last in
+   `src/lib/permissions.ts` so no grant loop widens it; synced by the seed and `pnpm admin:bootstrap
+   --sync-roles`. Demo account `floor.nfd@bryels-care.test` ("Floor TV NFD", NFD). An account whose only
+   role is floor_display lands on `/floor` (`homeHref`). Operations shows "Floor screen (TV)" to roles
+   with `production.batch.view`, except floor personas (operator, warehouse; ADR-083 FLOOR_MENU).
+
+**Consequences / risks.** The TV account is a normal session: it is signed out after the absolute session
+lifetime (`session.absolute_hours`, default 7 days) and must be signed in again; a revocable signed display
+link per site is the planned follow-up. The planned-pieces figure mixes "made today" with the plan of the
+orders being made (multi-day curing orders inflate it); the owner should confirm the wording after use.

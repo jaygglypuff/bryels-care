@@ -276,7 +276,7 @@ export async function loadBatchFacts(workOrderIds: string[]): Promise<Map<string
 }
 
 /** Expected (or, once batches are finished, made) pieces of an order. */
-function piecesOf(wo: { qtyPlannedBase: string; targetUnits: string | null; batchCount: number }, unitNetMassG: string, yieldPct: string | null, madeUnits: string | null, family: string) {
+export function piecesOf(wo: { qtyPlannedBase: string; targetUnits: string | null; batchCount: number }, unitNetMassG: string, yieldPct: string | null, madeUnits: string | null, family: string) {
   const expected = wo.targetUnits ? new Decimal(wo.targetUnits) : unitsFrom(wo.qtyPlannedBase, yieldPct, unitNetMassG);
   const made = madeUnits && new Decimal(madeUnits).gt(0) ? new Decimal(madeUnits) : null;
   return {

@@ -25,14 +25,15 @@ const sourceFiles = [...appFiles, ...walk(path.join(ROOT, "src/ui"))].filter((f)
 
 /**
  * `router.refresh()` is allowed only where no server-action response exists to carry the page:
- * uploads through the REST API, and the MFA recovery codes, which stay on screen until the user
- * confirms they saved them.
+ * uploads through the REST API, the MFA recovery codes, which stay on screen until the user
+ * confirms they saved them, and the floor screen's timed 30-second refresh (ADR-084: no form, no action).
  */
 const REFRESH_ALLOWED = new Set([
   "src/app/(app)/inventory/receive/[grId]/forms.tsx",
   "src/app/(app)/production/[batchId]/closure/forms.tsx",
   "src/app/(app)/account/forms.tsx",
   "src/app/(app)/admin/imports/forms.tsx",
+  "src/app/floor/live.tsx",
 ]);
 
 describe("in-place actions (ADR-043)", () => {

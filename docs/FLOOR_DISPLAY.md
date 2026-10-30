@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Planned (consultant review 2026-10-30); MVP built as `/floor` (see §9) |
+| Status | MVP built as `/floor` (ADR-084, 2026-10-30); warehouse variant, rotation, dark theme and signed display link not built (see §9) |
 | Owner request | "A dashboard that is flashed on a screen in real time in the production area: what is currently being processed, what needs to be processed, etc." |
 | Brief | Part II §9 (central work board), Part IV §9 (central operations board), §8 (mobile/tablet: screens are arrangements of the same workflows) |
 
@@ -93,7 +93,36 @@ disabled. Wi-Fi to the internet (the app is on Railway).
 
 ## 9. Delivery
 
-| Step | Content |
-|---|---|
-| MVP | `/floor` page + read model + auto-refresh + display role, production panels (§2) |
-| Next | Warehouse variant, rotation, dark theme, signed display link |
+| Step | Content | Status |
+|---|---|---|
+| MVP | `/floor` page + read model + auto-refresh + display role, production panels (§2) | **Built** (ADR-084) |
+| Next | Warehouse variant (`?area=warehouse`), rotation, dark theme, signed display link | Not built |
+
+### 9.1 As built (MVP)
+
+| Part | Where | Notes |
+|---|---|---|
+| Read model | `src/modules/production/floor-display.ts` → `getFloorDisplay(ctx, { siteId? })` | `production.batch.view` at the site (404 other sites, 403 without it); Today needs `production.daily_log.view` |
+| Page | `src/app/floor/page.tsx` (+ `live.tsx`, `error.tsx`; no `loading.tsx`, ADR-043) | Outside the `(app)` group: no menus; `requireContext()`; `?site=<code>` |
+| Refresh | `FloorRefresher` in `live.tsx` | `router.refresh()` every 30 s; "Updated hh:mm:ss"; "Connection lost — showing hh:mm data" after 75 s without fresh data or when offline; the error screen retries every 30 s |
+| Role | `floor_display` "Floor display" in `src/lib/permissions.ts` | Site-scoped; `production.batch.view`, `production.work_order.view`, `production.daily_log.view`; synced by seed and `pnpm admin:bootstrap --sync-roles` |
+| Demo account | `floor.nfd@bryels-care.test` / `demo1234`, "Floor TV NFD", NFD | A display-only account lands on `/floor` after sign-in (`homeHref` in `nav.ts`) |
+| Menu | Operations → "Floor screen (TV)" | Roles with `production.batch.view`; not in the operator and warehouse menus (ADR-083) |
+| Tests | `tests/integration/production/floor-display.test.ts`, `tests/unit/nav-per-role.test.ts` | Making now, Next up, Waiting, Today, no prices/customers, cross-site and role negatives, seed |
+
+Rules as built (§3 refined):
+
+- **Making now**: batches `materials_staged` ("Materials ready · not started yet") and `in_process`
+  ("Step 4 of 7 · Mix and pour"), oldest start first; percent = steps done ÷ steps. A started wait step shows
+  "Curing until Sat 1 Nov · 2 days left" (amber, hourglass) or "Curing finished — ready for the next step"
+  (green, tick). First name of the order's assignee, else "Anyone".
+- **Next up**: orders whose status is Approved and whose batches have not reached `materials_staged` (those are
+  already on a card), by needed-by (empty last), then planned start. "Late" (red, warning icon) when needed-by has
+  passed; "Missing materials" (amber) when the approval recorded shortages.
+- **Waiting**: batches curing/resting (and how many have finished their wait); batches `awaiting_qc` or
+  `quarantined` with the oldest age ("oldest waiting 3 days"); approved orders missing materials.
+- **Today**: good pieces and rejects (with %) from today's daily log entries that count; "of N planned" and the bar
+  only when the orders In progress have expected pieces (assumption: planned = expected pieces of the orders being
+  made; confirm with the owner after use).
+- **Session**: the TV account keeps a normal session; it must sign in again after `session.absolute_hours`
+  (default 7 days). The signed display link (Next) removes this.

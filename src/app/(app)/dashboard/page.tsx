@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
@@ -7,6 +8,7 @@ import { myApprovalCount } from "@/modules/action-centre";
 import { floorTaskCounts, myFloorTasks } from "@/modules/production";
 import { lowStockItems } from "@/modules/inventory";
 import { EmptyState, PageHeader, cx } from "@/ui/core";
+import { homeHref } from "../nav";
 import { OperatorHome, TasksToday } from "./operator-home";
 import { HeadlineNumbers, NeedsAttention, RightNow, attentionItems } from "./simple-home";
 
@@ -15,6 +17,8 @@ export const dynamic = "force-dynamic";
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ scope?: string; period?: string }> }) {
   const ctx = await requireContext();
   const sp = await searchParams;
+  // ADR-084: the production TV account (Floor display role only) has the floor screen as its home.
+  if (homeHref(ctx.roleCodes) !== "/dashboard") redirect(homeHref(ctx.roleCodes));
 
   // Operators (no analytics.dashboard.view) get a task home instead of the analytics overview.
   if (!ctx.can("analytics.dashboard.view")) {

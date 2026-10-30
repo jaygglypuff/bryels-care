@@ -113,6 +113,8 @@ async function main() {
     ["sales@bryels-care.test", "Mara Santos", "sales_cs", [nfd.id, rvs.id]],
     ["warehouse.rvs@bryels-care.test", "Carlo Bautista", "warehouse_operator", [rvs.id]],
     ["auditor@bryels-care.test", "Lea Fernandez", "auditor", ["org"]],
+    // ADR-084: the production TV's display account (read-only Floor display role, NFD only).
+    ["floor.nfd@bryels-care.test", "Floor TV NFD", "floor_display", [nfd.id]],
   ];
   const U: Record<string, string> = {};
   // The organization's system actor (ADR-029; src/lib/auth/system.ts): attributed scheduled work, never signs in.
