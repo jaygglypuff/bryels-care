@@ -1503,3 +1503,11 @@ run with testers playing a non-technical owner and floor staff (`docs/USABILITY_
    test for the list); developer codes (ADR, KPI, Phase, Wave) are not shown to users.
 7. **The production flow never sends an operator to the full batch record to finish:** the last step's
    button is "Finish" and opens the simple Finish screen.
+8. **"To approve" lists only what the user can decide now** (refines ADR-082 §4): each approvable module
+   registers a read-only verdict in `src/modules/wiring.ts` that reuses its decide service's step, role and
+   same-person rules; everything else visible to the user sits under "Waiting for others" with who must
+   decide, and the badge equals the decidable rows. Approve is an on-page two-step confirmation (no
+   browser pop-up). Kinds without a verdict keep the old rule (permission at the site, not your own request).
+9. **Low stock** (`lowStockItems`, A-INV-LOW-01): usable released stock below the active reorder minimum
+   (materials) or product minimum, shown in Home → Needs your attention. Reorder suggestions are worked out
+   on page load when the nightly job has not run for 26 hours (`ensureReorderSuggestionsFresh`).

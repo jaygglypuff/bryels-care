@@ -29,7 +29,7 @@ export function attentionItems(oc: OperationsCenter, approvals: number, lowStock
   const qc = st("qc");
   if (qc && qc.count > 0) items.push({ key: "qc", text: `${plural(qc.count, "finished batch waits", "finished batches wait")} for the quality check`, href: qc.href });
   add("inspection", (n) => `${plural(n, "material lot is", "material lots are")} on quality hold`);
-  if (lowStock && lowStock > 0) items.push({ key: "low", text: `${plural(lowStock, "material is", "materials are")} below the minimum stock`, href: "/procurement/reorder" });
+  if (lowStock && lowStock > 0) items.push({ key: "low", text: `${plural(lowStock, "item is", "items are")} below the minimum stock`, href: "/procurement/reorder", urgent: true });
   add("raw_available", (n) => `${plural(n, "raw material lot expires", "raw material lots expire")} within 30 days`);
   add("finished", (n) => `${plural(n, "finished goods lot expires", "finished goods lots expire")} within 30 days`);
   return items;

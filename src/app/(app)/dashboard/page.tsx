@@ -5,6 +5,7 @@ import { fmtDateTime } from "@/lib/qty";
 import { getOperationsCenter, getOperatorHome, getOwnerOverview } from "@/modules/analytics";
 import { myApprovalCount } from "@/modules/action-centre";
 import { listProductionOrders } from "@/modules/production";
+import { lowStockItems } from "@/modules/inventory";
 import { EmptyState, PageHeader, cx } from "@/ui/core";
 import { NextTaskCard, OperatorHome } from "./operator-home";
 import { HeadlineNumbers, NeedsAttention, RightNow, attentionItems } from "./simple-home";
@@ -51,8 +52,12 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       );
     throw e;
   }
-  const [oc, approvals] = await Promise.all([getOperationsCenter(ctx, { all }), myApprovalCount(ctx).catch(() => 0)]);
-  const items = attentionItems(oc, approvals, null);
+  const [oc, approvals, low] = await Promise.all([
+    getOperationsCenter(ctx, { all }),
+    myApprovalCount(ctx).catch(() => 0),
+    ctx.can("inventory.balance.view") ? lowStockItems(ctx, { siteIds: all ? ctx.allowedSiteIds : [ctx.currentSiteId] }).catch(() => null) : Promise.resolve(null),
+  ]);
+  const items = attentionItems(oc, approvals, low ? low.length : null);
   const q = (over: Record<string, string>) => {
     const u = new URLSearchParams({ ...(all ? { scope: "all" } : {}), ...(period !== "week" ? { period } : {}), ...over });
     for (const [k, v] of [...u.entries()]) if (!v) u.delete(k);
