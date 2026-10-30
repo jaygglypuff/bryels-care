@@ -148,7 +148,7 @@ async function kpiValue(page, caption) {
     await page.getByRole('button', { name: 'Post receipt' }).click();
     await page.waitForURL(/\/inventory\/receive\/[0-9a-f-]{36}\?posted=1/, { timeout: 30000 });
     await expectText(page, 'posted');
-    facts.receiptNumber = (await page.locator('h1').innerText()).trim();
+    facts.receiptNumber = (await page.locator('[data-testid=record-reference]').innerText()).trim(); // R3 record header
     facts.coconutLot = (await page.locator('[data-testid=created-lot]').first().innerText()).trim();
     assert(/^GR-\d{2}-\d{5}$/.test(facts.receiptNumber), 'receipt number ' + facts.receiptNumber);
     assert(/^L-\d{4}-\d{5}$/.test(facts.coconutLot), 'lot number ' + facts.coconutLot);
@@ -538,7 +538,7 @@ async function kpiValue(page, caption) {
     await page.getByRole('button', { name: 'Convert to sales order' }).click();
     await page.waitForURL(/\/sales\/[0-9a-f-]{36}(\?|$)/, { timeout: 30000 });
     facts.orderId = page.url().split('/').pop().split('?')[0];
-    facts.orderNumber = (await page.locator('h1').innerText()).trim();
+    facts.orderNumber = (await page.locator('[data-testid=record-reference]').innerText()).trim(); // R3 record header
     await expectText(page, facts.quoteNumber);
     // Sari Glow's open orders plus this one exceed its credit limit: the order waits for finance.
     await page.getByRole('button', { name: 'Submit and confirm order' }).click();

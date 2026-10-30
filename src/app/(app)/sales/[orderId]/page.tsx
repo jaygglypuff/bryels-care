@@ -4,15 +4,19 @@ import Decimal from "decimal.js";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, daysUntil, fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
-import { getOrder, manilaToday } from "@/modules/sales";
+import { fulfilmentForOrder, getOrder, manilaToday } from "@/modules/sales";
 import { productionOrdersForSalesOrder, salesOrderShortfalls, type MakeForLine } from "@/modules/production";
-import { Card, CardTitle, Dl, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Card, CardTitle, Dl, LinkButton, Table, Td } from "@/ui/core";
 import { Banner, StatusChip } from "@/ui/status";
+import { RecordHeader } from "@/ui/record";
+import { salesOrderSteps } from "@/ui/record-steps";
 import { Forbidden } from "../../forbidden";
 import { AllocateForm } from "./order-actions";
 import { FulfilmentPanel } from "./fulfilment-panel"; // W3E
+import { startPickAction } from "../fulfilment-actions";
+import { Cmd } from "../fulfilment-forms";
 import { ApproveOrderForm, CancelOrderPanel, ReorderForm, ReturnOrderForm, SubmitOrderForm } from "../orders/order-commercial";
-import { MaskedNote, Money, SalesStatus } from "../orders/sales-ui";
+import { MaskedNote, Money } from "../orders/sales-ui";
 import { Help } from "@/ui/help/help";
 import { DeleteDraftCard } from "../../delete-draft-button";
 
@@ -54,18 +58,51 @@ export default async function OrderDetailPage({ params, searchParams }: { params
   const toMake: MakeForLine[] = ctx.can("production.work_order.create") ? (await salesOrderShortfalls(ctx, order.id).catch(() => [])).filter((l) => D(l.missing).gt(0)) : [];
   const beingMade = ctx.can("production.work_order.view") ? await productionOrdersForSalesOrder(ctx, order.id) : [];
   const warnings = order.warnings ?? [];
+  const fulfilment = await fulfilmentForOrder(ctx, order.id);
+  const canSubmit = ctx.can("sales.sales_order.submit");
+  const canAllocate = ctx.can("inventory.allocation.create");
+  const pickable = !!fulfilment && ["allocated", "partially_shipped"].includes(fulfilment.order.status) && fulfilment.openAllocations > 0 && !fulfilment.openPick && ctx.can("sales.pick.create");
+  // One next action (R3): the existing single-click command or link for this status. Commands that need
+  // typed input (approval note, reasons) stay in their card below and the header says where.
+  const primary =
+    status === "draft" && canSubmit ? (
+      <SubmitOrderForm orderId={order.id} />
+    ) : status === "confirmed" && canAllocate ? (
+      <AllocateForm orderId={order.id} label={hasAllocations ? "Allocate remaining (FEFO)" : "Allocate stock (FEFO)"} />
+    ) : fulfilment?.openPick ? (
+      <LinkButton href={`/sales/picking/${fulfilment.openPick.id}`} variant="cta" size="lg">Continue pick {fulfilment.openPick.pickNumber}</LinkButton>
+    ) : pickable ? (
+      <Cmd action={startPickAction} fields={{ orderId: order.id }} label="Start pick list" pending="Starting…" variant="cta" size="lg">
+        <p className="text-[13px] text-fg-2">Scan every allocated box (or the lot with a quantity for loose units). Stock moves only at dispatch.</p>
+      </Cmd>
+    ) : undefined;
+  const next = primary ? undefined : status === "pending_approval" && approval?.canApprove ? "Next: approve or return it under Approval below." : undefined;
 
   return (
     <>
-      <PageHeader
-        title={order.orderNumber}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <SalesStatus status={status} />
-            <span>{customer.name}</span>
-          </span>
+      <RecordHeader
+        typeLabel="Sales order"
+        reference={order.orderNumber}
+        title={customer.name}
+        siteCode={ctx.allowedSites.find((x) => x.id === order.siteId)?.code}
+        status={status}
+        meta={[
+          ["Requested delivery", fmtDate(order.requestedDeliveryOn)],
+          ["Customer PO", order.customerPoNumber],
+        ]}
+        steps={salesOrderSteps(status)}
+        primary={primary}
+        next={next}
+        secondary={
+          <>
+            {status === "draft" && ctx.can("sales.sales_order.edit") && (
+              <LinkButton href={`/sales/orders/${order.id}/edit`} variant="secondary">
+                Edit draft
+              </LinkButton>
+            )}
+            <LinkButton href="/sales" variant="ghost">All orders</LinkButton>
+          </>
         }
-        actions={<LinkButton href="/sales" variant="secondary">All orders</LinkButton>}
       />
 
       {done && DONE[done] && (
@@ -234,20 +271,11 @@ export default async function OrderDetailPage({ params, searchParams }: { params
             </Banner>
           )}
 
-          {status === "draft" && (
+          {status === "draft" && (!canSubmit || canVoid) && (
             <Card>
-              <CardTitle>Next step</CardTitle>
+              <CardTitle>Draft</CardTitle>
               <div className="flex flex-col gap-3">
-                {ctx.can("sales.sales_order.submit") ? (
-                  <SubmitOrderForm orderId={order.id} />
-                ) : (
-                  <p className="text-[13px] text-muted">Waiting for sales to submit this order.</p>
-                )}
-                {ctx.can("sales.sales_order.edit") && (
-                  <LinkButton href={`/sales/orders/${order.id}/edit`} variant="secondary">
-                    Edit draft
-                  </LinkButton>
-                )}
+                {!canSubmit && <p className="text-[13px] text-muted">Waiting for sales to submit this order.</p>}
                 {canVoid && <CancelOrderPanel orderId={order.id} hasAllocations={false} />}
               </div>
             </Card>
@@ -301,8 +329,8 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                 <p className="text-[13px] text-fg-2">
                   Reserves released finished-goods lots at this site, earliest expiry first, skipping lots with less than {customer.minShelfLifeDays} days of shelf life left.
                 </p>
-                {ctx.can("inventory.allocation.create") ? (
-                  <AllocateForm orderId={order.id} label={hasAllocations ? "Allocate remaining (FEFO)" : "Allocate stock (FEFO)"} />
+                {canAllocate ? (
+                  <p className="text-[13px] text-muted">Use the allocate button at the top.</p>
                 ) : (
                   <p className="text-[13px] text-muted">Waiting for the warehouse to allocate stock.</p>
                 )}
@@ -312,7 +340,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
           )}
 
           {/* W3E: allocation → pick → pack verification → dispatch → delivery receipt live on the fulfilment screens. */}
-          <FulfilmentPanel orderId={order.id} />
+          <FulfilmentPanel orderId={order.id} data={fulfilment} hideNext />
 
           {canVoid && ["allocated", "picking", "packed"].includes(status) && (
             <Card>

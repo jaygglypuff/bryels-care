@@ -2,13 +2,15 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
-import { getPurchaseOrder } from "@/modules/procurement";
-import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, PageHeader, Table, Td, Textarea } from "@/ui/core";
+import { PO_STATUS_LABEL, getPurchaseOrder, type PoStatus } from "@/modules/procurement";
+import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, Table, Td, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { cancelOrderAction, closeOrderAction, confirmOrderAction, decideOrderAction, regenerateDocumentAction, sendOrderAction, shortCloseLineAction, submitOrderAction } from "../../actions";
-import { PoChip, Steps, SubNav, fmtBase, money } from "../../_ui";
+import { Steps, SubNav, fmtBase, money } from "../../_ui";
+import { RecordHeader } from "@/ui/record";
+import { purchaseOrderSteps } from "@/ui/record-steps";
 import { DeleteDraftCard } from "../../../delete-draft-button";
 
 export const dynamic = "force-dynamic";
@@ -34,17 +36,41 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
   const linkCls = "inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2";
   return (
     <>
-      <PageHeader
-        title={po.poNumber}
-        subtitle={`${v.supplier.name} · ${v.site?.code ?? ""} · ordered ${fmtDate(po.orderDate)}`}
-        actions={
+      <RecordHeader
+        typeLabel="Purchase order"
+        reference={po.poNumber}
+        title={v.supplier.name}
+        siteCode={v.site?.code}
+        status={po.status}
+        statusLabel={PO_STATUS_LABEL[po.status as PoStatus]}
+        meta={[
+          ["Ordered", fmtDate(po.orderDate)],
+          ["Expected", po.expectedDate ? fmtDate(po.expectedDate) : null],
+        ]}
+        steps={purchaseOrderSteps(po.status, { afterTheFact: po.afterTheFact })}
+        primary={
+          can.receive ? (
+            <LinkButton href={`/inventory/receive?po=${po.id}`} variant="cta" size="lg">Receive delivery</LinkButton>
+          ) : can.submit ? (
+            <ActionForm action={submitOrderAction} hidden={{ purchaseOrderId: po.id }} submit="Submit for approval" variant="cta" />
+          ) : undefined
+        }
+        next={
+          can.receive || can.submit
+            ? undefined
+            : can.decide
+              ? "Next: approve or return it under Approval below."
+              : can.send
+                ? "Next: send it to the supplier under Next step below."
+                : undefined
+        }
+        secondary={
           <>
             {can.print && (
               <a className={linkCls} href={`/print/purchase-order/${po.id}`}>
                 Print PO
               </a>
             )}
-            {can.receive && <LinkButton href={`/inventory/receive?po=${po.id}`} variant="cta">Receive delivery</LinkButton>}
             <LinkButton href="/procurement/orders" variant="secondary">Purchase orders</LinkButton>
           </>
         }
@@ -65,7 +91,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
         )}
         {po.status === "submitted" && !can.decide && <Banner tone="info" title="Waiting for approval">The next approver per the approval rules decides. The creator and submitter never approve their own order.</Banner>}
         <Card>
-          <CardTitle action={<PoChip status={po.status} />}>Order</CardTitle>
+          <CardTitle>Order</CardTitle>
           <Dl
             items={[
               ["Supplier", <Link key="s" className="text-primary-text hover:underline" href={`/procurement/suppliers/${v.supplier.id}`}>{`${v.supplier.name} (${v.supplier.code})`}</Link>],
@@ -132,7 +158,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             </p>
           ))}
           <div className="mt-3 flex flex-col gap-3">
-            {can.submit && <ActionForm action={submitOrderAction} hidden={{ purchaseOrderId: po.id }} submit="Submit for approval" variant="cta" />}
+            {can.submit && <p className="text-[13px] text-muted">Submit it for approval with the button at the top.</p>}
             {can.decide && (
               <div className="grid gap-3 sm:grid-cols-2">
                 <ActionForm action={decideOrderAction} hidden={{ purchaseOrderId: po.id, decision: "approve" }} submit={`Approve step ${v.progress.next?.step ?? 1}`} variant="cta">

@@ -4,8 +4,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { getShipment, shipmentReconciliation } from "@/modules/sales";
-import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, Table, Td } from "@/ui/core";
 import { Banner, StatusChip } from "@/ui/status";
+import { RecordHeader } from "@/ui/record";
+import { shipmentSteps } from "@/ui/record-steps";
 import { Forbidden } from "../../../forbidden";
 import { acknowledgeAction, cancelShipmentAction, dispatchShipmentAction, draftDeliveryReceiptAction, generateDeliveryReceiptAction, reverseShipmentAction } from "../../fulfilment-actions";
 import { AcknowledgeForm, Cmd, ReasonCmd } from "../../fulfilment-forms";
@@ -42,12 +44,40 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
   const rec = ["dispatched", "delivered", "reversed"].includes(s.status) ? await shipmentReconciliation(ctx, s.id) : null;
   const drDoc = v.documents.find((d) => d.documentKind === "delivery_receipt" && d.status === "ready");
   const packList = v.documents.find((d) => d.documentKind === "boxing_note" && d.status === "ready");
+  // One next action (R3): the existing link for this status. Dispatch and acknowledgment need typed
+  // input, so they stay in their cards and the header says where.
+  const primary =
+    s.status === "draft" && v.pick ? (
+      <LinkButton href={`/sales/picking/${v.pick.id}`} variant="cta" size="lg">Continue pick {v.pick.pickNumber}</LinkButton>
+    ) : s.status === "picked" ? (
+      <LinkButton href={`/sales/packing/${s.id}`} variant="cta" size="lg">Verify packing</LinkButton>
+    ) : ["dispatched", "delivered"].includes(s.status) && drDoc ? (
+      <LinkButton href={`/print/delivery-receipt/${s.id}`} target="_blank" variant={s.status === "delivered" ? "secondary" : "cta"} size="lg">Print delivery receipt</LinkButton>
+    ) : undefined;
+  const next =
+    s.status === "picked"
+      ? "Next: a colleague who did not pick scans every box against the order."
+      : s.status === "packed" && ctx.can("sales.shipment.post")
+        ? "Next: enter the driver and plate under Dispatch, then dispatch."
+        : s.status === "dispatched" && ctx.can("sales.delivery_receipt.create")
+          ? "Next: record the customer's acknowledgment below."
+          : undefined;
   return (
     <>
-      <PageHeader
-        title={s.shipmentNumber ?? s.deliveryReceiptNumber ?? "Shipment"}
-        subtitle={<span className="inline-flex flex-wrap items-center gap-2"><StatusChip status={s.status} /> <Link href={`/sales/${v.order.id}`} className="hover:underline">{v.order.orderNumber}</Link> · {v.customer.name}</span>}
-        actions={<LinkButton href="/sales/shipments" variant="secondary">All shipments</LinkButton>}
+      <RecordHeader
+        typeLabel="Shipment"
+        reference={s.shipmentNumber ?? s.deliveryReceiptNumber ?? "Shipment"}
+        title={v.customer.name}
+        siteCode={ctx.allowedSites.find((x) => x.id === s.siteId)?.code}
+        status={s.status}
+        meta={[
+          ["Order", <Link key="o" href={`/sales/${v.order.id}`} className="text-primary-text hover:underline">{v.order.orderNumber}</Link>],
+          ["DR", s.deliveryReceiptNumber],
+        ]}
+        steps={shipmentSteps(s.status)}
+        primary={primary}
+        next={next}
+        secondary={<LinkButton href="/sales/shipments" variant="ghost">All shipments</LinkButton>}
       />
       {done && DONE[done] && <div className="mb-4" role="status"><Banner tone="ok" title={DONE[done]} /></div>}
       {v.blockedLots.length > 0 && ["picked", "packed"].includes(s.status) && (
@@ -106,19 +136,6 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
           </Card>
         </div>
         <div className="flex flex-col gap-4">
-          {s.status === "draft" && v.pick && (
-            <Card>
-              <CardTitle>Picking</CardTitle>
-              <LinkButton href={`/sales/picking/${v.pick.id}`} variant="primary">Continue pick {v.pick.pickNumber}</LinkButton>
-            </Card>
-          )}
-          {s.status === "picked" && (
-            <Card>
-              <CardTitle>Pack verification</CardTitle>
-              <p className="mb-3 text-[13px] text-fg-2">A colleague who did not pick scans every box against the order.</p>
-              <LinkButton href={`/sales/packing/${s.id}`} variant="cta" size="lg">Verify packing</LinkButton>
-            </Card>
-          )}
           {s.status === "packed" && (
             <Card>
               <CardTitle>Dispatch</CardTitle>
@@ -148,9 +165,7 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
           {["dispatched", "delivered"].includes(s.status) && (
             <Card>
               <CardTitle>Delivery receipt {s.deliveryReceiptNumber}</CardTitle>
-              {drDoc ? (
-                <LinkButton href={`/print/delivery-receipt/${s.id}`} target="_blank" variant="primary" className="mb-3 w-full">Print delivery receipt</LinkButton>
-              ) : ctx.can("documents.generated_document.create") ? (
+              {drDoc ? null : ctx.can("documents.generated_document.create") ? (
                 <Cmd action={generateDeliveryReceiptAction} fields={{ shipmentId: s.id }} label="Generate delivery receipt" variant="secondary">
                   <Banner tone="warn" title="No DR document yet">The DR number is allocated; the document needs an approved template (Management → System → Templates & labels).</Banner>
                 </Cmd>

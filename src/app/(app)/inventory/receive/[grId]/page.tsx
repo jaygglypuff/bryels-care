@@ -9,10 +9,12 @@ import { getReceiptDocument, type ReceiptDocument } from "@/modules/inventory/re
 import { issueDownloadUrl } from "@/modules/inventory/receiving-documents";
 import { supplierOptions } from "@/modules/masterdata";
 import { poFromReceiptOptions } from "@/modules/procurement";
-import { Card, CardTitle, Dl, Field, Input, LinkButton, PageHeader, Select, Textarea } from "@/ui/core";
+import { Card, CardTitle, Dl, Field, Input, LinkButton, Select, Textarea } from "@/ui/core";
 import { fmtLotQty } from "@/ui/inventory/bits";
 import { ReceiptStatusChip, fmtBytes } from "@/ui/receiving";
 import { Banner, StatusChip } from "@/ui/status";
+import { RecordHeader } from "@/ui/record";
+import { goodsReceiptSteps } from "@/ui/record-steps";
 import { Forbidden } from "../../../forbidden";
 import { approveDiscrepancyAction, cancelDraftAction, createPoFromReceiptAction, linkSupplierAction, postDraftAction, recordDiscrepancyAction, reverseReceiptAction, voidFileAction } from "./actions";
 import { ActionForm, ReasonField, UploadWidget } from "./forms";
@@ -72,7 +74,6 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
     if (e instanceof DomainError && e.code === "not_found") notFound();
     throw e;
   }
-  const title = gr.receiptNumber ?? "Draft receipt";
   const headerDocs = await withLinks(ctx, gr.headerDocuments);
   const lines = await Promise.all(gr.lines.map(async (l) => ({ ...l, docs: await withLinks(ctx, l.documents) })));
   const sups = gr.can.linkSupplier ? await supplierOptions(ctx) : [];
@@ -80,14 +81,52 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
   // S6 (ADR-077): an urgent receipt without a PO can get its purchase order afterwards.
   const atf = gr.status === "posted" && !gr.purchaseOrderId ? await poFromReceiptOptions(ctx, gr.id) : null;
   const hidden = { receiptId: gr.id };
+  const canPutAway = gr.status === "posted" && ctx.can("inventory.movement.post");
+  const printLabels = gr.can.printLabels && (
+    <LinkButton href={`/print/lot-label/receipt/${gr.id}`} target="_blank" variant={gr.status === "posted" ? "cta" : "secondary"} size="lg">
+      <Printer size={18} /> Print labels ({gr.lines.length})
+    </LinkButton>
+  );
+  // One next action (R3): post a draft; once posted, label the containers, then put the stock away.
+  const primary = gr.can.post ? (
+    <ActionForm action={postDraftAction} hidden={hidden} submit="Post receipt" variant="cta" pendingText="Posting receipt…" confirm="Post this receipt? Lots and stock are created and can only be corrected by reversal." />
+  ) : gr.can.printLabels ? (
+    printLabels
+  ) : canPutAway ? (
+    <LinkButton href="/inventory/receive/put-away" variant="cta" size="lg">Put away</LinkButton>
+  ) : undefined;
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <PageHeader
-        title={title}
-        subtitle={
+      <RecordHeader
+        typeLabel="Goods receipt"
+        reference={gr.receiptNumber ?? "Draft"}
+        title={gr.supplierName}
+        siteCode={ctx.allowedSites.find((x) => x.id === gr.siteId)?.code}
+        status={gr.status}
+        meta={[
+          ["Received", fmtDateTime(gr.receivedAt)],
+          ["Delivery note", gr.supplierDocumentNumber],
+        ]}
+        steps={goodsReceiptSteps(gr.status)}
+        primary={primary}
+        next={
+          gr.can.post
+            ? "Posting creates one quarantined lot and one receipt movement per line, and allocates the receipt number."
+            : gr.status === "posted" && gr.can.printLabels
+              ? "Next: label every container, then put the stock away; QA can then release it."
+              : undefined
+        }
+        secondary={
           <>
-            <Link href="/inventory/receipts" className="text-primary-text hover:underline">Receipts</Link> · goods receipt from {gr.supplierName} · <ReceiptStatusChip status={gr.status} />
+            {canPutAway && gr.can.printLabels && <LinkButton href="/inventory/receive/put-away" variant="secondary">Put away</LinkButton>}
+            {gr.can.edit && (
+              <LinkButton href={`/inventory/receive/${gr.id}/edit`} variant="secondary">
+                <Pencil size={16} /> Edit draft
+              </LinkButton>
+            )}
+            {ctx.can("procurement.goods_receipt.create") && <LinkButton href="/inventory/receive" variant="ghost">Receive more</LinkButton>}
+            <LinkButton href="/inventory/receipts" variant="ghost">Receipts</LinkButton>
           </>
         }
       />
@@ -113,29 +152,6 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
         <Banner tone="warn" title="Supplier not in the supplier list">
           &ldquo;{gr.supplierName}&rdquo; is not linked to a supplier record. QA cannot release these lots until procurement links it.
         </Banner>
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        {gr.can.printLabels && (
-          <LinkButton href={`/print/lot-label/receipt/${gr.id}`} target="_blank" variant={posted ? "cta" : "secondary"} size="lg">
-            <Printer size={18} /> Print labels ({gr.lines.length})
-          </LinkButton>
-        )}
-        {gr.status === "posted" && ctx.can("inventory.movement.post") && <LinkButton href="/inventory/receive/put-away" variant="secondary" size="lg">Put away</LinkButton>}
-        {gr.can.edit && (
-          <LinkButton href={`/inventory/receive/${gr.id}/edit`} variant="secondary" size="lg">
-            <Pencil size={16} /> Edit draft
-          </LinkButton>
-        )}
-        {ctx.can("procurement.goods_receipt.create") && <LinkButton href="/inventory/receive" variant="secondary" size="lg">Receive more</LinkButton>}
-      </div>
-
-      {gr.can.post && (
-        <Card>
-          <CardTitle>Post this receipt</CardTitle>
-          <p className="mb-3 text-[13px] text-muted">Creates one quarantined lot and one receipt movement per line, and allocates the receipt number.</p>
-          <ActionForm action={postDraftAction} hidden={hidden} submit="Post receipt" variant="cta" pendingText="Posting receipt…" confirm="Post this receipt? Lots and stock are created and can only be corrected by reversal." />
-        </Card>
       )}
 
       {atf?.purchaseOrder && (

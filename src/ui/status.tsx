@@ -55,6 +55,15 @@ const STATES: Record<string, { tone: Tone; label: string; icon: ReactNode }> = {
   issued: { tone: "info", label: "Issued", icon: <CheckCircle2 size={13} /> },
   acknowledged: { tone: "ok", label: "Acknowledged", icon: <CheckCircle2 size={13} /> },
   voided: { tone: "neu", label: "Voided", icon: <Ban size={13} /> },
+  // R3 record header: purchase order, goods receipt and sales order states without an entry above
+  submitted: { tone: "appr", label: "Submitted", icon: <PauseCircle size={13} /> },
+  pending_approval: { tone: "warn", label: "Pending approval", icon: <PauseCircle size={13} /> },
+  approved: { tone: "info", label: "Approved", icon: <CheckCircle2 size={13} /> },
+  sent: { tone: "info", label: "Sent", icon: <Truck size={13} /> },
+  partially_received: { tone: "q", label: "Partly received", icon: <CircleDashed size={13} /> },
+  received: { tone: "ok", label: "Received", icon: <CheckCircle2 size={13} /> },
+  posted: { tone: "ok", label: "Posted", icon: <CheckCircle2 size={13} /> },
+  invoiced: { tone: "ok", label: "Invoiced", icon: <CheckCircle2 size={13} /> },
 };
 
 export function StatusChip({ status, label, className }: { status: string; label?: string; className?: string }) {
