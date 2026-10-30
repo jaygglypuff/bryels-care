@@ -145,6 +145,8 @@ export const workOrders = pgTable(
     targetUnits: numeric("target_units", QTY),
     plannedStart: date("planned_start").notNull(),
     plannedEnd: date("planned_end").notNull(),
+    /** ADR-080 (V2-2): the date the products are needed (customer order date, else typed). Late = before today and not Done. */
+    neededBy: date("needed_by"),
     priority: integer("priority").notNull().default(5),
     assignedPlannerId: uuid("assigned_planner_id").references(() => users.id),
     assignedSupervisorId: uuid("assigned_supervisor_id").references(() => users.id),

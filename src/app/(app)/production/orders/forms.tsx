@@ -10,7 +10,9 @@ import { addDailyLogAction, approveProductionOrderAction, cancelProductionOrderA
  * "More details". The server validates everything again; these forms only collect input.
  */
 
-type FormulaOption = { formulaId: string; productId: string; productName: string; productSku: string; referenceBatchSizeG: string | null };
+type FormulaOption = { formulaId: string; productId: string; productName: string; productSku: string; referenceBatchSizeG: string | null; theoreticalYieldPct?: string | null; unitNetMassG?: string | null };
+
+export type MakeForPrefill = { salesOrderId: string; salesOrderNumber: string; lineNo: number; productId: string; missing: string; neededBy: string | null };
 
 function MoreDetails({ children }: { children: ReactNode }) {
   return (
@@ -21,24 +23,45 @@ function MoreDetails({ children }: { children: ReactNode }) {
   );
 }
 
-export function ProductionOrderForm({ formulas, lines, today }: { formulas: FormulaOption[]; lines: { id: string; code: string; name: string }[]; today: string }) {
+/** Pieces one batch makes (rounded down), for the hint under "How many". */
+function perBatch(f: FormulaOption | undefined, sizeKg: string) {
+  if (!f?.unitNetMassG || !f.theoreticalYieldPct || !/^\d+(\.\d+)?$/.test(sizeKg)) return null;
+  const n = D(sizeKg).mul(1000).mul(f.theoreticalYieldPct).div(100).div(f.unitNetMassG).floor();
+  return n.gt(0) ? n.toString() : null;
+}
+
+/**
+ * New order (ADR-080 V2-2): pieces first. Visible: what to make, how many, needed by, start date.
+ * Batch size, number of batches, line and notes are under "More details". With a customer order
+ * ("Make for this order") the product, the missing pieces and the delivery date are prefilled and the
+ * order is linked to it.
+ */
+export function ProductionOrderForm({ formulas, lines, today, prefill }: { formulas: FormulaOption[]; lines: { id: string; code: string; name: string }[]; today: string; prefill?: MakeForPrefill | null }) {
   const products = useMemo(() => {
     const m = new Map<string, FormulaOption>();
     for (const f of formulas) if (!m.has(f.productId)) m.set(f.productId, f);
     return [...m.values()];
   }, [formulas]);
-  const [productId, setProductId] = useState(products[0]?.productId ?? "");
-  const ref = products.find((p) => p.productId === productId)?.referenceBatchSizeG;
+  const [productId, setProductId] = useState(prefill?.productId ?? products[0]?.productId ?? "");
+  const current = products.find((p) => p.productId === productId);
+  const ref = current?.referenceBatchSizeG;
   const [sizeKg, setSizeKg] = useState(ref ? D(ref).div(1000).toString() : "");
+  const per = perBatch(current, sizeKg);
   return (
-    <ActionForm action={createProductionOrderAction} submit="Create production order" pending="Creating…" variant="cta" size="lg" className="flex flex-col gap-5">
+    <ActionForm action={createProductionOrderAction} hidden={prefill ? { salesOrderId: prefill.salesOrderId } : undefined} submit="Create order" pending="Creating…" variant="cta" size="lg" className="flex flex-col gap-5">
       {(fe) => (
         <>
+          {prefill && (
+            <p className="rounded-[14px] border border-line bg-surface-2/60 px-3.5 py-3 text-[14px]">
+              For customer order <span className="font-semibold">{prefill.salesOrderNumber}</span>, line {prefill.lineNo}: {prefill.missing} pieces are missing.
+            </p>
+          )}
           <Field label="What to make" htmlFor="productId" error={fe.productId}>
             <Select
               id="productId"
               name="productId"
               value={productId}
+              disabled={!!prefill}
               onChange={(e) => {
                 setProductId(e.target.value);
                 const r = products.find((p) => p.productId === e.target.value)?.referenceBatchSizeG;
@@ -50,17 +73,24 @@ export function ProductionOrderForm({ formulas, lines, today }: { formulas: Form
               ))}
             </Select>
           </Field>
+          {prefill && <input type="hidden" name="productId" value={productId} />}
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="How much (kg per batch)" htmlFor="batchSizeKg" error={fe.batchSizeKg} hint={ref ? `Usual size ${fmtQty(D(ref).div(1000), "kg", 1)}` : undefined}>
-              <Input id="batchSizeKg" name="batchSizeKg" inputMode="decimal" value={sizeKg} onChange={(e) => setSizeKg(e.target.value)} />
+            <Field label="How many (pieces)" htmlFor="quantityUnits" error={fe.quantityUnits} hint={per ? `One batch makes about ${per}. Empty = one batch.` : "Empty = one batch."}>
+              <Input id="quantityUnits" name="quantityUnits" inputMode="numeric" pattern="[0-9]*" defaultValue={prefill?.missing ?? ""} placeholder={per ?? ""} />
+            </Field>
+            <Field label="Needed by" htmlFor="neededBy" error={fe.neededBy} hint="Optional. The order shows Late after this day.">
+              <Input id="neededBy" name="neededBy" type="date" defaultValue={prefill?.neededBy ?? ""} />
             </Field>
             <Field label="Start date" htmlFor="plannedStart" error={fe.plannedStart}>
               <Input id="plannedStart" name="plannedStart" type="date" defaultValue={today} required />
             </Field>
           </div>
           <MoreDetails>
-            <Field label="Number of batches" htmlFor="batchCount" error={fe.batchCount} hint="Usually 1.">
-              <Input id="batchCount" name="batchCount" inputMode="numeric" defaultValue="1" />
+            <Field label="Batch size (kg)" htmlFor="batchSizeKg" error={fe.batchSizeKg} hint={ref ? `Usual size ${fmtQty(D(ref).div(1000), "kg", 1)}` : undefined}>
+              <Input id="batchSizeKg" name="batchSizeKg" inputMode="decimal" value={sizeKg} onChange={(e) => setSizeKg(e.target.value)} />
+            </Field>
+            <Field label="Number of batches" htmlFor="batchCount" error={fe.batchCount} hint="Empty = enough batches for How many.">
+              <Input id="batchCount" name="batchCount" inputMode="numeric" defaultValue="" />
             </Field>
             <Field label="Finish by" htmlFor="plannedEnd" error={fe.plannedEnd} hint="Empty = same day as the start.">
               <Input id="plannedEnd" name="plannedEnd" type="date" />
@@ -133,7 +163,7 @@ export function DailyLogForm({ workOrderId, defectTypes, batches, today, initial
             <Input id={`${p}goodQty`} name="goodQty" inputMode="decimal" defaultValue={initial ? D(initial.goodQty).toString() : ""} placeholder="0" />
           </Field>
           <fieldset className="rounded-[14px] border border-line px-3.5 py-3">
-            <legend className="px-1 text-[14px] font-medium">Defects (how many pieces)</legend>
+            <legend className="px-1 text-[14px] font-medium">Rejects (how many pieces of each type)</legend>
             {fe.defects && <p className="mb-2 text-[13px] text-[var(--bad-fg)]">{fe.defects}</p>}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {types.map((t, i) => (

@@ -8,7 +8,7 @@ import { myApprovalCount } from "@/modules/action-centre";
 import { getMaintenanceState } from "@/lib/maintenance";
 import { MaintenanceBanner } from "@/ui/maintenance-banner";
 import { isDemoMode, isSandboxEmail } from "@/lib/demo";
-import { NAV, QUICK_ACTIONS } from "./nav";
+import { QUICK_ACTIONS, buildNav, tabsFor } from "./nav";
 import { Shell } from "./shell";
 import { signOut, switchSite } from "./actions";
 
@@ -22,7 +22,9 @@ async function openQaCount(siteId: string): Promise<number> {
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireContext();
-  const nav = NAV.map((g) => ({ ...g, items: g.items.filter((i) => i.planned || !i.permission || ctx.can(i.permission)) })).filter((g) => g.items.length > 0);
+  // ADR-080 §11: the menu and the phone/iPad-portrait tab bar follow the role.
+  const nav = buildNav((p) => ctx.can(p), ctx.roleCodes);
+  const tabs = tabsFor((p) => ctx.can(p), ctx.roleCodes);
   const quickActions = QUICK_ACTIONS.filter((q) => !q.permission || ctx.can(q.permission));
   const qaCount = ctx.can("quality.disposition.view") ? await openQaCount(ctx.currentSiteId) : null;
   const unreadCount = await unreadNotificationCount(ctx);
@@ -31,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <Shell
       nav={nav}
+      tabs={tabs}
       quickActions={quickActions}
       user={{ id: ctx.userId, name: ctx.displayName, roles: ctx.roleCodes.map((r) => ROLE_BUNDLES[r]?.name ?? r).join(", ") }}
       sites={ctx.allowedSites}

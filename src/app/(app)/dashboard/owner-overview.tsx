@@ -482,13 +482,13 @@ export function OwnerOverview({ data, kpi, canAudit }: { data: OwnerDashboard; k
             </div>
             {data.team && <TeamRow team={data.team} />}
             <div className="flex items-center gap-2">
-              <Link href="/production/new" className="grid size-10 place-items-center rounded-full border border-line bg-surface text-fg-2 hover:text-fg" title="New batch" aria-label="New batch">
+              <Link href="/production/orders/new" className="grid size-10 place-items-center rounded-full border border-line bg-surface text-fg-2 hover:text-fg" title="New order" aria-label="New production order">
                 <Plus size={18} />
               </Link>
               <Link href="/quality" className="grid size-10 place-items-center rounded-full border border-line bg-surface text-fg-2 hover:text-fg" title="QA queue" aria-label="QA queue">
                 <ClipboardCheck size={18} />
               </Link>
-              <Link href="/production" className="grid size-10 place-items-center rounded-full border border-line bg-surface text-fg-2 hover:text-fg" title="All batches" aria-label="All batches">
+              <Link href="/production/orders" className="grid size-10 place-items-center rounded-full border border-line bg-surface text-fg-2 hover:text-fg" title="Production orders" aria-label="Production orders">
                 <CalendarDays size={18} />
               </Link>
             </div>

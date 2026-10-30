@@ -6,15 +6,15 @@ import { Help } from "@/ui/help/help";
 import { Forbidden } from "../../forbidden";
 import { DefectTables } from "../orders/parts";
 
-export const metadata: Metadata = { title: "Defects" };
+export const metadata: Metadata = { title: "Rejects" };
 export const dynamic = "force-dynamic";
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Owner view (ADR-074): good pieces vs defects per product and day, and defect % by type, from the daily logs. */
+/** Owner view (ADR-074, ADR-080 words): good pieces vs rejects per product and day, and reject % by type, from the daily logs. The table keeps its name (production_defect_entries). */
 export default async function DefectsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; productId?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("production.daily_log.view")) return <Forbidden what="the defects summary" />;
+  if (!ctx.can("production.daily_log.view")) return <Forbidden what="the rejects summary" />;
   const sp = await searchParams;
   const to = sp.to && ISO.test(sp.to) ? sp.to : manilaToday();
   const from = sp.from && ISO.test(sp.from) ? sp.from : addDays(to, -29);
@@ -22,7 +22,7 @@ export default async function DefectsPage({ searchParams }: { searchParams: Prom
   const products = ctx.can("masterdata.product.view") ? await listProducts(ctx) : [];
   return (
     <div>
-      <PageHeader title="Defects" subtitle={`${ctx.currentSite.name} · good pieces and defects from the daily logs`} actions={<Help screen="production.production_order" />} />
+      <PageHeader title="Rejects" subtitle={`${ctx.currentSite.name} · good pieces and rejects from the daily logs`} actions={<Help screen="production.production_order" />} />
       <form method="get" className="mb-4 flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-[13px] font-medium">
           From
@@ -48,7 +48,7 @@ export default async function DefectsPage({ searchParams }: { searchParams: Prom
       <Card>
         <DefectTables summary={summary} />
       </Card>
-      <p className="mt-4 text-[13px] text-muted">Defect rate = defects ÷ (good + defects). A corrected entry counts once, with the corrected numbers.</p>
+      <p className="mt-4 text-[13px] text-muted">Reject rate = rejects ÷ (good + rejects). A corrected entry counts once, with the corrected numbers.</p>
     </div>
   );
 }

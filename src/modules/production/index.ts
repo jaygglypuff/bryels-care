@@ -78,30 +78,44 @@ export { workOrderRequirements, type Shortage } from "./work-orders-reserve";
 export { stageMaterial, approveMaterialSubstitution, releaseBatchStagingReservations, getStagingView, listBatchesToStage, canSeeStaging, type StageInput, type SubstitutionInput, type StagingView } from "./staging";
 export { generateBatchSheet, batchSheetData, batchSheets, type BatchSheetKind } from "./staging-documents";
 export { getProductionBoard, moveBoardCard, boardMove, type ProductionBoard, type BoardCard, type BoardColumn, type MoveVerdict, type BoardFilter } from "./board";
-// ADR-074 (S2): one production order (work order + batches) with a simple status, one-step approve and a daily log.
+// ADR-074 (S2) + ADR-080 (G1): one production order (work order + batches) with status v2, one next action, one-step approve and a daily log.
 export {
   PRODUCTION_ORDER_STATUSES,
   PRODUCTION_ORDER_LABEL,
   PRODUCTION_ORDER_CHIP,
   PRODUCTION_ORDER_STEPS,
+  OPEN_STATUSES,
   productionOrderStatus,
+  batchStatusView,
+  progressSteps,
+  isLate,
+  piecesText,
+  shortDay,
   type ProductionOrderStatus,
+  type ProductionOrderStatusView,
+  type BatchFact,
 } from "./production-order-status";
+export { productionOrderActions, batchNextAction, type NextAction } from "./production-order-next";
 export {
   createProductionOrder,
   approveProductionOrder,
   getProductionOrder,
   listProductionOrders,
-  nextProductionAction,
+  listProductionOrderBoard,
+  loadBatchFacts,
   batchStepWord,
   shortageLines,
+  salesOrderShortfalls,
+  makeForSalesLine,
+  productionOrdersForSalesOrder,
+  MAKE_FOR_SALES_STATUSES,
   type ProductionOrderInput,
   type ProductionOrderView,
   type ProductionOrderRow,
   type ApproveResult,
-  type NextAction,
+  type MakeForLine,
 } from "./production-orders";
-export { addDailyLog, correctDailyLog, listDailyLogs, defectSummary, defectTypes, type DailyLogEntryInput, type DailyLogRow, type DefectSummary, type DefectSummaryRow } from "./daily-log";
+export { addDailyLog, correctDailyLog, listDailyLogs, listSiteDailyLogs, defectSummary, defectTypes, type DailyLogEntryInput, type DailyLogRow, type DefectSummary, type DefectSummaryRow, type SiteDailyLog } from "./daily-log";
 export {
   buildProductionPlan,
   approveProductionPlan,

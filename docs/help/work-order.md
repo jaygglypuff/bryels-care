@@ -31,7 +31,7 @@ Most people use **Production orders** instead: the same order on one simple page
 ## Create batches
 
 1. Press **Create batch 1 of N** for each batch. Each batch gets its own number and takes over its share of the reservation.
-2. Then stage the materials (see "Stage materials").
+2. Then get the materials (see "Stage materials for a batch").
 
 ## Cancel
 

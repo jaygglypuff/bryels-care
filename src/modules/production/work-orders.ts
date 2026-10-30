@@ -50,6 +50,8 @@ export const workOrderInputSchema = z
     batchCount: z.coerce.number().int("Enter a whole number of batches.").min(1, "At least one batch.").max(200, "At most 200 batches per work order."),
     plannedStart: isoDate,
     plannedEnd: isoDate,
+    /** ADR-080 (V2-2): needed-by date; empty = none; omitted on edit = unchanged. */
+    neededBy: isoDate.nullish().or(z.literal("").transform(() => null)),
     productionLineId: optUuid,
     priority: z.coerce.number().int().min(1).max(9).default(5),
     assignedSupervisorId: optUuid,
@@ -166,6 +168,7 @@ export async function insertWorkOrder(tx: Tx, ctx: AuthContext, raw: unknown, li
       targetUnits: input.targetUnits ?? null,
       plannedStart: input.plannedStart,
       plannedEnd: input.plannedEnd,
+      neededBy: input.neededBy ?? null,
       priority: input.priority,
       assignedPlannerId: ctx.userId,
       assignedSupervisorId: input.assignedSupervisorId ?? null,
@@ -190,6 +193,9 @@ export async function insertWorkOrder(tx: Tx, ctx: AuthContext, raw: unknown, li
       qtyPlannedG: wo.qtyPlannedBase,
       plannedStart: input.plannedStart,
       plannedEnd: input.plannedEnd,
+      neededBy: input.neededBy ?? null,
+      salesOrderId: input.salesOrderId ?? null,
+      targetUnits: input.targetUnits ?? null,
       productionPlanLineId: links.productionPlanLineId ?? null,
     },
   });
@@ -241,6 +247,7 @@ export async function editWorkOrder(ctx: AuthContext, workOrderId: string, raw: 
       targetUnits: input.targetUnits ?? null,
       plannedStart: input.plannedStart,
       plannedEnd: input.plannedEnd,
+      neededBy: input.neededBy === undefined ? wo.neededBy : input.neededBy,
       priority: input.priority,
       assignedSupervisorId: input.assignedSupervisorId ?? null,
       notes: input.notes,
@@ -252,8 +259,8 @@ export async function editWorkOrder(ctx: AuthContext, workOrderId: string, raw: 
       entityId: wo.id,
       entityNumber: wo.workOrderNumber,
       siteId: wo.siteId,
-      before: { batchCount: wo.batchCount, batchSizeBase: wo.batchSizeBase, plannedStart: wo.plannedStart, plannedEnd: wo.plannedEnd, productionLineId: wo.productionLineId, priority: wo.priority },
-      after: { batchCount: after.batchCount, batchSizeBase: after.batchSizeBase, plannedStart: after.plannedStart, plannedEnd: after.plannedEnd, productionLineId: after.productionLineId, priority: after.priority },
+      before: { batchCount: wo.batchCount, batchSizeBase: wo.batchSizeBase, plannedStart: wo.plannedStart, plannedEnd: wo.plannedEnd, neededBy: wo.neededBy, productionLineId: wo.productionLineId, priority: wo.priority },
+      after: { batchCount: after.batchCount, batchSizeBase: after.batchSizeBase, plannedStart: after.plannedStart, plannedEnd: after.plannedEnd, neededBy: after.neededBy, productionLineId: after.productionLineId, priority: after.priority },
     });
     return { workOrderNumber: wo.workOrderNumber };
   });

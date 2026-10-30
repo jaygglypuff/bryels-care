@@ -3,10 +3,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  Bell, Boxes, ClipboardList, Clock, Database, Factory, FlaskConical, GitBranch, Home, ListChecks, Menu, PackagePlus, ScanLine,
-  ScrollText, Settings, ShieldCheck, ShoppingCart, Truck, Warehouse, X,
+  Bell, Boxes, CalendarDays, ClipboardList, Clock, Database, Factory, FlaskConical, GitBranch, HelpCircle, Home, ListChecks, Menu, PackagePlus, ScanLine,
+  ScrollText, Settings, ShieldCheck, ShoppingCart, Truck, Warehouse, Wrench, X,
 } from "lucide-react";
-import type { NavBadges, NavGroup, QuickAction } from "./nav";
+import type { NavBadges, NavGroup, NavItem, QuickAction, Tab } from "./nav";
 import { cx } from "@/ui/core";
 import { Logo, LogoMark } from "@/ui/brand";
 import { NavigationProgress } from "@/ui/navigation-progress";
@@ -15,13 +15,26 @@ import { SignOutButton, SyncChip } from "@/ui/sync-status";
 
 const ICONS: Record<string, React.ReactNode> = {
   home: <Home size={18} />, boxes: <Boxes size={18} />, factory: <Factory size={18} />, shield: <ShieldCheck size={18} />,
-  truck: <Truck size={18} />, warehouse: <Warehouse size={18} />, database: <Database size={18} />, settings: <Settings size={18} />, clock: <Clock size={18} />,
+  truck: <Truck size={18} />, warehouse: <Warehouse size={18} />, wrench: <Wrench size={18} />, database: <Database size={18} />, settings: <Settings size={18} />, clock: <Clock size={18} />,
   scan: <ScanLine size={19} />, receive: <PackagePlus size={19} />, batch: <FlaskConical size={19} />, qa: <ClipboardList size={19} />,
   order: <ShoppingCart size={19} />, trace: <GitBranch size={19} />, audit: <ScrollText size={19} />, approve: <ListChecks size={19} />,
 };
 
+const TAB_ICONS: Record<Tab["icon"], React.ReactNode> = {
+  home: <Home size={20} />, today: <CalendarDays size={20} />, scan: <ScanLine size={20} />, help: <HelpCircle size={20} />, factory: <Factory size={20} />,
+  truck: <Truck size={20} />, approve: <ListChecks size={20} />, shield: <ShieldCheck size={20} />, menu: <Menu size={20} />,
+};
+
+/** Items of a group without a section, under "Setup", and in the collapsed "Advanced" part (ADR-080 §11). */
+function sections(items: NavItem[]) {
+  const live = items.filter((i) => !i.planned);
+  return { main: live.filter((i) => !i.section), setup: live.filter((i) => i.section === "setup"), advanced: live.filter((i) => i.section === "advanced") };
+}
+
 type Props = {
   nav: NavGroup[];
+  /** Bottom tab bar per role (ADR-080 §11; built by tabsFor in nav.ts). */
+  tabs: Tab[];
   quickActions: QuickAction[];
   user: { id: string; name: string; roles: string };
   sites: { id: string; code: string; name: string }[];
@@ -71,7 +84,7 @@ function matchLen(pathname: string, href: string) {
   return -1;
 }
 
-export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, unreadCount, approvalCount = 0, switchSite, signOut, demo = null, children }: Props) {
+export function Shell({ nav, tabs, quickActions, user, sites, currentSiteId, qaCount, unreadCount, approvalCount = 0, switchSite, signOut, demo = null, children }: Props) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   useEffect(() => setDrawer(false), [pathname]);
@@ -86,7 +99,6 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
     const m = matchLen(pathname, i.href);
     if (m > best) { best = m; activeGroup = g; activeHref = i.href; }
   }
-  const allowedHrefs = new Set(real.flatMap((g) => g.items.filter((i) => !i.planned).map((i) => i.href)));
   const groupHref = (g: NavGroup) => g.items.find((i) => !i.planned)?.href ?? "#";
   const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
   const site = sites.find((s) => s.id === currentSiteId);
@@ -187,30 +199,54 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
             </details>
           </div>
         </div>
-        {/* Sub-page tabs for the active module */}
-        {activeGroup && activeGroup.items.filter((i) => !i.planned).length > 1 && (
-          <div className="mx-auto hidden max-w-[1480px] px-4 pb-3 sm:px-6 lg:block lg:pl-[92px]">
-            <ul className="flex flex-wrap gap-1.5">
-              {activeGroup.items.filter((i) => !i.planned).map((i) => (
-                <li key={i.href}>
-                  <Link
-                    href={i.href}
-                    aria-current={i.href === activeHref ? "page" : undefined}
-                    aria-label={badges[i.href] ? withCount(i.label, i.href) : undefined}
-                    className={cx(
-                      "flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[12.5px] font-medium transition-colors",
-                      i.href === activeHref ? "border-transparent bg-brand text-white" : "border-line bg-surface text-fg-2 hover:border-line-strong hover:text-fg",
-                    )}
-                    style={i.href === activeHref ? { background: "var(--brand-600)" } : undefined}
-                  >
-                    {i.label}
-                    <CountBadge n={badges[i.href]} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        {/* Sub-page tabs for the active module; Setup items follow, Advanced items sit in a collapsed menu (ADR-080 §11). */}
+        {activeGroup && activeGroup.items.filter((i) => !i.planned).length > 1 && (() => {
+          const sec = sections(activeGroup.items);
+          const pill = (i: NavItem) => (
+            <li key={i.href}>
+              <Link
+                href={i.href}
+                aria-current={i.href === activeHref ? "page" : undefined}
+                aria-label={badges[i.href] ? withCount(i.label, i.href) : undefined}
+                className={cx(
+                  "flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[12.5px] font-medium transition-colors",
+                  i.href === activeHref ? "border-transparent bg-brand text-white" : "border-line bg-surface text-fg-2 hover:border-line-strong hover:text-fg",
+                )}
+                style={i.href === activeHref ? { background: "var(--brand-600)" } : undefined}
+              >
+                {i.label}
+                <CountBadge n={badges[i.href]} />
+              </Link>
+            </li>
+          );
+          return (
+            <div className="mx-auto hidden max-w-[1480px] px-4 pb-3 sm:px-6 lg:block lg:pl-[92px]">
+              <ul className="flex flex-wrap items-center gap-1.5">
+                {sec.main.map(pill)}
+                {sec.setup.length > 0 && <li className="px-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Setup</li>}
+                {sec.setup.map(pill)}
+                {sec.advanced.length > 0 && (
+                  <li>
+                    <details className="relative">
+                      <summary className={cx("flex cursor-pointer list-none items-center gap-1 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[12.5px] font-medium", sec.advanced.some((i) => i.href === activeHref) ? "border-transparent bg-cta text-white" : "border-line bg-surface text-fg-2 hover:text-fg")}>
+                        Advanced
+                      </summary>
+                      <ul className="absolute left-0 top-9 z-40 w-64 rounded-[16px] border border-line bg-surface p-2 shadow-[var(--shadow-pop)]">
+                        {sec.advanced.map((i) => (
+                          <li key={i.href}>
+                            <Link href={i.href} aria-current={i.href === activeHref ? "page" : undefined} className={cx("block rounded-[10px] px-3 py-2 text-[13px]", i.href === activeHref ? "bg-cta font-medium text-white" : "text-fg-2 hover:bg-surface-2")}>
+                              {i.label}
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  </li>
+                )}
+              </ul>
+            </div>
+          );
+        })()}
       </header>
 
       <div className="mx-auto flex max-w-[1480px] gap-6 px-4 sm:px-6">
@@ -245,22 +281,29 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
       {/* Phone bottom tab bar */}
       <nav aria-label="Primary" className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
         <ul className="mx-auto flex max-w-[560px] justify-around">
-          {[
-            { label: "Home", href: "/dashboard", icon: <Home size={20} /> },
-            { label: "Scan", href: "/inventory/scan", icon: <ScanLine size={20} /> },
-            { label: "Batches", href: "/production", icon: <Factory size={20} /> },
-            { label: "QA", href: "/quality", icon: <ShieldCheck size={20} /> },
-            { label: "Orders", href: "/sales", icon: <Truck size={20} /> },
-          ].filter((t) => allowedHrefs.has(t.href)).map((t) => {
+          {tabs.map((t) => {
+            const inner = (active: boolean) => (
+              <>
+                <span className={cx("relative grid h-7 w-12 place-items-center rounded-full", active && "bg-[var(--lime-100)]")}>
+                  {TAB_ICONS[t.icon]}
+                  {t.href && <CountBadge n={badges[t.href]} className="absolute -right-0.5 -top-1" />}
+                </span>
+                {t.label}
+              </>
+            );
+            if (!t.href)
+              return (
+                <li key="menu" className="flex-1">
+                  <button type="button" onClick={() => setDrawer(true)} className="flex min-h-[56px] w-full flex-col items-center gap-0.5 py-2 text-[11px] font-medium text-muted" aria-label="Open menu">
+                    {inner(false)}
+                  </button>
+                </li>
+              );
             const active = matchLen(pathname, t.href) >= 0;
             return (
               <li key={t.href} className="flex-1">
-                <Link href={t.href} aria-label={badges[t.href] ? withCount(t.label, t.href) : undefined} className={cx("flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium", active ? "text-primary-text" : "text-muted")}>
-                  <span className={cx("relative grid h-7 w-12 place-items-center rounded-full", active && "bg-[var(--lime-100)]")}>
-                    {t.icon}
-                    <CountBadge n={badges[t.href]} className="absolute -right-0.5 -top-1" />
-                  </span>
-                  {t.label}
+                <Link href={t.href} aria-current={active ? "page" : undefined} aria-label={badges[t.href] ? withCount(t.label, t.href) : undefined} className={cx("flex min-h-[56px] flex-col items-center gap-0.5 py-2 text-[11px] font-medium", active ? "text-primary-text" : "text-muted")}>
+                  {inner(active)}
                 </Link>
               </li>
             );
@@ -281,16 +324,34 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
             {real.map((g) => (
               <div key={g.label} className="mb-3">
                 <p className="mb-1 flex items-center gap-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted">{ICONS[g.icon]} {g.label}</p>
-                <ul>
-                  {g.items.filter((i) => !i.planned).map((i) => (
+                {(() => {
+                  const sec = sections(g.items);
+                  const row = (i: NavItem) => (
                     <li key={i.href}>
-                      <Link href={i.href} aria-label={badges[i.href] ? withCount(i.label, i.href) : undefined} className={cx("flex items-center justify-between gap-2 rounded-[12px] px-3 py-2.5 text-[14px]", i.href === activeHref ? "bg-cta font-medium text-white" : "text-fg-2 hover:bg-surface-2")}>
+                      <Link href={i.href} aria-label={badges[i.href] ? withCount(i.label, i.href) : undefined} className={cx("flex min-h-[44px] items-center justify-between gap-2 rounded-[12px] px-3 py-2.5 text-[14px]", i.href === activeHref ? "bg-cta font-medium text-white" : "text-fg-2 hover:bg-surface-2")}>
                         {i.label}
                         <CountBadge n={badges[i.href]} />
                       </Link>
                     </li>
-                  ))}
-                </ul>
+                  );
+                  return (
+                    <>
+                      <ul>{sec.main.map(row)}</ul>
+                      {sec.setup.length > 0 && (
+                        <>
+                          <p className="mt-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-muted">Setup</p>
+                          <ul>{sec.setup.map(row)}</ul>
+                        </>
+                      )}
+                      {sec.advanced.length > 0 && (
+                        <details className="mt-1" open={sec.advanced.some((i) => i.href === activeHref)}>
+                          <summary className="flex min-h-[44px] cursor-pointer items-center px-3 text-[13px] font-medium text-muted">Advanced</summary>
+                          <ul>{sec.advanced.map(row)}</ul>
+                        </details>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             ))}
             {planned.length > 0 && (

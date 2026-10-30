@@ -1,7 +1,7 @@
 ---
 key: start.getting_started
 title: Getting started: from an empty company to a shipped order
-version: 2
+version: 3
 updated_at: 2026-10-30
 sop: Training guide for the sandbox; not an SOP
 ---
@@ -12,7 +12,7 @@ Sign in on the sign-in page with **Start from scratch** and pick **Sandbox Owner
 
 One rule for every record: many new records start as a **Draft**. Open the record and use the buttons at the top (for example **Submit**, **Approve** or **Activate**) until its status reads **Active** or **Approved**. Only active or approved records can be used in the next steps.
 
-Shortcut: on **Production → Formulas** press **Use the Acapulco soap example**. It adds the soap materials (coconut oil, palm oil, lye solution, extract, colour, wrapper), the product **Acapulco Soap 135 g**, a draft formula and a draft soap routing in one tap. Then skip steps 2, 4 and 5 except for checking, submitting and approving the drafts. The quantities are examples from the fictional demo company: check them before you rely on them.
+Shortcut: on **Production → Setup → Products and formulas** press **Use the Acapulco soap example**. It adds the soap materials (coconut oil, palm oil, lye solution, extract, colour, wrapper), the product **Acapulco Soap 135 g**, a draft formula and a draft soap routing in one tap. Then skip steps 2, 4 and 5 except for checking, submitting and approving the drafts. The quantities are examples from the fictional demo company: check them before you rely on them.
 
 Tip: when a button is missing or a step says it needs someone else, the message names the role and the people who can do it.
 
@@ -40,10 +40,10 @@ Tip: when a button is missing or a step says it needs someone else, the message 
 
 ## 5. Write the recipe (formula) and the steps (routing)
 
-1. Open **Production → Formulas** and create a formula for the product (or use the Acapulco soap example): each material with its quantity for one standard batch.
+1. Open **Production → Setup → Products and formulas** and create a formula for the product (or use the Acapulco soap example): each material with its quantity for one standard batch.
 2. Submit it, then approve it. Only an approved formula can be used for production.
-3. Open **Production → Routings** and create the steps (for example weighing, mixing, curing, cutting, wrapping). To add readings such as temperature to a step, open the draft routing, open the step and use **Add parameter** (name, unit, and optional minimum and maximum). Submit and approve.
-4. Optional: **Production → Work instructions** for operator text per step, and **Production → Equipment** for scales and mixers.
+3. Open **Production → Setup → Steps for each product** and create the steps (for example weighing, mixing, curing, cutting, wrapping). To add readings such as temperature to a step, open the draft routing, open the step and use **Add parameter** (name, unit, and optional minimum and maximum). Submit and approve.
+4. Optional: **Production → Setup → Work instructions** for operator text per step, and **Production → Setup → Equipment** for scales and mixers.
 
 ## 6. Say what QA checks (inspection plan)
 
@@ -62,25 +62,26 @@ Tip: when a button is missing or a step says it needs someone else, the message 
 2. Open the lot, record the inspection results and choose **Release**. The lot becomes available.
 3. Open **Inventory → Put away** and move the released lot from the receiving dock to a storage rack (scan the labels or choose the locations).
 
-## 9. Plan production (work order)
+## 9. Plan production (production order)
 
-1. Open **Production → Work orders** and create a work order: product, quantity and due date. It uses the approved formula and routing.
-2. Press **Release and reserve materials** on the work order. Releasing checks that enough released material exists and reserves it. If something is short, the screen says what is missing.
-3. Create the batch from the work order (**Production → Batches** or the work order page).
+1. Open **Production → New order**. Choose the product, type **How many (pieces)** and, if you have one, the **Needed by** date. It uses the approved formula and steps.
+2. Open the order and press **Approve**. Approving checks that enough released material exists, sets it aside and creates the batch. If something is short, the screen says what is missing.
+3. Made for a customer? On the customer order press **Make for this order** instead: the product and the missing pieces are filled in.
 
 ## 10. Make the batch
 
-1. **Production → Stage materials**: move the reserved lots to the production staging location.
-2. On the batch, do the **line clearance** (the room and line are clean and empty of the previous product).
-3. **Weighing**: weigh each material against the formula. A second person normally checks each weighing.
-4. Complete each routing step and record the readings asked for.
-5. Record the output (how many good units) and the yield. The finished goods go to quarantine.
+1. On the order, press the big button. It always shows the next step.
+2. **Get materials**: take the materials on the list to the making area (for now by scanning each lot).
+3. **Start**: do the start check (the room and line are clean and empty of the previous product).
+4. **Weigh**: weigh each material against the formula. A second person checks the weighings that need it.
+5. Do each step and type the values asked for (for example a temperature).
+6. **Finish**: record how many good pieces were made. The finished goods go to the hold area and the order shows **Quality check**.
 
-## 11. QA releases the batch
+## 11. QA checks the batch
 
 1. Open **Quality → QA queue**. Review the batch record and the finished-product inspection.
-2. Choose **Release**. The finished goods can now be sold.
-3. On the batch, open **Closure & paper pages** and close the batch. The final batch record (BMR) can be printed.
+2. Choose **Release** (pass). The finished goods can now be sold and the order shows **Done**.
+3. On the batch (**Production → Advanced → Batches (full record)**), open **Closure & paper pages** and close the batch. The final batch record (BMR) can be printed.
 
 ## 12. Sell and ship
 

@@ -500,11 +500,12 @@ export async function getOperatorHome(ctx: AuthContext): Promise<OperatorTile[]>
         .where(and(eq(batches.siteId, site), inArray(batches.status, ["materials_staged", "in_process"])))
         .then(([r]) => ({
           key: "batches",
-          title: ctx.can("production.dispense_record.create") ? "Weigh batch" : "Batches",
-          href: "/production",
+          // ADR-080 §11: operators follow production orders ("My work"), not the old batch list.
+          title: ctx.can("production.work_order.create") ? "Production orders" : "My work",
+          href: ctx.can("production.work_order.view") ? "/production/orders" : "/production",
           count: Number(r?.n ?? 0),
-          countLabel: "batches in process",
-          description: "Open a batch to weigh materials and complete process steps.",
+          countLabel: "batches being made",
+          description: "Open an order; its big button shows the next step (get materials, start, weigh, next step, finish).",
         })),
     );
   if (ctx.can("quality.disposition.view"))
