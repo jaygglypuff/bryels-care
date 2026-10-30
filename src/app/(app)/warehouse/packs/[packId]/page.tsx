@@ -104,7 +104,7 @@ export default async function PackPage({ params, searchParams }: { params: Promi
                   <p className="text-[13px] text-fg-2">One label per box: BC:BOX, SKU, lot, expiry, units, packed date, packer initials, box n of N.</p>
                 </Cmd>
               ) : (
-                <Banner tone="warn" title="Box label printing isn't set up">Ask an administrator to approve a box (carton) label template under Admin → Templates & labels.</Banner>
+                <Banner tone="warn" title="Box label printing isn't set up">Ask an administrator to approve a box (carton) label template under Management → System → Templates & labels.</Banner>
               )}
               <LinkButton href="/labels" variant="ghost" className="mt-2">Open the print station</LinkButton>
             </Card>

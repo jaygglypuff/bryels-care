@@ -119,14 +119,15 @@ export async function listLots(ctx: AuthContext, f: LotFilter = {}) {
 }
 
 /** KPI strip for the current site: counts of lots that still hold stock. */
-export async function lotKpis(ctx: AuthContext) {
+/** Stock warning counts at the current site; `kind` limits them to materials or finished products (ADR-081 stock tabs). */
+export async function lotKpis(ctx: AuthContext, opts: { kind?: "material" | "product" } = {}) {
   ctx.require("inventory.lot.view");
   const rows = await db.execute<{ quarantined: string; on_hold: string; expiring: string; expired: string }>(sql`
     with s as (
       select l.id, l.quality_status, l.expires_on
       from ${inventoryLots} l
       join ${inventoryBalances} b on b.lot_id = l.id
-      where l.site_id = ${ctx.currentSiteId}
+      where l.site_id = ${ctx.currentSiteId} ${opts.kind ? sql`and l.item_kind = ${opts.kind}` : sql``}
       group by l.id
       having sum(b.qty_base) > 0
     )

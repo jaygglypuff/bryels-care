@@ -61,3 +61,6 @@ export type { KpiAggregate, KpiDefinition, KpiUnit, ValueLabel } from "./kpi/cat
 export { PERIOD_KEYS, isPeriodKey } from "./kpi/time";
 export type { Grain, PeriodKey } from "./kpi/time";
 export { analyticsReconcileKpisJob, analyticsSnapshotKpisJob } from "./jobs";
+// ADR-081: Operations Center pipeline (five-destination navigation)
+export { ACTIVE_BATCH_LIMIT, PIPELINE_STAGE_KEYS, getOperationsCenter } from "./operations-center";
+export type { ActiveBatch, OperationsCenter, PipelinePart, PipelineStage, PipelineStageKey } from "./operations-center";

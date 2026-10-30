@@ -144,7 +144,7 @@ export async function submitExpenseClaim(ctx: AuthContext, id: string) {
     if (D(c.amount).gt(limit) && !c.receiptAttachmentId) throw new DomainError("validation", `Attach the receipt: claims above ${money(limit)} need one.`, { field: "receipt" });
     const ev = await evaluateAtSubmit(tx, ctx, { recordType: "expense_claim", recordId: c.id, recordNumber: c.claimNumber, siteId: c.siteId, basis: { amount: c.amount } });
     const now = new Date();
-    if (!ev.steps.length) throw new DomainError("setup_required", "No approval rule applies to expense claims; ask the owner to configure one (Admin → Approval rules).");
+    if (!ev.steps.length) throw new DomainError("setup_required", "No approval rule applies to expense claims; ask the owner to configure one (Management → System → Approval rules).");
     await tx.update(expenseClaims).set({ status: "submitted", submittedAt: now, updatedAt: now }).where(eq(expenseClaims.id, c.id));
     await logTransition(tx, ctx, doc(c), "draft", "submitted");
     await notifyNextStep(tx, ctx, ev.steps[0], { siteId: c.siteId, kind: "finance.expense_claim.approval", title: `Expense claim ${c.claimNumber} to approve`, body: `${ctx.displayName} claims ${money(c.amount)} ${c.currency}.`, entityType: "expense_claim", entityId: c.id, link: `/finance/expenses/${c.id}` });

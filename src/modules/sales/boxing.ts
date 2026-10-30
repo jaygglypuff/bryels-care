@@ -431,7 +431,7 @@ export async function printPackLabels(ctx: AuthContext, packId: string, input: {
   ctx.require("inventory.label_job.create");
   const p = await getPackRow(ctx, packId);
   const tpl = p.labelTemplateId ? { id: p.labelTemplateId } : await labelTemplateFor(db, ctx.organizationId, p.siteId);
-  if (!tpl) throw new DomainError("setup_required", "No approved box (carton) label template exists for this site. Ask an administrator to set one up under Admin → Templates → Labels.");
+  if (!tpl) throw new DomainError("setup_required", "No approved box (carton) label template exists for this site. Ask an administrator to set one up under Management → System → Templates & labels.");
   const boxes = await db.select({ containerId: packBoxes.containerId, boxNo: packBoxes.boxNo, number: containers.containerNumber }).from(packBoxes).innerJoin(containers, eq(containers.id, packBoxes.containerId)).where(and(eq(packBoxes.packId, p.id), eq(packBoxes.status, "packed"))).orderBy(asc(packBoxes.boxNo));
   const live = boxes.length
     ? await db.select({ entityId: labelJobs.entityId }).from(labelJobs).where(and(eq(labelJobs.entityType, "container"), inArray(labelJobs.entityId, boxes.map((b) => b.containerId)), inArray(labelJobs.status, ["queued", "rendering", "ready", "printed"]), sql`${labelJobs.voidedAt} is null`))
@@ -757,7 +757,7 @@ export async function generateBoxingNoteInTx(tx: Tx, ctx: AuthContext, packId: s
   const { data, pack } = await boxingNoteData(tx, packId);
   const code = await getSetting(tx, ctx.organizationId, "documents.boxing_note.template_code", pack.siteId);
   const resolved = await resolveTemplateVersion(tx, ctx.organizationId, { templateCode: code, siteId: pack.siteId });
-  if (!resolved) throw new DomainError("setup_required", `No approved boxing note template (${code}) exists. Ask QA or an administrator to approve one under Admin → Templates.`);
+  if (!resolved) throw new DomainError("setup_required", `No approved boxing note template (${code}) exists. Ask QA or an administrator to approve one under Management → System → Templates & labels.`);
   const doc = await generateForSource(tx, ctx, {
     resolved,
     documentKind: "boxing_note",

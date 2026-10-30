@@ -267,6 +267,11 @@ Design starts at 360 px and adds, never subtracts. Nothing core needs more than 
 
 ## 3. Navigation model
 
+> **Superseded in part by ADR-081 (2026-10-30).** The menu is now five destinations — Home, Operations,
+> Inventory, Sales & Customers, Management — with section menus, per-role tab bars and no quick-action
+> rail. `docs/NEW_NAVIGATION.md` is the current map; the breakpoints, top bar and accessibility rules
+> below still apply.
+
 > **Amended by ADR-024 (2026-10-23).** As built, desktop uses the reference layout instead of
 > the 240 px left navigation of §3.1: a top bar (logo, module pills with the active module as a
 > solid `--cta` pill, site selector, scan, QA bell, account menu), a second pill row for the

@@ -593,7 +593,7 @@ export const SETTINGS = {
   "finance.currency": { scopes: ["organization"], schema: z.string().regex(/^[A-Z]{3}$/), default: "PHP", assumption: "A-FIN-26", group: "Finance", label: "Document currency", description: "Single currency of invoices, bills and payments (ISO code). Multi-currency documents are out of scope.", requiresApproval: true },
   "finance.tax.default_sales_code": {
     scopes: ["organization"], schema: z.string().regex(/^[A-Z0-9_-]{1,20}$/).nullable(), default: null as string | null, assumption: "A-W4B-02", group: "Finance", label: "Tax code for sales (quotes, orders, invoice lines)",
-    description: "A code of the reviewed tax configuration (Finance → Tax configuration). Empty = no tax line. The system does not decide which tax applies; the accountant does.", requiresApproval: true, restricted: true,
+    description: "A code of the reviewed tax configuration (Management → Finance → Tax configuration). Empty = no tax line. The system does not decide which tax applies; the accountant does.", requiresApproval: true, restricted: true,
   },
   "finance.tax.default_purchase_code": {
     scopes: ["organization"], schema: z.string().regex(/^[A-Z0-9_-]{1,20}$/).nullable(), default: null as string | null, assumption: "A-W4B-02", group: "Finance", label: "Tax code for supplier bill lines",

@@ -97,7 +97,7 @@ export default async function LotPage({ params, searchParams }: { params: Promis
         title={lot.lotNumber}
         subtitle={
           <>
-            <Link href="/inventory" className="text-primary-text hover:underline">Lots & stock</Link> · {lot.itemName} · {lot.itemCode}
+            <Link href="/inventory" className="text-primary-text hover:underline">Stock</Link> · {lot.itemName} · {lot.itemCode}
           </>
         }
         actions={

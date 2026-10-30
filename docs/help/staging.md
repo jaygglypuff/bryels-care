@@ -10,7 +10,7 @@ Bring the reserved lots of a batch to the staging area by scanning them. Only re
 
 ## Choose the batch
 
-1. Usually you come here from the order's **Get materials** button. You can also open **Production → Advanced → Materials by scan**. It lists the batches of approved orders.
+1. Usually you come here from the order's **Get materials** button. You can also open **Operations → Advanced → Materials by scan**. It lists the batches of approved orders.
 2. Open the batch. The screen lists each ingredient, the lot reserved for it and how much is still needed.
 3. **Nothing to stage**: no released work order has batches waiting. Ask the planner.
 

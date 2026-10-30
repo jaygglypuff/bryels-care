@@ -152,7 +152,7 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
                 <LinkButton href={`/print/delivery-receipt/${s.id}`} target="_blank" variant="primary" className="mb-3 w-full">Print delivery receipt</LinkButton>
               ) : ctx.can("documents.generated_document.create") ? (
                 <Cmd action={generateDeliveryReceiptAction} fields={{ shipmentId: s.id }} label="Generate delivery receipt" variant="secondary">
-                  <Banner tone="warn" title="No DR document yet">The DR number is allocated; the document needs an approved template (Admin → Templates).</Banner>
+                  <Banner tone="warn" title="No DR document yet">The DR number is allocated; the document needs an approved template (Management → System → Templates & labels).</Banner>
                 </Cmd>
               ) : null}
               {drDoc && <p className="text-[12px] text-muted">{drDoc.documentNumber} · {drDoc.watermark ?? "issued"} · reprints from the document record need a reason.</p>}

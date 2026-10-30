@@ -138,7 +138,7 @@ export async function deliveryReceiptData(q: DbOrTx, shipmentId: string, opts: {
 async function renderDr(tx: Tx, ctx: AuthContext, s: ShipmentRow, data: DeliveryReceiptData, watermark: string | null, idempotencyKey?: string | null) {
   const code = await getSetting(tx, ctx.organizationId, "documents.delivery_receipt.template_code", s.siteId);
   const resolved = await resolveTemplateVersion(tx, ctx.organizationId, { templateCode: code, siteId: s.siteId });
-  if (!resolved) throw new DomainError("setup_required", `No approved delivery receipt template (${code}) exists. Ask QA or an administrator to approve one under Admin → Templates.`);
+  if (!resolved) throw new DomainError("setup_required", `No approved delivery receipt template (${code}) exists. Ask QA or an administrator to approve one under Management → System → Templates & labels.`);
   return generateForSource(tx, ctx, {
     resolved,
     documentKind: "delivery_receipt",

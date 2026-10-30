@@ -79,7 +79,7 @@ export async function issuePaperPage(ctx: AuthContext, input: { batchId: string;
     const resolved = await bmrTemplateFor(tx, ctx, { id: b.id, siteId: b.siteId, createdAt: b.createdAt }, PAPER_PAGE_KIND);
     if (!resolved) {
       const code = await getSetting(tx, ctx.organizationId, "documents.bmr.paper_page_template_code", b.siteId);
-      throw new DomainError("setup_required", `No approved paper page template (${code}) is available. Ask QA to approve one under Admin → Document templates.`);
+      throw new DomainError("setup_required", `No approved paper page template (${code}) is available. Ask QA to approve one under Management → System → Templates & labels.`);
     }
     const { product, siteCode } = await visibleBatch(tx, ctx, b.id);
     const data: BmrPaperPageData = {

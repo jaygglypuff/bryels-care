@@ -1331,3 +1331,61 @@ redirect). Items a human GMP consultant must still confirm are listed in the QA 
   (`batchExpiryDates`, one source for lot, BMR and label); existing organizations keep `manufacture_date`.
 - Not in G2: Finish (G3) and Check quality (G3) still open the full batch record; "Use another lot" at the
   Materials list goes through the QA substitution; PIN on marked lines (QA review S1) not built.
+
+## ADR-081 Five destinations, Operations Center and stock by type (UX revision, slice R1)
+
+**Status.** Accepted (2026-10-30). The owner asked to "perform the necessary revision" against the master
+document's Part II–IV (UX restructuring brief and mockup board) on the existing app, without starting
+from scratch. Read with `docs/UX_AUDIT.md`, `docs/NEW_NAVIGATION.md`, `docs/WORKFLOW_ARCHITECTURE.md`
+and `docs/REDESIGN_IMPLEMENTATION_PLAN.md`. Builds on ADR-080 §11 (per-role navigation); supersedes
+its group list only (Production and Maintenance as separate groups).
+
+**Context.** The audit counted 13 menu groups, 117 menu items and six navigation surfaces; an operator
+saw 54 items in 11 groups (UX-01, UX-02). No screen showed the pipeline from delivery to dispatch
+(UX-20), and stock was not split into raw materials, WIP and finished goods (UX-23).
+
+**Decisions.**
+1. **Five destinations** replace the fourteen groups: Home, Operations, Inventory, Sales & Customers,
+   Management (`src/app/(app)/nav.ts`). Every screen keeps its URL; only its place in the menu
+   changes, so bookmarks, notification links and tests still work. Each menu entry appears once.
+2. Inside a destination, items without a section are tabs; the rest sit in named menus ("Receiving",
+   "Quality", "Packing & dispatch", "Maintenance", "Advanced" last; Management: "Reports & analytics",
+   "Purchasing", "Finance", "Production setup", "Master data", "People & access", "System").
+3. **Placement rules:** receiving (expected deliveries → receive → receipts → put away), quality,
+   boxing/picking/dispatch and maintenance belong to Operations; customer invoices, payments,
+   statements and credit notes belong to Sales & Customers; analytics, purchasing, supplier-side finance,
+   production setup (formulas, steps, instructions, inspection plans, equipment), master data, users and
+   system settings belong to Management. "My expense claims" is a personal item under Home.
+4. **Floor roles** (operator and warehouse personas) do not get the Management destination; their
+   pages still check access on the server as before (menus never grant or remove access). A new
+   `warehouse` persona gets the tabs Home · Receive · Scan · Inventory · Menu; operators
+   Home · My work · Today · Scan · Menu; QA Home · Quality check · Operations · Scan · Menu; everyone
+   else Home · Operations · Inventory · Sales · Menu. Every tab bar ends with Menu.
+5. **The quick-action rail is removed** (sixth navigation surface, icon-only, duplicated the menu;
+   UX-27). Its actions are the "Quick links" of the Operations Center. Scan, To approve, notifications
+   and the account menu stay in the top bar.
+6. **Operations Center** (`/operations`, read model `getOperationsCenter` in
+   `src/modules/analytics/operations-center.ts`): nine stages — Expected deliveries, Receiving,
+   Awaiting inspection, Raw materials available, Production, Quality check, Packaging, Finished goods,
+   Orders to dispatch — each a live count over existing state machines (no new table, no stored
+   counter), split by status, with one attention line (late, on hold, expiring) and a link to the
+   screen that does the work. A stage is computed only when the caller holds that module's view
+   permission; scope is the current site or "All my sites" (same rule as the owner overview). Below it,
+   the active batches furthest along first, each opening its production order (ADR-080 hub).
+7. The owner/manager **Home** shows the pipeline first ("Right now"), then the existing KPI overview.
+8. **Inventory** has tabs Raw materials · Work in progress · Finished goods · All stock, with Scan as
+   the primary button. WIP (`/inventory/wip`) lists batches between materials set aside and the QA
+   decision from the same read model as the Operations Center (WIP is not a stock lot; A-UX-03).
+9. **Management** has a landing page listing only the sections the user may open.
+10. An app-wide error page (`src/app/(app)/error.tsx`) replaces blank screens on pages without their own
+   boundary (UX-24).
+
+**Not decided here (needs the owner):** assignment of production orders to people or teams so "My work"
+is truly assigned work (UX-15, A-UX-04); one approvals/alerts inbox (UX-06, UX-29); the shared
+record layout (UX-21) and a workflow-instance record (UX-22) — see the implementation plan, phases R2–R4.
+
+**Consequences.** No schema change, no migration, no new permission. Help guides and on-screen setup
+messages now name the new paths (e.g. "Management → System → Templates & labels"). Tests:
+`tests/unit/nav-per-role.test.ts` (five destinations, one entry per screen, per-role menus and tabs,
+permission filtering) and `tests/integration/analytics/operations-center.test.ts` (counts equal the
+records, a new lot moves the right stage, cross-site and role negatives).

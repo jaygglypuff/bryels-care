@@ -3,10 +3,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  Bell, Boxes, CalendarDays, ClipboardList, Clock, Database, Factory, FlaskConical, GitBranch, HelpCircle, Home, ListChecks, Menu, PackagePlus, ScanLine,
+  Bell, Boxes, CalendarDays, ChevronDown, ClipboardList, Clock, Database, Factory, FlaskConical, GitBranch, HelpCircle, Home, ListChecks, Menu, PackagePlus, ScanLine,
   ScrollText, Settings, ShieldCheck, ShoppingCart, Truck, Warehouse, Wrench, X,
 } from "lucide-react";
-import type { NavBadges, NavGroup, NavItem, QuickAction, Tab } from "./nav";
+import { groupHref, groupSections, type NavBadges, type NavGroup, type NavItem, type Tab } from "./nav";
 import { cx } from "@/ui/core";
 import { Logo, LogoMark } from "@/ui/brand";
 import { NavigationProgress } from "@/ui/navigation-progress";
@@ -22,20 +22,14 @@ const ICONS: Record<string, React.ReactNode> = {
 
 const TAB_ICONS: Record<Tab["icon"], React.ReactNode> = {
   home: <Home size={20} />, today: <CalendarDays size={20} />, scan: <ScanLine size={20} />, help: <HelpCircle size={20} />, factory: <Factory size={20} />,
-  truck: <Truck size={20} />, approve: <ListChecks size={20} />, shield: <ShieldCheck size={20} />, menu: <Menu size={20} />,
+  truck: <Truck size={20} />, approve: <ListChecks size={20} />, shield: <ShieldCheck size={20} />, boxes: <Boxes size={20} />, receive: <PackagePlus size={20} />,
+  menu: <Menu size={20} />,
 };
-
-/** Items of a group without a section, under "Setup", and in the collapsed "Advanced" part (ADR-080 §11). */
-function sections(items: NavItem[]) {
-  const live = items.filter((i) => !i.planned);
-  return { main: live.filter((i) => !i.section), setup: live.filter((i) => i.section === "setup"), advanced: live.filter((i) => i.section === "advanced") };
-}
 
 type Props = {
   nav: NavGroup[];
-  /** Bottom tab bar per role (ADR-080 §11; built by tabsFor in nav.ts). */
+  /** Bottom tab bar per role (ADR-081; built by tabsFor in nav.ts). */
   tabs: Tab[];
-  quickActions: QuickAction[];
   user: { id: string; name: string; roles: string };
   sites: { id: string; code: string; name: string }[];
   currentSiteId: string;
@@ -84,13 +78,12 @@ function matchLen(pathname: string, href: string) {
   return -1;
 }
 
-export function Shell({ nav, tabs, quickActions, user, sites, currentSiteId, qaCount, unreadCount, approvalCount = 0, switchSite, signOut, demo = null, children }: Props) {
+export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCount, approvalCount = 0, switchSite, signOut, demo = null, children }: Props) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   useEffect(() => setDrawer(false), [pathname]);
 
-  const real = nav.filter((g) => g.items.some((i) => !i.planned));
-  const planned = nav.flatMap((g) => g.items.filter((i) => i.planned));
+  const real = nav;
   // Most specific match wins for both the module pill and the sub-tab.
   let activeGroup: NavGroup | undefined;
   let activeHref = "";
@@ -99,7 +92,6 @@ export function Shell({ nav, tabs, quickActions, user, sites, currentSiteId, qaC
     const m = matchLen(pathname, i.href);
     if (m > best) { best = m; activeGroup = g; activeHref = i.href; }
   }
-  const groupHref = (g: NavGroup) => g.items.find((i) => !i.planned)?.href ?? "#";
   const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
   const site = sites.find((s) => s.id === currentSiteId);
   const badges: NavBadges = { ...(qaCount ? { "/quality": qaCount } : {}), ...(approvalCount ? { "/approvals": approvalCount } : {}) };
@@ -145,12 +137,14 @@ export function Shell({ nav, tabs, quickActions, user, sites, currentSiteId, qaC
                     <Link
                       href={groupHref(g)}
                       aria-current={active ? "page" : undefined}
+                      title={g.description}
                       className={cx(
-                        "flex items-center whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-medium transition-colors",
+                        "flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-medium transition-colors",
                         active ? "bg-cta text-white" : "text-fg-2 hover:bg-surface-2 hover:text-fg",
                       )}
                     >
-                      {g.label === "Home" ? "Overview" : g.label}
+                      {ICONS[g.icon]}
+                      {g.label}
                     </Link>
                   </li>
                 );
@@ -199,9 +193,10 @@ export function Shell({ nav, tabs, quickActions, user, sites, currentSiteId, qaC
             </details>
           </div>
         </div>
-        {/* Sub-page tabs for the active module; Setup items follow, Advanced items sit in a collapsed menu (ADR-080 §11). */}
-        {activeGroup && activeGroup.items.filter((i) => !i.planned).length > 1 && (() => {
-          const sec = sections(activeGroup.items);
+        {/* Tabs of the active destination; each named section is one small menu ("Advanced" last), ADR-081. */}
+        {activeGroup && (() => {
+          const { main, sections } = groupSections(activeGroup);
+          if (main.length + sections.length <= 1) return null;
           const pill = (i: NavItem) => (
             <li key={i.href}>
               <Link
@@ -220,29 +215,40 @@ export function Shell({ nav, tabs, quickActions, user, sites, currentSiteId, qaC
             </li>
           );
           return (
-            <div className="mx-auto hidden max-w-[1480px] px-4 pb-3 sm:px-6 lg:block lg:pl-[92px]">
+            <div className="mx-auto hidden max-w-[1480px] px-4 pb-3 sm:px-6 lg:block">
               <ul className="flex flex-wrap items-center gap-1.5">
-                {sec.main.map(pill)}
-                {sec.setup.length > 0 && <li className="px-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Setup</li>}
-                {sec.setup.map(pill)}
-                {sec.advanced.length > 0 && (
-                  <li>
-                    <details className="relative">
-                      <summary className={cx("flex cursor-pointer list-none items-center gap-1 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[12.5px] font-medium", sec.advanced.some((i) => i.href === activeHref) ? "border-transparent bg-cta text-white" : "border-line bg-surface text-fg-2 hover:text-fg")}>
-                        Advanced
-                      </summary>
-                      <ul className="absolute left-0 top-9 z-40 w-64 rounded-[16px] border border-line bg-surface p-2 shadow-[var(--shadow-pop)]">
-                        {sec.advanced.map((i) => (
-                          <li key={i.href}>
-                            <Link href={i.href} aria-current={i.href === activeHref ? "page" : undefined} className={cx("block rounded-[10px] px-3 py-2 text-[13px]", i.href === activeHref ? "bg-cta font-medium text-white" : "text-fg-2 hover:bg-surface-2")}>
-                              {i.label}
-                            </Link>
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  </li>
-                )}
+                {main.map(pill)}
+                {sections.map((sec) => {
+                  const here = sec.items.some((i) => i.href === activeHref);
+                  return (
+                    <li key={sec.name}>
+                      {/* keyed by path so an open menu closes after navigating */}
+                      <details className="relative" key={pathname}>
+                        <summary className={cx("flex cursor-pointer list-none items-center gap-1 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[12.5px] font-medium", here ? "border-transparent bg-cta text-white" : "border-line bg-surface text-fg-2 hover:text-fg")}>
+                          {sec.name}
+                          <ChevronDown size={14} aria-hidden />
+                        </summary>
+                        <ul className="absolute left-0 top-9 z-40 w-64 rounded-[16px] border border-line bg-surface p-2 shadow-[var(--shadow-pop)]">
+                          {sec.items.map((i) => (
+                            <li key={i.label}>
+                              {i.planned ? (
+                                <span className="flex items-center justify-between rounded-[10px] px-3 py-2 text-[13px] text-muted" aria-disabled="true">
+                                  {i.label}
+                                  <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-semibold uppercase">{i.planned}</span>
+                                </span>
+                              ) : (
+                                <Link href={i.href} aria-current={i.href === activeHref ? "page" : undefined} className={cx("flex items-center justify-between rounded-[10px] px-3 py-2 text-[13px]", i.href === activeHref ? "bg-cta font-medium text-white" : "text-fg-2 hover:bg-surface-2")}>
+                                  {i.label}
+                                  <CountBadge n={badges[i.href]} />
+                                </Link>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           );
@@ -250,28 +256,6 @@ export function Shell({ nav, tabs, quickActions, user, sites, currentSiteId, qaC
       </header>
 
       <div className="mx-auto flex max-w-[1480px] gap-6 px-4 sm:px-6">
-        {/* Quick-action rail */}
-        <aside className="no-print sticky top-[124px] hidden h-fit flex-col items-center gap-2 py-6 lg:flex" aria-label="Quick actions">
-          <div className="flex flex-col gap-2 rounded-full bg-surface p-1.5 shadow-[var(--shadow-card)]">
-            {quickActions.map((q) => {
-              const active = matchLen(pathname, q.href) >= 0;
-              return (
-                <Link
-                  key={q.href}
-                  href={q.href}
-                  title={withCount(q.label, q.href)}
-                  aria-label={withCount(q.label, q.href)}
-                  className={cx("relative grid size-11 place-items-center rounded-full transition-colors", active ? "text-white" : "text-fg-2 hover:bg-surface-2 hover:text-fg")}
-                  style={active ? { background: "var(--brand-600)" } : undefined}
-                >
-                  {ICONS[q.icon]}
-                  <CountBadge n={badges[q.href]} className="absolute -right-1 -top-1" />
-                </Link>
-              );
-            })}
-          </div>
-          <SignOutButton signOut={signOut} variant="rail" />
-        </aside>
         <main className="min-w-0 flex-1 py-5 sm:py-7">
           <DeletedNotice pathname={pathname} />
           {children}
@@ -321,49 +305,37 @@ export function Shell({ nav, tabs, quickActions, user, sites, currentSiteId, qaC
               <button className="grid size-9 place-items-center rounded-full bg-surface-2" onClick={() => setDrawer(false)} aria-label="Close menu"><X size={18} /></button>
             </div>
             {sites.length > 1 && <div className="mb-4 sm:hidden">{siteSwitcher}</div>}
-            {real.map((g) => (
-              <div key={g.label} className="mb-3">
-                <p className="mb-1 flex items-center gap-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted">{ICONS[g.icon]} {g.label}</p>
-                {(() => {
-                  const sec = sections(g.items);
-                  const row = (i: NavItem) => (
-                    <li key={i.href}>
-                      <Link href={i.href} aria-label={badges[i.href] ? withCount(i.label, i.href) : undefined} className={cx("flex min-h-[44px] items-center justify-between gap-2 rounded-[12px] px-3 py-2.5 text-[14px]", i.href === activeHref ? "bg-cta font-medium text-white" : "text-fg-2 hover:bg-surface-2")}>
-                        {i.label}
-                        <CountBadge n={badges[i.href]} />
-                      </Link>
-                    </li>
-                  );
-                  return (
-                    <>
-                      <ul>{sec.main.map(row)}</ul>
-                      {sec.setup.length > 0 && (
-                        <>
-                          <p className="mt-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-muted">Setup</p>
-                          <ul>{sec.setup.map(row)}</ul>
-                        </>
-                      )}
-                      {sec.advanced.length > 0 && (
-                        <details className="mt-1" open={sec.advanced.some((i) => i.href === activeHref)}>
-                          <summary className="flex min-h-[44px] cursor-pointer items-center px-3 text-[13px] font-medium text-muted">Advanced</summary>
-                          <ul>{sec.advanced.map(row)}</ul>
-                        </details>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-            ))}
-            {planned.length > 0 && (
-              <div className="mb-3">
-                <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Coming next</p>
-                {planned.map((i) => (
-                  <p key={i.label} className="flex items-center justify-between px-3 py-2 text-[13px] text-muted" aria-disabled="true">
-                    {i.label}<span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-semibold uppercase">{i.planned}</span>
-                  </p>
-                ))}
-              </div>
-            )}
+            {real.map((g) => {
+              const { main, sections } = groupSections(g);
+              const row = (i: NavItem) =>
+                i.planned ? (
+                  <li key={i.label}>
+                    <span className="flex min-h-[44px] items-center justify-between px-3 py-2 text-[13px] text-muted" aria-disabled="true">
+                      {i.label}
+                      <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-semibold uppercase">{i.planned}</span>
+                    </span>
+                  </li>
+                ) : (
+                  <li key={i.href}>
+                    <Link href={i.href} aria-label={badges[i.href] ? withCount(i.label, i.href) : undefined} className={cx("flex min-h-[44px] items-center justify-between gap-2 rounded-[12px] px-3 py-2.5 text-[14px]", i.href === activeHref ? "bg-cta font-medium text-white" : "text-fg-2 hover:bg-surface-2")}>
+                      {i.label}
+                      <CountBadge n={badges[i.href]} />
+                    </Link>
+                  </li>
+                );
+              return (
+                <div key={g.label} className="mb-3">
+                  <p className="mb-1 flex items-center gap-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted">{ICONS[g.icon]} {g.label}</p>
+                  <ul>{main.map(row)}</ul>
+                  {sections.map((sec) => (
+                    <details key={sec.name} className="mt-0.5" open={sec.items.some((i) => i.href === activeHref)}>
+                      <summary className="flex min-h-[44px] cursor-pointer items-center px-3 text-[13px] font-medium text-muted">{sec.name}</summary>
+                      <ul className="pl-2">{sec.items.map(row)}</ul>
+                    </details>
+                  ))}
+                </div>
+              );
+            })}
             <div className="mt-auto flex items-center gap-2 border-t border-line pt-3">
               <LogoMark className="size-8" />
               <div className="min-w-0">

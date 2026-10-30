@@ -161,7 +161,7 @@ export async function runLoader(args: LoaderArgs, deps: LoaderDeps): Promise<num
     d = await getImportJob(ctx, up.jobId);
     deps.log(`Submitted for approval. A second person runs: pnpm migrate:approve ${up.importNumber} --as <email>; then: pnpm migrate:load --post --job ${up.importNumber} --as <email>`);
   } else if (d.job.status === "under_review") {
-    deps.log("Possible duplicates need a decision in the import wizard (Admin → Imports) before the job can be submitted.");
+    deps.log("Possible duplicates need a decision in the import wizard (Management → System → Imports) before the job can be submitted.");
   }
   deps.log(summary(d));
   return d.job.rowsRejected > 0 ? 3 : 0;

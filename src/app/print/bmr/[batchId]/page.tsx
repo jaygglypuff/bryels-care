@@ -93,7 +93,7 @@ export default async function BmrPrintPage({ params, searchParams }: Props) {
 
         {!view.template && (
           <div role="alert" className="rounded-[12px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
-            <b>BMR printing isn&apos;t set up.</b> No approved BMR template ({view.templateCode}) exists. Ask QA to approve one under Admin → Document templates.
+            <b>BMR printing isn&apos;t set up.</b> No approved BMR template ({view.templateCode}) exists. Ask QA to approve one under Management → System → Templates & labels.
           </div>
         )}
 

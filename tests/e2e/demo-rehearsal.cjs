@@ -837,22 +837,25 @@ async function kpiValue(page, caption) {
   {
     const noHScroll = async (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
     const { context, page } = await asUser('qa.nfd@bryels-care.test');
-    const qaLink = page.locator('aside[aria-label="Quick actions"] a[href="/quality"]');
-    const qaLabel = await qaLink.getAttribute('aria-label');
-    log('QA rail icon:', qaLabel);
-    assert(/^QA queue(, \d+ open)?$/.test(qaLabel), 'QA rail icon label ' + qaLabel);
+    // ADR-081: the quick-action rail is gone; the QA badge sits on the "Quality check" tab of Operations.
+    await page.goto(BASE + '/operations');
+    const qaLink = page.locator('header a[href="/quality"]').first();
+    const qaLabel = (await qaLink.getAttribute('aria-label')) ?? (await qaLink.innerText()).trim();
+    log('QA tab:', qaLabel);
+    assert(/^Quality check(, \d+ open)?/.test(qaLabel), 'QA tab label ' + qaLabel);
     await context.close();
     const desk = await asUser('manager.nfd@bryels-care.test');
-    for (const [url, group, tab] of [['/inventory/counts', 'Warehouse', 'Stock counts'], ['/inventory/containers', 'Inventory', 'Boxes'], ['/labels', 'Warehouse', 'Label print station']]) {
+    // [url, destination, main tab or section menu that is highlighted]
+    for (const [url, group, tab] of [['/inventory/counts', 'Inventory', 'Stock tasks'], ['/inventory/containers', 'Inventory', 'Stock views'], ['/labels', 'Inventory', 'Stock tasks'], ['/inventory/scan', 'Inventory', 'Scan'], ['/operations', 'Operations', 'Operations Center']]) {
       await desk.page.goto(BASE + url);
       await desk.page.locator('nav[aria-label="Modules"] a[aria-current="page"]', { hasText: group }).waitFor();
-      await desk.page.locator('header a[aria-current="page"]', { hasText: tab }).first().waitFor();
+      await desk.page.locator('header a[aria-current="page"], header summary.bg-cta', { hasText: tab }).first().waitFor();
       assert(await noHScroll(desk.page), `${url} has no horizontal scroll at 1440 px`);
     }
     await shot(desk.page, 'shell-warehouse-tabs', { top: true });
     await desk.context.close();
     const phone = await asUser('warehouse.nfd@bryels-care.test', PHONE, { isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
-    for (const url of ['/inventory/move', '/inventory/counts', '/inventory/containers', '/labels', '/inventory/scan', '/inventory/receive', '/sales/picking', '/sales/shipments', '/sales/shipments/' + facts.shipmentId, '/sales/returns', '/sales/returns/' + facts.returnId, '/warehouse/packs', '/action-centre', '/reports']) {
+    for (const url of ['/inventory/move', '/inventory/counts', '/inventory/containers', '/labels', '/inventory/scan', '/inventory/receive', '/sales/picking', '/sales/shipments', '/sales/shipments/' + facts.shipmentId, '/sales/returns', '/sales/returns/' + facts.returnId, '/warehouse/packs', '/action-centre', '/reports', '/operations', '/inventory/wip']) {
       await phone.page.goto(BASE + url);
       await noErrorPage(phone.page);
       assert(await noHScroll(phone.page), `${url} has no horizontal scroll at 390 px`);

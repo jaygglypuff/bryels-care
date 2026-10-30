@@ -31,7 +31,7 @@ export function WhoCanHelp({ permission, siteId }: { permission: string; siteId:
           ))}
         </ul>
       ) : (
-        <span className="block opacity-80">Nobody else holds this yet. An administrator can give the role under Admin → Users.</span>
+        <span className="block opacity-80">Nobody else holds this yet. An administrator can give the role under Management → People & access → Users.</span>
       )}
     </div>
   );

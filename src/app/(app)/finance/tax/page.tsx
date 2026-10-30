@@ -24,7 +24,7 @@ export default async function TaxPage() {
       <PageHeader title="Tax configuration" subtitle="The system computes tax from these reviewed rows; it does not decide which tax applies, file returns or decide whether its invoice is the official tax document." />
       <div className="mb-4">
         <Banner tone="info" title={`Sales tax code in use: ${defaults.sales ?? "none (no tax line)"} · purchases: ${defaults.purchases ?? "none"}`}>
-          The codes used by default are settings (Finance group){ctx.can("platform.settings.view") ? <> — change them in <Link className="underline" href="/admin/settings">Admin → Settings</Link> (second approver)</> : null}. Rows marked FICTIONAL are demo placeholders, not real rates.
+          The codes used by default are settings (Finance group){ctx.can("platform.settings.view") ? <> — change them in <Link className="underline" href="/admin/settings">Management → System → Settings</Link> (second approver)</> : null}. Rows marked FICTIONAL are demo placeholders, not real rates.
         </Banner>
       </div>
       <div className={admin ? "grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]" : ""}>

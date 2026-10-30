@@ -189,6 +189,7 @@ The full production topology (bucket, backups, staging/production separation) is
 | `docs/permissions-matrix.md` | Role × action × site-scope matrix and sensitive-field rules |
 | `docs/security.md` | Threat model, session policy, application controls, audit catalogue, retention |
 | `docs/ux-system.md` | Navigation, responsive behaviour, design tokens, component rules, states, accessibility |
+| `docs/UX_AUDIT.md`, `docs/NEW_NAVIGATION.md`, `docs/WORKFLOW_ARCHITECTURE.md`, `docs/OPERATOR_EXPERIENCE.md`, `docs/OWNER_EXPERIENCE.md`, `docs/REDESIGN_IMPLEMENTATION_PLAN.md` | UX revision (ADR-081): audit, the five-destination navigation, the connected pipeline and Operations Center, role experiences, phased plan |
 | `docs/design/style-tile.html` | Static visual direction: tokens, shell, owner dashboard, operator scan screen |
 | `docs/offline-sync.md` | Cached data, command queue, idempotency, conflicts, retry policy |
 | `docs/reports-and-templates.md` | Document templates (BMR, labels, DR, pick list), print specs, revision rules |

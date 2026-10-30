@@ -396,7 +396,7 @@ async function poDocumentData(q: DbOrTx, ctx: AuthContext, po: PoRow): Promise<P
 async function renderPoDocument(tx: Tx, ctx: AuthContext, po: PoRow, watermark: string | null) {
   const code = await getSetting(tx, ctx.organizationId, "documents.purchase_order.template_code", po.siteId);
   const resolved = await resolveTemplateVersion(tx, ctx.organizationId, { templateCode: code, siteId: po.siteId });
-  if (!resolved) throw new DomainError("setup_required", `No approved purchase order template (${code}) exists. Ask an administrator to approve one under Admin → Templates.`);
+  if (!resolved) throw new DomainError("setup_required", `No approved purchase order template (${code}) exists. Ask an administrator to approve one under Management → System → Templates & labels.`);
   const data = await poDocumentData(tx, ctx, po);
   return generateForSource(tx, ctx, {
     resolved,

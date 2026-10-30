@@ -2,8 +2,9 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
-import { getOperatorHome, getOwnerDashboard, getOwnerOverview } from "@/modules/analytics";
+import { getOperationsCenter, getOperatorHome, getOwnerDashboard, getOwnerOverview } from "@/modules/analytics";
 import { EmptyState, PageHeader } from "@/ui/core";
+import { PipelineStrip } from "@/ui/pipeline";
 import { ScopePeriodBar } from "../analytics/kpi-ui";
 import { OperatorHome } from "./operator-home";
 import { OwnerOverview } from "./owner-overview";
@@ -41,7 +42,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     throw e;
   }
   // The Batch journey board, near-expiry lots and activity come from the live operational read model, in the same scope.
-  const data = await getOwnerDashboard(ctx, { all: kpi.scope.all, siteIds: kpi.scope.siteIds, sites: kpi.scope.sites, label: kpi.scope.label });
+  const [data, pipeline] = await Promise.all([
+    getOwnerDashboard(ctx, { all: kpi.scope.all, siteIds: kpi.scope.siteIds, sites: kpi.scope.sites, label: kpi.scope.label }),
+    // ADR-081: "what is happening right now" first — the live pipeline, same scope as the figures below.
+    getOperationsCenter(ctx, { all: kpi.scope.all }),
+  ]);
 
   return (
     <>
@@ -50,6 +55,15 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         subtitle={`${kpi.scope.label} · ${kpi.period.label} · every number opens the records behind it`}
         actions={<ScopePeriodBar basePath="/dashboard" scope={kpi.scope} period={kpi.period} sites={ctx.allowedSites} canAll={kpi.canCrossSite} />}
       />
+      {pipeline.stages.length > 0 && (
+        <section aria-labelledby="now-h" className="mb-6 space-y-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 id="now-h" className="font-display text-[18px] font-semibold">Right now</h2>
+            <Link href={kpi.scope.all ? "/operations?scope=all" : "/operations"} className="text-[13px] font-medium text-primary-text hover:underline">Open the Operations Center</Link>
+          </div>
+          <PipelineStrip stages={pipeline.stages} compact />
+        </section>
+      )}
       <OwnerOverview data={data} kpi={kpi} canAudit={ctx.can("platform.audit.view")} />
     </>
   );

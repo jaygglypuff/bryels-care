@@ -489,7 +489,7 @@ export async function generatePickList(ctx: AuthContext, pickId: string, input: 
     if (replay) return { id: replay.id, documentNumber: replay.documentNumber };
     const code = await getSetting(tx, ctx.organizationId, "documents.pick_list.template_code", v.pick.siteId);
     const resolved = await resolveTemplateVersion(tx, ctx.organizationId, { templateCode: code, siteId: v.pick.siteId });
-    if (!resolved) throw new DomainError("setup_required", `No approved pick list template (${code}) exists. Ask QA or an administrator to approve one under Admin → Templates.`);
+    if (!resolved) throw new DomainError("setup_required", `No approved pick list template (${code}) exists. Ask QA or an administrator to approve one under Management → System → Templates & labels.`);
     const doc = await generateForSource(tx, ctx, {
       resolved,
       documentKind: "pick_list",

@@ -157,7 +157,7 @@ export async function generateBatchSheet(ctx: AuthContext, input: { batchId: str
   const b = view.batch;
   const tpl = await approvedTemplate(input.kind, ctx.organizationId, b.siteId);
   if (!tpl) {
-    throw new DomainError("setup_required", `No approved ${input.kind === "traveler" ? "traveler" : "dispensing sheet"} template exists. Ask QA to approve one under Admin → Templates & labels.`);
+    throw new DomainError("setup_required", `No approved ${input.kind === "traveler" ? "traveler" : "dispensing sheet"} template exists. Ask QA to approve one under Management → System → Templates & labels.`);
   }
   const [lastTransition] = await db.select().from(batchStateTransitions).where(eq(batchStateTransitions.batchId, b.id)).orderBy(desc(batchStateTransitions.at)).limit(1);
   const lastStaging = view.lines.flatMap((l) => l.stagings.map((s) => new Date(s.at).getTime()));

@@ -154,7 +154,7 @@ async function main(): Promise<number> {
           join document_templates nt on nt.organization_id = ${O} and nt.code = dt.code
           where lt.organization_id = ${demoOrg.id} and lt.site_id is null and lt.status = 'approved' and lt.is_active`);
       } else {
-        say("No demo company found to copy print templates from; create them under Admin → Templates & labels.");
+        say("No demo company found to copy print templates from; create them under Management → System → Templates & labels.");
       }
       await tx.insert(s.printStations).values({ organizationId: O, siteId: site.id, code: "SBX-DESK", name: "Warehouse desk printer", printerName: "Browser print (any printer)", createdBy: admin });
 

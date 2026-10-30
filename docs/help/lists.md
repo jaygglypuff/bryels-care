@@ -6,11 +6,11 @@ updated_at: 2026-10-30
 sop: SOP to be mapped by the owner (master data upkeep)
 ---
 
-Many dropdowns get their choices from **Master data → Lists**: product families, material categories, customer types and supplier categories. The owner and the system administrator can change them. Everyone else can look.
+Many dropdowns get their choices from **Management → Master data → Lists**: product families, material categories, customer types and supplier categories. The owner and the system administrator can change them. Everyone else can look.
 
 ## Add a choice
 
-1. Open **Master data → Lists**.
+1. Open **Management → Master data → Lists**.
 2. Find the list, for example **Material categories**.
 3. Type the new name under **New option**, for example "Clays".
 4. Tap **Add option**. It appears at the end of the list and in the dropdown straight away.

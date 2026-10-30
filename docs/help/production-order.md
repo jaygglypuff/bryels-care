@@ -19,7 +19,7 @@ A production order says what to make, how many and by when. You follow it on one
 
 ## Find your work
 
-1. Operators: open **Production → My work**. Owners and planners: open **Production → Orders**.
+1. Operators: open **Operations → My work**. Owners and planners: open **Operations → Production orders**.
 2. Each card shows the product, how many pieces (for example "247 bars · 2 batches"), the status and one big button.
 3. A red **Late** tag means the needed-by date has passed and the order is not done.
 4. Owners and planners can press **Board** to see the orders in five columns, one per status.
@@ -59,13 +59,13 @@ A production order says what to make, how many and by when. You follow it on one
 2. Press **Save to daily log**. You can add more entries during the day.
 3. Made a mistake? Open **Daily log**, press **Correct this entry**, fix the numbers and say why. The old entry stays visible and no longer counts.
 4. The reject types come from the setting **Reject types for the daily log**. The owner can change the list.
-5. **Production → Today** shows everything written today for all orders of your site.
+5. **Operations → Today** shows everything written today for all orders of your site.
 
 ## Rejects summary
 
-1. Open **Production → Rejects** to see good pieces and rejects per product and day, and the reject rate by type.
+1. Open **Operations → Rejects** to see good pieces and rejects per product and day, and the reject rate by type.
 2. The **Daily log** and **Batches** tabs of an order show the same numbers for that order.
 
 ## Older screens
 
-The detailed screens (production plan, detailed work orders and board, the full batch record, materials by scan) are under **Production → Advanced**. You do not need them for daily work.
+The detailed screens (production plan, detailed work orders and board, the full batch record, materials by scan) are under **Operations → Advanced**. You do not need them for daily work.

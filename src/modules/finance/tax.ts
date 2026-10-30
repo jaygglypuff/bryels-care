@@ -86,7 +86,7 @@ export async function resolveTaxConfiguration(q: DbOrTx, organizationId: string,
 export async function requireTaxConfiguration(q: DbOrTx, organizationId: string, code: string, appliesTo: TaxAppliesTo, onDate: string): Promise<TaxConfigRow> {
   const r = await resolveTaxConfiguration(q, organizationId, code, appliesTo, onDate);
   if (!r) {
-    throw new DomainError("validation", `TAX_CONFIG_MISSING: tax code ${code} has no reviewed rate effective on ${onDate} for ${appliesTo}. Ask finance to have the rate approved (Finance → Tax configuration).`, {
+    throw new DomainError("validation", `TAX_CONFIG_MISSING: tax code ${code} has no reviewed rate effective on ${onDate} for ${appliesTo}. Ask finance to have the rate approved (Management → Finance → Tax configuration).`, {
       code: "TAX_CONFIG_MISSING",
       field: "taxCode",
     });

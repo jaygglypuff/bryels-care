@@ -7,9 +7,10 @@ import { SectionHeading } from "@/ui/inventory/sections";
 import { Card, EmptyState, Input, Kpi, LinkButton, PageHeader, Select, Table, Td, buttonClass } from "@/ui/core";
 import { Banner, StatusChip } from "@/ui/status";
 import { Expiry, fmtLotQty } from "@/ui/inventory/bits";
+import { StockTabs } from "@/ui/inventory/stock-tabs";
 import { Forbidden } from "../forbidden";
 
-export const metadata = { title: "Lots & stock" };
+export const metadata = { title: "Stock" };
 
 const STATUS_LABEL: Record<string, string> = {
   quarantine: "Waiting for QA",
@@ -34,7 +35,7 @@ export default async function LotsPage({ searchParams }: { searchParams: Promise
   const [groups, emptyLots, kpis, loc] = await Promise.all([
     stockBySection(ctx, { q: sp.q, kind, status: sp.status, section, locationId: sp.loc }),
     includeEmpty ? listLots(ctx, { q: sp.q, kind, status: sp.status, includeEmpty: true, locationId: sp.loc }).then((r) => r.filter((l) => Number(l.onHand) === 0)) : Promise.resolve([]),
-    lotKpis(ctx),
+    lotKpis(ctx, { kind }),
     getCurrentSiteLocation(ctx, sp.loc),
   ]);
   const lotCount = new Set(groups.flatMap((g) => g.rows.map((r) => r.lotId))).size;
@@ -43,21 +44,22 @@ export default async function LotsPage({ searchParams }: { searchParams: Promise
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Lots & stock"
-        subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · every lot of material and finished goods with its quality status`}
+        title={kind === "material" ? "Raw materials" : kind === "product" ? "Finished goods" : "Stock"}
+        subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · every lot with its quality status, expiry and location`}
         actions={
           <>
-            <LinkButton href="/inventory/scan" variant="secondary">Scan / look up</LinkButton>
-            {ctx.can("procurement.goods_receipt.create") && <LinkButton href="/inventory/receive" variant="cta">Receive materials</LinkButton>}
+            {ctx.can("procurement.goods_receipt.create") && <LinkButton href="/inventory/receive" variant="secondary">New receiving</LinkButton>}
+            <LinkButton href="/inventory/scan" variant="cta">Scan</LinkButton>
           </>
         }
       />
+      <StockTabs active={kind ?? "all"} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label="Waiting for QA" value={kpis.quarantined} hint="New lots QA has not checked yet" tone={kpis.quarantined ? "warn" : "neutral"} href="/inventory?status=quarantine" />
-        <Kpi label="On hold" value={kpis.onHold} hint="Stopped by QA; do not use" tone={kpis.onHold ? "warn" : "neutral"} href="/inventory?status=on_hold" />
-        <Kpi label={`Expiring ≤ ${EXPIRY_WARN_DAYS} d`} value={kpis.expiring} hint="Use first (FEFO)" tone={kpis.expiring ? "warn" : "good"} href="/inventory?status=expiring" />
-        <Kpi label="Expired" value={kpis.expired} hint="Blocked from use" tone={kpis.expired ? "bad" : "good"} href="/inventory?status=expired" />
+        <Kpi label="Waiting for QA" value={kpis.quarantined} hint="New lots QA has not checked yet" tone={kpis.quarantined ? "warn" : "neutral"} href={`/inventory?status=quarantine${kind ? `&kind=${kind}` : ""}`} />
+        <Kpi label="On hold" value={kpis.onHold} hint="Stopped by QA; do not use" tone={kpis.onHold ? "warn" : "neutral"} href={`/inventory?status=on_hold${kind ? `&kind=${kind}` : ""}`} />
+        <Kpi label={`Expiring ≤ ${EXPIRY_WARN_DAYS} d`} value={kpis.expiring} hint="Use first (FEFO)" tone={kpis.expiring ? "warn" : "good"} href={`/inventory?status=expiring${kind ? `&kind=${kind}` : ""}`} />
+        <Kpi label="Expired" value={kpis.expired} hint="Blocked from use" tone={kpis.expired ? "bad" : "good"} href={`/inventory?status=expired${kind ? `&kind=${kind}` : ""}`} />
       </div>
 
       <Card>
