@@ -83,4 +83,5 @@ export { OPEN_ALLOCATION_ORDER_STATUSES } from "./reservations";
 export { claimIdempotencyKey, storeIdempotentResult, stateMachine } from "./command-kit";
 export { registerReceivingPoHooks, receivingPoHooks, type ReceivingPoHooks, type PoReceiptLine } from "./receiving-po"; // Wave 4 W4A
 export { lowStockItems, fmtStock, type LowStockItem } from "./low-stock"; // owner QA 2026-10-30: below-minimum read model
+export { getItemStock, itemStockScope, movementSentence, type ItemStock, type ItemStockInput, type ItemLot, type SupplierRow, type ExpiryBucket, type PlaceRow, type ItemMovement } from "./item-stock"; // owner question 2026-10-30: one page per item
 export { stockByItem, lotState, searchWords, ITEM_STATUS_FILTERS, type StockItem, type StockItemLot, type StockByItemResult, type ItemState, type LotState, type ItemStatusFilter } from "./stock-by-item"; // owner review 2026-10-30: one row per item

@@ -62,6 +62,7 @@ describe("universal search", () => {
     expect(items.hits.every((h) => /acapulco/i.test(h.title))).toBe(true);
     expect(items.hits[0].title).not.toMatch(/^(MAT|PKG|ACS)-/); // the name comes first, not the code
     expect(items.hits.some((h) => /OK to use at NFD|none in stock at NFD/.test(h.detail))).toBe(true);
+    expect(hrefs(g, "items").every((h) => /^\/inventory\/items\/(material|product)\/[0-9a-f-]{36}$/.test(h))).toBe(true); // the item page
     expect(hrefs(g, "batches").every((h) => /^\/production\/[0-9a-f-]{36}$/.test(h))).toBe(true);
     // 11 seeded customer orders start with SO-26: the group stops at 5.
     expect(hrefs(await searchEverything(owner, "so-26"), "sales_orders")).toHaveLength(GROUP_LIMIT);

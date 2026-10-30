@@ -102,7 +102,10 @@ function ItemRow({ item, blocked, open }: { item: StockItem; blocked: boolean; o
       <span className="flex min-w-0 items-center gap-3">
         <Avatar name={item.name} kind={item.kind} blocked={blocked} />
         <span className="min-w-0">
-          <span className="block text-[15px] font-semibold leading-snug text-fg">{item.name}</span>
+          {/* The name opens the item page (totals, suppliers, expiry, every lot); the rest of the row opens the lots. */}
+          <Link href={`/inventory/items/${item.kind}/${item.id}`} className="block text-[15px] font-semibold leading-snug text-fg underline decoration-line-strong underline-offset-4 hover:text-primary-text hover:decoration-current" data-testid="stock-item-link">
+            {item.name}
+          </Link>
           <span className="block text-[12px] text-muted">{item.code}{item.lots.length > 0 ? ` · ${item.lots.length} ${item.lots.length === 1 ? "lot" : "lots"}` : ""}</span>
         </span>
       </span>

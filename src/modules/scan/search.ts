@@ -86,16 +86,16 @@ async function items(ctx: AuthContext, words: string[]): Promise<SearchHit[]> {
        group by 1, 2
     )
     select * from (
-      select 'material' as kind, m.code, m.name, m.base_uom as unit, coalesce(st.usable, 0)::text as usable, coalesce(st.total, 0)::text as total
+      select 'material' as kind, m.id, m.code, m.name, m.base_uom as unit, coalesce(st.usable, 0)::text as usable, coalesce(st.total, 0)::text as total
         from materials m left join stock st on st.material_id = m.id
        where m.organization_id = ${ctx.organizationId}::uuid and m.status <> 'discontinued' and ${allWords(words, [sql`m.name`, sql`m.code`, sql`m.common_name`])}
       union all
-      select 'product', p.sku_code, p.name, p.base_uom, coalesce(st.usable, 0)::text, coalesce(st.total, 0)::text
+      select 'product', p.id, p.sku_code, p.name, p.base_uom, coalesce(st.usable, 0)::text, coalesce(st.total, 0)::text
         from products p left join stock st on st.product_id = p.id
        where p.organization_id = ${ctx.organizationId}::uuid and p.status <> 'discontinued' and ${allWords(words, [sql`p.name`, sql`p.sku_code`])}
     ) x
     order by (total::numeric > 0) desc, name asc
-    limit ${GROUP_LIMIT}`)) as unknown as { kind: "material" | "product"; code: string; name: string; unit: string; usable: string; total: string }[];
+    limit ${GROUP_LIMIT}`)) as unknown as { kind: "material" | "product"; id: string; code: string; name: string; unit: string; usable: string; total: string }[];
   return rows.map((r) => {
     const usable = new Decimal(r.usable);
     const rest = new Decimal(r.total).minus(usable);
@@ -104,7 +104,7 @@ async function items(ctx: AuthContext, words: string[]): Promise<SearchHit[]> {
       rest.gt(0) ? `${fmtStock(rest, r.unit)} not usable yet or blocked` : null,
       r.code,
     ].filter(Boolean);
-    return { title: r.name, detail: parts.join(" · "), href: `/inventory?kind=${r.kind}&q=${encodeURIComponent(r.code)}` };
+    return { title: r.name, detail: parts.join(" · "), href: `/inventory/items/${r.kind}/${r.id}` }; // the item page: totals, suppliers, expiry, every lot
   });
 }
 

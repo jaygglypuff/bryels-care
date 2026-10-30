@@ -786,6 +786,22 @@ are listed only where the page adds something. Permissions reference
   shown). Expired, rejected and recalled stock is a separate red **Do not use** group at the
   bottom. "What is a lot?" is explained once under the list. No KPI cards: the chip counts
   replace them so the list starts within the first phone screen. Read model `stockByItem`.
+- **Item page** (`/inventory/items/[kind]/[id]`, owner question 2026-10-30 "Palm oil has
+  different lots: how much in total, from whom, what expires?"): opened from the item name in
+  the stock list, from "Materials and products" search hits and from "All lots of this item"
+  on a lot. Title = item name; one line "Everything about <name>: how much we have, from whom,
+  and what expires first."; This site / All my sites switch (only with more than one site);
+  buttons Receive more (materials, `procurement.goods_receipt.create`), Order more (materials,
+  `procurement.reorder_suggestion.view`), Plan more (products, `production.work_order.view`),
+  Scan to move (`inventory.movement.post`). Four big numbers: Ready to use (with "set aside"
+  and "Free to use" when reservations exist) · Waiting for check · On hold · Below minimum?
+  (when below) or Expiring soon (30 days); then a line with the total and what must not be
+  used. Sections: "Who we bought it from" (supplier + brand rows; products: "Which batches
+  made it"), "Use these first (expiring soon)" (already expired / 30 / 60 / 90 days), "Where
+  it is" (per warehouse section and place), "All lots" (numbered in the order to use them,
+  each row opens the lot; long lists show 6 / 8 rows and "Show N more"), "What happened
+  lately" (last 10 movements as sentences: "Received 25 kg from Laguna Oleo"). Supplier,
+  brand or batch is the first thing in a row, never a code. Read model `getItemStock`.
 - **Lot detail** (after scan or from Lots list): identity block, status chip and risk
   banner, key facts (material, supplier lot, received, manufactured, expiry/retest, on
   hand, available, reserved, locations with quantities), tabs Movements / Documents /
