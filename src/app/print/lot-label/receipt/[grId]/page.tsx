@@ -13,10 +13,11 @@ export const metadata = { title: "Receipt labels" };
 export const dynamic = "force-dynamic";
 
 /** W01-07: one label job per received lot, sent to the site's print station. */
-export default async function ReceiptLabelsPage({ params }: { params: Promise<{ grId: string }> }) {
+export default async function ReceiptLabelsPage({ params, searchParams }: { params: Promise<{ grId: string }>; searchParams: Promise<{ posted?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("inventory.label_job.create")) return <div className="p-6"><Forbidden what="label printing" /></div>;
   const { grId } = await params;
+  const { posted } = await searchParams;
   let gr: Awaited<ReturnType<typeof getReceipt>>;
   try {
     gr = await getReceipt(ctx, grId);
@@ -43,6 +44,11 @@ export default async function ReceiptLabelsPage({ params }: { params: Promise<{ 
           <LinkButton href="/labels" variant="secondary" size="lg">Print station</LinkButton>
         </div>
       </div>
+      {posted && (
+        <Banner tone="ok" title={`Receipt ${gr.receiptNumber} posted`}>
+          {gr.lines.length} new {gr.lines.length === 1 ? "lot is" : "lots are"} waiting for the quality check. Print the labels now, stick one on every container and leave them in the hold area.
+        </Banner>
+      )}
       {gr.siteId !== ctx.currentSiteId ? (
         <Banner tone="info" title={`This receipt is at ${site?.code}`}>Switch site to print its labels.</Banner>
       ) : stations.length === 0 ? (
@@ -54,7 +60,7 @@ export default async function ReceiptLabelsPage({ params }: { params: Promise<{ 
           {alreadyLabelled > 0 && <p className="mb-3 text-[13px] text-[var(--warn-fg)]">{alreadyLabelled} of these lots already have labels; those are skipped. Use Reprint on the label job for a lost or damaged label.</p>}
           <ReceiptJobsForm
             grId={gr.id}
-            lotCount={gr.lines.length}
+            lots={gr.lines.map((l) => ({ lotId: l.lotId, lotNumber: l.lotNumber, materialName: l.materialName, containerCount: l.containerCount ?? null }))}
             templates={templates.map((t) => ({ id: t.id, code: t.code, name: t.name, media: `${Number(t.mediaWidthMm)} × ${Number(t.mediaHeightMm)} mm`, copiesDefault: t.copiesDefault }))}
             stations={stations.map((s) => ({ id: s.id, code: s.code, name: s.name, printerName: s.printerName }))}
           />

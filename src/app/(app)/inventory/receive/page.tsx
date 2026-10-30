@@ -101,7 +101,7 @@ export default async function ReceivePage({ searchParams }: { searchParams: Prom
     return (
       <div className="mx-auto max-w-5xl">
         {header(`${v.po.poNumber} · ${v.supplier.name}`)}
-        <ReceiveForm idempotencyKey={randomUUID()} materials={materials} locations={locations} suppliers={suppliers} reasonCodes={reasonCodes} defaultLocationId={defaultLocation.id} canPost={ctx.can("procurement.goods_receipt.post")} po={po} storageBySection={storageBySection} />
+        <ReceiveForm idempotencyKey={randomUUID()} materials={materials} locations={locations} suppliers={suppliers} reasonCodes={reasonCodes} defaultLocationId={defaultLocation.id} canPost={ctx.can("procurement.goods_receipt.post")} printLabels={ctx.can("inventory.label_job.create")} po={po} storageBySection={storageBySection} />
       </div>
     );
   }
@@ -155,7 +155,7 @@ export default async function ReceivePage({ searchParams }: { searchParams: Prom
   return (
     <div className="mx-auto max-w-5xl">
       {header("delivery without a purchase order")}
-      <ReceiveForm idempotencyKey={randomUUID()} materials={materials} locations={locations} suppliers={suppliers} reasonCodes={reasonCodes} defaultLocationId={defaultLocation.id} canPost={ctx.can("procurement.goods_receipt.post")} storageBySection={storageBySection} />
+      <ReceiveForm idempotencyKey={randomUUID()} materials={materials} locations={locations} suppliers={suppliers} reasonCodes={reasonCodes} defaultLocationId={defaultLocation.id} canPost={ctx.can("procurement.goods_receipt.post")} printLabels={ctx.can("inventory.label_job.create")} storageBySection={storageBySection} />
     </div>
   );
 }

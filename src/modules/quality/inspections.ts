@@ -387,47 +387,107 @@ export async function recordInspectionResult(ctx: AuthContext, input: RecordResu
   return db.transaction(async (tx) => {
     const ins = await lockInspection(tx, ctx, input.inspectionId);
     return withIdempotency(tx, ctx, input.idempotencyKey ? `test-result:${input.idempotencyKey}` : null, "quality.test_result.record", async () => {
-      if (!(INSPECTION_OPEN_STATUSES as readonly string[]).includes(ins.status)) {
-        throw new DomainError("state", `Inspection ${ins.inspectionNumber} is ${INSPECTION_STATUS_LABEL[ins.status].toLowerCase()}; results can no longer be added. Raise a deviation if something is wrong.`);
-      }
+      assertOpenForResults(ins);
       const tests = await planTests(tx, ins.inspectionPlanId);
       const t = tests.find((x) => x.id === input.planTestId);
       if (!t) throw new DomainError("validation", "Choose a test of this inspection's plan.", { field: "planTestId" });
       const ev = evaluateResult(t, input);
-      const instrument = await checkInstrument(tx, ctx, ins, input.instrumentEquipmentId);
-      const [row] = await tx
-        .insert(testResults)
-        .values({
-          batchId: ins.batchId,
-          testName: t.name,
-          specification: specLabel(t),
-          result: ev.resultText,
-          passed: ev.passed,
-          testedBy: ctx.userId,
-          inspectionId: ins.id,
-          inspectionPlanTestId: t.id,
-          testCode: t.testCode,
-          valueNumeric: ev.valueNumeric,
-          valueText: ev.valueText,
-          valuePass: ev.valuePass,
-          uom: ev.uom,
-          instrumentEquipmentId: instrument,
-        })
-        .returning();
-      if (!ins.performedBy) await tx.update(inspections).set({ performedBy: ctx.userId }).where(eq(inspections.id, ins.id));
-      if (ins.status === "pending") await moveInspection(tx, ctx, ins, "in_progress", "First result entered");
-      await maybeAdvance(tx, ctx, ins);
-      await audit(tx, ctx, {
-        action: "quality.test_result.recorded",
-        entityType: "test_result",
-        entityId: row.id,
-        entityNumber: ins.inspectionNumber,
-        siteId: ins.siteId,
-        after: { inspectionId: ins.id, testCode: t.testCode, specification: row.specification, result: row.result, passed: row.passed, instrumentEquipmentId: instrument },
-      });
-      return { resultId: row.id, passed: row.passed, result: row.result, testName: row.testName, inspectionStatus: ins.status };
+      return insertResultLocked(tx, ctx, ins, t, ev, input.instrumentEquipmentId);
     });
   });
+}
+
+function assertOpenForResults(ins: InspectionRow) {
+  if (!(INSPECTION_OPEN_STATUSES as readonly string[]).includes(ins.status)) {
+    throw new DomainError("state", `Inspection ${ins.inspectionNumber} is ${INSPECTION_STATUS_LABEL[ins.status].toLowerCase()}; results can no longer be added. Raise a deviation if something is wrong.`);
+  }
+}
+
+export type RecordResultsInput = {
+  inspectionId: string;
+  /** One entry per test filled in on the form; tests left empty are not sent. */
+  results: Omit<RecordResultInput, "inspectionId" | "idempotencyKey">[];
+  idempotencyKey?: string | null;
+};
+
+/**
+ * Records several results in ONE transaction (consultant review: the QA check page saves all tests
+ * with one button). Exactly the rules of recordInspectionResult for each test, in plan order; every
+ * test is evaluated first, so one wrong entry saves nothing and every field error is returned at once
+ * (field names `r-<planTestId>-value|uom|conforms`). A test listed twice is refused.
+ */
+export async function recordInspectionResults(ctx: AuthContext, input: RecordResultsInput) {
+  ctx.require("quality.test_result.create");
+  if (!Array.isArray(input.results) || input.results.length === 0) throw new DomainError("validation", "Enter at least one result.");
+  return db.transaction(async (tx) => {
+    const ins = await lockInspection(tx, ctx, input.inspectionId);
+    return withIdempotency(tx, ctx, input.idempotencyKey ? `test-results:${input.idempotencyKey}` : null, "quality.test_result.record_many", async () => {
+      assertOpenForResults(ins);
+      const tests = await planTests(tx, ins.inspectionPlanId);
+      const seen = new Set<string>();
+      const fieldErrors: Record<string, string> = {};
+      const evaluated: { t: PlanTest; ev: ReturnType<typeof evaluateResult>; instrument: string | null | undefined }[] = [];
+      for (const r of input.results) {
+        const t = tests.find((x) => x.id === r.planTestId);
+        if (!t) throw new DomainError("validation", "Choose a test of this inspection's plan.", { field: "planTestId" });
+        if (seen.has(t.id)) throw new DomainError("validation", `${t.name} is listed twice.`, { field: `r-${t.id}-value` });
+        seen.add(t.id);
+        try {
+          evaluated.push({ t, ev: evaluateResult(t, r), instrument: r.instrumentEquipmentId });
+        } catch (e) {
+          if (!(e instanceof DomainError) || e.code !== "validation") throw e;
+          fieldErrors[`r-${t.id}-${String(e.details?.field ?? "value")}`] = e.message;
+        }
+      }
+      const bad = Object.keys(fieldErrors);
+      if (bad.length) {
+        throw new DomainError("validation", bad.length === 1 ? Object.values(fieldErrors)[0] : `${bad.length} results need a correction. Nothing was saved.`, { field: bad[0], fieldErrors });
+      }
+      evaluated.sort((a, b) => a.t.sequence - b.t.sequence);
+      const saved: { resultId: string; passed: boolean; result: string; testName: string }[] = [];
+      for (const x of evaluated) saved.push(await insertResultLocked(tx, ctx, ins, x.t, x.ev, x.instrument));
+      return { saved, failed: saved.filter((x) => !x.passed).map((x) => x.testName), inspectionStatus: ins.status };
+    });
+  });
+}
+
+/** Inserts one evaluated result under the inspection lock (shared by the one-test and the many-tests commands). */
+async function insertResultLocked(tx: Tx, ctx: AuthContext, ins: InspectionRow, t: PlanTest, ev: ReturnType<typeof evaluateResult>, instrumentEquipmentId: string | null | undefined) {
+  const instrument = await checkInstrument(tx, ctx, ins, instrumentEquipmentId);
+  const [row] = await tx
+    .insert(testResults)
+    .values({
+      batchId: ins.batchId,
+      testName: t.name,
+      specification: specLabel(t),
+      result: ev.resultText,
+      passed: ev.passed,
+      testedBy: ctx.userId,
+      inspectionId: ins.id,
+      inspectionPlanTestId: t.id,
+      testCode: t.testCode,
+      valueNumeric: ev.valueNumeric,
+      valueText: ev.valueText,
+      valuePass: ev.valuePass,
+      uom: ev.uom,
+      instrumentEquipmentId: instrument,
+    })
+    .returning();
+  if (!ins.performedBy) {
+    await tx.update(inspections).set({ performedBy: ctx.userId }).where(eq(inspections.id, ins.id));
+    ins.performedBy = ctx.userId;
+  }
+  if (ins.status === "pending") await moveInspection(tx, ctx, ins, "in_progress", "First result entered");
+  await maybeAdvance(tx, ctx, ins);
+  await audit(tx, ctx, {
+    action: "quality.test_result.recorded",
+    entityType: "test_result",
+    entityId: row.id,
+    entityNumber: ins.inspectionNumber,
+    siteId: ins.siteId,
+    after: { inspectionId: ins.id, testCode: t.testCode, specification: row.specification, result: row.result, passed: row.passed, instrumentEquipmentId: instrument },
+  });
+  return { resultId: row.id, passed: row.passed, result: row.result, testName: row.testName, inspectionStatus: ins.status };
 }
 
 export type CorrectResultInput = { resultId: string; value?: string | null; uom?: string | null; conforms?: boolean | null; reason: string; instrumentEquipmentId?: string | null };

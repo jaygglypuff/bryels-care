@@ -52,14 +52,14 @@ export default async function PackPage({ params, searchParams }: { params: Promi
                 ["Product", `${v.sku} · ${v.productName}`],
                 ["Lot", v.lotNumber ? <span key="lot">{v.lotNumber} <StatusChip status={v.lotStatus ?? "released"} /> · expires {fmtDate(v.expiresOn)}</span> : "Several lots"],
                 ["Units per box", String(p.unitsPerBox)],
-                ["Boxed", `${qty(p.packedUnitsBase)}${p.expectedUnitsBase ? ` of ${qty(p.expectedUnitsBase)} (lot output)` : ""}`],
+                ["Boxed", `${qty(p.packedUnitsBase)}${p.expectedUnitsBase ? ` of ${qty(p.expectedUnitsBase)} (lot stock after samples)` : ""}`],
                 ["Location", v.locationCode ?? "—"],
                 ["Packer · checker", `${v.packer}${v.checkerName ? ` · ${v.checkerName}` : ""}`],
                 ["Shipping marks", cfg.shippingMarks ?? "—"],
                 ["Label template", v.labelTemplate?.code ?? "Not set up"],
               ]}
             />
-            {p.expectedUnitsBase && diff !== 0 && p.status === "open" && <p className="mt-3 text-[13px] text-[var(--warn-fg)]">{diff > 0 ? `${diff} units still to box` : `${-diff} units over the output`}: verification is blocked until boxes × units equal the lot output.</p>}
+            {p.expectedUnitsBase && diff !== 0 && p.status === "open" && <p className="mt-3 text-[13px] text-[var(--warn-fg)]">{diff > 0 ? `${diff} units still to box` : `${-diff} units over the output`}: verification is blocked until boxes × units equal the lot stock after samples.</p>}
           </Card>
           {boxing && ctx.can("inventory.pack.create") && (
             <Card>

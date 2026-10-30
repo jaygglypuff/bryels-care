@@ -1,7 +1,7 @@
 ---
 key: inventory.receive
 title: Receive a delivery
-version: 2
+version: 3
 updated_at: 2026-10-30
 sop: SOP to be mapped by the warehouse lead (US-9-08)
 ---
@@ -33,9 +33,10 @@ Use this screen when a supplier delivery arrives. New lots wait for the QA check
 - **Put it in**: the place is chosen for you. New lots go to the QA area; the line under each item says which section they are stored in after the QA check (for example Raw materials or Packaging).
 - **Problem with the delivery?**: less than ordered, more than ordered, damaged, wrong item or papers missing. More than ordered and wrong items are saved as a draft; purchasing approves them first.
 
-## After posting
+## Save and print labels
 
-- The receipt gets a GR number and each item becomes a lot waiting for QA.
-- Print the lot labels and stick them on every container.
-- Use **Put away** to store the goods. Put away shows the section the item belongs in.
+1. Press **Save and print labels** once. The receipt gets a GR number and each item becomes a lot waiting for QA.
+2. The labels screen opens by itself. **Copies** is already the number of containers of each lot (1 when you did not type containers).
+3. Press **Send to the station**, print, and stick one label on every container. Leave the goods in the hold area.
+4. When QA releases a lot, it appears in **Put away → To put away** with the shelf it goes to.
 - Urgent buy with no purchase order: purchasing opens the receipt and taps **Create PO from this receipt**. Nothing is received twice.

@@ -11,6 +11,7 @@ import {
   containers,
   customers,
   generatedDocuments,
+  inventoryBalances,
   inventoryLots,
   labelJobs,
   locations,
@@ -66,6 +67,26 @@ import { isUuid, packMachine } from "./fulfilment-state";
 type PackRow = typeof packs.$inferSelect;
 const PACKABLE_STATUSES = ["quarantine", "released"];
 
+/**
+ * Units that left a lot as samples: the retained samples kept at Finish and QA inspection samples,
+ * net of reversals. Boxing a batch output expects the output minus these (consultant review defect:
+ * 121 output, 2 samples, 119 in stock, so "121 still to box" could never reconcile).
+ */
+const SAMPLE_SOURCES = ["batch_retained_sample", "inspection"];
+function sampledSql(lotIdSql: ReturnType<typeof sql>) {
+  return sql`coalesce((select sum(m.qty_base) from stock_movements m
+    where m.lot_id = ${lotIdSql} and m.movement_type = 'consumption'
+      and m.source_document_type in (${sql.join(
+        SAMPLE_SOURCES.map((x) => sql`${x}`),
+        sql`, `,
+      )})
+      and not exists (select 1 from stock_movements r where r.reversal_of_id = m.id)), 0)`;
+}
+async function sampledQty(q: DbOrTx, lotId: string): Promise<Decimal> {
+  const [r] = (await q.execute(sql`select ${sampledSql(sql`${lotId}::uuid`)}::text as qty`)) as unknown as { qty: string }[];
+  return D(r?.qty ?? 0);
+}
+
 const unitWord = (uom: string) => (uom === "pcs" ? "pcs" : uom);
 const qtyText = (v: Decimal.Value, uom: string) => fmtQty(v, unitWord(uom), uom === "pcs" ? 0 : 3);
 
@@ -116,7 +137,14 @@ export async function startPack(ctx: AuthContext, input: StartPackInput) {
       if (live.length) throw new DomainError("conflict", `Boxing of this output is already in pack ${live[0].n}.`);
       lotId = out.o.lotId;
       locationId = out.o.toLocationId;
-      expected = D(out.o.qtyBase).toString();
+      expected = Decimal.max(D(out.o.qtyBase).minus(await sampledQty(tx, out.o.lotId)), 0).toString();
+      // The lot may have been put away after QA release (To put away list): box it where its loose stock is.
+      if ((await looseQty(tx, out.o.lotId, locationId)).lte(0)) {
+        const bal = await tx.select({ locationId: inventoryBalances.locationId }).from(inventoryBalances).where(and(eq(inventoryBalances.lotId, out.o.lotId), sql`${inventoryBalances.qtyBase} > 0`));
+        const withLoose: string[] = [];
+        for (const b of bal) if ((await looseQty(tx, out.o.lotId, b.locationId)).gt(0)) withLoose.push(b.locationId);
+        if (withLoose.length === 1) locationId = withLoose[0];
+      }
       batchId = out.o.batchId;
       batchOutputId = out.o.id;
       sourceText = `Batch ${out.batchNumber}`;
@@ -855,12 +883,31 @@ export async function listPacks(ctx: AuthContext, f: { status?: string } = {}) {
     .limit(200);
 }
 
-/** Batch outputs of finished goods at the current site that have no live pack yet (boxing queue). */
+/**
+ * Boxing queue: batch outputs of finished goods at the current site with boxes still to make. Only
+ * released, in-date lots (consultant review: quarantined, rejected, recalled lots are not work for the
+ * boxing table), with no live pack, and with loose (unboxed) stock left outside the dispatch bay (stock staged for shipping is not boxing work). `toBox` = output minus the
+ * samples that left the lot, the number the pack will expect.
+ */
 export async function boxableOutputs(ctx: AuthContext) {
   ctx.require("inventory.pack.view");
   ctx.requireSite(ctx.currentSiteId);
-  return db
-    .select({ id: batchOutputs.id, batchNumber: batches.batchNumber, qty: batchOutputs.qtyBase, baseUom: batchOutputs.baseUom, lotNumber: inventoryLots.lotNumber, lotStatus: inventoryLots.qualityStatus, sku: products.skuCode, productName: products.name, recordedAt: batchOutputs.recordedAt })
+  const loose = sql<string>`(coalesce((select sum(b.qty_base) from inventory_balances b join locations bl on bl.id = b.location_id where b.lot_id = ${inventoryLots.id} and bl.kind <> 'shipping'), 0)
+    - coalesce((select sum(cc.qty_base) from container_contents cc join containers c on c.id = cc.container_id join locations cl on cl.id = c.current_location_id where cc.lot_id = ${inventoryLots.id} and c.status in ('open', 'sealed') and cl.kind <> 'shipping'), 0))`;
+  const rows = await db
+    .select({
+      id: batchOutputs.id,
+      batchNumber: batches.batchNumber,
+      qty: batchOutputs.qtyBase,
+      baseUom: batchOutputs.baseUom,
+      lotNumber: inventoryLots.lotNumber,
+      lotStatus: inventoryLots.qualityStatus,
+      sku: products.skuCode,
+      productName: products.name,
+      recordedAt: batchOutputs.recordedAt,
+      sampled: sql<string>`${sampledSql(sql`${inventoryLots.id}`)}::text`,
+      loose: sql<string>`${loose}::text`,
+    })
     .from(batchOutputs)
     .innerJoin(batches, eq(batches.id, batchOutputs.batchId))
     .innerJoin(inventoryLots, eq(inventoryLots.id, batchOutputs.lotId))
@@ -869,9 +916,13 @@ export async function boxableOutputs(ctx: AuthContext) {
       and(
         eq(batchOutputs.siteId, ctx.currentSiteId),
         eq(batchOutputs.outputKind, "finished"),
+        eq(inventoryLots.qualityStatus, "released"),
+        sql`(${inventoryLots.expiresOn} is null or ${inventoryLots.expiresOn} >= (now() at time zone 'Asia/Manila')::date)`,
         sql`not exists (select 1 from ${packs} p where p.batch_output_id = ${batchOutputs.id} and p.status <> 'cancelled')`,
+        sql`${loose} > 0`,
       ),
     )
     .orderBy(desc(batchOutputs.recordedAt))
     .limit(50);
+  return rows.map(({ sampled, loose: l, ...r }) => ({ ...r, toBox: Decimal.max(D(r.qty).minus(sampled), 0).toString(), looseQty: D(l).toString() }));
 }

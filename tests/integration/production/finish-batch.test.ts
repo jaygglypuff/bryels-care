@@ -210,3 +210,26 @@ describe("Finish reads the counts back from the daily log", () => {
     expect(r).toMatchObject({ countsFrom: "daily_log", goodUnits: "60", rejects: "1", sellableUnits: "58" });
   });
 });
+
+describe("Finish reads the packaging step counts (consultant review: count once)", () => {
+  it("prefills damaged from the step's 'Wrappers destroyed' and tells the reject limit up front; site-scoped", async () => {
+    const b = await directBatchReadyToFinish(kit, { manager, operator, checker });
+    // The fixture records 1 for each required field of the packaging step (Wrappers used / destroyed).
+    const v = await getFinishView(operator, b.batchId);
+    const pkg = v.packaging.find((x) => x.materialId === b.wrapperMaterialId)!;
+    expect(pkg.counted).toBe(false);
+    expect(pkg.step).toMatchObject({ damaged: "1", used: "1", leftOver: null });
+    expect(pkg.step!.stepNo).toBeGreaterThan(0);
+    // 2 % of the theoretical pieces (setting production.scrap.approval_threshold_pct, default 2).
+    expect(Number(v.rejectApproval.limit)).toBeGreaterThan(0);
+    expect(Number(v.rejectApproval.limit)).toBeLessThan(2);
+    expect(v.rejectApproval).toMatchObject({ existingNeedsApproval: false, reportOpen: false });
+    await expectCode(getFinishView(operatorRvs, b.batchId), "not_found");
+
+    // The form sends the step's damaged count; the server balances it as before: 70 = 60 used + 1 damaged + 9 left over.
+    const r = await finishBatch(operator, { batchId: b.batchId, goodUnits: "60", packaging: [{ materialId: b.wrapperMaterialId, damaged: pkg.step!.damaged, leftOver: "9" }], idempotencyKey: key() }, { checker });
+    expect(r.goodUnits).toBe("60");
+    const [row] = await db.select().from(packagingReconciliations).where(and(eq(packagingReconciliations.batchId, b.batchId), isNull(packagingReconciliations.voidedAt)));
+    expect([row.usedQty, row.damagedQty, row.returnedQty].map((x) => new Decimal(x!).toString())).toEqual(["60", "1", "9"]);
+  });
+});

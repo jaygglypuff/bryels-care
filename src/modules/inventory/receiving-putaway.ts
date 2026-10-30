@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
-import { inventoryBalances, inventoryLots, locations, materials, stockMovements, warehouses } from "@/db/schema";
+import { inventoryBalances, inventoryLots, locations, materials, products, stockMovements, warehouses } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -11,6 +11,8 @@ import { heldLocations, resolveLocationRef, resolveLotRef } from "./holds";
 import { assertLocationsNotFrozen } from "./freeze";
 import { postMovement } from "./ledger";
 import { allowedDestinationKinds, isUuid } from "./lots";
+import { fmtStock } from "./low-stock";
+import { looseQty } from "./moves";
 import { SECTION_LABELS, SECTION_ORDER, isSection, sectionForItem, sectionSql, type LocationSection } from "@/modules/masterdata";
 
 /**
@@ -26,6 +28,7 @@ export async function putAwayOptions(ctx: AuthContext, lotRef: string) {
   const lot = await resolveLotRef(db, ctx, lotRef);
   ctx.requireSite(lot.siteId);
   const [mat] = lot.materialId ? await db.select({ code: materials.code, name: materials.name, materialKind: materials.materialKind }).from(materials).where(eq(materials.id, lot.materialId)) : [];
+  const [prod] = !mat && lot.productId ? await db.select({ code: products.skuCode, name: products.name }).from(products).where(eq(products.id, lot.productId)) : [];
   // S6 (ADR-077): suggest the section the item belongs in; its locations are listed first.
   const suggestedSection: LocationSection = sectionForItem({ itemKind: lot.itemKind === "product" ? "product" : "material", materialKind: mat?.materialKind });
   const balances = await db
@@ -36,6 +39,13 @@ export async function putAwayOptions(ctx: AuthContext, lotRef: string) {
     .orderBy(asc(locations.code));
   const kinds = allowedDestinationKinds(lot.qualityStatus, lot.expiresOn);
   const held = new Set((await heldLocations(db, lot.siteId)).map((h) => h.locationId));
+  // Friendly quantities (60,000 g → 60 kg) and the loose part: boxed stock moves with its box.
+  const balancesOut = await Promise.all(
+    balances.map(async (b) => {
+      const loose = Decimal.min(await looseQty(db, lot.id, b.locationId), b.qtyBase);
+      return { ...b, looseQtyBase: loose.toString(), qtyText: fmtStock(b.qtyBase, lot.baseUom), looseQtyText: fmtStock(loose, lot.baseUom) };
+    }),
+  );
   const destinations = (
     await db
       .select({ id: locations.id, code: locations.code, name: locations.name, kind: locations.kind, section: sql<string>`${sectionSql("locations", "warehouses")}` })
@@ -48,8 +58,8 @@ export async function putAwayOptions(ctx: AuthContext, lotRef: string) {
     .map((l) => ({ ...l, section: isSection(l.section) ? l.section : ("other" as LocationSection), sectionLabel: SECTION_LABELS[isSection(l.section) ? l.section : "other"] }))
     .sort((a, b) => Number(b.section === suggestedSection) - Number(a.section === suggestedSection) || SECTION_ORDER[a.section] - SECTION_ORDER[b.section] || a.code.localeCompare(b.code));
   return {
-    lot: { id: lot.id, lotNumber: lot.lotNumber, qualityStatus: lot.qualityStatus, expiresOn: lot.expiresOn, baseUom: lot.baseUom, itemCode: mat?.code ?? "", itemName: mat?.name ?? "" },
-    balances,
+    lot: { id: lot.id, lotNumber: lot.lotNumber, qualityStatus: lot.qualityStatus, expiresOn: lot.expiresOn, baseUom: lot.baseUom, itemCode: mat?.code ?? prod?.code ?? "", itemName: mat?.name ?? prod?.name ?? "", supplierLotNumber: lot.supplierLotNumber },
+    balances: balancesOut,
     destinations,
     allowedKinds: kinds,
     suggestedSection,
@@ -58,7 +68,24 @@ export async function putAwayOptions(ctx: AuthContext, lotRef: string) {
   };
 }
 
-export type PutAwayInput = { lotRef: string; locationRef: string; fromLocationId?: string | null; qty?: string | null; idempotencyKey: string };
+/**
+ * qtyUom: the unit the quantity was typed in. The lot's base unit, or the friendly unit shown on the
+ * screen for gram/millilitre lots (kg = 1,000 g, L = 1,000 mL). Any other unit is refused.
+ */
+export type PutAwayInput = { lotRef: string; locationRef: string; fromLocationId?: string | null; qty?: string | null; qtyUom?: string | null; idempotencyKey: string };
+
+const FRIENDLY_UNITS: Record<string, { base: string; factor: number }> = { kg: { base: "g", factor: 1000 }, L: { base: "mL", factor: 1000 } };
+
+/** Converts a typed quantity to the lot's base unit (decimal-safe). */
+export function putAwayQtyToBase(qty: Decimal, uom: string | null | undefined, baseUom: string): Decimal {
+  const u = (uom ?? "").trim();
+  if (!u || u === baseUom) return qty;
+  const f = FRIENDLY_UNITS[u === "l" ? "L" : u];
+  if (!f || f.base !== baseUom) {
+    throw new DomainError("validation", `This lot is counted in ${baseUom}; enter the quantity in ${baseUom}${baseUom === "g" ? " or kg" : baseUom === "mL" ? " or L" : ""}.`, { field: "qty" });
+  }
+  return qty.mul(f.factor);
+}
 
 /** Posts one transfer from the lot's current (default: receiving) location to the scanned destination. */
 export async function putAwayLot(ctx: AuthContext, input: PutAwayInput) {
@@ -124,15 +151,24 @@ export async function putAwayLot(ctx: AuthContext, input: PutAwayInput) {
     if (heldIds.has(from.locationId) && !["quarantine", "hold", "rejected"].includes(to.kind)) {
       throw new DomainError("blocked_lot", `Stock in ${from.code} is under a QA hold and can only move to a quarantine, hold or rejected location.`, { rule: "V-LOC" });
     }
-    let qty = new Decimal(from.qty);
+    // Boxed stock moves only with its box (same rule as transferStock, W1C): put-away moves the loose part.
+    const loose = Decimal.min(await looseQty(tx, lot.id, from.locationId), from.qty);
+    if (loose.lte(0)) {
+      throw new DomainError("insufficient_stock", `All of lot ${lot.lotNumber} at ${from.code} is in boxes. Move the boxes instead: scan each box on the Move screen.`, { field: "qty" });
+    }
+    let qty = loose;
     if (input.qty && String(input.qty).trim()) {
       try {
-        qty = new Decimal(String(input.qty).trim());
-      } catch {
+        qty = putAwayQtyToBase(new Decimal(String(input.qty).trim().replace(/,/g, "")), input.qtyUom, lot.baseUom);
+      } catch (e) {
+        if (e instanceof DomainError) throw e;
         throw new DomainError("validation", "Enter a quantity.", { field: "qty" });
       }
       if (!qty.isFinite() || qty.lte(0)) throw new DomainError("validation", "Quantity must be greater than zero.", { field: "qty" });
       if (lot.baseUom === "pcs" && !qty.isInteger()) throw new DomainError("validation", "This lot is counted in pieces; enter a whole number.", { field: "qty" });
+      if (qty.gt(loose)) {
+        throw new DomainError("insufficient_stock", `Only ${fmtStock(loose, lot.baseUom)} of lot ${lot.lotNumber} ${new Decimal(from.qty).gt(loose) ? "is loose (the rest is in boxes)" : "is"} at ${from.code}.`, { field: "qty" });
+      }
     }
     const number = await nextNumber(tx, ctx.organizationId, "MOV");
     const { movement } = await postMovement(tx, ctx, {

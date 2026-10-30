@@ -145,9 +145,15 @@ async function kpiValue(page, caption) {
     const locLabel = await page.locator('#line-1-loc option:checked').textContent();
     assert(/QUA-01/.test(locLabel), 'default receiving location is quarantine, got ' + locLabel);
     await shot(page, 'receive-form');
-    await page.getByRole('button', { name: 'Post receipt' }).click();
-    await page.waitForURL(/\/inventory\/receive\/[0-9a-f-]{36}\?posted=1/, { timeout: 30000 });
+    // Consultant review flow A: one button posts and opens the receipt's labels (copies = containers).
+    await page.getByRole('button', { name: 'Save and print labels' }).click();
+    await page.waitForURL(/\/print\/lot-label\/receipt\/[0-9a-f-]{36}\?posted=1/, { timeout: 30000 });
     await expectText(page, 'posted');
+    const receiptId = page.url().split('/').pop().split('?')[0];
+    await page.locator('[data-testid=receipt-label-lot]').first().waitFor();
+    await page.getByRole('button', { name: /Send 1 label job/ }).click();
+    await page.getByText(/label job\(s\) sent to the print station/).waitFor({ timeout: 20000 });
+    await page.goto(BASE + '/inventory/receive/' + receiptId);
     facts.receiptNumber = (await page.locator('[data-testid=record-reference]').innerText()).trim(); // R3 record header
     facts.coconutLot = (await page.locator('[data-testid=created-lot]').first().innerText()).trim();
     assert(/^GR-\d{2}-\d{5}$/.test(facts.receiptNumber), 'receipt number ' + facts.receiptNumber);
@@ -157,13 +163,9 @@ async function kpiValue(page, caption) {
     log('received', facts.receiptNumber, 'lot', facts.coconutLot);
     await shot(page, 'receipt-posted');
 
-    // Labels go through label jobs (US-2-12): send the receipt's jobs to the station, print one, confirm it.
-    const [labels] = await Promise.all([wh.context.waitForEvent('page'), page.getByRole('link', { name: /Print labels/ }).click()]);
-    await labels.waitForLoadState('networkidle');
+    // Labels go through label jobs (US-2-12): the receipt's job is at the station; print it and confirm.
+    const labels = await wh.context.newPage();
     await labels.setViewportSize(DESK);
-    await labels.getByText(facts.coconutLot).first().waitFor();
-    await labels.getByRole('button', { name: /Send 1 label job/ }).click();
-    await labels.getByText(/label job\(s\) sent to the print station/).waitFor({ timeout: 20000 });
     await labels.goto(BASE + '/labels');
     const job = labels.locator('[data-testid=station-job]').filter({ hasText: facts.coconutLot }).first();
     await job.waitFor();

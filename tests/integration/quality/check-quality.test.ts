@@ -3,11 +3,11 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
-import { auditEvents, batchClosures, batchQualityChecks, batches, generatedDocuments, inspections, inventoryLots, notifications, salesOrders, settings, users, workOrders } from "@/db/schema";
+import { auditEvents, batchClosures, batchQualityChecks, batches, generatedDocuments, inspections, inventoryLots, notifications, salesOrders, settings, testResults, users, workOrders } from "@/db/schema";
 import { type AuthContext, buildContextForUser } from "@/lib/auth/context";
 import { systemContext } from "@/lib/auth/system";
 import { finishBatch, getProductionOrder } from "@/modules/production";
-import { decideQualityCheck, getInspection, getQualityCheck, listWaitingForCheck, recordInspectionResult } from "@/modules/quality";
+import { decideQualityCheck, getInspection, getQualityCheck, listWaitingForCheck, recordInspectionResult, recordInspectionResults } from "@/modules/quality";
 import { registerAppHooks } from "@/modules/wiring";
 import { resetTestDatabase } from "../../support/db";
 import { asUser, expectCode, loadKit, type Kit } from "../../support/kit";
@@ -270,6 +270,49 @@ describe("Order status after the quality check", () => {
     const n = await db.select().from(notifications).where(and(eq(notifications.recipientUserId, so.createdBy), eq(notifications.kind, "sales.order.stock_available")));
     expect(n).toHaveLength(1);
     expect(n[0].body).toMatch(/60 ready to sell/);
+  }, 120_000);
+});
+
+describe("Tests saved in one form (consultant review)", () => {
+  it("saves all results in one transaction; one wrong entry saves nothing and names each field; site and role scoped; retry replays", async () => {
+    const b = await directBatchReadyToFinish(kit, crew);
+    await finish(b, "60", 70);
+    const [ins] = await db.select().from(inspections).where(eq(inspections.batchId, b.batchId));
+    const v = await getInspection(qa, ins.id);
+    const good = v.tests.map((t) => {
+      if (t.valueKind !== "numeric") return { planTestId: t.id, value: "Conforms", conforms: true };
+      const lo = t.specMin !== null ? new Decimal(t.specMin) : null;
+      const hi = t.specMax !== null ? new Decimal(t.specMax) : null;
+      return { planTestId: t.id, value: (lo && hi ? lo.plus(hi).div(2) : (lo ?? hi ?? new Decimal(1))).toString(), uom: t.uom };
+    });
+    const numeric = v.tests.find((t) => t.valueKind === "numeric");
+    expect(numeric, "the plan has a numeric test").toBeTruthy();
+    const other = v.tests.find((t) => t.valueKind !== "numeric");
+
+    // A wrong unit and a missing yes/no: refused together, nothing saved.
+    const wrong = good.map((r) => (r.planTestId === numeric!.id ? { ...r, uom: "furlong" } : other && r.planTestId === other.id ? { planTestId: r.planTestId, value: "x", conforms: null } : r));
+    const e = await expectCode(recordInspectionResults(qa, { inspectionId: ins.id, results: wrong }), "validation");
+    const fe = e.details?.fieldErrors as Record<string, string>;
+    expect(Object.keys(fe)).toContain(`r-${numeric!.id}-uom`);
+    if (other) expect(Object.keys(fe)).toContain(`r-${other.id}-conforms`);
+    expect(await db.select().from(testResults).where(eq(testResults.inspectionId, ins.id))).toHaveLength(0);
+
+    await expectCode(recordInspectionResults(operator, { inspectionId: ins.id, results: good }), "forbidden");
+    await expectCode(recordInspectionResults(qaRvs, { inspectionId: ins.id, results: good }), "not_found");
+    await expectCode(recordInspectionResults(qa, { inspectionId: ins.id, results: [good[0], good[0]] }), "validation");
+
+    const k = key();
+    const r = await recordInspectionResults(qa, { inspectionId: ins.id, results: good, idempotencyKey: k });
+    expect(r.saved).toHaveLength(v.tests.length);
+    expect(r.failed).toEqual([]);
+    const again = await recordInspectionResults(qa, { inspectionId: ins.id, results: good, idempotencyKey: k });
+    expect(again.replayed).toBe(true);
+    expect(await db.select().from(testResults).where(eq(testResults.inspectionId, ins.id))).toHaveLength(v.tests.length);
+    const [after] = await db.select().from(inspections).where(eq(inspections.id, ins.id));
+    expect(after.status).toBe("awaiting_review");
+    expect(after.performedBy).toBe(qa.userId);
+    const q = await getQualityCheck(qa, b.batchId);
+    expect(q.inspection?.tests.every((t) => t.result?.passed)).toBe(true);
   }, 120_000);
 });
 

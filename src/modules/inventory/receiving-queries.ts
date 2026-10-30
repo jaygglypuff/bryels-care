@@ -125,6 +125,7 @@ export async function getReceipt(ctx: AuthContext, receiptId: string) {
       materialName: materials.name,
       locationCode: locations.code,
       locationName: locations.name,
+      containerCount: goodsReceiptLines.containerCount,
     })
     .from(goodsReceiptLines)
     .innerJoin(inventoryLots, eq(inventoryLots.id, goodsReceiptLines.lotId))
