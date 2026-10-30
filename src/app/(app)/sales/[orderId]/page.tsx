@@ -16,7 +16,9 @@ import { FulfilmentPanel } from "./fulfilment-panel"; // W3E
 import { startPickAction } from "../fulfilment-actions";
 import { Cmd } from "../fulfilment-forms";
 import { ApproveOrderForm, CancelOrderPanel, ReorderForm, ReturnOrderForm, SubmitOrderForm } from "../orders/order-commercial";
-import { LateChip, MaskedNote, Money, historyLabel } from "../orders/sales-ui";
+import { LateChip, MaskedNote, Money } from "../orders/sales-ui";
+import { orderHistory } from "../orders/order-history";
+import { MoreMenu } from "@/ui/more-menu";
 import { Help } from "@/ui/help/help";
 import { DeleteDraftCard } from "../../delete-draft-button";
 
@@ -82,14 +84,14 @@ export default async function OrderDetailPage({ params, searchParams }: { params
   return (
     <>
       <RecordHeader
-        typeLabel="Sales order"
+        typeLabel="Customer order"
         reference={order.orderNumber}
         title={customer.name}
         siteCode={ctx.allowedSites.find((x) => x.id === order.siteId)?.code}
         status={status}
         meta={[
           ["Requested delivery", fmtDate(order.requestedDeliveryOn)],
-          ["Customer PO", order.customerPoNumber],
+          ["Customer's order no.", order.customerPoNumber],
         ]}
         steps={salesOrderSteps(status)}
         primary={primary}
@@ -102,6 +104,12 @@ export default async function OrderDetailPage({ params, searchParams }: { params
               </LinkButton>
             )}
             <LinkButton href="/sales" variant="ghost">All orders</LinkButton>
+            {canVoid && (
+              <MoreMenu>
+                <p className="mb-2 text-[13px] text-fg-2">Cancelling stops the order for good{hasAllocations ? " and releases its reserved stock" : ""}. Give the reason.</p>
+                <CancelOrderPanel orderId={order.id} hasAllocations={hasAllocations} />
+              </MoreMenu>
+            )}
           </>
         }
       />
@@ -127,7 +135,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
             <Dl
               items={[
                 ["Customer", ctx.can("masterdata.customer.view") ? <Link className="text-primary-text hover:underline" href={`/sales/customers/${customer.id}`}>{customer.name}</Link> : customer.name],
-                ["Customer PO", order.customerPoNumber ?? "—"],
+                ["Customer's order no.", order.customerPoNumber ?? "—"],
                 [
                   "Requested delivery",
                   <span key="d" className="inline-flex flex-wrap items-center gap-2">
@@ -283,13 +291,10 @@ export default async function OrderDetailPage({ params, searchParams }: { params
             </Banner>
           )}
 
-          {status === "draft" && (!canSubmit || canVoid) && (
+          {status === "draft" && !canSubmit && (
             <Card>
               <CardTitle>Draft</CardTitle>
-              <div className="flex flex-col gap-3">
-                {!canSubmit && <p className="text-[13px] text-muted">Waiting for sales to submit this order.</p>}
-                {canVoid && <CancelOrderPanel orderId={order.id} hasAllocations={false} />}
-              </div>
+              <p className="text-[13px] text-muted">Waiting for sales to submit this order.</p>
             </Card>
           )}
 
@@ -324,14 +329,13 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                       : "Only the approver named by the approval rule can decide."}
                   </p>
                 )}
-                {canVoid && <CancelOrderPanel orderId={order.id} hasAllocations={false} />}
               </div>
             </Card>
           )}
 
-          {status === "confirmed" && ((hasAllocations && shortLines.length > 0) || !canAllocate || canVoid) && (
+          {status === "confirmed" && ((hasAllocations && shortLines.length > 0) || !canAllocate) && (
             <Card>
-              <CardTitle>{(hasAllocations && shortLines.length > 0) || !canAllocate ? "Stock" : "Cancel order"}</CardTitle>
+              <CardTitle>Stock</CardTitle>
               <div className="flex flex-col gap-3">
                 {hasAllocations && shortLines.length > 0 && (
                   <Banner tone="warn" title="Only part of the stock is reserved">
@@ -339,20 +343,12 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                   </Banner>
                 )}
                 {!canAllocate && <p className="text-[13px] text-muted">Waiting for the warehouse to reserve stock. They take approved stock with the earliest expiry first, with at least {customer.minShelfLifeDays} days of shelf life left.</p>}
-                {canVoid && <CancelOrderPanel orderId={order.id} hasAllocations={hasAllocations} />}
               </div>
             </Card>
           )}
 
           {/* W3E: allocation → pick → pack verification → dispatch → delivery receipt live on the fulfilment screens. */}
           <FulfilmentPanel orderId={order.id} data={fulfilment} hideNext />
-
-          {canVoid && ["allocated", "picking", "packed"].includes(status) && (
-            <Card>
-              <CardTitle>Cancel order</CardTitle>
-              <CancelOrderPanel orderId={order.id} hasAllocations={hasAllocations} />
-            </Card>
-          )}
 
           {status === "cancelled" && (
             <Banner tone="neu" title="Cancelled">
@@ -369,21 +365,18 @@ export default async function OrderDetailPage({ params, searchParams }: { params
 
           <Card>
             <CardTitle>History</CardTitle>
-            {transitions.length === 0 ? (
-              <p className="text-[13px] text-muted">No history yet.</p>
-            ) : (
-              <ol className="flex flex-col gap-2 text-[13px]">
-                {transitions.map((t) => (
-                  <li key={t.id} className="flex flex-col border-l-2 border-line pl-3">
-                    <span className="font-medium">{historyLabel(t.fromState, t.toState)}</span>
-                    <span className="text-[12px] text-muted">
-                      {fmtDateTime(t.occurredAt)} · {t.actorName}
-                      {t.reason ? ` · ${t.reason}` : ""}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            )}
+            <ol className="flex flex-col gap-2 text-[13px]" data-testid="order-history">
+              {orderHistory(transitions, { at: order.createdAt, byName: data.createdByName }).map((h) => (
+                <li key={h.key} className="flex flex-col border-l-2 border-line pl-3">
+                  <span className="font-medium">{h.label}</span>
+                  <span className="text-[12px] text-muted">
+                    {fmtDateTime(h.at)}
+                    {h.who ? ` · ${h.who}` : ""}
+                    {h.reason ? ` · ${h.reason}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ol>
           </Card>
         </div>
         {status === "draft" && (ctx.can("sales.sales_order.edit") || ctx.can("sales.sales_order.create")) && <DeleteDraftCard kind="sales_order" id={order.id} what="sales order" />}

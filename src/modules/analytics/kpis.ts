@@ -427,6 +427,36 @@ export async function getOwnerOverview(ctx: AuthContext, input: { scope?: string
   };
 }
 
+/**
+ * One KPI tile for a named period, or an explicit local-date range [from, to) compared with the same
+ * number of days just before it (Home cards and the 7-day sales trend). The value aggregates the KPI's
+ * record query, so `href` (the drill-down) lists exactly the rows the number is made of (W11-02).
+ */
+export async function getKpiTile(
+  ctx: AuthContext,
+  code: string,
+  input: { scope?: string | null; period?: PeriodKey; from?: string; to?: string; daily?: boolean; now?: Date } = {},
+): Promise<KpiTile> {
+  ctx.require("analytics.dashboard.view");
+  const def = kpiByCode(code);
+  if (!def) throw new DomainError("not_found", "No such KPI.");
+  const now = input.now ?? new Date();
+  const scope = await resolveKpiScope(ctx, input.scope);
+  let cur: Period;
+  let prev: Period;
+  if (input.from || input.to) {
+    if (!isIsoDate(input.from) || !isIsoDate(input.to) || input.to <= input.from) throw new DomainError("validation", "Choose a valid period (from before to, YYYY-MM-DD).");
+    const days = diffDays(input.to, input.from);
+    if (days > 400) throw new DomainError("validation", "Choose a period of at most 400 days.");
+    cur = periodOf(input.from, input.to, scope.tz, "custom", `${input.from} to ${addDays(input.to, -1)}`);
+    prev = periodOf(addDays(input.from, -days), input.from, scope.tz, "prev", `the ${days} days before`);
+  } else ({ current: cur, previous: prev } = pickPeriod(input.period, "today", now, scope.tz));
+  const settings = await kpiSettings(ctx.organizationId);
+  const { _rows, ...tile } = await computeTile(ctx, def, scope, cur, prev, now, settings, { daily: input.daily });
+  void _rows;
+  return tile;
+}
+
 export type AreaKey = keyof typeof DASHBOARD_KPIS;
 export const AREAS: Record<AreaKey, { title: string; defaultPeriod: PeriodKey; intro: string }> = {
   operations: { title: "Operations", defaultPeriod: "today", intro: "Output against plan, yield, work order status and execution exceptions." },

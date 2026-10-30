@@ -428,7 +428,14 @@ async function fulfilmentDonut(siteIds: string[], tz: string, today: string) {
   return { byStatus, total: byStatus.reduce((a, r) => a + r.count, 0), cancelled: m.get("cancelled") ?? 0 };
 }
 
-async function recentActivity(ctx: AuthContext, scope: DashboardScope, siteCode: Map<string, string>): Promise<ActivityRow[]> {
+/** The last changes (audit events) at the scope's sites, newest first; needs platform.audit.view. */
+export async function listRecentActivity(ctx: AuthContext, scope: DashboardScope, limit = 8): Promise<ActivityRow[]> {
+  ctx.require("platform.audit.view");
+  for (const id of scope.siteIds) ctx.requireSite(id);
+  return recentActivity(ctx, scope, new Map(ctx.allowedSites.map((s) => [s.id, s.code])), limit);
+}
+
+async function recentActivity(ctx: AuthContext, scope: DashboardScope, siteCode: Map<string, string>, limit = 8): Promise<ActivityRow[]> {
   const orgWide = scope.all && (await isOrganizationWide(ctx));
   const siteFilter = orgWide ? or(inArray(auditEvents.siteId, scope.siteIds), isNull(auditEvents.siteId)) : inArray(auditEvents.siteId, scope.siteIds);
   const rows = await db
@@ -455,7 +462,7 @@ async function recentActivity(ctx: AuthContext, scope: DashboardScope, siteCode:
       ),
     )
     .orderBy(desc(auditEvents.occurredAt), desc(auditEvents.id))
-    .limit(8);
+    .limit(Math.min(Math.max(1, limit), 50));
   return rows.map((r) => ({ ...r, siteCode: r.siteId ? (siteCode.get(r.siteId) ?? null) : null }));
 }
 

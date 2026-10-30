@@ -467,6 +467,17 @@ donuts are part-to-whole with ≤ 4 segments; light-mode slots 5 and 6 require d
 Default period: this week (owner), today (operations), as-of now (inventory), this month
 (quality, sales, procurement, HR, finance). Filters follow section 2 and persist per user.
 
+**Home for owners and managers** (ADR-083 §4, mockup panel 1; `getOwnerHome` in
+`src/modules/analytics/owner-home.ts`, assumption A-HOME-01). Order: greeting; four cards — Sales today
+(KPI-SAL-01V today vs yesterday, masked without the money permissions; sales staff see the order count),
+Production progress (x of y batches planned this week released by QA), Stock alerts (low + expiring
+≤ 30 days + on hold), Waiting for your approval (`myApprovalCount`); Needs your attention (5 rows + See
+all); Sales this week (7 daily bars of KPI-SAL-01V, actuals only, table twin); Production by stage
+(Operations Center stages); Recent activity (last 8 audit events in sentences, `platform.audit.view`).
+Rule: **one source per label** — each number is computed by the function that lists the rows it opens
+(`listStockAlerts` → `/dashboard/details/stock`, `listWeekBatches` → `/dashboard/details/batches`,
+KPI record query → `/analytics/kpi/<code>`), tested in `tests/integration/analytics/owner-home.test.ts`.
+
 | Dashboard | KPI row (cards) | Charts | Tables / lists | Permission |
 |---|---|---|---|---|
 | Owner overview (`docs/ux-system.md` 9.2) | KPI-OWN-01 Orders, KPI-OWN-04 Output vs plan (meter), KPI-OWN-08 FEFO risk, KPI-OWN-10 QA holds; optional second row KPI-OWN-02, 03, 07, 12 when permitted | Production board summary (Planned / In process / Awaiting QC / Released counts); fulfilment donut on time / late / open (`--viz-good`, `--viz-bad`, `--viz-neutral`); 12-point sparklines from `kpi_snapshots` | Near-expiry lots (lot, item, expiry, qty, location, status chip, sorted by expiry); exceptions list (KPI-OWN-13); site comparison (KPI-OWN-14, one row per allowed site, "n/a" for masked columns) | `analytics.owner_dashboard.view` (+ class permissions of 1.5) |

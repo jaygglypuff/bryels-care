@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { db, type DbOrTx, type Tx } from "@/db/client";
-import { CUSTOMER_STATUSES, customerAddresses, customerContacts, customers, salesOrders, shipments } from "@/db/schema";
+import { CUSTOMER_STATUSES, customerAddresses, customerContacts, customers, invoices, salesOrders, shipments } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { runInTx, type InTx } from "@/lib/tx";
@@ -102,7 +102,43 @@ async function loadCustomer(q: DbOrTx, ctx: AuthContext, id: string, lock = fals
 }
 
 /** Customers are organization-level; order counts only include orders in the user's sites. */
-export async function listCustomers(ctx: AuthContext, filters: { q?: string; status?: string; segment?: string } = {}) {
+/** Invoices that are still owed (A-FIN-03): issued or partly paid, net of payments and credit notes. */
+const OWED_INVOICE_STATUSES = ["issued", "partially_paid"] as const;
+
+/**
+ * What each customer still owes on invoices in the caller's sites (`finance.invoice.view` only; others
+ * get no figure at all, not a zero). Map customer id → amount (decimal string, PHP).
+ */
+export async function customerOutstanding(ctx: AuthContext, customerIds?: string[]): Promise<Map<string, string> | null> {
+  if (!ctx.can("finance.invoice.view") || !ctx.allowedSiteIds.length) return null;
+  const rows = await db
+    .select({ customerId: invoices.customerId, owed: sql<string>`coalesce(sum(${invoices.totalAmount} - ${invoices.paidAmount} - ${invoices.creditedAmount}), 0)::text` })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.organizationId, ctx.organizationId),
+        inArray(invoices.siteId, ctx.allowedSiteIds),
+        inArray(invoices.status, [...OWED_INVOICE_STATUSES]),
+        customerIds ? inArray(invoices.customerId, customerIds.length ? customerIds : ["00000000-0000-0000-0000-000000000000"]) : undefined,
+      ),
+    )
+    .groupBy(invoices.customerId);
+  return new Map(rows.map((r) => [r.customerId, r.owed]));
+}
+
+/**
+ * Customer search words: case-insensitive, every word must match the name, code, e-mail, phone or
+ * contact name (at most 8 words; LIKE wildcards escaped).
+ */
+function customerWordMatches(q: string | undefined) {
+  const words = (q ?? "").trim().split(/\s+/).filter(Boolean).slice(0, 8);
+  return words.map((w) => {
+    const like = `%${w.slice(0, 60).replace(/[%_\\]/g, (c) => "\\" + c)}%`;
+    return or(ilike(customers.name, like), ilike(customers.code, like), ilike(sql`coalesce(${customers.email}, '')`, like), ilike(sql`coalesce(${customers.phone}, '')`, like), ilike(sql`coalesce(${customers.contactName}, '')`, like))!;
+  });
+}
+
+export async function listCustomers(ctx: AuthContext, filters: { q?: string; status?: string; segment?: string; sort?: "code" | "name" } = {}) {
   ctx.require("masterdata.customer.view");
   const stats = db
     .select({
@@ -116,8 +152,7 @@ export async function listCustomers(ctx: AuthContext, filters: { q?: string; sta
     .groupBy(salesOrders.customerId)
     .as("stats");
   const where = [eq(customers.organizationId, ctx.organizationId)];
-  const q = filters.q?.trim();
-  if (q) where.push(or(ilike(customers.name, `%${q}%`), ilike(customers.code, `%${q}%`))!);
+  where.push(...customerWordMatches(filters.q));
   if (filters.status && (CUSTOMER_STATUSES as readonly string[]).includes(filters.status)) where.push(eq(customers.status, filters.status));
   if (filters.segment && filters.segment.length <= 40) where.push(eq(customers.segment, filters.segment));
   const rows = await db
@@ -125,8 +160,16 @@ export async function listCustomers(ctx: AuthContext, filters: { q?: string; sta
     .from(customers)
     .leftJoin(stats, eq(stats.customerId, customers.id))
     .where(and(...where))
-    .orderBy(customers.code);
-  return rows.map((r) => ({ ...customerView(ctx, r.c), orders: Number(r.orders), openOrders: Number(r.openOrders), lastOrderAt: r.lastOrderAt }));
+    .orderBy(filters.sort === "name" ? sql`lower(${customers.name})` : customers.code, customers.code);
+  const owed = await customerOutstanding(ctx, rows.map((r) => r.c.id));
+  return rows.map((r) => ({
+    ...customerView(ctx, r.c),
+    orders: Number(r.orders),
+    openOrders: Number(r.openOrders),
+    lastOrderAt: r.lastOrderAt,
+    /** Owed on invoices; undefined when the caller may not see receivables (never a fake zero). */
+    outstanding: owed ? (owed.get(r.c.id) ?? "0") : undefined,
+  }));
 }
 
 /** Minimal customer list for order and quote entry (requires order-create, not customer-view). Inactive customers are not offered. */
