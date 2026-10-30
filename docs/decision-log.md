@@ -1477,3 +1477,29 @@ act like an expert; I will check when the app is live").
 order and filter, unassign, role escalation, cross-site, invalid assignee), `tests/unit/record-steps.test.ts`,
 `tests/unit/nav-per-role.test.ts` (approver rule). Deployment: the migration runs at start as usual
 (`scripts/start.sh`); rollback = redeploy the previous commit (the extra nullable column is ignored).
+
+## ADR-083 Layout that fits tablets and phones, a plain Home, and floor menus (UX revision R5)
+
+**Status.** Accepted (2026-10-30). The owner: "buttons and text are overlapping, the UI is a mess on
+tablets, iPads and phones … I really don't like the UI, it is overwhelming." Two usability tests were
+run with testers playing a non-technical owner and floor staff (`docs/USABILITY_TEST.md`).
+
+**Decisions.**
+1. **Breakpoints.** The full top menu (five destinations, section menus, site switcher) shows from 1280 px.
+   Below that — phones and iPads in both orientations — the header is compact (menu button, logo mark on
+   phones, scan, approvals, notifications, account), the destination's main tabs are one swipeable row
+   with "More", and the role's bottom tab bar is shown. The drawer folds per destination.
+2. **Fields keep the size a screen asks for.** `fieldClass` lets a caller's width, height, padding, text
+   size or corners replace the base field class; a `w-24` input no longer stretches over its label.
+3. **Green primary actions** (`--cta` = brand green), as the brief's design rules ask.
+4. **Home answers the owner's questions only:** "Needs your attention" (plain sentences built from live
+   counts, each opening the records), four headline numbers with plain titles, the live pipeline, and a
+   link to the detailed overview, which moved to Management → Reports & analytics → Business overview.
+   Home follows the site chosen in the header (or "All my sites") and offers Today / This week / This month.
+5. **Floor menus.** Operators keep Home, My work, Daily log, Stock and Scan; warehouse staff keep
+   Receiving, Packing & dispatch and Inventory. Pages outside the menu still open by link and are still
+   checked on the server.
+6. **Plain words** on menus, pipeline stages, Home and the screens the testers used (see the usability
+   test for the list); developer codes (ADR, KPI, Phase, Wave) are not shown to users.
+7. **The production flow never sends an operator to the full batch record to finish:** the last step's
+   button is "Finish" and opens the simple Finish screen.

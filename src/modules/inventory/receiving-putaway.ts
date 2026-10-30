@@ -90,7 +90,9 @@ export async function putAwayLot(ctx: AuthContext, input: PutAwayInput) {
       const suggestions = allowed.filter((a) => !heldIds.has(a.id)).map((a) => a.code);
       throw new DomainError(
         "blocked_lot",
-        `Lot ${lot.lotNumber} is ${lot.qualityStatus.replace("_", " ")}; it cannot go to ${to.code} (${to.kind}). Allowed: ${suggestions.join(", ") || "no location of an allowed type"}.`,
+        lot.qualityStatus === "quarantine"
+          ? `Lot ${lot.lotNumber} is waiting for the quality check, so it cannot go to ${to.code} yet. Leave it in ${suggestions[0] ?? "the hold area"} for now; put it away after QA approves it.`
+          : `Lot ${lot.lotNumber} is ${lot.qualityStatus.replace("_", " ")}, so it cannot go to ${to.code}. Put it in ${suggestions.join(" or ") || "a hold area"}.`,
         { rule: "V-LOC", allowedLocations: suggestions, allowedKinds: kinds },
       );
     }

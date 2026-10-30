@@ -483,7 +483,7 @@ export async function getOperatorHome(ctx: AuthContext): Promise<OperatorTile[]>
         .select({ n: sql<number>`count(*)::int` })
         .from(goodsReceipts)
         .where(and(eq(goodsReceipts.siteId, site), sql`${goodsReceipts.receivedAt} >= ${dayStart(today, tz)}`))
-        .then(([r]) => ({ key: "receive", title: "Receive materials", href: "/inventory/receive", count: Number(r?.n ?? 0), countLabel: "receipts posted today", description: "Post a goods receipt, create lots in quarantine and print labels." })),
+        .then(([r]) => ({ key: "receive", title: "Receive materials", href: "/inventory/receive", count: Number(r?.n ?? 0), countLabel: "deliveries recorded today", description: "Record a delivery that arrived and print its labels." })),
     );
   if (ctx.can("inventory.lot.view")) {
     const oh = onHandSubquery([site]);
@@ -493,7 +493,7 @@ export async function getOperatorHome(ctx: AuthContext): Promise<OperatorTile[]>
         .from(inventoryLots)
         .innerJoin(oh, eq(oh.lotId, inventoryLots.id))
         .where(eq(inventoryLots.siteId, site))
-        .then(([r]) => ({ key: "scan", title: "Scan / look up", href: "/inventory/scan", count: Number(r?.n ?? 0), countLabel: "lots with stock on hand", description: "Scan a lot, box or location label, or type its number." })),
+        .then(([r]) => ({ key: "scan", title: "Scan / look up", href: "/inventory/scan", count: Number(r?.n ?? 0), countLabel: "lots in stock", description: "Scan a label, or type the number printed on it." })),
     );
   }
   if (ctx.can("production.batch.view"))
@@ -508,7 +508,7 @@ export async function getOperatorHome(ctx: AuthContext): Promise<OperatorTile[]>
           title: ctx.can("production.work_order.create") ? "Production orders" : "My work",
           href: ctx.can("production.work_order.view") ? "/production/orders" : "/production",
           count: Number(r?.n ?? 0),
-          countLabel: "batches being made",
+          countLabel: Number(r?.n ?? 0) === 1 ? "batch being made" : "batches being made",
           description: "Open an order; its big button shows the next step (get materials, start, weigh, next step, finish).",
         })),
     );

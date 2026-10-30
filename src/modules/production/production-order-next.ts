@@ -76,6 +76,8 @@ export function batchNextAction(b: BatchStatusView & { id: string; batchNumber: 
         if (u.can(perm) && s.conductedBy !== u.userId) return { kind: "link", label: `Check ${s.name}`, href: `/production/${id}`, hint: `Batch ${nr}: ${s.name}${stepOf} needs a second person's check.`, batchId: id };
         return { kind: "wait", title: "Waiting for a check", hint: `Batch ${nr}: another person checks ${s.name}${stepOf}.`, who: { permission: perm, siteId }, batchId: id };
       }
+      // The last step (move to the hold area) is what Finish does: one plain button, the simple Finish screen.
+      if (s.kind === "transfer") return gate(u, siteId, "production.batch.post", { label: "Finish", href: `/production/${id}/finish`, hint: `Batch ${nr}: count the good pieces and send the batch for the quality check.`, batchId: id }, "Ready to finish");
       if (WEIGH_KINDS.includes(s.kind)) return gate(u, siteId, performPermission(s.kind), { label: "Weigh", href: fp("weigh"), hint: `Batch ${nr}: weigh the ingredients${stepOf}.`, batchId: id }, "Ready to weigh");
       return gate(u, siteId, performPermission(s.kind), { label: s.name, href: fp(`step/${s.stepNo}`), hint: `Batch ${nr}: ${s.name}${stepOf}.`, batchId: id }, `Next: ${s.name}`);
     }

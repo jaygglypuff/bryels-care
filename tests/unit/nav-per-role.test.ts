@@ -32,6 +32,7 @@ describe("five destinations", () => {
   it("operators do not see Management or Sales & Customers", () => {
     expect(navOf("production_operator").map((g) => g.label)).toEqual(["Home", "Operations", "Inventory"]);
     expect(navOf("warehouse_operator").map((g) => g.label)).not.toContain("Management");
+    expect(navOf("warehouse_operator").map((g) => g.label)).not.toContain("Sales & Customers");
   });
 
   it("menu items are filtered by permission (no entry the role cannot open)", () => {
@@ -52,10 +53,18 @@ describe("five destinations", () => {
 });
 
 describe("production tabs per role (ADR-080 §11)", () => {
-  it("operators: Operations Center, My work and Today; old screens under Advanced", () => {
+  it("operators (ADR-083): only My work and Daily log in Operations, Stock and Scan in Inventory, no sections", () => {
     expect(productionPersona(canFor("production_operator"), ["production_operator"])).toBe("operator");
-    expect(main("production_operator")).toEqual(["Operations Center", "My work", "Daily log"]);
-    expect(section("production_operator", "Operations", ADVANCED)).toContain("Batches (full record)");
+    expect(main("production_operator")).toEqual(["My work", "Daily log"]);
+    expect(groupSections(group("production_operator", "Operations")!).sections).toEqual([]);
+    expect(main("production_operator", "Inventory")).toEqual(["Stock", "Scan"]);
+    expect(main("production_operator", "Home")).not.toContain("Problems & alerts");
+  });
+
+  it("warehouse (ADR-083): receiving and packing in Operations, all of Inventory, no production or sales", () => {
+    expect(navOf("warehouse_operator").map((g) => g.label)).toEqual(["Home", "Operations", "Inventory"]);
+    expect(groupSections(group("warehouse_operator", "Operations")!).sections.map((x) => x.name)).toEqual(["Receiving", "Packing & dispatch"]);
+    expect(main("warehouse_operator", "Operations")).toEqual([]);
   });
 
   it("planner, site manager and owner: Production orders, Today, Rejects, New order", () => {

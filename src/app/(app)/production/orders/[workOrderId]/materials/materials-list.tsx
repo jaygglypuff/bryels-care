@@ -2,7 +2,7 @@
 import { AlertOctagon, Check, Circle } from "lucide-react";
 import { useState } from "react";
 import { fmtDate, fmtMass, fmtQty } from "@/lib/qty";
-import { cx, Input } from "@/ui/core";
+import { Button, cx, Input } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { pickAction } from "../flow-actions";
 
@@ -303,22 +303,33 @@ function MoreDetails({
 
 function AllTaken({ batchId, open }: { batchId: string; open: number }) {
   const [state, action] = useInPlaceAction(pickAction);
+  // ADR-083: one tap must not mark every material taken by accident; ask on the page first.
+  const [sure, setSure] = useState(false);
   return (
-    <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+72px)] z-10 mt-4 rounded-[20px] border border-line bg-surface/95 p-3 shadow-[var(--shadow-pop)] backdrop-blur lg:bottom-4">
+    <div className="z-10 mt-4 rounded-[20px] border border-line bg-surface p-3 shadow-[var(--shadow-pop)]">
       <form action={action} className="flex flex-wrap items-center gap-3">
         <input type="hidden" name="batchId" value={batchId} />
         <input type="hidden" name="all" value="1" />
-        <p className="min-w-0 flex-1 text-[15px] text-muted">
-          {open} still to take.
-        </p>
-        <SubmitButton
-          variant="cta"
-          size="lg"
-          pendingText="Saving…"
-          className="min-w-[200px]"
-        >
-          All taken
-        </SubmitButton>
+        {sure ? (
+          <>
+            <p className="min-w-0 flex-1 text-[15px] font-medium text-fg">
+              Mark all {open} {open === 1 ? "material" : "materials"} as taken?
+            </p>
+            <Button type="button" variant="secondary" size="lg" onClick={() => setSure(false)}>
+              Cancel
+            </Button>
+            <SubmitButton variant="cta" size="lg" pendingText="Saving…">
+              Yes, all taken
+            </SubmitButton>
+          </>
+        ) : (
+          <>
+            <p className="min-w-0 flex-1 text-[15px] text-muted">{open} still to take.</p>
+            <Button type="button" variant="cta" size="lg" className="min-w-[200px]" onClick={() => setSure(true)}>
+              All taken
+            </Button>
+          </>
+        )}
       </form>
       <FormMessage state={state} />
     </div>

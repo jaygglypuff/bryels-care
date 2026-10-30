@@ -147,7 +147,7 @@ export function StepCard(p: Props) {
           </Link>
         ) : step.isTransfer ? (
           <Link
-            href={p.fullRecordHref}
+            href={`${p.fullRecordHref}/finish`}
             className="inline-flex min-h-[56px] w-full items-center justify-center rounded-full bg-cta px-8 text-[17px] font-semibold text-white"
           >
             Go to Finish
@@ -293,7 +293,7 @@ function CheckList(p: Props) {
         />
       )}
       {p.canPerform && (
-        <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+72px)] flex flex-wrap gap-2 rounded-[20px] bg-surface/95 p-2 lg:static">
+        <div className="flex flex-wrap gap-2 rounded-[20px] bg-surface/95 p-2 lg:static">
           {!anyNo && (
             <SubmitButton
               name="allOk"
@@ -636,7 +636,7 @@ function FieldsCard(p: Props) {
           </p>
         )}
         {p.canPerform && (
-          <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+72px)] rounded-[20px] bg-surface/95 p-2 lg:static">
+          <div className="rounded-[20px] bg-surface/95 p-2 lg:static">
             <SubmitButton
               id={`done-${step.stepNo}`}
               variant="cta"

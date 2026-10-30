@@ -97,6 +97,11 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
   const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
   const site = sites.find((s) => s.id === currentSiteId);
   const badges: NavBadges = { ...(qaCount ? { "/quality/check": qaCount, "/quality": qaCount } : {}), ...(approvalCount ? { "/approvals": approvalCount } : {}) };
+  // Only the closest tab lights up (/inventory/receive must not also light up /inventory).
+  const activeTab = tabs.reduce<{ href: string | null; m: number }>((best, t) => {
+    const m = t.href ? matchLen(pathname, t.href) : -1;
+    return m > best.m ? { href: t.href, m } : best;
+  }, { href: null, m: -1 }).href;
   const withCount = (label: string, href: string) => (badges[href] ? `${label}, ${badges[href]} open` : label);
 
   const siteSwitcher = (
@@ -320,7 +325,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
                   </button>
                 </li>
               );
-            const active = matchLen(pathname, t.href) >= 0;
+            const active = t.href === activeTab;
             return (
               <li key={t.href} className="flex-1">
                 <Link href={t.href} aria-current={active ? "page" : undefined} aria-label={badges[t.href] ? withCount(t.label, t.href) : undefined} className={cx("flex min-h-[56px] flex-col items-center gap-0.5 py-2 text-[11px] font-medium", active ? "text-primary-text" : "text-muted")}>

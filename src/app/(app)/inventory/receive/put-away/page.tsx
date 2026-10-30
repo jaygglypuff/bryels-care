@@ -32,7 +32,7 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
       <Card>
         <form method="get" className="flex flex-wrap items-end gap-3">
           <div className="min-w-[220px] flex-1">
-            <Field label="1. Scan the lot label" htmlFor="lot" hint="Keyboard-wedge scanner or type the lot number.">
+            <Field label="1. Scan the lot label" htmlFor="lot" hint="Scan the label, or type the lot number printed on it.">
               <Input id="lot" name="lot" defaultValue={lotRef} placeholder="BC:LOT:L-2610-00012" autoComplete="off" autoFocus={!opts} required />
             </Field>
           </div>

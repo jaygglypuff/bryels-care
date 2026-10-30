@@ -279,11 +279,42 @@ const PRODUCTION_TAB_HREFS = new Set(["/production/orders", "/production/today",
 /** Floor roles work from Home, Operations and Inventory; Management is not in their menu (the pages still check access). */
 const FLOOR_PERSONAS: readonly ProductionPersona[] = ["operator", "warehouse"];
 
+/**
+ * ADR-083: what floor people keep in their menu (everything else still opens by link and is still
+ * checked on the server). Operators: their work, the daily log, stock and scan. Warehouse: receiving,
+ * packing and dispatch, and inventory. Keyed by destination; `true` = the whole destination.
+ */
+const FLOOR_MENU: Record<"operator" | "warehouse", Record<string, true | { main?: string[]; sections?: string[] }>> = {
+  operator: {
+    Home: { main: ["/dashboard", "/approvals", "/notifications"], sections: ["Help & my account"] },
+    Operations: { main: ["/production/orders", "/production/today"] },
+    Inventory: { main: ["/inventory", "/inventory/scan"] },
+  },
+  warehouse: {
+    Home: { main: ["/dashboard", "/approvals", "/notifications"], sections: ["Help & my account"] },
+    Operations: { main: [], sections: ["Receiving", "Packing & dispatch"] },
+    Inventory: true,
+  },
+};
+
+function trimForFloor(groups: NavGroup[], persona: ProductionPersona): NavGroup[] {
+  if (persona !== "operator" && persona !== "warehouse") return groups;
+  const keep = FLOOR_MENU[persona];
+  return groups
+    .filter((g) => keep[g.label])
+    .map((g) => {
+      const k = keep[g.label];
+      if (k === true) return g;
+      return { ...g, items: g.items.filter((i) => (i.section ? (k.sections ?? []).includes(i.section) : (k.main ?? []).includes(i.href))) };
+    })
+    .filter((g) => g.items.some((i) => !i.planned));
+}
+
 /** The menu of one person: the five destinations filtered by permission, production tabs per role. */
 export function buildNav(can: Can, roles: readonly string[], opts: { approver?: boolean } = {}): NavGroup[] {
   const persona = productionPersona(can, roles);
   const approver = opts.approver ?? true;
-  return NAV.filter((g) => !(g.label === "Management" && FLOOR_PERSONAS.includes(persona))).map((g) => {
+  const groups = NAV.filter((g) => !(g.label === "Management" && FLOOR_PERSONAS.includes(persona))).map((g) => {
     if (g.label !== "Operations") return g;
     const hub = g.items.filter((i) => i.hub);
     const rest = g.items.filter((i) => !i.hub && !PRODUCTION_TAB_HREFS.has(i.href));
@@ -291,6 +322,7 @@ export function buildNav(can: Can, roles: readonly string[], opts: { approver?: 
   })
     .map((g) => ({ ...g, items: g.items.filter((i) => (i.planned || !i.permission || can(i.permission)) && (approver || !i.approverOnly)) }))
     .filter((g) => g.items.some((i) => !i.planned && !i.hub) || g.label === "Home");
+  return trimForFloor(groups, persona);
 }
 
 /** The landing page of a destination: its hub, else its first live item. */

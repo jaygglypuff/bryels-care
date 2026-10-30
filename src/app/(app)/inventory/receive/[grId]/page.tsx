@@ -114,7 +114,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
           gr.can.post
             ? "Posting creates one quarantined lot and one receipt movement per line, and allocates the receipt number."
             : gr.status === "posted" && gr.can.printLabels
-              ? "Next: label every container, then put the stock away; QA can then release it."
+              ? "Next: stick a label on every container and leave them in the hold area. After QA approves the lot, put it away."
               : undefined
         }
         secondary={
@@ -133,7 +133,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
       {posted && gr.status === "posted" && (
         <Banner tone="ok" title={`Receipt ${gr.receiptNumber} posted`}>
           <span className="inline-flex items-center gap-1">
-            <CheckCircle2 size={14} /> {gr.lines.length} new {gr.lines.length === 1 ? "lot is" : "lots are"} in quarantine. Label every container, then put the stock away; QA can then release it.
+            <CheckCircle2 size={14} /> {gr.lines.length} new {gr.lines.length === 1 ? "lot is" : "lots are"} waiting for the quality check. Stick a label on every container and leave them in the hold area; put them away after QA approves.
           </span>
         </Banner>
       )}

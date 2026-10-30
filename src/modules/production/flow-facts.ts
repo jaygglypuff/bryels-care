@@ -188,9 +188,9 @@ export function nextBatchScreen(f: BatchFlowFacts, now = new Date()): NextScreen
   }
   if (f.status === "in_process" || f.status === "rework_approved") {
     const s = f.currentStep;
-    if (!s) return { action: "finish", label: "Go to Finish", href: `/production/${f.batchId}`, disabledReason: null, stepNo: null };
+    if (!s) return { action: "finish", label: "Go to Finish", href: `/production/${f.batchId}/finish`, disabledReason: null, stepNo: null };
     if (isWeighingStep(s.kind)) return { action: "weigh", label: "Weigh", href: flowPath(f, "weigh"), disabledReason: null, stepNo: s.stepNo };
-    if (s.kind === "transfer") return { action: "finish", label: "Go to Finish", href: `/production/${f.batchId}`, disabledReason: null, stepNo: s.stepNo };
+    if (s.kind === "transfer") return { action: "finish", label: "Go to Finish", href: `/production/${f.batchId}/finish`, disabledReason: null, stepNo: s.stepNo };
     if (isWaitStep(s.kind) && s.status === "in_progress" && s.readyAt) {
       const word = /mou?ld/i.test(s.name) ? "Mould time finished" : s.kind === "hold" ? "Resting finished" : "Curing finished";
       const early = s.readyAt.getTime() > now.getTime();
