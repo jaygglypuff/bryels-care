@@ -1,6 +1,6 @@
 import "server-only";
 import Decimal from "decimal.js";
-import { db } from "@/db/client";
+import { db, type Tx } from "@/db/client";
 import { batchMaterials, batchStateTransitions, batches } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
@@ -54,173 +54,183 @@ export async function createBatch(ctx: AuthContext, input: CreateBatchInput): Pr
       if (!input.workOrderId && !(await getSetting(tx, ctx.organizationId, "production.batch.allow_without_work_order", siteId))) {
         throw new DomainError("validation", "Batches are created from a planned or released work order. Open the work order and choose Create batch.");
       }
-      const rev = await loadFormulaRevisionForSnapshot(tx, ctx.organizationId, input.formulaRevisionId);
-      if (!rev) throw new DomainError("not_found", "Formula revision not found.");
-      const revLabel = `Formula ${rev.formula.code} revision ${rev.rev.revisionNo}`;
-      if (rev.rev.status !== "approved") {
-        throw new DomainError("state", `${revLabel} is ${rev.rev.status.replace(/_/g, " ")}; only an approved revision can be used for a batch.`);
-      }
-      // V-REV: the revision must be effective on the planned start date (docs/process-maps.md §1.5).
-      if (!isEffectiveOn(rev.rev, input.plannedStartOn)) {
-        const range = `${rev.rev.effectiveFrom ?? "?"}${rev.rev.effectiveTo ? ` until ${rev.rev.effectiveTo}` : " onwards"}`;
-        throw new DomainError("validation", `${revLabel} is not effective on ${input.plannedStartOn} (effective ${range}). Choose the revision effective on that date.`, {
-          rule: "V-REV",
-          fieldErrors: { plannedStartOn: "No effective revision on this date." },
-        });
-      }
-      const routing = await getEffectiveRouting(ctx, rev.product.id, input.plannedStartOn, { tx });
-      if (!routing) {
-        throw new DomainError("validation", `${rev.product.name} has no approved routing effective on ${input.plannedStartOn}. A routing revision must be approved first (V-REV).`, { rule: "V-REV" });
-      }
-      const wo = input.workOrderId
-        ? await assertWorkOrderAcceptsBatch(tx, ctx, input.workOrderId, { siteId, formulaRevisionId: rev.rev.id, routingRevisionId: routing.rev.id, plannedSizeG, plannedStartOn: input.plannedStartOn })
-        : null;
-      const plan = await getInspectionPlan(ctx, { planKind: "finished_product", productId: rev.product.id, date: input.plannedStartOn }, { tx });
-      const { lines } = rev;
-      const steps = routing.steps;
-      if (lines.length === 0) throw new DomainError("state", "The formula revision has no ingredient lines.");
-      if (steps.length === 0) throw new DomainError("state", "The routing revision has no steps.");
-
-      // W2G (US-1-22/23): the product must be active, and no ingredient draft, blocked or discontinued.
-      if (rev.product.status !== "active") throw new DomainError("validation", `${rev.product.name} is ${rev.product.status} in master data; batches are made only for active products.`);
-      const notActive = rev.lines.filter(({ material }) => material.status !== "active");
-      if (notActive.length) {
-        throw new DomainError("validation", `Ingredient${notActive.length > 1 ? "s" : ""} not available in master data: ${notActive.map(({ material }) => `${material.name} (${material.status})`).join(", ")}.`);
-      }
-      const refSize = new Decimal(rev.rev.referenceBatchSizeG);
-      const factor = plannedSizeG.div(refSize);
-      // Proportional lines scale with the batch size; fixed lines copy (docs/data-model.md §4.4).
-      const scaled = lines.map(({ line, material }) => {
-        const target = line.scaling === "fixed" ? new Decimal(line.quantityG) : new Decimal(line.quantityG).mul(factor).toDecimalPlaces(6);
-        // For an absolute tolerance the stored percentage is only the display equivalent.
-        const pct = line.toleranceAbsG !== null ? (target.gt(0) ? new Decimal(line.toleranceAbsG).div(target).mul(100).toDecimalPlaces(6) : new Decimal(0)) : new Decimal(line.tolerancePct ?? 0);
-        return { line, material, target, pct };
-      });
-      const snapshot: FormulaSnapshot = {
-        schemaVersion: "bom_snapshot/v2",
-        formulaId: rev.formula.id,
-        formulaCode: rev.formula.code,
-        formulaName: rev.formula.name,
-        formulaRevisionId: rev.rev.id,
-        revisionNo: rev.rev.revisionNo,
-        effectiveFrom: rev.rev.effectiveFrom,
-        referenceBatchSizeG: rev.rev.referenceBatchSizeG,
-        theoreticalYieldPct: rev.rev.theoreticalYieldPct,
-        takenAt: new Date().toISOString(),
-        routing: {
-          routingId: routing.routing.id,
-          routingCode: routing.routing.code,
-          routingName: routing.routing.name,
-          routingRevisionId: routing.rev.id,
-          revisionNo: routing.rev.revisionNo,
-          effectiveFrom: routing.rev.effectiveFrom,
-        },
-        inspectionPlan: plan
-          ? {
-              id: plan.plan.id,
-              code: plan.plan.code,
-              revisionNo: plan.plan.revisionNo,
-              isPlaceholder: plan.plan.isPlaceholder,
-              tests: plan.tests.map((t) => ({ testCode: t.testCode, name: t.name, valueKind: t.valueKind, uom: t.uom, specMin: t.specMin, specMax: t.specMax, specText: t.specText, isRequired: t.isRequired })),
-            }
-          : null,
-        lines: scaled.map(({ line, material, target, pct }) => ({
-          bomLineId: line.id,
-          lineNo: line.lineNo,
-          materialId: material.id,
-          materialCode: material.code,
-          materialName: material.name,
-          inciName: material.inciName,
-          quantityG: line.quantityG,
-          tolerancePct: pct.toString(),
-          toleranceAbsG: line.toleranceAbsG,
-          scaling: line.scaling,
-          phaseCode: line.phaseCode,
-          targetQtyG: target.toString(),
-          requiresChecker: line.requiresChecker,
-        })),
-        steps: steps.map((s) => ({
-          routingStepId: s.id,
-          stepNo: s.stepNo,
-          name: s.name,
-          stepKind: s.stepKind,
-          area: s.area,
-          instruction: s.instruction,
-          requiresChecker: s.requiresChecker,
-          requiresEquipment: s.requiresEquipment,
-          equipmentKind: s.equipmentKind,
-          workInstruction: s.workInstruction
-            ? { code: s.workInstruction.code, name: s.workInstruction.name, revisionNo: s.workInstruction.revisionNo, revisionId: s.workInstruction.revisionId, bodyMarkdown: s.workInstruction.bodyMarkdown }
-            : null,
-          parameters: s.parameters.map((p) => ({ id: p.id, code: p.code, name: p.name, valueKind: p.valueKind, uom: p.uom, minValue: p.minValue, targetValue: p.targetValue, maxValue: p.maxValue, isRequired: p.isRequired })),
-          checklistItems: s.checklistItems.map((c) => ({ id: c.id, itemNo: c.itemNo, text: c.text, requiresPhoto: c.requiresPhoto, isBlocking: c.isBlocking })),
-        })),
-      };
-      const theoreticalYieldG = plannedSizeG.mul(rev.rev.theoreticalYieldPct).div(100).toDecimalPlaces(6);
-
-      const batchNumber = await nextNumber(tx, ctx.organizationId, "BATCH");
-      const [b] = await tx
-        .insert(batches)
-        .values({
-          organizationId: ctx.organizationId,
-          siteId,
-          batchNumber,
-          productId: rev.product.id,
-          formulaRevisionId: rev.rev.id,
-          routingRevisionId: routing.rev.id,
-          inspectionPlanId: plan?.plan.id ?? null,
-          formulaSnapshot: snapshot,
-          plannedSizeG: plannedSizeG.toString(),
-          status: "planned",
-          plannedStartOn: input.plannedStartOn,
-          theoreticalYieldG: theoreticalYieldG.toString(),
-          workOrderId: wo?.id ?? null,
-          createdBy: ctx.userId,
-        })
-        .returning();
-      await tx.insert(batchMaterials).values(
-        scaled.map(({ line, target, pct }) => ({
-          batchId: b.id,
-          bomLineId: line.id,
-          lineNo: line.lineNo,
-          materialId: line.materialId,
-          theoreticalQtyG: target.toString(),
-          tolerancePct: pct.toString(),
-          toleranceAbsG: line.toleranceAbsG,
-        })),
-      );
-      await tx.insert(batchStateTransitions).values({ batchId: b.id, fromState: null, toState: "planned", actorId: ctx.userId });
-      await audit(tx, ctx, {
-        action: "production.batch.created",
-        entityType: "batch",
-        entityId: b.id,
-        entityNumber: batchNumber,
-        siteId,
-        after: {
-          product: rev.product.skuCode,
-          formula: `${rev.formula.code} rev ${rev.rev.revisionNo}`,
-          plannedSizeG: plannedSizeG.toString(),
-          plannedStartOn: input.plannedStartOn,
-          theoreticalYieldG: theoreticalYieldG.toString(),
-          workOrder: wo?.workOrderNumber ?? null,
-        },
-      });
-      await audit(tx, ctx, {
-        action: "production.batch.revisions_snapshotted",
-        entityType: "batch",
-        entityId: b.id,
-        entityNumber: batchNumber,
-        siteId,
-        after: {
-          formulaRevision: `${rev.formula.code} rev ${rev.rev.revisionNo}`,
-          routingRevision: `${routing.routing.code} rev ${routing.rev.revisionNo}`,
-          inspectionPlan: plan ? `${plan.plan.code} rev ${plan.plan.revisionNo}` : null,
-        },
-      });
-      return { batchId: b.id, batchNumber };
+      return insertBatch(tx, ctx, siteId, { formulaRevisionId: input.formulaRevisionId, plannedSizeG, plannedStartOn: input.plannedStartOn, workOrderId: input.workOrderId ?? null });
     });
     return result;
   });
+}
+
+/**
+ * The batch insert of createBatch in the caller's transaction (also used by the one-step production
+ * order approval, ADR-074, which creates the order's batches together with planning and reservation).
+ * The caller has checked permission and site scope and validated the size and date.
+ */
+export async function insertBatch(tx: Tx, ctx: AuthContext, siteId: string, input: { formulaRevisionId: string; plannedSizeG: Decimal; plannedStartOn: string; workOrderId: string | null }): Promise<{ batchId: string; batchNumber: string }> {
+  const { plannedSizeG } = input;
+  const rev = await loadFormulaRevisionForSnapshot(tx, ctx.organizationId, input.formulaRevisionId);
+  if (!rev) throw new DomainError("not_found", "Formula revision not found.");
+  const revLabel = `Formula ${rev.formula.code} revision ${rev.rev.revisionNo}`;
+  if (rev.rev.status !== "approved") {
+    throw new DomainError("state", `${revLabel} is ${rev.rev.status.replace(/_/g, " ")}; only an approved revision can be used for a batch.`);
+  }
+  // V-REV: the revision must be effective on the planned start date (docs/process-maps.md §1.5).
+  if (!isEffectiveOn(rev.rev, input.plannedStartOn)) {
+    const range = `${rev.rev.effectiveFrom ?? "?"}${rev.rev.effectiveTo ? ` until ${rev.rev.effectiveTo}` : " onwards"}`;
+    throw new DomainError("validation", `${revLabel} is not effective on ${input.plannedStartOn} (effective ${range}). Choose the revision effective on that date.`, {
+      rule: "V-REV",
+      fieldErrors: { plannedStartOn: "No effective revision on this date." },
+    });
+  }
+  const routing = await getEffectiveRouting(ctx, rev.product.id, input.plannedStartOn, { tx });
+  if (!routing) {
+    throw new DomainError("validation", `${rev.product.name} has no approved routing effective on ${input.plannedStartOn}. A routing revision must be approved first (V-REV).`, { rule: "V-REV" });
+  }
+  const wo = input.workOrderId
+    ? await assertWorkOrderAcceptsBatch(tx, ctx, input.workOrderId, { siteId, formulaRevisionId: rev.rev.id, routingRevisionId: routing.rev.id, plannedSizeG, plannedStartOn: input.plannedStartOn })
+    : null;
+  const plan = await getInspectionPlan(ctx, { planKind: "finished_product", productId: rev.product.id, date: input.plannedStartOn }, { tx });
+  const { lines } = rev;
+  const steps = routing.steps;
+  if (lines.length === 0) throw new DomainError("state", "The formula revision has no ingredient lines.");
+  if (steps.length === 0) throw new DomainError("state", "The routing revision has no steps.");
+
+  // W2G (US-1-22/23): the product must be active, and no ingredient draft, blocked or discontinued.
+  if (rev.product.status !== "active") throw new DomainError("validation", `${rev.product.name} is ${rev.product.status} in master data; batches are made only for active products.`);
+  const notActive = rev.lines.filter(({ material }) => material.status !== "active");
+  if (notActive.length) {
+    throw new DomainError("validation", `Ingredient${notActive.length > 1 ? "s" : ""} not available in master data: ${notActive.map(({ material }) => `${material.name} (${material.status})`).join(", ")}.`);
+  }
+  const refSize = new Decimal(rev.rev.referenceBatchSizeG);
+  const factor = plannedSizeG.div(refSize);
+  // Proportional lines scale with the batch size; fixed lines copy (docs/data-model.md §4.4).
+  const scaled = lines.map(({ line, material }) => {
+    const target = line.scaling === "fixed" ? new Decimal(line.quantityG) : new Decimal(line.quantityG).mul(factor).toDecimalPlaces(6);
+    // For an absolute tolerance the stored percentage is only the display equivalent.
+    const pct = line.toleranceAbsG !== null ? (target.gt(0) ? new Decimal(line.toleranceAbsG).div(target).mul(100).toDecimalPlaces(6) : new Decimal(0)) : new Decimal(line.tolerancePct ?? 0);
+    return { line, material, target, pct };
+  });
+  const snapshot: FormulaSnapshot = {
+    schemaVersion: "bom_snapshot/v2",
+    formulaId: rev.formula.id,
+    formulaCode: rev.formula.code,
+    formulaName: rev.formula.name,
+    formulaRevisionId: rev.rev.id,
+    revisionNo: rev.rev.revisionNo,
+    effectiveFrom: rev.rev.effectiveFrom,
+    referenceBatchSizeG: rev.rev.referenceBatchSizeG,
+    theoreticalYieldPct: rev.rev.theoreticalYieldPct,
+    takenAt: new Date().toISOString(),
+    routing: {
+      routingId: routing.routing.id,
+      routingCode: routing.routing.code,
+      routingName: routing.routing.name,
+      routingRevisionId: routing.rev.id,
+      revisionNo: routing.rev.revisionNo,
+      effectiveFrom: routing.rev.effectiveFrom,
+    },
+    inspectionPlan: plan
+      ? {
+          id: plan.plan.id,
+          code: plan.plan.code,
+          revisionNo: plan.plan.revisionNo,
+          isPlaceholder: plan.plan.isPlaceholder,
+          tests: plan.tests.map((t) => ({ testCode: t.testCode, name: t.name, valueKind: t.valueKind, uom: t.uom, specMin: t.specMin, specMax: t.specMax, specText: t.specText, isRequired: t.isRequired })),
+        }
+      : null,
+    lines: scaled.map(({ line, material, target, pct }) => ({
+      bomLineId: line.id,
+      lineNo: line.lineNo,
+      materialId: material.id,
+      materialCode: material.code,
+      materialName: material.name,
+      inciName: material.inciName,
+      quantityG: line.quantityG,
+      tolerancePct: pct.toString(),
+      toleranceAbsG: line.toleranceAbsG,
+      scaling: line.scaling,
+      phaseCode: line.phaseCode,
+      targetQtyG: target.toString(),
+      requiresChecker: line.requiresChecker,
+    })),
+    steps: steps.map((s) => ({
+      routingStepId: s.id,
+      stepNo: s.stepNo,
+      name: s.name,
+      stepKind: s.stepKind,
+      area: s.area,
+      instruction: s.instruction,
+      requiresChecker: s.requiresChecker,
+      requiresEquipment: s.requiresEquipment,
+      equipmentKind: s.equipmentKind,
+      workInstruction: s.workInstruction
+        ? { code: s.workInstruction.code, name: s.workInstruction.name, revisionNo: s.workInstruction.revisionNo, revisionId: s.workInstruction.revisionId, bodyMarkdown: s.workInstruction.bodyMarkdown }
+        : null,
+      parameters: s.parameters.map((p) => ({ id: p.id, code: p.code, name: p.name, valueKind: p.valueKind, uom: p.uom, minValue: p.minValue, targetValue: p.targetValue, maxValue: p.maxValue, isRequired: p.isRequired })),
+      checklistItems: s.checklistItems.map((c) => ({ id: c.id, itemNo: c.itemNo, text: c.text, requiresPhoto: c.requiresPhoto, isBlocking: c.isBlocking })),
+    })),
+  };
+  const theoreticalYieldG = plannedSizeG.mul(rev.rev.theoreticalYieldPct).div(100).toDecimalPlaces(6);
+
+  const batchNumber = await nextNumber(tx, ctx.organizationId, "BATCH");
+  const [b] = await tx
+    .insert(batches)
+    .values({
+      organizationId: ctx.organizationId,
+      siteId,
+      batchNumber,
+      productId: rev.product.id,
+      formulaRevisionId: rev.rev.id,
+      routingRevisionId: routing.rev.id,
+      inspectionPlanId: plan?.plan.id ?? null,
+      formulaSnapshot: snapshot,
+      plannedSizeG: plannedSizeG.toString(),
+      status: "planned",
+      plannedStartOn: input.plannedStartOn,
+      theoreticalYieldG: theoreticalYieldG.toString(),
+      workOrderId: wo?.id ?? null,
+      createdBy: ctx.userId,
+    })
+    .returning();
+  await tx.insert(batchMaterials).values(
+    scaled.map(({ line, target, pct }) => ({
+      batchId: b.id,
+      bomLineId: line.id,
+      lineNo: line.lineNo,
+      materialId: line.materialId,
+      theoreticalQtyG: target.toString(),
+      tolerancePct: pct.toString(),
+      toleranceAbsG: line.toleranceAbsG,
+    })),
+  );
+  await tx.insert(batchStateTransitions).values({ batchId: b.id, fromState: null, toState: "planned", actorId: ctx.userId });
+  await audit(tx, ctx, {
+    action: "production.batch.created",
+    entityType: "batch",
+    entityId: b.id,
+    entityNumber: batchNumber,
+    siteId,
+    after: {
+      product: rev.product.skuCode,
+      formula: `${rev.formula.code} rev ${rev.rev.revisionNo}`,
+      plannedSizeG: plannedSizeG.toString(),
+      plannedStartOn: input.plannedStartOn,
+      theoreticalYieldG: theoreticalYieldG.toString(),
+      workOrder: wo?.workOrderNumber ?? null,
+    },
+  });
+  await audit(tx, ctx, {
+    action: "production.batch.revisions_snapshotted",
+    entityType: "batch",
+    entityId: b.id,
+    entityNumber: batchNumber,
+    siteId,
+    after: {
+      formulaRevision: `${rev.formula.code} rev ${rev.rev.revisionNo}`,
+      routingRevision: `${routing.routing.code} rev ${routing.rev.revisionNo}`,
+      inspectionPlan: plan ? `${plan.plan.code} rev ${plan.plan.revisionNo}` : null,
+    },
+  });
+  return { batchId: b.id, batchNumber };
 }
 
 /**

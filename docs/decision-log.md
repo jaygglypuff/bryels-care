@@ -984,3 +984,53 @@ the audit trail, not a hard block, then shows that one person did both sides.
 FDA Philippines): switching the override on for real production is the owner's documented decision
 after QA advice (assumption A-GOV-OWNER). Other roles are unchanged. Tests:
 `tests/integration/governance/owner-override.test.ts`.
+
+## ADR-074 One production order with a simple status and a daily log
+
+**Status.** Accepted (owner decision after the iPad trial, 2026-10-30; stream S2).
+
+**Context.** The owner found the production flow (work order → plan → planned → release → batch →
+stage → line clearance → weigh → steps → output → QA → close) too many screens and words to follow.
+They want ONE "production order" to track from ordering to done, and a simple daily record of what
+was made and what went wrong.
+
+**Decision.**
+1. A **production order is a work order** with its batches. No new state machine: the simple status
+   is a read model over the existing work order and batch machines
+   (`src/modules/production/production-order-status.ts`): draft/planned → **Draft**; released with no
+   started batch → **Approved**; released with a started batch, or in_progress → **In progress**;
+   completed/closed → **Done**; cancelled → **Cancelled**. "Started" = the batch has `started_at`,
+   the rule `syncWorkOrderProgress` already uses.
+2. **Approve** (`approveProductionOrder`, permission `production.work_order.approve`) runs plan +
+   release + FEFO reservation + creation of the order's batches (`batch_count`, default 1) in ONE
+   transaction, idempotent (command `production.production_order.approve`). The existing plan and
+   release bodies were extracted as `planLockedWorkOrder` / `releaseLockedWorkOrder` and the batch
+   insert as `insertBatch`; `planWorkOrder`, `releaseWorkOrder` and `createBatch` call them, so
+   their behaviour is unchanged. Approving includes creating the batches (no separate
+   `production.batch.create`). A shortage (with `production.work_order.allow_release_with_shortage`
+   off) rolls everything back and the message names each material with need / usable / short in
+   kg or g. Separation of duties (`approvals.sod.work_order_release`) compares the approver with the
+   person who **created** the order (or planned it, for an order planned on the old screen); the
+   owner override (ADR-073) applies.
+3. The order page shows ONE next action: **Approve** (command), **Start** (opens staging, then the
+   batch workspace for the line check) or **Finish** (opens the batch workspace, then the closure
+   page). Start and Finish are links to the screens where that work is recorded; they never change a
+   state themselves. Waiting states (approval by another person, quality check) say who can act.
+4. **Daily log**: tables `production_daily_logs` and `production_defect_entries`, append-only
+   (`src/db/sql/s2.sql`). A correction is a new entry with `corrects_id` and a reason; an entry is
+   replaced at most once (unique index); replaced entries stay visible and do not count. Defect
+   types come from setting `production.defect_types`. Permissions `production.daily_log.view` and
+   `production.daily_log.create` (operator: both; site manager: both; planner, QA: view; auditor and
+   system admin: view through VIEW_ALL; owner: all).
+5. **Defects summary** per product and day (good, defects, defect % = defects ÷ (good + defects),
+   by type) on the order and on `/production/defects`.
+6. Navigation: **Production orders** is the first Production item, then **Defects**; the board,
+   work orders and direct batch creation stay reachable, labelled "(detailed)" / "(advanced)".
+
+**Why.** The owner tracks one thing; the batch engine, ledger, QA and traceability controls stay
+exactly as built and tested.
+
+**Consequences.** Not done in this change: feeding the defect rate into the analytics KPI catalogue
+(needs a KPI definition and reconciliation test, ADR-04x analytics rules); unit-of-measure for the
+daily log is "units" (pieces) for every product (A-S2-03). Tests:
+`tests/integration/production/production-orders.test.ts`.

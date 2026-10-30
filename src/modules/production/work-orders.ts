@@ -267,38 +267,46 @@ export async function planWorkOrder(ctx: AuthContext, workOrderId: string) {
   ctx.require("production.work_order.submit");
   return db.transaction(async (tx) => {
     const wo = await lockWorkOrder(tx, ctx, workOrderId);
-    if (wo.status !== "draft") await transitionWorkOrder(tx, ctx, wo, "planned"); // throws 409 with the state words
-    const [product] = await tx.select().from(products).where(eq(products.id, wo.productId)).limit(1);
-    const rev = await getEffectiveFormulaRevision(ctx, wo.productId, wo.plannedStart, { tx });
-    if (!rev || rev.formula.id !== wo.formulaId) {
-      throw new DomainError("validation", `No approved formula revision of ${product.name} is effective on ${wo.plannedStart}. Approve a revision or move the planned start (V-REV).`, {
-        rule: "V-REV",
-        fieldErrors: { plannedStart: "No effective formula revision on this date." },
-      });
-    }
-    const routing = await getEffectiveRouting(ctx, wo.productId, wo.plannedStart, { tx });
-    if (!routing) {
-      throw new DomainError("validation", `${product.name} has no approved routing effective on ${wo.plannedStart}. A routing revision must be approved first (V-REV).`, {
-        rule: "V-REV",
-        fieldErrors: { plannedStart: "No effective routing revision on this date." },
-      });
-    }
-    const now = new Date();
-    await transitionWorkOrder(tx, ctx, wo, "planned", {
-      set: { formulaRevisionId: rev.rev.id, routingRevisionId: routing.rev.id, submittedBy: ctx.userId, submittedAt: now },
-    });
-    const sizeNote = new Decimal(wo.batchSizeBase).eq(rev.rev.referenceBatchSizeG) ? null : `Batch size ${wo.batchSizeBase} g differs from the reference ${rev.rev.referenceBatchSizeG} g; lines scale proportionally.`;
-    await audit(tx, ctx, {
-      action: "production.work_order.planned",
-      entityType: "work_order",
-      entityId: wo.id,
-      entityNumber: wo.workOrderNumber,
-      siteId: wo.siteId,
-      before: { status: "draft" },
-      after: { status: "planned", formulaRevision: `${rev.formula.code} rev ${rev.rev.revisionNo}`, routingRevision: `${routing.routing.code} rev ${routing.rev.revisionNo}`, note: sizeNote },
-    });
-    return { workOrderNumber: wo.workOrderNumber, formulaRevision: `${rev.formula.code} rev ${rev.rev.revisionNo}`, routingRevision: `${routing.routing.code} rev ${routing.rev.revisionNo}` };
+    return planLockedWorkOrder(tx, ctx, wo);
   });
+}
+
+/**
+ * draft → planned in the caller's transaction on a locked work order (shared by planWorkOrder and
+ * the one-step production order approval, ADR-074). The caller has checked the permission.
+ */
+export async function planLockedWorkOrder(tx: Tx, ctx: AuthContext, wo: typeof workOrders.$inferSelect) {
+  if (wo.status !== "draft") await transitionWorkOrder(tx, ctx, wo, "planned"); // throws 409 with the state words
+  const [product] = await tx.select().from(products).where(eq(products.id, wo.productId)).limit(1);
+  const rev = await getEffectiveFormulaRevision(ctx, wo.productId, wo.plannedStart, { tx });
+  if (!rev || rev.formula.id !== wo.formulaId) {
+    throw new DomainError("validation", `No approved formula revision of ${product.name} is effective on ${wo.plannedStart}. Approve a revision or move the planned start (V-REV).`, {
+      rule: "V-REV",
+      fieldErrors: { plannedStart: "No effective formula revision on this date." },
+    });
+  }
+  const routing = await getEffectiveRouting(ctx, wo.productId, wo.plannedStart, { tx });
+  if (!routing) {
+    throw new DomainError("validation", `${product.name} has no approved routing effective on ${wo.plannedStart}. A routing revision must be approved first (V-REV).`, {
+      rule: "V-REV",
+      fieldErrors: { plannedStart: "No effective routing revision on this date." },
+    });
+  }
+  const now = new Date();
+  await transitionWorkOrder(tx, ctx, wo, "planned", {
+    set: { formulaRevisionId: rev.rev.id, routingRevisionId: routing.rev.id, submittedBy: ctx.userId, submittedAt: now },
+  });
+  const sizeNote = new Decimal(wo.batchSizeBase).eq(rev.rev.referenceBatchSizeG) ? null : `Batch size ${wo.batchSizeBase} g differs from the reference ${rev.rev.referenceBatchSizeG} g; lines scale proportionally.`;
+  await audit(tx, ctx, {
+    action: "production.work_order.planned",
+    entityType: "work_order",
+    entityId: wo.id,
+    entityNumber: wo.workOrderNumber,
+    siteId: wo.siteId,
+    before: { status: "draft" },
+    after: { status: "planned", formulaRevision: `${rev.formula.code} rev ${rev.rev.revisionNo}`, routingRevision: `${routing.routing.code} rev ${routing.rev.revisionNo}`, note: sizeNote },
+  });
+  return { workOrderNumber: wo.workOrderNumber, formulaRevision: `${rev.formula.code} rev ${rev.rev.revisionNo}`, routingRevision: `${routing.routing.code} rev ${routing.rev.revisionNo}` };
 }
 
 function shortageMessage(shortages: Shortage[]) {
@@ -322,36 +330,47 @@ export async function releaseWorkOrder(ctx: AuthContext, workOrderId: string, op
           throw new DomainError("separation_of_duties", "You planned this work order; another person with release permission must release it.", ctx.refusalDetails());
         }
       }
-      const [rev] = await tx.select().from(formulaRevisions).where(eq(formulaRevisions.id, wo.formulaRevisionId!)).limit(1);
-      if (!rev || rev.status !== "approved") {
-        throw new DomainError("state", "The formula revision resolved at planning is no longer approved. Cancel this work order and plan a new one (V-REV).", { rule: "V-REV" });
-      }
-      const { picks, shortages } = await reserveWorkOrderMaterials(tx, ctx, wo);
-      const allow = await getSetting(tx, ctx.organizationId, "production.work_order.allow_release_with_shortage", wo.siteId);
-      if (shortages.length && !allow) {
-        throw new DomainError("insufficient_stock", `Not enough released stock to reserve: ${shortageMessage(shortages)}. Nothing was reserved; receive or release stock, or ask the owner to allow release with shortage.`, {
-          shortages,
-        });
-      }
-      const reservations = await insertWorkOrderReservations(tx, ctx, wo, picks);
-      const now = new Date();
-      await transitionWorkOrder(tx, ctx, wo, "released", {
-        set: { approvedBy: ctx.userId, approvedAt: now, approvalNote: opts.note?.trim() || null, releaseShortages: shortages.length ? shortages : null, releasedWithShortage: shortages.length > 0 },
-      });
-      await audit(tx, ctx, {
-        action: "production.work_order.released",
-        entityType: "work_order",
-        entityId: wo.id,
-        entityNumber: wo.workOrderNumber,
-        siteId: wo.siteId,
-        reason: shortages.length ? `Released with shortage: ${shortageMessage(shortages)}` : null,
-        before: { status: "planned" },
-        after: { status: "released", reservations: reservations.map((r) => `${r.reservationNumber} ${r.materialCode} ${r.lotNumber}@${r.locationCode} ${r.qty} ${r.baseUom}`), shortages: shortages.map((s) => `${s.materialCode} short ${s.short}`) },
-      });
-      return { workOrderNumber: wo.workOrderNumber, reservations, shortages };
+      return releaseLockedWorkOrder(tx, ctx, wo, opts.note);
     });
     return result;
   });
+}
+
+/**
+ * planned → released in the caller's transaction on a locked work order (shared by releaseWorkOrder
+ * and the one-step production order approval, ADR-074). The caller has checked the permission and
+ * separation of duties. Throws `insufficient_stock` with `details.shortages` when stock is short and
+ * release with shortage is not allowed; the caller's transaction then rolls back.
+ */
+export async function releaseLockedWorkOrder(tx: Tx, ctx: AuthContext, wo: typeof workOrders.$inferSelect, note?: string | null) {
+  const opts = { note };
+  const [rev] = await tx.select().from(formulaRevisions).where(eq(formulaRevisions.id, wo.formulaRevisionId!)).limit(1);
+  if (!rev || rev.status !== "approved") {
+    throw new DomainError("state", "The formula revision resolved at planning is no longer approved. Cancel this work order and plan a new one (V-REV).", { rule: "V-REV" });
+  }
+  const { picks, shortages } = await reserveWorkOrderMaterials(tx, ctx, wo);
+  const allow = await getSetting(tx, ctx.organizationId, "production.work_order.allow_release_with_shortage", wo.siteId);
+  if (shortages.length && !allow) {
+    throw new DomainError("insufficient_stock", `Not enough released stock to reserve: ${shortageMessage(shortages)}. Nothing was reserved; receive or release stock, or ask the owner to allow release with shortage.`, {
+      shortages,
+    });
+  }
+  const reservations = await insertWorkOrderReservations(tx, ctx, wo, picks);
+  const now = new Date();
+  await transitionWorkOrder(tx, ctx, wo, "released", {
+    set: { approvedBy: ctx.userId, approvedAt: now, approvalNote: opts.note?.trim() || null, releaseShortages: shortages.length ? shortages : null, releasedWithShortage: shortages.length > 0 },
+  });
+  await audit(tx, ctx, {
+    action: "production.work_order.released",
+    entityType: "work_order",
+    entityId: wo.id,
+    entityNumber: wo.workOrderNumber,
+    siteId: wo.siteId,
+    reason: shortages.length ? `Released with shortage: ${shortageMessage(shortages)}` : null,
+    before: { status: "planned" },
+    after: { status: "released", reservations: reservations.map((r) => `${r.reservationNumber} ${r.materialCode} ${r.lotNumber}@${r.locationCode} ${r.qty} ${r.baseUom}`), shortages: shortages.map((s) => `${s.materialCode} short ${s.short}`) },
+  });
+  return { workOrderNumber: wo.workOrderNumber, reservations, shortages };
 }
 
 /** Tops up reservations of a released / in-progress work order after stock arrived (same rules as release). */

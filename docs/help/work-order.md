@@ -1,12 +1,14 @@
 ---
 key: production.work_order
 title: Plan and release a work order
-version: 1
-updated_at: 2026-10-25
+version: 2
+updated_at: 2026-10-30
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
 A work order says what to make, how much and when. Releasing it reserves the materials, and then you create the batches.
+
+Most people use **Production orders** instead: the same order on one simple page, where one **Approve** does plan, release and batch creation together (see "Make a product with a production order"). This page is the detailed view.
 
 ## Create
 

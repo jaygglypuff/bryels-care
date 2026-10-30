@@ -78,6 +78,30 @@ export { workOrderRequirements, type Shortage } from "./work-orders-reserve";
 export { stageMaterial, approveMaterialSubstitution, releaseBatchStagingReservations, getStagingView, listBatchesToStage, canSeeStaging, type StageInput, type SubstitutionInput, type StagingView } from "./staging";
 export { generateBatchSheet, batchSheetData, batchSheets, type BatchSheetKind } from "./staging-documents";
 export { getProductionBoard, moveBoardCard, boardMove, type ProductionBoard, type BoardCard, type BoardColumn, type MoveVerdict, type BoardFilter } from "./board";
+// ADR-074 (S2): one production order (work order + batches) with a simple status, one-step approve and a daily log.
+export {
+  PRODUCTION_ORDER_STATUSES,
+  PRODUCTION_ORDER_LABEL,
+  PRODUCTION_ORDER_CHIP,
+  PRODUCTION_ORDER_STEPS,
+  productionOrderStatus,
+  type ProductionOrderStatus,
+} from "./production-order-status";
+export {
+  createProductionOrder,
+  approveProductionOrder,
+  getProductionOrder,
+  listProductionOrders,
+  nextProductionAction,
+  batchStepWord,
+  shortageLines,
+  type ProductionOrderInput,
+  type ProductionOrderView,
+  type ProductionOrderRow,
+  type ApproveResult,
+  type NextAction,
+} from "./production-orders";
+export { addDailyLog, correctDailyLog, listDailyLogs, defectSummary, defectTypes, type DailyLogEntryInput, type DailyLogRow, type DefectSummary, type DefectSummaryRow } from "./daily-log";
 export {
   buildProductionPlan,
   approveProductionPlan,
