@@ -18,6 +18,7 @@ import {
   packagingLotOptions,
   performPermission,
   progressLabel,
+  waitingWords,
   quarantineLocations,
   signerOptions,
   usableLotsForBatch,
@@ -47,6 +48,7 @@ import {
 } from "./exec-forms";
 import { registerAppHooks } from "@/modules/wiring";
 import { Help } from "@/ui/help/help";
+import { whoCanDo } from "@/modules/identity";
 
 // Execution ↔ QA hooks (idempotent; also registered at server start in src/instrumentation.ts).
 registerAppHooks();
@@ -290,6 +292,21 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
   const ingById = new Map(rec.ingredients.map((i) => [i.id, i]));
 
   const requirePassword = await getSetting(db, ctx.organizationId, "production.sign_off.require_password");
+  const stepHelp = !step ? "production.step" : isWeighingStep(step.stepKind) ? "production.weighing" : step.stepKind === "line_clearance" || step.checklist.length > 0 ? "production.line_clearance" : "production.step";
+  // UX review: an operator who cannot do this step is told who does it (names or roles, never e-mail addresses).
+  const whoDoes = running && step?.isCurrent && !canPerform && step.status !== "awaiting_check" ? waitingWords(await whoCanDo(ctx, performPermission(step.stepKind), batch.siteId)) : null;
+  // UX review: on the weighing step only the first ingredient still to weigh is the green, numbered action.
+  const toWeigh = step && isWeighingStep(step.stepKind) ? ex.ingredients.filter((i) => i.status === "pending" || i.status === "partial") : [];
+  const nextWeighId = toWeigh[0]?.id ?? null;
+  const completeBlocked = !step
+    ? null
+    : isWeighingStep(step.stepKind) && toWeigh.length > 0
+      ? `Weigh all ${ex.ingredients.length} ingredients first (${toWeigh.length} still to weigh).`
+      : step.blockers.length > 0
+        ? step.blockers.length === 1
+          ? step.blockers[0].message
+          : `${step.blockers[0].message} (${step.blockers.length} things still to do before this step is done.)`
+        : null;
   return (
     <SignOffProvider requirePassword={requirePassword}>
     <div className="flex flex-col gap-5">
@@ -309,14 +326,23 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
           }
           actions={
             <>
-              <Help screen="production.weighing" label="Help: weighing" text="Help: weighing" />
-              <Help screen="production.line_clearance" label="Help: line clearance" text="Help: line clearance" />
-              <LinkButton href={`/print/bmr/${batch.id}`} variant="secondary" target="_blank">
-                Print batch record
-              </LinkButton>
-              <LinkButton href={`/production/${batch.id}/closure`} variant="secondary">
-                Close the batch and paper pages
-              </LinkButton>
+              {/* UX review: one visible help for this step; the rest under "More" so the next action stands out. */}
+              <Help screen={stepHelp} label="How to do this step" text="? How to do this step" />
+              <details className="relative" data-testid="batch-more-menu">
+                <summary className="inline-flex min-h-[44px] cursor-pointer list-none items-center gap-1 rounded-full border border-line bg-surface px-4 text-[14px] font-medium text-fg hover:bg-surface-2 [&::-webkit-details-marker]:hidden" aria-label="More actions">
+                  <span aria-hidden>⋯</span> More
+                </summary>
+                <div className="absolute right-0 z-20 mt-1.5 flex w-[min(280px,calc(100vw-2rem))] flex-col gap-1.5 rounded-[14px] border border-line bg-surface p-2 shadow-[0_8px_24px_rgba(28,27,24,.14)]">
+                  <Help screen="production.weighing" label="Help: weighing" text="Help: weighing" />
+                  <Help screen="production.line_clearance" label="Help: line clearance" text="Help: line clearance" />
+                  <LinkButton href={`/print/bmr/${batch.id}`} variant="secondary" target="_blank">
+                    Print batch record
+                  </LinkButton>
+                  <LinkButton href={`/production/${batch.id}/closure`} variant="secondary">
+                    Close the batch and paper pages
+                  </LinkButton>
+                </div>
+              </details>
               {batch.status === "planned" && !batch.workOrderId && ctx.can("production.batch.edit") && <StartBatchForm batchId={batch.id} />}
               {batch.status === "planned" && batch.workOrderId && (
                 <LinkButton href={`/production/staging/${batch.id}`} variant="cta">
@@ -423,7 +449,7 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
 
                 {!running && step.status !== "completed" && batch.status !== "planned" && <p className="text-[13px] text-muted">The batch is {(STATE_LABEL[batch.status] ?? batch.status).toLowerCase()}; steps cannot be worked on.</p>}
                 {running && !step.isCurrent && step.status !== "completed" && <p className="text-[13px] text-muted">Complete the earlier steps first.</p>}
-                {running && step.isCurrent && !canPerform && step.status !== "awaiting_check" && <p className="text-[13px] text-muted">Your role cannot perform this step.</p>}
+                {whoDoes && <p className="text-[14px] text-fg-2" data-testid="who-does-step">{whoDoes} can do this step. You can follow progress here.</p>}
 
                 {/* Line clearance / checklist */}
                 {working && step.checklist.length > 0 && (
@@ -443,7 +469,7 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                                Ingredient {i + 1} of {ex.ingredients.length} · {ing.materialCode}
+                                Ingredient {i + 1} of {ex.ingredients.length}
                               </p>
                               <p className="text-[16px] font-semibold">{ing.materialName}</p>
                               <p className="text-[13px] tabular text-fg-2">
@@ -477,10 +503,18 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
                             </ul>
                           )}
                           {working && open && r && (
-                            <details className="mt-3">
-                              <summary className="flex min-h-[48px] cursor-pointer list-none items-center justify-center rounded-full bg-primary px-4 text-[15px] font-semibold text-white sm:inline-flex">
-                                Weigh {ing.materialName}
-                              </summary>
+                            <details className="mt-3" open={ing.id === nextWeighId && ing.status === "partial" ? true : undefined}>
+                              {ing.id === nextWeighId ? (
+                                <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-center gap-2 rounded-full bg-cta px-5 text-[16px] font-semibold text-white sm:inline-flex [&::-webkit-details-marker]:hidden" data-testid="weigh-next">
+                                  <span className="grid size-6 place-items-center rounded-full bg-white/20 text-[13px]" aria-label="Do this first">1.</span>
+                                  Weigh {ing.materialName}
+                                </summary>
+                              ) : (
+                                <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-center gap-2 rounded-full border border-line bg-surface px-4 text-[14px] font-medium text-fg-2 sm:inline-flex [&::-webkit-details-marker]:hidden">
+                                  Weigh {ing.materialName}
+                                  <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[12px] text-muted">{toWeigh[1]?.id === ing.id ? "Next" : "Later"}</span>
+                                </summary>
+                              )}
                               <WeighForm
                                 batchId={batch.id}
                                 ing={{ id: ing.id, lineNo: ing.lineNo, materialCode: ing.materialCode, materialName: ing.materialName, inciName: r.inciName, theoreticalQtyG: ing.theoreticalQtyG, tolerancePct: r.tolerancePct, minG: r.minG, maxG: r.maxG, dispensedQtyG: ing.dispensedQtyG, status: ing.status, recommended: rec0 ? `${rec0.lotNumber} at ${rec0.locationCode}, exp ${fmtDate(rec0.expiresOn)}` : null }}
@@ -535,7 +569,7 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
                 {working && exceptionable && <ExceptionForm batchId={batch.id} stepNo={step.stepNo} approvers={approvers} />}
 
                 {working && step.stepKind !== "transfer" && step.checklist.length === 0 && (
-                  <CompleteStepForm batchId={batch.id} stepNo={step.stepNo} stepKind={step.stepKind} requiresChecker={step.requiresChecker} checkers={checkers} idem={key()} disabledReason={step.blockers.length ? "Resolve the items above first; the server re-checks when you submit." : null} />
+                  <CompleteStepForm batchId={batch.id} stepNo={step.stepNo} stepKind={step.stepKind} requiresChecker={step.requiresChecker} checkers={checkers} idem={key()} disabledReason={completeBlocked} />
                 )}
 
                 {step.stepKind === "transfer" && step.status !== "completed" && <p className="text-[13px] text-fg-2">Record the yield below, then move the batch to the hold area with the checker.</p>}
@@ -612,18 +646,19 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
         </div>
 
         <div className="flex min-w-0 flex-col gap-5">
-          <Card>
+          <details className="rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)]" data-testid="batch-details">
+            <summary className="min-h-[44px] cursor-pointer py-2.5 text-[14px] font-medium">Details</summary>
             <Dl
               items={[
-                ["Product", `${product.name} (${product.skuCode})`],
-                ["Formula", `${snapshot.formulaCode}, version ${snapshot.revisionNo}${snapshot.routing ? ` · steps ${snapshot.routing.routingCode}, version ${snapshot.routing.revisionNo}` : ""}`],
+                ["Product", product.name],
+                ["Recipe", `${snapshot.formulaName || product.name} (version ${snapshot.revisionNo})`],
                 ["Planned size", `${fmtQty(D(batch.plannedSizeG).div(1000), "kg", 2)}`],
                 ["Started", fmtDateTime(batch.startedAt)],
-                ["Theoretical yield", fmtMass(batch.theoreticalYieldG)],
+                ["Expected output", fmtMass(batch.theoreticalYieldG)],
                 ["Stock updates", ex.postings.consumption || ex.postings.output ? `${ex.postings.consumption ?? 0} materials used · ${ex.postings.output ?? 0} finished goods` : ex.postAtDispense ? "At each weighing" : "When the batch moves to the hold area"],
               ]}
             />
-          </Card>
+          </details>
           <Card>
             <CardTitle>Quality</CardTitle>
             {lastDisposition ? (

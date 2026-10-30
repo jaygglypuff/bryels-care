@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { ArrowRight, Factory, PackagePlus, ScanLine, ShieldCheck, Truck } from "lucide-react";
+import { ArrowRight, ClipboardList, Factory, PackagePlus, ScanLine, ShieldCheck, Truck } from "lucide-react";
 import type { ReactNode } from "react";
 import type { OperatorTile } from "@/modules/analytics";
-import type { ProductionOrderRow } from "@/modules/production";
-import { LinkButton } from "@/ui/core";
+import type { FloorTask } from "@/modules/production";
 import { EmptyState } from "@/ui/core";
+import { TaskCards } from "../production/task-cards";
 
 const ICON: Record<OperatorTile["key"], ReactNode> = {
   receive: <PackagePlus size={26} />,
@@ -14,7 +14,7 @@ const ICON: Record<OperatorTile["key"], ReactNode> = {
   dispatch: <Truck size={26} />,
 };
 
-/** Large task tiles for operators (ux-system operator mode): verbs, live counts, 44 px+ targets. */
+/** Large task tiles for operators without production tasks (warehouse, QA): verbs, live counts, 44 px+ targets. */
 export function OperatorHome({ tiles, siteLabel, updated }: { tiles: OperatorTile[]; siteLabel: string; updated: string }) {
   if (tiles.length === 0)
     return <EmptyState title="No tasks for your role yet">Your role has no task screens at this site. Ask your site manager if you need access.</EmptyState>;
@@ -50,26 +50,61 @@ export function OperatorHome({ tiles, siteLabel, updated }: { tiles: OperatorTil
   );
 }
 
-/** ADR-082 (mockup "Start Task"): the one production step to do next, with a single big button. */
-export function NextTaskCard({ order, more }: { order: ProductionOrderRow; more: number }) {
-  if (order.nextAction.kind !== "link") return null;
+type QuickAction = { href: string; label: string; icon: ReactNode };
+
+/**
+ * "Your tasks today" (UX review, operator mockup): 2–3 count tiles, then one card per batch with ONE
+ * big green button (myFloorTasks), then small quick actions. Replaces the ADR-082 "Your next task"
+ * card: the first card is that task, and batches without a production order are included.
+ */
+export function TasksToday({ tasks, counts, tiles, canDailyCount }: { tasks: FloorTask[]; counts: { forYou: number; weighing: number; waiting: number }; tiles: OperatorTile[]; canDailyCount: boolean }) {
+  const quick: QuickAction[] = [];
+  const scan = tiles.find((t) => t.key === "scan");
+  if (scan) quick.push({ href: scan.href, label: "Scan or search", icon: <ScanLine size={18} aria-hidden /> });
+  if (canDailyCount) quick.push({ href: "/production/today", label: "Daily count", icon: <ClipboardList size={18} aria-hidden /> });
+  for (const t of tiles) if (t.key !== "scan" && t.key !== "batches") quick.push({ href: t.href, label: t.title, icon: ICON[t.key] });
+  const COUNT: [string, number][] = [
+    ["Batches for you", counts.forYou],
+    ["Weighing", counts.weighing],
+    ["Waiting", counts.waiting],
+  ];
   return (
-    <section aria-labelledby="next-task-h" className="mb-5 rounded-[18px] border border-line bg-surface p-5">
-      <p id="next-task-h" className="text-[12px] font-semibold uppercase tracking-wide text-muted">
-        Your next task{order.assignedToMe ? "" : " · nobody has taken this order yet"}
-      </p>
-      <p className="mt-1.5 text-[20px] font-semibold leading-snug text-fg">{order.productName}</p>
-      <p className="text-[14px] text-fg-2">
-        {order.piecesText} · <span className="font-mono text-[12.5px]">{order.number}</span> · {order.statusLabel}
-      </p>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <LinkButton href={order.nextAction.href} variant="cta" size="lg" className="w-full justify-center sm:w-auto">
-          {order.nextAction.label}
-        </LinkButton>
-        <Link href="/production/orders" className="text-[14px] font-medium text-primary-text underline">
-          {more > 1 ? `All my orders (${more})` : "My work"}
-        </Link>
-      </div>
-    </section>
+    <>
+      <ul className="mb-5 grid grid-cols-3 gap-2 sm:gap-3" aria-label="Your tasks in numbers">
+        {COUNT.map(([label, n]) => (
+          <li key={label} className="rounded-[16px] border border-line bg-surface px-3 py-3 sm:px-4">
+            <p className="tabular text-[26px] font-semibold leading-none text-fg">{n}</p>
+            <p className="mt-1.5 text-[12.5px] leading-tight text-fg-2 sm:text-[13px]">{label}</p>
+          </li>
+        ))}
+      </ul>
+      <h2 className="mb-2.5 text-[16px] font-semibold text-fg">Your tasks today</h2>
+      <TaskCards
+        tasks={tasks}
+        empty={<EmptyState title="Nothing for you right now.">Your supervisor plans the next batch.</EmptyState>}
+      />
+      {tasks.length > 0 && (
+        <p className="mt-3 text-[14px]">
+          <Link href="/production/orders" className="font-medium text-primary-text underline">
+            My work
+          </Link>
+        </p>
+      )}
+      {quick.length > 0 && (
+        <nav aria-label="Quick actions" className="mt-6">
+          <h2 className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-muted">Quick actions</h2>
+          <ul className="flex flex-wrap gap-2">
+            {quick.map((q) => (
+              <li key={q.href}>
+                <Link href={q.href} className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-line bg-surface px-4 text-[14px] font-medium text-fg hover:bg-surface-2 [&_svg]:size-[18px]">
+                  {q.icon}
+                  {q.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
+    </>
   );
 }

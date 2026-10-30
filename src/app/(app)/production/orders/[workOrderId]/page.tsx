@@ -29,6 +29,26 @@ const pcs = (v: string) => fmtQty(v, "", D(v).isInteger() ? 0 : 1);
 
 function NextActionCard({ v }: { v: ProductionOrderView }) {
   const a = v.nextAction;
+  // UX review: an approved order without a batch says why nothing can be done, and whom to ask.
+  if (v.noBatchPlanned)
+    return (
+      <Card>
+        <CardTitle>Next step</CardTitle>
+        <div className="flex flex-col gap-2">
+          <p className="text-[15px] text-fg">
+            This order is approved but no batch is planned yet.{" "}
+            {v.canPlanBatch ? "You can plan it." : v.planner ? `Ask ${v.planner.name} to plan it.` : "Ask your supervisor to plan it."}
+          </p>
+          {v.canPlanBatch ? (
+            <LinkButton href={`/production/work-orders/${v.detail.workOrder.id}`} variant="cta" size="lg" className="w-full justify-center sm:w-auto">
+              Plan the batch
+            </LinkButton>
+          ) : (
+            <WhoCanHelp permission="production.batch.create" siteId={v.detail.workOrder.siteId} hideEmails lead="Who can plan it: " />
+          )}
+        </div>
+      </Card>
+    );
   return (
     <Card>
       <CardTitle>Next step</CardTitle>
@@ -211,7 +231,9 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
 
           {tab === "today" && (
             <>
-              {v.canAddLog ? (
+              {v.canAddLog && !v.anyBatchStarted ? (
+                <EmptyState title="Nothing to write yet">You write what happened each day once a batch of this order has started.</EmptyState>
+              ) : v.canAddLog ? (
                 <Card>
                   <CardTitle>What happened today?</CardTitle>
                   <DailyLogForm workOrderId={wo.id} defectTypes={types} batches={batchOptions} today={v.today} />

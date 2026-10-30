@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireContext } from "@/lib/auth/context";
-import { listProductionOrderBoard, listProductionOrders, PRODUCTION_ORDER_LABEL, type ProductionOrderRow } from "@/modules/production";
+import { listProductionOrderBoard, listProductionOrders, myFloorTasks, PRODUCTION_ORDER_LABEL, type ProductionOrderRow } from "@/modules/production";
 import { EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
 import { Help } from "@/ui/help/help";
 import { Forbidden } from "../../forbidden";
+import { TaskCards } from "../task-cards";
 import { ActionButton, NeededBy, OrderStatusChip, OrderWarning } from "./parts";
 
 export const metadata: Metadata = { title: "Production orders" };
@@ -61,6 +62,17 @@ function OrderCard({ r }: { r: ProductionOrderRow }) {
   );
 }
 
+/** Operators get the filters behind one "Show more filters" disclosure; planners see them as before. */
+function FilterWrap({ operator, open, children }: { operator: boolean; open: boolean; children: React.ReactNode }) {
+  if (!operator) return <>{children}</>;
+  return (
+    <details className="mb-4 rounded-[14px] border border-line bg-surface px-3.5 py-1" open={open}>
+      <summary className="min-h-[44px] cursor-pointer py-2.5 text-[14px] font-medium text-primary-text">Show more filters</summary>
+      <div className="pt-1">{children}</div>
+    </details>
+  );
+}
+
 /** Production orders (ADR-074, ADR-080): one card per order with status v2, pieces, needed-by and one next-action button. iPad-first: cards, no wide table. */
 export default async function ProductionOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; view?: string; mine?: string }> }) {
   const ctx = await requireContext();
@@ -72,9 +84,14 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
   const board = sp.view === "board" && !operator;
   // ADR-082: operators see their own orders and the unassigned ones unless they ask for all.
   const mine = sp.mine === "1" || (operator && sp.mine !== "0");
-  const rows = board ? [] : await listProductionOrders(ctx, { status, q: sp.q, mine });
+  // UX review: operators never see drafts or orders waiting for approval; there is nothing for them to do there.
+  const rows = board ? [] : (await listProductionOrders(ctx, { status, q: sp.q, mine })).filter((r) => !operator || r.status !== "draft");
   const columns = board ? await listProductionOrderBoard(ctx) : [];
+  // UX review "To do now": the same task cards as Home (batches with or without an order), first.
+  const tasks = operator && !board && ctx.can("production.batch.view") ? await myFloorTasks(ctx) : null;
   const moreActive = MORE_FILTERS.some(([k]) => k === status);
+  const mainFilters = operator ? MAIN_FILTERS.filter(([k]) => k !== "draft") : MAIN_FILTERS;
+  const filtersOpen = !operator || status !== "open" || !!sp.q || sp.mine === "0";
   return (
     <div>
       <PageHeader
@@ -115,7 +132,15 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
         </div>
       ) : (
         <>
-          <nav className="mb-3 flex flex-wrap gap-1.5" aria-label="Whose orders">
+          {tasks && (
+            <section aria-labelledby="todo-now-h" className="mb-6">
+              <h2 id="todo-now-h" className="mb-2.5 text-[16px] font-semibold text-fg">To do now</h2>
+              <TaskCards tasks={tasks} empty={<EmptyState title="Nothing for you right now.">Your supervisor plans the next batch.</EmptyState>} />
+            </section>
+          )}
+          {operator && <h2 className="mb-2.5 text-[16px] font-semibold text-fg">My orders</h2>}
+          <FilterWrap operator={operator} open={filtersOpen}>
+            <nav className="mb-3 flex flex-wrap gap-1.5" aria-label="Whose orders">
             {[["1", operator ? "Mine and open" : "Mine and unassigned"], ["0", "Everyone's"]].map(([v, label]) => {
               const active = (v === "1") === mine;
               return (
@@ -124,15 +149,15 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
                 </Link>
               );
             })}
-          </nav>
-          <nav className="mb-3 flex flex-wrap gap-1.5" aria-label="Filter by status">
-            {MAIN_FILTERS.map(([k, label]) => (
+            </nav>
+            <nav className="mb-3 flex flex-wrap gap-1.5" aria-label="Filter by status">
+            {mainFilters.map(([k, label]) => (
               <Link key={k} href={`?status=${k}${mine !== operator ? `&mine=${mine ? 1 : 0}` : ""}`} aria-current={k === status ? "page" : undefined} className={cx("min-h-[48px] whitespace-nowrap rounded-full border px-4 py-3 text-[14px] font-medium", k === status ? "border-transparent bg-primary text-white" : "border-line bg-surface text-fg hover:bg-surface-2")}>
                 {label}
               </Link>
             ))}
-          </nav>
-          <details className="mb-4 rounded-[14px] border border-line bg-surface-2/40 px-3.5 py-1" open={moreActive || !!sp.q}>
+            </nav>
+            <details className="mb-4 rounded-[14px] border border-line bg-surface-2/40 px-3.5 py-1" open={moreActive || !!sp.q}>
             <summary className="min-h-[44px] cursor-pointer py-2.5 text-[14px] font-medium">More details</summary>
             <div className="flex flex-col gap-3 pb-3">
               <nav className="flex flex-wrap gap-1.5" aria-label="More filters">
@@ -151,11 +176,12 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
                 <button className="min-h-[44px] rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" type="submit">Search</button>
               </form>
             </div>
-          </details>
+            </details>
+          </FilterWrap>
           {rows.length === 0 ? (
             status === "open" && !sp.q ? (
               operator ? (
-                <EmptyState title="Nothing to make right now">Orders assigned to you, and approved orders nobody has taken yet, appear here.</EmptyState>
+                <EmptyState title="No orders for you right now">Orders assigned to you, and approved orders nobody has taken yet, appear here.</EmptyState>
               ) : (
                 <EmptyState title="No production orders yet" action={canCreate ? <LinkButton href="/production/orders/new">New order</LinkButton> : undefined}>
                   A production order says what to make, how many and by when. Approve it, make it, write each day, and finish it.

@@ -71,7 +71,7 @@ export function ActionButton({ a, size = "lg", approve }: { a: NextAction; size?
         <p className="flex items-center gap-1.5 font-medium">
           <Hourglass size={14} aria-hidden /> {a.title}
         </p>
-        {a.who && <WhoCanHelp permission={a.who.permission} siteId={a.who.siteId} />}
+        {a.who && <WhoCanHelp permission={a.who.permission} siteId={a.who.siteId} hideEmails />}
       </div>
     );
   return null;

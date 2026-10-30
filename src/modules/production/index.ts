@@ -158,3 +158,5 @@ export {
 } from "./flow-facts";
 export { remindCuringReady, dueWaits } from "./curing";
 export { confirmLot } from "./dispensing";
+// UX review (operators): one task per batch the user can act on now or soon, with or without an order.
+export { myFloorTasks, floorTaskCounts, waitingWords, type FloorTask, type FloorTaskKind } from "./floor-tasks";
