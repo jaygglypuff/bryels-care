@@ -15,7 +15,7 @@
 | R2 — owner polish | Overview links to order hub (UX-09) ✓; "To approve" only for approvers (UX-06, UX-29) ✓; trim overview and labels = page titles (UX-19) next | Partly done (ADR-082) |
 | R3 — operator and record layout | Assignee on production orders ✓ (migration 0029, additive); "Your next task" on Home ✓; shared record header on PO, receipt, sales order, shipment ✓ (UX-21); words (UX-17/18) next | Done except words (ADR-082) |
 | R4 — connected workflows | "Journey" panel per record (UX-22); receiving flow opens inspection then put-away in sequence (UX-03); fulfilment under one URL area with redirects (UX-04) | Proposed |
-| R5 — validation and deployment | Playwright run of `tests/e2e/demo-rehearsal.cjs` on the demo, device check at 390/820/1180/1440 px, Railway deploy with backup and rollback (runbook) | After each phase |
+| R5 — layout, usability test and deployment | Usability test with a non-technical owner, operator and warehouse helper (`docs/USABILITY_TEST.md`); automatic layout check of 167 screens × 4 sizes × 3 roles (no sideways scroll, no errors); fixes in ADR-083; deploy to the Railway branch | Done except the "still open" items in the usability test and the e2e run on the deployed demo |
 
 ## R1 affected files
 

@@ -17,7 +17,7 @@ export default async function MovementsPage({ searchParams }: { searchParams: Pr
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Stock movements" subtitle={`${ctx.currentSite.code} · immutable stock ledger, latest 200 postings. Corrections are reversals, never edits.`} />
+      <PageHeader title="Stock movements" subtitle={`${ctx.currentSite.code} · every stock change, newest first (last 200). A mistake is undone with a reversal; nothing is ever edited.`} />
       <nav aria-label="Movement type" className="flex flex-wrap gap-2">
         {[undefined, ...MOVEMENT_TYPES].map((t) => (
           <Link
