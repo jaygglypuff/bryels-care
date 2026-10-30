@@ -136,6 +136,8 @@ description, sensitivity and phase are listed on one row.
 | `masterdata.{site,department,warehouse,production_line,uom,uom_conversion,reason_code}.view` | View organization structure and reference lists (all roles need these for the UI) | N | P1 |
 | `masterdata.site.admin` | Create/edit sites, time zone, numbering defaults | R | P1 |
 | `masterdata.{department,warehouse,production_line,uom,uom_conversion,reason_code}.admin` | Configure structure and reference lists | S | P1 |
+| `masterdata.lookup_value.view` | See the editable dropdown lists (Master data → Lists, ADR-076); every role | N | P9 |
+| `masterdata.lookup_value.admin` | Add, rename, reorder, turn off and delete unused options of the editable lists (system_admin; owner_director holds every string) | S | P9 |
 | `masterdata.location.view`, `masterdata.location.create`, `masterdata.location.edit` | Zones/bins/racks within a warehouse (needed by Slice 1 site setup, S1-01/S1-02) | N | P1 |
 | `masterdata.location.admin` | Designate special locations (receiving/staging, quarantine, hold, rejected, recall); deactivate | S | P1 |
 | `masterdata.product.{view,create,edit,export}` | Products, families, shelf life, storage conditions, status | N (export S) | P1 |

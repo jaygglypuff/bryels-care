@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { type AnyPgColumn, boolean, check, date, index, integer, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import { QTY, createdAt, id } from "./_common";
+import { QTY, createdAt, id, updatedAt } from "./_common";
 import { organizations, sites, users } from "./identity";
 
 export const warehouses = pgTable(
@@ -80,9 +80,18 @@ export const materials = pgTable(
     allocationRule: text("allocation_rule").notNull().default("fefo"),
     status: text("status").notNull().default("active"),
     createdAt: createdAt(),
+    // ADR-076: grouping, usual brand and standard pack size.
+    /** Code of an active value of the editable list `material_category` (lookup_values); null = not grouped. */
+    category: text("category"),
+    /** Usual brand bought (a default; each receipt line records the brand actually delivered). */
+    brand: text("brand"),
+    /** Standard pack (e.g. 18 L tin, 25 kg bag): default quantity when receiving and ordering. Unit converts to base_uom. */
+    standardPackQty: numeric("standard_pack_qty", QTY),
+    standardPackUom: text("standard_pack_uom"),
   },
   (t) => [
     uniqueIndex("materials_org_code_uq").on(t.organizationId, t.code),
+    check("materials_standard_pack_ck", sql`(${t.standardPackQty} is null) = (${t.standardPackUom} is null) and (${t.standardPackQty} is null or ${t.standardPackQty} > 0)`),
     check("materials_kind_ck", sql`${t.materialKind} in ('raw_material', 'intermediate', 'packaging', 'consumable')`),
     check("materials_status_ck", sql`${t.status} in ('draft', 'active', 'blocked', 'discontinued')`),
     check("materials_allocation_ck", sql`${t.allocationRule} in ('fefo', 'fifo')`),
@@ -235,5 +244,42 @@ export const customers = pgTable(
     uniqueIndex("customers_org_code_uq").on(t.organizationId, t.code),
     check("customers_status_ck", sql`${t.status} in ('prospect', 'active', 'on_hold', 'inactive')`),
     check("customers_credit_ck", sql`coalesce(${t.creditLimitAmount}, 0) >= 0 and coalesce(${t.paymentTermsDays}, 0) >= 0 and coalesce(${t.defaultLeadTimeDays}, 0) >= 0`),
+  ],
+);
+
+/**
+ * ADR-076: editable dropdown lists ("Master data → Lists"). One row per option of a list. The lists
+ * themselves (keys, titles, default options, where they are used) are defined in code
+ * (src/modules/masterdata/lookups.ts, LOOKUP_LISTS); lists that drive program logic (statuses, state
+ * machines, location kinds, material class) are never stored here. `code` is the stored value and never
+ * changes (trigger in src/db/sql/s4.sql); `label` is what people see and may be renamed. An option in
+ * use is deactivated, never deleted. While an organization has no rows for a list, the shipped
+ * defaults stand in; the first change writes the defaults as rows.
+ */
+export const LOOKUP_LIST_KEYS = ["product_family", "material_category", "customer_segment", "supplier_category"] as const;
+
+export const lookupValues = pgTable(
+  "lookup_values",
+  {
+    id: id(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    listKey: text("list_key").notNull(),
+    code: text("code").notNull(),
+    label: text("label").notNull(),
+    sortOrder: integer("sort_order").notNull().default(100),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: createdAt(),
+    createdBy: uuid("created_by").references(() => users.id),
+    updatedAt: updatedAt(),
+    updatedBy: uuid("updated_by").references(() => users.id),
+  },
+  (t) => [
+    uniqueIndex("uq_lookup_values_org_list_code").on(t.organizationId, t.listKey, t.code),
+    uniqueIndex("uq_lookup_values_org_list_label").on(t.organizationId, t.listKey, sql`lower(${t.label})`),
+    index("ix_lookup_values_org_list_sort").on(t.organizationId, t.listKey, t.sortOrder),
+    check("ck_lookup_values_list_key", sql`${t.listKey} in (${sql.raw(LOOKUP_LIST_KEYS.map((k) => `'${k}'`).join(","))})`),
+    check("ck_lookup_values_code", sql`length(${t.code}) between 1 and 40`),
+    check("ck_lookup_values_label", sql`length(btrim(${t.label})) between 1 and 60`),
+    check("ck_lookup_values_sort", sql`${t.sortOrder} between 0 and 9999`),
   ],
 );

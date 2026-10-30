@@ -8,6 +8,7 @@ import { DomainError } from "@/lib/errors";
 import { toCsv } from "./csv";
 import { SUPPLIER_QUALITY_STATUSES, SupplierInputSchema, parseOrThrow, type SupplierInput } from "./supplier-schemas";
 import { runInTx, type InTx } from "@/lib/tx";
+import { assertLookupValue } from "./lookups";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -73,7 +74,7 @@ export async function getSupplier(ctx: AuthContext, supplierId: string) {
   const [s] = await db.select().from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.organizationId, ctx.organizationId))).limit(1);
   if (!s) throw new DomainError("not_found", "Supplier not found.");
   const mats = await db
-    .select({ id: supplierMaterials.id, materialCode: materials.code, materialName: materials.name, supplierPartNumber: supplierMaterials.supplierPartNumber, isApproved: supplierMaterials.isApproved, leadTimeDays: supplierMaterials.leadTimeDays })
+    .select({ id: supplierMaterials.id, materialCode: materials.code, materialName: materials.name, supplierPartNumber: supplierMaterials.supplierPartNumber, isApproved: supplierMaterials.isApproved, leadTimeDays: supplierMaterials.leadTimeDays, brand: supplierMaterials.brand, packQty: supplierMaterials.packQty, packUom: supplierMaterials.packUom })
     .from(supplierMaterials)
     .innerJoin(materials, eq(materials.id, supplierMaterials.materialId))
     .where(eq(supplierMaterials.supplierId, s.id))
@@ -108,11 +109,12 @@ export async function createSupplier(ctx: AuthContext, input: SupplierInput, opt
   const v = parseOrThrow(SupplierInputSchema, input);
   await assertUnique(ctx, v, undefined, opts?.tx);
   return runInTx(opts, async (tx) => {
+    const category = await assertLookupValue(tx, ctx.organizationId, "supplier_category", v.category, { field: "category" });
     const [s] = await tx
       .insert(suppliers)
-      .values({ organizationId: ctx.organizationId, ...v, createdBy: ctx.userId, updatedBy: ctx.userId })
+      .values({ organizationId: ctx.organizationId, ...v, category, createdBy: ctx.userId, updatedBy: ctx.userId })
       .returning();
-    await audit(tx, ctx, { action: "masterdata.supplier.created", entityType: "supplier", entityId: s.id, entityNumber: s.code, siteId: null, after: v });
+    await audit(tx, ctx, { action: "masterdata.supplier.created", entityType: "supplier", entityId: s.id, entityNumber: s.code, siteId: null, after: { ...v, category } });
     return s;
   });
 }
@@ -134,13 +136,14 @@ export async function updateSupplier(ctx: AuthContext, supplierId: string, input
       .limit(1);
     if (!before) throw new DomainError("not_found", "Supplier not found.");
     await assertUnique(ctx, v, before.id);
+    const category = v.category === undefined ? before.category : await assertLookupValue(tx, ctx.organizationId, "supplier_category", v.category, { field: "category", keep: before.category });
     const [after] = await tx
       .update(suppliers)
-      .set({ ...v, updatedAt: new Date(), updatedBy: ctx.userId })
+      .set({ ...v, category, updatedAt: new Date(), updatedBy: ctx.userId })
       .where(eq(suppliers.id, before.id))
       .returning();
     const changed: Record<string, { from: unknown; to: unknown }> = {};
-    for (const k of Object.keys(v) as (keyof typeof v)[]) {
+    for (const k of [...Object.keys(v), "category"] as (keyof typeof v)[]) {
       if (before[k] !== after[k]) changed[k] = { from: before[k], to: after[k] };
     }
     await audit(tx, ctx, {

@@ -1,12 +1,13 @@
 import "server-only";
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { db, type DbOrTx, type Tx } from "@/db/client";
-import { CUSTOMER_SEGMENTS, CUSTOMER_STATUSES, customerAddresses, customerContacts, customers, salesOrders, shipments } from "@/db/schema";
+import { CUSTOMER_STATUSES, customerAddresses, customerContacts, customers, salesOrders, shipments } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { runInTx, type InTx } from "@/lib/tx";
 import { DomainError } from "@/lib/errors";
 import type { ExportDefinition } from "@/lib/export";
+import { assertLookupValue, lookupLabels, lookupOptions } from "@/modules/masterdata";
 import { CREDIT_FIELDS, formatAddress, idempotent, isUuid, maskFields } from "./crm-support";
 
 /**
@@ -20,7 +21,8 @@ import { CREDIT_FIELDS, formatAddress, idempotent, isUuid, maskFields } from "./
  */
 
 export type CustomerStatus = (typeof CUSTOMER_STATUSES)[number];
-export type CustomerSegment = (typeof CUSTOMER_SEGMENTS)[number];
+/** Code of an option of the editable list `customer_segment` ("Customer types", Master data → Lists; ADR-076). */
+export type CustomerSegment = string;
 
 /** Customer status machine. Placing or lifting a credit hold is a finance decision. */
 export const CUSTOMER_TRANSITIONS: Record<CustomerStatus, readonly CustomerStatus[]> = {
@@ -32,14 +34,14 @@ export const CUSTOMER_TRANSITIONS: Record<CustomerStatus, readonly CustomerStatu
 const CREDIT_HOLD_MOVES: readonly string[] = ["active>on_hold", "on_hold>active"];
 
 export const CUSTOMER_STATUS_LABEL: Record<CustomerStatus, string> = { prospect: "Prospect", active: "Active", on_hold: "Credit hold", inactive: "Inactive" };
-export const SEGMENT_LABEL: Record<CustomerSegment, string> = {
-  pharmacy_chain: "Pharmacy chain",
-  salon_spa: "Salon / spa",
-  distributor: "Distributor",
-  online_reseller: "Online reseller",
-  retail_store: "Retail store",
-  other: "Other",
-};
+/** Customer types a form offers (active options; `keep` = the customer's current type). */
+export async function customerSegmentOptions(ctx: AuthContext, opts: { keep?: string | null } = {}) {
+  return lookupOptions(db, ctx.organizationId, "customer_segment", opts);
+}
+/** Display names of customer types (an unknown code shows as itself). */
+export async function customerSegmentLabels(ctx: AuthContext) {
+  return lookupLabels(db, ctx.organizationId, "customer_segment");
+}
 
 export type AddressInput = {
   label: string;
@@ -114,7 +116,7 @@ export async function listCustomers(ctx: AuthContext, filters: { q?: string; sta
   const q = filters.q?.trim();
   if (q) where.push(or(ilike(customers.name, `%${q}%`), ilike(customers.code, `%${q}%`))!);
   if (filters.status && (CUSTOMER_STATUSES as readonly string[]).includes(filters.status)) where.push(eq(customers.status, filters.status));
-  if (filters.segment && (CUSTOMER_SEGMENTS as readonly string[]).includes(filters.segment)) where.push(eq(customers.segment, filters.segment));
+  if (filters.segment && filters.segment.length <= 40) where.push(eq(customers.segment, filters.segment));
   const rows = await db
     .select({ c: customers, orders: sql<number>`coalesce(${stats.orders}, 0)`, openOrders: sql<number>`coalesce(${stats.openOrders}, 0)`, lastOrderAt: stats.lastOrderAt })
     .from(customers)
@@ -237,6 +239,7 @@ export async function createCustomer(ctx: AuthContext, input: CustomerInput, opt
         .where(and(eq(customers.organizationId, ctx.organizationId), eq(customers.code, input.code)))
         .limit(1);
       if (dup) throw new DomainError("conflict", `Customer code ${input.code} is already used.`, { field: "code" });
+      const segment = await assertLookupValue(tx, ctx.organizationId, "customer_segment", input.segment, { field: "segment" });
       const [row] = await tx
         .insert(customers)
         .values({
@@ -249,7 +252,7 @@ export async function createCustomer(ctx: AuthContext, input: CustomerInput, opt
           shipToAddress: formatAddress(shipTo),
           minShelfLifeDays: input.minShelfLifeDays,
           status: input.status ?? "active",
-          segment: input.segment ?? null,
+          segment,
           defaultLeadTimeDays: input.defaultLeadTimeDays ?? null,
           notesInternal: input.notesInternal || null,
           creditLimitAmount: input.creditLimitAmount || null,
@@ -298,7 +301,7 @@ export async function updateCustomer(ctx: AuthContext, id: string, input: Custom
     const before = await loadCustomer(tx, ctx, id, true);
     const patch = {
       name: input.name.trim(),
-      segment: input.segment ?? null,
+      segment: await assertLookupValue(tx, ctx.organizationId, "customer_segment", input.segment, { field: "segment", keep: before.segment }),
       minShelfLifeDays: input.minShelfLifeDays,
       defaultLeadTimeDays: input.defaultLeadTimeDays ?? null,
       notesInternal: input.notesInternal?.trim() || null,

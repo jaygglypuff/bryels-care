@@ -141,6 +141,20 @@
       "when": 1793330739020,
       "tag": "0019_s2_custom_sql",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793331264667,
+      "tag": "0020_s4_lists_brand",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793331266855,
+      "tag": "0021_s4_custom_sql",
+      "breakpoints": true
     }
   ]
 }

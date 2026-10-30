@@ -29,12 +29,13 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   }
   const canEdit = ctx.can("masterdata.product.edit") && p.status !== "discontinued";
   const canSku = ctx.can("masterdata.sku.create") && p.status !== "discontinued";
-  const families = await productFamilies(db, ctx.organizationId);
+  const families = await productFamilies(db, ctx.organizationId, { keep: p.family });
+  const familyLabel = families.find((f) => f.value === p.family)?.label.replace(/ \(no longer used\)$/, "") ?? p.family;
   const units = await uomOptions(db, ctx.organizationId);
   const moves = ctx.can("masterdata.product.edit") ? PRODUCT_TRANSITIONS[p.status as ProductStatus] ?? [] : [];
   return (
     <div className="space-y-5">
-      <PageHeader title={`${p.code} · ${p.name}`} subtitle={<>{p.family} · <StateChip status={p.status} /></>} actions={<LinkButton href="/masterdata/products" variant="secondary">All products</LinkButton>} />
+      <PageHeader title={`${p.code} · ${p.name}`} subtitle={<>{familyLabel} · <StateChip status={p.status} /></>} actions={<LinkButton href="/masterdata/products" variant="secondary">All products</LinkButton>} />
       {created === "1" && <Banner tone="ok" title="Product created as draft">Add its SKUs, then activate it.</Banner>}
       <Card>
         <CardTitle>SKUs ({p.skus.length})</CardTitle>
@@ -78,7 +79,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
             <Grid>
               <TextField name="code" label="Code" defaultValue={p.code} mono hint="Fixed once formulas, batches or stock reference it." />
               <TextField name="name" label="Name" defaultValue={p.name} />
-              <SelectField name="family" label="Family" defaultValue={families.find((f) => f.toLowerCase() === p.family.toLowerCase()) ?? families[0]} options={families.map((f) => ({ value: f, label: f }))} />
+              <SelectField name="family" label="Family" defaultValue={p.family} options={families} hint="To add a family, go to Master data → Lists." />
               <TextField name="unitNetMassG" label="Net mass per unit (g)" defaultValue={Number(p.unitNetMassG).toString()} inputMode="decimal" />
               <TextField name="unitsPerBox" label="Units per box" defaultValue={p.unitsPerBox} inputMode="numeric" />
               <TextField name="shelfLifeDays" label="Shelf life (days)" defaultValue={p.shelfLifeDays} inputMode="numeric" />

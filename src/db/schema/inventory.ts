@@ -21,6 +21,8 @@ export const inventoryLots = pgTable(
     productId: uuid("product_id").references(() => products.id),
     supplierName: text("supplier_name"),
     supplierLotNumber: text("supplier_lot_number"),
+    /** ADR-076: brand of a received material lot, as recorded at receipt. */
+    brand: text("brand"),
     manufacturedOn: date("manufactured_on"),
     expiresOn: date("expires_on"),
     /** Retest date: the expiry job puts released lots on hold when it is reached (US-2-10, A-PROC-36). */

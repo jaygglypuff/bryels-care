@@ -7,7 +7,7 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import type { ExportDefinition } from "@/lib/export";
-import { getSetting } from "@/lib/settings";
+import { assertLookupValue, lookupOptions } from "./lookups";
 import { assertTransition, assertUuid, diff, isReferenced, optInt, optText, optUuid, reqText, scanCode, uniqueConflict } from "./org-common";
 import { PRODUCT_STATUSES, PRODUCT_TRANSITIONS, type ProductStatus, isValidGtin } from "./products-shelf-life";
 import { parseInput } from "./schemas";
@@ -120,16 +120,14 @@ export async function getProduct(ctx: AuthContext, productId: string) {
   return { ...p, code: p.skuCode, skus: skuRows };
 }
 
-/** Configured product families (setting masterdata.product_families). */
-export async function productFamilies(q: DbOrTx, organizationId: string) {
-  return getSetting(q, organizationId, "masterdata.product_families");
+/** Product families a form offers (editable list `product_family`, Master data → Lists; ADR-076). */
+export async function productFamilies(q: DbOrTx, organizationId: string, opts: { keep?: string | null } = {}) {
+  return lookupOptions(q, organizationId, "product_family", opts);
 }
 
-async function normaliseFamily(q: DbOrTx, organizationId: string, family: string) {
-  const list = await productFamilies(q, organizationId);
-  const match = list.find((f) => f.toLowerCase() === family.trim().toLowerCase());
-  if (!match) throw new DomainError("validation", `Choose one of the configured product families: ${list.join(", ")}.`, { field: "family" });
-  return match;
+/** The family code to store (code or name of an active option, any case); `keep` = the product's current family. */
+async function normaliseFamily(q: DbOrTx, organizationId: string, family: string, keep?: string) {
+  return (await assertLookupValue(q, organizationId, "product_family", family, { field: "family", required: true, keep }))!;
 }
 
 /** BC:SKU scans resolve product codes: a product code must not be another product's SKU code. */
@@ -163,7 +161,7 @@ export async function updateProduct(ctx: AuthContext, productId: string, raw: un
     const [before] = await tx.select().from(products).where(and(eq(products.id, productId), eq(products.organizationId, ctx.organizationId))).for("update").limit(1);
     if (!before) throw new DomainError("not_found", "Product not found.");
     if (before.status === "discontinued") throw new DomainError("state", "A discontinued product can no longer be edited.");
-    const family = await normaliseFamily(tx, ctx.organizationId, v.family);
+    const family = await normaliseFamily(tx, ctx.organizationId, v.family, before.family);
     if (v.code !== before.skuCode) {
       const ref = await isReferenced(tx, "products", before.id);
       if (ref.referenced) throw new DomainError("state", `Product ${before.skuCode} is in use (${ref.by.slice(0, 3).join(", ")}); its code can no longer change.`, { field: "code" });

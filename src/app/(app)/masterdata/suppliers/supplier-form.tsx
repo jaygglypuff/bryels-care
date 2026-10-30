@@ -21,6 +21,7 @@ export type SupplierFormValues = {
   qualityStatusReason: string | null;
   isActive: boolean;
   notes: string | null;
+  category?: string | null;
 };
 
 const STATUSES = [
@@ -30,7 +31,7 @@ const STATUSES = [
   ["suspended", "Suspended (receipts blocked)"],
 ] as const;
 
-export function SupplierForm({ initial }: { initial?: SupplierFormValues }) {
+export function SupplierForm({ initial, categories }: { initial?: SupplierFormValues; categories: { value: string; label: string }[] }) {
   const [state, dispatch] = useActionState<ActionState, FormData>(saveSupplierAction, null);
   const [status, setStatus] = useState(initial?.qualityStatus ?? "new");
   const fe = state?.fieldErrors ?? {};
@@ -45,6 +46,14 @@ export function SupplierForm({ initial }: { initial?: SupplierFormValues }) {
           </Field>
           <Field label="Name" htmlFor="name" error={fe.name}>
             <Input id="name" name="name" required defaultValue={v("name")} autoComplete="organization" />
+          </Field>
+          <Field label="Category (optional)" htmlFor="category" error={fe.category} hint="To add a category, go to Master data → Lists.">
+            <Select id="category" name="category" defaultValue={initial?.category ?? ""}>
+              <option value="">No category</option>
+              {categories.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </Select>
           </Field>
           <Field label="Contact person" htmlFor="contactName" error={fe.contactName}>
             <Input id="contactName" name="contactName" defaultValue={v("contactName")} />

@@ -453,6 +453,7 @@ async function main() {
   await (await import("./seeds/w3c")).seedW3c(db); // W3C: demo import mapping profiles
   await (await import("./seeds/w3b")).seedW3b(db); // W3B: notification rules, demo scheduled report
   await (await import("./seeds/w4a")).seedW4a(db); // W4A: PO template, approved-supplier list, requests, POs in every state, a supplier return
+  await (await import("./seeds/s4")).seedS4(db, O); // S4 (ADR-076): material categories, brands, standard packs, supplier packs, lot brands
   await (await import("./seeds/w4c")).seedW4c(db); // W4C: CAPA, change control, mock recall drill, PM plans, maintenance work orders
   await (await import("./seeds/w4e")).seedW4e(db, { passwordHash: pw }); // W4E: customer portal tenants, demo portal accounts, a portal order and a quotation
   await (await import("./seeds/w4d")).seedW4d(db); // W4D: demo device registrations and one open sync conflict

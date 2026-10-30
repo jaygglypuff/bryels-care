@@ -1931,7 +1931,7 @@ or discontinued, and codes stop changing once anything uses them.
 | `uoms` | As §3.2 plus `is_active`; seeded g, kg, mg, mL, L, pcs (`installReferenceData`) | Codes are case-sensitive text (`mL`) because lots and movements store the code as text |
 | `uom_conversions` | `factor numeric(24,12)`, `material_id` (density / pack units), `revision_no`, status `pending_approval → approved | rejected; approved → retired`, `submitted_by ≠ approved_by` (CHECK), `is_system` for installed SI rows, `effective_from/to`; partial unique indexes: one approved and one pending per (from, to[, material]) | A row is used in both directions; the reverse direction is used only when exact |
 | `skus` | As §3.2 (basic fields) with `uom_base_id → uoms` (must be a base unit), GTIN check digit validated in the service; status `draft, active, discontinued` | `label_template_id`, `bmr_template_id`, `legacy_number`, image not added; an SKU code may equal only its own product's code (BC:SKU scans still resolve `products.sku_code`) |
-| `products` | `+ status` (default `active` for existing rows; new products start `draft`), `storage_conditions`; `family` validated against setting `masterdata.product_families` | `sku_code` is the product code (column name kept); `product_family` is the configured label, not a CHECK |
+| `products` | `+ status` (default `active` for existing rows; new products start `draft`), `storage_conditions`; `family` validated against the editable list `product_family` (ADR-076; formerly setting `masterdata.product_families`) | `sku_code` is the product code (column name kept); `product_family` is the configured label, not a CHECK |
 | `materials` | `+ common_name`, `retest_days`, `allergen_notes`, `hazard_notes`, `allocation_rule` (default `fefo`), `status` (`draft, active, blocked, discontinued`); CHECK `material_kind in (raw_material, intermediate, packaging, consumable)` | `material_kind` = `material_class` (`raw_material` = raw); `base_uom` text code validated against `uoms` (base units only) instead of `uom_base_id`; the DB default of `requires_coa` stays `false` (W1B), the W2G service defaults new materials to `true` |
 | `reason_codes` | As §3.2 plus `description`, `sort_order`, `is_active`, `is_system`; CHECK code `^[a-z][a-z0-9_]{0,39}$`, `applies_to` non-empty subset of the category list; GIN index on `applies_to` | Seeded with the W1E reprint, W1B receipt and hold, W1C adjustment and count-variance codes, merged by code, plus the migration and undo codes |
 | Custom SQL | `src/db/sql/w2g.sql`, applied as custom migration `0004_w2g_custom_sql` (verbatim copy, drift-tested): `tg_uom_conversions_dimension` (UOM_DIMENSION_MISMATCH), `tg_uom_conversions_immutable`, `tg_uoms_code_immutable` and `tg_reason_codes_code_immutable` | — |
@@ -1939,6 +1939,23 @@ or discontinued, and codes stop changing once anything uses them.
 
 Codes become immutable once any other table references the row (`isReferenced()` reads the
 foreign keys from the catalogue, so later tables count automatically; audit rows do not count).
+
+### 4.7 Editable lists, brand and standard pack (stream S4, ADR-076)
+
+Plain language: the owner can add, rename, reorder and turn off the choices of four dropdowns on
+**Master data → Lists**. Materials now carry a category, a usual brand and a standard pack size; every
+receipt line and the lot it creates record the brand that actually arrived.
+
+| Item | As built | Notes |
+|---|---|---|
+| `lookup_values` (new, `masterdata.ts`) | `organization_id`, `list_key` (CHECK in `product_family, material_category, customer_segment, supplier_category`), `code` (1–40, the stored value), `label` (1–60, what people see), `sort_order` (0–9999), `is_active`, `created_*`, `updated_*`; unique (org, list, code) and (org, list, lower(label)) | No rows = the shipped defaults of `LOOKUP_LISTS` (src/modules/masterdata/lookups.ts) stand in; the first change writes them under a row lock. Code immutable: trigger `tg_lookup_values_code_immutable` (src/db/sql/s4.sql) |
+| `products.family` | Code of a `product_family` option (default codes equal the old setting values `Soap`, `Lotion`…, so no data migration) | Setting `masterdata.product_families` removed; s4.sql copies a stored value into list rows |
+| `customers.segment` | Code of a `customer_segment` option (default codes = the former fixed `CUSTOMER_SEGMENTS`) | No CHECK (there never was one) |
+| `materials` | `+ category` (code of `material_category`), `brand`, `standard_pack_qty numeric(18,6)`, `standard_pack_uom`; CHECK `materials_standard_pack_ck` (both or neither, qty > 0) | Pack unit must convert to `base_uom` through an approved conversion (service) |
+| `suppliers` | `+ category` (code of `supplier_category`) | — |
+| `supplier_materials` | `+ brand`, `pack_qty numeric(18,6)`, `pack_uom`; CHECK `ck_supplier_materials_pack` | Edited with `masterdata.supplier.edit` (not a cost term) |
+| `goods_receipt_lines`, `inventory_lots` | `+ brand` (max 80 in the service); copied line → lot at posting; corrected only through the audited lot edit | Lot label field key `brand` |
+| Not editable lists | statuses / state machines, location kinds, warehouse kinds, material class, discrepancy kinds, document kinds, complaint channels | Program logic depends on them (ADR-076) |
 
 ## 5. Ledger design (ADR-006)
 

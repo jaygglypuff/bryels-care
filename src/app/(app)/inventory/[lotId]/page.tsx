@@ -129,6 +129,7 @@ export default async function LotPage({ params, searchParams }: { params: Promis
               ["On hand", <strong key="oh">{fmtLotQty(onHand.toString(), lot.baseUom)}</strong>],
               ["Supplier", lot.supplierName ?? "—"],
               ["Supplier lot", lot.supplierLotNumber ?? "—"],
+              ...(lot.itemKind === "material" ? [["Brand", lot.brand ?? "—"] as [string, string]] : []),
               ["Manufactured", fmtDate(lot.manufacturedOn)],
               ["Expiry", <Expiry key="ex" date={lot.expiresOn} warnDays={EXPIRY_WARN_DAYS} />],
               ["Received", lot.receipt ? <><Link href={`/inventory/receive/${lot.receipt.id}`} className="text-primary-text hover:underline">{lot.receipt.number}</Link><div className="text-[12px] text-muted">{fmtDateTime(lot.receipt.receivedAt)}</div></> : fmtDateTime(lot.createdAt)],

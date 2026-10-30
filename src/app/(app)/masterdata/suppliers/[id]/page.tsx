@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { db } from "@/db/client";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
-import { getSupplier } from "@/modules/masterdata";
+import { getSupplier, lookupOptions } from "@/modules/masterdata";
 import { Card, CardTitle, Dl, EmptyState, PageHeader, Table, Td } from "@/ui/core";
 import { ReceiptStatusChip, SupplierStatusChip } from "@/ui/receiving";
 import { Banner, Chip } from "@/ui/status";
@@ -65,6 +66,8 @@ export default async function SupplierPage({ params, searchParams }: { params: P
               <li key={m.id}>
                 <Chip tone={m.isApproved ? "ok" : "neu"}>
                   {m.materialCode} · {m.materialName}
+                  {m.brand ? ` · ${m.brand}` : ""}
+                  {m.packQty ? ` · ${Number(m.packQty).toLocaleString("en-PH", { maximumFractionDigits: 6 })} ${m.packUom}` : ""}
                   {m.isApproved ? "" : " (not yet approved)"}
                 </Chip>
               </li>
@@ -94,7 +97,7 @@ export default async function SupplierPage({ params, searchParams }: { params: P
       {ctx.can("masterdata.supplier.edit") && (
         <div>
           <h2 className="mb-3 font-display text-[17px] font-semibold">Edit supplier</h2>
-          <SupplierForm initial={s} />
+          <SupplierForm initial={s} categories={await lookupOptions(db, ctx.organizationId, "supplier_category", { keep: s.category })} />
         </div>
       )}
     </div>

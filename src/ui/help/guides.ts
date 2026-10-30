@@ -34,6 +34,8 @@ export const GUIDE_FILES: Record<string, string> = {
   "sales.return": "return.md",
   "platform.import": "import.md",
   "analytics.reports": "run-a-report.md",
+  // ADR-076: Master data → Lists
+  "masterdata.lists": "lists.md",
 };
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");

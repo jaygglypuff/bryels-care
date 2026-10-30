@@ -1,7 +1,7 @@
 import { db } from "@/db/client";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { MATERIAL_CLASS_LABELS, MATERIAL_TRANSITIONS, getMaterial, uomOptions, type MaterialClass, type MaterialStatus } from "@/modules/masterdata";
+import { MATERIAL_CLASS_LABELS, MATERIAL_TRANSITIONS, getMaterial, lookupLabels, materialFormOptions, uomOptions, type MaterialClass, type MaterialStatus } from "@/modules/masterdata";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -28,10 +28,13 @@ export default async function MaterialPage({ params, searchParams }: { params: P
   }
   const canEdit = ctx.can("masterdata.material.edit") && m.status !== "discontinued";
   const baseUnits = await uomOptions(db, ctx.organizationId, { baseOnly: true });
+  const options = await materialFormOptions(ctx, { keepCategory: m.category });
+  const categoryLabel = m.category ? ((await lookupLabels(db, ctx.organizationId, "material_category")).get(m.category) ?? m.category) : null;
+  const pack = m.standardPackQty ? `${Number(m.standardPackQty).toLocaleString("en-PH", { maximumFractionDigits: 6 })} ${m.standardPackUom}` : null;
   const moves = ctx.can("masterdata.material.edit") ? MATERIAL_TRANSITIONS[m.status as MaterialStatus] ?? [] : [];
   return (
     <div className="space-y-5">
-      <PageHeader title={`${m.code} · ${m.name}`} subtitle={<>{MATERIAL_CLASS_LABELS[m.materialKind as MaterialClass] ?? m.materialKind} · base unit {m.baseUom} · <StateChip status={m.status} /></>} actions={<LinkButton href="/masterdata/materials" variant="secondary">All materials</LinkButton>} />
+      <PageHeader title={`${m.code} · ${m.name}`} subtitle={<>{MATERIAL_CLASS_LABELS[m.materialKind as MaterialClass] ?? m.materialKind} · base unit {m.baseUom}{categoryLabel ? ` · ${categoryLabel}` : ""}{m.brand ? ` · brand ${m.brand}` : ""}{pack ? ` · pack ${pack}` : ""} · <StateChip status={m.status} /></>} actions={<LinkButton href="/masterdata/materials" variant="secondary">All materials</LinkButton>} />
       {created === "1" && <Banner tone="ok" title="Material created">It can now be received and used in formulas.</Banner>}
       {m.warnings.map((w) => (
         <Banner key={w} tone="warn" title="Check before go-live">{w}</Banner>
@@ -40,7 +43,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
         <CardTitle>Material details</CardTitle>
         {canEdit ? (
           <ActionForm action={saveMaterialAction} submitLabel="Save material" hidden={{ _id: m.id }}>
-            <MaterialFields baseUnits={baseUnits} d={m} locked={m.inUse} />
+            <MaterialFields baseUnits={baseUnits} options={options} d={m} locked={m.inUse} />
           </ActionForm>
         ) : (
           <ReadOnlyNote what="this material" />

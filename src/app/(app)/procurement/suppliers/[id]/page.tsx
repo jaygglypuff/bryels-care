@@ -7,7 +7,7 @@ import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, PageHeader, 
 import { ActionForm } from "@/ui/form";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
-import { decideChangeAction, proposeChangeAction, proposePairAction, termsAction, withdrawChangeAction } from "../../actions";
+import { decideChangeAction, packAction, proposeChangeAction, proposePairAction, termsAction, withdrawChangeAction } from "../../actions";
 import { SubNav, money } from "../../_ui";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +59,8 @@ export default async function SupplierAslPage({ params }: { params: Promise<{ id
                     <Chip tone={r.isApproved ? "ok" : r.suspendedReason ? "bad" : "neu"}>{r.isApproved ? "Approved" : r.suspendedReason ? "Suspended" : "Not approved"}</Chip>
                   </div>
                   <p className="mt-1 text-[13px] text-muted">
+                    {r.brand && `Brand ${r.brand} · `}
+                    {r.packQty && `Pack ${Number(r.packQty).toLocaleString("en-PH", { maximumFractionDigits: 6 })} ${r.packUom} · `}
                     Lead time {r.leadTimeDays ?? "—"} d · MOQ {r.moqQty ? `${Number(r.moqQty)} ${r.moqUom}` : "—"}
                     {seePrices && ` · price ${r.unitPrice ? `${money(r.unitPrice, r.currency ?? "PHP")}/${r.priceUom}` : "—"}${r.priceEffectiveFrom ? ` from ${fmtDate(r.priceEffectiveFrom)}` : ""}`}
                     {r.approvedAt && ` · decided ${fmtDate(r.approvedAt)}`}
@@ -97,6 +99,22 @@ export default async function SupplierAslPage({ params }: { params: Promise<{ id
                         </ActionForm>
                       </details>
                     )
+                  )}
+                  {canPropose && (
+                    <details className="mt-2">
+                      <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-[13px] text-primary-text">Brand and pack size</summary>
+                      <ActionForm action={packAction} hidden={{ supplierMaterialId: r.id }} submit="Save brand and pack" variant="secondary" className="mt-2 grid gap-2 sm:grid-cols-3 sm:items-end">
+                        <Field label="Brand (optional)" htmlFor={`b-${r.id}`} hint="Filled in when receiving from this supplier.">
+                          <Input id={`b-${r.id}`} name="brand" defaultValue={r.brand ?? ""} maxLength={80} placeholder="e.g. Golden Palm" />
+                        </Field>
+                        <Field label="Pack size (optional)" htmlFor={`pq-${r.id}`} hint="e.g. 18 for an 18 L tin.">
+                          <Input id={`pq-${r.id}`} name="packQty" inputMode="decimal" defaultValue={r.packQty ? String(Number(r.packQty)) : ""} />
+                        </Field>
+                        <Field label="Pack unit" htmlFor={`pk-${r.id}`}>
+                          <Input id={`pk-${r.id}`} name="packUom" defaultValue={r.packUom ?? ""} placeholder={r.baseUom} />
+                        </Field>
+                      </ActionForm>
+                    </details>
                   )}
                   {canTerms && (
                     <details className="mt-2">

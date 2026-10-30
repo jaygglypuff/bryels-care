@@ -11,7 +11,7 @@ export const metadata = { title: "Receive materials" };
 export default async function ReceivePage() {
   const ctx = await requireContext();
   if (!ctx.can("procurement.goods_receipt.create")) return <Forbidden what="receiving materials" />;
-  const { materials, locations, suppliers, reasonCodes } = await receivingFormData(ctx);
+  const { materials, locations, suppliers, reasonCodes, supplierPacks } = await receivingFormData(ctx);
   const defaultLocation = locations.find((l) => l.kind === "quarantine") ?? locations.find((l) => l.kind !== "storage") ?? locations[0];
   return (
     <div className="mx-auto max-w-3xl">
@@ -36,6 +36,7 @@ export default async function ReceivePage() {
           materials={materials}
           locations={locations}
           suppliers={suppliers}
+          supplierPacks={supplierPacks}
           reasonCodes={reasonCodes}
           defaultLocationId={defaultLocation.id}
           canPost={ctx.can("procurement.goods_receipt.post")}

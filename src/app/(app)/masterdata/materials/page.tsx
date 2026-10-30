@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
-import { MATERIAL_CLASSES, MATERIAL_CLASS_LABELS, MATERIAL_STATUSES, listMaterialMaster, type MaterialClass } from "@/modules/masterdata";
+import { db } from "@/db/client";
+import { MATERIAL_CLASSES, MATERIAL_CLASS_LABELS, MATERIAL_STATUSES, listMaterialMaster, lookupLabels, type MaterialClass } from "@/modules/masterdata";
 import { Card, EmptyState, Input, LinkButton, PageHeader, Select, Table, Td } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { fmtLotQty } from "@/ui/inventory/bits";
@@ -9,14 +10,15 @@ import { StateChip } from "../_org/ui";
 
 export const metadata = { title: "Materials" };
 
-export default async function MaterialsPage({ searchParams }: { searchParams: Promise<{ created?: string; q?: string; kind?: string; status?: string }> }) {
+export default async function MaterialsPage({ searchParams }: { searchParams: Promise<{ created?: string; q?: string; kind?: string; status?: string; category?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("masterdata.material.view")) return <Forbidden what="materials" />;
   const sp = await searchParams;
-  const rows = await listMaterialMaster(ctx, { q: sp.q, materialKind: sp.kind, status: sp.status });
+  const rows = await listMaterialMaster(ctx, { q: sp.q, materialKind: sp.kind, status: sp.status, category: sp.category });
+  const categories = await lookupLabels(db, ctx.organizationId, "material_category");
   const canCreate = ctx.can("masterdata.material.create");
-  const filtered = !!(sp.q || sp.kind || sp.status);
-  const qs = new URLSearchParams(Object.entries({ q: sp.q ?? "", materialKind: sp.kind ?? "", status: sp.status ?? "" }).filter(([, v]) => v)).toString();
+  const filtered = !!(sp.q || sp.kind || sp.status || sp.category);
+  const qs = new URLSearchParams(Object.entries({ q: sp.q ?? "", materialKind: sp.kind ?? "", status: sp.status ?? "", category: sp.category ?? "" }).filter(([, v]) => v)).toString();
   return (
     <div className="space-y-5">
       <PageHeader
@@ -38,7 +40,7 @@ export default async function MaterialsPage({ searchParams }: { searchParams: Pr
         <form method="get" className="flex flex-wrap items-end gap-3">
           <label className="flex min-w-[160px] flex-1 flex-col gap-1 text-[13px]">
             Search
-            <Input name="q" defaultValue={sp.q} placeholder="Code, name, INCI or common name" />
+            <Input name="q" defaultValue={sp.q} placeholder="Code, name, INCI, common name or brand" />
           </label>
           <label className="flex flex-col gap-1 text-[13px]">
             Class
@@ -46,6 +48,15 @@ export default async function MaterialsPage({ searchParams }: { searchParams: Pr
               <option value="">All</option>
               {MATERIAL_CLASSES.map((k) => (
                 <option key={k} value={k}>{MATERIAL_CLASS_LABELS[k]}</option>
+              ))}
+            </Select>
+          </label>
+          <label className="flex flex-col gap-1 text-[13px]">
+            Category
+            <Select name="category" defaultValue={sp.category ?? ""}>
+              <option value="">All</option>
+              {[...categories].map(([code, label]) => (
+                <option key={code} value={code}>{label}</option>
               ))}
             </Select>
           </label>
@@ -81,7 +92,7 @@ export default async function MaterialsPage({ searchParams }: { searchParams: Pr
                     </div>
                     <p className="font-medium">{m.name}</p>
                     <p className="mt-1 text-[12px] text-muted">
-                      {MATERIAL_CLASS_LABELS[m.materialKind as MaterialClass] ?? m.materialKind} · {m.baseUom} · on hand {fmtLotQty(m.onHand, m.baseUom)}
+                      {m.category ? `${categories.get(m.category) ?? m.category} · ` : ""}{m.brand ? `${m.brand} · ` : ""}{MATERIAL_CLASS_LABELS[m.materialKind as MaterialClass] ?? m.materialKind} · {m.baseUom} · on hand {fmtLotQty(m.onHand, m.baseUom)}
                     </p>
                     {m.warnings.length > 0 && <p className="mt-1 text-[12px] text-[var(--warn-fg)]">INCI name missing</p>}
                   </Card>
@@ -96,7 +107,7 @@ export default async function MaterialsPage({ searchParams }: { searchParams: Pr
                   <Td className="font-mono font-semibold">
                     <Link className="text-primary-text hover:underline" href={`/masterdata/materials/${m.id}`}>{m.code}</Link>
                   </Td>
-                  <Td>{m.name}{m.storageConditions && <div className="text-[12px] text-muted">{m.storageConditions}</div>}</Td>
+                  <Td>{m.name}{(m.category || m.brand) && <div className="text-[12px] text-muted">{[m.category ? (categories.get(m.category) ?? m.category) : null, m.brand ? `Brand: ${m.brand}` : null].filter(Boolean).join(" · ")}</div>}{m.storageConditions && <div className="text-[12px] text-muted">{m.storageConditions}</div>}</Td>
                   <Td className="text-[12px]">{m.inciName ?? (m.warnings.length ? <Chip tone="warn">Missing</Chip> : <span className="text-muted">—</span>)}</Td>
                   <Td><Chip tone={m.materialKind === "packaging" ? "info" : m.materialKind === "intermediate" ? "appr" : "neu"}>{MATERIAL_CLASS_LABELS[m.materialKind as MaterialClass] ?? m.materialKind}</Chip></Td>
                   <Td>{m.baseUom}</Td>

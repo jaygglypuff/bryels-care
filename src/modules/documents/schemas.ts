@@ -95,6 +95,8 @@ export const LABEL_FIELD_KEYS = [
   "packer",
   "customer_marks",
   "box_of",
+  // ADR-076: brand of a received material lot
+  "brand",
 ] as const;
 export type LabelFieldKey = (typeof LABEL_FIELD_KEYS)[number];
 
@@ -108,7 +110,7 @@ export type LabelFields = z.infer<typeof labelFieldsSchema>;
 
 /** Default field sets per applies_to (docs/reports-and-templates.md §8.3). */
 export const DEFAULT_LABEL_FIELDS: Record<(typeof LABEL_APPLIES_TO)[number], LabelFieldKey[]> = {
-  material: ["item_name", "inci_name", "supplier", "supplier_lot", "received", "expiry", "quantity", "storage", "status_word", "scan_to_verify"],
+  material: ["item_name", "inci_name", "supplier", "brand", "supplier_lot", "received", "expiry", "quantity", "storage", "status_word", "scan_to_verify"],
   wip: ["item_name", "batch", "manufactured", "expiry", "quantity", "status_word", "scan_to_verify"],
   finished_good: ["item_name", "batch", "manufactured", "expiry", "quantity", "status_word", "scan_to_verify"],
   carton: ["item_name", "batch", "expiry", "quantity", "packed", "packer", "customer_marks", "box_of", "status_word", "scan_to_verify"],

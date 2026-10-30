@@ -11,7 +11,7 @@ import { isUuid } from "./lots";
 import { getInventorySetting } from "./policy";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const EDITABLE = ["manufacturedOn", "expiresOn", "supplierLotNumber", "supplierName"] as const;
+const EDITABLE = ["manufacturedOn", "expiresOn", "supplierLotNumber", "supplierName", "brand"] as const;
 
 export type LotAttributesInput = Partial<Record<(typeof EDITABLE)[number], string | null>> & { reason: string };
 
@@ -41,7 +41,9 @@ export async function editLotAttributes(ctx: AuthContext, lotId: string, input: 
       expiresOn: input.expiresOn === undefined ? lot.expiresOn : input.expiresOn || null,
       supplierLotNumber: input.supplierLotNumber === undefined ? lot.supplierLotNumber : input.supplierLotNumber?.trim() || null,
       supplierName: input.supplierName === undefined ? lot.supplierName : input.supplierName?.trim() || null,
+      brand: input.brand === undefined ? lot.brand : input.brand?.trim() || null,
     };
+    if (next.brand && next.brand.length > 80) throw new DomainError("validation", "Brand: use at most 80 characters.", { fieldErrors: { brand: "Use at most 80 characters." } });
     if (next.manufacturedOn && next.expiresOn && next.expiresOn < next.manufacturedOn) throw new DomainError("validation", "The expiry date cannot be before the manufacture date.", { fieldErrors: { expiresOn: "Must be on or after the manufacture date." } });
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};

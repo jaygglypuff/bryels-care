@@ -34,6 +34,8 @@ export const suppliers = pgTable(
     qualityStatusReason: text("quality_status_reason"),
     isActive: boolean("is_active").notNull().default(true),
     notes: text("notes"),
+    /** ADR-076: code of an active value of the editable list `supplier_category`; null = not grouped. */
+    category: text("category"),
     createdAt: createdAt(),
     createdBy: uuid("created_by").notNull().references(() => users.id),
     updatedAt: updatedAt(),
@@ -78,8 +80,13 @@ export const supplierMaterials = pgTable(
     currency: char("currency", { length: 3 }),
     priceEffectiveFrom: date("price_effective_from"),
     updatedBy: uuid("updated_by").references(() => users.id),
+    /** ADR-076: brand this supplier delivers for the material and its pack size (defaults when receiving and ordering). */
+    brand: text("brand"),
+    packQty: numeric("pack_qty", QTY),
+    packUom: text("pack_uom"),
   },
   (t) => [
+    check("ck_supplier_materials_pack", sql`(${t.packQty} is null) = (${t.packUom} is null) and (${t.packQty} is null or ${t.packQty} > 0)`),
     uniqueIndex("uq_supplier_materials_pair").on(t.supplierId, t.materialId),
     index("ix_supplier_materials_material").on(t.materialId),
     check("ck_supplier_materials_requested", sql`(${t.requestedBy} is null) = (${t.requestedAt} is null)`),
@@ -167,6 +174,8 @@ export const goodsReceiptLines = pgTable(
     /** Put-away location at posting (receiving, quarantine or storage kind). */
     locationId: uuid("location_id").notNull().references(() => locations.id),
     supplierLotNumber: text("supplier_lot_number"),
+    /** ADR-076: brand on the delivered containers (copied to the lot at posting). */
+    brand: text("brand"),
     manufacturedOn: date("manufactured_on"),
     expiresOn: date("expires_on"),
     retestOn: date("retest_on"),

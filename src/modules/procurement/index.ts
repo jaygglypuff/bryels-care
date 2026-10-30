@@ -11,6 +11,8 @@ export {
   decideAslChange,
   withdrawAslChange,
   updateSupplierTerms,
+  updateSupplierMaterialPack,
+  type PackInput,
   assertAslApproved,
   approvedMaterialsFor,
   aslMaterialOptions,
