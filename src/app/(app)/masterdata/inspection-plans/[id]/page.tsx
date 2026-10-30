@@ -7,6 +7,7 @@ import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td } fr
 import { Forbidden } from "../../../forbidden";
 import { decideInspectionPlanAction, newInspectionPlanRevisionAction, submitInspectionPlanAction } from "../../_eng/actions";
 import { CommandForm, DecisionForm } from "../../_eng/forms";
+import { DeleteDraftButton } from "../../../delete-draft-button";
 import { ApprovalPanel, EffectiveRange, VerifyBanner, VersionChip } from "../../_eng/ui";
 import { PlanTestEditor } from "./test-editor";
 
@@ -83,6 +84,11 @@ export default async function InspectionPlanPage({ params }: { params: Promise<{
           {ctx.can("quality.inspection_plan.edit") && (
             <div className="mt-4">
               <CommandForm action={submitInspectionPlanAction} hidden={{ id: p.id }} label="Submit for approval" variant="cta" confirmText="Save the draft first. A second QA user must approve the plan." />
+            </div>
+          )}
+          {!p.submittedAt && (ctx.can("quality.inspection_plan.edit") || ctx.can("quality.inspection_plan.create")) && (
+            <div className="mt-4">
+              <DeleteDraftButton kind="inspection_plan" id={p.id} what="this draft plan and its tests" />
             </div>
           )}
         </Card>

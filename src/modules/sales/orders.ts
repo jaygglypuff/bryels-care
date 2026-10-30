@@ -21,6 +21,7 @@ import {
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
+import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import type { ExportDefinition } from "@/lib/export";
 import { nextNumber } from "@/lib/numbering";
 import { D } from "@/lib/qty";
@@ -922,3 +923,28 @@ export const ordersExport: ExportDefinition<{ status?: string }, OrderExportRow>
   siteScope: (ctx) => [ctx.currentSiteId],
   fileName: () => "sales-orders",
 };
+
+/**
+ * Deletes a sales order that is a never-submitted draft (ADR-075), with its lines and its state
+ * history. Creator (sales.sales_order.create) or sales.sales_order.edit at the order's site.
+ * Audit sales.sales_order.deleted with the order and lines in `before`.
+ */
+export async function deleteDraftOrder(ctx: AuthContext, orderId: string) {
+  return db.transaction(async (tx) => {
+    const o = await lockOrder(tx, ctx, orderId);
+    assertMayDeleteDraft(ctx, { create: "sales.sales_order.create", manage: ["sales.sales_order.edit"] }, o.createdBy, o.siteId);
+    assertNeverSubmittedDraft(`Sales order ${o.orderNumber}`, o.status === "draft", o.submittedAt);
+    const lines = await tx.select().from(salesOrderLines).where(eq(salesOrderLines.salesOrderId, o.id));
+    await hardDeleteDraft(tx, ctx, {
+      table: "sales_orders",
+      id: o.id,
+      what: `Sales order ${o.orderNumber}`,
+      children: [
+        { table: "sales_order_lines", column: "sales_order_id" },
+        { table: "sales_order_state_transitions", column: "sales_order_id" },
+      ],
+      audit: { action: "sales.sales_order.deleted", entityType: "sales_order", entityNumber: o.orderNumber, siteId: o.siteId, before: { ...o, lines } },
+    });
+    return { deleted: o.orderNumber };
+  });
+}

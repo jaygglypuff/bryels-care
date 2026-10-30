@@ -7,6 +7,7 @@ import { ActionForm } from "@/ui/form";
 import { Forbidden } from "../../../forbidden";
 import { cancelRequestAction, decideRequestAction, submitRequestAction } from "../../actions";
 import { PrChip, Steps, SubNav, money } from "../../_ui";
+import { DeleteDraftCard } from "../../../delete-draft-button";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +116,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
             ))}
           </ol>
         </Card>
+        {r.status === "draft" && (ctx.can("procurement.purchase_request.edit") || ctx.can("procurement.purchase_request.create")) && <DeleteDraftCard kind="purchase_request" id={r.id} what="purchase request" />}
       </div>
     </>
   );

@@ -13,6 +13,7 @@ import { FulfilmentPanel } from "./fulfilment-panel"; // W3E
 import { ApproveOrderForm, CancelOrderPanel, ReorderForm, ReturnOrderForm, SubmitOrderForm } from "../orders/order-commercial";
 import { MaskedNote, Money, SalesStatus } from "../orders/sales-ui";
 import { Help } from "@/ui/help/help";
+import { DeleteDraftCard } from "../../delete-draft-button";
 
 export const metadata = { title: "Sales order" };
 
@@ -319,6 +320,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
             )}
           </Card>
         </div>
+        {status === "draft" && (ctx.can("sales.sales_order.edit") || ctx.can("sales.sales_order.create")) && <DeleteDraftCard kind="sales_order" id={order.id} what="sales order" />}
       </div>
     </>
   );

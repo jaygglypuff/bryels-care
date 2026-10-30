@@ -9,6 +9,7 @@ export type NavBadges = Partial<Record<string, number>>;
 
 /** Round icon rail (Dribbble reference): the most common operator actions, one tap away. */
 export const QUICK_ACTIONS: QuickAction[] = [
+  { label: "To approve", href: "/approvals", icon: "approve" }, // ADR-075
   { label: "Scan or look up", href: "/inventory/scan", icon: "scan", permission: "inventory.lot.view" },
   { label: "Receive materials", href: "/inventory/receive", icon: "receive", permission: "procurement.goods_receipt.create" },
   { label: "New batch", href: "/production/new", icon: "batch", permission: "production.batch.create" },
@@ -20,7 +21,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
 
 /** Left navigation (ux-system §3). Planned modules are shown disabled with their phase, never as fake links. */
 export const NAV: NavGroup[] = [
-  { label: "Home", icon: "home", items: [{ label: "Overview", href: "/dashboard" }, { label: "Action centre", href: "/action-centre" }, { label: "Dashboards", href: "/analytics", permission: "analytics.dashboard.view" }, { label: "Trends", href: "/analytics/trends", permission: "analytics.dashboard.view" }, { label: "KPI definitions", href: "/analytics/definitions", permission: "analytics.kpi_definition.view" }, { label: "Notifications", href: "/notifications" }, { label: "Help & guides", href: "/help" }, { label: "My account", href: "/account" }, { label: "Sync & offline", href: "/sync" }] },
+  { label: "Home", icon: "home", items: [{ label: "Overview", href: "/dashboard" }, { label: "To approve", href: "/approvals" }, { label: "Action centre", href: "/action-centre" }, { label: "Dashboards", href: "/analytics", permission: "analytics.dashboard.view" }, { label: "Trends", href: "/analytics/trends", permission: "analytics.dashboard.view" }, { label: "KPI definitions", href: "/analytics/definitions", permission: "analytics.kpi_definition.view" }, { label: "Notifications", href: "/notifications" }, { label: "Help & guides", href: "/help" }, { label: "My account", href: "/account" }, { label: "Sync & offline", href: "/sync" }] },
   {
     // Stock visibility: what is where, in which status, and what is free to use.
     label: "Inventory",

@@ -23,6 +23,7 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { sendEmail } from "@/lib/email";
 import { DomainError } from "@/lib/errors";
+import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { nextNumber } from "@/lib/numbering";
 import { fmtDate } from "@/lib/qty";
 import { getSetting } from "@/lib/settings";
@@ -842,5 +843,33 @@ export async function regeneratePoDocument(ctx: AuthContext, input: { purchaseOr
     await tx.update(purchaseOrders).set({ generatedDocumentId: doc.id }).where(eq(purchaseOrders.id, po.id));
     await audit(tx, ctx, { action: "procurement.purchase_order.document_regenerated", entityType: "purchase_order", entityId: po.id, entityNumber: po.poNumber, siteId: po.siteId, after: { documentNumber: doc.documentNumber } });
     return { documentId: doc.id, documentNumber: doc.documentNumber };
+  });
+}
+
+/**
+ * Deletes a purchase order that is a never-submitted draft (ADR-075), with its lines and state
+ * history. Refused when a line came from a purchase request (cancel it instead, so the request's
+ * history stays whole). Creator (procurement.purchase_order.create) or
+ * procurement.purchase_order.edit at the site. Audit procurement.purchase_order.deleted.
+ */
+export async function deletePurchaseOrderDraft(ctx: AuthContext, input: { purchaseOrderId: string }) {
+  return db.transaction(async (tx) => {
+    const po = await lockPo(tx, ctx, input.purchaseOrderId);
+    const what = `Purchase order ${po.poNumber}`;
+    assertMayDeleteDraft(ctx, { create: "procurement.purchase_order.create", manage: ["procurement.purchase_order.edit"] }, po.createdBy, po.siteId);
+    assertNeverSubmittedDraft(what, po.status === "draft", po.submittedAt);
+    const lines = await tx.select().from(purchaseOrderLines).where(eq(purchaseOrderLines.purchaseOrderId, po.id));
+    if (lines.some((l) => l.purchaseRequestLineId)) throw new DomainError("state", `${what} was made from a purchase request, so it is kept. Cancel it instead.`, { code: "FROM_REQUEST" });
+    await hardDeleteDraft(tx, ctx, {
+      table: "purchase_orders",
+      id: po.id,
+      what,
+      children: [
+        { table: "purchase_order_lines", column: "purchase_order_id" },
+        { table: "purchase_order_state_transitions", column: "purchase_order_id" },
+      ],
+      audit: { action: "procurement.purchase_order.deleted", entityType: "purchase_order", entityNumber: po.poNumber, siteId: po.siteId, before: { ...po, lines } },
+    });
+    return { deleted: po.poNumber };
   });
 }

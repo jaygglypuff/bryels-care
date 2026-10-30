@@ -6,7 +6,8 @@ import { inventoryBalances, locations, sites, warehouseSpecialLocations, warehou
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { assertTransition, assertUuid, bool, diff, isReferenced, optUuid, reqText, scanCode } from "./org-common";
+import { assertTransition, assertUuid, bool, diff, isReferenced, optUuid, optionalCode, reqText, scanCode } from "./org-common";
+import { assignMasterCode } from "@/lib/numbering";
 import { parseInput } from "./schemas";
 import { locationsHoldStock } from "./warehouses";
 import { runInTx, type InTx } from "@/lib/tx";
@@ -49,6 +50,8 @@ const LocationInput = z
     isPickable: bool(true),
   })
   .strict();
+/** Create: the code may be left blank; the next LOC-nnnn is assigned (ADR-075). */
+const CreateLocationInput = LocationInput.extend({ code: optionalCode(scanCode("Location code", "A-03")) }).strict();
 
 export type LocationFilter = { siteId?: string; warehouseId?: string; kind?: string; q?: string; includeInactive?: boolean };
 
@@ -160,17 +163,24 @@ async function assertParent(q: DbOrTx, warehouseId: string, parentId: string | n
 /** `opts.tx`: run inside a caller's transaction (savepoint), e.g. an import chunk (W3C, src/lib/tx.ts). */
 export async function createLocation(ctx: AuthContext, raw: unknown, opts?: InTx) {
   ctx.require("masterdata.location.create");
-  const v = parseInput(LocationInput, raw);
+  const parsed = parseInput(CreateLocationInput, raw);
   return runInTx(opts, async (tx) => {
     const [w] = await tx
       .select({ id: warehouses.id, siteId: warehouses.siteId, isActive: warehouses.isActive, organizationId: sites.organizationId })
       .from(warehouses)
       .innerJoin(sites, eq(sites.id, warehouses.siteId))
-      .where(eq(warehouses.id, v.warehouseId))
+      .where(eq(warehouses.id, parsed.warehouseId))
       .limit(1);
     if (!w || w.organizationId !== ctx.organizationId) throw new DomainError("not_found", "Warehouse not found.", { field: "warehouseId" });
     ctx.requireSite(w.siteId);
     if (!w.isActive) throw new DomainError("state", "This warehouse is inactive.", { field: "warehouseId" });
+    const code =
+      parsed.code ??
+      (await assignMasterCode(tx, ctx.organizationId, "LOC", async (c) => {
+        const r = await tx.select({ id: locations.id }).from(locations).innerJoin(sites, eq(sites.id, locations.siteId)).where(and(eq(sites.organizationId, ctx.organizationId), eq(locations.code, c))).limit(1);
+        return r.length > 0;
+      }));
+    const v = { ...parsed, code };
     await assertOrgUniqueCode(tx, ctx, v.code);
     await assertParent(tx, w.id, v.parentLocationId);
     const [l] = await tx

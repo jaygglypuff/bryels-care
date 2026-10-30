@@ -1,8 +1,8 @@
 ---
 key: start.getting_started
 title: Getting started: from an empty company to a shipped order
-version: 1
-updated_at: 2026-10-25
+version: 2
+updated_at: 2026-10-30
 sop: Training guide for the sandbox; not an SOP
 ---
 
@@ -17,12 +17,12 @@ Tip: when a button is missing or a step says it needs someone else, the message 
 ## 1. Check your site and warehouse
 
 1. Open **Master data → Sites**. You should see **SBX Sandbox Plant**. Fill in the address if you like.
-2. Open **Master data → Locations**. The warehouse already has a receiving dock, quarantine, QA hold, rejected, recall, staging, production, storage, finished goods and dispatch locations. Add more racks with **New location** when you need them.
+2. Open **Master data → Locations**. The warehouse already has a receiving dock, quarantine, QA hold, rejected, recall, staging, production, storage, finished goods and dispatch locations. Add more racks with **+ Add location** when you need them (leave the code empty and the system gives LOC-0001, LOC-0002 ...). Tap **Edit** next to a location to change it.
 3. Optional: **Master data → Production lines** to add your soap or lotion line.
 
 ## 2. Create what you buy (materials)
 
-1. Open **Master data → Materials** and press **New material**.
+1. Open **Master data → Materials** and press **New material**. You may leave the code empty: the system gives the next number (MAT-0001, MAT-0002 ...).
 2. Create at least two raw materials (for example a base oil and a fragrance) and one packaging item (a wrapper or a bottle). Choose the stock unit (g, kg, mL or pcs) and set **lot tracked** and the shelf life.
 3. Activate or approve each material (see the rule at the top) so it can be bought and used.
 

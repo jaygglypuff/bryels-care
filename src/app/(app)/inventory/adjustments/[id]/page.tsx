@@ -12,6 +12,7 @@ import { Forbidden } from "../../../forbidden";
 import { CommandForm } from "../../_kit/forms";
 import { ADJ_STATUS_TONE } from "../../counts/status";
 import { approveAdjustmentAction, cancelAdjustmentAction, postAdjustmentAction, rejectAdjustmentAction, submitAdjustmentAction } from "../actions";
+import { DeleteDraftCard } from "../../../delete-draft-button";
 
 export const metadata = { title: "Stock adjustment" };
 
@@ -87,6 +88,7 @@ export default async function AdjustmentPage({ params }: { params: Promise<{ id:
             {!a.can.submit && !a.can.approve && !a.can.post && !a.can.cancel && <p className="text-[13px] text-muted">{a.status === "posted" ? "Posted. Corrections are a reversal plus a new adjustment." : "Nothing for you to do here."}</p>}
           </div>
         </Card>
+        {a.status === "draft" && (ctx.can("inventory.adjustment.create") || ctx.can("inventory.adjustment.approve")) && <DeleteDraftCard kind="stock_adjustment" id={a.id} what="adjustment" note="Nothing has moved yet: stock only changes when an approved adjustment is posted. You can delete this draft." />}
       </div>
     </div>
   );

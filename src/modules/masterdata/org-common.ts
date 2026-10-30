@@ -1,7 +1,5 @@
 import "server-only";
-import { sql } from "drizzle-orm";
 import { z } from "zod";
-import type { DbOrTx } from "@/db/client";
 import { DomainError } from "@/lib/errors";
 
 /**
@@ -24,7 +22,14 @@ export const scanCode = (label: string, example: string) =>
     .toUpperCase()
     .regex(SCAN_CODE_RE, `${label}: use capital letters, digits, dot, dash or underscore (max 64), e.g. ${example}.`);
 
-export const reqText = (label: string, max: number) => z.string().trim().min(1, `Enter ${label}.`).max(max, `Use at most ${max} characters.`);
+/**
+ * A code the user may leave blank on create (ADR-075): blank becomes null and the service assigns
+ * the next number (MAT-0001...). A typed code still has to match `schema`.
+ */
+export const optionalCode = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (v === undefined || v === null || (typeof v === "string" && v.trim() === "") ? null : v), schema.nullable()) as unknown as z.ZodType<z.output<T> | null, z.input<T> | null | undefined>;
+
+export const reqText =(label: string, max: number) => z.string().trim().min(1, `Enter ${label}.`).max(max, `Use at most ${max} characters.`);
 export const optText = (max: number) =>
   z
     .union([z.string(), z.null(), z.undefined()])
@@ -68,29 +73,8 @@ export function diff<T extends Record<string, unknown>>(before: T, after: T, key
   return { before: b, after: a, changed: Object.keys(a) };
 }
 
-/** Tables whose rows are not "use" of a master record (audit trail, idempotency results). */
-const NOT_USE = new Set(["audit_events", "idempotency_keys", "notifications"]);
-
-/**
- * True when any row of another table references this record through a foreign key. Reads the
- * foreign keys from the catalogue, so tables added by later streams count automatically. Used to
- * make codes immutable once a record is in use (US-1-20..23: "codes immutable after use").
- */
-export async function isReferenced(q: DbOrTx, table: string, id: string, ignore: string[] = []): Promise<{ referenced: boolean; by: string[] }> {
-  const fks = await q.execute<{ tbl: string; col: string }>(sql`
-    select c.conrelid::regclass::text as tbl, a.attname as col
-    from pg_constraint c
-    join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
-    where c.contype = 'f' and c.confrelid = ${table}::regclass and array_length(c.conkey, 1) = 1`);
-  const by: string[] = [];
-  for (const fk of fks) {
-    const tbl = fk.tbl.replace(/"/g, "");
-    if (NOT_USE.has(tbl) || ignore.includes(tbl) || (tbl === table && fk.col === "id")) continue;
-    const r = await q.execute(sql`select 1 from ${sql.identifier(tbl)} where ${sql.identifier(fk.col)} = ${id} limit 1`);
-    if (r.length) by.push(tbl);
-  }
-  return { referenced: by.length > 0, by };
-}
+/** "Is this row referenced anywhere?" (moved to src/lib/references.ts for ADR-075 draft deletes). */
+export { isReferenced } from "@/lib/references";
 
 /** Maps a unique-violation from Postgres to a 409 naming the field. */
 export function uniqueConflict(e: unknown, message: string, field = "code"): never {

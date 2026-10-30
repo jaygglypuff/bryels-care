@@ -18,7 +18,7 @@ const SEGMENTS: [string, string][] = [
 const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
 /** New customer (US-4-01): profile, primary contact and the first address (default ship-to and bill-to). Credit terms are set by finance afterwards. */
-export function CustomerForm({ suggestedCode }: { suggestedCode: string }) {
+export function CustomerForm({ suggestedCode = "" }: { suggestedCode?: string }) {
   const { state, pending, onSubmit } = useActionForm(createCustomerW3dAction);
   const [key] = useState(newKey);
   const [v, setV] = useState<Record<string, string>>({
@@ -47,8 +47,8 @@ export function CustomerForm({ suggestedCode }: { suggestedCode: string }) {
       <Card>
         <CardTitle>Profile</CardTitle>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Customer code" htmlFor="code" error={fe.code} hint="Unique, e.g. CUS-008">
-            <Input {...bind("code")} required maxLength={20} autoCapitalize="characters" />
+          <Field label="Customer code (optional)" htmlFor="code" error={fe.code} hint="Leave blank and the system gives the next number, e.g. CUS-0001.">
+            <Input {...bind("code")} maxLength={20} autoCapitalize="characters" placeholder="Automatic" />
           </Field>
           <Field label="Name" htmlFor="name" error={fe.name}>
             <Input {...bind("name")} required maxLength={120} />

@@ -5,6 +5,7 @@ import { inspectionPlanTests, inspectionPlans, materials, products, users } from
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
+import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { CreateInspectionPlanInput, DecisionInput, SaveInspectionPlanDraftInput, parseInput } from "./schemas";
 import { approvalState, assertDraft, assertVersionTransition, businessToday, canDecideStep, effectiveLabel, isIsoDate, recordApprovalDecision, requireAny, supersedeOverlapping } from "./versioning";
 
@@ -251,4 +252,29 @@ export async function inspectionPlanFormOptions(ctx: AuthContext) {
     db.select({ id: materials.id, name: materials.name, code: materials.code }).from(materials).where(eq(materials.organizationId, ctx.organizationId)).orderBy(asc(materials.code)),
   ]);
   return { products: prods, materials: mats };
+}
+
+/**
+ * Deletes an inspection plan revision that is a never-submitted draft (ADR-075), with its tests.
+ * Creator (quality.inspection_plan.create) or quality.inspection_plan.edit; site-scoped plans
+ * check the site. Audit quality.inspection_plan.deleted with the row and tests in `before`.
+ * Returns the previous revision of the same code (to show next), or null.
+ */
+export async function deleteInspectionPlanDraft(ctx: AuthContext, planId: string): Promise<{ previousPlanId: string | null }> {
+  if (!/^[0-9a-f-]{36}$/i.test(planId)) throw new DomainError("not_found", "Inspection plan not found.");
+  return db.transaction(async (tx) => {
+    const p = await lockPlan(tx, ctx, planId);
+    const what = lbl(p.code, p.revisionNo);
+    assertMayDeleteDraft(ctx, { create: "quality.inspection_plan.create", manage: ["quality.inspection_plan.edit"] }, p.createdBy, p.siteId);
+    assertNeverSubmittedDraft(what, p.status === "draft", p.submittedAt);
+    const tests = await tx.select().from(inspectionPlanTests).where(eq(inspectionPlanTests.inspectionPlanId, p.id));
+    await hardDeleteDraft(tx, ctx, {
+      table: "inspection_plans",
+      id: p.id,
+      what,
+      children: [{ table: "inspection_plan_tests", column: "inspection_plan_id" }],
+      audit: { action: "quality.inspection_plan.deleted", entityType: "inspection_plan", entityNumber: what, siteId: p.siteId, before: { ...p, tests } },
+    });
+    return { previousPlanId: p.supersedesId ?? null };
+  });
 }

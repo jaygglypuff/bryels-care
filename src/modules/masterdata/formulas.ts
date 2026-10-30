@@ -6,6 +6,8 @@ import { bomLines, formulaRevisions, formulas, materials, products, users } from
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
+import { z } from "zod";
+import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { CreateFormulaInput, DecisionInput, RetireInput, SaveFormulaDraftInput, parseInput } from "./schemas";
 import {
   approvalState,
@@ -337,16 +339,40 @@ export async function retireFormulaRevision(ctx: AuthContext, raw: unknown) {
 
 /** Deletes a draft that was never submitted (only the draft and its lines; nothing references it). */
 export async function discardFormulaDraft(ctx: AuthContext, revisionId: string) {
-  ctx.require("masterdata.formula.edit");
+  return deleteFormulaDraft(ctx, revisionId);
+}
+
+/**
+ * Deletes a formula revision that is a never-submitted draft (ADR-075), with its lines. When it is
+ * the formula's only revision the formula goes too (a formula without revisions means nothing).
+ * Creator (masterdata.formula.create) or masterdata.formula.edit. Audit
+ * masterdata.formula_revision.deleted (and masterdata.formula.deleted) with the rows in `before`.
+ * Returns the formula id, or null when the formula was deleted.
+ */
+export async function deleteFormulaDraft(ctx: AuthContext, revisionId: string): Promise<{ formulaId: string | null }> {
+  if (!z.uuid().safeParse(revisionId).success) throw new DomainError("not_found", "Formula revision not found.");
   return db.transaction(async (tx) => {
     const { rev, formula } = await lockRevision(tx, ctx, revisionId);
-    assertDraft(label(formula.code, rev), rev.status);
-    const others = await tx.select({ id: formulaRevisions.id }).from(formulaRevisions).where(and(eq(formulaRevisions.formulaId, formula.id), sql`${formulaRevisions.id} <> ${rev.id}`));
-    if (!others.length) throw new DomainError("state", "This is the only revision of the formula; edit it instead of discarding it.");
-    await tx.delete(bomLines).where(eq(bomLines.formulaRevisionId, rev.id));
-    await tx.delete(formulaRevisions).where(eq(formulaRevisions.id, rev.id));
-    await audit(tx, ctx, { action: "masterdata.formula_revision.discarded", entityType: "formula_revision", entityId: rev.id, entityNumber: label(formula.code, rev), siteId: null, before: { status: "draft", revisionNo: rev.revisionNo } });
-    return { formulaId: formula.id };
+    const what = label(formula.code, rev);
+    assertMayDeleteDraft(ctx, { create: "masterdata.formula.create", manage: ["masterdata.formula.edit"] }, rev.createdBy, null);
+    assertNeverSubmittedDraft(what, rev.status === "draft", rev.submittedAt);
+    const lines = await tx.select().from(bomLines).where(eq(bomLines.formulaRevisionId, rev.id));
+    await hardDeleteDraft(tx, ctx, {
+      table: "formula_revisions",
+      id: rev.id,
+      what,
+      children: [{ table: "bom_lines", column: "formula_revision_id" }],
+      audit: { action: "masterdata.formula_revision.deleted", entityType: "formula_revision", entityNumber: what, siteId: null, before: { ...rev, lines } },
+    });
+    const others = await tx.select({ id: formulaRevisions.id }).from(formulaRevisions).where(eq(formulaRevisions.formulaId, formula.id)).limit(1);
+    if (others.length) return { formulaId: formula.id };
+    await hardDeleteDraft(tx, ctx, {
+      table: "formulas",
+      id: formula.id,
+      what: `Formula ${formula.code}`,
+      audit: { action: "masterdata.formula.deleted", entityType: "formula", entityNumber: formula.code, siteId: null, before: formula },
+    });
+    return { formulaId: null };
   });
 }
 

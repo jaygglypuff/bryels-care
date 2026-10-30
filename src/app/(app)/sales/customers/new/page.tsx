@@ -1,5 +1,4 @@
 import { requireContext } from "@/lib/auth/context";
-import { suggestCustomerCode } from "@/modules/sales";
 import { PageHeader } from "@/ui/core";
 import { Forbidden } from "../../../forbidden";
 import { CustomerForm } from "./customer-form";
@@ -12,7 +11,7 @@ export default async function NewCustomerPage() {
   return (
     <>
       <PageHeader title="New customer" subtitle="Fictional demo data only in development." />
-      <CustomerForm suggestedCode={await suggestCustomerCode(ctx)} />
+      <CustomerForm />
     </>
   );
 }

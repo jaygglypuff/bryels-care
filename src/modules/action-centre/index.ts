@@ -4,3 +4,5 @@ export { registerActionItemSource, detectAll, type Candidate, type ActionItemSou
 export { refreshActionItems, listActionItems, actionItemCounts, acknowledgeActionItem, actionItemHistory, canSeeItem, type ActionItemView, type RefreshResult } from "./items";
 export { listNotificationRules, saveNotificationRule, ruleRoleOptions, RuleInput } from "./rules";
 export { platformActionCentreSweepJob } from "./jobs";
+// ADR-075: the "To approve" page and its badge
+export { listMyApprovals, myApprovalCount, type ApprovalRow } from "./approvals";

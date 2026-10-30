@@ -6,6 +6,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { idempotent } from "./idempotency";
+import { assignMasterCode } from "@/lib/numbering";
 import { CreateEquipmentInput, DecisionInput, EquipmentStatusInput, OverrideRequestInput, ServiceRecordInput, parseInput } from "./schemas";
 import { addDays, approvalState, businessToday, canDecideStep, recordApprovalDecision, requireAny } from "./versioning";
 
@@ -141,11 +142,12 @@ export async function createEquipment(ctx: AuthContext, raw: unknown) {
   const input = parseInput(CreateEquipmentInput, raw);
   ctx.requireSite(input.siteId);
   return db.transaction(async (tx) => {
-    const [dup] = await tx.select({ id: equipment.id }).from(equipment).where(and(eq(equipment.organizationId, ctx.organizationId), eq(equipment.code, input.code)));
-    if (dup) throw new DomainError("conflict", `Equipment code ${input.code} is already used.`, { fieldErrors: { code: "This code is already used." } });
+    const taken = async (c: string) => (await tx.select({ id: equipment.id }).from(equipment).where(and(eq(equipment.organizationId, ctx.organizationId), eq(equipment.code, c))).limit(1)).length > 0;
+    if (input.code && (await taken(input.code))) throw new DomainError("conflict", `Equipment code ${input.code} is already used.`, { fieldErrors: { code: "This code is already used." } });
+    const code = input.code ?? (await assignMasterCode(tx, ctx.organizationId, "EQP", taken));
     const [e] = await tx
       .insert(equipment)
-      .values({ ...input, organizationId: ctx.organizationId, status: "in_service", statusChangedBy: ctx.userId, createdBy: ctx.userId })
+      .values({ ...input, code, organizationId: ctx.organizationId, status: "in_service", statusChangedBy: ctx.userId, createdBy: ctx.userId })
       .returning();
     await tx.insert(equipmentStateTransitions).values({ organizationId: ctx.organizationId, siteId: e.siteId, equipmentId: e.id, fromState: null, toState: "in_service", actorId: ctx.userId, reason: "Registered" });
     await audit(tx, ctx, { action: "masterdata.equipment.created", entityType: "equipment", entityId: e.id, entityNumber: e.code, siteId: e.siteId, after: { code: e.code, kind: e.equipmentKind, blockingRule: e.blockingRule } });

@@ -6,6 +6,7 @@ import { customers, priceListLines, priceLists, products, users } from "@/db/sch
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
+import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { notifyRoles } from "@/modules/platform";
 import { approvalProgress, canDecide, decisionsOf, recordDecision, stepRoles } from "./crm-approvals";
 import { businessDate, isUuid, money } from "./crm-support";
@@ -423,4 +424,27 @@ export async function pendingPriceListCount(ctx: AuthContext) {
   if (!ctx.can("sales.price_list.approve")) return 0;
   const rows = await db.select({ id: priceLists.id }).from(priceLists).where(and(eq(priceLists.organizationId, ctx.organizationId), eq(priceLists.status, "pending_approval")));
   return rows.length;
+}
+
+/**
+ * Deletes a price list version that is a never-submitted draft (ADR-075), with its lines. Creator
+ * or another holder of sales.price_list.edit (price lists are organization-wide). Audit
+ * sales.price_list.deleted. Returns the version it was copied from, if any.
+ */
+export async function deleteDraftPriceList(ctx: AuthContext, id: string): Promise<{ previousId: string | null }> {
+  return db.transaction(async (tx) => {
+    const pl = await loadList(tx, ctx, id, true);
+    const what = `Price list ${pl.code} v${pl.versionNo}`;
+    assertMayDeleteDraft(ctx, { manage: ["sales.price_list.edit"] }, pl.createdBy, null);
+    assertNeverSubmittedDraft(what, pl.status === "draft", pl.submittedAt);
+    const lines = await tx.select().from(priceListLines).where(eq(priceListLines.priceListId, pl.id));
+    await hardDeleteDraft(tx, ctx, {
+      table: "price_lists",
+      id: pl.id,
+      what,
+      children: [{ table: "price_list_lines", column: "price_list_id" }],
+      audit: { action: "sales.price_list.deleted", entityType: "price_list", entityNumber: `${pl.code} v${pl.versionNo}`, siteId: null, before: { ...pl, lines } },
+    });
+    return { previousId: pl.supersedesId ?? null };
+  });
 }

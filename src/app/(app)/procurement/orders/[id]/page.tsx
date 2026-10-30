@@ -9,6 +9,7 @@ import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { cancelOrderAction, closeOrderAction, confirmOrderAction, decideOrderAction, regenerateDocumentAction, sendOrderAction, shortCloseLineAction, submitOrderAction } from "../../actions";
 import { PoChip, Steps, SubNav, fmtBase, money } from "../../_ui";
+import { DeleteDraftCard } from "../../../delete-draft-button";
 
 export const dynamic = "force-dynamic";
 
@@ -230,6 +231,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
             ))}
           </ol>
         </Card>
+        {po.status === "draft" && (ctx.can("procurement.purchase_order.edit") || ctx.can("procurement.purchase_order.create")) && <DeleteDraftCard kind="purchase_order" id={po.id} what="purchase order" />}
       </div>
     </>
   );

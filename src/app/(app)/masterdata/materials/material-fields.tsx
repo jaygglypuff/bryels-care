@@ -30,7 +30,11 @@ export function MaterialFields({ baseUnits, d = {}, locked = false }: { baseUnit
   return (
     <>
       <Grid>
-        <TextField name="code" label="Code" defaultValue={d.code} placeholder="MAT-0070" mono readOnly={locked} hint={locked ? "In use: the code can no longer change." : "Unique; printed on labels as BC:MAT:<code>."} />
+        {d.code ? (
+          <TextField name="code" label="Code" defaultValue={d.code} placeholder="MAT-0070" mono readOnly={locked} hint={locked ? "In use: the code can no longer change." : "Unique; printed on labels as BC:MAT:<code>."} />
+        ) : (
+          <TextField name="code" label="Code (optional)" placeholder="Automatic, e.g. MAT-0001" mono hint="Leave blank and the system gives the next number. Printed on labels as BC:MAT:<code>." />
+        )}
         <TextField name="name" label="Name" defaultValue={d.name} placeholder="Shea Butter" />
         <TextField name="inciName" label="INCI name" defaultValue={d.inciName} placeholder="Butyrospermum Parkii Butter" hint="As declared by the supplier; verified by QA. Expected for ingredients, not for packaging." />
         <TextField name="commonName" label="Common name (optional)" defaultValue={d.commonName} />

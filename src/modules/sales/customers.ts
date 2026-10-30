@@ -8,6 +8,8 @@ import { runInTx, type InTx } from "@/lib/tx";
 import { DomainError } from "@/lib/errors";
 import type { ExportDefinition } from "@/lib/export";
 import { CREDIT_FIELDS, formatAddress, idempotent, isUuid, maskFields } from "./crm-support";
+import { assignMasterCode } from "@/lib/numbering";
+import { assertMayDeleteDraft, assertNeverSubmittedDraft, creatorOf, hardDeleteDraft } from "@/lib/draft-delete";
 
 /**
  * Customer master (US-4-01, docs/data-model.md §3.2, docs/permissions-matrix.md §3.2, §6).
@@ -54,7 +56,8 @@ export type AddressInput = {
 };
 
 export type CustomerInput = {
-  code: string;
+  /** Blank or missing: the next CUS-nnnn is assigned (ADR-075). */
+  code?: string | null;
   name: string;
   contactName?: string | null;
   phone?: string | null;
@@ -231,17 +234,15 @@ export async function createCustomer(ctx: AuthContext, input: CustomerInput, opt
   if (!shipTo) throw new DomainError("validation", "Enter the ship-to address.", { field: "shipTo.line1" });
   return runInTx(opts, async (tx) => {
     const { result } = await idempotent(tx, ctx, input.idempotencyKey, "masterdata.customer.create", async () => {
-      const [dup] = await tx
-        .select({ id: customers.id })
-        .from(customers)
-        .where(and(eq(customers.organizationId, ctx.organizationId), eq(customers.code, input.code)))
-        .limit(1);
-      if (dup) throw new DomainError("conflict", `Customer code ${input.code} is already used.`, { field: "code" });
+      const taken = async (c: string) => (await tx.select({ id: customers.id }).from(customers).where(and(eq(customers.organizationId, ctx.organizationId), eq(customers.code, c))).limit(1)).length > 0;
+      const typed = input.code?.trim().toUpperCase() || null;
+      if (typed && (await taken(typed))) throw new DomainError("conflict", `Customer code ${typed} is already used.`, { field: "code" });
+      const code = typed ?? (await assignMasterCode(tx, ctx.organizationId, "CUS", taken));
       const [row] = await tx
         .insert(customers)
         .values({
           organizationId: ctx.organizationId,
-          code: input.code,
+          code,
           name: input.name,
           contactName: input.contactName || null,
           phone: input.phone || null,
@@ -280,6 +281,31 @@ export async function createCustomer(ctx: AuthContext, input: CustomerInput, opt
     });
     const [row] = await tx.select().from(customers).where(eq(customers.id, result.id));
     return row;
+  });
+}
+
+/**
+ * Deletes a customer nobody has used yet (ADR-075): a prospect or active customer with no quotation,
+ * order, invoice, payment, price list, requirement, complaint, return or portal account. Its
+ * addresses and contacts go with it. Creator (masterdata.customer.create) or masterdata.customer.edit.
+ * Audit masterdata.customer.deleted with the row in `before`.
+ */
+export async function deleteCustomer(ctx: AuthContext, id: string) {
+  return db.transaction(async (tx) => {
+    const c = await loadCustomer(tx, ctx, id, true);
+    assertMayDeleteDraft(ctx, { create: "masterdata.customer.create", manage: ["masterdata.customer.edit"] }, await creatorOf(tx, ctx.organizationId, "customer", c.id), null);
+    assertNeverSubmittedDraft(`Customer ${c.code}`, c.status === "prospect" || c.status === "active");
+    await hardDeleteDraft(tx, ctx, {
+      table: "customers",
+      id: c.id,
+      what: `Customer ${c.code}`,
+      children: [
+        { table: "customer_contacts", column: "customer_id" },
+        { table: "customer_addresses", column: "customer_id" },
+      ],
+      audit: { action: "masterdata.customer.deleted", entityType: "customer", entityNumber: c.code, siteId: null, before: c },
+    });
+    return { deleted: c.code };
   });
 }
 

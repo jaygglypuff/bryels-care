@@ -23,6 +23,7 @@ import {
 } from "./customer-forms";
 import { registerAppHooks } from "@/modules/wiring";
 import { PortalAccessPanel } from "./portal-access";
+import { DeleteDraftCard } from "../../../delete-draft-button";
 
 registerAppHooks(); // Wave 3 cross-module registrations (src/modules/wiring.ts); cheap and idempotent
 
@@ -374,6 +375,7 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
             )}
           </Card>
         </div>
+        {(c.status === "prospect" || c.status === "active") && (ctx.can("masterdata.customer.edit") || ctx.can("masterdata.customer.create")) && <DeleteDraftCard kind="customer" id={c.id} what="customer" note="If nothing uses this customer yet (no quotation, order, invoice, price list or return), you can delete it with its addresses and contacts." />}
       </div>
     </>
   );

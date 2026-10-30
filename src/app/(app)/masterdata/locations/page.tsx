@@ -7,6 +7,7 @@ import { Forbidden } from "../../forbidden";
 import { ActionForm, CheckField, Grid, SelectField, TextField } from "../_org/form";
 import { saveLocationAction } from "../_org/actions";
 import { StateChip } from "../_org/ui";
+import { LocationHelp } from "../_org/location-help";
 
 export const metadata = { title: "Locations" };
 
@@ -46,11 +47,17 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
   }
   const filtered = !!(sp.warehouse || sp.kind || sp.q || sp.all);
   const canCreate = ctx.can("masterdata.location.create");
+  const canEdit = ctx.can("masterdata.location.edit");
   const canSeeLots = ctx.can("inventory.lot.view");
   const site = ctx.allowedSites.find((s) => s.id === siteId)!;
   return (
     <div className="space-y-5">
-      <PageHeader title="Locations" subtitle={`${site.code} · ${site.name}. The location class decides what may be stored or moved there; blocked locations take no movements.`} />
+      <PageHeader
+        title="Locations"
+        subtitle={`${site.code} · ${site.name}. A location is a place where stock is kept: a room, rack, shelf or bin.`}
+        actions={canCreate && opts.warehouses.length > 0 ? <LinkButton href="#add" variant="cta">+ Add location</LinkButton> : undefined}
+      />
+      <LocationHelp canSeeSites={ctx.can("masterdata.site.view")} />
       <Card>
         <form method="get" className="flex flex-wrap items-end gap-3">
           {ctx.allowedSites.length > 1 && (
@@ -112,11 +119,14 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
                         {!l.isPickable && " · not pickable"}
                       </p>
                     </div>
-                    <span className="flex flex-wrap gap-1">
+                    <span className="flex flex-wrap items-center gap-2">
                       {l.specialRoles.map((r) => (
                         <Chip key={r} tone="info">{SPECIAL_ROLE_LABELS[r as SpecialRole] ?? r}</Chip>
                       ))}
                       <StateChip status={l.status} />
+                      <LinkButton size="sm" variant="secondary" href={`/masterdata/locations/${l.id}`} aria-label={`${canEdit ? "Edit" : "Open"} location ${l.code}`}>
+                        {canEdit ? "Edit" : "Open"}
+                      </LinkButton>
                     </span>
                   </div>
                 </li>
@@ -131,10 +141,10 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
           <ActionForm action={saveLocationAction} submitLabel="Create location" variant="cta">
             <Grid>
               <SelectField name="warehouseId" label="Warehouse" defaultValue={sp.warehouse ?? opts.warehouses[0].id} options={opts.warehouses.map((w) => ({ value: w.id, label: `${w.siteCode} · ${w.code} · ${w.name}` }))} />
-              <SelectField name="kind" label="Class" defaultValue="storage" options={LOCATION_KINDS.map((k) => ({ value: k, label: LOCATION_KIND_LABELS[k] }))} hint="Receiving, quarantine, hold, rejected and recall locations can be designated per warehouse." />
-              <TextField name="code" label="Code" placeholder="A-03" mono hint="Unique across the organization; printed as BC:LOC:<code>." />
+              <SelectField name="kind" label="Type of place" defaultValue="storage" options={LOCATION_KINDS.map((k) => ({ value: k, label: LOCATION_KIND_LABELS[k] }))} hint="Receiving, quarantine, hold, rejected and recall locations can be designated per warehouse." />
+              <TextField name="code" label="Code (optional)" placeholder="Automatic, e.g. LOC-0001" mono hint="Leave blank and the system gives the next number. Unique across the company; printed as BC:LOC:<code>." />
               <TextField name="name" label="Name" placeholder="Oils rack A-03" />
-              <SelectField name="parentLocationId" label="Inside (optional)" emptyLabel="— top level —" options={opts.locations.map((l) => ({ value: l.id, label: `${l.code} · ${l.name}` }))} hint="Builds the zone → rack → bin tree; same warehouse only." />
+              <SelectField name="parentLocationId" label="Section or zone (optional)" emptyLabel="— none —" options={opts.locations.map((l) => ({ value: l.id, label: `${l.code} · ${l.name}` }))} hint="The bigger place this one is inside, e.g. zone A. Same warehouse only." />
             </Grid>
             <CheckField name="isPickable" label="Pickable (stock here may be picked for orders and batches)" defaultChecked />
           </ActionForm>

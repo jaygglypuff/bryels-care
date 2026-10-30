@@ -9,6 +9,7 @@ import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { Money, SalesStatus } from "../../orders/sales-ui";
 import { NewVersionForm, PriceListCommand } from "./commands";
+import { DeleteDraftCard } from "../../../delete-draft-button";
 
 export const metadata = { title: "Price list" };
 
@@ -140,6 +141,7 @@ export default async function PriceListPage({ params, searchParams }: { params: 
             </Card>
           )}
         </div>
+        {pl.status === "draft" && ctx.can("sales.price_list.edit") && <DeleteDraftCard kind="price_list" id={pl.id} what="price list version" />}
       </div>
     </>
   );

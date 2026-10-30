@@ -40,9 +40,15 @@ export function SupplierForm({ initial }: { initial?: SupplierFormValues }) {
       <input type="hidden" name="supplierId" value={initial?.id ?? ""} />
       <Card>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Code" htmlFor="code" error={fe.code} hint="e.g. SUP-0008. Letters, digits, dot, dash.">
-            <Input id="code" name="code" required defaultValue={v("code")} autoComplete="off" className="uppercase" />
-          </Field>
+          {initial?.id ? (
+            <Field label="Code" htmlFor="code" error={fe.code} hint="e.g. SUP-0008. Letters, digits, dot, dash.">
+              <Input id="code" name="code" required defaultValue={v("code")} autoComplete="off" className="uppercase" />
+            </Field>
+          ) : (
+            <Field label="Code (optional)" htmlFor="code" error={fe.code} hint="Leave blank and the system gives the next number, e.g. SUP-0001.">
+              <Input id="code" name="code" defaultValue={v("code")} autoComplete="off" className="uppercase" placeholder="Automatic" />
+            </Field>
+          )}
           <Field label="Name" htmlFor="name" error={fe.name}>
             <Input id="name" name="name" required defaultValue={v("name")} autoComplete="organization" />
           </Field>

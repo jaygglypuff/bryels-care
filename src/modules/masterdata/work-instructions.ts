@@ -5,6 +5,7 @@ import { users, workInstructionRevisions, workInstructions } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
+import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { CreateWorkInstructionInput, DecisionInput, SaveWorkInstructionDraftInput, parseInput } from "./schemas";
 import { approvalState, assertDraft, assertVersionTransition, businessToday, canDecideStep, effectiveLabel, isIsoDate, recordApprovalDecision, supersedeOverlapping } from "./versioning";
 
@@ -178,4 +179,25 @@ export async function approvedWorkInstructionOptions(ctx: AuthContext) {
     .innerJoin(workInstructions, eq(workInstructions.id, workInstructionRevisions.workInstructionId))
     .where(and(eq(workInstructions.organizationId, ctx.organizationId), eq(workInstructionRevisions.status, "approved")))
     .orderBy(asc(workInstructions.code), desc(workInstructionRevisions.revisionNo));
+}
+
+/**
+ * Deletes a work-instruction revision that is a never-submitted draft (ADR-075). When it is the
+ * only revision the instruction goes too. Creator or another holder of
+ * masterdata.work_instruction.create (drafts are edited under .create; the catalogue has no .edit).
+ * Audit masterdata.work_instruction_revision.deleted (and masterdata.work_instruction.deleted).
+ */
+export async function deleteWorkInstructionDraft(ctx: AuthContext, revisionId: string): Promise<{ workInstructionId: string | null }> {
+  if (!/^[0-9a-f-]{36}$/i.test(revisionId)) throw new DomainError("not_found", "Work instruction revision not found.");
+  return db.transaction(async (tx) => {
+    const { rev, wi } = await lockRevision(tx, ctx, revisionId);
+    const what = lbl(wi.code, rev.revisionNo);
+    assertMayDeleteDraft(ctx, { create: "masterdata.work_instruction.create", manage: ["masterdata.work_instruction.create"] }, rev.createdBy, null);
+    assertNeverSubmittedDraft(what, rev.status === "draft", rev.submittedAt);
+    await hardDeleteDraft(tx, ctx, { table: "work_instruction_revisions", id: rev.id, what, audit: { action: "masterdata.work_instruction_revision.deleted", entityType: "work_instruction_revision", entityNumber: what, siteId: null, before: rev } });
+    const others = await tx.select({ id: workInstructionRevisions.id }).from(workInstructionRevisions).where(eq(workInstructionRevisions.workInstructionId, wi.id)).limit(1);
+    if (others.length) return { workInstructionId: wi.id };
+    await hardDeleteDraft(tx, ctx, { table: "work_instructions", id: wi.id, what: `Work instruction ${wi.code}`, audit: { action: "masterdata.work_instruction.deleted", entityType: "work_instruction", entityNumber: wi.code, siteId: null, before: wi } });
+    return { workInstructionId: null };
+  });
 }

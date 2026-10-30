@@ -7,6 +7,7 @@ import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Forbidden } from "../../../forbidden";
 import { decideWorkInstructionAction, newWorkInstructionRevisionAction, submitWorkInstructionAction } from "../../_eng/actions";
 import { CommandForm, DecisionForm } from "../../_eng/forms";
+import { DeleteDraftButton } from "../../../delete-draft-button";
 import { ApprovalPanel, EffectiveRange, VerifyBanner, VersionChip } from "../../_eng/ui";
 import { WorkInstructionEditor } from "./editor";
 
@@ -45,6 +46,11 @@ export default async function WorkInstructionPage({ params }: { params: Promise<
                 {w.can.submit && (
                   <div className="mt-3">
                     <CommandForm action={submitWorkInstructionAction} hidden={{ id: r.id }} label="Submit for approval" variant="cta" confirmText="Save the text first; it cannot change after submitting." />
+                  </div>
+                )}
+                {!r.submittedAt && (
+                  <div className="mt-3">
+                    <DeleteDraftButton kind="work_instruction_revision" id={r.id} what="this draft revision (an instruction with no other revision is removed too)" />
                   </div>
                 )}
               </div>

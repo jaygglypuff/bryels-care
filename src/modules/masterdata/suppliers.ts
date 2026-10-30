@@ -6,7 +6,9 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { toCsv } from "./csv";
-import { SUPPLIER_QUALITY_STATUSES, SupplierInputSchema, parseOrThrow, type SupplierInput } from "./supplier-schemas";
+import { SUPPLIER_QUALITY_STATUSES, SupplierCreateSchema, SupplierInputSchema, parseOrThrow, type SupplierCreateInput, type SupplierInput } from "./supplier-schemas";
+import { assignMasterCode } from "@/lib/numbering";
+import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { runInTx, type InTx } from "@/lib/tx";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -103,17 +105,39 @@ async function assertUnique(ctx: AuthContext, v: { code: string; name: string },
 }
 
 /** `opts.tx`: run inside a caller's transaction (savepoint), e.g. an import chunk (W3C, src/lib/tx.ts). */
-export async function createSupplier(ctx: AuthContext, input: SupplierInput, opts?: InTx) {
+export async function createSupplier(ctx: AuthContext, input: SupplierCreateInput, opts?: InTx) {
   ctx.require("masterdata.supplier.create");
-  const v = parseOrThrow(SupplierInputSchema, input);
-  await assertUnique(ctx, v, undefined, opts?.tx);
+  const parsed = parseOrThrow(SupplierCreateSchema, input);
+  if (parsed.code) await assertUnique(ctx, { code: parsed.code, name: parsed.name }, undefined, opts?.tx);
   return runInTx(opts, async (tx) => {
+    // ADR-075: a blank code gets the next SUP-nnnn.
+    const code =
+      parsed.code ??
+      (await assignMasterCode(tx, ctx.organizationId, "SUP", async (c) => (await tx.select({ id: suppliers.id }).from(suppliers).where(and(eq(suppliers.organizationId, ctx.organizationId), eq(suppliers.code, c))).limit(1)).length > 0));
+    const v = { ...parsed, code };
+    if (!parsed.code) await assertUnique(ctx, v, undefined, tx);
     const [s] = await tx
       .insert(suppliers)
       .values({ organizationId: ctx.organizationId, ...v, createdBy: ctx.userId, updatedBy: ctx.userId })
       .returning();
-    await audit(tx, ctx, { action: "masterdata.supplier.created", entityType: "supplier", entityId: s.id, entityNumber: s.code, siteId: null, after: v });
+    await audit(tx, ctx, { action: "masterdata.supplier.created", entityType: "supplier", entityId: s.id, entityNumber: s.code, siteId: null, after: { ...v, codeAssigned: !parsed.code } });
     return s;
+  });
+}
+
+/**
+ * Deletes a supplier that is still new (never evaluated) and used nowhere: no approved-supplier
+ * list entry, purchase order, receipt, bill or payment (ADR-075). Creator or masterdata.supplier.edit.
+ */
+export async function deleteSupplier(ctx: AuthContext, supplierId: string) {
+  if (!UUID_RE.test(supplierId)) throw new DomainError("not_found", "Supplier not found.");
+  return db.transaction(async (tx) => {
+    const [s] = await tx.select().from(suppliers).where(and(eq(suppliers.id, supplierId), eq(suppliers.organizationId, ctx.organizationId))).for("update").limit(1);
+    if (!s) throw new DomainError("not_found", "Supplier not found.");
+    assertMayDeleteDraft(ctx, { create: "masterdata.supplier.create", manage: ["masterdata.supplier.edit"] }, s.createdBy, null);
+    assertNeverSubmittedDraft(`Supplier ${s.code}`, s.qualityStatus === "new");
+    await hardDeleteDraft(tx, ctx, { table: "suppliers", id: s.id, what: `Supplier ${s.code}`, audit: { action: "masterdata.supplier.deleted", entityType: "supplier", entityNumber: s.code, siteId: null, before: s } });
+    return { deleted: s.code };
   });
 }
 

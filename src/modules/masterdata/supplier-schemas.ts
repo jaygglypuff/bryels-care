@@ -34,13 +34,14 @@ const optInt = (max: number, label: string) =>
     });
 
 /** Supplier master fields (US-2-06). Codes are upper-case letters, digits, dot, dash or underscore. */
-export const SupplierInputSchema = z
+const supplierCode = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z0-9][A-Z0-9._-]{1,31}$/, { message: "Use 2 to 32 letters, digits, dots, dashes or underscores, e.g. SUP-0004." });
+const SupplierFields = z
   .object({
-    code: z
-      .string()
-      .trim()
-      .toUpperCase()
-      .regex(/^[A-Z0-9][A-Z0-9._-]{1,31}$/, { message: "Use 2 to 32 letters, digits, dots, dashes or underscores, e.g. SUP-0004." }),
+    code: supplierCode,
     name: z.string().trim().min(2, { message: "Enter the supplier name." }).max(200),
     contactName: optText(120),
     email: z
@@ -59,13 +60,21 @@ export const SupplierInputSchema = z
     isActive: z.boolean().default(true),
     notes: optText(1000),
   })
+  .strict();
+const suspensionReason = (v: { qualityStatus: string; qualityStatusReason: string | null }, c: z.RefinementCtx) => {
+  if (v.qualityStatus === "suspended" && (!v.qualityStatusReason || v.qualityStatusReason.length < 5)) {
+    c.addIssue({ code: "custom", path: ["qualityStatusReason"], message: "Give the reason for suspending this supplier (at least 5 characters)." });
+  }
+};
+export const SupplierInputSchema = SupplierFields.superRefine(suspensionReason);
+/** Create: the code may be left blank; the next SUP-nnnn is assigned (ADR-075). */
+export const SupplierCreateSchema = SupplierFields.extend({
+  code: z.preprocess((v) => (v === undefined || v === null || (typeof v === "string" && v.trim() === "") ? null : v), supplierCode.nullable()),
+})
   .strict()
-  .superRefine((v, c) => {
-    if (v.qualityStatus === "suspended" && (!v.qualityStatusReason || v.qualityStatusReason.length < 5)) {
-      c.addIssue({ code: "custom", path: ["qualityStatusReason"], message: "Give the reason for suspending this supplier (at least 5 characters)." });
-    }
-  });
+  .superRefine(suspensionReason);
 export type SupplierInput = z.input<typeof SupplierInputSchema>;
+export type SupplierCreateInput = z.input<typeof SupplierCreateSchema>;
 
 /** Parses with a Zod schema and turns the first issue into a 422 DomainError naming the field. */
 export function parseOrThrow<T extends z.ZodType>(schema: T, value: unknown): z.output<T> {
