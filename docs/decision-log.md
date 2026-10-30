@@ -1574,3 +1574,31 @@ stock list), so the parts always add up. "All plants" only for users with lot vi
 minimums need balance view; customer-order figures need sales-order view. Reads only. One status vocabulary on
 stock screens: Ready to use / Waiting for QA check / Stopped by QA / Expired – do not use / Bad – do not use.
 Search never shows an expired lot as ready to use.
+
+## ADR-088 The grade-5 standard for every screen, approvals by the top roles, packaging and labels in the flow
+
+**Status.** Accepted (2026-10-30). Owner: "You just changed the layout; contents are the same… a grade 5 will
+still not get it… the site manager or owner still needs approval from another person… where will the operator
+get and scan the packaging lot… formula only in g or kg, how about pieces… if a material is not in the formula
+help create it… users still need to add a code."
+
+**Decisions.**
+1. **Every screen** is reviewed against one standard (`docs/PAGE_REVIEW.md` tracks all of them): one sentence
+   saying what the screen is for; forms show at most five fields, everything else defaulted under "More
+   details"; **no user ever types a code** (the system numbers everything; editable only under More details);
+   one green button for the next step; grade-5 words with "What is this?" for the six kept words (lot, batch,
+   quality check, batch record, INCI, version); works on a 390 px phone; empty and error states say what to do.
+   Shared blocks: `src/ui/guide.tsx` (`PageIntro`, `NextStep`, `MoreDetails`, `Explain`).
+2. **The owner and the site manager may approve their own operational records** (production orders, purchase
+   requests and orders, stock adjustments and counts, price lists, quotations, customer orders, supplier
+   returns, expense claims, recipes and steps when the owner is the approver); the record shows "approved by
+   <name> (own request)". Releasing a material or product lot for use (quality decision) stays with QA — the
+   cosmetics GMP rule. Organization setting, default on; changes need the owner.
+3. **Packaging and labels are part of the flow, not a scavenger hunt**: packaging (wrappers, labels, boxes)
+   is listed in the recipe per piece, set aside and taken at "Get materials" like the ingredients; the
+   packaging step asks only how many were used and thrown away; the batch's product labels (product, batch,
+   expiry) are printed by the system from a button on that step. No lot is scanned that the operator did not
+   get from the list.
+4. **Recipes per pieces or per weight**: "This recipe makes [N] pieces" or "[N] kg"; the system converts with the
+   product's weight per piece and the expected yield; ingredients missing from the list can be added on the
+   spot.
