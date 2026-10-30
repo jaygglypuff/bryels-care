@@ -297,7 +297,7 @@ export async function getProductionOrder(ctx: AuthContext, workOrderId: string, 
   const status = view.status;
   const sodOn = await getSetting(db, ctx.organizationId, "approvals.sod.work_order_release", wo.siteId);
   const maker = wo.status === "planned" ? wo.submittedBy : wo.createdBy;
-  const actions = productionOrderActions(view, { siteId: wo.siteId, cancelReason: wo.cancelReason }, allowedFor(ctx, wo.siteId), {
+  const actions = productionOrderActions(view, { siteId: wo.siteId, cancelReason: wo.cancelReason, workOrderId: wo.id }, allowedFor(ctx, wo.siteId), {
     can: ctx.can("production.work_order.approve") && ctx.canAt("production.work_order.approve", wo.siteId),
     sodConflict: sodOn && ctx.sodConflict(maker),
   });
@@ -374,7 +374,7 @@ export async function listProductionOrders(ctx: AuthContext, f: { status?: strin
     .map((r) => {
       const view = productionOrderStatus(r.wo.status, facts.get(r.wo.id) ?? [], now);
       const pieces = piecesOf(r.wo, r.unitNetMassG, r.yieldPct, r.madeUnits, r.productFamily);
-      const actions = productionOrderActions(view, { siteId: r.wo.siteId, cancelReason: r.wo.cancelReason }, allowedFor(ctx, r.wo.siteId), {
+      const actions = productionOrderActions(view, { siteId: r.wo.siteId, cancelReason: r.wo.cancelReason, workOrderId: r.wo.id }, allowedFor(ctx, r.wo.siteId), {
         can: ctx.can("production.work_order.approve") && ctx.canAt("production.work_order.approve", r.wo.siteId),
         sodConflict: sodOn && ctx.sodConflict(r.wo.status === "planned" ? r.wo.submittedBy : r.wo.createdBy), // the list links to the order page, which approves
       });
