@@ -15,7 +15,7 @@ const plural = (n: number, one: string, many: string) => `${n.toLocaleString("en
  * The owner's "needs attention" list (ADR-083), built from live counts only: decisions waiting, late
  * deliveries and orders, late batches, quality checks, holds, expiring stock and low stock.
  */
-export function attentionItems(oc: OperationsCenter, approvals: number, lowStock: number | null): AttentionItem[] {
+export function attentionItems(oc: OperationsCenter, approvals: number, lowStock: number | null, notInvoiced: { count: number; oldestDays: number | null } | null = null): AttentionItem[] {
   const st = (k: string) => oc.stages.find((s) => s.key === k);
   const items: AttentionItem[] = [];
   if (approvals > 0) items.push({ key: "approve", text: `${plural(approvals, "thing waits", "things wait")} for your decision`, href: "/approvals", urgent: true });
@@ -30,6 +30,8 @@ export function attentionItems(oc: OperationsCenter, approvals: number, lowStock
   if (qc && qc.count > 0) items.push({ key: "qc", text: `${plural(qc.count, "finished batch waits", "finished batches wait")} for the quality check`, href: qc.href });
   add("inspection", (n) => `${plural(n, "material lot is", "material lots are")} on quality hold`);
   if (lowStock && lowStock > 0) items.push({ key: "low", text: `${plural(lowStock, "item is", "items are")} below the minimum stock`, href: "/procurement/reorder", urgent: true });
+  if (notInvoiced && notInvoiced.count > 0)
+    items.push({ key: "invoice", text: `${plural(notInvoiced.count, "shipment is", "shipments are")} not billed yet${notInvoiced.oldestDays && notInvoiced.oldestDays > 1 ? ` (oldest ${notInvoiced.oldestDays} days ago)` : ""}`, href: "/finance/invoices", urgent: (notInvoiced.oldestDays ?? 0) > 7 });
   add("raw_available", (n) => `${plural(n, "raw material lot expires", "raw material lots expire")} within 30 days`);
   add("finished", (n) => `${plural(n, "finished goods lot expires", "finished goods lots expire")} within 30 days`);
   return items;

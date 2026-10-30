@@ -1547,3 +1547,18 @@ the production area". Plan: `docs/FLOOR_DISPLAY.md`. Builds on ADR-080 (flow fac
 lifetime (`session.absolute_hours`, default 7 days) and must be signed in again; a revocable signed display
 link per site is the planned follow-up. The planned-pieces figure mixes "made today" with the plan of the
 orders being made (multi-day curing orders inflate it); the owner should confirm the wording after use.
+
+## ADR-086 No silent hand-offs (consultant review 2026-10-30)
+
+**Status.** Accepted (2026-10-30). A step that hands work to another person must tell that person, in the
+step's own transaction. (1) Draft and planned production orders are the To approve kind
+`approval.production_order` (replaces `approval.work_order_release`), decided inline with the rules of
+`approveProductionOrder` (permission at the site, separation of duties against the creator, owner override per
+ADR-073), idempotent; approvers at the site are notified when the order is created. (2) Posting a goods
+receipt notifies the people who can release lots at that site, once per receipt; the QA queue is oldest first.
+(3) Dispatch creates the invoice draft in the dispatch transaction (sales hook registered by finance,
+`createInvoiceFromShipment`, system actor on behalf of the dispatcher, idempotent per shipment, savepoint so a
+refusal never blocks dispatch; setting `finance.invoice.draft_at_dispatch`, default on); reversing a dispatch
+cancels only a still-draft invoice; submit/approve/issue unchanged. Home shows "N shipments are not billed
+yet" from `notInvoicedShipments`. (4) "Record a payment" opened from an invoice preselects it and its open
+amount; the server re-checks every amount. Recipients are always resolved by permission at the site.
