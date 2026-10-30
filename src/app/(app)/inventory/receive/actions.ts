@@ -57,6 +57,8 @@ export async function saveReceiptAction(_prev: ActionState, formData: FormData):
   let target: string;
   try {
     const ctx = await requireContext();
+    // Consultant review flow A: after posting, go straight to the receipt's labels ("Save and print labels").
+    const afterPost = (receiptId: string) => (ctx.can("inventory.label_job.create") ? `/print/lot-label/receipt/${receiptId}?posted=1` : `/inventory/receive/${receiptId}?posted=1`);
     let lines: unknown = [];
     try {
       lines = JSON.parse(String(formData.get("lines") ?? "[]"));
@@ -112,14 +114,14 @@ export async function saveReceiptAction(_prev: ActionState, formData: FormData):
         intent: d.intent,
         lines: header.lines.map((l, i) => ({ ...l, purchaseOrderLineId: d.lines[i].purchaseOrderLineId || null })),
       });
-      target = `/inventory/receive/${r.receiptId}?${r.posted ? "posted" : "saved"}=1`;
+      target = r.posted ? afterPost(r.receiptId) : `/inventory/receive/${r.receiptId}?saved=1`;
     } else if (d.receiptId) {
       await updateReceiptDraft(ctx, d.receiptId, header);
       if (d.intent === "post") await postReceipt(ctx, { receiptId: d.receiptId });
-      target = `/inventory/receive/${d.receiptId}?${d.intent === "post" ? "posted" : "saved"}=1`;
+      target = d.intent === "post" ? afterPost(d.receiptId) : `/inventory/receive/${d.receiptId}?saved=1`;
     } else if (d.intent === "post") {
       const r = await receiveAndPost(ctx, { idempotencyKey: d.idempotencyKey, ...header });
-      target = `/inventory/receive/${r.receiptId}?posted=1`;
+      target = afterPost(r.receiptId);
     } else {
       const r = await createReceiptDraft(ctx, { idempotencyKey: d.idempotencyKey, ...header });
       target = `/inventory/receive/${r.receiptId}?saved=1`;

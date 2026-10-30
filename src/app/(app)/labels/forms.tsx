@@ -149,9 +149,11 @@ export function CreateJobForm({ entityType, entityId, templates, stations }: { e
   );
 }
 
-export function ReceiptJobsForm({ grId, templates, stations, lotCount }: { grId: string; templates: TemplateOpt[]; stations: StationOpt[]; lotCount: number }) {
+/** One label per container: the copies of each lot start at its container count (1 when not recorded). */
+export function ReceiptJobsForm({ grId, templates, stations, lots }: { grId: string; templates: TemplateOpt[]; stations: StationOpt[]; lots: { lotId: string; lotNumber: string; materialName: string; containerCount: number | null }[] }) {
   const [state, action] = useActionState<ActionState, FormData>(createReceiptLabelJobsAction, null);
   const fe = state?.fieldErrors ?? {};
+  const lotCount = lots.length;
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="grId" value={grId} />
@@ -162,10 +164,20 @@ export function ReceiptJobsForm({ grId, templates, stations, lotCount }: { grId:
           ))}
         </Select>
       </Field>
+      <fieldset className="space-y-2">
+        <legend className="mb-1 text-[14px] font-semibold">Labels to print (one per container)</legend>
+        {lots.map((l) => (
+          <div key={l.lotId} className="grid grid-cols-[1fr_96px] items-end gap-3" data-testid="receipt-label-lot">
+            <p className="pb-3 text-[14px]">
+              <span className="font-mono font-semibold">{l.lotNumber}</span> <span className="text-muted">· {l.materialName}{l.containerCount ? ` · ${l.containerCount} ${l.containerCount === 1 ? "container" : "containers"}` : ""}</span>
+            </p>
+            <Field label="Copies" htmlFor={`copies-${l.lotId}`} error={fe[`copies-${l.lotId}`] ?? fe.copies}>
+              <Input id={`copies-${l.lotId}`} name={`copies-${l.lotId}`} type="number" inputMode="numeric" min={1} max={99} defaultValue={Math.min(Math.max(l.containerCount ?? 1, 1), 99)} required />
+            </Field>
+          </div>
+        ))}
+      </fieldset>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Copies per lot" htmlFor="copies" error={fe.copies} hint="One per container.">
-          <Input id="copies" name="copies" type="number" inputMode="numeric" min={1} max={99} defaultValue={1} required />
-        </Field>
         <Field label="Print station" htmlFor="printStationId" error={fe.printStationId}>
           <Select id="printStationId" name="printStationId" defaultValue={stations.length === 1 ? stations[0].id : ""} required>
             {stations.length > 1 && <option value="">Choose…</option>}

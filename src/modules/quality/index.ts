@@ -13,6 +13,8 @@ export {
   inProcessQcStatus,
   recordSample,
   recordInspectionResult,
+  recordInspectionResults,
+  type RecordResultsInput,
   correctInspectionResult,
   submitInspection,
   reviewInspection,

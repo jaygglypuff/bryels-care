@@ -16,8 +16,8 @@ export const metadata: Metadata = { title: "Finish batch" };
 export const dynamic = "force-dynamic";
 
 /**
- * Finish (ADR-080 §6, UX review S6): read-back of the day-log counts, damaged and left-over wrappers,
- * hold area, then one "Finish batch". Online only: one transaction across stock. Every rule is in
+ * Finish (ADR-080 §6, UX review S6): read-back of the day-log counts, wrappers (damaged read from the
+ * packaging step when it recorded them), hold area, then one "Finish batch" with an in-page confirmation. Online only: one transaction across stock. Every rule is in
  * finishBatch; this page only shows what the service will check.
  */
 export default async function FinishPage({ params }: { params: Promise<{ batchId: string }> }) {
@@ -89,6 +89,7 @@ export default async function FinishPage({ params }: { params: Promise<{ batchId
             defectTypes={v.defectTypes}
             samples={v.samples.units}
             packaging={v.packaging}
+            rejectApproval={v.rejectApproval}
             hold={v.hold}
             holdOptions={v.holdOptions}
             needsChecker={v.needsChecker}

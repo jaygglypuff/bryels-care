@@ -105,6 +105,7 @@ export function ReceiveForm({
   reasonCodes,
   defaultLocationId,
   canPost,
+  printLabels = false,
   initial,
   po,
   storageBySection = {},
@@ -116,6 +117,8 @@ export function ReceiveForm({
   reasonCodes: ReasonCode[];
   defaultLocationId: string;
   canPost: boolean;
+  /** Posting then opens the receipt's labels (consultant review: "Save and print labels"). */
+  printLabels?: boolean;
   initial?: ReceiptFormInitial;
   po?: PoFormContext;
   storageBySection?: Record<string, string[]>;
@@ -420,7 +423,7 @@ export function ReceiveForm({
           </SubmitButton>
           {canPost && (
             <SubmitButton name="intent" value="post" variant="cta" size="lg" pendingText="Posting…" className="flex-1 sm:flex-none">
-              Post receipt
+              {printLabels ? "Save and print labels" : "Post receipt"}
             </SubmitButton>
           )}
         </div>

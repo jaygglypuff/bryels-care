@@ -89,7 +89,14 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
   );
   // One next action (R3): post a draft; once posted, label the containers, then put the stock away.
   const primary = gr.can.post ? (
-    <ActionForm action={postDraftAction} hidden={hidden} submit="Post receipt" variant="cta" pendingText="Posting receipt…" confirm="Post this receipt? Lots and stock are created and can only be corrected by reversal." />
+    <ActionForm
+      action={postDraftAction}
+      hidden={hidden}
+      submit={ctx.can("inventory.label_job.create") ? "Save and print labels" : "Post receipt"}
+      variant="cta"
+      pendingText="Posting receipt…"
+      confirm="Post this receipt? Lots and stock are created and can only be corrected by reversal."
+    />
   ) : gr.can.printLabels ? (
     printLabels
   ) : canPutAway ? (

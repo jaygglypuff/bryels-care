@@ -15,6 +15,7 @@ import { DEVIATION_UNAVAILABLE, executionHooks } from "./execution-hooks";
 import { type BatchRow, eligibleSigners, findStepOfKind, sortedSteps, stepRecords } from "./execution";
 import { postBatchToQuarantineLocked } from "./output";
 import { countPackagingLocked, currentPackaging } from "./packaging";
+import { currentReadings } from "./process";
 import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
 import { currentYield, recordScrapReworkLocked, recordYieldLocked, yieldLimits } from "./yield";
 
@@ -126,6 +127,40 @@ async function packagingGroups(q: DbOrTx, batchId: string) {
   });
 }
 
+/**
+ * Wrapper counts already written on the packaging step (consultant review: "count once"). The seeded
+ * packaging step has the fields "Wrappers used" and "Wrappers destroyed"; any numeric field of the
+ * step whose code says destroyed/damaged, left/returned or used is read. Only when ONE packaging
+ * material was issued on that step: with several (wrappers and labels), a field cannot be tied to one
+ * material and nothing is prefilled. Assumption A-CR-03 (docs/PRD.md): field codes are configuration.
+ */
+export type StepPackagingCounts = { stepNo: number; used: string | null; damaged: string | null; leftOver: string | null };
+
+export async function stepPackagingCounts(q: DbOrTx, batchId: string): Promise<Map<string, StepPackagingCounts>> {
+  const out = new Map<string, StepPackagingCounts>();
+  const rows = await currentPackaging(q, batchId);
+  const recs = await stepRecords(q, batchId);
+  const byRec = new Map<string, Set<string>>();
+  for (const x of rows) byRec.set(x.r.processStepRecordId, (byRec.get(x.r.processStepRecordId) ?? new Set()).add(x.r.materialId));
+  for (const [recId, mats] of byRec) {
+    if (mats.size !== 1) continue;
+    const materialId = [...mats][0];
+    const recsOfMaterial = new Set(rows.filter((x) => x.r.materialId === materialId).map((x) => x.r.processStepRecordId));
+    if (recsOfMaterial.size !== 1) continue;
+    const readings = (await currentReadings(q, recId)).filter((r) => r.valueNumeric !== null);
+    const pick = (re: RegExp, not?: RegExp) => {
+      const r = readings.find((x) => re.test(x.parameterCode) && !(not && not.test(x.parameterCode)));
+      return r ? new Decimal(r.valueNumeric!).toString() : null;
+    };
+    const damaged = pick(/destroy|damag/i);
+    const leftOver = pick(/left|return/i);
+    const used = pick(/used/i, /destroy|damag|left|return/i);
+    if (damaged === null && leftOver === null && used === null) continue;
+    out.set(materialId, { stepNo: recs.find((r) => r.id === recId)?.stepNo ?? 0, used, damaged, leftOver });
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------------ read model for the Finish screen */
 
 export async function getFinishView(ctx: AuthContext, batchId: string) {
@@ -160,6 +195,11 @@ export async function getFinishView(ctx: AuthContext, batchId: string) {
   const needsChecker = transfer ? transfer.requiresChecker : false;
   const checkers = needsChecker ? (await eligibleSigners(db, ctx.organizationId, batch.siteId, "production.process_step_record.approve")).filter((u) => u.id !== ctx.userId) : [];
   const defectTypes = await getSetting(db, ctx.organizationId, "production.defect_types", batch.siteId);
+  const stepCounts = await stepPackagingCounts(db, batch.id);
+  // Rejects above this many pieces need a problem report at Finish (recordScrapReworkLocked, setting production.scrap.approval_threshold_pct).
+  const scrapPct = await getSetting(db, ctx.organizationId, "production.scrap.approval_threshold_pct", batch.siteId);
+  const unitMass = new Decimal(product.unitNetMassG);
+  const rejectLimit = unitMass.gt(0) ? new Decimal(batch.theoreticalYieldG ?? 0).div(unitMass).mul(scrapPct).div(100) : null;
   return {
     batch: { id: batch.id, number: batch.batchNumber, status: batch.status, siteId: batch.siteId, theoreticalYieldG: batch.theoreticalYieldG },
     order: wo ?? null,
@@ -173,6 +213,8 @@ export async function getFinishView(ctx: AuthContext, batchId: string) {
       scrap: scrap.map((r) => ({ kind: r.recordKind, reasonCode: r.reasonCode, qty: new Decimal(r.qty).toString(), note: r.note })),
     },
     samples: { enabled: samples.enabled, units: samples.enabled ? samples.units : 0 },
+    /** When the rejects need a problem report: more than `limit` pieces, or earlier scrap already waiting for approval. */
+    rejectApproval: { limit: rejectLimit?.toString() ?? null, existingNeedsApproval: scrap.some((r) => r.requiresApproval && r.status === "recorded"), reportOpen: !!y?.deviationId },
     packaging: (await packagingGroups(db, batch.id)).map((g) => ({
       materialId: g.materialId,
       materialCode: g.materialCode,
@@ -183,6 +225,7 @@ export async function getFinishView(ctx: AuthContext, batchId: string) {
       used: g.used.toString(),
       damaged: g.damaged.toString(),
       leftOver: g.leftOver.toString(),
+      step: stepCounts.get(g.materialId) ?? null,
     })),
     hold: hold ? { id: hold.id, code: hold.code, name: hold.name } : null,
     holdOptions,

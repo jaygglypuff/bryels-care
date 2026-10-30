@@ -20,7 +20,8 @@ export {
 export { getReceipt, receivingFormData, getReceiptDocument, listReceipts, exportReceiptsCsv, lotReleaseBlockers, openHoldsForLot, type ReceiptDocument } from "./receiving-queries";
 export * from "./receiving-state";
 export { uploadReceiptDocument, issueDownloadUrl, redeemDownload, voidAttachment, listLotDocuments, SUPPLIER_DOCUMENT_KINDS, SUPPLIER_DOCUMENT_LABELS, type SupplierDocumentKind } from "./receiving-documents";
-export { putAwayLot, putAwayOptions } from "./receiving-putaway";
+export { putAwayLot, putAwayOptions, putAwayQtyToBase } from "./receiving-putaway";
+export { lotsToPutAway, type PutAwayTask } from "./put-away-queue"; // consultant review flow A: released lots still in quarantine/hold/receiving
 export {
   placeHold,
   liftHold,

@@ -25,14 +25,17 @@ function done(receiptId: string, message: string): ActionState {
 
 export async function postDraftAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const receiptId = str(fd, "receiptId");
+  let printAfter = false;
   try {
     const ctx = await requireContext();
     await postReceipt(ctx, { receiptId });
+    // Consultant review flow A: "Save and print labels" goes straight to the receipt's labels.
+    printAfter = ctx.can("inventory.label_job.create");
   } catch (e) {
     return toActionState(e);
   }
   revalidatePath("/inventory");
-  redirect(`/inventory/receive/${receiptId}?posted=1`);
+  redirect(printAfter ? `/print/lot-label/receipt/${receiptId}?posted=1` : `/inventory/receive/${receiptId}?posted=1`);
 }
 
 export async function cancelDraftAction(_p: ActionState, fd: FormData): Promise<ActionState> {

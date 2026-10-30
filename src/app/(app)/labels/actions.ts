@@ -50,7 +50,9 @@ export async function createReceiptLabelJobsAction(_prev: ActionState, f: FormDa
   try {
     const ctx = await requireContext();
     const gr = await getReceipt(ctx, str(f, "grId"));
-    const out = await createLabelJobsForLots(ctx, gr.lines.map((l) => ({ lotId: l.lotId })), str(f, "labelTemplateId"), Number(str(f, "copies") || "1"), `gr:${gr.id}:${str(f, "labelTemplateId")}`, str(f, "printStationId") || null);
+    // Copies per lot (default on the form: one per container); the service validates 1–99.
+    const lots = gr.lines.map((l) => ({ lotId: l.lotId, copies: str(f, `copies-${l.lotId}`) ? Number(str(f, `copies-${l.lotId}`)) : null }));
+    const out = await createLabelJobsForLots(ctx, lots, str(f, "labelTemplateId"), Number(str(f, "copies") || "1"), `gr:${gr.id}:${str(f, "labelTemplateId")}`, str(f, "printStationId") || null);
     const failed = out.filter((o) => o.error);
     if (failed.length === out.length) return { ok: false, message: failed[0]?.error ?? "No labels were created." };
     msg = `${out.length - failed.length} label job(s) sent to the print station.${failed.length ? ` ${failed.length} skipped: ${failed[0].error}` : ""}`;

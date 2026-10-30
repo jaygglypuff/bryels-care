@@ -10,8 +10,8 @@ import { Help } from "@/ui/help/help";
 import { Banner, Chip } from "@/ui/status";
 import { WhoCanHelp } from "@/ui/who-can-help";
 import { Forbidden } from "../../../forbidden";
-import { ResultForm, StartInspectionButton } from "../../w2c-forms";
-import { FailForm, NotYetForm, PassForm } from "../forms";
+import { StartInspectionButton } from "../../w2c-forms";
+import { FailForm, NotYetForm, PassForm, TestsForm } from "../forms";
 
 export const metadata: Metadata = { title: "Check quality" };
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ const manilaToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "As
 
 /**
  * Check quality (ADR-080 §8–9, slice V2-7): one page per finished batch. Summary, the "Exceptions in
- * this batch" box, the tests, then Pass / Not yet / Fail. Reached from the production order and from
+ * this batch" box, the tests (one form, one Save), then Pass / Not yet / Fail. Reached from the production order and from
  * the QA list "Waiting for check". The service re-checks every rule; the page only explains them.
  */
 export default async function CheckQualityPage({ params }: { params: Promise<{ batchId: string }> }) {
@@ -124,30 +124,46 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
                 {ctx.can("quality.inspection.create") && <StartInspectionButton batchId={v.batch.id} />}
               </div>
             ) : (
-              <ul className="divide-y divide-line">
-                {v.inspection.tests.map((t) => (
-                  <li key={t.id} className="py-3">
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <span className="font-medium">
-                        {t.name}
-                        {!t.isRequired && <span className="text-[12px] text-muted"> (optional)</span>}
-                      </span>
-                      <span className="text-[13px] text-muted">OK: {t.spec}</span>
-                    </div>
-                    {t.result ? (
-                      <p className="mt-1 text-[15px]">
-                        <Chip tone={t.result.passed ? "ok" : "bad"}>{t.result.passed ? "OK" : "Not OK"}</Chip> {t.result.text} <span className="text-[13px] text-muted">by {t.result.by}</span>
-                      </p>
-                    ) : v.inspection!.canRecord && !decided ? (
-                      <div className="mt-2">
-                        <ResultForm inspectionId={v.inspection!.id} test={{ id: t.id, name: t.name, valueKind: t.valueKind, uom: t.uom, spec: t.spec }} />
-                      </div>
-                    ) : (
-                      <p className="mt-1 text-[14px] text-muted">No result yet.</p>
+              (() => {
+                const ins = v.inspection!;
+                const done = ins.tests.filter((t) => t.result);
+                const open = ins.tests.filter((t) => !t.result);
+                const canType = ins.canRecord && !decided;
+                return (
+                  <div className="space-y-3">
+                    {done.length > 0 && (
+                      <ul className="divide-y divide-line" data-testid="tests-done">
+                        {done.map((t) => (
+                          <li key={t.id} className="py-3">
+                            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                              <span className="font-medium">{t.name}</span>
+                              <span className="text-[13px] text-muted">OK: {t.spec}</span>
+                            </div>
+                            <p className="mt-1 text-[15px]">
+                              <Chip tone={t.result!.passed ? "ok" : "bad"}>{t.result!.passed ? "OK" : "Not OK"}</Chip> {t.result!.text} <span className="text-[13px] text-muted">by {t.result!.by}</span>
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
                     )}
-                  </li>
-                ))}
-              </ul>
+                    {open.length > 0 &&
+                      (canType ? (
+                        <>
+                          {done.length > 0 && <p className="text-[14px] font-semibold">Still to test ({open.length})</p>}
+                          <TestsForm key={open.map((t) => t.id).join(",")} inspectionId={ins.id} tests={open.map((t) => ({ id: t.id, name: t.name, valueKind: t.valueKind, uom: t.uom, spec: t.spec, isRequired: t.isRequired }))} />
+                        </>
+                      ) : (
+                        <ul className="divide-y divide-line">
+                          {open.map((t) => (
+                            <li key={t.id} className="py-3">
+                              <span className="font-medium">{t.name}</span> <span className="text-[14px] text-muted">· no result yet</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ))}
+                  </div>
+                );
+              })()
             )}
           </Card>
         </div>

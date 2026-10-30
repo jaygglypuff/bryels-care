@@ -98,6 +98,6 @@ refresh, read-only display account, no prices or customer names.
 
 ## 10. Possible defects to verify (from the process review)
 
-1. Boxing may be blocked: "121 units still to box" while stock is 119 after 2 retained samples.
+1. Boxing may be blocked: "121 units still to box" while stock is 119 after 2 retained samples. **Confirmed and fixed**: the pack expected the batch output; it now expects the output minus samples (A-CR-02, `tests/integration/sales/boxing-after-samples.test.ts`).
 2. A dispatched box still scans "At FG-01 · Released" (box location/status not updated at dispatch).
 3. The lot-confirm keypad offers only A–F and "-" (fine for today's lot formats; breaks for other codes).

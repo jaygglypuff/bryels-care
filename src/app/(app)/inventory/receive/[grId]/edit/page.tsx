@@ -40,6 +40,7 @@ export default async function EditReceiptPage({ params }: { params: Promise<{ gr
         reasonCodes={data.reasonCodes}
         defaultLocationId={data.locations[0]?.id ?? ""}
         canPost={ctx.can("procurement.goods_receipt.post")}
+        printLabels={ctx.can("inventory.label_job.create")}
         initial={{
           receiptId: gr.id,
           supplierName: gr.supplierName,
