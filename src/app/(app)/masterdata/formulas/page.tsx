@@ -17,7 +17,7 @@ export default async function FormulasPage() {
   if (!ctx.can("masterdata.formula.view")) return <Forbidden what="formulas" />;
   const rows = await listFormulas(ctx);
   const pending = rows.filter((r) => r.open?.status === "pending_approval").length;
-  // ADR-086: the step-by-step recipe wizard needs both the formula and the routing rights.
+  // ADR-089: the step-by-step recipe wizard needs both the formula and the routing rights.
   const canWizard = ctx.can("masterdata.formula.create") && ctx.can("masterdata.routing.create");
   const canChange = canWizard && ctx.can("masterdata.formula.edit") && ctx.can("masterdata.routing.edit") && ctx.can("masterdata.routing.view");
   return (

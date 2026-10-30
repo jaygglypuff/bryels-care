@@ -16,7 +16,7 @@ export default async function RoutingsPage() {
   const ctx = await requireContext();
   if (!ctx.can("masterdata.routing.view")) return <Forbidden what="routings" />;
   const rows = await listRoutings(ctx);
-  // ADR-086: each product's steps open in the step-by-step recipe (the recipe is the product's formula).
+  // ADR-089: each product's steps open in the step-by-step recipe (the recipe is the product's formula).
   const recipeOf = new Map((ctx.can("masterdata.formula.view") ? await listFormulas(ctx) : []).map((f) => [f.productId, f]));
   const canWizard = ctx.can("masterdata.formula.create") && ctx.can("masterdata.routing.create");
   const canChange = canWizard && ctx.can("masterdata.formula.edit") && ctx.can("masterdata.routing.edit");

@@ -369,7 +369,7 @@ export const SETTINGS = {
     requiresApproval: true,
   },
   /**
-   * ADR-086 (guided recipe wizard): the "Allowed difference" filled in for a new ingredient line, as
+   * ADR-089 (guided recipe wizard): the "Allowed difference" filled in for a new ingredient line, as
    * a percentage of its amount. Only a starting value: the author changes it per line and QA checks it
    * when approving the recipe. The 2 % default is the value of the built-in example (ADR-079), not a
    * quality rule.
