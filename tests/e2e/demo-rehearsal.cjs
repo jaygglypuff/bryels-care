@@ -192,7 +192,7 @@ async function kpiValue(page, caption) {
     await page.keyboard.press('Enter');
     const card = page.locator('[data-testid=scan-result][data-entity=lot]');
     await card.waitFor({ timeout: 20000 });
-    await card.getByText('Waiting for check: not usable yet').waitFor();
+    await card.getByText('Waiting for QA check: not usable yet').waitFor();
     assert((await card.innerText()).includes(facts.coconutLot), 'scan card shows the lot');
     await shot(page, 'scan-lot-quarantined');
     await card.getByRole('link', { name: 'Open lot' }).click();

@@ -5,10 +5,10 @@ import type { ItemState } from "@/modules/inventory/stock-by-item";
  * the server read model `stockByItem`; this file only names them. Colours and icons: stock-items.tsx.
  */
 export const ITEM_STATE_LABEL: Record<ItemState, string> = {
-  ok: "OK to use",
+  ok: "Ready to use",
   expiring: "Expiring soon",
-  waiting: "Waiting for check",
-  on_hold: "On hold",
+  waiting: "Waiting for QA check",
+  on_hold: "Stopped by QA",
   low: "Low stock",
   expired: "Expired – do not use",
   rejected: "Rejected – do not use",
@@ -20,9 +20,9 @@ export type StockChipKey = "" | "ok" | "waiting" | "on_hold" | "expiring" | "low
 /** The chips above the list, in the order the owner reads them. */
 export const STATUS_CHIPS: { key: StockChipKey; label: string }[] = [
   { key: "", label: "All" },
-  { key: "ok", label: "OK to use" },
-  { key: "waiting", label: "Waiting for check" },
-  { key: "on_hold", label: "On hold" },
+  { key: "ok", label: "Ready to use" },
+  { key: "waiting", label: "Waiting for QA check" },
+  { key: "on_hold", label: "Stopped by QA" },
   { key: "expiring", label: "Expiring" },
   { key: "low", label: "Low stock" },
 ];

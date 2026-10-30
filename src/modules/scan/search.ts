@@ -100,7 +100,7 @@ async function items(ctx: AuthContext, words: string[]): Promise<SearchHit[]> {
     const usable = new Decimal(r.usable);
     const rest = new Decimal(r.total).minus(usable);
     const parts = [
-      new Decimal(r.total).isZero() ? `none in stock at ${ctx.currentSite.code}` : `${fmtStock(usable, r.unit)} OK to use at ${ctx.currentSite.code}`,
+      new Decimal(r.total).isZero() ? `none in stock at ${ctx.currentSite.code}` : `${fmtStock(usable, r.unit)} ready to use at ${ctx.currentSite.code}`,
       rest.gt(0) ? `${fmtStock(rest, r.unit)} not usable yet or blocked` : null,
       r.code,
     ].filter(Boolean);

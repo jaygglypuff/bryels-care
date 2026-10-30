@@ -67,7 +67,7 @@ function QtyBlock({ item, blocked }: { item: StockItem; blocked: boolean }) {
   const extra = [item.waitingText ? `${item.waitingText} waiting for check` : null, item.onHoldText ? `${item.onHoldText} on hold` : null].filter(Boolean);
   return (
     <span className="block">
-      <span className="text-[16px] font-semibold tabular">{item.usableText}</span> <span className="text-[12px] text-muted">OK to use</span>
+      <span className="text-[16px] font-semibold tabular">{item.usableText}</span> <span className="text-[12px] text-muted">ready to use</span>
       {extra.length > 0 && <span className="block text-[12px] text-fg-2">+ {extra.join(" · ")}</span>}
       {item.low && item.minimumText && <span className="block text-[12px] text-[var(--warn-fg)]">Below the minimum of {item.minimumText}</span>}
     </span>

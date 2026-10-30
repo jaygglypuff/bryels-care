@@ -1562,3 +1562,15 @@ refusal never blocks dispatch; setting `finance.invoice.draft_at_dispatch`, defa
 cancels only a still-draft invoice; submit/approve/issue unchanged. Home shows "N shipments are not billed
 yet" from `notInvoicedShipments`. (4) "Record a payment" opened from an invoice preselects it and its open
 amount; the server re-checks every amount. Recipients are always resolved by permission at the site.
+
+## ADR-087 One page per material or product (owner request 2026-10-30)
+
+**Status.** Accepted. `/inventory/items/[kind]/[id]` on the read model `getItemStock`: one total and its split
+(ready to use · waiting for QA check · stopped by QA · expired · bad · set aside · promised to customer orders ·
+free to use), totals by supplier and by brand (as recorded at receipt, ADR-076; by batch for products), what
+expires first (30/60/90 days and already expired), where it is (per section and shelf), every lot in the order to
+use them, and the last ten movements as sentences. Each lot falls into exactly one bucket (same rules as the
+stock list), so the parts always add up. "All plants" only for users with lot view at more than one site;
+minimums need balance view; customer-order figures need sales-order view. Reads only. One status vocabulary on
+stock screens: Ready to use / Waiting for QA check / Stopped by QA / Expired – do not use / Bad – do not use.
+Search never shows an expired lot as ready to use.

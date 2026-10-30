@@ -126,7 +126,7 @@ function lotQty(v: string, uom: string) {
 }
 
 function riskFor(status: string, expired: boolean): { tone: RiskTone; title: string; body: string } | null {
-  if (status === "quarantine") return { tone: "q", title: "Waiting for check: not usable yet", body: "It cannot be used in production or shipped until quality checks and releases this lot. Move it only between the waiting-for-check and hold places." };
+  if (status === "quarantine") return { tone: "q", title: "Waiting for QA check: not usable yet", body: "It cannot be used in production or shipped until quality checks and releases this lot. Move it only between the waiting-for-check and hold places." };
   if (status === "on_hold") return { tone: "hold", title: "On hold: not usable", body: "It cannot be used in production or shipped. Move it only between the waiting-for-check and hold places until quality decides." };
   if (status === "rejected") return { tone: "rej", title: "Rejected: must not be used or shipped", body: "Keep it in the rejected cage and follow the QA disposal instruction." };
   if (status === "recalled") return { tone: "bad", title: "Recalled: must not be used or shipped", body: "Segregate all remaining stock and tell QA where you found it." };
