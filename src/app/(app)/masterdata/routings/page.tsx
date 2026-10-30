@@ -4,6 +4,8 @@ import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { listRoutings } from "@/modules/masterdata";
 import { Card, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { CommandForm } from "../_eng/forms";
+import { soapExampleAction } from "../_eng/actions";
 import { Forbidden } from "../../forbidden";
 import { VersionChip } from "../_eng/ui";
 
@@ -21,6 +23,7 @@ export default async function RoutingsPage() {
         actions={
           <>
             {ctx.can("masterdata.work_instruction.view") && <LinkButton href="/masterdata/work-instructions" variant="secondary">Work instructions</LinkButton>}
+            {ctx.can("masterdata.routing.create") && <CommandForm action={soapExampleAction} hidden={{}} label="Use the soap routing example" variant="secondary" pendingText="Adding…" />}
             {ctx.can("masterdata.routing.create") && <LinkButton href="/masterdata/routings/new" variant="cta">New routing</LinkButton>}
           </>
         }

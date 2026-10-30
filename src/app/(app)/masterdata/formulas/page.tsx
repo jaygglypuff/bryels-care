@@ -4,6 +4,8 @@ import { requireContext } from "@/lib/auth/context";
 import { D, fmtDate, fmtQty } from "@/lib/qty";
 import { listFormulas } from "@/modules/masterdata";
 import { Card, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { CommandForm } from "../_eng/forms";
+import { soapExampleAction } from "../_eng/actions";
 import { Forbidden } from "../../forbidden";
 import { VersionChip } from "../_eng/ui";
 
@@ -19,7 +21,14 @@ export default async function FormulasPage() {
       <PageHeader
         title="Formulas"
         subtitle={`Approved, effective revisions are frozen into each batch at creation.${pending ? ` ${pending} revision(s) awaiting approval.` : ""}`}
-        actions={ctx.can("masterdata.formula.create") ? <LinkButton href="/masterdata/formulas/new" variant="cta">New formula</LinkButton> : undefined}
+        actions={
+          ctx.can("masterdata.formula.create") ? (
+            <>
+              <CommandForm action={soapExampleAction} hidden={{}} label="Use the Acapulco soap example" variant="secondary" pendingText="Adding…" />
+              <LinkButton href="/masterdata/formulas/new" variant="cta">New formula</LinkButton>
+            </>
+          ) : undefined
+        }
       />
       {rows.length === 0 ? (
         <EmptyState title="No formulas yet">Formulas are drafted by the planner and approved by QA and a site manager before batches can use them.</EmptyState>

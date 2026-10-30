@@ -3,7 +3,9 @@ import { hash } from "@node-rs/argon2";
 import { and, count, eq, like } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
-import { auditEvents, locations, materials, organizations, products, settings, sites, users } from "@/db/schema";
+import { auditEvents, formulaRevisions, locations, materials, organizations, products, settings, sites, users } from "@/db/schema";
+import { buildContextForUser } from "@/lib/auth/context";
+import { installSoapExample } from "@/modules/masterdata";
 import { SANDBOX_ORG_NAME } from "@/lib/demo";
 import { listDemoAccounts, listSandboxAccounts } from "@/modules/identity";
 import { resetTestDatabase } from "../../support/db";
@@ -79,6 +81,21 @@ describe("ADR-072 empty sandbox company", () => {
     expect(sandbox.every((e) => e.startsWith("sandbox."))).toBe(true);
     expect(demo.some((e) => e.startsWith("sandbox."))).toBe(false);
     expect(demo.length).toBeGreaterThan(0);
+  });
+
+  it("ADR-079: the Acapulco soap example fills an empty company once, as drafts", async () => {
+    const [owner] = await db.select().from(users).where(eq(users.email, "sandbox.owner@bryels-care.test"));
+    const ctx = (await buildContextForUser(owner.id))!;
+    const first = await installSoapExample(ctx);
+    expect(first.created).toEqual(expect.arrayContaining(["product Acapulco Soap 135 g", "formula (draft)", "routing (draft)"]));
+    expect(first.created.filter((c) => c.startsWith("material ")).length).toBe(6);
+    const [rev] = await db.select().from(formulaRevisions).where(eq(formulaRevisions.id, first.formulaRevisionId!));
+    expect(rev.status).toBe("draft");
+    const again = await installSoapExample(ctx);
+    expect(again.created).toEqual([]);
+    // A warehouse operator may not create master data.
+    const [wh] = await db.select().from(users).where(eq(users.email, "sandbox.warehouse@bryels-care.test"));
+    await expect(installSoapExample((await buildContextForUser(wh.id))!)).rejects.toMatchObject({ code: "forbidden" });
   });
 
   it("refuses while a real account exists", async () => {

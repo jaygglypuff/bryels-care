@@ -55,6 +55,12 @@ const emptyStep = (): StepDraft => ({
   checklistText: "",
 });
 
+
+/** The parameter's internal code, made from its name when the user leaves it out (e.g. "Oil temperature" → oil_temperature). */
+const paramCode = (name: string, i: number) => {
+  const c = name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").replace(/^[^a-z]+/, "").slice(0, 40);
+  return c || `reading_${i + 1}`;
+};
 /**
  * Draft routing editor (US-3-02): steps in order with kind, area, checker requirement, equipment
  * class, parameters (unit, min/target/max, required) and checklist items. The server validates
@@ -113,7 +119,7 @@ export function RoutingStepEditor({
       requiresEquipment: s.requiresEquipment,
       equipmentKind: n(s.equipmentKind),
       minDurationMinutes: s.minDurationMinutes.trim() ? Number(s.minDurationMinutes) : null,
-      parameters: s.parameters.map((p) => ({ code: p.code, name: p.name, valueKind: p.valueKind, uom: n(p.uom), minValue: n(p.minValue), targetValue: n(p.targetValue), maxValue: n(p.maxValue), isRequired: p.isRequired })),
+      parameters: s.parameters.map((p, j) => ({ code: p.code.trim() || paramCode(p.name, j), name: p.name, valueKind: p.valueKind, uom: n(p.uom), minValue: n(p.minValue), targetValue: n(p.targetValue), maxValue: n(p.maxValue), isRequired: p.isRequired })),
       checklistItems: s.checklistText
         .split("\n")
         .map((l) => l.trim())
@@ -219,23 +225,44 @@ export function RoutingStepEditor({
               {s.parameters.map((p, k) => {
                 const perr = (f: string) => fe[`steps.${i}.parameters.${k}.${f}`];
                 return (
-                  <div key={k} className="mt-2 grid grid-cols-2 gap-2 rounded-[12px] bg-surface-2/60 p-2 sm:grid-cols-8">
-                    <Input aria-label="Parameter code" placeholder="code" value={p.code} onChange={(e) => setParam(i, k, { code: e.target.value })} className="font-mono" />
-                    <Input aria-label="Parameter name" placeholder="name" value={p.name} onChange={(e) => setParam(i, k, { name: e.target.value })} className="col-span-1 sm:col-span-2" />
-                    <Select aria-label="Value kind" value={p.valueKind} onChange={(e) => setParam(i, k, { valueKind: e.target.value })}>
-                      <option value="numeric">Number</option>
-                      <option value="text">Text</option>
-                      <option value="boolean">Yes/no</option>
-                    </Select>
-                    <Input aria-label="Unit" placeholder="unit" value={p.uom} onChange={(e) => setParam(i, k, { uom: e.target.value })} />
-                    <Input aria-label="Minimum" placeholder="min" inputMode="decimal" value={p.minValue} onChange={(e) => setParam(i, k, { minValue: e.target.value })} />
-                    <Input aria-label="Target" placeholder="target" inputMode="decimal" value={p.targetValue} onChange={(e) => setParam(i, k, { targetValue: e.target.value })} />
-                    <div className="flex items-center gap-1">
-                      <Input aria-label="Maximum" placeholder="max" inputMode="decimal" value={p.maxValue} onChange={(e) => setParam(i, k, { maxValue: e.target.value })} />
+                  <div key={k} className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 rounded-[12px] bg-surface-2/60 p-2.5 sm:grid-cols-6">
+                    <label className="col-span-2 flex flex-col gap-0.5 text-[12px] font-medium sm:col-span-3">
+                      What to record
+                      <Input aria-label="Parameter name" placeholder="e.g. Oil temperature" value={p.name} onChange={(e) => setParam(i, k, { name: e.target.value })} />
+                    </label>
+                    <label className="flex flex-col gap-0.5 text-[12px] font-medium">
+                      Type
+                      <Select aria-label="Value kind" value={p.valueKind} onChange={(e) => setParam(i, k, { valueKind: e.target.value })}>
+                        <option value="numeric">Number</option>
+                        <option value="text">Text</option>
+                        <option value="boolean">Yes/no</option>
+                      </Select>
+                    </label>
+                    <label className="flex flex-col gap-0.5 text-[12px] font-medium">
+                      Unit
+                      <Input aria-label="Unit" placeholder="°C, min, pcs" value={p.uom} onChange={(e) => setParam(i, k, { uom: e.target.value })} disabled={p.valueKind !== "numeric"} />
+                    </label>
+                    <div className="flex items-end justify-end">
                       <button type="button" aria-label="Remove parameter" onClick={() => set(i, { parameters: s.parameters.filter((_, j) => j !== k) })} className="rounded-full p-2 text-[var(--bad-fg)] hover:bg-surface-2">
                         <Trash2 size={15} />
                       </button>
                     </div>
+                    {p.valueKind === "numeric" && (
+                      <>
+                        <label className="flex flex-col gap-0.5 text-[12px] font-medium">
+                          Lowest OK
+                          <Input aria-label="Minimum" placeholder="optional" inputMode="decimal" value={p.minValue} onChange={(e) => setParam(i, k, { minValue: e.target.value })} />
+                        </label>
+                        <label className="flex flex-col gap-0.5 text-[12px] font-medium">
+                          Target
+                          <Input aria-label="Target" placeholder="optional" inputMode="decimal" value={p.targetValue} onChange={(e) => setParam(i, k, { targetValue: e.target.value })} />
+                        </label>
+                        <label className="flex flex-col gap-0.5 text-[12px] font-medium">
+                          Highest OK
+                          <Input aria-label="Maximum" placeholder="optional" inputMode="decimal" value={p.maxValue} onChange={(e) => setParam(i, k, { maxValue: e.target.value })} />
+                        </label>
+                      </>
+                    )}
                     {(perr("code") || perr("uom") || perr("minValue") || perr("targetValue") || perr("name")) && (
                       <p className="col-span-full text-[12px] text-[var(--bad-fg)]">{perr("code") ?? perr("name") ?? perr("uom") ?? perr("minValue") ?? perr("targetValue")}</p>
                     )}
@@ -247,9 +274,9 @@ export function RoutingStepEditor({
                 onClick={() => set(i, { parameters: [...s.parameters, { code: "", name: "", valueKind: "numeric", uom: "", minValue: "", targetValue: "", maxValue: "", isRequired: true }] })}
                 className="mt-2 inline-flex min-h-[40px] items-center gap-1 rounded-full border border-line px-3 text-[13px] hover:bg-surface-2"
               >
-                <Plus size={14} /> Add parameter
+                <Plus size={14} /> Add a reading (parameter)
               </button>
-              <p className="mt-1 text-[12px] text-muted">Limits are process-owner configuration; leave them empty until approved values exist.</p>
+              <p className="mt-1 text-[12px] text-muted">A parameter is a reading the operator records at this step, for example a temperature or a time. Lowest/highest OK are optional; a reading outside them is flagged.</p>
             </div>
 
             <div className="mt-3">

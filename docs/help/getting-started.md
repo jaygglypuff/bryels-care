@@ -1,8 +1,8 @@
 ---
 key: start.getting_started
 title: Getting started: from an empty company to a shipped order
-version: 1
-updated_at: 2026-10-25
+version: 2
+updated_at: 2026-10-30
 sop: Training guide for the sandbox; not an SOP
 ---
 
@@ -11,6 +11,8 @@ This guide takes you through the whole system once, in order, in the empty sandb
 Sign in on the sign-in page with **Start from scratch** and pick **Sandbox Owner**. As the owner you can do every step yourself, including approvals that normally need a second person; those are recorded in the audit log as an owner override. If you want to see how the hand-offs work for your staff, sign in with the role accounts instead (for example **Sandbox QA** to release lots). All sandbox passwords are demo1234.
 
 One rule for every record: many new records start as a **Draft**. Open the record and use the buttons at the top (for example **Submit**, **Approve** or **Activate**) until its status reads **Active** or **Approved**. Only active or approved records can be used in the next steps.
+
+Shortcut: on **Production → Formulas** press **Use the Acapulco soap example**. It adds the soap materials (coconut oil, palm oil, lye solution, extract, colour, wrapper), the product **Acapulco Soap 135 g**, a draft formula and a draft soap routing in one tap. Then skip steps 2, 4 and 5 except for checking, submitting and approving the drafts. The quantities are examples from the fictional demo company: check them before you rely on them.
 
 Tip: when a button is missing or a step says it needs someone else, the message names the role and the people who can do it.
 
@@ -38,9 +40,9 @@ Tip: when a button is missing or a step says it needs someone else, the message 
 
 ## 5. Write the recipe (formula) and the steps (routing)
 
-1. Open **Production → Formulas** and create a formula for the product: each material with its quantity for one standard batch.
+1. Open **Production → Formulas** and create a formula for the product (or use the Acapulco soap example): each material with its quantity for one standard batch.
 2. Submit it, then approve it. Only an approved formula can be used for production.
-3. Open **Production → Routings** and create the steps (for example weighing, mixing, curing, cutting, wrapping). Submit and approve.
+3. Open **Production → Routings** and create the steps (for example weighing, mixing, curing, cutting, wrapping). To add readings such as temperature to a step, open the draft routing, open the step and use **Add parameter** (name, unit, and optional minimum and maximum). Submit and approve.
 4. Optional: **Production → Work instructions** for operator text per step, and **Production → Equipment** for scales and mixers.
 
 ## 6. Say what QA checks (inspection plan)

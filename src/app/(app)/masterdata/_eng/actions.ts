@@ -36,6 +36,7 @@ import {
   submitWorkInstructionRevision,
   withdrawFormulaRevision,
   withdrawRoutingRevision,
+  installSoapExample,
 } from "@/modules/masterdata";
 
 /**
@@ -360,4 +361,13 @@ export async function requestOverrideAction(_: ActionState, fd: FormData) {
 }
 export async function decideOverrideAction(_: ActionState, fd: FormData) {
   return run(async (ctx) => DECISION_MSG(await decideEquipmentOverride(ctx, decisionInput(fd))), ["/masterdata/equipment"]);
+}
+
+/* ------------------------------------------------------------------ starter example (ADR-079) */
+
+export async function soapExampleAction(_: ActionState, _fd: FormData): Promise<ActionState> {
+  return run(async (ctx) => {
+    const r = await installSoapExample(ctx);
+    return r.created.length ? `Added the Acapulco soap example: ${r.created.join(", ")}. Review the drafts, then submit and approve them.` : "The Acapulco soap example is already there.";
+  }, ["/masterdata/formulas", "/masterdata/routings", "/masterdata/materials", "/masterdata/products"]);
 }

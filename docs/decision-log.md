@@ -1007,3 +1007,21 @@ lot held enough, and every checker had to type their password on the operator's 
 **Consequences.** A name-only signature records who was named, not proof they were present: for
 GMP the owner should switch the password back on, or use sign-off from the checker's own device,
 before real production (assumption A-SIGN-01). Tests: `tests/integration/production/execution-controls.test.ts`.
+
+## ADR-079 Built-in starter example (Acapulco soap)
+
+**Status.** Accepted (owner request, 2026-10-25).
+
+**Context.** Starting from an empty company, the owner had to invent the first formula and routing
+on unfamiliar screens.
+
+**Decision.** "Use the Acapulco soap example" (Formulas and Routings pages; `installSoapExample` in
+`src/modules/masterdata/templates.ts`) adds, only where missing (matched by name), the soap
+materials, the product "Acapulco Soap 135 g", a draft formula with the demo company's illustrative
+quantities and a draft five-step soap routing with optional readings. Codes are the next free
+`MAT-/PKG-/PRD-/F-/R-` numbers. Nothing is approved automatically; the drafts follow the normal
+review and approval. Running it again changes nothing. Needs the material, product, formula and
+routing create permissions. The routing editor also derives a parameter's code from its name.
+
+**Consequences.** The example quantities are fictional (not an approved recipe) and say so in the
+formula notes. Tests: `tests/integration/platform/sandbox.test.ts`.
