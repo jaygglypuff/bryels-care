@@ -13,6 +13,7 @@ import { DEVIATION_UNAVAILABLE, executionHooks } from "./execution-hooks";
 import { type BatchRow, findStepOfKind, openStep, stepRecord } from "./execution";
 import { assertStockCovers, postBatchMovement, postDispenseConsumption } from "./execution-postings";
 import { useEquipment } from "./process";
+import { convertReservations, expectedLots } from "./staging";
 import { type FormulaSnapshot, WEIGHING_STEP_KINDS, idempotent, lockBatch } from "./shared";
 
 /**
@@ -65,8 +66,41 @@ export type DispenseInput = {
   correctionReason?: string | null;
   /** CX-TOL: reason given by the approver for accepting an out-of-tolerance weight. */
   exceptionReason?: string | null;
+  /**
+   * ADR-080 §3: the screen preselected the lot (Weigh card). The operator must then confirm it per
+   * `production.weighing.lot_confirm`: `lotConfirm` = the last 4 characters printed on the container
+   * label, or the scanned BC:LOT label. A lot the operator scanned or typed into `lotRef` (the
+   * advanced batch workspace, offline sync) is itself the confirmation.
+   */
+  lotPreselected?: boolean;
+  lotConfirm?: string | null;
   idempotencyKey?: string | null;
 };
+
+const alnum = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+/**
+ * Lot confirmation at weighing (ADR-080 §3, UX review B5). Returns how the lot was confirmed for the
+ * record. Mismatch → 409 blocked_lot with the expected lot ("This label says …. Use lot …").
+ */
+export function confirmLot(mode: "last4" | "scan" | "none", preselected: boolean, lot: { lotNumber: string }, confirm: string | null | undefined): "typed_lot" | "last4" | "scan" | "not_required" {
+  if (!preselected) return "typed_lot"; // the label itself was scanned or typed into the lot field
+  if (mode === "none") return "not_required";
+  const c = (confirm ?? "").trim();
+  const field = { field: "lotConfirm", rule: "V-MAT" };
+  if (!c) {
+    throw new DomainError("validation", mode === "scan" ? `Scan the lot label on the container (lot ${lot.lotNumber}).` : `Type the last 4 characters of the lot number printed on the container label.`, { ...field, fieldErrors: { lotConfirm: mode === "scan" ? "Scan the label." : "Type the last 4." } });
+  }
+  const scanned = c.toUpperCase().startsWith("BC:LOT:") ? c.slice(7) : null;
+  if (scanned !== null || mode === "scan") {
+    const label = alnum(scanned ?? c);
+    if (label === alnum(lot.lotNumber)) return "scan";
+    throw new DomainError("blocked_lot", `This label says ${(scanned ?? c).toUpperCase()}. Use lot ${lot.lotNumber}, or choose another lot.`, { ...field, expected: lot.lotNumber, fieldErrors: { lotConfirm: "Wrong lot." } });
+  }
+  const want = alnum(lot.lotNumber).slice(-4);
+  if (alnum(c).slice(-4) === want && alnum(c).length >= 4) return "last4";
+  throw new DomainError("blocked_lot", `The label ends in ${alnum(c).slice(-4) || c.toUpperCase()}, not ${want}. Use lot ${lot.lotNumber}, or choose another lot.`, { ...field, expected: lot.lotNumber, fieldErrors: { lotConfirm: "Does not match." } });
+}
 
 /** Lots reserved for this batch for a material (stock_reservations demand batch), if any. */
 async function reservedLotsFor(q: DbOrTx, batchId: string, materialId: string) {
@@ -176,7 +210,16 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
       if (reserved.length && !reserved.some((r) => r.lotId === lot.id)) {
         throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} is not the lot reserved for this batch. Expected: ${reserved.map((r) => r.lotNumber).join(", ")}.`, { rule: "V-MAT", field: "lot" });
       }
+      // ADR-080 §2: a batch that got its materials by the Materials list (no staging move) weighs from the
+      // lots set aside for its order; another lot is refused with the expected lot shown.
+      const woReserved = !reserved.length && batch.workOrderId ? await expectedLots(tx, batch.workOrderId, bm.materialId) : [];
+      if (woReserved.length && !woReserved.some((r) => r.r.lotId === lot.id)) {
+        const exp = [...new Set(woReserved.map((r) => r.lotNumber))];
+        throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} is not the lot set aside for this order. Use lot ${exp.join(" or ")}.`, { rule: "V-MAT", field: "lot", expected: exp });
+      }
       assertLotUsable(lot);
+      const lotConfirmMode = await getSetting(tx, ctx.organizationId, "production.weighing.lot_confirm", batch.siteId);
+      const lotConfirmedBy = confirmLot(lotConfirmMode, !!input.lotPreselected, lot, input.lotConfirm);
       const loc = await resolveSourceLocation(tx, ctx, batch.siteId, lot.id, lot.lotNumber, input.locationRef);
       await assertLocationNotHeld(tx, loc);
       await assertStockCovers(tx, lot, loc, net);
@@ -288,6 +331,9 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
 
       const atDispense = await getSetting(tx, ctx.organizationId, "production.post_consumption_at_dispense", batch.siteId);
       if (atDispense) await postDispenseConsumption(tx, ctx, batch, rec2, material.name);
+      // The order's set-aside quantity of this lot is used up by the weighing (Materials-list batches).
+      const atLot = woReserved.filter((r) => r.r.lotId === lot.id && r.r.locationId === loc.id);
+      if (atLot.length) await convertReservations(tx, ctx, atLot.map((r) => r.r), net, `Weighed for batch ${batch.batchNumber}`, "converted");
 
       await audit(tx, ctx, {
         action: "production.dispense_record.recorded",
@@ -314,6 +360,7 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
           status,
           postedNow: atDispense,
           supersedes: supersedesId,
+          lotConfirmed: lotConfirmedBy,
         },
       });
       if (exception) {
@@ -347,7 +394,7 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
  * The checker verifies a saved weighing (W05-08): sees material, lot, target, actual and signs.
  * The operator can never check their own row (409 separation_of_duties; CHECK dispense_records_sod_ck).
  */
-export async function checkDispense(checker: AuthContext, input: { dispenseRecordId: string; idempotencyKey?: string | null }) {
+export async function checkDispense(checker: AuthContext, input: { dispenseRecordId: string; idempotencyKey?: string | null; signedOn?: "own_session" | "operator_device" }) {
   checker.require("production.dispense_record.approve");
   return db.transaction(async (tx) => {
     const [r] = await tx
@@ -375,7 +422,7 @@ export async function checkDispense(checker: AuthContext, input: { dispenseRecor
         entityId: rec.id,
         entityNumber: batch.batchNumber,
         siteId: batch.siteId,
-        after: { material: r.materialName, lot: r.lotNumber, actualQtyG: rec.actualQtyG, signedOn: "own_session" },
+        after: { material: r.materialName, lot: r.lotNumber, actualQtyG: rec.actualQtyG, signedOn: input.signedOn ?? "own_session" },
       });
       return { dispenseRecordId: rec.id, materialName: r.materialName };
     });

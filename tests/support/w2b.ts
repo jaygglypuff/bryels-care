@@ -159,7 +159,7 @@ let fixtureSeq = 0;
  * absolute) and an approved routing with the given steps (limits, holds, equipment), effective from
  * yesterday. Inserted as draft and then approved, like the W1D seed (fixture only).
  */
-export async function makeExecutionFixture(kit: Kit, steps: FixtureStep[], opts: { unitNetMassG?: string; yieldPct?: string } = {}) {
+export async function makeExecutionFixture(kit: Kit, steps: FixtureStep[], opts: { unitNetMassG?: string; yieldPct?: string; lineChecker?: [boolean, boolean] } = {}) {
   fixtureSeq += 1;
   const tag = `${Date.now().toString(36).toUpperCase()}${fixtureSeq}`;
   const mgr = await userId("manager.nfd@bryels-care.test");
@@ -173,8 +173,8 @@ export async function makeExecutionFixture(kit: Kit, steps: FixtureStep[], opts:
   const [f] = await db.insert(formulas).values({ organizationId: kit.orgId, productId: p.id, code: `F-TST-${tag}`, name: `Test formula ${tag}` }).returning();
   const [rev] = await db.insert(formulaRevisions).values({ formulaId: f.id, revisionNo: 1, referenceBatchSizeG: "1500", theoreticalYieldPct: opts.yieldPct ?? "100", createdBy: mgr }).returning();
   await db.insert(bomLines).values([
-    { formulaRevisionId: rev.id, lineNo: 1, materialId: coconut.id, quantityG: "1000", tolerancePct: "1" },
-    { formulaRevisionId: rev.id, lineNo: 2, materialId: palm.id, quantityG: "500", toleranceAbsG: "5" },
+    { formulaRevisionId: rev.id, lineNo: 1, materialId: coconut.id, quantityG: "1000", tolerancePct: "1", requiresChecker: opts.lineChecker?.[0] ?? true },
+    { formulaRevisionId: rev.id, lineNo: 2, materialId: palm.id, quantityG: "500", toleranceAbsG: "5", requiresChecker: opts.lineChecker?.[1] ?? true },
   ]);
   await db.update(formulaRevisions).set({ status: "approved", effectiveFrom: manilaDay(-1), submittedBy: mgr, submittedAt: new Date(), approvedBy: qa, approvedAt: new Date() }).where(eq(formulaRevisions.id, rev.id));
   const [r] = await db.insert(routings).values({ organizationId: kit.orgId, productId: p.id, code: `R-TST-${tag}`, name: `Test routing ${tag}` }).returning();

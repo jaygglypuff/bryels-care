@@ -16,6 +16,7 @@ import { analyticsAccessReportJob, analyticsScheduleDispatchJob, analyticsSchedu
 import { platformActionCentreSweepJob } from "@/modules/action-centre/jobs";
 import { procurementReorderSuggestJob } from "@/modules/procurement/jobs"; // W4A
 import { platformRetentionSweepJob } from "./retention-sweep"; // W4F (US-9-05)
+import { productionCuringReminderJob } from "@/modules/production/jobs/curing-reminder"; // ADR-080 G2 (V2-5)
 import { type AnyJobDefinition, type JobRegistry, createJobRegistry } from "./job-definition";
 
 /**
@@ -44,6 +45,7 @@ export function jobDefinitions(): AnyJobDefinition[] {
     analyticsReconcileKpisJob,
     procurementReorderSuggestJob, // W4A (US-6-04)
     platformRetentionSweepJob, // W4F (US-9-05)
+    productionCuringReminderJob, // ADR-080 G2 (V2-5)
   ];
 }
 

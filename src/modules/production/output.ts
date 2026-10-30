@@ -15,11 +15,12 @@ import { executionHooks } from "./execution-hooks";
 import { type BatchRow, endEquipmentUses, findStepOfKind, sortedSteps, stepRecord, stepRecords } from "./execution";
 import { postBatchMovement, postDispenseConsumption, postPackagingConsumption } from "./execution-postings";
 import { currentPackaging } from "./packaging";
-import { type FormulaSnapshot, addDays, idempotent, lockBatch, manilaToday } from "./shared";
+import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
 import { transitionBatch } from "./state";
 import { releaseBatchStagingReservations } from "./staging";
 import { syncWorkOrderProgress } from "./work-orders";
 import { currentYield, yieldBlockers } from "./yield";
+import { batchExpiryDates } from "./flow-facts";
 
 export type PostToQuarantineInput = {
   batchId: string;
@@ -27,8 +28,6 @@ export type PostToQuarantineInput = {
   locationRef: string;
   idempotencyKey?: string | null;
 };
-
-const manilaDateOf = (d: Date) => manilaToday(d);
 
 /** Everything that blocks posting to quarantine, for the transfer screen and the 409. */
 export async function transferBlockers(batch: BatchRow): Promise<string[]> {
@@ -108,14 +107,8 @@ export async function postBatchToQuarantine(ctx: AuthContext, input: PostToQuara
 
       // 2. Finished lot in quarantine (A-PROC-21, A-PROC-08).
       const basis = await getSetting(tx, ctx.organizationId, "production.output.expiry_basis");
-      const mfgDate = manilaDateOf(batch.startedAt ?? new Date());
-      let basisDate = mfgDate;
-      if (basis === "packaging_date") {
-        const pk = steps.find((s) => s.stepKind === "packaging" || s.stepKind === "filling");
-        const pr = pk ? recs.find((r) => r.stepNo === pk.stepNo) : null;
-        basisDate = pr?.completedAt ? manilaDateOf(pr.completedAt) : manilaToday();
-      }
-      const expiresOn = addDays(basisDate, product.shelfLifeDays);
+      // ADR-080 §7: one source for the lot, the BMR and the wrap label (batchExpiryDates).
+      const { manufacturedOn: mfgDate, expiresOn } = batchExpiryDates(batch, steps, recs, basis, product.shelfLifeDays);
       const lotNumber = await nextNumber(tx, ctx.organizationId, "LOT");
       const [lot] = await tx
         .insert(inventoryLots)

@@ -28,6 +28,10 @@ export const GUIDE_FILES: Record<string, string> = {
   "production.staging": "staging.md",
   "production.weighing": "weighing.md",
   "production.line_clearance": "line-clearance.md",
+  // ADR-080 stage G2: the production flow v2 operator screens
+  "production.materials_list": "materials-list.md",
+  "production.weigh": "weigh.md",
+  "production.step": "step.md",
   "quality.release": "qa-release.md",
   "production.bmr": "bmr.md",
   "sales.order": "order.md",

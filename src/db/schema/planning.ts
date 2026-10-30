@@ -261,3 +261,39 @@ export const batchMaterialStagings = pgTable(
     check("ck_batch_material_stagings_locations", sql`${t.fromLocationId} <> ${t.toLocationId}`),
   ],
 );
+
+/**
+ * Production flow v2 (ADR-080 §2, slice V2-3): the "Materials list" ticks. One row per action on an
+ * ingredient line of a batch: `taken` (brought to the line), `not_needed` (already in the room; it
+ * never removes or skips the weighing) or `untaken` (tick withdrawn while the batch is still planned).
+ * Append-only: the current state of a line is its latest row; nothing is updated or deleted. With
+ * `production.prepare.move_stock` off a tick moves no stock; with it on the tick also posts the
+ * staging transfer (`stagingId`).
+ */
+export const BATCH_MATERIAL_PICK_ACTIONS = ["taken", "not_needed", "untaken"] as const;
+export type BatchMaterialPickAction = (typeof BATCH_MATERIAL_PICK_ACTIONS)[number];
+export const batchMaterialPicks = pgTable(
+  "batch_material_picks",
+  {
+    id: id(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    siteId: uuid("site_id").notNull().references(() => sites.id),
+    batchId: uuid("batch_id").notNull().references((): AnyPgColumn => batches.id),
+    batchMaterialId: uuid("batch_material_id").notNull().references((): AnyPgColumn => batchMaterials.id),
+    action: text("action").notNull(),
+    /** The lot shown on the list when the line was ticked (null: no lot set aside, e.g. a batch without an order). */
+    lotId: uuid("lot_id").references(() => inventoryLots.id),
+    /** Lot label scanned when `production.prepare.scan_lots` is on. */
+    scannedLotCode: text("scanned_lot_code"),
+    /** Staging transfer posted with the tick when `production.prepare.move_stock` is on. */
+    stagingId: uuid("staging_id").references((): AnyPgColumn => batchMaterialStagings.id),
+    reason: text("reason"),
+    pickedBy: uuid("picked_by").notNull().references(() => users.id),
+    pickedAt: timestamp("picked_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("batch_material_picks_batch_idx").on(t.batchId, t.batchMaterialId, t.pickedAt),
+    check("ck_batch_material_picks_action", sql`${t.action} in (${inList(BATCH_MATERIAL_PICK_ACTIONS)})`),
+    check("ck_batch_material_picks_reason", sql`${t.action} <> 'not_needed' or length(btrim(coalesce(${t.reason}, ''))) >= 3`),
+  ],
+);
