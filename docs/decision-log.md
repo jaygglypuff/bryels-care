@@ -1218,3 +1218,61 @@ tablet widths.
 `purchase_order_lines.source_goods_receipt_line_id`, the index and checks above, and the changed
 `ck_purchase_orders_sent`. Assumptions A-S6-01..04 (PRD). Tests:
 `tests/integration/inventory/s6-sections.test.ts`, `tests/integration/procurement/s6-po-from-receipt.test.ts`.
+
+## ADR-080 Production flow v2 (supersedes parts of ADR-074 and ADR-078)
+
+**Status.** Accepted (2026-10-30). The owner delegated every decision ("act as the consultant, decide,
+I will test on the demo/sandbox"). Design: `docs/production-flow-v2.md`; independent reviews:
+`docs/reviews/production-flow-v2-qa-review.md` (GMP) and `docs/reviews/production-flow-v2-ux-review.md`
+(tablet UX). Where they disagree, the decision below wins and the design doc is read with it.
+
+**Decisions.**
+1. **Statuses (supersedes ADR-074 §1):** one list everywhere (chip, progress strip, filters, board):
+   Draft → Approved → In progress → Quality check → Done, plus end states Failed and Cancelled.
+   Curing is not a status: "In progress · Curing until Fri 28 Nov". A QA "Not yet" shows
+   "Quality check · On hold" in amber. **Done means QA passed** (not "moved to the hold area").
+   Quantities show in pieces first ("247 bars · 2 batches"); mass only on Weigh and More details.
+2. **Getting materials:** a pick list with "Taken" ticks; no stock move and no scanning by default
+   (`production.prepare.move_stock`, `production.prepare.scan_lots`, both off). "Not needed" may never
+   skip a weighing.
+3. **Right lot at weighing (GMP blocker from the UX review):** the lot is preselected but the operator
+   confirms it by typing the last 4 characters printed on the container (or scanning)
+   — `production.weighing.lot_confirm`, default on.
+4. **Second-person weighing check (supersedes ADR-078 §2):** mode `all | marked | none`; existing
+   organizations keep their behaviour (true → all, false → none); new organizations and the sandbox
+   `marked` (lye solution, colour, extract, fragrance, preservative are marked in the examples). The
+   checker picks their name (owner decision, ADR-078) on a 2-tap confirm screen. [GMP: confirm whether
+   critical lines need a PIN.]
+5. **Two short checks** (Start check, Before wrapping check) replace the three line clearances in the
+   example setups, "All OK" button, checker off by default. Sites with separate rooms keep three.
+6. **Counts are typed once:** Cut step records bars cut; the daily log records good units and rejects
+   by type; Finish is a read-back with only damaged and left-over wrappers typed (if nothing was logged
+   it asks for the counts in three short screens). Samples come out of the good units; rejects found
+   after wrapping count as wrappers used. Packaging balance must be 0. "Defects" are called "Rejects".
+7. **Expiry counts from the mixing date**; the wrap label and the lot use the same date.
+8. **Quality check (GMP blockers B1/B2 from the QA review):** one screen with Pass / Not yet / Fail,
+   an "Exceptions in this batch" box and a "batch record reviewed" tick. The releaser can never be a
+   person who weighed, checked or did a step of that batch; the owner override can bypass this only
+   with a typed reason that is printed on the batch record. The person who entered the test results
+   may release when `quality.release.tester_may_release` is on (restricted; default on). Release is
+   done from the releaser's own signed-in session (never by picking a name). [GMP: confirm electronic
+   signature validation before the paper BMR is retired.]
+9. **Pass closes the batch automatically** when all closure checks pass (via the existing hook
+   pattern), generates the BMR, sets the order Done when its last batch is decided, and notifies the
+   linked customer order.
+10. **Lye solution** is its own short order and lot, used only after a second person's check, with a
+    use-by date set by QA. Soap example: 8 steps; lotion example with pH/viscosity before filling and
+    a maximum bulk holding time.
+11. **Screens and words:** operator screens Orders, Order, Get materials, Weigh (in-app 56 px keypad),
+    Step ("Step done"), Finish, plus "Check quality" for QA and a one-page owner dashboard ("Waiting for
+    me" first). Navigation per role: operators "My work" and "Today"; owner/planner Orders, Today,
+    Rejects, New order, Setup; old screens in a collapsed "Advanced" group; Maintenance leaves
+    Production; the iPad tab bar follows the role. Banned operator words include dispense, staging,
+    quarantine, tolerance, yield, rework, reading, disposition, release (see the UX review §4).
+12. **Target:** one soap batch from Draft to Done in ≤ 30 taps excluding typed counts, checked at
+    820×1180 and 1180×820.
+
+**Consequences.** Built in four stages (G1 status, order hub, navigation, words; G2 materials, weighing,
+steps, curing; G3 finish, quality check, auto-close; G4 today page, dashboard, examples, hide and
+redirect). Items a human GMP consultant must still confirm are listed in the QA review §5 and in
+`docs/PRD.md` assumptions A-PF2-01..12.
