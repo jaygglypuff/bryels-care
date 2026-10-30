@@ -425,6 +425,7 @@ with V2-6 once V2-4 is in).
 | `production.post_consumption_at_dispense` | org, site | recommend true for new organizations (existing ones unchanged) | requires approval (as today) |
 | `production.output.default_hold_location` | site | first location of section `qa_hold` | — |
 | `production.output.retained_samples` | org, site | `{ enabled: true, units: 2 }` | requires approval |
+| `quality.release.tester_may_release` | org, site | true (ADR-080 §8, built in G3) | restricted, requires approval |
 | `production.quality.usual_days` | org, site | 2 (for the late-order forecast only) | — |
 | `production.daily_log.shifts` | org, site | `["Day"]` | — |
 | `production.paper_records.enabled` | org | false | — |

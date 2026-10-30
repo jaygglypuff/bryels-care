@@ -399,3 +399,43 @@ export async function defectSummary(ctx: AuthContext, f: { workOrderId?: string;
   };
 }
 export type DefectSummary = Awaited<ReturnType<typeof defectSummary>>;
+
+/**
+ * What the daily log says about one batch (ADR-080 §6, Finish read-back): good pieces and rejects by
+ * type from the entries that count (not replaced). Entries without a batch count for the batch only
+ * when the order has a single live batch (otherwise they cannot be attributed). No permission check:
+ * callers (Finish view and command) already checked access to the batch.
+ */
+export async function batchLogCounts(q: Tx | typeof db, batch: { id: string; workOrderId: string | null }) {
+  const empty = { entries: 0, days: 0, good: new Decimal(0), rejects: [] as { type: string; qty: Decimal }[] };
+  if (!batch.workOrderId) return empty;
+  const live = await q
+    .select({ id: batches.id })
+    .from(batches)
+    .where(and(eq(batches.workOrderId, batch.workOrderId), sql`not (${batches.status} = 'rejected' and ${batches.startedAt} is null)`));
+  const single = live.length <= 1;
+  const replaced = q.select({ id: productionDailyLogs.correctsId }).from(productionDailyLogs).where(isNotNull(productionDailyLogs.correctsId));
+  const rows = await q
+    .select({ id: productionDailyLogs.id, logDate: productionDailyLogs.logDate, good: productionDailyLogs.goodQty })
+    .from(productionDailyLogs)
+    .where(
+      and(
+        eq(productionDailyLogs.workOrderId, batch.workOrderId),
+        single ? sql`(${productionDailyLogs.batchId} = ${batch.id} or ${productionDailyLogs.batchId} is null)` : eq(productionDailyLogs.batchId, batch.id),
+        notInArray(productionDailyLogs.id, sql`(${replaced})`),
+      ),
+    );
+  if (!rows.length) return empty;
+  const defects = await q
+    .select({ type: productionDefectEntries.defectType, qty: productionDefectEntries.quantity })
+    .from(productionDefectEntries)
+    .where(inArray(productionDefectEntries.dailyLogId, rows.map((r) => r.id)));
+  const byType = new Map<string, Decimal>();
+  for (const d of defects) byType.set(d.type, (byType.get(d.type) ?? new Decimal(0)).plus(d.qty));
+  return {
+    entries: rows.length,
+    days: new Set(rows.map((r) => r.logDate)).size,
+    good: rows.reduce((s, r) => s.plus(r.good), new Decimal(0)),
+    rejects: [...byType.entries()].map(([type, qty]) => ({ type, qty })),
+  };
+}

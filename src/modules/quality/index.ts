@@ -118,3 +118,18 @@ export {
   type OpenRecallCaseInput,
 } from "./recall-cases";
 export * from "./capa-rules";
+// ADR-080 G3: Check quality (one page per finished batch) and the release hook.
+export {
+  getQualityCheck,
+  listWaitingForCheck,
+  decideQualityCheck,
+  batchMakers,
+  batchExceptions,
+  QUALITY_CHECK_DECISIONS,
+  QUALITY_CHECK_LABEL,
+  type QualityCheckDecision,
+  type QualityCheckInput,
+  type QualityCheckView,
+  type ExceptionItem,
+} from "./check-quality";
+export { registerQualityReleaseHooks, resetQualityReleaseHooks, type QualityReleaseHooks, type AutoCloseResult } from "./release-hooks";

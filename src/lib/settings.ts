@@ -150,10 +150,46 @@ export const SETTINGS = {
   // Scrap and rework reasons moved to the shared reason codes (categories scrap / rework, US-1-24).
   /** A-PROC-08: finished-lot expiry basis: manufacture (batch start) date or packaging date, plus product shelf life. */
   "production.output.expiry_basis": { scopes: ["organization"], schema: z.enum(["manufacture_date", "packaging_date"]), default: "manufacture_date" as "manufacture_date" | "packaging_date", assumption: "A-PROC-08", group: "Production", label: "Finished-lot expiry basis", requiresApproval: true },
+  /** ADR-080 §6 (G3): where Finish puts the finished batch: a quarantine-class location code of the site; empty = the first active one in the section "Waiting for QA / on hold". */
+  "production.output.default_hold_location": {
+    scopes: ["site"],
+    schema: z.string().trim().min(1).max(40).nullable(),
+    default: null as string | null,
+    assumption: "A-PF2-13",
+    group: "Production",
+    label: "Finished batches go to (hold area location code)",
+    description: "Leave empty to use the first active hold location of the site (section Waiting for QA / on hold). Must be a quarantine location.",
+  },
+  /** ADR-080 §6, A-PF2-09: retained samples kept at Finish, taken from the good pieces (not for sale). */
+  "production.output.retained_samples": {
+    scopes: ["organization", "site"],
+    schema: z.object({ enabled: z.boolean(), units: z.number().int().min(0).max(1000) }).strict(),
+    default: { enabled: true, units: 2 } as { enabled: boolean; units: number },
+    assumption: "A-PF2-09",
+    group: "Production",
+    label: "Samples kept per batch",
+    description: "How many finished pieces Finish keeps as retained samples (taken from the good pieces). Quantity and keeping time must be confirmed by QA.",
+    requiresApproval: true,
+  },
   /** W13-02: equipment with cleaning rule per_batch becomes "dirty" (cleaning required) when its use on a batch ends. */
   "production.equipment.mark_dirty_after_batch_use": { scopes: ["organization", "site"], schema: z.boolean(), default: true, assumption: "A-W2B-06", group: "Production", label: "Mark per-batch equipment dirty after use" },
 
   // Wave 2 W2C: QA release, deviations, genealogy, bulk disposition, label verification (A-W2C-nn in docs/PRD.md).
+  /**
+   * ADR-080 §8 (QA review B2): the person who entered the test results of a batch may also review the
+   * inspection and pass the batch. Production ≠ release always applies (B1). Restricted.
+   */
+  "quality.release.tester_may_release": {
+    scopes: ["organization", "site"],
+    schema: z.boolean(),
+    default: true as boolean,
+    assumption: "A-PF2-14",
+    group: "Quality",
+    label: "The person who tested a batch may also pass it",
+    description: "On: one QA person may enter the test results and pass the batch (the batch record says so). Off: another QA person must review the tests and decide. The person who made, weighed or checked the batch can never pass it.",
+    requiresApproval: true,
+    restricted: true,
+  },
   /** Hours from creation until an inspection shows as overdue in the QA queue (scheduling aid, not a quality rule). */
   "quality.inspection.due_hours": { scopes: ["organization", "site"], schema: z.number().int().min(1).max(24 * 60), default: 48, assumption: "A-W2C-01", group: "Quality", label: "Inspection overdue after (hours)" },
   /** Deviation severity classes qa_qc chooses from (W07-01). The company's QA defines the classes and their meaning. */

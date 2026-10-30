@@ -470,7 +470,17 @@ async function decideLotTx(ctx: AuthContext, input: DecideLotInput) {
 type Snapshot = { steps?: { stepNo: number; name: string; routingStepId: string }[] };
 
 /** Facts used for release blockers; works inside or outside a transaction. */
-async function batchFacts(q: Tx | typeof db, ctx: AuthContext, batch: typeof batches.$inferSelect, lot: typeof inventoryLots.$inferSelect | null, opts: { conditional?: boolean } = {}) {
+/**
+ * `opts.testerMayRelease` (ADR-080 §8, setting quality.release.tester_may_release): the person who entered
+ * the test results may release. The production ≠ release rule (isOperatorOrChecker) always applies.
+ */
+export async function batchFacts(
+  q: Tx | typeof db,
+  ctx: AuthContext,
+  batch: typeof batches.$inferSelect,
+  lot: typeof inventoryLots.$inferSelect | null,
+  opts: { conditional?: boolean; testerMayRelease?: boolean } = {},
+) {
   const tests = liveResults(
     await q.select({ id: testResults.id, testName: testResults.testName, passed: testResults.passed, supersedesId: testResults.supersedesId, testedBy: testResults.testedBy }).from(testResults).where(eq(testResults.batchId, batch.id)),
   );
@@ -530,7 +540,7 @@ async function batchFacts(q: Tx | typeof db, ctx: AuthContext, batch: typeof bat
     missingSteps: steps.filter((s) => !doneIds.has(s.routingStepId)).map((s) => `${s.stepNo}. ${s.name}`),
     pendingLines: lines.filter((l) => l.status === "pending").map((l) => `${l.lineNo}. ${l.name}`),
     isOperatorOrChecker: involved.has(ctx.userId),
-    isTester: testers.has(ctx.userId),
+    isTester: testers.has(ctx.userId) && !opts.testerMayRelease,
     planDriven: !!insp,
     extraBlockers: extra,
   });
@@ -685,7 +695,7 @@ export type ConditionalBasis = { requestedBy: string; conditions: string; review
  * `conditional` is given). Locks the batch and its output lot, re-checks every blocker, moves stock and
  * writes dispositions, transitions and audit events. Callers check permissions.
  */
-export async function decideBatchInTx(tx: Tx, ctx: AuthContext, input: { batchId: string; decision: BatchDecision; reason: string; conditional?: ConditionalBasis | null }) {
+export async function decideBatchInTx(tx: Tx, ctx: AuthContext, input: { batchId: string; decision: BatchDecision; reason: string; conditional?: ConditionalBasis | null; testerMayRelease?: boolean }) {
   const t = BATCH_TRANSITIONS[input.decision];
   const reason = input.reason;
   {
@@ -706,7 +716,7 @@ export async function decideBatchInTx(tx: Tx, ctx: AuthContext, input: { batchId
       : null;
 
     if (input.decision === "release") {
-      const blockers = await batchFacts(tx, ctx, batch, lot, { conditional: !!input.conditional });
+      const blockers = await batchFacts(tx, ctx, batch, lot, { conditional: !!input.conditional, testerMayRelease: !!input.testerMayRelease });
       const sod = blockers.find((b) => b.code === "separation_of_duties");
       if (sod) ctx.assertSeparation(true, sod.message);
       const others = blockers.filter((b) => b.code !== "separation_of_duties");
@@ -791,6 +801,6 @@ export async function decideBatchInTx(tx: Tx, ctx: AuthContext, input: { batchId
         after: { qualityStatus: lotTo, dispositionId: lotDispositionId, batch: batch.batchNumber, movedTo: toLocationCode, moved },
       });
     }
-    return { batchNumber: batch.batchNumber, toStatus: t.to, lotNumber: lot?.lotNumber ?? null, lotId: lot?.id ?? null, siteId: batch.siteId, lotDispositionId, movedTo: toLocationCode };
+    return { batchNumber: batch.batchNumber, toStatus: t.to, lotNumber: lot?.lotNumber ?? null, lotId: lot?.id ?? null, siteId: batch.siteId, lotDispositionId, batchDispositionId, movedTo: toLocationCode };
   }
 }

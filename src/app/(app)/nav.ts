@@ -109,6 +109,8 @@ export const NAV: NavGroup[] = [
     label: "Quality",
     icon: "shield",
     items: [
+      // ADR-080 G3: the one-page check of finished batches comes first for QA.
+      { label: "Waiting for check", href: "/quality/check", permission: "quality.disposition.view" },
       { label: "QA queue", href: "/quality", permission: "quality.disposition.view" },
       { label: "Inspections", href: "/quality/inspections", permission: "quality.inspection.view" },
       { label: "Deviations", href: "/quality/deviations", permission: "quality.deviation.view" },
@@ -291,7 +293,7 @@ export function tabsFor(can: Can, roles: readonly string[]): Tab[] {
     persona === "operator"
       ? [home, { label: "Today", href: "/production/today", icon: "today", permission: "production.daily_log.view" }, scan, { label: "Help", href: "/help", icon: "help" }]
       : persona === "qa"
-        ? [home, { label: "Quality check", href: "/quality", icon: "shield", permission: "quality.disposition.view" }, production, scan, menu]
+        ? [home, { label: "Quality check", href: "/quality/check", icon: "shield", permission: "quality.disposition.view" }, production, scan, menu]
         : persona === "viewer"
           ? [home, production, { label: "Sales", href: "/sales", icon: "truck", permission: "sales.sales_order.view" }, scan, menu]
           : [home, production, { label: "Sales", href: "/sales", icon: "truck", permission: "sales.sales_order.view" }, { label: "To approve", href: "/approvals", icon: "approve" }, menu];

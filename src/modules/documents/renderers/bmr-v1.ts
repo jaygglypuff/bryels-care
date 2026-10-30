@@ -335,6 +335,9 @@ function dispositionSignatures(sec: Section, d: BmrData): SafeHtml {
     <span><span class="box">${disapproved ? "✓" : ""}</span>Disapproved</span>
     ${disp && disp.decision === "other" ? html`<span style="display:block"><b>${disp.label}</b></span>` : ""}
     ${disp?.reason ? html`<span class="muted" style="display:block">Reason: ${disp.reason}</span>` : ""}
+    ${disp?.recordReviewed ? html`<span class="muted" style="display:block">Batch record reviewed before the decision.</span>` : ""}
+    ${disp?.testerReleased ? html`<span style="display:block"><b>Tested and released by the same person</b> (setting quality.release.tester_may_release).</span>` : ""}
+    ${disp?.overrideReason ? html`<span style="display:block" data-field="override_reason"><b>Released by a person who worked on this batch (owner override). Reason: ${disp.overrideReason}</b></span>` : ""}
   </td></tr>
   <tr>
     <td colspan="2"><span class="lbl">Name and Signature of QA:</span>${disp ? html`<b>${disp.decidedBy}</b><span class="muted"> (electronically recorded; an attestation, not a validated electronic signature)</span>` : ""}${hw ? html` <span class="sig-line"></span>` : ""}</td>

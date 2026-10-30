@@ -19,7 +19,8 @@
  * | Quality check                                 | Check quality              | quality.disposition.approve          |
  * | Passed / Failed                               | none                       | —                                    |
  *
- * Without the permission the action becomes "wait" with who can help (WhoCanHelp).
+ * Without the permission the action becomes "wait" with who can help (WhoCanHelp). Stage G3: Finish opens
+ * `/production/<batch>/finish` (finishBatch) and Check quality opens `/quality/check/<batch>`.
  */
 import { PRODUCTION_ORDER_LABEL, type BatchStatusView, type ProductionOrderStatusView } from "./production-order-status";
 
@@ -64,7 +65,7 @@ export function batchNextAction(b: BatchStatusView & { id: string; batchNumber: 
     case "in_progress": {
       if (b.batchStatus === "rework_approved") return gate(u, siteId, "production.process_step_record.create", { label: "Redo", href: `/production/${id}`, hint: `Batch ${nr}: redo the steps QA asked for.`, batchId: id }, "Waiting for the redo");
       const s = b.step;
-      if (!s) return gate(u, siteId, "production.batch.post", { label: "Finish", href: `/production/${id}`, hint: `Batch ${nr}: every step is done. Count the good pieces and send the batch for the quality check.`, batchId: id }, "Ready to finish");
+      if (!s) return gate(u, siteId, "production.batch.post", { label: "Finish", href: `/production/${id}/finish`, hint: `Batch ${nr}: every step is done. Count the good pieces and send the batch for the quality check.`, batchId: id }, "Ready to finish");
       const stepOf = b.stepsTotal > 0 ? ` (step ${s.stepNo} of ${b.stepsTotal})` : "";
       if (b.waitUntil && !b.waitOver) return { kind: "wait", title: b.subtitle ?? "Waiting", hint: `Batch ${nr}: ${s.name}${stepOf}. Press Curing finished on that day. Ending early needs approval.`, who: null, batchId: id };
       if (b.waitUntil && b.waitOver) return gate(u, siteId, "production.process_step_record.create", { label: "Curing finished", href: `/production/${id}`, hint: `Batch ${nr}: ${s.name}${stepOf}. The waiting time is over.`, batchId: id }, "Curing time over");
@@ -77,8 +78,8 @@ export function batchNextAction(b: BatchStatusView & { id: string; batchNumber: 
       return gate(u, siteId, performPermission(s.kind), { label: s.name, href: `/production/${id}`, hint: `Batch ${nr}: ${s.name}${stepOf}.`, batchId: id }, `Next: ${s.name}`);
     }
     case "quality_check":
-      if (b.warn) return u.can("quality.disposition.approve") ? { kind: "link", label: "Check quality", href: "/quality", hint: `Batch ${nr} is on hold in the quality check.`, batchId: id } : { kind: "wait", title: "Quality check · On hold", hint: `Batch ${nr} is on hold. QA checks it again.`, who: { permission: "quality.disposition.approve", siteId }, batchId: id };
-      return gate(u, siteId, "quality.disposition.approve", { label: "Check quality", href: "/quality", hint: `Batch ${nr} is in the hold area, waiting for the quality check.`, batchId: id }, "Waiting for the quality check");
+      if (b.warn) return u.can("quality.disposition.approve") ? { kind: "link", label: "Check quality", href: `/quality/check/${id}`, hint: `Batch ${nr} is on hold in the quality check.`, batchId: id } : { kind: "wait", title: "Quality check · On hold", hint: `Batch ${nr} is on hold. QA checks it again.`, who: { permission: "quality.disposition.approve", siteId }, batchId: id };
+      return gate(u, siteId, "quality.disposition.approve", { label: "Check quality", href: `/quality/check/${id}`, hint: `Batch ${nr} is in the hold area, waiting for the quality check.`, batchId: id }, "Waiting for the quality check");
     case "passed":
       return { kind: "none", hint: `Batch ${nr} passed the quality check. Ready to sell.`, batchId: id };
     case "failed":
