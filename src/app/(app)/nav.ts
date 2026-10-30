@@ -168,6 +168,7 @@ export const NAV: NavGroup[] = [
       { label: "Warehouses", href: "/masterdata/warehouses", permission: "masterdata.warehouse.view" },
       { label: "Production lines", href: "/masterdata/lines", permission: "masterdata.production_line.view" },
       { label: "Units of measure", href: "/masterdata/uom", permission: "masterdata.uom.view" },
+      { label: "Lists", href: "/masterdata/lists", permission: "masterdata.lookup_value.view" },
       { label: "Reason codes", href: "/masterdata/reason-codes", permission: "masterdata.reason_code.view" },
     ],
   },

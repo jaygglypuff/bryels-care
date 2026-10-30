@@ -63,6 +63,7 @@ export async function lotLabelEntity(ctx: AuthContext, lotId: string): Promise<L
       inciName: lot.inciName ?? null,
       supplierName: lot.supplierName ?? null,
       supplierLotNumber: lot.supplierLotNumber ?? null,
+      brand: lot.brand ?? null,
       receivedOn: fmtDate(lot.receipt?.receivedAt ?? lot.createdAt),
       manufacturedOn: lot.manufacturedOn ? fmtDate(lot.manufacturedOn) : null,
       expiresOn: lot.expiresOn ? fmtDate(lot.expiresOn) : "No expiry",

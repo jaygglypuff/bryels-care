@@ -5,20 +5,10 @@ import { FormMessage } from "@/ui/form";
 import { useActionForm } from "../../use-action-form";
 import { createCustomerW3dAction } from "../actions";
 
-const SEGMENTS: [string, string][] = [
-  ["", "Choose…"],
-  ["pharmacy_chain", "Pharmacy chain"],
-  ["salon_spa", "Salon / spa"],
-  ["distributor", "Distributor"],
-  ["online_reseller", "Online reseller"],
-  ["retail_store", "Retail store"],
-  ["other", "Other"],
-];
-
 const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
 /** New customer (US-4-01): profile, primary contact and the first address (default ship-to and bill-to). Credit terms are set by finance afterwards. */
-export function CustomerForm({ suggestedCode }: { suggestedCode: string }) {
+export function CustomerForm({ suggestedCode, segments }: { suggestedCode: string; segments: { value: string; label: string }[] }) {
   const { state, pending, onSubmit } = useActionForm(createCustomerW3dAction);
   const [key] = useState(newKey);
   const [v, setV] = useState<Record<string, string>>({
@@ -53,9 +43,9 @@ export function CustomerForm({ suggestedCode }: { suggestedCode: string }) {
           <Field label="Name" htmlFor="name" error={fe.name}>
             <Input {...bind("name")} required maxLength={120} />
           </Field>
-          <Field label="Segment" htmlFor="segment" error={fe.segment}>
+          <Field label="Customer type" htmlFor="segment" error={fe.segment} hint="To add a type, go to Master data → Lists.">
             <Select {...bind("segment")}>
-              {SEGMENTS.map(([val, label]) => (
+              {([["", "Choose…"], ...segments.map((o) => [o.value, o.label])] as [string, string][]).map(([val, label]) => (
                 <option key={val} value={val}>
                   {label}
                 </option>

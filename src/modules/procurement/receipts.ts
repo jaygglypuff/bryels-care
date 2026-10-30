@@ -21,6 +21,8 @@ export type PoReceiptLineInput = {
   qty: string;
   uom?: string | null;
   supplierLotNumber: string;
+  /** ADR-076: brand on the delivered containers. */
+  brand?: string | null;
   manufacturedOn?: string | null;
   expiresOn: string;
   retestOn?: string | null;

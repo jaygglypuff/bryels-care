@@ -149,7 +149,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
                     <p className="text-[13px] font-semibold text-muted">Line {l.lineNo} · lot created at posting</p>
                   )}
                   <p className="text-[13px]">
-                    {l.materialName} <span className="text-muted">· {l.materialCode} · supplier lot {l.supplierLotNumber ?? "—"}</span>
+                    {l.materialName} <span className="text-muted">· {l.materialCode} · supplier lot {l.supplierLotNumber ?? "—"}{l.brand ? ` · brand ${l.brand}` : ""}</span>
                   </p>
                   <p className="text-[12px] text-muted">
                     Expires {fmtDate(l.expiresOn)}

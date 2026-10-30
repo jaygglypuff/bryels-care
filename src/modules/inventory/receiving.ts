@@ -45,6 +45,8 @@ export type ReceiptLineInput = {
   /** Unit as entered; defaults to the material's base unit (V-UOM). */
   uom?: string | null;
   supplierLotNumber: string;
+  /** ADR-076: brand on the delivered containers (optional; copied to the lot at posting). */
+  brand?: string | null;
   manufacturedOn?: string | null;
   expiresOn: string;
   retestOn?: string | null;
@@ -140,6 +142,7 @@ export type NormalizedLine = {
   uomEntered: string;
   qtyBase: Decimal;
   supplierLotNumber: string;
+  brand: string | null;
   manufacturedOn: string | null;
   expiresOn: string;
   retestOn: string | null;
@@ -200,6 +203,7 @@ async function normalizeLines(tx: Tx, ctx: AuthContext, siteId: string, lines: R
     const supplierLotNumber = (l.supplierLotNumber ?? "").trim();
     if (!supplierLotNumber) throw new DomainError("validation", `Line ${n}: enter the supplier's lot number from the container label.`, { field: f("supplierLotNumber") });
     if (supplierLotNumber.length > 80) throw new DomainError("validation", `Line ${n}: supplier lot number is too long (max 80).`, { field: f("supplierLotNumber") });
+    const brand = cleanText(l.brand, 80, f("brand"), `Line ${n} brand`);
     const manufacturedOn = optDate(l.manufacturedOn, f("manufacturedOn"), `Line ${n} manufacture date`);
     const expiresOn = optDate(l.expiresOn, f("expiresOn"), `Line ${n} expiry date`);
     if (!expiresOn) throw new DomainError("validation", `Line ${n}: enter the expiry date.`, { field: f("expiresOn") });
@@ -232,6 +236,7 @@ async function normalizeLines(tx: Tx, ctx: AuthContext, siteId: string, lines: R
       uomEntered,
       qtyBase,
       supplierLotNumber,
+      brand,
       manufacturedOn,
       expiresOn,
       retestOn,
@@ -253,6 +258,7 @@ function lineValues(l: NormalizedLine) {
     qtyBase: l.qtyBase.toString(),
     locationId: l.loc.id,
     supplierLotNumber: l.supplierLotNumber,
+    brand: l.brand,
     manufacturedOn: l.manufacturedOn,
     expiresOn: l.expiresOn,
     retestOn: l.retestOn,
@@ -546,6 +552,7 @@ async function postInTx(tx: Tx, ctx: AuthContext, gr: typeof goodsReceipts.$infe
       qty: r.qtyEntered ?? r.qtyBase,
       uom: r.uomEntered,
       supplierLotNumber: r.supplierLotNumber ?? "",
+      brand: r.brand,
       manufacturedOn: r.manufacturedOn,
       expiresOn: r.expiresOn ?? "",
       retestOn: r.retestOn,
@@ -605,6 +612,7 @@ async function postInTx(tx: Tx, ctx: AuthContext, gr: typeof goodsReceipts.$infe
         materialId: l.mat.id,
         supplierName: gr.supplierName,
         supplierLotNumber: l.supplierLotNumber,
+        brand: l.brand,
         manufacturedOn: l.manufacturedOn,
         expiresOn: l.expiresOn,
         retestOn: l.retestOn,

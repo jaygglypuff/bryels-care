@@ -50,6 +50,8 @@ export default async function ReceivePoPage({ params }: { params: Promise<{ poId
   const locs = form.locations.filter((l) => ["receiving", "quarantine", "hold"].includes(l.kind));
   const defaultLoc = locs.find((l) => l.kind === "quarantine") ?? locs[0];
   const open = v.lines.filter((l) => l.lineStatus === "open");
+  // ADR-076: brand defaults from this supplier's pair, else the material's usual brand.
+  const brandFor = (materialId: string) => form.supplierPacks.find((p) => p.supplierId === v.supplier.id && p.materialId === materialId)?.brand ?? form.materials.find((m) => m.id === materialId)?.brand ?? "";
   const td = "py-1 pr-2 align-top";
   return (
     <div className="mx-auto max-w-5xl">
@@ -80,7 +82,7 @@ export default async function ReceivePoPage({ params }: { params: Promise<{ poId
                     <th className="py-1 pr-2">PO line</th>
                     <th className="py-1 pr-2">Qty received</th>
                     <th className="py-1 pr-2">Unit</th>
-                    <th className="py-1 pr-2">Supplier lot</th>
+                    <th className="py-1 pr-2">Supplier lot / brand</th>
                     <th className="py-1 pr-2">Mfg / expiry</th>
                     <th className="py-1 pr-2">Containers</th>
                     <th className="py-1 pr-2">Put into</th>
@@ -106,6 +108,7 @@ export default async function ReceivePoPage({ params }: { params: Promise<{ poId
                       </td>
                       <td className={td}>
                         <Input name={`lines.${i}.supplierLotNumber`} aria-label="Supplier lot" />
+                        <Input name={`lines.${i}.brand`} defaultValue={brandFor(l.materialId)} placeholder="Brand" aria-label="Brand" maxLength={80} className="mt-1" />
                       </td>
                       <td className={td}>
                         <Input type="date" name={`lines.${i}.manufacturedOn`} aria-label="Manufacture date" />
@@ -157,6 +160,7 @@ export default async function ReceivePoPage({ params }: { params: Promise<{ poId
                     </td>
                     <td className={td}>
                       <Input name={`lines.${open.length}.supplierLotNumber`} aria-label="Supplier lot" />
+                      <Input name={`lines.${open.length}.brand`} placeholder="Brand" aria-label="Brand" maxLength={80} className="mt-1" />
                     </td>
                     <td className={td}>
                       <Input type="date" name={`lines.${open.length}.expiresOn`} aria-label="Expiry date" />

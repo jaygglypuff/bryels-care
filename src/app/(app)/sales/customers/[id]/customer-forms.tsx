@@ -33,17 +33,7 @@ function Toggle({ label, children }: { label: string; children: React.ReactNode 
   );
 }
 
-const SEGMENTS: [string, string][] = [
-  ["", "—"],
-  ["pharmacy_chain", "Pharmacy chain"],
-  ["salon_spa", "Salon / spa"],
-  ["distributor", "Distributor"],
-  ["online_reseller", "Online reseller"],
-  ["retail_store", "Retail store"],
-  ["other", "Other"],
-];
-
-export function ProfileForm({ c }: { c: { id: string; name: string; segment: string | null; minShelfLifeDays: number; defaultLeadTimeDays: number | null; notesInternal: string | null } }) {
+export function ProfileForm({ c, segments }: { c: { id: string; name: string; segment: string | null; minShelfLifeDays: number; defaultLeadTimeDays: number | null; notesInternal: string | null }; segments: { value: string; label: string }[] }) {
   return (
     <Toggle label="Edit profile">
       <ActionForm action={updateCustomerAction} hidden={{ customerId: c.id }} submit="Save profile">
@@ -52,9 +42,9 @@ export function ProfileForm({ c }: { c: { id: string; name: string; segment: str
             <Field label="Name" htmlFor="p-name" error={fe.name}>
               <Input id="p-name" name="name" defaultValue={c.name} required maxLength={120} />
             </Field>
-            <Field label="Segment" htmlFor="p-segment" error={fe.segment}>
+            <Field label="Customer type" htmlFor="p-segment" error={fe.segment} hint="To add a type, go to Master data → Lists.">
               <Select id="p-segment" name="segment" defaultValue={c.segment ?? ""}>
-                {SEGMENTS.map(([v, l]) => (
+                {([["", "—"], ...segments.map((o) => [o.value, o.label])] as [string, string][]).map(([v, l]) => (
                   <option key={v} value={v}>
                     {l}
                   </option>

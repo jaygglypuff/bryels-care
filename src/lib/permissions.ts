@@ -167,6 +167,9 @@ export const PERMISSIONS = [
   "masterdata.material.export",
   "masterdata.reason_code.view",
   "masterdata.reason_code.admin",
+  // ADR-076: editable dropdown lists (Master data → Lists)
+  "masterdata.lookup_value.view",
+  "masterdata.lookup_value.admin",
   // Wave 2 W2B: batch execution (US-3-09..13; docs/permissions-matrix.md §2.5, §3.5)
   "production.line_clearance.create",
   "production.line_clearance.approve",
@@ -785,6 +788,7 @@ const W2G_ORG_VIEW: readonly Permission[] = [
   "masterdata.uom.view",
   "masterdata.uom_conversion.view",
   "masterdata.reason_code.view",
+  "masterdata.lookup_value.view",
 ];
 const W2G_GRANTS: Record<string, readonly Permission[]> = {
   system_admin: [
@@ -795,6 +799,7 @@ const W2G_GRANTS: Record<string, readonly Permission[]> = {
     "masterdata.uom.admin",
     "masterdata.uom_conversion.admin",
     "masterdata.reason_code.admin",
+    "masterdata.lookup_value.admin",
     "masterdata.location.create",
     "masterdata.location.edit",
     "masterdata.location.admin",

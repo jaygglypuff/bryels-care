@@ -36,6 +36,7 @@ import {
   submitPurchaseRequest,
   submitSupplierReturn,
   updateSupplierTerms,
+  updateSupplierMaterialPack,
   withdrawAslChange,
 } from "@/modules/procurement";
 import { registerAppHooks } from "@/modules/wiring";
@@ -108,6 +109,14 @@ export async function withdrawChangeAction(_p: ActionState, fd: FormData): Promi
     const ctx = await requireContext();
     await withdrawAslChange(ctx, { changeId: str(fd, "changeId") });
     return "Proposal withdrawn.";
+  });
+}
+
+export async function packAction(_p: ActionState, fd: FormData): Promise<ActionState> {
+  return inPlace(async () => {
+    const ctx = await requireContext();
+    await updateSupplierMaterialPack(ctx, { supplierMaterialId: str(fd, "supplierMaterialId"), brand: opt(fd, "brand"), packQty: opt(fd, "packQty"), packUom: opt(fd, "packUom") });
+    return "Brand and pack size saved.";
   });
 }
 
@@ -288,6 +297,7 @@ export async function receivePoAction(_p: ActionState, fd: FormData): Promise<Ac
         qty: l.qty,
         uom: l.uom || null,
         supplierLotNumber: l.supplierLotNumber ?? "",
+        brand: l.brand || null,
         manufacturedOn: l.manufacturedOn || null,
         expiresOn: l.expiresOn ?? "",
         containerCount: l.containerCount ? Number(l.containerCount) : null,

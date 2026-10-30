@@ -58,6 +58,8 @@ export const SupplierInputSchema = z
     qualityStatusReason: optText(500),
     isActive: z.boolean().default(true),
     notes: optText(1000),
+    /** ADR-076: code or name of an option of the list `supplier_category` (checked by the service); left out = keep on edit. */
+    category: z.string().trim().max(60).nullable().optional(),
   })
   .strict()
   .superRefine((v, c) => {

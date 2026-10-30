@@ -12,6 +12,7 @@ import {
   qualityHoldLots,
   qualityHolds,
   supplierLotDocuments,
+  supplierMaterials,
   suppliers,
   users,
 } from "@/db/schema";
@@ -42,6 +43,9 @@ export async function receivingFormData(ctx: AuthContext) {
         storageConditions: materials.storageConditions,
         requiresCoa: materials.requiresCoa,
         requiresIncomingInspection: materials.requiresIncomingInspection,
+        brand: materials.brand,
+        standardPackQty: materials.standardPackQty,
+        standardPackUom: materials.standardPackUom,
       })
       .from(materials)
       .where(and(eq(materials.organizationId, ctx.organizationId), eq(materials.status, "active"))) // W2G: only active materials are received
@@ -57,7 +61,13 @@ export async function receivingFormData(ctx: AuthContext) {
       .where(and(eq(suppliers.organizationId, ctx.organizationId), eq(suppliers.isActive, true)))
       .orderBy(asc(suppliers.name)),
   ]);
+  // ADR-076: per supplier × material brand and pack (defaults on the form; the operator confirms what arrived).
+  const packs = await db
+    .select({ supplierId: supplierMaterials.supplierId, materialId: supplierMaterials.materialId, brand: supplierMaterials.brand, packQty: supplierMaterials.packQty, packUom: supplierMaterials.packUom })
+    .from(supplierMaterials)
+    .where(and(eq(supplierMaterials.organizationId, ctx.organizationId), or(sql`${supplierMaterials.brand} is not null`, sql`${supplierMaterials.packQty} is not null`)));
   return {
+    supplierPacks: packs,
     // Units from the approved conversions (W2G UOM service), incl. a material's own pack units.
     materials: await Promise.all(mats.map(async (m) => ({ ...m, units: await enterableUnits(db, ctx.organizationId, m.baseUom, m.id) }))),
     locations: locs,
@@ -89,6 +99,7 @@ export async function getReceipt(ctx: AuthContext, receiptId: string) {
       lotNumber: inventoryLots.lotNumber,
       qualityStatus: inventoryLots.qualityStatus,
       supplierLotNumber: inventoryLots.supplierLotNumber,
+      brand: inventoryLots.brand,
       manufacturedOn: inventoryLots.manufacturedOn,
       expiresOn: inventoryLots.expiresOn,
       baseUom: inventoryLots.baseUom,

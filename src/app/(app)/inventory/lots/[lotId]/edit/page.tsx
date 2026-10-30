@@ -30,7 +30,7 @@ export default async function EditLotPage({ params }: { params: Promise<{ lotId:
       />
       <Banner tone="info" title="Quality status is not edited here">Only QA can change the status, by recording a decision. Changing the expiry does not release or block the lot by itself; the expiry rules apply to the new date.</Banner>
       <Card>
-        <EditLotForm lotId={lot.id} v={{ manufacturedOn: lot.manufacturedOn, expiresOn: lot.expiresOn, supplierLotNumber: lot.supplierLotNumber }} />
+        <EditLotForm lotId={lot.id} v={{ manufacturedOn: lot.manufacturedOn, expiresOn: lot.expiresOn, supplierLotNumber: lot.supplierLotNumber, brand: lot.brand, isMaterial: lot.itemKind === "material" }} />
       </Card>
     </div>
   );

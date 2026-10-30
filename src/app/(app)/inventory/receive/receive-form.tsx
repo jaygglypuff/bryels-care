@@ -16,7 +16,11 @@ type Material = {
   requiresCoa: boolean;
   requiresIncomingInspection: boolean;
   units: string[];
+  brand: string | null;
+  standardPackQty: string | null;
+  standardPackUom: string | null;
 };
+type SupplierPack = { supplierId: string; materialId: string; brand: string | null; packQty: string | null; packUom: string | null };
 type Location = { id: string; code: string; name: string; kind: string };
 type Supplier = { id: string; code: string; name: string; qualityStatus: string };
 type ReasonCode = { code: string; label: string };
@@ -27,6 +31,7 @@ export type ReceiptFormLine = {
   qty: string;
   uom: string;
   supplierLotNumber: string;
+  brand: string;
   manufacturedOn: string;
   expiresOn: string;
   retestOn: string;
@@ -45,7 +50,20 @@ export type ReceiptFormInitial = {
   lines: ReceiptFormLine[];
 };
 
-type Line = ReceiptFormLine & { key: number; expiryTouched: boolean };
+/** `packs`: form-only helper (number of standard packs); never sent. */
+type Line = ReceiptFormLine & { key: number; expiryTouched: boolean; packs: string };
+
+/** "18.000000" → "18". */
+const plain = (v: string) => v.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+
+/** packs × pack size, exact for the decimals a form uses (scaled integers, no floating point). */
+function times(packs: string, size: string): string {
+  if (!/^\d{1,6}$/.test(packs) || !/^\d+(\.\d{1,6})?$/.test(size)) return "";
+  const [i, f = ""] = size.split(".");
+  const scaled = BigInt(i + f.padEnd(6, "0")) * BigInt(packs);
+  const s = scaled.toString().padStart(7, "0");
+  return plain(`${s.slice(0, -6)}.${s.slice(-6)}`);
+}
 
 const DISCREPANCIES = [
   ["", "No discrepancy"],
@@ -78,6 +96,7 @@ export function ReceiveForm({
   materials,
   locations,
   suppliers,
+  supplierPacks = [],
   reasonCodes,
   defaultLocationId,
   canPost,
@@ -87,6 +106,7 @@ export function ReceiveForm({
   materials: Material[];
   locations: Location[];
   suppliers: Supplier[];
+  supplierPacks?: SupplierPack[];
   reasonCodes: ReasonCode[];
   defaultLocationId: string;
   canPost: boolean;
@@ -99,6 +119,8 @@ export function ReceiveForm({
     qty: "",
     uom: "",
     supplierLotNumber: "",
+    brand: "",
+    packs: "",
     manufacturedOn: "",
     expiresOn: "",
     retestOn: "",
@@ -109,11 +131,20 @@ export function ReceiveForm({
     discrepancyNote: "",
     expiryTouched: false,
   });
-  const [lines, setLines] = useState<Line[]>(() => (initial?.lines.length ? initial.lines.map((l, i) => ({ ...l, key: i + 1, expiryTouched: true })) : [blank(1)]));
+  const [lines, setLines] = useState<Line[]>(() => (initial?.lines.length ? initial.lines.map((l, i) => ({ ...l, key: i + 1, expiryTouched: true, packs: "" })) : [blank(1)]));
   const [nextKey, setNextKey] = useState((initial?.lines.length ?? 1) + 1);
   const [supplierName, setSupplierName] = useState(initial?.supplierName ?? "");
   const fe = state?.fieldErrors ?? {};
   const supplier = suppliers.find((s) => s.name.toLowerCase() === supplierName.trim().toLowerCase() || s.code.toLowerCase() === supplierName.trim().toLowerCase());
+
+  /** ADR-076: this supplier's brand and pack for the material, else the material's usual brand and standard pack. */
+  function packOf(mat: Material | undefined) {
+    if (!mat) return null;
+    const sp = supplier ? supplierPacks.find((p) => p.supplierId === supplier.id && p.materialId === mat.id) : undefined;
+    const qty = sp?.packQty ?? mat.standardPackQty;
+    const uom = sp?.packQty ? sp.packUom : mat.standardPackUom;
+    return { brand: sp?.brand ?? mat.brand ?? "", qty: qty && uom && mat.units.includes(uom) ? plain(qty) : null, uom: qty && uom && mat.units.includes(uom) ? uom : null };
+  }
 
   function update(key: number, patch: Partial<Line>) {
     setLines((ls) =>
@@ -121,8 +152,22 @@ export function ReceiveForm({
         if (l.key !== key) return l;
         const n = { ...l, ...patch };
         const mat = materials.find((m) => m.id === n.materialId);
+        const pack = packOf(mat);
+        if ("packs" in patch && pack?.qty && pack.uom) {
+          n.uom = pack.uom;
+          n.qty = times(n.packs, pack.qty);
+          if (/^\d{1,5}$/.test(n.packs) && Number(n.packs) > 0) n.containerCount = n.packs;
+        }
         if ("materialId" in patch) {
           n.uom = mat?.baseUom ?? "";
+          n.brand = pack?.brand ?? "";
+          n.packs = "";
+          if (pack?.qty && pack.uom) {
+            n.uom = pack.uom;
+            n.packs = "1";
+            n.qty = pack.qty;
+            n.containerCount = "1";
+          }
           const allowed = locationsFor(mat, locations);
           if (!allowed.some((x) => x.id === n.locationId)) n.locationId = allowed[0]?.id ?? "";
         }
@@ -132,7 +177,7 @@ export function ReceiveForm({
     );
   }
 
-  const payload = JSON.stringify(lines.map(({ key: _k, expiryTouched: _e, lineId, ...rest }) => ({ ...rest, lineId: lineId ?? "" })));
+  const payload = JSON.stringify(lines.map(({ key: _k, expiryTouched: _e, packs: _p, lineId, ...rest }) => ({ ...rest, lineId: lineId ?? "" })));
   const today = manilaToday();
 
   return (
@@ -178,6 +223,7 @@ export function ReceiveForm({
         const err = (f: string) => fe[`lines.${i}.${f}`];
         const id = (f: string) => `line-${l.key}-${f}`;
         const locs = locationsFor(mat, locations);
+        const pack = packOf(mat);
         const expired = !!l.expiresOn && l.expiresOn <= today;
         return (
           <Card key={l.key} aria-labelledby={id("title")} data-testid={`receipt-line-${i + 1}`}>
@@ -207,6 +253,14 @@ export function ReceiveForm({
                     ))}
                   </Select>
                 </div>
+              </Field>
+              {pack?.qty && (
+                <Field label="Number of packs" htmlFor={id("packs")} hint={`One pack = ${pack.qty} ${pack.uom}. The quantity is worked out for you; you can still change it.`}>
+                  <Input id={id("packs")} inputMode="numeric" autoComplete="off" value={l.packs} onChange={(e) => update(l.key, { packs: e.target.value })} className="tabular" />
+                </Field>
+              )}
+              <Field label="Brand (optional)" htmlFor={id("brand")} error={err("brand")} hint="The brand printed on the containers.">
+                <Input id={id("brand")} autoComplete="off" maxLength={80} value={l.brand} onChange={(e) => update(l.key, { brand: e.target.value })} />
               </Field>
               <Field label="Supplier lot no." htmlFor={id("slot")} error={err("supplierLotNumber")}>
                 <Input id={id("slot")} autoComplete="off" value={l.supplierLotNumber} onChange={(e) => update(l.key, { supplierLotNumber: e.target.value })} required />

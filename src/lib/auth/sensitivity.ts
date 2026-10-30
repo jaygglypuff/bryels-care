@@ -63,7 +63,7 @@ const SENSITIVE: ReadonlySet<string> = new Set([
   "masterdata.customer.export", "masterdata.customer_requirement.approve", "masterdata.department.admin",
   "masterdata.equipment.admin", "masterdata.equipment.approve", "masterdata.formula.export",
   "masterdata.formula.void", "masterdata.label_template.approve", "masterdata.location.admin",
-  "masterdata.production_line.admin", "masterdata.reason_code.admin", "masterdata.supplier.approve",
+  "masterdata.production_line.admin", "masterdata.reason_code.admin", "masterdata.lookup_value.admin", "masterdata.supplier.approve",
   "masterdata.supplier.export", "masterdata.supplier_price.edit", "masterdata.supplier_price.view",
   "masterdata.uom.admin", "masterdata.uom_conversion.admin", "masterdata.warehouse.admin",
   "masterdata.work_instruction.approve", "platform.audit.export", "platform.audit.view", "platform.diagnostics.view",

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
-import { SEGMENT_LABEL, listCustomers, type CustomerSegment } from "@/modules/sales";
+import { customerSegmentLabels, listCustomers } from "@/modules/sales";
 import { Card, EmptyState, Input, LinkButton, PageHeader, Select, Table, Td, buttonClass } from "@/ui/core";
 import { Forbidden } from "../../forbidden";
 import { Money, SalesStatus } from "../orders/sales-ui";
@@ -13,6 +13,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   if (!ctx.can("masterdata.customer.view")) return <Forbidden what="customers" />;
   const f = await searchParams;
   const rows = await listCustomers(ctx, { q: f.q, status: f.status, segment: f.segment });
+  const segLabels = await customerSegmentLabels(ctx);
   const canCreate = ctx.can("masterdata.customer.create");
   const credit = ctx.can("finance.credit_terms.view");
   const filtered = !!(f.q || f.status || f.segment);
@@ -41,9 +42,9 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
           <option value="on_hold">Credit hold</option>
           <option value="inactive">Inactive</option>
         </Select>
-        <Select name="segment" defaultValue={f.segment ?? ""} aria-label="Segment" className="max-w-[200px]">
-          <option value="">All segments</option>
-          {Object.entries(SEGMENT_LABEL).map(([k, l]) => (
+        <Select name="segment" defaultValue={f.segment ?? ""} aria-label="Customer type" className="max-w-[200px]">
+          <option value="">All customer types</option>
+          {[...segLabels].map(([k, l]) => (
             <option key={k} value={k}>
               {l}
             </option>
@@ -71,7 +72,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                     <p className="font-mono text-[12px] text-muted">{c.code}</p>
                     <p className="text-[13px] text-fg-2">{c.shipToAddress}</p>
                     <p className="text-[12px] text-muted">
-                      {c.segment ? SEGMENT_LABEL[c.segment as CustomerSegment] : "No segment"} · {c.openOrders} open order{c.openOrders === 1 ? "" : "s"}
+                      {c.segment ? (segLabels.get(c.segment) ?? c.segment) : "No customer type"} · {c.openOrders} open order{c.openOrders === 1 ? "" : "s"}
                     </p>
                   </Card>
                 </Link>
@@ -88,7 +89,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                   </Link>
                   {c.contactName && <span className="block text-[12px] text-muted">{c.contactName}</span>}
                 </Td>
-                <Td>{c.segment ? SEGMENT_LABEL[c.segment as CustomerSegment] : "—"}</Td>
+                <Td>{c.segment ? (segLabels.get(c.segment) ?? c.segment) : "—"}</Td>
                 <Td>
                   <SalesStatus status={c.status} />
                 </Td>

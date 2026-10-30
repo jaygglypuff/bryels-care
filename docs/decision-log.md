@@ -984,3 +984,53 @@ the audit trail, not a hard block, then shows that one person did both sides.
 FDA Philippines): switching the override on for real production is the owner's documented decision
 after QA advice (assumption A-GOV-OWNER). Other roles are unchanged. Tests:
 `tests/integration/governance/owner-override.test.ts`.
+
+## ADR-076 Editable dropdown lists, material brand and standard pack
+
+**Status.** Accepted (owner request, 2026-10-30). Default options and demo values flagged for owner review (A-S4-01..05).
+
+**Context.** The owner could not add a choice to a dropdown ("everything is pre-built"): product
+families were a setting, customer types a fixed code list, and materials had no category, brand or
+pack size ("palm oil may have different brands; there is no master quantity").
+
+**Decision.**
+1. One generic table `lookup_values` (organization, `list_key`, `code`, `label`, `sort_order`,
+   `is_active`) plus a code registry `LOOKUP_LISTS` (src/modules/masterdata/lookups.ts) that defines
+   each list: title, where it is used, shipped default options, how many records use an option, and
+   how many options must stay on. Lists: `product_family`, `material_category`, `customer_segment`,
+   `supplier_category`. The settings registry was not used: its values are versioned JSON with an
+   approval flow and no per-option identity, rename or "in use" check.
+2. The `code` is the stored value and never changes (trigger); renaming changes only the label, so
+   records follow. Options are reordered and turned off; an option in use is never deleted (an unused
+   one may be). Forms offer active options; an edit keeps a record's turned-off value. Services accept
+   the code or the label (any case) and store the code.
+3. While an organization has no rows for a list, the defaults stand in (same pattern as reason codes);
+   the first change writes them under a row lock (`FOR UPDATE` on the list's rows, insert
+   `ON CONFLICT DO NOTHING`), so concurrent first edits never fork the list. A record that picks an
+   option takes a share lock on it, so a delete cannot race a new use.
+4. Screen **Master data → Lists** (`/masterdata/lists`); permissions `masterdata.lookup_value.view`
+   (every role) and `.admin` (system_admin; owner_director). Audit `masterdata.lookup_value.created|updated|deleted`
+   (entity number `list:code`, site null). Lists with richer rows keep their screens and are linked:
+   reason codes (also defect and scrap reasons), units of measure, and the governed quality/finance
+   lists in Settings (they need a second approver). Lists that drive program logic (statuses, state
+   machines, location kinds, warehouse kinds, material class, discrepancy and document kinds,
+   complaint channels) stay fixed in code and are not shown.
+5. Product families move from the setting `masterdata.product_families` (removed) to the list; default
+   codes equal the old values (`Soap`…) and customer type codes equal the old fixed list, so no data
+   changes. src/db/sql/s4.sql copies a customised setting into list rows.
+6. Materials get `category`, `brand` (usual brand) and a standard pack (`standard_pack_qty` +
+   `standard_pack_uom`, unit must convert to the base unit). The supplier × material pair gets its own
+   `brand` and pack (`masterdata.supplier.edit`, not a cost term). Receipt lines record the brand that
+   arrived and posting copies it to the lot; corrections use the audited lot edit. The receive form
+   fills one pack from the pair (else the material), offers "Number of packs" and suggests the brand;
+   the PO picker returns the pack as the default quantity. Lot labels get the optional field `brand`
+   (on by default for new material label templates).
+
+**Why.** One table and one screen cover every simple list; codes keep history stable; brand per lot is
+what traceability needs when the same material comes from several brands and suppliers.
+
+**Consequences.** New columns and table need a migration (generated at merge) plus the custom SQL
+src/db/sql/s4.sql (code trigger, setting copy). A new simple list = a key in `LOOKUP_LIST_KEYS`
+(schema CHECK) and an entry in `LOOKUP_LISTS`. Pack sizes in litres for materials kept in grams need
+an approved material-specific density conversion first (A-S4-05). Tests:
+`tests/integration/masterdata/s4-lists-brand.test.ts`.

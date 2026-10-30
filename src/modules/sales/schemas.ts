@@ -121,7 +121,7 @@ export const AddressSchema = z.object({
   phone: optionalText(40),
 });
 
-export const CUSTOMER_SEGMENT_VALUES = ["pharmacy_chain", "salon_spa", "distributor", "online_reseller", "retail_store", "other"] as const;
+/** Customer type: a code of the editable list `customer_segment` (Master data → Lists, ADR-076); the service checks it. */
 
 /** Structured customer form (US-4-01). */
 export const CustomerCreateSchema = z.object({
@@ -131,8 +131,8 @@ export const CustomerCreateSchema = z.object({
   segment: z
     .string()
     .optional()
-    .transform((v) => (v ? v : null))
-    .pipe(z.enum(CUSTOMER_SEGMENT_VALUES).nullable()),
+    .transform((v) => (v ? v.trim() || null : null))
+    .pipe(z.string().max(40, "Choose a customer type from the list.").nullable()),
   contactName: optionalText(80),
   phone: optionalText(40),
   email: emailField,

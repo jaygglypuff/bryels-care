@@ -22,6 +22,7 @@ function input(fd: FormData): SupplierInput {
     qualityStatusReason: s("qualityStatusReason"),
     isActive: fd.get("isActive") === "on",
     notes: s("notes"),
+    category: s("category"),
   };
 }
 

@@ -18,6 +18,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const rows = await listProducts(ctx, { q: sp.q, status: sp.status, family: sp.family });
   const families = await productFamilies(db, ctx.organizationId);
+  const familyLabel = new Map(families.map((f) => [f.value, f.label]));
   const filtered = !!(sp.q || sp.status || sp.family);
   const canCreate = ctx.can("masterdata.product.create");
   const qs = new URLSearchParams(Object.entries({ q: sp.q ?? "", status: sp.status ?? "", family: sp.family ?? "" }).filter(([, v]) => v)).toString();
@@ -46,7 +47,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             <Select name="family" defaultValue={sp.family ?? ""}>
               <option value="">All</option>
               {families.map((f) => (
-                <option key={f} value={f}>{f}</option>
+                <option key={f.value} value={f.value}>{f.label}</option>
               ))}
             </Select>
           </label>
@@ -79,7 +80,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                     </div>
                     <p className="font-medium">{p.name}</p>
                     <p className="mt-1 text-[12px] text-muted tabular">
-                      {p.family} · {fmtQty(p.unitNetMassG, "g", 0)} net · {p.unitsPerBox}/box · {p.shelfLifeDays} days · {p.skuCount} SKU{p.skuCount === 1 ? "" : "s"}
+                      {familyLabel.get(p.family) ?? p.family} · {fmtQty(p.unitNetMassG, "g", 0)} net · {p.unitsPerBox}/box · {p.shelfLifeDays} days · {p.skuCount} SKU{p.skuCount === 1 ? "" : "s"}
                     </p>
                     <p className="mt-1 text-[13px] tabular">On hand {fmtQty(p.onHand, "pcs", 0)}</p>
                   </Card>
@@ -95,7 +96,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                     <Link href={`/masterdata/products/${p.id}`} className="text-primary-text hover:underline">{p.code}</Link>
                   </Td>
                   <Td>{p.name}</Td>
-                  <Td>{p.family}</Td>
+                  <Td>{familyLabel.get(p.family) ?? p.family}</Td>
                   <Td><StateChip status={p.status} /></Td>
                   <Td className="whitespace-nowrap">{fmtQty(p.unitNetMassG, "g", 0)}</Td>
                   <Td>{p.unitsPerBox}</Td>
@@ -114,7 +115,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
             <Grid>
               <TextField name="code" label="Code" placeholder="CCS-100" mono hint="Unique; scan-safe (capital letters, digits, . - _)." />
               <TextField name="name" label="Name" placeholder="Calamansi Cream Soap 100 g" />
-              <SelectField name="family" label="Family" options={families.map((f) => ({ value: f, label: f }))} hint="The list is a setting (masterdata.product_families)." />
+              <SelectField name="family" label="Family" options={families} hint="To add a family, go to Master data → Lists." />
               <TextField name="unitNetMassG" label="Net mass per unit (g)" inputMode="decimal" placeholder="100" />
               <TextField name="unitsPerBox" label="Units per box" inputMode="numeric" placeholder="48" />
               <TextField name="shelfLifeDays" label="Shelf life (days)" inputMode="numeric" placeholder="730" hint="Shelf-life values are confirmed by QA." />

@@ -13,6 +13,7 @@ export async function editLotAction(lotId: string, _p: ActionState, fd: FormData
       manufacturedOn: str(fd, "manufacturedOn") || null,
       expiresOn: str(fd, "expiresOn") || null,
       supplierLotNumber: str(fd, "supplierLotNumber") || null,
+      ...(fd.has("brand") ? { brand: str(fd, "brand") || null } : {}),
       reason: str(fd, "reason"),
     });
   } catch (e) {

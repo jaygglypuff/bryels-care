@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
-import { CUSTOMER_TRANSITIONS, CUSTOMER_STATUS_LABEL, SEGMENT_LABEL, formatAddress, getCustomer360, manilaToday, requirementFormOptions, type CustomerSegment, type CustomerStatus } from "@/modules/sales";
+import { CUSTOMER_TRANSITIONS, CUSTOMER_STATUS_LABEL, customerSegmentLabels, customerSegmentOptions, formatAddress, getCustomer360, manilaToday, requirementFormOptions, type CustomerStatus } from "@/modules/sales";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -43,6 +43,7 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
     throw e;
   }
   const c = d.customer;
+  const [segLabels, segOptions] = await Promise.all([customerSegmentLabels(ctx), customerSegmentOptions(ctx, { keep: c.segment })]);
   const canEdit = ctx.can("masterdata.customer.edit");
   const canReq = ctx.can("masterdata.customer_requirement.create");
   const opts = ctx.can("masterdata.customer_requirement.view") && (canReq || canEdit) ? await requirementFormOptions(ctx, c.id) : null;
@@ -59,7 +60,7 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
           <span className="inline-flex flex-wrap items-center gap-2">
             <span className="font-mono">{c.code}</span>
             <SalesStatus status={c.status} />
-            {c.segment && <Chip tone="neu">{SEGMENT_LABEL[c.segment as CustomerSegment] ?? c.segment}</Chip>}
+            {c.segment && <Chip tone="neu">{segLabels.get(c.segment) ?? c.segment}</Chip>}
           </span>
         }
         actions={
@@ -94,7 +95,7 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
                 ...(c.notesInternal ? ([["Internal notes", c.notesInternal]] as [string, string][]) : []),
               ]}
             />
-            {canEdit && <ProfileForm c={c} />}
+            {canEdit && <ProfileForm c={c} segments={segOptions} />}
             <StatusForm customerId={c.id} options={statusOptions} />
           </Card>
 

@@ -182,6 +182,7 @@ export {
   updateMaterial,
   changeMaterialStatus,
   materialsExport,
+  materialFormOptions,
   type MaterialFilter,
   type MaterialInput,
   type MaterialClass,
@@ -190,3 +191,24 @@ export {
 export { REASON_CATEGORY_LABELS, listReasonCodes, getReasonCode, reasonCodeOptions, reasonLabels, assertReasonCode, createReasonCode, updateReasonCode } from "./reason-codes";
 export { DEFAULT_REASON_CODES, REASON_NOTE_MAX, reasonCodesFor } from "./reason-codes-defaults";
 export { installReferenceData } from "./org-reference";
+// ADR-076: editable dropdown lists (Master data → Lists)
+export {
+  LOOKUP_LISTS,
+  LOOKUP_LIST_KEYS,
+  LISTS_ELSEWHERE,
+  isLookupListKey,
+  lookupOptions,
+  lookupLabels,
+  assertLookupValue,
+  listLookupLists,
+  addLookupValue,
+  renameLookupValue,
+  moveLookupValue,
+  setLookupValueActive,
+  deleteLookupValue,
+  codeFromLabel,
+  lookupValueCount,
+  type LookupListKey,
+  type LookupListView,
+  type LookupOption,
+} from "./lookups";

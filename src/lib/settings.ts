@@ -124,8 +124,7 @@ export const SETTINGS = {
   "inventory.container.allow_mixed_lots": { scopes: ["organization"], schema: z.boolean(), default: false, assumption: "A-PROC-22", group: "Inventory", label: "Allow mixed lots in one box" },
   /** Near-expiry buckets in days: Expiry alerts page and `expiring_lot` notifications (US-2-16). */
   // Wave 2 W2G: master data administration
-  /** Product families a product may belong to (US-1-22 AC1, docs/data-model.md §3.2 `product_family`). */
-  "masterdata.product_families": { scopes: ["organization"], schema: z.array(z.string().trim().min(1).max(40)).min(1).max(50), default: ["Soap", "Lotion", "Cream", "Oil", "Other"] as string[], assumption: "A-W2G-03", group: "Master data", label: "Product families" },
+  // Product families moved to the editable list `product_family` (Master data → Lists, ADR-076; src/db/sql/s4.sql copies a stored value).
 
   // Wave 2 W2B: batch execution (US-3-09..13). Defaults are fictional placeholders for the process owner and QA to confirm.
   /** A-PROC-31: post ingredient consumption at each dispense (and packaging consumption at packaging) instead of at transfer to quarantine (W05-17). */

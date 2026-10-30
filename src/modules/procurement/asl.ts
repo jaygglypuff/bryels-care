@@ -81,6 +81,9 @@ export async function listSupplierMaterials(ctx: AuthContext, supplierId: string
       materialName: r.materialName,
       baseUom: r.baseUom,
       supplierPartNumber: r.sm.supplierPartNumber,
+      brand: r.sm.brand,
+      packQty: r.sm.packQty,
+      packUom: r.sm.packUom,
       isApproved: r.sm.isApproved,
       approvedAt: r.sm.approvedAt,
       auditDate: r.sm.auditDate,
@@ -316,6 +319,39 @@ export async function updateSupplierTerms(ctx: AuthContext, input: TermsInput, o
   });
 }
 
+export type PackInput = { supplierMaterialId: string; brand?: string | null; packQty?: string | null; packUom?: string | null };
+
+/**
+ * ADR-076: brand this supplier delivers for the material and its pack size (e.g. "Golden Palm", 18 L tin).
+ * Defaults for receiving and purchase orders; not a cost term, so `masterdata.supplier.edit` is enough.
+ * The pack unit must convert to the material's base unit (V-UOM). Audited with before/after.
+ */
+export async function updateSupplierMaterialPack(ctx: AuthContext, input: PackInput, opts?: InTx) {
+  ctx.require("masterdata.supplier.edit");
+  ctx.assertWritable();
+  return runInTx(opts, async (tx) => {
+    const sm = await lockPair(tx, ctx, input.supplierMaterialId);
+    const [mat] = await tx.select().from(materials).where(eq(materials.id, sm.materialId));
+    const brand = cleanText(input.brand, 80, "brand", "Brand");
+    const packQty = optDecimal(input.packQty, "packQty", "Pack size");
+    const packUom = packQty ? (input.packUom || mat.baseUom).trim() : null;
+    if (packQty && packUom && !(await toBase(tx, ctx.organizationId, mat, packQty, packUom))) throw new DomainError("validation", `${packUom} cannot be converted to ${mat.code}'s base unit ${mat.baseUom}.`, { field: "packUom" });
+    const next = { brand, packQty: packQty?.toString() ?? null, packUom };
+    await tx.update(supplierMaterials).set({ ...next, updatedAt: new Date(), updatedBy: ctx.userId }).where(eq(supplierMaterials.id, sm.id));
+    const { supplier, material } = await pairLabel(tx, sm);
+    await audit(tx, ctx, {
+      action: "masterdata.supplier.updated",
+      entityType: "supplier",
+      entityId: sm.supplierId,
+      entityNumber: supplier?.code,
+      siteId: null,
+      before: { supplierMaterialId: sm.id, material: material?.code, brand: sm.brand, packQty: sm.packQty, packUom: sm.packUom },
+      after: { supplierMaterialId: sm.id, material: material?.code, ...next },
+    });
+    return { supplierMaterialId: sm.id, ...next };
+  });
+}
+
 /**
  * V-ASL (docs/process-maps.md §1.5): the supplier must be active and not suspended, and the pair must
  * be on the approved list. Returns the pair row (price, MOQ, lead time) for PO lines.
@@ -340,7 +376,7 @@ export async function approvedMaterialsFor(ctx: AuthContext, supplierId: string)
   ctx.require("masterdata.supplier.view");
   if (!isUuid(supplierId)) return [];
   const rows = await db
-    .select({ sm: supplierMaterials, code: materials.code, name: materials.name, baseUom: materials.baseUom })
+    .select({ sm: supplierMaterials, code: materials.code, name: materials.name, baseUom: materials.baseUom, standardPackQty: materials.standardPackQty, standardPackUom: materials.standardPackUom, materialBrand: materials.brand })
     .from(supplierMaterials)
     .innerJoin(materials, eq(materials.id, supplierMaterials.materialId))
     .where(and(eq(supplierMaterials.supplierId, supplierId), eq(supplierMaterials.organizationId, ctx.organizationId), eq(supplierMaterials.isApproved, true), eq(materials.status, "active")))
@@ -355,6 +391,10 @@ export async function approvedMaterialsFor(ctx: AuthContext, supplierId: string)
     leadTimeDays: r.sm.leadTimeDays,
     moqQty: r.sm.moqQty,
     moqUom: r.sm.moqUom,
+    // ADR-076: default order quantity = the supplier's pack, else the material's standard pack.
+    brand: r.sm.brand ?? r.materialBrand,
+    packQty: r.sm.packQty ?? r.standardPackQty,
+    packUom: r.sm.packQty ? r.sm.packUom : r.standardPackUom,
     priceUom: r.sm.priceUom,
     unitPrice: prices ? r.sm.unitPrice : undefined,
     currency: prices ? r.sm.currency : undefined,
