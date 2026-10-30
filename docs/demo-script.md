@@ -131,11 +131,12 @@ Close the label tabs.
 
 ### Scene 3: Scanning (1 min). Still `warehouse.nfd@`
 
-1. Menu: **Warehouse → Scan / look up** (or the scan icon in the top bar).
+1. Menu: **Inventory → Scan** (or the scan icon in the top bar). The page is titled
+   **Scan or search**: you can also type words such as `coconut oil` or a customer name.
 2. Type `BC:LOT:` followed by the new lot number (for example `BC:LOT:L-2610-00019`) and press
    Enter. A handheld scanner types exactly this, followed by Enter.
-3. The scan card shows the lot with the orange banner **Quarantined: not usable yet**. Point at
-   the greyed action: *Issue to production: blocked while the lot is quarantined.* **Open lot**
+3. The scan card shows the lot with the orange banner **Waiting for check: not usable yet**. Point at
+   the greyed action: *Issue to production: blocked while the lot is waiting for check.* **Open lot**
    opens the full lot page. Box labels (`BC:BOX:…`), location labels (`BC:LOC:…`) and equipment
    labels (`BC:EQP:…`) answer the same way.
 
@@ -158,8 +159,9 @@ invisible, and the server enforces this, not just the screen.
 **Say:** "Every QA decision needs a reason and is recorded permanently with who and when. It can
 never be edited afterwards."
 
-4. Now the expired lot. Left menu: **Inventory → Lots & stock**, search `LB-6620`, and open the lot
-   (**L-2610-00008**, Acapulco Extract). The banner says it is expired. Click **Open QA decision**.
+4. Now the expired lot. Left menu: **Inventory → Stock**, type `LB-6620` in the search box. The
+   row **Acapulco Extract** opens by itself in the red **Do not use** group at the bottom; tap the lot
+   (**L-2610-00008**). The banner says it is expired. Click **Open QA decision**.
 
 ![Expired lot cannot be released](demo/04-qa-expired-blocked.png)
 

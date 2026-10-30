@@ -542,6 +542,15 @@ flash and a short haptic (where supported) and opens the **scan result card**:
    the operator understands why, and are never clickable.
 5. "Scan again" and "Not what you expected?" (report a label problem to the supervisor).
 
+**Typed words (owner review 2026-10-30, extends ADR-085).** The scan page is titled **Scan or
+search**. Text that is not a label and not an exact lot / batch / order / receipt number is a
+search: every word must match (any case) and the card shows groups, at most 5 lines each, in
+this order: Materials and products (usable stock at the current site), Lots, Batches, Customer
+orders, Purchase orders, Customers, Suppliers. Each line is name first, a short plain detail,
+and is the link. A group the user's role may not open is never queried or shown
+(`searchEverything` in `src/modules/scan/search.ts`). Lot states on scan screens use the plain
+words "Waiting for check" (quarantine) and "On hold".
+
 Duplicate scans within 2 s are ignored; the same payload scanned twice in a flow asks
 "Already scanned. Scan it again?" to prevent double posting (idempotency keys per ADR-006).
 
@@ -767,6 +776,16 @@ are listed only where the page adds something. Permissions reference
 - **Scan home**: full-screen viewfinder with mode switch (Camera / Scanner / Type), torch,
   recent scans list below, "What can I scan?" help sheet. Keyboard-wedge input is focused
   silently.
+- **Stock list** (`/inventory`, owner review 2026-10-30): tabs Raw materials (default) / Work in
+  progress / Finished goods / All stock; one search box (filters as you type, words AND over
+  item name, code, lot number, supplier lot) with a green Scan button; status chips as links
+  with counts (All / OK to use / Waiting for check / On hold / Expiring / Low stock); "More
+  filters" holds the warehouse section. ONE row per material or product: initial avatar, name
+  first (code small and grey), usable quantity in kg / g / L / pcs, the worst state as a chip,
+  the next expiry; tap the row to open its lots (earliest expiry on top; "FEFO" is never
+  shown). Expired, rejected and recalled stock is a separate red **Do not use** group at the
+  bottom. "What is a lot?" is explained once under the list. No KPI cards: the chip counts
+  replace them so the list starts within the first phone screen. Read model `stockByItem`.
 - **Lot detail** (after scan or from Lots list): identity block, status chip and risk
   banner, key facts (material, supplier lot, received, manufactured, expiry/retest, on
   hand, available, reserved, locations with quantities), tabs Movements / Documents /
