@@ -6,7 +6,7 @@ import type { AuthContext, SiteRef } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { SECTION_LABELS, SECTION_ORDER, lookupLabels, sectionSql, type LocationSection } from "@/modules/masterdata";
 import { manilaToday } from "./availability";
-import { fmtStock, lowStockItems } from "./low-stock";
+import { fmtStock, fmtStockFriendly as friendly, lowStockItems } from "./low-stock";
 import { OPEN_ALLOCATION_ORDER_STATUSES } from "./reservations";
 import { lotState, type LotState } from "./stock-by-item";
 
@@ -62,6 +62,8 @@ export type ItemLot = {
   qty: string;
   qtyText: string;
   setAside: string;
+  /** Part of `setAside` promised to customer orders (open allocations). */
+  promised: string;
   /** "A-01 Oil rack (10 kg), B-02 (5 kg)". */
   where: string;
 };
@@ -106,7 +108,28 @@ export type ItemStock = {
   asOf: string;
   minimum: Amount | null;
   belowMinimum: boolean;
-  totals: { inStock: Amount; ready: Amount; waiting: Amount; onHold: Amount; doNotUse: Amount; setAside: Amount; free: Amount; expiringSoon: Amount };
+  totals: {
+    inStock: Amount;
+    ready: Amount;
+    waiting: Amount;
+    onHold: Amount;
+    /** expired + bad */
+    doNotUse: Amount;
+    expired: Amount;
+    /** Rejected or recalled. */
+    bad: Amount;
+    /** Reservations + open order allocations on ready lots. */
+    setAside: Amount;
+    /** The part of setAside promised to customer orders. */
+    promised: Amount;
+    free: Amount;
+    expiringSoon: Amount;
+  };
+  /** Products only, with `sales.sales_order.view` at a site in view (else null): open customer orders not yet set aside, and what is left to sell. */
+  orders: { notSetAside: Amount; freeToSell: Amount } | null;
+  /** Materials: kg per supplier and per brand (any supplier); both add up to the total. */
+  bySupplierTotal: { name: string | null; lots: number; total: Amount }[];
+  byBrandTotal: { name: string | null; lots: number; total: Amount }[];
   bySupplier: SupplierRow[];
   expiring: ExpiryBucket[];
   places: PlaceRow[];
@@ -120,12 +143,6 @@ const BLOCKED: LotState[] = ["expired", "rejected", "recalled"];
 const READY: LotState[] = ["ok", "expiring"];
 /** Order to use: ready first, then waiting, on hold, and blocked last. */
 const USE_ORDER: Record<LotState, number> = { ok: 0, expiring: 0, waiting: 1, on_hold: 2, expired: 3, rejected: 3, recalled: 3 };
-
-/** fmtStock, but nothing in grams reads "0 kg" (and mL "0 L"): the owner thinks of oils in kg. */
-function friendly(d: Decimal.Value, unit: string): string {
-  if (new Decimal(d).isZero()) return unit === "g" ? "0 kg" : unit === "mL" || unit === "ml" ? "0 L" : fmtStock(0, unit);
-  return fmtStock(d, unit);
-}
 
 /** "Oils rack A-01" when the name already says the code, else "Oils rack (A-01)", or just the code. */
 function placeName(code: string, name: string | null): string {
@@ -265,19 +282,23 @@ export async function getItemStock(ctx: AuthContext, input: ItemStockInput): Pro
 
   // ---- set aside (reservations + open order allocations) per lot ----
   const setAsideByLot = new Map<string, Decimal>();
+  const promisedByLot = new Map<string, Decimal>();
   if (inLots) {
     const openStatuses = sql.join(OPEN_ALLOCATION_ORDER_STATUSES.map((s) => sql`${s}`), sql`, `);
     const res = (await db.execute(sql`
-      select lot_id, sum(qty)::text as qty from (
-        select r.lot_id, r.qty_base as qty from stock_reservations r
+      select lot_id, sum(qty)::text as qty, coalesce(sum(qty) filter (where src = 'order'), 0)::text as promised from (
+        select r.lot_id, r.qty_base as qty, 'reservation' as src from stock_reservations r
          where r.lot_id in (${inLots}) and r.site_id in (${inSites}) and r.status = 'active' and (r.expires_at is null or r.expires_at > now())
         union all
-        select a.lot_id, a.qty_units from stock_allocations a
+        select a.lot_id, a.qty_units, 'order' from stock_allocations a
           join sales_order_lines sol on sol.id = a.sales_order_line_id
           join sales_orders so on so.id = sol.sales_order_id
          where a.lot_id in (${inLots}) and a.status = 'open' and so.status in (${openStatuses}) and so.site_id in (${inSites})
-      ) x group by lot_id`)) as unknown as { lot_id: string; qty: string }[];
-    for (const r of res) setAsideByLot.set(r.lot_id, new Decimal(r.qty));
+      ) x group by lot_id`)) as unknown as { lot_id: string; qty: string; promised: string }[];
+    for (const r of res) {
+      setAsideByLot.set(r.lot_id, new Decimal(r.qty));
+      promisedByLot.set(r.lot_id, new Decimal(r.promised));
+    }
   }
 
   // ---- lots ----
@@ -303,6 +324,7 @@ export async function getItemStock(ctx: AuthContext, input: ItemStockInput): Pro
         qty: "0",
         qtyText: "",
         setAside: "0",
+        promised: "0",
         where: "",
         qtyD: new Decimal(0),
         locs: [],
@@ -320,6 +342,7 @@ export async function getItemStock(ctx: AuthContext, input: ItemStockInput): Pro
     a.qtyText = fmtStock(a.qtyD, unit);
     const sa = READY.includes(a.state) ? Decimal.min(setAsideByLot.get(a.lotId) ?? 0, a.qtyD) : new Decimal(0);
     a.setAside = sa.toString();
+    a.promised = (READY.includes(a.state) ? Decimal.min(promisedByLot.get(a.lotId) ?? 0, sa) : new Decimal(0)).toString();
     a.where = a.locs.length === 1 ? a.locs[0].name : a.locs.map((l) => `${l.name} (${fmtStock(l.qty, unit)})`).join(", ");
   }
   accs.sort(
@@ -343,10 +366,42 @@ export async function getItemStock(ctx: AuthContext, input: ItemStockInput): Pro
     waiting: amt(sum((l) => l.state === "waiting")),
     onHold: amt(sum((l) => l.state === "on_hold")),
     doNotUse: amt(sum((l) => BLOCKED.includes(l.state))),
+    expired: amt(sum((l) => l.state === "expired")),
+    bad: amt(sum((l) => l.state === "rejected" || l.state === "recalled")),
     setAside: amt(setAside),
+    promised: amt(sum((l) => READY.includes(l.state), (l) => l.promised)),
     free: amt(free),
     expiringSoon: amt(expiringSoon),
   };
+
+  // ---- customer orders not yet set aside (products; needs sales.sales_order.view) ----
+  let orders: ItemStock["orders"] = null;
+  const salesSites = siteIds.filter((s) => ctx.canAt("sales.sales_order.view", s));
+  if (kind === "product" && salesSites.length) {
+    const openStatuses = sql.join(OPEN_ALLOCATION_ORDER_STATUSES.map((s) => sql`${s}`), sql`, `);
+    const inSales = sql.join(salesSites.map((s) => sql`${s}::uuid`), sql`, `);
+    // Per open line: ordered − (open + fulfilled allocations), never below 0. Confirmed orders with no allocation count in full.
+    const o = (await db.execute(sql`
+      select coalesce(sum(greatest(sol.qty_units - coalesce(al.q, 0), 0)), 0)::text as q
+        from sales_order_lines sol
+        join sales_orders so on so.id = sol.sales_order_id
+        left join (select sales_order_line_id, sum(qty_units) as q from stock_allocations where status in ('open', 'fulfilled') group by 1) al on al.sales_order_line_id = sol.id
+       where so.organization_id = ${ctx.organizationId}::uuid and so.site_id in (${inSales}) and so.status in (${openStatuses})
+         and sol.product_id = ${input.id}::uuid`)) as unknown as { q: string }[];
+    const notSetAside = new Decimal(o[0]?.q ?? 0);
+    orders = { notSetAside: amt(notSetAside), freeToSell: amt(Decimal.max(free.minus(notSetAside), 0)) };
+  }
+
+  // ---- totals per supplier and per brand (materials) ----
+  const totalsBy = (key: (l: ItemLot) => string | null) => {
+    const m = new Map<string | null, ItemLot[]>();
+    for (const l of lots) m.set(key(l), [...(m.get(key(l)) ?? []), l]);
+    return [...m.entries()]
+      .map(([name, ls]) => ({ name, lots: ls.length, total: amt(ls.reduce((t, l) => t.plus(l.qty), new Decimal(0))) }))
+      .sort((a, b) => new Decimal(b.total.qty).comparedTo(a.total.qty) || (a.name ?? "\uffff").localeCompare(b.name ?? "\uffff"));
+  };
+  const bySupplierTotal = kind === "material" ? totalsBy((l) => l.supplierName) : [];
+  const byBrandTotal = kind === "material" ? totalsBy((l) => l.brand) : [];
 
   // ---- by supplier and brand (materials) / by batch (products) ----
   const groups = new Map<string, ItemLot[]>();
@@ -462,6 +517,9 @@ export async function getItemStock(ctx: AuthContext, input: ItemStockInput): Pro
     minimum,
     belowMinimum,
     totals,
+    orders,
+    bySupplierTotal,
+    byBrandTotal,
     bySupplier,
     expiring,
     places,

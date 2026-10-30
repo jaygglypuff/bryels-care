@@ -802,6 +802,13 @@ are listed only where the page adds something. Permissions reference
   each row opens the lot; long lists show 6 / 8 rows and "Show N more"), "What happened
   lately" (last 10 movements as sentences: "Received 25 kg from Laguna Oleo"). Supplier,
   brand or batch is the first thing in a row, never a code. Read model `getItemStock`.
+  Grade-5 test follow-up: one vocabulary (Ready to use / Waiting for QA check / Stopped by QA /
+  Expired – do not use / Bad – do not use); every big number says "this plant" or "all
+  plants"; one total sentence "Total X = ready · waiting for QA check · stopped by QA ·
+  expired · bad" (also on each opened row of the stock list, whose lot lines now name the
+  supplier and brand); materials add "By supplier" and "By brand" kg lists; products add
+  Promised to customer orders · Ordered by customers, not yet set aside · Free to sell, and
+  show 5 batches / lots before "Show N more".
 - **Lot detail** (after scan or from Lots list): identity block, status chip and risk
   banner, key facts (material, supplier lot, received, manufactured, expiry/retest, on
   hand, available, reserved, locations with quantities), tabs Movements / Documents /

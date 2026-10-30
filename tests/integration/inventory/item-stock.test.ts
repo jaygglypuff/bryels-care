@@ -11,8 +11,8 @@ import Decimal from "decimal.js";
 import { and, eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import { db } from "@/db/client";
-import { inventoryLots, locations, materialReorderPolicies, materials, stockReservations } from "@/db/schema";
-import type { AuthContext } from "@/lib/auth/context";
+import { inventoryLots, locations, materialReorderPolicies, materials, products, stockReservations } from "@/db/schema";
+import { AuthContext } from "@/lib/auth/context";
 import { getItemStock, movementSentence, postMovement, type ItemStock } from "@/modules/inventory";
 import { resetTestDatabase } from "../../support/db";
 import { asUser, expectCode, type Kit, loadKit, loc, makeLot } from "../../support/kit";
@@ -89,6 +89,10 @@ describe("getItemStock", () => {
     expect(r.totals.waiting.qty).toBe("500");
     expect(r.totals.onHold.qty).toBe("250");
     expect(r.totals.doNotUse.qty).toBe("340"); // expired by date 300 + rejected 40
+    expect(r.totals.expired.qty).toBe("300");
+    expect(r.totals.bad.qty).toBe("40");
+    expect(r.totals.promised.qty).toBe("0"); // a manual reservation is set aside, not promised to a customer
+    expect(r.orders).toBeNull(); // materials have no customer orders
     expect(D(r.totals.ready.qty).plus(r.totals.waiting.qty).plus(r.totals.onHold.qty).plus(r.totals.doNotUse.qty).eq(r.totals.inStock.qty)).toBe(true);
     expect(r.totals.ready.text).toBe("3.5 kg");
     expect(r.totals.setAside.qty).toBe("200");
@@ -110,6 +114,27 @@ describe("getItemStock", () => {
     const mindanaoNoBrand = r.bySupplier.find((s) => s.supplierName === "Mindanao Fats (fictional)" && s.brand === null)!;
     expect(mindanaoNoBrand.onHold.qty).toBe("250");
     expect(r.bySupplier.find((s) => s.supplierName === null)!.total.qty).toBe("40");
+  });
+
+  it("totals per supplier and per brand each add up to the total", () => {
+    expect(D(sumQty(r.bySupplierTotal.map((s) => s.total))).eq(r.totals.inStock.qty)).toBe(true);
+    expect(D(sumQty(r.byBrandTotal.map((s) => s.total))).eq(r.totals.inStock.qty)).toBe(true);
+    expect(r.bySupplierTotal.find((s) => s.name === "Laguna Oleo (fictional)")!.total.qty).toBe("3800");
+    expect(r.byBrandTotal.find((s) => s.name === "Sunny Leaf")!.lots).toBe(3);
+    expect(r.byBrandTotal.find((s) => s.name === null)!.total.qty).toBe("290"); // 250 on hold + 40 rejected
+  });
+
+  it("products: by batch; customer orders not yet set aside and free to sell, only with sales.sales_order.view", async () => {
+    const [p] = await db.select().from(products).where(eq(products.skuCode, "ACS-135"));
+    expect(owner.can("sales.sales_order.view")).toBe(true);
+    const x = await getItemStock(owner, { kind: "product", id: p.id, all: true, asOf: AS_OF });
+    expect(x.bySupplierTotal).toEqual([]);
+    expect(x.orders).not.toBeNull();
+    expect(D(x.totals.free.qty).eq(D(x.totals.ready.qty).minus(x.totals.setAside.qty))).toBe(true);
+    expect(D(x.orders!.freeToSell.qty).eq(Decimal.max(D(x.totals.free.qty).minus(x.orders!.notSetAside.qty), 0))).toBe(true);
+    expect(D(x.totals.promised.qty).lte(x.totals.setAside.qty)).toBe(true);
+    const viewOnly = new AuthContext(wh.userId, kit.orgId, wh.displayName, wh.email, ["custom"], new Set(["inventory.lot.view"]), [kit.nfd], kit.nfd.id);
+    expect((await getItemStock(viewOnly, { kind: "product", id: p.id, asOf: AS_OF })).orders).toBeNull();
   });
 
   it("expiry buckets with a fixed business date: 30 / 60 / 90 days and already expired", () => {

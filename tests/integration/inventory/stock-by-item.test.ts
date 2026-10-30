@@ -70,6 +70,9 @@ describe("stockByItem", () => {
     expect(x.lots.map((l) => l.lotId)).toEqual([lotIds.ok2, lotIds.ok1, lotIds.waiting, lotIds.hold]);
     expect(x.nearestExpiry).toBe("2030-01-31");
     expect(x.name).toMatch(/^Calamansi/);
+    // The ONE total of the item, whatever the chip: ready + waiting + stopped + expired + bad (grade-5 test 2026-10-30).
+    expect(x.breakdown).toEqual({ totalText: "4.09 kg", readyText: "3 kg", waitingText: "500 g", onHoldText: "250 g", expiredText: "300 g", badText: "40 g" });
+    expect(x.lots[0].supplierName).toBe("Laguna Oleo Supply (fictional)"); // the supplier's name, not only their lot code
   });
 
   it("expired (by date or status) and rejected lots go to the separate Do not use group, never in the main row", async () => {

@@ -67,6 +67,12 @@ export function fmtStock(v: Decimal.Value, unit: string): string {
   return `${frac ? `${grouped}.${frac}` : grouped} ${u}`;
 }
 
+/** fmtStock, but zero in grams reads "0 kg" (and mL "0 L"): the owner thinks of oils in kg, not grams. */
+export function fmtStockFriendly(v: Decimal.Value, unit: string): string {
+  if (new Decimal(v).isZero()) return unit === "g" ? "0 kg" : unit === "mL" || unit === "ml" ? "0 L" : fmtStock(0, unit);
+  return fmtStock(v, unit);
+}
+
 type Row = { kind: "material" | "product"; id: string; code: string; name: string; site_id: string; site_code: string; unit: string; on_hand: string; waiting: string; minimum: string };
 
 export async function lowStockItems(ctx: AuthContext, opts: { siteIds?: string[] } = {}): Promise<LowStockItem[]> {

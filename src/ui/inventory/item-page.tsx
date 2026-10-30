@@ -1,15 +1,76 @@
 import Link from "next/link";
 import { ChevronRight, MapPin } from "lucide-react";
 import type { ReactNode } from "react";
-import type { ExpiryBucket, ItemLot, ItemMovement, PlaceRow, SupplierRow } from "@/modules/inventory/item-stock";
+import type { ExpiryBucket, ItemLot, ItemMovement, ItemStock, PlaceRow, SupplierRow } from "@/modules/inventory/item-stock";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { Card, cx } from "@/ui/core";
-import { ItemStateChip } from "./stock-items";
+import type { LotState } from "@/modules/inventory/stock-by-item";
+import { Chip } from "@/ui/status";
 
 /**
  * Item page pieces (owner question 2026-10-30). Pure presentation of the server read model `getItemStock`;
  * grade-5 words, mobile first (cards and lists, no wide tables), every row a 44 px+ tap target.
  */
+
+/**
+ * One vocabulary on the item page (grade-5 usability test 2026-10-30): Ready to use / Waiting for QA check /
+ * Stopped by QA / Expired – do not use / Bad – do not use. A lot past its date never reads "Released".
+ */
+export const LOT_WORDS: Record<LotState, string> = {
+  ok: "Ready to use",
+  expiring: "Ready to use",
+  waiting: "Waiting for QA check",
+  on_hold: "Stopped by QA",
+  expired: "Expired – do not use",
+  rejected: "Bad – do not use",
+  recalled: "Bad – do not use",
+};
+const LOT_TONE: Record<LotState, "ok" | "warn" | "q" | "hold" | "exp" | "bad"> = { ok: "ok", expiring: "warn", waiting: "q", on_hold: "hold", expired: "exp", rejected: "bad", recalled: "bad" };
+
+export function LotWordsChip({ state }: { state: LotState }) {
+  return <Chip tone={LOT_TONE[state]}>{LOT_WORDS[state]}</Chip>;
+}
+
+/** "Total 273.91 kg = ready 273.91 kg · waiting for QA check 0 kg · stopped by QA 0 kg · expired 0 kg · bad 0 kg". */
+export function TotalSentence({ totals, lots, where }: { totals: ItemStock["totals"]; lots: number; where: string }) {
+  return (
+    <p className="flex flex-wrap gap-x-2 px-1 text-[14px] text-fg-2" data-testid="item-total-line">
+      <span>
+        Total {where}: <b className="text-fg tabular">{totals.inStock.text}</b> in {lots} {lots === 1 ? "lot" : "lots"} =
+      </span>
+      <span>ready {totals.ready.text}</span>
+      <span>· waiting for QA check {totals.waiting.text}</span>
+      <span>· stopped by QA {totals.onHold.text}</span>
+      <span className={cx(totals.expired.qty !== "0" && "font-semibold text-[var(--bad-fg)]")}>· expired {totals.expired.text}</span>
+      <span className={cx(totals.bad.qty !== "0" && "font-semibold text-[var(--bad-fg)]")}>· bad {totals.bad.text}</span>
+    </p>
+  );
+}
+
+/** Two short lists: how much per supplier, how much per brand (each adds up to the total). */
+export function SupplierBrandTotals({ bySupplier, byBrand }: { bySupplier: ItemStock["bySupplierTotal"]; byBrand: ItemStock["byBrandTotal"] }) {
+  const list = (title: string, rows: ItemStock["bySupplierTotal"], none: string) => (
+    <div className="rounded-[16px] border border-line" data-testid={`item-totals-${title.toLowerCase().replace(/\W+/g, "-")}`}>
+      <p className="border-b border-line bg-surface-2 px-4 py-2 text-[13px] font-semibold">{title}</p>
+      <ul className="divide-y divide-line text-[14px]">
+        {rows.map((r) => (
+          <li key={r.name ?? "-"} className="flex items-baseline justify-between gap-3 px-4 py-2">
+            <span className={cx("min-w-0", !r.name && "text-muted")}>
+              {r.name ?? none} <span className="text-[12px] text-muted">· {r.lots} {r.lots === 1 ? "lot" : "lots"}</span>
+            </span>
+            <b className="shrink-0 tabular">{r.total.text}</b>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+  return (
+    <div className="mb-3 grid gap-3 md:grid-cols-2">
+      {list("By supplier", bySupplier, "Supplier not written down")}
+      {list("By brand", byBrand, "Brand not written down")}
+    </div>
+  );
+}
 
 export function daysWords(days: number | null): string {
   if (days === null) return "no expiry date";
@@ -44,10 +105,13 @@ const TONE: Record<"ok" | "q" | "hold" | "bad" | "warn" | "neu", string> = {
 };
 
 /** One big number. */
-export function BigNumber({ label, value, hint, tone = "neu", testId }: { label: string; value: string; hint?: ReactNode; tone?: keyof typeof TONE; testId?: string }) {
+export function BigNumber({ label, scope, value, hint, tone = "neu", testId }: { label: string; scope?: string; value: string; hint?: ReactNode; tone?: keyof typeof TONE; testId?: string }) {
   return (
     <div className={cx("flex min-h-[112px] flex-col rounded-[20px] border p-4", TONE[tone])} data-testid={testId}>
-      <p className="text-[13px] font-semibold text-fg-2">{label}</p>
+      <p className="text-[13px] font-semibold text-fg-2">
+        {label}
+        {scope && <span className="block text-[11px] font-normal text-muted">{scope}</span>}
+      </p>
       <p className="mt-1.5 font-display text-[28px] font-semibold leading-tight text-fg tabular sm:text-[32px]">{value}</p>
       {hint && <p className="mt-1 text-[12px] text-fg-2">{hint}</p>}
     </div>
@@ -82,8 +146,8 @@ export function SupplierList({ rows, kind }: { rows: SupplierRow[]; kind: "mater
         const sub = kind === "material" ? (s.brand ? `Brand: ${s.brand}` : "Brand not written down") : s.madeOn ? `Made on ${fmtDate(s.madeOn)}` : "Date not written down";
         const parts = [
           s.ready.qty !== "0" ? `${s.ready.text} ready to use` : null,
-          s.waiting.qty !== "0" ? `${s.waiting.text} waiting for check` : null,
-          s.onHold.qty !== "0" ? `${s.onHold.text} on hold` : null,
+          s.waiting.qty !== "0" ? `${s.waiting.text} waiting for QA check` : null,
+          s.onHold.qty !== "0" ? `${s.onHold.text} stopped by QA` : null,
           s.doNotUse.qty !== "0" ? `${s.doNotUse.text} do not use` : null,
         ].filter(Boolean);
         const onlyReady = parts.length === 1 && s.ready.qty === s.total.qty;
@@ -202,7 +266,7 @@ export function LotList({ lots, kind, showSite, offset = 0 }: { lots: ItemLot[];
                 {l.setAside !== "0" && <span className="block text-[11px] text-fg-2">some set aside</span>}
               </span>
               <span className="col-span-2 col-start-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] lg:col-span-1 lg:col-start-auto">
-                <ItemStateChip state={l.state} />
+                <LotWordsChip state={l.state} />
                 <ExpiryLine date={l.expiresOn} days={l.daysLeft} />
               </span>
               <span className="col-span-2 col-start-2 text-[12px] text-fg-2 lg:col-span-1 lg:col-start-auto">

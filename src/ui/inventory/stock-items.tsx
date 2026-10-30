@@ -84,7 +84,12 @@ function LotLines({ item }: { item: StockItem }) {
           <span className="min-w-0 pl-[52px]">
             <span className="text-muted">Lot </span>
             <Link href={`/inventory/${l.lotId}`} className="font-mono font-semibold text-primary-text underline-offset-2 hover:underline">{l.lotNumber}</Link>
-            <span className="block text-[12px] text-fg-2">At {l.where}{l.supplierLotNumber ? <span className="text-muted"> · supplier lot {l.supplierLotNumber}</span> : null}</span>
+            <span className="block text-[12px] text-fg-2">
+              At {l.where}
+              {l.supplierName ? <> · from <span className="font-medium text-fg">{l.supplierName}</span></> : null}
+              {l.brand ? ` · brand ${l.brand}` : null}
+              {l.supplierLotNumber ? <span className="text-muted"> · their lot {l.supplierLotNumber}</span> : null}
+            </span>
           </span>
           <span className="justify-self-end lg:justify-self-start"><ItemStateChip state={l.state} /></span>
           <span className="col-span-2 pl-[52px] font-medium tabular lg:col-span-1 lg:pl-0">{l.qtyText}</span>
@@ -140,6 +145,7 @@ function ItemRow({ item, blocked, open }: { item: StockItem; blocked: boolean; o
           </span>
         </summary>
         <div className="border-t border-line bg-surface-2/50 px-3 pb-2 lg:px-4">
+          <TotalLine item={item} />
           {!blocked && item.lots.length > 1 && <p className="pl-[52px] pt-2 text-[12px] text-muted">Use the top one first: it expires first.</p>}
           <LotLines item={item} />
         </div>
@@ -164,6 +170,29 @@ export function StockItemList({ items, blocked = false, open = false, label }: {
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * The ONE total of an item, in the same words as the item page (grade-5 usability test 2026-10-30):
+ * "Total 273.91 kg = ready 273.91 kg · waiting for QA check 0 kg · stopped by QA 0 kg · expired 0 kg · bad 0 kg".
+ */
+function TotalLine({ item }: { item: StockItem }) {
+  const b = item.breakdown;
+  return (
+    <p className="flex flex-wrap items-baseline gap-x-2 pt-2.5 text-[13px] text-fg-2 lg:pl-[52px]" data-testid="stock-item-total">
+      <span>
+        Total <b className="text-fg tabular">{b.totalText}</b> =
+      </span>
+      <span>ready {b.readyText}</span>
+      <span>· waiting for QA check {b.waitingText}</span>
+      <span>· stopped by QA {b.onHoldText}</span>
+      <span>· expired {b.expiredText}</span>
+      <span>· bad {b.badText}</span>
+      <Link href={`/inventory/items/${item.kind}/${item.id}`} className="inline-flex min-h-[44px] items-center font-medium text-primary-text underline-offset-2 hover:underline">
+        Open {item.name}: suppliers, brands, expiry
+      </Link>
+    </p>
   );
 }
 
