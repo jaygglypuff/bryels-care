@@ -397,7 +397,8 @@ export async function listRoutings(ctx: AuthContext) {
     .orderBy(asc(routings.code));
   if (!rows.length) return [];
   const revs = await db
-    .select({ rev: routingRevisions, stepCount: sql<number>`(select count(*)::int from ${routingSteps} where ${routingSteps.routingRevisionId} = ${routingRevisions.id})` })
+    // Spelled out (one-table select: Drizzle would write `= "id"`, the step's own id, so every routing showed 0 steps).
+    .select({ rev: routingRevisions, stepCount: sql<number>`(select count(*)::int from routing_steps s where s.routing_revision_id = "routing_revisions"."id")` })
     .from(routingRevisions)
     .where(inArray(routingRevisions.routingId, rows.map((r) => r.routing.id)))
     .orderBy(desc(routingRevisions.revisionNo));
@@ -409,6 +410,7 @@ export async function listRoutings(ctx: AuthContext) {
       id: routing.id,
       code: routing.code,
       name: routing.name,
+      productId: product.id,
       productName: product.name,
       productSku: product.skuCode,
       effective: eff ? { id: eff.rev.id, revisionNo: eff.rev.revisionNo, effectiveFrom: eff.rev.effectiveFrom, stepCount: Number(eff.stepCount) } : null,

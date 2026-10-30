@@ -39,6 +39,31 @@ export function VerifyBanner({ placeholder }: { placeholder?: boolean }) {
   );
 }
 
+/** Plain words for the people of an approval step ("a QA person", "a manager or the owner"). */
+const ROLE_WORDS: Record<string, string> = {
+  qa_qc: "a QA person",
+  site_manager: "a manager",
+  owner_director: "the owner",
+  production_planner: "a planner",
+  finance: "a finance person",
+  procurement: "a buyer",
+  system_admin: "an administrator",
+};
+export function roleWords(roles: string[]): string {
+  if (!roles.length) return "someone allowed to approve";
+  return roles.map((r) => ROLE_WORDS[r] ?? `a ${r.replace(/_/g, " ")}`).join(" or ");
+}
+
+/** "Next: a QA person checks it, then a manager or the owner approves. You can't approve your own recipe." */
+export function approvalSentence(policy: { step: number; roles: string[] }[], what = "record"): string {
+  const steps = [...policy].sort((a, b) => a.step - b.step);
+  const own = `You can't approve your own ${what}.`;
+  if (!steps.length) return own;
+  if (steps.length === 1) return `Next: ${roleWords(steps[0].roles)} approves it. ${own}`;
+  const middle = steps.slice(0, -1).map((x) => roleWords(x.roles)).join(", then ");
+  return `Next: ${middle} checks it, then ${roleWords(steps[steps.length - 1].roles)} approves. ${own}`;
+}
+
 type ApprovalProps = {
   approval: {
     policy: { step: number; label: string; roles: string[] }[];
@@ -47,13 +72,20 @@ type ApprovalProps = {
   };
   status: string;
   children?: ReactNode;
+  /** What is approved, for the plain sentence ("recipe", "steps"…). */
+  what?: string;
 };
 
 /** Approval steps with who decided what, and the decision form slot when the viewer may decide. */
-export function ApprovalPanel({ approval, status, children }: ApprovalProps) {
+export function ApprovalPanel({ approval, status, children, what }: ApprovalProps) {
   return (
     <Card>
       <CardTitle>Approval</CardTitle>
+      {(status === "draft" || status === "pending_approval") && (
+      <p className="mb-2 text-[14px] text-fg-2" data-testid="approval-sentence">
+        {approvalSentence(approval.policy, what)}
+      </p>
+      )}
       <ol className="flex flex-col gap-2">
         {approval.policy.map((p) => {
           const d = approval.decisions.find((x) => x.step === p.step);
@@ -64,7 +96,7 @@ export function ApprovalPanel({ approval, status, children }: ApprovalProps) {
                 <p className="text-[13px] font-medium">
                   Step {p.step}: {p.label}
                 </p>
-                <p className="text-[12px] text-muted">{p.roles.map((r) => r.replace(/_/g, " ")).join(" or ")}; never the author or submitter</p>
+                <p className="text-[12px] text-muted">By {roleWords(p.roles)} (not the person who wrote or sent it)</p>
                 {d?.note && <p className="mt-1 text-[12px] text-fg-2">“{d.note}”</p>}
               </div>
               {d ? (
