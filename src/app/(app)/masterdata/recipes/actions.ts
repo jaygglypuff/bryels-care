@@ -5,7 +5,7 @@ import { type ActionState, toActionState } from "@/lib/errors";
 import { createRecipeIngredient, createRecipeProduct, getRecipeCopy, saveRecipe } from "@/modules/masterdata";
 
 /**
- * Server actions of the guided recipe wizard (ADR-086): thin adapters that call the masterdata
+ * Server actions of the guided recipe wizard (ADR-089): thin adapters that call the masterdata
  * services (which validate, authorize, transact and audit) and map errors to a form state. No
  * business rules here.
  */

@@ -38,7 +38,7 @@ import { loadApprovalPolicy } from "./approval-policy";
 import { businessToday, effectiveLabel, requireAny } from "./versioning";
 
 /**
- * Guided "New recipe" wizard (ADR-086), server side. A thin orchestrator ON TOP of the existing
+ * Guided "New recipe" wizard (ADR-089), server side. A thin orchestrator ON TOP of the existing
  * formula, routing, product and material services: every write is one of their commands, so their
  * permission checks, Zod validation, draft-only rules (src/db/sql/w1d.sql), audit events and the
  * approval path stay exactly as they are. This file adds no business rule of its own except:

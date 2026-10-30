@@ -18,7 +18,7 @@ const ICONS: Record<string, LucideIcon> = {
   other: Wrench,
 };
 
-/** The picture of a step block (ADR-086), in a soft round badge. */
+/** The picture of a step block (ADR-089), in a soft round badge. */
 export function BlockIcon({ block, className, size = 20 }: { block: string; className?: string; size?: number }) {
   const I = ICONS[block] ?? Wrench;
   return (

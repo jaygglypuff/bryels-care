@@ -7,7 +7,7 @@ import { RecipeWizard } from "../wizard";
 
 export const metadata: Metadata = { title: "New recipe" };
 
-/** Guided "New recipe" (ADR-086): five screens on top of the formula and routing services. */
+/** Guided "New recipe" (ADR-089): five screens on top of the formula and routing services. */
 export default async function NewRecipePage({ searchParams }: { searchParams: Promise<{ product?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("masterdata.formula.create") || !ctx.can("masterdata.routing.create")) return <Forbidden what="making new recipes" />;

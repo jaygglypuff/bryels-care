@@ -115,7 +115,7 @@ export type WizardStart = {
 };
 
 /**
- * Guided "New recipe" / "Edit recipe" wizard (ADR-086): five screens, one question group each, Back /
+ * Guided "New recipe" / "Edit recipe" wizard (ADR-089): five screens, one question group each, Back /
  * Next, plain words. Nothing here decides a rule: "Save as draft" and "Send for approval" call the
  * recipe service, which saves through the existing formula and routing services.
  */

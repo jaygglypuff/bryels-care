@@ -2,7 +2,7 @@ import Link from "next/link";
 import { buttonClass, cx } from "@/ui/core";
 
 /**
- * The plain action for one recipe on the formulas and routings lists (ADR-086): "Edit recipe" for a
+ * The plain action for one recipe on the formulas and routings lists (ADR-089): "Edit recipe" for a
  * draft, "Open recipe" while waiting for approval, "Make a new version" for an approved recipe.
  */
 export function RecipeRowAction({ formulaId, openStatus, canChange, className }: { formulaId: string; openStatus: string | null | undefined; canChange: boolean; className?: string }) {

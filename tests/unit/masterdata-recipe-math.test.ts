@@ -1,5 +1,5 @@
 /**
- * ADR-086: the guided recipe wizard's percent ↔ grams conversion is exact (decimal.js, never
+ * ADR-089: the guided recipe wizard's percent ↔ grams conversion is exact (decimal.js, never
  * floating point), totals say what is missing in plain words, and the step blocks map only to
  * existing routing step kinds.
  */

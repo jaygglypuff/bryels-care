@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 
 /**
- * Guided "New recipe" wizard (ADR-086): the pure part shared by the browser and the server.
+ * Guided "New recipe" wizard (ADR-089): the pure part shared by the browser and the server.
  *
  * A recipe is a formula revision (ingredients) plus a routing revision (steps) of one product. The
  * wizard never stores anything itself: these helpers turn what the person typed into the exact

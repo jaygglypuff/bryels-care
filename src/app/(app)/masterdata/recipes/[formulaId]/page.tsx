@@ -22,7 +22,7 @@ function partLabel(p: { open: V; current: V; next: number } | null, newVersion: 
 }
 
 /**
- * One recipe in plain words (ADR-086): the summary of the open or current version, with "Edit
+ * One recipe in plain words (ADR-089): the summary of the open or current version, with "Edit
  * recipe" for a draft, "Make a new version" for an approved recipe, and the detailed pages as
  * "Advanced editing". Approvals stay on the detailed pages and in "To approve".
  */

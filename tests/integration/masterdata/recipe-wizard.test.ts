@@ -1,5 +1,5 @@
 /**
- * ADR-086: the guided "New recipe" wizard sits on top of the existing formula, routing, product and
+ * ADR-089: the guided "New recipe" wizard sits on top of the existing formula, routing, product and
  * material services. These tests prove that it writes exactly what the services write, keeps drafts
  * as drafts until the normal approval, copies recipes as new drafts, refuses people without the
  * permissions, and that a batch still needs the approved versions.

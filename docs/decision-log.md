@@ -1602,3 +1602,20 @@ help create it… users still need to add a code."
 4. **Recipes per pieces or per weight**: "This recipe makes [N] pieces" or "[N] kg"; the system converts with the
    product's weight per piece and the expected yield; ingredients missing from the list can be added on the
    spot.
+
+## ADR-089 Guided recipe wizard on top of the formula and routing services
+
+Status: Accepted (owner request 2026-10-30, "easy enough for a grade-5 student").
+
+Decision: `/masterdata/recipes/new` and `/masterdata/recipes/[formulaId]` are a five-screen wizard (product, batch
+size, ingredients, steps, check and save). Its only writer is `saveRecipe` in `src/modules/masterdata/recipes.ts`,
+which calls the existing formula, routing, product and material commands; pure helpers live in `recipe-blocks.ts`.
+All input is validated first with the services' own schemas; a failed save removes what it created with the existing
+draft-delete/withdraw commands. A part unchanged since its approved version gets no new revision. Amounts typed in
+percent must total exactly 100%. Step blocks map only to existing step kinds. "Make a new product" creates the
+product and its SKU and activates both when permitted. "Add a new ingredient" creates the material inline. Approval,
+immutability and batch snapshots are unchanged; the detailed pages remain as "advanced editing".
+
+Consequences: new setting `masterdata.recipe.default_allowed_difference_pct` (default 2); assumptions A-RW-01..05
+(A-RW-05, "later steps wait" ticked by default, flagged for QA); fixed the list counts and the advanced formula
+editor reset bugs. Open: batch size in kg only (litres need density); packaging per piece is handled by ADR-088 §3.

@@ -221,7 +221,7 @@ export {
   type LookupListView,
   type LookupOption,
 } from "./lookups";
-// ADR-086: guided "New recipe" wizard on top of the formula, routing, product and material services
+// ADR-089: guided "New recipe" wizard on top of the formula, routing, product and material services
 export {
   saveRecipe,
   prepareRecipe,

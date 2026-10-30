@@ -40,7 +40,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
 
 /** Product, step and instruction setup: Management → Production setup (owner and engineering). */
 const SETUP_ITEMS: NavItem[] = [
-  // ADR-086: the guided recipe wizard (ingredients and steps in five screens).
+  // ADR-089: the guided recipe wizard (ingredients and steps in five screens).
   { label: "New recipe (step by step)", href: "/masterdata/recipes/new", permission: "masterdata.formula.create" },
   { label: "Products and formulas", href: "/masterdata/formulas", permission: "masterdata.formula.view" },
   { label: "Steps for each product", href: "/masterdata/routings", permission: "masterdata.routing.view" },
