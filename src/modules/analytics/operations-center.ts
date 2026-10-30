@@ -146,37 +146,37 @@ export async function getOperationsCenter(ctx: AuthContext, opts: { all?: boolea
     stages.push({
       key: "expected",
       label: "Expected deliveries",
-      hint: "Purchase orders waiting for goods",
+      hint: "Ordered from suppliers, not arrived yet",
       href: "/procurement/expected",
       count: toSend + sent + part,
-      parts: [{ label: "approved", n: toSend }, { label: "sent", n: sent }, { label: "part received", n: part }],
+      parts: [{ label: "not sent yet", n: toSend }, { label: "sent", n: sent }, { label: "partly arrived", n: part }],
       attention: lateOf(po),
       attentionLabel: "past the expected date",
     });
   }
   if (gr) {
     const drafts = num(gr[0]);
-    stages.push({ key: "receiving", label: "Receiving", hint: "Receipts started, not posted yet", href: "/inventory/receipts?status=draft", count: drafts, parts: [{ label: "draft", n: drafts }], attention: 0, attentionLabel: "" });
+    stages.push({ key: "receiving", label: "Receiving", hint: "Deliveries being checked in", href: "/inventory/receipts?status=draft", count: drafts, parts: [{ label: "being checked in", n: drafts }], attention: 0, attentionLabel: "" });
   }
   if (materialLots) {
     stages.push({
       key: "inspection",
-      label: "Awaiting inspection",
-      hint: "Material lots QA has not released",
+      label: "Materials to check",
+      hint: "New materials waiting for quality approval",
       href: "/inventory?kind=material&status=quarantine",
       count: materialLots.quarantine,
-      parts: [{ label: "waiting for QA", n: materialLots.quarantine }],
+      parts: [{ label: "waiting", n: materialLots.quarantine }],
       attention: materialLots.onHold,
       attentionLabel: "on hold",
       attentionHref: "/inventory?kind=material&status=on_hold",
     });
     stages.push({
       key: "raw_available",
-      label: "Raw materials available",
-      hint: "Released material lots with stock",
+      label: "Materials ready",
+      hint: "Approved materials in stock",
       href: "/inventory?kind=material&status=released",
       count: materialLots.released,
-      parts: [{ label: "released", n: materialLots.released }],
+      parts: [{ label: "lots", n: materialLots.released }],
       attention: materialLots.releasedExpiring,
       attentionLabel: `expire within ${NEAR_EXPIRY_WINDOW_DAYS} days`,
       attentionHref: "/inventory/lots/expiry",
@@ -187,11 +187,11 @@ export async function getOperationsCenter(ctx: AuthContext, opts: { all?: boolea
     const running = sum(batchRows, ["materials_staged", "in_process"]);
     stages.push({
       key: "production",
-      label: "Production",
-      hint: "Batches planned or being made",
+      label: "Being made",
+      hint: "Batches planned or in production",
       href: "/production/orders",
       count: planned + running,
-      parts: [{ label: "planned", n: planned }, { label: "in progress", n: running }],
+      parts: [{ label: "not started", n: planned }, { label: "in production", n: running }],
       attention: lateOf(batchRows, ["planned"]),
       attentionLabel: "late to start",
     });
@@ -199,11 +199,11 @@ export async function getOperationsCenter(ctx: AuthContext, opts: { all?: boolea
     const held = sum(batchRows, ["quarantined"]);
     stages.push({
       key: "qc",
-      label: "Quality check",
-      hint: "Finished batches waiting for QA",
-      href: can("quality.disposition.view") ? "/quality" : "/production/orders",
+      label: "Products to check",
+      hint: "Finished batches waiting for quality approval",
+      href: can("quality.disposition.view") ? "/quality/check" : "/production/orders",
       count: awaiting + held,
-      parts: [{ label: "awaiting QC", n: awaiting }, { label: "in hold area", n: held }],
+      parts: [{ label: "waiting", n: awaiting }, { label: "on hold", n: held }],
       attention: 0,
       attentionLabel: "",
     });
@@ -211,16 +211,16 @@ export async function getOperationsCenter(ctx: AuthContext, opts: { all?: boolea
   if (packRows) {
     const open = sum(packRows, ["open"]);
     const verified = sum(packRows, ["verified"]);
-    stages.push({ key: "packaging", label: "Packaging", hint: "Boxing of finished batches", href: "/warehouse/packs", count: open + verified, parts: [{ label: "boxing", n: open }, { label: "checked", n: verified }], attention: 0, attentionLabel: "" });
+    stages.push({ key: "packaging", label: "Boxing", hint: "Finished batches being boxed", href: "/warehouse/packs", count: open + verified, parts: [{ label: "being boxed", n: open }, { label: "checked", n: verified }], attention: 0, attentionLabel: "" });
   }
   if (productLots) {
     stages.push({
       key: "finished",
-      label: "Finished goods",
-      hint: "Released product lots with stock",
+      label: "Ready to sell",
+      hint: "Approved products in stock",
       href: "/inventory?kind=product&status=released",
       count: productLots.released,
-      parts: [{ label: "available", n: productLots.released }],
+      parts: [{ label: "lots", n: productLots.released }],
       attention: productLots.releasedExpiring,
       attentionLabel: `expire within ${NEAR_EXPIRY_WINDOW_DAYS} days`,
       attentionHref: "/inventory/lots/expiry",
@@ -231,11 +231,11 @@ export async function getOperationsCenter(ctx: AuthContext, opts: { all?: boolea
     const toDispatch = sum(orders, ORDER_TO_DISPATCH);
     stages.push({
       key: "dispatch",
-      label: "Orders to dispatch",
-      hint: "Customer orders confirmed, not shipped",
+      label: "Orders to ship",
+      hint: "Customer orders confirmed, not shipped yet",
       href: "/sales/board",
       count: toPick + toDispatch,
-      parts: [{ label: "to pick", n: toPick }, { label: "picking or packed", n: toDispatch }],
+      parts: [{ label: "to pick", n: toPick }, { label: "being packed", n: toDispatch }],
       attention: lateOf(orders),
       attentionLabel: "past the requested date",
     });

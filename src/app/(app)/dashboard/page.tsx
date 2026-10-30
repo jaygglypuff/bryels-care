@@ -2,13 +2,12 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
-import { getOperationsCenter, getOperatorHome, getOwnerDashboard, getOwnerOverview } from "@/modules/analytics";
+import { getOperationsCenter, getOperatorHome, getOwnerOverview } from "@/modules/analytics";
+import { myApprovalCount } from "@/modules/action-centre";
 import { listProductionOrders } from "@/modules/production";
-import { EmptyState, PageHeader } from "@/ui/core";
-import { PipelineStrip } from "@/ui/pipeline";
-import { ScopePeriodBar } from "../analytics/kpi-ui";
+import { EmptyState, PageHeader, cx } from "@/ui/core";
 import { NextTaskCard, OperatorHome } from "./operator-home";
-import { OwnerOverview } from "./owner-overview";
+import { HeadlineNumbers, NeedsAttention, RightNow, attentionItems } from "./simple-home";
 
 export const dynamic = "force-dynamic";
 
@@ -33,45 +32,71 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     );
   }
 
+  // ADR-083: Home answers "what needs me, how are we doing, what is happening" — nothing else. The
+  // detailed overview moved to Management → Reports & analytics → Business overview.
+  const all = sp.scope === "all" && ctx.allowedSites.length > 1 && ctx.can("analytics.owner_dashboard.view");
+  const period = sp.period === "today" || sp.period === "month" ? sp.period : "week";
   let kpi;
   try {
-    kpi = await getOwnerOverview(ctx, { scope: sp.scope ?? null, period: sp.period ?? null });
+    kpi = await getOwnerOverview(ctx, { scope: all ? "all" : ctx.currentSiteId, period });
   } catch (e) {
     if (e instanceof DomainError && (e.code === "forbidden" || e.code === "not_found"))
       return (
         <>
-          <PageHeader title="Overview" />
-          <EmptyState title={e.code === "forbidden" ? "You don't have access to the all-sites view" : "This site isn't available to you"} action={<Link href="/dashboard" className="font-medium text-primary-text hover:underline">Open your site&apos;s overview</Link>}>
+          <PageHeader title="Home" />
+          <EmptyState title="This view isn't available to you" action={<Link href="/dashboard" className="font-medium text-primary-text hover:underline">Open your site&apos;s home</Link>}>
             {e.message}
           </EmptyState>
         </>
       );
     throw e;
   }
-  // The Batch journey board, near-expiry lots and activity come from the live operational read model, in the same scope.
-  const [data, pipeline] = await Promise.all([
-    getOwnerDashboard(ctx, { all: kpi.scope.all, siteIds: kpi.scope.siteIds, sites: kpi.scope.sites, label: kpi.scope.label }),
-    // ADR-081: "what is happening right now" first — the live pipeline, same scope as the figures below.
-    getOperationsCenter(ctx, { all: kpi.scope.all }),
-  ]);
+  const [oc, approvals] = await Promise.all([getOperationsCenter(ctx, { all }), myApprovalCount(ctx).catch(() => 0)]);
+  const items = attentionItems(oc, approvals, null);
+  const q = (over: Record<string, string>) => {
+    const u = new URLSearchParams({ ...(all ? { scope: "all" } : {}), ...(period !== "week" ? { period } : {}), ...over });
+    for (const [k, v] of [...u.entries()]) if (!v) u.delete(k);
+    const str = u.toString();
+    return str ? `/dashboard?${str}` : "/dashboard";
+  };
+  const pill = (href: string, active: boolean, label: string) => (
+    <Link key={label} href={href} aria-current={active ? "page" : undefined} className={cx("flex min-h-[40px] items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium", active ? "bg-cta text-white" : "text-fg-2 hover:bg-surface-2")}>
+      {label}
+    </Link>
+  );
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: "Asia/Manila" }).format(new Date()));
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
-    <>
+    <div className="space-y-5">
       <PageHeader
-        title={ctx.roleCodes.includes("owner_director") ? "Owner overview" : "Overview"}
-        subtitle={`${kpi.scope.label} · ${kpi.period.label} · every number opens the records behind it`}
-        actions={<ScopePeriodBar basePath="/dashboard" scope={kpi.scope} period={kpi.period} sites={ctx.allowedSites} canAll={kpi.canCrossSite} />}
-      />
-      {pipeline.stages.length > 0 && (
-        <section aria-labelledby="now-h" className="mb-6 space-y-3">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 id="now-h" className="font-display text-[18px] font-semibold">Right now</h2>
-            <Link href={kpi.scope.all ? "/operations?scope=all" : "/operations"} className="text-[13px] font-medium text-primary-text hover:underline">Open the Operations Center</Link>
+        title={`${greeting}, ${ctx.displayName.split(" ")[0]}`}
+        subtitle={`${all ? "All your sites" : `${ctx.currentSite.name}`} · here is what needs you and how things are going`}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <div className="flex rounded-full border border-line bg-surface p-1" role="group" aria-label="Period">
+              {pill(q({ period: "today" }), period === "today", "Today")}
+              {pill(q({ period: "" }), period === "week", "This week")}
+              {pill(q({ period: "month" }), period === "month", "This month")}
+            </div>
+            {ctx.allowedSites.length > 1 && ctx.can("analytics.owner_dashboard.view") && (
+              <div className="flex rounded-full border border-line bg-surface p-1" role="group" aria-label="Sites">
+                {pill(q({ scope: "" }), !all, "This site")}
+                {pill(q({ scope: "all" }), all, "All my sites")}
+              </div>
+            )}
           </div>
-          <PipelineStrip stages={pipeline.stages} compact />
-        </section>
-      )}
-      <OwnerOverview data={data} kpi={kpi} canAudit={ctx.can("platform.audit.view")} />
-    </>
+        }
+      />
+      <NeedsAttention items={items} />
+      <HeadlineNumbers kpi={kpi} />
+      <RightNow oc={oc} all={all} />
+      <p className="text-[14px] text-fg-2">
+        More numbers and charts:{" "}
+        <Link href={all ? "/analytics/overview?scope=all" : "/analytics/overview"} className="font-medium text-primary-text underline">
+          Business overview
+        </Link>
+      </p>
+    </div>
   );
 }

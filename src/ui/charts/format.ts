@@ -54,7 +54,7 @@ export function deltaOf(unit: string, better: "up" | "down" | null, cur: string 
   const tone = direction === "flat" || better === null ? "neutral" : (direction === "up") === (better === "up") ? "good" : "bad";
   const sign = diff.gt(0) ? "+" : diff.lt(0) ? "−" : "±";
   let text: string;
-  if (unit === "ratio") text = `${sign}${n(diff.abs().mul(100), 1)} pts vs ${prevLabel}`;
+  if (unit === "ratio") text = `${sign}${n(diff.abs().mul(100), 1)} points vs ${prevLabel}`;
   else {
     const abs = fmtKpi(unit, diff.abs().toString());
     const rel = p.isZero() ? "" : ` (${sign}${n(diff.abs().div(p.abs()).mul(100), 0)} %)`;

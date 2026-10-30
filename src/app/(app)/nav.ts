@@ -24,7 +24,7 @@ export type QuickAction = { label: string; href: string; icon: string; permissio
 /** Live counts shown as a badge on the matching tab and menu entry (keyed by href). */
 export type NavBadges = Partial<Record<string, number>>;
 
-export const ADVANCED = "Advanced";
+export const ADVANCED = "Older screens";
 
 /** The most common actions, one tap away on the Operations Center ("Quick links" of the mockup board). */
 export const QUICK_ACTIONS: QuickAction[] = [
@@ -68,8 +68,8 @@ export const NAV: NavGroup[] = [
       { label: "Overview", href: "/dashboard" },
       { label: "To approve", href: "/approvals", approverOnly: true },
       { label: "Notifications", href: "/notifications" },
-      { label: "Action centre", href: "/action-centre" },
-      ...inSection("Me", [
+      { label: "Problems & alerts", href: "/action-centre" },
+      ...inSection("Help & my account", [
         { label: "Help & guides", href: "/help" },
         { label: "My account", href: "/account" },
         { label: "Sync & offline", href: "/sync" },
@@ -85,7 +85,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Operations Center", href: "/operations", hub: true },
       { label: "Production orders", href: "/production/orders", permission: "production.work_order.view" },
-      { label: "Today", href: "/production/today", permission: "production.daily_log.view" },
+      { label: "Daily log", href: "/production/today", permission: "production.daily_log.view" },
       { label: "Rejects", href: "/production/defects", permission: "production.daily_log.view" },
       { label: "New order", href: "/production/orders/new", permission: "production.work_order.create" },
       // ADR-080 G3: the one-page check of finished batches; lots waiting for QA are under Quality → QA queue.
@@ -136,7 +136,7 @@ export const NAV: NavGroup[] = [
       { label: "Scan", href: "/inventory/scan", permission: "inventory.lot.view" },
       { label: "Scan to move", href: "/inventory/move", permission: "inventory.movement.post" },
       { label: "Warehouse sections", href: "/warehouse", permission: "inventory.lot.view" }, // S6 (ADR-077)
-      ...inSection("Stock views", [
+      ...inSection("More stock lists", [
         { label: "Locations & stock", href: "/inventory/locations", permission: "masterdata.location.view" },
         { label: "Boxes", href: "/inventory/containers", permission: "inventory.container.view" },
         { label: "Availability", href: "/inventory/availability", permission: "inventory.balance.view" },
@@ -144,7 +144,7 @@ export const NAV: NavGroup[] = [
         { label: "FEFO & reservations", href: "/inventory/lots/reservations", permission: "inventory.lot.view" },
         { label: "Stock movements", href: "/inventory/movements", permission: "inventory.movement.view" },
       ]),
-      ...inSection("Stock tasks", [
+      ...inSection("Counts & labels", [
         { label: "Stock counts", href: "/inventory/counts", permission: "inventory.stock_count.view" },
         { label: "Adjustments", href: "/inventory/adjustments", permission: "inventory.adjustment.view" },
         { label: "Label print station", href: "/labels", permission: "inventory.label_job.view" },
@@ -161,7 +161,7 @@ export const NAV: NavGroup[] = [
       { label: "New order", href: "/sales/new", permission: "sales.sales_order.create" },
       { label: "Customers", href: "/sales/customers", permission: "masterdata.customer.view" },
       { label: "Order board", href: "/sales/board", permission: "sales.sales_order.view" },
-      ...inSection("Selling", [
+      ...inSection("Quotes, prices & returns", [
         { label: "Quotations", href: "/sales/quotations", permission: "sales.quote.view" },
         { label: "Price lists", href: "/sales/price-lists", permission: "sales.price_list.view" },
         { label: "Customer returns", href: "/sales/returns", permission: "sales.customer_return.view" },
@@ -180,13 +180,13 @@ export const NAV: NavGroup[] = [
     icon: "settings",
     description: "HR, finance, reports and settings",
     items: [
-      { label: "Overview", href: "/management", hub: true },
+      { label: "Management home", href: "/management", hub: true },
       ...inSection("Reports & analytics", [
+        { label: "Business overview", href: "/analytics/overview", permission: "analytics.dashboard.view" },
         { label: "Dashboards", href: "/analytics", permission: "analytics.dashboard.view" },
         { label: "Trends", href: "/analytics/trends", permission: "analytics.dashboard.view" },
         { label: "Report library", href: "/reports", permission: "analytics.report.view" },
         { label: "Scheduled reports", href: "/reports/schedules", permission: "analytics.scheduled_report.view" },
-        { label: "KPI definitions", href: "/analytics/definitions", permission: "analytics.kpi_definition.view" },
       ]),
       ...inSection("Purchasing", [
         { label: "Purchasing overview", href: "/procurement", permission: "procurement.purchase_request.view" },
@@ -223,9 +223,8 @@ export const NAV: NavGroup[] = [
         { label: "Roles", href: "/admin/roles", permission: "identity.role.view" },
         { label: "Sessions", href: "/admin/sessions", permission: "identity.session.view" },
         { label: "Security", href: "/admin/security", permission: "identity.user.admin" },
-        { label: "HR & attendance", href: "#", planned: "Phase 5–6" },
       ]),
-      ...inSection("System", [
+      ...inSection("IT settings", [
         { label: "Audit log", href: "/admin/audit", permission: "platform.audit.view" },
         { label: "Settings", href: "/admin/settings", permission: "platform.settings.view" },
         { label: "Approval rules", href: "/admin/approval-rules", permission: "platform.approval_rule.view" },
@@ -238,6 +237,7 @@ export const NAV: NavGroup[] = [
         { label: "Sync conflicts", href: "/sync/conflicts", permission: "platform.sync_conflict.view" },
         { label: "Retention & holds", href: "/admin/retention", permission: "platform.retention_policy.view" },
         { label: "Diagnostics", href: "/admin/diagnostics", permission: "platform.job.view" },
+        { label: "KPI definitions", href: "/analytics/definitions", permission: "analytics.kpi_definition.view" },
       ]),
     ],
   },
@@ -264,11 +264,11 @@ export function productionItems(persona: ProductionPersona): NavItem[] {
   if (persona === "operator")
     return [
       { label: "My work", href: "/production/orders", permission: "production.work_order.view" },
-      { label: "Today", href: "/production/today", permission: "production.daily_log.view" },
+      { label: "Daily log", href: "/production/today", permission: "production.daily_log.view" },
     ];
   return [
     { label: "Production orders", href: "/production/orders", permission: "production.work_order.view" },
-    { label: "Today", href: "/production/today", permission: "production.daily_log.view" },
+    { label: "Daily log", href: "/production/today", permission: "production.daily_log.view" },
     { label: "Rejects", href: "/production/defects", permission: "production.daily_log.view" },
     { label: "New order", href: "/production/orders/new", permission: "production.work_order.create" },
   ];
@@ -329,7 +329,7 @@ export function tabsFor(can: Can, roles: readonly string[]): Tab[] {
   const scan: Tab = { label: "Scan", href: "/inventory/scan", icon: "scan", permission: "inventory.lot.view" };
   const tabs: Tab[] =
     persona === "operator"
-      ? [home, { label: "My work", href: "/production/orders", icon: "factory", permission: "production.work_order.view" }, { label: "Today", href: "/production/today", icon: "today", permission: "production.daily_log.view" }, scan, menu]
+      ? [home, { label: "My work", href: "/production/orders", icon: "factory", permission: "production.work_order.view" }, { label: "Daily log", href: "/production/today", icon: "today", permission: "production.daily_log.view" }, scan, menu]
       : persona === "warehouse"
         ? [home, { label: "Receive", href: "/inventory/receive", icon: "receive", permission: "procurement.goods_receipt.create" }, scan, inventory, menu]
         : persona === "qa"

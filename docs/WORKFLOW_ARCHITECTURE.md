@@ -33,6 +33,10 @@ edited; corrections are reversals (ADR-006).
 
 ## 2. Operations Center read model (built, ADR-081)
 
+Stage names on screen (ADR-083, plain words): Expected deliveries · Receiving · Materials to check ·
+Materials ready · Being made · Products to check · Boxing · Ready to sell · Orders to ship. The table
+above keeps the technical names used in the brief.
+
 `getOperationsCenter(ctx, { all })` in `src/modules/analytics/operations-center.ts`:
 
 - **Scope:** the current site, or all of the user's sites with `?scope=all` (`resolveScope`, which calls

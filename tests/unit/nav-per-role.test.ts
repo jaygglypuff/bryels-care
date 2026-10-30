@@ -1,6 +1,6 @@
 /**
  * ADR-081 (five destinations) and ADR-080 §11 (per role): the menu is Home, Operations, Inventory,
- * Sales & Customers, Management, filtered by permission. Operators get "My work" and "Today"; the old
+ * Sales & Customers, Management, filtered by permission. Operators get "My work" and "Daily log"; the old
  * production screens sit in a collapsed Advanced section; Production setup lives in Management; the
  * tab bar has at most five tabs and never shows "Batches" or a bare "Orders".
  */
@@ -54,13 +54,13 @@ describe("five destinations", () => {
 describe("production tabs per role (ADR-080 §11)", () => {
   it("operators: Operations Center, My work and Today; old screens under Advanced", () => {
     expect(productionPersona(canFor("production_operator"), ["production_operator"])).toBe("operator");
-    expect(main("production_operator")).toEqual(["Operations Center", "My work", "Today"]);
+    expect(main("production_operator")).toEqual(["Operations Center", "My work", "Daily log"]);
     expect(section("production_operator", "Operations", ADVANCED)).toContain("Batches (full record)");
   });
 
   it("planner, site manager and owner: Production orders, Today, Rejects, New order", () => {
     for (const r of ["production_planner", "site_manager", "owner_director"]) {
-      expect(main(r)).toEqual(expect.arrayContaining(["Operations Center", "Production orders", "Today", "Rejects", "New order"]));
+      expect(main(r)).toEqual(expect.arrayContaining(["Operations Center", "Production orders", "Daily log", "Rejects", "New order"]));
       expect(section(r, "Operations", ADVANCED)).toEqual(expect.arrayContaining(["Production plan", "Work orders (detailed)", "Board (detailed)"]));
     }
   });
@@ -92,8 +92,8 @@ describe("production tabs per role (ADR-080 §11)", () => {
 });
 
 describe("bottom tab bar (phone and iPad portrait) per role", () => {
-  it("operator: Home · My work · Today · Scan · Menu", () => {
-    expect(tabs("production_operator").map((t) => t.label)).toEqual(["Home", "My work", "Today", "Scan", "Menu"]);
+  it("operator: Home · My work · Daily log · Scan · Menu", () => {
+    expect(tabs("production_operator").map((t) => t.label)).toEqual(["Home", "My work", "Daily log", "Scan", "Menu"]);
   });
 
   it("warehouse: Home · Receive · Scan · Inventory · Menu", () => {

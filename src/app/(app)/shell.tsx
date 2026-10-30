@@ -96,7 +96,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
   }
   const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
   const site = sites.find((s) => s.id === currentSiteId);
-  const badges: NavBadges = { ...(qaCount ? { "/quality": qaCount } : {}), ...(approvalCount ? { "/approvals": approvalCount } : {}) };
+  const badges: NavBadges = { ...(qaCount ? { "/quality/check": qaCount, "/quality": qaCount } : {}), ...(approvalCount ? { "/approvals": approvalCount } : {}) };
   const withCount = (label: string, href: string) => (badges[href] ? `${label}, ${badges[href]} open` : label);
 
   const siteSwitcher = (
@@ -118,19 +118,20 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
   );
 
   return (
-    <div className="min-h-dvh pb-[76px] lg:pb-0">
+    <div className="min-h-dvh pb-[76px] xl:pb-0">
       <NavigationProgress />
       {/* Top bar */}
       <header className="no-print sticky top-0 z-30 border-b border-line/70 bg-bg/90 backdrop-blur">
         {demo && <DemoBanner canReset={demo.canReset} sandbox={demo.sandbox} />}
         <div className="mx-auto flex h-[68px] max-w-[1480px] items-center gap-3 px-4 sm:px-6">
-          <button className="grid size-10 place-items-center rounded-full bg-surface shadow-[var(--shadow-card)] lg:hidden" onClick={() => setDrawer(true)} aria-label="Open menu">
+          <button className="grid size-11 shrink-0 place-items-center rounded-full bg-surface shadow-[var(--shadow-card)] xl:hidden" onClick={() => setDrawer(true)} aria-label="Open menu">
             <Menu size={18} />
           </button>
           <Link href="/dashboard" className="shrink-0" aria-label="Bryel's Care home">
-            <Logo className="h-9 w-auto" />
+            <LogoMark className="size-9 sm:hidden" />
+            <Logo className="hidden h-9 w-auto sm:block" />
           </Link>
-          <nav aria-label="Modules" className="mx-auto hidden min-w-0 lg:block">
+          <nav aria-label="Modules" className="mx-auto hidden min-w-0 xl:block">
             <ul className="scroll-x-hidden flex items-center gap-1 overflow-x-auto rounded-full bg-surface p-1 shadow-[var(--shadow-card)]">
               {real.map((g) => {
                 const active = g === activeGroup;
@@ -153,12 +154,14 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
               })}
             </ul>
           </nav>
-          <div className="ml-auto flex items-center gap-2 lg:ml-0">
-            {sites.length > 1 && <div className="hidden sm:block">{siteSwitcher}</div>}
+          <div className="ml-auto flex shrink-0 items-center gap-2 xl:ml-0">
+            {sites.length > 1 && <div className="hidden xl:block">{siteSwitcher}</div>}
             <Link href="/inventory/scan" className="hidden size-10 place-items-center rounded-full bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg sm:grid" aria-label="Scan or search" title="Scan or search">
               <ScanLine size={18} />
             </Link>
-            <SyncChip userId={user.id} />
+            <div className="hidden sm:block">
+              <SyncChip userId={user.id} />
+            </div>
             {/* ADR-075: "To approve" is one tap away for people who approve (ADR-082). */}
             {showApprovals && (
             <Link
@@ -168,7 +171,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
               title="To approve"
             >
               <ListChecks size={18} />
-              <span className="hidden md:inline">To approve</span>
+              <span className="hidden 2xl:inline">To approve</span>
               {approvalCount > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full bg-[#c62828] px-1 text-[10px] font-semibold leading-[18px] text-white">{approvalCount > 99 ? "99+" : approvalCount}</span>
               )}
@@ -180,11 +183,11 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
                 <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full bg-[#c62828] px-1 text-[10px] font-semibold leading-[18px] text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>
               )}
             </Link>
-            <details className="relative">
+            <details className="relative shrink-0">
               <summary className="grid size-10 cursor-pointer list-none place-items-center rounded-full bg-lime-100 text-[13px] font-semibold text-brand ring-2 ring-white" style={{ background: "var(--lime-200)", color: "var(--brand-800)" }} aria-label="Account">
                 {initials}
               </summary>
-              <div className="absolute right-0 top-12 z-40 w-64 rounded-[18px] border border-line bg-surface p-4 shadow-[var(--shadow-pop)]">
+              <div className="absolute right-0 top-12 z-40 w-64 max-w-[calc(100vw-32px)] rounded-[18px] border border-line bg-surface p-4 shadow-[var(--shadow-pop)]">
                 <p className="font-semibold text-fg">{user.name}</p>
                 <p className="text-[12px] text-muted">{user.roles}</p>
                 <p className="mt-2 text-[12px] text-muted">Site: {site?.code} · {site?.name}</p>
@@ -219,7 +222,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
             </li>
           );
           return (
-            <div className="mx-auto hidden max-w-[1480px] px-4 pb-3 sm:px-6 lg:block">
+            <div className="mx-auto hidden max-w-[1480px] px-4 pb-3 sm:px-6 xl:block">
               <ul className="flex flex-wrap items-center gap-1.5">
                 {main.map(pill)}
                 {sections.map((sec) => {
@@ -257,6 +260,36 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
             </div>
           );
         })()}
+        {/* Phones and tablets (below 1280 px): the destination's main tabs in one swipeable row; sections live in the menu. */}
+        {activeGroup && (() => {
+          const { main, sections } = groupSections(activeGroup);
+          if (main.length <= 1 && sections.length === 0) return null;
+          return (
+            <nav aria-label={`${activeGroup.label} pages`} className="xl:hidden">
+              <ul className="scroll-x-hidden mx-auto flex max-w-[1480px] gap-1.5 overflow-x-auto px-4 pb-2.5 sm:px-6">
+                {main.map((i) => (
+                  <li key={i.href} className="shrink-0">
+                    <Link
+                      href={i.href}
+                      aria-current={i.href === activeHref ? "page" : undefined}
+                      className={cx("flex min-h-[40px] items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 text-[13px] font-medium", i.href === activeHref ? "border-transparent bg-cta text-white" : "border-line bg-surface text-fg-2")}
+                    >
+                      {i.label}
+                      <CountBadge n={badges[i.href]} />
+                    </Link>
+                  </li>
+                ))}
+                {sections.length > 0 && (
+                  <li className="shrink-0">
+                    <button type="button" onClick={() => setDrawer(true)} className={cx("flex min-h-[40px] items-center gap-1 whitespace-nowrap rounded-full border px-3.5 text-[13px] font-medium", sections.some((x) => x.items.some((i) => i.href === activeHref)) ? "border-transparent bg-cta text-white" : "border-line bg-surface text-fg-2")}>
+                      More <ChevronDown size={14} aria-hidden />
+                    </button>
+                  </li>
+                )}
+              </ul>
+            </nav>
+          );
+        })()}
       </header>
 
       <div className="mx-auto flex max-w-[1480px] gap-6 px-4 sm:px-6">
@@ -267,7 +300,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
       </div>
 
       {/* Phone bottom tab bar */}
-      <nav aria-label="Primary" className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+      <nav aria-label="Primary" className="no-print fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur xl:hidden">
         <ul className="mx-auto flex max-w-[560px] justify-around">
           {tabs.map((t) => {
             const inner = (active: boolean) => (
@@ -301,14 +334,17 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
 
       {/* Drawer (tablet and phone) */}
       {drawer && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50 xl:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setDrawer(false)} />
           <aside className="absolute inset-y-0 left-0 flex w-[300px] max-w-[86vw] flex-col overflow-y-auto bg-surface p-4 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <Logo className="h-8 w-auto" />
               <button className="grid size-9 place-items-center rounded-full bg-surface-2" onClick={() => setDrawer(false)} aria-label="Close menu"><X size={18} /></button>
             </div>
-            {sites.length > 1 && <div className="mb-4 sm:hidden">{siteSwitcher}</div>}
+            {sites.length > 1 && <div className="mb-4">{siteSwitcher}</div>}
+            <div className="mb-4 sm:hidden">
+              <SyncChip userId={user.id} />
+            </div>
             {real.map((g) => {
               const { main, sections } = groupSections(g);
               const row = (i: NavItem) =>
@@ -328,16 +364,18 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
                   </li>
                 );
               return (
-                <div key={g.label} className="mb-3">
-                  <p className="mb-1 flex items-center gap-2 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted">{ICONS[g.icon]} {g.label}</p>
+                <details key={g.label} className="mb-1 border-b border-line pb-1" open={g === activeGroup}>
+                  <summary className="flex min-h-[52px] cursor-pointer list-none items-center gap-2.5 px-2 text-[16px] font-semibold text-fg">
+                    {ICONS[g.icon]} <span className="flex-1">{g.label}</span> <ChevronDown size={18} className="text-muted" aria-hidden />
+                  </summary>
                   <ul>{main.map(row)}</ul>
                   {sections.map((sec) => (
                     <details key={sec.name} className="mt-0.5" open={sec.items.some((i) => i.href === activeHref)}>
-                      <summary className="flex min-h-[44px] cursor-pointer items-center px-3 text-[13px] font-medium text-muted">{sec.name}</summary>
+                      <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between px-3 text-[14px] font-medium text-fg-2">{sec.name}<ChevronDown size={16} aria-hidden /></summary>
                       <ul className="pl-2">{sec.items.map(row)}</ul>
                     </details>
                   ))}
-                </div>
+                </details>
               );
             })}
             <div className="mt-auto flex items-center gap-2 border-t border-line pt-3">

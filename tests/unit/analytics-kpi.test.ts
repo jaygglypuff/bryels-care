@@ -49,7 +49,7 @@ describe("formatting", () => {
   it("formats per unit and states the comparison period", () => {
     expect(fmtKpi("qty_g", "12500")).toBe("12.5 kg");
     expect(fmtKpi("ratio", "0.9523")).toBe("95.2 %");
-    expect(deltaOf("ratio", "up", "0.9", "0.8", "last week")).toMatchObject({ tone: "good", text: "+10.0 pts vs last week" });
+    expect(deltaOf("ratio", "up", "0.9", "0.8", "last week")).toMatchObject({ tone: "good", text: "+10.0 points vs last week" });
     expect(deltaOf("count", "down", "5", "4", "yesterday")).toMatchObject({ tone: "bad", direction: "up" });
     expect(niceMax(7)).toBe(10);
     expect(niceMax(0)).toBe(1);

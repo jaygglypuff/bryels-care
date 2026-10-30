@@ -55,9 +55,15 @@ export function KpiCard({
   hint,
   meterOf,
   updated,
+  title,
+  simple = false,
 }: {
   /** When the live value was computed (ISO). */
   updated: string;
+  /** Plain title instead of the KPI short name (Home, ADR-083). */
+  title?: string;
+  /** Home card (ADR-083): title, number, change and hint only; no definition, chips or trend. */
+  simple?: boolean;
   tile: KpiTile;
   scope: KpiScope;
   period: PeriodDto;
@@ -74,9 +80,9 @@ export function KpiCard({
     <Link href={tile.href} aria-label={`${tile.name}: ${value}. Open the records`} className="group block h-full rounded-[24px]">
       <Card className="flex h-full flex-col gap-2 transition-shadow group-hover:shadow-[var(--shadow-pop)]">
         <div className="flex items-start justify-between gap-2">
-          <span className="text-[12px] font-semibold uppercase tracking-[.04em] text-fg-2">{tile.short}</span>
+          <span className="text-[12px] font-semibold uppercase tracking-[.04em] text-fg-2">{title ?? tile.short}</span>
           <span className="flex shrink-0 items-center gap-1.5">
-            <ValueLabelChip label={tile.label} />
+            {!simple && <ValueLabelChip label={tile.label} />}
             <ArrowRight size={16} className="text-muted transition-transform group-hover:translate-x-0.5" aria-hidden />
           </span>
         </div>
@@ -91,7 +97,7 @@ export function KpiCard({
             {meterOf && <div className="text-[12px] text-muted">{meterOf(tile)}</div>}
           </div>
         )}
-        {visual === "sparkline" &&
+        {!simple && visual === "sparkline" &&
           (tile.sparkline ? (
             <Sparkline
               values={tile.sparkline.map((p) => (p.value === null ? null : Number(p.value)))}
@@ -103,13 +109,19 @@ export function KpiCard({
           ) : (
             <p className="text-[12px] text-muted">The 12-day trend appears after the nightly snapshot.</p>
           ))}
-        <p className="mt-auto pt-1 text-[12px] leading-4 text-muted" title={`${tile.formula}. Time basis: ${tile.timeBasis}. Sources: ${tile.sources.join(", ")}.`}>
-          <Info size={12} className="mr-1 inline align-[-1px]" aria-hidden />
-          {tile.definition}
-        </p>
-        <p className="text-[11.5px] text-muted">
-          Updated {hhmm(updated)} · {scopeText(scope)} · {asOf}
-        </p>
+        {simple ? (
+          <p className="mt-auto pt-1 text-[12px] text-muted">{tile.label === "actual" ? asOf : `Estimate · ${asOf}`}</p>
+        ) : (
+          <>
+            <p className="mt-auto pt-1 text-[12px] leading-4 text-muted" title={`${tile.formula}. Time basis: ${tile.timeBasis}. Sources: ${tile.sources.join(", ")}.`}>
+              <Info size={12} className="mr-1 inline align-[-1px]" aria-hidden />
+              {tile.definition}
+            </p>
+            <p className="text-[11.5px] text-muted">
+              Updated {hhmm(updated)} · {scopeText(scope)} · {asOf}
+            </p>
+          </>
+        )}
       </Card>
     </Link>
   );

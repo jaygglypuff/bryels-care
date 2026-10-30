@@ -121,14 +121,35 @@ export function Field({ label, htmlFor, error, hint, children }: { label: string
 export const inputClass =
   "min-h-[44px] w-full rounded-[14px] border border-line-strong bg-surface px-3.5 text-[14px] text-fg placeholder:text-muted focus:border-ring focus:outline-none focus:ring-2 focus:ring-[var(--lime-200)]";
 
+/** Utility "families" a caller may override on a field (width, height, padding, text size, corners). */
+const FAMILIES: [RegExp, RegExp][] = [
+  [/^w-/, /^w-/],
+  [/^min-h-/, /^min-h-/],
+  [/^px-/, /^px-/],
+  [/^text-\[\d/, /^text-\[\d/],
+  [/^rounded/, /^rounded/],
+];
+
+/**
+ * Base field classes plus the caller's, where an unprefixed caller class replaces the base class of the
+ * same family. Without this, `w-full` in the base beat a caller's `w-24` (whichever Tailwind emits later
+ * wins), and narrow inputs grew over their labels.
+ */
+export function fieldClass(base: string, extra?: string) {
+  if (!extra) return base;
+  const mine = extra.split(/\s+/).filter(Boolean);
+  const kept = base.split(/\s+/).filter((b) => !FAMILIES.some(([fb, fe]) => fb.test(b) && mine.some((m) => fe.test(m))));
+  return [...kept, ...mine].join(" ");
+}
+
 export function Input(props: ComponentProps<"input">) {
-  return <input {...props} className={cx(inputClass, props.className)} />;
+  return <input {...props} className={fieldClass(inputClass, props.className)} />;
 }
 export function Select(props: ComponentProps<"select">) {
-  return <select {...props} className={cx(inputClass, props.className)} />;
+  return <select {...props} className={fieldClass(inputClass, props.className)} />;
 }
 export function Textarea(props: ComponentProps<"textarea">) {
-  return <textarea {...props} className={cx(inputClass, "min-h-[80px] py-2", props.className)} />;
+  return <textarea {...props} className={fieldClass(`${inputClass} min-h-[80px] py-2`, props.className)} />;
 }
 
 export function Dl({ items }: { items: [string, ReactNode][] }) {

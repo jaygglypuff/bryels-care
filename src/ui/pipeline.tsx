@@ -25,14 +25,13 @@ export function PipelineStrip({ stages, compact = false }: { stages: PipelineSta
             </Link>
             {!compact && <p className="mt-1 text-[12px] text-muted">{s.hint}</p>}
             {s.parts.length > 1 && (
-              <p className="mt-2 text-[12px] text-fg-2">
-                {s.parts.map((p, i) => (
-                  <span key={p.label}>
-                    {i > 0 && " · "}
+              <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px] text-fg-2">
+                {s.parts.map((p) => (
+                  <li key={p.label} className="whitespace-nowrap">
                     <span className="tabular font-medium">{p.n}</span> {p.label}
-                  </span>
+                  </li>
                 ))}
-              </p>
+              </ul>
             )}
             {s.attention > 0 && (
               <Link href={s.attentionHref ?? s.href} className="mt-auto flex items-center gap-1 pt-2 text-[12px] font-medium text-[var(--warn-fg)] hover:underline">
