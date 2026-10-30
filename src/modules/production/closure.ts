@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, max } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, max, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, type DbOrTx, type Tx } from "@/db/client";
 import {
@@ -20,6 +20,7 @@ import {
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
+import { systemContext } from "@/lib/auth/system";
 import type { Permission } from "@/lib/permissions";
 import { releaseReservationsForDemand } from "@/modules/inventory";
 import { notifyRoles } from "@/modules/platform";
@@ -135,7 +136,23 @@ export async function closureChecks(q: DbOrTx, ctx: AuthContext, b: typeof batch
     checks.push({ code: "yield_record", label: "Yield reconciliation checked", ok: true, blocking: false, detail: "Recorded before electronic execution records; the BMR prints the actual yield from the batch." });
   } else if (y.available && b.status === "released") {
     const rec = y.rows[0];
-    checks.push({ code: "yield_record", label: "Yield reconciliation checked", ok: !!rec?.checkedBy, blocking: true, detail: !rec ? "No yield record." : rec.checkedBy ? `Checked by ${rec.checkedBy} (co-signed the transfer to quarantine).` : "The yield record has not been checked by a second person." });
+    // ADR-080 §6/§8: with no checker at Finish, QA's "batch record reviewed" tick on the pass is the
+    // second person's check of the counts (the reviewer is never the person who recorded them).
+    const [reviewed] = rec && !rec.checkedBy
+      ? ((await q.execute(sql`
+          select u.display_name as name from batch_quality_checks c
+          join users u on u.id = c.decided_by
+          join yield_records y on y.batch_id = c.batch_id and y.is_current
+          where c.batch_id = ${b.id} and c.decision = 'pass' and c.record_reviewed and c.decided_by <> y.recorded_by
+          order by c.decided_at desc limit 1`)) as unknown as { name: string }[])
+      : [];
+    checks.push({
+      code: "yield_record",
+      label: "Yield reconciliation checked",
+      ok: !!rec?.checkedBy || !!reviewed,
+      blocking: true,
+      detail: !rec ? "No yield record." : rec.checkedBy ? `Checked by ${rec.checkedBy} (co-signed the transfer to quarantine).` : reviewed ? `Reviewed by ${reviewed.name} at the quality check (batch record reviewed).` : "The yield record has not been checked by a second person.",
+    });
   } else {
     checks.push({ code: "yield_record", label: "Yield reconciliation checked", ok: true, blocking: false, detail: y.available ? "Not required for a rejected batch." : "Yield reconciliation records are not captured electronically in this version; the BMR prints the actual yield." });
   }
@@ -164,42 +181,77 @@ export async function closeBatch(ctx: AuthContext, input: { batchId: string; not
           blockers: blockers.map((c) => ({ code: c.code, label: c.label, detail: c.detail })),
         });
       }
-      const fromState = b.status as "released" | "rejected";
-      const { closures, reopenCount } = await closureCounters(tx, b.id);
-      await transitionBatch(tx, ctx, b, "closed", { reason: note ?? "Batch record closed" });
-      const [t] = await tx.select({ id: batchStateTransitions.id }).from(batchStateTransitions).where(eq(batchStateTransitions.batchId, b.id)).orderBy(desc(batchStateTransitions.at), desc(batchStateTransitions.id)).limit(1);
-      const released = await releaseReservationsForDemand(tx, ctx, "batch", b.id, `Batch ${b.batchNumber} closed`);
-      await syncWorkOrderProgress(tx, ctx, b.workOrderId); // W2A: completed → closed with its last batch
-      const watermark = bmrWatermark("closed", reopenCount);
-      const { doc } = await generateBmrInTx(tx, ctx, b.id, { force: true, watermark, idempotencyKey: `close:${input.idempotencyKey}` });
-      const closureNo = closures.length + 1;
-      await tx.insert(batchClosures).values({
-        organizationId: ctx.organizationId,
-        siteId: b.siteId,
-        batchId: b.id,
-        closureNo,
-        fromState,
-        batchStateTransitionId: t?.id ?? null,
-        generatedDocumentId: doc.id,
-        checks: checks.map((c) => ({ code: c.code, ok: c.ok, detail: c.detail })),
-        reservationsReleased: released,
-        note,
-        closedBy: ctx.userId,
-      });
-      await audit(tx, ctx, {
-        action: "production.batch.closed",
-        entityType: "batch",
-        entityId: b.id,
-        entityNumber: b.batchNumber,
-        siteId: b.siteId,
-        reason: note,
-        before: { status: fromState },
-        after: { status: "closed", closureNo, reopenCount, bmrDocument: doc.documentNumber, watermark, reservationsReleased: released },
-      });
-      return { closureNo, documentId: doc.id, documentNumber: doc.documentNumber, watermark, reservationsReleased: released };
+      return closeCheckedBatch(tx, ctx, b, checks, { note, idempotencyKey: input.idempotencyKey });
     });
     return result;
   });
+}
+
+/** Closure body once every check passed (the batch is locked by the caller). */
+async function closeCheckedBatch(tx: Tx, ctx: AuthContext, b: typeof batches.$inferSelect, checks: ClosureCheck[], opts: { note: string | null; idempotencyKey: string; automatic?: boolean }) {
+  const note = opts.note;
+  const fromState = b.status as "released" | "rejected";
+  const { closures, reopenCount } = await closureCounters(tx, b.id);
+  await transitionBatch(tx, ctx, b, "closed", { reason: note ?? "Batch record closed" });
+  const [t] = await tx.select({ id: batchStateTransitions.id }).from(batchStateTransitions).where(eq(batchStateTransitions.batchId, b.id)).orderBy(desc(batchStateTransitions.at), desc(batchStateTransitions.id)).limit(1);
+  const released = await releaseReservationsForDemand(tx, ctx, "batch", b.id, `Batch ${b.batchNumber} closed`);
+  await syncWorkOrderProgress(tx, ctx, b.workOrderId); // W2A: completed → closed with its last batch
+  const watermark = bmrWatermark("closed", reopenCount);
+  const { doc } = await generateBmrInTx(tx, ctx, b.id, { force: true, watermark, idempotencyKey: `close:${opts.idempotencyKey}` });
+  const closureNo = closures.length + 1;
+  await tx.insert(batchClosures).values({
+    organizationId: ctx.organizationId,
+    siteId: b.siteId,
+    batchId: b.id,
+    closureNo,
+    fromState,
+    batchStateTransitionId: t?.id ?? null,
+    generatedDocumentId: doc.id,
+    checks: checks.map((c) => ({ code: c.code, ok: c.ok, detail: c.detail })),
+    reservationsReleased: released,
+    note,
+    closedBy: ctx.userId,
+  });
+  await audit(tx, ctx, {
+    action: "production.batch.closed",
+    entityType: "batch",
+    entityId: b.id,
+    entityNumber: b.batchNumber,
+    siteId: b.siteId,
+    reason: note,
+    before: { status: fromState },
+    after: { status: "closed", closureNo, reopenCount, bmrDocument: doc.documentNumber, watermark, reservationsReleased: released, automatic: !!opts.automatic },
+  });
+  return { closureNo, documentId: doc.id, documentNumber: doc.documentNumber, watermark, reservationsReleased: released };
+}
+
+/** Permissions the automatic closure after a QA pass runs with (system action, ADR-080 §9). */
+const AUTO_CLOSE_PERMISSIONS: Permission[] = ["production.batch.view", "production.batch.approve", "documents.generated_document.create", "documents.generated_document.view"];
+
+/**
+ * ADR-080 §9 (A-PF2-07): after QA passed a batch, close it in the same transaction when every
+ * closure check passes; otherwise generate the BMR and leave the batch released for a manual close.
+ * Runs as the system action `quality_pass_auto_close` on behalf of the QA person (audit actor label
+ * plus on_behalf_of), because the closure is a consequence of the pass, not a second decision.
+ * Called by the quality module through the release hook (src/modules/wiring.ts), never imported by it.
+ */
+export async function autoCloseReleasedBatch(tx: Tx, qa: AuthContext, input: { batchId: string; idempotencyKey: string }) {
+  const sys = await systemContext(qa.organizationId, { code: "quality_pass_auto_close", systemPermissions: AUTO_CLOSE_PERMISSIONS }, { onBehalfOf: qa.userId, correlationId: qa.correlationId });
+  const b = await lockBatch(tx, sys, input.batchId);
+  if (b.status !== "released") return { closed: false as const, blockers: [{ code: "state", label: "Batch has a QA decision", detail: `Batch is ${b.status}.` }], documentNumber: null };
+  const checks = await closureChecks(tx, sys, b);
+  const blockers = checks.filter((c) => c.blocking && !c.ok).map((c) => ({ code: c.code, label: c.label, detail: c.detail }));
+  if (blockers.length) {
+    let documentNumber: string | null = null;
+    if (!blockers.some((x) => x.code === "bmr_template")) {
+      const { doc } = await generateBmrInTx(tx, sys, b.id, { idempotencyKey: `pass:${input.idempotencyKey}` });
+      documentNumber = doc.documentNumber;
+    }
+    await audit(tx, sys, { action: "production.batch.auto_close_skipped", entityType: "batch", entityId: b.id, entityNumber: b.batchNumber, siteId: b.siteId, after: { blockers, bmrDocument: documentNumber } });
+    return { closed: false as const, blockers, documentNumber };
+  }
+  const r = await closeCheckedBatch(tx, sys, b, checks, { note: "Closed automatically after the quality check passed", idempotencyKey: `pass:${input.idempotencyKey}`, automatic: true });
+  return { closed: true as const, blockers: [], documentNumber: r.documentNumber, closureNo: r.closureNo };
 }
 
 /* ------------------------------------------------------------------ reopen */

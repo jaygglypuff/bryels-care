@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, isNull } from "drizzle-orm";
 import Decimal from "decimal.js";
-import { type DbOrTx, db } from "@/db/client";
+import { type DbOrTx, type Tx, db } from "@/db/client";
 import { products, scrapReworkRecords, yieldRecords } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
@@ -46,62 +46,71 @@ function parseUnits(v: string, label: string, field: string) {
  * range at the time. Outside the range the record needs approval with a deviation before posting.
  * A correction supersedes the current record with a reason (one current record per batch).
  */
-export async function recordYield(ctx: AuthContext, input: { batchId: string; actualUnits: string; notes?: string | null; correctionReason?: string | null; idempotencyKey?: string | null }) {
+export type RecordYieldInput = { batchId: string; actualUnits: string; notes?: string | null; correctionReason?: string | null; idempotencyKey?: string | null };
+
+export async function recordYield(ctx: AuthContext, input: RecordYieldInput) {
   ctx.require("production.yield_record.create");
-  const units = parseUnits(input.actualUnits, "the finished units", "actualUnits");
+  parseUnits(input.actualUnits, "the finished units", "actualUnits");
   return db.transaction(async (tx) => {
     const batch = await lockBatch(tx, ctx, input.batchId);
-    const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.yield_record.create", async () => {
-      if (batch.status !== "in_process") throw new DomainError("state", `Batch ${batch.batchNumber} is ${batch.status.replace(/_/g, " ")}; yield is recorded while it is in process.`);
-      const open = await openStepsBeforeTransfer(tx, batch);
-      if (open.length) throw new DomainError("state", `Complete step ${open[0].stepNo} (${open[0].name}) before recording the yield.`, { rule: "V-STATE" });
-      const [product] = await tx.select().from(products).where(eq(products.id, batch.productId)).limit(1);
-      const theo = new Decimal(batch.theoreticalYieldG ?? 0);
-      if (theo.lte(0)) throw new DomainError("state", "This batch has no theoretical yield; ask the planner to check the formula revision.");
-      const actual = units.mul(product.unitNetMassG);
-      const yieldPct = actual.div(theo).mul(100).toDecimalPlaces(2);
-      const variance = actual.minus(theo);
-      const limits = await yieldLimits(tx, ctx.organizationId, batch.siteId, product.skuCode);
-      const within = yieldPct.gte(limits.min) && yieldPct.lte(limits.max);
-      const prev = await currentYield(tx, batch.id);
-      const correction = input.correctionReason?.trim() ?? "";
-      if (prev && correction.length < 5) throw new DomainError("validation", "A yield is already recorded. Give the reason for the correction (at least 5 characters).", { field: "correctionReason" });
-      if (prev) await tx.update(yieldRecords).set({ isCurrent: false }).where(eq(yieldRecords.id, prev.id));
-      const [y] = await tx
-        .insert(yieldRecords)
-        .values({
-          organizationId: ctx.organizationId,
-          siteId: batch.siteId,
-          batchId: batch.id,
-          theoreticalBase: theo.toString(),
-          actualBase: actual.toString(),
-          actualUnits: units.toString(),
-          varianceBase: variance.toString(),
-          yieldPct: yieldPct.toString(),
-          variancePct: yieldPct.minus(100).toString(),
-          minPct: String(limits.min),
-          maxPct: String(limits.max),
-          isWithinLimits: within,
-          notes: input.notes?.trim() || null,
-          recordedBy: ctx.userId,
-          supersedesId: prev?.id ?? null,
-          correctionReason: prev ? correction : null,
-        })
-        .returning();
-      await audit(tx, ctx, {
-        action: prev ? "production.yield_record.corrected" : "production.yield_record.recorded",
-        entityType: "yield_record",
-        entityId: y.id,
-        entityNumber: batch.batchNumber,
-        siteId: batch.siteId,
-        reason: prev ? correction : null,
-        before: prev ? { actualUnits: prev.actualUnits, yieldPct: prev.yieldPct } : null,
-        after: { actualUnits: units.toString(), actualG: actual.toString(), theoreticalG: theo.toString(), yieldPct: yieldPct.toString(), range: `${limits.min}–${limits.max} %`, within },
-      });
-      return { yieldRecordId: y.id, yieldPct: yieldPct.toString(), within, range: limits };
-    });
+    const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.yield_record.create", () => recordYieldLocked(tx, ctx, batch, input));
     return result;
   });
+}
+
+/**
+ * Body of recordYield for a caller that already holds the batch lock (finishBatch, ADR-080 §6).
+ * The caller checks production.yield_record.create.
+ */
+export async function recordYieldLocked(tx: Tx, ctx: AuthContext, batch: BatchRow, input: Omit<RecordYieldInput, "batchId" | "idempotencyKey">) {
+  const units = parseUnits(input.actualUnits, "the finished units", "actualUnits");
+  if (batch.status !== "in_process") throw new DomainError("state", `Batch ${batch.batchNumber} is ${batch.status.replace(/_/g, " ")}; yield is recorded while it is in process.`);
+  const open = await openStepsBeforeTransfer(tx, batch);
+  if (open.length) throw new DomainError("state", `Complete step ${open[0].stepNo} (${open[0].name}) before recording the yield.`, { rule: "V-STATE" });
+  const [product] = await tx.select().from(products).where(eq(products.id, batch.productId)).limit(1);
+  const theo = new Decimal(batch.theoreticalYieldG ?? 0);
+  if (theo.lte(0)) throw new DomainError("state", "This batch has no theoretical yield; ask the planner to check the formula revision.");
+  const actual = units.mul(product.unitNetMassG);
+  const yieldPct = actual.div(theo).mul(100).toDecimalPlaces(2);
+  const variance = actual.minus(theo);
+  const limits = await yieldLimits(tx, ctx.organizationId, batch.siteId, product.skuCode);
+  const within = yieldPct.gte(limits.min) && yieldPct.lte(limits.max);
+  const prev = await currentYield(tx, batch.id);
+  const correction = input.correctionReason?.trim() ?? "";
+  if (prev && correction.length < 5) throw new DomainError("validation", "A yield is already recorded. Give the reason for the correction (at least 5 characters).", { field: "correctionReason" });
+  if (prev) await tx.update(yieldRecords).set({ isCurrent: false }).where(eq(yieldRecords.id, prev.id));
+  const [y] = await tx
+    .insert(yieldRecords)
+    .values({
+      organizationId: ctx.organizationId,
+      siteId: batch.siteId,
+      batchId: batch.id,
+      theoreticalBase: theo.toString(),
+      actualBase: actual.toString(),
+      actualUnits: units.toString(),
+      varianceBase: variance.toString(),
+      yieldPct: yieldPct.toString(),
+      variancePct: yieldPct.minus(100).toString(),
+      minPct: String(limits.min),
+      maxPct: String(limits.max),
+      isWithinLimits: within,
+      notes: input.notes?.trim() || null,
+      recordedBy: ctx.userId,
+      supersedesId: prev?.id ?? null,
+      correctionReason: prev ? correction : null,
+    })
+    .returning();
+  await audit(tx, ctx, {
+    action: prev ? "production.yield_record.corrected" : "production.yield_record.recorded",
+    entityType: "yield_record",
+    entityId: y.id,
+    entityNumber: batch.batchNumber,
+    siteId: batch.siteId,
+    reason: prev ? correction : null,
+    before: prev ? { actualUnits: prev.actualUnits, yieldPct: prev.yieldPct } : null,
+    after: { actualUnits: units.toString(), actualG: actual.toString(), theoreticalG: theo.toString(), yieldPct: yieldPct.toString(), range: `${limits.min}–${limits.max} %`, within },
+  });
+  return { yieldRecordId: y.id, yieldPct: yieldPct.toString(), within, range: limits };
 }
 
 /**
@@ -151,58 +160,68 @@ export async function approveYield(approver: AuthContext, input: { yieldRecordId
  * threshold (% of the theoretical unit count, setting production.scrap.approval_threshold_pct) the
  * record needs approval by a different person before posting to quarantine.
  */
-export async function recordScrapRework(ctx: AuthContext, input: { batchId: string; kind: "scrap" | "rework"; reasonCode: string; qty: string; note?: string | null; idempotencyKey?: string | null }) {
+export type RecordScrapReworkInput = { batchId: string; kind: "scrap" | "rework"; reasonCode: string; qty: string; note?: string | null; idempotencyKey?: string | null };
+
+export async function recordScrapRework(ctx: AuthContext, input: RecordScrapReworkInput) {
   ctx.require("production.scrap_rework_record.create");
   if (input.kind !== "scrap" && input.kind !== "rework") throw new DomainError("validation", "Choose scrap or rework.", { field: "kind" });
-  const qty = parseUnits(input.qty, "the quantity", "qty");
+  parseUnits(input.qty, "the quantity", "qty");
   return db.transaction(async (tx) => {
     const batch = await lockBatch(tx, ctx, input.batchId);
-    const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.scrap_rework_record.create", async () => {
-      if (batch.status !== "in_process") throw new DomainError("state", `Batch ${batch.batchNumber} is ${batch.status.replace(/_/g, " ")}.`);
-      // Shared reason codes, category `scrap` or `rework` (US-1-24; formerly a setting, A-W2B-05).
-      let code: { code: string; name: string };
-      try {
-        code = await assertReasonCode(tx, ctx.organizationId, input.kind, input.reasonCode, input.note);
-      } catch (e) {
-        if (e instanceof DomainError && e.details?.field === "reasonNote") throw new DomainError("validation", "Explain the reason in the note.", { field: "note" });
-        throw e;
-      }
-      const [product] = await tx.select().from(products).where(eq(products.id, batch.productId)).limit(1);
-      const theoUnits = new Decimal(batch.theoreticalYieldG ?? 0).div(product.unitNetMassG);
-      const pct = await getSetting(tx, ctx.organizationId, "production.scrap.approval_threshold_pct", batch.siteId);
-      const existing = await tx
-        .select({ qty: scrapReworkRecords.qty })
-        .from(scrapReworkRecords)
-        .where(and(eq(scrapReworkRecords.batchId, batch.id), eq(scrapReworkRecords.recordKind, input.kind), isNull(scrapReworkRecords.voidedAt)));
-      const cumulative = existing.reduce((s, r) => s.plus(r.qty), new Decimal(0)).plus(qty);
-      const requiresApproval = cumulative.gt(theoUnits.mul(pct).div(100));
-      const [r] = await tx
-        .insert(scrapReworkRecords)
-        .values({
-          organizationId: ctx.organizationId,
-          siteId: batch.siteId,
-          batchId: batch.id,
-          recordKind: input.kind,
-          reasonCode: code.code,
-          qty: qty.toString(),
-          uom: product.baseUom,
-          note: input.note?.trim() || null,
-          requiresApproval,
-          recordedBy: ctx.userId,
-        })
-        .returning();
-      await audit(tx, ctx, {
-        action: "production.scrap_rework_record.recorded",
-        entityType: "scrap_rework_record",
-        entityId: r.id,
-        entityNumber: batch.batchNumber,
-        siteId: batch.siteId,
-        after: { kind: input.kind, reason: code.name, qty: qty.toString(), uom: product.baseUom, requiresApproval, thresholdPct: pct },
-      });
-      return { scrapReworkRecordId: r.id, requiresApproval };
-    });
+    const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.scrap_rework_record.create", () => recordScrapReworkLocked(tx, ctx, batch, input));
     return result;
   });
+}
+
+/**
+ * Body of recordScrapRework for a caller that already holds the batch lock (finishBatch, ADR-080 §6).
+ * The caller checks production.scrap_rework_record.create.
+ */
+export async function recordScrapReworkLocked(tx: Tx, ctx: AuthContext, batch: BatchRow, input: Omit<RecordScrapReworkInput, "batchId" | "idempotencyKey">) {
+  if (input.kind !== "scrap" && input.kind !== "rework") throw new DomainError("validation", "Choose scrap or rework.", { field: "kind" });
+  const qty = parseUnits(input.qty, "the quantity", "qty");
+  if (batch.status !== "in_process") throw new DomainError("state", `Batch ${batch.batchNumber} is ${batch.status.replace(/_/g, " ")}.`);
+  // Shared reason codes, category `scrap` or `rework` (US-1-24; formerly a setting, A-W2B-05).
+  let code: { code: string; name: string };
+  try {
+    code = await assertReasonCode(tx, ctx.organizationId, input.kind, input.reasonCode, input.note);
+  } catch (e) {
+    if (e instanceof DomainError && e.details?.field === "reasonNote") throw new DomainError("validation", "Explain the reason in the note.", { field: "note" });
+    throw e;
+  }
+  const [product] = await tx.select().from(products).where(eq(products.id, batch.productId)).limit(1);
+  const theoUnits = new Decimal(batch.theoreticalYieldG ?? 0).div(product.unitNetMassG);
+  const pct = await getSetting(tx, ctx.organizationId, "production.scrap.approval_threshold_pct", batch.siteId);
+  const existing = await tx
+    .select({ qty: scrapReworkRecords.qty })
+    .from(scrapReworkRecords)
+    .where(and(eq(scrapReworkRecords.batchId, batch.id), eq(scrapReworkRecords.recordKind, input.kind), isNull(scrapReworkRecords.voidedAt)));
+  const cumulative = existing.reduce((s, r) => s.plus(r.qty), new Decimal(0)).plus(qty);
+  const requiresApproval = cumulative.gt(theoUnits.mul(pct).div(100));
+  const [r] = await tx
+    .insert(scrapReworkRecords)
+    .values({
+      organizationId: ctx.organizationId,
+      siteId: batch.siteId,
+      batchId: batch.id,
+      recordKind: input.kind,
+      reasonCode: code.code,
+      qty: qty.toString(),
+      uom: product.baseUom,
+      note: input.note?.trim() || null,
+      requiresApproval,
+      recordedBy: ctx.userId,
+    })
+    .returning();
+  await audit(tx, ctx, {
+    action: "production.scrap_rework_record.recorded",
+    entityType: "scrap_rework_record",
+    entityId: r.id,
+    entityNumber: batch.batchNumber,
+    siteId: batch.siteId,
+    after: { kind: input.kind, reason: code.name, qty: qty.toString(), uom: product.baseUom, requiresApproval, thresholdPct: pct },
+  });
+  return { scrapReworkRecordId: r.id, requiresApproval };
 }
 
 /** Approves or rejects a scrap/rework record above the threshold (decider ≠ recorder). */
@@ -236,15 +255,18 @@ export async function decideScrapRework(approver: AuthContext, input: { scrapRew
 }
 
 /** Messages that block posting to quarantine on the yield/scrap side. */
-export async function yieldBlockers(q: DbOrTx, batch: BatchRow): Promise<string[]> {
+export async function yieldBlockers(q: DbOrTx, batch: BatchRow, opts: { finishDeviation?: boolean } = {}): Promise<string[]> {
   const out: string[] = [];
   const y = await currentYield(q, batch.id);
+  // ADR-080 §6: at Finish a problem report (deviation on the yield record) stands in for the prior approval.
+  const covered = !!opts.finishDeviation && !!y?.deviationId;
   if (!y) out.push("Record the actual output (finished units) first.");
-  else if (!y.isWithinLimits && !(y.approvedBy && y.deviationId)) out.push(`Yield ${new Decimal(y.yieldPct).toString()} % is outside ${new Decimal(y.minPct).toString()}–${new Decimal(y.maxPct).toString()} %: it needs approval with a deviation first.`);
+  else if (!y.isWithinLimits && !(y.approvedBy && y.deviationId) && !covered) out.push(`Yield ${new Decimal(y.yieldPct).toString()} % is outside ${new Decimal(y.minPct).toString()}–${new Decimal(y.maxPct).toString()} %: it needs approval with a deviation first.`);
   const pending = await q
     .select({ id: scrapReworkRecords.id, kind: scrapReworkRecords.recordKind, qty: scrapReworkRecords.qty })
     .from(scrapReworkRecords)
     .where(and(eq(scrapReworkRecords.batchId, batch.id), eq(scrapReworkRecords.status, "recorded"), eq(scrapReworkRecords.requiresApproval, true), isNull(scrapReworkRecords.voidedAt)));
+  if (covered) return out;
   for (const p of pending) out.push(`${p.kind === "scrap" ? "Scrap" : "Rework"} of ${new Decimal(p.qty).toString()} needs approval.`);
   return out;
 }

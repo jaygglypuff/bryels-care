@@ -33,6 +33,7 @@ export default async function QaQueuePage() {
         actions={
           <>
             <Help screen="quality.release" />
+            <LinkButton href="/quality/check" variant="primary">Waiting for check</LinkButton>
             {ctx.can("quality.inspection.view") && <LinkButton href="/quality/inspections" variant="secondary">Inspections</LinkButton>}
             {ctx.can("quality.deviation.view") && <LinkButton href="/quality/deviations" variant="secondary">Deviations</LinkButton>}
             {ctx.can("quality.disposition.approve") && <LinkButton href="/quality/bulk" variant="secondary">Bulk disposition</LinkButton>}
@@ -154,6 +155,9 @@ export default async function QaQueuePage() {
                   </Td>
                   <Td>{fmtDateTime(b.completedAt)}</Td>
                   <Td className="text-right">
+                    <LinkButton href={`/quality/check/${b.id}`} size="sm">
+                      Check quality
+                    </LinkButton>{" "}
                     <LinkButton href={`/quality/batches/${b.id}`} variant="secondary" size="sm">
                       Review
                     </LinkButton>

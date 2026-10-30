@@ -593,6 +593,54 @@ export async function reviewInspection(ctx: AuthContext, input: { inspectionId: 
   });
 }
 
+/**
+ * Check quality (ADR-080 §8, QA review B2): the pass reviews the batch's finished-product inspection in
+ * the same transaction. Submits it when it is still in progress, then approves it as the review. The
+ * reviewer may have entered results only when `testerMayRelease` (setting
+ * quality.release.tester_may_release); otherwise another QA user must review (sod.results.reviewer_not_tester).
+ * Lock order: inspection, then batch (as reviewInspection). Returns whether the decider tested.
+ */
+export async function reviewInspectionForPass(tx: Tx, ctx: AuthContext, inspectionId: string, opts: { testerMayRelease: boolean }) {
+  const ins = await lockInspection(tx, ctx, inspectionId);
+  const all = await inspectionResults(tx, ins.id);
+  const tested = ins.performedBy === ctx.userId || all.some((r) => r.testedBy === ctx.userId);
+  if (ins.status === "approved") return { status: ins.status, outcome: ins.outcome, tested, reviewedNow: false };
+  if (ins.status === "rejected" || ins.status === "cancelled") throw new DomainError("state", `Inspection ${ins.inspectionNumber} is ${INSPECTION_STATUS_LABEL[ins.status].toLowerCase()}.`);
+  const live = liveResults(all);
+  const missing = missingRequiredTests(await planTests(tx, ins.inspectionPlanId), live);
+  if (live.length === 0 || missing.length) throw new DomainError("state", `Enter every required test first${missing.length ? ` (missing: ${missing.map((m) => m.name).join(", ")})` : ""}.`, { rule: "V-TESTS" });
+  if (tested && !opts.testerMayRelease && ctx.sodBlocks(true, "You entered results on this inspection, so another QA user must review it (separation of duties).")) {
+    throw new DomainError("separation_of_duties", "You entered results on this inspection, so another QA user must review it and pass the batch (setting: the person who tested may not pass).", ctx.refusalDetails());
+  }
+  if (ins.status === "pending" || ins.status === "in_progress") {
+    if (ins.status === "pending") await moveInspection(tx, ctx, ins, "in_progress", "Results entered on Check quality");
+    await moveInspection(tx, ctx, ins, "awaiting_review", "Submitted on Check quality");
+  }
+  // The deferred reviewer ≠ performer trigger (src/db/sql/g3.sql) accepts this transaction's review by the tester.
+  if (tested && opts.testerMayRelease) await tx.execute(sql`select set_config('bc.tester_release', 'on', true)`);
+  const outcome = live.some((r) => !r.passed) ? "fail" : "pass";
+  const note = tested ? "Reviewed on Check quality by the person who entered the results (quality.release.tester_may_release)" : "Reviewed on Check quality";
+  await moveInspection(tx, ctx, ins, "approved", note, { reviewedBy: ctx.userId, reviewedAt: new Date(), outcome, reviewNote: note });
+  let batchStatus: string | null = null;
+  if (ins.batchId && ins.inspectionKind === "finished_product") {
+    const [b] = await tx.select().from(batches).where(eq(batches.id, ins.batchId)).for("update").limit(1);
+    if (b.status === "awaiting_qc" && !(await paperRecordBlockers(tx, b.id)).length) {
+      await transitionBatch(tx, ctx, b, "quarantined", { reason: `Inspection ${ins.inspectionNumber} reviewed (${outcome})` });
+      batchStatus = "quarantined";
+    }
+  }
+  await audit(tx, ctx, {
+    action: "quality.inspection.reviewed",
+    entityType: "inspection",
+    entityId: ins.id,
+    entityNumber: ins.inspectionNumber,
+    siteId: ins.siteId,
+    reason: note,
+    after: { status: "approved", decision: "approve", outcome, liveResults: live.length, failed: live.filter((r) => !r.passed).length, batchStatus, onQualityCheck: true, testerReviewed: tested },
+  });
+  return { status: "approved", outcome, tested, reviewedNow: true };
+}
+
 /** Cancels an inspection that has no results yet (results are evidence and are never discarded). */
 export async function cancelInspection(ctx: AuthContext, input: { inspectionId: string; reason: string }) {
   ctx.require("quality.inspection.submit");

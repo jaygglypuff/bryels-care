@@ -1331,3 +1331,54 @@ redirect). Items a human GMP consultant must still confirm are listed in the QA 
   (`batchExpiryDates`, one source for lot, BMR and label); existing organizations keep `manufacture_date`.
 - Not in G2: Finish (G3) and Check quality (G3) still open the full batch record; "Use another lot" at the
   Materials list goes through the QA substitution; PIN on marked lines (QA review S1) not built.
+
+**Consequences of stage G3 (2026-10-30, Finish, Check quality, auto-close).**
+- **Finish (V2-6, §6).** `finishBatch` (`src/modules/production/finish.ts`, command `production.batch.finish`,
+  idempotent) runs in ONE transaction under one batch lock the extracted bodies `recordYieldLocked`,
+  `recordScrapReworkLocked`, `countPackagingLocked` and `postBatchToQuarantineLocked` (pattern of ADR-074 §2);
+  the old commands call the same bodies and keep their behaviour. Lock order as `postMovement`: batch →
+  packaging rows → lots in id order → balances. A comparison test shows the result equals the old commands
+  run one by one. Counts are read back from the daily log of the batch (`batchLogCounts`: entries that count;
+  entries without a batch only for a one-batch order); without log entries the screen asks for good pieces
+  and rejects. Rejects become scrap records with reason code `other` and the note "Reject: <type>" (A-PF2-15).
+  Wrapper arithmetic (QA review S4): used = good pieces (samples included) + rejects already wrapped; taken
+  = used + damaged + left over within `production.packaging.reconciliation_tolerance` (default 0), else
+  refused. Samples kept leave stock as a `consumption` with source `batch_retained_sample` (not a batch
+  input, so genealogy is unchanged). A yield outside the range or rejects above the approval threshold need
+  a reason and open ONE problem report through the existing `openDeviation` hook; that open report stands
+  in for the prior approval at Finish and blocks the pass until QA closes it. Settings
+  `production.output.default_hold_location` (site; empty = first active quarantine location in section
+  `qa_hold`) and `production.output.retained_samples` (`{enabled: true, units: 2}`, needs approval). The
+  checker at Finish follows the frozen transfer step's `requires_checker` (seeded routings: on).
+- **Packaging count moved to Finish.** A packaging step no longer needs its components counted before it
+  completes (`packagingBlockers`); a counted component out of tolerance still blocks it. The old transfer
+  (`postBatchToQuarantine`) now refuses uncounted components instead of skipping their consumption.
+- **Check quality (V2-7, §8).** `decideQualityCheck` (`src/modules/quality/check-quality.ts`, Pass / Not yet
+  / Fail, idempotent) and the page `/quality/check/<batch>` (list `/quality/check`, "Waiting for check").
+  Every decision is a row of the new append-only table `batch_quality_checks` (tick, exceptions shown,
+  reason, check-again date, override reason, tester released). Release independence: the makers of a batch
+  (weighed or checked a weighing, did or checked a step, finished or checked the finish, recorded the yield
+  or rejects, took or counted wrappers) can never pass it; under the owner override only with a typed reason
+  (≥ 10 characters), audited (`quality.quality_check.passed`, `governance.owner_override.used`) and printed
+  on the BMR. `quality.release.tester_may_release` (restricted, needs approval, default **true**) lets the
+  person who entered the results review the inspection and pass in the same transaction; the CHECK
+  `ck_inspections_reviewer_not_performer` became a deferred constraint trigger (`src/db/sql/g3.sql`) lifted
+  only by the transaction flag `bc.tester_release` (set only in that case) or the owner override. The
+  decision takes no co-signer and refuses system contexts (own session only; password re-entry of QA
+  review B3 is not built, see below). Not yet = lot `on_hold` with a review date ("Quality check · On hold");
+  a later Pass lifts that hold first (`hold_lifted`). Fail = existing batch reject.
+- **Auto-close (§9).** The pass calls `onBatchReleased` of the new quality release-hook registry
+  (`src/modules/quality/release-hooks.ts`, same pattern as `execution-hooks.ts`), registered in
+  `src/modules/wiring.ts` with production's `autoCloseReleasedBatch`. It runs as the system action
+  `quality_pass_auto_close` on behalf of the QA person inside the same transaction: closes the batch when
+  every closure check passes (BMR CONTROLLED COPY), otherwise generates the BMR and leaves the batch released
+  (`production.batch.auto_close_skipped`). The closure check "Yield reconciliation checked" now also accepts
+  the QA pass with "batch record reviewed" by someone other than the person who recorded the counts. The
+  order becomes Done / Failed / Done with "1 of 2 batches failed" through the G1 read model; the person who
+  created the linked customer order gets a `sales.order.stock_available` notification (no automatic allocation).
+- **Not done in G3.** Password/PIN re-entry for the release (QA review B3; go-live item), the 3-screen
+  empty-log Finish (one screen with the fields open instead), the in-app keypad (numeric inputs with
+  56 px height), name-only signatures in the exceptions box (co-signatures by name are not linked to a
+  batch in the audit), and the FDA notification warning (S11).
+- **Migration (lead).** New table `batch_quality_checks`; drop CHECK `ck_inspections_reviewer_not_performer`;
+  custom SQL `src/db/sql/g3.sql` (append-only trigger, reviewer trigger).

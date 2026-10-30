@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import Decimal from "decimal.js";
-import { type DbOrTx, db } from "@/db/client";
+import { type DbOrTx, type Tx, db } from "@/db/client";
 import { inventoryBalances, inventoryLots, locations, materials, packagingReconciliations } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
@@ -122,77 +122,85 @@ export async function issuePackaging(
  * (setting production.packaging.reconciliation_tolerance; default 0, A-PROC-19). A recount supersedes
  * the earlier count with a reason.
  */
-export async function countPackaging(
-  ctx: AuthContext,
-  input: { reconciliationId: string; used: string; damaged?: string | null; returned?: string | null; correctionReason?: string | null; idempotencyKey?: string | null },
-) {
+export type CountPackagingInput = { reconciliationId: string; used: string; damaged?: string | null; returned?: string | null; correctionReason?: string | null; idempotencyKey?: string | null };
+
+export async function countPackaging(ctx: AuthContext, input: CountPackagingInput) {
   ctx.require("production.process_step_record.create");
   const [head] = await db.select({ batchId: packagingReconciliations.batchId }).from(packagingReconciliations).where(eq(packagingReconciliations.id, input.reconciliationId)).limit(1);
   if (!head) throw new DomainError("not_found", "Packaging component not found.");
   return db.transaction(async (tx) => {
     const batch = await lockBatch(tx, ctx, head.batchId);
-    const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.packaging.count", async () => {
-      const [r] = await tx.select().from(packagingReconciliations).where(eq(packagingReconciliations.id, input.reconciliationId)).for("update").limit(1);
-      if (r.voidedAt) throw new DomainError("state", "This count was replaced by a recount; count the current row.");
-      if (r.productionPostingId) throw new DomainError("state", "This component's consumption is already posted.");
-      if (batch.status !== "in_process") throw new DomainError("state", `Batch ${batch.batchNumber} is ${batch.status.replace(/_/g, " ")}.`);
-      const used = parseCount(input.used, "Used", "used");
-      const damaged = parseCount(input.damaged, "Damaged", "damaged");
-      const returned = parseCount(input.returned, "Returned", "returned");
-      if (returned.gt(r.issuedQty)) throw new DomainError("validation", "Returned cannot exceed issued.", { field: "returned" });
-      const variance = new Decimal(r.issuedQty).minus(used).minus(damaged).minus(returned);
-      const [m] = await tx.select({ code: materials.code, name: materials.name }).from(materials).where(eq(materials.id, r.materialId)).limit(1);
-      const tol = await getSetting(tx, ctx.organizationId, "production.packaging.reconciliation_tolerance", batch.siteId);
-      const tolerance = new Decimal(tol.byMaterialCode?.[m.code] ?? tol.defaultQty);
-      const within = variance.abs().lte(tolerance);
-      const counted = { usedQty: used.toString(), damagedQty: damaged.toString(), returnedQty: returned.toString(), varianceQty: variance.toString(), toleranceQty: tolerance.toString(), isWithinTolerance: within, countedBy: ctx.userId, countedAt: new Date() };
-      let id = r.id;
-      if (r.countedAt) {
-        const reason = input.correctionReason?.trim() ?? "";
-        if (reason.length < 5) throw new DomainError("validation", "This component was already counted. Give the reason for the recount (at least 5 characters).", { field: "correctionReason" });
-        await tx.update(packagingReconciliations).set({ voidedAt: new Date() }).where(eq(packagingReconciliations.id, r.id));
-        const [n] = await tx
-          .insert(packagingReconciliations)
-          .values({
-            organizationId: r.organizationId,
-            siteId: r.siteId,
-            batchId: r.batchId,
-            processStepRecordId: r.processStepRecordId,
-            materialId: r.materialId,
-            lotId: r.lotId,
-            fromLocationId: r.fromLocationId,
-            baseUom: r.baseUom,
-            issuedQty: r.issuedQty,
-            issuedBy: r.issuedBy,
-            issuedAt: r.issuedAt,
-            ...counted,
-            supersedesId: r.id,
-            correctionReason: reason,
-          })
-          .returning();
-        id = n.id;
-      } else {
-        await tx.update(packagingReconciliations).set(counted).where(eq(packagingReconciliations.id, r.id));
-      }
-      await audit(tx, ctx, {
-        action: r.countedAt ? "production.packaging_reconciliation.recounted" : "production.packaging_reconciliation.counted",
-        entityType: "packaging_reconciliation",
-        entityId: id,
-        entityNumber: batch.batchNumber,
-        siteId: batch.siteId,
-        reason: r.countedAt ? input.correctionReason : null,
-        before: r.countedAt ? { used: r.usedQty, damaged: r.damagedQty, returned: r.returnedQty, variance: r.varianceQty } : null,
-        after: { material: m.code, issued: r.issuedQty, used: counted.usedQty, damaged: counted.damagedQty, returned: counted.returnedQty, variance: counted.varianceQty, tolerance: counted.toleranceQty, within },
-      });
-      return { reconciliationId: id, variance: variance.toString(), within, materialName: m.name };
-    });
+    const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.packaging.count", () => countPackagingLocked(tx, ctx, batch, input));
     return result;
   });
 }
 
 /**
- * What keeps a packaging step from completing: no component issued, components not counted, and a
- * reconciliation outside tolerance (exceptionable only with a deviation).
+ * Body of countPackaging for a caller that already holds the batch lock (finishBatch, ADR-080 §6).
+ * Lock order: batch (caller) → reconciliation row. The caller checks permissions.
+ */
+export async function countPackagingLocked(tx: Tx, ctx: AuthContext, batch: BatchRow, input: Omit<CountPackagingInput, "idempotencyKey">) {
+  const [r] = await tx.select().from(packagingReconciliations).where(eq(packagingReconciliations.id, input.reconciliationId)).for("update").limit(1);
+  if (!r || r.batchId !== batch.id) throw new DomainError("not_found", "Packaging component not found.");
+  if (r.voidedAt) throw new DomainError("state", "This count was replaced by a recount; count the current row.");
+  if (r.productionPostingId) throw new DomainError("state", "This component's consumption is already posted.");
+  if (batch.status !== "in_process") throw new DomainError("state", `Batch ${batch.batchNumber} is ${batch.status.replace(/_/g, " ")}.`);
+  const used = parseCount(input.used, "Used", "used");
+  const damaged = parseCount(input.damaged, "Damaged", "damaged");
+  const returned = parseCount(input.returned, "Returned", "returned");
+  if (returned.gt(r.issuedQty)) throw new DomainError("validation", "Returned cannot exceed issued.", { field: "returned" });
+  const variance = new Decimal(r.issuedQty).minus(used).minus(damaged).minus(returned);
+  const [m] = await tx.select({ code: materials.code, name: materials.name }).from(materials).where(eq(materials.id, r.materialId)).limit(1);
+  const tol = await getSetting(tx, ctx.organizationId, "production.packaging.reconciliation_tolerance", batch.siteId);
+  const tolerance = new Decimal(tol.byMaterialCode?.[m.code] ?? tol.defaultQty);
+  const within = variance.abs().lte(tolerance);
+  const counted = { usedQty: used.toString(), damagedQty: damaged.toString(), returnedQty: returned.toString(), varianceQty: variance.toString(), toleranceQty: tolerance.toString(), isWithinTolerance: within, countedBy: ctx.userId, countedAt: new Date() };
+  let id = r.id;
+  if (r.countedAt) {
+    const reason = input.correctionReason?.trim() ?? "";
+    if (reason.length < 5) throw new DomainError("validation", "This component was already counted. Give the reason for the recount (at least 5 characters).", { field: "correctionReason" });
+    await tx.update(packagingReconciliations).set({ voidedAt: new Date() }).where(eq(packagingReconciliations.id, r.id));
+    const [n] = await tx
+      .insert(packagingReconciliations)
+      .values({
+        organizationId: r.organizationId,
+        siteId: r.siteId,
+        batchId: r.batchId,
+        processStepRecordId: r.processStepRecordId,
+        materialId: r.materialId,
+        lotId: r.lotId,
+        fromLocationId: r.fromLocationId,
+        baseUom: r.baseUom,
+        issuedQty: r.issuedQty,
+        issuedBy: r.issuedBy,
+        issuedAt: r.issuedAt,
+        ...counted,
+        supersedesId: r.id,
+        correctionReason: reason,
+      })
+      .returning();
+    id = n.id;
+  } else {
+    await tx.update(packagingReconciliations).set(counted).where(eq(packagingReconciliations.id, r.id));
+  }
+  await audit(tx, ctx, {
+    action: r.countedAt ? "production.packaging_reconciliation.recounted" : "production.packaging_reconciliation.counted",
+    entityType: "packaging_reconciliation",
+    entityId: id,
+    entityNumber: batch.batchNumber,
+    siteId: batch.siteId,
+    reason: r.countedAt ? input.correctionReason : null,
+    before: r.countedAt ? { used: r.usedQty, damaged: r.damagedQty, returned: r.returnedQty, variance: r.varianceQty } : null,
+    after: { material: m.code, issued: r.issuedQty, used: counted.usedQty, damaged: counted.damagedQty, returned: counted.returnedQty, variance: counted.varianceQty, tolerance: counted.toleranceQty, within },
+  });
+  return { reconciliationId: id, variance: variance.toString(), within, materialName: m.name };
+}
+
+/**
+ * What keeps a packaging step from completing: no component issued, and a counted reconciliation
+ * outside tolerance (exceptionable only with a deviation). ADR-080 §6: the wrappers may be counted
+ * at Finish (damaged and left over only), so a component not counted yet no longer blocks the step;
+ * posting to the hold area refuses uncounted components instead (`uncountedPackagingBlockers`).
  */
 export async function packagingBlockers(q: DbOrTx, batch: BatchRow, step: SnapshotStep, rec: StepRecord | null) {
   if (!(RECONCILED_STEP_KINDS as readonly string[]).includes(step.stepKind)) return [];
@@ -200,10 +208,15 @@ export async function packagingBlockers(q: DbOrTx, batch: BatchRow, step: Snapsh
   const out: { message: string; exceptionable: boolean }[] = [];
   if (!rows.length) out.push({ message: "Issue the packaging and label lots used (scan each lot).", exceptionable: false });
   for (const { r, materialName, lotNumber } of rows) {
-    if (!r.countedAt) out.push({ message: `Count ${materialName} (lot ${lotNumber}): used, damaged and returned.`, exceptionable: false });
-    else if (!r.isWithinTolerance && !rec?.deviationId) {
+    if (!r.countedAt) continue;
+    if (!r.isWithinTolerance && !rec?.deviationId) {
       out.push({ message: `${materialName} (lot ${lotNumber}) does not reconcile: ${new Decimal(r.varianceQty ?? 0).toString()} ${r.baseUom} unexplained (allowed ${new Decimal(r.toleranceQty ?? 0).toString()}). Recount, or raise a deviation.`, exceptionable: true });
     }
   }
   return out;
+}
+
+/** Packaging components issued to the batch but not counted yet (blocks posting to the hold area). */
+export async function uncountedPackagingBlockers(q: DbOrTx, batchId: string): Promise<string[]> {
+  return (await currentPackaging(q, batchId)).filter((x) => !x.r.countedAt).map((x) => `Count ${x.materialName} (lot ${x.lotNumber}): damaged and left over.`);
 }
