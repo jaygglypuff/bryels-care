@@ -78,4 +78,14 @@ describe("keyword look-up", () => {
     if (finance.can("inventory.lot.view")) return;
     await expectCode(resolveScanCard(finance, "coconut"), "forbidden");
   });
+
+  it("a lot past its expiry date never says 'ready to use' (grade-5 test)", async () => {
+    const m = matchesOf(await resolveScanCard(whNfd, "coconut"));
+    const rows = await db.select().from(inventoryLots).where(eq(inventoryLots.siteId, kit.nfd.id));
+    const today = new Date().toISOString().slice(0, 10);
+    for (const x of m) {
+      const lot = rows.find((r) => x.href.endsWith(r.id))!;
+      if (lot.expiresOn && lot.expiresOn < today) expect(x.detail, lot.lotNumber).toMatch(/EXPIRED – do not use/);
+    }
+  });
 });

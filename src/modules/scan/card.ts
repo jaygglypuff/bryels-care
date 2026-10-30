@@ -62,7 +62,7 @@ export type ScanCard =
 
 export type KeywordMatch = { title: string; detail: string; href: string };
 
-const MATCH_LIMIT = 8;
+const MATCH_LIMIT = 25;
 const KEYWORD_STATUS: Record<string, string> = { quarantine: "waiting for check", on_hold: "on hold", rejected: "rejected", expired: "expired", recalled: "recalled", released: "ready to use" };
 
 /**
@@ -107,7 +107,8 @@ export async function keywordMatches(ctx: AuthContext, text: string): Promise<Ke
     const site = multi ? ctx.allowedSites.find((x) => x.id === r.siteId)?.code : null;
     const parts = [
       qty.gt(0) ? `${fmtStock(r.onHand, r.baseUom)} in stock` : "none left",
-      KEYWORD_STATUS[r.status] ?? r.status.replace(/_/g, " "),
+      // Grade-5 test: a lot past its expiry date is never "ready to use", whatever its stored status.
+      isPastExpiry(r.expiresOn) && !["rejected", "recalled"].includes(r.status) ? "EXPIRED – do not use" : (KEYWORD_STATUS[r.status] ?? r.status.replace(/_/g, " ")),
       r.expiresOn ? `expires ${fmtDate(r.expiresOn)}` : null,
       site,
     ].filter(Boolean);
