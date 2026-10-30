@@ -61,7 +61,7 @@ export function TasksToday({ tasks, counts, tiles, canDailyCount }: { tasks: Flo
   const quick: QuickAction[] = [];
   const scan = tiles.find((t) => t.key === "scan");
   if (scan) quick.push({ href: scan.href, label: "Scan or search", icon: <ScanLine size={18} aria-hidden /> });
-  if (canDailyCount) quick.push({ href: "/production/today", label: "Daily count", icon: <ClipboardList size={18} aria-hidden /> });
+  if (canDailyCount) quick.push({ href: "/production/today", label: "Today's count", icon: <ClipboardList size={18} aria-hidden /> });
   for (const t of tiles) if (t.key !== "scan" && t.key !== "batches") quick.push({ href: t.href, label: t.title, icon: ICON[t.key] });
   const COUNT: [string, number][] = [
     ["Batches for you", counts.forYou],
