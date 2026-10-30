@@ -1,14 +1,31 @@
 "use client";
 import { useFormStatus } from "react-dom";
-import { useActionState, useRef, type ComponentProps, type ReactNode } from "react";
+import { useActionState, useRef, type ComponentProps, type MouseEvent, type ReactNode } from "react";
 import type { ActionState } from "@/lib/errors";
 import { Button, cx, type ButtonVariant } from "./core";
 import { WhoCanHelp } from "./who-can-help";
 
-export function SubmitButton({ children, pendingText = "Saving…", ...rest }: ComponentProps<typeof Button> & { pendingText?: string }) {
+export function SubmitButton({ children, pendingText = "Saving…", onClick, ...rest }: ComponentProps<typeof Button> & { pendingText?: string }) {
   const { pending } = useFormStatus();
+  // A button's name/value (e.g. decision=approved) is copied into a hidden field before submitting: some
+  // browsers (iPad Safari) leave the clicked button out of the form data once it disables itself.
+  const carryValue = (e: MouseEvent<HTMLButtonElement>) => {
+    onClick?.(e);
+    const b = e.currentTarget;
+    if (!rest.name || b.form == null) return;
+    let field = b.form.querySelector<HTMLInputElement>(`input[type="hidden"][data-submitter="${rest.name}"]`);
+    if (!field) {
+      field = document.createElement("input");
+      field.type = "hidden";
+      field.name = rest.name;
+      field.dataset.submitter = rest.name;
+      b.form.appendChild(field);
+    }
+    field.value = String(rest.value ?? "");
+  };
+  const { name: _name, ...button } = rest;
   return (
-    <Button type="submit" disabled={pending || rest.disabled} {...rest}>
+    <Button type="submit" disabled={pending || rest.disabled} onClick={carryValue} {...button}>
       {pending ? pendingText : children}
     </Button>
   );

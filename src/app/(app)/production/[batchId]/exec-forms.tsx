@@ -531,12 +531,12 @@ export function DecideScrapForm({ batchId, id }: { batchId: string; id: string }
     <form action={action} className="flex flex-wrap items-end gap-2">
       <Hidden v={{ batchId, scrapReworkRecordId: id }} />
       <Input name="note" placeholder="Reason for the decision" aria-label="Decision reason" className="max-w-[260px]" required />
-      <Button type="submit" name="decision" value="approve">
+      <SubmitButton name="decision" value="approve" pendingText="Saving…">
         Approve
-      </Button>
-      <Button type="submit" name="decision" value="reject" variant="secondary">
+      </SubmitButton>
+      <SubmitButton name="decision" value="reject" variant="secondary" pendingText="Saving…">
         Reject
-      </Button>
+      </SubmitButton>
       <FormMessage state={state} />
     </form>
   );
