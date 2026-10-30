@@ -71,7 +71,7 @@ async function stagedTotals(q: DbOrTx, batchId: string) {
 }
 
 /** Active work-order reservations of a material (the "expected lots" of staging). */
-async function expectedLots(q: DbOrTx, workOrderId: string, materialId: string) {
+export async function expectedLots(q: DbOrTx, workOrderId: string, materialId: string) {
   return q
     .select({ r: stockReservations, lotNumber: inventoryLots.lotNumber, expiresOn: inventoryLots.expiresOn, locationCode: locations.code })
     .from(stockReservations)
@@ -104,7 +104,7 @@ async function loadWorkOrderForBatch(tx: Tx, b: typeof batches.$inferSelect) {
  * is converted and its remainder re-reserved under a new number (reservations are never edited in
  * place). Returns the quantity that could not be covered (0 when fully covered).
  */
-async function convertReservations(tx: Tx, ctx: AuthContext, rows: (typeof stockReservations.$inferSelect)[], qty: Decimal, why: string, status: "converted" | "released") {
+export async function convertReservations(tx: Tx, ctx: AuthContext, rows: (typeof stockReservations.$inferSelect)[], qty: Decimal, why: string, status: "converted" | "released") {
   let left = qty;
   for (const r of rows) {
     if (left.lte(0)) break;
@@ -180,7 +180,23 @@ export async function stageMaterial(ctx: AuthContext, input: StageInput) {
 
   return db.transaction(async (tx) => {
     const b = await lockBatch(tx, ctx, input.batchId);
-    const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.batch_material.stage", async () => {
+    const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.batch_material.stage", () =>
+      stageInTx(tx, ctx, b, { lotNumber, locCode, fromLocationId: input.fromLocationId ?? null, qty: qtyIn }),
+    );
+    return result;
+  });
+}
+
+/**
+ * The body of one staging scan in the caller's transaction (caller holds the batch lock and has
+ * checked inventory.movement.post). Also used by the Materials list when
+ * `production.prepare.move_stock` is on (ADR-080 §2): a "Taken" tick posts the same transfer.
+ */
+export async function stageInTx(tx: Tx, ctx: AuthContext, b: typeof batches.$inferSelect, input: { lotNumber: string; locCode: string; fromLocationId?: string | null; qty?: Decimal | null }) {
+  const { lotNumber, locCode } = input;
+  const qtyIn = input.qty ?? null;
+  {
+    {
       if (b.status !== "planned") {
         throw new DomainError("state", `Batch ${b.batchNumber} is ${b.status.replace(/_/g, " ")}; materials are staged while the batch is planned.`);
       }
@@ -331,10 +347,10 @@ export async function stageMaterial(ctx: AuthContext, input: StageInput) {
         toLocation: to.code,
         remaining: remainingOf(line).toString(),
         batchStaged: allStaged,
+        batchMaterialId: line.bm.id,
       };
-    });
-    return result;
-  });
+    }
+  }
 }
 
 export type SubstitutionInput = {

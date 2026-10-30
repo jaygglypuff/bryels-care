@@ -148,8 +148,56 @@ export const SETTINGS = {
   /** Scrap or rework above this % of the theoretical unit count needs approval (production.scrap_rework_record.approve). */
   "production.scrap.approval_threshold_pct": { scopes: ["organization", "site"], schema: z.number().min(0).max(100), default: 2, assumption: "A-W2B-04", group: "Production", label: "Scrap or rework needs approval above (%)", requiresApproval: true },
   // Scrap and rework reasons moved to the shared reason codes (categories scrap / rework, US-1-24).
-  /** A-PROC-08: finished-lot expiry basis: manufacture (batch start) date or packaging date, plus product shelf life. */
-  "production.output.expiry_basis": { scopes: ["organization"], schema: z.enum(["manufacture_date", "packaging_date"]), default: "manufacture_date" as "manufacture_date" | "packaging_date", assumption: "A-PROC-08", group: "Production", label: "Finished-lot expiry basis", requiresApproval: true },
+  /**
+   * A-PROC-08, ADR-080 §7: finished-lot expiry basis plus product shelf life. `mixing_date` (default for
+   * new organizations, A-PF2-24) = the day the first making step after weighing started (Mix and pour),
+   * which is also the manufacture date on the lot; `manufacture_date` = batch start date (Start check);
+   * `packaging_date` = packaging-step completion. Existing organizations keep `manufacture_date`
+   * (src/db/sql/g2.sql stores it for them).
+   */
+  "production.output.expiry_basis": {
+    scopes: ["organization"],
+    schema: z.enum(["mixing_date", "manufacture_date", "packaging_date"]),
+    default: "mixing_date" as "mixing_date" | "manufacture_date" | "packaging_date",
+    assumption: "A-PROC-08, A-PF2-24",
+    group: "Production",
+    label: "Finished-lot expiry counts from",
+    description: "Mixing date (recommended): the day the batch was mixed. Batch start date: the day of the Start check. Packaging date: the day wrapping or filling finished. The regulatory adviser confirms the basis.",
+    requiresApproval: true,
+  },
+  /** ADR-080 §2 (V-2-3): with this off the Materials list ticks move no stock; on = every tick posts the move to the production area (staging transfer). */
+  "production.prepare.move_stock": {
+    scopes: ["organization", "site"],
+    schema: z.boolean(),
+    default: false as boolean,
+    assumption: "A-PF2-02",
+    group: "Production",
+    label: "Materials list moves stock to the production area",
+    description: "Off: ticking Taken only records who brought the material. On: each tick also moves the set-aside lot to the production area in the stock ledger (use when the store room is in another building).",
+    requiresApproval: true,
+  },
+  /** ADR-080 §2: the Materials list asks for a scan of the lot label before Taken. The lot is always confirmed again at weighing. */
+  "production.prepare.scan_lots": {
+    scopes: ["organization", "site"],
+    schema: z.boolean(),
+    default: false as boolean,
+    assumption: "A-PF2-20",
+    group: "Production",
+    label: "Materials list asks to scan each lot",
+    description: "Off: one tap on Taken. On: the lot label must be scanned (or typed) and match the set-aside lot.",
+  },
+  /** ADR-080 §3 (UX review B5): how the operator confirms the preselected lot on the Weigh card. */
+  "production.weighing.lot_confirm": {
+    scopes: ["organization", "site"],
+    schema: z.enum(["last4", "scan", "none"]),
+    default: "last4" as "last4" | "scan" | "none",
+    assumption: "A-PF2-11",
+    group: "Production",
+    label: "Confirm the lot at weighing",
+    description: "Last 4 (recommended): type the last 4 characters printed on the container label. Scan: scan the lot label. None: no confirmation (GMP adviser must agree).",
+    requiresApproval: true,
+    restricted: true,
+  },
   /** W13-02: equipment with cleaning rule per_batch becomes "dirty" (cleaning required) when its use on a batch ends. */
   "production.equipment.mark_dirty_after_batch_use": { scopes: ["organization", "site"], schema: z.boolean(), default: true, assumption: "A-W2B-06", group: "Production", label: "Mark per-batch equipment dirty after use" },
 
@@ -268,15 +316,21 @@ export const SETTINGS = {
     description: "Off: the checker or approver just picks their name on the tablet (fast). On: they also type their own password, which proves they were there.",
     restricted: true,
   },
-  /** ADR-078: second-person check of each weighing; off = the operator weighs alone (the log still shows who). */
+  /**
+   * ADR-078, ADR-080 §4: second-person check of weighings. `all` = every ingredient; `marked` = only
+   * formula lines marked "needs a check" (`bom_lines.requires_checker`); `none` = the operator weighs
+   * alone (the log still shows who). Stored booleans from before ADR-080 still read: true → all,
+   * false → none (src/db/sql/g2.sql rewrites them). Frozen into the batch snapshot at creation.
+   */
   "production.weighing.second_person_check": {
     scopes: ["organization", "site"],
-    schema: z.boolean(),
-    default: true as boolean,
-    assumption: "A-SIGN-02",
+    schema: z.preprocess((v) => (v === true ? "all" : v === false ? "none" : v), z.enum(["all", "marked", "none"])),
+    default: "marked" as "all" | "marked" | "none",
+    assumption: "A-SIGN-02, A-PF2-08",
     group: "Production",
-    label: "A second person checks each weighing",
-    description: "Off: the operator weighs alone and the weighing counts as done. Applies to batches created after the change.",
+    label: "Second person checks weighings",
+    description: "All ingredients, only the ingredients marked \"needs a check\" in the formula (recommended: lye solution, colour, extract, fragrance, preservative), or none. Applies to batches created after the change.",
+    requiresApproval: true,
   },
   /**
    * ADR-073: the owner may carry any step through alone. When on, a user holding the Owner/Director role

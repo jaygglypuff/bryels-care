@@ -11,6 +11,7 @@ import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
 import { transitionBatch } from "./state";
 import { assertWorkOrderAcceptsBatch, syncWorkOrderProgress } from "./work-orders";
 import { getSetting } from "@/lib/settings";
+import { pickProgressInTx } from "./materials-list";
 
 export type CreateBatchInput = {
   formulaRevisionId: string;
@@ -88,8 +89,9 @@ export async function insertBatch(tx: Tx, ctx: AuthContext, siteId: string, inpu
   const wo = input.workOrderId
     ? await assertWorkOrderAcceptsBatch(tx, ctx, input.workOrderId, { siteId, formulaRevisionId: rev.rev.id, routingRevisionId: routing.rev.id, plannedSizeG, plannedStartOn: input.plannedStartOn })
     : null;
-  // ADR-078: the second-person weighing check can be switched off per organization/site.
+  // ADR-078 / ADR-080 §4: second-person weighing check all | marked (formula line flag) | none, frozen per line.
   const weighCheck = await getSetting(tx, ctx.organizationId, "production.weighing.second_person_check", siteId);
+  const lineNeedsCheck = (flag: boolean) => weighCheck === "all" || (weighCheck === "marked" && flag);
   const plan = await getInspectionPlan(ctx, { planKind: "finished_product", productId: rev.product.id, date: input.plannedStartOn }, { tx });
   const { lines } = rev;
   const steps = routing.steps;
@@ -152,7 +154,7 @@ export async function insertBatch(tx: Tx, ctx: AuthContext, siteId: string, inpu
       scaling: line.scaling,
       phaseCode: line.phaseCode,
       targetQtyG: target.toString(),
-      requiresChecker: line.requiresChecker && weighCheck,
+      requiresChecker: lineNeedsCheck(line.requiresChecker),
     })),
     steps: steps.map((s) => ({
       routingStepId: s.id,
@@ -236,16 +238,26 @@ export async function insertBatch(tx: Tx, ctx: AuthContext, siteId: string, inpu
 }
 
 /**
- * Confirms that the materials of a batch WITHOUT a work order are at the line: planned →
- * materials_staged (docs/data-model.md §6.2). A work-order batch reaches materials_staged only by
- * staging every ingredient by scan (W2A, W05-05). In both cases the batch then becomes in_process
- * when its first line clearance is signed (W2B, W05-06); nothing else starts a batch.
+ * Confirms that the materials of a batch are at the line: planned → materials_staged
+ * (docs/data-model.md §6.2). A batch WITHOUT a work order may be confirmed directly. A work-order
+ * batch needs its Materials list complete (every line Taken or Not needed, ADR-080 §2; the last tick
+ * normally moves it already, this is the fallback) or every ingredient staged by scan (W2A, W05-05).
+ * In all cases the batch then becomes in_process when its first line clearance (Start check) is
+ * signed (W2B, W05-06); nothing else starts a batch.
  */
 export async function startBatch(ctx: AuthContext, batchId: string): Promise<{ batchNumber: string; status: "materials_staged" }> {
   ctx.require("production.batch.edit");
   return db.transaction(async (tx) => {
     const b = await lockBatch(tx, ctx, batchId);
-    if (b.workOrderId && b.status === "planned") throw new DomainError("state", `Stage the materials of batch ${b.batchNumber} first: scan the reserved lots to the staging location.`);
+    if (b.workOrderId && b.status === "planned") {
+      const p = await pickProgressInTx(tx, b.id);
+      if (!p.complete) {
+        throw new DomainError("state", `Get the materials of batch ${b.batchNumber} first: tick every line on the Materials list (${p.taken + p.notNeeded} of ${p.lines} taken).`, { rule: "V-STATE" });
+      }
+      await transitionBatch(tx, ctx, b, "materials_staged", { reason: "Materials list complete" });
+      await audit(tx, ctx, { action: "production.batch.materials_confirmed", entityType: "batch", entityId: b.id, entityNumber: b.batchNumber, siteId: b.siteId, before: { status: "planned" }, after: { status: "materials_staged", trigger: "materials_list" } });
+      return { batchNumber: b.batchNumber, status: "materials_staged" as const };
+    }
     if (b.status === "materials_staged") {
       throw new DomainError("state", `Batch ${b.batchNumber} is ready: it starts when the weighing-area line clearance is signed in the batch workspace.`);
     }

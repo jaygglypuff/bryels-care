@@ -205,10 +205,30 @@ export async function recordReading(
     const batch = await lockBatch(tx, ctx, input.batchId);
     const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.process_step_reading.record", async () => {
       const step = findStep(batch, input.stepNo);
+      const rec = await openStep(tx, ctx, batch, step);
+      return recordReadingInTx(tx, ctx, batch, step, rec, input);
+    });
+    return result;
+  });
+}
+
+/**
+ * The body of recordReading in the caller's transaction (caller holds the batch lock, checked
+ * permission and opened the step). Also used by the step card's "Step done" (ADR-080, V2-5).
+ */
+export async function recordReadingInTx(
+  tx: Tx,
+  ctx: AuthContext,
+  batch: BatchRow,
+  step: SnapshotStep,
+  rec: StepRecord,
+  input: { parameterId: string; value: string; correctionReason?: string | null; equipmentRef?: string | null },
+) {
+  {
+    {
       const p = (step.parameters ?? []).find((x) => x.id === input.parameterId);
       if (!p) throw new DomainError("validation", "This parameter is not part of the step's routing revision.");
       const ev = evaluateReading(p, input.value);
-      const rec = await openStep(tx, ctx, batch, step);
       const current = (await currentReadings(tx, rec.id)).find((r) => r.routingStepParameterId === p.id);
       const correction = input.correctionReason?.trim() || null;
       if (current && (!correction || correction.length < 5)) {
@@ -259,9 +279,8 @@ export async function recordReading(
           .where(eq(processStepRecords.id, rec.id));
       }
       return { readingId: row.id, isWithinLimits: ev.within, parameter: p.name, value: shown, limits: limitText };
-    });
-    return result;
-  });
+    }
+  }
 }
 
 export function limitsLabel(p: { minValue: string | null; maxValue: string | null; uom: string | null; valueKind: string }) {

@@ -1304,3 +1304,30 @@ redirect). Items a human GMP consultant must still confirm are listed in the QA 
   orders report count **work order** states (labelled as such) and stay correct; the work orders report
   already counts a batch as done only after a QA decision. The operator home tile and the owner overview
   shortcuts now open production orders instead of the old batch list.
+**Consequences, stage G2 as built (materials, weighing, steps, curing; slices V2-3..V2-5).**
+- *Materials list* (`src/modules/production/materials-list.ts`, screen `/production/orders/[id]/materials`):
+  append-only `batch_material_picks` (taken / not_needed / untaken; trigger in `src/db/sql/g2.sql`).
+  With `production.prepare.move_stock` off (default) the last tick moves the batch planned →
+  materials_staged with no stock movement; on, each tick runs the staging-by-scan body (`stageInTx`).
+  `production.prepare.scan_lots` (default off) asks for the label. Held/expired lots are refused;
+  "Not needed" never touches the weighing line. `startBatch` accepts a work-order batch whose list is
+  complete (the scan path still works from "Materials by scan").
+- *Weighing*: a Materials-list batch weighs only from the lots set aside for its order, and the weighed
+  quantity converts that reservation. The Weigh card sends `lotPreselected` + `lotConfirm`
+  (`production.weighing.lot_confirm` = last4 | scan | none, default last4, restricted). A lot scanned or
+  typed into the lot field of the full batch record counts as confirmed (A-PF2-11 risk: choosing from that
+  screen's list is not confirmed). `production.weighing.second_person_check` is now `all | marked | none`
+  (stored booleans still read: true → all, false → none; `g2.sql` rewrites them and stores the old
+  default for existing organizations); the checker confirms on the operator's tablet
+  (`checkDispense(..., signedOn: "operator_device")`, ADR-078 name pick).
+- *Steps*: `stepDone` (readings + completion in one command, out-of-range values kept, the next wait
+  started at once); waits use the existing step kinds `curing` / `hold` and the routing minimum time
+  (`earliest_completion_at`); ending early stays the CX-TOL exception (approver ≠ operator, reason,
+  problem report). Job `production.curing_reminder` (hourly, one notification per step record).
+- *Read model for G1*: `batchFlowFacts` / `getBatchFlowFacts` / `orderBatchFacts` (current step, ready
+  date, "Curing until Sat 28 Nov", pick progress) and the pure `nextBatchScreen` ("what is the next screen
+  for this batch") in `src/modules/production/flow-facts.ts`.
+- *Expiry (§7)*: `production.output.expiry_basis` gains `mixing_date`, the default for new organizations
+  (`batchExpiryDates`, one source for lot, BMR and label); existing organizations keep `manufacture_date`.
+- Not in G2: Finish (G3) and Check quality (G3) still open the full batch record; "Use another lot" at the
+  Materials list goes through the QA substitution; PIN on marked lines (QA review S1) not built.

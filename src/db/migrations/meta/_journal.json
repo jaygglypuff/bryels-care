@@ -176,6 +176,20 @@
       "when": 1793337435411,
       "tag": "0024_g1_needed_by",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793338969090,
+      "tag": "0025_g2_material_picks",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793338971190,
+      "tag": "0026_g2_custom_sql",
+      "breakpoints": true
     }
   ]
 }
