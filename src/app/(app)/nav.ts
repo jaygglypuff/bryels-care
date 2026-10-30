@@ -1,6 +1,7 @@
 import type { Permission } from "@/lib/permissions";
 
-export type NavItem = { label: string; href: string; permission?: Permission; planned?: string };
+/** `section`: items shown under a "Setup" heading, or in the collapsed "Advanced" group (ADR-080 §11). */
+export type NavItem = { label: string; href: string; permission?: Permission; planned?: string; section?: "setup" | "advanced" };
 export type NavGroup = { label: string; icon: string; items: NavItem[] };
 export type QuickAction = { label: string; href: string; icon: string; permission?: Permission };
 
@@ -18,6 +19,24 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { label: "New sales order", href: "/sales/new", icon: "order", permission: "sales.sales_order.create" },
   { label: "Traceability", href: "/quality/trace", icon: "trace", permission: "quality.genealogy.view" },
   { label: "Audit log", href: "/admin/audit", icon: "audit", permission: "platform.audit.view" },
+];
+
+/** Production setup (owner: "Setup" heading; other roles: inside Advanced). */
+const SETUP_ITEMS: NavItem[] = [
+  { label: "Products and formulas", href: "/masterdata/formulas", permission: "masterdata.formula.view" },
+  { label: "Steps for each product", href: "/masterdata/routings", permission: "masterdata.routing.view" },
+  { label: "Work instructions", href: "/masterdata/work-instructions", permission: "masterdata.work_instruction.view" },
+  { label: "Equipment", href: "/masterdata/equipment", permission: "masterdata.equipment.view" },
+];
+
+/** The old detailed production screens, collapsed under "Advanced" (ADR-080 §11; V2-10 hides/redirects them later). */
+const ADVANCED_ITEMS: NavItem[] = [
+  { label: "Production plan", href: "/production/plan", permission: "production.production_plan.view", section: "advanced" },
+  { label: "Work orders (detailed)", href: "/production/work-orders", permission: "production.work_order.view", section: "advanced" },
+  { label: "Board (detailed)", href: "/production/board", permission: "production.work_order.view", section: "advanced" },
+  { label: "Batches (full record)", href: "/production", permission: "production.batch.view", section: "advanced" },
+  { label: "Materials by scan", href: "/production/staging", permission: "inventory.movement.post", section: "advanced" },
+  { label: "New batch without an order", href: "/production/new", permission: "production.batch.create", section: "advanced" },
 ];
 
 /** Left navigation (ux-system §3). Planned modules are shown disabled with their phase, never as fake links. */
@@ -61,22 +80,24 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    // ADR-080 §11: the Production group is built per role by productionItems(); this is the full list
+    // (used by tests and as the source of every production entry). Maintenance has its own group.
     label: "Production",
     icon: "factory",
     items: [
-      // ADR-074: one production order from ordering to done comes first; the detailed screens follow.
-      { label: "Production orders", href: "/production/orders", permission: "production.work_order.view" },
-      { label: "Defects", href: "/production/defects", permission: "production.daily_log.view" },
-      { label: "Stage materials", href: "/production/staging", permission: "inventory.movement.post" },
-      { label: "Batches", href: "/production", permission: "production.batch.view" },
-      { label: "Board (detailed)", href: "/production/board", permission: "production.work_order.view" },
-      { label: "Work orders (detailed)", href: "/production/work-orders", permission: "production.work_order.view" },
-      { label: "Production plan", href: "/production/plan", permission: "production.production_plan.view" },
-      { label: "New batch (advanced)", href: "/production/new", permission: "production.batch.create" },
-      { label: "Formulas", href: "/masterdata/formulas", permission: "masterdata.formula.view" },
-      { label: "Routings", href: "/masterdata/routings", permission: "masterdata.routing.view" },
-      { label: "Work instructions", href: "/masterdata/work-instructions", permission: "masterdata.work_instruction.view" },
-      { label: "Equipment", href: "/masterdata/equipment", permission: "masterdata.equipment.view" },
+      { label: "Orders", href: "/production/orders", permission: "production.work_order.view" },
+      { label: "Today", href: "/production/today", permission: "production.daily_log.view" },
+      { label: "Rejects", href: "/production/defects", permission: "production.daily_log.view" },
+      { label: "New order", href: "/production/orders/new", permission: "production.work_order.create" },
+      ...SETUP_ITEMS.map((i) => ({ ...i, section: "setup" as const })),
+      ...ADVANCED_ITEMS,
+    ],
+  },
+  {
+    // ADR-080 §11: Maintenance leaves Production (UX review §5.1).
+    label: "Maintenance",
+    icon: "wrench",
+    items: [
       // Wave 4 W4C: equipment maintenance (US-6-19)
       { label: "Maintenance", href: "/maintenance", permission: "maintenance.work_order.view" },
       { label: "PM plans", href: "/maintenance/plans", permission: "maintenance.plan.view" },
@@ -211,3 +232,68 @@ export const NAV: NavGroup[] = [
     ],
   },
 ];
+
+// ---------------------------------------------------------------- per role (ADR-080 §11, UX review §5)
+
+type Can = (p: Permission) => boolean;
+
+/** Who the production screens are built for. Decided by permissions first (custom roles), roles second. */
+export type ProductionPersona = "owner" | "planner" | "operator" | "qa" | "viewer";
+
+export function productionPersona(can: Can, roles: readonly string[]): ProductionPersona {
+  if (roles.includes("owner_director")) return "owner";
+  if (can("production.work_order.create") || can("production.work_order.approve")) return "planner";
+  if (can("production.daily_log.create") || can("production.batch.edit") || roles.includes("production_operator") || roles.includes("warehouse_operator")) return "operator";
+  if (can("quality.disposition.approve")) return "qa";
+  return "viewer";
+}
+
+/** The Production menu of one person: operators "My work" and "Today"; owner/planner Orders, Today, Rejects, New order, Setup; old screens under Advanced. */
+export function productionItems(persona: ProductionPersona): NavItem[] {
+  const main: NavItem[] =
+    persona === "operator"
+      ? [
+          { label: "My work", href: "/production/orders", permission: "production.work_order.view" },
+          { label: "Today", href: "/production/today", permission: "production.daily_log.view" },
+        ]
+      : [
+          { label: "Orders", href: "/production/orders", permission: "production.work_order.view" },
+          { label: "Today", href: "/production/today", permission: "production.daily_log.view" },
+          { label: "Rejects", href: "/production/defects", permission: "production.daily_log.view" },
+          { label: "New order", href: "/production/orders/new", permission: "production.work_order.create" },
+        ];
+  const setup = SETUP_ITEMS.map((i) => ({ ...i, section: persona === "owner" ? ("setup" as const) : ("advanced" as const) }));
+  return [...main, ...setup, ...ADVANCED_ITEMS];
+}
+
+/** The menu of one person: groups filtered by permission, with the Production group built per role. */
+export function buildNav(can: Can, roles: readonly string[]): NavGroup[] {
+  const persona = productionPersona(can, roles);
+  return NAV.map((g) => (g.label === "Production" ? { ...g, items: productionItems(persona) } : g))
+    .map((g) => ({ ...g, items: g.items.filter((i) => i.planned || !i.permission || can(i.permission)) }))
+    .filter((g) => g.items.length > 0);
+}
+
+/** One tab of the bottom bar (phone and iPad portrait). `href: null` = the Menu tab, which opens the drawer. */
+export type Tab = { label: string; href: string | null; icon: "home" | "today" | "scan" | "help" | "factory" | "truck" | "approve" | "shield" | "menu"; permission?: Permission };
+
+/**
+ * Bottom tab bar per role (UX review §5.2). Never "Batches", never a bare "Orders": production is
+ * "Production" (the production orders), sales is "Sales".
+ */
+export function tabsFor(can: Can, roles: readonly string[]): Tab[] {
+  const persona = productionPersona(can, roles);
+  const home: Tab = { label: "Home", href: "/dashboard", icon: "home" };
+  const menu: Tab = { label: "Menu", href: null, icon: "menu" };
+  const production: Tab = { label: "Production", href: "/production/orders", icon: "factory", permission: "production.work_order.view" };
+  const scan: Tab = { label: "Scan", href: "/inventory/scan", icon: "scan", permission: "inventory.lot.view" };
+  const tabs: Tab[] =
+    persona === "operator"
+      ? [home, { label: "Today", href: "/production/today", icon: "today", permission: "production.daily_log.view" }, scan, { label: "Help", href: "/help", icon: "help" }]
+      : persona === "qa"
+        ? [home, { label: "Quality check", href: "/quality", icon: "shield", permission: "quality.disposition.view" }, production, scan, menu]
+        : persona === "viewer"
+          ? [home, production, { label: "Sales", href: "/sales", icon: "truck", permission: "sales.sales_order.view" }, scan, menu]
+          : [home, production, { label: "Sales", href: "/sales", icon: "truck", permission: "sales.sales_order.view" }, { label: "To approve", href: "/approvals", icon: "approve" }, menu];
+  return tabs.filter((t) => !t.permission || can(t.permission));
+}

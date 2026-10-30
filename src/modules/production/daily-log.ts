@@ -101,15 +101,15 @@ async function validateEntry(tx: Tx, ctx: AuthContext, wo: typeof workOrders.$in
   const seen = new Set<string>();
   const defects = e.defects.map((d) => {
     const type = allowed.find((t) => t.toLowerCase() === d.defectType.toLowerCase());
-    if (!type) throw new DomainError("validation", `"${d.defectType}" is not in the defect list. Choose one of: ${allowed.join(", ")}.`, { fieldErrors: { defects: "Choose a defect type from the list." } });
-    if (seen.has(type)) throw new DomainError("validation", `${type} is listed twice. Add the quantities together in one line.`, { fieldErrors: { defects: "Each defect type once." } });
+    if (!type) throw new DomainError("validation", `"${d.defectType}" is not in the reject list. Choose one of: ${allowed.join(", ")}.`, { fieldErrors: { defects: "Choose a reject type from the list." } });
+    if (seen.has(type)) throw new DomainError("validation", `${type} is listed twice. Add the quantities together in one line.`, { fieldErrors: { defects: "Each reject type once." } });
     seen.add(type);
     const qty = new Decimal(d.quantity);
     if (qty.lte(0)) throw new DomainError("validation", `Enter how many pieces had "${type}" (more than 0).`, { fieldErrors: { defects: "More than 0." } });
     return { defectType: type, quantity: qty, note: d.note };
   });
   const good = new Decimal(e.goodQty ?? 0);
-  if (!e.notes && good.eq(0) && defects.length === 0) throw new DomainError("validation", "Write what happened, or enter the good quantity or a defect.", { fieldErrors: { notes: "Write what happened today." } });
+  if (!e.notes && good.eq(0) && defects.length === 0) throw new DomainError("validation", "Write what happened, or enter the good quantity or a reject.", { fieldErrors: { notes: "Write what happened today." } });
   return { logDate, good, defects };
 }
 
@@ -258,6 +258,57 @@ export async function listDailyLogs(ctx: AuthContext, workOrderId: string) {
   });
 }
 export type DailyLogRow = Awaited<ReturnType<typeof listDailyLogs>>[number];
+
+/**
+ * "Today" (ADR-080 §11, stage G1): the daily log entries of ONE day for every production order of
+ * the current site, newest first, with the order and product. Read-only; entries are added on the
+ * order page (the full plant "Today" page with one row per order is stage G4). Replaced entries
+ * are returned with `replacedById` so the screen can show them as not counted.
+ */
+export async function listSiteDailyLogs(ctx: AuthContext, f: { date?: string } = {}) {
+  ctx.require("production.daily_log.view");
+  const siteId = ctx.currentSiteId;
+  ctx.requireSite(siteId);
+  const date = f.date && /^\d{4}-\d{2}-\d{2}$/.test(f.date) ? f.date : manilaToday();
+  const rows = await db
+    .select({ log: productionDailyLogs, author: users.displayName, orderNumber: workOrders.workOrderNumber, productName: products.name, productFamily: products.family, batchNumber: batches.batchNumber })
+    .from(productionDailyLogs)
+    .innerJoin(users, eq(users.id, productionDailyLogs.createdBy))
+    .innerJoin(workOrders, eq(workOrders.id, productionDailyLogs.workOrderId))
+    .innerJoin(products, eq(products.id, workOrders.productId))
+    .leftJoin(batches, eq(batches.id, productionDailyLogs.batchId))
+    .where(and(eq(productionDailyLogs.organizationId, ctx.organizationId), eq(productionDailyLogs.siteId, siteId), eq(workOrders.siteId, siteId), eq(productionDailyLogs.logDate, date)))
+    .orderBy(desc(productionDailyLogs.createdAt))
+    .limit(500);
+  const ids = rows.map((r) => r.log.id);
+  const defects = ids.length ? await db.select().from(productionDefectEntries).where(inArray(productionDefectEntries.dailyLogId, ids)).orderBy(asc(productionDefectEntries.defectType)) : [];
+  const replacers = ids.length ? await db.select({ id: productionDailyLogs.id, correctsId: productionDailyLogs.correctsId }).from(productionDailyLogs).where(inArray(productionDailyLogs.correctsId, ids)) : [];
+  const replacedBy = new Map(replacers.map((r) => [r.correctsId!, r.id]));
+  return {
+    date,
+    entries: rows.map((r) => {
+      const ds = defects.filter((d) => d.dailyLogId === r.log.id);
+      return {
+        id: r.log.id,
+        workOrderId: r.log.workOrderId,
+        orderNumber: r.orderNumber,
+        productName: r.productName,
+        productFamily: r.productFamily,
+        batchNumber: r.batchNumber,
+        shift: r.log.shift,
+        notes: r.log.notes,
+        goodQty: r.log.goodQty,
+        rejects: ds.map((d) => ({ type: d.defectType, quantity: d.quantity })),
+        rejectTotal: ds.reduce((a, d) => a.plus(d.quantity), new Decimal(0)).toString(),
+        author: r.author,
+        createdAt: r.log.createdAt,
+        correctsId: r.log.correctsId,
+        replacedById: replacedBy.get(r.log.id) ?? null,
+      };
+    }),
+  };
+}
+export type SiteDailyLog = Awaited<ReturnType<typeof listSiteDailyLogs>>;
 
 export type DefectSummaryRow = { productId: string; productName: string; productSku: string; logDate: string; good: string; defects: string; defectPct: string | null; byType: Record<string, string> };
 

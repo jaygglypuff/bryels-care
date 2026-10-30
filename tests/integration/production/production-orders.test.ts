@@ -41,17 +41,13 @@ beforeAll(async () => {
   managerRvs = await ctxFor(w.orgId, "manager.nfd@bryels-care.test", "site_manager", [w.rvs]);
 }, 120_000);
 
-describe("simple status mapping (ADR-074)", () => {
-  it("maps work order states and batch starts to Draft / Approved / In progress / Done / Cancelled", () => {
-    expect(productionOrderStatus("draft", false)).toBe("draft");
-    expect(productionOrderStatus("planned", false)).toBe("draft");
-    expect(productionOrderStatus("released", false)).toBe("approved");
-    expect(productionOrderStatus("released", true)).toBe("in_progress");
-    expect(productionOrderStatus("in_progress", true)).toBe("in_progress");
-    expect(productionOrderStatus("completed", true)).toBe("done");
-    expect(productionOrderStatus("closed", true)).toBe("done");
-    expect(productionOrderStatus("cancelled", false)).toBe("cancelled");
-    expect(() => productionOrderStatus("bogus", false)).toThrow();
+describe("status mapping (ADR-080 §1)", () => {
+  it("maps work order states without batches; every batch row is unit-tested in tests/unit/production-order-status.test.ts", () => {
+    expect(productionOrderStatus("draft").status).toBe("draft");
+    expect(productionOrderStatus("planned").status).toBe("draft");
+    expect(productionOrderStatus("released").status).toBe("approved");
+    expect(productionOrderStatus("cancelled").status).toBe("cancelled");
+    expect(() => productionOrderStatus("bogus")).toThrow();
   });
 });
 
@@ -94,8 +90,8 @@ describe("Approve in one step", () => {
 
     const view = await getProductionOrder(w.operator, orderId);
     expect(view.status).toBe("approved");
-    expect(view.nextAction).toMatchObject({ kind: "link", label: "Start", href: `/production/staging/${batchId}` });
-    expect(view.progress.steps.map((s) => s.state)).toEqual(["done", "current", "todo", "todo"]);
+    expect(view.nextAction).toMatchObject({ kind: "link", label: "Get materials", href: `/production/staging/${batchId}` });
+    expect(view.progress.steps!.map((s) => s.state)).toEqual(["done", "current", "todo", "todo", "todo"]);
   });
 
   it("is idempotent: the same key returns the stored result and creates nothing more", async () => {
@@ -140,7 +136,7 @@ describe("Approve in one step", () => {
 
 let firstLog: string;
 
-describe("daily log and defects (append-only, corrections)", () => {
+describe("daily log and rejects (append-only, corrections)", () => {
   it("an operator adds what happened today with good output and defects by type", async () => {
     const r = await addDailyLog(w.operator, {
       workOrderId: orderId,
@@ -238,17 +234,24 @@ describe("daily log and defects (append-only, corrections)", () => {
   });
 });
 
-describe("status follows the batches", () => {
-  it("In progress once a batch has started; Done when the work order completes", async () => {
+describe("status follows the batches (ADR-080: Done = QA decided)", () => {
+  it("In progress once a batch has started; Quality check (not Done) when the work order completes; Done after QA", async () => {
     // Test shortcut: starting a batch needs staging and a line clearance (covered by staging/execution tests);
-    // the mapping reads only the batch start time and the work order status.
-    await db.update(batches).set({ startedAt: new Date() }).where(eq(batches.id, batchId));
+    // here the read model reads the batch and work order states only.
+    await db.update(batches).set({ startedAt: new Date(), status: "in_process" }).where(eq(batches.id, batchId));
+    await db.update(workOrders).set({ status: "in_progress" }).where(eq(workOrders.id, orderId));
     expect((await listProductionOrders(w.planner)).find((x) => x.id === orderId)?.status).toBe("in_progress");
     const view = await getProductionOrder(w.planner, orderId);
     expect(view.status).toBe("in_progress");
+    await db.update(batches).set({ status: "quarantined" }).where(eq(batches.id, batchId));
     await db.update(workOrders).set({ status: "completed" }).where(eq(workOrders.id, orderId));
+    expect((await listProductionOrders(w.planner, { status: "quality_check" })).map((x) => x.id)).toContain(orderId);
+    expect((await listProductionOrders(w.planner, { status: "done" })).map((x) => x.id)).not.toContain(orderId);
+    expect((await listProductionOrders(w.planner)).map((x) => x.id)).toContain(orderId); // still open
+    await db.update(batches).set({ status: "released" }).where(eq(batches.id, batchId));
     expect((await listProductionOrders(w.planner, { status: "done" })).map((x) => x.id)).toContain(orderId);
-    expect((await getProductionOrder(w.planner, orderId)).nextAction.kind).not.toBe("approve");
+    expect((await listProductionOrders(w.planner)).map((x) => x.id)).not.toContain(orderId);
+    expect((await getProductionOrder(w.planner, orderId)).nextAction.kind).toBe("none");
   });
 });
 

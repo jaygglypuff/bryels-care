@@ -5,6 +5,7 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, daysUntil, fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { getOrder, manilaToday } from "@/modules/sales";
+import { productionOrdersForSalesOrder, salesOrderShortfalls, type MakeForLine } from "@/modules/production";
 import { Card, CardTitle, Dl, LinkButton, PageHeader, Table, Td } from "@/ui/core";
 import { Banner, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
@@ -49,6 +50,9 @@ export default async function OrderDetailPage({ params, searchParams }: { params
   const showAlloc = ["confirmed", "allocated", "picking", "packed", "partially_shipped", "shipped"].includes(status);
   const canVoid = ctx.can("sales.sales_order.void") && ["draft", "submitted", "pending_approval", "confirmed", "allocated", "picking", "packed"].includes(status);
   const reasons = order.approvalReasons ?? [];
+  // ADR-080 (V2-2): "Make for this order" on lines short of stock, for people who can create production orders.
+  const toMake: MakeForLine[] = ctx.can("production.work_order.create") ? (await salesOrderShortfalls(ctx, order.id).catch(() => [])).filter((l) => D(l.missing).gt(0)) : [];
+  const beingMade = ctx.can("production.work_order.view") ? await productionOrdersForSalesOrder(ctx, order.id) : [];
   const warnings = order.warnings ?? [];
 
   return (
@@ -149,6 +153,38 @@ export default async function OrderDetailPage({ params, searchParams }: { params
             </Table>
             <MaskedNote fields={data._masked} />
           </Card>
+
+          {(toMake.length > 0 || beingMade.length > 0) && (
+            <Card>
+              <CardTitle>Production for this order</CardTitle>
+              {toMake.length > 0 && (
+                <ul className="flex flex-col gap-2">
+                  {toMake.map((l) => (
+                    <li key={l.salesOrderLineId} className="flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-line p-3">
+                      <div className="min-w-0 text-[14px]">
+                        <p className="font-medium">{l.productName}</p>
+                        <p className="text-fg-2">
+                          {fmtQty(l.missing, "pcs", 0)} missing · ordered {fmtQty(l.ordered, "", 0)}, free stock {fmtQty(l.freeStock, "", 0)}
+                          {D(l.alreadyInProduction).gt(0) ? `, already being made ${fmtQty(l.alreadyInProduction, "", 0)}` : ""}
+                        </p>
+                      </div>
+                      <LinkButton href={`/production/orders/new?salesOrderLine=${l.salesOrderLineId}`} variant="cta">Make for this order</LinkButton>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {beingMade.length > 0 && (
+                <ul className={toMake.length > 0 ? "mt-3 flex flex-col gap-1.5 text-[14px]" : "flex flex-col gap-1.5 text-[14px]"}>
+                  {beingMade.map((p) => (
+                    <li key={p.id}>
+                      <Link className="text-primary-text hover:underline" href={`/production/orders/${p.id}`}>{p.number}</Link> · {p.productName} · {p.statusLabel}
+                      {p.subtitle ? ` · ${p.subtitle}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          )}
 
           {hasAllocations && (
             <Card>

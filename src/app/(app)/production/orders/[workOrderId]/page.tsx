@@ -11,7 +11,7 @@ import { Help } from "@/ui/help/help";
 import { WhoCanHelp } from "@/ui/who-can-help";
 import { Forbidden } from "../../../forbidden";
 import { ApproveButton, CancelOrderForm, DailyLogForm } from "../forms";
-import { DefectTables, OrderStatusChip, ProgressStrip } from "../parts";
+import { ActionButton, DefectTables, NeededBy, OrderStatusChip, OrderWarning, ProgressStrip } from "../parts";
 
 export const metadata: Metadata = { title: "Production order" };
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ const TABS = [
   ["today", "Today"],
   ["log", "Daily log"],
   ["materials", "Materials"],
-  ["output", "Output"],
+  ["output", "Batches"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
 
@@ -32,28 +32,37 @@ function NextActionCard({ v }: { v: ProductionOrderView }) {
   return (
     <Card>
       <CardTitle>Next step</CardTitle>
-      {a.kind === "approve" && (
-        <div className="flex flex-col gap-2">
-          <p className="text-[14px] text-fg-2">{a.hint}</p>
-          <ApproveButton workOrderId={v.detail.workOrder.id} />
-        </div>
-      )}
-      {a.kind === "link" && (
-        <div className="flex flex-col gap-2">
-          <p className="text-[14px] text-fg-2">{a.hint}</p>
-          <div>
-            <LinkButton href={a.href} variant="cta" size="lg">{a.label}</LinkButton>
-          </div>
-        </div>
-      )}
-      {a.kind === "wait" && (
-        <div className="text-[14px]">
-          <p className="font-medium">{a.title}</p>
-          <p className="text-fg-2">{a.hint}</p>
-          {a.who && <WhoCanHelp permission={a.who.permission} siteId={a.who.siteId} />}
-        </div>
-      )}
-      {a.kind === "none" && <p className="text-[14px] text-fg-2">{a.hint}</p>}
+      <div className="flex flex-col gap-2">
+        <p className="text-[14px] text-fg-2">{a.hint}</p>
+        <ActionButton a={a} approve={<ApproveButton workOrderId={v.detail.workOrder.id} />} />
+        {a.kind === "wait" && !a.who && <p className="text-[13px] text-muted">Nothing to press yet.</p>}
+      </div>
+    </Card>
+  );
+}
+
+/** Multi-batch orders: one row per batch with its own status and button (UX review S2). */
+function BatchRows({ v }: { v: ProductionOrderView }) {
+  if (v.batchActions.length === 0) return null;
+  return (
+    <Card>
+      <CardTitle>Batches</CardTitle>
+      <ul className="space-y-2">
+        {v.batchActions.map((b) => (
+          <li key={b.batchId} className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-line p-3.5">
+            <div className="min-w-0">
+              <p className="font-mono text-[13px] font-semibold">{b.batchNumber}</p>
+              <p className="text-[14px] text-fg-2">
+                {b.label}
+                {b.subtitle ? ` · ${b.subtitle}` : ""}
+              </p>
+            </div>
+            <div className="min-w-[160px]">
+              {b.action.kind === "none" ? <p className="text-[13px] text-muted">{b.action.hint}</p> : <ActionButton a={b.action} size="md" />}
+            </div>
+          </li>
+        ))}
+      </ul>
     </Card>
   );
 }
@@ -78,7 +87,7 @@ function LogEntry({ e, v, types, canCorrect }: { e: DailyLogRow; v: ProductionOr
         Good: <span className="font-semibold tabular">{pcs(e.goodQty)}</span>
         {e.defects.length > 0 && (
           <>
-            {" "}· Defects: <span className="font-semibold tabular">{pcs(e.defectTotal)}</span> ({e.defects.map((d) => `${d.defectType} ${pcs(d.quantity)}`).join(", ")})
+            {" "}· Rejects: <span className="font-semibold tabular">{pcs(e.defectTotal)}</span> ({e.defects.map((d) => `${d.defectType} ${pcs(d.quantity)}`).join(", ")})
           </>
         )}
       </p>
@@ -130,16 +139,25 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
         title={d.product.name}
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
-            <OrderStatusChip status={v.status} label={v.statusLabel} />
+            <OrderStatusChip status={v.status} label={v.statusLabel} subtitle={v.statusView.subtitle} warn={v.statusView.warn} />
+            <OrderWarning text={v.statusView.warning} />
+            <span className="font-medium text-fg">
+              {v.pieces.text} {v.pieces.word}
+            </span>
             <span className="font-mono">{wo.workOrderNumber}</span>
-            <span>
-              {fmtMass(wo.qtyPlannedBase)}
-              {wo.batchCount > 1 ? ` in ${wo.batchCount} batches` : ""}
-            </span>
-            <span>
-              {fmtDate(wo.plannedStart)}
-              {wo.plannedEnd !== wo.plannedStart ? ` – ${fmtDate(wo.plannedEnd)}` : ""}
-            </span>
+            <NeededBy date={v.neededBy} late={v.late} />
+            {d.salesOrder && (
+              <span>
+                For customer order{" "}
+                {ctx.can("sales.sales_order.view") ? (
+                  <Link href={`/sales/${d.salesOrder.id}`} className="underline">
+                    {d.salesOrder.number}
+                  </Link>
+                ) : (
+                  d.salesOrder.number
+                )}
+              </span>
+            )}
           </span>
         }
         actions={
@@ -154,16 +172,20 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
         <div className="mb-4">
           <Banner tone="neu" title="Cancelled">{wo.cancelReason}</Banner>
         </div>
+      ) : v.status === "failed" || !v.progress.steps ? (
+        <div className="mb-4">
+          <Banner tone="rej" title="Failed">Every batch of this order failed the quality check. Nothing from it can be sold.</Banner>
+        </div>
       ) : (
         <Card className="mb-4">
-          <ProgressStrip steps={v.progress.steps} />
-          {v.progress.batchesTotal > 1 && (
-            <p className="mt-2 text-[13px] text-muted">
-              {v.progress.batchesFinished} of {v.progress.batchesTotal} batches finished
-            </p>
-          )}
+          <ProgressStrip steps={v.progress.steps} note={v.statusView.stepNote} />
+          {v.statusView.batchesNote && <p className="mt-2 text-[13px] text-muted">Batches: {v.statusView.batchesNote}</p>}
         </Card>
       )}
+
+      <div className="mb-4 lg:hidden">
+        <NextActionCard v={v} />
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="min-w-0 space-y-4">
@@ -175,11 +197,10 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
             ))}
           </nav>
 
+          <BatchRows v={v} />
+
           {tab === "today" && (
             <>
-              <div className="lg:hidden">
-                <NextActionCard v={v} />
-              </div>
               {v.canAddLog ? (
                 <Card>
                   <CardTitle>What happened today?</CardTitle>
@@ -207,7 +228,7 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
             (v.logs === null ? (
               <EmptyState title="You can't see the daily log">Your role does not include the daily log. Ask your site manager if you need it.</EmptyState>
             ) : v.logs.length === 0 ? (
-              <EmptyState title="Nothing recorded yet">Each day, write what happened, how many good pieces were made and any defects.</EmptyState>
+              <EmptyState title="Nothing recorded yet">Each day, write what happened, how many good pieces were made and any rejects.</EmptyState>
             ) : (
               <>
                 <ul className="space-y-2">
@@ -217,7 +238,7 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
                 </ul>
                 {v.summary && (
                   <Card>
-                    <CardTitle>Good and defects</CardTitle>
+                    <CardTitle>Good and rejects</CardTitle>
                     <DefectTables summary={v.summary} showProduct={false} />
                   </Card>
                 )}
@@ -277,7 +298,7 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
                         <span className="font-mono text-[13px] font-semibold">{b.batchNumber}</span>
                         <Chip tone={b.status === "closed" || b.status === "released" ? "ok" : b.status === "rejected" ? "rej" : "info"}>{b.word}</Chip>
                       </div>
-                      <p className="mt-1 text-[13px] text-muted">{fmtMass(b.plannedSizeG)}</p>
+                      <p className="mt-1 text-[13px] text-muted">Open the full batch record</p>
                     </Link>
                   ))}
                 </div>
@@ -293,7 +314,7 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
         </div>
 
         <aside className="space-y-4">
-          <div className={cx(tab === "today" && "hidden lg:block")}>
+          <div className="hidden lg:block">
             <NextActionCard v={v} />
           </div>
           {v.canCancel && (
@@ -304,9 +325,27 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
               </div>
             </details>
           )}
-          <p className="text-[13px] text-muted">
-            Detailed view: <Link href={`/production/work-orders/${wo.id}`} className="underline">work order {wo.workOrderNumber}</Link>
-          </p>
+          <details className="rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)]">
+            <summary className="min-h-[44px] cursor-pointer py-2.5 text-[14px] font-medium">More details</summary>
+            <dl className="mt-2 space-y-1.5 text-[14px]">
+              <div>
+                <dt className="text-[12px] text-muted">How much</dt>
+                <dd className="tabular">
+                  {fmtMass(wo.qtyPlannedBase)} ({wo.batchCount} × {fmtMass(wo.batchSizeBase)})
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[12px] text-muted">Planned dates</dt>
+                <dd>
+                  {fmtDate(wo.plannedStart)}
+                  {wo.plannedEnd !== wo.plannedStart ? ` – ${fmtDate(wo.plannedEnd)}` : ""}
+                </dd>
+              </div>
+            </dl>
+            <p className="mt-3 text-[13px] text-muted">
+              Advanced: <Link href={`/production/work-orders/${wo.id}`} className="underline">full order record {wo.workOrderNumber}</Link>
+            </p>
+          </details>
         </aside>
       </div>
     </div>
