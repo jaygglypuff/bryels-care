@@ -121,6 +121,7 @@ export {
   type ApproveResult,
   type MakeForLine,
 } from "./production-orders";
+export { productionOrderApprovalVerdicts, notifyProductionOrderApprovers, neededByWord, PRODUCTION_ORDER_APPROVAL_KIND } from "./production-order-approvals";
 export { batchLogCounts } from "./daily-log";
 export { addDailyLog, correctDailyLog, listDailyLogs, listSiteDailyLogs, defectSummary, defectTypes, type DailyLogEntryInput, type DailyLogRow, type DefectSummary, type DefectSummaryRow, type SiteDailyLog } from "./daily-log";
 export {

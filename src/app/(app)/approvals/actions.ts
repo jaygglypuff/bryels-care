@@ -7,6 +7,7 @@ import { decideExpenseClaim, approveInvoice, returnInvoice } from "@/modules/fin
 import { approveImport, rejectImport } from "@/modules/imports";
 import { approveAdjustment, rejectAdjustment } from "@/modules/inventory";
 import { decidePurchaseOrder, decidePurchaseRequest, decideSupplierReturn } from "@/modules/procurement";
+import { approveProductionOrder, type ApproveResult } from "@/modules/production";
 import { decideChangeControl } from "@/modules/quality";
 import { approveCustomerReturn, approveOrder, approvePriceList, approveQuote, approveRequirement, rejectPriceList, rejectRequirement, returnOrderToDraft, returnQuoteToDraft } from "@/modules/sales";
 import { INLINE_DECISIONS } from "./inline";
@@ -17,7 +18,7 @@ import { INLINE_DECISIONS } from "./inline";
  * the approval steps exactly as on the record's own page. Kinds without an entry here are decided
  * on their own page (they need a password, a measured value or a longer form).
  */
-type Decide = (ctx: AuthContext, id: string, note: string | null) => Promise<unknown>;
+type Decide = (ctx: AuthContext, id: string, note: string | null, idempotencyKey: string | null) => Promise<unknown>;
 
 const APPROVE: Record<string, Decide> = {
   "approval.stock_adjustment": (ctx, id, note) => approveAdjustment(ctx, id, note),
@@ -33,7 +34,19 @@ const APPROVE: Record<string, Decide> = {
   "approval.expense_claim": (ctx, id, note) => decideExpenseClaim(ctx, id, { decision: "approved", note }),
   "approval.change_control": (ctx, id, note) => decideChangeControl(ctx, { changeControlId: id, decision: "approved", note }),
   "approval.import_job": (ctx, id, note) => approveImport(ctx, id, note),
+  // Approve = plan + release + reserve + create the batches (one transaction, idempotent per form).
+  "approval.production_order": (ctx, id, note, key) => approveProductionOrder(ctx, id, { note, idempotencyKey: key ? `to-approve:${key}` : null }),
 };
+
+/** Plain result for kinds whose approval does more than change a status. */
+function approvedMessage(kind: string, result: unknown): string {
+  if (kind === "approval.production_order" && result && typeof result === "object" && "batches" in result) {
+    const r = result as ApproveResult;
+    const made = r.batches.length ? ` Batch${r.batches.length === 1 ? "" : "es"} ${r.batches.map((b) => b.batchNumber).join(", ")} ready to make.` : "";
+    return `Production order ${r.workOrderNumber} approved.${made}${r.shortages.length ? ` Short: ${r.shortages.join(" ")}` : ""}`;
+  }
+  return "Approved.";
+}
 
 const REJECT: Record<string, Decide> = {
   "approval.stock_adjustment": (ctx, id, reason) => rejectAdjustment(ctx, id, reason ?? ""),
@@ -55,19 +68,21 @@ export async function decideApprovalAction(_prev: ActionState, fd: FormData): Pr
   const id = String(fd.get("entityId") ?? "");
   const decision = String(fd.get("decision") ?? "");
   const note = String(fd.get("note") ?? "").trim() || null;
+  const idempotencyKey = String(fd.get("idempotencyKey") ?? "").trim() || null;
   const fn = decision === "approve" ? APPROVE[kind] : decision === "reject" ? REJECT[kind] : undefined;
   const label = INLINE_DECISIONS[kind];
   if (!fn || !label) return { ok: false, message: "Open the record to decide this one." };
   if (decision === "reject" && (!note || note.length < 3)) return { ok: false, message: "Say why (at least 3 characters).", fieldErrors: { note: "Say why (at least 3 characters)." } };
   let ctx: AuthContext;
+  let result: unknown;
   try {
     ctx = await requireContext();
-    await fn(ctx, id, note);
+    result = await fn(ctx, id, note, idempotencyKey);
   } catch (e) {
     return toActionState(e);
   }
   // The decided item leaves the list at once (the sweep would clear it within 5 minutes anyway).
   await refreshActionItems(ctx.organizationId).catch(() => null);
   refreshCurrentPage();
-  return { ok: true, message: decision === "approve" ? "Approved." : `${label.reject}: done.` };
+  return { ok: true, message: decision === "approve" ? approvedMessage(kind, result) : `${label.reject}: done.` };
 }

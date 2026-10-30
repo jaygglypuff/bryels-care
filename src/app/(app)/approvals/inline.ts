@@ -17,4 +17,6 @@ export const INLINE_DECISIONS: Record<string, { reject: string }> = {
   "approval.expense_claim": { reject: "Reject" },
   "approval.change_control": { reject: "Reject" },
   "approval.import_job": { reject: "Reject" },
+  // Approve only: a production order is not sent back; it is cancelled (with a reason) on its own page.
+  "approval.production_order": { reject: "" },
 };

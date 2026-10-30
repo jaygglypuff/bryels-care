@@ -126,6 +126,9 @@ export async function getQaQueue(ctx: AuthContext) {
       expired: isLotExpired(l),
     };
   });
+  // Oldest received first (consultant review 2026-10-30, flow A): the receipt date, not the lot row's creation
+  // time, so a receipt entered late for an earlier delivery is checked in delivery order. Ties: lot number.
+  lots.sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime() || a.lotNumber.localeCompare(b.lotNumber));
 
   const outLot = alias(inventoryLots, "out_lot");
   const batchRows = await db

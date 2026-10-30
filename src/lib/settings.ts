@@ -635,6 +635,11 @@ export const SETTINGS = {
     scopes: ["organization"], schema: z.string().regex(/^[A-Z0-9_-]{1,20}$/).nullable(), default: null as string | null, assumption: "A-W4B-02", group: "Finance", label: "Tax code for supplier bill lines",
     description: "A code of the reviewed tax configuration used as the default on new supplier bill lines. Empty = no input tax.", requiresApproval: true, restricted: true,
   },
+  "finance.invoice.draft_at_dispatch": {
+    scopes: ["organization", "site"], schema: z.boolean(), default: true as boolean, assumption: "A-WD-03", group: "Finance", label: "Create the invoice draft when a shipment is dispatched",
+    description: "On: dispatching a shipment also creates its invoice draft (system action, once per shipment); finance still checks, submits, approves and issues it. Off: finance creates each invoice from the shipment.",
+    requiresApproval: true,
+  },
   "finance.invoice.default_terms_days": { scopes: ["organization"], schema: z.number().int().min(0).max(365), default: 30, assumption: "A-FIN-04", group: "Finance", label: "Invoice due after (days) when the customer has no terms", requiresApproval: true },
   "finance.bill.default_terms_days": { scopes: ["organization"], schema: z.number().int().min(0).max(365), default: 30, assumption: "A-FIN-04", group: "Finance", label: "Bill due after (days) when the supplier has no terms", requiresApproval: true },
   "finance.payment.apply_oldest_first": { scopes: ["organization"], schema: z.boolean(), default: true, assumption: "A-FIN-07", group: "Finance", label: "Apply payments to the oldest due document first", description: "When a payment is recorded without a manual allocation, it settles the counterparty's open documents oldest due date first." },

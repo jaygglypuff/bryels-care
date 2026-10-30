@@ -16,3 +16,5 @@ export { invoicesToApprove, overdueInvoices, disputedBills, expenseClaimsToAppro
 export { approvalProgress as financeApprovalProgress, BASE_APPROVE as FINANCE_BASE_APPROVE, type FinanceRecordType, type Progress as FinanceApprovalProgress } from "./approvals";
 export { computeTaxedLines, settlementState, invoiceMachine, creditNoteMachine, supplierBillMachine, paymentMachine, expenseClaimMachine, businessDate as financeBusinessDate, periodCodeOf } from "./shared";
 export { expenseClaimApprovalVerdicts, invoiceApprovalVerdicts } from "./approval-gates";
+export { draftInvoiceAtDispatch, cancelDispatchDraftOnReversal, notInvoicedShipments, dispatchDraftKey } from "./invoice-at-dispatch";
+export { paymentPrefillFor, type PaymentPrefill } from "./payment-prefill";

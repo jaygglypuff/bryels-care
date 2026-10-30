@@ -100,7 +100,7 @@ describe("action centre queue (US-5-06)", () => {
     await refreshActionItems(kit.orgId);
     const mgr = await listActionItems(manager);
     expect(mgr.find((i) => i.kind === "late_work_order" && i.entityId === wo.id)?.title).toMatch(/day\(s\) late/);
-    expect(mgr.find((i) => i.kind === "approval.work_order_release" && i.entityId === wo.id)).toBeTruthy();
+    expect(mgr.find((i) => i.kind === "approval.production_order" && i.entityId === wo.id)).toBeTruthy();
     expect((await listActionItems(admin)).some((i) => i.kind === "failed_job" && i.entityId === job.id)).toBe(true);
     expect((await listActionItems(sales)).some((i) => i.kind === "failed_job")).toBe(false);
     // the job is cancelled → the item clears

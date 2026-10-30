@@ -179,7 +179,31 @@ async function postDispatch(tx: Tx, ctx: AuthContext, o: OrderRow, s: ShipmentRo
     before: { status: s.status, orderStatus: before },
     after: { shipmentNumber: s.shipmentNumber, orderNumber: o.orderNumber, orderStatus: o.status, driver: input.driverName.trim(), plate: input.vehiclePlate.trim().toUpperCase(), movements: posted, documentNumber: document?.documentNumber ?? null },
   });
+  // Consultant review 2026-10-30 (flow C): finance drafts the invoice in this transaction (hook wired in
+  // src/modules/wiring.ts; sales must not import finance). The hook never fails the dispatch.
+  await shipmentInvoicingHooks()?.onDispatched(tx, ctx, { shipmentId: s.id, siteId: s.siteId });
   return { shipmentId: s.id, shipmentNumber: s.shipmentNumber, drNumber, orderStatus: o.status, movements: posted.length, documentNumber: document?.documentNumber ?? null };
+}
+
+/**
+ * Invoicing at dispatch (consultant review 2026-10-30, flow C; finance registers it in src/modules/wiring.ts):
+ * - `onDispatched` runs inside the dispatch transaction, after the stock is posted: finance creates the
+ *   invoice draft for the shipment (once per shipment). It must not throw for a business reason: a draft that
+ *   cannot be made is reported to finance and the dispatch still commits.
+ * - `onReversing` runs inside the reversal transaction, before the reversal guard: finance cancels the draft
+ *   it made at dispatch while nobody has submitted it yet (a submitted, approved or issued invoice still
+ *   blocks the reversal, as before).
+ */
+export type ShipmentInvoicingHooks = {
+  onDispatched: (tx: Tx, ctx: AuthContext, shipment: { shipmentId: string; siteId: string }) => Promise<void>;
+  onReversing: (tx: Tx, ctx: AuthContext, shipment: { shipmentId: string; siteId: string; reason: string }) => Promise<void>;
+};
+const INVOICING_HOOKS_KEY = "__bc_sales_shipment_invoicing_hooks__";
+export function registerShipmentInvoicingHooks(hooks: ShipmentInvoicingHooks) {
+  (globalThis as unknown as Record<string, ShipmentInvoicingHooks>)[INVOICING_HOOKS_KEY] = hooks;
+}
+function shipmentInvoicingHooks(): ShipmentInvoicingHooks | null {
+  return (globalThis as unknown as Record<string, ShipmentInvoicingHooks | undefined>)[INVOICING_HOOKS_KEY] ?? null;
 }
 
 /** "Dispatch shipment" (sales.shipment.post, S): a packed shipment leaves the dock. */
@@ -270,6 +294,7 @@ export async function reverseShipment(ctx: AuthContext, shipmentId: string, inpu
     const s = await lockShipment(tx, ctx, shipmentId);
     ctx.requireAt("sales.shipment.void", s.siteId);
     if (s.status !== "dispatched") throw new DomainError("state", s.status === "delivered" ? `Shipment ${s.shipmentNumber} was delivered; goods coming back are a customer return, not a reversal.` : `Shipment ${s.shipmentNumber ?? s.deliveryReceiptNumber} is ${s.status}; only a dispatched shipment can be reversed.`);
+    await shipmentInvoicingHooks()?.onReversing(tx, ctx, { shipmentId: s.id, siteId: s.siteId, reason });
     const blocked = await shipmentReversalGuard()?.(tx, ctx.organizationId, s.id);
     if (blocked) throw new DomainError("conflict", blocked, { code: "SHIPMENT_INVOICED" });
     const lines = await tx.select().from(shipmentLines).where(and(eq(shipmentLines.shipmentId, s.id), isNotNull(shipmentLines.stockMovementId))).orderBy(asc(shipmentLines.lotId), asc(shipmentLines.id));

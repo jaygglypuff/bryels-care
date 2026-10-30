@@ -93,7 +93,7 @@ refresh, read-only display account, no prices or customer names.
 |---|---|---|
 | 0 | Plain-word lot search; "Older screens" retired; header in words; destination descriptions; floor-screen plan | Done (ADR-085) |
 | 1 | Operator task list + one next action on the step screen; inventory by item + universal search; owner Home in mockup order with consistent counts; sales split view + search; floor screen MVP | In progress |
-| 2 | Silent hand-offs fixed: production orders in To approve, QA told about deliveries, "To put away" after release, invoice draft at dispatch + "Not invoiced", payment prefill; on-page confirmations; count once at Finish; one-form QA tests | Next |
+| 2 | Silent hand-offs fixed: production orders in To approve, QA told about deliveries, "To put away" after release, invoice draft at dispatch + "Not invoiced", payment prefill; on-page confirmations; count once at Finish; one-form QA tests | In progress. Done: production orders in To approve (kind `approval.production_order`, inline Approve, approvers notified at creation), QA notified when a receipt posts + QA queue oldest received first, invoice draft at dispatch (`finance.invoice.draft_at_dispatch`) + `notInvoicedShipments` for Home, payment prefilled from its invoice |
 | 3 | Equipment and packaging on the step cards; wizards; "This screen is for…" + "What is this?" everywhere; help rewritten as five role guides | After owner decisions D2–D3 |
 
 ## 10. Possible defects to verify (from the process review)

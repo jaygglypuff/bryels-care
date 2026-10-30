@@ -4,6 +4,8 @@ import { Button, Field, Input } from "@/ui/core";
 import { ActionForm, FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { decideApprovalAction } from "./actions";
 
+const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+
 /**
  * Approve and Reject / Send back on one row of "To approve" (ADR-075). Approve is two taps inside the
  * page (no browser popup): the first shows "Approve ₱350.00 expense claim from Tess?" with
@@ -12,6 +14,8 @@ import { decideApprovalAction } from "./actions";
 export function InlineDecision({ kind, entityId, what, rejectLabel }: { kind: string; entityId: string; what: string; rejectLabel: string }) {
   const [asking, setAsking] = useState(false);
   const [state, dispatch] = useInPlaceAction(decideApprovalAction);
+  // One key per row: a double tap or a retry of "Yes, approve" returns the first result (production orders).
+  const [idempotencyKey] = useState(newKey);
   return (
     <div className="flex w-full flex-col gap-2 md:w-72">
       {!asking ? (
@@ -23,6 +27,7 @@ export function InlineDecision({ kind, entityId, what, rejectLabel }: { kind: st
           <input type="hidden" name="kind" value={kind} />
           <input type="hidden" name="entityId" value={entityId} />
           <input type="hidden" name="decision" value="approve" />
+          <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
           <p className="text-[14px] font-medium" role="status">
             Approve {what}?
           </p>

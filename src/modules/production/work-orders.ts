@@ -15,6 +15,7 @@ import { idempotent } from "./shared";
 import { transitionBatch } from "./state";
 import { transitionWorkOrder, type WorkOrderStatus } from "./work-orders-state";
 import { batchesOfWorkOrder, endReservationsForDemand, insertWorkOrderReservations, reserveWorkOrderMaterials, type Shortage } from "./work-orders-reserve";
+import { notifyProductionOrderApprovers } from "./production-order-approvals";
 
 /**
  * Work orders (US-3-05; docs/process-maps.md W05-02, W05-04; docs/data-model.md §3.5, §6.3).
@@ -222,6 +223,8 @@ export async function createWorkOrder(ctx: AuthContext, raw: WorkOrderInput & { 
   return db.transaction(async (tx) => {
     const { result } = await idempotent(tx, ctx, idempotencyKey, "production.work_order.create", async () => {
       const wo = await insertWorkOrder(tx, ctx, rest);
+      // Consultant review 2026-10-30 (flow B): the approvers hear about the new order at once (no silent hand-off).
+      await notifyProductionOrderApprovers(tx, ctx, wo);
       return { workOrderId: wo.id, workOrderNumber: wo.workOrderNumber };
     });
     return result;
