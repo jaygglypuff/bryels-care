@@ -236,11 +236,11 @@ async function step(name, fn, u) {
   await step('notifications: mark read and acknowledge', async () => {
     const p = mg.page;
     await p.goto(BASE + '/dashboard');
-    await p.getByRole('link', { name: /^Notifications, \d+ unread$/ }).click();
+    await p.getByRole('link', { name: /^Messages, \d+ unread$/ }).click();
     await p.waitForURL(/\/notifications/);
-    const before = await p.getByRole('link', { name: /^Notifications, \d+ unread$/ }).getAttribute('aria-label');
+    const before = await p.getByRole('link', { name: /^Messages, \d+ unread$/ }).getAttribute('aria-label');
     await p.getByRole('button', { name: 'Mark read' }).first().click();
-    await fresh(mg, p.getByRole('link', { name: /^Notifications, \d+ unread$/ }).and(p.locator(`:not([aria-label="${before}"])`)), 'unread count refresh');
+    await fresh(mg, p.getByRole('link', { name: /^Messages, \d+ unread$/ }).and(p.locator(`:not([aria-label="${before}"])`)), 'unread count refresh');
     // Wave 3 seeds (action centre rules, W3E/W3F data) give the manager several open items: the
     // acknowledged one leaves the list, the others stay.
     const acks = p.getByRole('button', { name: 'Acknowledge' });

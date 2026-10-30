@@ -6,7 +6,7 @@ import { Card, EmptyState, LinkButton, PageHeader, buttonClass, cx } from "@/ui/
 import { Chip } from "@/ui/status";
 import { acknowledgeAction, markAllReadAction, markReadAction } from "./actions";
 
-export const metadata = { title: "Notifications" };
+export const metadata = { title: "Messages" };
 
 const SEVERITY = { critical: { tone: "bad", label: "Critical" }, warning: { tone: "warn", label: "Warning" }, info: { tone: "info", label: "Info" } } as const;
 
@@ -21,7 +21,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Notifications"
+        title="Messages"
         subtitle="Alerts and items waiting for you. Tap Open to go to the record. Acknowledge an item once you are dealing with it; it stays in your history."
         actions={
           <>

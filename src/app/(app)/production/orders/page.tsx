@@ -88,7 +88,7 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
                 {board ? "List" : "Board"}
               </LinkButton>
             )}
-            {canCreate && <LinkButton href="/production/orders/new" variant="cta">New order</LinkButton>}
+            {canCreate && <LinkButton href="/production/orders/new" variant="cta">New production order</LinkButton>}
           </>
         }
       />

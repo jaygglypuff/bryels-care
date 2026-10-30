@@ -152,7 +152,10 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
                       )}
                     >
                       {ICONS[g.icon]}
-                      {g.label}
+                      <span className="flex flex-col leading-tight">
+                        <span>{g.label}</span>
+                        <span className={cx("hidden text-[11px] font-normal 2xl:block", active ? "text-white/75" : "text-muted")}>{g.description}</span>
+                      </span>
                     </Link>
                   </li>
                 );
@@ -161,8 +164,9 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
           </nav>
           <div className="ml-auto flex shrink-0 items-center gap-2 xl:ml-0">
             {sites.length > 1 && <div className="hidden xl:block">{siteSwitcher}</div>}
-            <Link href="/inventory/scan" className="hidden size-10 place-items-center rounded-full bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg sm:grid" aria-label="Scan or search" title="Scan or search">
+            <Link href="/inventory/scan" className="hidden h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface px-2.5 text-[13px] font-medium text-fg-2 shadow-[var(--shadow-card)] hover:text-fg sm:flex" aria-label="Scan or search" title="Scan or search">
               <ScanLine size={18} />
+              <span className="hidden md:inline xl:hidden 2xl:inline">Scan or search</span>
             </Link>
             <div className="hidden sm:block">
               <SyncChip userId={user.id} />
@@ -176,14 +180,15 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
               title="To approve"
             >
               <ListChecks size={18} />
-              <span className="hidden 2xl:inline">To approve</span>
+              <span className="hidden md:inline xl:hidden 2xl:inline whitespace-nowrap">To approve</span>
               {approvalCount > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full bg-[#c62828] px-1 text-[10px] font-semibold leading-[18px] text-white">{approvalCount > 99 ? "99+" : approvalCount}</span>
               )}
             </Link>
             )}
-            <Link href="/notifications" className="relative grid size-10 place-items-center rounded-full bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg" aria-label={`Notifications, ${unreadCount} unread`} title="Notifications">
+            <Link href="/notifications" className="relative flex h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface px-2.5 text-[13px] font-medium text-fg-2 shadow-[var(--shadow-card)] hover:text-fg" aria-label={`Messages, ${unreadCount} unread`} title="Messages">
               <Bell size={18} />
+              <span className="hidden md:inline xl:hidden 2xl:inline">Messages</span>
               {unreadCount > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full bg-[#c62828] px-1 text-[10px] font-semibold leading-[18px] text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>
               )}
@@ -371,7 +376,12 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
               return (
                 <details key={g.label} className="mb-1 border-b border-line pb-1" open={g === activeGroup}>
                   <summary className="flex min-h-[52px] cursor-pointer list-none items-center gap-2.5 px-2 text-[16px] font-semibold text-fg">
-                    {ICONS[g.icon]} <span className="flex-1">{g.label}</span> <ChevronDown size={18} className="text-muted" aria-hidden />
+                    {ICONS[g.icon]}
+                    <span className="flex flex-1 flex-col leading-tight">
+                      {g.label}
+                      <span className="text-[12px] font-normal text-muted">{g.description}</span>
+                    </span>
+                    <ChevronDown size={18} className="text-muted" aria-hidden />
                   </summary>
                   <ul>{main.map(row)}</ul>
                   {sections.map((sec) => (

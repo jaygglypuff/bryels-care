@@ -68,7 +68,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Overview", href: "/dashboard" },
       { label: "To approve", href: "/approvals", approverOnly: true },
-      { label: "Notifications", href: "/notifications" },
+      { label: "Messages", href: "/notifications" },
       { label: "Problems & alerts", href: "/action-centre" },
       ...inSection("Help & my account", [
         { label: "Help & guides", href: "/help" },
@@ -86,9 +86,8 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Operations Center", href: "/operations", hub: true },
       { label: "Production orders", href: "/production/orders", permission: "production.work_order.view" },
-      { label: "Daily log", href: "/production/today", permission: "production.daily_log.view" },
+      { label: "Today's count", href: "/production/today", permission: "production.daily_log.view" },
       { label: "Rejects", href: "/production/defects", permission: "production.daily_log.view" },
-      { label: "New order", href: "/production/orders/new", permission: "production.work_order.create" },
       // ADR-080 G3: the one-page check of finished batches; lots waiting for QA are under Quality → QA queue.
       { label: "Quality check", href: "/quality/check", permission: "quality.disposition.view" },
       ...inSection("Receiving", [
@@ -158,7 +157,6 @@ export const NAV: NavGroup[] = [
     description: "Orders, deliveries and payments",
     items: [
       { label: "Customer orders", href: "/sales", permission: "sales.sales_order.view" },
-      { label: "New order", href: "/sales/new", permission: "sales.sales_order.create" },
       { label: "Customers", href: "/sales/customers", permission: "masterdata.customer.view" },
       { label: "Order board", href: "/sales/board", permission: "sales.sales_order.view" },
       ...inSection("Quotes, prices & returns", [
@@ -265,13 +263,12 @@ export function productionItems(persona: ProductionPersona): NavItem[] {
   if (persona === "operator")
     return [
       { label: "My work", href: "/production/orders", permission: "production.work_order.view" },
-      { label: "Daily log", href: "/production/today", permission: "production.daily_log.view" },
+      { label: "Today's count", href: "/production/today", permission: "production.daily_log.view" },
     ];
   return [
     { label: "Production orders", href: "/production/orders", permission: "production.work_order.view" },
-    { label: "Daily log", href: "/production/today", permission: "production.daily_log.view" },
+    { label: "Today's count", href: "/production/today", permission: "production.daily_log.view" },
     { label: "Rejects", href: "/production/defects", permission: "production.daily_log.view" },
-    { label: "New order", href: "/production/orders/new", permission: "production.work_order.create" },
   ];
 }
 
@@ -362,7 +359,7 @@ export function tabsFor(can: Can, roles: readonly string[]): Tab[] {
   const scan: Tab = { label: "Scan", href: "/inventory/scan", icon: "scan", permission: "inventory.lot.view" };
   const tabs: Tab[] =
     persona === "operator"
-      ? [home, { label: "My work", href: "/production/orders", icon: "factory", permission: "production.work_order.view" }, { label: "Daily log", href: "/production/today", icon: "today", permission: "production.daily_log.view" }, scan, menu]
+      ? [home, { label: "My work", href: "/production/orders", icon: "factory", permission: "production.work_order.view" }, { label: "Today's count", href: "/production/today", icon: "today", permission: "production.daily_log.view" }, scan, menu]
       : persona === "warehouse"
         ? [home, { label: "Receive", href: "/inventory/receive", icon: "receive", permission: "procurement.goods_receipt.create" }, scan, inventory, menu]
         : persona === "qa"

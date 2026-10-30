@@ -1,6 +1,6 @@
 /**
  * ADR-081 (five destinations) and ADR-080 §11 (per role): the menu is Home, Operations, Inventory,
- * Sales & Customers, Management, filtered by permission. Operators get "My work" and "Daily log"; the old
+ * Sales & Customers, Management, filtered by permission. Operators get "My work" and "Today's count"; the old
  * production screens sit in a collapsed Advanced section; Production setup lives in Management; the
  * tab bar has at most five tabs and never shows "Batches" or a bare "Orders".
  */
@@ -55,7 +55,7 @@ describe("five destinations", () => {
 describe("production tabs per role (ADR-080 §11)", () => {
   it("operators (ADR-083): only My work and Daily log in Operations, Stock and Scan in Inventory, no sections", () => {
     expect(productionPersona(canFor("production_operator"), ["production_operator"])).toBe("operator");
-    expect(main("production_operator")).toEqual(["My work", "Daily log"]);
+    expect(main("production_operator")).toEqual(["My work", "Today's count"]);
     expect(groupSections(group("production_operator", "Operations")!).sections).toEqual([]);
     expect(main("production_operator", "Inventory")).toEqual(["Stock", "Scan"]);
     expect(main("production_operator", "Home")).not.toContain("Problems & alerts");
@@ -69,7 +69,7 @@ describe("production tabs per role (ADR-080 §11)", () => {
 
   it("planner, site manager and owner: Production orders, Today, Rejects, New order", () => {
     for (const r of ["production_planner", "site_manager", "owner_director"]) {
-      expect(main(r)).toEqual(expect.arrayContaining(["Operations Center", "Production orders", "Daily log", "Rejects", "New order"]));
+      expect(main(r)).toEqual(expect.arrayContaining(["Operations Center", "Production orders", "Today's count", "Rejects"]));
       expect(section(r, "Operations", ADVANCED)).toEqual([]); // ADR-085: no "Older screens" in Operations
       expect(section(r, "Management", ADVANCED)).toEqual(expect.arrayContaining(["Production plan (weeks ahead)", "All batches and their records"]));
     }
@@ -102,8 +102,8 @@ describe("production tabs per role (ADR-080 §11)", () => {
 });
 
 describe("bottom tab bar (phone and iPad portrait) per role", () => {
-  it("operator: Home · My work · Daily log · Scan · Menu", () => {
-    expect(tabs("production_operator").map((t) => t.label)).toEqual(["Home", "My work", "Daily log", "Scan", "Menu"]);
+  it("operator: Home · My work · Today's count · Scan · Menu", () => {
+    expect(tabs("production_operator").map((t) => t.label)).toEqual(["Home", "My work", "Today's count", "Scan", "Menu"]);
   });
 
   it("warehouse: Home · Receive · Scan · Inventory · Menu", () => {
