@@ -1,3 +1,4 @@
+const autoConfirm = require('./auto-confirm.cjs');
 /* Full client-demo rehearsal against the running production build.
  * Run: NODE_PATH=$(npm root -g) node rehearsal.cjs
  * Requires a fresh seed. Fails loudly on assertion errors, error pages, console errors and failed requests.
@@ -29,6 +30,7 @@ function log(...a) {
 let browser;
 async function asUser(email, viewport = DESK, extra = {}) {
   const context = await browser.newContext({ viewport, deviceScaleFactor: 1, locale: 'en-PH', timezoneId: 'Asia/Manila', ...extra });
+  await context.addInitScript(autoConfirm);
   const page = await context.newPage();
   const tag = email.split('@')[0];
   const watch = (p) => {

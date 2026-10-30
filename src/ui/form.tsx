@@ -1,6 +1,6 @@
 "use client";
 import { useFormStatus } from "react-dom";
-import { useActionState, useRef, type ComponentProps, type MouseEvent, type ReactNode } from "react";
+import { useActionState, useRef, useState, type ComponentProps, type MouseEvent, type ReactNode } from "react";
 import type { ActionState } from "@/lib/errors";
 import { Button, cx, type ButtonVariant } from "./core";
 import { WhoCanHelp } from "./who-can-help";
@@ -97,7 +97,7 @@ export function ActionForm<S extends ActionState = ActionState>({
   pending?: string;
   variant?: ButtonVariant;
   size?: "sm" | "md" | "lg";
-  /** Asked with `window.confirm` before submitting; cancelling sends nothing. */
+  /** Asked on the page before submitting ("Yes, continue" / "Back"); going back sends nothing (ADR-083, no browser pop-ups). */
   confirm?: string;
   children?: ReactNode | ((fieldErrors: Record<string, string>) => ReactNode);
   /** Replaces the default layout classes. */
@@ -108,16 +108,56 @@ export function ActionForm<S extends ActionState = ActionState>({
   const [state, dispatch] = useInPlaceAction<S>(action);
   const fe = state?.fieldErrors ?? {};
   const message = <FormMessage state={state} />;
+  const formRef = useRef<HTMLFormElement>(null);
+  // In-page confirmation: the first submit only asks; "Yes" submits for real (the browser still validates the fields first).
+  const [asking, setAsking] = useState(false);
+  const confirmed = useRef(false);
   return (
-    <form action={dispatch} className={className} onSubmit={(e) => confirm && !window.confirm(confirm) && e.preventDefault()}>
+    <form
+      ref={formRef}
+      action={dispatch}
+      className={className}
+      onSubmit={(e) => {
+        if (!confirm) return;
+        if (confirmed.current) {
+          confirmed.current = false;
+          setAsking(false);
+          return;
+        }
+        e.preventDefault();
+        setAsking(true);
+      }}
+    >
       {Object.entries(hidden).map(([k, v]) => (v ? <input key={k} type="hidden" name={k} value={v} /> : null))}
       {typeof children === "function" ? children(fe) : children}
       {!messageBelow && message}
-      <div>
-        <SubmitButton variant={variant} size={size} pendingText={pending}>
-          {submit}
-        </SubmitButton>
-      </div>
+      {asking ? (
+        <div role="alertdialog" aria-label="Please confirm" className="flex flex-col gap-3 rounded-[14px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3.5">
+          <p className="text-[14px] font-medium text-fg">{confirm}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={variant === "danger" ? "danger" : "cta"}
+              size={size}
+              onClick={() => {
+                confirmed.current = true;
+                formRef.current?.requestSubmit();
+              }}
+            >
+              Yes, continue
+            </Button>
+            <Button type="button" variant="secondary" size={size} onClick={() => setAsking(false)}>
+              Back
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <SubmitButton variant={variant} size={size} pendingText={pending}>
+            {submit}
+          </SubmitButton>
+        </div>
+      )}
       {messageBelow && message}
     </form>
   );

@@ -1,3 +1,4 @@
+const autoConfirm = require('./auto-confirm.cjs');
 /* Offline capture and replay on a phone-sized device (W4D: US-7-01, US-7-02, US-7-04, US-7-06;
  * docs/testing.md §6 offline.* rows marked E2E in docs/offline-acceptance-checklist.md).
  *
@@ -62,9 +63,11 @@ async function waitFor(fn, label, timeout = 30000) {
 (async () => {
   browser = await chromium.launch({ executablePath: process.env.CHROMIUM || '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
   const desk = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-PH', timezoneId: 'Asia/Manila' });
+  await desk.addInitScript(autoConfirm);
   const mg = await desk.newPage();
   mg.on('dialog', (d) => d.accept());
   const device = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: 'en-PH', timezoneId: 'Asia/Manila', serviceWorkers: 'allow' });
+  await device.addInitScript(autoConfirm);
   let dev = await device.newPage();
   dev.on('dialog', (d) => d.accept());
   const label = `E2E counting phone ${Date.now().toString(36)}`;

@@ -1,3 +1,4 @@
+const autoConfirm = require('./auto-confirm.cjs');
 /* In-place action regression check (ADR-043, docs/ux-system.md "Rules: 5.8a").
  * Every action is taken right after a client-side navigation and must show its result AND the
  * re-rendered page within 10 s, with no reload: receipts, counts, adjustments, QA inspection and
@@ -14,6 +15,7 @@ let browser;
 
 async function asUser(email) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-PH', timezoneId: 'Asia/Manila' });
+  await context.addInitScript(autoConfirm);
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));

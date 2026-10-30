@@ -1,3 +1,4 @@
+const autoConfirm = require('./auto-confirm.cjs');
 /* W3A e2e (US-5-02, US-5-03, US-5-16): owner overview, area dashboards, KPI records and the trends
  * page on desktop (1440 px) and phone (390 px). Requires a fresh demo seed (pnpm db:reset), which
  * includes the W3A month and its snapshots.
@@ -17,6 +18,7 @@ function assert(cond, msg) {
 
 async function signIn(browser, email, viewport) {
   const context = await browser.newContext({ viewport, locale: 'en-PH', timezoneId: 'Asia/Manila' });
+  await context.addInitScript(autoConfirm);
   const page = await context.newPage();
   const tag = `${email.split('@')[0]}@${viewport.width}`;
   page.on('console', (m) => {
