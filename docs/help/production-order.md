@@ -68,6 +68,6 @@ A production order says what to make, how many and by when. You follow it on one
 1. Open **Operations → Rejects** to see good pieces and rejects per product and day, and the reject rate by type.
 2. The **Daily log** and **Batches** tabs of an order show the same numbers for that order.
 
-## Older screens
+## Planning tools
 
-The detailed screens (production plan, detailed work orders and board, the full batch record, materials by scan) are under **Operations → Older screens**. You do not need them for daily work.
+The detailed screens (production plan, detailed work orders and board, the full batch record, materials by scan) are under **Management → Planning tools** for planners and the owner. You do not need them for daily work.

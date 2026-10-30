@@ -261,12 +261,12 @@ export function Scanner({
           </div>
           {cameraState === "denied" && (
             <p role="alert" className="rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
-              Camera access is off. Use the keyboard scanner or type the code.
+              Camera access is off. Type the lot number or the material name instead.
             </p>
           )}
           {cameraState === "unavailable" && (
             <p role="alert" className="rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
-              The camera could not be opened on this device. Use the keyboard scanner or type the code.
+              The camera could not be opened on this device. Type the lot number or the material name instead.
             </p>
           )}
         </div>

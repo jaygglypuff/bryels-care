@@ -33,7 +33,7 @@ export function ScanClient() {
   return (
     <div className="space-y-4">
       <Card>
-        <Scanner onScan={onScan} pending={pending} />
+        <Scanner onScan={onScan} pending={pending} placeholder="Scan a label, or type a lot number or a material name (e.g. coconut)" />
         {offline && (
           <p role="alert" className="mt-3 rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
             You&apos;re offline. Look-ups need a connection; scan again when you&apos;re back online.

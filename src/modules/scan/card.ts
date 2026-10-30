@@ -49,7 +49,68 @@ export type ScanCard =
       } | null;
       actions: ScanAction[];
     }
-  | { outcome: "not_found" | "not_recognised" | "not_supported" | "rate_limited" | "forbidden"; payload: string; message: string };
+  | {
+      outcome: "not_found" | "not_recognised" | "not_supported" | "rate_limited" | "forbidden";
+      payload: string;
+      message: string;
+      /** ADR-085: "Did you mean…" — lots whose number, supplier lot or item name contains every typed word. */
+      matches?: KeywordMatch[];
+    };
+
+export type KeywordMatch = { title: string; detail: string; href: string };
+
+const MATCH_LIMIT = 8;
+const KEYWORD_STATUS: Record<string, string> = { quarantine: "waiting for QA", on_hold: "on quality hold", rejected: "rejected", expired: "expired", recalled: "recalled", released: "ready to use" };
+
+/**
+ * Keyword look-up (ADR-085, consultant review): lots at the caller's sites whose lot number, supplier lot,
+ * paper number, material/product name or code, or supplier name contains EVERY typed word (case does
+ * not matter). Lots with stock first, then the earliest expiry. Read-only; site-scoped like every look-up.
+ */
+export async function keywordMatches(ctx: AuthContext, text: string): Promise<KeywordMatch[]> {
+  ctx.require("inventory.lot.view");
+  const words = text
+    .toLowerCase()
+    .split(/[\s,;/]+/)
+    .map((w) => w.replace(/[%_\\]/g, ""))
+    .filter((w) => w.length >= 2)
+    .slice(0, 5);
+  if (words.length === 0) return [];
+  const conds = words.map((w) => {
+    const like = `%${w}%`;
+    return sql`(${inventoryLots.lotNumber} ilike ${like} or coalesce(${inventoryLots.supplierLotNumber}, '') ilike ${like} or coalesce(${inventoryLots.legacyNumber}, '') ilike ${like} or coalesce(${inventoryLots.supplierName}, '') ilike ${like} or coalesce(${materials.name}, '') ilike ${like} or coalesce(${materials.code}, '') ilike ${like} or coalesce(${products.name}, '') ilike ${like} or coalesce(${products.skuCode}, '') ilike ${like})`;
+  });
+  const onHand = sql<string>`coalesce((select sum(b.qty_base) from inventory_balances b where b.lot_id = ${inventoryLots.id}), 0)::text`;
+  const rows = await db
+    .select({
+      id: inventoryLots.id,
+      lotNumber: inventoryLots.lotNumber,
+      status: inventoryLots.qualityStatus,
+      expiresOn: inventoryLots.expiresOn,
+      baseUom: inventoryLots.baseUom,
+      siteId: inventoryLots.siteId,
+      name: sql<string>`coalesce(${materials.name}, ${products.name}, '')`,
+      onHand,
+    })
+    .from(inventoryLots)
+    .leftJoin(materials, eq(materials.id, inventoryLots.materialId))
+    .leftJoin(products, eq(products.id, inventoryLots.productId))
+    .where(and(eq(inventoryLots.organizationId, ctx.organizationId), inArray(inventoryLots.siteId, ctx.allowedSiteIds), ...conds))
+    .orderBy(sql`(${onHand})::numeric > 0 desc`, sql`${inventoryLots.expiresOn} asc nulls last`, inventoryLots.lotNumber)
+    .limit(MATCH_LIMIT);
+  const multi = ctx.allowedSites.length > 1;
+  return rows.map((r) => {
+    const qty = D(r.onHand);
+    const site = multi ? ctx.allowedSites.find((x) => x.id === r.siteId)?.code : null;
+    const parts = [
+      qty.gt(0) ? `${r.baseUom === "g" ? fmtMass(r.onHand) : fmtQty(r.onHand, r.baseUom)} in stock` : "none left",
+      KEYWORD_STATUS[r.status] ?? r.status.replace(/_/g, " "),
+      r.expiresOn ? `expires ${fmtDate(r.expiresOn)}` : null,
+      site,
+    ].filter(Boolean);
+    return { title: `${r.name} · lot ${r.lotNumber}`, detail: parts.join(" · "), href: `/inventory/${r.id}` };
+  });
+}
 
 const STATUS_WORDS: Record<string, string> = { quarantine: "quarantined", on_hold: "on QA hold", rejected: "rejected", expired: "expired", recalled: "recalled", released: "released" };
 const LABEL_WORD: Record<string, string> = { quarantine: "QUARANTINE", released: "RELEASED", on_hold: "ON HOLD", rejected: "REJECTED", expired: "EXPIRED", recalled: "RECALLED" };
@@ -399,7 +460,16 @@ export async function resolveScanCard(ctx: AuthContext, raw: string): Promise<Sc
   const p = parseScan(raw);
   const payload = p.kind === "typed" ? p.payload : p.kind === "untyped" ? p.value : p.input;
   if (!(await limitScanLookup(ctx.organizationId, ctx.userId)).allowed) return { outcome: "rate_limited", payload, message: "Too many look-ups in a minute. Wait a moment, then scan again." };
-  if (p.kind === "invalid") return { outcome: "not_recognised", payload, message: invalidScanMessage(p) };
+  if (p.kind === "invalid") {
+    // Typed words ("coconut oil") are not a label: search by keyword instead of refusing (ADR-085).
+    if (p.reason === "grammar" && !String(raw).trim().toUpperCase().startsWith("BC:")) {
+      const matches = await keywordMatches(ctx, String(raw));
+      return matches.length
+        ? { outcome: "not_found", payload, message: `No label matches "${String(raw).trim()}". Did you mean one of these?`, matches }
+        : { outcome: "not_found", payload, message: `Nothing matches "${String(raw).trim()}". Try fewer words, part of the lot number, or the material name.` };
+    }
+    return { outcome: "not_recognised", payload, message: invalidScanMessage(p) };
+  }
 
   try {
     if (p.kind === "typed") {
@@ -431,7 +501,9 @@ export async function resolveScanCard(ctx: AuthContext, raw: string): Promise<Sc
     if (doc) return doc;
     const r = await resolveScan(ctx, p.value);
     if (r.ok) return { outcome: "found", payload, entity: "record", caption: r.label.split(" ")[0], identifier: p.value, title: r.label, facts: [], actions: [{ key: "open", label: `Open ${r.label.toLowerCase()}`, href: r.href, allowed: true, primary: true }] };
-    return { outcome: "not_found", payload, message: `Nothing matches "${p.value}" at your sites. Check the label, or type the lot, batch, order or document number.` };
+    const matches = await keywordMatches(ctx, String(raw));
+    if (matches.length) return { outcome: "not_found", payload, message: `No exact match for "${String(raw).trim()}". Did you mean one of these?`, matches };
+    return { outcome: "not_found", payload, message: `Nothing matches "${String(raw).trim()}". Try fewer words, part of the lot number, or the material name.` };
   } catch (e) {
     if (e instanceof DomainError && e.code === "not_found") return notFound(payload, "record", ctx);
     throw e;

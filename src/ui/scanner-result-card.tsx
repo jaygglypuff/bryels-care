@@ -17,11 +17,24 @@ export function ScanResultCard({ card, onScanAgain }: { card: ScanCard; onScanAg
         <div className="flex items-start gap-3">
           <SearchX size={24} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" />
           <div className="min-w-0">
-            <p className="font-semibold">{card.outcome === "not_recognised" ? "Not recognised" : card.outcome === "not_found" ? "Not found" : card.outcome === "rate_limited" ? "Slow down" : card.outcome === "forbidden" ? "No access" : "Recognised"}</p>
+            <p className="font-semibold">{card.matches?.length ? "Did you mean…" : card.outcome === "not_recognised" ? "Not recognised" : card.outcome === "not_found" ? "Not found" : card.outcome === "rate_limited" ? "Slow down" : card.outcome === "forbidden" ? "No access" : "Recognised"}</p>
             <p className="mt-0.5 text-[14px] text-fg-2">{card.message}</p>
-            {card.payload && <p className="mt-1 break-all font-mono text-[12px] text-muted"><Chip tone={tone}>Scanned</Chip> {card.payload}</p>}
+            {card.payload && !card.matches?.length && <p className="mt-1 break-all font-mono text-[12px] text-muted"><Chip tone={tone}>Scanned</Chip> {card.payload}</p>}
           </div>
         </div>
+        {/* ADR-085: typed words list the lots that match; tap one to open it. */}
+        {card.matches && card.matches.length > 0 && (
+          <ul className="mt-3 divide-y divide-line rounded-[14px] border border-line" data-testid="scan-matches">
+            {card.matches.map((m) => (
+              <li key={m.href}>
+                <Link href={m.href} className="flex min-h-[56px] flex-col justify-center gap-0.5 px-3.5 py-2.5 hover:bg-surface-2">
+                  <span className="text-[15px] font-medium text-fg">{m.title}</span>
+                  <span className="text-[13px] text-fg-2">{m.detail}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
         {onScanAgain && (
           <div className="mt-4">
             <button type="button" onClick={onScanAgain} className={buttonClass("secondary")}>Scan again</button>

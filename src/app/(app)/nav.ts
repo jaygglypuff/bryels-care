@@ -24,7 +24,8 @@ export type QuickAction = { label: string; href: string; icon: string; permissio
 /** Live counts shown as a badge on the matching tab and menu entry (keyed by href). */
 export type NavBadges = Partial<Record<string, number>>;
 
-export const ADVANCED = "Older screens";
+/** ADR-085: the former "Older screens" — planning tools for planners and the owner, in Management. */
+export const ADVANCED = "Planning tools";
 
 /** The most common actions, one tap away on the Operations Center ("Quick links" of the mockup board). */
 export const QUICK_ACTIONS: QuickAction[] = [
@@ -48,12 +49,12 @@ const SETUP_ITEMS: NavItem[] = [
 
 /** The old detailed production screens, collapsed under "Advanced" (ADR-080 §11). */
 const ADVANCED_ITEMS: NavItem[] = [
-  { label: "Production plan", href: "/production/plan", permission: "production.production_plan.view", section: ADVANCED },
-  { label: "Work orders (detailed)", href: "/production/work-orders", permission: "production.work_order.view", section: ADVANCED },
-  { label: "Board (detailed)", href: "/production/board", permission: "production.work_order.view", section: ADVANCED },
-  { label: "Batches (full record)", href: "/production", permission: "production.batch.view", section: ADVANCED },
-  { label: "Materials by scan", href: "/production/staging", permission: "inventory.movement.post", section: ADVANCED },
-  { label: "New batch without an order", href: "/production/new", permission: "production.batch.create", section: ADVANCED },
+  { label: "Production plan (weeks ahead)", href: "/production/plan", permission: "production.production_plan.view", section: ADVANCED },
+  { label: "All batches and their records", href: "/production", permission: "production.batch.view", section: ADVANCED },
+  { label: "Production orders, full detail", href: "/production/work-orders", permission: "production.work_order.view", section: ADVANCED },
+  { label: "Production board, full detail", href: "/production/board", permission: "production.work_order.view", section: ADVANCED },
+  { label: "Get materials by scanning", href: "/production/staging", permission: "inventory.movement.post", section: ADVANCED },
+  { label: "Make a batch without an order", href: "/production/new", permission: "production.batch.create", section: ADVANCED },
 ];
 
 const inSection = (section: string, items: NavItem[]): NavItem[] => items.map((i) => ({ ...i, section }));
@@ -123,7 +124,6 @@ export const NAV: NavGroup[] = [
         { label: "Maintenance work orders", href: "/maintenance/work-orders", permission: "maintenance.work_order.view" },
         { label: "Spare parts", href: "/maintenance/spare-parts", permission: "maintenance.spare_part.view" },
       ]),
-      ...ADVANCED_ITEMS,
     ],
   },
   {
@@ -206,6 +206,7 @@ export const NAV: NavGroup[] = [
         { label: "Tax configuration", href: "/finance/tax", permission: "finance.tax_config.view" },
       ]),
       ...inSection("Production setup", SETUP_ITEMS),
+      ...ADVANCED_ITEMS,
       ...inSection("Master data", [
         { label: "Materials", href: "/masterdata/materials", permission: "masterdata.material.view" },
         { label: "Products", href: "/masterdata/products", permission: "masterdata.product.view" },

@@ -70,7 +70,8 @@ describe("production tabs per role (ADR-080 §11)", () => {
   it("planner, site manager and owner: Production orders, Today, Rejects, New order", () => {
     for (const r of ["production_planner", "site_manager", "owner_director"]) {
       expect(main(r)).toEqual(expect.arrayContaining(["Operations Center", "Production orders", "Daily log", "Rejects", "New order"]));
-      expect(section(r, "Operations", ADVANCED)).toEqual(expect.arrayContaining(["Production plan", "Work orders (detailed)", "Board (detailed)"]));
+      expect(section(r, "Operations", ADVANCED)).toEqual([]); // ADR-085: no "Older screens" in Operations
+      expect(section(r, "Management", ADVANCED)).toEqual(expect.arrayContaining(["Production plan (weeks ahead)", "All batches and their records"]));
     }
   });
 

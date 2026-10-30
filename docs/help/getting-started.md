@@ -81,7 +81,7 @@ Tip: when a button is missing or a step says it needs someone else, the message 
 
 1. Open **Operations → Quality check**. Review the batch record and the finished-product inspection.
 2. Choose **Release** (pass). The finished goods can now be sold and the order shows **Done**.
-3. On the batch (**Operations → Older screens → Batches (full record)**), open **Close the batch and paper pages** and close the batch. The final batch record (BMR) can be printed.
+3. On the batch (open the production order, then tap the batch number; or **Management → Planning tools → All batches and their records**), open **Close the batch and paper pages** and close the batch. The final batch record (BMR) can be printed.
 
 ## 12. Sell and ship
 

@@ -79,9 +79,11 @@ describe("scan result card (US-2-13)", () => {
     expect(c.siteCode).toBe("RVS");
   });
 
-  it("scan.rejects_url and unknown strings are 'not recognised'; unknown boxes and equipment are 'not found'", async () => {
+  it("scan.rejects_url; typed words are searched (ADR-085) and say 'not found' when nothing matches; unknown boxes and equipment are 'not found'", async () => {
     expect((await resolveScanCard(whNfd, "https://evil.example/BC:LOT:L-1")).outcome).toBe("not_recognised");
-    expect((await resolveScanCard(whNfd, "hello world")).outcome).toBe("not_recognised");
+    const words = await resolveScanCard(whNfd, "hello world");
+    expect(words.outcome).toBe("not_found");
+    expect(words.outcome === "not_found" && (words.matches ?? []).length).toBe(0);
     expect((await resolveScanCard(whNfd, "BC:BOX:BX-1")).outcome).toBe("not_found");
     expect((await resolveScanCard(whNfd, "BC:EQP:NOPE-01")).outcome).toBe("not_found");
     expect((await resolveScanCard(whNfd, "BC:LOT:NOPE-1")).outcome).toBe("not_found");
@@ -171,7 +173,7 @@ describe("scan result card (US-2-13)", () => {
     const fresh = new AuthContext(randomUUID(), orgId, "x", "x", ["test"], new Set(["inventory.lot.view"]), [nfd], nfd.id);
     const results: string[] = [];
     for (let i = 0; i < 121; i++) results.push((await resolveScanCard(fresh, `NOT A CODE ${i}`)).outcome);
-    expect(results.slice(0, 120).every((o) => o === "not_recognised")).toBe(true);
+    expect(results.slice(0, 120).every((o) => o !== "rate_limited")).toBe(true);
     expect(results[120]).toBe("rate_limited");
   });
 });
