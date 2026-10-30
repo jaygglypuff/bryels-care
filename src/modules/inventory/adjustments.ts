@@ -20,6 +20,7 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
+import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { assertReasonCode } from "@/modules/masterdata";
 import { postMovement } from "./ledger";
 import { isUuid } from "./lots";
@@ -500,3 +501,27 @@ export async function getAdjustment(ctx: AuthContext, id: string) {
 }
 
 export type AdjustmentDetail = Awaited<ReturnType<typeof getAdjustment>>;
+
+/**
+ * Deletes a stock adjustment that is a never-submitted draft (ADR-075), with its lines. Nothing has
+ * posted: stock only moves when an approved adjustment is posted. The person who drafted it
+ * (inventory.adjustment.create) or an approver (inventory.adjustment.approve) at the site.
+ * Audit inventory.stock_adjustment.deleted with the draft and lines in `before`.
+ */
+export async function deleteDraftAdjustment(ctx: AuthContext, id: string) {
+  return db.transaction(async (tx) => {
+    const a = await lockAdjustment(tx, ctx, id);
+    const what = `Adjustment ${a.adjustmentNumber}`;
+    assertMayDeleteDraft(ctx, { create: "inventory.adjustment.create", manage: ["inventory.adjustment.approve"] }, a.createdBy, a.siteId);
+    assertNeverSubmittedDraft(what, a.status === "draft", a.submittedAt);
+    const lines = await tx.select().from(stockAdjustmentLines).where(eq(stockAdjustmentLines.stockAdjustmentId, a.id));
+    await hardDeleteDraft(tx, ctx, {
+      table: "stock_adjustments",
+      id: a.id,
+      what,
+      children: [{ table: "stock_adjustment_lines", column: "stock_adjustment_id" }],
+      audit: { action: "inventory.stock_adjustment.deleted", entityType: "stock_adjustment", entityNumber: a.adjustmentNumber, siteId: a.siteId, before: { ...a, lines } },
+    });
+    return { deleted: a.adjustmentNumber };
+  });
+}

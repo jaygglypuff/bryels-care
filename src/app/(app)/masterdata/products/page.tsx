@@ -113,7 +113,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         <AddCard title="Add a product">
           <ActionForm action={saveProductAction} submitLabel="Create product (draft)" variant="cta">
             <Grid>
-              <TextField name="code" label="Code" placeholder="CCS-100" mono hint="Unique; scan-safe (capital letters, digits, . - _)." />
+              <TextField name="code" label="Code (optional)" placeholder="Automatic, e.g. PRD-0001" mono hint="Leave blank and the system gives the next number." />
               <TextField name="name" label="Name" placeholder="Calamansi Cream Soap 100 g" />
               <SelectField name="family" label="Family" options={families} hint="To add a family, go to Master data → Lists." />
               <TextField name="unitNetMassG" label="Net mass per unit (g)" inputMode="decimal" placeholder="100" />

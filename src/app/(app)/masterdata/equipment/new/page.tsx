@@ -26,8 +26,8 @@ export default async function NewEquipmentPage() {
             </Select>
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Code" htmlFor="code" hint="Printed on the label as BC:EQP:<code>.">
-              <Input id="code" name="code" required className="font-mono uppercase" placeholder="SC-03" />
+            <Field label="Code (optional)" htmlFor="code" hint="Leave blank and the system gives the next number, e.g. EQP-0001. Printed on the label as BC:EQP:<code>.">
+              <Input id="code" name="code" className="font-mono uppercase" placeholder="Automatic" />
             </Field>
             <Field label="Name" htmlFor="name">
               <Input id="name" name="name" required />

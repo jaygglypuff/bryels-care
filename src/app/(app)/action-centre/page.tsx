@@ -3,7 +3,8 @@ import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { ACTION_KINDS, ACTION_TABS, type ActionItemView, listActionItems, refreshActionItems } from "@/modules/action-centre";
 import { listMyNotifications } from "@/modules/platform";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton, PageHeader, buttonClass, cx } from "@/ui/core";
+import { isInternalPath, recordHref } from "@/lib/record-links";
 import { Banner, Chip } from "@/ui/status";
 import { AcknowledgeForm } from "./forms";
 import { registerAppHooks } from "@/modules/wiring";
@@ -43,7 +44,7 @@ function ItemRow({ i }: { i: ActionItemView }) {
         {i.acknowledgementNote && <p className="mt-0.5 text-[12px] text-muted">Note: {i.acknowledgementNote}</p>}
       </div>
       <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-start">
-        <LinkButton href={i.link} size="sm">{i.actionLabel}</LinkButton>
+        <LinkButton href={isInternalPath(i.link) ? i.link : (recordHref(i.entityType, i.entityId) ?? "/action-centre")} size="sm">{i.actionLabel}</LinkButton>
         {!i.acknowledgedAt && <AcknowledgeForm id={i.id} />}
       </div>
     </li>
@@ -114,8 +115,11 @@ export default async function ActionCentrePage({ searchParams }: { searchParams:
                     <Chip tone={(SEV[n.severity as keyof typeof SEV] ?? SEV.info).tone}>{(SEV[n.severity as keyof typeof SEV] ?? SEV.info).label}</Chip>
                     <span className="text-[12px] text-muted">{fmtDateTime(n.createdAt)}</span>
                   </div>
-                  <p className="mt-1 text-[14px]">{n.link ? <Link href={n.link} className="hover:underline">{n.title}</Link> : n.title}</p>
+                  <p className="mt-1 text-[14px]">
+                    <a href={`/notifications/open/${n.id}`} className="text-primary-text hover:underline">{n.title}</a>
+                  </p>
                   <p className="text-[13px] text-muted">{n.body}</p>
+                  <a href={`/notifications/open/${n.id}`} className={cx(buttonClass("primary", "sm"), "mt-2")} aria-label={`Open: ${n.title}`}>Open</a>
                 </li>
               ))}
             </ul>

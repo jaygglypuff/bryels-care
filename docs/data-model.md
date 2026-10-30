@@ -2543,6 +2543,15 @@ pattern contains `{SITE}` (`A-DM-07`).
 | `EXP` | `expense_claims.claim_number` | `EXP-{YY}-{SEQ}` (5) | yearly | P6 |
 | `COST` | `costing_runs.run_number` | `COST-{YYMM}-{SEQ}` (2) | monthly | P6 |
 | `RCN` | `reconciliations.reconciliation_number` | `RCN-{YYMM}-{SEQ}` (2) | monthly | P6 |
+| `MAT` | `materials.code` when left blank (ADR-075) | `MAT-{SEQ}` (4, grows past 9999) | never | P1 |
+| `PRD` | `products.sku_code` when left blank (ADR-075) | `PRD-{SEQ}` (4) | never | P1 |
+| `SUP` | `suppliers.code` when left blank (ADR-075) | `SUP-{SEQ}` (4) | never | P1 |
+| `CUS` | `customers.code` when left blank (ADR-075) | `CUS-{SEQ}` (4) | never | P1 |
+| `LOC` | `locations.code` when left blank (ADR-075) | `LOC-{SEQ}` (4) | never | P1 |
+| `EQP` | `equipment.code` when left blank (ADR-075) | `EQP-{SEQ}` (4) | never | P1 |
+
+Master-data codes (ADR-075, `assignMasterCode`) skip numbers already used by a typed or imported
+code and never raise `NUMBER_OVERFLOW`; a typed code still follows the record's own code rule.
 
 `{SITE}` requires `sites.code ~ '^[A-Z0-9]{1,6}$'` (CHECK on `sites`). Example outputs with
 site `NFD` on 12 October 2026: `B-NFD-261012-001`, `L-2610-00001`, `BX-00000001`,

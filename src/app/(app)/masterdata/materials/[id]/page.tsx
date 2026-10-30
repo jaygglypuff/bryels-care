@@ -4,6 +4,7 @@ import { DomainError } from "@/lib/errors";
 import { MATERIAL_CLASS_LABELS, MATERIAL_TRANSITIONS, getMaterial, lookupLabels, materialFormOptions, uomOptions, type MaterialClass, type MaterialStatus } from "@/modules/masterdata";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Banner } from "@/ui/status";
+import { DeleteDraftCard } from "../../../delete-draft-button";
 import { Forbidden } from "../../../forbidden";
 import { ActionForm, TextField } from "../../_org/form";
 import { materialStatusAction, saveMaterialAction } from "../../_org/actions";
@@ -61,6 +62,9 @@ export default async function MaterialPage({ params, searchParams }: { params: P
             ))}
           </div>
         </Card>
+      )}
+      {!m.inUse && (m.status === "draft" || m.status === "active") && (ctx.can("masterdata.material.edit") || ctx.can("masterdata.material.create")) && (
+        <DeleteDraftCard kind="material" id={m.id} what="material" note="Nothing uses this material yet (no stock, formula, order or supplier link), so you can delete it, for example if it was added by mistake." />
       )}
     </div>
   );

@@ -15,6 +15,7 @@ import {
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
+import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { type ApprovalRuleType, loadApprovalPolicy } from "./approval-policy";
 import { CreateRoutingInput, DecisionInput, RetireInput, SaveRoutingDraftInput, parseInput } from "./schemas";
 import {
@@ -476,4 +477,37 @@ export type RoutingRevisionView = NonNullable<Awaited<ReturnType<typeof getRouti
 export async function routingFormOptions(ctx: AuthContext) {
   requireAny(ctx, ["masterdata.routing.create", "masterdata.routing.edit"]);
   return db.select({ id: products.id, name: products.name, skuCode: products.skuCode }).from(products).where(eq(products.organizationId, ctx.organizationId)).orderBy(asc(products.name));
+}
+
+/**
+ * Deletes a routing revision that is a never-submitted draft (ADR-075), with its steps, step
+ * parameters and checklist items. When it is the routing's only revision the routing goes too.
+ * Creator (masterdata.routing.create) or masterdata.routing.edit. Audit
+ * masterdata.routing_revision.deleted (and masterdata.routing.deleted). Returns the routing id, or
+ * null when the routing was deleted.
+ */
+export async function deleteRoutingDraft(ctx: AuthContext, revisionId: string): Promise<{ routingId: string | null }> {
+  if (!/^[0-9a-f-]{36}$/i.test(revisionId)) throw new DomainError("not_found", "Routing revision not found.");
+  return db.transaction(async (tx) => {
+    const { rev, routing } = await lockRevision(tx, ctx, revisionId);
+    const what = lbl(routing.code, rev.revisionNo);
+    assertMayDeleteDraft(ctx, { create: "masterdata.routing.create", manage: ["masterdata.routing.edit"] }, rev.createdBy, null);
+    assertNeverSubmittedDraft(what, rev.status === "draft", rev.submittedAt);
+    const steps = await tx.select().from(routingSteps).where(eq(routingSteps.routingRevisionId, rev.id));
+    await hardDeleteDraft(tx, ctx, {
+      table: "routing_revisions",
+      id: rev.id,
+      what,
+      children: [
+        { table: "routing_step_parameters", column: "routing_step_id", through: { table: "routing_steps", column: "routing_revision_id" } },
+        { table: "routing_step_checklist_items", column: "routing_step_id", through: { table: "routing_steps", column: "routing_revision_id" } },
+        { table: "routing_steps", column: "routing_revision_id" },
+      ],
+      audit: { action: "masterdata.routing_revision.deleted", entityType: "routing_revision", entityNumber: what, siteId: null, before: { ...rev, steps: steps.map((s) => ({ stepNo: s.stepNo, name: s.name })) } },
+    });
+    const others = await tx.select({ id: routingRevisions.id }).from(routingRevisions).where(eq(routingRevisions.routingId, routing.id)).limit(1);
+    if (others.length) return { routingId: routing.id };
+    await hardDeleteDraft(tx, ctx, { table: "routings", id: routing.id, what: `Routing ${routing.code}`, audit: { action: "masterdata.routing.deleted", entityType: "routing", entityNumber: routing.code, siteId: null, before: routing } });
+    return { routingId: null };
+  });
 }

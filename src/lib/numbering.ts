@@ -19,6 +19,9 @@ export type NumberingRuleSpec = { prefix: string; pattern: string; resetPeriod: 
 
 const yearly = (prefix: string, width: number): NumberingRuleSpec => ({ prefix, pattern: "{PREFIX}-{YY}-{SEQ}", resetPeriod: "yearly", sequenceWidth: width, isGapless: false });
 
+/** Master-data codes (ADR-075): MAT-0001, never reset; past 9999 the number simply grows. */
+const masterCode = (prefix: string): NumberingRuleSpec => ({ prefix, pattern: "{PREFIX}-{SEQ}", resetPeriod: "never", sequenceWidth: 4, isGapless: false });
+
 /** Built-in defaults for the MVP document types (A-PRD-04; output identical to the pre-W2F formats). */
 export const NUMBERING_DEFAULTS = {
   GR: yearly("GR", 5),
@@ -69,6 +72,13 @@ export const NUMBERING_DEFAULTS = {
   RC: { prefix: "RC", pattern: "{PREFIX}-{YYYY}-{SEQ}", resetPeriod: "yearly", sequenceWidth: 2, isGapless: false },
   PM: { prefix: "PM", pattern: "{PREFIX}-{SEQ}", resetPeriod: "never", sequenceWidth: 4, isGapless: false },
   MWO: yearly("MWO", 4),
+  // ADR-075: master-data codes the system assigns when the user leaves the code blank
+  MAT: masterCode("MAT"),
+  PRD: masterCode("PRD"),
+  SUP: masterCode("SUP"),
+  CUS: masterCode("CUS"),
+  LOC: masterCode("LOC"),
+  EQP: masterCode("EQP"),
 } satisfies Record<string, NumberingRuleSpec>;
 
 export type DocumentType = keyof typeof NUMBERING_DEFAULTS;
@@ -169,6 +179,15 @@ export async function effectiveNumberingRule(q: DbOrTx, organizationId: string, 
  * of the command), e.g. GR-26-00012, L-2610-00171, B-26-0012.
  */
 export async function nextNumber(tx: DbOrTx, organizationId: string, documentType: DocumentType, now = new Date()): Promise<string> {
+  const { rule, seq } = await allocateSequence(tx, organizationId, documentType, now);
+  if (String(seq).length > rule.sequenceWidth) {
+    throw new DomainError("conflict", `NUMBER_OVERFLOW: ${documentType} numbers of this period exceed ${rule.sequenceWidth} digits; approve a wider numbering rule.`, { code: "NUMBER_OVERFLOW" });
+  }
+  return formatNumber(rule, seq, now);
+}
+
+/** Row-locked counter increment shared by document numbers and master-data codes. */
+async function allocateSequence(tx: DbOrTx, organizationId: string, documentType: DocumentType, now: Date) {
   if (!isDocumentType(documentType)) throw new DomainError("setup_required", `NUMBERING_RULE_MISSING: no numbering rule for ${String(documentType)}.`, { code: "NUMBERING_RULE_MISSING" });
   const rule = await effectiveNumberingRule(tx, organizationId, documentType, now);
   const pk = periodKeyFor(rule.resetPeriod, now);
@@ -178,11 +197,27 @@ export async function nextNumber(tx: DbOrTx, organizationId: string, documentTyp
     ON CONFLICT (organization_id, document_type, period_key)
     DO UPDATE SET next_value = numbering_rules.next_value + 1, prefix = excluded.prefix, sequence_width = excluded.sequence_width
     RETURNING (next_value - 1)::text AS value`);
-  const seq = Number(rows[0].value);
-  if (String(seq).length > rule.sequenceWidth) {
-    throw new DomainError("conflict", `NUMBER_OVERFLOW: ${documentType} numbers of this period exceed ${rule.sequenceWidth} digits; approve a wider numbering rule.`, { code: "NUMBER_OVERFLOW" });
+  return { rule, seq: Number(rows[0].value) };
+}
+
+/** Master-data code types (ADR-075). */
+export const MASTER_CODE_TYPES = ["MAT", "PRD", "SUP", "CUS", "LOC", "EQP"] as const;
+export type MasterCodeType = (typeof MASTER_CODE_TYPES)[number];
+
+/**
+ * The next free master-data code (MAT-0001, SUP-0002, ...) for a record whose code was left blank.
+ * The counter row of `numbering_rules` stays locked until the caller's transaction ends, so two
+ * creates at the same moment get different codes. `taken` says whether a code is already used
+ * (typed by hand earlier, or imported); such numbers are skipped. Past the width the number
+ * simply grows (MAT-10000): master codes never overflow.
+ */
+export async function assignMasterCode(tx: DbOrTx, organizationId: string, type: MasterCodeType, taken: (code: string) => Promise<boolean>, now = new Date()): Promise<string> {
+  for (let i = 0; i < 10_000; i += 1) {
+    const { rule, seq } = await allocateSequence(tx, organizationId, type, now);
+    const code = formatNumber(rule, seq, now);
+    if (!(await taken(code))) return code;
   }
-  return formatNumber(rule, seq, now);
+  throw new DomainError("conflict", `Could not find a free ${type} code; type a code instead.`, { field: "code" });
 }
 
 /**

@@ -9,6 +9,7 @@ import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { MaskedNote, Money, SalesStatus } from "../../orders/sales-ui";
 import { ConvertQuoteForm, QuoteCommand } from "./commands";
+import { DeleteDraftCard } from "../../../delete-draft-button";
 
 export const metadata = { title: "Quotation" };
 
@@ -163,6 +164,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
             </Card>
           )}
         </div>
+        {q.status === "draft" && (ctx.can("sales.quote.edit") || ctx.can("sales.quote.create")) && <DeleteDraftCard kind="quote" id={q.id} what="quotation" />}
       </div>
     </>
   );

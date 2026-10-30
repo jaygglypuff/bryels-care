@@ -155,7 +155,7 @@ export async function discardFormulaDraftAction(_: ActionState, fd: FormData): P
   try {
     const ctx = await requireContext();
     const r = await discardFormulaDraft(ctx, id(fd));
-    target = `/masterdata/formulas/${r.formulaId}`;
+    target = r.formulaId ? `/masterdata/formulas/${r.formulaId}` : "/masterdata/formulas";
   } catch (e) {
     return toActionState(e);
   }

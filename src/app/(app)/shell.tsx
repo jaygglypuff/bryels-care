@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  Bell, Boxes, ClipboardList, Clock, Database, Factory, FlaskConical, GitBranch, Home, Menu, PackagePlus, ScanLine,
+  Bell, Boxes, ClipboardList, Clock, Database, Factory, FlaskConical, GitBranch, Home, ListChecks, Menu, PackagePlus, ScanLine,
   ScrollText, Settings, ShieldCheck, ShoppingCart, Truck, Warehouse, X,
 } from "lucide-react";
 import type { NavBadges, NavGroup, QuickAction } from "./nav";
@@ -17,7 +17,7 @@ const ICONS: Record<string, React.ReactNode> = {
   home: <Home size={18} />, boxes: <Boxes size={18} />, factory: <Factory size={18} />, shield: <ShieldCheck size={18} />,
   truck: <Truck size={18} />, warehouse: <Warehouse size={18} />, database: <Database size={18} />, settings: <Settings size={18} />, clock: <Clock size={18} />,
   scan: <ScanLine size={19} />, receive: <PackagePlus size={19} />, batch: <FlaskConical size={19} />, qa: <ClipboardList size={19} />,
-  order: <ShoppingCart size={19} />, trace: <GitBranch size={19} />, audit: <ScrollText size={19} />,
+  order: <ShoppingCart size={19} />, trace: <GitBranch size={19} />, audit: <ScrollText size={19} />, approve: <ListChecks size={19} />,
 };
 
 type Props = {
@@ -30,12 +30,29 @@ type Props = {
   qaCount: number | null;
   /** Open, unread in-app notifications of the signed-in user (US-2-03). */
   unreadCount: number;
+  /** ADR-075: approvals waiting for the signed-in user (the "To approve" badge). */
+  approvalCount?: number;
   switchSite: (fd: FormData) => Promise<void>;
   signOut: () => Promise<void>;
   /** Demo mode (ADR-055): the strip above the top bar; `canReset` adds the owner's reset link. Null outside the demo. */
   demo?: { canReset: boolean; sandbox?: boolean } | null;
   children: React.ReactNode;
 };
+
+/** "Draft deleted." after a delete redirected here with ?deleted=1 (ADR-075); read from the URL after navigation. */
+function DeletedNotice({ pathname }: { pathname: string }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => setShow(new URLSearchParams(window.location.search).get("deleted") === "1"), [pathname]);
+  if (!show) return null;
+  return (
+    <div role="status" className="mb-4 flex items-center justify-between gap-3 rounded-[14px] border border-line bg-surface px-4 py-3 text-[14px]">
+      <span>Draft deleted. A copy is kept in the audit log.</span>
+      <button type="button" onClick={() => setShow(false)} className="min-h-[44px] px-2 text-primary-text" aria-label="Dismiss">
+        <X size={16} />
+      </button>
+    </div>
+  );
+}
 
 /** Small count badge (QA queue); hidden at zero. */
 function CountBadge({ n, className }: { n: number | undefined; className?: string }) {
@@ -54,7 +71,7 @@ function matchLen(pathname: string, href: string) {
   return -1;
 }
 
-export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, unreadCount, switchSite, signOut, demo = null, children }: Props) {
+export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, unreadCount, approvalCount = 0, switchSite, signOut, demo = null, children }: Props) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   useEffect(() => setDrawer(false), [pathname]);
@@ -73,7 +90,7 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
   const groupHref = (g: NavGroup) => g.items.find((i) => !i.planned)?.href ?? "#";
   const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
   const site = sites.find((s) => s.id === currentSiteId);
-  const badges: NavBadges = qaCount ? { "/quality": qaCount } : {};
+  const badges: NavBadges = { ...(qaCount ? { "/quality": qaCount } : {}), ...(approvalCount ? { "/approvals": approvalCount } : {}) };
   const withCount = (label: string, href: string) => (badges[href] ? `${label}, ${badges[href]} open` : label);
 
   const siteSwitcher = (
@@ -134,6 +151,19 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
               <ScanLine size={18} />
             </Link>
             <SyncChip userId={user.id} />
+            {/* ADR-075: "To approve" is always one tap away, with the number waiting for this user. */}
+            <Link
+              href="/approvals"
+              className={cx("relative flex h-10 items-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium text-fg-2 shadow-[var(--shadow-card)] hover:text-fg", pathname.startsWith("/approvals") && "text-primary-text")}
+              aria-label={`To approve, ${approvalCount} waiting`}
+              title="To approve"
+            >
+              <ListChecks size={18} />
+              <span className="hidden md:inline">To approve</span>
+              {approvalCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full bg-[#c62828] px-1 text-[10px] font-semibold leading-[18px] text-white">{approvalCount > 99 ? "99+" : approvalCount}</span>
+              )}
+            </Link>
             <Link href="/notifications" className="relative grid size-10 place-items-center rounded-full bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg" aria-label={`Notifications, ${unreadCount} unread`} title="Notifications">
               <Bell size={18} />
               {unreadCount > 0 && (
@@ -206,7 +236,10 @@ export function Shell({ nav, quickActions, user, sites, currentSiteId, qaCount, 
           </div>
           <SignOutButton signOut={signOut} variant="rail" />
         </aside>
-        <main className="min-w-0 flex-1 py-5 sm:py-7">{children}</main>
+        <main className="min-w-0 flex-1 py-5 sm:py-7">
+          <DeletedNotice pathname={pathname} />
+          {children}
+        </main>
       </div>
 
       {/* Phone bottom tab bar */}

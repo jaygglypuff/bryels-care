@@ -8,6 +8,7 @@ import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/co
 import { Forbidden } from "../../../../../forbidden";
 import { decideRoutingAction, retireRoutingAction, submitRoutingAction, withdrawRoutingAction } from "../../../../_eng/actions";
 import { CommandForm, DecisionForm } from "../../../../_eng/forms";
+import { DeleteDraftButton } from "../../../../../delete-draft-button";
 import { ApprovalPanel, EffectiveRange, VerifyBanner, VersionChip } from "../../../../_eng/ui";
 import { RoutingStepEditor, type StepDraft } from "./step-editor";
 
@@ -160,6 +161,7 @@ export default async function RoutingRevisionPage({ params }: { params: Promise<
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             {v.can.submit && <CommandForm action={submitRoutingAction} hidden={{ id: r.id }} label="Submit for approval" variant="cta" confirmText="Save the draft first. A sequencing-only change needs one site manager approval; any other change needs QA and a site manager or owner." />}
             {v.can.withdraw && <CommandForm action={withdrawRoutingAction} hidden={{ id: r.id }} label="Withdraw to draft" variant="secondary" />}
+            {v.can.edit && r.status === "draft" && !r.submittedAt && <DeleteDraftButton kind="routing_revision" id={r.id} what="this draft revision and its steps (a routing with no other revision is removed too)" />}
             {v.can.retire && <CommandForm action={retireRoutingAction} hidden={{ id: r.id }} label="Retire revision" variant="danger" reasonLabel="Reason for retiring" />}
           </div>
         </Card>

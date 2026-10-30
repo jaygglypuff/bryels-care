@@ -10,6 +10,7 @@ import { ActionForm, Grid, SelectField, TextField } from "../../_org/form";
 import { productStatusAction, saveProductAction, saveSkuAction } from "../../_org/actions";
 import { ReadOnlyNote, StateChip } from "../../_org/ui";
 import { SkuFields } from "./sku-fields";
+import { DeleteDraftCard } from "../../../delete-draft-button";
 
 export const metadata = { title: "Product" };
 
@@ -103,6 +104,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
           </div>
         </Card>
       )}
+      {p.status === "draft" && (ctx.can("masterdata.product.edit") || ctx.can("masterdata.product.create")) && <DeleteDraftCard kind="product" id={p.id} what="product" note="This product is still a draft. If nothing uses it yet (no formula, batch, order or stock), you can delete it together with its SKUs." />}
     </div>
   );
 }

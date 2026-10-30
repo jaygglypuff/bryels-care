@@ -125,7 +125,8 @@ export const AddressSchema = z.object({
 
 /** Structured customer form (US-4-01). */
 export const CustomerCreateSchema = z.object({
-  code: CustomerSchema.shape.code,
+  /** ADR-075: blank = the next CUS-nnnn is assigned. */
+  code: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? null : v), CustomerSchema.shape.code.nullable().optional()),
   name: CustomerSchema.shape.name,
   status: z.enum(["prospect", "active"]).default("active"),
   segment: z

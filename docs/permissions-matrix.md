@@ -103,6 +103,11 @@ machine allows; `submit` moves a record to the next state without approval autho
 ledger or irreversible business effect; `export` allows file export; `void` cancels, reverses
 or supersedes with mandatory reason; `admin` configures the entity type itself.
 
+Deleting a draft (ADR-075) uses no new string: a never-submitted draft with no dependants is
+deleted by its creator holding `create`, or by a holder of `edit` (or `admin` where the module
+has no `edit`; stock adjustments: `inventory.adjustment.approve`), at the record's site. Audit
+`<module>.<entity>.deleted`. Anything submitted, approved, posted or used keeps `void`.
+
 Sensitivity: **N** normal; **S** sensitive (money, personal data, overrides, cross-record
 exposure; grant and use are audited); **R** restricted (changes the control system, releases
 quality, posts money or payroll, or overrides a safety rule; grant requires owner approval,

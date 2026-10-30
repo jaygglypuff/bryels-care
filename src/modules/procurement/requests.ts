@@ -6,6 +6,7 @@ import { materials, purchaseRequestLines, purchaseRequestStateTransitions, purch
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
+import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { nextNumber } from "@/lib/numbering";
 import { notifyRoles } from "@/modules/platform";
 import { approvalProgress, canDecide, decisionsOf, recordDecision } from "./approvals";
@@ -310,4 +311,30 @@ export async function requestFormOptions(ctx: AuthContext) {
   const mats = await db.select({ id: materials.id, code: materials.code, name: materials.name, baseUom: materials.baseUom }).from(materials).where(and(eq(materials.organizationId, ctx.organizationId), eq(materials.status, "active"))).orderBy(asc(materials.code));
   const sups = await db.select({ id: suppliers.id, code: suppliers.code, name: suppliers.name }).from(suppliers).where(and(eq(suppliers.organizationId, ctx.organizationId), eq(suppliers.isActive, true))).orderBy(asc(suppliers.name));
   return { materials: mats, suppliers: sups };
+}
+
+/**
+ * Deletes a purchase request that is a never-submitted draft (ADR-075), with its lines and its
+ * state history. The requester (procurement.purchase_request.create) or a holder of
+ * procurement.purchase_request.edit at the site. Audit procurement.purchase_request.deleted.
+ */
+export async function deletePurchaseRequestDraft(ctx: AuthContext, input: { requestId: string }) {
+  return db.transaction(async (tx) => {
+    const pr = await lockPr(tx, ctx, input.requestId);
+    const what = `Purchase request ${pr.requestNumber}`;
+    assertMayDeleteDraft(ctx, { create: "procurement.purchase_request.create", manage: ["procurement.purchase_request.edit"] }, pr.requestedBy ?? pr.createdBy, pr.siteId);
+    assertNeverSubmittedDraft(what, pr.status === "draft", pr.submittedAt);
+    const lines = await tx.select().from(purchaseRequestLines).where(eq(purchaseRequestLines.purchaseRequestId, pr.id));
+    await hardDeleteDraft(tx, ctx, {
+      table: "purchase_requests",
+      id: pr.id,
+      what,
+      children: [
+        { table: "purchase_request_lines", column: "purchase_request_id" },
+        { table: "purchase_request_state_transitions", column: "purchase_request_id" },
+      ],
+      audit: { action: "procurement.purchase_request.deleted", entityType: "purchase_request", entityNumber: pr.requestNumber, siteId: pr.siteId, before: { ...pr, lines } },
+    });
+    return { deleted: pr.requestNumber };
+  });
 }

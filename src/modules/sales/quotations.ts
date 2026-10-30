@@ -6,6 +6,7 @@ import { QUOTE_STATUSES, customerAddresses, customers, products, quoteLines, quo
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
+import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import type { ExportDefinition } from "@/lib/export";
 import { nextNumber } from "@/lib/numbering";
 import { D } from "@/lib/qty";
@@ -493,3 +494,24 @@ export const quotesExport: ExportDefinition<{ status?: string }, QuoteExportRow>
   siteScope: (ctx) => [ctx.currentSiteId],
   fileName: () => "quotations",
 };
+
+/**
+ * Deletes a quotation that is a never-submitted draft (ADR-075), with its lines. Creator
+ * (sales.quote.create) or sales.quote.edit at the quotation's site. Audit sales.quote.deleted.
+ */
+export async function deleteDraftQuote(ctx: AuthContext, id: string) {
+  return db.transaction(async (tx) => {
+    const q = await lockQuote(tx, ctx, id);
+    assertMayDeleteDraft(ctx, { create: "sales.quote.create", manage: ["sales.quote.edit"] }, q.createdBy, q.siteId);
+    assertNeverSubmittedDraft(`Quotation ${q.quoteNumber}`, q.status === "draft", q.submittedAt);
+    const lines = await tx.select().from(quoteLines).where(eq(quoteLines.quoteId, q.id));
+    await hardDeleteDraft(tx, ctx, {
+      table: "quotes",
+      id: q.id,
+      what: `Quotation ${q.quoteNumber}`,
+      children: [{ table: "quote_lines", column: "quote_id" }],
+      audit: { action: "sales.quote.deleted", entityType: "quote", entityNumber: q.quoteNumber, siteId: q.siteId, before: { ...q, lines } },
+    });
+    return { deleted: q.quoteNumber };
+  });
+}

@@ -10,6 +10,7 @@ import { ReceiptStatusChip, SupplierStatusChip } from "@/ui/receiving";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { SupplierForm } from "../supplier-form";
+import { DeleteDraftCard } from "../../../delete-draft-button";
 
 export const metadata = { title: "Supplier" };
 
@@ -100,6 +101,7 @@ export default async function SupplierPage({ params, searchParams }: { params: P
           <SupplierForm initial={s} categories={await lookupOptions(db, ctx.organizationId, "supplier_category", { keep: s.category })} />
         </div>
       )}
+      {s.qualityStatus === "new" && (ctx.can("masterdata.supplier.edit") || ctx.can("masterdata.supplier.create")) && <DeleteDraftCard kind="supplier" id={s.id} what="supplier" note="This supplier is still new (not yet evaluated). If nothing uses it yet (no approved material, order, receipt or bill), you can delete it." />}
     </div>
   );
 }

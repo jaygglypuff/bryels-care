@@ -4,6 +4,7 @@ import { batches, inventoryLots } from "@/db/schema";
 import { requireContext } from "@/lib/auth/context";
 import { ROLE_BUNDLES } from "@/lib/permissions";
 import { unreadNotificationCount } from "@/modules/platform";
+import { myApprovalCount } from "@/modules/action-centre";
 import { getMaintenanceState } from "@/lib/maintenance";
 import { MaintenanceBanner } from "@/ui/maintenance-banner";
 import { isDemoMode, isSandboxEmail } from "@/lib/demo";
@@ -25,6 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const quickActions = QUICK_ACTIONS.filter((q) => !q.permission || ctx.can(q.permission));
   const qaCount = ctx.can("quality.disposition.view") ? await openQaCount(ctx.currentSiteId) : null;
   const unreadCount = await unreadNotificationCount(ctx);
+  const approvalCount = await myApprovalCount(ctx).catch(() => 0); // ADR-075 "To approve" badge
   const maintenance = await getMaintenanceState(db, ctx.organizationId);
   return (
     <Shell
@@ -35,6 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       currentSiteId={ctx.currentSiteId}
       qaCount={qaCount}
       unreadCount={unreadCount}
+      approvalCount={approvalCount}
       switchSite={switchSite}
       signOut={signOut}
       demo={isDemoMode() ? { canReset: ctx.roleCodes.includes("owner_director"), sandbox: isSandboxEmail(ctx.email) } : null}

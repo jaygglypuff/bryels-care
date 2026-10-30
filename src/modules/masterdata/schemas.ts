@@ -274,7 +274,8 @@ export const SaveInspectionPlanDraftInput = z
 export const CreateEquipmentInput = z
   .object({
     siteId: uuid,
-    code: codeSchema("Equipment code"),
+    /** ADR-075: blank = the next EQP-nnnn is assigned. */
+    code: z.preprocess((v) => (v === undefined || v === null || (typeof v === "string" && v.trim() === "") ? null : v), codeSchema("Equipment code").nullable()),
     name: reqText("the equipment name", 120),
     equipmentKind: z.enum(EQUIPMENT_KINDS),
     lineLabel: optText(80),

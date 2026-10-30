@@ -1123,3 +1123,56 @@ src/db/sql/s4.sql (code trigger, setting copy). A new simple list = a key in `LO
 (schema CHECK) and an entry in `LOOKUP_LISTS`. Pack sizes in litres for materials kept in grams need
 an approved material-specific density conversion first (A-S4-05). Tests:
 `tests/integration/masterdata/s4-lists-brand.test.ts`.
+## ADR-075 Codes assigned by the system, deleting drafts, "To approve", notification links
+
+**Status.** Accepted (owner requests, 2026-10-30; stream S3). Assumptions A-DEL-01 to A-DEL-03 and
+A-CODE-01 flagged for owner approval.
+
+**Context.** On the iPad the owner could not delete a draft made by mistake, could not tap a
+notification to reach the record, had to invent codes for every material or customer, had no single
+place for approvals, and did not find how to add or edit a location.
+
+**Decision.**
+1. *Codes.* Material, product, supplier, customer, location and equipment codes are optional on
+   create. A blank code gets the next number of a per-organization counter, reusing the numbering
+   rules of ADR-009 / US-1-19 (`src/lib/numbering.ts`, new document types MAT, PRD, SUP, CUS, LOC,
+   EQP: pattern `{PREFIX}-{SEQ}`, never reset, 4 digits that grow past 9999 instead of
+   overflowing; `assignMasterCode`). The counter row stays locked until the creating transaction
+   ends, so concurrent creates get different codes; a number already used by a typed or imported
+   code is skipped. The owner changes prefixes under Admin → Numbering like any document type.
+2. *Deleting drafts.* `src/lib/draft-delete.ts`: a record that is a never-submitted draft
+   (`status = draft` and `submitted_at` empty; for master data its initial state) and that no other
+   record references (catalogue foreign keys, `isReferenced`) can be hard-deleted with its own
+   child rows (lines, addresses, steps) by its creator (holding the create permission) or by a
+   holder of the module's edit/admin permission, at the record's site. Audit
+   `<module>.<entity>.deleted` with the deleted row (and lines) in `before`. Submitted, approved,
+   posted or used records are never deleted (cancel / void / reversal as before). Covered:
+   materials, products (with unused SKUs), suppliers (quality status new), customers (prospect or
+   active, unused), formula / routing / work-instruction revisions (the parent goes too when it
+   was the only revision), inspection plans, purchase requests, purchase orders (not one made from
+   a request), sales orders, quotations, price-list versions, stock adjustments. The append-only
+   transition histories of sales orders, purchase requests and purchase orders accept deleting the
+   creation row (empty → draft) only inside a draft delete (transaction flag `bc.draft_delete`,
+   `src/db/sql/s3.sql`); any later transition still blocks the delete.
+3. *Notification links.* `src/lib/record-links.ts` maps entity type + id to the record's page;
+   a notification opens the producer's stored internal link, else the derived page, else the
+   action centre. `GET /notifications/open/{id}` marks the user's own notification read and
+   redirects (plain links, never prefetched). A unit test checks every notifying entity type and
+   that each derived route has a page.
+4. *To approve.* `/approvals` (top-bar button with a count, Home menu, rail icon) lists the action
+   centre's approval items the user may decide (permission at the item's site; the owner override
+   shows everything) with who asked and when (from the audit trail), a direct link and, for kinds
+   whose module decision needs no password or measurement, Approve and Reject / Send back with a
+   reason, calling the existing module services (same permission and same-person rules).
+5. *Locations.* "+ Add location" and an "Edit" button per row on Master data → Locations, an
+   "Edit location" button on the detail page, simple labels (Type of place; Section or zone = the
+   parent location, no new column) and a help note: one Site per address, each site with its own
+   warehouses and locations.
+
+**Why.** The owner works alone on a tablet: every screen must lead somewhere and a mistaken draft
+must be removable, while posted history stays immutable.
+
+**Consequences.** Custom SQL `src/db/sql/s3.sql` (replaces the three transition-log triggers with
+`adr075_transition_guard`) must be appended to the merged migration; no table or column changes.
+Tests: `tests/integration/masterdata/adr075-codes-and-draft-deletes.test.ts`,
+`tests/integration/action-centre/adr075-to-approve.test.ts`, `tests/unit/record-links.test.ts`.

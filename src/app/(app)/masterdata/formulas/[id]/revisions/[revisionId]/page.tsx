@@ -6,8 +6,9 @@ import { businessToday, formulaFormOptions, getFormulaRevision } from "@/modules
 import { Banner } from "@/ui/status";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
 import { Forbidden } from "../../../../../forbidden";
-import { decideFormulaAction, discardFormulaDraftAction, retireFormulaAction, submitFormulaAction, withdrawFormulaAction } from "../../../../_eng/actions";
+import { decideFormulaAction, retireFormulaAction, submitFormulaAction, withdrawFormulaAction } from "../../../../_eng/actions";
 import { CommandForm, DecisionForm } from "../../../../_eng/forms";
+import { DeleteDraftButton } from "../../../../../delete-draft-button";
 import { ApprovalPanel, EffectiveRange, VerifyBanner, VersionChip } from "../../../../_eng/ui";
 import { FormulaLineEditor } from "./line-editor";
 
@@ -162,7 +163,7 @@ export default async function FormulaRevisionPage({ params }: { params: Promise<
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             {v.can.submit && <CommandForm action={submitFormulaAction} hidden={{ id: r.id }} label="Submit for approval" pendingText="Submitting…" variant="cta" confirmText="Save the draft first. After submitting, the revision cannot be edited unless you withdraw it before anyone decides." />}
             {v.can.withdraw && <CommandForm action={withdrawFormulaAction} hidden={{ id: r.id }} label="Withdraw to draft" variant="secondary" />}
-            {v.can.edit && <CommandForm action={discardFormulaDraftAction} hidden={{ id: r.id }} label="Discard draft" variant="danger" confirmText="The draft and its lines are deleted. Approved revisions are not affected." />}
+            {v.can.edit && !r.submittedAt && <DeleteDraftButton kind="formula_revision" id={r.id} what="this draft revision and its lines (approved revisions are not affected; a formula with no other revision is removed too)" />}
             {v.can.retire && <CommandForm action={retireFormulaAction} hidden={{ id: r.id }} label="Retire revision" variant="danger" reasonLabel="Reason for retiring" confirmText="A retired revision cannot be used for new batches. Batches that used it keep it." />}
           </div>
         </Card>

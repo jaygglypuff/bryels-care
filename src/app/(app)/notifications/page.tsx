@@ -22,7 +22,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
     <div className="space-y-5">
       <PageHeader
         title="Notifications"
-        subtitle="Alerts and items waiting for you. Acknowledge an item once you are dealing with it; it stays in your history."
+        subtitle="Alerts and items waiting for you. Tap Open to go to the record. Acknowledge an item once you are dealing with it; it stays in your history."
         actions={
           <>
             <LinkButton href={all ? "/notifications" : "/notifications?show=all"} variant="secondary" size="sm">{all ? "Open only" : "Show history"}</LinkButton>
@@ -56,10 +56,17 @@ export default async function NotificationsPage({ searchParams }: { searchParams
                       {!n.readAt && <span className="text-[11px] font-semibold uppercase text-primary-text">New</span>}
                       <span className="text-[12px] text-muted">{fmtDateTime(n.createdAt)}</span>
                     </div>
-                    <p className="mt-1 text-[14px] text-fg">{n.link ? <Link href={n.link} className="hover:underline">{n.title}</Link> : n.title}</p>
+                    {/* ADR-075: every notification opens its record (plain <a>: opening marks it read, so no prefetch). */}
+                    <p className="mt-1 text-[14px] text-fg">
+                      <a href={`/notifications/open/${n.id}`} className="text-primary-text hover:underline">{n.title}</a>
+                    </p>
                     <p className="mt-0.5 break-words text-[13px] font-normal text-muted">{n.body}</p>
                     {n.acknowledgedAt && <p className="mt-0.5 text-[12px] text-muted">Acknowledged {fmtDateTime(n.acknowledgedAt)}</p>}
                   </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <a href={`/notifications/open/${n.id}`} className={buttonClass("primary", "sm")} aria-label={`Open: ${n.title}`}>
+                      Open
+                    </a>
                   {!n.acknowledgedAt && (
                     <div className="flex shrink-0 gap-2">
                       {!n.readAt && (
@@ -74,6 +81,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
                       </form>
                     </div>
                   )}
+                  </div>
                 </li>
               );
             })}

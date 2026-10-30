@@ -17,6 +17,7 @@ export {
   decideFormulaRevision,
   retireFormulaRevision,
   discardFormulaDraft,
+  deleteFormulaDraft,
   getEffectiveFormulaRevision,
   loadFormulaRevisionForSnapshot,
   isEffectiveOn,
@@ -32,6 +33,7 @@ export {
 } from "./formulas";
 export {
   createRouting,
+  deleteRoutingDraft,
   createRoutingRevision,
   saveRoutingRevisionDraft,
   submitRoutingRevision,
@@ -51,6 +53,7 @@ export {
 } from "./routings";
 export {
   createWorkInstruction,
+  deleteWorkInstructionDraft,
   createWorkInstructionRevision,
   saveWorkInstructionDraft,
   submitWorkInstructionRevision,
@@ -61,6 +64,7 @@ export {
 } from "./work-instructions";
 export {
   createInspectionPlan,
+  deleteInspectionPlanDraft,
   createInspectionPlanRevision,
   saveInspectionPlanDraft,
   submitInspectionPlan,
@@ -95,8 +99,8 @@ export { VERSION_STATUSES, VERSION_TRANSITIONS, canVersionTransition, businessTo
 export { STEP_KINDS, AREAS, EQUIPMENT_KINDS } from "./schemas";
 
 // Wave 1 W1B: suppliers (US-2-06)
-export { listSuppliers, supplierOptions, getSupplier, createSupplier, updateSupplier, exportSuppliersCsv, type SupplierFilter } from "./suppliers";
-export { SUPPLIER_QUALITY_STATUSES, SUPPLIER_QUALITY_LABELS, SupplierInputSchema, parseOrThrow, type SupplierInput, type SupplierQualityStatus } from "./supplier-schemas";
+export { listSuppliers, supplierOptions, getSupplier, createSupplier, updateSupplier, deleteSupplier, exportSuppliersCsv, type SupplierFilter } from "./suppliers";
+export { SUPPLIER_QUALITY_STATUSES, SUPPLIER_QUALITY_LABELS, SupplierInputSchema, SupplierCreateSchema, parseOrThrow, type SupplierInput, type SupplierCreateInput, type SupplierQualityStatus } from "./supplier-schemas";
 export { toCsv, neutralizeCell } from "./csv";
 
 // Wave 2 W2G: master data administration (US-1-20..US-1-24)
@@ -156,6 +160,7 @@ export {
   getProduct,
   productFamilies,
   createProduct,
+  deleteProduct,
   updateProduct,
   changeProductStatus,
   listSkus,
@@ -179,6 +184,7 @@ export {
   listMaterials as listMaterialMaster,
   getMaterial,
   createMaterial as createMaterialMaster,
+  deleteMaterial,
   updateMaterial,
   changeMaterialStatus,
   materialsExport,

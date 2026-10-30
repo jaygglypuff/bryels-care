@@ -8,7 +8,9 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import type { ExportDefinition } from "@/lib/export";
-import { assertTransition, assertUuid, bool, diff, isReferenced, optInt, optText, reqText, scanCode, uniqueConflict } from "./org-common";
+import { assertTransition, assertUuid, bool, diff, isReferenced, optInt, optText, optionalCode, reqText, scanCode, uniqueConflict } from "./org-common";
+import { assignMasterCode } from "@/lib/numbering";
+import { assertMayDeleteDraft, assertNeverSubmittedDraft, creatorOf, hardDeleteDraft } from "@/lib/draft-delete";
 import { parseInput } from "./schemas";
 import { assertLookupValue, lookupOptions } from "./lookups";
 import { findConversionStep } from "./uom";
@@ -59,7 +61,8 @@ const MaterialInput = z
   })
   .strict();
 export type MaterialInput = z.input<typeof MaterialInput>;
-const CreateInput = MaterialInput.extend({ status: z.enum(["draft", "active"]).default("active") }).strict();
+/** Create: the code may be left blank; the next MAT-nnnn is assigned (ADR-075). */
+const CreateInput = MaterialInput.extend({ code: optionalCode(scanCode("Material code", "MAT-0070")), status: z.enum(["draft", "active"]).default("active") }).strict();
 
 /** Fields every list and export may show (DTO allow-list; no cost fields). */
 const LIST_FIELDS = {
@@ -168,14 +171,43 @@ export async function createMaterial(ctx: AuthContext, raw: unknown, opts?: InTx
   const v = parseInput(CreateInput, raw);
   return runInTx(opts, async (tx) => {
     await assertBaseUom(tx, ctx.organizationId, v.baseUom);
+    const code = v.code ?? (await assignMasterCode(tx, ctx.organizationId, "MAT", (c) => materialCodeTaken(tx, ctx.organizationId, c)));
     const extra = await extraFields(tx, ctx.organizationId, v, v.baseUom, null);
     const [m] = await tx
       .insert(materials)
-      .values({ organizationId: ctx.organizationId, ...v, ...extra })
+      .values({ organizationId: ctx.organizationId, ...v, ...extra, code })
       .returning()
-      .catch((e) => uniqueConflict(e, `Material code ${v.code} is already in use.`));
-    await audit(tx, ctx, { action: "masterdata.material.created", entityType: "material", entityId: m.id, entityNumber: m.code, siteId: null, after: { ...v, ...extra } });
+      .catch((e) => uniqueConflict(e, `Material code ${code} is already in use.`));
+    await audit(tx, ctx, { action: "masterdata.material.created", entityType: "material", entityId: m.id, entityNumber: m.code, siteId: null, after: { ...v, ...extra, code, codeAssigned: !v.code } });
     return { ...m, warnings: materialWarnings(m) };
+  });
+}
+
+async function materialCodeTaken(q: DbOrTx, organizationId: string, code: string) {
+  const r = await q.select({ id: materials.id }).from(materials).where(and(eq(materials.organizationId, organizationId), eq(materials.code, code))).limit(1);
+  return r.length > 0;
+}
+
+/**
+ * Deletes a material that is still a draft and used nowhere (ADR-075): by its creator or a holder
+ * of masterdata.material.edit. Audit masterdata.material.deleted with the row in `before`.
+ */
+export async function deleteMaterial(ctx: AuthContext, materialId: string) {
+  assertUuid(materialId, "Material");
+  return db.transaction(async (tx) => {
+    const [m] = await tx.select().from(materials).where(and(eq(materials.id, materialId), eq(materials.organizationId, ctx.organizationId))).for("update").limit(1);
+    if (!m) throw new DomainError("not_found", "Material not found.");
+    assertMayDeleteDraft(ctx, { create: "masterdata.material.create", manage: ["masterdata.material.edit"] }, await creatorOf(tx, ctx.organizationId, "material", m.id), null);
+    // A material starts active by default; draft or active and used nowhere counts as "never used" (A-DEL-01).
+    assertNeverSubmittedDraft(`Material ${m.code}`, m.status === "draft" || m.status === "active");
+    await hardDeleteDraft(tx, ctx, {
+      table: "materials",
+      id: m.id,
+      what: `Material ${m.code}`,
+      children: [{ table: "material_aliases", column: "material_id" }],
+      audit: { action: "masterdata.material.deleted", entityType: "material", entityNumber: m.code, siteId: null, before: m },
+    });
+    return { deleted: m.code };
   });
 }
 

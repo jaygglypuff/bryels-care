@@ -8,7 +8,9 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import type { ExportDefinition } from "@/lib/export";
 import { assertLookupValue, lookupOptions } from "./lookups";
-import { assertTransition, assertUuid, diff, isReferenced, optInt, optText, optUuid, reqText, scanCode, uniqueConflict } from "./org-common";
+import { assertTransition, assertUuid, diff, isReferenced, optInt, optText, optUuid, optionalCode, reqText, scanCode, uniqueConflict } from "./org-common";
+import { assignMasterCode } from "@/lib/numbering";
+import { assertMayDeleteDraft, assertNeverSubmittedDraft, creatorOf, hardDeleteDraft } from "@/lib/draft-delete";
 import { PRODUCT_STATUSES, PRODUCT_TRANSITIONS, type ProductStatus, isValidGtin } from "./products-shelf-life";
 import { parseInput } from "./schemas";
 import { runInTx, type InTx } from "@/lib/tx";
@@ -45,6 +47,8 @@ const ProductInput = z
   })
   .strict();
 export type ProductInput = z.input<typeof ProductInput>;
+/** Create: the code may be left blank; the next PRD-nnnn is assigned (ADR-075). */
+const CreateProductInput = ProductInput.extend({ code: optionalCode(scanCode("Product code", "ACS-135")) }).strict();
 
 const SkuInput = z
   .object({
@@ -139,17 +143,52 @@ async function assertProductCodeFree(q: DbOrTx, ctx: AuthContext, code: string, 
 /** `opts.tx`: run inside a caller's transaction (savepoint), e.g. an import chunk (W3C, src/lib/tx.ts). */
 export async function createProduct(ctx: AuthContext, raw: unknown, opts?: InTx) {
   ctx.require("masterdata.product.create");
-  const v = parseInput(ProductInput, raw);
+  const v = parseInput(CreateProductInput, raw);
   return runInTx(opts, async (tx) => {
     const family = await normaliseFamily(tx, ctx.organizationId, v.family);
-    await assertProductCodeFree(tx, ctx, v.code);
+    // ADR-075: a blank code gets the next PRD-nnnn (skipping codes used by a product or an SKU).
+    const code =
+      v.code ??
+      (await assignMasterCode(tx, ctx.organizationId, "PRD", async (c) => {
+        const p = await tx.select({ id: products.id }).from(products).where(and(eq(products.organizationId, ctx.organizationId), eq(products.skuCode, c))).limit(1);
+        const s = await tx.select({ id: skus.id }).from(skus).where(and(eq(skus.organizationId, ctx.organizationId), eq(skus.code, c))).limit(1);
+        return p.length > 0 || s.length > 0;
+      }));
+    await assertProductCodeFree(tx, ctx, code);
     const [p] = await tx
       .insert(products)
-      .values({ organizationId: ctx.organizationId, skuCode: v.code, name: v.name, family, unitNetMassG: v.unitNetMassG, unitsPerBox: v.unitsPerBox!, shelfLifeDays: v.shelfLifeDays!, storageConditions: v.storageConditions, status: "draft" })
+      .values({ organizationId: ctx.organizationId, skuCode: code, name: v.name, family, unitNetMassG: v.unitNetMassG, unitsPerBox: v.unitsPerBox!, shelfLifeDays: v.shelfLifeDays!, storageConditions: v.storageConditions, status: "draft" })
       .returning()
-      .catch((e) => uniqueConflict(e, `Product code ${v.code} is already in use.`));
-    await audit(tx, ctx, { action: "masterdata.product.created", entityType: "product", entityId: p.id, entityNumber: p.skuCode, siteId: null, after: { ...v, family, status: "draft" } });
+      .catch((e) => uniqueConflict(e, `Product code ${code} is already in use.`));
+    await audit(tx, ctx, { action: "masterdata.product.created", entityType: "product", entityId: p.id, entityNumber: p.skuCode, siteId: null, after: { ...v, code, codeAssigned: !v.code, family, status: "draft" } });
     return { ...p, code: p.skuCode };
+  });
+}
+
+/**
+ * Deletes a product that is still a draft and used nowhere (ADR-075), with its unused SKUs.
+ * Creator or masterdata.product.edit. Audit masterdata.product.deleted with the row in `before`.
+ */
+export async function deleteProduct(ctx: AuthContext, productId: string) {
+  assertUuid(productId, "Product");
+  return db.transaction(async (tx) => {
+    const [p] = await tx.select().from(products).where(and(eq(products.id, productId), eq(products.organizationId, ctx.organizationId))).for("update").limit(1);
+    if (!p) throw new DomainError("not_found", "Product not found.");
+    assertMayDeleteDraft(ctx, { create: "masterdata.product.create", manage: ["masterdata.product.edit"] }, await creatorOf(tx, ctx.organizationId, "product", p.id), null);
+    assertNeverSubmittedDraft(`Product ${p.skuCode}`, p.status === "draft");
+    const own = await tx.select().from(skus).where(eq(skus.productId, p.id));
+    for (const s of own) {
+      const ref = await isReferenced(tx, "skus", s.id);
+      if (ref.referenced) throw new DomainError("state", `SKU ${s.code} of product ${p.skuCode} is already used, so the product cannot be deleted.`, { code: "IN_USE" });
+    }
+    await hardDeleteDraft(tx, ctx, {
+      table: "products",
+      id: p.id,
+      what: `Product ${p.skuCode}`,
+      children: [{ table: "skus", column: "product_id" }],
+      audit: { action: "masterdata.product.deleted", entityType: "product", entityNumber: p.skuCode, siteId: null, before: { ...p, skus: own.map((s) => s.code) } },
+    });
+    return { deleted: p.skuCode };
   });
 }
 
