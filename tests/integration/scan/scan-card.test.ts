@@ -50,13 +50,13 @@ describe("scan result card (US-2-13)", () => {
     expect(c.identifier).toBe(lot.lotNumber);
     expect(c.status?.code).toBe("quarantine");
     expect(c.siteCode).toBe("NFD");
-    expect(c.risk?.title).toMatch(/Quarantined/);
+    expect(c.risk?.title).toMatch(/Waiting for check/);
     if (lot.expiresOn) expect(c.expiry?.daysLeft).not.toBeNull();
     const byKey = Object.fromEntries(c.actions.map((a) => [a.key, a]));
     expect(byKey.open.allowed).toBe(true);
     expect(byKey.label.allowed).toBe(true); // NFD has a station and an approved RM template
     expect(byKey.use).toMatchObject({ allowed: false });
-    expect(byKey.use.reason).toMatch(/quarantined/);
+    expect(byKey.use.reason).toMatch(/waiting for check/);
     expect(byKey.qa).toBeUndefined(); // warehouse operator: no QA decision action at all
     for (const a of c.actions.filter((x) => !x.allowed)) expect(a.reason).toBeTruthy();
     // QA sees the decision action; the scan itself writes no audit.

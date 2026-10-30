@@ -7,7 +7,7 @@ const TABS: { key: StockTab; label: string; href: string }[] = [
   { key: "material", label: "Raw materials", href: "/inventory?kind=material" },
   { key: "wip", label: "Work in progress", href: "/inventory/wip" },
   { key: "product", label: "Finished goods", href: "/inventory?kind=product" },
-  { key: "all", label: "All stock", href: "/inventory" },
+  { key: "all", label: "All stock", href: "/inventory?kind=all" },
 ];
 
 /** Raw materials, work in progress and finished goods kept apart (ADR-081, brief Part II §3). */

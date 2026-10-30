@@ -8,9 +8,10 @@ import { daysUntil, D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
 import { invalidScanMessage, parseScan, type ScanType } from "@/lib/scan/payload";
 import { limitScanLookup } from "@/lib/rate-limit";
 import { activeStationsAt, approvedLabelTemplatesFor, findDocumentByNumber, labelHistory } from "@/modules/documents";
-import { activeCountsForLocations, describeBoxForScan, getContainer, getLotDetail, heldLocations, isPastExpiry, resolveScan } from "@/modules/inventory";
+import { activeCountsForLocations, describeBoxForScan, fmtStock, getContainer, getLotDetail, heldLocations, isPastExpiry, resolveScan } from "@/modules/inventory";
 import { equipmentAvailability } from "@/modules/masterdata";
 import { LOT_TRANSITIONS } from "@/modules/quality";
+import { searchEverything, type SearchGroup } from "./search";
 
 /**
  * Scan result card (US-2-13; docs/ux-system.md §5.9): identity, status, risk banner and the
@@ -55,12 +56,14 @@ export type ScanCard =
       message: string;
       /** ADR-085: "Did you mean…" — lots whose number, supplier lot or item name contains every typed word. */
       matches?: KeywordMatch[];
+      /** Universal search (owner review 2026-10-30): typed words grouped by kind (items, lots, batches, orders …). */
+      groups?: SearchGroup[];
     };
 
 export type KeywordMatch = { title: string; detail: string; href: string };
 
 const MATCH_LIMIT = 8;
-const KEYWORD_STATUS: Record<string, string> = { quarantine: "waiting for QA", on_hold: "on quality hold", rejected: "rejected", expired: "expired", recalled: "recalled", released: "ready to use" };
+const KEYWORD_STATUS: Record<string, string> = { quarantine: "waiting for check", on_hold: "on hold", rejected: "rejected", expired: "expired", recalled: "recalled", released: "ready to use" };
 
 /**
  * Keyword look-up (ADR-085, consultant review): lots at the caller's sites whose lot number, supplier lot,
@@ -103,7 +106,7 @@ export async function keywordMatches(ctx: AuthContext, text: string): Promise<Ke
     const qty = D(r.onHand);
     const site = multi ? ctx.allowedSites.find((x) => x.id === r.siteId)?.code : null;
     const parts = [
-      qty.gt(0) ? `${r.baseUom === "g" ? fmtMass(r.onHand) : fmtQty(r.onHand, r.baseUom)} in stock` : "none left",
+      qty.gt(0) ? `${fmtStock(r.onHand, r.baseUom)} in stock` : "none left",
       KEYWORD_STATUS[r.status] ?? r.status.replace(/_/g, " "),
       r.expiresOn ? `expires ${fmtDate(r.expiresOn)}` : null,
       site,
@@ -112,7 +115,7 @@ export async function keywordMatches(ctx: AuthContext, text: string): Promise<Ke
   });
 }
 
-const STATUS_WORDS: Record<string, string> = { quarantine: "quarantined", on_hold: "on QA hold", rejected: "rejected", expired: "expired", recalled: "recalled", released: "released" };
+const STATUS_WORDS: Record<string, string> = { quarantine: "waiting for check", on_hold: "on hold", rejected: "rejected", expired: "expired", recalled: "recalled", released: "released" };
 const LABEL_WORD: Record<string, string> = { quarantine: "QUARANTINE", released: "RELEASED", on_hold: "ON HOLD", rejected: "REJECTED", expired: "EXPIRED", recalled: "RECALLED" };
 
 function lotQty(v: string, uom: string) {
@@ -122,8 +125,8 @@ function lotQty(v: string, uom: string) {
 }
 
 function riskFor(status: string, expired: boolean): { tone: RiskTone; title: string; body: string } | null {
-  if (status === "quarantine") return { tone: "q", title: "Quarantined: not usable yet", body: "Issue, consumption and shipment are blocked until QA releases this lot. Move it only between quarantine and hold locations." };
-  if (status === "on_hold") return { tone: "hold", title: "QA hold: not usable", body: "Issue, consumption and shipment are blocked. Move it only between quarantine and hold locations until QA decides." };
+  if (status === "quarantine") return { tone: "q", title: "Waiting for check: not usable yet", body: "It cannot be used in production or shipped until quality checks and releases this lot. Move it only between the waiting-for-check and hold places." };
+  if (status === "on_hold") return { tone: "hold", title: "On hold: not usable", body: "It cannot be used in production or shipped. Move it only between the waiting-for-check and hold places until quality decides." };
   if (status === "rejected") return { tone: "rej", title: "Rejected: must not be used or shipped", body: "Keep it in the rejected cage and follow the QA disposal instruction." };
   if (status === "recalled") return { tone: "bad", title: "Recalled: must not be used or shipped", body: "Segregate all remaining stock and tell QA where you found it." };
   if (expired) return { tone: "exp", title: "Expired: not usable", body: "Expired stock is blocked. Move it to a quarantine, hold or rejected location and tell QA." };
@@ -454,6 +457,16 @@ async function documentCard(ctx: AuthContext, value: string, payload: string): P
 
 const NOT_TRACKED: Partial<Record<ScanType, string>> = {};
 
+/** Typed words: lots (ADR-085) plus every other group the caller may see (universal search). */
+async function wordsResult(ctx: AuthContext, raw: string, payload: string): Promise<ScanCard> {
+  const text = raw.trim();
+  const matches = await keywordMatches(ctx, text);
+  const groups = await searchEverything(ctx, text, matches);
+  if (!groups.length) return { outcome: "not_found", payload, message: `Nothing matches "${text}". Try fewer words, part of a name, or part of a lot, batch or order number.` };
+  const n = groups.reduce((a, g) => a + g.hits.length, 0);
+  return { outcome: "not_found", payload, message: `${n} ${n === 1 ? "result" : "results"} for "${text}". Tap one to open it.`, matches, groups };
+}
+
 /** Resolves one scan into a card. Rate limited per user (setting platform.rate_limits, 120 per minute) in the shared store (US-1-25). */
 export async function resolveScanCard(ctx: AuthContext, raw: string): Promise<ScanCard> {
   ctx.require("inventory.lot.view");
@@ -463,10 +476,7 @@ export async function resolveScanCard(ctx: AuthContext, raw: string): Promise<Sc
   if (p.kind === "invalid") {
     // Typed words ("coconut oil") are not a label: search by keyword instead of refusing (ADR-085).
     if (p.reason === "grammar" && !String(raw).trim().toUpperCase().startsWith("BC:")) {
-      const matches = await keywordMatches(ctx, String(raw));
-      return matches.length
-        ? { outcome: "not_found", payload, message: `No label matches "${String(raw).trim()}". Did you mean one of these?`, matches }
-        : { outcome: "not_found", payload, message: `Nothing matches "${String(raw).trim()}". Try fewer words, part of the lot number, or the material name.` };
+      return await wordsResult(ctx, String(raw), payload);
     }
     return { outcome: "not_recognised", payload, message: invalidScanMessage(p) };
   }
@@ -501,9 +511,7 @@ export async function resolveScanCard(ctx: AuthContext, raw: string): Promise<Sc
     if (doc) return doc;
     const r = await resolveScan(ctx, p.value);
     if (r.ok) return { outcome: "found", payload, entity: "record", caption: r.label.split(" ")[0], identifier: p.value, title: r.label, facts: [], actions: [{ key: "open", label: `Open ${r.label.toLowerCase()}`, href: r.href, allowed: true, primary: true }] };
-    const matches = await keywordMatches(ctx, String(raw));
-    if (matches.length) return { outcome: "not_found", payload, message: `No exact match for "${String(raw).trim()}". Did you mean one of these?`, matches };
-    return { outcome: "not_found", payload, message: `Nothing matches "${String(raw).trim()}". Try fewer words, part of the lot number, or the material name.` };
+    return await wordsResult(ctx, String(raw), payload);
   } catch (e) {
     if (e instanceof DomainError && e.code === "not_found") return notFound(payload, "record", ctx);
     throw e;

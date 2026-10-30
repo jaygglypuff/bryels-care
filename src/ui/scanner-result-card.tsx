@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, Lock, SearchX, Tag } from "lucide-react";
+import { AlertTriangle, ChevronRight, Lock, Search, SearchX, Tag } from "lucide-react";
 import type { ScanCard } from "@/modules/scan";
 import { Card, buttonClass, cx } from "./core";
 import { Banner, Chip, StatusChip } from "./status";
@@ -12,32 +12,41 @@ import { Banner, Chip, StatusChip } from "./status";
 export function ScanResultCard({ card, onScanAgain }: { card: ScanCard; onScanAgain?: () => void }) {
   if (card.outcome !== "found") {
     const tone = card.outcome === "not_recognised" || card.outcome === "rate_limited" ? "warn" : card.outcome === "not_supported" ? "info" : "neu";
+    const groups = card.groups ?? [];
+    const hasResults = groups.length > 0 || !!card.matches?.length;
     return (
       <Card data-testid="scan-result" data-outcome={card.outcome} aria-live="polite">
         <div className="flex items-start gap-3">
-          <SearchX size={24} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" />
+          {hasResults ? <Search size={22} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" /> : <SearchX size={24} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" />}
           <div className="min-w-0">
-            <p className="font-semibold">{card.matches?.length ? "Did you mean…" : card.outcome === "not_recognised" ? "Not recognised" : card.outcome === "not_found" ? "Not found" : card.outcome === "rate_limited" ? "Slow down" : card.outcome === "forbidden" ? "No access" : "Recognised"}</p>
+            <p className="font-semibold">{hasResults ? "Search results" : card.outcome === "not_recognised" ? "Not recognised" : card.outcome === "not_found" ? "Not found" : card.outcome === "rate_limited" ? "Slow down" : card.outcome === "forbidden" ? "No access" : "Recognised"}</p>
             <p className="mt-0.5 text-[14px] text-fg-2">{card.message}</p>
-            {card.payload && !card.matches?.length && <p className="mt-1 break-all font-mono text-[12px] text-muted"><Chip tone={tone}>Scanned</Chip> {card.payload}</p>}
+            {card.payload && !hasResults && <p className="mt-1 break-all font-mono text-[12px] text-muted"><Chip tone={tone}>Scanned</Chip> {card.payload}</p>}
           </div>
         </div>
-        {/* ADR-085: typed words list the lots that match; tap one to open it. */}
-        {card.matches && card.matches.length > 0 && (
-          <ul className="mt-3 divide-y divide-line rounded-[14px] border border-line" data-testid="scan-matches">
-            {card.matches.map((m) => (
-              <li key={m.href}>
-                <Link href={m.href} className="flex min-h-[56px] flex-col justify-center gap-0.5 px-3.5 py-2.5 hover:bg-surface-2">
-                  <span className="text-[15px] font-medium text-fg">{m.title}</span>
-                  <span className="text-[13px] text-fg-2">{m.detail}</span>
-                </Link>
-              </li>
+        {/* Universal search: typed words grouped by kind (items, lots, batches, orders, customers, suppliers). */}
+        {groups.length > 0 ? (
+          <div className="mt-3 space-y-4" data-testid="scan-groups">
+            {groups.map((g) => (
+              <section key={g.key} aria-labelledby={`scan-group-${g.key}`} data-group={g.key}>
+                <h3 id={`scan-group-${g.key}`} className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-muted">
+                  {g.label} <span className="font-normal normal-case">· {g.hits.length}</span>
+                </h3>
+                <ResultLines hits={g.hits} testId={g.key === "lots" ? "scan-matches" : undefined} />
+              </section>
             ))}
-          </ul>
+          </div>
+        ) : (
+          card.matches &&
+          card.matches.length > 0 && (
+            <div className="mt-3">
+              <ResultLines hits={card.matches} testId="scan-matches" />
+            </div>
+          )
         )}
         {onScanAgain && (
           <div className="mt-4">
-            <button type="button" onClick={onScanAgain} className={buttonClass("secondary")}>Scan again</button>
+            <button type="button" onClick={onScanAgain} className={buttonClass("secondary")}>{hasResults ? "New search" : "Scan again"}</button>
           </div>
         )}
       </Card>
@@ -145,5 +154,24 @@ export function ScanResultCard({ card, onScanAgain }: { card: ScanCard; onScanAg
         </div>
       )}
     </Card>
+  );
+}
+
+/** One plain line per result; the whole line is the link (44 px+ touch target). */
+function ResultLines({ hits, testId }: { hits: { title: string; detail: string; href: string }[]; testId?: string }) {
+  return (
+    <ul className="divide-y divide-line rounded-[14px] border border-line" data-testid={testId}>
+      {hits.map((m) => (
+        <li key={m.href}>
+          <Link href={m.href} className="flex min-h-[56px] items-center gap-3 px-3.5 py-2.5 hover:bg-surface-2">
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-[15px] font-medium text-fg">{m.title}</span>
+              {m.detail && <span className="text-[13px] text-fg-2">{m.detail}</span>}
+            </span>
+            <ChevronRight size={18} className="shrink-0 text-muted" aria-hidden="true" />
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }

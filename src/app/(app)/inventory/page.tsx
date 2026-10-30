@@ -1,196 +1,176 @@
 import Link from "next/link";
-import { requireContext } from "@/lib/auth/context";
-import { EXPIRY_WARN_DAYS, LOT_STATUSES, getCurrentSiteLocation, listLots, lotKpis } from "@/modules/inventory/lots";
-import { stockBySection } from "@/modules/inventory/sections";
+import { Plus } from "lucide-react";
+import { requireContext, type AuthContext } from "@/lib/auth/context";
+import { getCurrentSiteLocation } from "@/modules/inventory/lots";
+import { stockByItem } from "@/modules/inventory";
 import { LOCATION_SECTIONS, SECTION_LABELS, isSection } from "@/lib/location-sections";
-import { SectionHeading } from "@/ui/inventory/sections";
-import { Card, EmptyState, Input, Kpi, LinkButton, PageHeader, Select, Table, Td, buttonClass } from "@/ui/core";
+import { Card, EmptyState, LinkButton, PageHeader, Select, buttonClass, cx } from "@/ui/core";
 import { Banner } from "@/ui/status";
-import { Expiry, LotStatusChip, fmtLotQty } from "@/ui/inventory/bits";
+import { STATUS_CHIPS, normaliseStockStatus } from "@/ui/inventory/item-status";
+import { StockItemList, WhatIsALot } from "@/ui/inventory/stock-items";
+import { StockSearch } from "@/ui/inventory/stock-search";
 import { StockTabs } from "@/ui/inventory/stock-tabs";
 import { Forbidden } from "../forbidden";
 
 export const metadata = { title: "Stock" };
 
-const STATUS_LABEL: Record<string, string> = {
-  quarantine: "Waiting for QA",
-  released: "Released",
-  on_hold: "On hold",
-  rejected: "Rejected",
-  expired: "Expired",
-  recalled: "Recalled",
-  expiring: `Expiring in ${EXPIRY_WARN_DAYS} days`,
-};
+type SP = { q?: string; kind?: string; status?: string; loc?: string; section?: string };
+type Kind = "material" | "product" | "all";
 
-type SP = { q?: string; kind?: string; status?: string; empty?: string; loc?: string; section?: string };
+const TITLE: Record<Kind, string> = { material: "Raw materials", product: "Finished goods", all: "All stock" };
+const NOUN: Record<Kind, string> = { material: "Material", product: "Product", all: "Item" };
 
-export default async function LotsPage({ searchParams }: { searchParams: Promise<SP> }) {
+/**
+ * Stock (owner review 2026-10-30, brief Part II §3 mockup): one row per material or product, name first,
+ * usable quantity, status in plain words and the next expiry; tap a row for its lots. One search box,
+ * status chips as links, "More filters" for the warehouse section. Expired / rejected stock sits in a red
+ * "Do not use" group at the bottom. Reads come from `stockByItem` (site-scoped, permission-checked).
+ */
+export default async function StockPage({ searchParams }: { searchParams: Promise<SP> }) {
   const ctx = await requireContext();
   if (!ctx.can("inventory.lot.view")) return <Forbidden what="lots and stock" />;
   const sp = await searchParams;
-  const kind = sp.kind === "material" || sp.kind === "product" ? sp.kind : undefined;
-  const includeEmpty = sp.empty === "1";
+  const q = (sp.q ?? "").trim();
+  const status = normaliseStockStatus(sp.status);
   const section = isSection(sp.section) ? sp.section : undefined;
-  // S6 (ADR-077): stock is grouped by warehouse section; empty lots (no section) are listed separately on request.
-  const [groups, emptyLots, kpis, loc] = await Promise.all([
-    stockBySection(ctx, { q: sp.q, kind, status: sp.status, section, locationId: sp.loc }),
-    includeEmpty ? listLots(ctx, { q: sp.q, kind, status: sp.status, includeEmpty: true, locationId: sp.loc }).then((r) => r.filter((l) => Number(l.onHand) === 0)) : Promise.resolve([]),
-    lotKpis(ctx, { kind }),
-    getCurrentSiteLocation(ctx, sp.loc),
-  ]);
-  const lotCount = new Set(groups.flatMap((g) => g.rows.map((r) => r.lotId))).size;
-  const filtered = !!(sp.q || kind || sp.status || sp.loc || section);
+  const loc = await getCurrentSiteLocation(ctx, sp.loc);
+  // Raw materials is the first tab. Deep links that filter (old status links, words, a place) without a
+  // kind keep showing every kind, so a link from Home never hides finished goods.
+  const kind: Kind = sp.kind === "material" || sp.kind === "product" || sp.kind === "all" ? sp.kind : q || sp.status || section || loc ? "all" : "material";
+  const keep = { kind, status, section, loc: loc?.id };
+  const href = (over: Partial<Record<"kind" | "status" | "q" | "section" | "loc", string | undefined>>) => {
+    const p = new URLSearchParams();
+    const all = { kind, status, q: q || undefined, section, loc: loc?.id, ...over };
+    for (const [k, v] of Object.entries(all)) if (v) p.set(k, v);
+    return `/inventory?${p.toString()}`;
+  };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
-        title={kind === "material" ? "Raw materials" : kind === "product" ? "Finished goods" : "Stock"}
-        subtitle={`${ctx.currentSite.name} · every lot with its quality status, expiry and place`}
+        title={TITLE[kind]}
+        subtitle={`${ctx.currentSite.name} · what is in stock, if it is OK to use, and when it expires`}
         actions={
-          <>
-            {ctx.can("procurement.goods_receipt.create") && <LinkButton href="/inventory/receive" variant="secondary">New receiving</LinkButton>}
-            <LinkButton href="/inventory/scan" variant="cta">Scan</LinkButton>
-          </>
+          ctx.can("procurement.goods_receipt.create") ? (
+            <LinkButton href="/inventory/receive" variant="cta">
+              <Plus size={18} aria-hidden /> New receiving
+            </LinkButton>
+          ) : undefined
         }
       />
-      <StockTabs active={kind ?? "all"} />
+      <StockTabs active={kind} />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label="Waiting for QA" value={kpis.quarantined} hint="New lots QA has not checked yet" tone={kpis.quarantined ? "warn" : "neutral"} href={`/inventory?status=quarantine${kind ? `&kind=${kind}` : ""}`} />
-        <Kpi label="On hold" value={kpis.onHold} hint="Stopped by QA; do not use" tone={kpis.onHold ? "warn" : "neutral"} href={`/inventory?status=on_hold${kind ? `&kind=${kind}` : ""}`} />
-        <Kpi label={`Expiring in ${EXPIRY_WARN_DAYS} days`} value={kpis.expiring} hint="Use these first" tone={kpis.expiring ? "warn" : "good"} href={`/inventory?status=expiring${kind ? `&kind=${kind}` : ""}`} />
-        <Kpi label="Expired" value={kpis.expired} hint="Do not use" tone={kpis.expired ? "bad" : "good"} href={`/inventory?status=expired${kind ? `&kind=${kind}` : ""}`} />
-      </div>
+      <StockSearch defaultQ={q} keep={keep} />
 
-      <Card>
-        <form method="get" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr_auto_auto] xl:items-end" role="search">
-          {sp.loc && <input type="hidden" name="loc" value={sp.loc} />}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="q" className="text-[13px] font-medium">Item or lot</label>
-            <Input id="q" name="q" defaultValue={sp.q ?? ""} placeholder="Lot number, material, SKU, supplier lot…" />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="section" className="text-[13px] font-medium">Section</label>
-            <Select id="section" name="section" defaultValue={section ?? ""}>
-              <option value="">All sections</option>
-              {LOCATION_SECTIONS.map((s) => (
-                <option key={s} value={s}>{SECTION_LABELS[s]}</option>
-              ))}
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="kind" className="text-[13px] font-medium">Kind</label>
-            <Select id="kind" name="kind" defaultValue={kind ?? ""}>
-              <option value="">All</option>
-              <option value="material">Materials</option>
-              <option value="product">Finished goods</option>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="status" className="text-[13px] font-medium">Quality status</label>
-            <Select id="status" name="status" defaultValue={sp.status ?? ""}>
-              <option value="">All</option>
-              {[...LOT_STATUSES, "expiring"].map((s) => (
-                <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-              ))}
-            </Select>
-          </div>
-          <label className="flex min-h-[44px] items-center gap-2 text-[13px]">
-            <input type="checkbox" name="empty" value="1" defaultChecked={includeEmpty} className="size-4 accent-[var(--primary)]" />
-            Include empty lots
-          </label>
-          <div className="flex gap-2">
-            <button type="submit" className={buttonClass("primary")}>Apply</button>
-            {filtered && <Link href="/inventory" className={buttonClass("ghost")}>Clear</Link>}
-          </div>
-        </form>
-      </Card>
+      {/* No suspense boundary here (ADR-043); while a new list loads the search box dims and the top progress bar runs. */}
+      <StockList ctx={ctx} kind={kind} q={q} status={status} section={section} locId={loc?.id} href={href} />
 
       {loc && (
-        <Banner tone="info" title={`Showing lots stored at ${loc.code} · ${loc.name}`} action={<Link href="/inventory" className={buttonClass("secondary", "sm")}>Show all</Link>} />
+        <Banner tone="info" title={`Showing stock stored at ${loc.name} (${loc.code})`} action={<Link href={href({ loc: undefined })} className={buttonClass("secondary", "sm")}>Show all places</Link>} />
       )}
 
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-[15px] font-semibold">
-          {lotCount} {lotCount === 1 ? "lot" : "lots"} in {groups.length} {groups.length === 1 ? "section" : "sections"}
-        </h2>
-        <p className="text-[12px] text-muted">In each section the lot to use next (earliest expiry) is at the top.</p>
+      <div className="flex flex-wrap items-start gap-x-6">
+        <WhatIsALot />
+        <details className="text-[13px]" open={!!section}>
+          <summary className="inline-flex min-h-[44px] cursor-pointer items-center font-medium text-primary-text">More filters{section ? ` · ${SECTION_LABELS[section]}` : ""}</summary>
+          <form method="get" action="/inventory" className="flex flex-wrap items-end gap-2 pb-2">
+            <input type="hidden" name="kind" value={kind} />
+            {status && <input type="hidden" name="status" value={status} />}
+            {q && <input type="hidden" name="q" value={q} />}
+            {loc && <input type="hidden" name="loc" value={loc.id} />}
+            <div className="flex flex-col gap-1">
+              <label htmlFor="section" className="text-[13px] font-medium">Part of the warehouse</label>
+              <Select id="section" name="section" defaultValue={section ?? ""}>
+                <option value="">Everywhere</option>
+                {LOCATION_SECTIONS.map((s) => (
+                  <option key={s} value={s}>{SECTION_LABELS[s]}</option>
+                ))}
+              </Select>
+            </div>
+            <button type="submit" className={buttonClass("secondary")}>Show</button>
+            {section && <Link href={href({ section: undefined })} className={buttonClass("ghost")}>Everywhere</Link>}
+          </form>
+        </details>
       </div>
+    </div>
+  );
+}
 
-      {groups.length === 0 && emptyLots.length === 0 ? (
+async function StockList({ ctx, kind, q, status, section, locId, href }: { ctx: AuthContext; kind: Kind; q: string; status: ReturnType<typeof normaliseStockStatus>; section?: string; locId?: string; href: (o: Record<string, string | undefined>) => string }) {
+  const r = await stockByItem(ctx, { kind: kind === "all" ? undefined : kind, q, status, section, locationId: locId });
+  const narrowed = !!(q || status || section || locId);
+  const noun = NOUN[kind].toLowerCase();
+  // Words that hit a lot number or supplier lot open the rows, so the matching lot is visible at once.
+  const openRows = !!q && r.items.length + r.doNotUse.length <= 5;
+  return (
+    <>
+      <nav aria-label="Filter by status" className="-mx-1 overflow-x-auto px-1 pb-1">
+        <ul className="flex gap-2">
+          {STATUS_CHIPS.map((c) => {
+            const active = (status ?? "") === c.key;
+            const n = c.key ? r.counts[c.key] : r.counts.all;
+            return (
+              <li key={c.key || "all"} className="shrink-0">
+                <Link
+                  href={href({ status: c.key || undefined })}
+                  aria-current={active ? "true" : undefined}
+                  className={cx(
+                    "inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-4 text-[14px] font-medium whitespace-nowrap",
+                    active ? "border-[var(--brand-600)] bg-[var(--brand-600)] text-white" : "border-line bg-surface text-fg-2 hover:border-line-strong hover:text-fg",
+                  )}
+                >
+                  {c.label}
+                  <span className={cx("tabular text-[12px]", active ? "text-white/85" : "text-muted")}>{n}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      {status && status !== "do_not_use" && (
+        <p className="flex flex-wrap items-center gap-x-2 text-[13px] text-fg-2" data-testid="stock-filter-note">
+          Showing only: <span className="font-semibold text-fg">{STATUS_CHIPS.find((c) => c.key === status)?.label}</span>
+          <Link href={href({ status: undefined })} className="inline-flex min-h-[44px] items-center font-medium text-primary-text underline-offset-2 hover:underline">Show all</Link>
+        </p>
+      )}
+      {status === "do_not_use" && (
+        <Banner tone="bad" title="Showing only stock that must not be used" action={<Link href={href({ status: undefined })} className={buttonClass("secondary", "sm")}>Show all</Link>} />
+      )}
+
+      {r.items.length === 0 && r.doNotUse.length === 0 ? (
         <Card>
           <EmptyState
-            title={filtered ? "No lots match these filters" : "No stock at this site yet"}
-            action={filtered ? <LinkButton href="/inventory" variant="secondary">Clear filters</LinkButton> : ctx.can("procurement.goods_receipt.create") ? <LinkButton href="/inventory/receive">Receive materials</LinkButton> : undefined}
+            title={narrowed ? `Nothing matches${q ? ` "${q}"` : " this filter"}` : kind === "product" ? "No finished goods in stock here yet" : kind === "material" ? "No raw materials in stock here yet" : "No stock at this site yet"}
+            action={narrowed ? <LinkButton href={`/inventory?kind=${kind}`} variant="secondary">Show everything</LinkButton> : ctx.can("procurement.goods_receipt.create") ? <LinkButton href="/inventory/receive" variant="cta">Receive materials</LinkButton> : undefined}
           >
-            {filtered ? "Try a different item, section, kind or status, or include empty lots." : "Received materials and produced finished goods appear here."}
+            {narrowed ? "Try fewer words, part of the lot number, or another status." : "Received materials and finished batches appear here."}
           </EmptyState>
         </Card>
       ) : (
-        groups.map((g) => (
-          <Card key={g.section} aria-labelledby={`section-${g.section}`} data-testid={`stock-section-${g.section}`}>
-            <SectionHeading section={g.section} label={g.label} hint={g.hint} count={g.rows.length} />
-            {/* Phone and portrait tablet: cards */}
-            <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:hidden">
-              {g.rows.map((l) => (
-                <li key={l.lotId} className="min-w-0">
-                  <Link href={`/inventory/${l.lotId}`} className="block rounded-[12px] border border-line p-3 active:bg-surface-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="min-w-0 break-all font-mono text-[15px] font-semibold text-primary-text">{l.lotNumber}</span>
-                      <LotStatusChip status={l.qualityStatus} expiresOn={l.expiresOn} />
-                    </div>
-                    <p className="mt-1 text-[14px]">{l.itemName} <span className="text-muted">· {l.itemCode}</span></p>
-                    <div className="mt-2 flex flex-wrap items-end justify-between gap-2 text-[13px]">
-                      <Expiry date={l.expiresOn} warnDays={EXPIRY_WARN_DAYS} compact />
-                      <span className="font-semibold tabular">{fmtLotQty(l.onHand, l.baseUom)}</span>
-                    </div>
-                    <p className="mt-1 text-[12px] text-muted">At {l.locationCodes}{l.supplierLotNumber ? ` · supplier lot ${l.supplierLotNumber}` : ""}</p>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            {/* Landscape tablet and desktop: table */}
-            <Table className="hidden lg:block" head={["Lot", "Item", "Supplier lot", "Expiry", "Here", "Where", "Status"]}>
-              {g.rows.map((l) => (
-                <tr key={l.lotId} className="hover:bg-surface-2">
-                  <Td>
-                    <Link href={`/inventory/${l.lotId}`} className="font-mono font-semibold text-primary-text hover:underline">{l.lotNumber}</Link>
-                    <div className="text-[11px] text-muted">{l.itemKind === "product" ? "Finished goods" : "Material"}</div>
-                  </Td>
-                  <Td>
-                    {l.itemName}
-                    <div className="text-[12px] text-muted">{l.itemCode}</div>
-                  </Td>
-                  <Td>{l.supplierLotNumber ?? <span className="text-muted">—</span>}</Td>
-                  <Td><Expiry date={l.expiresOn} warnDays={EXPIRY_WARN_DAYS} /></Td>
-                  <Td className="whitespace-nowrap text-right font-medium">{fmtLotQty(l.onHand, l.baseUom)}</Td>
-                  <Td className="text-[12px]">{l.locationCodes}</Td>
-                  <Td><LotStatusChip status={l.qualityStatus} expiresOn={l.expiresOn} /></Td>
-                </tr>
-              ))}
-            </Table>
-          </Card>
-        ))
+        <>
+          {r.items.length > 0 && (
+            <section aria-label="Stock list" data-testid="stock-list">
+              <StockItemList items={r.items} label={NOUN[kind]} open={openRows} />
+              <p className="mt-1.5 px-1 text-[12px] text-muted">
+                {r.items.length} {r.items.length === 1 ? noun : `${noun}s`}. Tap a row to see its lots.
+              </p>
+            </section>
+          )}
+          {r.items.length === 0 && status !== "do_not_use" && (
+            <p className="rounded-[12px] border border-dashed border-line-strong px-4 py-3 text-[13px] text-muted">Nothing usable matches. Only stock that must not be used is listed below.</p>
+          )}
+          {r.doNotUse.length > 0 && (
+            <section aria-labelledby="do-not-use" data-testid="stock-do-not-use" className="space-y-2 pt-2">
+              <div>
+                <h2 id="do-not-use" className="text-[16px] font-semibold text-[var(--bad-fg)]">Do not use · {r.doNotUse.length}</h2>
+                <p className="text-[12px] text-muted">Expired, rejected or recalled. Keep it apart and ask quality what to do with it.</p>
+              </div>
+              <StockItemList items={r.doNotUse} blocked label={NOUN[kind]} open={openRows} />
+            </section>
+          )}
+        </>
       )}
-
-      {emptyLots.length > 0 && (
-        <Card data-testid="stock-section-empty">
-          <h2 className="mb-3 text-[15px] font-semibold">Lots with no stock left · {emptyLots.length}</h2>
-          <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            {emptyLots.map((l) => (
-              <li key={l.id} className="min-w-0">
-                <Link href={`/inventory/${l.id}`} className="block rounded-[12px] border border-line p-3 active:bg-surface-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="min-w-0 break-all font-mono text-[14px] font-semibold text-primary-text">{l.lotNumber}</span>
-                    <LotStatusChip status={l.qualityStatus} expiresOn={l.expiresOn} />
-                  </div>
-                  <p className="mt-1 text-[13px]">{l.itemName} <span className="text-muted">· {l.itemCode}</span></p>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-    </div>
+    </>
   );
 }

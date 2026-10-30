@@ -61,7 +61,8 @@ export function fmtStock(v: Decimal.Value, unit: string): string {
     u = unit === "g" ? "kg" : "L";
   }
   const dp = d.isInteger() ? 0 : Math.min(d.decimalPlaces(), 2);
-  const [int, frac] = d.toFixed(dp).split(".");
+  const [int, rawFrac] = d.toFixed(dp).split(".");
+  const frac = rawFrac?.replace(/0+$/, ""); // "3.00 kg" reads as "3 kg"
   const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return `${frac ? `${grouped}.${frac}` : grouped} ${u}`;
 }
