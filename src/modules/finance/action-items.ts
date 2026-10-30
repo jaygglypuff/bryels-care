@@ -1,7 +1,11 @@
 import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { businessDate, money } from "./shared";
+import { fmtMoney } from "@/lib/qty";
+import { businessDate } from "./shared";
+
+/** ₱12,768.00 for pesos; other currencies keep their code ("USD 1,200.00"). */
+const money = (v: string, currency: unknown) => (String(currency ?? "PHP") === "PHP" ? fmtMoney(v) : `${currency} ${fmtMoney(v).slice(1)}`);
 
 /**
  * Finance conditions for the action centre (US-5-06 queue; registered in src/modules/wiring.ts): invoices
@@ -26,7 +30,7 @@ export async function invoicesToApprove(org: string) {
     entityId: String(r.id),
     recordNumber: String(r.shipment_number ?? r.delivery_receipt_number ?? ""),
     title: `Invoice for ${r.customer} waits for approval`,
-    detail: `${money(String(r.total_amount))} ${r.currency}`,
+    detail: `${money(String(r.total_amount), r.currency)}`,
     link: `/finance/invoices/${r.id}`,
     openedAt: at(r.at),
   }));
@@ -45,7 +49,7 @@ export async function overdueInvoices(org: string, now: Date) {
     entityId: String(r.id),
     recordNumber: String(r.invoice_number),
     title: `Invoice ${r.invoice_number} (${r.customer}) is overdue`,
-    detail: `${money(String(r.open))} ${r.currency} open, due ${r.due}`,
+    detail: `${money(String(r.open), r.currency)} open, due ${r.due}`,
     link: `/finance/invoices/${r.id}`,
     openedAt: at(`${r.due}T00:00:00+08:00`),
   }));
@@ -63,7 +67,7 @@ export async function disputedBills(org: string) {
     entityId: String(r.id),
     recordNumber: String(r.bill_number),
     title: `Bill ${r.bill_number} from ${r.supplier} is in dispute`,
-    detail: `Supplier ref. ${r.supplier_reference} · ${money(String(r.total_amount))} ${r.currency}`,
+    detail: `Supplier ref. ${r.supplier_reference} · ${money(String(r.total_amount), r.currency)}`,
     link: `/finance/bills/${r.id}`,
     openedAt: at(r.at),
   }));
@@ -81,7 +85,7 @@ export async function expenseClaimsToApprove(org: string) {
     entityId: String(r.id),
     recordNumber: String(r.claim_number),
     title: `Expense claim ${r.claim_number} (${r.claimant}) waits for approval`,
-    detail: `${money(String(r.amount))} ${r.currency}`,
+    detail: `${money(String(r.amount), r.currency)}`,
     link: `/finance/expenses/${r.id}`,
     openedAt: at(r.at),
   }));

@@ -21,7 +21,7 @@ export function CancelOrderForm({ orderId, hasAllocations }: { orderId: string; 
   const [open, setOpen] = useState(false);
   const { state, pending, onSubmit } = useActionForm(
     cancelOrderAction.bind(null, orderId),
-    "Cancel this order? This cannot be undone." + (hasAllocations ? " Its allocated stock will be released." : ""),
+    "Cancel this order? This cannot be undone." + (hasAllocations ? " Its reserved stock will be released." : ""),
   );
   const [reason, setReason] = useState("");
   if (!open)
@@ -48,13 +48,13 @@ export function CancelOrderForm({ orderId, hasAllocations }: { orderId: string; 
   );
 }
 
-export function AllocateForm({ orderId, label = "Allocate stock (FEFO)" }: { orderId: string; label?: string }) {
+export function AllocateForm({ orderId, label = "Reserve stock for this order" }: { orderId: string; label?: string }) {
   const { state, pending, onSubmit } = useActionForm(allocateAction.bind(null, orderId));
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3">
       <FormMessage state={state} />
       <Button type="submit" variant="cta" size="lg" disabled={pending}>
-        {pending ? "Allocating…" : label}
+        {pending ? "Reserving…" : label}
       </Button>
     </form>
   );

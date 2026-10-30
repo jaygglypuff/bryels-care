@@ -22,6 +22,7 @@ export {
   type EvaluatedStep,
   type BasisValue,
 } from "./approval-rules";
+export { stepVerdict, OWN_REQUEST_REASON, EARLIER_STEP_REASON, type ApprovalVerdict } from "./approval-verdict";
 export { DEFAULT_APPROVAL_RULES, BASE_APPROVE_PERMISSION, CONFIGURABLE_SOD_TYPES, type ApprovalDocumentType, type ApprovalRuleSpec, type ThresholdBasis } from "./default-rules";
 export { listSettingsForAdmin, changeSetting, approveSettingChange, rejectSettingChange, cancelSettingChange, listSettingChangeRequests, type SettingRow } from "./settings-admin";
 export { listNumberingAdmin, submitNumberingRuleVersion, approveNumberingRuleVersion, rejectNumberingRuleVersion } from "./numbering-admin";

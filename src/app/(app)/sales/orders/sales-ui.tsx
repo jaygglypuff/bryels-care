@@ -1,5 +1,5 @@
 import { Lock } from "lucide-react";
-import { fmtMoney } from "@/lib/qty";
+import { fmtMoney, fmtQty } from "@/lib/qty";
 import { Chip } from "@/ui/status";
 
 /** Sales order, quote, price-list and requirement states with icon-free text + colour + border (never colour alone). */
@@ -55,4 +55,43 @@ export function MaskedNote({ fields }: { fields?: string[] }) {
       <Lock size={12} aria-hidden /> Some fields are hidden for your role.
     </p>
   );
+}
+
+/** Red "Late N days" chip for an order past its requested delivery date (rule: orderDaysLate in the sales module). */
+export function LateChip({ days }: { days: number }) {
+  if (days <= 0) return null;
+  return (
+    <span data-testid="order-late" className="inline-flex">
+      <Chip tone="bad">Late {days} {days === 1 ? "day" : "days"}</Chip>
+    </span>
+  );
+}
+
+/** Products on an order in plain words: "Acapulco Soap 135 g × 48, …" (SKU codes stay on the order page). */
+export function linesSummary(lines: { sku: string; productName?: string | null; qty: string }[]): string {
+  return lines.map((l) => `${l.productName || l.sku} × ${fmtQty(l.qty, "", 0)}`).join(", ");
+}
+
+/** One order history entry in plain words, e.g. draft → submitted becomes "Submitted". */
+export function historyLabel(from: string | null, to: string): string {
+  if (to === "confirmed" && from === "pending_approval") return "Approved and confirmed";
+  if (to === "confirmed" && from && ["allocated", "picking", "packed"].includes(from)) return "Stock reservation released";
+  if (to === "draft" && from === "pending_approval") return "Sent back to draft";
+  if (to === "draft" && !from) return "Created as draft";
+  if (to === "allocated" && from && ["picking", "packed"].includes(from)) return "Pick cancelled, stock still reserved";
+  const plain: Record<string, string> = {
+    draft: "Back to draft",
+    submitted: "Submitted",
+    pending_approval: "Sent for approval",
+    confirmed: "Confirmed",
+    allocated: "Stock reserved",
+    picking: "Picking started",
+    packed: "Packed and checked",
+    partially_shipped: "Partly shipped",
+    shipped: "Shipped",
+    invoiced: "Invoiced",
+    closed: "Closed",
+    cancelled: "Cancelled",
+  };
+  return plain[to] ?? to.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 }

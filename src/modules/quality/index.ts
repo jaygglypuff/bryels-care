@@ -133,3 +133,4 @@ export {
   type ExceptionItem,
 } from "./check-quality";
 export { registerQualityReleaseHooks, resetQualityReleaseHooks, type QualityReleaseHooks, type AutoCloseResult } from "./release-hooks";
+export { changeControlApprovalVerdicts, recallCaseApprovalVerdicts } from "./approval-gates"; // ADR-075 "To approve"

@@ -1,6 +1,6 @@
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
-import { aslMaterialOptions, listReorderPolicies, listReorderSuggestions } from "@/modules/procurement";
+import { aslMaterialOptions, ensureReorderSuggestionsFresh, listReorderPolicies, listReorderSuggestions } from "@/modules/procurement";
 import { supplierOptions } from "@/modules/masterdata";
 import { Card, CardTitle, EmptyState, Field, Input, PageHeader, Select, Table, Td } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
@@ -29,11 +29,13 @@ export default async function ReorderPage({ searchParams }: { searchParams: Prom
   if (!ctx.can("procurement.reorder_suggestion.view")) return <Forbidden what="reorder suggestions" />;
   const { status = "open" } = await searchParams;
   const canDecide = ctx.can("procurement.reorder_suggestion.approve");
+  // The nightly job may not have run (demo without a worker, missed night): compute now when stale (owner QA 2026-10-30).
+  const fresh = await ensureReorderSuggestionsFresh(ctx).catch(() => ({ lastComputedAt: null, computedNow: false }));
   const [rows, policies] = await Promise.all([listReorderSuggestions(ctx, { status }), listReorderPolicies(ctx)]);
   const [mats, sups] = canDecide && ctx.can("masterdata.supplier.edit") ? await Promise.all([aslMaterialOptions(ctx), supplierOptions(ctx)]) : [[], []];
   return (
     <>
-      <PageHeader title="Reorder suggestions" subtitle={`${ctx.currentSite.code} · every suggestion shows its drivers; a person decides.`} actions={canDecide ? <ActionForm action={recomputeReorderAction} submit="Recompute now" pending="Computing…" variant="secondary" className="flex flex-col gap-1" messageBelow /> : undefined} />
+      <PageHeader title="Reorder suggestions" subtitle={`${ctx.currentSite.code} · every suggestion shows its drivers; a person decides. ${fresh.lastComputedAt ? `Last worked out ${fmtDateTime(fresh.lastComputedAt)}.` : "Not worked out yet."}`} actions={canDecide ? <ActionForm action={recomputeReorderAction} submit="Recompute now" pending="Computing…" variant="secondary" className="flex flex-col gap-1" messageBelow /> : undefined} />
       <SubNav />
       <div className="flex flex-col gap-5">
         <Banner tone="info" title="How the suggestion is made">
@@ -42,7 +44,13 @@ export default async function ReorderPage({ searchParams }: { searchParams: Prom
         <Card>
           <FilterPills base="/procurement/reorder" current={status} items={FILTERS} />
           {rows.length === 0 ? (
-            <EmptyState title="No suggestions here">{policies.length === 0 ? "Add a reorder policy below to get suggestions." : "Everything is above its minimum, or the nightly job has not run yet."}</EmptyState>
+            <EmptyState title="No suggestions here">{status !== "open"
+                ? "Nothing in this list."
+                : policies.length === 0
+                  ? "No material at this site has a minimum yet. Add a reorder policy below to get suggestions."
+                  : fresh.lastComputedAt
+                    ? `Every material with a minimum is covered: usable stock plus open orders and requests is at or above its minimum (checked ${fmtDateTime(fresh.lastComputedAt)}). Tap “Recompute now” after receiving or using stock.`
+                    : "Suggestions could not be worked out just now. Tap “Recompute now” to try again."}</EmptyState>
           ) : (
             <Table head={["Material", "Suggest", "Drivers", "Supplier", ...(status === "open" && canDecide ? [""] : ["Review"])]}>
               {rows.map((r) => (

@@ -195,7 +195,7 @@ export async function listOrders(ctx: AuthContext, status?: string, limit?: numb
     .limit(limit ?? 1_000_000);
   const lines = orders.length
     ? await db
-        .select({ orderId: salesOrderLines.salesOrderId, sku: products.skuCode, qty: salesOrderLines.qtyUnits, price: salesOrderLines.unitPrice })
+        .select({ orderId: salesOrderLines.salesOrderId, sku: products.skuCode, productName: products.name, qty: salesOrderLines.qtyUnits, price: salesOrderLines.unitPrice })
         .from(salesOrderLines)
         .innerJoin(products, eq(products.id, salesOrderLines.productId))
         .where(inArray(salesOrderLines.salesOrderId, orders.map((o) => o.id)))
@@ -206,7 +206,7 @@ export async function listOrders(ctx: AuthContext, status?: string, limit?: numb
   const prices = canSeePrices(ctx);
   return orders.map((o) => {
     const ls = byOrder.get(o.id) ?? [];
-    const base = { ...o, lines: ls.map((l) => ({ sku: l.sku, qty: l.qty })) };
+    const base = { ...o, lines: ls.map((l) => ({ sku: l.sku, productName: l.productName, qty: l.qty })) };
     if (!prices) return { ...base, value: undefined as string | undefined, _masked: ["value"] as string[] | undefined };
     return { ...base, value: ls.reduce((s, l) => s.plus(D(l.qty).times(l.price)), new Decimal(0)).toString() as string | undefined, _masked: undefined as string[] | undefined };
   });

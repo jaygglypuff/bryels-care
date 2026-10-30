@@ -58,22 +58,33 @@ type Params = { params: Promise<{ batchId: string }>; searchParams: Promise<{ st
 const STATE_LABEL: Record<string, string> = {
   draft: "Draft",
   planned: "Planned",
-  materials_staged: "Materials staged",
+  materials_staged: "Materials ready",
   in_process: "In process",
-  awaiting_qc: "Awaiting QC",
-  quarantined: "Quarantined",
-  released: "Released",
-  rejected: "Rejected",
+  awaiting_qc: "Waiting for quality approval",
+  quarantined: "On hold until quality approves",
+  released: "Approved by quality",
+  rejected: "Rejected by quality",
   rework_approved: "Rework approved",
   closed: "Closed",
 };
-const STEP_STATUS: Record<string, { label: string; tone: "ok" | "info" | "warn" | "neu" | "appr" }> = {
-  pending: { label: "Waiting", tone: "neu" },
-  in_progress: { label: "In progress", tone: "info" },
+type StepTone = "ok" | "info" | "warn" | "neu" | "appr";
+const STEP_STATUS: Record<string, { label: string; tone: StepTone }> = {
   awaiting_check: { label: "Needs checker", tone: "appr" },
   completed: { label: "Done", tone: "ok" },
   skipped: { label: "Skipped", tone: "warn" },
 };
+
+/**
+ * The stepper chip in plain words: the step being worked on is "Now", the one after it "Next", the
+ * rest "Later"; finished steps "Done". A batch that is not running shows no "Now".
+ */
+function stepChip(s: ExecStep, currentNo: number | null, running: boolean): { label: string; tone: StepTone } {
+  const fixed = STEP_STATUS[s.status];
+  if (fixed) return fixed;
+  if (running && (s.isCurrent || s.status === "in_progress")) return { label: "Now", tone: "info" };
+  if (running && currentNo !== null && s.stepNo === currentNo + 1) return { label: "Next", tone: "neu" };
+  return { label: "Later", tone: "neu" };
+}
 const LINE_STATUS: Record<string, string> = { pending: "Pending", partial: "Part weighed", dispensed: "Dispensed", exception: "Exception" };
 
 function auditLine(a: BatchRecord["audits"][number]): string {
@@ -146,10 +157,11 @@ function SignLine({ step }: { step: ExecStep }) {
   if (!r) return null;
   return (
     <p className="text-[13px] text-fg-2">
-      Conducted by <b>{r.conductedBy}</b>
+      Done by <b>{r.conductedBy ?? "unknown"}</b>
       {r.checkedBy ? (
         <>
-          , checked by <b>{r.checkedBy}</b> · {fmtDateTime(r.checkedAt)}
+          , checked by <b>{r.checkedBy}</b>
+          {r.checkedAt ? ` · ${fmtDateTime(r.checkedAt)}` : ""}
         </>
       ) : r.status === "awaiting_check" ? (
         <> · waiting for the checker</>
@@ -289,20 +301,21 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
           title={batch.batchNumber}
           subtitle={
             <span className="flex flex-wrap items-center gap-2">
-              <StatusChip status={batch.status} />
+              <StatusChip status={batch.status} label={STATE_LABEL[batch.status]} />
               <span>
-                {product.name} · {site?.code ?? ""} · {progressLabel(batch.status, ex.stepsCompleted, total)}
+                {[product.name, site?.name, progressLabel(batch.status, ex.stepsCompleted, total)].filter(Boolean).join(" · ")}
               </span>
             </span>
           }
           actions={
             <>
-              <Help screen="production.weighing" label="Help: weighing" text="Weighing" /><Help screen="production.line_clearance" label="Help: line clearance" text="Line clearance" />
+              <Help screen="production.weighing" label="Help: weighing" text="Help: weighing" />
+              <Help screen="production.line_clearance" label="Help: line clearance" text="Help: line clearance" />
               <LinkButton href={`/print/bmr/${batch.id}`} variant="secondary" target="_blank">
-                Print BMR
+                Print batch record
               </LinkButton>
               <LinkButton href={`/production/${batch.id}/closure`} variant="secondary">
-                Closure &amp; paper pages
+                Close the batch and paper pages
               </LinkButton>
               {batch.status === "planned" && !batch.workOrderId && ctx.can("production.batch.edit") && <StartBatchForm batchId={batch.id} />}
               {batch.status === "planned" && batch.workOrderId && (
@@ -324,32 +337,32 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
               : "An operator confirms the materials when they are at the weighing area."}
         </Banner>
       )}
-      {batch.status === "materials_staged" && <Banner tone="info" title="Materials staged">Sign the weighing-area line clearance (step 1) to start the batch.</Banner>}
+      {batch.status === "materials_staged" && <Banner tone="info" title="Materials ready">Sign the weighing-area line clearance (step 1) to start the batch.</Banner>}
       {batch.status === "awaiting_qc" && (
-        <Banner tone="appr" title="Awaiting QA decision">
-          Output lot {rec.outputLot?.lotNumber} ({fmtQty(batch.actualUnits, "pcs", 0)}) is in quarantine. QA reviews the record and releases or rejects the batch.
+        <Banner tone="appr" title="Waiting for quality approval">
+          Output lot {rec.outputLot?.lotNumber} ({fmtQty(batch.actualUnits, "pcs", 0)}) is in the hold area. Quality reviews the record and approves or rejects the batch.
         </Banner>
       )}
-      {batch.status === "released" && <Banner tone="ok" title="Released by QA">The output lot may be used for sales orders.</Banner>}
-      {batch.status === "rejected" && <Banner tone="rej" title="Rejected by QA">The output lot is blocked. Follow the rejected-goods procedure.</Banner>}
+      {batch.status === "released" && <Banner tone="ok" title="Approved by quality">The output lot may be used for sales orders.</Banner>}
+      {batch.status === "rejected" && <Banner tone="rej" title="Rejected by quality">The output lot is blocked. Follow the rejected-goods procedure.</Banner>}
 
       <nav aria-label="Batch steps">
-        <ol className="flex flex-wrap gap-2">
+        <ol className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {ex.steps.map((s) => {
-            const st = STEP_STATUS[s.status] ?? STEP_STATUS.pending;
+            const st = stepChip(s, ex.currentStepNo ?? null, running);
             return (
-              <li key={s.stepNo}>
+              <li key={s.stepNo} className="min-w-0">
                 <Link
                   href={`/production/${batch.id}?step=${s.stepNo}`}
                   data-testid={`stepper-${s.stepNo}`}
                   aria-current={s.stepNo === step?.stepNo ? "step" : undefined}
                   className={cx(
-                    "flex min-h-[44px] items-center gap-2 rounded-full border px-3 text-[13px]",
+                    "flex h-full min-h-[44px] items-center gap-2 rounded-[14px] border px-3 py-2 text-[13px] leading-snug",
                     s.stepNo === step?.stepNo ? "border-primary bg-[var(--green-50)] font-semibold" : "border-line bg-surface",
                   )}
                 >
                   <span className="tabular">{s.stepNo}</span>
-                  <span className="max-w-[160px] truncate">{s.name}</span>
+                  <span className="min-w-0 flex-1 break-words">{s.name}</span>
                   <Chip tone={st.tone}>{st.label}</Chip>
                 </Link>
               </li>
@@ -371,7 +384,7 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
               {step.workInstruction && (
                 <details className="mt-2 text-[13px]">
                   <summary className="cursor-pointer text-primary-text">
-                    ? Work instruction {step.workInstruction.code} rev {step.workInstruction.revisionNo} (frozen with this batch)
+                    Work instruction {step.workInstruction.code}, version {step.workInstruction.revisionNo} (as when the batch started)
                   </summary>
                   <pre className="mt-2 whitespace-pre-wrap rounded-[10px] bg-surface-2 p-3 font-sans">{step.workInstruction.bodyMarkdown}</pre>
                 </details>
@@ -408,7 +421,7 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
                   </div>
                 )}
 
-                {!running && step.status !== "completed" && batch.status !== "planned" && <p className="text-[13px] text-muted">The batch is {STATE_LABEL[batch.status] ?? batch.status}; steps cannot be worked on.</p>}
+                {!running && step.status !== "completed" && batch.status !== "planned" && <p className="text-[13px] text-muted">The batch is {(STATE_LABEL[batch.status] ?? batch.status).toLowerCase()}; steps cannot be worked on.</p>}
                 {running && !step.isCurrent && step.status !== "completed" && <p className="text-[13px] text-muted">Complete the earlier steps first.</p>}
                 {running && step.isCurrent && !canPerform && step.status !== "awaiting_check" && <p className="text-[13px] text-muted">Your role cannot perform this step.</p>}
 
@@ -524,7 +537,7 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
                   <CompleteStepForm batchId={batch.id} stepNo={step.stepNo} stepKind={step.stepKind} requiresChecker={step.requiresChecker} checkers={checkers} idem={key()} disabledReason={step.blockers.length ? "Resolve the items above first; the server re-checks when you submit." : null} />
                 )}
 
-                {step.stepKind === "transfer" && step.status !== "completed" && <p className="text-[13px] text-fg-2">Record the yield below, then post the batch to quarantine with the checker.</p>}
+                {step.stepKind === "transfer" && step.status !== "completed" && <p className="text-[13px] text-fg-2">Record the yield below, then move the batch to the hold area with the checker.</p>}
                 {step.status === "completed" && <StepSummary step={step} />}
               </div>
             </Card>
@@ -532,7 +545,7 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
 
           {(ex.readyForTransfer || ex.yieldRecord || ex.outputs.length > 0) && (
             <Card data-testid="yield-transfer">
-              <CardTitle>Yield and transfer to quarantine</CardTitle>
+              <CardTitle>Yield and move to the hold area</CardTitle>
               {ex.yieldRecord && (
                 <div className={cx("mb-3 rounded-[12px] border p-3 text-[13px]", ex.yieldRecord.isWithinLimits ? "border-line" : "border-[var(--warn-bd)] bg-[var(--warn-bg)]")}>
                   <p className="tabular">
@@ -571,7 +584,7 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
                 {running && ex.readyForTransfer && ctx.can("production.scrap_rework_record.create") && <ScrapForm batchId={batch.id} reasonCodes={ex.reasonCodes} idem={key()} />}
               </div>
               <div className="mt-4 flex flex-col gap-3">
-                <p className="text-[13px] font-semibold">Transfer to quarantine</p>
+                <p className="text-[13px] font-semibold">Move to the hold area until quality approves</p>
                 {ex.outputs.map((o) => (
                   <p key={o.id} className="text-[13px]">
                     Output lot <span className="font-mono">{o.lotNumber}</span> · {fmtQty(o.qtyBase, o.baseUom, 0)} · {o.locationCode} · expires {fmtDate(o.expiresOn)} {o.qualityStatus && <StatusChip status={o.qualityStatus} />}
@@ -602,11 +615,11 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
             <Dl
               items={[
                 ["Product", `${product.name} (${product.skuCode})`],
-                ["Formula", `${snapshot.formulaCode} rev ${snapshot.revisionNo}${snapshot.routing ? ` · routing ${snapshot.routing.routingCode} rev ${snapshot.routing.revisionNo}` : ""}`],
+                ["Formula", `${snapshot.formulaCode}, version ${snapshot.revisionNo}${snapshot.routing ? ` · steps ${snapshot.routing.routingCode}, version ${snapshot.routing.revisionNo}` : ""}`],
                 ["Planned size", `${fmtQty(D(batch.plannedSizeG).div(1000), "kg", 2)}`],
                 ["Started", fmtDateTime(batch.startedAt)],
                 ["Theoretical yield", fmtMass(batch.theoreticalYieldG)],
-                ["Postings", ex.postings.consumption || ex.postings.output ? `${ex.postings.consumption ?? 0} consumption · ${ex.postings.output ?? 0} output` : ex.postAtDispense ? "At each weighing" : "At transfer to quarantine"],
+                ["Stock updates", ex.postings.consumption || ex.postings.output ? `${ex.postings.consumption ?? 0} materials used · ${ex.postings.output ?? 0} finished goods` : ex.postAtDispense ? "At each weighing" : "When the batch moves to the hold area"],
               ]}
             />
           </Card>
@@ -617,7 +630,7 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
                 <StatusChip status={lastDisposition.toStatus} /> {lastDisposition.decidedByName} · {fmtDateTime(lastDisposition.decidedAt)}
               </p>
             ) : (
-              <p className="text-[13px] text-muted">{batch.status === "awaiting_qc" ? "Waiting for QA disposition." : "No QA decision yet."}</p>
+              <p className="text-[13px] text-muted">{batch.status === "awaiting_qc" ? "Waiting for quality approval." : "No quality decision yet."}</p>
             )}
             {rec.tests.length > 0 && (
               <ul className="mt-2 flex flex-col divide-y divide-line text-[13px]">

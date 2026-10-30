@@ -10,6 +10,7 @@ import { allocateOrder } from "./allocation";
 import { approvalProgress, canDecide } from "./crm-approvals";
 import { businessDate, canSeePrices, isUuid } from "./crm-support";
 import { ORDER_STATUS_LABEL, type OrderStatus, approveOrder, submitOrder } from "./orders";
+import { orderDaysLate } from "./late";
 
 /**
  * Order status board (US-4-06 AC1): one column per resting sales order state (`submitted` is passed
@@ -52,6 +53,8 @@ export type OrderCard = {
   reasons: { code: string; message: string }[];
   warnings: { code: string; message: string }[];
   overdue: boolean;
+  /** Days past the requested delivery date while not shipped (0 when on time); see orderDaysLate. */
+  daysLate: number;
   moves: Record<string, MoveVerdict>;
 };
 
@@ -93,6 +96,7 @@ export async function orderBoard(ctx: AuthContext) {
       reasons: o.approvalReasons ?? [],
       warnings: o.warnings ?? [],
       overdue: !!o.requestedDeliveryOn && o.requestedDeliveryOn < today && !FINISHED.includes(status),
+      daysLate: orderDaysLate({ status, requestedDeliveryOn: o.requestedDeliveryOn }, today),
       moves,
     });
   }
@@ -106,7 +110,7 @@ export type OrderBoard = Awaited<ReturnType<typeof orderBoard>>;
 function verdict(ctx: AuthContext, o: typeof salesOrders.$inferSelect, from: OrderStatus, to: OrderStatus, canApprove: boolean): MoveVerdict {
   if (from === to) return { allowed: false, reason: "The card is already in this column." };
   if (from === "draft" && (to === "confirmed" || to === "pending_approval")) {
-    if (!ctx.canAt("sales.sales_order.submit", o.siteId)) return { allowed: false, reason: "Submitting orders needs sales permission (sales.sales_order.submit)." };
+    if (!ctx.canAt("sales.sales_order.submit", o.siteId)) return { allowed: false, reason: "Only sales staff can submit orders." };
     return { allowed: true, label: "Submit: credit and approval check" };
   }
   if (from === "pending_approval" && to === "confirmed") {
@@ -114,8 +118,8 @@ function verdict(ctx: AuthContext, o: typeof salesOrders.$inferSelect, from: Ord
     return { allowed: true, label: "Approve and confirm" };
   }
   if (from === "confirmed" && to === "allocated") {
-    if (!ctx.canAt("sales.allocation.post", o.siteId)) return { allowed: false, reason: "Allocation is done by the warehouse (sales.allocation.post)." };
-    return { allowed: true, label: "Allocate stock (FEFO)" };
+    if (!ctx.canAt("sales.allocation.post", o.siteId)) return { allowed: false, reason: "The warehouse reserves stock for orders." };
+    return { allowed: true, label: "Reserve stock (earliest expiry first)" };
   }
   if (to === "cancelled") return { allowed: false, reason: "Cancel from the order page: a reason is required." };
   if (from === "pending_approval" && to === "draft") return { allowed: false, reason: "Return the order from its page: a reason is required." };
@@ -144,7 +148,7 @@ export async function moveOrderCard(ctx: AuthContext, input: { orderId: string; 
   }
   if (o.status === "confirmed" && to === "allocated") {
     const r = await allocateOrder(ctx, input.orderId);
-    return r.fullyAllocated ? { ok: true, message: `${r.orderNumber} fully allocated by FEFO.` } : { ok: false, message: `${r.orderNumber} partly allocated; the shortfall stays open. ${r.shortfalls.map((s) => `${s.sku}: ${s.short} pcs short`).join("; ")}.` };
+    return r.fullyAllocated ? { ok: true, message: `${r.orderNumber}: stock reserved, earliest expiry first.` } : { ok: false, message: `${r.orderNumber}: only part of the stock could be reserved; the rest stays open. ${r.shortfalls.map((s) => `${s.sku}: ${s.short} pcs short`).join("; ")}.` };
   }
   throw new DomainError("state", `${o.orderNumber} cannot be moved there from the board.`);
 }

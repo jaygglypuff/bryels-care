@@ -2,9 +2,10 @@ import "server-only";
 import Decimal from "decimal.js";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db, type DbOrTx, type Tx } from "@/db/client";
-import { materialReorderPolicies, materials, reorderSuggestions, sites, supplierMaterials, suppliers, users } from "@/db/schema";
+import { auditEvents, materialReorderPolicies, materials, reorderSuggestions, sites, supplierMaterials, suppliers, users } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
+import { systemContext } from "@/lib/auth/system";
 import { DomainError } from "@/lib/errors";
 import { fmtQty } from "@/lib/qty";
 import { getSetting } from "@/lib/settings";
@@ -196,6 +197,35 @@ export async function computeReorderSuggestions(ctx: AuthContext, opts: { siteId
     await audit(tx, ctx, { action: "procurement.reorder_suggestion.computed", entityType: "reorder_suggestion", siteId: opts.siteId ?? null, after: { policies: policies.length, created, superseded, asOf: today } });
     return { policies: policies.length, created, superseded };
   });
+}
+
+/** Suggestions older than this are recomputed when the screen opens (the nightly job runs every 24 h). */
+const STALE_AFTER_MS = 26 * 3_600_000;
+
+/** When suggestions were last computed for the organization (job, "Recompute now" or screen), or null. */
+export async function lastReorderComputation(ctx: AuthContext): Promise<Date | null> {
+  ctx.require("procurement.reorder_suggestion.view");
+  const [r] = await db
+    .select({ at: sql<Date | null>`max(${auditEvents.occurredAt})` })
+    .from(auditEvents)
+    .where(and(eq(auditEvents.organizationId, ctx.organizationId), eq(auditEvents.action, "procurement.reorder_suggestion.computed")));
+  return r?.at ? new Date(r.at) : null;
+}
+
+/**
+ * Owner QA 2026-10-30: the Reorder suggestions screen was empty although PKG-0101 was far below its
+ * minimum, because the nightly job `procurement.reorder_suggest` had never run (no worker in the demo, or
+ * a missed night). When the last computation is missing or older than 26 h, this runs the same
+ * computation the job runs, as the organization's system actor (audited like the job), so the screen
+ * never shows an empty list just because the job did not run. Read-only maintenance mode skips it.
+ * Returns when suggestions were last computed and whether this call computed them.
+ */
+export async function ensureReorderSuggestionsFresh(ctx: AuthContext, now: Date = new Date()): Promise<{ lastComputedAt: Date | null; computedNow: boolean }> {
+  const last = await lastReorderComputation(ctx);
+  if (ctx.readOnly || (last && now.getTime() - last.getTime() < STALE_AFTER_MS)) return { lastComputedAt: last, computedNow: false };
+  const sys = await systemContext(ctx.organizationId, { code: "procurement.reorder_suggest", systemPermissions: ["procurement.reorder_suggestion.view"] });
+  await computeReorderSuggestions(sys, { now });
+  return { lastComputedAt: now, computedNow: true };
 }
 
 export async function listReorderSuggestions(ctx: AuthContext, f: { status?: string } = {}) {

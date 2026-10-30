@@ -25,6 +25,8 @@ describe("US-4-06 order board", () => {
     const all = board.columns.flatMap((c) => c.cards);
     expect(all.length).toBeGreaterThan(0);
     expect(all.every((c) => board.columns.find((col) => col.key === c.status))).toBe(true);
+    // Late flag (owner usability fix): only open orders past their requested date count days late.
+    expect(all.every((c) => (c.daysLate > 0) === c.overdue)).toBe(true);
   });
 
   it("cards drag only where permitted, and the server re-checks the move", async () => {

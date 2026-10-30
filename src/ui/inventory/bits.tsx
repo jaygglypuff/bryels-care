@@ -1,5 +1,8 @@
 import { daysUntil, fmtDate, fmtMass, fmtQty } from "@/lib/qty";
-import { Chip } from "@/ui/status";
+import { Chip, StatusChip } from "@/ui/status";
+import { lotDisplayStatus } from "./lot-status";
+
+export { lotDisplayStatus };
 
 /** Quantity in a lot's base unit: grams shown as kg above 1,000 g, pieces as whole numbers. */
 export function fmtLotQty(v: string | null | undefined, uom: string): string {
@@ -13,13 +16,22 @@ export function Expiry({ date, warnDays = 30, compact = false }: { date: string 
   if (!date) return <span className="text-muted">No expiry</span>;
   const d = daysUntil(date)!;
   const tone = d < 0 ? "text-[var(--bad-fg)] font-semibold" : d <= warnDays ? "text-[var(--warn-fg)] font-semibold" : "text-muted";
-  const left = d < 0 ? `expired ${-d} d ago` : d === 0 ? "expires today" : `${d} d left`;
+  const left = d < 0 ? `expired ${-d} ${-d === 1 ? "day" : "days"} ago` : d === 0 ? "expires today" : `${d} ${d === 1 ? "day" : "days"} left`;
   return (
     <span className="whitespace-nowrap">
       {fmtDate(date)}
       <span className={`${compact ? "ml-1.5" : "block"} text-[12px] ${tone}`}>{left}</span>
     </span>
   );
+}
+
+/**
+ * Lot quality status for lists. A lot whose expiry date has passed shows "Expired" even while its
+ * stored status is still released / waiting / on hold (the nightly expiry job may not have run yet),
+ * so a list never says "Released" next to "expired 2 days ago".
+ */
+export function LotStatusChip({ status, expiresOn }: { status: string; expiresOn: string | null | undefined }) {
+  return <StatusChip status={lotDisplayStatus(status, expiresOn)} />;
 }
 
 const KIND_TONE: Record<string, "ok" | "q" | "hold" | "rej" | "info" | "neu" | "appr"> = {

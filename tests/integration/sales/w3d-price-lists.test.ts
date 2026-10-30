@@ -127,6 +127,8 @@ describe("US-4-03 price lists", () => {
     expect(JSON.stringify(view, (k, v) => (k === "_masked" ? undefined : v))).not.toMatch(/"unitPrice"|"totalAmount"|"subtotalAmount"/);
     const list = await listOrders(w.warehouse);
     expect(list.every((o) => o.value === undefined)).toBe(true);
+    // The list shows product names next to the SKU code (owner usability fix), never prices.
+    expect(list.flatMap((o) => o.lines).every((l) => typeof l.productName === "string" && l.productName.length > 0)).toBe(true);
     // A warehouse operator cannot slip a price in on an order either.
     const noPrice = withPermissions(w.sales, bundle("sales_cs").filter((p) => p !== "sales.price_list.view"));
     const c = await newCustomer(w);

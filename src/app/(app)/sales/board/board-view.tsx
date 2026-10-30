@@ -20,21 +20,25 @@ function Card({ c, columns, busy, onMove, onDragStart }: { c: OrderCard; columns
         e.dataTransfer.effectAllowed = "move";
         onDragStart(c);
       }}
-      className="rounded-[14px] border border-line bg-surface p-3 shadow-sm"
+      className="relative rounded-[14px] border border-line bg-surface p-3 shadow-sm"
       aria-label={`Order ${c.orderNumber}`}
     >
-      <div className="flex items-start justify-between gap-1.5">
-        <Link href={`/sales/${c.id}`} className="whitespace-nowrap font-mono text-[13px] font-semibold text-primary-text hover:underline">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+        <Link href={`/sales/${c.id}`} className="whitespace-nowrap text-[13px] font-semibold text-primary-text hover:underline">
           {c.orderNumber}
         </Link>
-        {c.value !== undefined && <span className="text-[12px] font-medium tabular">{fmtMoney(c.value)}</span>}
+        {c.value !== undefined && <span className="whitespace-nowrap text-[13px] font-semibold tabular">{fmtMoney(c.value)}</span>}
       </div>
       <p className="mt-1 text-[13px] font-medium">{c.customerName}</p>
       <p className="text-[12px] text-muted tabular">
-        {c.lineCount} line{c.lineCount === 1 ? "" : "s"} · {fmtQty(c.units, "pcs", 0)} · deliver {fmtDate(c.requestedDeliveryOn)}
+        {c.lineCount} {c.lineCount === 1 ? "product" : "products"} · {fmtQty(c.units, "pcs", 0)} · deliver by {fmtDate(c.requestedDeliveryOn)}
       </p>
       <div className="mt-2 flex flex-wrap gap-1.5">
-        {c.overdue && <Chip tone="bad">Past requested date</Chip>}
+        {c.daysLate > 0 && (
+          <Chip tone="bad">
+            Late {c.daysLate} {c.daysLate === 1 ? "day" : "days"}
+          </Chip>
+        )}
         {c.reasons.map((r) => (
           <Chip key={r.code + r.message} tone="warn">
             {r.message}
@@ -42,7 +46,7 @@ function Card({ c, columns, busy, onMove, onDragStart }: { c: OrderCard; columns
         ))}
         {c.warnings.map((r) => (
           <Chip key={r.code + r.message} tone="info">
-            {r.code === "moq" ? "Below MOQ" : r.code === "lead_time" ? "Inside lead time" : r.message}
+            {r.code === "moq" ? "Below minimum order quantity" : r.code === "lead_time" ? "Shorter than the usual lead time" : r.message}
           </Chip>
         ))}
       </div>
@@ -126,7 +130,7 @@ export function OrderBoardView({ board }: { board: OrderBoard }) {
           Moving…
         </p>
       )}
-      <div className="flex max-w-full snap-x snap-mandatory gap-3 overflow-x-auto pb-3" aria-label="Sales order board columns">
+      <div className="relative flex max-w-full snap-x snap-mandatory gap-3 overflow-x-auto pb-3" aria-label="Sales order board columns">
         {board.columns.map((col) => (
           <section
             key={col.key}
@@ -143,7 +147,7 @@ export function OrderBoardView({ board }: { board: OrderBoard }) {
               dragged.current = null;
             }}
             className={cx(
-              "flex w-[82vw] max-w-[300px] shrink-0 snap-start flex-col rounded-[16px] border bg-surface-2/60 p-2.5 sm:w-[270px]",
+              "relative flex w-[280px] shrink-0 snap-start flex-col rounded-[16px] border bg-surface-2/60 p-2.5 sm:w-[270px]",
               over === col.key ? (dragged.current?.moves[col.key]?.allowed ? "border-primary" : "border-[var(--warn-bd)]") : "border-line",
             )}
           >
@@ -162,8 +166,8 @@ export function OrderBoardView({ board }: { board: OrderBoard }) {
         ))}
       </div>
       <p className="mt-1 text-[12px] text-muted">
-        Moves you can make here: submit a draft (the credit and approval check decides confirmed or pending approval), approve a pending order when you are its approver, allocate a confirmed
-        order (warehouse). Returning, cancelling, picking, packing and dispatch are done on the order page.
+        Moves you can make here: submit a draft (the credit check decides whether it is confirmed or needs approval), approve an order when you are its approver, and reserve stock for a
+        confirmed order (warehouse). Sending back, cancelling, picking, packing and shipping are done on the order page.
       </p>
     </div>
   );

@@ -53,8 +53,9 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       />
       {canInvite && !email.ready && (
         <div className="mb-4">
-          <Banner tone="warn" title="Email is not set up">
-            {email.problem} Invitation links are then shown to you once, to pass on in person. <Link href="/admin/security" className="underline">Security settings</Link>
+          <Banner tone="warn" title="Email sending is not set up yet">
+            Give the invitation link to the person yourself. The link is shown to you once, after you invite someone. Your IT contact can set up email under{" "}
+            <Link href="/admin/security" className="underline">Security settings</Link>.
           </Banner>
         </div>
       )}

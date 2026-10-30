@@ -4,7 +4,7 @@ import Decimal from "decimal.js";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, daysUntil, fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
-import { fulfilmentForOrder, getOrder, manilaToday } from "@/modules/sales";
+import { fulfilmentForOrder, getOrder, manilaToday, orderDaysLate, salesBusinessDate } from "@/modules/sales";
 import { productionOrdersForSalesOrder, salesOrderShortfalls, type MakeForLine } from "@/modules/production";
 import { Card, CardTitle, Dl, LinkButton, Table, Td } from "@/ui/core";
 import { Banner, StatusChip } from "@/ui/status";
@@ -16,21 +16,21 @@ import { FulfilmentPanel } from "./fulfilment-panel"; // W3E
 import { startPickAction } from "../fulfilment-actions";
 import { Cmd } from "../fulfilment-forms";
 import { ApproveOrderForm, CancelOrderPanel, ReorderForm, ReturnOrderForm, SubmitOrderForm } from "../orders/order-commercial";
-import { MaskedNote, Money } from "../orders/sales-ui";
+import { LateChip, MaskedNote, Money, historyLabel } from "../orders/sales-ui";
 import { Help } from "@/ui/help/help";
 import { DeleteDraftCard } from "../../delete-draft-button";
 
 export const metadata = { title: "Sales order" };
 
 const DONE: Record<string, string> = {
-  confirmed: "Order confirmed within limits. The warehouse can now allocate stock.",
-  pending_approval: "Submitted. The order needs approval before the warehouse can allocate it.",
+  confirmed: "Order confirmed. The warehouse can now reserve stock for it.",
+  pending_approval: "Submitted. The order needs approval before the warehouse can reserve stock for it.",
   edited: "Draft saved.",
   reordered: "New draft created from the earlier order at today's prices. Check it, then submit.",
-  allocated: "Fully allocated by FEFO. Next: start the pick list (Fulfilment).",
+  allocated: "Stock reserved (earliest expiry first). Next: start the pick list.",
   dispatched: "Dispatched: stock issued. Delivery receipt",
   delivered: "Delivery recorded.",
-  cancelled: "Order cancelled. Any allocated stock was released.",
+  cancelled: "Order cancelled. Any reserved stock was released.",
 };
 
 export default async function OrderDetailPage({ params, searchParams }: { params: Promise<{ orderId: string }>; searchParams: Promise<{ done?: string }> }) {
@@ -54,7 +54,8 @@ export default async function OrderDetailPage({ params, searchParams }: { params
   const showAlloc = ["confirmed", "allocated", "picking", "packed", "partially_shipped", "shipped"].includes(status);
   const canVoid = ctx.can("sales.sales_order.void") && ["draft", "submitted", "pending_approval", "confirmed", "allocated", "picking", "packed"].includes(status);
   const reasons = order.approvalReasons ?? [];
-  // ADR-080 (V2-2): "Make for this order" on lines short of stock, for people who can create production orders.
+  const daysLate = orderDaysLate(order, salesBusinessDate());
+  // "Make for this order" on lines short of stock, for people who can create production orders.
   const toMake: MakeForLine[] = ctx.can("production.work_order.create") ? (await salesOrderShortfalls(ctx, order.id).catch(() => [])).filter((l) => D(l.missing).gt(0)) : [];
   const beingMade = ctx.can("production.work_order.view") ? await productionOrdersForSalesOrder(ctx, order.id) : [];
   const warnings = order.warnings ?? [];
@@ -68,12 +69,12 @@ export default async function OrderDetailPage({ params, searchParams }: { params
     status === "draft" && canSubmit ? (
       <SubmitOrderForm orderId={order.id} />
     ) : status === "confirmed" && canAllocate ? (
-      <AllocateForm orderId={order.id} label={hasAllocations ? "Allocate remaining (FEFO)" : "Allocate stock (FEFO)"} />
+      <AllocateForm orderId={order.id} label={hasAllocations ? "Reserve the rest of the stock" : "Reserve stock for this order"} />
     ) : fulfilment?.openPick ? (
       <LinkButton href={`/sales/picking/${fulfilment.openPick.id}`} variant="cta" size="lg">Continue pick {fulfilment.openPick.pickNumber}</LinkButton>
     ) : pickable ? (
       <Cmd action={startPickAction} fields={{ orderId: order.id }} label="Start pick list" pending="Starting…" variant="cta" size="lg">
-        <p className="text-[13px] text-fg-2">Scan every allocated box (or the lot with a quantity for loose units). Stock moves only at dispatch.</p>
+        <p className="text-[13px] text-fg-2">Scan every reserved box (or the lot with a quantity for loose units). Stock moves only at dispatch.</p>
       </Cmd>
     ) : undefined;
   const next = primary ? undefined : status === "pending_approval" && approval?.canApprove ? "Next: approve or return it under Approval below." : undefined;
@@ -105,6 +106,14 @@ export default async function OrderDetailPage({ params, searchParams }: { params
         }
       />
 
+      {daysLate > 0 && (
+        <div className="mb-4" data-testid="order-late-banner">
+          <Banner tone="bad" title={`Late ${daysLate} ${daysLate === 1 ? "day" : "days"}`}>
+            The customer asked for delivery by {fmtDate(order.requestedDeliveryOn)} and the goods have not been shipped yet.
+          </Banner>
+        </div>
+      )}
+
       {done && DONE[done] && (
         <div className="mb-4" role="status">
           <Banner tone="ok" title={done === "dispatched" && shipments[0] ? `${DONE[done]} ${shipments[0].deliveryReceiptNumber}` : DONE[done]} />
@@ -119,12 +128,15 @@ export default async function OrderDetailPage({ params, searchParams }: { params
               items={[
                 ["Customer", ctx.can("masterdata.customer.view") ? <Link className="text-primary-text hover:underline" href={`/sales/customers/${customer.id}`}>{customer.name}</Link> : customer.name],
                 ["Customer PO", order.customerPoNumber ?? "—"],
-                ["Requested delivery", fmtDate(order.requestedDeliveryOn)],
-                ["Ship to", order.shipToText ?? customer.shipToAddress],
                 [
-                  "Credit / approval",
-                  `${order.creditCheckStatus.replace(/_/g, " ")}${order.approvedAt ? ` · approved ${fmtDateTime(order.approvedAt)}${order.approvalNote ? ` (${order.approvalNote})` : ""}` : ""}`,
+                  "Requested delivery",
+                  <span key="d" className="inline-flex flex-wrap items-center gap-2">
+                    {fmtDate(order.requestedDeliveryOn)} <LateChip days={daysLate} />
+                  </span>,
                 ],
+                ["Ship to", order.shipToText ?? customer.shipToAddress],
+                ["Credit check", creditCheckText(order.creditCheckStatus, status)],
+                ["Approval", approvalText(status, order.approvedAt, order.approvalNote)],
                 ["Bill to", billTo ? `${billTo.label}: ${[billTo.line1, billTo.city].filter(Boolean).join(", ")}` : shipTo ? "Same as ship-to" : "—"],
                 ...(quote ? ([["From quotation", <Link key="q" className="text-primary-text hover:underline" href={`/sales/quotations/${quote.id}`}>{quote.quoteNumber}</Link>]] as [string, React.ReactNode][]) : []),
                 ["Min shelf life", `${customer.minShelfLifeDays} days at dispatch`],
@@ -147,7 +159,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                   <p className="text-[13px] tabular text-muted">
                     {fmtQty(l.qtyUnits, "pcs", 0)} × <Money value={l.unitPrice} />
                     {l.customerItemCode ? ` · customer code ${l.customerItemCode}` : ""}
-                    {showAlloc && (status === "shipped" ? ` · shipped ${fmtQty(l.qtyUnits, "", 0)}` : ` · allocated ${fmtQty(l.allocated, "", 0)}`)}
+                    {showAlloc && (status === "shipped" ? ` · shipped ${fmtQty(l.qtyUnits, "", 0)}` : ` · reserved ${fmtQty(l.allocated, "", 0)}`)}
                   </p>
                 </li>
               ))}
@@ -156,7 +168,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                 <Money value={total} />
               </li>
             </ul>
-            <Table className="hidden sm:block" head={["#", "SKU", "Product", "Qty", "Unit price", "Value", ...(showAlloc ? ["Allocated"] : [])]}>
+            <Table className="hidden sm:block" head={["#", "SKU", "Product", "Qty", "Unit price", "Value", ...(showAlloc ? ["Reserved"] : [])]}>
               {lines.map((l) => (
                 <tr key={l.id}>
                   <Td>{l.lineNo}</Td>
@@ -225,7 +237,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
 
           {hasAllocations && (
             <Card>
-              <CardTitle>{status === "shipped" ? "Shipped lots" : "Pick list (FEFO allocation)"}</CardTitle>
+              <CardTitle>{status === "shipped" ? "Shipped lots" : "Reserved stock (earliest expiry first)"}</CardTitle>
               <ul className="flex flex-col gap-2 sm:hidden">
                 {allocations.map((a) => (
                   <li key={a.id} className="rounded-[12px] border border-line p-3">
@@ -317,23 +329,16 @@ export default async function OrderDetailPage({ params, searchParams }: { params
             </Card>
           )}
 
-          {status === "confirmed" && (
+          {status === "confirmed" && ((hasAllocations && shortLines.length > 0) || !canAllocate || canVoid) && (
             <Card>
-              <CardTitle>Allocate stock</CardTitle>
+              <CardTitle>{(hasAllocations && shortLines.length > 0) || !canAllocate ? "Stock" : "Cancel order"}</CardTitle>
               <div className="flex flex-col gap-3">
                 {hasAllocations && shortLines.length > 0 && (
-                  <Banner tone="warn" title="Partly allocated — shortfall">
-                    {shortLines.map((l) => `${l.sku}: ${fmtQty(l.shortfall, "pcs", 0)} short`).join("; ")}. The order stays confirmed until every line is fully allocated.
+                  <Banner tone="warn" title="Only part of the stock is reserved">
+                    {shortLines.map((l) => `${l.productName}: ${fmtQty(l.shortfall, "pcs", 0)} short`).join("; ")}. The order waits until every line has stock reserved.
                   </Banner>
                 )}
-                <p className="text-[13px] text-fg-2">
-                  Reserves released finished-goods lots at this site, earliest expiry first, skipping lots with less than {customer.minShelfLifeDays} days of shelf life left.
-                </p>
-                {canAllocate ? (
-                  <p className="text-[13px] text-muted">Use the allocate button at the top.</p>
-                ) : (
-                  <p className="text-[13px] text-muted">Waiting for the warehouse to allocate stock.</p>
-                )}
+                {!canAllocate && <p className="text-[13px] text-muted">Waiting for the warehouse to reserve stock. They take approved stock with the earliest expiry first, with at least {customer.minShelfLifeDays} days of shelf life left.</p>}
                 {canVoid && <CancelOrderPanel orderId={order.id} hasAllocations={hasAllocations} />}
               </div>
             </Card>
@@ -365,15 +370,12 @@ export default async function OrderDetailPage({ params, searchParams }: { params
           <Card>
             <CardTitle>History</CardTitle>
             {transitions.length === 0 ? (
-              <p className="text-[13px] text-muted">No state changes recorded for this order (entered before Wave 3).</p>
+              <p className="text-[13px] text-muted">No history yet.</p>
             ) : (
               <ol className="flex flex-col gap-2 text-[13px]">
                 {transitions.map((t) => (
                   <li key={t.id} className="flex flex-col border-l-2 border-line pl-3">
-                    <span className="font-medium">
-                      {t.fromState ? `${t.fromState.replace(/_/g, " ")} → ` : ""}
-                      {t.toState.replace(/_/g, " ")}
-                    </span>
+                    <span className="font-medium">{historyLabel(t.fromState, t.toState)}</span>
                     <span className="text-[12px] text-muted">
                       {fmtDateTime(t.occurredAt)} · {t.actorName}
                       {t.reason ? ` · ${t.reason}` : ""}
@@ -388,4 +390,22 @@ export default async function OrderDetailPage({ params, searchParams }: { params
       </div>
     </>
   );
+}
+
+/** Credit check in plain words. Orders confirmed before the check was recorded say so instead of "pending". */
+function creditCheckText(credit: string, status: string): string {
+  if (credit === "passed") return "Passed";
+  if (credit === "not_required") return "Not needed for this customer";
+  if (credit === "overridden") return "Over the limit, approved by a manager";
+  if (credit === "failed") return "Not passed: needs approval";
+  return ["draft", "submitted"].includes(status) ? "Not checked yet (checked when the order is submitted)" : status === "pending_approval" ? "Pending" : "Not recorded";
+}
+
+/** Approval in plain words: who approved, or why none was needed. */
+function approvalText(status: string, approvedAt: Date | string | null, note: string | null): string {
+  if (approvedAt) return `Approved ${fmtDateTime(approvedAt)}${note ? ` (${note})` : ""}`;
+  if (status === "pending_approval") return "Waiting for approval";
+  if (["draft", "submitted"].includes(status)) return "Not submitted yet";
+  if (status === "cancelled") return "—";
+  return "Not needed";
 }

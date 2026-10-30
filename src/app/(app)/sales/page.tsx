@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
-import { fmtDate, fmtQty } from "@/lib/qty";
-import { listOrders, orderCounts, ordersAwaitingApproval } from "@/modules/sales";
+import { fmtDate } from "@/lib/qty";
+import { listOrders, orderCounts, orderDaysLate, ordersAwaitingApproval, salesBusinessDate } from "@/modules/sales";
 import { Card, EmptyState, Kpi, LinkButton, PageHeader, Table, Td, cx } from "@/ui/core";
 import { Banner } from "@/ui/status";
-import { Money, SalesStatus } from "./orders/sales-ui";
+import { LateChip, Money, SalesStatus, linesSummary } from "./orders/sales-ui";
 import { Forbidden } from "../forbidden";
 import { Help } from "@/ui/help/help";
 
@@ -29,12 +29,15 @@ export default async function SalesOrdersPage({ searchParams }: { searchParams: 
   const active = TABS.some((t) => t.key === status) ? status : "";
   const [orders, counts, awaiting] = await Promise.all([listOrders(ctx, active || undefined, LIST_LIMIT), orderCounts(ctx), ordersAwaitingApproval(ctx)]);
   const mine = awaiting.filter((a) => a.siteId === ctx.currentSiteId);
+  const today = salesBusinessDate();
+  const late = new Map(orders.map((o) => [o.id, orderDaysLate(o, today)]));
+  const lateCount = [...late.values()].filter((d) => d > 0).length;
 
   return (
     <>
       <PageHeader
         title="Sales orders"
-        subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · draft → submitted → confirmed (or pending approval) → allocated → shipped`}
+        subtitle={ctx.currentSite.name}
         actions={
           <>
             <Help screen="sales.order" />
@@ -51,11 +54,19 @@ export default async function SalesOrdersPage({ searchParams }: { searchParams: 
         </div>
       )}
 
+      {lateCount > 0 && (
+        <div className="mb-4">
+          <Banner tone="bad" title={`${lateCount} order${lateCount === 1 ? " is" : "s are"} late`}>
+            The customer asked for delivery before today and the goods have not been shipped yet. Late orders are marked in red below.
+          </Banner>
+        </div>
+      )}
+
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label="Draft" value={counts.draft ?? 0} hint={`${counts.pending_approval ?? 0} pending approval`} href="/sales?status=draft" />
-        <Kpi label="Confirmed" value={counts.confirmed ?? 0} hint="Waiting for allocation" tone={(counts.confirmed ?? 0) > 0 ? "warn" : "neutral"} href="/sales?status=confirmed" />
-        <Kpi label="Allocated" value={counts.allocated ?? 0} hint="Ready to pick and dispatch" href="/sales?status=allocated" />
-        <Kpi label="Shipped" value={counts.shipped ?? 0} hint="Delivery receipt issued" tone="good" href="/sales?status=shipped" />
+        <Kpi label="Confirmed" value={counts.confirmed ?? 0} hint="Stock not yet reserved" tone={(counts.confirmed ?? 0) > 0 ? "warn" : "neutral"} href="/sales?status=confirmed" />
+        <Kpi label="Allocated" value={counts.allocated ?? 0} hint="Stock reserved, ready to pick" href="/sales?status=allocated" />
+        <Kpi label="Shipped" value={counts.shipped ?? 0} hint="Sent to the customer" tone="good" href="/sales?status=shipped" />
       </div>
 
       <nav aria-label="Filter by status" className="mb-4 flex gap-1 overflow-x-auto rounded-[12px] border border-line bg-surface p-1">
@@ -82,50 +93,61 @@ export default async function SalesOrdersPage({ searchParams }: { searchParams: 
       {orders.length >= LIST_LIMIT && <p className="mb-2 text-[13px] text-muted">Showing the newest {LIST_LIMIT} orders. Filter by status, or use the order report for the full list.</p>}
       {orders.length === 0 ? (
         <EmptyState
-          title={active ? `No ${active} orders` : "No sales orders yet"}
+          title={active ? `No ${(TABS.find((t) => t.key === active)?.label ?? active).toLowerCase()} orders` : "No sales orders yet"}
           action={ctx.can("sales.sales_order.create") ? <LinkButton href="/sales/new">Create an order</LinkButton> : undefined}
         >
           Orders for {ctx.currentSite.name} appear here. Switch site in the top bar to see other sites.
         </EmptyState>
       ) : (
         <>
-          {/* Phone: cards */}
-          <ul className="flex flex-col gap-3 sm:hidden">
-            {orders.map((o) => (
-              <li key={o.id}>
-                <Link href={`/sales/${o.id}`}>
-                  <Card className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-fg">{o.orderNumber}</span>
-                      <SalesStatus status={o.status} />
-                    </div>
-                    <p className="text-[14px] text-fg">{o.customerName}</p>
-                    <p className="text-[12px] text-muted">
-                      {o.lines.map((l) => `${l.sku} × ${fmtQty(l.qty, "", 0)}`).join(" · ")}
-                    </p>
-                    <div className="flex justify-between text-[13px] tabular">
-                      <span className="text-muted">Deliver {fmtDate(o.requestedDeliveryOn)}</span>
-                      <Money className="font-medium" value={o.value} />
-                    </div>
-                  </Card>
-                </Link>
-              </li>
-            ))}
+          {/* Phone and tablet: cards (a seven-column table does not fit below 1024 px). */}
+          <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:hidden">
+            {orders.map((o) => {
+              const daysLate = late.get(o.id) ?? 0;
+              return (
+                <li key={o.id} className="min-w-0">
+                  <Link href={`/sales/${o.id}`} className="block h-full">
+                    <Card className="flex h-full flex-col gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="whitespace-nowrap font-semibold text-fg">{o.orderNumber}</span>
+                        <SalesStatus status={o.status} />
+                      </div>
+                      <p className="text-[15px] font-medium text-fg">{o.customerName}</p>
+                      <p className="text-[13px] text-fg-2">{linesSummary(o.lines)}</p>
+                      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 text-[13px] tabular">
+                        <span className="inline-flex flex-wrap items-center gap-2 text-muted">
+                          Deliver by {fmtDate(o.requestedDeliveryOn)}
+                          <LateChip days={daysLate} />
+                        </span>
+                        <Money className="font-semibold text-fg" value={o.value} />
+                      </div>
+                    </Card>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
-          {/* Tablet / desktop: table */}
-          <Table className="hidden sm:block" head={["Order", "Customer", "PO number", "Requested delivery", "Lines", "Value", "Status"]}>
+          {/* Desktop: table */}
+          <Table className="hidden lg:block" head={["Order", "Customer", "Deliver by", "Products", "Value", "Status"]}>
             {orders.map((o) => (
               <tr key={o.id} className="hover:bg-surface-2">
-                <Td>
+                <Td className="whitespace-nowrap">
                   <Link href={`/sales/${o.id}`} className="font-medium text-primary-text hover:underline">
                     {o.orderNumber}
                   </Link>
+                  {o.customerPoNumber && <span className="block text-[12px] text-muted">PO {o.customerPoNumber}</span>}
                 </Td>
                 <Td>{o.customerName}</Td>
-                <Td>{o.customerPoNumber ?? "—"}</Td>
-                <Td>{fmtDate(o.requestedDeliveryOn)}</Td>
-                <Td className="text-fg-2">{o.lines.map((l) => `${l.sku} × ${fmtQty(l.qty, "", 0)}`).join(", ")}</Td>
-                <Td className="font-medium">
+                <Td>
+                  <span className="whitespace-nowrap">{fmtDate(o.requestedDeliveryOn)}</span>
+                  {(late.get(o.id) ?? 0) > 0 && (
+                    <span className="mt-1 block">
+                      <LateChip days={late.get(o.id) ?? 0} />
+                    </span>
+                  )}
+                </Td>
+                <Td className="text-fg-2">{linesSummary(o.lines)}</Td>
+                <Td className="whitespace-nowrap font-medium">
                   <Money value={o.value} />
                 </Td>
                 <Td>

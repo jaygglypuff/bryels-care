@@ -74,7 +74,7 @@ export {
   recentReceiptsOfSupplier,
 } from "./returns";
 export { supplierPerformance, type SupplierPerformanceRow } from "./performance";
-export { listReorderPolicies, saveReorderPolicy, computeReorderSuggestions, listReorderSuggestions, acceptReorderSuggestion, dismissReorderSuggestion, suggestQty } from "./reorder";
+export { listReorderPolicies, saveReorderPolicy, computeReorderSuggestions, ensureReorderSuggestionsFresh, lastReorderComputation, listReorderSuggestions, acceptReorderSuggestion, dismissReorderSuggestion, suggestQty } from "./reorder";
 export { forecastRows, submitForecastOverride, decideForecastOverride, FORECAST_BANNER, type ForecastRow } from "./forecast";
 export { forecastSeries, backtest, forecastNext, METHOD_LABEL, type ForecastResult, type MethodId } from "./forecast-math";
 export { PR_TRANSITIONS, PO_TRANSITIONS, SR_TRANSITIONS, PR_STATUS_LABEL, PO_STATUS_LABEL, SR_STATUS_LABEL, canMove, type PrStatus, type PoStatus, type SrStatus } from "./state";
@@ -82,3 +82,4 @@ export { poApprovalCandidates, prApprovalCandidates, srApprovalCandidates, aslAp
 export { supplierMaterialsKind } from "./import-kind";
 export { purchaseOrderMatchSourceImpl } from "./finance-match"; // W4B three-way match (src/modules/wiring.ts)
 export { procurementReorderSuggestJob } from "./jobs";
+export { purchaseRequestApprovalVerdicts, purchaseOrderApprovalVerdicts, supplierReturnApprovalVerdicts } from "./approval-gates"; // ADR-075 "To approve"

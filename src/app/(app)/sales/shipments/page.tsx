@@ -62,7 +62,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
       {ctx.can("sales.shipment.export") && (
         <Card className="mt-4">
           <CardTitle>Export for the accountant</CardTitle>
-          <p className="mb-3 text-[13px] text-fg-2">Dispatched and delivered shipments of a period with order, DR, customer, lots, boxes and quantities. Prices appear only for price-list viewers. Billing works from this export until invoices exist (Phase 6), never from draft documents.</p>
+          <p className="mb-3 text-[13px] text-fg-2">Dispatched and delivered shipments of a period with order, DR, customer, lots, boxes and quantities. Prices appear only for price-list viewers. Until invoicing is set up, billing works from this export, never from draft documents.</p>
           <form method="get" action="/api/v1/sales/shipments/export" className="grid grid-cols-1 gap-3 sm:grid-cols-4 sm:items-end">
             <input type="hidden" name="siteId" value={ctx.currentSiteId} />
             <Field label="From" htmlFor="from"><Input id="from" name="from" type="date" defaultValue={monthStart} required /></Field>

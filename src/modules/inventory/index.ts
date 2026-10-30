@@ -81,3 +81,4 @@ export { containerMachine, lockContainers, contentsOf, addContent, takeContent, 
 export { OPEN_ALLOCATION_ORDER_STATUSES } from "./reservations";
 export { claimIdempotencyKey, storeIdempotentResult, stateMachine } from "./command-kit";
 export { registerReceivingPoHooks, receivingPoHooks, type ReceivingPoHooks, type PoReceiptLine } from "./receiving-po"; // Wave 4 W4A
+export { lowStockItems, fmtStock, type LowStockItem } from "./low-stock"; // owner QA 2026-10-30: below-minimum read model

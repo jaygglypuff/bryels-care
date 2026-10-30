@@ -39,16 +39,16 @@ export default async function ClosurePage({ params }: { params: Promise<{ batchI
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <PageHeader
-        title={`Closure and records · ${v.batch.number}`}
-        subtitle={`${v.batch.productName} · site ${v.batch.siteCode}${v.reopenCount ? ` · reopened ${v.reopenCount} time(s)` : ""}`}
+        title={`Close the batch · ${v.batch.number}`}
+        subtitle={`${v.batch.productName} · site ${v.batch.siteCode}${v.reopenCount ? ` · reopened ${v.reopenCount} ${v.reopenCount === 1 ? "time" : "times"}` : ""}`}
         actions={
           <>
             <Help screen="production.bmr" />
             <LinkButton href={`/production/${v.batch.id}`} variant="secondary">
-              Batch
+              Back to batch
             </LinkButton>
             <LinkButton href={`/print/bmr/${v.batch.id}`} variant="secondary" target="_blank">
-              BMR
+              Print batch record
             </LinkButton>
           </>
         }
@@ -56,7 +56,7 @@ export default async function ClosurePage({ params }: { params: Promise<{ batchI
 
       {v.activeReopenNo && (
         <Banner tone="warn" title={`Reopened for amendment (rev ${v.activeReopenNo})`}>
-          Record each correction below with its reason, then close the batch again. The new BMR prints as AMENDED rev {v.activeReopenNo} and replaces the earlier copy.
+          Record each correction below with its reason, then close the batch again. The new batch record prints as AMENDED rev {v.activeReopenNo} and replaces the earlier copy.
         </Banner>
       )}
 
@@ -98,9 +98,9 @@ export default async function ClosurePage({ params }: { params: Promise<{ batchI
               {v.closures.map((c) => (
                 <li key={c.id} className="py-2">
                   Closure {c.closureNo} from {c.fromState} · {c.closedByName}, {fmtDateTime(c.closedAt)}
-                  {c.reservationsReleased ? ` · ${c.reservationsReleased} reservation(s) released` : ""} ·{" "}
+                  {c.reservationsReleased ? ` · ${c.reservationsReleased} ${c.reservationsReleased === 1 ? "reservation" : "reservations"} released` : ""} ·{" "}
                   <Link href={`/print/bmr/${v.batch.id}?doc=${c.generatedDocumentId}`} className="text-primary-text hover:underline">
-                    final BMR
+                    final batch record
                   </Link>
                   {c.note ? <span className="block text-muted">{c.note}</span> : null}
                 </li>

@@ -15,7 +15,7 @@ export default async function OrderBoardPage() {
     <>
       <PageHeader
         title="Order board"
-        subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · one column per order state; finished columns show the last 30 days`}
+        subtitle={`${ctx.currentSite.name} · one column per step; finished orders show for 30 days`}
         actions={
           <>
             <LinkButton href="/sales" variant="secondary">List</LinkButton>

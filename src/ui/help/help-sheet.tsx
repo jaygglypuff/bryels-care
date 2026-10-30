@@ -26,9 +26,10 @@ export function HelpSheet({ title, meta, children, label = "Help for this screen
         aria-label={label}
         title={label}
         onClick={() => ref.current?.showModal()}
-        className={`inline-flex h-9 ${text ? "px-3 gap-1 text-[13px]" : "w-9 text-[15px]"} shrink-0 items-center justify-center rounded-full border border-line bg-surface font-semibold text-primary-text hover:bg-primary-soft focus-visible:outline-2`}
+        className={`inline-flex ${text ? "min-h-[44px] px-4 gap-1 text-[14px]" : "h-9 w-9 text-[15px]"} shrink-0 items-center justify-center rounded-full border border-line bg-surface font-semibold text-primary-text hover:bg-primary-soft focus-visible:outline-2`}
       >
-        ?{text ? <span>{text}</span> : null}
+        {/* With a visible text ("Help: weighing") the text says it all; the bare "?" is for icon-only buttons. */}
+        {text ? <span>{text}</span> : "?"}
       </button>
       <dialog
         ref={ref}

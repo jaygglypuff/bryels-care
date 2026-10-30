@@ -169,7 +169,7 @@ export default async function ReturnPage({ params }: { params: Promise<{ returnI
                   </div>
                 </details>
               )}
-              <p className="text-[12px] text-muted">Credit notes for returns arrive with finance in Phase 6.</p>
+              <p className="text-[12px] text-muted">Credit notes for returns are not available yet; finance issues them separately.</p>
             </div>
           </Card>
         )}

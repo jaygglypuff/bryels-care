@@ -358,7 +358,7 @@ async function kpiValue(page, caption) {
     };
 
     await page.goto(BASE + '/production/' + facts.batchId);
-    await expectText(page, 'Materials staged');
+    await expectText(page, 'Materials ready');
 
     // Step 1: weighing-area line clearance, conductor + checker: signing it starts the batch (in process).
     await signClearance(1);
@@ -447,8 +447,8 @@ async function kpiValue(page, caption) {
     await coSign(transfer);
     await transfer.getByText('This posts consumption and output').click();
     await shot(page, 'batch-weighed-and-checklist', { full: true });
-    await transfer.getByRole('button', { name: 'Post to quarantine and send to QA' }).click();
-    await expectText(page, 'Awaiting QA decision', 30000);
+    await transfer.getByRole('button', { name: 'Move to hold area and send to quality' }).click();
+    await expectText(page, 'Waiting for quality approval', 30000);
     facts.fgLot = (await yt.locator('span.font-mono').first().innerText()).trim();
     assert(/^L-\d{4}-\d{5}$/.test(facts.fgLot), 'output lot ' + facts.fgLot);
     log('batch posted to quarantine, output lot', facts.fgLot);

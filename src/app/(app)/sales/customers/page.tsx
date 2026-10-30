@@ -21,7 +21,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
     <>
       <PageHeader
         title="Customers"
-        subtitle="Profiles, addresses, requirements and terms. Credit terms are visible to finance-authorised roles only."
+        subtitle="Who you sell to: addresses, requirements and terms. Only finance staff see credit limits."
         actions={
           <>
             {ctx.can("masterdata.customer.export") && (
@@ -60,13 +60,13 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
         </EmptyState>
       ) : (
         <>
-          <ul className="flex flex-col gap-3 sm:hidden">
+          <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:hidden">
             {rows.map((c) => (
               <li key={c.id}>
-                <Link href={`/sales/customers/${c.id}`}>
-                  <Card className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-fg">{c.name}</span>
+                <Link href={`/sales/customers/${c.id}`} className="block h-full">
+                  <Card className="flex h-full flex-col gap-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="min-w-0 font-semibold text-fg">{c.name}</span>
                       <SalesStatus status={c.status} />
                     </div>
                     <p className="font-mono text-[12px] text-muted">{c.code}</p>
@@ -79,10 +79,10 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
               </li>
             ))}
           </ul>
-          <Table className="hidden sm:block" head={["Code", "Name", "Segment", "Status", "Ship to", ...(credit ? ["Credit limit"] : []), "Open / all orders", "Last order"]}>
+          <Table className="hidden lg:block" head={["Code", "Name", "Customer type", "Status", "Ship to", ...(credit ? ["Credit limit"] : []), "Orders", "Last order"]}>
             {rows.map((c) => (
               <tr key={c.id} className="hover:bg-surface-2">
-                <Td className="font-mono text-[12px]">{c.code}</Td>
+                <Td className="whitespace-nowrap font-mono text-[12px]">{c.code}</Td>
                 <Td>
                   <Link href={`/sales/customers/${c.id}`} className="font-medium text-primary-text hover:underline">
                     {c.name}
@@ -100,9 +100,9 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                   </Td>
                 )}
                 <Td>
-                  {c.openOrders} / {c.orders}
+                  {c.openOrders} open of {c.orders}
                 </Td>
-                <Td>{c.lastOrderAt ? fmtDate(c.lastOrderAt) : "—"}</Td>
+                <Td className="whitespace-nowrap">{c.lastOrderAt ? fmtDate(c.lastOrderAt) : "—"}</Td>
               </tr>
             ))}
           </Table>

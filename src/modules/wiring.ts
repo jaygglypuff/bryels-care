@@ -5,6 +5,8 @@ import { type DeviationKind, type OpenDeviationInput, autoCloseReleasedBatch, re
 import {
   type DeviationSource,
   changeControlApprovalCandidates,
+  changeControlApprovalVerdicts,
+  recallCaseApprovalVerdicts,
   ensureBatchInspection,
   inProcessQcStatus,
   listComplaints,
@@ -15,7 +17,7 @@ import {
 } from "@/modules/quality";
 import { pmDueCandidates, usageAvailabilityReasons } from "@/modules/maintenance";
 import { registerEquipmentAvailabilityProvider } from "@/modules/masterdata";
-import { registerActionItemSource } from "@/modules/action-centre";
+import { registerActionItemSource, registerApprovalGate } from "@/modules/action-centre";
 import { customersKind, failedImportCandidates, importApprovalCandidates, importWizardStats, registerImportKind } from "@/modules/imports";
 import { registerImportStatsProvider } from "@/modules/platform/diagnostics-phase5";
 import { registerReceivingPoHooks } from "@/modules/inventory";
@@ -24,13 +26,18 @@ import {
   latePoCandidates,
   overDeliveryCandidates,
   poApprovalCandidates,
+  purchaseOrderApprovalVerdicts,
+  purchaseRequestApprovalVerdicts,
+  supplierReturnApprovalVerdicts,
   prApprovalCandidates,
   purchaseOrderMatchSourceImpl,
   purchaseOrderReceivingHooks,
   srApprovalCandidates,
   supplierMaterialsKind,
 } from "@/modules/procurement";
+import { customerRequirementApprovalVerdicts, priceListApprovalVerdicts, quoteApprovalVerdicts, salesOrderApprovalVerdicts } from "@/modules/sales";
 import { listCustomerReturns, registerCustomer360Section, registerSalesTaxRateResolver, registerShipmentReversalGuard, RETURN_STATUS_LABEL, type CustomerReturnStatus } from "@/modules/sales";
+import { expenseClaimApprovalVerdicts, invoiceApprovalVerdicts } from "@/modules/finance";
 import { disputedBills, expenseClaimsToApprove, invoiceBlockingShipmentReversal, invoicesToApprove, overdueInvoices, registerPurchaseOrderMatchSource, salesTaxRateFor } from "@/modules/finance";
 
 /**
@@ -156,4 +163,17 @@ export function registerAppHooks() {
   registerActionItemSource({ kind: "pm_due", detect: async (org, now) => (await pmDueCandidates(org, now)).filter((c) => c.kind === "pm_due") });
   registerActionItemSource({ kind: "pm_overdue", detect: async (org, now) => (await pmDueCandidates(org, now)).filter((c) => c.kind === "pm_overdue") });
   registerEquipmentAvailabilityProvider("maintenance.usage_plans", (q, ids) => usageAvailabilityReasons(q, ids));
+  // ADR-075 / ADR-082 §4 (owner QA 2026-10-30): "To approve" shows only what the user can decide now; each
+  // module says who decides its open approval step, with the rules its decide service enforces.
+  registerApprovalGate("approval.expense_claim", expenseClaimApprovalVerdicts);
+  registerApprovalGate("approval.invoice", invoiceApprovalVerdicts);
+  registerApprovalGate("approval.purchase_request", purchaseRequestApprovalVerdicts);
+  registerApprovalGate("approval.purchase_order", purchaseOrderApprovalVerdicts);
+  registerApprovalGate("approval.supplier_return", supplierReturnApprovalVerdicts);
+  registerApprovalGate("approval.sales_order", salesOrderApprovalVerdicts);
+  registerApprovalGate("approval.quote", quoteApprovalVerdicts);
+  registerApprovalGate("approval.price_list", priceListApprovalVerdicts);
+  registerApprovalGate("approval.customer_requirement", customerRequirementApprovalVerdicts);
+  registerApprovalGate("approval.change_control", changeControlApprovalVerdicts);
+  registerApprovalGate("approval.recall_case", recallCaseApprovalVerdicts);
 }

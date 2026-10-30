@@ -113,7 +113,7 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
                     ["Tax identifier", c.taxIdentifier ?? "—"],
                   ]}
                 />
-                <p className="mt-2 text-[12px] text-muted">Exposure counts confirmed to invoiced orders until receivables arrive with finance (Phase 6).</p>
+                <p className="mt-2 text-[12px] text-muted">Open order exposure counts orders from confirmed up to invoiced. Unpaid invoices are not included yet.</p>
                 {ctx.can("finance.credit_terms.approve") && <CreditTermsForm c={c} />}
               </>
             ) : (
@@ -175,7 +175,7 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
             <Card>
               <CardTitle>Requirements</CardTitle>
               {d.requirements.length === 0 ? (
-                <EmptyState title="No requirements yet">Agreed specifications (shelf life, MOQ, carton count, artwork, documents) apply to orders and packing once approved.</EmptyState>
+                <EmptyState title="No requirements yet">Agreed specifications (shelf life, minimum order quantity, carton count, artwork, documents) apply to orders and packing once approved.</EmptyState>
               ) : (
                 <ul className="flex flex-col divide-y divide-line">
                   {d.requirements.map((r) => (

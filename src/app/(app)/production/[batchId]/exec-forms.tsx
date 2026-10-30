@@ -604,17 +604,17 @@ export function TransferForm({ batchId, checkers, quarantine, idem }: { batchId:
   return (
     <form action={action} className="flex flex-col gap-3" data-testid="transfer-form">
       <Hidden v={{ batchId, idempotencyKey: idem }} />
-      <Field label="Scan the quarantine location" htmlFor="transfer-loc" error={state?.fieldErrors?.locationRef} hint={quarantine.length ? `Quarantine locations: ${quarantine.map((q) => q.code).join(", ")}` : "This site has no quarantine location."}>
+      <Field label="Scan the hold area location" htmlFor="transfer-loc" error={state?.fieldErrors?.locationRef} hint={quarantine.length ? `Hold area locations: ${quarantine.map((q) => q.code).join(", ")}` : "This site has no hold area location."}>
         <Input id="transfer-loc" name="locationRef" autoComplete="off" className="min-h-[52px] font-mono text-[16px]" placeholder="BC:LOC:QUA-01" required />
       </Field>
       <CoSign prefix="checker" people={checkers} title="Checked by" required />
       <label className="flex min-h-[44px] items-start gap-2 text-[14px]">
         <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} className="mt-1 size-5" required />
-        This posts consumption and output: the materials leave stock and the finished lot is created in quarantine. It cannot be edited afterwards.
+        This updates stock: the materials used leave stock and the finished lot is created in the hold area, where it waits for quality approval. It cannot be edited afterwards.
       </label>
       <FormMessage state={state} />
       <SubmitButton size="lg" variant="cta" pendingText="Posting…" disabled={!confirm} className="w-full sm:w-auto sm:self-start">
-        Post to quarantine and send to QA
+        Move to hold area and send to quality
       </SubmitButton>
     </form>
   );

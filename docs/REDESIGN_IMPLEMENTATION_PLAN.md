@@ -13,7 +13,7 @@
 | Information architecture (2) | `docs/NEW_NAVIGATION.md`, `docs/WORKFLOW_ARCHITECTURE.md` | Done |
 | **R1 — navigation, Operations Center, stock by type** (3–4) | Five destinations; section menus; role tab bars; rail removed; `/operations`; Home "Right now"; Inventory tabs Raw/WIP/Finished; `/inventory/wip`; `/management`; app-wide error page; help and messages renamed | **Done** (ADR-081) |
 | R2 — owner polish | Overview links to order hub (UX-09) ✓; "To approve" only for approvers (UX-06, UX-29) ✓; trim overview and labels = page titles (UX-19) next | Partly done (ADR-082) |
-| R3 — operator and record layout | Assignee on production orders ✓ (migration 0027, additive); "Your next task" on Home ✓; shared record header on PO, receipt, sales order, shipment ✓ (UX-21); words (UX-17/18) next | Done except words (ADR-082) |
+| R3 — operator and record layout | Assignee on production orders ✓ (migration 0029, additive); "Your next task" on Home ✓; shared record header on PO, receipt, sales order, shipment ✓ (UX-21); words (UX-17/18) next | Done except words (ADR-082) |
 | R4 — connected workflows | "Journey" panel per record (UX-22); receiving flow opens inspection then put-away in sequence (UX-03); fulfilment under one URL area with redirects (UX-04) | Proposed |
 | R5 — validation and deployment | Playwright run of `tests/e2e/demo-rehearsal.cjs` on the demo, device check at 390/820/1180/1440 px, Railway deploy with backup and rollback (runbook) | After each phase |
 

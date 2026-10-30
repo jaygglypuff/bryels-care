@@ -26,3 +26,6 @@ export * from "./shipment-export";
 export * from "./returns";
 export * from "./returns-shipments";
 export { RETURN_TRANSITIONS, RETURN_STATUS_LABEL, RETURN_CONDITION_LABEL, canMoveReturn, type CustomerReturnStatus, type ReturnLineCondition } from "./returns-rules";
+// Owner usability fix: one "late" rule for the order list, board and order page.
+export { orderDaysLate, ORDER_FINISHED_STATES } from "./late";
+export { salesOrderApprovalVerdicts, quoteApprovalVerdicts, priceListApprovalVerdicts, customerRequirementApprovalVerdicts } from "./approval-gates"; // ADR-075 "To approve"

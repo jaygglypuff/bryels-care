@@ -29,11 +29,11 @@ export async function FulfilmentPanel({ orderId, data, hideNext = false }: { ord
       <div className="flex flex-col gap-3">
         {showStart && (
           <Cmd action={startPickAction} fields={{ orderId: o.id }} label="Start pick list" pending="Starting…" variant="cta" size="lg">
-            <p className="text-[13px] text-fg-2">Scan every allocated box (or the lot with a quantity for loose units). Stock moves only at dispatch.</p>
+            <p className="text-[13px] text-fg-2">Scan every reserved box (or the lot with a quantity for loose units). Stock moves only at dispatch.</p>
           </Cmd>
         )}
         {showContinue && f.openPick && <LinkButton href={`/sales/picking/${f.openPick.id}`} variant="primary">Continue pick {f.openPick.pickNumber}</LinkButton>}
-        {releasable && <ReasonCmd action={releaseAllocationsAction} fields={{ orderId: o.id }} label="Release allocation" placeholder="e.g. Customer postponed the delivery" />}
+        {releasable && <ReasonCmd action={releaseAllocationsAction} fields={{ orderId: o.id }} label="Release reserved stock" placeholder="e.g. Customer postponed the delivery" />}
         {f.shipments.length > 0 && (
           <ul className="flex flex-col divide-y divide-line text-[13px]">
             {f.shipments.map((s) => (

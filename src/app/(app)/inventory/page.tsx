@@ -5,8 +5,8 @@ import { stockBySection } from "@/modules/inventory/sections";
 import { LOCATION_SECTIONS, SECTION_LABELS, isSection } from "@/lib/location-sections";
 import { SectionHeading } from "@/ui/inventory/sections";
 import { Card, EmptyState, Input, Kpi, LinkButton, PageHeader, Select, Table, Td, buttonClass } from "@/ui/core";
-import { Banner, StatusChip } from "@/ui/status";
-import { Expiry, fmtLotQty } from "@/ui/inventory/bits";
+import { Banner } from "@/ui/status";
+import { Expiry, LotStatusChip, fmtLotQty } from "@/ui/inventory/bits";
 import { StockTabs } from "@/ui/inventory/stock-tabs";
 import { Forbidden } from "../forbidden";
 
@@ -17,9 +17,9 @@ const STATUS_LABEL: Record<string, string> = {
   released: "Released",
   on_hold: "On hold",
   rejected: "Rejected",
-  expired: "Expired (status or date)",
+  expired: "Expired",
   recalled: "Recalled",
-  expiring: `Expiring ≤ ${EXPIRY_WARN_DAYS} days`,
+  expiring: `Expiring in ${EXPIRY_WARN_DAYS} days`,
 };
 
 type SP = { q?: string; kind?: string; status?: string; empty?: string; loc?: string; section?: string };
@@ -45,7 +45,7 @@ export default async function LotsPage({ searchParams }: { searchParams: Promise
     <div className="space-y-5">
       <PageHeader
         title={kind === "material" ? "Raw materials" : kind === "product" ? "Finished goods" : "Stock"}
-        subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · every lot with its quality status, expiry and location`}
+        subtitle={`${ctx.currentSite.name} · every lot with its quality status, expiry and place`}
         actions={
           <>
             {ctx.can("procurement.goods_receipt.create") && <LinkButton href="/inventory/receive" variant="secondary">New receiving</LinkButton>}
@@ -58,8 +58,8 @@ export default async function LotsPage({ searchParams }: { searchParams: Promise
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label="Waiting for QA" value={kpis.quarantined} hint="New lots QA has not checked yet" tone={kpis.quarantined ? "warn" : "neutral"} href={`/inventory?status=quarantine${kind ? `&kind=${kind}` : ""}`} />
         <Kpi label="On hold" value={kpis.onHold} hint="Stopped by QA; do not use" tone={kpis.onHold ? "warn" : "neutral"} href={`/inventory?status=on_hold${kind ? `&kind=${kind}` : ""}`} />
-        <Kpi label={`Expiring ≤ ${EXPIRY_WARN_DAYS} d`} value={kpis.expiring} hint="Use first (FEFO)" tone={kpis.expiring ? "warn" : "good"} href={`/inventory?status=expiring${kind ? `&kind=${kind}` : ""}`} />
-        <Kpi label="Expired" value={kpis.expired} hint="Blocked from use" tone={kpis.expired ? "bad" : "good"} href={`/inventory?status=expired${kind ? `&kind=${kind}` : ""}`} />
+        <Kpi label={`Expiring in ${EXPIRY_WARN_DAYS} days`} value={kpis.expiring} hint="Use these first" tone={kpis.expiring ? "warn" : "good"} href={`/inventory?status=expiring${kind ? `&kind=${kind}` : ""}`} />
+        <Kpi label="Expired" value={kpis.expired} hint="Do not use" tone={kpis.expired ? "bad" : "good"} href={`/inventory?status=expired${kind ? `&kind=${kind}` : ""}`} />
       </div>
 
       <Card>
@@ -137,7 +137,7 @@ export default async function LotsPage({ searchParams }: { searchParams: Promise
                   <Link href={`/inventory/${l.lotId}`} className="block rounded-[12px] border border-line p-3 active:bg-surface-2">
                     <div className="flex items-start justify-between gap-2">
                       <span className="min-w-0 break-all font-mono text-[15px] font-semibold text-primary-text">{l.lotNumber}</span>
-                      <StatusChip status={l.qualityStatus} />
+                      <LotStatusChip status={l.qualityStatus} expiresOn={l.expiresOn} />
                     </div>
                     <p className="mt-1 text-[14px]">{l.itemName} <span className="text-muted">· {l.itemCode}</span></p>
                     <div className="mt-2 flex flex-wrap items-end justify-between gap-2 text-[13px]">
@@ -165,7 +165,7 @@ export default async function LotsPage({ searchParams }: { searchParams: Promise
                   <Td><Expiry date={l.expiresOn} warnDays={EXPIRY_WARN_DAYS} /></Td>
                   <Td className="whitespace-nowrap text-right font-medium">{fmtLotQty(l.onHand, l.baseUom)}</Td>
                   <Td className="text-[12px]">{l.locationCodes}</Td>
-                  <Td><StatusChip status={l.qualityStatus} /></Td>
+                  <Td><LotStatusChip status={l.qualityStatus} expiresOn={l.expiresOn} /></Td>
                 </tr>
               ))}
             </Table>
@@ -182,7 +182,7 @@ export default async function LotsPage({ searchParams }: { searchParams: Promise
                 <Link href={`/inventory/${l.id}`} className="block rounded-[12px] border border-line p-3 active:bg-surface-2">
                   <div className="flex items-start justify-between gap-2">
                     <span className="min-w-0 break-all font-mono text-[14px] font-semibold text-primary-text">{l.lotNumber}</span>
-                    <StatusChip status={l.qualityStatus} />
+                    <LotStatusChip status={l.qualityStatus} expiresOn={l.expiresOn} />
                   </div>
                   <p className="mt-1 text-[13px]">{l.itemName} <span className="text-muted">· {l.itemCode}</span></p>
                 </Link>
