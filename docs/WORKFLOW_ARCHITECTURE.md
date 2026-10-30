@@ -83,3 +83,23 @@ Proposal, with no change to posting logic:
 Header (reference, type, product/customer, site, status, assignee) · progress strip · current work with one
 primary action · related records · activity. The production order hub (ADR-080) is the model; apply it to
 purchase order, goods receipt, sales order and shipment in that order.
+
+**Built (R3 header, 2026-10-30).** `RecordHeader` in `src/ui/record.tsx` (type · mono reference · site,
+title, status chip, meta, progress strip, one primary action, quiet secondary links) is used by
+`procurement/orders/[id]`, `inventory/receive/[grId]`, `sales/[orderId]` and `sales/shipments/[shipmentId]`.
+Assignee is not shown yet (needs the workflow-instance/assignment model, UX-22). Strip stages are pure
+mappings in `src/ui/record-steps.ts`, tested against the real transition tables
+(`tests/unit/record-steps.test.ts`):
+
+| Record | Stages ("current" = where the record is now) | Stopped states (last step "blocked") |
+|---|---|---|
+| Purchase order | Draft · Approval (submitted) · Approved · Sent · Received (partly/fully) · Closed; after-the-fact POs have no Sent stage | Cancelled → Created ✓ · Cancelled ✕ |
+| Goods receipt | Draft · Posted | Cancelled → Draft ✓ · Cancelled ✕; Reversed → Draft ✓ · Posted ✓ · Reversed ✕ |
+| Sales order | Draft · Approval (submitted, pending approval) · Confirmed · Allocated · Pick & pack (picking, packed) · Shipped (partly/fully) · Invoiced · Closed | Cancelled → Created ✓ · Cancelled ✕ |
+| Shipment | Picking (draft) · Picked · Packed · Dispatched · Delivered | Cancelled → Created ✓ · Cancelled ✕; Reversed/Returned → Picking…Dispatched ✓ · Reversed/Returned ✕ |
+
+Primary-action rule: the header carries the page's existing single-click command or link for the current
+status (Submit, Post receipt, Allocate, Start/Continue pick, Verify packing, Receive delivery, Print labels,
+Print delivery receipt). Commands that need typed input (approve with note, send with email choice,
+dispatch with driver/plate, acknowledgment, cancel/reverse with reason) stay in their card; the header
+then shows one "Next: …" sentence pointing to it. No new action, permission or service was added.

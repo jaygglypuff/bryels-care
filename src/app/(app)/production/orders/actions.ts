@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireContext } from "@/lib/auth/context";
 import { type ActionState, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
-import { addDailyLog, approveProductionOrder, cancelWorkOrder, correctDailyLog, createProductionOrder } from "@/modules/production";
+import { addDailyLog, approveProductionOrder, assignProductionOrder, cancelWorkOrder, correctDailyLog, createProductionOrder } from "@/modules/production";
 
 /**
  * Server actions of the production order screens (ADR-074). Thin adapters: read the form, call the
@@ -100,6 +100,19 @@ export async function cancelProductionOrderAction(_: ActionState, fd: FormData):
     const r = await cancelWorkOrder(ctx, uuid.parse(str(fd, "workOrderId")), str(fd, "reason") ?? "");
     refreshCurrentPage();
     return { ok: true, message: `Production order ${r.workOrderNumber} cancelled. Materials set aside for it are free again.` };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** ADR-082: assign the order to the person who makes it, or back to anyone (empty value). */
+export async function assignProductionOrderAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const assigneeId = str(fd, "assigneeId")?.trim() || null;
+    const r = await assignProductionOrder(ctx, uuid.parse(str(fd, "workOrderId")), { assigneeId });
+    refreshCurrentPage();
+    return { ok: true, message: !r.changed ? "No change." : assigneeId ? "Assigned. They get a notification and see it first in My work." : "Anyone at the site can take this order now." };
   } catch (e) {
     return toActionState(e);
   }

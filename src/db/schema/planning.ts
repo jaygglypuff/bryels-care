@@ -150,6 +150,8 @@ export const workOrders = pgTable(
     priority: integer("priority").notNull().default(5),
     assignedPlannerId: uuid("assigned_planner_id").references(() => users.id),
     assignedSupervisorId: uuid("assigned_supervisor_id").references(() => users.id),
+    /** ADR-082: the person who makes this order ("My work"); null = open for anyone at the site. */
+    assignedOperatorId: uuid("assigned_operator_id").references(() => users.id),
     notes: text("notes"),
     /** Shortages found at release (material id → required/reserved/short); live figures are recomputed. */
     releaseShortages: jsonb("release_shortages"),

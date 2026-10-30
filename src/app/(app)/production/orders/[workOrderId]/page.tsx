@@ -4,13 +4,13 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
-import { defectTypes, getProductionOrder, type DailyLogRow, type ProductionOrderView } from "@/modules/production";
+import { assigneeChoices, defectTypes, getProductionOrder, type DailyLogRow, type ProductionOrderView } from "@/modules/production";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { Help } from "@/ui/help/help";
 import { WhoCanHelp } from "@/ui/who-can-help";
 import { Forbidden } from "../../../forbidden";
-import { ApproveButton, CancelOrderForm, DailyLogForm } from "../forms";
+import { AssignForm, ApproveButton, CancelOrderForm, DailyLogForm } from "../forms";
 import { ActionButton, DefectTables, NeededBy, OrderStatusChip, OrderWarning, ProgressStrip } from "../parts";
 
 export const metadata: Metadata = { title: "Production order" };
@@ -129,6 +129,7 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
   const d = v.detail;
   const wo = d.workOrder;
   const types = v.canAddLog ? await defectTypes(ctx, wo.siteId) : [];
+  const people = v.canAssign ? await assigneeChoices(ctx, wo.id) : [];
   const todays = v.logs?.filter((l) => l.logDate === v.today && !l.replacedById) ?? [];
   const missing = d.materials.filter((m) => D(m.short).gt(0));
   const batchOptions = v.batches.map((b) => ({ id: b.id, batchNumber: b.batchNumber }));
@@ -146,6 +147,7 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
             </span>
             <span className="font-mono">{wo.workOrderNumber}</span>
             <NeededBy date={v.neededBy} late={v.late} />
+            <span>{v.assignee ? (v.assignee.id === ctx.userId ? "Assigned to you" : `Assigned to ${v.assignee.name}`) : "Anyone can take it"}</span>
             {d.salesOrder && (
               <span>
                 For customer order{" "}
@@ -317,6 +319,11 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
           <div className="hidden lg:block">
             <NextActionCard v={v} />
           </div>
+          {v.canAssign && (
+            <div className="rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)]">
+              <AssignForm workOrderId={wo.id} current={v.assignee?.id ?? null} people={people} />
+            </div>
+          )}
           {v.canCancel && (
             <details className="rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)]">
               <summary className="min-h-[44px] cursor-pointer py-2.5 text-[14px] font-medium">Cancel this order</summary>

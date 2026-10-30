@@ -104,6 +104,8 @@ export type BoardCard = {
   meta: string;
   stepsDone: number;
   stepsTotal: number;
+  /** ADR-082 (UX-09): the card opens the production order; null for a batch made without one. */
+  workOrderId: string | null;
 };
 
 export type NearExpiryLot = {
@@ -316,6 +318,7 @@ async function productionBoard(siteIds: string[], tz: string, today: string, sit
       releasedAt,
       stepsDone,
       stepsTotal,
+      workOrderId: batches.workOrderId,
     })
     .from(batches)
     .innerJoin(products, eq(products.id, batches.productId))
@@ -337,6 +340,7 @@ async function productionBoard(siteIds: string[], tz: string, today: string, sit
       siteCode: siteCode.get(r.siteId) ?? "",
       stepsDone: Number(r.stepsDone),
       stepsTotal: Number(r.stepsTotal),
+      workOrderId: r.workOrderId,
     };
     if (r.status === "planned") col.planned.push({ ...base, meta: r.plannedStartOn ? `Starts ${local(new Date(r.plannedStartOn + "T00:00:00Z"))}` : "No start date" });
     else if (r.status === "materials_staged" || r.status === "in_process")

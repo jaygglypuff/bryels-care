@@ -3,7 +3,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { D, fmtQty } from "@/lib/qty";
 import { Field, Input, Select, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
-import { addDailyLogAction, approveProductionOrderAction, cancelProductionOrderAction, correctDailyLogAction, createProductionOrderAction } from "./actions";
+import { addDailyLogAction, approveProductionOrderAction, assignProductionOrderAction, cancelProductionOrderAction, correctDailyLogAction, createProductionOrderAction } from "./actions";
 
 /**
  * Client forms of the production order screens (ADR-074). Few fields visible; the rest under
@@ -115,6 +115,24 @@ export function ProductionOrderForm({ formulas, lines, today, prefill }: { formu
 
 export function ApproveButton({ workOrderId }: { workOrderId: string }) {
   return <ActionForm action={approveProductionOrderAction} hidden={{ workOrderId }} submit="Approve" pending="Approving…" variant="cta" size="lg" messageBelow className="flex flex-col gap-2" />;
+}
+
+/** ADR-082: who makes this order. Only people who record production at the site are offered. */
+export function AssignForm({ workOrderId, current, people }: { workOrderId: string; current: string | null; people: { id: string; name: string }[] }) {
+  return (
+    <ActionForm action={assignProductionOrderAction} hidden={{ workOrderId }} submit="Save" pending="Saving…" variant="secondary" size="sm" messageBelow className="flex flex-col gap-2">
+      {(fe) => (
+        <Field label="Who makes it" htmlFor="assignee" error={fe.assigneeId}>
+          <Select id="assignee" name="assigneeId" defaultValue={current ?? ""}>
+            <option value="">Anyone at the site</option>
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </Select>
+        </Field>
+      )}
+    </ActionForm>
+  );
 }
 
 export function CancelOrderForm({ workOrderId }: { workOrderId: string }) {

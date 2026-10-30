@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { ROLE_BUNDLES, type Permission } from "@/lib/permissions";
-import { ADVANCED, NAV, buildNav, groupSections, productionPersona, tabsFor } from "@/app/(app)/nav";
+import { ADVANCED, NAV, buildNav, groupSections, isApprover, productionPersona, tabsFor } from "@/app/(app)/nav";
 
 const canFor = (role: string) => {
   const set = new Set<string>(ROLE_BUNDLES[role].permissions);
@@ -126,5 +126,21 @@ describe("bottom tab bar (phone and iPad portrait) per role", () => {
       expect(t.at(-1)!.label, r).toBe("Menu");
     }
     expect(tabs("production_operator").map((x) => x.href)).not.toContain("/sales");
+  });
+});
+
+describe("To approve only for approvers (ADR-082)", () => {
+  it("roles without any approve permission do not get To approve, unless something waits for them", () => {
+    const approver = (r: string, waiting: number) => isApprover(canFor(r), [r], ROLE_BUNDLES[r].permissions, waiting);
+    expect(approver("owner_director", 0)).toBe(true);
+    expect(approver("qa_qc", 0)).toBe(true);
+    expect(approver("finance", 0)).toBe(true);
+    expect(approver("production_operator", 0)).toBe(false); // floor sign-offs happen at the step
+    expect(approver("warehouse_operator", 0)).toBe(false);
+    expect(approver("sales_cs", 0)).toBe(false);
+    expect(approver("production_operator", 2)).toBe(true);
+    const home = (approver: boolean) => buildNav(canFor("production_operator"), ["production_operator"], { approver }).find((g) => g.label === "Home")!.items.map((i) => i.label);
+    expect(home(false)).not.toContain("To approve");
+    expect(home(true)).toContain("To approve");
   });
 });

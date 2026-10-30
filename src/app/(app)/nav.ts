@@ -8,7 +8,16 @@ import type { Permission } from "@/lib/permissions";
  * screens, ADR-080 §11). `hub` marks a destination's landing page: a destination whose only visible
  * item is its hub is hidden (nothing to land on).
  */
-export type NavItem = { label: string; href: string; permission?: Permission; planned?: string; section?: string; hub?: boolean };
+export type NavItem = {
+  label: string;
+  href: string;
+  permission?: Permission;
+  planned?: string;
+  section?: string;
+  hub?: boolean;
+  /** ADR-082: only for people who approve something (or have something waiting for them). */
+  approverOnly?: boolean;
+};
 export type NavGroup = { label: string; icon: string; /** One line under the label in the top bar (mockup board). */ description: string; items: NavItem[] };
 export type QuickAction = { label: string; href: string; icon: string; permission?: Permission };
 
@@ -57,7 +66,7 @@ export const NAV: NavGroup[] = [
     description: "Your day at a glance",
     items: [
       { label: "Overview", href: "/dashboard" },
-      { label: "To approve", href: "/approvals" },
+      { label: "To approve", href: "/approvals", approverOnly: true },
       { label: "Notifications", href: "/notifications" },
       { label: "Action centre", href: "/action-centre" },
       ...inSection("Me", [
@@ -269,15 +278,16 @@ const PRODUCTION_TAB_HREFS = new Set(["/production/orders", "/production/today",
 const FLOOR_PERSONAS: readonly ProductionPersona[] = ["operator", "warehouse"];
 
 /** The menu of one person: the five destinations filtered by permission, production tabs per role. */
-export function buildNav(can: Can, roles: readonly string[]): NavGroup[] {
+export function buildNav(can: Can, roles: readonly string[], opts: { approver?: boolean } = {}): NavGroup[] {
   const persona = productionPersona(can, roles);
+  const approver = opts.approver ?? true;
   return NAV.filter((g) => !(g.label === "Management" && FLOOR_PERSONAS.includes(persona))).map((g) => {
     if (g.label !== "Operations") return g;
     const hub = g.items.filter((i) => i.hub);
     const rest = g.items.filter((i) => !i.hub && !PRODUCTION_TAB_HREFS.has(i.href));
     return { ...g, items: [...hub, ...productionItems(persona), ...rest] };
   })
-    .map((g) => ({ ...g, items: g.items.filter((i) => i.planned || !i.permission || can(i.permission)) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => (i.planned || !i.permission || can(i.permission)) && (approver || !i.approverOnly)) }))
     .filter((g) => g.items.some((i) => !i.planned && !i.hub) || g.label === "Home");
 }
 
@@ -324,4 +334,16 @@ export function tabsFor(can: Can, roles: readonly string[]): Tab[] {
           ? [home, { label: "Quality check", href: "/quality", icon: "shield", permission: "quality.disposition.view" }, operations, scan, menu]
           : [home, operations, inventory, sales, menu];
   return tabs.filter((t) => !t.permission || can(t.permission));
+}
+
+/**
+ * ADR-082: does this person get "To approve"? Always when something waits for them; otherwise only
+ * office roles holding an `*.approve` permission. Floor roles' approvals (checker sign-off, pack check)
+ * happen on the tablet at the step, not in the inbox.
+ */
+export function isApprover(can: Can, roles: readonly string[], permissions: Iterable<string>, waiting: number): boolean {
+  if (waiting > 0) return true;
+  if (FLOOR_PERSONAS.includes(productionPersona(can, roles))) return false;
+  for (const p of permissions) if (p.endsWith(".approve")) return true;
+  return false;
 }

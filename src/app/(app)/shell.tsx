@@ -39,6 +39,8 @@ type Props = {
   unreadCount: number;
   /** ADR-075: approvals waiting for the signed-in user (the "To approve" badge). */
   approvalCount?: number;
+  /** ADR-082: show the "To approve" button only to people who approve something. */
+  showApprovals?: boolean;
   switchSite: (fd: FormData) => Promise<void>;
   signOut: () => Promise<void>;
   /** Demo mode (ADR-055): the strip above the top bar; `canReset` adds the owner's reset link. Null outside the demo. */
@@ -78,7 +80,7 @@ function matchLen(pathname: string, href: string) {
   return -1;
 }
 
-export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCount, approvalCount = 0, switchSite, signOut, demo = null, children }: Props) {
+export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCount, approvalCount = 0, showApprovals = true, switchSite, signOut, demo = null, children }: Props) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   useEffect(() => setDrawer(false), [pathname]);
@@ -157,7 +159,8 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
               <ScanLine size={18} />
             </Link>
             <SyncChip userId={user.id} />
-            {/* ADR-075: "To approve" is always one tap away, with the number waiting for this user. */}
+            {/* ADR-075: "To approve" is one tap away for people who approve (ADR-082). */}
+            {showApprovals && (
             <Link
               href="/approvals"
               className={cx("relative flex h-10 items-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium text-fg-2 shadow-[var(--shadow-card)] hover:text-fg", pathname.startsWith("/approvals") && "text-primary-text")}
@@ -170,6 +173,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
                 <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full bg-[#c62828] px-1 text-[10px] font-semibold leading-[18px] text-white">{approvalCount > 99 ? "99+" : approvalCount}</span>
               )}
             </Link>
+            )}
             <Link href="/notifications" className="relative grid size-10 place-items-center rounded-full bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg" aria-label={`Notifications, ${unreadCount} unread`} title="Notifications">
               <Bell size={18} />
               {unreadCount > 0 && (

@@ -97,6 +97,8 @@ export {
 } from "./production-order-status";
 export { productionOrderActions, batchNextAction, type NextAction } from "./production-order-next";
 export {
+  assignProductionOrder,
+  assigneeChoices,
   createProductionOrder,
   approveProductionOrder,
   getProductionOrder,

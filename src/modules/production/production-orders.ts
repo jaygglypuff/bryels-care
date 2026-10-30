@@ -1,14 +1,16 @@
 import "server-only";
-import { and, desc, eq, inArray, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
-import { batches, processStepRecords, productionLines, products, salesOrderLines, salesOrders, workOrders } from "@/db/schema";
+import { batches, processStepRecords, productionLines, products, rolePermissions, salesOrderLines, salesOrders, userSiteAssignments, users, workOrders } from "@/db/schema";
+import { activeAssignment } from "@/lib/auth/assignments";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtMass, fmtQty } from "@/lib/qty";
 import { getSetting } from "@/lib/settings";
 import { getEffectiveFormulaRevision } from "@/modules/masterdata";
+import { notifyUsers } from "@/modules/platform/notifications";
 import { insertBatch } from "./batches";
 import { listDailyLogs, defectSummary } from "./daily-log";
 import { productionOrderActions, type NextAction } from "./production-order-next";
@@ -308,8 +310,12 @@ export async function getProductionOrder(ctx: AuthContext, workOrderId: string, 
   const [made] = await db.select({ units: sql<string | null>`sum(${batches.actualUnits})::text` }).from(batches).where(eq(batches.workOrderId, wo.id));
   const yieldPct = d.formulaRevision?.theoreticalYieldPct ?? (await getEffectiveFormulaRevision(ctx, wo.productId, wo.plannedStart).catch(() => null))?.rev.theoreticalYieldPct ?? null;
   const today = manilaToday(now);
+  const [assignee] = wo.assignedOperatorId ? await db.select({ id: users.id, name: users.displayName }).from(users).where(eq(users.id, wo.assignedOperatorId)).limit(1) : [];
   return {
     detail: d,
+    /** ADR-082: who makes this order; null = open for anyone at the site. */
+    assignee: assignee ?? null,
+    canAssign: ctx.can("production.work_order.edit") && ctx.canAt("production.work_order.edit", wo.siteId) && !ASSIGN_CLOSED.includes(wo.status),
     status,
     statusLabel: PRODUCTION_ORDER_LABEL[status],
     statusView: view,
@@ -339,7 +345,7 @@ export type ProductionOrderView = Awaited<ReturnType<typeof getProductionOrder>>
  * The status is computed from the batches, so the SQL only pre-filters on the work order states
  * that can map to the asked status (production-order-status.ts).
  */
-export async function listProductionOrders(ctx: AuthContext, f: { status?: string; q?: string } = {}, now: Date = new Date()) {
+export async function listProductionOrders(ctx: AuthContext, f: { status?: string; q?: string; mine?: boolean } = {}, now: Date = new Date()) {
   ctx.require("production.work_order.view");
   ctx.requireSite(ctx.currentSiteId);
   const conds: SQL[] = [eq(workOrders.organizationId, ctx.organizationId), eq(workOrders.siteId, ctx.currentSiteId)];
@@ -348,6 +354,8 @@ export async function listProductionOrders(ctx: AuthContext, f: { status?: strin
   if (simple) conds.push(inArray(workOrders.status, workOrderStatusesFor(simple)));
   else if (!all) conds.push(inArray(workOrders.status, workOrderStatusesFor("open")));
   if (f.q?.trim()) conds.push(or(sql`${workOrders.workOrderNumber} ilike ${"%" + f.q.trim() + "%"}`, sql`${products.name} ilike ${"%" + f.q.trim() + "%"}`)!);
+  // ADR-082 "My work": my orders and the ones nobody took; never someone else's.
+  if (f.mine) conds.push(or(eq(workOrders.assignedOperatorId, ctx.userId), isNull(workOrders.assignedOperatorId))!);
   const rows = await db
     .select({
       wo: workOrders,
@@ -359,13 +367,15 @@ export async function listProductionOrders(ctx: AuthContext, f: { status?: strin
       salesOrderNumber: salesOrders.orderNumber,
       yieldPct: sql<string | null>`coalesce((select fr.theoretical_yield_pct from formula_revisions fr where fr.id = ${workOrders.formulaRevisionId}), (select fr.theoretical_yield_pct from formula_revisions fr where fr.formula_id = ${workOrders.formulaId} and fr.status = 'approved' order by fr.revision_no desc limit 1))::text`,
       madeUnits: sql<string | null>`(select sum(b.actual_units)::text from batches b where b.work_order_id = ${workOrders.id})`,
+      assigneeName: users.displayName,
     })
     .from(workOrders)
     .innerJoin(products, eq(products.id, workOrders.productId))
     .leftJoin(productionLines, eq(productionLines.id, workOrders.productionLineId))
     .leftJoin(salesOrders, eq(salesOrders.id, workOrders.salesOrderId))
+    .leftJoin(users, eq(users.id, workOrders.assignedOperatorId))
     .where(and(...conds))
-    .orderBy(desc(workOrders.plannedStart), desc(workOrders.createdAt))
+    .orderBy(...(f.mine ? [sql`(${workOrders.assignedOperatorId} = ${ctx.userId}) desc nulls last`] : []), desc(workOrders.plannedStart), desc(workOrders.createdAt))
     .limit(300);
   const facts = await loadBatchFacts(rows.map((r) => r.wo.id));
   const today = manilaToday(now);
@@ -394,6 +404,8 @@ export async function listProductionOrders(ctx: AuthContext, f: { status?: strin
         neededBy: r.wo.neededBy,
         late: isLate(r.wo.neededBy, view.status, today),
         salesOrderNumber: r.salesOrderNumber,
+        assigneeName: r.assigneeName,
+        assignedToMe: r.wo.assignedOperatorId === ctx.userId,
         workOrderStatus: r.wo.status,
         status: view.status,
         statusLabel: view.label,
@@ -409,6 +421,84 @@ export async function listProductionOrders(ctx: AuthContext, f: { status?: strin
     .filter((r) => (simple ? r.status === simple : all ? true : (OPEN_STATUSES as readonly string[]).includes(r.status)));
 }
 export type ProductionOrderRow = Awaited<ReturnType<typeof listProductionOrders>>[number];
+
+// ---------------------------------------------------------------- assignment (ADR-082)
+
+/** Work order states in which the person making it can no longer change. */
+const ASSIGN_CLOSED: readonly string[] = ["closed", "cancelled"];
+/** Who may be assigned: people who record production (the daily log) at the order's site. */
+const ASSIGNEE_PERMISSION = "production.daily_log.create";
+
+async function peopleWhoMakeAt(organizationId: string, siteId: string) {
+  return db
+    .selectDistinct({ id: users.id, name: users.displayName })
+    .from(users)
+    .innerJoin(userSiteAssignments, eq(userSiteAssignments.userId, users.id))
+    .innerJoin(rolePermissions, eq(rolePermissions.roleId, userSiteAssignments.roleId))
+    .where(
+      and(
+        eq(users.organizationId, organizationId),
+        eq(users.status, "active"),
+        eq(rolePermissions.permissionCode, ASSIGNEE_PERMISSION),
+        activeAssignment(),
+        or(eq(userSiteAssignments.siteId, siteId), eq(userSiteAssignments.isOrganizationWide, true)),
+      ),
+    )
+    .orderBy(asc(users.displayName));
+}
+
+/** The people an order can be assigned to (the picker on the order page). */
+export async function assigneeChoices(ctx: AuthContext, workOrderId: string) {
+  ctx.require("production.work_order.view");
+  const [wo] = UUID.test(workOrderId)
+    ? await db.select({ siteId: workOrders.siteId }).from(workOrders).where(and(eq(workOrders.id, workOrderId), eq(workOrders.organizationId, ctx.organizationId))).limit(1)
+    : [];
+  if (!wo || !ctx.allowedSiteIds.includes(wo.siteId)) throw new DomainError("not_found", "Production order not found in your sites.");
+  return peopleWhoMakeAt(ctx.organizationId, wo.siteId);
+}
+
+/**
+ * Assigns a production order to the person who makes it, or back to "anyone" (`assigneeId: null`).
+ * Planner or site manager (production.work_order.edit at the site); the assignee must record
+ * production there. Audited; the new assignee gets an in-app notification with the order link.
+ */
+export async function assignProductionOrder(ctx: AuthContext, workOrderId: string, input: { assigneeId: string | null }) {
+  ctx.require("production.work_order.edit");
+  return db.transaction(async (tx) => {
+    const wo = await lockWorkOrder(tx, ctx, workOrderId); // not_found outside the caller's sites
+    if (!ctx.canAt("production.work_order.edit", wo.siteId)) throw new DomainError("forbidden", "You cannot assign production orders at this site.");
+    if (ASSIGN_CLOSED.includes(wo.status)) throw new DomainError("state", `Production order ${wo.workOrderNumber} is ${wo.status}; it can no longer be assigned.`);
+    const to = input.assigneeId?.trim() || null;
+    if (to) {
+      const ok = UUID.test(to) && (await peopleWhoMakeAt(ctx.organizationId, wo.siteId)).some((p) => p.id === to);
+      if (!ok) throw new DomainError("validation", "Choose someone who makes production at this site.", { field: "assigneeId", fieldErrors: { assigneeId: "Not a production person at this site." } });
+    }
+    if (to === wo.assignedOperatorId) return { changed: false };
+    await tx.update(workOrders).set({ assignedOperatorId: to, updatedBy: ctx.userId, updatedAt: new Date() }).where(eq(workOrders.id, wo.id));
+    await audit(tx, ctx, {
+      action: "production.production_order.assigned",
+      entityType: "work_order",
+      entityId: wo.id,
+      entityNumber: wo.workOrderNumber,
+      siteId: wo.siteId,
+      before: { assigneeId: wo.assignedOperatorId },
+      after: { assigneeId: to },
+    });
+    if (to && to !== ctx.userId)
+      await notifyUsers(tx, [to], {
+        organizationId: ctx.organizationId,
+        siteId: wo.siteId,
+        kind: "production.order.assigned",
+        severity: "info",
+        title: `${wo.workOrderNumber} is yours to make`,
+        body: `${ctx.displayName} assigned production order ${wo.workOrderNumber} to you. It is at the top of My work.`,
+        entityType: "work_order",
+        entityId: wo.id,
+        link: `/production/orders/${wo.id}`,
+      });
+    return { changed: true };
+  });
+}
 
 /**
  * The owner board (ADR-080 §1): five columns = the five statuses. In progress is split into

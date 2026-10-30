@@ -51,7 +51,7 @@ function BatchCard({ b, showSite, highlight }: { b: BoardCard; showSite: boolean
   const running = (b.status === "in_process" || b.status === "materials_staged") && b.stepsTotal > 0;
   return (
     <Link
-      href={`/production/${b.id}`}
+      href={b.workOrderId ? `/production/orders/${b.workOrderId}` : `/production/${b.id}`}
       className={cx(
         "group block rounded-[18px] p-3.5 transition-all",
         highlight ? "bg-cta text-white shadow-[var(--shadow-pop)] hover:-translate-y-0.5" : "bg-surface shadow-[var(--shadow-card)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-pop)]",
@@ -126,8 +126,8 @@ function Board({ board, showSite }: { board: NonNullable<OwnerDashboard["board"]
               <BatchCard key={b.id} b={b} showSite={showSite} highlight={title === "Awaiting QC" && i === 0} />
             ))}
             {cards.length > BOARD_LIMIT && (
-              <Link href="/production" className="px-1.5 text-[12px] font-medium text-primary-text hover:underline">
-                +{cards.length - BOARD_LIMIT} more in Batches
+              <Link href="/production/orders?status=all" className="px-1.5 text-[12px] font-medium text-primary-text hover:underline">
+                +{cards.length - BOARD_LIMIT} more in Production orders
               </Link>
             )}
           </div>

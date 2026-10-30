@@ -23,6 +23,8 @@ A production order says what to make, how many and by when. You follow it on one
 2. Each card shows the product, how many pieces (for example "247 bars · 2 batches"), the status and one big button.
 3. A red **Late** tag means the needed-by date has passed and the order is not done.
 4. Owners and planners can press **Board** to see the orders in five columns, one per status.
+5. **Who makes it:** on an order, the planner or site manager chooses a person under **Who makes it**, or leaves **Anyone at the site**. The person gets a notification.
+6. **My work** shows your own orders first, then the ones nobody has taken. Press **Everyone's** to see the rest. Your **Home** shows **Your next task** with one big button.
 
 ## Create the order
 

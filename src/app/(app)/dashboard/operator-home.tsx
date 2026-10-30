@@ -2,6 +2,8 @@ import Link from "next/link";
 import { ArrowRight, Factory, PackagePlus, ScanLine, ShieldCheck, Truck } from "lucide-react";
 import type { ReactNode } from "react";
 import type { OperatorTile } from "@/modules/analytics";
+import type { ProductionOrderRow } from "@/modules/production";
+import { LinkButton } from "@/ui/core";
 import { EmptyState } from "@/ui/core";
 
 const ICON: Record<OperatorTile["key"], ReactNode> = {
@@ -45,5 +47,29 @@ export function OperatorHome({ tiles, siteLabel, updated }: { tiles: OperatorTil
         Counts for {siteLabel} · updated {updated} · all figures from posted transactions
       </p>
     </>
+  );
+}
+
+/** ADR-082 (mockup "Start Task"): the one production step to do next, with a single big button. */
+export function NextTaskCard({ order, more }: { order: ProductionOrderRow; more: number }) {
+  if (order.nextAction.kind !== "link") return null;
+  return (
+    <section aria-labelledby="next-task-h" className="mb-5 rounded-[18px] border border-line bg-surface p-5">
+      <p id="next-task-h" className="text-[12px] font-semibold uppercase tracking-wide text-muted">
+        Your next task{order.assignedToMe ? "" : " · nobody has taken this order yet"}
+      </p>
+      <p className="mt-1.5 text-[20px] font-semibold leading-snug text-fg">{order.productName}</p>
+      <p className="text-[14px] text-fg-2">
+        {order.piecesText} · <span className="font-mono text-[12.5px]">{order.number}</span> · {order.statusLabel}
+      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <LinkButton href={order.nextAction.href} variant="cta" size="lg" className="w-full justify-center sm:w-auto">
+          {order.nextAction.label}
+        </LinkButton>
+        <Link href="/production/orders" className="text-[14px] font-medium text-primary-text underline">
+          {more > 1 ? `All my orders (${more})` : "My work"}
+        </Link>
+      </div>
+    </section>
   );
 }

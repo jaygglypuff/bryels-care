@@ -1389,3 +1389,40 @@ messages now name the new paths (e.g. "Management → System → Templates & lab
 `tests/unit/nav-per-role.test.ts` (five destinations, one entry per screen, per-role menus and tabs,
 permission filtering) and `tests/integration/analytics/operations-center.test.ts` (counts equal the
 records, a new lot moves the right stage, cross-site and role negatives).
+
+## ADR-082 Assigned production orders, "To approve" for approvers, one record header (UX revision R2–R3)
+
+**Status.** Accepted (2026-10-30). The owner delegated the open decisions of ADR-081 ("decide freely,
+act like an expert; I will check when the app is live").
+
+**Decisions.**
+1. **Assignment (UX-15, A-UX-05).** A production order can be assigned to one person who makes it
+   (`work_orders.assigned_operator_id`, nullable; migration `0027_r3_assignee.sql`, additive). The planner or
+   site manager assigns (`production.work_order.edit` at the order's site); only active people who
+   record production there (`production.daily_log.create`, active site assignment) can be chosen. Not
+   assigned = anyone at the site may take it. Closed and cancelled orders cannot be reassigned. Every
+   change is audited (`production.production_order.assigned`, before/after) and the new assignee gets an
+   in-app notification that opens the order. Assignment is guidance, not a lock: it does not change who
+   may record a step (permissions and site rules stay as they are), so a sick operator never blocks a
+   batch.
+2. **"My work"** lists the operator's own orders first, then the unassigned ones, never someone else's;
+   a "Mine / Everyone's" switch shows the rest. Planners can use the same switch. Each card says
+   "Assigned to you", "Assigned to <name>" or "Anyone can take it".
+3. **"Your next task"** card on the operator Home: the first of those orders with a step to do, with its
+   one next-action button (mockup "Start Task").
+4. **One inbox for decisions (UX-06, UX-29).** "To approve" stays the single place where people decide.
+   It is shown to office roles holding an `*.approve` permission and to anyone with something waiting.
+   Floor roles do not see it otherwise: their sign-offs (second-person weighing check, line clearance,
+   pack check) happen on the tablet at the step. Notifications stay information; the Action centre
+   stays exceptions.
+5. **One record header (UX-21).** Purchase order, goods receipt, customer order and shipment pages open
+   with the same header as the production order: reference, type, name, site, status, a progress strip
+   derived from the record's state machine (cancelled/reversed shown as blocked, never as progress) and
+   one primary next action (existing actions only).
+6. **Owner overview batch cards open the production order** (UX-09); a batch without an order still opens
+   its full record.
+
+**Consequences.** Tests: `tests/integration/production/assignment.test.ts` (picker, assign, audit, My work
+order and filter, unassign, role escalation, cross-site, invalid assignee), `tests/unit/record-steps.test.ts`,
+`tests/unit/nav-per-role.test.ts` (approver rule). Deployment: the migration runs at start as usual
+(`scripts/start.sh`); rollback = redeploy the previous commit (the extra nullable column is ignored).

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | R1 built: focused menu and tab bar. R3 proposal: assigned tasks and "next task" home |
+| Status | R1 built: focused menu and tab bar. R3 built: assigned orders, "My work", "Your next task" (ADR-082) |
 | Read with | ADR-080 (production order flow), `docs/reviews/production-flow-v2-ux-review.md`, ADR-081 |
 
 ## 1. What an operator sees after R1
@@ -31,11 +31,12 @@ Each command returns a plain message saying what is missing (e.g. "Confirm the l
 characters on the container"). Out-of-range values are kept and flagged, never silently accepted.
 Offline-capable commands (counting, weighing) queue with an idempotency key and show the sync chip state.
 
-## 4. Proposal for R3 (needs owner decision)
+## 4. Assigned work (built in R3, ADR-082)
 
-1. **Assigned work.** Add an assignee or team to production orders and receipts; "My work" lists only those
-   (A-UX-05). Until then the label stays "My work" and lists the site's open orders.
-2. **"Your next task" card** on the operator Home: the first assigned order's next action as one button
-   (mockup "Start Task"), above the tiles.
-3. **Words.** Apply the ADR-080 word list to the operator tiles (no "quarantine", "disposition", "FEFO" on
+1. **Assignment.** The planner or site manager picks "Who makes it" on the production order (only people
+   who record production at that site are offered); the person gets a notification. Unassigned orders are
+   open for anyone. Assignment never blocks recording: anyone allowed may still do a step.
+2. **My work** shows my orders first, then unassigned ones; "Everyone's" shows the rest of the site.
+3. **"Your next task"** on the operator Home: the first of those orders with a step to do, one big button.
+4. **Next: words.** Apply the ADR-080 word list to the operator tiles (no "quarantine", "disposition", "FEFO" on
    operator screens; UX-17, UX-18).

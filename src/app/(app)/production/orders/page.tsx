@@ -44,6 +44,10 @@ function OrderCard({ r }: { r: ProductionOrderRow }) {
       <div className="flex flex-wrap items-center gap-2">
         <NeededBy date={r.neededBy} late={r.late} />
         {r.salesOrderNumber && <span className="text-[13px] text-muted">For {r.salesOrderNumber}</span>}
+        {/* ADR-082: who makes it */}
+        <span className={cx("rounded-full px-2.5 py-0.5 text-[12.5px] font-medium", r.assignedToMe ? "bg-primary-soft text-primary-text" : "bg-surface-2 text-fg-2")}>
+          {r.assignedToMe ? "Assigned to you" : r.assigneeName ? `Assigned to ${r.assigneeName}` : "Anyone can take it"}
+        </span>
       </div>
       <div className="mt-auto pt-1">
         <ActionButton a={r.nextAction} size="md" />
@@ -58,7 +62,7 @@ function OrderCard({ r }: { r: ProductionOrderRow }) {
 }
 
 /** Production orders (ADR-074, ADR-080): one card per order with status v2, pieces, needed-by and one next-action button. iPad-first: cards, no wide table. */
-export default async function ProductionOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; view?: string }> }) {
+export default async function ProductionOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; view?: string; mine?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("production.work_order.view")) return <Forbidden what="production orders" />;
   const sp = await searchParams;
@@ -66,7 +70,9 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
   const canCreate = ctx.can("production.work_order.create");
   const operator = !canCreate && !ctx.can("production.work_order.approve");
   const board = sp.view === "board" && !operator;
-  const rows = board ? [] : await listProductionOrders(ctx, { status, q: sp.q });
+  // ADR-082: operators see their own orders and the unassigned ones unless they ask for all.
+  const mine = sp.mine === "1" || (operator && sp.mine !== "0");
+  const rows = board ? [] : await listProductionOrders(ctx, { status, q: sp.q, mine });
   const columns = board ? await listProductionOrderBoard(ctx) : [];
   const moreActive = MORE_FILTERS.some(([k]) => k === status);
   return (
@@ -109,9 +115,19 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
         </div>
       ) : (
         <>
+          <nav className="mb-3 flex flex-wrap gap-1.5" aria-label="Whose orders">
+            {[["1", operator ? "Mine and open" : "Mine and unassigned"], ["0", "Everyone's"]].map(([v, label]) => {
+              const active = (v === "1") === mine;
+              return (
+                <Link key={v} href={`?status=${status}&mine=${v}`} aria-current={active ? "page" : undefined} className={cx("min-h-[44px] whitespace-nowrap rounded-full border px-4 py-2.5 text-[14px] font-medium", active ? "border-transparent bg-cta text-white" : "border-line bg-surface text-fg-2 hover:bg-surface-2")}>
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
           <nav className="mb-3 flex flex-wrap gap-1.5" aria-label="Filter by status">
             {MAIN_FILTERS.map(([k, label]) => (
-              <Link key={k} href={`?status=${k}`} aria-current={k === status ? "page" : undefined} className={cx("min-h-[48px] whitespace-nowrap rounded-full border px-4 py-3 text-[14px] font-medium", k === status ? "border-transparent bg-primary text-white" : "border-line bg-surface text-fg hover:bg-surface-2")}>
+              <Link key={k} href={`?status=${k}${mine !== operator ? `&mine=${mine ? 1 : 0}` : ""}`} aria-current={k === status ? "page" : undefined} className={cx("min-h-[48px] whitespace-nowrap rounded-full border px-4 py-3 text-[14px] font-medium", k === status ? "border-transparent bg-primary text-white" : "border-line bg-surface text-fg hover:bg-surface-2")}>
                 {label}
               </Link>
             ))}
@@ -139,7 +155,7 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
           {rows.length === 0 ? (
             status === "open" && !sp.q ? (
               operator ? (
-                <EmptyState title="Nothing to make right now">New orders appear here when the owner approves them.</EmptyState>
+                <EmptyState title="Nothing to make right now">Orders assigned to you, and approved orders nobody has taken yet, appear here.</EmptyState>
               ) : (
                 <EmptyState title="No production orders yet" action={canCreate ? <LinkButton href="/production/orders/new">New order</LinkButton> : undefined}>
                   A production order says what to make, how many and by when. Approve it, make it, write each day, and finish it.

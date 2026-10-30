@@ -3,10 +3,11 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { getOperationsCenter, getOperatorHome, getOwnerDashboard, getOwnerOverview } from "@/modules/analytics";
+import { listProductionOrders } from "@/modules/production";
 import { EmptyState, PageHeader } from "@/ui/core";
 import { PipelineStrip } from "@/ui/pipeline";
 import { ScopePeriodBar } from "../analytics/kpi-ui";
-import { OperatorHome } from "./operator-home";
+import { NextTaskCard, OperatorHome } from "./operator-home";
 import { OwnerOverview } from "./owner-overview";
 
 export const dynamic = "force-dynamic";
@@ -17,10 +18,16 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   // Operators (no analytics.dashboard.view) get a task home instead of the analytics overview.
   if (!ctx.can("analytics.dashboard.view")) {
-    const tiles = await getOperatorHome(ctx);
+    // ADR-082: the operator's next task first — their own order (else one nobody took) that has a step to do.
+    const [tiles, orders] = await Promise.all([
+      getOperatorHome(ctx),
+      ctx.can("production.work_order.view") && ctx.can("production.daily_log.create") ? listProductionOrders(ctx, { mine: true }) : Promise.resolve([]),
+    ]);
+    const next = orders.find((o) => o.nextAction.kind === "link") ?? null;
     return (
       <>
         <PageHeader title={`Good day, ${ctx.displayName.split(" ")[0]}`} subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · What do you need to do?`} />
+        {next && <NextTaskCard order={next} more={orders.filter((o) => o.assignedToMe).length} />}
         <OperatorHome tiles={tiles} siteLabel={ctx.currentSite.code} updated={fmtDateTime(new Date())} />
       </>
     );

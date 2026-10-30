@@ -8,7 +8,7 @@ import { myApprovalCount } from "@/modules/action-centre";
 import { getMaintenanceState } from "@/lib/maintenance";
 import { MaintenanceBanner } from "@/ui/maintenance-banner";
 import { isDemoMode, isSandboxEmail } from "@/lib/demo";
-import { buildNav, tabsFor } from "./nav";
+import { buildNav, isApprover, tabsFor } from "./nav";
 import { Shell } from "./shell";
 import { signOut, switchSite } from "./actions";
 
@@ -23,11 +23,12 @@ async function openQaCount(siteId: string): Promise<number> {
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireContext();
   // ADR-080 §11, ADR-081: five destinations; the menu and the phone/iPad-portrait tab bar follow the role.
-  const nav = buildNav((p) => ctx.can(p), ctx.roleCodes);
+  const approvalCount = await myApprovalCount(ctx).catch(() => 0); // ADR-075 "To approve" badge
+  const approver = isApprover((p) => ctx.can(p), ctx.roleCodes, ctx.permissions, approvalCount); // ADR-082: hidden from people who never approve
+  const nav = buildNav((p) => ctx.can(p), ctx.roleCodes, { approver });
   const tabs = tabsFor((p) => ctx.can(p), ctx.roleCodes);
   const qaCount = ctx.can("quality.disposition.view") ? await openQaCount(ctx.currentSiteId) : null;
   const unreadCount = await unreadNotificationCount(ctx);
-  const approvalCount = await myApprovalCount(ctx).catch(() => 0); // ADR-075 "To approve" badge
   const maintenance = await getMaintenanceState(db, ctx.organizationId);
   return (
     <Shell
@@ -39,6 +40,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       qaCount={qaCount}
       unreadCount={unreadCount}
       approvalCount={approvalCount}
+      showApprovals={approver}
       switchSite={switchSite}
       signOut={signOut}
       demo={isDemoMode() ? { canReset: ctx.roleCodes.includes("owner_director"), sandbox: isSandboxEmail(ctx.email) } : null}
