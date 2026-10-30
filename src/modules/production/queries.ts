@@ -285,7 +285,8 @@ export type LotOption = {
 export async function checkerOptions(ctx: AuthContext, siteId: string) {
   ctx.requireSite(siteId);
   const list = await eligibleCheckers(db, ctx.organizationId, siteId);
-  return list.filter((u) => u.id !== ctx.userId);
+  const others = list.filter((u) => u.id !== ctx.userId);
+  return ctx.ownerOverride ? [{ ...list.find((u) => u.id === ctx.userId), id: ctx.userId, displayName: `${ctx.displayName} (you)` } as (typeof list)[number], ...others] : others;
 }
 
 /**

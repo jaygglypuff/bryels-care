@@ -96,3 +96,40 @@ export function StageFlow({ batchId, stagingLocations }: { batchId: string; stag
     </Card>
   );
 }
+
+/**
+ * One tap per reserved lot (owner feedback 2026-10-25): no typing of lot numbers. Moves what the
+ * ingredient still needs (or the whole reserved quantity if less) to the staging area; the server
+ * re-checks the lot, the reservation and the quantity.
+ */
+export function StageLotButton({ batchId, lotNumber, qty, toLocationCode, label }: { batchId: string; lotNumber: string; qty: string; toLocationCode: string | null; label: string }) {
+  const [key, setKey] = useState(newKey);
+  const [result, setResult] = useState<StageResult | null>(null);
+  const [pending, start] = useTransition();
+  if (!toLocationCode) return null;
+  return (
+    <div className="flex flex-col gap-1">
+      <Button
+        type="button"
+        variant="cta"
+        disabled={pending}
+        onClick={() =>
+          start(async () => {
+            const r = await stageMaterialAction({ batchId, lotCode: lotNumber, toLocationCode, qty, idempotencyKey: key });
+            startTransition(() => {
+              setResult(r);
+              if (r.ok) setKey(newKey());
+            });
+          })
+        }
+      >
+        {pending ? "Moving…" : label}
+      </Button>
+      {result && !result.ok && (
+        <p role="alert" className="text-[12.5px] text-[var(--bad-fg)]">
+          {result.message}
+        </p>
+      )}
+    </div>
+  );
+}

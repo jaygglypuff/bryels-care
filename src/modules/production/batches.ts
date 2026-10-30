@@ -75,6 +75,8 @@ export async function createBatch(ctx: AuthContext, input: CreateBatchInput): Pr
       const wo = input.workOrderId
         ? await assertWorkOrderAcceptsBatch(tx, ctx, input.workOrderId, { siteId, formulaRevisionId: rev.rev.id, routingRevisionId: routing.rev.id, plannedSizeG, plannedStartOn: input.plannedStartOn })
         : null;
+      // ADR-078: the second-person weighing check can be switched off per organization/site.
+      const weighCheck = await getSetting(tx, ctx.organizationId, "production.weighing.second_person_check", siteId);
       const plan = await getInspectionPlan(ctx, { planKind: "finished_product", productId: rev.product.id, date: input.plannedStartOn }, { tx });
       const { lines } = rev;
       const steps = routing.steps;
@@ -137,7 +139,7 @@ export async function createBatch(ctx: AuthContext, input: CreateBatchInput): Pr
           scaling: line.scaling,
           phaseCode: line.phaseCode,
           targetQtyG: target.toString(),
-          requiresChecker: line.requiresChecker,
+          requiresChecker: line.requiresChecker && weighCheck,
         })),
         steps: steps.map((s) => ({
           routingStepId: s.id,

@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { auditEvents, users } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
+import { getSetting } from "@/lib/settings";
 import type { Permission } from "@/lib/permissions";
 import { type AuthContext, buildContextForUser } from "./context";
 import { verifyPassword } from "./password";
@@ -36,12 +37,26 @@ export async function coSign(operator: AuthContext, input: CoSignInput): Promise
   const what = input.role === "checker" ? "checker" : "approver";
   if (!input.userId) throw new DomainError("validation", `Choose the ${what}.`, { field: "checkerId" });
   operator.assertSeparation(input.userId === operator.userId, `You cannot sign as ${what} for your own work. The ${what} signs with their own password, or checks from their own device.`);
-  if (!input.password) throw new DomainError("validation", `The ${what} must type their own password to sign.`, { field: "checkerPassword" });
   const [u] = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
   if (!u || u.organizationId !== operator.organizationId) throw new DomainError("validation", `The selected ${what} was not found.`, { field: "checkerId" });
   if (u.status === "locked") throw new DomainError("forbidden", `${u.displayName}'s account is locked. Ask a system administrator to unlock it.`);
   if (u.status !== "active") throw new DomainError("validation", `${u.displayName} cannot sign (account not active).`, { field: "checkerId" });
-  const ok = await verifyPassword(u.passwordHash, input.password);
+  // ADR-078: by default the signer just picks their name; the password is asked only when the setting is on.
+  const passwordRequired = await getSetting(db, operator.organizationId, "production.sign_off.require_password");
+  if (passwordRequired && !input.password) throw new DomainError("validation", `The ${what} must type their own password to sign.`, { field: "checkerPassword" });
+  const ok = !passwordRequired || (await verifyPassword(u.passwordHash, input.password));
+  if (!passwordRequired) {
+    await db.insert(auditEvents).values({
+      organizationId: u.organizationId,
+      siteId: input.siteId,
+      actorId: operator.userId,
+      action: "identity.co_signature.by_name",
+      entityType: "user",
+      entityId: u.id,
+      entityNumber: u.email,
+      after: { role: input.role, signer: u.displayName, enteredBy: operator.displayName, sessionId: operator.sessionId },
+    });
+  }
   if (!ok) {
     const failures = u.failedLoginCount + 1;
     await db

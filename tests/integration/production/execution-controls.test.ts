@@ -2,7 +2,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 import { db } from "@/db/client";
-import { auditEvents, batchMaterials, batches, equipment, equipmentOverrideRequests, equipmentUses, inspectionPlans, notifications, processStepRecords, scrapReworkRecords, users } from "@/db/schema";
+import { auditEvents, batchMaterials, batches, equipment, equipmentOverrideRequests, equipmentUses, inspectionPlans, notifications, processStepRecords, scrapReworkRecords, settings, users } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { coSign } from "@/lib/auth/co-sign";
 import { decideEquipmentOverride, requestEquipmentOverride } from "@/modules/masterdata";
@@ -306,7 +306,19 @@ describe("yield, scrap and transfer controls (US-3-13)", () => {
 });
 
 describe("co-signature on the operator's device", () => {
-  it("refuses the operator signing for themself, a wrong password (audited) and a signer without the permission", async () => {
+  it("ADR-078 default: the checker just picks their name (no password); recorded with the operator's session", async () => {
+    const [u] = await db.select().from(users).where(eq(users.email, "checker.nfd@bryels-care.test"));
+    const base = { role: "checker" as const, permission: "production.line_clearance.approve" as const, siteId: kit.nfd.id };
+    await expectCode(coSign(operator, { ...base, userId: operator.userId, password: "" }), "separation_of_duties");
+    const signer = await coSign(operator, { ...base, userId: u.id, password: "" });
+    expect(signer.userId).toBe(u.id);
+    const ev = await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, u.id), eq(auditEvents.action, "identity.co_signature.by_name")));
+    expect(ev.length).toBeGreaterThanOrEqual(1);
+    expect(ev[0].actorId).toBe(operator.userId);
+  });
+
+  it("with the password setting on: refuses the operator signing for themself, a wrong password (audited) and a signer without the permission", async () => {
+    await db.insert(settings).values({ organizationId: kit.orgId, scope: "organization", key: "production.sign_off.require_password", value: true }).onConflictDoUpdate({ target: [settings.organizationId, settings.scope, settings.siteId, settings.userId, settings.key], set: { value: true } });
     const [u] = await db.select().from(users).where(eq(users.email, "checker.nfd@bryels-care.test"));
     const [wh] = await db.select().from(users).where(eq(users.email, "warehouse.nfd@bryels-care.test"));
     const base = { role: "checker" as const, permission: "production.line_clearance.approve" as const, siteId: kit.nfd.id };
@@ -326,5 +338,17 @@ describe("co-signature on the operator's device", () => {
     const [lead] = await db.select().from(users).where(eq(users.email, "qa.lead@bryels-care.test"));
     const s = await coSign(operator, { role: "exception_approver", permission: "production.over_tolerance_dispense.approve", siteId: kit.nfd.id, userId: lead.id, password: "demo1234" });
     expect(s.userId).toBe(qaLead.userId);
+  });
+});
+
+describe("ADR-078 second-person weighing check switch", () => {
+  it("off: batches created afterwards need no checker on any weighing line; on again: they do", async () => {
+    await db.insert(settings).values({ organizationId: kit.orgId, scope: "organization", key: "production.weighing.second_person_check", value: false });
+    const off = await snap(await fixtureBatch());
+    expect(off.lines.length).toBeGreaterThan(0);
+    expect(off.lines.every((l) => l.requiresChecker === false)).toBe(true);
+    await db.delete(settings).where(and(eq(settings.organizationId, kit.orgId), eq(settings.key, "production.weighing.second_person_check")));
+    const on = await snap(await fixtureBatch());
+    expect(on.lines.some((l) => l.requiresChecker !== false)).toBe(true);
   });
 });

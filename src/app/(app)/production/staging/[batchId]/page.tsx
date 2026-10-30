@@ -14,7 +14,8 @@ import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { generateSheetAction, substitutionAction } from "../../work-orders/actions";
 import { CommandForm } from "../../work-orders/command-form";
-import { StageFlow } from "./stage-flow";
+import { StageFlow, StageLotButton } from "./stage-flow";
+import Decimal from "decimal.js";
 
 export const metadata: Metadata = { title: "Stage materials" };
 export const dynamic = "force-dynamic";
@@ -67,7 +68,14 @@ export default async function StageBatchPage({ params }: { params: Promise<{ bat
         </div>
       )}
 
-      {v.canStage && <StageFlow batchId={b.id} stagingLocations={v.stagingLocations} />}
+      {v.canStage && (
+        <details className="mb-2">
+          <summary className="cursor-pointer text-[13px] text-primary-text">Scan labels instead (barcode scanner)</summary>
+          <div className="mt-2">
+            <StageFlow batchId={b.id} stagingLocations={v.stagingLocations} />
+          </div>
+        </details>
+      )}
 
       <div className="mt-4 space-y-3">
         {v.lines.map((l) => (
@@ -83,12 +91,26 @@ export default async function StageBatchPage({ params }: { params: Promise<{ bat
               </div>
               {l.isStaged ? <Chip tone="ok">Staged</Chip> : <Chip tone="info">{g(l.remaining)} to stage</Chip>}
             </div>
-            {!l.isStaged && (
-              <p className="mt-2 text-[13px]">
-                <span className="font-semibold">Pick: </span>
-                {l.expected.length ? l.expected.map((x) => `${x.lotNumber} @ ${x.locationCode} (${g(x.qty)}, exp ${fmtDate(x.expiresOn)})`).join(" · ") : "No lot reserved. Ask the planner to reserve again."}
-              </p>
-            )}
+            {!l.isStaged &&
+              (l.expected.length ? (
+                <ul className="mt-3 space-y-2">
+                  {l.expected.map((x) => {
+                    const take = Decimal.min(new Decimal(x.qty), new Decimal(l.remaining)).toString();
+                    return (
+                      <li key={`${x.lotId}-${x.locationId}`} className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-line p-2.5">
+                        <span className="text-[13.5px]">
+                          <span className="font-mono font-medium">{x.lotNumber}</span> · {g(x.qty)} at {x.locationCode}
+                          {x.expiresOn ? ` · exp ${fmtDate(x.expiresOn)}` : ""}
+                        </span>
+                        {v.canStage && <StageLotButton batchId={b.id} lotNumber={x.lotNumber} qty={take} toLocationCode={v.stagingLocations[0]?.code ?? null} label={`Bring ${g(take)} to production`} />}
+                      </li>
+                    );
+                  })}
+                  {v.stagingLocations.length === 0 && <li className="text-[12.5px] text-muted">No production staging area is set for this warehouse (Master data → Locations).</li>}
+                </ul>
+              ) : (
+                <p className="mt-2 text-[13px]">No lot is set aside for this ingredient. Approve the production order again, or ask the planner.</p>
+              ))}
             {l.stagings.length > 0 && (
               <ul className="mt-2 space-y-0.5 text-[12px] text-fg-2">
                 {l.stagings.map((s) => (

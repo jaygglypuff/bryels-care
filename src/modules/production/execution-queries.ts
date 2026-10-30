@@ -335,7 +335,9 @@ export async function packagingLotOptions(ctx: AuthContext, siteId: string) {
 export async function signerOptions(ctx: AuthContext, siteId: string, permission: Permission) {
   ctx.requireSite(siteId);
   const list = await eligibleSigners(db, ctx.organizationId, siteId, permission);
-  return list.filter((u) => u.id !== ctx.userId);
+  const others = list.filter((u) => u.id !== ctx.userId);
+  // ADR-073: under the owner override the owner may sign their own work (recorded as an override).
+  return ctx.ownerOverride ? [{ ...list.find((u) => u.id === ctx.userId), id: ctx.userId, displayName: `${ctx.displayName} (you)` } as (typeof list)[number], ...others] : others;
 }
 
 export type { SnapshotStep };

@@ -984,3 +984,26 @@ the audit trail, not a hard block, then shows that one person did both sides.
 FDA Philippines): switching the override on for real production is the owner's documented decision
 after QA advice (assumption A-GOV-OWNER). Other roles are unchanged. Tests:
 `tests/integration/governance/owner-override.test.ts`.
+
+## ADR-078 Faster sign-off and picking on the shop floor
+
+**Status.** Accepted (owner decision, 2026-10-25). Regulatory use flagged for qualified review.
+
+**Context.** On an iPad the owner had to type lot numbers to stage and weigh, could not see whether a
+lot held enough, and every checker had to type their password on the operator's tablet.
+
+**Decision.**
+1. A checker or approver signing on the operator's device picks their name. Their password is asked
+   only when `production.sign_off.require_password` is on (default off, restricted). Each name-only
+   signature writes `identity.co_signature.by_name` with the operator and session it came from.
+   The same-person rule still applies (owner override aside, ADR-073).
+2. `production.weighing.second_person_check` (default on; off in the sandbox): when off, batches
+   created afterwards need no checker on weighing lines (the snapshot's `requiresChecker` is false).
+3. Staging lists each reserved lot with its quantity and a one-tap "Bring … to production" button
+   (quantity = what the ingredient still needs, or the lot's reserved quantity if less); scanning stays
+   available under "Scan labels instead". Weighing preselects a lot from a list (lot, quantity,
+   location, expiry; staged lots first) and warns when the lot holds less than still needed.
+
+**Consequences.** A name-only signature records who was named, not proof they were present: for
+GMP the owner should switch the password back on, or use sign-off from the checker's own device,
+before real production (assumption A-SIGN-01). Tests: `tests/integration/production/execution-controls.test.ts`.

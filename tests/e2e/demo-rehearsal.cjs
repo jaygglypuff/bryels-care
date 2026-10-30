@@ -302,20 +302,21 @@ async function kpiValue(page, caption) {
   {
     const page = wh.page;
     await page.goto(BASE + '/production/staging/' + facts.batchId);
-    await page.locator('#lotCode').waitFor({ timeout: 20000 });
+    // Owner feedback 2026-10-25: one tap per reserved lot ("Bring … to production"), no typing of lot numbers.
+    await page.getByRole('button', { name: /^Bring .* to production$/ }).first().waitFor({ timeout: 20000 });
     for (let guard = 0; guard < 12; guard++) {
-      const pick = page.locator('p', { hasText: /^Pick: / }).first();
-      if (!(await pick.count())) break;
-      const lineTitle = (await pick.locator('xpath=preceding::p[contains(@class,"font-medium")][1]').innerText()).trim();
-      const lotNo = (await pick.innerText()).replace(/^Pick: /, '').split(' @ ')[0].trim();
-      await page.fill('#lotCode', 'BC:LOT:' + lotNo);
-      await page.fill('#toLocationCode', 'BC:LOC:PRD-01');
-      await page.getByRole('button', { name: 'Confirm staging' }).click();
-      // No reload: the result and the refreshed pick list come back in the action's response and
-      // commit together (ADR-043), so the next iteration reads the new picks. After the last
-      // ingredient the page replaces the scanner with "All ingredients staged".
-      await settle(page, page.locator('[role=status]', { hasText: `(lot ${lotNo})` }).first().or(page.getByText('All ingredients staged').first()), 'staging ' + lotNo, 20000);
-      await page.getByText(/^(Staged|Batch fully staged)$/).first().waitFor({ timeout: 20000 });
+      const btn = page.getByRole('button', { name: /^Bring .* to production$/ }).first();
+      if (!(await btn.count())) break;
+      const li = btn.locator('xpath=ancestor::li[1]');
+      const lotNo = (await li.locator('span.font-mono').innerText()).trim();
+      const lineTitle = (await li.locator('xpath=preceding::p[contains(@class,"font-medium")][1]').innerText()).trim();
+      await btn.click();
+      // No reload (ADR-043): the action's response re-renders the list without this lot's button.
+      try {
+        await page.locator('li', { hasText: lotNo }).getByRole('button', { name: /^Bring / }).waitFor({ state: 'detached', timeout: 20000 });
+      } catch {
+        throw new Error(`ASSERTION FAILED: staging ${lotNo} did not update the page (no reload fallback, ADR-043)`);
+      }
       (facts.staged[lineTitle.split('. ')[0]] ??= []).push(lotNo);
       log('staged', lineTitle, 'lot', lotNo);
     }
@@ -328,11 +329,13 @@ async function kpiValue(page, caption) {
   {
     const { context, page } = await asUser('operator.nfd@bryels-care.test');
     const CHECKER = 'Jun Dela Cruz';
-    // The checker signs on the operator's device with their own password (never the operator's session).
+    // The checker signs on the operator's device by picking their name; the password field appears only when
+    // the setting production.sign_off.require_password is on (ADR-078).
     const coSign = async (scope) => {
       const box = scope.locator('[data-testid=cosign-checker]');
       await box.locator('select[name=checkerId]').selectOption({ label: CHECKER });
-      await box.locator('input[name=checkerPassword]').fill(PW);
+      const pw = box.locator('input[name=checkerPassword]');
+      if (await pw.count()) await pw.fill(PW);
     };
     const panel = (n) => page.locator(`[data-testid=step-panel-${n}]`);
     const stepDone = async (n) => page.locator(`[data-testid=stepper-${n}]`).getByText('Done', { exact: true }).waitFor({ timeout: 20000 });
@@ -367,12 +370,10 @@ async function kpiValue(page, caption) {
       await row.locator('summary', { hasText: /^Weigh / }).click();
       const form = row.locator('[data-testid=weigh-form]');
       await form.waitFor();
-      const hint = await form.getByText(/^Recommended \(FEFO\): /).innerText();
-      const lotNo = hint.replace(/^Recommended \(FEFO\): /, '').split(' at ')[0].trim();
-      // The lot staged for this line is recommended first, at the staging location.
-      assert((facts.staged[String(n)] ?? []).includes(lotNo) && hint.includes(' at PRD-01'), `line ${n}: a lot staged for it (${facts.staged[String(n)]}) at PRD-01 recommended, got ${hint}`);
-      await form.locator('input[name=lotRef]').fill('BC:LOT:' + lotNo);
-      await form.locator('input[name=locationRef]').fill('BC:LOC:PRD-01');
+      // The lot list preselects the lot staged for this line (oldest expiry first among staged lots).
+      const picked = (await form.locator('select[id^=lotpick-] option:checked').innerText()).trim();
+      const lotNo = picked.split(' · ')[0].trim();
+      assert((facts.staged[String(n)] ?? []).includes(lotNo), `line ${n}: a lot staged for it (${facts.staged[String(n)]}) preselected, got ${picked}`);
       const label = await form.locator('label', { hasText: 'Net weight (target' }).innerText();
       const theo = label.match(/target ([\d,.]+) g/)[1].replace(/,/g, '');
       await form.locator('input[name=qty]').fill(theo);

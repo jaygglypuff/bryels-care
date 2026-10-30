@@ -161,6 +161,8 @@ async function main(): Promise<number> {
       for (const orgId of [O, demoOrg?.id].filter((x): x is string => !!x)) {
         await tx.insert(s.settings).values({ organizationId: orgId, scope: "organization", key: "governance.owner_override", value: true, updatedBy: orgId === O ? admin : null }).onConflictDoNothing();
       }
+      // ADR-078: the sandbox starts with the fast setting (the operator weighs alone); switchable in Settings.
+      await tx.insert(s.settings).values({ organizationId: O, scope: "organization", key: "production.weighing.second_person_check", value: false, updatedBy: admin });
       await tx.insert(s.auditEvents).values({ organizationId: O, actorId: admin, action: "platform.sandbox.seeded", entityType: "organization", entityId: O, entityNumber: "SBX", after: { accounts: PEOPLE.length, site: "SBX" } });
     });
 

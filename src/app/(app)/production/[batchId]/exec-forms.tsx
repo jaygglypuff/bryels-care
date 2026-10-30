@@ -1,5 +1,5 @@
 "use client";
-import { useActionState, useState, type ReactNode } from "react";
+import { createContext, useActionState, useContext, useState, type ReactNode } from "react";
 import { D, fmtQty } from "@/lib/qty";
 import { parseScan } from "@/lib/scan/payload";
 import { Button, Field, Input, Select, Textarea, cx } from "@/ui/core";
@@ -41,9 +41,16 @@ const Hidden = ({ v }: { v: Record<string, string | number> }) => (
   </>
 );
 
-/** Second-person signature on this device: choose the person, they type their own password. */
+/** Whether a co-signer must also type their password (setting production.sign_off.require_password, ADR-078). */
+const SignOffPassword = createContext(false);
+export function SignOffProvider({ requirePassword, children }: { requirePassword: boolean; children: ReactNode }) {
+  return <SignOffPassword.Provider value={requirePassword}>{children}</SignOffPassword.Provider>;
+}
+
+/** Second-person signature on this device: choose the person (and, when required, they type their password). */
 export function CoSign({ prefix, people, title, hint, required = false }: { prefix: "checker" | "approver"; people: Person[]; title: string; hint?: string; required?: boolean }) {
   const [who, setWho] = useState("");
+  const needsPassword = useContext(SignOffPassword);
   return (
     <fieldset className="grid gap-3 rounded-[12px] border border-line bg-surface-2/50 p-3 sm:grid-cols-2" data-testid={`cosign-${prefix}`}>
       <legend className="px-1 text-[12px] font-semibold uppercase tracking-wide text-muted">{title}</legend>
@@ -57,7 +64,7 @@ export function CoSign({ prefix, people, title, hint, required = false }: { pref
           ))}
         </Select>
       </Field>
-      {who && (
+      {who && needsPassword && (
         <Field label="Their password (typed by them)" htmlFor={`${prefix}-pw-${title}`}>
           <Input id={`${prefix}-pw-${title}`} name={`${prefix}Password`} type="password" autoComplete="off" required />
         </Field>
@@ -127,6 +134,8 @@ export function ChecklistForm({ batchId, stepNo, items, checkers, idem }: { batc
 
 export type ScaleOpt = { id: string; code: string; name: string; usable: boolean; viaOverride: boolean; blocking: string[]; reasons: string[]; calibrationDueDate: string | null; capacity: string | null };
 export type IngredientExec = { id: string; lineNo: number; materialCode: string; materialName: string; inciName: string | null; theoreticalQtyG: string; tolerancePct: string; minG: string; maxG: string; dispensedQtyG: string; status: string; recommended: string | null };
+/** A lot the operator can weigh from: where it is and how much is there (base unit, grams). */
+export type WeighLot = { lotNumber: string; locationCode: string; locationName: string; qty: string; expiresOn: string | null };
 
 export function WeighForm({
   batchId,
@@ -136,9 +145,13 @@ export function WeighForm({
   approvers,
   idem,
   replaces,
+  lots = [],
+  needsChecker = true,
 }: {
   batchId: string;
   ing: IngredientExec;
+  lots?: WeighLot[];
+  needsChecker?: boolean;
   scales: ScaleOpt[];
   checkers: Person[];
   approvers: Person[];
@@ -148,8 +161,12 @@ export function WeighForm({
   const [state, action] = useAct(dispenseAction);
   const [qty, setQty] = useState("");
   const [uom, setUom] = useState("g");
-  const [lot, setLot] = useState("");
+  const [lot, setLot] = useState(lots[0]?.lotNumber ?? "");
+  const [loc, setLoc] = useState(lots[0]?.locationCode ?? "");
+  const [typing, setTyping] = useState(lots.length === 0);
   const [partial, setPartial] = useState(false);
+  const picked = lots.find((l) => l.lotNumber === lot && l.locationCode === loc) ?? null;
+  const stillNeeded = D(ing.theoreticalQtyG).minus(ing.dispensedQtyG);
   const firstUsable = scales.find((s) => s.usable)?.code ?? "";
   const [scale, setScale] = useState(firstUsable);
   const fe = state?.fieldErrors ?? {};
@@ -164,12 +181,51 @@ export function WeighForm({
     <form action={action} className="mt-1 flex flex-col gap-4 rounded-[12px] border border-line-strong p-3.5" data-testid="weigh-form">
       <Hidden v={{ batchId, batchMaterialId: ing.id, idempotencyKey: idem, uom }} />
       {replaces && <input type="hidden" name="supersedesId" value={replaces.id} />}
-      <Field label="1. Scan the lot label on the container" htmlFor={`lot-${ing.id}`} error={fe.lot ?? scanError ?? undefined} hint={ing.recommended ? `Recommended (FEFO): ${ing.recommended}` : undefined}>
-        <Input id={`lot-${ing.id}`} name="lotRef" value={lot} onChange={(e) => setLot(e.target.value)} autoComplete="off" placeholder="BC:LOT:… or lot number" className="min-h-[52px] font-mono text-[16px]" required />
-      </Field>
-      <Field label="Location (only if the lot is in several places)" htmlFor={`loc-${ing.id}`} error={fe.location}>
-        <Input id={`loc-${ing.id}`} name="locationRef" autoComplete="off" placeholder="BC:LOC:… or code, e.g. A-01" />
-      </Field>
+      {!typing ? (
+        <Field label="1. Choose the lot" htmlFor={`lotpick-${ing.id}`} error={fe.lot ?? fe.location} hint="Oldest expiry first; lots already brought to production are at the top.">
+          <Select
+            id={`lotpick-${ing.id}`}
+            value={`${lot}|${loc}`}
+            onChange={(e) => {
+              const [l, c] = e.target.value.split("|");
+              setLot(l ?? "");
+              setLoc(c ?? "");
+            }}
+            className="min-h-[52px] text-[15px]"
+          >
+            {lots.map((l) => (
+              <option key={`${l.lotNumber}|${l.locationCode}`} value={`${l.lotNumber}|${l.locationCode}`}>
+                {l.lotNumber} · {fmtQty(l.qty, "g", 1)} at {l.locationCode}
+                {l.expiresOn ? ` · exp ${l.expiresOn}` : ""}
+              </option>
+            ))}
+          </Select>
+          <input type="hidden" name="lotRef" value={lot} />
+          <input type="hidden" name="locationRef" value={loc} />
+          {picked && D(picked.qty).lt(stillNeeded) && (
+            <span className="mt-1 block text-[12.5px] text-[var(--warn-fg)]">
+              Only {fmtQty(picked.qty, "g", 1)} in this lot; {fmtQty(stillNeeded, "g", 1)} still needed. Weigh what it has, tick &quot;Another lot follows&quot;, then weigh the rest from the next lot.
+            </span>
+          )}
+          <button type="button" className="mt-1 text-[12.5px] text-primary-text underline" onClick={() => setTyping(true)}>
+            Scan or type a lot instead
+          </button>
+        </Field>
+      ) : (
+        <>
+          <Field label="1. Scan the lot label on the container" htmlFor={`lot-${ing.id}`} error={fe.lot ?? scanError ?? undefined} hint={lots.length === 0 ? "No usable lot of this material at this site. Receive it (and have it approved) first." : ing.recommended ? `Suggested: ${ing.recommended}` : undefined}>
+            <Input id={`lot-${ing.id}`} name="lotRef" value={lot} onChange={(e) => setLot(e.target.value)} autoComplete="off" placeholder="BC:LOT:… or lot number" className="min-h-[52px] font-mono text-[16px]" required />
+          </Field>
+          <Field label="Location (only if the lot is in several places)" htmlFor={`loc-${ing.id}`} error={fe.location}>
+            <Input id={`loc-${ing.id}`} name="locationRef" value={loc} onChange={(e) => setLoc(e.target.value)} autoComplete="off" placeholder="BC:LOC:… or code, e.g. A-01" />
+          </Field>
+          {lots.length > 0 && (
+            <button type="button" className="self-start text-[12.5px] text-primary-text underline" onClick={() => setTyping(false)}>
+              Choose from the list instead
+            </button>
+          )}
+        </>
+      )}
       <Field
         label="2. Scale"
         htmlFor={`scale-${ing.id}`}
@@ -235,7 +291,7 @@ export function WeighForm({
           </Field>
         </div>
       )}
-      <CoSign prefix="checker" people={checkers} title="Checked by" hint="Or the checker signs later from their own device." />
+      {needsChecker && <CoSign prefix="checker" people={checkers} title="Checked by" hint="Or the checker signs later from their own device." />}
       <FormMessage state={state} />
       <SubmitButton size="lg" variant={outside ? "secondary" : "primary"} pendingText="Saving…" disabled={!!scanError} className="w-full sm:w-auto sm:self-start">
         {outside ? "Request exception" : "Confirm weight"}

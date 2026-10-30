@@ -220,10 +220,8 @@ async function step(name, fn, u) {
     await row.locator('summary', { hasText: /^Weigh / }).click();
     const form = row.locator('[data-testid=weigh-form]');
     await form.waitFor();
-    const hint = await form.getByText(/^Recommended \(FEFO\): /).innerText();
-    const [lotNo, rest] = hint.replace(/^Recommended \(FEFO\): /, '').split(' at ');
-    await form.locator('input[name=lotRef]').fill('BC:LOT:' + lotNo.trim());
-    await form.locator('input[name=locationRef]').fill('BC:LOC:' + rest.trim().split(/[ ,(]/)[0]);
+    // The lot is chosen from a list (owner feedback 2026-10-25); the first option is preselected.
+    const lotNo = (await form.locator('select[id^=lotpick-] option:checked').innerText()).split(' · ')[0];
     const label = await form.locator('label', { hasText: 'Net weight (target' }).innerText();
     await form.locator('input[name=qty]').fill(label.match(/target ([\d,.]+) g/)[1].replace(/,/g, ''));
     await form.getByText('Within tolerance').waitFor();

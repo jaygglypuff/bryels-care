@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getSetting } from "@/lib/settings";
+import { db } from "@/db/client";
 import { uuidv7 } from "uuidv7";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -41,6 +43,7 @@ import {
   YieldForm,
   type Person,
   type ScaleOpt,
+  SignOffProvider,
 } from "./exec-forms";
 import { registerAppHooks } from "@/modules/wiring";
 import { Help } from "@/ui/help/help";
@@ -274,7 +277,9 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
   const exceptionable = step?.blockers.some((b) => b.exceptionable) ?? false;
   const ingById = new Map(rec.ingredients.map((i) => [i.id, i]));
 
+  const requirePassword = await getSetting(db, ctx.organizationId, "production.sign_off.require_password");
   return (
+    <SignOffProvider requirePassword={requirePassword}>
     <div className="flex flex-col gap-5">
       <div>
         <Link href="/production" className="text-[13px] text-primary-text hover:underline">
@@ -470,6 +475,8 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
                                 approvers={approvers}
                                 idem={key()}
                                 replaces={lastVoided && ing.status === "pending" ? { id: lastVoided.id } : null}
+                                needsChecker={(batch.formulaSnapshot as { lines?: { lineNo: number; requiresChecker?: boolean }[] }).lines?.find((x) => x.lineNo === ing.lineNo)?.requiresChecker !== false}
+                                lots={(fefo[r?.materialId ?? ""] ?? []).map((l) => ({ lotNumber: l.lotNumber, locationCode: l.locationCode, locationName: l.locationName, qty: l.qty, expiresOn: l.expiresOn }))}
                               />
                             </details>
                           )}
@@ -671,5 +678,6 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
         </Card>
       )}
     </div>
+    </SignOffProvider>
   );
 }

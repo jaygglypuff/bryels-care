@@ -254,6 +254,32 @@ export const SETTINGS = {
   "approvals.sod.production_plan": sodSetting("Separation of duties: production plans"),
   "approvals.sod.customer_return": sodSetting("Separation of duties: customer returns"),
   /**
+   * Owner decision 2026-10-25 (ADR-078): a checker or approver signing on the operator's device picks
+   * their name; their password is asked only when this is on. The record still names the signer and the
+   * session it was entered from (audit `identity.co_signature.by_name`), but it no longer proves the
+   * signer was present — flagged for qualified review (GMP second-person checks).
+   */
+  "production.sign_off.require_password": {
+    scopes: ["organization"],
+    schema: z.boolean(),
+    default: false as boolean,
+    assumption: "A-SIGN-01",
+    group: "Production",
+    label: "Checker types their password to sign",
+    description: "Off: the checker or approver just picks their name on the tablet (fast). On: they also type their own password, which proves they were there.",
+    restricted: true,
+  },
+  /** ADR-078: second-person check of each weighing; off = the operator weighs alone (the log still shows who). */
+  "production.weighing.second_person_check": {
+    scopes: ["organization", "site"],
+    schema: z.boolean(),
+    default: true as boolean,
+    assumption: "A-SIGN-02",
+    group: "Production",
+    label: "A second person checks each weighing",
+    description: "Off: the operator weighs alone and the weighing counts as done. Applies to batches created after the change.",
+  },
+  /**
    * ADR-073: the owner may carry any step through alone. When on, a user holding the Owner/Director role
    * holds every permission and passes every separation-of-duties check (second person, checker,
    * approver other than the submitter); each use is audited as `governance.owner_override.used`.
