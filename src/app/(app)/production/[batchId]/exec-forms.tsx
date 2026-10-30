@@ -421,9 +421,14 @@ export function CompleteStepForm({ batchId, stepNo, stepKind, requiresChecker, c
         <Input id={`notes-${stepNo}`} name="notes" />
       </Field>
       {requiresChecker && <CoSign prefix="checker" people={checkers} title="Checked by" hint="Or the checker signs later from their own device." />}
-      {disabledReason && <p className="text-[13px] text-[var(--warn-fg)]">{disabledReason}</p>}
+      {/* UX review: disabled with the plain reason until ready (UI only; the server re-checks on submit). */}
+      {disabledReason && (
+        <p className="text-[14px] font-medium text-[var(--warn-fg)]" id={`complete-why-${stepNo}`}>
+          {disabledReason}
+        </p>
+      )}
       <FormMessage state={state} />
-      <SubmitButton size="lg" pendingText="Saving…" className="w-full sm:w-auto sm:self-start">
+      <SubmitButton size="lg" pendingText="Saving…" className="w-full sm:w-auto sm:self-start" disabled={!!disabledReason} aria-describedby={disabledReason ? `complete-why-${stepNo}` : undefined}>
         Complete step {stepNo}
       </SubmitButton>
     </form>

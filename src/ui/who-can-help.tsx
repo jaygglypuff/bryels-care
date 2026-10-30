@@ -3,8 +3,12 @@ import { useEffect, useState } from "react";
 
 type WhoCanDo = { roles: string[]; people: { name: string; email: string; role: string }[] };
 
-/** Under a refused step: the roles and colleagues who can do it (ADR-073; GET /api/who-can-do). */
-export function WhoCanHelp({ permission, siteId }: { permission: string; siteId: string | null }) {
+/**
+ * Under a refused step: the roles and colleagues who can do it (ADR-073; GET /api/who-can-do).
+ * `hideEmails`: floor screens (operators on a shared tablet) show names and roles only (UX review).
+ * `lead`: replaces "Who can do this:" (e.g. "These people do this step:").
+ */
+export function WhoCanHelp({ permission, siteId, hideEmails = false, lead = "Who can do this: " }: { permission: string; siteId: string | null; hideEmails?: boolean; lead?: string }) {
   const [data, setData] = useState<WhoCanDo | null>(null);
   useEffect(() => {
     let live = true;
@@ -20,13 +24,13 @@ export function WhoCanHelp({ permission, siteId }: { permission: string; siteId:
   if (!data || (data.roles.length === 0 && data.people.length === 0)) return null;
   return (
     <div className="mt-1.5 text-[12.5px]">
-      <span className="font-medium">Who can do this: </span>
+      <span className="font-medium">{lead}</span>
       {data.roles.length > 0 && <span>{data.roles.join(", ")}</span>}
       {data.people.length > 0 ? (
         <ul className="mt-1 list-disc pl-5">
           {data.people.map((p) => (
             <li key={p.email}>
-              {p.name} <span className="opacity-75">({p.role}, {p.email})</span>
+              {p.name} <span className="opacity-75">({hideEmails ? p.role : `${p.role}, ${p.email}`})</span>
             </li>
           ))}
         </ul>

@@ -4,10 +4,10 @@ import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { getOperationsCenter, getOperatorHome, getOwnerOverview } from "@/modules/analytics";
 import { myApprovalCount } from "@/modules/action-centre";
-import { listProductionOrders } from "@/modules/production";
+import { floorTaskCounts, myFloorTasks } from "@/modules/production";
 import { lowStockItems } from "@/modules/inventory";
 import { EmptyState, PageHeader, cx } from "@/ui/core";
-import { NextTaskCard, OperatorHome } from "./operator-home";
+import { OperatorHome, TasksToday } from "./operator-home";
 import { HeadlineNumbers, NeedsAttention, RightNow, attentionItems } from "./simple-home";
 
 export const dynamic = "force-dynamic";
@@ -18,17 +18,17 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
   // Operators (no analytics.dashboard.view) get a task home instead of the analytics overview.
   if (!ctx.can("analytics.dashboard.view")) {
-    // ADR-082: the operator's next task first — their own order (else one nobody took) that has a step to do.
-    const [tiles, orders] = await Promise.all([
-      getOperatorHome(ctx),
-      ctx.can("production.work_order.view") && ctx.can("production.daily_log.create") ? listProductionOrders(ctx, { mine: true }) : Promise.resolve([]),
-    ]);
-    const next = orders.find((o) => o.nextAction.kind === "link") ?? null;
+    // UX review "Your tasks today": one card per batch the operator can act on (with or without an order), then quick actions.
+    const floor = ctx.can("production.batch.view") && (ctx.can("production.dispense_record.create") || ctx.can("production.daily_log.create"));
+    const [tiles, tasks] = await Promise.all([getOperatorHome(ctx), floor ? myFloorTasks(ctx) : Promise.resolve([])]);
     return (
       <>
-        <PageHeader title={`Good day, ${ctx.displayName.split(" ")[0]}`} subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · What do you need to do?`} />
-        {next && <NextTaskCard order={next} more={orders.filter((o) => o.assignedToMe).length} />}
-        <OperatorHome tiles={tiles} siteLabel={ctx.currentSite.code} updated={fmtDateTime(new Date())} />
+        <PageHeader title={`Good day, ${ctx.displayName.split(" ")[0]}`} subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · ${floor ? "Here is what to do next." : "What do you need to do?"}`} />
+        {floor ? (
+          <TasksToday tasks={tasks} counts={floorTaskCounts(tasks)} tiles={tiles} canDailyCount={ctx.can("production.daily_log.view")} />
+        ) : (
+          <OperatorHome tiles={tiles} siteLabel={ctx.currentSite.code} updated={fmtDateTime(new Date())} />
+        )}
       </>
     );
   }

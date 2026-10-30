@@ -311,7 +311,19 @@ export async function getProductionOrder(ctx: AuthContext, workOrderId: string, 
   const yieldPct = d.formulaRevision?.theoreticalYieldPct ?? (await getEffectiveFormulaRevision(ctx, wo.productId, wo.plannedStart).catch(() => null))?.rev.theoreticalYieldPct ?? null;
   const today = manilaToday(now);
   const [assignee] = wo.assignedOperatorId ? await db.select({ id: users.id, name: users.displayName }).from(users).where(eq(users.id, wo.assignedOperatorId)).limit(1) : [];
+  // UX review: an approved order without a batch says who plans it (the planner, else the supervisor, else who approved it).
+  const noBatchPlanned = live.length === 0 && (status === "approved" || status === "in_progress");
+  const planBy = noBatchPlanned ? (wo.assignedPlannerId ?? wo.assignedSupervisorId ?? wo.statusChangedBy) : null;
+  const [planner] = planBy ? await db.select({ id: users.id, name: users.displayName }).from(users).where(eq(users.id, planBy)).limit(1) : [];
   return {
+    /** Approved, but no batch exists yet: nothing to do on the floor until someone plans one. */
+    noBatchPlanned,
+    /** Who to ask to plan the batch (name only, never an e-mail address); null when a batch exists. */
+    planner: planner ?? null,
+    /** The user can create the batch (old work order screen, production.batch.create at the site). */
+    canPlanBatch: noBatchPlanned && ctx.can("production.batch.create") && ctx.canAt("production.batch.create", wo.siteId),
+    /** A batch of the order has started: the daily log ("What happened today?") is useful only from then on. */
+    anyBatchStarted: live.some((b) => b.startedAt !== null),
     detail: d,
     /** ADR-082: who makes this order; null = open for anyone at the site. */
     assignee: assignee ?? null,

@@ -159,7 +159,7 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
               {!v.can.decide ? (
                 <div className="space-y-2">
                   <p className="text-[14px] text-fg-2">A QA person decides this batch.</p>
-                  <WhoCanHelp permission="quality.disposition.approve" siteId={v.batch.siteId} />
+                  <WhoCanHelp permission="quality.disposition.approve" siteId={v.batch.siteId} hideEmails />
                 </div>
               ) : (
                 <div className="space-y-5">

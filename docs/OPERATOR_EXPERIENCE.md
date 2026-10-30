@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | R1 built: focused menu and tab bar. R3 built: assigned orders, "My work", "Your next task" (ADR-082) |
+| Status | R1 built: focused menu and tab bar. R3 built: assigned orders, "My work", "Your next task" (ADR-082). Operator UX review fixes built: "Your tasks today" task list, step screen focus (§5) |
 | Read with | ADR-080 (production order flow), `docs/reviews/production-flow-v2-ux-review.md`, ADR-081 |
 
 ## 1. What an operator sees after R1
@@ -37,6 +37,19 @@ Offline-capable commands (counting, weighing) queue with an idempotency key and 
    who record production at that site are offered); the person gets a notification. Unassigned orders are
    open for anyone. Assignment never blocks recording: anyone allowed may still do a step.
 2. **My work** shows my orders first, then unassigned ones; "Everyone's" shows the rest of the site.
-3. **"Your next task"** on the operator Home: the first of those orders with a step to do, one big button.
+3. **"Your next task"** on the operator Home: replaced by "Your tasks today" (§5), whose first card is that task.
 4. **Next: words.** Apply the ADR-080 word list to the operator tiles (no "quarantine", "disposition", "FEFO" on
    operator screens; UX-17, UX-18).
+
+## 5. Operator UX review fixes ("operators freeze")
+
+| # | Screen | Built |
+|---|---|---|
+| 1 | Task list read model | `myFloorTasks(ctx)` (`src/modules/production/floor-tasks.ts`): one task per batch at the current site in materials_staged, in_process, rework_approved, or planned (approved order, or an older batch without an order). Batches of orders assigned to someone else are left out (`work_orders.assigned_operator_id`); mine first, then canDo, then the furthest along. Verb + thing, product, batch, "Step x of y · …", percent, ONE href (`batchNextAction`: order screens when the batch has an order, else the batch page) and whether the user may do it at the site; if not, "Waiting for <first names or role>", never e-mail addresses. Needs `production.batch.view`. |
+| 2 | Home (operators who make: batch view + weigh or daily log) | "Your tasks today": greeting, three counts (Batches for you, Weighing, Waiting), task cards with one big green Start / Continue, quick actions (Scan or search, Daily count, other role tiles). Empty: "Nothing for you right now. Your supervisor plans the next batch." Warehouse and QA operators keep the task tiles. |
+| 3 | My work | "To do now" task cards first; drafts (orders waiting for approval) hidden from operators; the filter chips behind "Show more filters". |
+| 3 | Who can do this | `WhoCanHelp hideEmails` on floor screens (order screens, Finish, Check quality); names and roles only. |
+| 4 | Batch step screen | Only the first ingredient still to weigh is green and numbered "1."; the others are secondary with "Next" / "Later". "Complete step N" is disabled with the plain reason ("Weigh all 5 ingredients first (3 still to weigh).") until ready; the server still validates. One "? How to do this step"; the other help, print and close links under "⋯ More". A user who cannot do the step reads "<names or roles> can do this step. You can follow progress here." Ingredient lines show names, not codes. Facts under "Details": "Recipe: <name> (version n)", "Expected output". |
+| 5 | Approved order without a batch | "This order is approved but no batch is planned yet. Ask <planner, else supervisor, else approver> to plan it." (a user with `production.batch.create` gets "Plan the batch"); "What happened today?" is hidden until a batch has started. |
+
+Tests: `tests/integration/production/floor-tasks.test.ts` (batch without an order listed; someone else's order not listed; cross-site; forbidden without `production.batch.view`; waiting words without e-mail).

@@ -65,7 +65,7 @@ export default async function FinishPage({ params }: { params: Promise<{ batchId
       ) : !v.can.finish ? (
         <Card>
           <EmptyState title="Someone from production finishes this batch">
-            <WhoCanHelp permission="production.batch.post" siteId={v.batch.siteId} />
+            <WhoCanHelp permission="production.batch.post" siteId={v.batch.siteId} hideEmails />
           </EmptyState>
         </Card>
       ) : !v.hold ? (

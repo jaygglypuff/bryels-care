@@ -369,7 +369,7 @@ async function kpiValue(page, caption) {
     await panel(2).waitFor({ timeout: 20000 });
     for (let n = 1; n <= 5; n++) {
       const row = page.locator(`[data-testid=ingredient-${n}]`);
-      await row.locator('summary', { hasText: /^Weigh / }).click();
+      await row.locator('summary', { hasText: /Weigh / }).click();
       const form = row.locator('[data-testid=weigh-form]');
       await form.waitFor();
       // The lot list preselects the lot staged for this line (oldest expiry first among staged lots).
@@ -823,7 +823,7 @@ async function kpiValue(page, caption) {
     await page.getByRole('link', { name: /B-\d{2}-0004/ }).first().click();
     await page.waitForURL(/\/production\/[0-9a-f-]{36}$/);
     const row = page.locator('[data-testid=ingredient-1]');
-    await row.locator('summary', { hasText: /^Weigh / }).click();
+    await row.locator('summary', { hasText: /Weigh / }).click();
     await row.locator('[data-testid=weigh-form]').waitFor();
     await row.locator('input[name=qty]').fill('3723.0');
     await row.getByText('Within tolerance').waitFor();
