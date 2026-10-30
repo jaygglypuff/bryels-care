@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { ROLE_BUNDLES, type Permission } from "@/lib/permissions";
-import { ADVANCED, NAV, buildNav, groupSections, isApprover, productionPersona, tabsFor } from "@/app/(app)/nav";
+import { ADVANCED, NAV, buildNav, groupSections, homeHref, isApprover, productionPersona, tabsFor } from "@/app/(app)/nav";
 
 const canFor = (role: string) => {
   const set = new Set<string>(ROLE_BUNDLES[role].permissions);
@@ -151,5 +151,26 @@ describe("To approve only for approvers (ADR-082)", () => {
     const home = (approver: boolean) => buildNav(canFor("production_operator"), ["production_operator"], { approver }).find((g) => g.label === "Home")!.items.map((i) => i.label);
     expect(home(false)).not.toContain("To approve");
     expect(home(true)).toContain("To approve");
+  });
+});
+
+describe("Floor screen (ADR-084)", () => {
+  it("office roles with production.batch.view get Floor screen (TV) in Operations; floor personas do not", () => {
+    for (const r of ["owner_director", "site_manager", "production_planner"]) expect(main(r)).toContain("Floor screen (TV)");
+    expect(main("production_operator")).not.toContain("Floor screen (TV)");
+    expect(navOf("warehouse_operator").flatMap((g) => g.items.map((i) => i.href))).not.toContain("/floor");
+    expect(navOf("sales_cs").flatMap((g) => g.items.map((i) => i.href))).not.toContain("/floor");
+  });
+
+  it("the Floor display role is read-only, site-scoped, and its home is the floor screen", () => {
+    const b = ROLE_BUNDLES.floor_display;
+    expect(b.orgWide).toBe(false);
+    expect(b.permissions.every((p) => p.endsWith(".view"))).toBe(true);
+    expect(productionPersona(canFor("floor_display"), ["floor_display"])).toBe("viewer");
+    expect(navOf("floor_display").map((g) => g.label)).toEqual(["Home", "Operations"]);
+    expect(main("floor_display")).toContain("Floor screen (TV)");
+    expect(homeHref(["floor_display"])).toBe("/floor");
+    expect(homeHref(["floor_display", "site_manager"])).toBe("/dashboard");
+    expect(homeHref([])).toBe("/dashboard");
   });
 });

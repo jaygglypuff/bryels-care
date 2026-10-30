@@ -17,7 +17,7 @@ import { type SignInResult, signInWithPassword } from "./sign-in";
  */
 
 /** Display order of the role groups (permissions matrix order); unknown/custom roles go last. */
-const ROLE_ORDER = ["owner_director", "system_admin", "site_manager", "production_planner", "production_operator", "qa_qc", "warehouse_operator", "procurement", "sales_cs", "finance", "auditor"];
+const ROLE_ORDER = ["owner_director", "system_admin", "site_manager", "production_planner", "production_operator", "qa_qc", "warehouse_operator", "procurement", "sales_cs", "finance", "auditor", "floor_display"];
 const rank = (code: string) => {
   const i = ROLE_ORDER.indexOf(code);
   return i === -1 ? ROLE_ORDER.length : i;

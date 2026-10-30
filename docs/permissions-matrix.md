@@ -530,6 +530,12 @@ Role philosophy (owners should read this part):
 - **auditor** is view and export only, organization-wide, including finance and audit logs;
   payroll figures and employee personal data are excluded by default (A-PM-04) and granted by
   an explicit extra assignment when an external audit requires them.
+- **floor_display** (ADR-084, "Floor display") is the role of a wall-TV account such as
+  `floor.nfd@bryels-care.test` ("Floor TV NFD"): `production.batch.view`,
+  `production.work_order.view` and `production.daily_log.view` at the sites of the assignment,
+  never organization-wide. It opens `/floor` (no prices, no customer names) and nothing it can
+  change. A user whose only role is floor_display lands on `/floor` instead of Home. Revoking the
+  assignment turns the TV off.
 - **customer_portal_user** holds no internal permission at all. Its capabilities are a
   separate list evaluated by a separate portal context (section 7).
 

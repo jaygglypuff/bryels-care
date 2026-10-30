@@ -1561,3 +1561,12 @@ const S2_GRANTS: Record<string, readonly Permission[]> = {
 for (const [role, grants] of Object.entries(S2_GRANTS)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
 }
+
+// ADR-084 (docs/FLOOR_DISPLAY.md §5): the read-only "Floor display" role of the production TV account.
+// Defined last on purpose: no grant or exclusion loop above may widen it. Site-scoped (never organization-wide);
+// revoking the display user's assignment turns the TV off.
+ROLE_BUNDLES.floor_display = {
+  name: "Floor display",
+  orgWide: false,
+  permissions: ["production.batch.view", "production.work_order.view", "production.daily_log.view"],
+};
