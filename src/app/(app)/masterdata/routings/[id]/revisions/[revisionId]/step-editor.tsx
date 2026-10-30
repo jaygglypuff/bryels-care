@@ -1,10 +1,11 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import type { ActionState } from "@/lib/errors";
 import { Field, Input, Select, Textarea } from "@/ui/core";
 import { FormMessage, SubmitButton } from "@/ui/form";
 import { saveRoutingDraftAction } from "../../../../_eng/actions";
+import { AREAS_WORDS, WAIT_UNITS, type WaitUnit, minutesToWait, waitText, waitToMinutes } from "@/modules/masterdata/recipe-blocks";
 
 export type ParamDraft = { code: string; name: string; valueKind: string; uom: string; minValue: string; targetValue: string; maxValue: string; isRequired: boolean };
 export type StepDraft = {
@@ -19,6 +20,9 @@ export type StepDraft = {
   requiresEquipment: boolean;
   equipmentKind: string;
   minDurationMinutes: string;
+  /** The wait typed as amount + unit (minutes, hours, days, weeks); saved as whole minutes. */
+  waitAmount?: string;
+  waitUnit?: WaitUnit;
   parameters: ParamDraft[];
   /** One checklist item per line; prefix "[photo] " to require a photo. */
   checklistText: string;
@@ -46,7 +50,8 @@ const emptyStep = (): StepDraft => ({
   area: "",
   instruction: "",
   workInstructionRevisionId: "",
-  requiresChecker: true,
+  // Second-person check off by default (owner usability test); weighing turns it on when chosen.
+  requiresChecker: false,
   blocksUntilComplete: true,
   requiresEquipment: false,
   equipmentKind: "",
@@ -88,7 +93,18 @@ export function RoutingStepEditor({
   today: string;
 }) {
   const [state, action] = useActionState<ActionState, FormData>(saveRoutingDraftAction, null);
-  const [steps, setSteps] = useState<StepDraft[]>(initial);
+  // React 19 resets a form after its action, which showed every controlled select as "Choose…" although the
+  // draft was saved; drawing the form again from the kept state after each save shows the saved values.
+  const [round, setRound] = useState(0);
+  useEffect(() => {
+    if (state) setRound((r) => r + 1);
+  }, [state]);
+  const [steps, setSteps] = useState<StepDraft[]>(() =>
+    initial.map((s) => {
+      const w = minutesToWait(s.minDurationMinutes.trim() ? Number(s.minDurationMinutes) : null);
+      return { ...s, waitAmount: s.waitAmount ?? w.amount, waitUnit: s.waitUnit ?? w.unit };
+    }),
+  );
   const [eff, setEff] = useState(effectiveFrom ?? "");
   const [chg, setChg] = useState(changeSummary ?? "");
   const fe = state?.fieldErrors ?? {};
@@ -118,7 +134,7 @@ export function RoutingStepEditor({
       blocksUntilComplete: s.blocksUntilComplete,
       requiresEquipment: s.requiresEquipment,
       equipmentKind: n(s.equipmentKind),
-      minDurationMinutes: s.minDurationMinutes.trim() ? Number(s.minDurationMinutes) : null,
+      minDurationMinutes: (s.waitAmount ?? "").trim() ? (Number.isNaN(waitToMinutes(s.waitAmount ?? "", s.waitUnit ?? "days")) ? -1 : waitToMinutes(s.waitAmount ?? "", s.waitUnit ?? "days")) : null,
       parameters: s.parameters.map((p, j) => ({ code: p.code.trim() || paramCode(p.name, j), name: p.name, valueKind: p.valueKind, uom: n(p.uom), minValue: n(p.minValue), targetValue: n(p.targetValue), maxValue: n(p.maxValue), isRequired: p.isRequired })),
       checklistItems: s.checklistText
         .split("\n")
@@ -129,7 +145,7 @@ export function RoutingStepEditor({
   });
 
   return (
-    <form action={action} className="flex flex-col gap-4">
+    <form key={round} action={action} className="flex flex-col gap-4">
       <input type="hidden" name="payload" value={payload} />
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Proposed effective date" htmlFor="r-eff" error={fe.effectiveFrom} hint="The final approver confirms it.">
@@ -147,14 +163,14 @@ export function RoutingStepEditor({
           <fieldset key={i} className="rounded-[16px] border border-line p-3" data-testid={`edit-step-${i + 1}`}>
             <legend className="px-1 text-[12px] font-semibold text-muted">Step {i + 1}</legend>
             <div className="grid gap-3 sm:grid-cols-6">
-              <div className="sm:col-span-3">
+              <div className="sm:col-span-2">
                 <Field label="Name" htmlFor={`${pid}-name`} error={err("name")}>
                   <Input id={`${pid}-name`} value={s.name} onChange={(e) => set(i, { name: e.target.value })} />
                 </Field>
               </div>
               <div className="sm:col-span-2">
                 <Field label="Kind" htmlFor={`${pid}-kind`} error={err("stepKind")}>
-                  <Select id={`${pid}-kind`} value={s.stepKind} onChange={(e) => set(i, { stepKind: e.target.value })}>
+                  <Select id={`${pid}-kind`} value={s.stepKind} onChange={(e) => set(i, { stepKind: e.target.value, ...(e.target.value === "dispensing" ? { requiresChecker: true } : {}) })}>
                     {stepKinds.map((k) => (
                       <option key={k} value={k}>
                         {KIND_LABEL[k] ?? k}
@@ -163,13 +179,13 @@ export function RoutingStepEditor({
                   </Select>
                 </Field>
               </div>
-              <div className="sm:col-span-1">
+              <div className="sm:col-span-2">
                 <Field label="Area" htmlFor={`${pid}-area`} error={err("area")}>
                   <Select id={`${pid}-area`} value={s.area} onChange={(e) => set(i, { area: e.target.value })}>
                     <option value="">—</option>
                     {areas.map((a) => (
                       <option key={a} value={a}>
-                        {a}
+                        {AREAS_WORDS[a] ?? a}
                       </option>
                     ))}
                   </Select>
@@ -204,18 +220,35 @@ export function RoutingStepEditor({
                   </Select>
                 </Field>
               </div>
-              <div className="sm:col-span-1">
-                <Field label="Min. minutes" htmlFor={`${pid}-min`} error={err("minDurationMinutes")}>
-                  <Input id={`${pid}-min`} inputMode="numeric" value={s.minDurationMinutes} onChange={(e) => set(i, { minDurationMinutes: e.target.value })} />
+              <div className="sm:col-span-6">
+                <Field
+                  label="Wait at least (for curing or resting steps)"
+                  htmlFor={`${pid}-min`}
+                  error={err("minDurationMinutes")}
+                  hint={(() => {
+                    const m = waitToMinutes(s.waitAmount ?? "", s.waitUnit ?? "days");
+                    return m && !Number.isNaN(m) ? `Wait at least ${waitText(m)}.` : "Empty = no minimum time.";
+                  })()}
+                >
+                  <div className="flex gap-2">
+                    <Input id={`${pid}-min`} inputMode="decimal" className="w-28" value={s.waitAmount ?? ""} onChange={(e) => set(i, { waitAmount: e.target.value })} />
+                    <Select aria-label="Wait unit" className="w-36" value={s.waitUnit ?? "days"} onChange={(e) => set(i, { waitUnit: e.target.value as WaitUnit })}>
+                      {WAIT_UNITS.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
                 </Field>
               </div>
             </div>
             <div className="mt-2 flex flex-wrap gap-4 text-[13px]">
               <label className="flex min-h-[44px] items-center gap-2">
-                <input type="checkbox" checked={s.requiresChecker} onChange={(e) => set(i, { requiresChecker: e.target.checked })} /> Checker required
+                <input type="checkbox" className="h-5 w-5" checked={s.requiresChecker} onChange={(e) => set(i, { requiresChecker: e.target.checked })} /> A second person checks and signs this step
               </label>
               <label className="flex min-h-[44px] items-center gap-2">
-                <input type="checkbox" checked={s.blocksUntilComplete} onChange={(e) => set(i, { blocksUntilComplete: e.target.checked })} /> Blocks completion until done
+                <input type="checkbox" className="h-5 w-5" checked={s.blocksUntilComplete} onChange={(e) => set(i, { blocksUntilComplete: e.target.checked })} /> The next steps wait until this one is done
               </label>
             </div>
 

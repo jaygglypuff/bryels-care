@@ -64,7 +64,8 @@ export default async function FormulaRevisionPage({ params }: { params: Promise<
           <CardTitle>Edit draft</CardTitle>
           <FormulaLineEditor
             today={today}
-            materials={editor.materials}
+            // Ingredients only (usability test): no packaging or spare parts, except a material already on a line.
+            materials={editor.materials.filter((m) => m.kind === "raw_material" || m.kind === "intermediate" || v.lines.some((l) => l.materialId === m.id))}
             init={{
               revisionId: r.id,
               referenceBatchSizeG: r.referenceBatchSizeG,
@@ -72,7 +73,7 @@ export default async function FormulaRevisionPage({ params }: { params: Promise<
               effectiveFrom: r.effectiveFrom,
               changeSummary: r.changeSummary,
               notes: r.notes,
-              lines: v.lines.map((l) => ({ materialId: l.materialId, quantityG: l.quantityG, tolerancePct: l.tolerancePct, toleranceAbsG: l.toleranceAbsG, phaseCode: l.phaseCode, scaling: l.scaling })),
+              lines: v.lines.map((l) => ({ materialId: l.materialId, quantityG: l.quantityG, tolerancePct: l.tolerancePct, toleranceAbsG: l.toleranceAbsG, phaseCode: l.phaseCode, scaling: l.scaling, isCritical: l.isCritical, requiresChecker: l.requiresChecker })),
             }}
           />
         </Card>
@@ -147,7 +148,7 @@ export default async function FormulaRevisionPage({ params }: { params: Promise<
       )}
 
       {(r.status !== "draft" || v.approval.decisions.length > 0) && (
-        <ApprovalPanel approval={v.approval} status={r.status}>
+        <ApprovalPanel approval={v.approval} status={r.status} what="recipe">
           {v.approval.canDecide && v.approval.nextStep && (
             <DecisionForm action={decideFormulaAction} id={r.id} stepLabel={`step ${v.approval.nextStep.step}, ${v.approval.nextStep.label}`} isFinal={v.approval.nextStep.step === lastStep} defaultEffectiveFrom={r.effectiveFrom} today={today} />
           )}

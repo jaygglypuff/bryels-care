@@ -369,6 +369,22 @@ export const SETTINGS = {
     requiresApproval: true,
   },
   /**
+   * ADR-086 (guided recipe wizard): the "Allowed difference" filled in for a new ingredient line, as
+   * a percentage of its amount. Only a starting value: the author changes it per line and QA checks it
+   * when approving the recipe. The 2 % default is the value of the built-in example (ADR-079), not a
+   * quality rule.
+   */
+  "masterdata.recipe.default_allowed_difference_pct": {
+    scopes: ["organization"],
+    schema: z.number().min(0).max(100),
+    default: 2,
+    assumption: "A-RW-02",
+    group: "Production",
+    label: "New recipe: starting allowed difference per ingredient (%)",
+    description: "Filled in for each new ingredient in the step-by-step recipe; the author may change it and QA checks it when approving.",
+    requiresApproval: true,
+  },
+  /**
    * ADR-073: the owner may carry any step through alone. When on, a user holding the Owner/Director role
    * holds every permission and passes every separation-of-duties check (second person, checker,
    * approver other than the submitter); each use is audited as `governance.owner_override.used`.

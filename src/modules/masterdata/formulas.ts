@@ -447,7 +447,9 @@ export async function listFormulas(ctx: AuthContext) {
   const revs = await db
     .select({
       rev: formulaRevisions,
-      lineCount: sql<number>`(select count(*)::int from ${bomLines} where ${bomLines.formulaRevisionId} = ${formulaRevisions.id})`,
+      // Spelled out: in a one-table select Drizzle writes columns without the table name, so `= ${formulaRevisions.id}`
+      // became `= "id"` (the line's own id) and every recipe showed 0 ingredients.
+      lineCount: sql<number>`(select count(*)::int from bom_lines b where b.formula_revision_id = "formula_revisions"."id")`,
     })
     .from(formulaRevisions)
     .where(inArray(formulaRevisions.formulaId, rows.map((r) => r.formula.id)))
@@ -461,6 +463,7 @@ export async function listFormulas(ctx: AuthContext) {
       formulaId: formula.id,
       code: formula.code,
       name: formula.name,
+      productId: product.id,
       productName: product.name,
       productSku: product.skuCode,
       effective: effective ? { ...pickRev(effective.rev), lineCount: Number(effective.lineCount) } : null,

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { D, fmtDateTime } from "@/lib/qty";
-import { AREAS, EQUIPMENT_KINDS, STEP_KINDS, approvedWorkInstructionOptions, businessToday, getRoutingRevision } from "@/modules/masterdata";
+import { AREAS, EQUIPMENT_KINDS, STEP_KINDS, approvedWorkInstructionOptions, businessToday, getRoutingRevision, waitText } from "@/modules/masterdata";
 import { Banner, Chip } from "@/ui/status";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Forbidden } from "../../../../../forbidden";
@@ -109,7 +109,7 @@ export default async function RoutingRevisionPage({ params }: { params: Promise<
                     <Chip tone="neu">{s.stepKind.replace(/_/g, " ")}{s.area ? ` (${s.area})` : ""}</Chip>
                     {s.requiresChecker && <Chip tone="info">Checker required</Chip>}
                     {s.requiresEquipment && <Chip tone="info">Equipment: {s.equipmentKind}</Chip>}
-                    {s.minDurationMinutes && <Chip tone="neu">Min. {s.minDurationMinutes} min</Chip>}
+                    {s.minDurationMinutes && <Chip tone="neu">Wait at least {waitText(s.minDurationMinutes)}</Chip>}
                   </div>
                   {s.instruction && <p className="mt-1 text-[13px] text-fg-2">{s.instruction}</p>}
                   {s.workInstruction && (
@@ -124,7 +124,7 @@ export default async function RoutingRevisionPage({ params }: { params: Promise<
                     <ul className="mt-1 text-[12px]">
                       {s.parameters.map((p) => (
                         <li key={p.id}>
-                          <span className="font-mono">{p.code}</span> {p.name}: {p.valueKind === "numeric" ? limits(p) : p.valueKind}
+                          {p.name}: {p.valueKind === "numeric" ? limits(p) : p.valueKind === "boolean" ? "yes or no" : "a short note"}
                           {p.isRequired ? "" : " (optional)"}
                         </li>
                       ))}
@@ -148,7 +148,7 @@ export default async function RoutingRevisionPage({ params }: { params: Promise<
       )}
 
       {(r.status !== "draft" || v.approval.decisions.length > 0) && (
-        <ApprovalPanel approval={v.approval} status={r.status}>
+        <ApprovalPanel approval={v.approval} status={r.status} what="steps">
           {v.approval.canDecide && v.approval.nextStep && (
             <DecisionForm action={decideRoutingAction} id={r.id} stepLabel={`step ${v.approval.nextStep.step}, ${v.approval.nextStep.label}`} isFinal={v.approval.nextStep.step === lastStep} defaultEffectiveFrom={r.effectiveFrom} today={today} />
           )}

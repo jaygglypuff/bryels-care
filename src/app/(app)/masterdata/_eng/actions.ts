@@ -368,6 +368,6 @@ export async function decideOverrideAction(_: ActionState, fd: FormData) {
 export async function soapExampleAction(_: ActionState, _fd: FormData): Promise<ActionState> {
   return run(async (ctx) => {
     const r = await installSoapExample(ctx);
-    return r.created.length ? `Added the Acapulco soap example: ${r.created.join(", ")}. Review the drafts, then submit and approve them.` : "The Acapulco soap example is already there.";
+    return r.created.length ? `Added the Acapulco soap example: ${r.created.join(", ")}. Review the drafts, then submit and approve them.` : "The Acapulco soap example is already there. To start a new recipe from it, press \"New recipe (step by step)\" and choose \"Start from another product's recipe\".";
   }, ["/masterdata/formulas", "/masterdata/routings", "/masterdata/materials", "/masterdata/products"]);
 }

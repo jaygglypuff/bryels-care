@@ -62,7 +62,7 @@ const STEPS = [
 ] as const;
 
 /** Next free `PREFIX-0001` code in the organization (the example runs rarely; a plain scan is enough). */
-async function nextCode(table: "materials" | "products" | "formulas" | "routings", organizationId: string, prefix: string) {
+export async function nextCode(table: "materials" | "products" | "formulas" | "routings", organizationId: string, prefix: string) {
   const t = { materials: [materials, materials.code, materials.organizationId], products: [products, products.skuCode, products.organizationId], formulas: [formulas, formulas.code, formulas.organizationId], routings: [routings, routings.code, routings.organizationId] } as const;
   const [tbl, col, org] = t[table];
   const rows = await db.select({ code: col }).from(tbl).where(and(eq(org, organizationId), sql`${col} like ${prefix + "-%"}`));

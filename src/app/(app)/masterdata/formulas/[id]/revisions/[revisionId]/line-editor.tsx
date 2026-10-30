@@ -1,5 +1,5 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import Decimal from "decimal.js";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import type { ActionState } from "@/lib/errors";
@@ -8,7 +8,7 @@ import { FormMessage, SubmitButton } from "@/ui/form";
 import { saveFormulaDraftAction } from "../../../../_eng/actions";
 
 type Material = { id: string; code: string; name: string; baseUom: string };
-type Row = { key: number; materialId: string; quantityG: string; tolMode: "pct" | "abs"; tol: string; phaseCode: string; scaling: "proportional" | "fixed" };
+type Row = { key: number; materialId: string; quantityG: string; tolMode: "pct" | "abs"; tol: string; phaseCode: string; scaling: "proportional" | "fixed"; isCritical: boolean; requiresChecker: boolean };
 export type EditorInit = {
   revisionId: string;
   referenceBatchSizeG: string;
@@ -16,7 +16,7 @@ export type EditorInit = {
   effectiveFrom: string | null;
   changeSummary: string | null;
   notes: string | null;
-  lines: { materialId: string; quantityG: string; tolerancePct: string | null; toleranceAbsG: string | null; phaseCode: string | null; scaling: string }[];
+  lines: { materialId: string; quantityG: string; tolerancePct: string | null; toleranceAbsG: string | null; phaseCode: string | null; scaling: string; isCritical?: boolean; requiresChecker?: boolean }[];
 };
 
 const strip = (v: string) => (v.includes(".") ? v.replace(/0+$/, "").replace(/\.$/, "") : v);
@@ -36,6 +36,12 @@ const dec = (v: string) => {
  */
 export function FormulaLineEditor({ init, materials, today }: { init: EditorInit; materials: Material[]; today: string }) {
   const [state, action] = useActionState<ActionState, FormData>(saveFormulaDraftAction, null);
+  // React 19 resets a form after its action, which showed every controlled select as "Choose…" although the
+  // draft was saved; drawing the form again from the kept state after each save shows the saved values.
+  const [round, setRound] = useState(0);
+  useEffect(() => {
+    if (state) setRound((r) => r + 1);
+  }, [state]);
   let seq = 0;
   const [rows, setRows] = useState<Row[]>(() =>
     init.lines.map((l) => ({
@@ -46,6 +52,9 @@ export function FormulaLineEditor({ init, materials, today }: { init: EditorInit
       tol: strip(l.toleranceAbsG ?? l.tolerancePct ?? ""),
       phaseCode: l.phaseCode ?? "",
       scaling: l.scaling === "fixed" ? "fixed" : "proportional",
+      // Kept as stored: before this, every save reset both flags to the schema defaults (true).
+      isCritical: l.isCritical ?? true,
+      requiresChecker: l.requiresChecker ?? false,
     })),
   );
   const [nextKey, setNextKey] = useState(init.lines.length + 1);
@@ -83,11 +92,13 @@ export function FormulaLineEditor({ init, materials, today }: { init: EditorInit
       toleranceAbsG: r.tolMode === "abs" ? r.tol.trim() || null : null,
       phaseCode: r.phaseCode.trim() || null,
       scaling: r.scaling,
+      isCritical: r.isCritical,
+      requiresChecker: r.requiresChecker,
     })),
   });
 
   return (
-    <form action={action} className="flex flex-col gap-5">
+    <form key={round} action={action} className="flex flex-col gap-5">
       <input type="hidden" name="payload" value={payload} />
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Reference batch size (g)" htmlFor="refsize" error={fe.referenceBatchSizeG}>
@@ -154,6 +165,10 @@ export function FormulaLineEditor({ init, materials, today }: { init: EditorInit
                   </Field>
                 </div>
               </div>
+              <label className="mt-2 flex min-h-[44px] items-center gap-2 text-[13px]">
+                <input type="checkbox" className="h-5 w-5" checked={r.requiresChecker} onChange={(e) => update(r.key, { requiresChecker: e.target.checked })} />
+                Needs a second person to check the weighing
+              </label>
               <div className="mt-2 flex gap-1">
                 <button type="button" aria-label={`Move line ${i + 1} up`} onClick={() => move(i, -1)} className="rounded-full p-2 hover:bg-surface-2">
                   <ArrowUp size={16} />
@@ -171,7 +186,7 @@ export function FormulaLineEditor({ init, materials, today }: { init: EditorInit
         <button
           type="button"
           onClick={() => {
-            setRows((rs) => [...rs, { key: nextKey, materialId: "", quantityG: "", tolMode: "pct", tol: "", phaseCode: "", scaling: "proportional" }]);
+            setRows((rs) => [...rs, { key: nextKey, materialId: "", quantityG: "", tolMode: "pct", tol: "", phaseCode: "", scaling: "proportional", isCritical: true, requiresChecker: false }]);
             setNextKey((k) => k + 1);
           }}
           className="inline-flex min-h-[44px] items-center justify-center gap-2 self-start rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2"
