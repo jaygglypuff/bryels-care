@@ -135,7 +135,7 @@ export default async function SalesOrdersPage({ searchParams }: { searchParams: 
                   <Link href={`/sales/${o.id}`} className="font-medium text-primary-text hover:underline">
                     {o.orderNumber}
                   </Link>
-                  {o.customerPoNumber && <span className="block text-[12px] text-muted">PO {o.customerPoNumber}</span>}
+                  {o.customerPoNumber && <span className="block text-[12px] text-muted" title="Customer PO number">{o.customerPoNumber}</span>}
                 </Td>
                 <Td>{o.customerName}</Td>
                 <Td>

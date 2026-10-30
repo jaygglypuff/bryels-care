@@ -229,7 +229,7 @@ async function step(name, fn, u) {
     await box.locator('select[name=checkerId]').selectOption({ label: 'Jun Dela Cruz' });
     await box.locator('input[name=checkerPassword]').fill(PW);
     await form.getByRole('button', { name: 'Confirm weight' }).click();
-    await fresh(op, row.getByText('Dispensed', { exact: true }), 'dispensed refresh');
+    await fresh(op, row.getByText('Weighed', { exact: true }), 'dispensed refresh');
   }, op);
 
   // 8. Notifications: mark read, acknowledge (header badge and list refresh).

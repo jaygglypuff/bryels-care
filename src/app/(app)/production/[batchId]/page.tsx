@@ -447,7 +447,8 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
                               </p>
                               <p className="text-[16px] font-semibold">{ing.materialName}</p>
                               <p className="text-[13px] tabular text-fg-2">
-                                Target {fmtQty(ing.theoreticalQtyG, "g", 1)} · range {r ? `${fmtQty(r.minG, "", 1)}–${fmtQty(r.maxG, "g", 1)}` : "—"} · weighed {D(ing.dispensedQtyG).gt(0) ? fmtQty(ing.dispensedQtyG, "g", 1) : "—"}
+                                Target {fmtQty(ing.theoreticalQtyG, "g", 1)}
+                                {r ? ` · allowed ${fmtQty(r.minG, "", 1)}–${fmtQty(r.maxG, "g", 1)}` : ""} · {D(ing.dispensedQtyG).gt(0) ? `weighed ${fmtQty(ing.dispensedQtyG, "g", 1)}` : "not weighed yet"}
                               </p>
                             </div>
                             <StatusChip status={ing.status} label={LINE_STATUS[ing.status] ?? ing.status} />

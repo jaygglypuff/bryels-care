@@ -130,7 +130,8 @@ export function OrderBoardView({ board }: { board: OrderBoard }) {
           Moving…
         </p>
       )}
-      <div className="relative flex max-w-full snap-x snap-mandatory gap-3 overflow-x-auto pb-3" aria-label="Sales order board columns">
+      {/* Phones and tablets: one column under the other (nothing cut off at the screen edge). Desktop: side by side, scrolling sideways. */}
+      <div className="relative flex max-w-full flex-col gap-3 pb-3 lg:snap-x lg:snap-mandatory lg:flex-row lg:overflow-x-auto" aria-label="Sales order board columns">
         {board.columns.map((col) => (
           <section
             key={col.key}
@@ -147,7 +148,8 @@ export function OrderBoardView({ board }: { board: OrderBoard }) {
               dragged.current = null;
             }}
             className={cx(
-              "relative flex w-[280px] shrink-0 snap-start flex-col rounded-[16px] border bg-surface-2/60 p-2.5 sm:w-[270px]",
+              "relative flex w-full min-w-0 flex-col rounded-[16px] border bg-surface-2/60 p-2.5 lg:w-[270px] lg:shrink-0 lg:snap-start",
+              col.cards.length === 0 && "hidden lg:flex", // stacked view: skip empty steps
               over === col.key ? (dragged.current?.moves[col.key]?.allowed ? "border-primary" : "border-[var(--warn-bd)]") : "border-line",
             )}
           >
@@ -155,9 +157,9 @@ export function OrderBoardView({ board }: { board: OrderBoard }) {
               <h2 className="text-[13px] font-semibold">{col.title}</h2>
               <span className="text-[12px] text-muted tabular">{col.cards.length}</span>
             </header>
-            <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-1">
               {col.cards.length === 0 ? (
-                <p className="px-1 py-4 text-center text-[12px] text-muted">None</p>
+                <p className="px-1 py-2 text-[12px] text-muted lg:py-4 lg:text-center">None</p>
               ) : (
                 col.cards.map((c) => <Card key={c.id} c={c} columns={columns} busy={pending} onMove={move} onDragStart={(x) => (dragged.current = x)} />)
               )}

@@ -152,10 +152,10 @@ export default async function OrderDetailPage({ params, searchParams }: { params
               {lines.map((l) => (
                 <li key={l.id} className="py-2.5">
                   <div className="flex justify-between gap-2">
-                    <span className="font-medium">{l.sku}</span>
-                    <Money className="font-medium tabular" value={l.value} />
+                    <span className="min-w-0 font-medium">{l.productName}</span>
+                    <Money className="whitespace-nowrap font-medium tabular" value={l.value} />
                   </div>
-                  <p className="text-[13px] text-fg-2">{l.productName}</p>
+                  <p className="text-[12px] text-muted">{l.sku}</p>
                   <p className="text-[13px] tabular text-muted">
                     {fmtQty(l.qtyUnits, "pcs", 0)} × <Money value={l.unitPrice} />
                     {l.customerItemCode ? ` · customer code ${l.customerItemCode}` : ""}

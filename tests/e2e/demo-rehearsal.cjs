@@ -153,7 +153,7 @@ async function kpiValue(page, caption) {
     assert(/^GR-\d{2}-\d{5}$/.test(facts.receiptNumber), 'receipt number ' + facts.receiptNumber);
     assert(/^L-\d{4}-\d{5}$/.test(facts.coconutLot), 'lot number ' + facts.coconutLot);
     await expectText(page, '25.00 kg');
-    await expectText(page, 'Quarantined');
+    await expectText(page, 'Waiting for QA');
     log('received', facts.receiptNumber, 'lot', facts.coconutLot);
     await shot(page, 'receipt-posted');
 
@@ -362,7 +362,7 @@ async function kpiValue(page, caption) {
 
     // Step 1: weighing-area line clearance, conductor + checker: signing it starts the batch (in process).
     await signClearance(1);
-    await expectText(page, 'In process');
+    await expectText(page, 'Being made');
     log('step 1 clearance signed; batch in process');
 
     // Step 2: weighing. Scan each lot (FEFO recommendation shown), scale, weight, checker signs on device.
@@ -383,7 +383,7 @@ async function kpiValue(page, caption) {
       await coSign(form);
       if (n === 1) await shot(page, 'weigh-coconut-within-tolerance');
       await form.getByRole('button', { name: 'Confirm weight' }).click();
-      await row.getByText('Dispensed', { exact: true }).waitFor({ timeout: 20000 });
+      await row.getByText('Weighed', { exact: true }).waitFor({ timeout: 20000 });
       log(`weighed ingredient ${n}: ${theo} g from ${lotNo}`);
     }
     await completeWithChecker(2);
@@ -558,7 +558,7 @@ async function kpiValue(page, caption) {
     await page.fill('#approve-note', 'Customer paid the September invoice (fictional).');
     await page.getByRole('button', { name: 'Approve and confirm' }).click();
     // The approval form leaves the page with the new state (ADR-043): the history shows the transition.
-    await settle(page, page.getByText('pending approval → confirmed').first(), 'order approval');
+    await settle(page, page.getByText('Approved and confirmed').first(), 'order approval');
     log('order', facts.orderNumber, 'approved by finance');
     await shot(page, 'sales-order-confirmed');
     await context.close();
@@ -573,11 +573,11 @@ async function kpiValue(page, caption) {
     await page.getByRole('link', { name: /SO-\d{2}-00002/ }).first().click();
     await page.waitForURL(/\/sales\/[0-9a-f-]{36}/);
     await expectText(page, 'Isla Spa Supplies');
-    await page.getByRole('button', { name: /Allocate stock/ }).click();
+    await page.getByRole('button', { name: /Reserve stock/ }).click();
     await page.waitForURL(/done=allocated/, { timeout: 30000 });
 
     await page.goto(BASE + '/sales/' + facts.orderId);
-    await page.getByRole('button', { name: /Allocate stock/ }).click();
+    await page.getByRole('button', { name: /Reserve stock/ }).click();
     await page.waitForURL(/done=allocated/, { timeout: 30000 });
     await expectText(page, facts.fgLot);
     await shot(page, 'order-allocated-fefo', { full: true });

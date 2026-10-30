@@ -264,8 +264,8 @@ life is applied automatically when the warehouse allocates."
 
 1. **Sales & dispatch → Sales orders**. Two orders are confirmed: yesterday's Isla Spa Supplies
    order (**SO-26-00002**) and the new Mabuhay order.
-2. Work the queue in order: open **SO-26-00002** (Isla Spa) and click **Allocate stock (FEFO)**.
-3. Open the Mabuhay order (**SO-26-00004**) and click **Allocate stock (FEFO)**.
+2. Work the queue in order: open **SO-26-00002** (Isla Spa) and click **Reserve stock for this order** (earliest expiry first).
+3. Open the Mabuhay order (**SO-26-00004**) and click **Reserve stock for this order** (earliest expiry first).
 
 ![FEFO allocation across two lots](demo/08-order-allocated-fefo.png)
 
