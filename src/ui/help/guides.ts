@@ -20,6 +20,8 @@ export const GUIDE_FILES: Record<string, string> = {
   "inventory.count": "count.md",
   // Wave 4 W4F (US-9-08): one quick guide per major flow
   "inventory.putaway": "putaway.md",
+  // ADR-074: the production order (one order from ordering to done, daily log, defects)
+  "production.production_order": "production-order.md",
   "production.work_order": "work-order.md",
   "production.staging": "staging.md",
   "production.weighing": "weighing.md",

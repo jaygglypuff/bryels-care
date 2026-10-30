@@ -11,7 +11,8 @@ export type NavBadges = Partial<Record<string, number>>;
 export const QUICK_ACTIONS: QuickAction[] = [
   { label: "Scan or look up", href: "/inventory/scan", icon: "scan", permission: "inventory.lot.view" },
   { label: "Receive materials", href: "/inventory/receive", icon: "receive", permission: "procurement.goods_receipt.create" },
-  { label: "New batch", href: "/production/new", icon: "batch", permission: "production.batch.create" },
+  // ADR-074: a production order creates its batch on approval; operators never "create a batch".
+  { label: "New production order", href: "/production/orders/new", icon: "batch", permission: "production.work_order.create" },
   { label: "QA queue", href: "/quality", icon: "qa", permission: "quality.disposition.view" },
   { label: "New sales order", href: "/sales/new", icon: "order", permission: "sales.sales_order.create" },
   { label: "Traceability", href: "/quality/trace", icon: "trace", permission: "quality.genealogy.view" },
@@ -61,12 +62,15 @@ export const NAV: NavGroup[] = [
     label: "Production",
     icon: "factory",
     items: [
-      { label: "Board", href: "/production/board", permission: "production.work_order.view" },
-      { label: "Work orders", href: "/production/work-orders", permission: "production.work_order.view" },
-      { label: "Production plan", href: "/production/plan", permission: "production.production_plan.view" },
+      // ADR-074: one production order from ordering to done comes first; the detailed screens follow.
+      { label: "Production orders", href: "/production/orders", permission: "production.work_order.view" },
+      { label: "Defects", href: "/production/defects", permission: "production.daily_log.view" },
       { label: "Stage materials", href: "/production/staging", permission: "inventory.movement.post" },
       { label: "Batches", href: "/production", permission: "production.batch.view" },
-      { label: "New batch", href: "/production/new", permission: "production.batch.create" },
+      { label: "Board (detailed)", href: "/production/board", permission: "production.work_order.view" },
+      { label: "Work orders (detailed)", href: "/production/work-orders", permission: "production.work_order.view" },
+      { label: "Production plan", href: "/production/plan", permission: "production.production_plan.view" },
+      { label: "New batch (advanced)", href: "/production/new", permission: "production.batch.create" },
       { label: "Formulas", href: "/masterdata/formulas", permission: "masterdata.formula.view" },
       { label: "Routings", href: "/masterdata/routings", permission: "masterdata.routing.view" },
       { label: "Work instructions", href: "/masterdata/work-instructions", permission: "masterdata.work_instruction.view" },

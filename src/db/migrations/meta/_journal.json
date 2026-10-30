@@ -127,6 +127,20 @@
       "when": 1792923406767,
       "tag": "0017_adr073_custom_sql",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793330736847,
+      "tag": "0018_s2_production_orders",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793330739020,
+      "tag": "0019_s2_custom_sql",
+      "breakpoints": true
     }
   ]
 }

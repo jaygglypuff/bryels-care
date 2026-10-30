@@ -326,6 +326,16 @@ export const SETTINGS = {
   "production.work_order.lot_expiry_margin_days": { scopes: ["organization", "site"], schema: z.number().int().min(0).max(3650), default: 0, assumption: "A-W2A-02", group: "Production", label: "Reserved lot must outlive the planned end by (days)" },
   /** Work order reservations lapse this many days after the planned end unless staged or released earlier. */
   "production.work_order.reservation_grace_days": { scopes: ["organization", "site"], schema: z.number().int().min(0).max(365), default: 3, assumption: "A-W2A-03", group: "Production", label: "Work order reservations lapse after planned end (days)" },
+  /** ADR-074 (S2): defect types operators pick in the production order daily log (A-S2-02, owner-editable list). */
+  "production.defect_types": {
+    scopes: ["organization", "site"],
+    schema: z.array(z.string().trim().min(1).max(40)).min(1).max(30).refine((v) => new Set(v.map((x) => x.toLowerCase())).size === v.length, "Each defect type once."),
+    default: ["Cracked bar", "Wrong weight", "Air bubbles", "Discoloration", "Bad wrapping", "Other"] as string[],
+    assumption: "A-S2-02",
+    group: "Production",
+    label: "Defect types for the daily log",
+    description: "The list operators choose from when they record defects. Removing a type keeps old entries as they were.",
+  },
   /** Location kinds that count as a production staging area (scan destination at W05-05). */
   "production.staging.location_kinds": { scopes: ["organization", "site"], schema: z.array(z.string().min(1)).min(1).max(5), default: ["production"] as string[], assumption: "A-W2A-04", group: "Production", label: "Staging location kinds" },
   /** Staged stock stays reserved for its batch this long (hours) unless consumed or released earlier. */

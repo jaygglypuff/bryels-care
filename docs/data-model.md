@@ -1249,6 +1249,20 @@ work order, and the warehouse stages the reserved lots by scan; the batch become
 | State machines | `src/modules/production/work-orders-state.ts` (§6.3); batch table gains `planned → rejected` (abandonment when the work order is cancelled before staging, §6.2) | `in_progress`/`completed`/`closed` follow the batches through `syncWorkOrderProgress` |
 | Numbering | `WO-{YY}-{SEQ5}`, `PP-{YYMM}-{SEQ3}` in `src/lib/numbering.ts` | — |
 
+### 3.5.2 Production order daily log (ADR-074, stream S2)
+
+A **production order** is a work order with its batches (no new table); its simple status is a read
+model (§6.3a). The daily log adds two append-only tables (`src/db/schema/production-log.ts`,
+triggers in `src/db/sql/s2.sql`):
+
+| Table | Columns | Rules |
+|---|---|---|
+| `production_daily_logs` | `organization_id`, `site_id`, `work_order_id`, `batch_id` (optional, a batch of the order), `product_id` (from the order), `log_date` (plant date), `shift` (optional text), `notes`, `good_qty numeric(18,6) ≥ 0`, `qty_uom` (default `units`, A-S2-03), `corrects_id` (self, unique), `correction_reason`, `created_by`, `created_at` | No UPDATE/DELETE. `corrects_id` and `correction_reason` are both set or both null. An entry is replaced at most once (unique `corrects_id`); replaced entries do not count in totals |
+| `production_defect_entries` | `organization_id`, `site_id`, `daily_log_id`, `defect_type` (one of setting `production.defect_types` when written), `quantity numeric(18,6) > 0`, `note` | No UPDATE/DELETE; one row per type per entry |
+
+Audit: `production.daily_log.created`, `production.daily_log.corrected` (entity
+`production_daily_log`), `production.production_order.approved` (entity `work_order`).
+
 ### 3.6 Quality
 
 | Table → column | Type | Null | Constraint / default | Notes |
@@ -2126,6 +2140,13 @@ exception transitions, enforced by the state machine), `occurred_at timestamptz 
 cancelled` (reason); `in_progress` requires at least one batch `in_process` (W05-06); `completed`
 when every batch has reached `awaiting_qc` or beyond (W05-17); `closed` when every batch is
 `closed` (W05-20).
+
+### 6.3a Production order (read model, ADR-074)
+
+Draft = work order `draft|planned`; Approved = `released` with no batch started; In progress =
+`released` with a started batch (`started_at` set) or `in_progress`; Done = `completed|closed`;
+Cancelled = `cancelled`. Approve moves `draft → planned → released` and creates the batches in one
+transaction; every other move is the existing work order and batch machines.
 
 ### 6.4 Purchase order
 

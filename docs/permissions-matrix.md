@@ -220,6 +220,7 @@ description, sensitivity and phase are listed on one row.
 | `production.work_order.{view,create,edit,submit,export}` | WorkOrder draft → planned | N | P3 |
 | `production.work_order.approve` | Release a work order to the floor (`released`) | S | P3 |
 | `production.work_order.void` | Cancel a work order | S | P3 |
+| `production.daily_log.{view,create}` | Production order daily log and defects (ADR-074); create also writes corrections (new entry + reason) | N | P3 |
 | `production.batch.{view,create,edit,export}` | Batch records; create snapshots formula/routing revisions | N | P3 |
 | `production.batch.submit` | Operator transitions: start, complete steps, submit to `awaiting_qc` | N | P3 |
 | `production.batch.approve` | Supervisor transitions: approve start after line clearance, approve closure | S | P3 |
@@ -680,6 +681,13 @@ sheet / traveler of a batch are visible with `production.batch.view` **or**
 `production.batch.edit`). Work order release SoD follows setting `approvals.sod.work_order_release`
 (default on: releaser ≠ the person who planned it); plan approval follows
 `approvals.sod.production_plan`.
+
+As built (ADR-074, block "S2" in `src/lib/permissions.ts`): `production.daily_log.view` for
+`production_operator`, `production_planner`, `qa_qc` (and VIEW_ALL roles: `system_admin`,
+`site_manager`, `auditor`); `production.daily_log.create` for `production_operator` and
+`site_manager`; `owner_director` holds both. The one-step production order Approve needs only
+`production.work_order.approve` (it plans, releases and creates the batches); its separation of
+duties compares the approver with the person who created the order.
 
 ### 3.6 quality
 

@@ -426,6 +426,9 @@ export const PERMISSIONS = [
   "platform.purge_run.post",
   "platform.restore_drill.view",
   "platform.restore_drill.approve",
+  // ADR-074 (S2): production order daily log and defects (docs/permissions-matrix.md §3.5)
+  "production.daily_log.view",
+  "production.daily_log.create",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -1538,4 +1541,18 @@ for (const [role, grants] of Object.entries(W4F_GRANTS)) {
 const W4F_VIEWS: readonly Permission[] = ["platform.retention_policy.view", "platform.legal_hold.view", "platform.purge_run.view", "platform.restore_drill.view"];
 for (const role of ["site_manager"]) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = ROLE_BUNDLES[role].permissions.filter((p) => !W4F_VIEWS.includes(p));
+}
+
+// ADR-074 (S2): production order daily log ("What happened today") and defect summaries. Operators and
+// site managers write entries (and corrections, which are new entries with a reason); planners and QA
+// read them. The `.view` string reaches the VIEW_ALL roles (system_admin, site_manager, auditor);
+// owner_director holds every string.
+const S2_GRANTS: Record<string, readonly Permission[]> = {
+  production_operator: ["production.daily_log.view", "production.daily_log.create"],
+  site_manager: ["production.daily_log.create"],
+  production_planner: ["production.daily_log.view"],
+  qa_qc: ["production.daily_log.view"],
+};
+for (const [role, grants] of Object.entries(S2_GRANTS)) {
+  if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
 }
