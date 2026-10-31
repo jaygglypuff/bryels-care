@@ -29,7 +29,7 @@ export function CloseBatchForm({ batchId, batchNumber }: { batchId: string; batc
       </Field>
       <FormMessage state={state} />
       <SubmitButton variant="cta" size="lg" pendingText="Closing…">
-        Close batch and generate the final BMR
+        Close the batch and make the final batch record
       </SubmitButton>
     </form>
   );
@@ -52,7 +52,7 @@ export function ReopenRequestForm({ batchId, fromState }: { batchId: string; fro
       <Field label="Why must the closed record be reopened?" htmlFor="reason" error={fe.reason} hint="At least 10 characters; printed on the BMR.">
         <Textarea id="reason" name="reason" required minLength={10} maxLength={1000} rows={2} />
       </Field>
-      <Field label="What will be amended?" htmlFor="amendmentScope" error={fe.amendmentScope} hint="Sections or fields, e.g. “Step 4 reading”.">
+      <Field label="What will be amended?" htmlFor="amendmentScope" error={fe.amendmentScope} hint="Sections or fields, e.g. “Step 4 value”.">
         <Input id="amendmentScope" name="amendmentScope" required minLength={5} maxLength={1000} />
       </Field>
       <FormMessage state={state} />
@@ -113,8 +113,8 @@ export function WithdrawReopenForm({ batchId, requestId }: { batchId: string; re
 
 const SECTIONS: [string, string][] = [
   ["process_steps", "Procedure / process steps"],
-  ["materials", "Dispensing and weighing"],
-  ["line_clearance", "Line clearance"],
+  ["materials", "Weighing"],
+  ["line_clearance", "Clean-area check"],
   ["packaging_reconciliation", "Packaging and label reconciliation"],
   ["output_yield", "Output and yield"],
   ["qc", "QC results"],
@@ -142,7 +142,7 @@ export function AmendmentForm({ batchId, amendments }: { batchId: string; amendm
           ))}
         </Select>
       </Field>
-      <Field label="What is corrected" htmlFor="reference" error={fe.reference} hint="Step, line or field, e.g. “Step 4 Mixing, reading”.">
+      <Field label="What is corrected" htmlFor="reference" error={fe.reference} hint="Step, line or field, e.g. “Step 4 Mixing, value”.">
         <Input id="reference" name="reference" required minLength={2} maxLength={200} />
       </Field>
       <Field label="Value as recorded" htmlFor="previousValue" error={fe.previousValue}>

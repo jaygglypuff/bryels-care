@@ -1,7 +1,7 @@
 import "server-only";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { batches, inventoryLots, locations, materials, packBoxes, packs, users, warehouses } from "@/db/schema";
+import { batches, inventoryLots, locations, materials, packBoxes, packs, products, users, warehouses } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtMass, fmtQty } from "@/lib/qty";
@@ -17,7 +17,7 @@ import { isUuid } from "./templates";
  */
 
 export type LabelEntity = {
-  entityType: "inventory_lot" | "location" | "container";
+  entityType: "inventory_lot" | "location" | "container" | "batch";
   entityId: string;
   siteId: string;
   number: string;
@@ -194,7 +194,53 @@ export async function labelEntity(ctx: AuthContext, entityType: string, entityId
   if (entityType === "inventory_lot") return lotLabelEntity(ctx, entityId);
   if (entityType === "location") return locationLabelEntity(ctx, entityId);
   if (entityType === "container") return containerLabelEntity(ctx, entityId);
+  if (entityType === "batch") return batchLabelEntity(ctx, entityId);
   throw new DomainError("validation", "Labels for this kind of record arrive with its module.");
+}
+
+/**
+ * Product labels of a batch (ADR-088 §3), printed on the packaging step, one per piece: product, the
+ * finished lot number, the batch number, made date and expiry. The lot number and dates are frozen on
+ * the batch when the labels are first requested (production `printBatchLabels`); Finish posts the lot
+ * with exactly these, so the bars and the stock record always agree. No status word: the label goes on
+ * the product. The barcode is the lot's BC:LOT payload (it scans once the batch is finished).
+ */
+export async function batchLabelEntity(ctx: AuthContext, batchId: string): Promise<LabelEntity> {
+  ctx.require("production.batch.view");
+  if (!isUuid(batchId)) throw new DomainError("not_found", "Batch not found in your sites.");
+  const [row] = await db
+    .select({ b: batches, p: products })
+    .from(batches)
+    .innerJoin(products, eq(products.id, batches.productId))
+    .where(and(eq(batches.id, batchId), eq(batches.organizationId, ctx.organizationId), inArray(batches.siteId, ctx.allowedSiteIds)))
+    .limit(1);
+  if (!row) throw new DomainError("not_found", "Batch not found in your sites.");
+  const { b, p } = row;
+  if (!b.outputLotNumber || !b.outputExpiresOn) throw new DomainError("state", `Print the labels of batch ${b.batchNumber} from its packaging step.`);
+  return {
+    entityType: "batch",
+    entityId: b.id,
+    siteId: b.siteId,
+    number: b.batchNumber,
+    appliesTo: "finished_good",
+    // Content identity: same lot and dates = the same label (a second print is a controlled reprint).
+    state: `${b.outputLotNumber}|${b.outputManufacturedOn ?? ""}|${b.outputExpiresOn}`,
+    revisionAt: new Date(b.createdAt),
+    entity: {
+      payloadType: "LOT",
+      value: b.outputLotNumber,
+      caption: (p.family || "PRODUCT").toUpperCase().slice(0, 40),
+      itemCode: p.skuCode,
+      itemName: p.name,
+      batchNumber: b.batchNumber,
+      manufacturedOn: b.outputManufacturedOn ? fmtDate(b.outputManufacturedOn) : null,
+      expiresOn: fmtDate(b.outputExpiresOn),
+      expiryLabel: "Expiry",
+      storageConditions: p.storageConditions ?? null,
+      quantityText: null,
+      statusWord: null,
+    },
+  };
 }
 
 /** Sample data for label test pages (T-01): clearly fictional, never a real lot. */

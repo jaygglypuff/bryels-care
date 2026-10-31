@@ -218,6 +218,13 @@
       "when": 1793376322259,
       "tag": "0030_adr088_custom_sql",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793413437692,
+      "tag": "0031_adr088_packaging_labels",
+      "breakpoints": true
     }
   ]
 }

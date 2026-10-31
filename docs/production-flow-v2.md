@@ -253,6 +253,19 @@ The same six operator screens serve both products; only the step setup (routing)
 
 ---
 
+### 4.3 Packaging and labels in the flow (ADR-088 §3, built 2026-10-31)
+
+| Step | What the operator sees | What the system records |
+|---|---|---|
+| Order approved | — | Wrapper (label, box) lines of the batch from the recipe's packaging lines, else from `production.packaging.per_piece`; set aside FEFO with the ingredients |
+| Get materials | "Soap wrapper 135 g · 124 pcs · for wrapping (not weighed) · Lot L-2610-00001 · Packaging shelf" with Taken | Pick tick (same as ingredients; scan only when `production.prepare.scan_lots` is on) |
+| Weigh | Wrappers are not on the Weigh screen | A packaging line has status `packaging`; `recordDispense` refuses it |
+| Packaging step | "You took these at Get materials: Soap wrapper 135 g · Lot … (taken) · shelf PKG-01 · 124 pcs"; "How many did you use? (Wrappers used)", "How many were spoiled? (Wrappers destroyed)"; "Print labels for this batch (124 labels)" | Step done records the issue against the taken lot (packaging_reconciliations, audit `production.packaging_component.issued` with `source: materials_list`), converts the set-aside quantity; readings as before |
+| Labels | Print page of the label job (one label per piece) | Label job (entity `batch`) with lot number, made date, expiry frozen on the batch (`production.batch.label_lot_fixed`) |
+| Finish | Damaged and left over (prefilled from the step) | Reconciliation taken = used + damaged + left over (tolerance), consumption posted, finished lot = the lot on the labels |
+
+No packaging line at all (no recipe line, no setup): the packaging step asks "Which wrapper or label lot did you use? (scan or type it)" (the old issue command).
+
 ## 5. Day to day
 
 ### 5.1 Daily log ("What happened today")

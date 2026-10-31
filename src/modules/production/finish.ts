@@ -15,6 +15,7 @@ import { DEVIATION_UNAVAILABLE, executionHooks } from "./execution-hooks";
 import { type BatchRow, eligibleSigners, findStepOfKind, sortedSteps, stepRecords } from "./execution";
 import { postBatchToQuarantineLocked } from "./output";
 import { countPackagingLocked, currentPackaging } from "./packaging";
+import { batchLabelInfo } from "./packaging-flow";
 import { currentReadings } from "./process";
 import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
 import { currentYield, recordScrapReworkLocked, recordYieldLocked, yieldLimits } from "./yield";
@@ -229,6 +230,8 @@ export async function getFinishView(ctx: AuthContext, batchId: string) {
     })),
     hold: hold ? { id: hold.id, code: hold.code, name: hold.name } : null,
     holdOptions,
+    /** ADR-088 §3: "Print labels for this batch" is offered on Finish too. */
+    labels: await batchLabelInfo(ctx, batch),
     needsChecker,
     checkers,
     defectTypes,

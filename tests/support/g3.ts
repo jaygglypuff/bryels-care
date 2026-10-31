@@ -38,6 +38,7 @@ async function weighStaged(operator: AuthContext, checker: AuthContext, batchId:
     .innerJoin(inventoryLots, eq(inventoryLots.id, stockReservations.lotId))
     .where(and(eq(stockReservations.demandType, "batch"), eq(stockReservations.demandId, batchId), eq(stockReservations.status, "active")));
   for (const { bm } of lines.sort((a, z) => a.bm.lineNo - z.bm.lineNo)) {
+    if (bm.status === "packaging") continue; // ADR-088 §3: packaging lines are not weighed
     const mine = rsv.filter((x) => x.lot.materialId === bm.materialId);
     let left = new Decimal(bm.theoreticalQtyG).toDecimalPlaces(3);
     for (const [i, x] of mine.entries()) {

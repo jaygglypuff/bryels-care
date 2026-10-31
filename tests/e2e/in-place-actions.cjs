@@ -263,7 +263,7 @@ async function step(name, fn, u) {
   await step('work order: plan', async () => {
     const p = pl.page;
     await p.goto(BASE + '/production/work-orders');
-    await p.getByRole('link', { name: /New work order/ }).first().click();
+    await p.getByRole('link', { name: /New production order/ }).first().click();
     await p.waitForURL(/\/production\/work-orders\/new/);
     const prodOpt = await p.locator('#productId option', { hasText: 'ACS-135' }).first().innerText();
     await p.selectOption('#productId', { label: prodOpt });
@@ -271,7 +271,7 @@ async function step(name, fn, u) {
     await p.fill('#batchCount', '1');
     await p.fill('#plannedStart', manilaDate(0));
     await p.fill('#plannedEnd', manilaDate(2));
-    await p.getByRole('button', { name: 'Create work order' }).click();
+    await p.getByRole('button', { name: 'Create production order' }).click();
     await p.waitForURL(/\/production\/work-orders\/[0-9a-f-]{36}/, { timeout: 30000 });
     await p.getByRole('button', { name: 'Plan (resolve revisions)' }).click();
     await fresh(pl, p.getByText('Planned with').first(), 'plan message');
@@ -287,7 +287,7 @@ async function step(name, fn, u) {
     await fresh(mg, p.getByText('Released.').first(), 'release message');
     await fresh(mg, p.getByRole('button', { name: /Create batch 1 of 1/ }), 'release refresh');
     await p.fill('#reason', 'Repro cleanup');
-    await p.getByRole('button', { name: 'Cancel work order' }).click();
+    await p.getByRole('button', { name: 'Cancel production order' }).click();
     await fresh(mg, p.getByText('Repro cleanup').first(), 'cancel refresh');
   }, mg);
 

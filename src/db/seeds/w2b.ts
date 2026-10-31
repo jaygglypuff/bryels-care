@@ -68,4 +68,10 @@ export async function seedW2B(db: Db) {
     postedAt: receivedAt,
   });
   await db.insert(s.dispositions).values({ organizationId: O, siteId: nfd.id, subjectType: "lot", subjectId: lot.id, decision: "release", fromStatus: "quarantine", toStatus: "released", reason: "Incoming inspection: print and dimensions conform (demo).", decidedBy: qa.id, decidedAt: receivedAt });
+  // ADR-088 §3 (A-G5-01): the demo soap recipes list no wrapper, so each bar takes one wrapper from the
+  // per-piece setup; it is set aside with the ingredients and taken at "Get materials". Fictional.
+  await db
+    .insert(s.settings)
+    .values({ organizationId: O, scope: "organization", key: "production.packaging.per_piece", value: { "ACS-135": [{ materialCode: "PKG-0101", perPiece: 1 }], "GBS-135": [{ materialCode: "PKG-0101", perPiece: 1 }] }, updatedBy: qa.id })
+    .onConflictDoNothing();
 }

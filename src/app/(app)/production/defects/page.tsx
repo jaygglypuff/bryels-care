@@ -5,6 +5,7 @@ import { Card, PageHeader, Select } from "@/ui/core";
 import { Help } from "@/ui/help/help";
 import { Forbidden } from "../../forbidden";
 import { DefectTables } from "../orders/parts";
+import { PageIntro } from "@/ui/guide";
 
 export const metadata: Metadata = { title: "Rejects" };
 export const dynamic = "force-dynamic";
@@ -22,7 +23,8 @@ export default async function DefectsPage({ searchParams }: { searchParams: Prom
   const products = ctx.can("masterdata.product.view") ? await listProducts(ctx) : [];
   return (
     <div>
-      <PageHeader title="Rejects" subtitle={`${ctx.currentSite.name} · good pieces and rejects from the daily logs`} actions={<Help screen="production.production_order" />} />
+      <PageHeader title="Rejects" subtitle={ctx.currentSite.name} actions={<Help screen="production.production_order" />} />
+      <PageIntro>How many pieces were thrown away, and why, from the daily logs.</PageIntro>
       <form method="get" className="mb-4 flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-[13px] font-medium">
           From

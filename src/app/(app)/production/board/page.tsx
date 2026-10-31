@@ -4,6 +4,7 @@ import { getProductionBoard, listProductionLines, listProducts } from "@/modules
 import { EmptyState, LinkButton, PageHeader, Select } from "@/ui/core";
 import { Forbidden } from "../../forbidden";
 import { BoardView } from "./board-view";
+import { PageIntro } from "@/ui/guide";
 
 export const metadata: Metadata = { title: "Production board" };
 export const dynamic = "force-dynamic";
@@ -27,12 +28,15 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
         subtitle={`${site.code} · ${site.name} · ${board.total} card${board.total === 1 ? "" : "s"} · drag a card to move it when your role allows`}
         actions={
           <>
-            <LinkButton href="/production/work-orders" variant="secondary">Work orders</LinkButton>
-            {ctx.can("production.work_order.create") && <LinkButton href="/production/work-orders/new" variant="cta">New work order</LinkButton>}
+            <LinkButton href="/production/work-orders" variant="secondary">Production orders</LinkButton>
+            {ctx.can("production.work_order.create") && <LinkButton href="/production/work-orders/new" variant="cta">New production order</LinkButton>}
           </>
         }
       />
-      <form method="get" className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end" aria-label="Board filters">
+      <PageIntro>All batches by step, so you can see what is waiting.</PageIntro>
+      <details className="mb-4">
+        <summary className="min-h-[44px] cursor-pointer py-2 text-[14px] font-medium text-fg-2">Filter the board (site, line, product, dates, person)</summary>
+      <form method="get" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end" aria-label="Board filters">
         {ctx.allowedSites.length > 1 && (
           <label className="flex flex-col gap-1 text-[12px] font-medium">
             Site
@@ -78,11 +82,12 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
             ))}
           </Select>
         </label>
-        <button type="submit" className="min-h-[40px] rounded-full border border-line bg-surface px-4 text-[13px] font-medium hover:bg-surface-2">Apply</button>
+        <button type="submit" className="min-h-[44px] rounded-full border border-line bg-surface px-4 text-[13px] font-medium hover:bg-surface-2">Apply</button>
       </form>
+      </details>
       {board.total === 0 ? (
-        <EmptyState title="Nothing on the board" action={ctx.can("production.work_order.create") ? <LinkButton href="/production/work-orders/new">Create a work order</LinkButton> : undefined}>
-          Work orders and batches of this site appear here by state. Clear the filters or plan the next work order.
+        <EmptyState title="Nothing on the board" action={ctx.can("production.work_order.create") ? <LinkButton href="/production/work-orders/new">Create a production order</LinkButton> : undefined}>
+          Production orders and batches of this site appear here by state. Clear the filters or plan the next production order.
         </EmptyState>
       ) : (
         <BoardView board={board} />

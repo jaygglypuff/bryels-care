@@ -58,7 +58,7 @@ export async function makeLot(
     .values({
       organizationId: ctx.organizationId,
       siteId,
-      lotNumber: `T-${Date.now().toString(36)}-${lotSeq}-${uuidv7().slice(-4)}`,
+      lotNumber: `T-${Date.now().toString(36)}-${lotSeq}-${uuidv7().slice(-4)}`.toUpperCase(),
       itemKind: "material",
       materialId: m.id,
       supplierName: "Laguna Oleo Supply (fictional)",

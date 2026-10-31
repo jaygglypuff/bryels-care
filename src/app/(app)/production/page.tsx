@@ -6,13 +6,14 @@ import { type BatchListRow, listBatches, progressLabel } from "@/modules/product
 import { Card, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
 import { StatusChip } from "@/ui/status";
 import { Forbidden } from "../forbidden";
+import { PageIntro } from "@/ui/guide";
 
 export const metadata: Metadata = { title: "Batches" };
 
 const COLUMNS: { key: string; title: string; statuses: string[]; hint: string }[] = [
   { key: "planned", title: "Planned", statuses: ["draft", "planned"], hint: "Waiting to start" },
   { key: "in_process", title: "In process", statuses: ["materials_staged", "in_process"], hint: "Weighing and processing" },
-  { key: "awaiting_qc", title: "Awaiting QC", statuses: ["awaiting_qc", "quarantined", "rework_approved"], hint: "Output in quarantine, QA to decide" },
+  { key: "awaiting_qc", title: "Quality check", statuses: ["awaiting_qc", "quarantined", "rework_approved"], hint: "Output waiting for QA check, QA to decide" },
   { key: "released", title: "Released", statuses: ["released"], hint: "Approved by QA" },
 ];
 
@@ -62,6 +63,7 @@ export default async function BatchesPage() {
         subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · ${rows.length} batch${rows.length === 1 ? "" : "es"}`}
         actions={ctx.can("production.batch.create") ? <LinkButton href="/production/new" variant="cta">New batch</LinkButton> : undefined}
       />
+      <PageIntro>Every batch at this site. Open one to see its full record.</PageIntro>
 
       {rows.length === 0 ? (
         <EmptyState

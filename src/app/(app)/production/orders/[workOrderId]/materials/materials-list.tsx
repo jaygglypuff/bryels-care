@@ -14,6 +14,8 @@ type Line = {
   state: "open" | "taken" | "not_needed" | "untaken";
   by: string | null;
   reason: string | null;
+  /** Wrapper, label or box (ADR-088 §3): taken now, used at the packaging step, never weighed. */
+  packaging?: boolean;
   lots: {
     lotNumber: string;
     place: string;
@@ -126,6 +128,7 @@ function PickRow({
           <p className="text-[17px] font-semibold text-fg">{line.name}</p>
           <p className="text-[16px] tabular text-fg">
             {amount(line.qty, line.uom)}
+            {line.packaging ? <span className="text-[14px] text-muted"> · for wrapping (not weighed)</span> : null}
           </p>
           {lot ? (
             <p className="text-[14px] text-muted">

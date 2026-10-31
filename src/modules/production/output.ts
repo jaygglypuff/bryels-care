@@ -128,8 +128,12 @@ export async function postBatchToQuarantineLocked(
   // 2. Finished lot in quarantine (A-PROC-21, A-PROC-08).
   const basis = await getSetting(tx, ctx.organizationId, "production.output.expiry_basis");
   // ADR-080 §7: one source for the lot, the BMR and the wrap label (batchExpiryDates).
-  const { manufacturedOn: mfgDate, expiresOn } = batchExpiryDates(batch, steps, recs, basis, product.shelfLifeDays);
-  const lotNumber = await nextNumber(tx, ctx.organizationId, "LOT");
+  // ADR-088 §3: when the product labels were printed, the lot gets the number and dates printed on them.
+  const computed = batchExpiryDates(batch, steps, recs, basis, product.shelfLifeDays);
+  const frozen = !!(batch.outputLotNumber && batch.outputExpiresOn);
+  const mfgDate = frozen ? (batch.outputManufacturedOn ?? computed.manufacturedOn) : computed.manufacturedOn;
+  const expiresOn = frozen ? batch.outputExpiresOn! : computed.expiresOn;
+  const lotNumber = batch.outputLotNumber ?? (await nextNumber(tx, ctx.organizationId, "LOT"));
   const [lot] = await tx
     .insert(inventoryLots)
     .values({

@@ -4,6 +4,7 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getStepCard, nextBatchScreen, type StepCardView } from "@/modules/production";
 import { LinkButton } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
 import { Help } from "@/ui/help/help";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../../../forbidden";
@@ -14,6 +15,16 @@ export const metadata: Metadata = { title: "Step" };
 export const dynamic = "force-dynamic";
 
 /** S5 Step (ADR-080, UX review S5): Start check, Mix, Wait (curing / resting), Cut, Wrap. One step per screen. */
+/** One plain sentence per kind of step; the step's own name comes from the approved steps (configuration). */
+function plainStep(kind: string, isCheck: boolean, isWait: boolean) {
+  if (isCheck) return "Look at each point and answer Yes or No. All OK when everything is fine.";
+  if (isWait) return "The batch rests here. Come back on the ready day.";
+  if (kind === "packaging" || kind === "filling") return "Wrap or fill the pieces and stick one label on each. Then say how many wrappers you used and how many were spoiled.";
+  if (kind === "dispensing" || kind === "weighing") return "Weigh out each ingredient on the Weigh screen.";
+  if (kind === "transfer") return "Count the pieces and put the batch in the hold area on the Finish screen.";
+  return "Do this step, write the numbers it asks for, then tap Step done.";
+}
+
 export default async function StepPage({ params, searchParams }: { params: Promise<{ workOrderId: string; n: string }>; searchParams: Promise<{ batch?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("production.batch.view")) return <Forbidden what="production steps" />;
@@ -46,6 +57,7 @@ export default async function StepPage({ params, searchParams }: { params: Promi
         progress={<span>Step {v.step.index} of {v.step.total}</span>}
         actions={<Help screen="production.step" />}
       />
+      <PageIntro>{plainStep(v.step.kind, v.step.isCheck, v.step.isWait)}</PageIntro>
       {v.blockedReason && v.step.status !== "completed" && (
         <div className="mb-4">
           <Banner tone="warn" title="Not yet" action={next.href && next.stepNo !== stepNo ? <LinkButton href={next.href} variant="secondary" size="lg">{next.label}</LinkButton> : undefined}>
@@ -69,6 +81,7 @@ export default async function StepPage({ params, searchParams }: { params: Promi
         nextLabel={v.next ? (v.next.kind === "transfer" ? "Go to Finish" : v.next.kind === "dispensing" || v.next.kind === "weighing" ? "Weigh" : v.next.name) : null}
         weighHref={`/production/orders/${workOrderId}/weigh?batch=${b.id}`}
         fullRecordHref={`/production/${b.id}`}
+        packaging={v.packaging}
       />
     </div>
   );

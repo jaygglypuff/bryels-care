@@ -12,6 +12,7 @@ import { WhoCanHelp } from "@/ui/who-can-help";
 import { Forbidden } from "../../../forbidden";
 import { AssignForm, ApproveButton, CancelOrderForm, DailyLogForm } from "../forms";
 import { ActionButton, DefectTables, NeededBy, OrderStatusChip, OrderWarning, ProgressStrip } from "../parts";
+import { PageIntro } from "@/ui/guide";
 
 export const metadata: Metadata = { title: "Production order" };
 export const dynamic = "force-dynamic";
@@ -189,6 +190,7 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
           </>
         }
       />
+      <PageIntro>One production order: what to make, its batches, and the one thing to do next.</PageIntro>
 
       {sp.finished && v.batches.some((b) => b.batchNumber === sp.finished) && (
         <div className="mb-4">
@@ -325,7 +327,7 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {v.batches.map((b) => (
-                    <Link key={b.id} href={b.status === "planned" ? `/production/staging/${b.id}` : `/production/${b.id}`} className="block rounded-[16px] border border-line bg-surface p-3.5 hover:shadow-sm">
+                    <Link key={b.id} href={b.status === "planned" ? `/production/orders/${wo.id}/materials?batch=${b.id}` : `/production/${b.id}`} className="block rounded-[16px] border border-line bg-surface p-3.5 hover:shadow-sm">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-mono text-[13px] font-semibold">{b.batchNumber}</span>
                         <Chip tone={b.status === "closed" || b.status === "released" ? "ok" : b.status === "rejected" ? "rej" : "info"}>{b.word}</Chip>

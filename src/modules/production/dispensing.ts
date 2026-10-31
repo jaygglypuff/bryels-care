@@ -1,4 +1,5 @@
 import "server-only";
+import { isPackagingKind } from "./packaging-lines";
 import { and, eq, inArray, isNull, gt, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { type DbOrTx, db } from "@/db/client";
@@ -175,6 +176,9 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
         .limit(1);
       if (!row) throw new DomainError("not_found", "Ingredient line not found on this batch.");
       const { bm, material } = row;
+      if (isPackagingKind(material.materialKind)) {
+        throw new DomainError("validation", `${material.name} is packaging: it is not weighed. Its lot is recorded at the packaging step.`);
+      }
       if (bm.status === "dispensed" || bm.status === "exception") {
         throw new DomainError("state", `${material.name} has already been weighed for batch ${batch.batchNumber}. A correction needs the weighing voided first.`);
       }

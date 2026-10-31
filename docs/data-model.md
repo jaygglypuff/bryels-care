@@ -1137,6 +1137,9 @@ null = derived from the class and warehouse kind).
 | `rework_batch_id`, `rework_of_batch_id` | uuid | yes | → batches | a `rework_approved` batch closes once its linked rework batch exists (`rework_batch_id` set, §6.2); the rework batch points back with `rework_of_batch_id` so both BMRs cross-reference |
 | `remarks` | text | yes | | BMR remarks |
 | **`batch_materials`** · P3 · T · `std +site` | | | | ingredient table rows of the BMR |
+| | `bom_line_id` | uuid? | | null for a packaging line from the per-piece setup (ADR-088 §3) |
+| | `status` | text | | pending · partial · dispensed · exception · **packaging** (wrapper/label/box line: never weighed, issued at the packaging step, ADR-088 §3) |
+| **`batches`** (ADR-088 §3) | `output_lot_number`, `output_manufactured_on`, `output_expires_on` | text? | | finished lot number and dates fixed when the product labels are first printed; Finish posts the lot with them |
 | `batch_id`, `line_no`, `bom_line_id`, `material_id` | uuid / int / uuid / uuid | no | `uq (batch_id, line_no)` | |
 | `target_qty_base`, `tolerance_low_base`, `tolerance_high_base`, `uom_base_id` | num6 ×3 / uuid | no | ck `low <= target <= high` | scaled from snapshot |
 | `dispensed_qty_base` | num6 | no | default 0 | projection from dispense records |

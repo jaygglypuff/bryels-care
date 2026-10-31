@@ -4,6 +4,7 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getWeighView, type WeighView } from "@/modules/production";
 import { LinkButton } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
 import { Help } from "@/ui/help/help";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../../forbidden";
@@ -40,6 +41,7 @@ export default async function WeighPage({ params, searchParams }: { params: Prom
         progress={<span data-testid="weigh-progress">{v.weighedCount} of {v.cards.length} weighed{v.step ? ` · Step ${v.step.index} of ${v.step.total}` : ""}</span>}
         actions={<Help screen="production.weigh" />}
       />
+      <PageIntro>Weigh out each ingredient: check the lot printed on the container, put it on the scale, type the weight and save.</PageIntro>
       {v.blockedReason && (
         <div className="mb-4">
           <Banner tone="warn" title="You can't weigh now" action={b.status === "materials_staged" || b.status === "planned" ? <LinkButton href={`${orderHref}`} variant="secondary" size="lg">Back to the order</LinkButton> : undefined}>

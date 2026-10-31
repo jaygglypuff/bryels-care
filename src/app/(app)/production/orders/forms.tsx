@@ -180,8 +180,10 @@ export function DailyLogForm({ workOrderId, defectTypes, batches, today, initial
           <Field label="Good pieces made" htmlFor={`${p}goodQty`} error={fe.goodQty}>
             <Input id={`${p}goodQty`} name="goodQty" inputMode="decimal" defaultValue={initial ? D(initial.goodQty).toString() : ""} placeholder="0" />
           </Field>
-          <fieldset className="rounded-[14px] border border-line px-3.5 py-3">
-            <legend className="px-1 text-[14px] font-medium">Rejects (how many pieces of each type)</legend>
+          <details className="rounded-[14px] border border-line px-3.5" open={!!fe.defects || types.some((t) => !!qtyOf(t) && qtyOf(t) !== "0")}>
+            <summary className="min-h-[48px] cursor-pointer py-3 text-[14px] font-medium">Any rejects? Tap to write how many of each type</summary>
+          <fieldset className="pb-3">
+            <legend className="sr-only">Rejects (how many pieces of each type)</legend>
             {fe.defects && <p className="mb-2 text-[13px] text-[var(--bad-fg)]">{fe.defects}</p>}
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {types.map((t, i) => (
@@ -193,6 +195,7 @@ export function DailyLogForm({ workOrderId, defectTypes, batches, today, initial
               ))}
             </div>
           </fieldset>
+          </details>
           <MoreDetails>
             <Field label="Day" htmlFor={`${p}logDate`} error={fe.logDate}>
               <Input id={`${p}logDate`} name="logDate" type="date" max={today} defaultValue={initial?.logDate ?? today} />

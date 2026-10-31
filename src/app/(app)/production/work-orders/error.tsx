@@ -2,5 +2,5 @@
 import { SegmentError } from "@/ui/states";
 
 export default function ProductionSegmentError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  return <SegmentError what="The work orders page" reset={reset} />;
+  return <SegmentError what="The production orders page" reset={reset} />;
 }

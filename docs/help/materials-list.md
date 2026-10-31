@@ -11,7 +11,7 @@ The Materials list shows every ingredient of the batch: how much, which lot to u
 ## Take the materials
 
 1. Open the order and tap **Get materials**.
-2. The list is grouped by place in the warehouse (Raw materials, Packaging, and so on).
+2. The list is grouped by place in the warehouse (Raw materials, Packaging, and so on). Wrappers, labels and boxes are on the list too ("for wrapping, not weighed"): take them now; they are used at the wrap step.
 3. Take the lot that is shown. It is the one to use first.
 4. Tap **Taken** on the line. The line turns green and shows your name.
 5. If you brought everything, tap **All taken** at the bottom.

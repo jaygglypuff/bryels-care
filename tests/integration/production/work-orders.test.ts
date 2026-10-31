@@ -156,7 +156,7 @@ describe("work order lifecycle (US-3-05)", () => {
 
   it("the detail shows required = reserved and no shortage", async () => {
     const d = await getWorkOrder(w.planner, woId);
-    expect(d.materials).toHaveLength(5);
+    expect(d.materials).toHaveLength(6); // 5 ingredients + the wrappers per piece (ADR-088 §3);
     for (const m of d.materials) {
       expect(new Decimal(m.reserved).eq(m.required)).toBe(true);
       expect(new Decimal(m.short).eq(0)).toBe(true);

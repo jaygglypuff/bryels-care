@@ -109,8 +109,8 @@ describe("staging by scan (US-3-08, W05-05)", () => {
     await expectCode(startBatch(w.operator, batchId), "state");
   });
 
-  it("when every ingredient is staged the batch becomes materials_staged; the signed line clearance starts it and the work order is in progress", async () => {
-    for (const sl of ["LYE-1009", "LB-7712", "GRN-0311"]) await stageMaterial(w.warehouse, { batchId, lotCode: await LOT(sl), toLocationCode: STAGE });
+  it("when every ingredient and the wrappers (ADR-088 §3) are staged the batch becomes materials_staged; the signed line clearance starts it and the work order is in progress", async () => {
+    for (const sl of ["LYE-1009", "LB-7712", "GRN-0311", "MPP-901"]) await stageMaterial(w.warehouse, { batchId, lotCode: await LOT(sl), toLocationCode: STAGE });
     const [b] = await db.select().from(batches).where(eq(batches.id, batchId));
     expect(b.status).toBe("materials_staged");
     const view = await getStagingView(w.warehouse, batchId);

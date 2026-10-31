@@ -6,6 +6,7 @@ import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { ProductionOrderForm } from "../forms";
+import { PageIntro } from "@/ui/guide";
 
 export const metadata: Metadata = { title: "New production order" };
 export const dynamic = "force-dynamic";
@@ -35,7 +36,8 @@ export default async function NewProductionOrderPage({ searchParams }: { searchP
   if (prefill && !prefillError && !usable) prefillError = `${prefill.productName} has no approved formula yet, so it can't be made. Ask the person who looks after formulas.`;
   return (
     <div className="mx-auto max-w-2xl">
-      <PageHeader title="New order" subtitle={`${ctx.currentSite.name} · it starts as a draft; a manager approves it`} />
+      <PageHeader title="New production order" subtitle={ctx.currentSite.name} />
+      <PageIntro>Choose what to make and how many pieces. The system numbers the order; a manager approves it.</PageIntro>
       {prefillError && (
         <div className="mb-4">
           <Banner tone="warn" title="Can't fill in from the customer order">{prefillError}</Banner>

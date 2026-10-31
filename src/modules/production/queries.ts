@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import {
@@ -88,7 +88,7 @@ export async function getBatchRecord(ctx: AuthContext, batchId: string) {
     .select({ bm: batchMaterials, material: materials })
     .from(batchMaterials)
     .innerJoin(materials, eq(materials.id, batchMaterials.materialId))
-    .where(eq(batchMaterials.batchId, batch.id))
+    .where(and(eq(batchMaterials.batchId, batch.id), ne(materials.materialKind, "packaging")))
     .orderBy(asc(batchMaterials.lineNo));
   const dispenses = mats.length
     ? await db

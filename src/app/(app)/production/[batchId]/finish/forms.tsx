@@ -156,8 +156,10 @@ export function FinishForm(p: FinishFormProps) {
             {p.existingScrap.length > 0 ? (
               <p className="text-[14px] text-muted sm:col-span-2">Rejects already recorded on the batch screen: {rejectTotal}.</p>
             ) : (
-              <fieldset className="sm:col-span-2">
-                <legend className="mb-2 text-[14px] font-semibold">Rejects by type</legend>
+              <details className="sm:col-span-2" open={Object.values(rejects).some((v) => !!v && v !== "0")}>
+                <summary className="min-h-[48px] cursor-pointer py-3 text-[15px] font-semibold">Any rejects? Tap to write how many, by type</summary>
+              <fieldset>
+                <legend className="sr-only">Rejects by type</legend>
                 <div className="grid gap-3 sm:grid-cols-3">
                   {types.map((t, i) => (
                     <Field key={t} label={t} htmlFor={`reject-${i}`} error={fe[`rejects.${i}.qty`] ?? fe[`rejects.${i}.type`]}>
@@ -166,6 +168,7 @@ export function FinishForm(p: FinishFormProps) {
                   ))}
                 </div>
               </fieldset>
+              </details>
             )}
           </div>
         )}

@@ -265,7 +265,7 @@ export const labelJobs = pgTable(
     index("label_jobs_entity_idx").on(t.entityType, t.entityId),
     check("label_jobs_status_ck", inList(t.status, LABEL_JOB_STATUSES)),
     check("label_jobs_entity_type_ck", inList(t.entityType, LABEL_JOB_ENTITY_TYPES)),
-    check("label_jobs_copies_ck", sql`${t.copies} between 1 and 99`),
+    check("label_jobs_copies_ck", sql`${t.copies} between 1 and 999`),
     check("label_jobs_reprint_ck", sql`(${t.reprintOfId} is null and ${t.reprintNo} = 0) or (${t.reprintOfId} is not null and ${t.reprintNo} > 0 and ${t.reprintReasonCode} is not null)`),
     check("label_jobs_void_ck", sql`(${t.voidedAt} is null and ${t.voidedBy} is null and ${t.voidReason} is null) or (${t.voidedAt} is not null and ${t.voidedBy} is not null and ${t.voidReason} is not null)`),
     check("label_jobs_printed_ck", sql`${t.status} <> 'printed' or (${t.printedBy} is not null and ${t.printedAt} is not null)`),

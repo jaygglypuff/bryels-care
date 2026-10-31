@@ -7,6 +7,7 @@ import { Card, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
 import { Help } from "@/ui/help/help";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
+import { PageIntro } from "@/ui/guide";
 
 export const metadata: Metadata = { title: "Today" };
 export const dynamic = "force-dynamic";
@@ -29,7 +30,7 @@ export default async function TodayPage() {
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title="Today"
-        subtitle={`${ctx.currentSite.name} · ${fmtDate(t.date)} · what was written in the daily log`}
+        subtitle={`${ctx.currentSite.name} · ${fmtDate(t.date)}`}
         actions={
           <>
             <Help screen="production.production_order" />
@@ -37,6 +38,7 @@ export default async function TodayPage() {
           </>
         }
       />
+      <PageIntro>Today's count: good pieces and rejects written in the daily log of each batch.</PageIntro>
       {t.entries.length === 0 ? (
         <EmptyState title="Nothing written today yet" action={<LinkButton href="/production/orders">Open an order</LinkButton>}>
           To write today&apos;s count, open the production order and fill in &quot;What happened today?&quot;.

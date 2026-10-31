@@ -12,6 +12,7 @@ import { transitionBatch } from "./state";
 import { assertWorkOrderAcceptsBatch, syncWorkOrderProgress } from "./work-orders";
 import { getSetting } from "@/lib/settings";
 import { pickProgressInTx } from "./materials-list";
+import { expectedPieces, isPackagingKind, PACKAGING_LINE_STATUS, PER_PIECE_LINE_NO, perPieceQty, perPieceSetup } from "./packaging-lines";
 
 export type CreateBatchInput = {
   formulaRevisionId: string;
@@ -113,6 +114,12 @@ export async function insertBatch(tx: Tx, ctx: AuthContext, siteId: string, inpu
     const pct = line.toleranceAbsG !== null ? (target.gt(0) ? new Decimal(line.toleranceAbsG).div(target).mul(100).toDecimalPlaces(6) : new Decimal(0)) : new Decimal(line.tolerancePct ?? 0);
     return { line, material, target, pct };
   });
+  // ADR-088 §3: packaging lines. The recipe's packaging lines (material kind packaging) are batch lines
+  // as they are; when the recipe has none, the per-piece setup of the product adds them (A-G5-01).
+  const recipeHasPackaging = scaled.some(({ material }) => isPackagingKind(material.materialKind));
+  const pieces = expectedPieces(plannedSizeG, rev.rev.theoreticalYieldPct, rev.product.unitNetMassG);
+  const perPiece = recipeHasPackaging ? [] : await perPieceSetup(tx, ctx.organizationId, siteId, rev.product.skuCode);
+  const extraPackaging = perPiece.map((p, i) => ({ ...p, lineNo: PER_PIECE_LINE_NO + i + 1, qty: perPieceQty(pieces, p.perPiece, p.extraPct) })).filter((p) => p.qty.gt(0));
   const snapshot: FormulaSnapshot = {
     schemaVersion: "bom_snapshot/v2",
     formulaId: rev.formula.id,
@@ -154,8 +161,13 @@ export async function insertBatch(tx: Tx, ctx: AuthContext, siteId: string, inpu
       scaling: line.scaling,
       phaseCode: line.phaseCode,
       targetQtyG: target.toString(),
-      requiresChecker: lineNeedsCheck(line.requiresChecker),
+      requiresChecker: isPackagingKind(material.materialKind) ? false : lineNeedsCheck(line.requiresChecker),
+      materialKind: material.materialKind,
     })),
+    packaging: [
+      ...scaled.filter(({ material }) => isPackagingKind(material.materialKind)).map(({ line, material, target }) => ({ lineNo: line.lineNo, materialId: material.id, materialCode: material.code, materialName: material.name, qty: target.toString(), baseUom: material.baseUom, source: "recipe" as const })),
+      ...extraPackaging.map((p) => ({ lineNo: p.lineNo, materialId: p.materialId, materialCode: p.materialCode, materialName: p.materialName, qty: p.qty.toString(), baseUom: p.baseUom, source: "per_piece" as const, perPiece: p.perPiece, extraPct: p.extraPct, pieces: pieces.toString() })),
+    ],
     steps: steps.map((s) => ({
       routingStepId: s.id,
       stepNo: s.stepNo,
@@ -195,8 +207,8 @@ export async function insertBatch(tx: Tx, ctx: AuthContext, siteId: string, inpu
       createdBy: ctx.userId,
     })
     .returning();
-  await tx.insert(batchMaterials).values(
-    scaled.map(({ line, target, pct }) => ({
+  await tx.insert(batchMaterials).values([
+    ...scaled.map(({ line, material, target, pct }) => ({
       batchId: b.id,
       bomLineId: line.id,
       lineNo: line.lineNo,
@@ -204,8 +216,19 @@ export async function insertBatch(tx: Tx, ctx: AuthContext, siteId: string, inpu
       theoreticalQtyG: target.toString(),
       tolerancePct: pct.toString(),
       toleranceAbsG: line.toleranceAbsG,
+      status: isPackagingKind(material.materialKind) ? PACKAGING_LINE_STATUS : "pending",
     })),
-  );
+    ...extraPackaging.map((p) => ({
+      batchId: b.id,
+      bomLineId: null,
+      lineNo: p.lineNo,
+      materialId: p.materialId,
+      theoreticalQtyG: p.qty.toString(),
+      tolerancePct: "0",
+      toleranceAbsG: null,
+      status: PACKAGING_LINE_STATUS,
+    })),
+  ]);
   await tx.insert(batchStateTransitions).values({ batchId: b.id, fromState: null, toState: "planned", actorId: ctx.userId });
   await audit(tx, ctx, {
     action: "production.batch.created",

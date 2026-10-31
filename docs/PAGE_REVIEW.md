@@ -242,27 +242,27 @@ Total screens: 250.
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/production/[batchId]/closure` | ☐ | |
-| `/production/[batchId]/finish` | ☐ | |
-| `/production/[batchId]` | ☐ | |
-| `/production/board` | ☐ | |
-| `/production/defects` | ☐ | |
-| `/production/new` | ☐ | |
-| `/production/orders/[workOrderId]/materials` | ☐ | |
-| `/production/orders/[workOrderId]` | ☐ | |
-| `/production/orders/[workOrderId]/step/[n]` | ☐ | |
-| `/production/orders/[workOrderId]/weigh` | ☐ | |
-| `/production/orders/new` | ☐ | |
-| `/production/orders` | ☐ | |
-| `/production` | ☐ | |
-| `/production/plan/[planId]` | ☐ | |
-| `/production/plan` | ☐ | |
-| `/production/staging/[batchId]` | ☐ | |
-| `/production/staging` | ☐ | |
-| `/production/today` | ☐ | |
-| `/production/work-orders/[workOrderId]` | ☐ | |
-| `/production/work-orders/new` | ☐ | |
-| `/production/work-orders` | ☐ | |
+| `/production/[batchId]/closure` | ☑ 2026-10-31 | Intro; check names in plain words (QA decision, problem reports, pieces made, batch record); button "Close the batch and make the final batch record". |
+| `/production/[batchId]/finish` | ☑ 2026-10-31 | Intro; rejects folded under "Any rejects?" (good pieces, samples, left-over wrappers visible); wrappers reconcile; "Open this batch's labels" (ADR-088 §3). |
+| `/production/[batchId]` | ☑ 2026-10-31 | Batch full record: intro + "What is this?" for batch record (BMR); yield/theoretical/tolerance/dispense words replaced; planned batch button now "Get materials"; readable audit lines for finish and label lot. |
+| `/production/board` | ☑ 2026-10-31 | Intro; 6 filters folded under "Filter the board"; footer in plain words; columns scroll inside the board only. |
+| `/production/defects` | ☑ 2026-10-31 | Rejects: intro; subtitle shortened. |
+| `/production/new` | ☑ 2026-10-31 | New batch: intro (system numbers it); "work order" → "production order". |
+| `/production/orders/[workOrderId]/materials` | ☑ 2026-10-31 | Get materials: title and intro; wrappers/labels listed under Packaging with lot, shelf, pieces and "for wrapping (not weighed)"; "What is this?" for lot (ADR-088 §3). |
+| `/production/orders/[workOrderId]` | ☑ 2026-10-31 | Order hub: intro; next-step card already one green button; planned batch opens Get materials; daily log rejects folded. |
+| `/production/orders/[workOrderId]/step/[n]` | ☑ 2026-10-31 | Step cards: plain one-line subtitle per step kind (step names stay configuration); packaging step shows the taken wrapper lot, "How many did you use?/spoiled?", "Print labels for this batch (N labels)"; no scan. |
+| `/production/orders/[workOrderId]/weigh` | ☑ 2026-10-31 | Weigh: intro ("weigh out"); wrappers never on this screen. |
+| `/production/orders/new` | ☑ 2026-10-31 | New production order: intro; 3 fields + product, the rest under More details; system numbers the order. |
+| `/production/orders` | ☑ 2026-10-31 | Orders / My work: intro per role. |
+| `/production` | ☑ 2026-10-31 | Batches list: intro; "Awaiting QC" → "Quality check". |
+| `/production/plan/[planId]` | ☑ 2026-10-31 | Plan: intro; "work order" → "production order". |
+| `/production/plan` | ☑ 2026-10-31 | Plan list: intro; words. |
+| `/production/staging/[batchId]` | ☑ 2026-10-31 | Older scan staging: intro says most sites use Get materials; words. |
+| `/production/staging` | ☑ 2026-10-31 | Older scan staging list: intro; words. |
+| `/production/today` | ☑ 2026-10-31 | Today's count: intro; subtitle shortened. |
+| `/production/work-orders/[workOrderId]` | ☑ 2026-10-31 | Older order view: intro points to Production orders; "work order" → "production order" in all visible text. |
+| `/production/work-orders/new` | ☑ 2026-10-31 | Older order form: intro; words. |
+| `/production/work-orders` | ☑ 2026-10-31 | Older list: intro; words. |
 
 ## Quality (30)
 

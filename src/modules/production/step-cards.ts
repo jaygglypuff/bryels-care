@@ -10,7 +10,8 @@ import { checkPermission, findStep, finishStep, openStep, performPermission, sor
 import { postPackagingConsumption } from "./execution-postings";
 import { getBatchExecution, signerOptions } from "./execution-queries";
 import { currentStepOf, isWaitStep, shortDay, waitLabel } from "./flow-facts";
-import { currentPackaging } from "./packaging";
+import { currentPackaging, RECONCILED_STEP_KINDS } from "./packaging";
+import { batchLabelInfo, issueTakenPackagingLocked, packagingLinesOf } from "./packaging-flow";
 import { currentReadings, recordReadingInTx } from "./process";
 import { type FormulaSnapshot, idempotent, isWeighingStep, lockBatch } from "./shared";
 import { stepBlockers } from "./steps";
@@ -55,6 +56,10 @@ export async function getStepCard(ctx: AuthContext, batchId: string, stepNo: num
   const canPerform = ctx.can(performPermission(step.stepKind));
   const checkers = step.requiresChecker ? await signerOptions(ctx, b.siteId, checkPermission(step.stepKind)) : [];
   const approvers = isWaitStep(step.stepKind) || step.parameters.length ? await signerOptions(ctx, b.siteId, "production.over_tolerance_dispense.approve") : [];
+  // ADR-088 §3: the packaging step shows the wrappers/labels taken at Get materials and the label button.
+  const isPackaging = (RECONCILED_STEP_KINDS as readonly string[]).includes(step.stepKind);
+  const packagingLines = isPackaging ? await packagingLinesOf(db, b) : [];
+  const issuedHere = isPackaging ? (await currentPackaging(db, b.id)).filter((r) => step.record && r.r.processStepRecordId === step.record.id) : [];
   return {
     batch: b,
     product: ex.product,
@@ -89,6 +94,14 @@ export async function getStepCard(ctx: AuthContext, batchId: string, stepNo: num
     next: next ? { stepNo: next.stepNo, name: next.name, kind: next.stepKind } : null,
     isLastMakingStep: !!next && next.stepKind === "transfer",
     current: current ? { stepNo: current.stepNo, name: current.name } : null,
+    packaging: isPackaging
+      ? {
+          lines: packagingLines,
+          /** Nothing on the list and nothing recorded: the operator scans (or types) the lot used (fallback). */
+          needsScan: issuedHere.length === 0 && !packagingLines.some((l) => l.plan.length > 0 || l.issued.length > 0),
+          labels: await batchLabelInfo(ctx, b),
+        }
+      : null,
     blockedReason,
     canPerform: canPerform && !blockedReason && step.status !== "completed",
     checkers: checkers.map((c) => ({ id: c.id, displayName: c.displayName })),
@@ -144,6 +157,8 @@ export async function stepDone(ctx: AuthContext, input: StepDoneInput, signers: 
         if (signers.checker.userId === ctx.userId && !ctx.ownerOverride) throw new DomainError("separation_of_duties", "The checker must be a different person.");
       }
       const rec = await openStep(tx, ctx, batch, step);
+      // ADR-088 §3: the wrappers and labels taken at Get materials are recorded on this step (no scan).
+      await issueTakenPackagingLocked(tx, ctx, batch, step, rec);
       const now = await currentReadings(tx, rec.id);
       for (const r of typed) {
         const p = (step.parameters ?? []).find((x) => x.id === r.parameterId);

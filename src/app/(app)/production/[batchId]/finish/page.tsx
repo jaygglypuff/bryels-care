@@ -10,6 +10,8 @@ import { Help } from "@/ui/help/help";
 import { Banner } from "@/ui/status";
 import { WhoCanHelp } from "@/ui/who-can-help";
 import { Forbidden } from "../../../forbidden";
+import { PageIntro } from "@/ui/guide";
+import { LabelPrint } from "../../orders/[workOrderId]/step/[n]/packaging-box";
 import { FinishForm } from "./forms";
 
 export const metadata: Metadata = { title: "Finish batch" };
@@ -50,6 +52,7 @@ export default async function FinishPage({ params }: { params: Promise<{ batchId
           </>
         }
       />
+      <PageIntro>Check the counts of good pieces, rejects and wrappers, then put the batch in the hold area to wait for the QA check.</PageIntro>
       {finished ? (
         <Banner tone="ok" title="This batch is finished">
           It is in the hold area, waiting for the quality check.
@@ -98,6 +101,7 @@ export default async function FinishPage({ params }: { params: Promise<{ batchId
           />
         </Card>
       )}
+      {!v.labels.why || v.labels.lotNumber ? <LabelPrint batchId={v.batch.id} labels={v.labels} /> : null}
     </div>
   );
 }
