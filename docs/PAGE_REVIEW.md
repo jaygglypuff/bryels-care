@@ -18,67 +18,67 @@ Total screens: 250.
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/account` | ☐ | |
-| `/action-centre` | ☐ | |
-| `/approvals` | ☐ | |
-| `/dashboard/details/batches` | ☐ | |
-| `/dashboard/details/stock` | ☐ | |
-| `/dashboard` | ☐ | |
-| `/notifications` | ☐ | |
-| `/sync/conflicts/[id]` | ☐ | |
-| `/sync/conflicts` | ☐ | |
-| `/sync` | ☐ | |
+| `/account` | ☑ 2026-10-31 | Intro; “needs the owner's OK” wording; password, phone code and sign-ins unchanged. |
+| `/action-centre` | ☑ 2026-10-31 | “Problems & alerts”: plain tabs (To decide, Problems, Alerts for you, Phone changes to check), 44 px tabs, title first/number grey, “I'm on it”; message rules in ⋯ More. |
+| `/approvals` | ☑ 2026-10-31 | Next step opens the oldest decision; title first, number grey; Problems & alerts in ⋯ More; owner banner in plain words. |
+| `/dashboard/details/batches` | ☑ 2026-10-31 | Intro (“Done” = QA OK); back to Home. |
+| `/dashboard/details/stock` | ☑ 2026-10-31 | “Stock to look at”: running low / use first / stopped by QA. |
+| `/dashboard` | ☑ 2026-10-31 | Per-role intro sentence (owner, site manager, QA, sales, finance, operator, warehouse); ADR-081/082/083/086 layout and attentionItems kept; plain words (stopped by QA, QA check, See every step, Full history of changes); link to Reports. |
+| `/notifications` | ☑ 2026-10-31 | Intro; “I'm on it” instead of Acknowledge. |
+| `/sync/conflicts/[id]` | ☑ 2026-10-31 | “Phone change to check”: next step to the choice, on the phone / in the system now. |
+| `/sync/conflicts` | ☑ 2026-10-31 | “Phone changes to check”, intro. |
+| `/sync` | ☑ 2026-10-31 | “Working without signal”, intro. |
 
 ## Settings & people (29)
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/admin/approval-rules` | ☐ | |
-| `/admin/audit` | ☐ | |
-| `/admin/demo` | ☐ | |
-| `/admin/devices` | ☐ | |
-| `/admin/diagnostics` | ☐ | |
-| `/admin/imports/[id]` | ☐ | |
-| `/admin/imports/legacy-documents` | ☐ | |
-| `/admin/imports` | ☐ | |
-| `/admin/notification-rules` | ☐ | |
-| `/admin/numbering` | ☐ | |
-| `/admin` | ☐ | |
-| `/admin/retention` | ☐ | |
-| `/admin/roles/[id]/clone` | ☐ | |
-| `/admin/roles/[id]` | ☐ | |
-| `/admin/roles` | ☐ | |
-| `/admin/security` | ☐ | |
-| `/admin/sessions` | ☐ | |
-| `/admin/settings` | ☐ | |
-| `/admin/templates/[id]` | ☐ | |
-| `/admin/templates/labels/[id]` | ☐ | |
-| `/admin/templates/labels/new` | ☐ | |
-| `/admin/templates/new` | ☐ | |
-| `/admin/templates` | ☐ | |
-| `/admin/templates/stations` | ☐ | |
-| `/admin/users/[id]` | ☐ | |
-| `/admin/users/invite` | ☐ | |
-| `/admin/users` | ☐ | |
-| `/documents/[id]` | ☐ | |
-| `/management` | ☐ | |
+| `/admin/approval-rules` | ☑ 2026-10-31 | “Who says OK to what”: 5 visible fields (what, when, more than, who, why) + password; rest folded; plain record types and roles. |
+| `/admin/audit` | ☑ 2026-10-31 | “History of changes”: area + record number search, sentences; technical name and before/after folded. |
+| `/admin/demo` | ☑ 2026-10-31 | Intro (demo only, real data never touched). |
+| `/admin/devices` | ☑ 2026-10-31 | “Phones and tablets”; 44 px filter chips. |
+| `/admin/diagnostics` | ☑ 2026-10-31 | “Health of the system” (IT only); tables scroll inside their card. |
+| `/admin/imports/[id]` | ☑ 2026-10-31 | Next step by status; columns preview folded; rows as a list (phone); “Save … rows for good”; permission names folded. |
+| `/admin/imports/legacy-documents` | ☑ 2026-10-31 | “Old paper documents”: one card per scan, product first. |
+| `/admin/imports` | ☑ 2026-10-31 | “Load data from a spreadsheet”: saved matching picked from a list (no typed code); files as list; templates as 44 px buttons; legacy docs in ⋯ More. |
+| `/admin/notification-rules` | ☑ 2026-10-31 | “Who gets which message”: 4 visible fields; site, name, severity, email folded; Add a rule folded. |
+| `/admin/numbering` | ☑ 2026-10-31 | “How record numbers look”: list with example; change form 4 fields; pattern/digits folded; waiting changes shown with OK. |
+| `/admin` | ☑ 2026-10-31 | Redirects to People (/admin/users). |
+| `/admin/retention` | ☑ 2026-10-31 | “Keeping and deleting old records”, plain card titles; tables scroll in card. |
+| `/admin/roles/[id]/clone` | ☑ 2026-10-31 | “New job, copied from …”: name only; technical code made from the name (folded). |
+| `/admin/roles/[id]` | ☑ 2026-10-31 | Plain role name; “What this job may do” as sentences per area; permission strings folded as technical names; stop/delete in ⋯ More. |
+| `/admin/roles` | ☑ 2026-10-31 | Jobs as a list (Owner, Site manager, Machine operator…); permission matrix folded. |
+| `/admin/security` | ☑ 2026-10-31 | “Sign-in safety”; assumption ids and permission names removed from view. |
+| `/admin/sessions` | ☑ 2026-10-31 | “Who is signed in”; Can approve / Extra code checked chips. |
+| `/admin/settings` | ☑ 2026-10-31 | One group at a time (chips), label + one sentence + “Now:”; key and assumption under Technical name; “Needs the owner's OK”; history folded; next step for waiting changes. |
+| `/admin/templates/[id]` | ☑ 2026-10-31 | Layout name first, versions with plain status; next step for QA; JSON folded for IT. |
+| `/admin/templates/labels/[id]` | ☑ 2026-10-31 | Label name first; next step (QA OK); printer details folded; stop in ⋯. |
+| `/admin/templates/labels/new` | ☑ 2026-10-31 | Name (code made from it), for, size, printed fields; layout/barcode/copies/dpi folded. |
+| `/admin/templates/new` | ☑ 2026-10-31 | What it is for + name; code made from the name. |
+| `/admin/templates` | ☑ 2026-10-31 | “Labels and printouts”: labels and layouts as lists; printers and recent printouts folded; new layout/printers in ⋯ More. |
+| `/admin/templates/stations` | ☑ 2026-10-31 | “Label printers”: name + printer name; code made from the name; in-use/notes folded. |
+| `/admin/users/[id]` | ☑ 2026-10-31 | Next step (give a job / waiting for sign-in / unlock); plain role names; account actions in ⋯ More; permission strings folded. |
+| `/admin/users/invite` | ☑ 2026-10-31 | “Add a person”: 4 fields; warehouse limit folded; plain job names. |
+| `/admin/users` | ☑ 2026-10-31 | “People who use the app”: plain statuses and job names; roles/CSV in ⋯ More. |
+| `/documents/[id]` | ☑ 2026-10-31 | Kind + number title; plain banners (cancelled, replaced). |
+| `/management` | ☑ 2026-10-31 | Plain section texts; 44 px links. |
 
 ## Reports (12)
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/analytics/[area]` | ☐ | |
-| `/analytics/definitions` | ☐ | |
-| `/analytics/kpi/[code]` | ☐ | |
-| `/analytics/overview` | ☐ | |
-| `/analytics` | ☐ | |
-| `/analytics/trends` | ☐ | |
-| `/reports/[code]` | ☐ | |
-| `/reports` | ☐ | |
-| `/reports/runs/[runId]` | ☐ | |
-| `/reports/schedules/[id]` | ☐ | |
-| `/reports/schedules/new` | ☐ | |
-| `/reports/schedules` | ☐ | |
+| `/analytics/[area]` | ☑ 2026-10-31 | Plain titles (Making products, Stock numbers, Quality numbers, Sales numbers), intro, plain chart/list titles, no KPI codes. |
+| `/analytics/definitions` | ☑ 2026-10-31 | “What each number means”; codes only as technical name. |
+| `/analytics/kpi/[code]` | ☑ 2026-10-31 | Plain title, no code in subtitle; calculation folded. |
+| `/analytics/overview` | ☑ 2026-10-31 | Intro; plain card titles (PLAIN_KPI); no codes in chart subtitles. |
+| `/analytics` | ☑ 2026-10-31 | Reports landing: three tiles (sales 4 weeks, batches done, stock to look at), one weekly chart, What sells best (new read model getTopProducts), more reports in plain words. |
+| `/analytics/trends` | ☑ 2026-10-31 | “Compare over time”: plain number names, 44 px checkboxes. |
+| `/reports/[code]` | ☑ 2026-10-31 | Plain title; site + dates visible, other filters folded; Print green, Excel/CSV/email in ⋯ More; rows as cards on phones; definitions folded. |
+| `/reports` | ☑ 2026-10-31 | “Lists to download or print”: plain names per area as list; planned lists folded. |
+| `/reports/runs/[runId]` | ☑ 2026-10-31 | “Download” the emailed file; plain status. |
+| `/reports/schedules/[id]` | ☑ 2026-10-31 | Plain summary; history as list; stop/start in ⋯ More. |
+| `/reports/schedules/new` | ☑ 2026-10-31 | 4 visible fields (how often, day, time, who); name/sites/file type/filters folded. |
+| `/reports/schedules` | ☑ 2026-10-31 | “Lists sent by email” as list. |
 
 ## Finance (19)
 
@@ -108,7 +108,7 @@ Total screens: 250.
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/help` | ☐ | |
+| `/help` | ☑ 2026-10-31 | Five role guides “Your day in 5 steps” (own role first), Words we use, task guides folded (/help#key opens them). |
 
 ## Inventory & warehouse (38)
 
@@ -213,8 +213,8 @@ Total screens: 250.
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/operations` | ☐ | |
-| `/floor` | ☐ | |
+| `/operations` | ☑ 2026-10-31 | Intro; From delivery to dispatch; product first on phone cards; 44 px site switch. |
+| `/floor` | ☑ 2026-10-31 | TV header says what it is for (vw sizes; a TV, not a phone screen). |
 
 ## Purchasing (17)
 
@@ -328,3 +328,12 @@ Total screens: 250.
 | `/sales/returns` | ☑ 2026-10-31 | "Customer returns": PlainList, FilterTabs, icon statuses in plain words. |
 | `/sales/shipments/[shipmentId]` | ☑ 2026-10-31 | "Delivery": next step (get from shelf / check box / send out with driver and plate / proof of delivery); cancel and undo sending under ⋯ More; history folded. |
 | `/sales/shipments` | ☑ 2026-10-31 | "Deliveries": PlainList with grade-5 statuses; accountant download folded under More details. |
+
+
+## Notes from the Home, Settings & people, Reports and Help pass (2026-10-31)
+
+- New read model `getTopProducts` (src/modules/analytics/top-products.ts) for "What sells best" on the Reports page: confirmed orders only (same rule as "Orders confirmed"), money masked like the order-value number, site-scoped; tests in `tests/integration/analytics/top-products.test.ts`.
+- Shared grade-5 helpers: `src/ui/role-names.ts` (Owner, Site manager, Machine operator, Warehouse, QA, Sales, Finance; per-role Home sentence), `src/ui/permission-words.ts` (permission strings as "Stock: see, add, approve"; "Needs the owner's OK" for restricted), `src/ui/name-and-code.tsx` (codes made from names: roles, labels, layouts, printer places, column matchings).
+- Help: five role guides (`docs/help/role-*.md`, "Your day in 5 steps") and `docs/help/words.md`; task guides stay (the "?" on screens and `/help#key`).
+- Settings without a written description show their current value as the sentence; 118 of 170 settings in `src/lib/settings.ts` still need a one-sentence `description` from their module owner.
+- Menu labels to rename in `nav.ts` (not changed here): "Dashboards" → "Reports", "Report library" → "Lists to download or print", "Scheduled reports" → "Lists sent by email", "Trends" → "Compare over time", "KPI definitions" → "What each number means", "Users" → "People", "Sessions" → "Who is signed in", "Security" → "Sign-in safety", "Audit log" → "History of changes", "Approval rules" → "Who says OK to what", "Numbering" → "How record numbers look", "Templates & labels" → "Labels and printouts", "Notification rules" → "Who gets which message", "Imports" → "Load data from a spreadsheet", "Legacy documents" → "Old paper documents", "Devices" → "Phones and tablets", "Sync conflicts" → "Phone changes to check", "Retention & holds" → "Keeping and deleting old records", "Diagnostics" → "Health of the system", "Sync & offline" → "Working without signal".

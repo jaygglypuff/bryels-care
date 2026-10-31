@@ -6,11 +6,20 @@ import { DomainError } from "@/lib/errors";
 import { AREAS, type AreaDashboard, type AreaKey, DASHBOARD_KPIS, canSeeCrossSite, getAreaDashboard } from "@/modules/analytics";
 import { Card, EmptyState, PageHeader } from "@/ui/core";
 import { Banner } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
 import { fmtKpi } from "@/ui/charts/format";
 import { BreakdownChart, DailyChart } from "../charts";
 import { KpiCard, RecordList, ScopePeriodBar, StaleNotice } from "../kpi-ui";
 
 export const dynamic = "force-dynamic";
+
+/** Plain titles and the one-sentence "what is this for" (ADR-088). */
+const PLAIN_AREA: Record<AreaKey, { title: string; intro: string }> = {
+  operations: { title: "Making products", intro: "This screen is for the owner and the site manager: how much we made against the plan, how much came out of each batch, and which orders are late. Tap a card to see the records." },
+  inventory: { title: "Stock numbers", intro: "This screen is for the owner, the site manager and the warehouse: what stock we can use, what is stopped, and what to use first before it expires." },
+  quality: { title: "Quality numbers", intro: "This screen is for QA and the owner: how fast checks are done, how many pass, and what is stopped by QA." },
+  sales: { title: "Sales numbers", intro: "This screen is for the owner and sales: orders per day, orders sent on time and complete, and orders that are late." },
+};
 
 function Section({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
   return (
@@ -43,10 +52,9 @@ function Body({ d }: { d: AreaDashboard }) {
     <div className="flex flex-col gap-4">
       <StaleNotice freshness={d.freshness} />
       {d.ledgerCheck && (
-        <Banner tone={d.ledgerCheck.every((x) => x.agrees) ? "ok" : "bad"} title={d.ledgerCheck.every((x) => x.agrees) ? "Stock totals agree with the ledger" : "Stock totals differ from the ledger"}>
-          Usable and blocked stock on the cards come from the balance projection; the same totals recomputed from every posted stock movement give{" "}
-          {d.ledgerCheck.map((x) => `${x.code} ${x.ledger ?? "n/a"}`).join(" · ")}.
-          {!d.ledgerCheck.every((x) => x.agrees) && " Run the stock reconciliation in Diagnostics; nothing is corrected automatically."}
+        <Banner tone={d.ledgerCheck.every((x) => x.agrees) ? "ok" : "bad"} title={d.ledgerCheck.every((x) => x.agrees) ? "Stock totals checked: they match every stock movement" : "Stock totals do not match the stock movements"}>
+          The system added up every stock movement again and compared it with the cards.
+          {!d.ledgerCheck.every((x) => x.agrees) && " Tell the IT person (Diagnostics → stock check); nothing is corrected automatically."}
         </Banner>
       )}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -57,47 +65,47 @@ function Body({ d }: { d: AreaDashboard }) {
       {d.area === "operations" && (
         <>
           <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-            <DailyChart {...c} tile={t["KPI-OPS-01"]} title="Output vs plan per day" subtitle="Planned mass of work orders due that day and output mass posted that day" split={{ numerator: "Output posted", denominator: "Planned (due)" }} />
-            <DailyChart {...c} tile={t["KPI-OPS-02"]} title="Yield per day" subtitle="Actual ÷ theoretical output mass, batches by first yield record" />
+            <DailyChart {...c} tile={t["KPI-OPS-01"]} title="Made against plan, per day" subtitle="Planned amount due that day and the amount made that day" split={{ numerator: "Output posted", denominator: "Planned (due)" }} />
+            <DailyChart {...c} tile={t["KPI-OPS-02"]} title="How much came out, per day" subtitle="Amount made ÷ amount the recipe should make" />
           </div>
           <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-            <BreakdownChart {...c} tile={t["KPI-OPS-05"]} title="Open work orders by status" />
-            <BreakdownChart {...c} tile={t["KPI-OPS-07"]} title="Step overrun by step kind" measure="num" empty="No completed step has an expected duration in its routing yet, so no overrun can be measured." />
+            <BreakdownChart {...c} tile={t["KPI-OPS-05"]} title="Open production orders by step" />
+            <BreakdownChart {...c} tile={t["KPI-OPS-07"]} title="Steps that took longer than planned" measure="num" empty="No completed step has an expected duration in its routing yet, so no overrun can be measured." />
           </div>
-          <ListSection d={d} list="late_work_orders" code="KPI-OPS-14" title="Late work orders" empty="No open work order is past its planned end." />
+          <ListSection d={d} list="late_work_orders" code="KPI-OPS-14" title="Production orders that are late" empty="No production order is late." />
           <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-            <ListSection d={d} list="yield_outside" code="KPI-OPS-02" title="Batches outside yield limits" empty="Every batch in the period is within its yield limits." />
-            <ListSection d={d} list="dispense_exceptions" code="KPI-OPS-16" title="Weighings outside tolerance" empty="Every original weighing was within tolerance." />
+            <ListSection d={d} list="yield_outside" code="KPI-OPS-02" title="Batches that came out too short or too long" empty="Every batch in the period is within its yield limits." />
+            <ListSection d={d} list="dispense_exceptions" code="KPI-OPS-16" title="Weighings that were off" empty="Every original weighing was within tolerance." />
           </div>
         </>
       )}
       {d.area === "inventory" && (
         <>
           <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-            <BreakdownChart {...c} tile={t["KPI-INV-02"]} title="Blocked lots by status" empty="No blocked lot has stock on hand." />
-            <BreakdownChart {...c} tile={t["KPI-INV-07"]} title="Material coverage of planned work orders" donut empty="No planned or released work order." />
+            <BreakdownChart {...c} tile={t["KPI-INV-02"]} title="Stock that cannot be used, by reason" empty="No blocked lot has stock on hand." />
+            <BreakdownChart {...c} tile={t["KPI-INV-07"]} title="Do planned orders have their materials?" donut empty="No planned or released work order." />
           </div>
-          <ListSection d={d} list="fefo_risk" code="KPI-INV-04" title="FEFO risk: released lots expiring soon" empty="No released lot with stock expires within the window." />
+          <ListSection d={d} list="fefo_risk" code="KPI-INV-04" title="Use these first: OK stock that expires soon" empty="No released lot with stock expires within the window." />
           <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-            <ListSection d={d} list="expired" code="KPI-INV-04E" title="Expired lots on hand" empty="No expired stock on hand." />
-            <ListSection d={d} list="coverage_short" code="KPI-INV-07" title="Work orders short of material" empty="Every planned work order is covered by released stock." />
+            <ListSection d={d} list="expired" code="KPI-INV-04E" title="Expired stock still on the shelves" empty="No expired stock on hand." />
+            <ListSection d={d} list="coverage_short" code="KPI-INV-07" title="Production orders missing materials" empty="Every planned work order is covered by released stock." />
           </div>
         </>
       )}
       {d.area === "quality" && (
         <>
           <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-            <DailyChart {...c} tile={t["KPI-QUA-01"]} title="QC turnaround per day (median hours)" />
-            <BreakdownChart {...c} tile={t["KPI-QUA-06"]} title="Deviations raised by severity" empty="No deviation raised in the period." />
+            <DailyChart {...c} tile={t["KPI-QUA-01"]} title="Hours for a QA check, per day (typical)" />
+            <BreakdownChart {...c} tile={t["KPI-QUA-06"]} title="Problem reports by how bad" empty="No deviation raised in the period." />
           </div>
           <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-            <BreakdownChart {...c} tile={t["KPI-QUA-02"]} title="Finished-product outcomes" donut empty="No finished-product inspection reviewed in the period." />
-            <BreakdownChart {...c} tile={t["KPI-QUA-11"]} title="Incoming backlog by status" empty="No incoming inspection is open." />
+            <BreakdownChart {...c} tile={t["KPI-QUA-02"]} title="QA results for finished products" donut empty="No finished-product inspection reviewed in the period." />
+            <BreakdownChart {...c} tile={t["KPI-QUA-11"]} title="Deliveries waiting for QA, by step" empty="No incoming inspection is open." />
           </div>
-          <ListSection d={d} list="open_holds" code="KPI-QUA-03A" title="Open holds, oldest first" empty="No quality hold is open." valueHeader="Age" unit="days" />
+          <ListSection d={d} list="open_holds" code="KPI-QUA-03A" title="Stock stopped by QA, oldest first" empty="No quality hold is open." valueHeader="Age" unit="days" />
           <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-            <ListSection d={d} list="incoming_backlog" code="KPI-QUA-11" title="Incoming inspections waiting" empty="No incoming inspection is waiting." />
-            <ListSection d={d} list="oos" code="KPI-QUA-04" title="Out-of-specification results" empty="No result out of specification in the period." />
+            <ListSection d={d} list="incoming_backlog" code="KPI-QUA-11" title="Deliveries waiting for a QA check" empty="No incoming inspection is waiting." />
+            <ListSection d={d} list="oos" code="KPI-QUA-04" title="Test results that failed" empty="No result out of specification in the period." />
           </div>
         </>
       )}
@@ -105,12 +113,12 @@ function Body({ d }: { d: AreaDashboard }) {
         <>
           <div className="grid min-w-0 gap-4 xl:grid-cols-2">
             <DailyChart {...c} tile={t["KPI-SAL-01"]} title="Orders per day" kind="column" />
-            <BreakdownChart {...c} tile={t["KPI-SAL-02"]} title="On time in full" donut empty="No order due in the period." />
+            <BreakdownChart {...c} tile={t["KPI-SAL-02"]} title="Sent on time and complete" donut empty="No order due in the period." />
           </div>
-          <DailyChart {...c} tile={t["KPI-SAL-04"]} title="Order-to-ship time per day (median days)" />
+          <DailyChart {...c} tile={t["KPI-SAL-04"]} title="Days from order to sending (typical)" />
           <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-            <ListSection d={d} list="overdue_orders" code="KPI-SAL-11" title="Orders past their requested date" empty="No order is past its requested date." />
-            <ListSection d={d} list="otif_missed" code="KPI-SAL-02" title="Orders late or not shipped in full" empty="Every order due in the period was on time in full." />
+            <ListSection d={d} list="overdue_orders" code="KPI-SAL-11" title="Customer orders past the promised date" empty="No order is past its requested date." />
+            <ListSection d={d} list="otif_missed" code="KPI-SAL-02" title="Orders sent late or not complete" empty="Every order due in the period was on time in full." />
           </div>
         </>
       )}
@@ -127,8 +135,8 @@ export default async function AreaDashboardPage({ params, searchParams }: { para
   if (!ctx.can("analytics.dashboard.view"))
     return (
       <>
-        <PageHeader title={`${meta.title} dashboard`} />
-        <EmptyState title={`You don't have access to dashboards at ${ctx.currentSite.code}`}>Ask your site manager, or switch site.</EmptyState>
+        <PageHeader title={PLAIN_AREA[area as AreaKey].title} />
+        <EmptyState title="You can't see these numbers">Ask the owner or your site manager, or switch site at the top.</EmptyState>
       </>
     );
   let d: AreaDashboard;
@@ -138,7 +146,7 @@ export default async function AreaDashboardPage({ params, searchParams }: { para
     if (e instanceof DomainError && (e.code === "forbidden" || e.code === "not_found"))
       return (
         <>
-          <PageHeader title={`${meta.title} dashboard`} />
+          <PageHeader title={PLAIN_AREA[area as AreaKey].title} />
           <EmptyState title="This view isn't available to you" action={<Link href={`/analytics/${area}`} className="font-medium text-primary-text hover:underline">Open your site&apos;s view</Link>}>
             {e.message}
           </EmptyState>
@@ -148,7 +156,8 @@ export default async function AreaDashboardPage({ params, searchParams }: { para
   }
   return (
     <>
-      <PageHeader title={`${meta.title} dashboard`} subtitle={`${d.scope.label} · ${d.period.label} · ${meta.intro}`} actions={<ScopePeriodBar basePath={`/analytics/${area}`} scope={d.scope} period={d.period} sites={ctx.allowedSites} canAll={canSeeCrossSite(ctx)} />} />
+      <PageHeader title={PLAIN_AREA[area as AreaKey].title} subtitle={`${d.scope.label} · ${d.period.label}`} actions={<ScopePeriodBar basePath={`/analytics/${area}`} scope={d.scope} period={d.period} sites={ctx.allowedSites} canAll={canSeeCrossSite(ctx)} />} />
+      <PageIntro>{PLAIN_AREA[area as AreaKey].intro}</PageIntro>
       <Body d={d} />
     </>
   );

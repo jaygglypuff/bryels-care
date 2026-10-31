@@ -5,12 +5,16 @@ import { fmtDateTime } from "@/lib/qty";
 import { listUsers } from "@/modules/identity";
 import { Card, CardTitle, EmptyState, Input, LinkButton, PageHeader, Select, Table, Td, buttonClass } from "@/ui/core";
 import { Banner } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { plainRoleName } from "@/ui/role-names";
 import { Forbidden } from "../../forbidden";
 import { UserStatusChip } from "./user-status";
 
 export const dynamic = "force-dynamic";
 
 const STATUSES = ["invited", "active", "locked", "deactivated"];
+const STATUS_TEXT: Record<string, string> = { invited: "Not signed in yet", active: "Active", locked: "Locked", deactivated: "Switched off (left)" };
 
 /** Users (US-1-16): list with search and status filter, invite, export. */
 export default async function UsersPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
@@ -29,33 +33,40 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
   return (
     <>
       <PageHeader
-        title="Users"
-        subtitle={`${everyone.length} people${invited ? ` · ${invited} invited` : ""}${locked ? ` · ${locked} locked` : ""}`}
+        title="People who use the app"
+        subtitle={`${everyone.length} people${invited ? ` · ${invited} not signed in yet` : ""}${locked ? ` · ${locked} locked` : ""}`}
         actions={
           <>
-            {ctx.can("identity.role.view") && (
-              <LinkButton href="/admin/roles" variant="secondary">
-                Roles
-              </LinkButton>
-            )}
-            {ctx.can("identity.user.export") && (
-              <a href={`/admin/users/export?format=csv${status ? `&status=${status}` : ""}`} className={buttonClass("secondary")}>
-                Export CSV
-              </a>
-            )}
             {canInvite && (
               <LinkButton href="/admin/users/invite" variant="cta">
-                Invite someone
+                Add a person
               </LinkButton>
+            )}
+            {(ctx.can("identity.role.view") || ctx.can("identity.user.export")) && (
+              <MoreMenu>
+                <div className="flex flex-col gap-2">
+                  {ctx.can("identity.role.view") && (
+                    <LinkButton href="/admin/roles" variant="secondary" size="sm">
+                      Roles (what each job may do)
+                    </LinkButton>
+                  )}
+                  {ctx.can("identity.user.export") && (
+                    <a href={`/admin/users/export?format=csv${status ? `&status=${status}` : ""}`} className={buttonClass("secondary", "sm")}>
+                      Download the list (CSV)
+                    </a>
+                  )}
+                </div>
+              </MoreMenu>
             )}
           </>
         }
       />
+      <PageIntro>This screen is for the owner and the IT person: everyone who can sign in, their job (role) and their site. Tap a person to change their role, reset their password or switch them off when they leave.</PageIntro>
       {canInvite && !email.ready && (
         <div className="mb-4">
           <Banner tone="warn" title="Email sending is not set up yet">
-            Give the invitation link to the person yourself. The link is shown to you once, after you invite someone. Your IT contact can set up email under{" "}
-            <Link href="/admin/security" className="underline">Security settings</Link>.
+            Give the sign-up link to the person yourself. It is shown to you once, right after you add them. The IT person can set up email under{" "}
+            <Link href="/admin/security" className="underline">Security</Link>.
           </Banner>
         </div>
       )}
@@ -67,22 +78,22 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
           </div>
           <label htmlFor="status" className="sr-only">Status</label>
           <Select id="status" name="status" defaultValue={status ?? ""} className="w-auto">
-            <option value="">All statuses</option>
+            <option value="">Everyone</option>
             {STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
+                {STATUS_TEXT[s]}
               </option>
             ))}
           </Select>
-          <button className={buttonClass("secondary")}>Filter</button>
+          <button className={buttonClass("secondary")}>Search</button>
         </form>
-        <CardTitle>People</CardTitle>
+        
         {users.length === 0 ? (
-          <EmptyState title={status || q ? "No users match the filter" : "No users in your sites"}>{status || q ? <Link href="/admin/users" className="underline">Clear the filter</Link> : null}</EmptyState>
+          <EmptyState title={status || q ? "Nobody matches" : "Nobody at your sites yet"}>{status || q ? <Link href="/admin/users" className="underline">Show everyone</Link> : "Press “Add a person” to invite the first one."}</EmptyState>
         ) : (
           <>
             <div className="hidden md:block">
-              <Table head={["Name", "Email", "Role(s)", "Site scope", "Status", "Last sign-in"]}>
+              <Table head={["Name", "Email", "Job (role)", "Site", "Status", "Last sign-in"]}>
                 {users.map((u) => (
                   <tr key={u.id} className="hover:bg-surface-2">
                     <Td>
@@ -91,7 +102,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                       </Link>
                     </Td>
                     <Td className="text-fg-2">{u.email}</Td>
-                    <Td>{u.roles.join(", ") || "—"}</Td>
+                    <Td>{u.roles.map(plainRoleName).join(", ") || "—"}</Td>
                     <Td>{u.siteScope}</Td>
                     <Td>
                       <UserStatusChip status={u.status} />
@@ -111,7 +122,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                     </div>
                     <p className="break-all text-[12px] text-muted">{u.email}</p>
                     <p className="mt-1 text-[13px] text-fg-2">
-                      {u.roles.join(", ") || "No role"} · {u.siteScope}
+                      {u.roles.map(plainRoleName).join(", ") || "No job yet"} · {u.siteScope}
                     </p>
                     <p className="text-[12px] text-muted">Last sign-in: {u.lastLoginAt ? fmtDateTime(u.lastLoginAt) : "never"}</p>
                   </Link>

@@ -10,7 +10,7 @@ QA checks every finished batch before it can be sold. Everything is on one page.
 
 ## Find the batches
 
-1. Open **Quality check** (tab bar) or **Quality → Batches waiting for QA check**. You can also press **Check quality** on a production order.
+1. Open **Quality check** (tab bar) or **Operations → Quality check**. You can also press **Check quality** on a production order.
 2. Each card shows the product first, then the batch number in grey and how many were made. **Not yet** means someone said "Not yet" before.
 3. The green box **What to do next** opens the oldest batch. Or tap a card.
 

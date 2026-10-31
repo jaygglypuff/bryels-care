@@ -5,10 +5,13 @@ import { fmtDateTime } from "@/lib/qty";
 import { getRunForRecipient } from "@/modules/reports";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader, buttonClass } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
+import { plainReport } from "../../plain";
 
 export const dynamic = "force-dynamic";
 
 const RUN_TONE = { succeeded: "ok", partial: "warn", skipped: "neu", failed: "bad", running: "info" } as const;
+const RUN_TEXT: Record<string, string> = { succeeded: "Sent", partial: "Sent to some", skipped: "Not sent", failed: "Failed", running: "Sending" };
 
 /** One delivery of a scheduled report: the caller's files (recipients) and, for the schedule owner, who was skipped. */
 export default async function ReportRunPage({ params }: { params: Promise<{ runId: string }> }) {
@@ -26,31 +29,33 @@ export default async function ReportRunPage({ params }: { params: Promise<{ runI
   return (
     <div className="space-y-5">
       <PageHeader
-        title={r.title}
-        subtitle={<>Delivery <span className="font-mono">{r.run.periodKey}</span> · started {fmtDateTime(r.run.startedAt)}</>}
-        actions={r.run.scheduledReportId ? <LinkButton href={`/reports/schedules/${r.run.scheduledReportId}`} variant="secondary" size="sm">Schedule</LinkButton> : undefined}
+        title={plainReport(r.run.reportCode, r.title).title}
+        subtitle={`Sent ${fmtDateTime(r.run.startedAt)}`}
+        actions={r.run.scheduledReportId ? <LinkButton href={`/reports/schedules/${r.run.scheduledReportId}`} variant="secondary" size="sm">About this email</LinkButton> : undefined}
       />
+      <PageIntro>This screen is for getting the file that was sent to you by email. Press “Download”.</PageIntro>
       <Card>
         <div className="mb-3 flex flex-wrap items-center gap-2 text-[13px]">
-          <Chip tone={RUN_TONE[r.run.status as keyof typeof RUN_TONE] ?? "neu"}>{r.run.status}</Chip>
-          <span className="text-muted">sent to {r.run.recipientsSent} · skipped {r.run.recipientsSkipped} · files {r.run.filesCount} · emails {r.run.emailsSent}</span>
+          <Chip tone={RUN_TONE[r.run.status as keyof typeof RUN_TONE] ?? "neu"}>{RUN_TEXT[r.run.status] ?? r.run.status}</Chip>
+          <span className="text-muted">sent to {r.run.recipientsSent} · skipped {r.run.recipientsSkipped}</span>
         </div>
-        {r.run.errorMessage && <Banner tone="bad" title="This delivery failed">{r.run.errorMessage}</Banner>}
+        {r.run.errorMessage && <Banner tone="bad" title="This one was not sent">{r.run.errorMessage} Ask the IT person to look at it.</Banner>}
         <CardTitle>Your file</CardTitle>
         {r.files.length === 0 ? (
-          <EmptyState title="No file for you in this delivery">You were not a recipient, or you were skipped because your access changed.</EmptyState>
+          <EmptyState title="There is no file for you here">You were not on the list, or your access changed. Ask the person who set it up.</EmptyState>
         ) : (
           <ul className="space-y-2">
             {r.files.map((f) => (
               <li key={f.id} className="flex flex-col gap-2 rounded-[14px] border border-line p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 text-[13px]">
-                  <p className="break-all font-mono">{f.fileName}</p>
+                  <p className="break-all font-medium">{f.fileName}</p>
                   <p className="text-muted">
-                    {f.rowCount} rows{f.truncated ? " (truncated at the row limit)" : ""} · sites {siteCodes(f.siteIds)} · sha256 {f.sha256.slice(0, 12)}…
+                    {f.rowCount} rows{f.truncated ? " (cut off at the row limit)" : ""} · sites {siteCodes(f.siteIds)}
                   </p>
+                  <p className="break-all text-[12px] text-muted">Check number (sha256): {f.sha256.slice(0, 12)}…</p>
                 </div>
                 {f.purgedAt ? (
-                  <span className="text-[13px] text-muted">Removed after the retention period</span>
+                  <span className="text-[13px] text-muted">Deleted after the keep-time ended</span>
                 ) : (
                   <a className={buttonClass("primary", "sm")} href={`/reports/runs/${r.run.id}/files/${f.id}`}>Download</a>
                 )}
@@ -61,8 +66,8 @@ export default async function ReportRunPage({ params }: { params: Promise<{ runI
       </Card>
       {(r.isOwner || ctx.can("analytics.scheduled_report.admin")) && skipped.length > 0 && (
         <Card>
-          <CardTitle>Skipped recipients</CardTitle>
-          <p className="mb-2 text-[13px] text-muted">Their access was re-checked at delivery time; they did not receive a file.</p>
+          <CardTitle>People who did not get it</CardTitle>
+          <p className="mb-2 text-[13px] text-muted">The system checked their access when sending; they were no longer allowed to see this list.</p>
           <ul className="space-y-1 text-[13px]">
             {skipped.map((s) => (
               <li key={s.userId}><span className="font-medium">{s.name}</span>: {s.reason}</li>

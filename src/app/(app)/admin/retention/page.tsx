@@ -4,6 +4,7 @@ import { fmtDateTime } from "@/lib/qty";
 import { ENTITY_LABELS, listLegalHolds, listPurgeRuns, listRestoreDrills, listRetentionPolicies, periodLabel } from "@/modules/platform";
 import { Card, CardTitle, EmptyState, PageHeader, Table, Td } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../forbidden";
 import { StepUpGate } from "../users/step-up-gate";
 import { DryRunForm, ExecutePurgeForm, PlaceHoldForm, PolicyConfirmForm, PolicyEditForm, ReleaseHoldForm, SignOffDrillForm } from "./forms";
@@ -54,7 +55,8 @@ export default async function RetentionPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Retention and legal holds" subtitle="How long records are kept, what is held, what the weekly sweep did, and the restore drill evidence." />
+      <PageHeader title="Keeping and deleting old records" />
+      <PageIntro>This screen is for the owner and the IT person: how long each kind of record is kept, records that must not be deleted (holds, for example during a recall), what the weekly clean-up did, and proof that backups can be restored. The periods are guesses until the company&apos;s reviewers confirm them.</PageIntro>
       {restricted && <StepUpGate ctx={ctx} purpose="change retention, run a purge or sign off a drill" />}
       <Banner tone="info" title="Placeholders until the company's reviewers confirm them">
         The periods are engineering defaults from the data model, not legal advice. A class acts only after its confirmation is recorded; ledgers, quality records, finance, payroll and audit are never deleted by the sweep.
@@ -62,7 +64,7 @@ export default async function RetentionPage() {
 
       {policies && (
         <Card>
-          <CardTitle>Retention policies</CardTitle>
+          <CardTitle>How long we keep each kind of record</CardTitle>
           <Table head={["Class", "Applies to", "Period", "Counts from", "At the end", "Status"]}>
             {policies.map((p) => (
               <tr key={`${p.dataClass}/${p.target}`} className="align-top">
@@ -123,12 +125,12 @@ export default async function RetentionPage() {
 
       {holds && (
         <Card>
-          <CardTitle>Legal holds</CardTitle>
+          <CardTitle>Records that must not be deleted (holds)</CardTitle>
           <p className="mb-3 text-[13px] text-muted">
             A hold stops every retention action on the record. A held lot also holds the batch that made it; a held batch holds its output lots. Open complaints and open deviations hold their lots and batches automatically.
           </p>
           {holds.length === 0 ? (
-            <EmptyState title="No active legal holds">Place one when a claim, recall, audit or regulator query needs records kept.</EmptyState>
+            <EmptyState title="No holds now">Add one when a complaint, recall, audit or government question needs records kept.</EmptyState>
           ) : (
             <Table head={["Record", "Kind", "Reason", "Placed", ""]}>
               {holds.map((h) => (
@@ -161,12 +163,12 @@ export default async function RetentionPage() {
 
       {runs && (
         <Card>
-          <CardTitle action={canDryRun ? <DryRunForm /> : undefined}>Retention sweep</CardTitle>
+          <CardTitle action={canDryRun ? <DryRunForm /> : undefined}>Weekly clean-up</CardTitle>
           <p className="mb-3 text-[13px] text-muted">
             The weekly sweep (Sunday 03:00 Manila) writes a dry-run report unless the setting “Weekly retention sweep” is set to execute. A dry run never deletes anything.
           </p>
           {runs.length === 0 ? (
-            <EmptyState title="No sweep has run yet">Run a dry run to see what is past its period and what is held.</EmptyState>
+            <EmptyState title="No clean-up has run yet">Press the test-run button to see what is past its time and what is held (nothing is deleted in a test run).</EmptyState>
           ) : (
             <Table head={["When", "Mode", "Past period", "Held", "Deleted", "By"]}>
               {runs.map((r) => (
@@ -216,12 +218,12 @@ export default async function RetentionPage() {
 
       {drills && (
         <Card>
-          <CardTitle>Restore drills</CardTitle>
+          <CardTitle>Backup restore tests</CardTitle>
           <p className="mb-3 text-[13px] text-muted">
             Recorded by the drill script (<span className="font-mono">pnpm restore:drill</span>, runbook §13.6). Targets: restore within 4 hours (RTO), from a dump at most 24 hours old (RPO), until the owner confirms other values.
           </p>
           {drills.length === 0 ? (
-            <EmptyState title="No restore drill recorded yet">The first drill is required before go-live (Gate 9), then every quarter.</EmptyState>
+            <EmptyState title="No restore test recorded yet">The first test is needed before real use, then every three months.</EmptyState>
           ) : (
             <Table head={["When", "Result", "Restore time", "Dump age", "Checks", "Sign-off"]}>
               {drills.map((d) => (

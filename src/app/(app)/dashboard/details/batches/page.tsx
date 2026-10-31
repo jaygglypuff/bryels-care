@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageIntro } from "@/ui/guide";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate } from "@/lib/qty";
@@ -31,9 +32,10 @@ export default async function WeekBatchesPage({ searchParams }: { searchParams: 
     <div className="space-y-4">
       <PageHeader
         title="Batches this week"
-        subtitle={`${w.scope.label} · ${fmtDate(w.weekStart)} to ${fmtDate(w.weekEnd)} · ${done} of ${w.rows.length} done (released by QA)`}
+        subtitle={`${w.scope.label} · ${fmtDate(w.weekStart)} to ${fmtDate(w.weekEnd)} · ${done} of ${w.rows.length} done`}
         actions={<LinkButton href={all ? "/dashboard?scope=all" : "/dashboard"} variant="secondary">Back to Home</LinkButton>}
       />
+      <PageIntro>This screen is for the owner and the site manager: the batches planned to start this week. “Done” means QA checked the batch and said OK. Tap a batch to open it.</PageIntro>
       <Card>
         {w.rows.length === 0 ? (
           <EmptyState title="No batches planned this week">Batches planned to start between Monday and Sunday appear here.</EmptyState>

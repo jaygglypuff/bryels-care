@@ -6,12 +6,15 @@ import type { Permission } from "@/lib/permissions";
 import { type RoleDetail, getRole, permissionCatalogue } from "@/modules/identity";
 import { Card, PageHeader } from "@/ui/core";
 import { Banner } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
+import { permissionSummary } from "@/ui/permission-words";
+import { plainRole } from "@/ui/role-names";
 import { Forbidden } from "../../../../forbidden";
 import { StepUpGate } from "../../../users/step-up-gate";
 import { CloneForm } from "../../forms";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Clone role" };
+export const metadata = { title: "Copy a job" };
 
 /** US-1-29: clone a role; strings the creator does not hold are left out and listed. */
 export default async function CloneRolePage({ params }: { params: Promise<{ id: string }> }) {
@@ -36,12 +39,13 @@ export default async function CloneRolePage({ params }: { params: Promise<{ id: 
           ← {d.role.name}
         </Link>
       </p>
-      <PageHeader title={`Clone ${d.role.name}`} subtitle="A custom role starts from this bundle. Remove what the job does not need." />
+      <PageHeader title={`New job, copied from ${plainRole(d.role.code, d.role.name)}`} />
+      <PageIntro>This screen is for making your own job (role): give it a name, untick what this job should not do, and press the button at the bottom.</PageIntro>
       <StepUpGate ctx={ctx} purpose="create a role" />
       {dropped.length > 0 && (
         <div className="mb-4">
-          <Banner tone="warn" title={`${dropped.length} permission(s) left out`}>
-            A custom role cannot hold permissions you do not hold yourself: {dropped.join(", ")}. The owner can create the role if it needs them.
+          <Banner tone="warn" title={`${dropped.length} thing(s) left out`}>
+            A new job cannot do more than you may do yourself. Left out: {permissionSummary(dropped).map((r) => `${r.label} (${r.actions.join(", ")})`).join("; ")}. Ask the owner to make the job if it needs them.
           </Banner>
         </div>
       )}

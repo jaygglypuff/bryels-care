@@ -3,6 +3,11 @@ import { useActionState, useState } from "react";
 import type { ActionState } from "@/lib/errors";
 import { Field, Input, Select, Textarea } from "@/ui/core";
 import { FormMessage, SubmitButton } from "@/ui/form";
+import { MoreDetails } from "@/ui/guide";
+import { NameAndCode } from "@/ui/name-and-code";
+
+import { APPLIES_TEXT } from "./words";
+const DATASET_TEXT: Record<string, string> = { "label/material/v1": "Materials", "label/wip/v1": "Half-made product", "label/finished_good/v1": "Finished products", "label/location/v1": "Shelves and places", "label/carton/v1": "Boxes (cartons)" };
 import {
   createLabelTemplateAction,
   createTemplateAction,
@@ -21,13 +26,7 @@ export function NewTemplateForm({ kinds }: { kinds: { value: string; label: stri
   return (
     <form action={action} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Code" htmlFor="code" error={fe.code} hint="Printed in the footer, e.g. LBL-RM-2.">
-          <Input id="code" name="code" required className="font-mono uppercase" autoComplete="off" />
-        </Field>
-        <Field label="Name" htmlFor="name" error={fe.name}>
-          <Input id="name" name="name" required />
-        </Field>
-        <Field label="Kind" htmlFor="templateKind" error={fe.templateKind} hint="Only kinds with a renderer in this version are listed.">
+        <Field label="What it is for" htmlFor="templateKind" error={fe.templateKind} hint="Only the kinds this version can print are listed.">
           <Select id="templateKind" name="templateKind" value={kind} onChange={(e) => setKind(e.target.value)}>
             {kinds.map((k) => (
               <option key={k.value} value={k.value}>{k.label}</option>
@@ -35,10 +34,10 @@ export function NewTemplateForm({ kinds }: { kinds: { value: string; label: stri
           </Select>
         </Field>
         {kind === "label" ? (
-          <Field label="Label data" htmlFor="dataset" hint="Which records this layout prints.">
+          <Field label="Labels for" htmlFor="dataset" hint="Which records this layout prints.">
             <Select id="dataset" name="dataset">
               {datasets.filter((d) => d !== "label/test/v1").map((d) => (
-                <option key={d} value={d}>{d}</option>
+                <option key={d} value={d}>{DATASET_TEXT[d] ?? d}</option>
               ))}
             </Select>
           </Field>
@@ -50,9 +49,10 @@ export function NewTemplateForm({ kinds }: { kinds: { value: string; label: stri
             </Select>
           </Field>
         )}
+        <NameAndCode nameLabel="Name" placeholder="e.g. Raw material label" nameError={fe.name} codeError={fe.code} prefix="TPL-" max={30} />
       </div>
       <FormMessage state={state} />
-      <SubmitButton variant="cta" pendingText="Creating…">Create template with draft v1</SubmitButton>
+      <SubmitButton variant="cta" pendingText="Making…">Make the layout (as a draft)</SubmitButton>
     </form>
   );
 }
@@ -146,13 +146,8 @@ export function LabelTemplateForm({
     <form action={action} className="space-y-4">
       {values?.id && <input type="hidden" name="id" value={values.id} />}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Code" htmlFor="code" error={fe.code}>
-          <Input id="code" name="code" required defaultValue={values?.code} readOnly={editing} className="font-mono uppercase" />
-        </Field>
-        <Field label="Name" htmlFor="name" error={fe.name}>
-          <Input id="name" name="name" required defaultValue={values?.name} />
-        </Field>
-        <Field label="Applies to" htmlFor="appliesTo" error={fe.appliesTo}>
+        <NameAndCode nameLabel="Name" defaultName={values?.name} defaultCode={values?.code} codeReadOnly={editing} placeholder="e.g. Finished product label" nameError={fe.name} codeError={fe.code} prefix="LBL-" max={30} />
+        <Field label="Labels for" htmlFor="appliesTo" error={fe.appliesTo}>
           <Select
             id="appliesTo"
             name="appliesTo"
@@ -163,33 +158,38 @@ export function LabelTemplateForm({
             }}
           >
             {appliesTo.map((a) => (
-              <option key={a} value={a}>{a.replace("_", " ")}</option>
+              <option key={a} value={a}>{APPLIES_TEXT[a] ?? a.replace(/_/g, " ")}</option>
             ))}
           </Select>
         </Field>
-        <Field label="Layout template (kind label)" htmlFor="documentTemplateId" error={fe.documentTemplateId}>
+        <Field label="Label size" htmlFor="mediaWidthMm" error={fe.mediaWidthMm ?? fe.mediaHeightMm} hint="Width × height in mm (the paper in the label printer).">
+          <div className="flex items-center gap-2">
+            <Input id="mediaWidthMm" name="mediaWidthMm" inputMode="decimal" defaultValue={values?.mediaWidthMm ?? "100"} required aria-label="Width (mm)" className="w-24" />
+            <span aria-hidden>×</span>
+            <Input id="mediaHeightMm" name="mediaHeightMm" inputMode="decimal" defaultValue={values?.mediaHeightMm ?? "50"} required aria-label="Height (mm)" className="w-24" />
+            <span className="text-[13px] text-muted">mm</span>
+          </div>
+        </Field>
+      </div>
+      <MoreDetails open={!!(fe.documentTemplateId || fe.symbology || fe.copiesDefault || fe.dpi)}>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Layout" htmlFor="documentTemplateId" error={fe.documentTemplateId}>
           <Select id="documentTemplateId" name="documentTemplateId" defaultValue={values?.documentTemplateId} required>
             {layouts.map((l) => (
-              <option key={l.id} value={l.id}>{l.code} · {l.name}</option>
+              <option key={l.id} value={l.id}>{l.name}</option>
             ))}
           </Select>
         </Field>
-        <Field label="Symbology" htmlFor="symbology" error={fe.symbology} hint="QR for phones (default); Code 128 for linear scanners, labels ≥ 80 mm wide.">
+        <Field label="Barcode type" htmlFor="symbology" error={fe.symbology} hint="QR for phones (most labels); Code 128 for older scanners, labels ≥ 80 mm wide.">
           <Select id="symbology" name="symbology" defaultValue={values?.symbology ?? "qr"}>
             <option value="qr">QR Code</option>
             <option value="code128">Code 128</option>
           </Select>
         </Field>
-        <Field label="Default copies" htmlFor="copiesDefault" error={fe.copiesDefault}>
+        <Field label="Copies each time" htmlFor="copiesDefault" error={fe.copiesDefault}>
           <Input id="copiesDefault" name="copiesDefault" type="number" min={1} max={99} defaultValue={values?.copiesDefault ?? 1} required />
         </Field>
-        <Field label="Width (mm)" htmlFor="mediaWidthMm" error={fe.mediaWidthMm} hint="Assumed media: 50 × 30, 100 × 50, 100 × 150 mm (A-RPT-08).">
-          <Input id="mediaWidthMm" name="mediaWidthMm" inputMode="decimal" defaultValue={values?.mediaWidthMm ?? "100"} required />
-        </Field>
-        <Field label="Height (mm)" htmlFor="mediaHeightMm" error={fe.mediaHeightMm}>
-          <Input id="mediaHeightMm" name="mediaHeightMm" inputMode="decimal" defaultValue={values?.mediaHeightMm ?? "50"} required />
-        </Field>
-        <Field label="Printer resolution" htmlFor="dpi" error={fe.dpi}>
+        <Field label="Printer sharpness (dpi)" htmlFor="dpi" error={fe.dpi}>
           <Select id="dpi" name="dpi" defaultValue={String(values?.dpi ?? 203)}>
             <option value="203">203 dpi</option>
             <option value="300">300 dpi</option>
@@ -197,20 +197,21 @@ export function LabelTemplateForm({
           </Select>
         </Field>
       </div>
+      </MoreDetails>
       <fieldset>
-        <legend className="mb-2 text-[13px] font-medium">Printed fields</legend>
+        <legend className="mb-2 text-[14px] font-medium">What is printed on the label</legend>
         <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
           {fieldKeys.map((k) => (
-            <label key={k} className="flex min-h-[36px] items-center gap-2 text-[13px]">
+            <label key={k} className="flex min-h-[44px] items-center gap-2 text-[14px]">
               <input type="checkbox" name="fields" value={k} checked={fields.includes(k)} onChange={(e) => setFields((f) => (e.target.checked ? [...f, k] : f.filter((x) => x !== k)))} className="h-5 w-5" />
               {k.replace(/_/g, " ")}
             </label>
           ))}
         </div>
-        <p className="mt-1 text-[12px] text-muted">Label wording such as allergen or storage text is QA-validated content (docs/reports-and-templates.md §8.3).</p>
+        <p className="mt-1 text-[13px] text-muted">Words such as allergen or storage text must be checked by QA.</p>
       </fieldset>
       <FormMessage state={state} />
-      <SubmitButton variant="cta" pendingText="Saving…">{editing ? "Save (returns to draft)" : "Create label template"}</SubmitButton>
+      <SubmitButton variant="cta" pendingText="Saving…">{editing ? "Save (QA must OK it again)" : "Make the label"}</SubmitButton>
     </form>
   );
 }
@@ -226,7 +227,7 @@ export function LabelStatusOp({ id, op }: { id: string; op: "approve" | "retire"
           <Input id="retire-reason" name="reason" required minLength={5} />
         </Field>
       )}
-      <SubmitButton variant={op === "approve" ? "cta" : "danger"} pendingText="Saving…">{op === "approve" ? "Approve for printing" : "Retire template"}</SubmitButton>
+      <SubmitButton variant={op === "approve" ? "cta" : "danger"} pendingText="Saving…">{op === "approve" ? "OK for printing" : "Stop using this label"}</SubmitButton>
       <FormMessage state={state} />
     </form>
   );
@@ -240,27 +241,26 @@ export function StationForm({ values }: { values?: { id: string; code: string; n
     <form action={action} className="space-y-3">
       {values && <input type="hidden" name="id" value={values.id} />}
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Code" htmlFor={`code-${p}`} error={fe.code}>
-          <Input id={`code-${p}`} name="code" required defaultValue={values?.code} readOnly={!!values} className="font-mono uppercase" />
-        </Field>
-        <Field label="Name" htmlFor={`name-${p}`} error={fe.name}>
-          <Input id={`name-${p}`} name="name" required defaultValue={values?.name} placeholder="Warehouse label desk" />
-        </Field>
-        <Field label="Printer name" htmlFor={`printer-${p}`} error={fe.printerName} hint="As shown in the station's print dialog.">
+        <NameAndCode idPrefix={`${p}-`} nameLabel="Name of the place" defaultName={values?.name} defaultCode={values?.code} codeReadOnly={!!values} placeholder="Warehouse label desk" nameError={fe.name} codeError={fe.code} max={20} />
+        <Field label="Printer name" htmlFor={`printer-${p}`} error={fe.printerName} hint="As shown when you press Print on that computer.">
           <Input id={`printer-${p}`} name="printerName" required defaultValue={values?.printerName} />
         </Field>
-        <Field label="Active" htmlFor={`active-${p}`}>
-          <Select id={`active-${p}`} name="isActive" defaultValue={values?.isActive === false ? "false" : "true"}>
-            <option value="true">Active</option>
-            <option value="false">Inactive</option>
-          </Select>
-        </Field>
       </div>
-      <Field label="Notes (media size, location)" htmlFor={`notes-${p}`}>
-        <Input id={`notes-${p}`} name="notes" defaultValue={values?.notes ?? ""} />
-      </Field>
+      <MoreDetails>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="In use" htmlFor={`active-${p}`}>
+            <Select id={`active-${p}`} name="isActive" defaultValue={values?.isActive === false ? "false" : "true"}>
+              <option value="true">Yes</option>
+              <option value="false">No (not used now)</option>
+            </Select>
+          </Field>
+          <Field label="Notes (label size, where it is)" htmlFor={`notes-${p}`}>
+            <Input id={`notes-${p}`} name="notes" defaultValue={values?.notes ?? ""} />
+          </Field>
+        </div>
+      </MoreDetails>
       <FormMessage state={state} />
-      <SubmitButton variant={values ? "secondary" : "cta"} pendingText="Saving…">{values ? "Save station" : "Add station"}</SubmitButton>
+      <SubmitButton variant={values ? "secondary" : "cta"} pendingText="Saving…">{values ? "Save" : "Add this printer place"}</SubmitButton>
     </form>
   );
 }

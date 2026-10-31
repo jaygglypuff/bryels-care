@@ -1,3 +1,5 @@
+import { NextStep, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { isInternalPath, recordHref } from "@/lib/record-links";
@@ -39,8 +41,8 @@ function Row({ a, decidable }: { a: ApprovalRow; decidable: boolean }) {
         </div>
         <p className="mt-1 text-[15px] font-medium">
           <a href={href} className="text-primary-text hover:underline">
-            {a.displayNumber && <span className="mr-1 font-mono">{a.displayNumber}</span>}
             {a.displayTitle}
+            {a.displayNumber && <span className="ml-1 font-mono text-[12px] text-muted">{a.displayNumber}</span>}
           </a>
         </p>
         {a.amountText && <p className="mt-0.5 text-[15px] font-semibold tabular-nums">{a.amountText}</p>}
@@ -84,11 +86,22 @@ export default async function ApprovalsPage() {
     <div className="space-y-5">
       <PageHeader
         title="To approve"
-        subtitle="What waits for your decision, oldest first. Tap Approve to decide here, or Open to see the full record."
-        actions={<LinkButton href="/action-centre" variant="secondary" size="sm">Action centre</LinkButton>}
+        actions={
+          <MoreMenu>
+            <LinkButton href="/action-centre" variant="secondary" size="sm">Problems & alerts</LinkButton>
+          </MoreMenu>
+        }
       />
-      {!refreshed && <Banner tone="warn" title="Showing the last refreshed list">The list could not be refreshed just now; it may be up to 5 minutes old.</Banner>}
-      {ctx.ownerOverride && <Banner tone="info" title="Owner override is on">You may decide any step and your own requests. Each such decision is recorded in the audit log.</Banner>}
+      <PageIntro>This screen is for the owner, managers and QA: things that wait for your yes or no, oldest first. Press Approve to decide here, or Open to read everything first.</PageIntro>
+      {decidable.length > 0 && (
+        <NextStep
+          text={<>Decide the oldest one: {decidable[0].displayTitle}</>}
+          action={{ label: "Open it", href: isInternalPath(decidable[0].link) ? decidable[0].link : (recordHref(decidable[0].entityType, decidable[0].entityId) ?? "/approvals") }}
+          waitingFor={decidable.length > 1 ? `${decidable.length - 1} more after this one.` : undefined}
+        />
+      )}
+      {!refreshed && <Banner tone="warn" title="This list may be a few minutes old">It could not be updated just now. Open the page again in a minute.</Banner>}
+      {ctx.ownerOverride && <Banner tone="info" title="You can decide everything here">As the owner you may decide any step and your own requests. Each decision is kept in the history of changes.</Banner>}
       <Card>
         {decidable.length === 0 ? (
           <EmptyState title="Nothing waits for your decision">

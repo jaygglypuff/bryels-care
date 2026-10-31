@@ -32,9 +32,13 @@ export default async function FloorPage({ searchParams }: { searchParams: Promis
   return (
     <main className="flex h-screen w-screen flex-col gap-[0.8vw] overflow-hidden bg-[var(--bg)] p-[1vw] text-[var(--fg)]" aria-label={`Floor screen, ${v.site.name}`}>
       <header className="flex items-center justify-between rounded-[1vw] bg-[var(--brand-800)] px-[1.4vw] py-[0.6vw] text-white">
-        <h1 className="font-display text-[2vw] font-semibold leading-tight">
-          Bryel&apos;s Care · {v.site.name}
-        </h1>
+        <div className="min-w-0">
+          <h1 className="font-display text-[2vw] font-semibold leading-tight">
+            Bryel&apos;s Care · {v.site.name}
+          </h1>
+          {/* ADR-088: the one sentence that says what this screen is for (TV size). */}
+          <p className="text-[1vw] leading-tight text-white/85">This screen is for everyone on the floor: what we are making now, what is next, and what waits. It updates by itself.</p>
+        </div>
         <div className="font-display text-[2vw] font-semibold">
           <FloorClock serverNow={v.generatedAt} />
         </div>

@@ -43,8 +43,8 @@ export function attentionItems(oc: OperationsCenter, approvals: number, stock: S
   if (stock?.lowStock) items.push({ key: "low", text: `${plural(stock.lowStock, "item is", "items are")} below the minimum stock`, href: `${stockHref}#low`, urgent: true });
   add("expected", (n) => `${plural(n, "supplier delivery is", "supplier deliveries are")} late`);
   const qc = st("qc");
-  if (qc && qc.count > 0) items.push({ key: "qc", text: `${plural(qc.count, "finished batch waits", "finished batches wait")} for the quality check`, href: qc.href });
-  if (stock?.onHold) items.push({ key: "hold", text: `${plural(stock.onHold, "lot is", "lots are")} on quality hold`, href: `${stockHref}#on-hold` });
+  if (qc && qc.count > 0) items.push({ key: "qc", text: `${plural(qc.count, "finished batch waits", "finished batches wait")} for the QA check`, href: qc.href });
+  if (stock?.onHold) items.push({ key: "hold", text: `${plural(stock.onHold, "lot is", "lots are")} stopped by QA`, href: `${stockHref}#on-hold` });
   if (stock?.expiring) items.push({ key: "expiring", text: `${plural(stock.expiring, "lot expires", "lots expire")} within 30 days`, href: `${stockHref}#expiring` });
   // ADR-086: shipments sent but not billed (oldest first in the invoice list).
   if (notInvoiced && notInvoiced.count > 0)
@@ -167,11 +167,11 @@ export function HomeCards({ home, approvals, stockHref, batchesHref }: { home: O
         </HomeCard>
       )}
       {k && (
-        <HomeCard title="Stock alerts" tone="orange" icon={<Boxes size={16} />} href={stockHref} label={`Stock alerts: ${k.total}`} value={k.total.toLocaleString("en-PH")}>
+        <HomeCard title="Stock to look at" tone="orange" icon={<Boxes size={16} />} href={stockHref} label={`Stock to look at: ${k.total}`} value={k.total.toLocaleString("en-PH")}>
           {[
             k.lowStock !== null ? `${k.lowStock} low` : null,
-            k.expiring !== null ? `${k.expiring} expiring ≤30 days` : null,
-            k.onHold !== null ? `${k.onHold} on hold` : null,
+            k.expiring !== null ? `${k.expiring} expire soon` : null,
+            k.onHold !== null ? `${k.onHold} stopped by QA` : null,
           ]
             .filter(Boolean)
             .join(" · ")}
@@ -198,7 +198,7 @@ export function SalesWeek({ week, scopeLabel, generatedAt }: { week: NonNullable
       title="Sales this week"
       subtitle={
         <>
-          {unit === "money" ? `${fmtKpi("money", total)} in the last 7 days` : `${plural(Number(total), "order", "orders")} confirmed in the last 7 days`} · Actual (confirmed orders, no estimates)
+          {unit === "money" ? `${fmtKpi("money", total)} in the last 7 days` : `${plural(Number(total), "order", "orders")} confirmed in the last 7 days`} · real figures, no estimates
         </>
       }
       meta={
@@ -270,8 +270,8 @@ export function ProductionByStage({ oc, all }: { oc: OperationsCenter; all: bool
     <section aria-labelledby="stages-h" className="min-w-0 rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)] sm:p-6">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 id="stages-h" className="font-display text-[17px] font-semibold text-fg">Production by stage</h2>
-        <Link href={all ? "/operations?scope=all" : "/operations"} className="text-[13px] font-medium text-primary-text hover:underline">
-          Operations Center
+        <Link href={all ? "/operations?scope=all" : "/operations"} className="inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text hover:underline">
+          See every step
         </Link>
       </div>
       <ul className="divide-y divide-line">
@@ -305,8 +305,8 @@ export function RecentActivity({ rows, showSite }: { rows: ActivityRow[]; showSi
     <section aria-labelledby="activity-h" className="min-w-0 rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)] sm:p-6">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3">
         <h2 id="activity-h" className="font-display text-[17px] font-semibold text-fg">Recent activity</h2>
-        <Link href="/admin/audit" className="text-[13px] font-medium text-primary-text hover:underline">
-          Full history
+        <Link href="/admin/audit" className="inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text hover:underline">
+          Full history of changes
         </Link>
       </div>
       {rows.length === 0 ? (

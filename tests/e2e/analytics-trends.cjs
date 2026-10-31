@@ -54,8 +54,12 @@ async function visit(page, path, viewport) {
   try {
     for (const viewport of [DESK, PHONE]) {
       const { context, page } = await signIn(browser, 'owner@bryels-care.test', viewport);
-      let body = await visit(page, '/dashboard', viewport);
-      assert(body.includes('Owner overview'), 'owner overview title');
+      // ADR-083/088: the detailed overview lives at /analytics/overview; /analytics is the short Reports page.
+      let body = await visit(page, '/analytics', viewport);
+      assert(body.includes('What sells best') && body.includes('Sales per week'), 'reports landing: one chart and the best sellers');
+      assert(!/KPI-[A-Z]{3}-\d/.test(body), 'no KPI codes on the reports landing');
+      body = await visit(page, '/analytics/overview?scope=all', viewport);
+      assert(body.includes('Business overview'), 'business overview title');
       assert(body.includes('Batch journey'), 'batch journey board kept');
       assert(body.includes('Site comparison'), 'site comparison for the owner');
       assert(/Updated \d\d:\d\d · All sites/.test(body), 'updated line with scope');
@@ -65,19 +69,20 @@ async function visit(page, path, viewport) {
       await frame.getByRole('button', { name: 'Table' }).click();
       assert(await frame.locator('table').first().isVisible(), 'table twin visible after toggle');
 
-      body = await visit(page, '/dashboard?period=last_month', viewport);
-      for (const area of ['operations', 'inventory', 'quality', 'sales']) {
+      body = await visit(page, '/analytics/overview?period=last_month', viewport);
+      for (const [area, title] of [['operations', 'Making products'], ['inventory', 'Stock numbers'], ['quality', 'Quality numbers'], ['sales', 'Sales numbers']]) {
         body = await visit(page, `/analytics/${area}?period=last_30`, viewport);
-        assert(body.toLowerCase().includes(`${area} dashboard`), `${area} dashboard title`);
+        assert(body.includes(title), `${area} title`);
+        assert(body.includes('This screen is for'), `${area} says what it is for`);
       }
       body = await visit(page, '/analytics/inventory', viewport);
-      assert(body.includes('Stock totals agree with the ledger'), 'inventory totals equal the ledger');
+      assert(body.includes('Stock totals checked: they match every stock movement'), 'inventory totals equal the ledger');
 
       body = await visit(page, '/analytics/kpi/KPI-SAL-01?scope=all&period=last_30', viewport);
       assert(body.includes('Orders confirmed') && body.includes('Total'), 'drill-down with total row');
 
       body = await visit(page, '/analytics/trends?k=KPI-SAL-01&k=KPI-OPS-02&k=KPI-FIN-02&grain=day&span=30&comparison=previous&scope=all', viewport);
-      assert(body.includes('Trends') && body.includes('Estimate'), 'trends with estimate chip');
+      assert(body.includes('Compare over time') && body.includes('Estimate'), 'trends with estimate chip');
       await page.getByRole('button', { name: 'Table' }).first().click();
       const rows = await page.locator('table tbody tr').count();
       assert(rows === 30, `trends table twin has 30 rows (got ${rows})`);
@@ -93,7 +98,7 @@ async function visit(page, path, viewport) {
       body = await visit(page, '/analytics/trends?k=a&k=b&k=c&k=d&k=e&k=f&k=g', viewport);
       assert(body.includes('Pick at most 6 KPIs'), 'more than six KPIs refused');
       body = await visit(page, '/analytics/definitions', viewport);
-      assert(body.includes('KPI definitions'), 'definitions page');
+      assert(body.includes('What each number means'), 'definitions page');
       await context.close();
     }
     // A site manager has no cross-site view.

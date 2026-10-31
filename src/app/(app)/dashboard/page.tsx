@@ -4,6 +4,8 @@ import { fmtDateTime } from "@/lib/qty";
 import { getOperatorHome } from "@/modules/analytics";
 import { floorTaskCounts, myFloorTasks } from "@/modules/production";
 import { PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { homeIntro } from "@/ui/role-names";
 import { homeHref } from "../nav";
 import { OperatorHome, TasksToday } from "./operator-home";
 import { OwnerHomePage } from "./owner-home";
@@ -23,7 +25,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     const [tiles, tasks] = await Promise.all([getOperatorHome(ctx), floor ? myFloorTasks(ctx) : Promise.resolve([])]);
     return (
       <>
-        <PageHeader title={`Good day, ${ctx.displayName.split(" ")[0]}`} subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · ${floor ? "Here is what to do next." : "What do you need to do?"}`} />
+        <PageHeader title={`Good day, ${ctx.displayName.split(" ")[0]}`} subtitle={ctx.currentSite.name} />
+        <PageIntro>{homeIntro(ctx.roleCodes)}</PageIntro>
         {floor ? (
           <TasksToday tasks={tasks} counts={floorTaskCounts(tasks)} tiles={tiles} canDailyCount={ctx.can("production.daily_log.view")} />
         ) : (

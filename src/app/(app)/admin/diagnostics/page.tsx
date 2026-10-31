@@ -10,6 +10,7 @@ import { syncDiagnostics } from "@/lib/offline/server/conflicts"; // W4D (US-7-0
 import { SyncDiagnosticsCard } from "@/ui/sync-status-diagnostics";
 import { Card, CardTitle, EmptyState, Input, PageHeader, Table, Td, buttonClass, cx } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../forbidden";
 import { cancelJobAction, rebuildBalancesAction, retryJobAction, runReconciliationAction } from "./actions";
 import { registerAppHooks } from "@/modules/wiring";
@@ -51,7 +52,8 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
 
   return (
     <div className="space-y-5">
-      <PageHeader title="Diagnostics" subtitle="Background jobs, the worker and stock reconciliation. Payloads are summarised; secrets are never shown." />
+      <PageHeader title="Health of the system" />
+      <PageIntro>This screen is for the IT person: whether the background worker runs, jobs that failed, backups, and the nightly check that stock totals match every stock movement. Nobody else needs it. Secrets are never shown.</PageIntro>
       {sp.ok && <Banner tone="ok" title={sp.ok} />}
       {sp.error && <Banner tone="bad" title="Not done">{sp.error}</Banner>}
       {ops && <OpsCards health={ops[0]} backups={ops[1]} variables={ops[2]} />}

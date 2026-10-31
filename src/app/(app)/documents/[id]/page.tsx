@@ -5,6 +5,7 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { getGeneratedDocument, pdfSetupMessage, reprintReasonOptions, type GeneratedDocumentDetail } from "@/modules/documents";
+import { PageIntro } from "@/ui/guide";
 import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
@@ -40,8 +41,8 @@ export default async function DocumentPage({ params, searchParams }: { params: P
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <PageHeader
-        title={d.documentNumber}
-        subtitle={`${d.documentKind.replace(/_/g, " ")} · ${d.template.code} v${d.template.versionNo} · Rev ${d.recordRevisionNo}`}
+        title={`${d.documentKind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())} ${d.documentNumber}`}
+        subtitle={`Layout version ${d.template.versionNo} · record change ${d.recordRevisionNo}`}
         actions={
           d.status === "ready" ? (
             <LinkButton href={isLabel && labelJobId ? `/print/labels/${labelJobId}` : `/print/documents/${d.id}`} target="_blank" variant="cta">
@@ -50,10 +51,11 @@ export default async function DocumentPage({ params, searchParams }: { params: P
           ) : undefined
         }
       />
+      <PageIntro>This screen is for one printed page made by the system (for example a batch record or delivery paper): which record it belongs to, every printed copy, the PDF, and printing it again with a reason.</PageIntro>
       {reprinted && <Banner tone="ok" title={`Reprint ${d.reprintNo} created`}>It is marked REPRINT {d.reprintNo} and logged with your reason.</Banner>}
-      {d.status === "void" && <Banner tone="bad" title="Void">{d.voidReason}</Banner>}
-      {d.status === "superseded" && <Banner tone="warn" title="Superseded">A newer document replaced this one. Do not use printed copies of it.</Banner>}
-      {d.status === "failed" && <Banner tone="bad" title="Rendering failed">{d.errorMessage}</Banner>}
+      {d.status === "void" && <Banner tone="bad" title="Cancelled – do not use">{d.voidReason}</Banner>}
+      {d.status === "superseded" && <Banner tone="warn" title="Replaced by a newer one">Do not use printed copies of this one.</Banner>}
+      {d.status === "failed" && <Banner tone="bad" title="It could not be made">{d.errorMessage} Tell the IT person.</Banner>}
 
       <Card>
         <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -76,7 +78,7 @@ export default async function DocumentPage({ params, searchParams }: { params: P
       </Card>
 
       <Card>
-        <CardTitle>Prints and reprints</CardTitle>
+        <CardTitle>Printed copies</CardTitle>
         <ol className="divide-y divide-line text-[13px]">
           {d.chain.map((c) => (
             <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
@@ -88,7 +90,7 @@ export default async function DocumentPage({ params, searchParams }: { params: P
       </Card>
 
       <Card>
-        <CardTitle>PDF file</CardTitle>
+        <CardTitle>PDF file (to save or send)</CardTitle>
         {d.pdfAvailable ? <DownloadPdfForm id={d.id} /> : <Banner tone="info" title="PDF rendering isn't set up">{pdfSetupMessage()}</Banner>}
       </Card>
 
@@ -98,13 +100,13 @@ export default async function DocumentPage({ params, searchParams }: { params: P
         <>
           {ctx.can("documents.reprint.create") && root?.status === "ready" && (
             <Card>
-              <CardTitle>Reprint</CardTitle>
+              <CardTitle>Print it again</CardTitle>
               <DocReprintForm id={root.id} reasons={reprintReasons} />
             </Card>
           )}
           {ctx.can("documents.generated_document.void") && d.status === "ready" && (
             <Card>
-              <CardTitle>Generated in error?</CardTitle>
+              <CardTitle>Made by mistake?</CardTitle>
               <DocVoidForm id={d.id} />
             </Card>
           )}

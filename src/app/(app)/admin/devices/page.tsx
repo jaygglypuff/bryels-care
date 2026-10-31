@@ -5,6 +5,7 @@ import { BUILT_OFFLINE_WORKFLOWS, WORKFLOW_LABEL } from "@/lib/offline/protocol"
 import { fmtDateTime } from "@/lib/qty";
 import { Card, EmptyState, PageHeader, cx } from "@/ui/core";
 import { Chip } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../forbidden";
 import { DeviceForms } from "./forms";
 
@@ -32,19 +33,19 @@ export default async function DevicesPage({ searchParams }: { searchParams: Prom
   return (
     <>
       <PageHeader
-        title="Devices"
-        subtitle="Phones and tablets registered for offline work at your sites. A device runs a workflow offline only when it is granted here and allowed by the site's offline policy (Settings › Offline)."
+        title="Phones and tablets"
       />
+      <PageIntro>This screen is for the IT person or the site manager: phones and tablets allowed to keep working without signal. Someone asks from the phone itself (on “Working without signal”); you say OK here and pick what it may do offline.</PageIntro>
       <nav aria-label="Device status" className="mb-4 flex flex-wrap gap-2">
         {TABS.map((t) => (
-          <Link key={t.key} href={t.key ? `/admin/devices?status=${t.key}` : "/admin/devices"} aria-current={status === t.key ? "page" : undefined} className={cx("rounded-full border px-3.5 py-1.5 text-[13px]", status === t.key ? "border-primary bg-primary-soft font-semibold" : "border-line")}>
+          <Link key={t.key} href={t.key ? `/admin/devices?status=${t.key}` : "/admin/devices"} aria-current={status === t.key ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[14px]", status === t.key ? "border-primary bg-primary-soft font-semibold" : "border-line")}>
             {t.label}
           </Link>
         ))}
       </nav>
       <Card>
         {rows.length === 0 ? (
-          <EmptyState title="No devices here">A person asks for registration from the device itself, on the Sync page. Requests then wait here for approval.</EmptyState>
+          <EmptyState title="No phones or tablets here">A person asks from the phone itself, on “Working without signal”. The request then waits here for your OK.</EmptyState>
         ) : (
           <ul className="divide-y divide-line" data-testid="device-list">
             {rows.map((d) => {

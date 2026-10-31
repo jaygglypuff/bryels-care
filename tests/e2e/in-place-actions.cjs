@@ -201,16 +201,17 @@ async function step(name, fn, u) {
   await step('admin: change setting', async () => {
     const p = ad.page;
     await p.goto(BASE + '/admin');
-    await p.goto(BASE + '/admin/settings');
+    // ADR-088: one group at a time; the key sits under "Technical name" in the setting's row.
+    await p.goto(BASE + '/admin/settings?group=inventory');
     const key = 'settings.ux.undo_window_seconds';
-    const card = p.locator('div, section, li').filter({ has: p.getByText(key, { exact: false }) }).filter({ has: p.locator('summary') }).last();
+    const card = p.locator(`[data-testid="setting-${key}"]`);
     await card.locator('summary', { hasText: 'Change' }).click();
     await p.locator(`[id="${key}-value"]`).fill('61');
     await p.locator(`[id="${key}-reason"]`).fill('Repro: one more second');
     await p.locator(`[id="${key}-password"]`).fill(PW);
     await card.getByRole('button', { name: 'Save change' }).click();
     await fresh(ad, p.getByText(/^Saved\. The change applies from the next request/).first(), 'setting message');
-    await fresh(ad, p.getByText(/^Organization: 61\b/).first(), 'setting refresh (value)');
+    await fresh(ad, card.getByText(/^Now: 61\b/).first(), 'setting refresh (value)');
   }, ad);
 
   // 7. Batch execution: weigh the first ingredient of the in-process batch.
@@ -246,13 +247,13 @@ async function step(name, fn, u) {
     await fresh(mg, p.getByRole('link', { name: /^Messages, \d+ unread$/ }).and(p.locator(`:not([aria-label="${before}"])`)), 'unread count refresh');
     // Wave 3 seeds (action centre rules, W3E/W3F data) give the manager several open items: the
     // acknowledged one leaves the list, the others stay.
-    const acks = p.getByRole('button', { name: 'Acknowledge' });
+    const acks = p.getByRole('button', { name: "I'm on it" });
     const n = await acks.count();
     await acks.first().click();
     if (n === 1) await fresh(mg, p.getByText('Nothing needs your attention').first(), 'acknowledge refresh');
     else {
       const ok = await p
-        .waitForFunction((m) => [...document.querySelectorAll('main button')].filter((b) => b.textContent.trim() === 'Acknowledge').length === m, n - 1, { timeout: 10000 })
+        .waitForFunction((m) => [...document.querySelectorAll('main button')].filter((b) => b.textContent.trim() === "I'm on it").length === m, n - 1, { timeout: 10000 })
         .then(() => true)
         .catch(() => false);
       if (!ok) throw new Error(`STALE: acknowledge refresh on ${p.url()} (still ${n} items to acknowledge)`);

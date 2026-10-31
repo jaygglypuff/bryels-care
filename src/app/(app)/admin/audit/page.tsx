@@ -2,9 +2,10 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
-import { AUDIT_PAGE_SIZE, listAuditEvents, listAuditModules, type AuditRow } from "@/modules/identity";
+import { listAuditEvents, listAuditModules, type AuditRow } from "@/modules/identity";
 import { Card, EmptyState, Input, LinkButton, PageHeader, Select, Table, Td, buttonClass } from "@/ui/core";
 import { Banner } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../forbidden";
 import { actionLabel, actionModule, entityHref, moduleLabel } from "./format";
 
@@ -13,11 +14,18 @@ export const dynamic = "force-dynamic";
 type SP = { module?: string; q?: string; before?: string };
 
 function Payload({ r }: { r: AuditRow }) {
-  if (r.before == null && r.after == null) return null;
+  if (r.before == null && r.after == null)
+    return (
+      <details className="mt-1">
+        <summary className="flex min-h-[40px] cursor-pointer items-center text-[13px] font-medium text-primary-text">Technical name</summary>
+        <p className="font-mono text-[11px] text-muted">{r.action}</p>
+      </details>
+    );
   return (
     <details className="mt-1">
-      <summary className="cursor-pointer text-[12px] font-medium text-primary-text">Before / after</summary>
+      <summary className="flex min-h-[40px] cursor-pointer items-center text-[13px] font-medium text-primary-text">What changed (before / after)</summary>
       <div className="mt-1 grid gap-2 sm:grid-cols-2">
+        <p className="text-[11px] text-muted sm:col-span-2">Technical name: <span className="font-mono">{r.action}</span></p>
         {(["before", "after"] as const).map((k) => (
           <div key={k} className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{k}</p>
@@ -61,9 +69,9 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
     if (e instanceof DomainError || (e && typeof e === "object" && "issues" in e)) {
       return (
         <>
-          <PageHeader title="Audit log" />
-          <Banner tone="warn" title="These filters are not valid" action={<LinkButton href="/admin/audit" variant="secondary">Show newest events</LinkButton>}>
-            {e instanceof DomainError ? e.message : "Use the module list and a document number of up to 80 characters."}
+          <PageHeader title="History of changes" />
+          <Banner tone="warn" title="This search did not work" action={<LinkButton href="/admin/audit" variant="secondary">Show the newest</LinkButton>}>
+            {e instanceof DomainError ? e.message : "Pick an area from the list and type a record number of up to 80 characters."}
           </Banner>
         </>
       );
@@ -72,7 +80,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
   }
   const modules = await listAuditModules(ctx);
   const siteCode = new Map(ctx.allowedSites.map((s) => [s.id, s.code]));
-  const where = (r: AuditRow) => (r.siteId ? (siteCode.get(r.siteId) ?? "—") : "Organization");
+  const where = (r: AuditRow) => (r.siteId ? (siteCode.get(r.siteId) ?? "—") : "Whole company");
   const qs = (extra: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
     for (const [k, v] of Object.entries({ module: filter.module, q: filter.q, ...extra })) if (v) p.set(k, v);
@@ -83,18 +91,19 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
   return (
     <>
       <PageHeader
-        title="Audit log"
-        subtitle={`Append-only record of every posted change · ${result.orgWide ? "all sites and organization-level events" : `sites ${ctx.allowedSites.map((s) => s.code).join(", ")}`} · newest first, ${AUDIT_PAGE_SIZE} per page`}
+        title="History of changes"
+        subtitle={`${result.orgWide ? "All sites" : ctx.allowedSites.map((s) => s.code).join(", ")} · newest first`}
       />
+      <PageIntro>This screen is for the owner and auditors: every change anyone saved, who did it, when and why. Nothing here can be changed or deleted. To find one record, type its number (for example a batch or order number).</PageIntro>
 
       <Card className="mb-4">
         <form method="get" action="/admin/audit" className="grid gap-3 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)_auto] sm:items-end">
           <div className="flex min-w-0 flex-col gap-1.5">
             <label htmlFor="module" className="text-[13px] font-medium">
-              Module
+              Area
             </label>
             <Select id="module" name="module" defaultValue={filter.module ?? ""}>
-              <option value="">All modules</option>
+              <option value="">All areas</option>
               {modules.map((m) => (
                 <option key={m} value={m}>
                   {moduleLabel(m)}
@@ -104,13 +113,13 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
           </div>
           <div className="flex min-w-0 flex-col gap-1.5">
             <label htmlFor="q" className="text-[13px] font-medium">
-              Document or entity number
+              Record number
             </label>
-            <Input id="q" name="q" defaultValue={filter.q ?? ""} placeholder="e.g. B-26-0003, SO-…, LOT-…" maxLength={80} />
+            <Input id="q" name="q" defaultValue={filter.q ?? ""} placeholder="For example a batch or order number" maxLength={80} />
           </div>
           <div className="flex gap-2">
             <button type="submit" className={buttonClass("primary")}>
-              Filter
+              Search
             </button>
             {(filter.module || filter.q) && (
               <Link href="/admin/audit" className={buttonClass("secondary")}>
@@ -123,19 +132,18 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
 
       <Card>
         {result.rows.length === 0 ? (
-          <EmptyState title={filter.before ? "No older events" : "No audit events match"} action={(filter.module || filter.q || filter.before) && <LinkButton href="/admin/audit" variant="secondary">Show newest events</LinkButton>}>
-            {filter.module || filter.q ? "Try another module or number." : "Events appear as soon as anything is posted."}
+          <EmptyState title={filter.before ? "Nothing older" : "Nothing found"} action={(filter.module || filter.q || filter.before) && <LinkButton href="/admin/audit" variant="secondary">Show the newest</LinkButton>}>
+            {filter.module || filter.q ? "Try another area or check the number." : "Changes appear here as soon as anyone saves something."}
           </EmptyState>
         ) : (
           <>
             <div className="hidden lg:block">
-              <Table head={["When", "Action", "Record", "Actor", "Site", "Reason"]}>
+              <Table head={["When", "What happened", "Record", "Who", "Site", "Why"]}>
                 {result.rows.map((r) => (
                   <tr key={r.id} className="align-top">
                     <Td className="whitespace-nowrap text-fg-2">{fmtDateTime(r.occurredAt)}</Td>
                     <Td>
                       <p className="font-medium text-fg">{actionLabel(r.action)}</p>
-                      <p className="font-mono text-[11px] text-muted">{r.action}</p>
                       <Payload r={r} />
                     </Td>
                     <Td>
@@ -169,7 +177,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
             </ul>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
               <span className="text-[12px] text-muted">
-                {result.rows.length} event{result.rows.length === 1 ? "" : "s"} on this page
+                {result.rows.length} change{result.rows.length === 1 ? "" : "s"} on this page
               </span>
               <div className="flex gap-2">
                 {filter.before && (
@@ -179,7 +187,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
                 )}
                 {result.nextCursor && (
                   <LinkButton href={qs({ before: result.nextCursor })} variant="secondary">
-                    Older events →
+                    Older →
                   </LinkButton>
                 )}
               </div>

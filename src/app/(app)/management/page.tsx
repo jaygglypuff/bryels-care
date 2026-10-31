@@ -1,19 +1,21 @@
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { Card, EmptyState, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
 import { buildNav, groupSections } from "../nav";
 
 export const metadata = { title: "Management" };
 
 /** What each Management section is for, in plain words (ADR-081). */
 const ABOUT: Record<string, string> = {
-  "Reports & analytics": "Dashboards, trends and the report library. Actual figures, with forecasts labelled as such.",
-  Purchasing: "Purchase requests and orders, suppliers and reorder suggestions.",
-  Finance: "Supplier bills, expenses, period locks and tax setup. Customer invoices and payments are under Sales & Customers.",
-  "Production setup": "Products, formulas, steps, work instructions, inspection plans and equipment.",
-  "Master data": "Materials, products, suppliers, locations, sites and lists used everywhere else.",
-  "People & access": "Users, roles, sign-in sessions and security.",
-  System: "Audit log, settings, approval rules, numbering, templates, imports and devices.",
+  "Reports & analytics": "How the business is doing: sales, batches, stock and quality numbers, and lists to download.",
+  Purchasing: "Buying from suppliers: requests, orders, what to buy again.",
+  Finance: "Supplier bills, expense claims, closing a month, tax set-up. Customer invoices are under Sales & Customers.",
+  "Production setup": "Recipes, steps, work instructions, QA test plans and machines.",
+  "Master data": "The lists everything else uses: materials, products, suppliers, places, sites.",
+  "People & access": "Who can sign in, their job (role), and sign-in safety.",
+  "IT settings": "Settings, who says OK to what, record numbers, labels, file imports, history of changes.",
+  System: "Settings, who says OK to what, record numbers, labels, file imports, history of changes.",
 };
 
 /**
@@ -26,24 +28,25 @@ export default async function ManagementPage() {
   const sections = group ? groupSections(group).sections : [];
   return (
     <div className="space-y-5">
-      <PageHeader title="Management" subtitle="People, money, purchasing, reports, setup and settings" />
+      <PageHeader title="Management" />
+      <PageIntro>This screen is for the owner, managers and the IT person: everything that is not daily floor work – reports, buying, money, set-up lists, people and settings. You only see what your job may open.</PageIntro>
       {sections.length === 0 ? (
-        <EmptyState title="Nothing to manage with your role">Management pages are for owners, managers and administrators. Ask your site manager if you need access.</EmptyState>
+        <EmptyState title="Nothing here for your job">These pages are for the owner, managers and the IT person. Ask your site manager if you need one.</EmptyState>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {sections.map((sec) => (
             <Card key={sec.name} aria-labelledby={`sec-${sec.name}`}>
               <h2 id={`sec-${sec.name}`} className="font-display text-[17px] font-semibold text-fg">{sec.name}</h2>
               {ABOUT[sec.name] && <p className="mt-1 text-[13px] text-muted">{ABOUT[sec.name]}</p>}
-              <ul className="mt-3 flex flex-wrap gap-1.5">
+              <ul className="mt-3 flex flex-wrap gap-2">
                 {sec.items.map((i) =>
                   i.planned ? (
-                    <li key={i.label} className="rounded-full border border-dashed border-line px-3 py-1.5 text-[12.5px] text-muted" aria-disabled="true">
+                    <li key={i.label} className="inline-flex min-h-[44px] items-center rounded-full border border-dashed border-line px-4 text-[13px] text-muted" aria-disabled="true">
                       {i.label} · {i.planned}
                     </li>
                   ) : (
                     <li key={i.href}>
-                      <Link href={i.href} className="block rounded-full border border-line bg-surface px-3 py-1.5 text-[12.5px] font-medium text-fg-2 hover:border-line-strong hover:text-fg">
+                      <Link href={i.href} className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-4 text-[14px] font-medium text-fg-2 hover:border-line-strong hover:text-fg">
                         {i.label}
                       </Link>
                     </li>

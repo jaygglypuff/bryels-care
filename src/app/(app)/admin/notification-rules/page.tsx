@@ -1,12 +1,14 @@
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { ACTION_KINDS, listNotificationRules, ruleRoleOptions } from "@/modules/action-centre";
-import { Card, CardTitle, EmptyState, PageHeader } from "@/ui/core";
+import { Card, EmptyState, PageHeader } from "@/ui/core";
 import { Chip } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
+import { plainRole } from "@/ui/role-names";
 import { Forbidden } from "../../forbidden";
 import { NotificationRuleForm } from "./forms";
 
-export const metadata = { title: "Notification rules" };
+export const metadata = { title: "Who gets which message" };
 
 /**
  * Notification rules and escalation (US-5-07): read with platform.notification_rule.view, change with
@@ -18,33 +20,33 @@ export default async function NotificationRulesPage() {
   if (!ctx.can("platform.notification_rule.view")) return <Forbidden what="notification rules" />;
   const [rules, roles] = await Promise.all([listNotificationRules(ctx), ruleRoleOptions(ctx)]);
   const admin = ctx.can("platform.notification_rule.admin");
-  const opts = { kinds: ACTION_KINDS.map((k) => ({ kind: k.kind, label: `${k.tab === "approvals" ? "Approval" : "Exception"}: ${k.label}` })), roles, sites: ctx.allowedSites.map((s) => ({ id: s.id, code: s.code })) };
-  const roleName = (c: string) => roles.find((r) => r.code === c)?.name ?? c;
+  const opts = { kinds: ACTION_KINDS.map((k) => ({ kind: k.kind, label: `${k.tab === "approvals" ? "Waits for OK" : "Problem"}: ${k.label}` })), roles, sites: ctx.allowedSites.map((s) => ({ id: s.id, code: s.code })) };
+  const roleName = (c: string) => plainRole(c, roles.find((r) => r.code === c)?.name ?? c);
   return (
     <div className="space-y-5">
-      <PageHeader title="Notification rules" subtitle="Who is told when an action-centre item opens, and who hears about it when nobody acknowledges it in time. Kinds without a rule still appear in the action centre for everyone allowed to act." />
+      <PageHeader title="Who gets which message" />
+      <PageIntro>This screen is for the owner and the IT person: when a problem appears (for example a late order), who gets a message, and who is told next if nobody reacts in time. Problems without a rule still show in “Problems &amp; alerts”.</PageIntro>
       <Card>
         {rules.length === 0 ? (
-          <EmptyState title="No rules yet">Without rules items still show in the action centre, but nobody is notified or escalated.</EmptyState>
+          <EmptyState title="No rules yet">Problems still show in “Problems &amp; alerts”, but nobody gets a message. Add a rule below.</EmptyState>
         ) : (
           <ul className="divide-y divide-line">
             {rules.map((r) => (
               <li key={r.id} className="py-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Chip tone={r.isActive ? "ok" : "neu"}>{r.isActive ? "Active" : "Off"}</Chip>
-                  <Chip tone={r.severity === "critical" ? "bad" : r.severity === "warning" ? "warn" : "info"}>{r.severity}</Chip>
+                  <Chip tone={r.isActive ? "ok" : "neu"}>{r.isActive ? "On" : "Off"}</Chip>
+                  <Chip tone={r.severity === "critical" ? "bad" : r.severity === "warning" ? "warn" : "info"}>{r.severity === "critical" ? "Urgent" : r.severity === "warning" ? "Soon" : "Info"}</Chip>
                   <span className="font-medium">{r.name}</span>
-                  <span className="text-[12px] text-muted">{r.kindLabel} · {r.siteId ? (ctx.allowedSites.find((s) => s.id === r.siteId)?.code ?? "site") : "every site"} · v{r.version} · changed {fmtDateTime(r.updatedAt)}</span>
+                  <span className="text-[12px] text-muted">{r.kindLabel} · {r.siteId ? (ctx.allowedSites.find((s) => s.id === r.siteId)?.code ?? "site") : "every site"} · changed {fmtDateTime(r.updatedAt)}</span>
                 </div>
                 <p className="mt-1 text-[13px] text-muted">
-                  Notifies {(r.ownerRoleCodes as string[]).map(roleName).join(", ") || "nobody"}
-                  {r.escalateAfterHours ? ` · escalates after ${r.escalateAfterHours} h to ${(r.escalationRoleCodes as string[]).map(roleName).join(", ")}` : " · no escalation"}
-                  {r.emailOnOpen ? " · email on open" : ""}
-                  {r.emailOnEscalation && r.escalateAfterHours ? " · email on escalation" : ""}
+                  Tells {(r.ownerRoleCodes as string[]).map(roleName).join(", ") || "nobody"}
+                  {r.escalateAfterHours ? ` · if nobody reacts in ${r.escalateAfterHours} h, also ${(r.escalationRoleCodes as string[]).map(roleName).join(", ")}` : ""}
+                  {r.emailOnOpen ? " · by email too" : ""}
                 </p>
                 {admin && (
                   <details className="mt-2">
-                    <summary className="cursor-pointer text-[13px] text-primary-text">Change</summary>
+                    <summary className="flex min-h-[44px] cursor-pointer items-center text-[14px] font-medium text-primary-text">Change</summary>
                     <div className="mt-2">
                       <NotificationRuleForm value={{ ...r, ownerRoleCodes: r.ownerRoleCodes as string[], escalationRoleCodes: r.escalationRoleCodes as string[] }} opts={opts} />
                     </div>
@@ -57,8 +59,10 @@ export default async function NotificationRulesPage() {
       </Card>
       {admin && (
         <Card>
-          <CardTitle>Add a rule</CardTitle>
+          <details>
+          <summary className="flex min-h-[44px] cursor-pointer items-center font-semibold text-primary-text">Add a rule</summary>
           <NotificationRuleForm value={{ itemKind: ACTION_KINDS[0].kind, siteId: null, name: "", severity: "warning", ownerRoleCodes: [], escalateAfterHours: null, escalationRoleCodes: [], emailOnOpen: false, emailOnEscalation: true, isActive: true }} opts={opts} />
+          </details>
         </Card>
       )}
     </div>

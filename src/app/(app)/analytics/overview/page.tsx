@@ -3,6 +3,7 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getOwnerDashboard, getOwnerOverview } from "@/modules/analytics";
 import { EmptyState, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
 import { ScopePeriodBar } from "../kpi-ui";
 import { OwnerOverview } from "../../dashboard/owner-overview";
 import { Forbidden } from "../../forbidden";
@@ -39,9 +40,10 @@ export default async function BusinessOverviewPage({ searchParams }: { searchPar
     <>
       <PageHeader
         title="Business overview"
-        subtitle={`${kpi.scope.label} · ${kpi.period.label} · every number opens the records behind it`}
+        subtitle={`${kpi.scope.label} · ${kpi.period.label}`}
         actions={<ScopePeriodBar basePath="/analytics/overview" scope={kpi.scope} period={kpi.period} sites={ctx.allowedSites} canAll={kpi.canCrossSite} />}
       />
+      <PageIntro>This screen is for the owner: every number about the business on one page, with the sites side by side. Tap any card to see the records behind it. For a short summary, open Reports.</PageIntro>
       <OwnerOverview data={data} kpi={kpi} canAudit={ctx.can("platform.audit.view")} />
     </>
   );

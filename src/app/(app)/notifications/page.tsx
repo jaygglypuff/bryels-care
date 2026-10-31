@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageIntro } from "@/ui/guide";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { listMyNotifications } from "@/modules/platform";
@@ -22,7 +23,6 @@ export default async function NotificationsPage({ searchParams }: { searchParams
     <div className="space-y-5">
       <PageHeader
         title="Messages"
-        subtitle="Alerts and items waiting for you. Tap Open to go to the record. Acknowledge an item once you are dealing with it; it stays in your history."
         actions={
           <>
             <LinkButton href={all ? "/notifications" : "/notifications?show=all"} variant="secondary" size="sm">{all ? "Open only" : "Show history"}</LinkButton>
@@ -34,6 +34,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
           </>
         }
       />
+      <PageIntro>This screen is for everyone: messages the system sent you. Tap Open to go to the thing it is about. Press “I&apos;m on it” when you are dealing with it.</PageIntro>
       {ctx.can("quality.disposition.view") && (
         <p className="text-[13px] text-muted">
           QA decisions waiting are listed in the <Link className="text-primary-text hover:underline" href="/quality">QA queue</Link>.
@@ -61,7 +62,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
                       <a href={`/notifications/open/${n.id}`} className="text-primary-text hover:underline">{n.title}</a>
                     </p>
                     <p className="mt-0.5 break-words text-[13px] font-normal text-muted">{n.body}</p>
-                    {n.acknowledgedAt && <p className="mt-0.5 text-[12px] text-muted">Acknowledged {fmtDateTime(n.acknowledgedAt)}</p>}
+                    {n.acknowledgedAt && <p className="mt-0.5 text-[12px] text-muted">You said you&apos;re on it · {fmtDateTime(n.acknowledgedAt)}</p>}
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
                     <a href={`/notifications/open/${n.id}`} className={buttonClass("primary", "sm")} aria-label={`Open: ${n.title}`}>
@@ -77,7 +78,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
                       )}
                       <form action={acknowledgeAction}>
                         <input type="hidden" name="id" value={n.id} />
-                        <button className={buttonClass("secondary", "sm")}>Acknowledge</button>
+                        <button className={buttonClass("secondary", "sm")}>I&apos;m on it</button>
                       </form>
                     </div>
                   )}

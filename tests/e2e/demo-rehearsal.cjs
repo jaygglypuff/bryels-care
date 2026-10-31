@@ -756,9 +756,9 @@ async function kpiValue(page, caption) {
   {
     const { context, page } = await asUser('manager.nfd@bryels-care.test');
     await page.goto(BASE + '/reports/RPT-SAL-SHIPMENTS?period=today');
-    await expectText(page, 'Shipments and delivery receipts');
+    await expectText(page, 'Shipments and delivery papers');
     await expectText(page, facts.orderNumber);
-    const href = await page.getByRole('link', { name: 'CSV' }).getAttribute('href');
+    const href = await page.locator('a', { hasText: 'Download as CSV' }).first().getAttribute('href');
     const res = await page.request.get(BASE + href);
     assert(res.ok(), 'report export HTTP ' + res.status());
     const csv = await res.text();

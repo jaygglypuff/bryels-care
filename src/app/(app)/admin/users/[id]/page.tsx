@@ -6,6 +6,8 @@ import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { type SessionView, type UserDetail, getUser, grantableRoles, listActiveSessions, warehousesForSites } from "@/modules/identity";
 import { Card, CardTitle, Dl, EmptyState, Input, PageHeader, Select } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
+import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { plainRole, plainRoleName } from "@/ui/role-names";
 import { Forbidden } from "../../../forbidden";
 import { actionLabel, moduleLabel } from "../../audit/format";
 import { StepUpGate } from "../step-up-gate";
@@ -43,10 +45,20 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
     <>
       <p className="mb-2 text-[13px]">
         <Link href="/admin/users" className="text-primary-text hover:underline">
-          ← Users
+          ← People
         </Link>
       </p>
       <PageHeader title={u.displayName} subtitle={u.email} actions={<UserStatusChip status={u.status} />} />
+      <PageIntro>This screen is for the owner and the IT person: what this person may do (their job), where, and their account. Changes are kept in the history of changes.</PageIntro>
+      {!self && u.status === "invited" && (
+        <NextStep text={`${u.displayName} has not signed in yet.`} waitingFor="They must open the link in their email (or the link you gave them) and choose a password." />
+      )}
+      {!self && u.status === "active" && d.assignments.length === 0 && canAssign && (
+        <NextStep text={`Give ${u.displayName} a job (role) so they can use the app.`} action={{ label: "Give a job", href: "#grant" }} />
+      )}
+      {!self && u.status === "locked" && canAdmin && (
+        <NextStep text="This account is locked. Unlock it only after you checked it is really them (for example by phone)." action={{ label: "Unlock", href: "#account-actions" }} />
+      )}
       {self && (
         <div className="mb-4">
           <Banner tone="info" title="This is your own account">
@@ -83,14 +95,14 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
       {u.status === "deactivated" && (
         <div className="mb-4">
           <Banner tone="neu" title="This account is deactivated">
-            {u.deactivatedAt ? `Since ${fmtDateTime(u.deactivatedAt)}. ` : ""}Every request by this person is refused. The record stays for the audit trail.
+            {u.deactivatedAt ? `Since ${fmtDateTime(u.deactivatedAt)}. ` : ""}They cannot sign in. Their name stays on past records and in the history of changes.
           </Banner>
         </div>
       )}
       {u.status === "locked" && (
         <div className="mb-4">
           <Banner tone="bad" title="This account is locked">
-            {u.failedLoginCount >= 5 ? `Locked after ${u.failedLoginCount} failed sign-in attempts.` : "Locked by an administrator."} The user cannot sign in until it is unlocked.
+            {u.failedLoginCount >= 5 ? `Locked after ${u.failedLoginCount} failed sign-in attempts.` : "Locked by the IT person or the owner."} They cannot sign in until it is unlocked.
           </Banner>
         </div>
       )}
@@ -112,7 +124,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
             {ctx.can("identity.user.edit") && u.status !== "deactivated" && (
               <div className="mt-4 border-t border-line pt-4">
                 <CommandForm userId={u.id} op="rename" label="Save name">
-                  <label htmlFor="displayName" className="text-[13px] font-medium text-fg">Display name</label>
+                  <label htmlFor="displayName" className="text-[13px] font-medium text-fg">Name shown in the app</label>
                   <Input id="displayName" name="displayName" defaultValue={u.displayName} required minLength={2} maxLength={120} />
                 </CommandForm>
               </div>
@@ -120,33 +132,34 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
           </Card>
 
           {canAdmin && (
-            <Card>
-              <CardTitle>Account actions</CardTitle>
+            <div id="account-actions">
+            <MoreDetails title="⋯ More: sign out, new password, lock or switch off this account" open={u.status === "locked"}>
               <div className="flex flex-col gap-5">
                 {u.status === "active" && (
                   <>
                     <CommandForm userId={u.id} op="sign_out_all" label="Sign out everywhere" reason={{ label: "Reason for signing out", hint: "For example: phone reported lost." }} />
-                    <CommandForm userId={u.id} op="force_reset" label="Force password reset" reason={{ label: "Reason for the reset" }} />
+                    <CommandForm userId={u.id} op="force_reset" label="Make them choose a new password" reason={{ label: "Reason for the reset" }} />
                     <CommandForm userId={u.id} op="lock" label="Lock account" variant="danger" reason={{ label: "Reason for locking" }} />
                   </>
                 )}
                 {u.status === "locked" && <CommandForm userId={u.id} op="unlock" label="Unlock account" variant="cta" reason={{ label: "Reason for unlocking", hint: "For example: identity confirmed by phone." }} />}
                 {(u.status === "active" || u.status === "locked") && (
-                  <CommandForm userId={u.id} op="deactivate" label="Deactivate (offboarding)" variant="danger" reason={{ label: "Reason for deactivation", hint: "Ends every role, signs out every device, voids links." }} />
+                  <CommandForm userId={u.id} op="deactivate" label="Switch off (person left)" variant="danger" reason={{ label: "Why", hint: "Ends every job, signs out every device, stops old links." }} />
                 )}
-                {u.status === "deactivated" && <CommandForm userId={u.id} op="reactivate" label="Reactivate" variant="cta" reason={{ label: "Reason for reactivation", hint: "No role comes back automatically." }} />}
+                {u.status === "deactivated" && <CommandForm userId={u.id} op="reactivate" label="Switch on again" variant="cta" reason={{ label: "Why", hint: "Their old jobs do not come back by themselves; give them again." }} />}
                 {d.mfaEnrolled && ctx.can("identity.mfa.admin") && (
                   <CommandForm userId={u.id} op="reset_mfa" label="Reset two-step sign-in" reason={{ label: "Reason for the reset", hint: "For example: new phone, identity confirmed in person." }} />
                 )}
               </div>
-            </Card>
+            </MoreDetails>
+            </div>
           )}
 
           {d.history && (
             <Card>
-              <CardTitle action={<Link href={`/admin/audit?q=${encodeURIComponent(u.email)}`} className="text-[13px] font-medium text-primary-text hover:underline">Audit log</Link>}>Account history</CardTitle>
+              <CardTitle action={<Link href={`/admin/audit?q=${encodeURIComponent(u.email)}`} className="inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text hover:underline">Full history</Link>}>History of changes</CardTitle>
               {d.history.length === 0 ? (
-                <p className="text-[13px] text-muted">No account events recorded.</p>
+                <p className="text-[13px] text-muted">Nothing changed yet.</p>
               ) : (
                 <ul className="divide-y divide-line">
                   {d.history.map((h) => (
@@ -166,9 +179,9 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
 
         <div className="flex min-w-0 flex-col gap-4">
           <Card>
-            <CardTitle>Role assignments</CardTitle>
+            <CardTitle>Job (role) and where</CardTitle>
             {d.assignments.length === 0 ? (
-              <EmptyState title="No current assignments in your sites">{u.status === "active" ? "The user cannot sign in to anything until a role is granted." : undefined}</EmptyState>
+              <EmptyState title="No job at your sites yet">{u.status === "active" ? "They can sign in but see nothing until you give them a job below." : undefined}</EmptyState>
             ) : (
               <ul className="divide-y divide-line">
                 {d.assignments.map((a) => {
@@ -177,23 +190,23 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
                     <li key={a.id} className="py-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-medium text-fg">
-                          {a.roleName} {!a.roleIsSystem && <Chip tone="info">Custom</Chip>} {a.state === "scheduled" && <Chip tone="warn">Starts {fmtDate(a.validFrom)}</Chip>}
+                          {plainRoleName(a.roleName)} {!a.roleIsSystem && <Chip tone="info">Made here</Chip>} {a.state === "scheduled" && <Chip tone="warn">Starts {fmtDate(a.validFrom)}</Chip>}
                         </span>
-                        <span className="text-[13px] text-fg-2">{a.orgWide ? "All sites (organization-wide)" : `${a.siteCode} · ${a.siteName}`}</span>
+                        <span className="text-[13px] text-fg-2">{a.orgWide ? "All sites" : a.siteName}</span>
                       </div>
                       <p className="text-[12px] text-muted">
                         From {fmtDate(a.validFrom)}
                         {a.validTo ? ` to ${fmtDate(a.validTo)}` : ", no end date"}
-                        {a.warehouseIds ? ` · writes only in ${a.warehouseCodes.join(", ")}` : a.orgWide ? "" : " · whole site"}
+                        {a.warehouseIds ? ` · moves stock only in ${a.warehouseCodes.join(", ")}` : a.orgWide ? "" : " · whole site"}
                       </p>
                       {canAssign && (
                         <details className="mt-2">
-                          <summary className="cursor-pointer text-[13px] font-medium text-primary-text">Change</summary>
+                          <summary className="flex min-h-[44px] cursor-pointer items-center text-[14px] font-medium text-primary-text">Change</summary>
                           <div className="mt-3 flex flex-col gap-4 rounded-[14px] bg-surface-2 p-3">
                             {!a.orgWide && siteWh.length > 0 && (
                               <CommandForm userId={u.id} op="scope" label="Save warehouse limit" hidden={{ assignmentId: a.id }} reason={{ label: "Reason" }}>
                                 <fieldset className="flex flex-wrap gap-3">
-                                  <legend className="mb-1 text-[13px] font-medium text-fg">May post stock in (none ticked = whole site)</legend>
+                                  <legend className="mb-1 text-[13px] font-medium text-fg">May move stock in (none ticked = whole site)</legend>
                                   {siteWh.map((w) => (
                                     <label key={w.id} className="flex items-center gap-1.5 text-[13px]">
                                       <input type="checkbox" name="warehouseIds" value={w.id} defaultChecked={a.warehouseIds?.includes(w.id)} className="size-4" /> {w.code} · {w.name}
@@ -202,7 +215,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
                                 </fieldset>
                               </CommandForm>
                             )}
-                            <CommandForm userId={u.id} op="end_assignment" label="End this assignment" variant="danger" hidden={{ assignmentId: a.id }} reason={{ label: "Reason for ending" }} />
+                            <CommandForm userId={u.id} op="end_assignment" label="Take this job away" variant="danger" hidden={{ assignmentId: a.id }} reason={{ label: "Why" }} />
                           </div>
                         </details>
                       )}
@@ -211,19 +224,19 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
                 })}
               </ul>
             )}
-            {d.hiddenAssignments > 0 && <p className="mt-2 text-[12px] text-muted">{d.hiddenAssignments} assignment(s) at sites outside your scope are not shown.</p>}
+            {d.hiddenAssignments > 0 && <p className="mt-2 text-[12px] text-muted">{d.hiddenAssignments} job(s) at other sites are not shown to you.</p>}
             {canAssign && u.status !== "deactivated" && (
-              <details className="mt-3 border-t border-line pt-3">
-                <summary className="cursor-pointer text-[14px] font-semibold text-primary-text">Grant a role</summary>
+              <details id="grant" className="mt-3 border-t border-line pt-3" open={d.assignments.length === 0}>
+                <summary className="flex min-h-[44px] cursor-pointer items-center text-[15px] font-semibold text-primary-text">Give a job (role)</summary>
                 <div className="mt-3">
-                  <CommandForm userId={u.id} op="grant" label="Grant role" variant="cta">
-                    <label htmlFor="grant-role" className="text-[13px] font-medium text-fg">Role</label>
+                  <CommandForm userId={u.id} op="grant" label="Give this job" variant="cta">
+                    <label htmlFor="grant-role" className="text-[13px] font-medium text-fg">Job (role)</label>
                     <Select id="grant-role" name="roleId" required defaultValue="">
-                      <option value="" disabled>Choose a role…</option>
+                      <option value="" disabled>Choose a job…</option>
                       {roles.map((r) => (
                         <option key={r.id} value={r.id}>
-                          {r.name}
-                          {r.blockedReason && r.blockedReason !== "Site only" ? ` (${r.blockedReason})` : ""}
+                          {plainRole(r.code, r.name)}
+                          {r.blockedReason && r.blockedReason !== "Site only" ? " (needs the owner's OK)" : ""}
                         </option>
                       ))}
                     </Select>
@@ -231,25 +244,27 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
                     <Select id="grant-site" name="siteId" required defaultValue={ctx.currentSiteId}>
                       {ctx.allowedSites.map((s) => (
                         <option key={s.id} value={s.id}>
-                          {s.code} · {s.name}
+                          {s.name}
                         </option>
                       ))}
-                      {ctx.isOrganizationWide && <option value="org">All sites (owner, system admin, auditor only)</option>}
+                      {ctx.isOrganizationWide && <option value="org">All sites (only owner, IT person, auditor)</option>}
                     </Select>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex flex-col gap-1.5">
-                        <label htmlFor="grant-from" className="text-[13px] font-medium text-fg">Starts</label>
-                        <Input id="grant-from" name="validFrom" type="date" />
+                    <MoreDetails title="Start, end and a note (you can skip this)">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="flex flex-col gap-1.5">
+                          <label htmlFor="grant-from" className="text-[13px] font-medium text-fg">Starts (empty = today)</label>
+                          <Input id="grant-from" name="validFrom" type="date" />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label htmlFor="grant-to" className="text-[13px] font-medium text-fg">Ends (optional)</label>
+                          <Input id="grant-to" name="validTo" type="date" />
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-1.5">
-                        <label htmlFor="grant-to" className="text-[13px] font-medium text-fg">Ends (optional)</label>
-                        <Input id="grant-to" name="validTo" type="date" />
-                      </div>
-                    </div>
-                    <label htmlFor="grant-reason" className="text-[13px] font-medium text-fg">Note (optional)</label>
-                    <Input id="grant-reason" name="reason" maxLength={300} />
+                      <label htmlFor="grant-reason" className="text-[13px] font-medium text-fg">Note (optional)</label>
+                      <Input id="grant-reason" name="reason" maxLength={300} />
+                    </MoreDetails>
                   </CommandForm>
-                  <p className="mt-2 text-[12px] text-muted">Roles with restricted permissions you do not hold are granted by the owner. Warehouse limits are set after granting.</p>
+                  <p className="mt-2 text-[13px] text-muted">Jobs that need the owner&apos;s OK are given by the owner. A warehouse limit can be set after giving the job.</p>
                 </div>
               </details>
             )}
@@ -257,11 +272,11 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
 
           {d.endedAssignments.length > 0 && (
             <Card>
-              <CardTitle>Ended assignments</CardTitle>
+              <CardTitle>Jobs they had before</CardTitle>
               <ul className="divide-y divide-line text-[13px]">
                 {d.endedAssignments.map((a) => (
                   <li key={a.id} className="py-2">
-                    <span className="font-medium text-fg">{a.roleName}</span> · {a.orgWide ? "All sites" : a.siteCode} · {fmtDate(a.validFrom)} to {a.validTo ? fmtDate(a.validTo) : "—"}
+                    <span className="font-medium text-fg">{plainRoleName(a.roleName)}</span> · {a.orgWide ? "All sites" : a.siteCode} · {fmtDate(a.validFrom)} to {a.validTo ? fmtDate(a.validTo) : "—"}
                     {a.revokedReason && <span className="text-muted"> · “{a.revokedReason}”</span>}
                   </li>
                 ))}
@@ -271,7 +286,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
 
           {canSessions && (
             <Card>
-              <CardTitle>Active sessions</CardTitle>
+              <CardTitle>Where they are signed in</CardTitle>
               {sessions.length === 0 ? (
                 <p className="text-[13px] text-muted">Not signed in anywhere.</p>
               ) : (
@@ -279,7 +294,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
                   {sessions.map((s) => (
                     <li key={s.id} className="py-2.5">
                       <p className="font-medium text-fg">
-                        {s.deviceLabel ?? "Unknown device"} {s.deviceClass === "shared" && <Chip tone="info">Shared</Chip>} {s.privileged && <Chip tone="warn">Privileged</Chip>}
+                        {s.deviceLabel ?? "Unknown device"} {s.deviceClass === "shared" && <Chip tone="info">Shared</Chip>} {s.privileged && <Chip tone="warn">Can approve</Chip>}
                       </p>
                       <p className="text-[12px] text-muted">
                         Last active {fmtDateTime(s.lastSeenAt)}
@@ -287,7 +302,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
                       </p>
                       {ctx.can("identity.session.void") && (
                         <details className="mt-1">
-                          <summary className="cursor-pointer text-[13px] font-medium text-primary-text">Sign out this device</summary>
+                          <summary className="flex min-h-[44px] cursor-pointer items-center text-[14px] font-medium text-primary-text">Sign out this device</summary>
                           <div className="mt-2">
                             <CommandForm userId={u.id} op="revoke_session" label="Sign out" hidden={{ sessionId: s.id }} reason={{ label: "Reason" }} />
                           </div>
@@ -300,9 +315,8 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
             </Card>
           )}
 
-          <Card className="min-w-0">
-            <CardTitle action={<span className="text-[12px] text-muted">{d.permissionCount} permissions</span>}>Effective permissions</CardTitle>
-            <p className="mb-3 text-[13px] text-muted">Union of the permissions of the user&apos;s current roles. Each applies within its assignment&apos;s site.</p>
+          <MoreDetails title={`Everything they may do: ${d.permissionCount} technical names (for the IT person)`}>
+            <p className="text-[13px] text-muted">All the permissions of their current jobs together. Each one works only at the site of that job.</p>
             {d.permissionsByModule.length === 0 ? (
               <EmptyState title="No permissions" />
             ) : (
@@ -325,7 +339,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
                 ))}
               </div>
             )}
-          </Card>
+          </MoreDetails>
         </div>
       </div>
     </>
