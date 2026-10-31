@@ -6,7 +6,8 @@ import { SPECIAL_LOCATION_ROLES, inventoryBalances, locations, sites, warehouseS
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { assertUuid, diff, isReferenced, reqText, scanCode, uniqueConflict } from "./org-common";
+import { assertUuid, diff, isReferenced, optionalCode, reqText, scanCode, uniqueConflict } from "./org-common";
+import { assignMasterCode } from "@/lib/numbering";
 import { parseInput } from "./schemas";
 
 /**
@@ -44,7 +45,8 @@ export const SPECIAL_ROLE_KIND: Record<SpecialRole, string> = {
 const WarehouseInput = z
   .object({
     siteId: z.string().uuid("Choose a site."),
-    code: scanCode("Warehouse code", "WH2"),
+    /** ADR-088: optional; blank = the next WH-nnnn on create, kept on edit. */
+    code: optionalCode(scanCode("Warehouse code", "WH2")),
     name: reqText("the warehouse name", 120),
     warehouseKind: z.enum(WAREHOUSE_KINDS, { message: "Choose the warehouse kind." }),
   })
@@ -124,12 +126,18 @@ export async function createWarehouse(ctx: AuthContext, raw: unknown) {
   const v = parseInput(WarehouseInput, raw);
   ctx.requireSite(v.siteId);
   return db.transaction(async (tx) => {
+    const code =
+      v.code ??
+      (await assignMasterCode(tx, ctx.organizationId, "WH", async (c) => {
+        const r = await tx.select({ id: warehouses.id }).from(warehouses).innerJoin(sites, eq(sites.id, warehouses.siteId)).where(and(eq(sites.organizationId, ctx.organizationId), eq(warehouses.code, c))).limit(1);
+        return r.length > 0;
+      }));
     const [w] = await tx
       .insert(warehouses)
-      .values({ siteId: v.siteId, code: v.code, name: v.name, warehouseKind: v.warehouseKind })
+      .values({ siteId: v.siteId, code, name: v.name, warehouseKind: v.warehouseKind })
       .returning()
-      .catch((e) => uniqueConflict(e, `Warehouse code ${v.code} already exists at this site.`));
-    await audit(tx, ctx, { action: "masterdata.warehouse.created", entityType: "warehouse", entityId: w.id, entityNumber: w.code, siteId: w.siteId, after: v });
+      .catch((e) => uniqueConflict(e, `Warehouse code ${code} already exists at this site.`));
+    await audit(tx, ctx, { action: "masterdata.warehouse.created", entityType: "warehouse", entityId: w.id, entityNumber: w.code, siteId: w.siteId, after: { ...v, code, codeAssigned: !v.code } });
     return { ...w, missing: [...SPECIAL_LOCATION_ROLES] as SpecialRole[] };
   });
 }
@@ -139,15 +147,16 @@ export async function updateWarehouse(ctx: AuthContext, warehouseId: string, raw
   const v = parseInput(WarehouseInput.omit({ siteId: true }), raw);
   return db.transaction(async (tx) => {
     const before = await loadWarehouse(tx, ctx, warehouseId, true);
-    if (v.code !== before.code && (await isReferenced(tx, "warehouses", before.id)).referenced) {
+    const code = v.code ?? before.code;
+    if (code !== before.code && (await isReferenced(tx, "warehouses", before.id)).referenced) {
       throw new DomainError("state", `Warehouse code ${before.code} is in use; it can no longer change.`, { field: "code" });
     }
     const [after] = await tx
       .update(warehouses)
-      .set({ code: v.code, name: v.name, warehouseKind: v.warehouseKind })
+      .set({ code, name: v.name, warehouseKind: v.warehouseKind })
       .where(eq(warehouses.id, before.id))
       .returning()
-      .catch((e) => uniqueConflict(e, `Warehouse code ${v.code} already exists at this site.`));
+      .catch((e) => uniqueConflict(e, `Warehouse code ${code} already exists at this site.`));
     const d = diff(before, after, ["code", "name", "warehouseKind"]);
     if (d.changed.length) await audit(tx, ctx, { action: "masterdata.warehouse.updated", entityType: "warehouse", entityId: after.id, entityNumber: after.code, siteId: after.siteId, before: d.before, after: d.after });
     return after;

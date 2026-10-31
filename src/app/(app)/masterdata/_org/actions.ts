@@ -34,6 +34,7 @@ import {
   updateUom,
   updateWarehouse,
 } from "@/modules/masterdata";
+import { createMaterialWithUsualSupplier } from "@/modules/procurement";
 import { act, field, formInput } from "./act";
 
 /** Server actions for the W2G master data screens (thin adapters over src/modules/masterdata). */
@@ -115,11 +116,14 @@ export const saveMaterialAction: A = async (_p, fd) =>
   id(fd)
     ? act((ctx) => updateMaterial(ctx, id(fd), formInput(fd)), { revalidate: ["/masterdata/materials"], message: (m) => (m.warnings.length ? `Saved. ${m.warnings.join(" ")}` : "Material saved.") })
     : act((ctx) => createMaterialMaster(ctx, formInput(fd)), { revalidate: ["/masterdata/materials"], redirectTo: (m) => `/masterdata/materials/${m.id}?created=1` });
+/** ADR-088: the 3-question form; a usual supplier is proposed for the approved list in the same transaction. */
+export const createMaterialAction: A = async (_p, fd) =>
+  act((ctx) => createMaterialWithUsualSupplier(ctx, formInput(fd)), { revalidate: ["/masterdata/materials", "/procurement/suppliers"], redirectTo: (m) => `/masterdata/materials/${m.id}?created=1` });
 export const materialStatusAction: A = async (_p, fd) =>
   act((ctx) => changeMaterialStatus(ctx, { id: id(fd), status: field(fd, "status"), reason: field(fd, "reason") }), { revalidate: ["/masterdata/materials"], message: (m) => `Material is now ${m.status}.` });
 
 /* reason codes */
 export const saveReasonCodeAction: A = async (_p, fd) =>
   id(fd)
-    ? act((ctx) => updateReasonCode(ctx, id(fd), formInput(fd, ["appliesTo"])), { revalidate: ["/masterdata/reason-codes"], message: "Reason code saved." })
+    ? act((ctx) => updateReasonCode(ctx, id(fd), formInput(fd, ["appliesTo"])), { revalidate: ["/masterdata/reason-codes"], message: "Reason saved." })
     : act((ctx) => createReasonCode(ctx, formInput(fd, ["appliesTo"])), { revalidate: ["/masterdata/reason-codes"], redirectTo: (r) => `/masterdata/reason-codes/${r.id}?created=1` });

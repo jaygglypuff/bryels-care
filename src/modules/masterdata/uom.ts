@@ -7,7 +7,7 @@ import { UOM_DIMENSIONS, materials, uomConversions, uoms, users } from "@/db/sch
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { assertUuid, bool, diff, optText, optUuid, reqText, uniqueConflict } from "./org-common";
+import { assertUuid, bool, codeFromName, diff, optText, optUuid, optionalCode, reqText, uniqueConflict } from "./org-common";
 import { parseInput } from "./schemas";
 import { type ConversionStep, type Quantity, enteredEqualsBase, toBasePair } from "./uom-math";
 import { runInTx, type InTx } from "@/lib/tx";
@@ -23,10 +23,13 @@ import { runInTx, type InTx } from "@/lib/tx";
 
 const UomCreateInput = z
   .object({
-    code: z
-      .string()
-      .trim()
-      .regex(/^[A-Za-z][A-Za-z0-9_]{0,15}$/, "Unit code: letters, digits or underscore, starting with a letter (max 16), e.g. kg, drum25."),
+    /** ADR-088: optional short name shown next to quantities; blank = made from the name ("Steel drum" → steel_drum). */
+    code: optionalCode(
+      z
+        .string()
+        .trim()
+        .regex(/^[A-Za-z][A-Za-z0-9_]{0,15}$/, "Short name: letters, digits or underscore, starting with a letter (max 16), e.g. kg, drum25."),
+    ),
     name: reqText("the unit name", 60),
     dimension: z.enum(UOM_DIMENSIONS, { message: "Choose what the unit measures." }),
     isBase: bool(false),
@@ -62,18 +65,15 @@ export async function createUom(ctx: AuthContext, raw: unknown) {
       const [base] = await tx.select({ code: uoms.code }).from(uoms).where(and(eq(uoms.organizationId, ctx.organizationId), eq(uoms.dimension, v.dimension), eq(uoms.isBase, true))).limit(1);
       if (base) throw new DomainError("conflict", `${v.dimension} already has its base unit (${base.code}). A dimension has exactly one base unit.`, { field: "isBase" });
     }
-    const [dupe] = await tx
-      .select({ code: uoms.code })
-      .from(uoms)
-      .where(and(eq(uoms.organizationId, ctx.organizationId), sql`lower(${uoms.code}) = lower(${v.code})`))
-      .limit(1);
-    if (dupe) throw new DomainError("conflict", `Unit ${dupe.code} already exists.`, { field: "code" });
+    const taken = async (c: string) => (await tx.select({ code: uoms.code }).from(uoms).where(and(eq(uoms.organizationId, ctx.organizationId), sql`lower(${uoms.code}) = lower(${c})`)).limit(1)).length > 0;
+    if (v.code && (await taken(v.code))) throw new DomainError("conflict", `Unit ${v.code} already exists.`, { field: "code" });
+    const code = v.code ?? (await codeFromName(v.name, "snake", 16, taken));
     const [u] = await tx
       .insert(uoms)
-      .values({ organizationId: ctx.organizationId, ...v, createdBy: ctx.userId, updatedBy: ctx.userId })
+      .values({ organizationId: ctx.organizationId, ...v, code, createdBy: ctx.userId, updatedBy: ctx.userId })
       .returning()
-      .catch((e) => uniqueConflict(e, `Unit ${v.code} already exists.`));
-    await audit(tx, ctx, { action: "masterdata.uom.created", entityType: "uom", entityId: u.id, entityNumber: u.code, siteId: null, after: v });
+      .catch((e) => uniqueConflict(e, `Unit ${code} already exists.`));
+    await audit(tx, ctx, { action: "masterdata.uom.created", entityType: "uom", entityId: u.id, entityNumber: u.code, siteId: null, after: { ...v, code, codeAssigned: !v.code } });
     return u;
   });
 }

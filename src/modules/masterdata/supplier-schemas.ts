@@ -39,9 +39,11 @@ const supplierCode = z
   .trim()
   .toUpperCase()
   .regex(/^[A-Z0-9][A-Z0-9._-]{1,31}$/, { message: "Use 2 to 32 letters, digits, dots, dashes or underscores, e.g. SUP-0004." });
+const blankToNull = (v: unknown) => (v === undefined || v === null || (typeof v === "string" && v.trim() === "") ? null : v);
 const SupplierFields = z
   .object({
-    code: supplierCode,
+    /** ADR-088: optional everywhere; blank on create = the next SUP-nnnn, blank on edit = keep. */
+    code: z.preprocess(blankToNull, supplierCode.nullable()).optional(),
     name: z.string().trim().min(2, { message: "Enter the supplier name." }).max(200),
     contactName: optText(120),
     email: z
@@ -71,7 +73,8 @@ const suspensionReason = (v: { qualityStatus: string; qualityStatusReason: strin
 export const SupplierInputSchema = SupplierFields.superRefine(suspensionReason);
 /** Create: the code may be left blank; the next SUP-nnnn is assigned (ADR-075). */
 export const SupplierCreateSchema = SupplierFields.extend({
-  code: z.preprocess((v) => (v === undefined || v === null || (typeof v === "string" && v.trim() === "") ? null : v), supplierCode.nullable()),
+  /** A new supplier starts "new (not yet checked)" unless QA says otherwise. */
+  qualityStatus: z.enum(SUPPLIER_QUALITY_STATUSES, { message: "Choose a quality status." }).default("new"),
 })
   .strict()
   .superRefine(suspensionReason);

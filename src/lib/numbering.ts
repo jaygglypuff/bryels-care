@@ -19,7 +19,7 @@ export type NumberingRuleSpec = { prefix: string; pattern: string; resetPeriod: 
 
 const yearly = (prefix: string, width: number): NumberingRuleSpec => ({ prefix, pattern: "{PREFIX}-{YY}-{SEQ}", resetPeriod: "yearly", sequenceWidth: width, isGapless: false });
 
-/** Master-data codes (ADR-075): MAT-0001, never reset; past 9999 the number simply grows. */
+/** Master-data codes (ADR-075, ADR-088): MAT-0001, WH-0001, LINE-0001…, never reset; past 9999 the number simply grows. */
 const masterCode = (prefix: string): NumberingRuleSpec => ({ prefix, pattern: "{PREFIX}-{SEQ}", resetPeriod: "never", sequenceWidth: 4, isGapless: false });
 
 /** Built-in defaults for the MVP document types (A-PRD-04; output identical to the pre-W2F formats). */
@@ -79,6 +79,11 @@ export const NUMBERING_DEFAULTS = {
   CUS: masterCode("CUS"),
   LOC: masterCode("LOC"),
   EQP: masterCode("EQP"),
+  // ADR-088 (grade-5 standard): every set-up record is numbered by the system
+  WH: masterCode("WH"),
+  LINE: masterCode("LINE"),
+  DEP: masterCode("DEP"),
+  QCP: masterCode("QCP"),
 } satisfies Record<string, NumberingRuleSpec>;
 
 export type DocumentType = keyof typeof NUMBERING_DEFAULTS;
@@ -201,7 +206,7 @@ async function allocateSequence(tx: DbOrTx, organizationId: string, documentType
 }
 
 /** Master-data code types (ADR-075). */
-export const MASTER_CODE_TYPES = ["MAT", "PRD", "SUP", "CUS", "LOC", "EQP"] as const;
+export const MASTER_CODE_TYPES = ["MAT", "PRD", "SUP", "CUS", "LOC", "EQP", "WH", "LINE", "DEP", "QCP"] as const;
 export type MasterCodeType = (typeof MASTER_CODE_TYPES)[number];
 
 /**

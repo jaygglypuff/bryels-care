@@ -260,7 +260,12 @@ export async function createInspectionPlanAction(_: ActionState, fd: FormData): 
   let target: string;
   try {
     const ctx = await requireContext();
-    const r = await createInspectionPlan(ctx, { code: str(fd, "code"), name: str(fd, "name"), planKind: str(fd, "planKind"), productId: opt(fd, "productId"), materialId: opt(fd, "materialId") });
+    // ADR-088: one "Which item?" picker ("m:<id>" material, "p:<id>" product) replaces the two pickers.
+    const item = str(fd, "item") ?? "";
+    const productId = item.startsWith("p:") ? item.slice(2) : opt(fd, "productId");
+    const materialId = item.startsWith("m:") ? item.slice(2) : opt(fd, "materialId");
+    const planKind = item.startsWith("m:") ? "incoming" : str(fd, "planKind");
+    const r = await createInspectionPlan(ctx, { code: str(fd, "code"), name: str(fd, "name"), planKind, productId, materialId });
     target = `/masterdata/inspection-plans/${r.planId}`;
   } catch (e) {
     return toActionState(e);

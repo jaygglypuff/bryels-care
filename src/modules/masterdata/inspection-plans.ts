@@ -7,6 +7,7 @@ import { approverLabel } from "@/lib/auth/self-approval";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
+import { assignMasterCode } from "@/lib/numbering";
 import { CreateInspectionPlanInput, DecisionInput, SaveInspectionPlanDraftInput, parseInput } from "./schemas";
 import { approvalState, assertDraft, assertVersionTransition, businessToday, approvalSodConflict, canDecideStep, effectiveLabel, isIsoDate, recordApprovalDecision, requireAny, supersedeOverlapping } from "./versioning";
 
@@ -35,19 +36,26 @@ export async function createInspectionPlan(ctx: AuthContext, raw: unknown) {
   ctx.require("quality.inspection_plan.create");
   const input = parseInput(CreateInspectionPlanInput, raw);
   return db.transaction(async (tx) => {
-    const [dup] = await tx.select({ id: inspectionPlans.id }).from(inspectionPlans).where(and(eq(inspectionPlans.organizationId, ctx.organizationId), eq(inspectionPlans.code, input.code))).limit(1);
-    if (dup) throw new DomainError("conflict", `Plan code ${input.code} already exists; start a new revision of it instead.`, { fieldErrors: { code: "This code is already used." } });
+    const codeUsed = async (c: string) => (await tx.select({ id: inspectionPlans.id }).from(inspectionPlans).where(and(eq(inspectionPlans.organizationId, ctx.organizationId), eq(inspectionPlans.code, c))).limit(1)).length > 0;
+    if (input.code && (await codeUsed(input.code))) throw new DomainError("conflict", `Plan code ${input.code} already exists; start a new revision of it instead.`, { fieldErrors: { code: "This code is already used." } });
+    // ADR-088: a blank code gets the next QCP-nnnn.
+    const code = input.code ?? (await assignMasterCode(tx, ctx.organizationId, "QCP", codeUsed));
+    let itemName = "";
     if (input.productId) {
-      const [p] = await tx.select({ id: products.id }).from(products).where(and(eq(products.id, input.productId), eq(products.organizationId, ctx.organizationId)));
+      const [p] = await tx.select({ id: products.id, name: products.name }).from(products).where(and(eq(products.id, input.productId), eq(products.organizationId, ctx.organizationId)));
       if (!p) throw new DomainError("not_found", "Product not found.");
+      itemName = p.name;
     }
     if (input.materialId) {
-      const [m] = await tx.select({ id: materials.id }).from(materials).where(and(eq(materials.id, input.materialId), eq(materials.organizationId, ctx.organizationId)));
+      const [m] = await tx.select({ id: materials.id, name: materials.name }).from(materials).where(and(eq(materials.id, input.materialId), eq(materials.organizationId, ctx.organizationId)));
       if (!m) throw new DomainError("not_found", "Material not found.");
+      itemName = m.name;
     }
+    const KIND_WORD = { incoming: "on arrival", in_process: "while making", finished_product: "finished product" } as const;
+    const name = input.name ?? `Quality checks: ${itemName} (${KIND_WORD[input.planKind]})`.slice(0, 120);
     const [plan] = await tx
       .insert(inspectionPlans)
-      .values({ organizationId: ctx.organizationId, code: input.code, name: input.name, planKind: input.planKind, productId: input.productId, materialId: input.materialId, revisionNo: 1, status: "draft", changeSummary: "First revision", createdBy: ctx.userId })
+      .values({ organizationId: ctx.organizationId, code, name, planKind: input.planKind, productId: input.productId, materialId: input.materialId, revisionNo: 1, status: "draft", changeSummary: "First revision", createdBy: ctx.userId })
       .returning();
     await audit(tx, ctx, { action: "quality.inspection_plan.drafted", entityType: "inspection_plan", entityId: plan.id, entityNumber: lbl(plan.code, 1), siteId: null, after: { status: "draft", planKind: plan.planKind } });
     return { planId: plan.id };

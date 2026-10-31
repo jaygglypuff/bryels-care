@@ -6,7 +6,8 @@ import { departments, equipment, productionLines, sites } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { assertTransition, assertUuid, diff, isReferenced, optText, optUuid, reqText, scanCode, uniqueConflict } from "./org-common";
+import { assertTransition, assertUuid, diff, isReferenced, optText, optUuid, optionalCode, reqText, scanCode, uniqueConflict } from "./org-common";
+import { assignMasterCode } from "@/lib/numbering";
 import { parseInput } from "./schemas";
 
 /**
@@ -25,7 +26,8 @@ export const LINE_TRANSITIONS: Record<LineStatus, readonly LineStatus[]> = {
 const LineInput = z
   .object({
     siteId: z.string().uuid("Choose a site."),
-    code: scanCode("Line code", "SOAP-1"),
+    /** ADR-088: optional; blank = the next LINE-nnnn on create, kept on edit. */
+    code: optionalCode(scanCode("Line code", "SOAP-1")),
     name: reqText("the line name", 120),
     departmentId: optUuid,
     notes: optText(1000),
@@ -91,12 +93,15 @@ export async function createLine(ctx: AuthContext, raw: unknown) {
   ctx.requireSite(v.siteId);
   return db.transaction(async (tx) => {
     await assertDepartment(tx, v.siteId, v.departmentId);
+    const code =
+      v.code ??
+      (await assignMasterCode(tx, ctx.organizationId, "LINE", async (c) => (await tx.select({ id: productionLines.id }).from(productionLines).where(and(eq(productionLines.organizationId, ctx.organizationId), eq(productionLines.code, c))).limit(1)).length > 0));
     const [l] = await tx
       .insert(productionLines)
-      .values({ organizationId: ctx.organizationId, ...v, createdBy: ctx.userId, updatedBy: ctx.userId })
+      .values({ organizationId: ctx.organizationId, ...v, code, createdBy: ctx.userId, updatedBy: ctx.userId })
       .returning()
-      .catch((e) => uniqueConflict(e, `Line code ${v.code} already exists at this site.`));
-    await audit(tx, ctx, { action: "masterdata.production_line.created", entityType: "production_line", entityId: l.id, entityNumber: l.code, siteId: l.siteId, after: v });
+      .catch((e) => uniqueConflict(e, `Line code ${code} already exists at this site.`));
+    await audit(tx, ctx, { action: "masterdata.production_line.created", entityType: "production_line", entityId: l.id, entityNumber: l.code, siteId: l.siteId, after: { ...v, code, codeAssigned: !v.code } });
     return l;
   });
 }
@@ -106,16 +111,17 @@ export async function updateLine(ctx: AuthContext, lineId: string, raw: unknown)
   const v = parseInput(LineInput.omit({ siteId: true }), raw);
   return db.transaction(async (tx) => {
     const before = await loadLine(tx, ctx, lineId, true);
-    if (v.code !== before.code && (await isReferenced(tx, "production_lines", before.id)).referenced) {
+    const code = v.code ?? before.code;
+    if (code !== before.code && (await isReferenced(tx, "production_lines", before.id)).referenced) {
       throw new DomainError("state", `Line code ${before.code} is in use; it can no longer change.`, { field: "code" });
     }
     await assertDepartment(tx, before.siteId, v.departmentId);
     const [after] = await tx
       .update(productionLines)
-      .set({ ...v, updatedAt: new Date(), updatedBy: ctx.userId })
+      .set({ ...v, code, updatedAt: new Date(), updatedBy: ctx.userId })
       .where(eq(productionLines.id, before.id))
       .returning()
-      .catch((e) => uniqueConflict(e, `Line code ${v.code} already exists at this site.`));
+      .catch((e) => uniqueConflict(e, `Line code ${code} already exists at this site.`));
     const d = diff(before, after, ["code", "name", "departmentId", "notes"]);
     if (d.changed.length) await audit(tx, ctx, { action: "masterdata.production_line.updated", entityType: "production_line", entityId: after.id, entityNumber: after.code, siteId: after.siteId, before: d.before, after: d.after });
     if (d.changed.includes("name")) await tx.update(equipment).set({ lineLabel: after.name }).where(eq(equipment.productionLineId, after.id));

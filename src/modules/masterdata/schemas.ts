@@ -210,6 +210,31 @@ export const SaveWorkInstructionDraftInput = z
 
 /* ------------------------------------------------------------------ inspection plans */
 
+/** ADR-088: a test left without a code gets one from its name ("Appearance" → APPEARANCE); repeated names get -2, -3. */
+function fillTestCodes(v: unknown): unknown {
+  if (!v || typeof v !== "object" || !Array.isArray((v as { tests?: unknown }).tests)) return v;
+  const tests = (v as { tests: unknown[] }).tests;
+  const used = new Set(tests.map((t) => (t && typeof t === "object" && typeof (t as { testCode?: unknown }).testCode === "string" ? ((t as { testCode: string }).testCode.trim().toUpperCase()) : "")).filter(Boolean));
+  const filled = tests.map((t) => {
+    if (!t || typeof t !== "object") return t;
+    const r = t as { testCode?: unknown; name?: unknown };
+    if (typeof r.testCode === "string" && r.testCode.trim()) return t;
+    const base =
+      String(r.name ?? "")
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 36) || "TEST";
+    let code = base;
+    for (let i = 2; used.has(code); i += 1) code = `${base}-${i}`;
+    used.add(code);
+    return { ...r, testCode: code };
+  });
+  return { ...(v as object), tests: filled };
+}
+
 export const PlanTestInput = z
   .object({
     testCode: codeSchema("Test code"),
@@ -237,8 +262,10 @@ export type PlanTestInput = z.input<typeof PlanTestInput>;
 
 export const CreateInspectionPlanInput = z
   .object({
-    code: codeSchema("Plan code"),
-    name: reqText("the plan name", 120),
+    /** ADR-088: optional; blank = the next QCP-nnnn. */
+    code: z.preprocess((v) => (v === undefined || v === null || (typeof v === "string" && v.trim() === "") ? null : v), codeSchema("Plan code").nullable()),
+    /** ADR-088: optional; blank = "Quality checks: <item name>". */
+    name: optText(120),
     planKind: z.enum(["incoming", "in_process", "finished_product"]),
     productId: z
       .union([uuid, z.literal(""), z.null(), z.undefined()])
@@ -249,11 +276,14 @@ export const CreateInspectionPlanInput = z
   })
   .strict()
   .superRefine((p, ctx) => {
-    if (p.planKind === "incoming" && (!p.materialId || p.productId)) ctx.addIssue({ code: "custom", path: ["materialId"], message: "An incoming inspection plan applies to one material." });
-    if (p.planKind !== "incoming" && (!p.productId || p.materialId)) ctx.addIssue({ code: "custom", path: ["productId"], message: "In-process and finished-product plans apply to one product." });
+    if (!p.productId && !p.materialId) ctx.addIssue({ code: "custom", path: ["item"], message: "Choose the material or product these checks are for." });
+    else if (p.planKind === "incoming" && (!p.materialId || p.productId)) ctx.addIssue({ code: "custom", path: ["item"], message: "Checks when a delivery arrives are for a material. Choose a material." });
+    else if (p.planKind !== "incoming" && (!p.productId || p.materialId)) ctx.addIssue({ code: "custom", path: ["item"], message: "Checks while making or when finished are for a product. Choose a product." });
   });
 
-export const SaveInspectionPlanDraftInput = z
+export const SaveInspectionPlanDraftInput = z.preprocess(
+  fillTestCodes,
+  z
   .object({
     planId: uuid,
     name: reqText("the plan name", 120),
@@ -267,7 +297,8 @@ export const SaveInspectionPlanDraftInput = z
   .superRefine((p, ctx) => {
     const codes = p.tests.map((t) => t.testCode.toUpperCase());
     if (new Set(codes).size !== codes.length) ctx.addIssue({ code: "custom", path: ["tests"], message: "Test codes must be unique within a plan." });
-  });
+  }),
+);
 
 /* ------------------------------------------------------------------ equipment */
 
