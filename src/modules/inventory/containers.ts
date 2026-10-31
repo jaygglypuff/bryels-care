@@ -527,23 +527,23 @@ export function boxAllowedActions(
   const out: AllowedAction[] = [];
   const movable = (MOVABLE_BOX_STATUSES as readonly string[]).includes(box.status);
   const empty = box.contents.length === 0;
-  const frozen = box.frozenBy ? `Its location is frozen by count ${box.frozenBy}.` : undefined;
-  const why = !movable ? `The box is ${box.status}.` : empty ? "The box is empty." : frozen;
+  const frozen = box.frozenBy ? `Its shelf is being counted (${box.frozenBy}); no moves until the count is finished.` : undefined;
+  const why = !movable ? `The box is ${({ empty: "empty", void: "cancelled", shipped: "sent out", in_transit: "on the way" } as Record<string, string>)[box.status] ?? box.status}.` : empty ? "The box is empty." : frozen;
   if (ctx.can("inventory.movement.post")) {
     const kinds = [...new Set(box.contents.flatMap((c) => allowedDestinationKinds(c.qualityStatus, c.expiresOn)))];
-    const label = kinds.length === 0 || kinds.includes("storage") ? "Move box" : `Move box (only to ${kinds.join(" / ")})`;
+    const label = kinds.length === 0 || kinds.includes("storage") ? "Move box" : "Move box (only to a QA area)";
     out.push({ key: "move", label, href: `/inventory/move?box=${box.id}`, allowed: !why, reason: why });
   }
   if (ctx.can("inventory.container.create")) {
-    out.push({ key: "split", label: "Split", href: `/inventory/containers/${box.id}?op=split`, allowed: !why, reason: why });
-    out.push({ key: "merge", label: "Merge with…", href: `/inventory/containers/${box.id}?op=merge`, allowed: !why, reason: why });
+    out.push({ key: "split", label: "Split into smaller boxes", href: `/inventory/containers/${box.id}?op=split`, allowed: !why, reason: why });
+    out.push({ key: "merge", label: "Put together with other boxes", href: `/inventory/containers/${box.id}?op=merge`, allowed: !why, reason: why });
   }
   if (ctx.can("inventory.container.edit")) {
     out.push({ key: "repack", label: "Repack", href: `/inventory/containers/${box.id}?op=repack`, allowed: !why, reason: why });
-    if (box.status === "open" && !empty) out.push({ key: "seal", label: "Seal box", href: `/inventory/containers/${box.id}?op=seal`, allowed: true });
-    if (box.status === "sealed") out.push({ key: "reopen", label: "Reopen box", href: `/inventory/containers/${box.id}?op=reopen`, allowed: true });
+    if (box.status === "open" && !empty) out.push({ key: "seal", label: "Close the box", href: `/inventory/containers/${box.id}?op=seal`, allowed: true });
+    if (box.status === "sealed") out.push({ key: "reopen", label: "Open the box again", href: `/inventory/containers/${box.id}?op=reopen`, allowed: true });
   }
-  if (ctx.can("inventory.label_job.create")) out.push({ key: "label", label: "Print box label", href: `/print/box-label/${box.id}`, allowed: box.status !== "void", reason: box.status === "void" ? "The box is void." : undefined });
+  if (ctx.can("inventory.label_job.create")) out.push({ key: "label", label: "Print box label", href: `/print/box-label/${box.id}`, allowed: box.status !== "void", reason: box.status === "void" ? "The box is cancelled." : undefined });
   return out;
 }
 
@@ -587,7 +587,11 @@ export async function listContainers(ctx: AuthContext, f: ContainerFilter = {}) 
       containerKind: containers.containerKind,
       status: containers.status,
       locationCode: locations.code,
+      locationName: locations.name,
       packedAt: containers.packedAt,
+      // Grade-5 list (ADR-088): what is inside, by name, so the row starts with words, not a lot number.
+      itemNames: sql<string | null>`(select string_agg(distinct coalesce(m.name, p.name), ', ') from ${containerContents} cc join ${inventoryLots} l on l.id = cc.lot_id
+        left join materials m on m.id = l.material_id left join products p on p.id = l.product_id where cc.container_id = ${containers.id} and cc.qty_base > 0)`,
       contents: sql<string | null>`(select string_agg(l.lot_number || ' · ' || trim(to_char(cc.qty_base, 'FM999999999990.######')) || ' ' || cc.base_uom, ', ' order by l.lot_number)
         from ${containerContents} cc join ${inventoryLots} l on l.id = cc.lot_id where cc.container_id = ${containers.id} and cc.qty_base > 0)`,
       qualityStatuses: sql<string | null>`(select string_agg(distinct l.quality_status, ',') from ${containerContents} cc join ${inventoryLots} l on l.id = cc.lot_id where cc.container_id = ${containers.id} and cc.qty_base > 0)`,

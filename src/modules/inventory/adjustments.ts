@@ -445,6 +445,12 @@ export async function listAdjustments(ctx: AuthContext, f: { status?: string } =
       createdAt: stockAdjustments.createdAt,
       createdBy: users.displayName,
       lines: sql<number>`(select count(*)::int from ${stockAdjustmentLines} l where l.stock_adjustment_id = ${stockAdjustments.id})`,
+      // Grade-5 list (ADR-088): what was fixed, by name.
+      itemNames: sql<string | null>`(select string_agg(distinct coalesce(m.name, p.name), ', ') from ${stockAdjustmentLines} l
+        left join inventory_lots il on il.id = l.lot_id
+        left join materials m on m.id = coalesce(il.material_id, l.new_lot_material_id)
+        left join products p on p.id = coalesce(il.product_id, l.new_lot_product_id)
+        where l.stock_adjustment_id = ${stockAdjustments.id})`,
     })
     .from(stockAdjustments)
     .innerJoin(users, eq(users.id, stockAdjustments.createdBy))

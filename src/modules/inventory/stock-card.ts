@@ -16,6 +16,8 @@ export type StockCardLine = {
   movementType: string;
   fromCode: string | null;
   toCode: string | null;
+  fromName?: string | null;
+  toName?: string | null;
   container: string | null;
   qtyIn: string | null;
   qtyOut: string | null;
@@ -91,7 +93,7 @@ export async function getStockCard(ctx: AuthContext, f: { lotId: string; from: s
     .where(eq(stockMovements.lotId, lot.lot.id));
 
   const rows = await db
-    .select({ m: stockMovements, fromCode: fromLoc.code, toCode: toLoc.code, postedBy: users.displayName })
+    .select({ m: stockMovements, fromCode: fromLoc.code, toCode: toLoc.code, fromName: fromLoc.name, toName: toLoc.name, postedBy: users.displayName })
     .from(stockMovements)
     .leftJoin(fromLoc, eq(fromLoc.id, stockMovements.fromLocationId))
     .leftJoin(toLoc, eq(toLoc.id, stockMovements.toLocationId))
@@ -135,6 +137,8 @@ export async function getStockCard(ctx: AuthContext, f: { lotId: string; from: s
         movementType: m.movementType,
         fromCode: r.fromCode,
         toCode: r.toCode,
+        fromName: r.fromName,
+        toName: r.toName,
         container: null,
         qtyIn: qtyIn?.toString() ?? null,
         qtyOut: qtyOut?.toString() ?? null,

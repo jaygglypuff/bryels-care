@@ -404,6 +404,12 @@ const jobColumns = {
   printedByName: printer.displayName,
   documentNumber: generatedDocuments.documentNumber,
   statusAtPrint: generatedDocuments.sourceState,
+  // Grade-5 queue (ADR-088): what the label is for, in words (item or shelf name), next to the number.
+  templateName: labelTemplates.name,
+  entityName: sql<string | null>`case ${labelJobs.entityType}
+    when 'inventory_lot' then (select coalesce(m.name, p.name) from inventory_lots l left join materials m on m.id = l.material_id left join products p on p.id = l.product_id where l.id = ${labelJobs.entityId})
+    when 'location' then (select x.name from locations x where x.id = ${labelJobs.entityId})
+    else null end`,
 };
 
 function jobsQuery() {
@@ -418,7 +424,7 @@ function jobsQuery() {
 }
 
 type JobListRow = Awaited<ReturnType<ReturnType<typeof jobsQuery>["where"]>>[number];
-const flat = (r: JobListRow) => ({ ...r.j, templateCode: r.templateCode, media: r.media, stationCode: r.stationCode, stationName: r.stationName, requestedByName: r.requestedByName, printedByName: r.printedByName, documentNumber: r.documentNumber, statusAtPrint: r.statusAtPrint });
+const flat = (r: JobListRow) => ({ ...r.j, templateCode: r.templateCode, templateName: r.templateName, entityName: r.entityName, media: r.media, stationCode: r.stationCode, stationName: r.stationName, requestedByName: r.requestedByName, printedByName: r.printedByName, documentNumber: r.documentNumber, statusAtPrint: r.statusAtPrint });
 export type LabelJobView = ReturnType<typeof flat>;
 
 /** The station queue: jobs to print (ready/failed/rendering) plus the last 24 h of printed ones. */

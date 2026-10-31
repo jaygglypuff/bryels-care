@@ -1,15 +1,13 @@
-import { daysUntil, fmtDate, fmtMass, fmtQty } from "@/lib/qty";
+import type { ReactNode } from "react";
+import { ArrowDownToLine, ArrowRightLeft, Factory, PackageCheck, PackageMinus, Scale, Truck, Undo2 } from "lucide-react";
+import { daysUntil, fmtDate } from "@/lib/qty";
+import { BOX_STATUS_WORDS, LOCATION_KIND_WORDS, LOT_STATUS_WORDS, MOVEMENT_LABEL, fmtLotQty, placeWords } from "./words";
 import { Chip, StatusChip } from "@/ui/status";
 import { lotDisplayStatus } from "./lot-status";
 
 export { lotDisplayStatus };
+export { BOX_STATUS_WORDS, LOCATION_KIND_WORDS, LOT_STATUS_WORDS, MOVEMENT_LABEL, fmtLotQty, placeWords };
 
-/** Quantity in a lot's base unit: grams shown as kg above 1,000 g, pieces as whole numbers. */
-export function fmtLotQty(v: string | null | undefined, uom: string): string {
-  if (uom === "g") return fmtMass(v);
-  if (uom === "pcs") return fmtQty(v, "pcs", 0);
-  return fmtQty(v, uom, 1);
-}
 
 /** Expiry date with days left: red when expired, amber within the warning window (30 days). */
 export function Expiry({ date, warnDays = 30, compact = false }: { date: string | null; warnDays?: number; compact?: boolean }) {
@@ -25,13 +23,15 @@ export function Expiry({ date, warnDays = 30, compact = false }: { date: string 
   );
 }
 
+
 /**
  * Lot quality status for lists. A lot whose expiry date has passed shows "Expired" even while its
  * stored status is still released / waiting / on hold (the nightly expiry job may not have run yet),
- * so a list never says "Released" next to "expired 2 days ago".
+ * so a list never says "Ready to use" next to "expired 2 days ago". Icon + plain words.
  */
-export function LotStatusChip({ status, expiresOn }: { status: string; expiresOn: string | null | undefined }) {
-  return <StatusChip status={lotDisplayStatus(status, expiresOn)} />;
+export function LotStatusChip({ status, expiresOn, className }: { status: string; expiresOn?: string | null; className?: string }) {
+  const s = lotDisplayStatus(status, expiresOn ?? null);
+  return <StatusChip status={s} label={LOT_STATUS_WORDS[s]} className={className} />;
 }
 
 const KIND_TONE: Record<string, "ok" | "q" | "hold" | "rej" | "info" | "neu" | "appr"> = {
@@ -44,17 +44,33 @@ const KIND_TONE: Record<string, "ok" | "q" | "hold" | "rej" | "info" | "neu" | "
   shipping: "neu",
 };
 
+
 export function LocationKindChip({ kind }: { kind: string }) {
-  return <Chip tone={KIND_TONE[kind] ?? "neu"}>{kind[0].toUpperCase() + kind.slice(1)}</Chip>;
+  return <Chip tone={KIND_TONE[kind] ?? "neu"}>{LOCATION_KIND_WORDS[kind] ?? kind}</Chip>;
 }
 
-export const MOVEMENT_LABEL: Record<string, string> = {
-  receipt: "Receipt",
-  issue: "Issue (inter-site out)",
-  transfer: "Transfer",
-  consumption: "Consumption",
-  output: "Production output",
-  adjustment: "Adjustment",
-  shipment: "Shipment",
-  reversal: "Reversal",
+
+const MOVEMENT_LOOK: Record<string, { tone: "ok" | "info" | "warn" | "neu" | "appr"; icon: ReactNode }> = {
+  receipt: { tone: "ok", icon: <ArrowDownToLine size={13} aria-hidden /> },
+  issue: { tone: "info", icon: <Truck size={13} aria-hidden /> },
+  transfer: { tone: "info", icon: <ArrowRightLeft size={13} aria-hidden /> },
+  consumption: { tone: "appr", icon: <PackageMinus size={13} aria-hidden /> },
+  output: { tone: "ok", icon: <Factory size={13} aria-hidden /> },
+  adjustment: { tone: "warn", icon: <Scale size={13} aria-hidden /> },
+  shipment: { tone: "neu", icon: <PackageCheck size={13} aria-hidden /> },
+  reversal: { tone: "warn", icon: <Undo2 size={13} aria-hidden /> },
+  return: { tone: "info", icon: <Undo2 size={13} aria-hidden /> },
 };
+
+/** A stock change type as a chip with an icon (never colour alone). */
+export function MovementChip({ type }: { type: string }) {
+  const l = MOVEMENT_LOOK[type] ?? { tone: "neu" as const, icon: null };
+  return (
+    <Chip tone={l.tone}>
+      {l.icon}
+      {MOVEMENT_LABEL[type] ?? type}
+    </Chip>
+  );
+}
+
+

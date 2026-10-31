@@ -4,13 +4,16 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { type StockCard, getStockCard, manilaToday } from "@/modules/inventory";
-import { Card, Dl, EmptyState, Input, PageHeader, Table, Td, buttonClass } from "@/ui/core";
-import { MOVEMENT_LABEL, fmtLotQty } from "@/ui/inventory/bits";
-import { Banner, Chip, StatusChip } from "@/ui/status";
+import { Card, Dl, EmptyState, Input, LinkButton, PageHeader, buttonClass } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { RecordNo } from "@/ui/plain-list";
+import { LotStatusChip, MovementChip, fmtLotQty, placeWords } from "@/ui/inventory/bits";
+import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { PrintButton } from "./print-button";
 
-export const metadata = { title: "Stock card" };
+export const metadata = { title: "History of this lot" };
 
 type Search = { from?: string; to?: string; location?: string };
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -21,9 +24,14 @@ function daysAgo(n: number) {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * History of this lot (the stock card), grade-5 (ADR-088): one list for phone and desktop, each stock
+ * change with what happened, in or out, and how much was left after it. Opening and closing amounts at
+ * the top and bottom; the ledger check stays visible. Exports and print in ⋯ More.
+ */
 export default async function StockCardPage({ params, searchParams }: { params: Promise<{ lotId: string }>; searchParams: Promise<Search> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.movement.view")) return <Forbidden what="stock cards" />;
+  if (!ctx.can("inventory.movement.view")) return <Forbidden what="the history of lots" />;
   const { lotId } = await params;
   const sp = await searchParams;
   const from = sp.from && DATE_RE.test(sp.from) ? sp.from : daysAgo(90);
@@ -38,9 +46,10 @@ export default async function StockCardPage({ params, searchParams }: { params: 
     if (e instanceof DomainError && e.code === "validation") {
       return (
         <div className="space-y-4">
-          <PageHeader title="Stock card" />
+          <PageHeader title="History of this lot" />
+          <PageIntro>This screen is for seeing everything that happened to one lot between two dates.</PageIntro>
           <Banner tone="warn" title="Check the dates">{e.message}</Banner>
-          <Link href={`/inventory/stock-card/${lotId}`} className={buttonClass("secondary")}>Reset dates</Link>
+          <Link href={`/inventory/stock-card/${lotId}`} className={buttonClass("secondary")}>Use the last 90 days</Link>
         </div>
       );
     }
@@ -50,116 +59,104 @@ export default async function StockCardPage({ params, searchParams }: { params: 
   const qs = new URLSearchParams({ from, to, ...(locationId ? { locationId } : {}) });
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
-        title={`Stock card · ${card.lot.lotNumber}`}
-        subtitle={`${card.lot.itemName} (${card.lot.itemCode}) · ${card.location ? `location ${card.location.code}` : "all locations"} · ${fmtDate(from)} to ${fmtDate(to)}`}
+        title={`History: ${card.lot.itemName}`}
+        subtitle={
+          <>
+            Lot <RecordNo>{card.lot.lotNumber}</RecordNo> · {card.location ? `only ${card.location.name}` : "all shelves"} · {fmtDate(from)} to {fmtDate(to)}
+          </>
+        }
         actions={
           <>
-            <Link href={`/inventory/${card.lot.id}`} className={buttonClass("secondary", "sm")}>Lot detail</Link>
-            {ctx.can("inventory.movement.export") && (
-              <>
-                <a className={buttonClass("secondary", "sm")} href={`/api/v1/inventory/lots/${card.lot.id}/stock-card/export?${qs}&format=csv`}>Export CSV</a>
-                <a className={buttonClass("secondary", "sm")} href={`/api/v1/inventory/lots/${card.lot.id}/stock-card/export?${qs}&format=xlsx`}>Export XLSX</a>
-              </>
-            )}
-            <PrintButton />
+            <LinkButton href={`/inventory/${card.lot.id}`} variant="secondary">Open this lot</LinkButton>
+            <MoreMenu>
+              <div className="flex flex-col gap-2">
+                <PrintButton />
+                {ctx.can("inventory.movement.export") && (
+                  <>
+                    <a className={buttonClass("secondary")} href={`/api/v1/inventory/lots/${card.lot.id}/stock-card/export?${qs}&format=xlsx`}>Download for Excel</a>
+                    <a className={buttonClass("secondary")} href={`/api/v1/inventory/lots/${card.lot.id}/stock-card/export?${qs}&format=csv`}>Download as CSV</a>
+                  </>
+                )}
+                {card.location && <LinkButton href={`/inventory/stock-card/${card.lot.id}?from=${from}&to=${to}`} variant="secondary">Show all shelves</LinkButton>}
+              </div>
+            </MoreMenu>
           </>
         }
       />
-      <form className="no-print grid gap-3 rounded-[20px] bg-surface p-4 shadow-[var(--shadow-card)] sm:grid-cols-[1fr_1fr_auto]">
+      <PageIntro>This screen is for seeing everything that happened to one lot between two dates: what came in, what went out, and how much was left after each change.</PageIntro>
+
+      <form className="no-print grid grid-cols-2 gap-3 rounded-[20px] bg-surface p-4 shadow-[var(--shadow-card)] sm:grid-cols-[1fr_1fr_auto]">
         {locationId && <input type="hidden" name="location" value={locationId} />}
         <div>
-          <label htmlFor="from" className="text-[12px] text-muted">From</label>
+          <label htmlFor="from" className="text-[13px] font-medium">From</label>
           <Input id="from" name="from" type="date" defaultValue={from} />
         </div>
         <div>
-          <label htmlFor="to" className="text-[12px] text-muted">To</label>
+          <label htmlFor="to" className="text-[13px] font-medium">To</label>
           <Input id="to" name="to" type="date" defaultValue={to} />
         </div>
-        <button className={buttonClass("primary") + " self-end"}>Show</button>
+        <button className={buttonClass("secondary") + " col-span-2 self-end sm:col-span-1"}>Show these dates</button>
       </form>
 
       <Card>
         <Dl
           items={[
-            ["Current status", <StatusChip key="s" status={card.lot.qualityStatus} />],
+            ["Now", <LotStatusChip key="s" status={card.lot.qualityStatus} expiresOn={card.lot.expiresOn} />],
             ["Expires", card.lot.expiresOn ? fmtDate(card.lot.expiresOn) : "No expiry"],
-            ["Opening balance", fmtLotQty(card.opening, uom)],
-            ["Closing balance", fmtLotQty(card.closing, uom)],
-            ["Movements in range", String(card.lines.length)],
-            ["Scope", card.location ? card.location.code : "All locations of the lot"],
+            [`At the start (${fmtDate(from)})`, fmtLotQty(card.opening, uom)],
+            [`At the end (${fmtDate(to)})`, <strong key="c">{fmtLotQty(card.closing, uom)}</strong>],
+            ["Stock changes", String(card.lines.length)],
           ]}
         />
       </Card>
 
       {card.check.flagged ? (
-        <Banner tone="bad" title="Ledger and balance projection differ">
-          The ledger sums to {fmtLotQty(card.check.ledgerNow, uom)} but the balance shows {fmtLotQty(card.check.projection, uom)} (difference {card.check.difference} {uom}). Tell your system administrator; nothing is corrected automatically.
+        <Banner tone="bad" title="The history and the stock amount do not match">
+          The history adds up to {fmtLotQty(card.check.ledgerNow, uom)} but the stock amount shows {fmtLotQty(card.check.projection, uom)} (difference {card.check.difference} {uom}). Tell your system administrator; nothing is fixed automatically.
         </Banner>
       ) : (
-        <p className="text-[12px] text-muted">Projection check: the current balance ({fmtLotQty(card.check.projection, uom)}) equals the ledger.</p>
+        <p className="text-[13px] text-muted">Checked: the stock amount now ({fmtLotQty(card.check.projection, uom)}) matches this history.</p>
       )}
 
-      <Card>
-        {card.lines.length === 0 ? (
-          <EmptyState title="No movements in this period">Opening and closing balance are {fmtLotQty(card.opening, uom)}. Widen the date range to see earlier postings.</EmptyState>
-        ) : (
-          <>
-            <div className="hidden md:block">
-              <Table head={["When", "Number", "Type", "From → to", "In", "Out", "Balance", "Status", "Source", "By / reason"]}>
-                <tr className="bg-surface-2/60">
-                  <Td colSpan={6} className="font-medium">Opening balance {fmtDate(from)}</Td>
-                  <Td className="text-right font-semibold">{fmtLotQty(card.opening, uom)}</Td>
-                  <Td colSpan={3} />
-                </tr>
-                {card.lines.map((l) => (
-                  <tr key={l.movementId} className="hover:bg-surface-2">
-                    <Td className="whitespace-nowrap">{fmtDateTime(l.postedAt)}</Td>
-                    <Td><Link className="font-mono text-[12px] text-primary-text hover:underline" href={`/inventory/movements/${l.movementId}`}>{l.number}</Link></Td>
-                    <Td>
-                      {MOVEMENT_LABEL[l.movementType] ?? l.movementType}
-                      {l.reversalOf && <div><Chip tone="warn">reverses {l.reversalOf}</Chip></div>}
-                      {l.reversedBy && <div><Chip tone="neu">reversed</Chip></div>}
-                    </Td>
-                    <Td className="whitespace-nowrap font-mono text-[12px]">{l.fromCode ?? "—"} → {l.toCode ?? "—"}</Td>
-                    <Td className="text-right">{l.qtyIn ? fmtLotQty(l.qtyIn, uom) : l.qtyMoved ? <span className="text-muted">moved {fmtLotQty(l.qtyMoved, uom)}</span> : ""}</Td>
-                    <Td className="text-right">{l.qtyOut ? fmtLotQty(l.qtyOut, uom) : ""}</Td>
-                    <Td className="text-right font-semibold">{fmtLotQty(l.running, uom)}</Td>
-                    <Td>{l.statusAtPosting ? <StatusChip status={l.statusAtPosting} /> : <span className="text-muted">—</span>}</Td>
-                    <Td>{l.sourceHref ? <Link className="text-primary-text hover:underline" href={l.sourceHref}>{l.sourceDocumentNumber}</Link> : (l.sourceDocumentNumber ?? "—")}</Td>
-                    <Td>{l.postedBy}{l.reason && <div className="max-w-[240px] truncate text-[12px] text-muted" title={l.reason}>{l.reason}</div>}</Td>
-                  </tr>
-                ))}
-                <tr className="bg-surface-2/60">
-                  <Td colSpan={6} className="font-medium">Closing balance {fmtDate(to)}</Td>
-                  <Td className="text-right font-semibold">{fmtLotQty(card.closing, uom)}</Td>
-                  <Td colSpan={3} />
-                </tr>
-              </Table>
-            </div>
-            <ul className="space-y-3 md:hidden">
-              <li className="rounded-[14px] bg-surface-2 p-3 text-[13px]">Opening {fmtDate(from)}: <strong>{fmtLotQty(card.opening, uom)}</strong></li>
-              {card.lines.map((l) => (
-                <li key={l.movementId} className="rounded-[14px] border border-line p-3 text-[13px]">
-                  <div className="flex justify-between gap-2">
-                    <Link className="font-mono text-primary-text" href={`/inventory/movements/${l.movementId}`}>{l.number}</Link>
-                    <span className="text-muted">{fmtDateTime(l.postedAt)}</span>
+      {card.lines.length === 0 ? (
+        <Card>
+          <EmptyState title="Nothing happened in these dates">At the start and at the end there was {fmtLotQty(card.opening, uom)}. Choose an earlier From date to see older stock changes.</EmptyState>
+        </Card>
+      ) : (
+        <ol className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface" aria-label="Stock changes of this lot">
+          <li className="bg-surface-2/60 px-4 py-3 text-[14px]">At the start ({fmtDate(from)}): <strong className="tabular">{fmtLotQty(card.opening, uom)}</strong></li>
+          {card.lines.map((l) => {
+            const amount = l.qtyIn ? `+ ${fmtLotQty(l.qtyIn, uom)}` : l.qtyOut ? `− ${fmtLotQty(l.qtyOut, uom)}` : l.qtyMoved ? `moved ${fmtLotQty(l.qtyMoved, uom)}` : "";
+            const where = placeWords(l.fromName ?? l.fromCode, l.toName ?? l.toCode);
+            return (
+              <li key={l.movementId}>
+                <Link href={`/inventory/movements/${l.movementId}`} className="flex min-h-[56px] items-center gap-3 px-4 py-3 hover:bg-surface-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <MovementChip type={l.movementType} />
+                      {l.reversalOf && <span className="text-[12px] text-[var(--warn-fg)]">undoes an earlier change</span>}
+                      {l.reversedBy && <span className="text-[12px] text-muted">(undone)</span>}
+                    </div>
+                    <p className="mt-0.5 break-words text-[13px] text-fg-2">
+                      {where && `${where} · `}
+                      {l.postedBy} · {fmtDateTime(l.postedAt)}
+                      <span className="ml-1 font-mono text-[12px] text-muted">· {l.number}</span>
+                      {l.reason && <span className="block text-[12px] text-muted">“{l.reason}”</span>}
+                    </p>
                   </div>
-                  <p>{MOVEMENT_LABEL[l.movementType] ?? l.movementType} · {l.fromCode ?? "—"} → {l.toCode ?? "—"}</p>
-                  <p className="tabular">
-                    {l.qtyIn && `In ${fmtLotQty(l.qtyIn, uom)} `}
-                    {l.qtyOut && `Out ${fmtLotQty(l.qtyOut, uom)} `}
-                    {l.qtyMoved && `Moved ${fmtLotQty(l.qtyMoved, uom)} `}· balance <strong>{fmtLotQty(l.running, uom)}</strong>
-                  </p>
-                  {(l.reversalOf || l.reversedBy) && <p className="text-[12px] text-[var(--warn-fg)]">{l.reversalOf ? `Reverses ${l.reversalOf}` : "Reversed"}</p>}
-                </li>
-              ))}
-              <li className="rounded-[14px] bg-surface-2 p-3 text-[13px]">Closing {fmtDate(to)}: <strong>{fmtLotQty(card.closing, uom)}</strong></li>
-            </ul>
-          </>
-        )}
-      </Card>
+                  <div className="shrink-0 text-right">
+                    <p className="font-semibold tabular text-[15px]">{amount}</p>
+                    <p className="text-[12px] text-muted tabular">left {fmtLotQty(l.running, uom)}</p>
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+          <li className="bg-surface-2/60 px-4 py-3 text-[14px]">At the end ({fmtDate(to)}): <strong className="tabular">{fmtLotQty(card.closing, uom)}</strong></li>
+        </ol>
+      )}
     </div>
   );
 }

@@ -10,9 +10,11 @@ import { issueDownloadUrl } from "@/modules/inventory/receiving-documents";
 import { supplierOptions } from "@/modules/masterdata";
 import { poFromReceiptOptions } from "@/modules/procurement";
 import { Card, CardTitle, Dl, Field, Input, LinkButton, Select, Textarea } from "@/ui/core";
-import { fmtLotQty } from "@/ui/inventory/bits";
+import { LotStatusChip, fmtLotQty } from "@/ui/inventory/bits";
+import { PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
 import { ReceiptStatusChip, fmtBytes } from "@/ui/receiving";
-import { Banner, StatusChip } from "@/ui/status";
+import { Banner } from "@/ui/status";
 import { RecordHeader } from "@/ui/record";
 import { goodsReceiptSteps } from "@/ui/record-steps";
 import { Forbidden } from "../../../forbidden";
@@ -106,7 +108,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <RecordHeader
-        typeLabel="Goods receipt"
+        typeLabel="Delivery received"
         reference={gr.receiptNumber ?? "Not finished"}
         title={gr.supplierName}
         siteCode={ctx.allowedSites.find((x) => x.id === gr.siteId)?.code}
@@ -126,17 +128,38 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
         }
         secondary={
           <>
-            {canPutAway && gr.can.printLabels && <LinkButton href="/inventory/receive/put-away" variant="secondary">Put away</LinkButton>}
             {gr.can.edit && (
               <LinkButton href={`/inventory/receive/${gr.id}/edit`} variant="secondary">
                 <Pencil size={16} /> Change it
               </LinkButton>
             )}
-            {ctx.can("procurement.goods_receipt.create") && <LinkButton href="/inventory/receive" variant="ghost">Receive more</LinkButton>}
-            <LinkButton href="/inventory/receipts" variant="ghost">Receipts</LinkButton>
+            <MoreMenu>
+              <div className="flex flex-col gap-3">
+                {canPutAway && gr.can.printLabels && <LinkButton href="/inventory/receive/put-away" variant="secondary">Put away</LinkButton>}
+                {ctx.can("procurement.goods_receipt.create") && <LinkButton href="/inventory/receive" variant="secondary">Receive another delivery</LinkButton>}
+                <LinkButton href="/inventory/receipts" variant="secondary">All deliveries received</LinkButton>
+                {(gr.can.cancel || gr.can.reverse) && (
+                  <div data-testid="receipt-cancel-reverse">
+                    <p className="mb-2 text-[13px] text-fg-2">
+                      {gr.can.cancel ? "Cancel this unfinished delivery. It is kept on record and can no longer be saved to stock." : "Undo this delivery (kept on record): every item is taken back out of stock. Refused if stock has moved since; move it back first."}
+                    </p>
+                    <ActionForm
+                      action={gr.can.cancel ? cancelDraftAction : reverseReceiptAction}
+                      hidden={hidden}
+                      submit={gr.can.cancel ? "Cancel it" : "Undo this delivery"}
+                      variant="danger"
+                      confirm={gr.can.cancel ? "Cancel this unfinished delivery?" : "Undo this saved delivery? The stock is taken back out. It stays on record."}
+                    >
+                      <ReasonField id="cancel-reason" placeholder={gr.can.cancel ? "e.g. delivery refused at the dock" : "e.g. received at the wrong site"} />
+                    </ActionForm>
+                  </div>
+                )}
+              </div>
+            </MoreMenu>
           </>
         }
       />
+      <PageIntro>This screen is for one delivery: what came, the lot and label for each item, papers from the supplier, and any problem with it.</PageIntro>
       {posted && gr.status === "posted" && (
         <Banner tone="ok" title={`Receipt ${gr.receiptNumber} saved`}>
           <span className="inline-flex items-center gap-1">
@@ -218,21 +241,25 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
       )}
 
       <Card>
-        <CardTitle>{gr.status === "draft" ? "Lines" : "Created lots"}</CardTitle>
+        <CardTitle>{gr.status === "draft" ? "What came" : "What came (one lot each)"}</CardTitle>
         <ul className="space-y-3">
           {lines.map((l) => (
             <li key={l.id} className="rounded-[12px] border border-line p-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
+                  <p className="text-[16px] font-semibold">{l.materialName}</p>
                   {l.lotNumber ? (
-                    <Link href={`/inventory/${l.lotId}`} className="font-mono text-[18px] font-semibold text-primary-text hover:underline" data-testid="created-lot">
-                      {l.lotNumber}
-                    </Link>
+                    <p className="text-[13px]">
+                      Lot{" "}
+                      <Link href={`/inventory/${l.lotId}`} className="font-mono font-semibold text-primary-text hover:underline" data-testid="created-lot">
+                        {l.lotNumber}
+                      </Link>
+                    </p>
                   ) : (
-                    <p className="text-[13px] font-semibold text-muted">Line {l.lineNo} · the lot is made when the receipt is saved</p>
+                    <p className="text-[13px] text-muted">Item {l.lineNo} · the lot is made when the delivery is saved</p>
                   )}
-                  <p className="text-[13px]">
-                    {l.materialName} <span className="text-muted">· {l.materialCode} · supplier&apos;s code on the sack {l.supplierLotNumber ?? "—"}{l.brand ? ` · brand ${l.brand}` : ""}</span>
+                  <p className="text-[13px] text-muted">
+                    Supplier&apos;s code on the sack {l.supplierLotNumber ?? "—"}{l.brand ? ` · brand ${l.brand}` : ""}
                   </p>
                   <p className="text-[12px] text-muted">
                     Expires {fmtDate(l.expiresOn)}
@@ -243,7 +270,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
                 <div className="flex flex-col items-end gap-1">
                   <span className="font-semibold tabular">{fmtLotQty(l.qtyBase, l.baseUom)}</span>
                   {l.uomEntered && l.uomEntered !== l.baseUom && <span className="text-[12px] text-muted">entered {fmtQty(l.qtyEntered, l.uomEntered, 2)}</span>}
-                  {l.lotStatus && <StatusChip status={l.lotStatus} />}
+                  {l.lotStatus && <LotStatusChip status={l.lotStatus} expiresOn={l.expiresOn} />}
                 </div>
               </div>
               {l.flags.length > 0 && (
@@ -262,14 +289,14 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
                   </p>
                   <p className="text-muted">
                     Recorded by {l.recordedByName ?? "—"} {l.discrepancyRecordedAt ? `on ${fmtDateTime(l.discrepancyRecordedAt)}` : ""}
-                    {l.discrepancyApprovedBy ? ` · approved by ${l.approvedByName} (${l.discrepancyApprovalNote})` : " · awaiting procurement approval"}
+                    {l.discrepancyApprovedBy ? ` · approved by ${l.approvedByName} (${l.discrepancyApprovalNote})` : " · waiting for purchasing to accept it"}
                   </p>
                   {!l.discrepancyApprovedBy && gr.can.approveDiscrepancy && (
                     <div className="mt-2">
                       {gr.can.isReceiver || ctx.sodConflict(l.discrepancyRecordedBy) ? (
-                        <p className="text-[12px] text-muted">You received these goods or recorded this discrepancy, so another procurement user must approve it.</p>
+                        <p className="text-[12px] text-muted">You received these goods or wrote down this problem, so another purchasing person must accept it.</p>
                       ) : (
-                        <ActionForm action={approveDiscrepancyAction} hidden={{ ...hidden, lineId: l.id }} submit="Approve discrepancy" variant="secondary" className="space-y-2">
+                        <ActionForm action={approveDiscrepancyAction} hidden={{ ...hidden, lineId: l.id }} submit="Accept the problem" variant="secondary" className="space-y-2">
                           <ReasonField id={`appr-${l.id}`} name="note" label="Decision note" placeholder="e.g. accepted; supplier credits the short quantity" />
                         </ActionForm>
                       )}
@@ -279,15 +306,15 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
               )}
               {gr.can.recordDiscrepancy && !l.discrepancyApprovedBy && (
                 <details className="mt-2">
-                  <summary className="cursor-pointer text-[13px] text-primary-text">{l.discrepancyKind ? "Change discrepancy" : "Record a discrepancy"}</summary>
-                  <ActionForm action={recordDiscrepancyAction} hidden={{ ...hidden, lineId: l.id }} submit="Record discrepancy" variant="secondary" className="mt-2 space-y-2">
-                    <Field label="Type" htmlFor={`kind-${l.id}`}>
+                  <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-[13px] text-primary-text">{l.discrepancyKind ? "Change the problem" : "Something wrong with this item?"}</summary>
+                  <ActionForm action={recordDiscrepancyAction} hidden={{ ...hidden, lineId: l.id }} submit="Save the problem" variant="secondary" className="mt-2 space-y-2">
+                    <Field label="What kind of problem?" htmlFor={`kind-${l.id}`}>
                       <Select id={`kind-${l.id}`} name="kind" defaultValue={l.discrepancyKind ?? "short"}>
-                        <option value="short">Short delivery</option>
-                        <option value="over">Over-delivery</option>
+                        <option value="short">Less came than ordered</option>
+                        <option value="over">More came than ordered</option>
                         <option value="damaged">Damaged</option>
                         <option value="wrong_item">Wrong item</option>
-                        <option value="missing_documents">Missing documents</option>
+                        <option value="missing_documents">Papers are missing</option>
                       </Select>
                     </Field>
                     <ReasonField id={`note-${l.id}`} name="note" label="What was wrong" />
@@ -310,7 +337,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
       </Card>
 
       <Card>
-        <CardTitle>Delivery document</CardTitle>
+        <CardTitle>Delivery paper (photo or scan)</CardTitle>
         <DocList docs={headerDocs} receiptId={gr.id} canVoid={gr.can.voidFile} />
         {gr.can.upload && storageReady && (
           <div className="mt-3">
@@ -320,14 +347,14 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
       </Card>
 
       <Card>
-        <CardTitle>Receipt</CardTitle>
+        <CardTitle>About this delivery</CardTitle>
         <Dl
           items={[
-            ["Receipt no.", gr.receiptNumber ?? "Given when saved"],
+            ["Number", gr.receiptNumber ?? "Given when saved"],
             ["Status", <ReceiptStatusChip key="s" status={gr.status} />],
             ["Supplier", gr.supplier ? <Link key="sup" href={`/masterdata/suppliers/${gr.supplier.id}`} className="text-primary-text hover:underline">{gr.supplierName} ({gr.supplier.code})</Link> : `${gr.supplierName} (not in the supplier list)`],
             ["Number on the supplier's paper", gr.supplierDocumentNumber ?? "—"],
-            ["Unplanned reason", gr.reasonLabel ?? "—"],
+            ["Why no purchase order", gr.reasonLabel ?? "—"],
             ["Received", `${fmtDateTime(gr.receivedAt)} by ${gr.receivedByName}`],
             ["Saved", gr.postedAt ? `${fmtDateTime(gr.postedAt)} by ${gr.postedByName}` : "—"],
             ["Notes", gr.notes ?? "—"],
@@ -355,23 +382,6 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
         </Card>
       )}
 
-      {(gr.can.cancel || gr.can.reverse) && (
-        <Card>
-          <CardTitle>{gr.can.cancel ? "Cancel (not finished)" : "Reverse receipt"}</CardTitle>
-          <p className="mb-3 text-[13px] text-muted">
-            {gr.can.cancel ? "It is kept for the record and can no longer be saved to stock." : "Takes every line back out of its receiving place. Refused if stock has moved since; move it back first. The lots stay on record."}
-          </p>
-          <ActionForm
-            action={gr.can.cancel ? cancelDraftAction : reverseReceiptAction}
-            hidden={hidden}
-            submit={gr.can.cancel ? "Cancel it" : "Reverse receipt"}
-            variant="danger"
-            confirm={gr.can.cancel ? "Cancel this unfinished receipt?" : "Reverse this saved receipt? The stock is taken back out."}
-          >
-            <ReasonField id="cancel-reason" placeholder={gr.can.cancel ? "e.g. delivery refused at the dock" : "e.g. received at the wrong site"} />
-          </ActionForm>
-        </Card>
-      )}
     </div>
   );
 }

@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { fmtFriendly } from "@/lib/units";
 import { Button, Field, Input, Select, Textarea } from "@/ui/core";
 import { FormMessage } from "@/ui/form";
 import { QtyUnitInput } from "@/ui/qty-unit-input";
+import { MoreDetails } from "@/ui/guide";
 import { useActionForm } from "../_kit/forms";
-import { approveCountAction, planCountAction, recordCountAction, recountAction, rejectLinesAction } from "./actions";
+import { approveCountAction, findLotsForCountAction, planCountAction, recordCountAction, recountAction, rejectLinesAction } from "./actions";
 
 const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
@@ -14,29 +15,14 @@ export function PlanCountForm({ locations, counters, kinds }: { locations: { id:
   const fe = state?.fieldErrors ?? {};
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Field label="Kind" htmlFor="countKind">
-          <Select id="countKind" name="countKind" defaultValue="cycle">
-            {kinds.map((k) => (
-              <option key={k} value={k}>{k === "cycle" ? "A few shelves (cycle)" : k === "full" ? "Everything (full)" : k}</option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Day of the count (optional)" htmlFor="scheduledFor" error={fe.scheduledFor}>
-          <Input id="scheduledFor" name="scheduledFor" type="date" />
-        </Field>
-        <label className="flex min-h-[44px] items-center gap-2 self-end text-[14px]">
-          <input type="checkbox" name="isBlind" defaultChecked className="size-5 accent-[var(--primary)]" /> Count without seeing the expected amount
-        </label>
-      </div>
       <fieldset className="min-w-0">
-        <legend className="mb-1.5 text-[13px] font-medium">Shelves to count (nobody can move stock on them until the count is finished)</legend>
+        <legend className="mb-1.5 text-[14px] font-medium">Which shelves? (nobody can move stock on them until the count is finished)</legend>
         {fe.locationIds && <p className="mb-1 text-[12px] text-[var(--bad-fg)]">{fe.locationIds}</p>}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {locations.map((l) => (
             <label key={l.id} className="flex min-h-[44px] items-center gap-2 rounded-[10px] border border-line px-2 text-[14px]">
-              <input type="checkbox" name="locationIds" value={l.id} className="size-5 accent-[var(--primary)]" />
-              <span className="min-w-0 truncate"><span className="font-mono font-semibold">{l.code}</span> <span className="text-muted">{l.kind}</span></span>
+              <input type="checkbox" name="locationIds" value={l.id} className="size-5 shrink-0 accent-[var(--primary)]" />
+              <span className="min-w-0 break-words"><span className="font-medium">{l.name}</span> <span className="font-mono text-[12px] text-muted">{l.code}</span></span>
             </label>
           ))}
         </div>
@@ -55,18 +41,84 @@ export function PlanCountForm({ locations, counters, kinds }: { locations: { id:
           </div>
         )}
       </fieldset>
-      <Field label="Notes (optional)" htmlFor="notes">
-        <Textarea id="notes" name="notes" maxLength={500} />
-      </Field>
+      <MoreDetails>
+        <Field label="A few shelves or everything?" htmlFor="countKind">
+          <Select id="countKind" name="countKind" defaultValue="cycle">
+            {kinds.map((k) => (
+              <option key={k} value={k}>{k === "cycle" ? "A few shelves" : k === "full" ? "Everything" : k}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Day of the count" htmlFor="scheduledFor" error={fe.scheduledFor} hint="Empty: today.">
+          <Input id="scheduledFor" name="scheduledFor" type="date" />
+        </Field>
+        <label className="flex min-h-[44px] items-center gap-2 text-[14px]">
+          <input type="checkbox" name="isBlind" defaultChecked className="size-5 accent-[var(--primary)]" /> Counters do not see how much should be there (better counts)
+        </label>
+        <Field label="Notes" htmlFor="notes">
+          <Textarea id="notes" name="notes" maxLength={500} />
+        </Field>
+      </MoreDetails>
       <FormMessage state={state} />
-      <Button type="submit" variant="cta" disabled={pending} className="w-full sm:w-auto">
-        {pending ? "Planning…" : "Plan count"}
+      <Button type="submit" variant="cta" size="lg" disabled={pending} className="w-full sm:w-auto">
+        {pending ? "Planning…" : "Plan the count"}
       </Button>
     </form>
   );
 }
 
-export type ShelfLine = { lotNumber: string | null; itemName: string | null; baseUom: string | null; counted: boolean; mine: string | null; unlabelled: boolean; description: string | null };
+/** "Not in the list? Find it by name": the keyword look-up (ADR-085) for a lot found on the wrong shelf. */
+function FindByWords({ onPick, id }: { onPick: (lotNumber: string) => void; id: string }) {
+  const [text, setText] = useState("");
+  const [busy, start] = useTransition();
+  const [res, setRes] = useState<{ lots: { lotNumber: string; title: string; detail: string }[]; message: string | null }>({ lots: [], message: null });
+  const find = () =>
+    start(async () => {
+      const r = await findLotsForCountAction(text);
+      setRes(r.ok ? { lots: r.lots, message: r.lots.length > 1 ? `${r.lots.length} lots match. Tap the right one.` : null } : { lots: [], message: r.message });
+      if (r.ok && r.lots.length === 1) onPick(r.lots[0].lotNumber);
+    });
+  return (
+    <MoreDetails title="Not in the list and no barcode? Find it by name">
+      <div className="flex gap-2">
+        <label htmlFor={id} className="sr-only">Item name</label>
+        <Input
+          id={id}
+          value={text}
+          autoComplete="off"
+          enterKeyHint="search"
+          placeholder="e.g. coconut oil"
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              find();
+            }
+          }}
+          className="min-w-0 flex-1"
+        />
+        <Button type="button" variant="secondary" onClick={find} disabled={busy}>
+          {busy ? "…" : "Find"}
+        </Button>
+      </div>
+      {res.message && <p className="text-[13px] text-fg-2" role="status">{res.message}</p>}
+      {res.lots.length > 1 && (
+        <ul className="flex flex-col gap-2" aria-label="Matching lots">
+          {res.lots.map((o) => (
+            <li key={o.lotNumber}>
+              <button type="button" onClick={() => onPick(o.lotNumber)} className="flex min-h-[52px] w-full flex-col items-start rounded-[12px] border border-line px-3 py-2 text-left hover:bg-surface-2">
+                <span className="text-[14px] font-semibold">{o.title} <span className="font-mono text-[12px] font-normal text-muted">{o.lotNumber}</span></span>
+                <span className="text-[13px] text-muted">{o.detail}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </MoreDetails>
+  );
+}
+
+export type ShelfLine ={ lotNumber: string | null; itemName: string | null; baseUom: string | null; counted: boolean; mine: string | null; unlabelled: boolean; description: string | null };
 
 /**
  * Count one shelf (usability test 2026-10-30): "Shelf B-01: scan each sack and type how much". The lots
@@ -92,6 +144,8 @@ export function ShelfCountForm({ countId, location, lines }: { countId: string; 
   const fe = state?.fieldErrors ?? {};
   const typed = lotCode.trim().toUpperCase().replace(/^BC:LOT:/, "");
   const known = lines.find((l) => l.lotNumber && l.lotNumber === typed);
+  // The lots expected on this shelf, as buttons by name (never type a lot number; ADR-088).
+  const expected = lines.filter((l, i) => l.lotNumber && lines.findIndex((x) => x.lotNumber === l.lotNumber) === i);
   const baseUom = mode === "lot" && known?.baseUom ? known.baseUom : "*";
   const id = (f: string) => `${f}-${location.code}`;
   return (
@@ -107,7 +161,7 @@ export function ShelfCountForm({ countId, location, lines }: { countId: string; 
                   <span className="font-medium">No label: {l.description}</span>
                 ) : (
                   <>
-                    <span className="font-mono font-semibold">{l.lotNumber}</span> <span className="text-muted">· {l.itemName}</span>
+                    <span className="font-medium">{l.itemName}</span> <span className="font-mono text-[12px] text-muted">{l.lotNumber}</span>
                   </>
                 )}
               </span>
@@ -125,16 +179,32 @@ export function ShelfCountForm({ countId, location, lines }: { countId: string; 
         </label>
       </div>
       {mode === "lot" ? (
-        <Field label="Scan the label, or type the lot number" htmlFor={id("lotCode")} error={fe.lotCode}>
-          <Input ref={lotRef} id={id("lotCode")} name="lotCode" autoComplete="off" autoCapitalize="characters" placeholder="L-2610-00001" className="min-h-[52px] font-mono text-[16px]" value={lotCode} onChange={(e) => setLotCode(e.target.value)} list={id("lots")} />
-          <datalist id={id("lots")}>
-            {lines
-              .filter((l) => l.lotNumber)
-              .map((l) => (
-                <option key={l.lotNumber!} value={l.lotNumber!}>{l.itemName}</option>
-              ))}
-          </datalist>
-        </Field>
+        <div className="flex flex-col gap-2">
+          {known ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] bg-surface-2 px-3 py-2 text-[14px]">
+              <span className="min-w-0"><span className="font-semibold">{known.itemName}</span> <span className="font-mono text-[12px] text-muted">{known.lotNumber}</span></span>
+              <Button type="button" variant="ghost" onClick={() => { setLotCode(""); lotRef.current?.focus(); }}>Change</Button>
+            </div>
+          ) : (
+            expected.length > 0 && (
+              <div>
+                <p className="mb-1.5 text-[14px] font-medium">Tap what you are counting</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {expected.map((l) => (
+                    <button key={l.lotNumber!} type="button" onClick={() => setLotCode(l.lotNumber!)} className="flex min-h-[48px] flex-col items-start justify-center rounded-[12px] border border-line px-3 py-1.5 text-left hover:bg-surface-2">
+                      <span className="text-[14px] font-semibold">{l.itemName}</span>
+                      <span className="font-mono text-[12px] text-muted">{l.lotNumber}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          )}
+          <Field label={known ? "Lot (from the label)" : "Or scan the label"} htmlFor={id("lotCode")} error={fe.lotCode}>
+            <Input ref={lotRef} id={id("lotCode")} name="lotCode" autoComplete="off" autoCapitalize="characters" placeholder="Scan the label" className="min-h-[52px] font-mono text-[16px]" value={lotCode} onChange={(e) => setLotCode(e.target.value)} />
+          </Field>
+          {!known && <FindByWords onPick={(n) => setLotCode(n)} id={id("words")} />}
+        </div>
       ) : (
         <Field label="What is it? (QA will find out)" htmlFor={id("unlabelled")}>
           <Input id={id("unlabelled")} name="unlabelled" maxLength={300} placeholder="e.g. white 5 kg pail, no label, behind the rack" className="min-h-[52px]" />
@@ -186,51 +256,44 @@ export function ApproveForm({ countId, lines, reasons, step }: { countId: string
   const fe = state?.fieldErrors ?? {};
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3">
-      <div className="overflow-x-auto rounded-[16px] border border-line">
-        <table className="w-full min-w-[640px] text-left text-[13px]">
-          <thead className="bg-surface-2 text-[11px] uppercase tracking-wide text-muted">
-            <tr>
-              <th className="px-3 py-2">Line</th>
-              <th className="px-3 py-2">Expected</th>
-              <th className="px-3 py-2">Counted</th>
-              <th className="px-3 py-2">Counted again</th>
-              <th className="px-3 py-2">Difference</th>
-              <th className="px-3 py-2">Reason</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line tabular">
-            {lines.map((l) => (
-              <tr key={l.id}>
-                <td className="px-3 py-2">{l.label}</td>
-                <td className="px-3 py-2">{amt(l.expected, l.uom)}</td>
-                <td className="px-3 py-2">{amt(l.first, l.uom)}</td>
-                <td className="px-3 py-2">{l.recount ? amt(l.recount, l.uom) : "—"}</td>
-                <td className="px-3 py-2 font-semibold">
+      {/* One card per line (phone 390 px: no table to scroll sideways; ADR-088). */}
+      <ul className="flex flex-col gap-2" aria-label="Differences to check">
+        {lines.map((l) => (
+          <li key={l.id} className="rounded-[16px] border border-line p-3" data-testid="count-review-line">
+            <p className="text-[15px] font-semibold">{l.label}</p>
+            <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-[13px] tabular sm:grid-cols-4">
+              <div><dt className="text-muted">Should be</dt><dd>{amt(l.expected, l.uom)}</dd></div>
+              <div><dt className="text-muted">Counted</dt><dd>{amt(l.first, l.uom)}</dd></div>
+              <div><dt className="text-muted">Counted again</dt><dd>{l.recount ? amt(l.recount, l.uom) : "—"}</dd></div>
+              <div>
+                <dt className="text-muted">Difference</dt>
+                <dd className="font-semibold">
                   {amt(l.variance, l.uom, true)}
                   {l.pct ? ` (${Number(l.pct).toFixed(1)} %)` : ""}
-                </td>
-                <td className="px-3 py-2">
-                  {l.auto ? (
-                    <span className="text-muted">small, approved by the rule</span>
-                  ) : step === 1 ? (
-                    <>
-                      <Select name={`reason_${l.id}`} defaultValue={l.reasonCode ?? ""} aria-label={`Reason for ${l.label}`} className="min-w-[160px]">
-                        <option value="">Choose…</option>
-                        {reasons.map((r) => (
-                          <option key={r.code} value={r.code}>{r.label}</option>
-                        ))}
-                      </Select>
-                      {fe[`reason_${l.id}`] && <p className="text-[12px] text-[var(--bad-fg)]">{fe[`reason_${l.id}`]}</p>}
-                    </>
-                  ) : (
-                    (l.reasonCode ?? "—").replace(/_/g, " ")
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                </dd>
+              </div>
+            </dl>
+            <div className="mt-2 text-[13px]">
+              {l.auto ? (
+                <span className="text-muted">Small difference: OK by the rule.</span>
+              ) : step === 1 ? (
+                <>
+                  <label htmlFor={`reason_${l.id}`} className="mb-1 block font-medium">Why is it different?</label>
+                  <Select id={`reason_${l.id}`} name={`reason_${l.id}`} defaultValue={l.reasonCode ?? ""} aria-label={`Reason for ${l.label}`} className="w-full sm:max-w-[320px]">
+                    <option value="">Choose…</option>
+                    {reasons.map((r) => (
+                      <option key={r.code} value={r.code}>{r.label}</option>
+                    ))}
+                  </Select>
+                  {fe[`reason_${l.id}`] && <p className="text-[12px] text-[var(--bad-fg)]">{fe[`reason_${l.id}`]}</p>}
+                </>
+              ) : (
+                <span>Why: {reasons.find((r) => r.code === l.reasonCode)?.label ?? (l.reasonCode ?? "—").replace(/_/g, " ")}</span>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
       <Field label="Note (optional)" htmlFor="note">
         <Input id="note" name="note" maxLength={500} />
       </Field>

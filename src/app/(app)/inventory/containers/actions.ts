@@ -66,10 +66,14 @@ export async function mergeAction(containerId: string, _p: ActionState, fd: Form
   let target: string;
   try {
     const ctx = await requireContext();
-    const codes = str(fd, "others")
+    // Ticked boxes at the same shelf and scanned labels both arrive as "others" (never typed codes).
+    const codes = fd
+      .getAll("others")
+      .map(String)
+      .join(" ")
       .split(/[,\s]+/)
       .filter(Boolean);
-    if (codes.length === 0) return { ok: false, message: "Scan the other box or boxes to merge with.", fieldErrors: { others: "Scan at least one more box." } };
+    if (codes.length === 0) return { ok: false, message: "Tick or scan the other box or boxes to put together with this one.", fieldErrors: { others: "Tick or scan at least one more box." } };
     const ids = [containerId];
     for (const c of codes) {
       const hit = await findContainerByNumber(ctx, c);
@@ -120,5 +124,5 @@ export async function boxStatusAction(containerId: string, to: "sealed" | "open"
     return actionError(e);
   }
   revalidatePath(`/inventory/containers/${containerId}`);
-  return { ok: true, message: to === "sealed" ? "Box sealed." : to === "open" ? "Box reopened." : "Box voided." };
+  return { ok: true, message: to === "sealed" ? "Box closed." : to === "open" ? "Box open again." : "Box thrown away (kept on record)." };
 }

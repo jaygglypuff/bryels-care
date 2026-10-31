@@ -193,6 +193,8 @@ export async function getLotDetail(ctx: AuthContext, lotId: string) {
       baseUom: stockMovements.baseUom,
       fromCode: fromLoc.code,
       toCode: toLoc.code,
+      fromName: fromLoc.name,
+      toName: toLoc.name,
       sourceDocumentType: stockMovements.sourceDocumentType,
       sourceDocumentId: stockMovements.sourceDocumentId,
       sourceDocumentNumber: stockMovements.sourceDocumentNumber,

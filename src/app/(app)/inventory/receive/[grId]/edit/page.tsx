@@ -5,10 +5,11 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getReceiptDocument, receivingFormData, type ReceiptDocument } from "@/modules/inventory/receiving";
 import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../../forbidden";
 import { ReceiveForm } from "../../receive-form";
 
-export const metadata = { title: "Change the receipt (not finished)" };
+export const metadata = { title: "Change the delivery (not finished)" };
 
 export default async function EditReceiptPage({ params }: { params: Promise<{ grId: string }> }) {
   const ctx = await requireContext();
@@ -23,15 +24,16 @@ export default async function EditReceiptPage({ params }: { params: Promise<{ gr
   }
   if (gr.status !== "draft" || gr.siteId !== ctx.currentSiteId) {
     return (
-      <EmptyState title={gr.status !== "draft" ? "This receipt is no longer a draft" : "Switch to the receipt's site to edit it"} action={<LinkButton href={`/inventory/receive/${gr.id}`} variant="secondary">Back to the receipt</LinkButton>}>
-        Saved receipts are corrected by reversing them, never changed.
+      <EmptyState title={gr.status !== "draft" ? "This delivery is already saved" : "Switch to the delivery's site to change it"} action={<LinkButton href={`/inventory/receive/${gr.id}`} variant="secondary">Back to the delivery</LinkButton>}>
+        A saved delivery is never changed. If it is wrong, undo it (kept on record) and write it down again.
       </EmptyState>
     );
   }
   const data = await receivingFormData(ctx);
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader title="Change the receipt (not finished)" subtitle={`${ctx.currentSite.code} · ${gr.supplierName}`} />
+      <PageHeader title="Change the delivery (not finished)" subtitle={`${ctx.currentSite.name} · ${gr.supplierName}`} />
+      <PageIntro>This screen is for fixing a delivery that is not saved yet: add or change items, amounts and dates, then save it to stock.</PageIntro>
       <ReceiveForm
         idempotencyKey={randomUUID()}
         materials={data.materials}

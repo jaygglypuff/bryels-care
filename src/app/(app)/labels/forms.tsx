@@ -116,7 +116,7 @@ export function ReprintForm({ jobId, reasons, maxCopies }: { jobId: string; reas
     <form action={action} className="space-y-3">
       <input type="hidden" name="jobId" value={jobId} />
       <input type="hidden" name="idempotencyKey" value={key} />
-      <Field label="Reason for the reprint" htmlFor="reasonCode" error={fe.reasonCode}>
+      <Field label="Why print it again?" htmlFor="reasonCode" error={fe.reasonCode}>
         <Select id="reasonCode" name="reasonCode" required value={reason} onChange={(e) => setReason(e.target.value)}>
           <option value="">Choose a reason…</option>
           {reasons.map((r) => (
@@ -127,7 +127,7 @@ export function ReprintForm({ jobId, reasons, maxCopies }: { jobId: string; reas
       <Field label={needsNote ? "Explain (required)" : "Note (optional)"} htmlFor="note" error={fe.note}>
         <Textarea id="note" name="note" required={needsNote} minLength={needsNote ? 5 : undefined} maxLength={500} />
       </Field>
-      <Field label="Copies" htmlFor="copies" error={fe.copies} hint={`Up to ${maxCopies}.`}>
+      <Field label="How many labels?" htmlFor="copies" error={fe.copies} hint={`Up to ${maxCopies}.`}>
         <Input id="copies" name="copies" type="number" inputMode="numeric" min={1} max={maxCopies} defaultValue={1} required />
       </Field>
       <FormMessage state={state} />
@@ -172,7 +172,7 @@ export function CreateJobForm({ entityType, entityId, templates, stations }: { e
       </div>
       <FormMessage state={state} />
       <div className="flex flex-col gap-2 sm:flex-row">
-        <SubmitButton name="then" value="station" variant="cta" size="lg" pendingText="Sending…">Send to print station</SubmitButton>
+        <SubmitButton name="then" value="station" variant="cta" size="lg" pendingText="Sending…">Send to the label printer</SubmitButton>
         <SubmitButton name="then" value="print" variant="secondary" size="lg" pendingText="Preparing…">Print here now</SubmitButton>
       </div>
     </form>

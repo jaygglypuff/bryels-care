@@ -10,6 +10,8 @@ import { receivingFormData } from "@/modules/inventory/receiving";
 import { expectedReceipts, getPurchaseOrder } from "@/modules/procurement";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Chip } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
 import { Forbidden } from "../../forbidden";
 import { ReceiveForm, type PoFormContext } from "./receive-form";
 
@@ -34,24 +36,29 @@ export default async function ReceivePage({ searchParams }: { searchParams: Prom
   const defaultLocation = locations.find((l) => l.kind === "quarantine") ?? locations.find((l) => l.kind !== "storage") ?? locations[0];
   const canSeePos = ctx.can("procurement.purchase_order.view");
   const header = (subtitle: string) => (
-    <PageHeader
-      title="Receive a delivery"
-      subtitle={`${ctx.currentSite.code} · ${subtitle}`}
-      actions={
-        <>
-          <Help screen="inventory.receive" />
-          {ctx.can("procurement.goods_receipt.view") && <LinkButton href="/inventory/receipts" variant="secondary">Receipts &amp; not finished</LinkButton>}
-          {ctx.can("inventory.movement.post") && <LinkButton href="/inventory/receive/put-away" variant="secondary">Put away</LinkButton>}
-        </>
-      }
-    />
+    <>
+      <PageHeader
+        title="Receive a delivery"
+        subtitle={`${ctx.currentSite.name} · ${subtitle}`}
+        actions={
+          <MoreMenu>
+            <div className="flex flex-col gap-2">
+              <Help screen="inventory.receive" />
+              {ctx.can("procurement.goods_receipt.view") && <LinkButton href="/inventory/receipts" variant="secondary">Deliveries received</LinkButton>}
+              {ctx.can("inventory.movement.post") && <LinkButton href="/inventory/receive/put-away" variant="secondary">Put away</LinkButton>}
+            </div>
+          </MoreMenu>
+        }
+      />
+      <PageIntro>This screen is for writing down a delivery when it arrives: who sent it, what came and how much. Each item gets its own lot and label; it waits for the QA check.</PageIntro>
+    </>
   );
   if (materials.length === 0 || !defaultLocation) {
     return (
       <div className="mx-auto max-w-4xl">
-        {header(ctx.currentSite.name)}
+        {header("not set up yet")}
         <EmptyState title="Receiving is not set up for this site">
-          {materials.length === 0 ? "No materials exist yet. Create materials in Master data first." : "This site has no receiving, QA or hold place."}
+          {materials.length === 0 ? "No materials exist yet. Ask the person who sets up materials (Setup) to add them first." : "This site has no receiving or QA area yet. Ask the system administrator to add one (Setup → Shelves)."}
         </EmptyState>
       </div>
     );
@@ -114,7 +121,7 @@ export default async function ReceivePage({ searchParams }: { searchParams: Prom
       <div className="mx-auto max-w-4xl space-y-4">
         {header("which delivery is this?")}
         <Card>
-          <CardTitle>Orders waiting for delivery</CardTitle>
+          <CardTitle>Which delivery is it? Tap the supplier</CardTitle>
           <ul className="grid grid-cols-1 gap-3 md:grid-cols-2" aria-label="Purchase orders to receive">
             {orders.map((o) => (
               <li key={o.purchaseOrderId} className="min-w-0">

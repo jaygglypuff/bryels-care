@@ -51,7 +51,7 @@ export function PutAwayForm({
           <Select id="fromLocationId" name="fromLocationId" defaultValue={defaultFrom}>
             {balances.map((b) => (
               <option key={b.locationId} value={b.locationId}>
-                {b.code} · {b.name} ({b.boxed ? `${b.looseQtyText} not in a box, of ${b.qtyText}` : b.qtyText})
+                {b.name} ({b.code}) · {b.boxed ? `${b.looseQtyText} not in a box, of ${b.qtyText}` : b.qtyText}
               </option>
             ))}
           </Select>
@@ -101,7 +101,7 @@ export function PutAwayForm({
           ))}
         </div>
         <Field label="Or scan the shelf label" htmlFor="location" error={fe.location} hint={`Allowed now: ${destinations.map((d) => d.code).join(", ") || "none"}`}>
-          <Input id="location" name="location" required autoComplete="off" placeholder="BC:LOC:A-01 or A-01" value={to} onChange={(e) => setTo(e.target.value)} list="dest-options" />
+          <Input id="location" name="location" required autoComplete="off" placeholder="Scan the shelf label" value={to} onChange={(e) => setTo(e.target.value)} list="dest-options" />
           <datalist id="dest-options">
             {destinations.map((d) => (
               <option key={d.id} value={d.code}>

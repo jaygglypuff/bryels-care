@@ -67,9 +67,9 @@ async function step(name, fn, u) {
   await step('receipt: change discrepancy', async () => {
     const p = wh.page;
     await p.goto(BASE + '/inventory/receipts');
-    await p.getByRole('link', { name: /^Draft/ }).first().click();
+    await p.locator('a[href^="/inventory/receive/"]').filter({ hasText: 'Not finished' }).first().click(); // grade-5 list rows (ADR-088)
     await p.waitForURL(/\/inventory\/receive\/[0-9a-f-]{36}$/);
-    await p.getByText('Change discrepancy').first().click();
+    await p.getByText('Change the problem').first().click();
     const form = p.locator('form', { has: p.locator('input[name=lineId]') }).first();
     const note = `Repro ${Date.now()}: drum 2 dented, seal intact`;
     await form.locator('input[name=note]').fill(note);
@@ -81,7 +81,7 @@ async function step(name, fn, u) {
   await step('count: release and freeze', async () => {
     const p = mg.page;
     await p.goto(BASE + '/inventory/counts');
-    await p.getByRole('link', { name: 'CNT-26-0001', exact: true }).first().click();
+    await p.locator('a[href^="/inventory/counts/"]').filter({ hasText: 'CNT-26-0001' }).first().click(); // grade-5 list rows: number small and grey
     await p.waitForURL(/\/inventory\/counts\/[0-9a-f-]{36}$/);
     // Usability test 2026-10-30: "Start count" asks on the page; auto-confirm presses "Yes, start the count".
     await p.getByRole('button', { name: 'Start count' }).click();
@@ -104,7 +104,7 @@ async function step(name, fn, u) {
   await step('adjustment: approve', async () => {
     const p = mg.page;
     await p.goto(BASE + '/inventory/adjustments');
-    await p.getByRole('link', { name: 'ADJ-26-00001', exact: true }).first().click();
+    await p.locator('a[href^="/inventory/adjustments/"]').filter({ hasText: 'ADJ-26-00001' }).first().click(); // grade-5 list rows
     await p.waitForURL(/\/inventory\/adjustments\/[0-9a-f-]{36}$/);
     await p.getByRole('button', { name: 'Approve', exact: true }).first().click();
     const reason = p.locator('input[name=reason]');
@@ -113,13 +113,13 @@ async function step(name, fn, u) {
       await p.getByRole('button', { name: 'Approve', exact: true }).last().click();
     }
     await fresh(mg, p.getByText(/^Approved/).first(), 'adjustment approve message');
-    await fresh(mg, p.getByRole('button', { name: /^Post/ }).first(), 'adjustment approve refresh (Post offered)');
+    await fresh(mg, p.getByRole('button', { name: 'Save to stock' }).first(), 'adjustment approve refresh (Save to stock offered)');
   }, mg);
   await step('adjustment: post', async () => {
     const p = mg.page;
-    await p.getByRole('button', { name: /^Post/ }).first().click();
-    await fresh(mg, p.getByText('posted', { exact: true }).first(), 'adjustment post refresh (status)');
-    await fresh(mg, p.getByText(/^Posted\. Corrections are a reversal/).first(), 'adjustment post refresh (next step)');
+    await p.getByRole('button', { name: 'Save to stock' }).first().click(); // auto-confirm presses "Yes, save to stock"
+    await fresh(mg, p.getByText('Saved to stock', { exact: true }).first(), 'adjustment post refresh (status)');
+    await fresh(mg, p.getByText(/^Saved to stock\. Nothing more to do/).first(), 'adjustment post refresh (next step)');
   }, mg);
 
   // 4. QA: incoming inspection on a quarantined lot: sample, every result, submit.
