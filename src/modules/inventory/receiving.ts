@@ -539,11 +539,11 @@ async function postInTx(tx: Tx, ctx: AuthContext, gr: typeof goodsReceipts.$infe
         { rule: "V-ASL" },
       );
     }
-    if (s && !s.isActive) throw new DomainError("conflict", `Supplier ${s.name} is inactive. Ask procurement to reactivate it before posting.`);
+    if (s && !s.isActive) throw new DomainError("conflict", `Supplier ${s.name} is inactive. Ask purchasing to switch it on again before saving the delivery.`);
   }
 
   const rows = await tx.select().from(goodsReceiptLines).where(eq(goodsReceiptLines.goodsReceiptId, gr.id)).orderBy(asc(goodsReceiptLines.lineNo));
-  if (rows.length === 0) throw new DomainError("validation", "Add at least one line before posting.", { field: "lines" });
+  if (rows.length === 0) throw new DomainError("validation", "Add at least one item before saving the delivery.", { field: "lines" });
   // Re-validate against current master data (a location or material may have changed since the draft was saved).
   const lines = await normalizeLines(
     tx,
@@ -712,7 +712,7 @@ async function notifyQaOfReceipt(tx: Tx, ctx: AuthContext, gr: typeof goodsRecei
     kind: "quality.lots.received",
     severity: "info",
     title: `${n} new lot${n === 1 ? "" : "s"}${from} wait${n === 1 ? "s" : ""} for the quality check`,
-    body: `Receipt ${receiptNumber} posted by ${ctx.displayName}: ${[...new Set(waiting.map((l) => l.material))].join(", ")}.${missing ? ` ${missing} still without the supplier certificate (CoA).` : ""} They stay in quarantine until QA decides.`,
+    body: `Delivery ${receiptNumber} saved to stock by ${ctx.displayName}: ${[...new Set(waiting.map((l) => l.material))].join(", ")}.${missing ? ` ${missing} still without the supplier certificate (CoA).` : ""} They wait for the QA check and nobody may use them until QA says OK.`,
     entityType: "goods_receipt",
     entityId: gr.id,
     link: "/quality",

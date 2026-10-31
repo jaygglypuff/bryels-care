@@ -13,7 +13,7 @@ Five things people ask about most. Each one says where to tap.
 1. When you add a material, product, supplier, customer, location or equipment, you may leave **Code** empty.
 2. The system then gives the next number: **MAT-0001** for materials, **PRD-0001** products, **SUP-0001** suppliers, **CUS-0001** customers, **LOC-0001** locations and **EQP-0001** equipment.
 3. You can still type your own code if your labels already use one. A code that is already taken is skipped by the automatic numbering.
-4. The owner can change the prefix under **Management → System → Numbering**.
+4. The owner can change the prefix under **Management → IT settings → How record numbers look**.
 
 ## Adding or changing a location
 
@@ -37,7 +37,8 @@ Five things people ask about most. Each one says where to tap.
 4. Items that need a password, a measurement or a longer form open on their own page.
 5. With the owner override switched on, the owner sees every approval in the company.
 
-## Notifications open the record
+## Messages open the record
 
-1. Tap the bell. Each notification has an **Open** button that takes you to the record it is about and marks it read.
-2. **Acknowledge** still means "I am dealing with it" and removes it from your open list.
+1. Tap the bell (**Messages**). Each message has an **Open** button that takes you to the record it is about and marks it read.
+2. **I'm on it** means "I am dealing with it" and removes it from your open list.
+3. Decisions waiting for you are in **To approve**; things that went wrong or wait too long are in **Problems & alerts**.

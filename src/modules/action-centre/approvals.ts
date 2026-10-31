@@ -169,10 +169,10 @@ export async function listMyApprovals(ctx: AuthContext): Promise<ApprovalRow[]> 
     const ownRequest = !!requestedBy.id && requestedBy.id === ctx.userId;
     const canDecide = v ? v.canDecide : !ctx.sodConflict(requestedBy.id);
     const blocked = v ? v.blockedReason : ctx.sodConflict(requestedBy.id) ? OWN_REQUEST_REASON : null;
-    const kindNoun = i.kindLabel.replace(/ to (approve|decide|release|review)$/i, "").replace(/ waiting for .*$/i, "");
+    const kindNoun = i.kindLabel.replace(/ to (approve|decide|release|review|confirm)$/i, "").replace(/ waiting for .*$/i, "");
     const rawTitle =
       v?.title ??
-      (i.kind === "approval.setting_change" && i.recordNumber ? settingTitle(i.recordNumber) : cleanSentence(i.title.replace(/ waits for (approval|review|release|a QA decision|a second QA approver)$/i, "")));
+      (i.kind === "approval.setting_change" && i.recordNumber ? settingTitle(i.recordNumber) : cleanSentence(i.title.replace(/ waits? for (approval|review|release|a QA decision|the QA check|a second QA approver|a second QA person|QA)$/i, "")));
     // The number is shown once: not again in front of a title that already contains it ("Adjustment ADJ-26-00001").
     const displayNumber = NO_NUMBER.has(i.kind) || (i.recordNumber && rawTitle.includes(i.recordNumber)) ? null : i.recordNumber;
     const displayTitle = rawTitle;

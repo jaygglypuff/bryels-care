@@ -352,7 +352,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
           items={[
             ["Number", gr.receiptNumber ?? "Given when saved"],
             ["Status", <ReceiptStatusChip key="s" status={gr.status} />],
-            ["Supplier", gr.supplier ? <Link key="sup" href={`/masterdata/suppliers/${gr.supplier.id}`} className="text-primary-text hover:underline">{gr.supplierName} ({gr.supplier.code})</Link> : `${gr.supplierName} (not in the supplier list)`],
+            ["Supplier", gr.supplier ? <Link key="sup" href={`/procurement/suppliers/${gr.supplier.id}`} className="text-primary-text hover:underline">{gr.supplierName} ({gr.supplier.code})</Link> : `${gr.supplierName} (not in the supplier list)`],
             ["Number on the supplier's paper", gr.supplierDocumentNumber ?? "—"],
             ["Why no purchase order", gr.reasonLabel ?? "—"],
             ["Received", `${fmtDateTime(gr.receivedAt)} by ${gr.receivedByName}`],

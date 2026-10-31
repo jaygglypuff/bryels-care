@@ -34,7 +34,7 @@ export default async function InspectionPage({ params }: { params: Promise<{ ins
   }
   const ins = v.inspection;
   const canSeeResults = ctx.can("quality.test_result.view");
-  const subjectHref = v.batch ? `/quality/batches/${v.batch.id}` : v.lot ? `/quality/lots/${v.lot.id}` : "/quality";
+  const subjectHref = v.batch ? `/quality/check/${v.batch.id}` : v.lot ? `/quality/lots/${v.lot.id}` : "/quality";
 
   return (
     <>

@@ -149,7 +149,7 @@ export async function putAwayLot(ctx: AuthContext, input: PutAwayInput) {
     // V-FREEZE (US-2-17): a running stock count freezes its locations; checked here for a clear message (postMovement enforces it too).
     await assertLocationsNotFrozen(tx, [from.locationId, to.id]);
     if (heldIds.has(from.locationId) && !["quarantine", "hold", "rejected"].includes(to.kind)) {
-      throw new DomainError("blocked_lot", `Stock in ${from.code} is under a QA hold and can only move to a quarantine, hold or rejected location.`, { rule: "V-LOC" });
+      throw new DomainError("blocked_lot", `Stock in ${from.code} is stopped by QA and can only move to a waiting-for-check, stopped-by-QA or rejected place.`, { rule: "V-LOC" });
     }
     // Boxed stock moves only with its box (same rule as transferStock, W1C): put-away moves the loose part.
     const loose = Decimal.min(await looseQty(tx, lot.id, from.locationId), from.qty);

@@ -390,7 +390,7 @@ export async function voidBoxesForReversal(tx: Tx, ctx: AuthContext, input: { lo
   for (const { box, qty } of rows) {
     ctx.requireSite(box.siteId);
     const all = await contentsOf(tx, box.id);
-    if (all.some((c) => c.lotId !== input.lotId)) throw new DomainError("state", `Box ${box.containerNumber} also holds other lots; repack it before the reversal.`);
+    if (all.some((c) => c.lotId !== input.lotId)) throw new DomainError("state", `Box ${box.containerNumber} also holds other lots; repack it before the undo.`);
     await takeContent(tx, box.id, input.lotId, new Decimal(qty));
     await tx.update(containers).set({ status: "void", updatedAt: new Date() }).where(eq(containers.id, box.id));
     await audit(tx, ctx, { action: "inventory.container.voided", entityType: "container", entityId: box.id, entityNumber: box.containerNumber, siteId: box.siteId, reason: input.reason, before: { status: box.status }, after: { status: "void" } });
@@ -404,7 +404,7 @@ export async function setBoxStatus(ctx: AuthContext, containerId: string, to: "s
   ctx.require("inventory.container.edit");
   return db.transaction(async (tx) => {
     const [box] = await lockContainers(tx, ctx, [containerId]);
-    if (box.status === "shipped") throw new DomainError("state", `Box ${box.containerNumber} was shipped; only a shipment reversal can bring it back.`);
+    if (box.status === "shipped") throw new DomainError("state", `Box ${box.containerNumber} was shipped; only undoing the delivery can bring it back.`);
     containerMachine.assert(box.status, to, `Box ${box.containerNumber}`);
     if (to === "void" && (await contentsOf(tx, box.id)).length) throw new DomainError("state", "Only an empty box can be voided.");
     await tx.update(containers).set({ status: to, updatedAt: new Date() }).where(eq(containers.id, box.id));

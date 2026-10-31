@@ -193,7 +193,7 @@ export async function requestPeriodUnlock(ctx: AuthContext, periodCode: string, 
     await audit(tx, ctx, { action: "finance.accounting_period.unlock_requested", entityType: "accounting_period", entityId: p.id, entityNumber: periodCode, siteId: null, reason, after: { requestId: req.id } });
     const second = prog.steps[1];
     if (second?.roleCodes.length) {
-      await notifyRoles(tx, { roleCodes: second.roleCodes, siteId: null }, { organizationId: ctx.organizationId, kind: "finance.period_unlock", severity: "warning", title: `Unlock of period ${periodCode} needs your approval`, body: `Requested by ${ctx.displayName}: ${reason}`, entityType: "accounting_period", entityId: p.id, link: "/finance/periods" });
+      await notifyRoles(tx, { roleCodes: second.roleCodes, siteId: null }, { organizationId: ctx.organizationId, kind: "finance.period_unlock", severity: "warning", title: `Reopening month ${periodCode} needs your approval`, body: `Requested by ${ctx.displayName}: ${reason}`, entityType: "accounting_period", entityId: p.id, link: "/finance/periods" });
     }
     return req;
   });

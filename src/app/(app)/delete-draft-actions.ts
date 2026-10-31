@@ -19,7 +19,7 @@ type Handler = (ctx: AuthContext, id: string) => Promise<string>;
 const HANDLERS: Record<string, Handler> = {
   material: async (ctx, id) => (await deleteMaterial(ctx, id), "/masterdata/materials?deleted=1"),
   product: async (ctx, id) => (await deleteProduct(ctx, id), "/masterdata/products?deleted=1"),
-  supplier: async (ctx, id) => (await deleteSupplier(ctx, id), "/masterdata/suppliers?deleted=1"),
+  supplier: async (ctx, id) => (await deleteSupplier(ctx, id), "/procurement/suppliers?deleted=1"),
   customer: async (ctx, id) => (await deleteCustomer(ctx, id), "/sales/customers?deleted=1"),
   formula_revision: async (ctx, id) => {
     const r = await deleteFormulaDraft(ctx, id);

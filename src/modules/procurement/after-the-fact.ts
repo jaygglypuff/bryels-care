@@ -177,7 +177,7 @@ export async function createPoFromReceipt(ctx: AuthContext, input: PoFromReceipt
         after: { afterTheFact: true, receipt: gr.receiptNumber, receiptId: gr.id, supplier: v.supplier.code, total: money4(v.total), lines: lineAudit, warnings: v.warnings.filter((w) => w.code !== "lead_time") },
       });
       await audit(tx, ctx, { action: "procurement.goods_receipt.po_created_after", entityType: "goods_receipt", entityId: gr.id, entityNumber: gr.receiptNumber, siteId: gr.siteId, reason, after: { purchaseOrderId: po.id, poNumber } });
-      await notifyRoles(tx, { roleCodes: ["owner_director"], siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_urgent", severity: "warning", title: `Purchase order ${poNumber} made after the goods arrived`, body: `${reason} (receipt ${gr.receiptNumber}).`, entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
+      await notifyRoles(tx, { roleCodes: ["owner_director"], siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_urgent", severity: "warning", title: `Purchase order ${poNumber} made after the goods arrived`, body: `${reason} (delivery ${gr.receiptNumber}).`, entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
       return { purchaseOrderId: po.id, poNumber, warnings: v.warnings.filter((w) => w.code !== "lead_time") };
     });
     return { ...r.result, replayed: r.replayed };

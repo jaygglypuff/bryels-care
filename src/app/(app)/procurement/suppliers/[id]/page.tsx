@@ -20,10 +20,11 @@ const summaryCls = "inline-flex min-h-[44px] cursor-pointer items-center text-[1
  * One supplier (US-6-01, W04-11): the items we may buy from them, QA's yes/no on suggestions (never offered to
  * the person who suggested), and price, minimum order and delivery time for people who may change prices.
  */
-export default async function SupplierAslPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function SupplierAslPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("masterdata.supplier.view")) return <Forbidden what="suppliers" />;
   const { id } = await params;
+  const { created } = await searchParams;
   let s: Awaited<ReturnType<typeof getSupplier>>;
   try {
     s = await getSupplier(ctx, id);
@@ -61,9 +62,10 @@ export default async function SupplierAslPage({ params }: { params: Promise<{ id
       ) : null}
       <SubNav />
       <div className="flex flex-col gap-5">
+        {created && <Banner tone="ok" title="Supplier added">Next: suggest the items we may buy from them; QA says yes or no.</Banner>}
         {s.qualityStatus === "suspended" && <Banner tone="bad" title="Stopped – do not buy">{s.qualityStatusReason ?? "No purchase orders or deliveries until QA lifts the stop."}</Banner>}
         <Card>
-          <CardTitle>Contact</CardTitle>
+          <CardTitle action={ctx.can("masterdata.supplier.edit") ? <LinkButton href={`/masterdata/suppliers/${s.id}`} variant="ghost" size="sm">Change contact details</LinkButton> : undefined}>Contact</CardTitle>
           <Dl items={[["Contact", [s.contactName, s.email, s.phone].filter(Boolean).join(" · ") || "—"], ["We pay within", s.paymentTermsDays !== null ? `${s.paymentTermsDays} days` : "—"], ["Usual delivery time", s.defaultLeadTimeDays !== null ? `${s.defaultLeadTimeDays} days` : "—"]]} />
         </Card>
         <Card>

@@ -130,7 +130,7 @@ function riskFor(status: string, expired: boolean): { tone: RiskTone; title: str
   if (status === "on_hold") return { tone: "hold", title: "On hold: not usable", body: "It cannot be used in production or shipped. Move it only between the waiting-for-check and hold places until quality decides." };
   if (status === "rejected") return { tone: "rej", title: "Rejected: must not be used or shipped", body: "Keep it in the rejected cage and follow the QA disposal instruction." };
   if (status === "recalled") return { tone: "bad", title: "Recalled: must not be used or shipped", body: "Segregate all remaining stock and tell QA where you found it." };
-  if (expired) return { tone: "exp", title: "Expired: not usable", body: "Expired stock is blocked. Move it to a quarantine, hold or rejected location and tell QA." };
+  if (expired) return { tone: "exp", title: "Expired: not usable", body: "Expired stock must not be used. Move it to the waiting-for-check, stopped-by-QA or rejected area and tell QA." };
   return null;
 }
 
@@ -148,7 +148,7 @@ async function lotCard(ctx: AuthContext, lotId: string, payload: string): Promis
 
   if (ctx.can("inventory.movement.post")) {
     const reason = !here ? elsewhere : onHand.lte(0) ? "Nothing on hand to move." : undefined;
-    actions.push({ key: "move", label: "Move stock", href: `/inventory/${lot.id}/move`, allowed: !reason, reason, primary: !reason });
+    actions.push({ key: "move", label: "Move stock", href: `/inventory/move?lot=${lot.id}`, allowed: !reason, reason, primary: !reason });
   } else {
     actions.push({ key: "move", label: "Move stock", allowed: false, reason: "Your role cannot move stock." });
   }
@@ -190,9 +190,9 @@ async function lotCard(ctx: AuthContext, lotId: string, payload: string): Promis
     const possible = Object.values(LOT_TRANSITIONS).some((t) => t.from.includes(lot.qualityStatus));
     actions.push({ key: "qa", label: "QA decision", href: `/quality/lots/${lot.id}`, allowed: possible, reason: possible ? undefined : `No QA decision applies to a ${STATUS_WORDS[lot.qualityStatus] ?? lot.qualityStatus} lot.` });
   }
-  if (ctx.can("quality.genealogy.view")) actions.push({ key: "trace", label: "Trace genealogy", href: `/quality/trace?lot=${encodeURIComponent(lot.lotNumber)}`, allowed: true });
+  if (ctx.can("quality.genealogy.view")) actions.push({ key: "trace", label: "Where it came from and went", href: `/quality/trace?lot=${encodeURIComponent(lot.lotNumber)}`, allowed: true });
   if (!usable) {
-    actions.push({ key: "use", label: lot.itemKind === "product" ? "Allocate / ship" : "Issue to production", allowed: false, reason: `Blocked while the lot is ${expired && lot.qualityStatus === "released" ? "expired" : STATUS_WORDS[lot.qualityStatus] ?? lot.qualityStatus}.` });
+    actions.push({ key: "use", label: lot.itemKind === "product" ? "Send to a customer" : "Use in making", allowed: false, reason: `Blocked while the lot is ${expired && lot.qualityStatus === "released" ? "expired" : STATUS_WORDS[lot.qualityStatus] ?? lot.qualityStatus}.` });
   }
 
   const facts: ScanFact[] = [
@@ -303,9 +303,9 @@ async function locationCard(ctx: AuthContext, value: string, payload: string): P
       ["Count in progress", count?.countNumber ?? "None"],
     ],
     risk: count
-      ? { tone: "warn", title: `Frozen by stock count ${count.countNumber}`, body: "Nothing can move in or out of this location until the count is posted or cancelled." }
+      ? { tone: "warn", title: `Frozen by stock count ${count.countNumber}`, body: "Nothing can move in or out of this shelf until the count is saved or cancelled." }
       : hold
-        ? { tone: "hold", title: `Under QA hold ${hold.holdNumber}`, body: "No stock may be moved into this location; stock here may only go to a quarantine, hold or rejected location." }
+        ? { tone: "hold", title: `Under QA hold ${hold.holdNumber}`, body: "No stock may be moved onto this shelf; stock here may only go to the waiting-for-check, stopped-by-QA or rejected area." }
         : ["quarantine", "hold", "rejected"].includes(l.kind) ? { tone: l.kind === "rejected" ? "rej" : l.kind === "hold" ? "hold" : "q", title: `${l.kind === "rejected" ? "Rejected goods" : l.kind === "hold" ? "QA hold" : "Quarantine"} location`, body: "Stock here is not usable until QA decides." } : null,
     holdings: here
       ? holdings.map((h) => ({ label: `${h.lotNumber} · ${h.item} · ${LABEL_WORD[h.status] ?? h.status}`, qty: lotQty(h.qty, h.uom), href: `/inventory/${h.lotId}` }))
@@ -375,7 +375,7 @@ async function equipmentCard(ctx: AuthContext, value: string, payload: string): 
         ? { tone: "warn", title: "Usable with a warning", body: av.warnings.map((w) => w.detail).join(" · ") }
         : null
       : { tone: "bad", title: "Do not use this equipment", body: av.blockingReasons.map((r) => r.detail).join(" · ") || "Blocked." },
-    actions: [{ key: "open", label: "Open equipment record", href: `/masterdata/equipment/${e.id}`, allowed: true, primary: true }],
+    actions: [{ key: "open", label: "Open the machine", href: `/masterdata/equipment/${e.id}`, allowed: true, primary: true }],
   };
 }
 
@@ -394,7 +394,7 @@ async function materialCard(ctx: AuthContext, value: string, payload: string): P
     subtitle: m.inciName,
     siteCode: null,
     facts: [["Kind", m.materialKind.replace("_", " ")], ["Base unit", m.baseUom], ...counts],
-    actions: [{ key: "lots", label: `Lots at ${ctx.currentSite.code}`, href: `/inventory?q=${encodeURIComponent(m.code)}`, allowed: true, primary: true }],
+    actions: [{ key: "lots", label: "See its stock", href: `/inventory/items/material/${m.id}`, allowed: true, primary: true }],
   };
 }
 
@@ -407,12 +407,12 @@ async function skuCard(ctx: AuthContext, value: string, payload: string): Promis
     outcome: "found",
     payload,
     entity: "sku",
-    caption: "SKU",
+    caption: "Product",
     identifier: p.skuCode,
     title: p.name,
     subtitle: p.family,
     facts: [["Units per box", String(p.unitsPerBox)], ...counts],
-    actions: [{ key: "lots", label: `Lots at ${ctx.currentSite.code}`, href: `/inventory?q=${encodeURIComponent(p.skuCode)}`, allowed: true, primary: true }],
+    actions: [{ key: "lots", label: "See its stock", href: `/inventory/items/product/${p.id}`, allowed: true, primary: true }],
   };
 }
 

@@ -230,7 +230,7 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
   return db.transaction(async (tx) => {
     const o = await lockOrder(tx, ctx, orderId);
     ctx.requireAt("inventory.allocation.create", o.siteId);
-    if (o.status === "allocated") throw new DomainError("state", `Order ${o.orderNumber} is already fully allocated.`);
+    if (o.status === "allocated") throw new DomainError("state", `All of order ${o.orderNumber} is already set aside.`);
     if (!ALLOCATABLE_STATUSES.includes(o.status)) throw new DomainError("state", `Order ${o.orderNumber} is ${o.status.replace(/_/g, " ")}; only confirmed orders (or the remainder of a partial shipment) can be allocated.`);
 
     const lines = await tx
@@ -358,7 +358,7 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
 export async function releaseAllocations(ctx: AuthContext, orderId: string, input: { allocationIds?: string[]; reason: string }) {
   ctx.require("inventory.allocation.void");
   const reason = input.reason?.trim() ?? "";
-  if (reason.length < 3) throw new DomainError("validation", "Say why the allocation is released (at least 3 characters).", { field: "reason" });
+  if (reason.length < 3) throw new DomainError("validation", "Say why the stock is let go (at least 3 characters).", { field: "reason" });
   return db.transaction(async (tx) => {
     const o = await lockOrder(tx, ctx, orderId);
     ctx.requireAt("inventory.allocation.void", o.siteId);
@@ -375,7 +375,7 @@ export async function releaseAllocations(ctx: AuthContext, orderId: string, inpu
       .innerJoin(picks, eq(picks.id, pickLines.pickId))
       .where(and(inArray(pickLines.allocationId, rows.map((r) => r.id)), isNull(pickLines.voidedAt), inArray(picks.status, ["draft", "in_progress"])))
       .limit(1);
-    if (onPick.length) throw new DomainError("state", "Some of these allocations are already picked on an open pick list. Cancel the pick first.");
+    if (onPick.length) throw new DomainError("state", "Some of this stock is already on an open list to get from the shelf. Stop that list first.");
     await tx
       .update(stockAllocations)
       .set({ status: "released", releasedAt: new Date(), releasedBy: ctx.userId, releaseReason: reason })

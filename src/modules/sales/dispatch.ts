@@ -80,7 +80,7 @@ async function postDispatch(tx: Tx, ctx: AuthContext, o: OrderRow, s: ShipmentRo
     try {
       assertLotUsable(lot);
     } catch (e) {
-      if (e instanceof DomainError) throw new DomainError("blocked_lot", `${e.message} Dispatch was not posted; ask QA, or re-allocate the order.`, { rule: "shipment.dispatch_rechecks_status" });
+      if (e instanceof DomainError) throw new DomainError("blocked_lot", `${e.message} Nothing was sent out; ask QA, or set the stock aside again.`, { rule: "shipment.dispatch_rechecks_status" });
       throw e;
     }
   }
@@ -96,7 +96,7 @@ async function postDispatch(tx: Tx, ctx: AuthContext, o: OrderRow, s: ShipmentRo
   // Allocations still open (not released meanwhile).
   const allocIds = [...new Set(lines.map((l) => l.allocationId).filter((x): x is string => !!x))];
   const allocs = allocIds.length ? await tx.select().from(stockAllocations).where(inArray(stockAllocations.id, allocIds)).for("update") : [];
-  for (const a of allocs) if (a.status !== "open") throw new DomainError("conflict", "An allocation of this shipment was released meanwhile. Re-allocate and pick again.");
+  for (const a of allocs) if (a.status !== "open") throw new DomainError("conflict", "Some stock of this delivery was let go meanwhile. Set it aside and get it from the shelf again.");
 
   const correlationId = randomUUID();
   const posted: { lotNumber: string; qty: string; movementId: string; box: string | null }[] = [];
@@ -246,7 +246,7 @@ export async function dispatchOrder(ctx: AuthContext, orderId: string, input: Di
     if (o.status !== "allocated") throw new DomainError("state", `Order ${o.orderNumber} is ${o.status.replace(/_/g, " ")} and cannot be moved to shipped.`);
     validateDriver(input);
     const allocs = await openAllocationsForOrder(tx, o.id);
-    if (allocs.length === 0) throw new DomainError("state", "Nothing is allocated to this order.");
+    if (allocs.length === 0) throw new DomainError("state", "No stock is set aside for this order yet.");
     const [cust] = await tx.select().from(customers).where(eq(customers.id, o.customerId)).limit(1);
     const shipmentNumber = await nextNumber(tx, ctx.organizationId, "SH");
     const [s] = await tx
@@ -282,7 +282,7 @@ function shipmentReversalGuard(): ShipmentReversalGuard | null {
 export async function reverseShipment(ctx: AuthContext, shipmentId: string, input: { reason: string; idempotencyKey: string }) {
   ctx.require("sales.shipment.void");
   const reason = input.reason?.trim() ?? "";
-  if (reason.length < 5) throw new DomainError("validation", "Give the reason for the reversal (at least 5 characters).", { field: "reason" });
+  if (reason.length < 5) throw new DomainError("validation", "Say why you undo it (at least 5 characters).", { field: "reason" });
   if (!input.idempotencyKey || input.idempotencyKey.length < 8) throw new DomainError("validation", "The form is missing its submission key. Reload the page and try again.");
   const key = `dispatch_reverse:${input.idempotencyKey}`;
   const body = { shipmentId, reason };
@@ -300,7 +300,7 @@ export async function reverseShipment(ctx: AuthContext, shipmentId: string, inpu
     const lines = await tx.select().from(shipmentLines).where(and(eq(shipmentLines.shipmentId, s.id), isNotNull(shipmentLines.stockMovementId))).orderBy(asc(shipmentLines.lotId), asc(shipmentLines.id));
     const legacy = lines.length === 0;
     const movements = await tx.select().from(stockMovements).where(and(eq(stockMovements.sourceDocumentType, "shipment"), eq(stockMovements.sourceDocumentId, s.id), eq(stockMovements.movementType, "shipment")));
-    if (movements.length === 0) throw new DomainError("state", "This shipment has no stock postings to reverse.");
+    if (movements.length === 0) throw new DomainError("state", "This delivery took no stock out, so there is nothing to undo.");
     await lockLots(tx, movements.map((m) => m.lotId));
     const boxIds = lines.map((l) => l.containerId).filter((x): x is string => !!x);
     const boxes = boxIds.length ? await lockContainers(tx, ctx, boxIds) : [];

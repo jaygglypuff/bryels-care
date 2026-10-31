@@ -201,7 +201,7 @@ export async function getOperationsCenter(ctx: AuthContext, opts: { all?: boolea
       key: "qc",
       label: "Products to check",
       hint: "Finished batches waiting for quality approval",
-      href: can("quality.disposition.view") ? "/quality/check" : "/production/orders",
+      href: can("quality.disposition.view") ? "/quality" : "/production/orders",
       count: awaiting + held,
       parts: [{ label: "waiting", n: awaiting }, { label: "on hold", n: held }],
       attention: 0,

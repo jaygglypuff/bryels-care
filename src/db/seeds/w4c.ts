@@ -54,6 +54,13 @@ export async function seedW4c(db: Db) {
   /* ---------------------------------------------------------------- 1. CAPA in progress from the open deviation */
   const [dev] = await db.select().from(s.deviations).where(and(eq(s.deviations.siteId, nfd.id), eq(s.deviations.status, "open"))).limit(1);
   if (dev) {
+    // A fix-and-prevent plan being worked on means QA is already looking into the problem report (UX audit
+    // 2026-10-31: "New" next to "Being fixed" contradicted itself). Same transition as startInvestigation.
+    await db
+      .update(s.deviations)
+      .set({ status: "investigating", severity: dev.severity ?? "major", classifiedBy: qa.id, classifiedAt: at(2), investigation: dev.investigation ?? "Mixer stopped during a power dip; checking the temperature record and the batch (fictional).", statusChangedAt: at(2), statusChangedBy: qa.id })
+      .where(eq(s.deviations.id, dev.id));
+    await db.insert(s.deviationStateTransitions).values({ organizationId: O, siteId: nfd.id, deviationId: dev.id, fromState: "open", toState: "investigating", actorId: qa.id, reason: "Looking into it; fix-and-prevent plan opened", occurredAt: at(2) });
     const capaNumber = await nextNo(db, O, "CAPA", 3, YY, (q) => `CAPA-${YY}-${q}`);
     const [c] = await db
       .insert(s.capas)

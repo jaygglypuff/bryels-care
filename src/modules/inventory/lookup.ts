@@ -39,8 +39,8 @@ export async function resolveScan(ctx: AuthContext, raw: string): Promise<ScanRe
   }
 
   if (type === "MAT") {
-    const [mat] = await db.select({ code: materials.code }).from(materials).where(and(eq(materials.organizationId, ctx.organizationId), eq(materials.code, value))).limit(1);
-    return mat ? { ok: true, href: `/inventory?q=${encodeURIComponent(mat.code)}&empty=1`, label: `Material ${mat.code}` } : NOT_FOUND(value);
+    const [mat] = await db.select({ id: materials.id, code: materials.code }).from(materials).where(and(eq(materials.organizationId, ctx.organizationId), eq(materials.code, value))).limit(1);
+    return mat ? { ok: true, href: `/inventory/items/material/${mat.id}`, label: `Material ${mat.code}` } : NOT_FOUND(value); // the item page (ADR-087)
   }
 
   if (type === "LOC") {

@@ -33,7 +33,7 @@ export function Phase5Cards({ database, imports, alerts, errors, integrations }:
       <Card id="imports">
         <CardTitle>Imports</CardTitle>
         {!imports.wizardAvailable && imports.importJobs.length === 0 ? (
-          <EmptyState title="No imports yet">Import runs appear here when the import wizard (US-5-08) is in use; failed imports also show in the action centre.</EmptyState>
+          <EmptyState title="No imports yet">Import runs appear here when the import wizard (US-5-08) is in use; failed imports also show in Problems &amp; alerts.</EmptyState>
         ) : (
           <ul className="space-y-1 text-[13px]">
             {imports.sources.map((s) => (

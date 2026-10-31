@@ -49,7 +49,7 @@ export async function saveNotificationRuleAction(_prev: ActionState, f: FormData
       { id: str(f, "id") || null, expectedVersion: str(f, "version") ? Number(str(f, "version")) : null, reason: str(f, "reason") },
     );
     refreshCurrentPage();
-    return { ok: true, message: "Rule saved. It applies from the next refresh of the action centre." };
+    return { ok: true, message: "Rule saved. It applies the next time Problems & alerts refreshes (within 5 minutes)." };
   } catch (e) {
     return withField(e);
   }

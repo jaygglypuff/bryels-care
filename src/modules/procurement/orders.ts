@@ -290,7 +290,7 @@ export async function submitPurchaseOrder(ctx: AuthContext, input: { purchaseOrd
     await audit(tx, ctx, { action: "procurement.purchase_order.submitted", entityType: "purchase_order", entityId: po.id, entityNumber: po.poNumber, siteId: po.siteId, after: { status: "submitted", total: po.totalAmount } });
     const progress = await approvalProgress(tx, ctx.organizationId, { recordType: "purchase_order", recordId: po.id, siteId: po.siteId, basis: basisOf(po) });
     const roles = progress.next?.roleCodes.length ? progress.next.roleCodes : ["site_manager"];
-    await notifyRoles(tx, { roleCodes: roles, siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_submitted", severity: "info", title: `Purchase order ${po.poNumber} waits for approval`, body: `${progress.steps.length} approval step(s).`, entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
+    await notifyRoles(tx, { roleCodes: roles, siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_submitted", severity: "info", title: `Purchase order ${po.poNumber} waits for approval`, body: `${progress.steps.length} approval step(s) to go.`, entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
     return { purchaseOrderId: po.id, status: "submitted" as const, steps: progress.steps.length };
   });
 }
@@ -576,7 +576,7 @@ export const purchaseOrderReceivingHooks: ReceivingPoHooks = {
       if (!l.purchaseOrderLineId) {
         // A material not on the PO (W01-02 V-MAT): only as an approved discrepancy line (CX-QTY).
         if (!l.discrepancyKind || !l.discrepancyApproved) {
-          throw new DomainError("conflict", `Line ${l.lineNo} is not on ${po.poNumber}: record it as a wrong-item or over-delivery discrepancy and have procurement approve it before posting (CX-QTY).`, { rule: "CX-QTY", lineId: l.lineId });
+          throw new DomainError("conflict", `Line ${l.lineNo} is not on ${po.poNumber}: write it down as a wrong item or more than ordered, and have purchasing approve it before saving the delivery.`, { rule: "CX-QTY", lineId: l.lineId });
         }
         continue;
       }

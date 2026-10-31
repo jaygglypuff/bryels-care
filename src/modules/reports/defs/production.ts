@@ -160,5 +160,5 @@ export const workOrdersReport: ReportDefinition = {
   ],
   schedulable: true,
   defaultCadence: "daily",
-  rowLink: (r) => (r._woId ? `/production/work-orders/${r._woId}` : null),
+  rowLink: (r) => (r._woId ? `/production/orders/${r._woId}` : null),
 };

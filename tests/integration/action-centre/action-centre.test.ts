@@ -57,7 +57,7 @@ describe("action centre queue (US-5-06)", () => {
     const dev = qaItems.find((i) => i.kind === "open_deviation" && i.siteCode === "NFD");
     expect(dev).toBeTruthy();
     expect(dev!.link).toMatch(/^\/quality\/deviations\//);
-    expect(dev!.actionLabel).toBe("Open deviation");
+    expect(dev!.actionLabel).toBe("Open the problem report");
     expect(dev!.recordNumber).toBeTruthy();
     // cross-site: an RVS user never sees NFD items, even with the permission
     expect((await listActionItems(whRvs)).some((i) => i.siteId === kit.nfd.id)).toBe(false);

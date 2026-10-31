@@ -25,9 +25,9 @@ type WoRow = typeof maintenanceWorkOrders.$inferSelect;
 const LIVE: MaintenanceWoStatus[] = ["open", "in_progress", "on_hold"];
 
 async function lockWo(tx: Tx, ctx: AuthContext, id: string): Promise<WoRow> {
-  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new DomainError("not_found", "Maintenance work order not found in your sites.");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new DomainError("not_found", "Repair job not found at your sites.");
   const [w] = await tx.select().from(maintenanceWorkOrders).where(and(eq(maintenanceWorkOrders.id, id), eq(maintenanceWorkOrders.organizationId, ctx.organizationId))).for("update").limit(1);
-  if (!w || !ctx.allowedSiteIds.includes(w.siteId)) throw new DomainError("not_found", "Maintenance work order not found in your sites.");
+  if (!w || !ctx.allowedSiteIds.includes(w.siteId)) throw new DomainError("not_found", "Repair job not found at your sites.");
   return w;
 }
 
@@ -54,7 +54,7 @@ async function notifyAssignee(tx: Tx, ctx: AuthContext, w: WoRow, equipmentCode:
     siteId: w.siteId,
     kind: "maintenance.work_order.assigned",
     severity: w.priority === "urgent" ? "critical" : "info",
-    title: `Maintenance ${w.workOrderNumber} on ${equipmentCode} is assigned to you`,
+    title: `Repair job ${w.workOrderNumber} on ${equipmentCode} is yours`,
     body: w.title,
     entityType: "maintenance_work_order",
     entityId: w.id,
@@ -272,7 +272,7 @@ export async function completeMaintenanceWorkOrder(ctx: AuthContext, raw: unknow
         after: { result: input.result, serviceRecordId: svc.recordId, equipmentStatus: status, statusChange: svc.statusChange, planUpdate, maintenanceDueDate: sync?.maintenanceDueDate ?? null },
       });
       if (!pass) {
-        await notifyRoles(tx, { roleCodes: ["site_manager"], siteId: w.siteId }, { organizationId: ctx.organizationId, siteId: w.siteId, kind: "maintenance.work_order.failed", severity: "critical", title: `${w.workOrderNumber} failed: the equipment stays out of service`, body: input.workDone, entityType: "maintenance_work_order", entityId: w.id, link: `/maintenance/work-orders/${w.id}`, dedupeKey: `mwo-failed:${w.id}` });
+        await notifyRoles(tx, { roleCodes: ["site_manager"], siteId: w.siteId }, { organizationId: ctx.organizationId, siteId: w.siteId, kind: "maintenance.work_order.failed", severity: "critical", title: `Repair job ${w.workOrderNumber} did not fix it: the machine stays out of use`, body: input.workDone, entityType: "maintenance_work_order", entityId: w.id, link: `/maintenance/work-orders/${w.id}`, dedupeKey: `mwo-failed:${w.id}` });
       }
       return { status: "completed" as const, equipmentStatus: status, serviceRecordId: svc.recordId };
     });
@@ -305,9 +305,9 @@ export async function listMaintenanceWorkOrders(ctx: AuthContext, f: { status?: 
 export async function getMaintenanceWorkOrder(ctx: AuthContext, id: string) {
   ctx.require("maintenance.work_order.view");
   const w = await db.transaction(async (tx) => {
-    if (!/^[0-9a-f-]{36}$/i.test(id)) throw new DomainError("not_found", "Maintenance work order not found in your sites.");
+    if (!/^[0-9a-f-]{36}$/i.test(id)) throw new DomainError("not_found", "Repair job not found at your sites.");
     const [row] = await tx.select().from(maintenanceWorkOrders).where(and(eq(maintenanceWorkOrders.id, id), eq(maintenanceWorkOrders.organizationId, ctx.organizationId))).limit(1);
-    if (!row || !ctx.allowedSiteIds.includes(row.siteId)) throw new DomainError("not_found", "Maintenance work order not found in your sites.");
+    if (!row || !ctx.allowedSiteIds.includes(row.siteId)) throw new DomainError("not_found", "Repair job not found at your sites.");
     return row;
   });
   const [e] = await db.select({ e: equipment, siteCode: sites.code }).from(equipment).innerJoin(sites, eq(sites.id, equipment.siteId)).where(eq(equipment.id, w.equipmentId)).limit(1);

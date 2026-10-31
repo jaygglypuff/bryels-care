@@ -62,6 +62,26 @@ function cleanReason(reason: string): string {
 
 /* ------------------------------------------------------------------ queue */
 
+/** What the QA queue lists (one rule for the list, the badge and Home): incoming material lots waiting for the QA check, lots stopped by QA, and finished batches waiting for a decision. */
+const qaLotWaiting = (organizationId: string, siteId: string) =>
+  and(
+    eq(inventoryLots.siteId, siteId),
+    eq(inventoryLots.organizationId, organizationId),
+    or(and(eq(inventoryLots.qualityStatus, "quarantine"), eq(inventoryLots.itemKind, "material")), eq(inventoryLots.qualityStatus, "on_hold")),
+  );
+const qaBatchWaiting = (organizationId: string, siteId: string) => and(eq(batches.siteId, siteId), eq(batches.organizationId, organizationId), inArray(batches.status, [...BATCH_AWAITING_DECISION]));
+
+/** The number of rows on the QA queue (lots + batches), with the same rules as `getQaQueue`. Read only; the caller checks `quality.disposition.view`. */
+export async function qaQueueCount(organizationId: string, siteId: string): Promise<{ lots: number; batches: number; total: number }> {
+  const [[l], [b]] = await Promise.all([
+    db.select({ n: sql<number>`count(*)::int` }).from(inventoryLots).where(qaLotWaiting(organizationId, siteId)),
+    db.select({ n: sql<number>`count(*)::int` }).from(batches).where(qaBatchWaiting(organizationId, siteId)),
+  ]);
+  const lots = Number(l?.n ?? 0);
+  const bs = Number(b?.n ?? 0);
+  return { lots, batches: bs, total: lots + bs };
+}
+
 export async function getQaQueue(ctx: AuthContext) {
   ctx.require("quality.disposition.view");
   const siteId = ctx.currentSiteId;
@@ -86,13 +106,7 @@ export async function getQaQueue(ctx: AuthContext) {
     .from(inventoryLots)
     .leftJoin(materials, eq(materials.id, inventoryLots.materialId))
     .leftJoin(products, eq(products.id, inventoryLots.productId))
-    .where(
-      and(
-        eq(inventoryLots.siteId, siteId),
-        eq(inventoryLots.organizationId, ctx.organizationId),
-        or(and(eq(inventoryLots.qualityStatus, "quarantine"), eq(inventoryLots.itemKind, "material")), eq(inventoryLots.qualityStatus, "on_hold")),
-      ),
-    )
+    .where(qaLotWaiting(ctx.organizationId, siteId))
     .orderBy(asc(inventoryLots.createdAt));
 
   const lotIds = lotRows.map((l) => l.id);
@@ -152,7 +166,7 @@ export async function getQaQueue(ctx: AuthContext) {
     .from(batches)
     .innerJoin(products, eq(products.id, batches.productId))
     .leftJoin(outLot, eq(outLot.id, batches.outputLotId))
-    .where(and(eq(batches.siteId, siteId), eq(batches.organizationId, ctx.organizationId), inArray(batches.status, [...BATCH_AWAITING_DECISION])))
+    .where(qaBatchWaiting(ctx.organizationId, siteId))
     .orderBy(asc(batches.completedAt));
 
   const decisions = await recentDecisions(ctx, siteId, 20);
@@ -195,7 +209,7 @@ async function recentDecisions(ctx: AuthContext, siteId: string, limit: number) 
     ...r,
     subjectNumber: (r.subjectType === "lot" ? lotNums : batchNums).find((x) => x.id === r.subjectId)?.n ?? "—",
     subjectName: ((r.subjectType === "lot" ? lotNums : batchNums).find((x) => x.id === r.subjectId)?.name as string | null | undefined) ?? null,
-    href: r.subjectType === "lot" ? `/quality/lots/${r.subjectId}` : `/quality/batches/${r.subjectId}`,
+    href: r.subjectType === "lot" ? `/quality/lots/${r.subjectId}` : `/quality/check/${r.subjectId}`,
   }));
 }
 

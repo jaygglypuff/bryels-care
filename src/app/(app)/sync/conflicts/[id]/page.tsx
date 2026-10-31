@@ -50,7 +50,7 @@ const EDITABLE = ["qty", "note", "reason", "lotRef", "locationRef", "equipmentRe
 const HREF: Record<string, (id: string) => string> = {
   stock_count: (id) => `/inventory/counts/${id}`,
   batch: (id) => `/production/${id}`,
-  inventory_lot: (id) => `/inventory/lots/${id}`,
+  inventory_lot: (id) => `/inventory/${id}`,
 };
 
 const show = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v));

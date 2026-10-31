@@ -560,8 +560,8 @@ async function kpiValue(page, caption) {
   }
   {
     const { context, page } = await asUser('finance@bryels-care.test');
-    await page.goto(BASE + '/action-centre?tab=approvals');
-    await page.getByText(`Order ${facts.orderNumber} waits for approval`).first().waitFor({ timeout: 20000 });
+    await page.goto(BASE + '/approvals'); // To approve (the old action-centre tab redirects here)
+    await page.getByText(`Order ${facts.orderNumber}`).first().waitFor({ timeout: 20000 });
     await shot(page, 'finance-action-centre');
     await page.goto(BASE + '/sales/' + facts.orderId);
     await expectText(page, 'over credit limit');

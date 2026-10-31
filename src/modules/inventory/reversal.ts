@@ -49,7 +49,7 @@ export async function reverseMovement(ctx: AuthContext, input: ReverseMovementIn
   const reason = input.reason?.trim() ?? "";
   if (reason.length < 3 || reason.length > 500) throw new DomainError("validation", "Give the reason for the correction (3 to 500 characters).", { field: "reason" });
   if ((input.confirmation ?? "").trim().toUpperCase() !== REVERSAL_CONFIRMATION_WORD) {
-    throw new DomainError("validation", `Type ${REVERSAL_CONFIRMATION_WORD} to confirm the reversal.`, { field: "confirmation" });
+    throw new DomainError("validation", `Type ${REVERSAL_CONFIRMATION_WORD} to confirm the undo.`, { field: "confirmation" });
   }
   const key = `reverse:${input.idempotencyKey}`;
   const replaceKey = `replace:${input.idempotencyKey}`;
@@ -78,7 +78,7 @@ export async function reverseMovement(ctx: AuthContext, input: ReverseMovementIn
       return { reversalId: rev.id, replacementId: rep?.id ?? null, replacementNumber: rep?.sourceDocumentNumber ?? null, correlationId: rev.correlationId!, lotId: lot.id, replayed: true };
     }
 
-    if (original.movementType === "reversal") throw new DomainError("state", "A reversal cannot itself be reversed. Post a new movement instead.");
+    if (original.movementType === "reversal") throw new DomainError("state", "An undo cannot be undone. Record a new stock change instead.");
     if (!(REVERSIBLE_MOVEMENT_TYPES as readonly string[]).includes(original.movementType)) {
       throw new DomainError(
         "state",

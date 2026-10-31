@@ -256,7 +256,7 @@ export function ScopePeriodBar({ basePath, scope, period, sites, canAll, extra =
 const REF_ROUTES: Record<string, (id: string) => string> = {
   sales_order: (id) => `/sales/${id}`,
   batch: (id) => `/production/${id}`,
-  work_order: (id) => `/production/work-orders/${id}`,
+  work_order: (id) => `/production/orders/${id}`,
   lot: (id) => `/inventory/${id}`,
   goods_receipt: (id) => `/inventory/receive/${id}`,
   inspection: (id) => `/quality/inspections/${id}`,

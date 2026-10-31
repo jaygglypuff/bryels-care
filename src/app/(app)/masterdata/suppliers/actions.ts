@@ -32,10 +32,10 @@ export async function saveSupplierAction(_p: ActionState, fd: FormData): Promise
   try {
     const ctx = await requireContext();
     const s = id ? await updateSupplier(ctx, id, input(fd)) : await createSupplier(ctx, input(fd));
-    target = `/masterdata/suppliers/${s.id}?saved=1`;
+    target = id ? `/masterdata/suppliers/${s.id}?saved=1` : `/procurement/suppliers/${s.id}?created=1`;
   } catch (e) {
     return toActionState(e);
   }
-  revalidatePath("/masterdata/suppliers");
+  revalidatePath("/procurement/suppliers");
   redirect(target);
 }

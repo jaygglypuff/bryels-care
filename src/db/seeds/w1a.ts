@@ -95,8 +95,8 @@ export async function seedW1a(db: Db, organizationId: string) {
 
   // 3. Notifications for the demo action centre.
   const rows = [
-    admin && { recipientUserId: admin.id, severity: "info", kind: "reconciliation_clean", title: "Nightly stock reconciliation: no differences", body: "The ledger and the balance table agreed at every site last night.", link: "/admin/diagnostics#reconciliation" },
-    manager && { recipientUserId: manager.id, siteId: nfd.id, severity: "warning", kind: "correction_posted", title: "A stock move was corrected at NFD", body: "MOV-DEMO-01 was reversed and replaced by MOV-DEMO-02 (wrong rack). Check the stock card if you count that rack today.", link: "/inventory/movements" },
+    admin && { recipientUserId: admin.id, severity: "info", kind: "reconciliation_clean", title: "Nightly stock check: everything matches", body: "The stock history and the stock totals agreed at every site last night.", link: "/admin/diagnostics#reconciliation" },
+    manager && { recipientUserId: manager.id, siteId: nfd.id, severity: "warning", kind: "correction_posted", title: "A stock move was corrected at NFD", body: "MOV-DEMO-01 was undone (kept on record) and written again as MOV-DEMO-02 (wrong shelf). Look at the stock changes if you count that shelf today.", link: "/inventory/movements" },
   ].filter(Boolean) as { recipientUserId: string; siteId?: string; severity: string; kind: string; title: string; body: string; link: string }[];
   if (rows.length) await db.insert(s.notifications).values(rows.map((r) => ({ organizationId, channel: "in_app", deliveredAt: new Date(), ...r })));
 }

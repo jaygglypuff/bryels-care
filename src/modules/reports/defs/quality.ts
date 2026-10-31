@@ -48,7 +48,7 @@ export const dispositionsReport: ReportDefinition = {
              coalesce(lot.lot_number, b.batch_number) as subject, coalesce(m.code, p.sku_code, bp.sku_code) as item, d.decision,
              d.from_status as "fromStatus", d.to_status as "toStatus", d.reason, coalesce(d.conditions, '') as conditions,
              u.display_name as "decidedBy", coalesce(r.display_name, '') as "requestedBy",
-             case when d.subject_type = 'lot' then '/quality/lots/' || d.subject_id::text else '/quality/batches/' || d.subject_id::text end as "_href"
+             case when d.subject_type = 'lot' then '/quality/lots/' || d.subject_id::text else '/quality/check/' || d.subject_id::text end as "_href"
       from dispositions d
       join sites s on s.id = d.site_id
       join users u on u.id = d.decided_by

@@ -26,14 +26,14 @@ export async function poApprovalCandidates(org: string): Promise<Candidate[]> {
 export async function prApprovalCandidates(org: string): Promise<Candidate[]> {
   return (await run(sql`select id, site_id, request_number, coalesce(submitted_at, created_at) as at from purchase_requests where organization_id = ${org}::uuid and status = 'submitted'`)).map((r) => ({
     kind: "approval.purchase_request", siteId: String(r.site_id), entityType: "purchase_request", entityId: String(r.id), recordNumber: String(r.request_number),
-    title: `Purchase request ${r.request_number} waits for approval`, detail: null, link: `/procurement/requests/${r.id}`, openedAt: d(r.at),
+    title: `Request to buy ${r.request_number} waits for approval`, detail: null, link: `/procurement/requests/${r.id}`, openedAt: d(r.at),
   }));
 }
 
 export async function srApprovalCandidates(org: string): Promise<Candidate[]> {
   return (await run(sql`select id, site_id, return_number, coalesce(submitted_at, created_at) as at from supplier_returns where organization_id = ${org}::uuid and status = 'submitted'`)).map((r) => ({
     kind: "approval.supplier_return", siteId: String(r.site_id), entityType: "supplier_return", entityId: String(r.id), recordNumber: String(r.return_number),
-    title: `Supplier return ${r.return_number} waits for approval`, detail: null, link: `/procurement/returns/${r.id}`, openedAt: d(r.at),
+    title: `Return to supplier ${r.return_number} waits for approval`, detail: null, link: `/procurement/returns/${r.id}`, openedAt: d(r.at),
   }));
 }
 
@@ -45,7 +45,7 @@ export async function aslApprovalCandidates(org: string): Promise<Candidate[]> {
      where c.organization_id = ${org}::uuid and c.status = 'pending'`)
   ).map((r) => ({
     kind: "approval.asl_change", siteId: null, entityType: "supplier_material_change", entityId: String(r.id), recordNumber: `${r.supplier_code} × ${r.material_code}`,
-    title: `${r.action === "suspend" ? "Suspension" : "Approved-list entry"} ${r.supplier_code} × ${r.material_code} waits for QA`, detail: null, link: `/procurement/suppliers/${r.supplier_id}`, openedAt: d(r.at),
+    title: `${r.action === "suspend" ? "Stop buying" : "Start buying"} ${r.material_code} from ${r.supplier_code} waits for QA`, detail: null, link: `/procurement/suppliers/${r.supplier_id}`, openedAt: d(r.at),
   }));
 }
 
@@ -59,7 +59,7 @@ export async function latePoCandidates(org: string, now: Date): Promise<Candidat
        and coalesce(po.promised_date, po.expected_date) + ${grace}::int < ${today(now)}::date`)
   ).map((r) => ({
     kind: "late_purchase_order", siteId: String(r.site_id), entityType: "purchase_order", entityId: String(r.id), recordNumber: String(r.po_number),
-    title: `Purchase order ${r.po_number} from ${r.supplier} is late`, detail: `Due ${String(r.due).slice(0, 10)}; chase the supplier or short-close.`, link: `/procurement/orders/${r.id}`, openedAt: d(r.due),
+    title: `Purchase order ${r.po_number} from ${r.supplier} is late`, detail: `Was due ${String(r.due).slice(0, 10)}; call the supplier, or close the order with what came.`, link: `/procurement/orders/${r.id}`, openedAt: d(r.due),
   }));
 }
 
@@ -71,6 +71,6 @@ export async function overDeliveryCandidates(org: string): Promise<Candidate[]> 
      group by g.id, g.site_id, g.supplier_name`)
   ).map((r) => ({
     kind: "over_delivery", siteId: String(r.site_id), entityType: "goods_receipt", entityId: String(r.id), recordNumber: null,
-    title: `Delivery from ${r.supplier_name} has ${r.n} line(s) over the PO or not on it`, detail: "Approve the discrepancy (CX-QTY) or correct the receipt before it posts.", link: `/inventory/receive/${r.id}`, openedAt: d(r.at ?? new Date()),
+    title: `Delivery from ${r.supplier_name} has ${r.n} item(s) more than ordered or not on the purchase order`, detail: "Approve the difference, or fix the delivery before it is saved to stock.", link: `/inventory/receive/${r.id}`, openedAt: d(r.at ?? new Date()),
   }));
 }

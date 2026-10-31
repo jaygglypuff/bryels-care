@@ -363,7 +363,7 @@ export async function undoMove(ctx: AuthContext, input: { transferId: string; se
   const key = `undo:${input.transferId}`;
   const body = { transferId: input.transferId };
   const refuse = (why: string) =>
-    new DomainError("state", `${why} Nothing was changed. Ask your site manager to reverse the move with a reason (Request reversal).`, { offerReversalRequest: true });
+    new DomainError("state", `${why} Nothing was changed. Ask your site manager to undo the move with a reason (kept on record).`, { offerReversalRequest: true });
 
   return db.transaction(async (tx) => {
     const claimed = await claimIdempotencyKey<UndoResult>(tx, ctx.organizationId, key, "inventory.move.undo", body);

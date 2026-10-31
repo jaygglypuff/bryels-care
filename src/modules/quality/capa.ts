@@ -213,7 +213,7 @@ export async function openCapa(ctx: AuthContext, input: OpenCapaInput) {
         siteId: c.siteId,
         kind: "quality.capa.assigned",
         severity: "info",
-        title: `You own CAPA ${capaNumber}`,
+        title: `You look after fix-and-prevent plan ${capaNumber}`,
         body: title,
         entityType: "capa",
         entityId: c.id,
@@ -273,7 +273,7 @@ export async function updateCapa(ctx: AuthContext, input: UpdateCapaInput) {
       after: changed,
     });
     if (set.ownerId) {
-      await notifyUsers(tx, [set.ownerId], { organizationId: ctx.organizationId, siteId: c.siteId, kind: "quality.capa.assigned", severity: "info", title: `You own CAPA ${c.capaNumber}`, body: c.title, entityType: "capa", entityId: c.id, link: `/quality/capa/${c.id}`, dedupeKey: `capa-owner:${c.id}:${set.ownerId}` });
+      await notifyUsers(tx, [set.ownerId], { organizationId: ctx.organizationId, siteId: c.siteId, kind: "quality.capa.assigned", severity: "info", title: `You look after fix-and-prevent plan ${c.capaNumber}`, body: c.title, entityType: "capa", entityId: c.id, link: `/quality/capa/${c.id}`, dedupeKey: `capa-owner:${c.id}:${set.ownerId}` });
     }
     return { capaId: c.id };
   });
@@ -313,7 +313,7 @@ export async function addCapaAction(ctx: AuthContext, input: AddCapaActionInput)
         siteId: c.siteId,
         kind: "quality.capa.action_assigned",
         severity: "info",
-        title: `CAPA ${c.capaNumber} action ${a.actionNo} is yours (due ${dueDate})`,
+        title: `Fix-and-prevent plan ${c.capaNumber}: task ${a.actionNo} is yours (finish by ${dueDate})`,
         body: description,
         entityType: "capa",
         entityId: c.id,
@@ -639,7 +639,7 @@ export async function overdueCapaActionCandidates(organizationId: string, now: D
     entityType: "capa_action",
     entityId: r.id,
     recordNumber: `${r.capaNumber}/${r.actionNo}`,
-    title: `CAPA ${r.capaNumber} action ${r.actionNo} overdue since ${r.dueDate}`,
+    title: `Fix-and-prevent plan ${r.capaNumber}: task ${r.actionNo} is late (was due ${r.dueDate})`,
     detail: `${r.ownerName}: ${r.description.slice(0, 160)}`,
     link: `/quality/capa/${r.capaId}`,
     openedAt: new Date(r.dueDate + "T16:00:00Z"),

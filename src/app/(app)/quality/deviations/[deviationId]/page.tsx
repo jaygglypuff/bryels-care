@@ -88,7 +88,7 @@ export default async function DeviationPage({ params, searchParams }: { params: 
           <p className="mb-4 whitespace-pre-wrap text-[14px]">{d.description}</p>
           <Dl
             items={[
-              ["Batch", v.batch ? <Link key="b" className="text-primary-text hover:underline" href={`/quality/batches/${v.batch.id}`}>{v.batch.number}</Link> : "—"],
+              ["Batch", v.batch ? <Link key="b" className="text-primary-text hover:underline" href={`/quality/check/${v.batch.id}`}>{v.batch.number}</Link> : "—"],
               ["Lot", v.lot ? <span key="l" className="inline-flex flex-wrap items-center gap-2"><Link className="text-primary-text hover:underline" href={`/quality/lots/${v.lot.id}`}>{v.lot.number}</Link><QaStatusChip status={v.lot.status} /></span> : "—"],
               ["Step", d.stepRef ?? "—"],
               ["Quality check", v.inspection ? <Link key="i" className="text-primary-text hover:underline" href={`/quality/inspections/${v.inspection.id}`}>{v.inspection.number}</Link> : "—"],

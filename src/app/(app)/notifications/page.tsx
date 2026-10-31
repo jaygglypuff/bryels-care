@@ -42,7 +42,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
       )}
       <Card>
         {items.length === 0 ? (
-          <EmptyState title={all ? "No notifications yet" : "Nothing needs your attention"}>
+          <EmptyState title={all ? "No messages yet" : "No new messages"}>
             Failed background jobs, reconciliation differences and other alerts for your role appear here.
           </EmptyState>
         ) : (

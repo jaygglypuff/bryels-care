@@ -128,8 +128,8 @@ export async function lowStockItems(ctx: AuthContext, opts: { siteIds?: string[]
         ? ctx.canAt("procurement.reorder_suggestion.view", r.site_id)
           ? "/procurement/reorder"
           : `/inventory/availability?q=${encodeURIComponent(r.code)}`
-        : ctx.canAt("production.work_order.view", r.site_id)
-          ? "/production/plan"
+        : ctx.canAt("production.work_order.create", r.site_id)
+          ? "/production/orders/new"
           : `/inventory/availability?q=${encodeURIComponent(r.code)}`;
     out.push({
       kind: r.kind,

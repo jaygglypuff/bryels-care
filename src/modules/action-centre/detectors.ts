@@ -55,16 +55,25 @@ async function orgTz(organizationId: string) {
   return String(r?.timezone ?? "Asia/Manila");
 }
 
+/** Where a late customer order is now, in the words of the order screens (no stored status codes). */
+const ORDER_STEP_WORDS: Record<string, string> = {
+  confirmed: "Now: confirmed, stock not set aside yet",
+  allocated: "Now: stock set aside, not got from the shelf yet",
+  picking: "Now: getting it from the shelf",
+  packed: "Now: boxed and checked, not sent out yet",
+  partially_shipped: "Now: partly sent out",
+};
+
 const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promise<Candidate[]>> = {
   "approval.stock_adjustment": async (org) =>
     (await run(sql`select id, site_id, adjustment_number, reason_code, coalesce(submitted_at, created_at) as at from stock_adjustments where organization_id = ${org}::uuid and status = 'submitted'`)).map((r) => ({
       kind: "approval.stock_adjustment", siteId: String(r.site_id), entityType: "stock_adjustment", entityId: String(r.id), recordNumber: String(r.adjustment_number),
-      title: `Adjustment ${r.adjustment_number} waits for approval`, detail: `Reason ${r.reason_code}`, link: `/inventory/adjustments/${r.id}`, openedAt: d(r.at),
+      title: `Stock fix ${r.adjustment_number} waits for approval`, detail: `Why: ${String(r.reason_code).replace(/_/g, " ")}`, link: `/inventory/adjustments/${r.id}`, openedAt: d(r.at),
     })),
   "approval.stock_count": async (org) =>
     (await run(sql`select id, site_id, count_number, created_at as at from stock_counts where organization_id = ${org}::uuid and status = 'pending_approval'`)).map((r) => ({
       kind: "approval.stock_count", siteId: String(r.site_id), entityType: "stock_count", entityId: String(r.id), recordNumber: String(r.count_number),
-      title: `Count ${r.count_number} variance waits for approval`, detail: null, link: `/inventory/counts/${r.id}`, openedAt: d(r.at),
+      title: `Count ${r.count_number}: the difference waits for approval`, detail: null, link: `/inventory/counts/${r.id}`, openedAt: d(r.at),
     })),
   // A production order (draft or planned work order) waits for Approve (approveProductionOrder); the row opens the order.
   "approval.production_order": async (org) =>
@@ -77,27 +86,27 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
       select b.id, b.site_id, b.batch_number, b.status, coalesce((select max(t.at) from batch_state_transitions t where t.batch_id = b.id), b.created_at) as at
       from batches b where b.organization_id = ${org}::uuid and b.status in ('awaiting_qc','quarantined')`)).map((r) => ({
       kind: "approval.batch_disposition", siteId: String(r.site_id), entityType: "batch", entityId: String(r.id), recordNumber: String(r.batch_number),
-      title: `Batch ${r.batch_number} waits for a QA decision`, detail: `Status ${String(r.status).replace("_", " ")}`, link: `/quality/batches/${r.id}`, openedAt: d(r.at),
+      title: `Batch ${r.batch_number} waits for the QA check`, detail: r.status === "awaiting_qc" ? "Made; nobody may use it until QA says OK." : "Waiting for QA check; kept apart until QA decides.", link: `/quality/check/${r.id}`, openedAt: d(r.at),
     })),
   "approval.inspection_review": async (org) =>
     (await run(sql`select id, site_id, inspection_number, created_at as at from inspections where organization_id = ${org}::uuid and status = 'awaiting_review'`)).map((r) => ({
       kind: "approval.inspection_review", siteId: String(r.site_id), entityType: "inspection", entityId: String(r.id), recordNumber: String(r.inspection_number),
-      title: `Inspection ${r.inspection_number} waits for review`, detail: null, link: `/quality/inspections/${r.id}`, openedAt: d(r.at),
+      title: `Quality check ${r.inspection_number} waits for review`, detail: null, link: `/quality/inspections/${r.id}`, openedAt: d(r.at),
     })),
   "approval.conditional_release": async (org) =>
     (await run(sql`select dr.id, dr.site_id, dr.batch_id, b.batch_number, dr.requested_at as at from disposition_requests dr join batches b on b.id = dr.batch_id where dr.organization_id = ${org}::uuid and dr.status = 'pending'`)).map((r) => ({
       kind: "approval.conditional_release", siteId: String(r.site_id), entityType: "disposition_request", entityId: String(r.id), recordNumber: String(r.batch_number),
-      title: `Conditional release of ${r.batch_number} waits for a second QA approver`, detail: null, link: `/quality/batches/${r.batch_id}`, openedAt: d(r.at),
+      title: `“OK with conditions” for batch ${r.batch_number} waits for a second QA person`, detail: null, link: `/quality/batches/${r.batch_id}`, openedAt: d(r.at),
     })),
   "approval.batch_reopen": async (org) =>
     (await run(sql`select rr.id, rr.site_id, rr.batch_id, b.batch_number, rr.requested_at as at from batch_reopen_requests rr join batches b on b.id = rr.batch_id where rr.organization_id = ${org}::uuid and rr.status = 'pending'`)).map((r) => ({
       kind: "approval.batch_reopen", siteId: String(r.site_id), entityType: "batch_reopen_request", entityId: String(r.id), recordNumber: String(r.batch_number),
-      title: `Reopen of ${r.batch_number} waits for approval`, detail: null, link: `/production/${r.batch_id}/closure`, openedAt: d(r.at),
+      title: `Reopening batch ${r.batch_number} waits for approval`, detail: null, link: `/production/${r.batch_id}/closure`, openedAt: d(r.at),
     })),
   "approval.equipment_override": async (org) =>
     (await run(sql`select o.id, o.site_id, o.equipment_id, e.code, o.requested_at as at from equipment_override_requests o join equipment e on e.id = o.equipment_id where o.organization_id = ${org}::uuid and o.status = 'pending_approval'`)).map((r) => ({
       kind: "approval.equipment_override", siteId: String(r.site_id), entityType: "equipment_override_request", entityId: String(r.id), recordNumber: String(r.code),
-      title: `Override for equipment ${r.code} waits for approval`, detail: null, link: `/masterdata/equipment/${r.equipment_id}`, openedAt: d(r.at),
+      title: `Using machine ${r.code} anyway waits for approval`, detail: null, link: `/masterdata/equipment/${r.equipment_id}`, openedAt: d(r.at),
     })),
   "approval.setting_change": async (org) =>
     (await run(sql`select id, site_id, key, created_at as at from setting_change_requests where organization_id = ${org}::uuid and status = 'submitted'`)).map((r) => ({
@@ -109,7 +118,7 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
       select v.id, t.id as template_id, t.site_id, t.code, v.version_no, v.updated_at as at from document_template_versions v join document_templates t on t.id = v.document_template_id
       where t.organization_id = ${org}::uuid and v.status = 'pending_approval'`)).map((r) => ({
       kind: "approval.template_version", siteId: r.site_id ? String(r.site_id) : null, entityType: "document_template_version", entityId: String(r.id), recordNumber: `${r.code} v${r.version_no}`,
-      title: `Template ${r.code} version ${r.version_no} waits for approval`, detail: null, link: `/admin/templates/${r.template_id}`, openedAt: d(r.at),
+      title: `Layout ${r.code} version ${r.version_no} waits for approval`, detail: null, link: `/admin/templates/${r.template_id}`, openedAt: d(r.at),
     })),
   late_work_order: async (org, _now, today) => {
     const grace = await getSetting(db, org, "action_centre.work_order_late_grace_days");
@@ -117,22 +126,22 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
       select id, site_id, work_order_number, status, planned_end::text as pe, (${today}::date - planned_end) as days from work_orders
       where organization_id = ${org}::uuid and status in ('planned','released','in_progress') and planned_end < (${today}::date - ${grace}::int)`)).map((r) => ({
       kind: "late_work_order", siteId: String(r.site_id), entityType: "work_order", entityId: String(r.id), recordNumber: String(r.work_order_number),
-      title: `Work order ${r.work_order_number} is ${r.days} day(s) late`, detail: `Planned end ${r.pe} · ${String(r.status).replace("_", " ")}`, link: `/production/work-orders/${r.id}`,
+      title: `Production order ${r.work_order_number} is ${r.days} day(s) late`, detail: `Planned to finish on ${r.pe}`, link: `/production/orders/${r.id}`,
       openedAt: new Date(`${r.pe}T16:00:00Z`),
     }));
   },
   low_stock: async (org) =>
     (await run(sql`
-      select ms.id, ms.site_id, p.sku_code, p.name, trim_scale(ms.min_stock_units)::text as min, trim_scale(coalesce(sum(b.qty_base), 0))::text as on_hand, ms.updated_at as at
+      select ms.id, ms.site_id, p.id as product_id, p.sku_code, p.name, trim_scale(ms.min_stock_units)::text as min, trim_scale(coalesce(sum(b.qty_base), 0))::text as on_hand, ms.updated_at as at
       from product_min_stock ms
       join products p on p.id = ms.product_id
       left join inventory_lots lot on lot.product_id = ms.product_id and lot.site_id = ms.site_id and lot.quality_status = 'released'
       left join inventory_balances b on b.lot_id = lot.id and b.qty_base > 0
       where ms.organization_id = ${org}::uuid and ms.min_stock_units > 0
-      group by ms.id, ms.site_id, p.sku_code, p.name, ms.min_stock_units, ms.updated_at
+      group by ms.id, ms.site_id, p.id, p.sku_code, p.name, ms.min_stock_units, ms.updated_at
       having coalesce(sum(b.qty_base), 0) < ms.min_stock_units`)).map((r) => ({
       kind: "low_stock", siteId: String(r.site_id), entityType: "product_min_stock", entityId: String(r.id), recordNumber: String(r.sku_code),
-      title: `${r.sku_code} ${r.name} is below minimum stock`, detail: `Released on hand ${r.on_hand} pcs, minimum ${r.min} pcs`, link: `/production/plan`, openedAt: d(r.at),
+      title: `${r.name} is running low`, detail: `Ready to use ${r.on_hand} pcs, minimum ${r.min} pcs`, link: `/inventory/items/product/${r.product_id}`, openedAt: d(r.at),
     })),
   expiring_lot: async (org, _now, today) => {
     const buckets = await getSetting(db, org, "inventory.expiry.alert_days");
@@ -154,17 +163,17 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
       where lot.organization_id = ${org}::uuid and lot.expires_on is not null and lot.expires_on < ${today}::date and lot.quality_status not in ('rejected','recalled')
         and exists (select 1 from inventory_balances b where b.lot_id = lot.id and b.qty_base > 0)`)).map((r) => ({
       kind: "expired_stock", siteId: String(r.site_id), entityType: "inventory_lot", entityId: String(r.id), recordNumber: String(r.lot_number),
-      title: `Lot ${r.lot_number} expired on ${r.exp} and still has stock`, detail: "Decide disposal or rejection; expired stock cannot be used.", link: `/inventory/${r.id}`, openedAt: new Date(`${r.exp}T16:00:00Z`),
+      title: `Lot ${r.lot_number} expired on ${r.exp} and still has stock`, detail: "Do not use it. Ask QA whether to throw it away.", link: `/inventory/${r.id}`, openedAt: new Date(`${r.exp}T16:00:00Z`),
     })),
   failed_job: async (org) =>
     (await run(sql`select id, site_id, job_kind, finished_at as at, left(coalesce(error_message, ''), 200) as err from background_jobs where organization_id = ${org}::uuid and status = 'failed' and job_kind not like '%import%'`)).map((r) => ({
       kind: "failed_job", siteId: r.site_id ? String(r.site_id) : null, entityType: "background_job", entityId: String(r.id), recordNumber: String(r.job_kind),
-      title: `Background job ${r.job_kind} failed`, detail: String(r.err) || null, link: `/admin/diagnostics?job=${r.id}#jobs`, openedAt: d(r.at ?? new Date()),
+      title: `Automatic task ${r.job_kind} failed`, detail: String(r.err) || null, link: `/admin/diagnostics?job=${r.id}#jobs`, openedAt: d(r.at ?? new Date()),
     })),
   failed_import: async (org) =>
     (await run(sql`select id, site_id, job_kind, finished_at as at, left(coalesce(error_message, ''), 200) as err from background_jobs where organization_id = ${org}::uuid and status = 'failed' and job_kind like '%import%'`)).map((r) => ({
       kind: "failed_import", siteId: r.site_id ? String(r.site_id) : null, entityType: "background_job", entityId: String(r.id), recordNumber: String(r.job_kind),
-      title: `Import ${r.job_kind} failed`, detail: String(r.err) || null, link: `/admin/diagnostics?job=${r.id}#jobs`, openedAt: d(r.at ?? new Date()),
+      title: `Spreadsheet load ${r.job_kind} failed`, detail: String(r.err) || null, link: `/admin/diagnostics?job=${r.id}#jobs`, openedAt: d(r.at ?? new Date()),
     })),
   reconciliation_difference: async (org) =>
     (await run(sql`
@@ -173,17 +182,17 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
       .filter((r) => r.status === "differences")
       .map((r) => ({
         kind: "reconciliation_difference", siteId: r.site_id ? String(r.site_id) : null, entityType: "reconciliation_run", entityId: String(r.id), recordNumber: String(r.kind),
-        title: `Reconciliation found ${r.differences_count} difference(s)`, detail: "Ledger and balance table disagree; investigate before rebuilding (runbook §9).", link: `/admin/diagnostics?run=${r.id}#reconciliation`, openedAt: d(r.at),
+        title: `Stock check found ${r.differences_count} difference(s)`, detail: "The stock history and the stock totals do not agree. Ask IT to look before anything is rebuilt (runbook §9).", link: `/admin/diagnostics?run=${r.id}#reconciliation`, openedAt: d(r.at),
       })),
   open_hold: async (org) =>
     (await run(sql`select id, site_id, hold_number, reason_code, opened_at as at from quality_holds where organization_id = ${org}::uuid and status <> 'closed'`)).map((r) => ({
       kind: "open_hold", siteId: String(r.site_id), entityType: "quality_hold", entityId: String(r.id), recordNumber: String(r.hold_number),
-      title: `Hold ${r.hold_number} is open`, detail: `Reason ${r.reason_code}`, link: `/quality/holds/${r.id}`, openedAt: d(r.at),
+      title: `Stopped by QA: ${r.hold_number}`, detail: `Why: ${String(r.reason_code).replace(/_/g, " ")}`, link: `/quality/holds/${r.id}`, openedAt: d(r.at),
     })),
   open_deviation: async (org) =>
     (await run(sql`select id, site_id, deviation_number, status, coalesce(severity, 'unclassified') as sev, raised_at as at from deviations where organization_id = ${org}::uuid and status <> 'closed'`)).map((r) => ({
       kind: "open_deviation", siteId: String(r.site_id), entityType: "deviation", entityId: String(r.id), recordNumber: String(r.deviation_number),
-      title: `Deviation ${r.deviation_number} is ${r.status}`, detail: `Severity ${r.sev}`, link: `/quality/deviations/${r.id}`, openedAt: d(r.at),
+      title: `Problem report ${r.deviation_number} is ${String(r.status).replace(/_/g, " ")}`, detail: `How serious: ${String(r.sev).replace(/_/g, " ")}`, link: `/quality/deviations/${r.id}`, openedAt: d(r.at),
     })),
   // W3E: issued delivery receipts of shipments still out (not acknowledged), after
   // `sales.delivery_receipt.unacknowledged_days` (the same setting as the daily DR reminder job).
@@ -198,7 +207,7 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
       if (now.getTime() - d(r.at).getTime() < days * 86_400_000) continue;
       out.push({
         kind: "unacknowledged_dr", siteId: String(r.site_id), entityType: "shipment", entityId: String(r.id), recordNumber: String(r.dr_number ?? r.shipment_number),
-        title: `Delivery receipt ${r.dr_number ?? r.shipment_number} is not acknowledged`, detail: `Dispatched more than ${days} day(s) ago`, link: `/sales/shipments/${r.id}`, openedAt: new Date(d(r.at).getTime() + days * 86_400_000),
+        title: `Delivery ${r.dr_number ?? r.shipment_number} has no signed receipt yet`, detail: `Sent out more than ${days} day(s) ago`, link: `/sales/shipments/${r.id}`, openedAt: new Date(d(r.at).getTime() + days * 86_400_000),
       });
     }
     return out;
@@ -210,7 +219,7 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
       where so.organization_id = ${org}::uuid and so.status in ('confirmed','allocated','picking','packed','partially_shipped')
         and (case when so.requested_delivery_on ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then so.requested_delivery_on::date end) < (${today}::date - ${grace}::int)`)).map((r) => ({
       kind: "unshipped_order", siteId: String(r.site_id), entityType: "sales_order", entityId: String(r.id), recordNumber: String(r.order_number),
-      title: `Order ${r.order_number} is not shipped; requested for ${r.req}`, detail: `Status ${String(r.status).replace(/_/g, " ")}`, link: `/sales/${r.id}`, openedAt: new Date(`${r.req}T16:00:00Z`),
+      title: `Order ${r.order_number} is not sent out yet; the customer wanted it on ${r.req}`, detail: ORDER_STEP_WORDS[String(r.status)] ?? null, link: `/sales/${r.id}`, openedAt: new Date(`${r.req}T16:00:00Z`),
     }));
   },
   // W3D: commercial approvals and credit holds.
@@ -222,19 +231,19 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
   "approval.quote": async (org) =>
     (await run(sql`select id, site_id, quote_number, coalesce(submitted_at, created_at) as at from quotes where organization_id = ${org}::uuid and status = 'pending_approval'`)).map((r) => ({
       kind: "approval.quote", siteId: String(r.site_id), entityType: "quote", entityId: String(r.id), recordNumber: String(r.quote_number),
-      title: `Quotation ${r.quote_number} waits for approval`, detail: null, link: `/sales/quotations/${r.id}`, openedAt: d(r.at),
+      title: `Price offer ${r.quote_number} waits for approval`, detail: null, link: `/sales/quotations/${r.id}`, openedAt: d(r.at),
     })),
   "approval.price_list": async (org) =>
     (await run(sql`select id, code, version_no, coalesce(submitted_at, created_at) as at from price_lists where organization_id = ${org}::uuid and status = 'pending_approval'`)).map((r) => ({
       kind: "approval.price_list", siteId: null, entityType: "price_list", entityId: String(r.id), recordNumber: `${r.code} v${r.version_no}`,
-      title: `Price list ${r.code} version ${r.version_no} waits for approval`, detail: null, link: `/sales/price-lists/${r.id}`, openedAt: d(r.at),
+      title: `Prices ${r.code} version ${r.version_no} wait for approval`, detail: null, link: `/sales/price-lists/${r.id}`, openedAt: d(r.at),
     })),
   "approval.customer_requirement": async (org) =>
     (await run(sql`
       select r.id, r.customer_id, c.name, r.requirement_kind, r.version_no, coalesce(r.submitted_at, r.created_at) as at
       from customer_requirements r join customers c on c.id = r.customer_id where r.organization_id = ${org}::uuid and r.status = 'pending_approval'`)).map((r) => ({
       kind: "approval.customer_requirement", siteId: null, entityType: "customer_requirement", entityId: String(r.id), recordNumber: `${String(r.requirement_kind).replace(/_/g, " ")} v${r.version_no}`,
-      title: `Requirement of ${r.name} waits for approval`, detail: `${String(r.requirement_kind).replace(/_/g, " ")}, version ${r.version_no}`, link: `/sales/customers/${r.customer_id}`, openedAt: d(r.at),
+      title: `Special rule of ${r.name} waits for approval`, detail: `${String(r.requirement_kind).replace(/_/g, " ")}, version ${r.version_no}`, link: `/sales/customers/${r.customer_id}`, openedAt: d(r.at),
     })),
   credit_hold: async (org) =>
     (await run(sql`
@@ -242,13 +251,13 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
              (select count(*)::int from sales_orders so where so.customer_id = c.id and so.status in ('draft','submitted','pending_approval')) as waiting
       from customers c where c.organization_id = ${org}::uuid and c.status = 'on_hold'`)).map((r) => ({
       kind: "credit_hold", siteId: null, entityType: "customer", entityId: String(r.id), recordNumber: String(r.code),
-      title: `${r.name} is on credit hold`, detail: Number(r.waiting) ? `${r.waiting} order(s) not yet accepted` : "New orders need approval", link: `/sales/customers/${r.id}`, openedAt: d(r.at),
+      title: `${r.name} is stopped for unpaid bills`, detail: Number(r.waiting) ? `${r.waiting} order(s) not accepted yet` : "New orders need an OK first", link: `/sales/customers/${r.id}`, openedAt: d(r.at),
     })),
   // W3F: complaints and customer returns.
   open_complaint: async (org) =>
     (await run(sql`select id, site_id, complaint_number, status, coalesce(severity, 'unclassified') as sev, received_at as at from complaints where organization_id = ${org}::uuid and status in ('open','investigating')`)).map((r) => ({
       kind: "open_complaint", siteId: String(r.site_id), entityType: "complaint", entityId: String(r.id), recordNumber: String(r.complaint_number),
-      title: `Complaint ${r.complaint_number} is ${r.status}`, detail: `Severity ${r.sev}`, link: `/quality/complaints/${r.id}`, openedAt: d(r.at),
+      title: `Complaint ${r.complaint_number} is ${r.status}`, detail: `How serious: ${String(r.sev).replace(/_/g, " ")}`, link: `/quality/complaints/${r.id}`, openedAt: d(r.at),
     })),
   "approval.customer_return": async (org) =>
     (await run(sql`select id, site_id, return_number, coalesce(submitted_at, created_at) as at from customer_returns where organization_id = ${org}::uuid and status = 'submitted'`)).map((r) => ({
@@ -258,7 +267,7 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
   return_awaiting_qa: async (org) =>
     (await run(sql`select id, site_id, return_number, received_at as at from customer_returns where organization_id = ${org}::uuid and status = 'received'`)).map((r) => ({
       kind: "return_awaiting_qa", siteId: String(r.site_id), entityType: "customer_return", entityId: String(r.id), recordNumber: String(r.return_number),
-      title: `Returned goods of ${r.return_number} wait for a QA decision`, detail: "Received into quarantine; disposition every return lot.", link: `/sales/returns/${r.id}`, openedAt: d(r.at),
+      title: `Returned goods of ${r.return_number} wait for the QA check`, detail: "Kept apart until QA decides; QA decides each returned lot.", link: `/sales/returns/${r.id}`, openedAt: d(r.at),
     })),
 };
 

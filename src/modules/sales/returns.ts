@@ -122,7 +122,7 @@ async function destination(q: DbOrTx, ctx: AuthContext, siteId: string, location
     const [l] = await q.select().from(locations).where(eq(locations.id, locationId)).limit(1);
     if (!l || l.siteId !== siteId) throw new DomainError("validation", "The returns location must be at the shipment's site.", { field: "toLocationId" });
     if (!kinds.includes(l.kind)) {
-      throw new DomainError("blocked_lot", `Returned stock arrives in quarantine; it can only go to ${kinds.join(" / ")} locations, not ${l.kind} (${l.code}).`, { rule: "V-LOC", allowedKinds: kinds, field: "toLocationId" });
+      throw new DomainError("blocked_lot", `Returned stock waits for the QA check; it can only go to ${kinds.join(" / ")} locations, not ${l.kind} (${l.code}).`, { rule: "V-LOC", allowedKinds: kinds, field: "toLocationId" });
     }
     if (!l.isActive || l.status !== "active") throw new DomainError("state", `Location ${l.code} is not active.`, { field: "toLocationId" });
     ctx.requireWarehouseWrite(l.siteId, l.warehouseId);
@@ -338,7 +338,7 @@ export async function submitCustomerReturn(ctx: AuthContext, input: { returnId: 
     await notifyRoles(
       tx,
       { roleCodes: ["site_manager"], siteId: r.siteId },
-      { organizationId: ctx.organizationId, siteId: r.siteId, kind: "sales.customer_return.submitted", severity: "info", title: `Return ${r.returnNumber} to approve`, body: "A customer return is waiting for approval before it is received into quarantine.", entityType: "customer_return", entityId: r.id, link: `/sales/returns/${r.id}`, dedupeKey: `return-submitted:${r.id}:${Date.now()}` },
+      { organizationId: ctx.organizationId, siteId: r.siteId, kind: "sales.customer_return.submitted", severity: "info", title: `Return ${r.returnNumber} to approve`, body: "A customer return waits for an OK before it is taken in and kept apart for the QA check.", entityType: "customer_return", entityId: r.id, link: `/sales/returns/${r.id}`, dedupeKey: `return-submitted:${r.id}:${Date.now()}` },
     );
     return { status: r.status };
   });
@@ -486,8 +486,8 @@ export async function postCustomerReturn(ctx: AuthContext, input: { returnId: st
           siteId: r.siteId,
           kind: "sales.customer_return.posted",
           severity: "warning",
-          title: `Returned stock to disposition (${r.returnNumber})`,
-          body: `${posted.length} returned lot(s) from ${s.customerName} are in quarantine: ${posted.map((p) => p.returnLotNumber).join(", ")}.`,
+          title: `Returned goods to check (${r.returnNumber})`,
+          body: `${posted.length} returned lot(s) from ${s.customerName} wait for the QA check: ${posted.map((p) => p.returnLotNumber).join(", ")}.`,
           entityType: "customer_return",
           entityId: r.id,
           link: `/sales/returns/${r.id}`,
@@ -512,7 +512,7 @@ export async function markReturnInspected(ctx: AuthContext, input: { returnId: s
       .where(eq(customerReturnLines.customerReturnId, r.id));
     if (r.status === "received") {
       const waiting = lines.filter((l) => l.status === "quarantine");
-      if (waiting.length || !lines.length) throw new DomainError("state", `QA has not dispositioned returned lot(s) ${waiting.map((l) => l.lotNumber).join(", ")} yet.`);
+      if (waiting.length || !lines.length) throw new DomainError("state", `QA has not decided returned lot(s) ${waiting.map((l) => l.lotNumber).join(", ")} yet.`);
     }
     await move(tx, ctx, r, "inspected", null, { inspectedBy: ctx.userId, inspectedAt: new Date() });
     await audit(tx, ctx, { action: "sales.customer_return.inspected", entityType: "customer_return", entityId: r.id, entityNumber: r.returnNumber, siteId: r.siteId, after: { lots: lines } });

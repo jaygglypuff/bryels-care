@@ -78,14 +78,14 @@ export async function evaluateAlerts(organizationId: string, now: Date): Promise
   const [hb] = await db.select({ at: workerHeartbeats.lastHeartbeatAt, host: workerHeartbeats.hostname }).from(workerHeartbeats).orderBy(desc(workerHeartbeats.lastHeartbeatAt)).limit(1);
   if (hb) {
     const age = Math.round((now.getTime() - hb.at.getTime()) / 1000);
-    if (age > heartbeatMax) findings.push({ code: "worker_down", severity: "critical", title: "Worker heartbeat is missing", body: `The last worker heartbeat was ${age}s ago (limit ${heartbeatMax}s). Background jobs are not running. Runbook §12.`, link: "/admin/diagnostics#health" });
+    if (age > heartbeatMax) findings.push({ code: "worker_down", severity: "critical", title: "Worker heartbeat is missing", body: `The last worker heartbeat was ${age}s ago (limit ${heartbeatMax}s). Automatic tasks are not running. Runbook §12.`, link: "/admin/diagnostics#health" });
   }
   const windowMin = await getSetting(db, organizationId, "alerts.failed_jobs_window_minutes");
   const [dl] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(backgroundJobs)
     .where(and(eq(backgroundJobs.organizationId, organizationId), isNotNull(backgroundJobs.deadLetteredAt), gte(backgroundJobs.deadLetteredAt, new Date(now.getTime() - windowMin * 60_000))));
-  if (Number(dl?.n ?? 0) > 0) findings.push({ code: "failed_jobs", severity: "critical", title: "Background jobs were dead-lettered", body: `${dl.n} job(s) failed for good in the last ${windowMin} minutes. Open the Jobs card to retry or cancel. Runbook §6.`, link: "/admin/diagnostics?status=failed#jobs" });
+  if (Number(dl?.n ?? 0) > 0) findings.push({ code: "failed_jobs", severity: "critical", title: "Automatic tasks failed for good", body: `${dl.n} job(s) failed for good in the last ${windowMin} minutes. Open the Jobs card to retry or cancel. Runbook §6.`, link: "/admin/diagnostics?status=failed#jobs" });
   if (process.env.BACKUP_STATUS_SOURCE?.trim() === "table") {
     const maxAge = await getSetting(db, organizationId, "alerts.backup_max_age_hours");
     const [b] = await db.select({ at: backupRuns.finishedAt, offsite: backupRuns.offsiteBucketKey }).from(backupRuns).where(and(eq(backupRuns.organizationId, organizationId), eq(backupRuns.status, "succeeded"))).orderBy(desc(backupRuns.finishedAt)).limit(1);

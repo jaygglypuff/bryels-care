@@ -35,16 +35,16 @@ export async function resolveChangeEntity(q: DbOrTx, organizationId: string, ent
   switch (entityType) {
     case "formula_revision":
       rows = (await q.execute(sql`select r.status, f.code, f.name, r.revision_no, f.id as parent_id from formula_revisions r join formulas f on f.id = r.formula_id where r.id = ${entityId}::uuid and f.organization_id = ${organizationId}::uuid`)) as unknown as Record<string, unknown>[];
-      return rows[0] ? { label: `Formula ${rows[0].code} rev ${rows[0].revision_no} (${rows[0].name})`, status: String(rows[0].status), href: `/masterdata/formulas/${rows[0].parent_id}/revisions/${entityId}` } : null;
+      return rows[0] ? { label: `Recipe ${rows[0].code} version ${rows[0].revision_no} (${rows[0].name})`, status: String(rows[0].status), href: `/masterdata/formulas/${rows[0].parent_id}/revisions/${entityId}` } : null;
     case "routing_revision":
       rows = (await q.execute(sql`select r.status, x.code, x.name, r.revision_no, x.id as parent_id from routing_revisions r join routings x on x.id = r.routing_id where r.id = ${entityId}::uuid and x.organization_id = ${organizationId}::uuid`)) as unknown as Record<string, unknown>[];
-      return rows[0] ? { label: `Routing ${rows[0].code} rev ${rows[0].revision_no} (${rows[0].name})`, status: String(rows[0].status), href: `/masterdata/routings/${rows[0].parent_id}/revisions/${entityId}` } : null;
+      return rows[0] ? { label: `Steps ${rows[0].code} version ${rows[0].revision_no} (${rows[0].name})`, status: String(rows[0].status), href: `/masterdata/routings/${rows[0].parent_id}/revisions/${entityId}` } : null;
     case "inspection_plan":
       rows = (await q.execute(sql`select status, code, name, revision_no from inspection_plans where id = ${entityId}::uuid and organization_id = ${organizationId}::uuid`)) as unknown as Record<string, unknown>[];
-      return rows[0] ? { label: `Inspection plan ${rows[0].code} rev ${rows[0].revision_no} (${rows[0].name})`, status: String(rows[0].status), href: `/masterdata/inspection-plans/${entityId}` } : null;
+      return rows[0] ? { label: `Quality checks ${rows[0].code} version ${rows[0].revision_no} (${rows[0].name})`, status: String(rows[0].status), href: `/masterdata/inspection-plans/${entityId}` } : null;
     case "work_instruction_revision":
       rows = (await q.execute(sql`select r.status, w.code, w.name, r.revision_no, w.id as parent_id from work_instruction_revisions r join work_instructions w on w.id = r.work_instruction_id where r.id = ${entityId}::uuid and w.organization_id = ${organizationId}::uuid`)) as unknown as Record<string, unknown>[];
-      return rows[0] ? { label: `Work instruction ${rows[0].code} rev ${rows[0].revision_no} (${rows[0].name})`, status: String(rows[0].status), href: `/masterdata/work-instructions/${rows[0].parent_id}` } : null;
+      return rows[0] ? { label: `How-to sheet ${rows[0].code} version ${rows[0].revision_no} (${rows[0].name})`, status: String(rows[0].status), href: `/masterdata/work-instructions/${rows[0].parent_id}` } : null;
     default:
       return null;
   }
@@ -255,7 +255,7 @@ export async function submitChangeControl(ctx: AuthContext, input: { changeContr
     await audit(tx, ctx, { action: "quality.change_control.submitted", entityType: "change_control", entityId: c.id, entityNumber: c.changeNumber, siteId: c.siteId, before: { status: "draft" }, after: { status: "submitted", riskLevel: c.riskLevel } });
     const progress = await qualityApprovalProgress(tx, ctx.organizationId, { recordType: DOCUMENT_TYPE, recordId: c.id, siteId: c.siteId });
     const roles = progress.next?.roleCodes.length ? progress.next.roleCodes : ["qa_qc"];
-    await notifyRoles(tx, { roleCodes: roles, siteId: c.siteId }, { organizationId: ctx.organizationId, siteId: c.siteId, kind: "quality.change_control.submitted", severity: "info", title: `Change ${c.changeNumber} waits for approval`, body: c.title, entityType: "change_control", entityId: c.id, link: `/quality/changes/${c.id}`, dedupeKey: `cc-submitted:${c.id}:${progress.cycle}` });
+    await notifyRoles(tx, { roleCodes: roles, siteId: c.siteId }, { organizationId: ctx.organizationId, siteId: c.siteId, kind: "quality.change_control.submitted", severity: "info", title: `Change request ${c.changeNumber} waits for approval`, body: c.title, entityType: "change_control", entityId: c.id, link: `/quality/changes/${c.id}`, dedupeKey: `cc-submitted:${c.id}:${progress.cycle}` });
     return { status: "submitted" as const };
   });
 }
@@ -460,7 +460,7 @@ export async function changeControlApprovalCandidates(organizationId: string) {
     entityType: "change_control",
     entityId: r.id,
     recordNumber: r.changeNumber,
-    title: `Change ${r.changeNumber} waits for approval`,
+    title: `Change request ${r.changeNumber} waits for approval`,
     detail: `${r.title}${r.riskLevel ? ` · risk ${r.riskLevel}` : ""}`,
     link: `/quality/changes/${r.id}`,
     openedAt: r.submittedAt ?? r.statusChangedAt,

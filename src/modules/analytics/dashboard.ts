@@ -24,10 +24,11 @@ import type { AuthContext, SiteRef } from "@/lib/auth/context";
 import { D } from "@/lib/qty";
 import { lotsToPutAway } from "@/modules/inventory";
 import { expectedReceipts } from "@/modules/procurement";
+import { qaQueueCount } from "@/modules/quality";
 
 /**
  * Owner overview and operator home read models (docs/analytics-kpis.md §2.1, §3).
- * Every figure is computed live from posted transactions in the caller's allowed sites; nothing is cached
+ * Every figure is computed live from saved records in the caller's allowed sites; nothing is cached
  * or estimated. Each section is only computed when the caller also holds the view permission of the
  * module the figure comes from (analytics-kpis §1.5).
  */
@@ -530,16 +531,14 @@ export async function getOperatorHome(ctx: AuthContext): Promise<OperatorTile[]>
     );
   if (ctx.can("quality.disposition.view"))
     tiles.push(
-      Promise.all([
-        db.select({ n: sql<number>`count(*)::int` }).from(inventoryLots).where(and(eq(inventoryLots.siteId, site), eq(inventoryLots.qualityStatus, "quarantine"))),
-        db.select({ n: sql<number>`count(*)::int` }).from(batches).where(and(eq(batches.siteId, site), eq(batches.status, "awaiting_qc"))),
-      ]).then(([[l], [b]]) => ({
-        key: "qa",
+      // The same rule as the QA queue list and the menu badge (qaQueueCount), so the numbers agree.
+      qaQueueCount(ctx.organizationId, site).then((c) => ({
+        key: "qa" as const,
         title: "QA queue",
         href: "/quality",
-        count: Number(l?.n ?? 0) + Number(b?.n ?? 0),
-        countLabel: `waiting for QA (${Number(l?.n ?? 0)} lots, ${Number(b?.n ?? 0)} batches)`,
-        description: "Review quarantined lots and batches awaiting QC.",
+        count: c.total,
+        countLabel: `waiting for QA (${c.lots} ${c.lots === 1 ? "delivery or lot" : "deliveries or lots"}, ${c.batches} ${c.batches === 1 ? "batch" : "batches"})`,
+        description: "Deliveries and batches waiting for the QA check, and lots stopped by QA.",
       })),
     );
   if (ctx.can("sales.sales_order.view"))
@@ -548,7 +547,7 @@ export async function getOperatorHome(ctx: AuthContext): Promise<OperatorTile[]>
         .select({ n: sql<number>`count(*)::int` })
         .from(salesOrders)
         .where(and(eq(salesOrders.siteId, site), eq(salesOrders.status, "allocated")))
-        .then(([r]) => ({ key: "dispatch", title: "Dispatch orders", href: "/sales", count: Number(r?.n ?? 0), countLabel: "orders allocated, ready to ship", description: "Pick allocated stock, dispatch and print the delivery receipt." })),
+        .then(([r]) => ({ key: "dispatch", title: "Send out orders", href: "/sales/picking", count: Number(r?.n ?? 0), countLabel: "orders with stock set aside, ready to get from the shelf", description: "Get the boxes from the shelf, send them out and print the delivery receipt." })),
     );
   return Promise.all(tiles);
 }
@@ -635,3 +634,19 @@ function warehouseTiles(ctx: AuthContext, site: string, tz: string, today: strin
   return out;
 }
 
+
+/**
+ * The planner's next step on Home (UX audit 2026-10-31): production orders not approved yet, then approved ones whose
+ * batch has not started, at the current site. Counts only; the production module decides what can be done.
+ */
+export async function getPlannerNext(ctx: AuthContext): Promise<{ toApprove: number; approvedNotStarted: number }> {
+  ctx.requireSite(ctx.currentSiteId);
+  const rows = (await db.execute(sql`
+    select
+      count(*) filter (where wo.status in ('draft', 'planned'))::int as to_approve,
+      count(*) filter (where wo.status = 'released' and not exists (
+        select 1 from batches b where b.work_order_id = wo.id and b.status not in ('draft', 'planned')))::int as approved_not_started
+    from work_orders wo
+    where wo.organization_id = ${ctx.organizationId}::uuid and wo.site_id = ${ctx.currentSiteId}::uuid`)) as unknown as { to_approve: number; approved_not_started: number }[];
+  return { toApprove: Number(rows[0]?.to_approve ?? 0), approvedNotStarted: Number(rows[0]?.approved_not_started ?? 0) };
+}

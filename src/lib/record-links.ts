@@ -20,8 +20,8 @@ export const RECORD_ROUTES: Record<string, (id: string) => string> = {
   label_job: (id) => `/labels/jobs/${id}`,
   // production and maintenance
   batch: (id) => `/production/${id}`,
-  work_order: (id) => `/production/work-orders/${id}`,
-  product_min_stock: () => "/production/plan",
+  work_order: (id) => `/production/orders/${id}`,
+  product_min_stock: () => "/inventory?kind=product",
   maintenance_work_order: (id) => `/maintenance/work-orders/${id}`,
   maintenance_plan: (id) => `/maintenance/plans/${id}`,
   equipment: (id) => `/masterdata/equipment/${id}`,
@@ -44,7 +44,7 @@ export const RECORD_ROUTES: Record<string, (id: string) => string> = {
   purchase_request: (id) => `/procurement/requests/${id}`,
   purchase_order: (id) => `/procurement/orders/${id}`,
   supplier_return: (id) => `/procurement/returns/${id}`,
-  supplier: (id) => `/masterdata/suppliers/${id}`,
+  supplier: (id) => `/procurement/suppliers/${id}`,
   supplier_material_change: () => "/procurement/suppliers",
   // finance
   invoice: (id) => `/finance/invoices/${id}`,
@@ -78,6 +78,31 @@ export const LINK_ONLY_TYPES = ["batch_reopen_request", "disposition_request", "
 
 export const FALLBACK_HREF = "/action-centre";
 
+/**
+ * Old screen addresses that have a newer screen doing the same job (docs/LEGACY_SCREENS.md). Links stored
+ * before the change (notifications, action items, e-mails, bookmarks) still work because the old pages
+ * redirect; this map sends taps straight to the current screen so nobody sees the old address at all.
+ * Order matters: the first matching pattern wins. Query strings and #anchors are kept unless replaced.
+ */
+export const SUPERSEDED_LINKS: readonly { from: RegExp; to: (m: RegExpMatchArray) => string }[] = [
+  { from: /^\/action-centre\?(?:.*&)?tab=approvals(?:&.*)?$/, to: () => "/approvals" },
+  { from: /^\/action-centre\?(?:.*&)?tab=alerts(?:&.*)?$/, to: () => "/notifications" },
+  { from: /^\/inventory\/([0-9a-f-]{36})\/move$/i, to: (m) => `/inventory/move?lot=${m[1]}` },
+  { from: /^\/inventory\/lots\/([0-9a-f-]{36})$/i, to: (m) => `/inventory/${m[1]}` },
+  { from: /^\/masterdata\/suppliers(\?.*)?$/, to: (m) => `/procurement/suppliers${m[1] ?? ""}` },
+  { from: /^\/quality\/check\/?$/, to: () => "/quality" },
+  { from: /^\/production\/work-orders\/([0-9a-f-]{36})$/i, to: (m) => `/production/orders/${m[1]}` },
+];
+
+/** The current screen for a link that may point at a superseded one (unchanged when it does not). */
+export function currentHref(link: string): string {
+  for (const r of SUPERSEDED_LINKS) {
+    const m = link.match(r.from);
+    if (m) return r.to(m);
+  }
+  return link;
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A same-site path only (never an absolute or protocol-relative URL). */
@@ -94,9 +119,10 @@ export function recordHref(entityType: string | null | undefined, entityId: stri
 
 /**
  * Where tapping a notification goes: the link the producer stored (it knows the exact screen),
- * else the page derived from the entity type and id, else the action centre.
+ * else the page derived from the entity type and id, else Problems & alerts. A stored link to a superseded
+ * screen is sent to its replacement (`currentHref`).
  */
 export function notificationHref(n: { entityType?: string | null; entityId?: string | null; link?: string | null }): string {
-  if (isInternalPath(n.link) && n.link !== "/notifications") return n.link;
+  if (isInternalPath(n.link) && n.link !== "/notifications") return currentHref(n.link);
   return recordHref(n.entityType, n.entityId) ?? FALLBACK_HREF;
 }

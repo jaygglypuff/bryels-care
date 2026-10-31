@@ -323,7 +323,7 @@ function Exceptions({ kpi }: { kpi: OwnerKpis }) {
       }
     >
       {kpi.exceptions.length === 0 ? (
-        <EmptyState title="Nothing needs attention">No open alert in the action centre.</EmptyState>
+        <EmptyState title="Nothing needs attention">Nothing open in Problems &amp; alerts.</EmptyState>
       ) : (
         <ul className="divide-y divide-line">
           {kpi.exceptions.map((e, i) => (
