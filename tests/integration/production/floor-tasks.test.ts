@@ -36,12 +36,12 @@ beforeAll(async () => {
 }, 180_000);
 
 describe("myFloorTasks", () => {
-  it("lists the seeded batch that has no production order (B-26-0004, being made) with one button to the batch page", async () => {
+  it("lists the seeded batch that has no production order (B-26-0004, being made) with one button to its flow screen (one path, never the old workspace)", async () => {
     const tasks = await myFloorTasks(w.operator);
     const t = tasks.find((x) => x.batchNumber === "B-26-0004");
     expect(t, "batch without an order is a task").toBeDefined();
     expect(t!.workOrderId).toBeNull();
-    expect(t!.href).toBe(`/production/${t!.batchId}`);
+    expect(t!.href).toMatch(new RegExp(`^/production/orders/without-order/(materials|weigh|step/\\d+)\\?batch=${t!.batchId}$`));
     expect(t!.stepLabel).toMatch(/^Step \d+ of \d+ · /);
     expect(t!.percent).toBeGreaterThanOrEqual(0);
     expect(t!.percent).toBeLessThanOrEqual(100);

@@ -264,7 +264,34 @@ The same six operator screens serve both products; only the step setup (routing)
 | Labels | Print page of the label job (one label per piece) | Label job (entity `batch`) with lot number, made date, expiry frozen on the batch (`production.batch.label_lot_fixed`) |
 | Finish | Damaged and left over (prefilled from the step) | Reconciliation taken = used + damaged + left over (tolerance), consumption posted, finished lot = the lot on the labels |
 
-No packaging line at all (no recipe line, no setup): the packaging step asks "Which wrapper or label lot did you use? (scan or type it)" (the old issue command).
+No packaging line at all (no recipe line, no setup, or a batch made before migration 0031): Get materials says so, and the packaging step shows the released packaging lots at the site as tap-to-choose cards (name, lot, shelf, quantity, first expiry first) plus **Scan with camera** (`src/ui/scanner.tsx`). The tapped card sends the lot id and shelf id to the existing `issuePackaging` (same lot, material, site, hold and stock checks). Nobody types a code.
+
+Labels: the box "Labels for this batch" shows a small preview (product, lot, expiry, label design) and links to the label job's print page (the print view itself belongs to the label work under `/print` and `/labels`). Printing fixes the lot number, made date and expiry, so `printBatchLabels` refuses it until every step before the first packaging/filling step is done (`labelPrintBlocker`, server rule; the button shows the reason).
+
+## 4.4 One path for production work (2026-10-31)
+
+Owner complaint: on "Step 6 of 7 Packaging and labeling" the operator landed on the old batch workspace (typed `BC:LOT:` box, "Lot BC not found"). Every "do work" link is now built in `src/modules/production/flow-paths.ts` and opens a flow screen; `/production/<batch>` is the read-only **batch record**. Guard: `tests/unit/production-one-path.test.ts` (next-action builders for every state, with and without an order, plus a grep over the link-building modules and screens).
+
+| Task | Screen | Who (permission at the batch site) |
+|---|---|---|
+| Get materials (also "by scan" when `production.prepare.scan_lots` is on) | `/production/orders/<order>/materials?batch=<b>` | `production.batch.edit` or `inventory.movement.post` |
+| Start check (clean area) and Start | `/production/orders/<order>/step/<first step>?batch=<b>` | `production.line_clearance.create` |
+| Second check of the Start check / any step | same step screen: name pick on the doer's tablet, or **Yes, I checked it** / **send it back** on the checker's own phone (`checkStep` / `returnStep` own session) | check permission of the step kind, never the doer |
+| Weigh | `/production/orders/<order>/weigh?batch=<b>` (lot label scanned; last 4 typed only for a damaged label) | `production.dispense_record.create` |
+| Check a weighing | Weigh screen: name pick, or **Yes, I checked it** on the checker's own phone; Home task "Check a weighing" | `production.dispense_record.approve`, never the weigher |
+| Container weight, two lots, out-of-range approval, undo a weighing | `/production/orders/<order>/weigh/more?batch=<b>&line=<line>` ("Other ways to weigh") | as before (`recordDispense`, `voidDispense`, CX-TOL approver) |
+| A step: fields, extra fields, equipment, ask for approval | `/production/orders/<order>/step/<n>?batch=<b>` | step perform permission; equipment `production.equipment_use.create` |
+| Curing / resting finished, end early | same step screen | `production.process_step_record.create`; approver for early end |
+| Packaging and labels | the packaging step screen | as a step; labels `inventory.label_job.create` |
+| Redo (QA asked for rework) | the step screen (shows "QA asked for a redo"; no service moves a batch to `rework_approved` yet) | — |
+| Finish | `/production/<b>/finish` | `production.batch.post` |
+| Check quality (QA) | `/quality/check/<b>` (also free-form tests for batches without a test list) | `quality.disposition.approve` |
+| See what happened | `/production/<b>` "Batch record" (read-only; NextStep "Continue this batch" when you can act) | `production.batch.view` |
+| Callers that know only the batch (board, scan, old bookmarks) | `/production/orders/<order>/continue?batch=<b>` (server redirect to the next screen) | `production.batch.view` |
+
+A batch made **without a production order** uses the same screens with the order segment `without-order` (e.g. `/production/orders/without-order/step/6?batch=<b>`); "back" goes to its batch record. This needed no new routes, no migration and no data change (least invasive; A-ONE-01).
+
+Superseded screens (server redirects, URLs kept): `/production/new` and `/production/work-orders/new` → `/production/orders/new`; `/production/work-orders` → `/production/orders`; `/production/staging` → `/production/orders`. `/production/staging/<b>` is now "Lots and sheets" (set-aside lots, QA substitution, printed sheets; no scan-to-stage). `/production` is "Batch records" (read-only list). `/production/work-orders/<id>` stays as the advanced full order record (plan batch, top-up, dispensing sheet); its batch links use "continue".
 
 ## 5. Day to day
 

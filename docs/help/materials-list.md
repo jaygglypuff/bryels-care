@@ -1,8 +1,8 @@
 ---
 key: production.materials_list
 title: Get the materials for a batch (Materials list)
-version: 1
-updated_at: 2026-10-30
+version: 2
+updated_at: 2026-10-31
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -16,11 +16,13 @@ The Materials list shows every ingredient of the batch: how much, which lot to u
 4. Tap **Taken** on the line. The line turns green and shows your name.
 5. If you brought everything, tap **All taken** at the bottom.
 6. Tapped by mistake? Tap **Taken** again to undo it. You can undo until the list is complete.
+7. No wrappers on the list? The screen says so (the product has no packaging set up per piece). Take the wrappers or labels you need; at the wrap step you tap the one you took.
+8. A batch made without a production order (older batches) uses the same list. Its lots are not set aside, so the list shows only what to take.
 
 ## When the list is complete
 
 1. When every line is taken, the screen says **Materials ready**.
-2. Tap **Start** to do the Start check.
+2. Tap the green button (**Start**) to do the Start check.
 
 ## A line shows a red warning
 
@@ -34,5 +36,5 @@ The Materials list shows every ingredient of the batch: how much, which lot to u
 
 ## Settings your site may use
 
-- **Scan each lot**: the button says **Scan**. Scan the label on the container; a wrong lot is refused.
+- **Scan each lot**: the button says **Scan**. Scan the label on the container; a wrong lot is refused. (This replaces the older "Get materials by scanning" screen, which now opens this list.)
 - **Move stock to the production area**: each tick also moves the lot in the stock records. Only the storekeeper can tick then.

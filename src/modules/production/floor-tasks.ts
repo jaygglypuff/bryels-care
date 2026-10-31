@@ -7,6 +7,7 @@ import { whoCanDo } from "@/modules/identity";
 import { currentStepOf } from "./flow-facts";
 import { batchNextAction, type NextAction } from "./production-order-next";
 import { firstStepNo, flowHref } from "./flow-paths";
+import { plainWords } from "./plain-words";
 import { batchStatusView, type BatchFact } from "./production-order-status";
 import { type FormulaSnapshot, isWeighingStep } from "./shared";
 
@@ -83,7 +84,11 @@ export function waitingWords(who: { roles: string[]; people: { name: string }[] 
 
 function taskOf(a: NextAction, step: { name: string; kind: string; status: string } | null, waitingLabel: string | null, batchStatus: string): { kind: FloorTaskKind; title: string } {
   if (batchStatus === "planned") return { kind: "get_materials", title: "Get the materials" };
-  if (batchStatus === "materials_staged") return { kind: "start", title: "Start the batch" };
+  if (batchStatus === "materials_staged") {
+    // The Start check is answered and waits for the second person's check (own phone, step card).
+    if (step?.status === "awaiting_check") return { kind: "check", title: a.kind === "link" ? `Check ${step.name.toLowerCase()}` : `${step.name}: waiting for a check` };
+    return { kind: "start", title: "Start the batch" };
+  }
   if (batchStatus === "rework_approved") return { kind: "redo", title: "Redo the steps QA asked for" };
   if (!step) return { kind: "finish", title: "Finish the batch" };
   if (waitingLabel && a.kind === "wait" && !a.who) return { kind: "wait", title: waitingLabel };
@@ -164,8 +169,8 @@ export async function myFloorTasks(ctx: AuthContext, now: Date = new Date()): Pr
     const total = planned.length || cur?.total || 0;
     const index = r.status === "in_process" || r.status === "rework_approved" ? (cur?.index ?? total) : null;
     const doneSteps = r.status === "in_process" || r.status === "rework_approved" ? (cur ? cur.index - 1 : total) : 0;
-    const t = taskOf(action, cur ? { name: cur.name, kind: cur.kind, status: cur.status } : null, cur?.waitingLabel ?? null, r.status);
-    const word = t.kind === "weigh" ? "Weighing" : cur?.name ?? "Every step done";
+    const t = taskOf(action, cur ? { name: plainWords(cur.name), kind: cur.kind, status: cur.status } : null, cur?.waitingLabel ?? null, r.status);
+    const word = t.kind === "weigh" ? "Weighing" : (cur ? plainWords(cur.name) : "Every step done");
     const stepLabel = index !== null && total > 0 ? `Step ${Math.min(index, total)} of ${total} · ${cur ? word : "Every step done"}` : r.status === "materials_staged" ? "Materials ready · not started" : "Not started";
     let canDo = action.kind === "link";
     // A weighing of this batch waits for my check (someone else weighed it): the task is "Check".
