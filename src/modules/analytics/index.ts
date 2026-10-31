@@ -69,3 +69,6 @@ export type { ActiveBatch, OperationsCenter, PipelinePart, PipelineStage, Pipeli
 // Owner Home (ADR-083 §4, mockup panel 1): one source per label, see owner-home.ts
 export { getOwnerHome, listStockAlerts, listWeekBatches, stockAlertCounts } from "./owner-home";
 export type { OwnerHome, SalesDay, StockAlertCounts, StockAlertLot, StockAlerts, WeekBatch, WeekBatches } from "./owner-home";
+// ADR-088: Reports landing page (grade-5 business overview), best-selling products
+export { getTopProducts } from "./top-products";
+export type { TopProduct, TopProducts } from "./top-products";

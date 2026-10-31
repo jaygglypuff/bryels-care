@@ -9,10 +9,11 @@ import { fmtDateTime } from "@/lib/qty";
 import { reasonCodeOptions } from "@/modules/masterdata";
 import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
+import { NextStep, PageIntro } from "@/ui/guide";
 import { ResolveForms } from "./resolve-forms";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Sync conflict" };
+export const metadata = { title: "Phone change to check" };
 
 const FIELD_LABEL: Record<string, string> = {
   qty: "Quantity",
@@ -77,9 +78,17 @@ export default async function ConflictPage({ params }: { params: Promise<{ id: s
     <>
       <PageHeader
         title={`${commandLabel(c.commandType)}${c.relatedEntityNumber ? ` · ${c.relatedEntityNumber}` : ""}`}
-        subtitle={`Captured offline by ${c.userName}${c.deviceLabel ? ` on ${c.deviceLabel}` : ""} at ${fmtDateTime(c.command.clientCreatedAt)}; received ${fmtDateTime(c.command.receivedAt)} · site ${c.siteCode}`}
+        subtitle={`Made without signal by ${c.userName}${c.deviceLabel ? ` on ${c.deviceLabel}` : ""} at ${fmtDateTime(c.command.clientCreatedAt)} · arrived ${fmtDateTime(c.command.receivedAt)} · ${c.siteCode}`}
         actions={<LinkButton href={ctx.can("platform.sync_conflict.view") ? "/sync/conflicts" : "/sync"} variant="secondary">Back</LinkButton>}
       />
+      <PageIntro>This screen is for the supervisor: one change made on a phone without signal that the system could not save. Compare “on the phone” with “in the system now”, then choose what to do at the bottom.</PageIntro>
+      {c.status === "open" && (
+        c.canResolve ? (
+          <NextStep text="Choose what happens to this change: save it again, save it with a fix, throw it away, or pass it up." action={{ label: "Choose now", href: "#resolve" }} />
+        ) : (
+          <NextStep text="This change waits for a supervisor." waitingFor="The site manager or the person who looks after phone changes decides." />
+        )
+      )}
       <div className="space-y-5">
         <Banner tone={c.status === "open" ? "warn" : "info"} title={`${REASON_LABEL[c.reasonCode as SyncConflictReason] ?? c.reasonCode}${c.status === "open" ? " · waiting for review" : ` · ${c.status.replace(/_/g, " ")}`}`}>
           {c.reasonMessage} Nothing from this change was applied{c.status === "resolved_applied" || c.status === "resolved_amended" ? " until a reviewer re-applied it as a new change" : ""}.
@@ -87,12 +96,12 @@ export default async function ConflictPage({ params }: { params: Promise<{ id: s
 
         <div className="grid gap-5 lg:grid-cols-2">
           <Card>
-            <CardTitle>On the device (as sent)</CardTitle>
+            <CardTitle>On the phone (as sent)</CardTitle>
             <Dl items={Object.entries(payload).map(([k, v]) => [FIELD_LABEL[k] ?? k, show(v)])} />
             {c.command.isClockSkewFlagged && <p className="mt-3 text-[12px] text-[var(--warn-fg)]">The device clock differed from the server by {Math.round(c.command.clockSkewSeconds / 60)} min.</p>}
           </Card>
           <Card>
-            <CardTitle action={href ? <Link href={href} className="text-[13px] font-medium text-primary-text hover:underline">Open record</Link> : undefined}>On the server now</CardTitle>
+            <CardTitle action={href ? <Link href={href} className="text-[13px] font-medium text-primary-text hover:underline">Open record</Link> : undefined}>In the system now</CardTitle>
             {Object.keys(server).length === 0 ? <p className="text-[13px] text-muted">No related record to show.</p> : <Dl items={Object.entries(server).filter(([k]) => k !== "deviationId").map(([k, v]) => [SERVER_LABEL[k] ?? k, show(v)])} />}
             {typeof server.deviationNumber === "string" && <p className="mt-3 text-[13px]">A deviation stub was opened for QA: <Chip tone="warn">{server.deviationNumber}</Chip></p>}
           </Card>
@@ -100,7 +109,7 @@ export default async function ConflictPage({ params }: { params: Promise<{ id: s
 
         {c.status !== "open" && (
           <Card>
-            <CardTitle>Resolution</CardTitle>
+            <CardTitle>What was decided</CardTitle>
             <Dl
               items={[
                 ["Decision", c.status.replace(/_/g, " ")],
@@ -116,7 +125,7 @@ export default async function ConflictPage({ params }: { params: Promise<{ id: s
 
         {c.attempts.length > 0 && (
           <Card>
-            <CardTitle>Re-apply attempts</CardTitle>
+            <CardTitle>Tries to save it again</CardTitle>
             <ul className="divide-y divide-line text-[13px]">
               {c.attempts.map((a) => (
                 <li key={a.id} className="flex flex-wrap justify-between gap-2 py-2">
@@ -129,11 +138,13 @@ export default async function ConflictPage({ params }: { params: Promise<{ id: s
         )}
 
         {c.status === "open" && (c.canResolve || c.canDiscardOwn) && (
+          <div id="resolve">
           <ResolveForms conflictId={c.id} editable={editable} ownDiscardOnly={!c.canResolve} canEscalateAdjustment={c.canResolve && canEscalateAdjustment} canEscalateDeviation={c.canResolve && canEscalateDeviation} reasonCodes={reasonCodes} />
+          </div>
         )}
         {c.status === "open" && !c.canResolve && !c.canDiscardOwn && (
           <Card>
-            <p className="text-[13px] text-muted">{c.isOwn ? "A supervisor at this site reviews your change. You will see the decision here." : "Resolving needs the sync conflict approval permission at this site."}</p>
+            <p className="text-[13px] text-muted">{c.isOwn ? "A supervisor at this site reviews your change. You will see the decision here." : "Deciding needs the supervisor\u2019s permission at this site. Ask the site manager."}</p>
           </Card>
         )}
       </div>

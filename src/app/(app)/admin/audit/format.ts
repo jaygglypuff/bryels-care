@@ -1,17 +1,9 @@
 /** Presentation helpers for audit events (module.entity.event). */
 
-const MODULE_LABEL: Record<string, string> = {
-  identity: "Identity",
-  platform: "Platform",
-  masterdata: "Master data",
-  inventory: "Inventory",
-  production: "Production",
-  quality: "Quality",
-  sales: "Sales",
-  analytics: "Analytics",
-};
+import { plainModule } from "@/ui/permission-words";
 
-export const moduleLabel = (m: string) => MODULE_LABEL[m] ?? m.charAt(0).toUpperCase() + m.slice(1);
+/** Plain area names (ADR-088), shared with the roles and permission screens. */
+export const moduleLabel = (m: string) => plainModule(m);
 
 /** "inventory.goods_receipt.posted" → "Goods receipt posted". */
 export function actionLabel(action: string): string {

@@ -5,6 +5,8 @@ import { getOperationsCenter, getOwnerHome } from "@/modules/analytics";
 import { myApprovalCount } from "@/modules/action-centre";
 import { notInvoicedShipments } from "@/modules/finance";
 import { EmptyState, PageHeader, cx } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { homeIntro } from "@/ui/role-names";
 import { HomeCards, NeedsAttention, ProductionByStage, RecentActivity, SalesWeek, attentionItems } from "./simple-home";
 
 /**
@@ -53,7 +55,7 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
     <div className="space-y-5">
       <PageHeader
         title={`${greeting}, ${ctx.displayName.split(" ")[0]}`}
-        subtitle={`Here is what is happening in your business today · ${today} · ${all ? "All your sites" : ctx.currentSite.name}`}
+        subtitle={`${today} · ${all ? "All your sites" : ctx.currentSite.name}`}
         actions={
           ctx.allowedSites.length > 1 && ctx.can("analytics.owner_dashboard.view") ? (
             <div className="flex rounded-full border border-line bg-surface p-1" role="group" aria-label="Sites">
@@ -63,6 +65,9 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
           ) : undefined
         }
       />
+      <div className="-mt-2">
+        <PageIntro>{homeIntro(ctx.roleCodes)}</PageIntro>
+      </div>
       <HomeCards home={home} approvals={approvals} stockHref={stockHref} batchesHref={`/dashboard/details/batches${qs}`} />
       <NeedsAttention items={items} />
       {(home.salesWeek || oc.stages.length > 0) && (
@@ -74,8 +79,8 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
       {home.activity && <RecentActivity rows={home.activity} showSite={all} />}
       <p className="text-[14px] text-fg-2">
         More numbers and charts:{" "}
-        <Link href={all ? "/analytics/overview?scope=all" : "/analytics/overview"} className="font-medium text-primary-text underline">
-          Business overview
+        <Link href={all ? "/analytics?scope=all" : "/analytics"} className="inline-flex min-h-[44px] items-center font-medium text-primary-text underline">
+          Reports
         </Link>
       </p>
     </div>

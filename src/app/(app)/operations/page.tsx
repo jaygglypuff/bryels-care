@@ -5,6 +5,7 @@ import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { ACTIVE_BATCH_LIMIT, getOperationsCenter } from "@/modules/analytics";
 import { Card, EmptyState, PageHeader, Table, Td, cx } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
 import { PipelineStrip } from "@/ui/pipeline";
 import { StatusChip } from "@/ui/status";
 import { QUICK_ACTIONS } from "../nav";
@@ -43,14 +44,14 @@ export default async function OperationsCenterPage({ searchParams }: { searchPar
     <div className="space-y-6">
       <PageHeader
         title="Operations Center"
-        subtitle={`${oc.scope.label} · from delivery to dispatch · every number opens the records behind it`}
+        subtitle={oc.scope.label}
         actions={
           multi ? (
             <div className="flex rounded-full border border-line bg-surface p-1 text-[13px]" role="group" aria-label="Sites shown">
-              <Link href="/operations" aria-current={!oc.scope.all ? "page" : undefined} className={cx("rounded-full px-3 py-1.5", !oc.scope.all ? "bg-cta text-white" : "text-fg-2")}>
-                {ctx.currentSite.code}
+              <Link href="/operations" aria-current={!oc.scope.all ? "page" : undefined} className={cx("inline-flex min-h-[40px] items-center rounded-full px-3.5", !oc.scope.all ? "bg-cta text-white" : "text-fg-2")}>
+                This site
               </Link>
-              <Link href="/operations?scope=all" aria-current={oc.scope.all ? "page" : undefined} className={cx("rounded-full px-3 py-1.5", oc.scope.all ? "bg-cta text-white" : "text-fg-2")}>
+              <Link href="/operations?scope=all" aria-current={oc.scope.all ? "page" : undefined} className={cx("inline-flex min-h-[40px] items-center rounded-full px-3.5", oc.scope.all ? "bg-cta text-white" : "text-fg-2")}>
                 All my sites
               </Link>
             </div>
@@ -58,11 +59,14 @@ export default async function OperationsCenterPage({ searchParams }: { searchPar
         }
       />
 
+      <div className="-mt-4">
+        <PageIntro>This screen is for everyone who runs the plant: every step from a supplier delivery to sending the customer order, with how many things are at each step right now. Tap a step to see them; red means late or stopped.</PageIntro>
+      </div>
       {oc.stages.length === 0 ? (
-        <EmptyState title="No pipeline stages for your role">Your role does not give access to receiving, stock, production or customer orders at this site. Ask your site manager if you need it.</EmptyState>
+        <EmptyState title="Nothing to show for your role">Your role does not give access to receiving, stock, production or customer orders at this site. Ask your site manager if you need it.</EmptyState>
       ) : (
         <section aria-labelledby="pipeline-h" className="space-y-3">
-          <h2 id="pipeline-h" className="font-display text-[18px] font-semibold">Pipeline</h2>
+          <h2 id="pipeline-h" className="font-display text-[18px] font-semibold">From delivery to dispatch</h2>
           <PipelineStrip stages={oc.stages} />
         </section>
       )}
@@ -70,8 +74,8 @@ export default async function OperationsCenterPage({ searchParams }: { searchPar
       {(ctx.can("production.batch.view") || ctx.can("production.work_order.view")) && (
         <section aria-labelledby="batches-h" className="space-y-3">
           <div className="flex items-baseline justify-between gap-3">
-            <h2 id="batches-h" className="font-display text-[18px] font-semibold">Active batches</h2>
-            <Link href="/production/orders" className="text-[13px] font-medium text-primary-text hover:underline">All production orders</Link>
+            <h2 id="batches-h" className="font-display text-[18px] font-semibold">Batches being made</h2>
+            <Link href="/production/orders" className="inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text hover:underline">All production orders</Link>
           </div>
           {oc.batches.length === 0 ? (
             <EmptyState title="No batches in progress">Batches appear here when a production order is approved, and leave when QA releases or rejects them.</EmptyState>
@@ -83,10 +87,10 @@ export default async function OperationsCenterPage({ searchParams }: { searchPar
                   <li key={b.id}>
                     <Link href={b.href} className="block rounded-[14px] border border-line bg-surface p-3.5">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-[12.5px] text-fg-2">{b.batchNumber}{oc.scope.all && ` · ${b.siteCode}`}</span>
+                        <p className="min-w-0 font-medium text-fg">{b.productName}</p>
                         <StatusChip status={b.status} />
                       </div>
-                      <p className="mt-1 font-medium text-fg">{b.productName}</p>
+                      <span className="font-mono text-[12px] text-muted">{b.batchNumber}{oc.scope.all && ` · ${b.siteCode}`}</span>
                       <div className="mt-2 flex items-center justify-between text-[12px] text-muted">
                         <Progress done={b.stepsDone} total={b.stepsTotal} />
                         <span className={cx(b.late && "font-medium text-[var(--warn-fg)]")}>{b.plannedStartOn ? `${b.late ? "Late · " : ""}Start ${fmtDate(b.plannedStartOn)}` : ""}</span>
@@ -108,7 +112,7 @@ export default async function OperationsCenterPage({ searchParams }: { searchPar
                   </tr>
                 ))}
               </Table>
-              {oc.batches.length >= ACTIVE_BATCH_LIMIT && <p className="text-[12px] text-muted">Showing the first {ACTIVE_BATCH_LIMIT}. Open production orders for the full list.</p>}
+              {oc.batches.length >= ACTIVE_BATCH_LIMIT && <p className="text-[13px] text-muted">Showing the first {ACTIVE_BATCH_LIMIT}. Open “All production orders” for the rest.</p>}
             </>
           )}
         </section>
@@ -116,7 +120,7 @@ export default async function OperationsCenterPage({ searchParams }: { searchPar
 
       {quick.length > 0 && (
         <Card aria-labelledby="quick-h">
-          <h2 id="quick-h" className="mb-3 font-display text-[16px] font-semibold">Quick links</h2>
+          <h2 id="quick-h" className="mb-3 font-display text-[16px] font-semibold">Start something</h2>
           <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             {quick.map((q) => (
               <li key={q.href}>

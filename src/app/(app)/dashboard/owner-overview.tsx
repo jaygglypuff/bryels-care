@@ -11,7 +11,7 @@ import { ChartFrame } from "@/ui/charts/chart-frame";
 import { fmtKpi, hhmm } from "@/ui/charts/format";
 import { VIZ } from "@/ui/charts/palette";
 import { actionLabel, actionModule, entityHref, moduleLabel } from "../admin/audit/format";
-import { CategoryChip, KpiCard, LockedCard, RecordRef, StaleNotice, UnavailableCard, periodText, scopeText } from "../analytics/kpi-ui";
+import { CategoryChip, KpiCard, LockedCard, RecordRef, StaleNotice, UnavailableCard, periodText, plainKpi, scopeText } from "../analytics/kpi-ui";
 
 /**
  * Owner overview (docs/ux-system.md §9.2, US-5-02). The KPI rows come from the KPI engine
@@ -280,7 +280,7 @@ function Fulfilment({ kpi }: { kpi: OwnerKpis }) {
       <tr className="font-semibold">
         <Td>Due in the period</Td>
         <Td className="text-right tabular">{fmtInt(total)}</Td>
-        <Td className="text-right tabular">OTIF {fmtKpi("ratio", t.current?.value)}</Td>
+        <Td className="text-right tabular">On time {fmtKpi("ratio", t.current?.value)}</Td>
       </tr>
     </Table>
   );
@@ -289,7 +289,7 @@ function Fulfilment({ kpi }: { kpi: OwnerKpis }) {
       <EmptyState title="No orders due in this period">Orders appear here by their requested delivery date.</EmptyState>
     ) : (
       <div className="flex flex-col items-center gap-4 sm:flex-row lg:flex-col 2xl:flex-row">
-        <Donut segments={segs} centre={fmtKpi("ratio", t.current?.value)} centreLabel="OTIF" ariaLabel={`Orders due: ${segs.map((s) => `${s.label} ${s.value}`).join(", ")}`} />
+        <Donut segments={segs} centre={fmtKpi("ratio", t.current?.value)} centreLabel="on time" ariaLabel={`Orders due: ${segs.map((s) => `${s.label} ${s.value}`).join(", ")}`} />
         <ul className="grid w-full gap-1.5 text-[13px]">
           {segs.map((s) => (
             <li key={s.key}>
@@ -305,7 +305,7 @@ function Fulfilment({ kpi }: { kpi: OwnerKpis }) {
         </ul>
       </div>
     );
-  return <ChartFrame title="Order fulfilment" subtitle="On time in full, late and still open, for orders due in the period (KPI-SAL-02)" chart={chart} table={table} meta={meta} />;
+  return <ChartFrame title="Order fulfilment" subtitle="Orders due in this period: sent on time and complete, late, or still open" chart={chart} table={table} meta={meta} />;
 }
 
 // ---------- exceptions ----------
@@ -348,11 +348,11 @@ function Exceptions({ kpi }: { kpi: OwnerKpis }) {
 // ---------- site comparison ----------
 
 const COMPARISON_COLUMNS: [string, string, string][] = [
-  ["KPI-OPS-01", "Output", "qty_g"],
-  ["KPI-OPS-02", "Yield", "ratio"],
-  ["KPI-SAL-02", "OTIF", "ratio"],
-  ["KPI-QUA-03", "QA holds", "count"],
-  ["KPI-INV-04", "FEFO risk", "count"],
+  ["KPI-OPS-01", "Made", "qty_g"],
+  ["KPI-OPS-02", "Came out", "ratio"],
+  ["KPI-SAL-02", "On time", "ratio"],
+  ["KPI-QUA-03", "Stopped by QA", "count"],
+  ["KPI-INV-04", "Expires soon", "count"],
   ["KPI-OWN-07", "Stock value", "money"],
   ["KPI-FIN-02", "Shipped value (est.)", "money"],
 ];
@@ -468,7 +468,7 @@ export function OwnerOverview({ data, kpi, canAudit }: { data: OwnerDashboard; k
         {card("KPI-INV-07")}
         {card("KPI-FIN-02")}
         {card("KPI-OWN-13", { visual: "none" })}
-        {kpi.unavailable.map((u) => (u.masked ? <LockedCard key={u.code} title={u.short} /> : <UnavailableCard key={u.code} title={u.short} reason={u.reason} phase={u.phase} />))}
+        {kpi.unavailable.map((u) => (u.masked ? <LockedCard key={u.code} title={plainKpi(u.code, u.short)} /> : <UnavailableCard key={u.code} title={plainKpi(u.code, u.short)} reason={u.reason} phase={u.phase} />))}
       </div>
 
       {board && (
@@ -526,7 +526,7 @@ export function OwnerOverview({ data, kpi, canAudit }: { data: OwnerDashboard; k
       <p className="text-center text-[12px] text-muted">
         Updated {fmtDateTime(kpi.generatedAt)} · {kpi.scope.label} · cards are computed from posted records; sparklines from the nightly snapshot
         {kpi.freshness.lastReconciliation &&
-          ` · last reconciliation: ${kpi.freshness.lastReconciliation.mismatches === 0 ? "every KPI matched its source records" : `${kpi.freshness.lastReconciliation.mismatches} differences reported`}`}
+          ` · last reconciliation: ${kpi.freshness.lastReconciliation.mismatches === 0 ? "every number matched its records" : `${kpi.freshness.lastReconciliation.mismatches} differences reported`}`}
       </p>
     </div>
   );

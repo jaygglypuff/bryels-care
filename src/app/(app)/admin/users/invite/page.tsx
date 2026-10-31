@@ -2,12 +2,13 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { grantableRoles, warehousesForSites } from "@/modules/identity";
 import { Card, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
 import { StepUpGate } from "../step-up-gate";
 import { InviteForm } from "./form";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Invite someone" };
+export const metadata = { title: "Add a person" };
 
 export default async function InvitePage() {
   const ctx = await requireContext();
@@ -17,10 +18,11 @@ export default async function InvitePage() {
     <>
       <p className="mb-2 text-[13px]">
         <Link href="/admin/users" className="text-primary-text hover:underline">
-          ← Users
+          ← People
         </Link>
       </p>
-      <PageHeader title="Invite someone" subtitle="They receive a one-time link to choose their own password. You never see or set it." />
+      <PageHeader title="Add a person" />
+      <PageIntro>This screen is for adding someone who will use the app: type their email and name, pick their job and site, and press “Send invitation”. They get a link to choose their own password; you never see it.</PageIntro>
       <StepUpGate ctx={ctx} purpose="invite people" />
       <Card className="max-w-[640px]">
         <InviteForm roles={roles} sites={ctx.allowedSites} warehouses={warehouses} orgWide={ctx.isOrganizationWide} defaultSiteId={ctx.currentSiteId} />

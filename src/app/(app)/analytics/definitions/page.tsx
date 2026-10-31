@@ -3,6 +3,7 @@ import { requireContext } from "@/lib/auth/context";
 import { listKpiDefinitions } from "@/modules/analytics";
 import { Card, EmptyState, PageHeader, Table, Td } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
 import { LABEL_TEXT } from "@/ui/charts/format";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export default async function DefinitionsPage({ searchParams }: { searchParams: 
   if (!ctx.can("analytics.kpi_definition.view"))
     return (
       <>
-        <PageHeader title="KPI definitions" />
+        <PageHeader title="What each number means" />
         <EmptyState title={`You don't have access to KPI definitions at ${ctx.currentSite.code}`}>Ask your site manager.</EmptyState>
       </>
     );
@@ -24,7 +25,8 @@ export default async function DefinitionsPage({ searchParams }: { searchParams: 
   const d = await listKpiDefinitions(ctx, { runId: sp.run ?? null });
   return (
     <>
-      <PageHeader title="KPI definitions" subtitle="What each number means, how it is calculated, which records it reads, and whether last night's recomputation matched." />
+      <PageHeader title="What each number means" />
+      <PageIntro>This screen is for checking the numbers: what each one counts, where it comes from, and whether last night&apos;s check matched the records. Most people never need it.</PageIntro>
       <div className="flex flex-col gap-4">
         <div id="reconciliation">
           {d.run ? (
@@ -38,7 +40,7 @@ export default async function DefinitionsPage({ searchParams }: { searchParams: 
         {d.mismatches.length > 0 && (
           <Card>
             <h2 className="mb-3 font-display text-[17px] font-semibold">Differences found</h2>
-            <Table head={["KPI", "Scope", "Grain", "From", "What differs"]}>
+            <Table head={["Number", "Where", "By", "From", "What differs"]}>
               {d.mismatches.map((m, i) => (
                 <tr key={i}>
                   <Td className="font-mono text-[12.5px]">{m.kpiCode}</Td>
@@ -52,7 +54,7 @@ export default async function DefinitionsPage({ searchParams }: { searchParams: 
           </Card>
         )}
         <div className="hidden md:block">
-          <Table head={["KPI", "Definition", "Calculation", "Time basis", "Refresh", "Label", "Version", "Last check"]}>
+          <Table head={["Number", "What it means", "How it is worked out", "Counted by", "Updated", "Kind", "Version", "Last check"]}>
             {d.entries.map((e) => (
               <tr key={e.code} className="align-top">
                 <Td>
@@ -63,9 +65,8 @@ export default async function DefinitionsPage({ searchParams }: { searchParams: 
                   ) : (
                     <span className="font-medium">{e.name}</span>
                   )}
-                  <div className="font-mono text-[11.5px] text-muted">
-                    {e.code} · {AREA_TEXT[e.area]}
-                  </div>
+                  <div className="text-[11.5px] text-muted">{AREA_TEXT[e.area]}</div>
+                  <div className="font-mono text-[11px] text-muted">technical name {e.code}</div>
                 </Td>
                 <Td className="max-w-[260px] text-[12.5px]">{e.definition}</Td>
                 <Td className="max-w-[240px] text-[12px] text-fg-2">
@@ -90,18 +91,18 @@ export default async function DefinitionsPage({ searchParams }: { searchParams: 
                 <span className="font-medium">{e.name}</span>
                 <Chip tone={e.label === "actual" ? "neu" : "warn"}>{LABEL_TEXT[e.label]}</Chip>
               </div>
-              <p className="font-mono text-[11.5px] text-muted">{e.code}</p>
               <p className="mt-1 text-[12.5px]">{e.definition}</p>
-              <p className="mt-1 text-[12px] text-muted">Time basis: {e.timeBasis}</p>
+              <p className="mt-1 text-[12px] text-muted">Counted by: {e.timeBasis}</p>
+              <p className="mt-1 break-words font-mono text-[11.5px] text-muted">Technical name: {e.code}</p>
             </li>
           ))}
         </ul>
         <Card>
-          <h2 className="mb-2 font-display text-[17px] font-semibold">Not available yet</h2>
+          <h2 className="mb-2 font-display text-[17px] font-semibold">Numbers we cannot show yet</h2>
           <ul className="grid gap-1.5 text-[13px]">
             {d.unavailable.map((u) => (
               <li key={u.code}>
-                <span className="font-medium">{u.name}</span> <span className="font-mono text-[11.5px] text-muted">{u.code}</span> · {u.phase}: {u.reason}
+                <span className="font-medium">{u.name}</span> · {u.reason}
               </li>
             ))}
           </ul>

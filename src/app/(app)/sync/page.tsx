@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageIntro } from "@/ui/guide";
 import { requireContext } from "@/lib/auth/context";
 import { listMyConflicts, openConflictCount } from "@/lib/offline/server/conflicts";
 import { REASON_LABEL, type SyncConflictReason } from "@/lib/offline/protocol";
@@ -19,10 +20,10 @@ export default async function SyncPage() {
   return (
     <>
       <PageHeader
-        title="Sync and offline"
-        subtitle="What this device has queued, when it last reached the server, and the offline data it keeps for counting and weighing without signal."
+        title="Working without signal"
         actions={canReview ? <LinkButton href="/sync/conflicts" variant="secondary">Conflict review{reviewCount ? ` · ${reviewCount}` : ""}</LinkButton> : undefined}
       />
+      <PageIntro>This screen is for phones and tablets used where the signal is weak: what this device saved while offline, when it last sent it, and anything the office must check.</PageIntro>
       <div className="space-y-5">
         <SyncPanel userId={ctx.userId} sites={ctx.allowedSites} currentSiteId={ctx.currentSiteId} />
         <Card>

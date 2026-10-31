@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageIntro } from "@/ui/guide";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { listStockAlerts, stockAlertCounts, type StockAlertLot } from "@/modules/analytics";
@@ -31,10 +32,11 @@ export default async function StockAlertsPage({ searchParams }: { searchParams: 
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Stock alerts"
-        subtitle={`${a.scope.label} · ${n.total} ${n.total === 1 ? "alert" : "alerts"} · a lot on hold that also expires soon is listed in both groups`}
+        title="Stock to look at"
+        subtitle={`${a.scope.label} · ${n.total} to look at`}
         actions={<LinkButton href={all ? "/dashboard?scope=all" : "/dashboard"} variant="secondary">Back to Home</LinkButton>}
       />
+      <PageIntro>This screen is for the owner, the site manager and the warehouse: what is running low (buy more), what expires soon (use first) and what QA stopped. Something stopped that also expires soon is in both lists.</PageIntro>
       {a.lowStock && (
         <Card>
           <div id="low" className="scroll-mt-24">
@@ -68,8 +70,8 @@ export default async function StockAlertsPage({ searchParams }: { searchParams: 
           )}
         </Card>
       )}
-      {a.expiring && <LotGroup id="expiring" title="Expiring within 30 days" rows={a.expiring} showSite={showSite} empty="No lot in stock expires in the next 30 days." />}
-      {a.onHold && <LotGroup id="on-hold" title="On quality hold" rows={a.onHold} showSite={showSite} empty="No lot in stock is on quality hold." />}
+      {a.expiring && <LotGroup id="expiring" title="Expires within 30 days – use first" rows={a.expiring} showSite={showSite} empty="No lot in stock expires in the next 30 days." />}
+      {a.onHold && <LotGroup id="on-hold" title="Stopped by QA" rows={a.onHold} showSite={showSite} empty="Nothing in stock is stopped by QA." />}
       {!a.lowStock && !a.expiring && !a.onHold && <Forbidden what="stock" />}
     </div>
   );

@@ -1,6 +1,8 @@
 import { requireContext } from "@/lib/auth/context";
 import { canSeeReport, recipientOptions, reportByCode } from "@/modules/reports";
 import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { plainReport } from "../../plain";
 import { Forbidden } from "../../../forbidden";
 import { ScheduleForm } from "../forms";
 import { formParams } from "../shared";
@@ -16,8 +18,8 @@ export default async function NewSchedulePage({ searchParams }: { searchParams: 
   if (!def || !def.schedulable || !canSeeReport(ctx, def)) {
     return (
       <Card>
-        <EmptyState title="Choose a report first" action={<LinkButton href="/reports" variant="secondary">Report library</LinkButton>}>
-          Open a report in the library and use “Schedule”. Reports delivered by the system (the weekly access report) cannot be scheduled by hand.
+        <EmptyState title="Choose a list first" action={<LinkButton href="/reports" variant="secondary">Lists to download or print</LinkButton>}>
+          Open a list, then ⋯ More → “Send it by email regularly”. The weekly sign-in list is sent by the system and cannot be set up by hand.
         </EmptyState>
       </Card>
     );
@@ -27,10 +29,11 @@ export default async function NewSchedulePage({ searchParams }: { searchParams: 
   const people = await recipientOptions(ctx);
   return (
     <div className="space-y-5">
-      <PageHeader title={`Schedule: ${def.title}`} subtitle={<span className="font-mono">{def.code}</span>} />
+      <PageHeader title={`Send by email: ${plainReport(def.code, def.title).title}`} />
+      <PageIntro>This screen is for setting up a list that arrives by itself: choose how often, the time and who gets it, then press “Start sending”.</PageIntro>
       <Card>
         <ScheduleForm
-          value={{ name: def.title, reportCode: def.code, siteId: sp.site && sp.site !== "all" ? sp.site : null, cadence: def.defaultCadence ?? "weekly", runAtTime: "07:00", weekday: 1, monthDay: 1, format: "xlsx", parameters, recipientUserIds: [ctx.userId] }}
+          value={{ name: plainReport(def.code, def.title).title, reportCode: def.code, siteId: sp.site && sp.site !== "all" ? sp.site : null, cadence: def.defaultCadence ?? "weekly", runAtTime: "07:00", weekday: 1, monthDay: 1, format: "xlsx", parameters, recipientUserIds: [ctx.userId] }}
           params={formParams(def)}
           sites={ctx.allowedSites.filter((s) => ctx.canAt(def.viewPermission, s.id))}
           people={people}

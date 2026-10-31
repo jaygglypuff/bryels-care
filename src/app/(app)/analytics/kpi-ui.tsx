@@ -11,6 +11,54 @@ import { slotColor } from "@/ui/charts/palette";
 
 /** Shared KPI presentation for the overview, the area dashboards and the drill-down (docs/ux-system.md 5.12, 9.2). */
 
+/**
+ * Plain card titles (ADR-088 grade-5 words) for the KPI short names that are jargon. The catalogue keeps
+ * the official names (definitions page, exports); cards show these.
+ */
+export const PLAIN_KPI: Record<string, string> = {
+  "KPI-SAL-01": "Orders confirmed",
+  "KPI-SAL-01V": "Value of orders",
+  "KPI-SAL-02": "Sent on time and complete",
+  "KPI-SAL-03": "Complete on first sending",
+  "KPI-SAL-04": "Days from order to sending",
+  "KPI-SAL-11": "Orders past the promised date",
+  "KPI-FIN-02": "Value sent (estimate)",
+  "KPI-OPS-01": "Made against plan",
+  "KPI-OPS-02": "How much came out",
+  "KPI-OPS-03": "Amount lost in making",
+  "KPI-OPS-05": "Open production orders",
+  "KPI-OPS-07": "Minutes over plan",
+  "KPI-OPS-13": "Right the first time",
+  "KPI-OPS-14": "Late production orders",
+  "KPI-OPS-16": "Weighed right first time",
+  "KPI-INV-01G": "Stock we can use (g)",
+  "KPI-INV-01P": "Stock we can use (pieces)",
+  "KPI-INV-02": "Stock we cannot use",
+  "KPI-INV-04": "Use first: expires soon",
+  "KPI-INV-04E": "Expired, still on shelves",
+  "KPI-INV-07": "Orders with their materials",
+  "KPI-INV-09": "Delivery to shelf time",
+  "KPI-INV-10": "Deliveries with a problem",
+  "KPI-INV-14": "Stock check differences",
+  "KPI-QUA-01": "Time for a QA check",
+  "KPI-QUA-01P": "Time for a QA check (slow ones)",
+  "KPI-QUA-02": "OK on the first check",
+  "KPI-QUA-03": "Stopped by QA",
+  "KPI-QUA-03A": "Stopped the longest (days)",
+  "KPI-QUA-04": "Tests that failed",
+  "KPI-QUA-05": "Not OK (rejected)",
+  "KPI-QUA-06": "Problem reports",
+  "KPI-QUA-06T": "Days to close a problem",
+  "KPI-QUA-11": "Deliveries waiting for QA",
+  "KPI-OWN-13": "Problems and alerts",
+  "KPI-OWN-03": "Profit on sales",
+  "KPI-OWN-07": "Value of stock",
+  "KPI-OWN-11": "People at work",
+  "KPI-OWN-12": "Money in and out",
+};
+
+export const plainKpi = (code: string, fallback: string) => PLAIN_KPI[code] ?? fallback;
+
 export function scopeText(scope: KpiScope) {
   return scope.all ? "All sites" : scope.sites[0].code;
 }
@@ -72,7 +120,7 @@ export function KpiCard({
   /** Meter caption for ratio KPIs against a plan: numerator and denominator in words. */
   meterOf?: (t: KpiTile) => ReactNode;
 }) {
-  if (tile.masked) return <LockedCard title={tile.short} />;
+  if (tile.masked) return <LockedCard title={plainKpi(tile.code, tile.short)} />;
   const value = fmtKpi(tile.unit, tile.current?.value);
   const pct = tile.current?.value ? Math.min(100, Number(tile.current.value) * 100) : 0;
   const asOf = tile.kind === "asof" ? `as of ${hhmm(tile.asOf)}` : periodText(period);
@@ -80,7 +128,7 @@ export function KpiCard({
     <Link href={tile.href} aria-label={`${tile.name}: ${value}. Open the records`} className="group block h-full rounded-[24px]">
       <Card className="flex h-full flex-col gap-2 transition-shadow group-hover:shadow-[var(--shadow-pop)]">
         <div className="flex items-start justify-between gap-2">
-          <span className="text-[12px] font-semibold uppercase tracking-[.04em] text-fg-2">{title ?? tile.short}</span>
+          <span className="text-[12px] font-semibold uppercase tracking-[.04em] text-fg-2">{title ?? plainKpi(tile.code, tile.short)}</span>
           <span className="flex shrink-0 items-center gap-1.5">
             {!simple && <ValueLabelChip label={tile.label} />}
             <ArrowRight size={16} className="text-muted transition-transform group-hover:translate-x-0.5" aria-hidden />

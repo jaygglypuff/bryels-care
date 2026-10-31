@@ -7,6 +7,9 @@ import type { Permission } from "@/lib/permissions";
 import { type RoleDetail, getRole, permissionCatalogue } from "@/modules/identity";
 import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
+import { MoreDetails, PageIntro } from "@/ui/guide";
+import { permissionSummary, plainModule } from "@/ui/permission-words";
+import { plainRole, plainRoleName } from "@/ui/role-names";
 import { Forbidden } from "../../../forbidden";
 import { StepUpGate } from "../../users/step-up-gate";
 import { EditRoleForm, RetireRoleForms } from "../forms";
@@ -14,6 +17,21 @@ import { EditRoleForm, RetireRoleForms } from "../forms";
 export const dynamic = "force-dynamic";
 
 const SENS = { N: "neu", S: "warn", R: "bad" } as const;
+
+/** "Stock: see, add, change" — one line per area, in plain words. */
+function PlainSummary({ codes }: { codes: string[] }) {
+  const rows = permissionSummary(codes);
+  if (rows.length === 0) return <p className="text-[14px] text-fg-2">Nothing yet.</p>;
+  return (
+    <ul className="divide-y divide-line">
+      {rows.map((r) => (
+        <li key={r.module} className="py-2 text-[14px]">
+          <span className="font-semibold text-fg">{r.label}:</span> <span className="text-fg-2">{r.actions.join(", ")}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export default async function RoleDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
@@ -41,29 +59,29 @@ export default async function RoleDetailPage({ params, searchParams }: { params:
         </Link>
       </p>
       <PageHeader
-        title={role.name}
-        subtitle={<span className="font-mono">{role.code}</span>}
+        title={plainRole(role.code, role.name)}
         actions={
           <>
-            {role.isSystem ? <Chip tone="neu">Template · read-only</Chip> : <Chip tone="info">Custom</Chip>}
-            {role.status === "inactive" && <Chip tone="warn">Inactive</Chip>}
+            {role.isSystem ? <Chip tone="neu">Standard</Chip> : <Chip tone="info">Made here</Chip>}
+            {role.status === "inactive" && <Chip tone="warn">Not used any more</Chip>}
             {canAdmin && (
               <LinkButton href={`/admin/roles/${role.id}/clone`} variant="secondary" size="sm">
-                Clone into a custom role
+                Copy into a new job
               </LinkButton>
             )}
           </>
         }
       />
+      <PageIntro>This screen is for the owner and the IT person: what people with this job may do. Give the job to a person on their page under People.</PageIntro>
       {(await searchParams).created === "1" && (
         <div className="mb-4" role="status">
-          <Banner tone="ok" title="Custom role created">Grant it from a user&apos;s page. Every change to it is audited with the permissions added and removed.</Banner>
+          <Banner tone="ok" title="New job made">Give it to a person on their page under People. Every change to it is kept in the history of changes.</Banner>
         </div>
       )}
       {d.sodWarnings.length > 0 && (
         <div className="mb-4">
-          <Banner tone="warn" title="Separation of duties">
-            This role can both submit and approve: {d.sodWarnings.join(", ")}. The system still refuses anyone approving their own submission.
+          <Banner tone="warn" title="This job can both ask and approve">
+            Areas: {d.sodWarnings.map((w) => plainModule(w.split(".")[0])).join(", ")}. The system still stops anyone approving their own request.
           </Banner>
         </div>
       )}
@@ -71,36 +89,38 @@ export default async function RoleDetailPage({ params, searchParams }: { params:
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <div className="flex min-w-0 flex-col gap-4">
           <Card>
-            <CardTitle>About</CardTitle>
+            <CardTitle>About this job</CardTitle>
             <Dl
               items={[
-                ["Permissions", String(d.permissions.length)],
-                ["People now", String(d.activeAssignments)],
-                ["Scope", role.allowsOrganizationWide ? "Organization-wide or per site" : "Per site"],
-                ["Cloned from", role.clonedFromName ?? "—"],
-                ["Updated", fmtDateTime(role.updatedAt)],
+                ["People with this job now", String(d.activeAssignments)],
+                ["Where", role.allowsOrganizationWide ? "One site or all sites" : "One site"],
+                ["Copied from", role.clonedFromName ? plainRoleName(role.clonedFromName) : "—"],
+                ["Last changed", fmtDateTime(role.updatedAt)],
               ]}
             />
             {role.description && <p className="mt-3 text-[13px] text-fg-2">{role.description}</p>}
-            {role.isSystem && <p className="mt-3 text-[12px] text-muted">Seeded templates change only with a software release, so every site keeps the same bundle. Clone it to make a variant.</p>}
+            {role.isSystem && <p className="mt-3 text-[13px] text-muted">Standard jobs change only with a new version of the app, so every site has the same. Copy it to make your own.</p>}
           </Card>
           {editable && (
-            <Card>
-              <CardTitle>Retire this role</CardTitle>
+            <MoreDetails title="⋯ More: stop using or delete this job">
               <RetireRoleForms roleId={role.id} canDelete={d.everAssigned === 0} />
-            </Card>
+            </MoreDetails>
           )}
         </div>
         <Card className="min-w-0">
           {editable ? (
             <>
-              <CardTitle>Edit permissions</CardTitle>
-              <p className="mb-3 text-[13px] text-muted">You can remove anything, and add only permissions you hold yourself.</p>
+              <CardTitle>What this job may do</CardTitle>
+              <PlainSummary codes={d.permissions.map((p) => p.code)} />
+              <p className="mb-3 mt-4 text-[13px] text-muted">To change it: tick or untick below. You can take anything away, and add only what you may do yourself.</p>
               <EditRoleForm roleId={role.id} name={role.name} description={role.description} catalogue={catalogue} selected={d.permissions.map((p) => p.code)} />
             </>
           ) : (
             <>
-              <CardTitle>Permissions</CardTitle>
+              <CardTitle>What this job may do</CardTitle>
+              <PlainSummary codes={d.permissions.map((p) => p.code)} />
+              <div className="mt-4">
+              <MoreDetails title={`Technical names (${d.permissions.length}, for the IT person)`}>
               <div className="flex flex-col gap-3">
                 {[...grouped.entries()].map(([mod, ps]) => (
                   <section key={mod}>
@@ -118,6 +138,8 @@ export default async function RoleDetailPage({ params, searchParams }: { params:
                     </ul>
                   </section>
                 ))}
+              </div>
+              </MoreDetails>
               </div>
             </>
           )}

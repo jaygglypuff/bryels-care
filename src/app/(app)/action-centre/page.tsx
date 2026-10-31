@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { ACTION_KINDS, ACTION_TABS, type ActionItemView, listActionItems, refreshActionItems } from "@/modules/action-centre";
@@ -33,12 +35,12 @@ function ItemRow({ i }: { i: ActionItemView }) {
         <div className="flex flex-wrap items-center gap-2">
           <Chip tone={sev.tone}>{sev.label}</Chip>
           {i.escalationLevel > 0 && <Chip tone="bad">Escalated</Chip>}
-          {i.acknowledgedAt && <Chip tone="neu">Acknowledged</Chip>}
-          <span className="text-[12px] text-muted">{i.kindLabel} · {i.siteCode ?? "Organization"} · open {age(i.ageMinutes)}</span>
+          {i.acknowledgedAt && <Chip tone="neu">Someone is on it</Chip>}
+          <span className="text-[12px] text-muted">{i.kindLabel} · {i.siteCode ?? "whole company"} · waiting {age(i.ageMinutes)}</span>
         </div>
-        <p className="mt-1 text-[14px] font-medium text-fg">
-          {i.recordNumber && <span className="mr-1 font-mono">{i.recordNumber}</span>}
+        <p className="mt-1 text-[15px] font-medium text-fg">
           {i.title}
+          {i.recordNumber && <span className="ml-1 font-mono text-[12px] text-muted">{i.recordNumber}</span>}
         </p>
         {i.detail && <p className="mt-0.5 break-words text-[13px] text-muted">{i.detail}</p>}
         {i.acknowledgementNote && <p className="mt-0.5 text-[12px] text-muted">Note: {i.acknowledgementNote}</p>}
@@ -56,6 +58,9 @@ function ItemRow({ i }: { i: ActionItemView }) {
  * Alerts and Sync. Items come from the underlying records and clear when those resolve; the queue is
  * refreshed on open and every 5 minutes. Owners can group exceptions per site.
  */
+/** Plain tab names (ADR-088). */
+const TAB_TEXT: Record<string, string> = { approvals: "To decide", exceptions: "Problems", alerts: "Alerts for you", sync: "Phone changes to check" };
+
 export default async function ActionCentrePage({ searchParams }: { searchParams: Promise<SP> }) {
   const ctx = await requireContext();
   const sp = await searchParams;
@@ -81,20 +86,26 @@ export default async function ActionCentrePage({ searchParams }: { searchParams:
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Action centre"
-        subtitle="Approvals waiting for you and exceptions in your sites. Each item clears by itself when its record is resolved; acknowledge to say you are on it."
-        actions={ctx.can("platform.notification_rule.view") ? <LinkButton href="/admin/notification-rules" variant="secondary" size="sm">Notification rules</LinkButton> : undefined}
+        title="Problems & alerts"
+        actions={
+          ctx.can("platform.notification_rule.view") ? (
+            <MoreMenu>
+              <LinkButton href="/admin/notification-rules" variant="secondary" size="sm">Who gets which message</LinkButton>
+            </MoreMenu>
+          ) : undefined
+        }
       />
-      {!refresh && <Banner tone="warn" title="Showing the last refreshed queue">The queue could not be refreshed just now; items may be up to 5 minutes old.</Banner>}
+      <PageIntro>This screen is for managers and QA: things that went wrong or wait too long at your sites. Tap the button on a row to fix it; press “I&apos;m on it” so others know. A row goes away by itself when it is fixed.</PageIntro>
+      {!refresh && <Banner tone="warn" title="This list may be a few minutes old">It could not be updated just now. Open the page again in a minute.</Banner>}
       <nav aria-label="Action centre tabs" className="flex flex-wrap gap-2">
         {ACTION_TABS.map((t) => (
           <Link
             key={t.tab}
             href={`/action-centre?tab=${t.tab}`}
             aria-current={tab === t.tab ? "page" : undefined}
-            className={cx("rounded-full border px-3.5 py-1.5 text-[13px]", tab === t.tab ? "border-primary bg-primary-soft font-semibold" : "border-line")}
+            className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[14px]", tab === t.tab ? "border-primary bg-primary-soft font-semibold" : "border-line")}
           >
-            {t.label}
+            {TAB_TEXT[t.tab] ?? t.label}
             {t.tab === "approvals" || t.tab === "exceptions" ? ` · ${counts[t.tab]}` : ""}
           </Link>
         ))}
@@ -104,9 +115,9 @@ export default async function ActionCentrePage({ searchParams }: { searchParams:
         <SyncConflictSummary ctx={ctx} />
       ) : tab === "alerts" ? (
         <Card>
-          <CardTitle action={<LinkButton href="/notifications" variant="ghost" size="sm">All notifications</LinkButton>}>Alerts for you</CardTitle>
+          <CardTitle action={<LinkButton href="/notifications" variant="ghost" size="sm">All messages</LinkButton>}>Alerts for you</CardTitle>
           {alerts.length === 0 ? (
-            <EmptyState title="No open alerts">Failed jobs, reconciliation differences, report deliveries and escalations addressed to you appear here.</EmptyState>
+            <EmptyState title="No alerts for you">When something fails or waits too long and you should know, it appears here.</EmptyState>
           ) : (
             <ul className="divide-y divide-line">
               {alerts.map((n) => (
@@ -137,7 +148,7 @@ export default async function ActionCentrePage({ searchParams }: { searchParams:
             {ctx.allowedSites.length > 1 && (
               <Link href={qs({ group: bySite ? undefined : "site" })} className="ml-auto text-primary-text hover:underline">{bySite ? "Do not group" : "Group by site"}</Link>
             )}
-            <Link href={qs({ acked: sp.acked === "0" ? undefined : "0" })} className="text-primary-text hover:underline">{sp.acked === "0" ? "Show acknowledged" : "Hide acknowledged"}</Link>
+            <Link href={qs({ acked: sp.acked === "0" ? undefined : "0" })} className="text-primary-text hover:underline">{sp.acked === "0" ? "Show the ones someone is on" : "Hide the ones someone is on"}</Link>
           </div>
           {items.length === 0 ? (
             <EmptyState title={tab === "approvals" ? "Nothing waits for your approval" : "No open exceptions"}>

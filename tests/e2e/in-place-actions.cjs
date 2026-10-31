@@ -246,13 +246,13 @@ async function step(name, fn, u) {
     await fresh(mg, p.getByRole('link', { name: /^Messages, \d+ unread$/ }).and(p.locator(`:not([aria-label="${before}"])`)), 'unread count refresh');
     // Wave 3 seeds (action centre rules, W3E/W3F data) give the manager several open items: the
     // acknowledged one leaves the list, the others stay.
-    const acks = p.getByRole('button', { name: 'Acknowledge' });
+    const acks = p.getByRole('button', { name: "I'm on it" });
     const n = await acks.count();
     await acks.first().click();
     if (n === 1) await fresh(mg, p.getByText('Nothing needs your attention').first(), 'acknowledge refresh');
     else {
       const ok = await p
-        .waitForFunction((m) => [...document.querySelectorAll('main button')].filter((b) => b.textContent.trim() === 'Acknowledge').length === m, n - 1, { timeout: 10000 })
+        .waitForFunction((m) => [...document.querySelectorAll('main button')].filter((b) => b.textContent.trim() === "I'm on it").length === m, n - 1, { timeout: 10000 })
         .then(() => true)
         .catch(() => false);
       if (!ok) throw new Error(`STALE: acknowledge refresh on ${p.url()} (still ${n} items to acknowledge)`);

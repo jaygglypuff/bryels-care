@@ -5,12 +5,12 @@ import { BarList, ColumnChart, Donut, LineChart } from "@/ui/charts/charts";
 import { ChartFrame } from "@/ui/charts/chart-frame";
 import { axisFmt, fmtKpi, hhmm, shortDate } from "@/ui/charts/format";
 import { slotColor, toneColor } from "@/ui/charts/palette";
-import { LockedCard, periodText, scopeText } from "./kpi-ui";
+import { LockedCard, periodText, plainKpi, scopeText } from "./kpi-ui";
 
 /** Dashboard charts built from KPI tiles; every chart renders its table twin from the same numbers. */
 
 const meta = (generatedAt: string, scope: KpiScope, period: PeriodDto, tile: KpiTile) =>
-  `Updated ${hhmm(generatedAt)} · ${scopeText(scope)} · ${tile.kind === "asof" ? `as of ${hhmm(tile.asOf)}` : periodText(period)} · ${tile.code}`;
+  `Updated ${hhmm(generatedAt)} · ${scopeText(scope)} · ${tile.kind === "asof" ? `as of ${hhmm(tile.asOf)}` : periodText(period)}`;
 
 type Common = { tile: KpiTile; scope: KpiScope; period: PeriodDto; generatedAt: string; title: string; subtitle?: ReactNode; stale?: string | null };
 
@@ -33,18 +33,18 @@ export function DailyChart({ tile, scope, period, generatedAt, title, subtitle, 
       ]}
     />
   ) : kind === "column" ? (
-    <ColumnChart labels={labels} fmt={fmt} ariaLabel={`${title} per day`} series={[{ key: "v", label: tile.short, color: slotColor(1), values: days.map((d) => Number(d.value ?? 0)) }]} />
+    <ColumnChart labels={labels} fmt={fmt} ariaLabel={`${title} per day`} series={[{ key: "v", label: plainKpi(tile.code, tile.short), color: slotColor(1), values: days.map((d) => Number(d.value ?? 0)) }]} />
   ) : (
     <LineChart
       labels={labels}
       fmt={fmt}
       ariaLabel={`${title} per day: ${days.map((d) => `${d.date} ${fmtKpi(unit, d.value)}`).join(", ")}`}
       max={tile.unit === "ratio" ? Math.max(1, ...days.map((d) => Number(d.value ?? 0))) : undefined}
-      series={[{ key: "v", label: tile.short, color: slotColor(1), dashed: tile.label !== "actual", values: days.map((d) => (d.value === null ? null : Number(d.value))), hrefs: days.map((d) => href(d.date)) }]}
+      series={[{ key: "v", label: plainKpi(tile.code, tile.short), color: slotColor(1), dashed: tile.label !== "actual", values: days.map((d) => (d.value === null ? null : Number(d.value))), hrefs: days.map((d) => href(d.date)) }]}
     />
   );
   const table = (
-    <Table head={split ? ["Day", split.denominator, split.numerator, "Share"] : ["Day", tile.short, "Records"]}>
+    <Table head={split ? ["Day", split.denominator, split.numerator, "Share"] : ["Day", plainKpi(tile.code, tile.short), "Records"]}>
       {days.map((d) => (
         <tr key={d.date}>
           <Td>{shortDate(d.date)}</Td>
@@ -102,7 +102,7 @@ export function BreakdownChart({ tile, scope, period, generatedAt, title, subtit
   const chart =
     donut && items.length > 0 && items.length <= 4 ? (
       <div className="flex flex-col items-center gap-4 sm:flex-row">
-        <Donut segments={items.map((b, i) => ({ key: b.key, label: b.label, value: valueOf(b), color: toneColor(b.tone === "neutral" ? undefined : b.tone, i + 1) }))} centre={fmtKpi(tile.unit, tile.current?.value)} centreLabel={tile.short} ariaLabel={`${title}: ${items.map((b) => `${b.label} ${display(b)}`).join(", ")}`} />
+        <Donut segments={items.map((b, i) => ({ key: b.key, label: b.label, value: valueOf(b), color: toneColor(b.tone === "neutral" ? undefined : b.tone, i + 1) }))} centre={fmtKpi(tile.unit, tile.current?.value)} centreLabel={plainKpi(tile.code, tile.short)} ariaLabel={`${title}: ${items.map((b) => `${b.label} ${display(b)}`).join(", ")}`} />
         <ul className="grid w-full gap-1.5 text-[13px]">
           {items.map((b, i) => (
             <li key={b.key} className="grid grid-cols-[12px_1fr_auto] items-center gap-2">
@@ -117,7 +117,7 @@ export function BreakdownChart({ tile, scope, period, generatedAt, title, subtit
       <BarList ariaLabel={title} empty={empty} items={items.map((b, i) => ({ key: b.key, label: b.label.charAt(0).toUpperCase() + b.label.slice(1), value: valueOf(b), display: display(b), color: b.tone === "neutral" ? slotColor(i + 1 > 6 ? 1 : i + 1) : toneColor(b.tone), href: tile.href }))} />
     );
   const table = (
-    <Table head={["Category", measure === "rows" ? "Records" : tile.short, "Share"]}>
+    <Table head={["Category", measure === "rows" ? "Records" : plainKpi(tile.code, tile.short), "Share"]}>
       {items.map((b) => (
         <tr key={b.key}>
           <Td className="capitalize">{b.label}</Td>

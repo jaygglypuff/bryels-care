@@ -7,7 +7,8 @@ import { LineChart } from "@/ui/charts/charts";
 import { ChartFrame } from "@/ui/charts/chart-frame";
 import { axisFmt, fmtKpi, hhmm, monthLabel, shortDate } from "@/ui/charts/format";
 import { VIZ, slotColor } from "@/ui/charts/palette";
-import { StaleNotice, ValueLabelChip, rangeText } from "../kpi-ui";
+import { StaleNotice, ValueLabelChip, plainKpi, rangeText } from "../kpi-ui";
+import { PageIntro } from "@/ui/guide";
 import { DeleteViewForm, SaveViewForm } from "./forms";
 
 export const dynamic = "force-dynamic";
@@ -26,13 +27,13 @@ function Picker({ catalogue, codes, grain, span, comparison, scopeKey, sites, ca
     <Card>
       <form method="get" action="/analytics/trends" className="flex flex-col gap-4">
         <fieldset>
-          <legend className="mb-2 text-[13px] font-medium text-fg">KPIs (up to {TREND_MAX_SERIES})</legend>
+          <legend className="mb-2 text-[14px] font-medium text-fg">Numbers to show (up to {TREND_MAX_SERIES})</legend>
           <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2 xl:grid-cols-3">
             {catalogue.map((k) => (
-              <label key={k.code} className="flex min-h-[32px] items-center gap-2 text-[13px]">
+              <label key={k.code} className="flex min-h-[44px] items-center gap-2 text-[14px]">
                 <input type="checkbox" name="k" value={k.code} defaultChecked={codes.includes(k.code)} className="size-4 accent-[var(--brand-600)]" />
                 <span className="min-w-0">
-                  {k.name} {k.label !== "actual" && <span className="text-[11px] font-semibold uppercase text-[var(--warn-fg)]">Estimate</span>}
+                  {plainKpi(k.code, k.name)} {k.label !== "actual" && <span className="text-[11px] font-semibold uppercase text-[var(--warn-fg)]">Estimate</span>}
                 </span>
               </label>
             ))}
@@ -172,7 +173,7 @@ function TrendCharts({ t }: { t: Trends }) {
       <li>Click a point to open its records.</li>
     </ul>
   );
-  return <ChartFrame title="Trends" subtitle="One chart per KPI, each on its own zero-based scale; values come from the nightly snapshots" chart={charts} table={table} legend={legend} meta={updated} stale={t.freshness.stale ? t.freshness.reason : null} />;
+  return <ChartFrame title="Trends" subtitle="One small chart per number, each starting at zero; figures saved each night" chart={charts} table={table} legend={legend} meta={updated} stale={t.freshness.stale ? t.freshness.reason : null} />;
 }
 
 /** US-5-16 trends page (docs/ux-system.md §9.15). */
@@ -181,7 +182,7 @@ export default async function TrendsPage({ searchParams }: { searchParams: Promi
   if (!ctx.can("analytics.dashboard.view"))
     return (
       <>
-        <PageHeader title="Trends" />
+        <PageHeader title="Compare over time" />
         <EmptyState title={`You don't have access to dashboards at ${ctx.currentSite.code}`}>Ask your site manager, or switch site.</EmptyState>
       </>
     );
@@ -220,7 +221,8 @@ export default async function TrendsPage({ searchParams }: { searchParams: Promi
   };
   return (
     <>
-      <PageHeader title="Trends" subtitle={`${scope.label} · KPI values per ${grain} from the nightly snapshots`} />
+      <PageHeader title="Compare over time" subtitle={`${scope.label} · per ${grain}`} />
+      <PageIntro>This screen is for seeing how numbers change over time: tick up to six numbers, choose day, week or month, and press the button. The figures are saved each night.</PageIntro>
       <div className="flex flex-col gap-4">
         <Picker catalogue={catalogue} codes={codes} grain={grain} span={span} comparison={comparison} scopeKey={scope.key} sites={ctx.allowedSites} canAll={canSeeCrossSite(ctx)} />
         {trends && <StaleNotice freshness={trends.freshness} />}

@@ -3,9 +3,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { type KpiRecords, RECORD_LIMIT, canSeeCrossSite, getKpiRecords } from "@/modules/analytics";
 import { Card, Dl, EmptyState, PageHeader, Table, Td } from "@/ui/core";
+import { MoreDetails, PageIntro } from "@/ui/guide";
 import { Banner } from "@/ui/status";
 import { fmtKpi, hhmm } from "@/ui/charts/format";
-import { CategoryChip, RecordRef, ValueLabelChip, rangeText } from "../../kpi-ui";
+import { CategoryChip, RecordRef, ValueLabelChip, plainKpi, rangeText } from "../../kpi-ui";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,7 @@ export default async function KpiRecordsPage({ params, searchParams }: { params:
     if (e instanceof DomainError && ["forbidden", "not_found", "validation"].includes(e.code))
       return (
         <>
-          <PageHeader title="KPI records" />
+          <PageHeader title="The records behind a number" />
           <EmptyState title={e.code === "forbidden" ? "You don't have access to this figure" : e.code === "validation" ? "Check the period" : "This figure isn't available at your sites"} action={<Link href="/dashboard" className="font-medium text-primary-text hover:underline">Back to the overview</Link>}>
             {e.message}
           </EmptyState>
@@ -54,8 +55,8 @@ export default async function KpiRecordsPage({ params, searchParams }: { params:
   return (
     <>
       <PageHeader
-        title={r.def.name}
-        subtitle={`${r.def.code} · ${r.scope.label} · ${r.def.kind === "asof" ? `as of ${new Date(r.period.asOf).toLocaleString("en-GB", { timeZone: "Asia/Manila", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}` : rangeText(r.period.fromDate, r.period.toDate)}`}
+        title={plainKpi(r.def.code, r.def.name)}
+        subtitle={`${r.scope.label} · ${r.def.kind === "asof" ? `as of ${new Date(r.period.asOf).toLocaleString("en-GB", { timeZone: "Asia/Manila", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}` : rangeText(r.period.fromDate, r.period.toDate)}`}
         actions={
           canSeeCrossSite(ctx) && scopeOther ? (
             <Link href={`?${new URLSearchParams({ ...sp, scope: "all" } as Record<string, string>).toString()}`} className="text-[13px] font-medium text-primary-text hover:underline">
@@ -64,9 +65,10 @@ export default async function KpiRecordsPage({ params, searchParams }: { params:
           ) : null
         }
       />
+      <PageIntro>This screen is for seeing exactly which records make up this number. Tap a record number to open it.</PageIntro>
       <div className="flex flex-col gap-4">
         {r.lastCheck?.status === "mismatch" && (
-          <Banner tone="bad" title="The last nightly check found a difference for this KPI">
+          <Banner tone="bad" title="The last nightly check found a difference for this number">
             {r.lastCheck.detail} The figures below are recomputed from the records now; the stored snapshot keeps what was reported.
           </Banner>
         )}
@@ -77,6 +79,7 @@ export default async function KpiRecordsPage({ params, searchParams }: { params:
           </div>
           <p className="mt-1 text-[13px] text-fg-2">{r.def.definition}</p>
           <div className="mt-4">
+            <MoreDetails title="How this number is worked out (for checking)">
             <Dl
               items={[
                 ["Calculation", `${r.def.formula}. ${AGG_TEXT[r.def.aggregate]}.`],
@@ -88,10 +91,12 @@ export default async function KpiRecordsPage({ params, searchParams }: { params:
                 ["Last nightly check", r.lastCheck ? `${r.lastCheck.status === "match" ? "Matched its source records" : "Difference found"} · ${new Date(r.lastCheck.checkedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "Asia/Manila" })} ${hhmm(r.lastCheck.checkedAt)}` : "Not checked yet"],
               ]}
             />
+                        <p className="font-mono text-[12px] text-muted">Technical name: {r.def.code}</p>
+            </MoreDetails>
           </div>
         </Card>
         {r.rows.length === 0 ? (
-          <EmptyState title="No records in this scope and period">The value is {fmtKpi(r.def.unit, r.total.value)}{r.total.value === null ? " because there is nothing to divide by" : ""}.</EmptyState>
+          <EmptyState title="No records for these dates and sites">The value is {fmtKpi(r.def.unit, r.total.value)}{r.total.value === null ? " because there is nothing to divide by" : ""}.</EmptyState>
         ) : (
           <>
             <div className="hidden md:block">

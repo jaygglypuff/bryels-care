@@ -1,3 +1,4 @@
+import { PageIntro } from "@/ui/guide";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { ROLE_BUNDLES } from "@/lib/permissions";
@@ -18,11 +19,12 @@ export default async function AccountPage() {
   return (
     <>
       <PageHeader title="My account" subtitle={ctx.email} />
+      <PageIntro>This screen is for you: your name, your password, the extra sign-in code on your phone, and where you are signed in.</PageIntro>
       {mfa.required && !mfa.enrolled && (
         <div className="mb-4">
           <Banner tone={mfa.overdue ? "bad" : "warn"} title={mfa.overdue ? "Two-step sign-in is required now" : "Set up two-step sign-in"}>
             Your role can change controlled records, so a password alone is not enough.{" "}
-            {mfa.graceEndsAt && !mfa.overdue ? `Set it up before ${fmtDateTime(mfa.graceEndsAt)}.` : "Restricted actions are blocked until it is set up."}
+            {mfa.graceEndsAt && !mfa.overdue ? `Set it up before ${fmtDateTime(mfa.graceEndsAt)}.` : "Actions that need the owner's OK are blocked until it is set up."}
           </Banner>
         </div>
       )}

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PageIntro } from "@/ui/guide";
 import { requireContext } from "@/lib/auth/context";
 import { listConflicts } from "@/lib/offline/server/conflicts";
 import { REASON_LABEL, commandLabel, type SyncConflictReason } from "@/lib/offline/protocol";
@@ -26,10 +27,10 @@ export default async function ConflictsPage({ searchParams }: { searchParams: Pr
   return (
     <>
       <PageHeader
-        title="Sync conflicts"
-        subtitle="Offline changes the server could not apply as sent. Nothing here was applied; each one is kept, re-applied as a new change, discarded with a note or escalated."
+        title="Phone changes to check"
         actions={<LinkButton href="/sync" variant="secondary">This device</LinkButton>}
       />
+      <PageIntro>This screen is for the supervisor: changes made on a phone without signal that the system could not save as they were. Nothing here was saved yet. Open each one and choose: save it again, throw it away (with a note), or pass it up.</PageIntro>
       <nav aria-label="Conflict status" className="mb-4 flex flex-wrap gap-2">
         {TABS.map((t) => (
           <Link key={t.key} href={`/sync/conflicts?status=${t.key}`} aria-current={status === t.key ? "page" : undefined} className={cx("rounded-full border px-3.5 py-1.5 text-[13px]", status === t.key ? "border-primary bg-primary-soft font-semibold" : "border-line")}>
