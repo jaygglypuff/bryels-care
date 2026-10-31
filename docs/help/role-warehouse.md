@@ -13,7 +13,7 @@ You receive what comes in, keep it in the right place, and send customer orders 
 1. Open **Home**. The tiles show what waits for you: **Receive**, **Put away**, **Move**, **Count**, **Fix stock**, **Find**, **Dispatch orders**.
 2. When a delivery arrives, tap **Receive**. Pick the supplier order, type how much came and the supplier's lot number, then press **Save and print labels**. Stick a label on every sack, drum or box. The new lots wait for the QA check.
 3. Tap **Put away**. Scan the lot label, then the shelf label, and confirm. Use the shelf the screen suggests.
-4. For customer orders tap **Dispatch orders**. Press **Start pick list**, pick each line by scanning, then **Complete pick**, pack and press **Complete packing**, and finally **Dispatch shipment**.
+4. For customer orders open **Menu → Operations → Packing & dispatch → To get from shelf**. Press **Get from shelf** on the first order, scan each shelf and box the screen shows, then press **Finish getting from shelf**. A second person checks the boxes and presses **Finish the check**. Then open **Send out** and press **Send out now** when the truck is loaded.
 5. When there is a count to do, tap **Count**, count the shelves on the list and save. Differences go to the site manager.
 
 ## Good to know

@@ -20,7 +20,7 @@ Tip: when a button is missing or a step says it needs someone else, the message 
 
 1. Open **Management → Master data → Sites**. You should see **SBX Sandbox Plant**. Fill in the address if you like.
 2. Open **Management → Master data → Locations**. The warehouse already has a receiving dock, quarantine, QA hold, rejected, recall, staging, production, storage, finished goods and dispatch locations. Add more racks with **+ Add location** when you need them (leave the code empty and the system gives LOC-0001, LOC-0002 ...). Tap **Edit** next to a location to change it.
-3. Optional: **Management → Master data → Production lines** to add your soap or lotion line.
+3. Optional: **Management → Master data → Making areas / lines** to add your soap or lotion line.
 
 ## 2. Create what you buy (materials)
 
@@ -59,7 +59,7 @@ The detailed pages (**Products and formulas** and **Steps for each product**, "a
 
 ## 6. Say what QA checks (inspection plan)
 
-1. Open **Management → Production setup → Inspection plans** and create a plan for the incoming materials (for example appearance and certificate of analysis) and one for the finished product (for example weight and pH).
+1. Open **Management → Production setup → Quality checks for items** and create a plan for the incoming materials (for example appearance and certificate of analysis) and one for the finished product (for example weight and pH).
 2. Submit and approve each plan.
 
 ## 7. Buy and receive the materials
@@ -98,9 +98,9 @@ The detailed pages (**Products and formulas** and **Steps for each product**, "a
 ## 12. Sell and ship
 
 1. Open **Sales & Customers → Customers** and create a customer (made-up name), then approve it.
-2. Open **Sales & Customers → Selling → Price lists** and give the product a price. Approve the price list.
+2. Open **Sales & Customers → Quotes, prices & returns → Prices** and give the product a price. Approve the price list.
 3. Open **Sales & Customers → Customer orders → New customer order**. Choose the customer, add the product and quantity, submit and confirm the order.
-4. **Operations → Packing & dispatch → Picking**: pick the boxes (the system suggests the lots that expire first). Then **Boxing** and **Dispatch**: print the delivery receipt and mark the order dispatched.
+4. **Operations → Packing & dispatch → To get from shelf**: get the boxes (the system suggests the lots that expire first). Then **Boxing** and **Send out**: print the delivery receipt and press **Send out now**.
 
 ## 13. Bill and get paid
 
@@ -110,7 +110,7 @@ The detailed pages (**Products and formulas** and **Steps for each product**, "a
 ## 14. See it all together
 
 1. **Home → Overview** and **Management → Reports & analytics → Dashboards** now show your stock, the batch and the order.
-2. **Operations → Quality → Traceability**: search the batch number to see which material lots went into it and which customer received it.
+2. **Operations → Quality → Where it came from and went**: search the batch number to see which material lots went into it and which customer received it.
 3. **Reports** lists the standard reports; each one exports to a spreadsheet.
 
 ## Start over

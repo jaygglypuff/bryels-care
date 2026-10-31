@@ -13,8 +13,8 @@ You decide if materials and products are OK to use. Nobody else may do this.
 1. Open **Home** and read **Needs your attention**: batches and lots waiting for you, oldest first.
 2. Tap **Quality check** (bottom bar). The oldest batch is at the top. Press **Check this batch** (or **Check quality** on a card).
 3. Look at how the batch went and its test results. Then press **OK to use**, **Not yet**, or **Not OK – don't use**. Add a note when you say not OK.
-4. For deliveries from suppliers, open **QA queue** (Menu → Operations → Quality). Open each lot, check it, and decide **OK to use** or **Not OK**. Many lots at once: **Decide many lots at once**.
-5. If something is wrong, stop it: **Stop a lot** puts it on hold so nobody can use it. Write a **Problem report** when something went wrong in production.
+4. For deliveries from suppliers, open **QA queue** (Menu → Operations → Quality). Open each lot, check it, and decide **OK to use** or **Not OK**. Many lots at once: **Decide many lots at once** (same menu).
+5. If something is wrong, stop it: open **Stopped by QA** and press **Stop a lot**; it is put on hold so nobody can use it. When something went wrong in production, open the batch or lot and use **⋯ More → Report a problem**.
 
 ## Good to know
 
