@@ -92,12 +92,12 @@ describe("production tabs per role (ADR-080 §11)", () => {
   });
 
   it("receiving steps sit together in Operations → Receiving; picking and dispatch in Packing & dispatch", () => {
-    expect(section("owner_director", "Operations", "Receiving")).toEqual(["Expected deliveries", "Receive materials", "Goods receipts", "Put away"]);
+    expect(section("owner_director", "Operations", "Receiving")).toEqual(["Deliveries coming", "Receive materials", "Goods receipts", "Put away"]);
     expect(section("owner_director", "Operations", "Packing & dispatch")).toEqual(expect.arrayContaining(["Boxing", "To get from shelf", "Send out"]));
   });
 
   it("customer billing sits with Sales & Customers", () => {
-    expect(section("owner_director", "Sales & Customers", "Billing & payments")).toEqual(["Invoices", "Payments", "Statements", "Credit notes"]);
+    expect(section("owner_director", "Sales & Customers", "Billing & payments")).toEqual(["Invoices", "Payments", "Statements", "Credits (money back)"]);
   });
 });
 
