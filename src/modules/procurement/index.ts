@@ -19,6 +19,7 @@ export {
   type ProposeInput,
   type TermsInput,
 } from "./asl";
+export { createMaterialWithUsualSupplier } from "./usual-supplier";
 export {
   createPurchaseRequest,
   updatePurchaseRequest,

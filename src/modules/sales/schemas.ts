@@ -140,6 +140,8 @@ export const CustomerCreateSchema = z.object({
   minShelfLifeDays: CustomerSchema.shape.minShelfLifeDays,
   defaultLeadTimeDays: optionalInt(0, 365, "Lead time: 0 to 365 days."),
   notesInternal: optionalText(1000),
+  /** ADR-088: "days to pay" on the new-customer form; the service accepts it only with finance.credit_terms.approve. */
+  paymentTermsDays: optionalInt(0, 365, "Days to pay: 0 to 365."),
   shipTo: AddressSchema,
 });
 
@@ -211,8 +213,10 @@ export const ArtworkSchema = z.object({
     .optional()
     .transform((v) => (v ? v : null)),
   productId: z.string().uuid("Choose a product."),
-  artworkCode: z.string().trim().min(2, "Enter the artwork code.").max(40),
-  versionLabel: z.string().trim().min(1, "Enter the version.").max(20),
+  /** ADR-088: optional; blank = ART-<product code>, decided by the service. */
+  artworkCode: optionalText(40),
+  /** Optional; blank = the next vN of the design. */
+  versionLabel: optionalText(20),
   description: optionalText(300),
 });
 
@@ -228,12 +232,19 @@ export const PriceLineSchema = z.object({
 });
 
 export const PriceListSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z0-9][A-Z0-9-]{1,29}$/, "2–30 letters, digits or dashes."),
-  name: z.string().trim().min(3, "Enter a name.").max(120),
+  /** ADR-088: optional; blank = the party's existing list code, else PL-<customer number> (decided by the service). */
+  code: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+    z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z0-9][A-Z0-9-]{1,29}$/, "2–30 letters, digits or dashes.")
+      .nullable()
+      .optional(),
+  ),
+  /** Optional; blank = "Prices for <customer>" / "General prices". */
+  name: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? null : v), z.string().trim().min(3, "Enter a name.").max(120).nullable().optional()),
   partyKind: z.enum(["customer", "general"]),
   customerId: z
     .string()

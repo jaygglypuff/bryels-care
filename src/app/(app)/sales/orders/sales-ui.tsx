@@ -1,64 +1,94 @@
-import { Lock } from "lucide-react";
+import type { ReactNode } from "react";
+import { Ban, CheckCircle2, CircleDashed, Hourglass, Lock, PackageCheck, PauseCircle, Truck } from "lucide-react";
 import { fmtMoney, fmtQty } from "@/lib/qty";
 import { Chip } from "@/ui/status";
 
-/** Sales order, quote, price-list and requirement states with icon-free text + colour + border (never colour alone). */
-const TONES: Record<string, { tone: "ok" | "warn" | "bad" | "info" | "neu" | "appr" | "hold" | "rej" | "q" | "exp"; label: string }> = {
-  draft: { tone: "neu", label: "Draft" },
-  submitted: { tone: "info", label: "Submitted" },
-  pending_approval: { tone: "warn", label: "Pending approval" },
-  confirmed: { tone: "info", label: "Confirmed" },
-  allocated: { tone: "appr", label: "Allocated" },
-  picking: { tone: "appr", label: "Picking" },
-  packed: { tone: "appr", label: "Packed" },
-  partially_shipped: { tone: "warn", label: "Partially shipped" },
-  shipped: { tone: "ok", label: "Shipped" },
-  invoiced: { tone: "ok", label: "Invoiced" },
-  closed: { tone: "neu", label: "Closed" },
-  cancelled: { tone: "neu", label: "Cancelled" },
-  sent: { tone: "info", label: "Sent" },
-  accepted: { tone: "ok", label: "Accepted" },
-  rejected: { tone: "rej", label: "Rejected" },
-  expired: { tone: "exp", label: "Expired" },
-  converted: { tone: "ok", label: "Converted" },
-  voided: { tone: "neu", label: "Voided" },
-  approved: { tone: "ok", label: "Approved" },
-  retired: { tone: "neu", label: "Retired" },
-  effective: { tone: "ok", label: "Effective" },
-  scheduled: { tone: "info", label: "Scheduled" },
-  prospect: { tone: "info", label: "Prospect" },
-  active: { tone: "ok", label: "Active" },
-  on_hold: { tone: "hold", label: "Credit hold" },
-  inactive: { tone: "neu", label: "Inactive" },
-};
+type Tone = "ok" | "warn" | "bad" | "info" | "neu" | "appr" | "hold" | "rej" | "q" | "exp";
+type Word = { tone: Tone; label: string; icon: "wait" | "ok" | "stop" | "draft" | "truck" | "x" | "box" };
 
-export function SalesStatus({ status }: { status: string }) {
-  const t = TONES[status] ?? { tone: "neu" as const, label: status.replace(/_/g, " ") };
-  return <Chip tone={t.tone}>{t.label}</Chip>;
-}
+const ICONS: Record<Word["icon"], ReactNode> = {
+  wait: <Hourglass size={13} aria-hidden />,
+  ok: <CheckCircle2 size={13} aria-hidden />,
+  stop: <PauseCircle size={13} aria-hidden />,
+  draft: <CircleDashed size={13} aria-hidden />,
+  truck: <Truck size={13} aria-hidden />,
+  x: <Ban size={13} aria-hidden />,
+  box: <PackageCheck size={13} aria-hidden />,
+};
 
 /**
- * Customer order status in the owner's words (mockup panel 6 chips; same words as the order's step strip
- * in src/ui/record-steps.ts). Display only; the state machine is ORDER_TRANSITIONS in the sales module.
+ * Sales statuses in grade-5 words (ADR-088 sales pass), each with an icon, a colour and a border (never
+ * colour alone). Display only: the state machines and the stored statuses are unchanged.
  */
-const PLAIN_ORDER: Record<string, { tone: "ok" | "warn" | "info" | "neu" | "appr"; label: string }> = {
-  draft: { tone: "neu", label: "Draft" },
-  submitted: { tone: "warn", label: "Waiting for approval" },
-  pending_approval: { tone: "warn", label: "Waiting for approval" },
-  confirmed: { tone: "info", label: "Confirmed" },
-  allocated: { tone: "appr", label: "Stock reserved" },
-  picking: { tone: "appr", label: "Packing" },
-  packed: { tone: "appr", label: "Packing" },
-  partially_shipped: { tone: "warn", label: "Partly shipped" },
-  shipped: { tone: "ok", label: "Shipped" },
-  invoiced: { tone: "ok", label: "Billed" },
-  closed: { tone: "neu", label: "Done" },
-  cancelled: { tone: "neu", label: "Cancelled" },
+const WORDS: Record<string, Word> = {
+  draft: { tone: "neu", label: "Draft", icon: "draft" },
+  submitted: { tone: "warn", label: "Waiting for approval", icon: "wait" },
+  pending_approval: { tone: "warn", label: "Waiting for approval", icon: "wait" },
+  confirmed: { tone: "info", label: "Confirmed", icon: "ok" },
+  allocated: { tone: "appr", label: "Set aside", icon: "box" },
+  picking: { tone: "appr", label: "Getting from shelf", icon: "box" },
+  packed: { tone: "appr", label: "Box checked", icon: "box" },
+  partially_shipped: { tone: "warn", label: "Partly sent out", icon: "truck" },
+  shipped: { tone: "ok", label: "Sent out", icon: "truck" },
+  invoiced: { tone: "ok", label: "Billed", icon: "ok" },
+  closed: { tone: "neu", label: "Done", icon: "ok" },
+  cancelled: { tone: "neu", label: "Cancelled", icon: "x" },
+  sent: { tone: "info", label: "Sent to customer", icon: "truck" },
+  accepted: { tone: "ok", label: "Customer said yes", icon: "ok" },
+  rejected: { tone: "rej", label: "Not accepted", icon: "x" },
+  expired: { tone: "exp", label: "Too old", icon: "x" },
+  converted: { tone: "ok", label: "Made into an order", icon: "ok" },
+  voided: { tone: "neu", label: "Cancelled", icon: "x" },
+  approved: { tone: "ok", label: "Approved", icon: "ok" },
+  retired: { tone: "neu", label: "No longer used", icon: "x" },
+  effective: { tone: "ok", label: "In use now", icon: "ok" },
+  scheduled: { tone: "info", label: "Starts later", icon: "wait" },
+  prospect: { tone: "info", label: "New, not buying yet", icon: "draft" },
+  active: { tone: "ok", label: "Active", icon: "ok" },
+  on_hold: { tone: "hold", label: "Stopped: unpaid bills", icon: "stop" },
+  inactive: { tone: "neu", label: "Not buying any more", icon: "x" },
 };
 
-export function OrderChip({ status }: { status: string }) {
-  const t = PLAIN_ORDER[status] ?? { tone: "neu" as const, label: status.replace(/_/g, " ") };
-  return <Chip tone={t.tone}>{t.label}</Chip>;
+/** The word alone (for option lists, banners and history). */
+export const salesWord = (status: string) => WORDS[status]?.label ?? status.replace(/_/g, " ");
+
+export function SalesStatus({ status }: { status: string }) {
+  const t = WORDS[status] ?? { tone: "neu" as const, label: status.replace(/_/g, " "), icon: "draft" as const };
+  return (
+    <Chip tone={t.tone}>
+      {ICONS[t.icon]}
+      {t.label}
+    </Chip>
+  );
+}
+
+/** Customer order status (same words as the order's step strip in src/ui/record-steps.ts). */
+export const OrderChip = SalesStatus;
+
+/** Shipment and "get from shelf" status in grade-5 words: get from shelf, second check of the box, send out, delivered. */
+const SHIP: Record<string, Word> = {
+  draft: { tone: "info", label: "Getting from shelf", icon: "box" },
+  picked: { tone: "warn", label: "Waiting for second check", icon: "wait" },
+  packed: { tone: "appr", label: "Ready to send out", icon: "box" },
+  dispatched: { tone: "ok", label: "Sent out", icon: "truck" },
+  delivered: { tone: "ok", label: "Delivered", icon: "ok" },
+  returned: { tone: "warn", label: "Came back", icon: "truck" },
+  cancelled: { tone: "neu", label: "Cancelled", icon: "x" },
+  reversed: { tone: "neu", label: "Sending undone", icon: "x" },
+  in_progress: { tone: "info", label: "Getting from shelf", icon: "box" },
+  completed: { tone: "ok", label: "Got everything", icon: "ok" },
+};
+
+export const shipWord = (status: string) => SHIP[status]?.label ?? salesWord(status);
+
+export function ShipChip({ status }: { status: string }) {
+  const t = SHIP[status] ?? WORDS[status] ?? { tone: "neu" as const, label: status.replace(/_/g, " "), icon: "draft" as const };
+  return (
+    <Chip tone={t.tone}>
+      {ICONS[t.icon]}
+      {t.label}
+    </Chip>
+  );
 }
 
 /** Money or a lock when the caller may not see prices (the value never reached the page). */
@@ -91,7 +121,7 @@ export function LateChip({ days }: { days: number }) {
   );
 }
 
-/** Products on an order in plain words: "Acapulco Soap 135 g × 48, …" (SKU codes stay on the order page). */
+/** Products on an order in plain words: "Acapulco Soap 135 g × 48, …" (product codes stay on the order page). */
 export function linesSummary(lines: { sku: string; productName?: string | null; qty: string }[]): string {
   return lines.map((l) => `${l.productName || l.sku} × ${fmtQty(l.qty, "", 0)}`).join(", ");
 }

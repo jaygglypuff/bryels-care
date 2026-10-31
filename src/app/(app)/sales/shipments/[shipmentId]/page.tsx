@@ -4,21 +4,25 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { getShipment, shipmentReconciliation } from "@/modules/sales";
-import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, Table, Td } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton } from "@/ui/core";
+import { MoreDetails, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
 import { Banner, StatusChip } from "@/ui/status";
 import { RecordHeader } from "@/ui/record";
 import { shipmentSteps } from "@/ui/record-steps";
 import { Forbidden } from "../../../forbidden";
 import { acknowledgeAction, cancelShipmentAction, dispatchShipmentAction, draftDeliveryReceiptAction, generateDeliveryReceiptAction, reverseShipmentAction } from "../../fulfilment-actions";
 import { AcknowledgeForm, Cmd, ReasonCmd } from "../../fulfilment-forms";
+import { shipWord } from "../../orders/sales-ui";
+import { DoNext, whoDoes } from "../../next-step";
 import { Help } from "@/ui/help/help";
 
-export const metadata = { title: "Shipment" };
+export const metadata = { title: "Delivery" };
 
 const DONE: Record<string, string> = {
-  picked: "Pick completed. Next: pack verification by someone who did not pick.",
-  packed: "Packing verified. Print the draft delivery receipt if needed, then dispatch.",
-  dispatched: "Dispatched: stock was issued and the delivery receipt numbered.",
+  picked: "Got everything from the shelf. Next: a colleague who did not take them checks the box a second time.",
+  packed: "Second check done. Next: send it out.",
+  dispatched: "Sent out: stock left the shelf and the delivery receipt got its number.",
 };
 
 function manilaNowLocal(): string {
@@ -27,10 +31,10 @@ function manilaNowLocal(): string {
   return `${g("year")}-${g("month")}-${g("day")}T${g("hour")}:${g("minute")}`;
 }
 
-/** Shipment record (US-4-11..13): lines with boxes and lots, the next allowed step, DR and history. */
+/** Delivery (shipment, US-4-11..13), phone first: what is in it, the one next step, the delivery receipt and what happened. */
 export default async function ShipmentPage({ params, searchParams }: { params: Promise<{ shipmentId: string }>; searchParams: Promise<{ done?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.shipment.view")) return <Forbidden what="shipments" />;
+  if (!ctx.can("sales.shipment.view")) return <Forbidden what="deliveries" />;
   const { shipmentId } = await params;
   const { done } = await searchParams;
   let v: Awaited<ReturnType<typeof getShipment>>;
@@ -44,168 +48,245 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
   const rec = ["dispatched", "delivered", "reversed"].includes(s.status) ? await shipmentReconciliation(ctx, s.id) : null;
   const drDoc = v.documents.find((d) => d.documentKind === "delivery_receipt" && d.status === "ready");
   const packList = v.documents.find((d) => d.documentKind === "boxing_note" && d.status === "ready");
-  // One next action (R3): the existing link for this status. Dispatch and acknowledgment need typed
-  // input, so they stay in their cards and the header says where.
-  const primary =
-    s.status === "draft" && v.pick ? (
-      <LinkButton href={`/sales/picking/${v.pick.id}`} variant="cta" size="lg">Continue pick {v.pick.pickNumber}</LinkButton>
-    ) : s.status === "picked" ? (
-      <LinkButton href={`/sales/packing/${s.id}`} variant="cta" size="lg">Verify packing</LinkButton>
-    ) : ["dispatched", "delivered"].includes(s.status) && drDoc ? (
-      <LinkButton href={`/print/delivery-receipt/${s.id}`} target="_blank" variant={s.status === "delivered" ? "secondary" : "cta"} size="lg">Print delivery receipt</LinkButton>
-    ) : undefined;
+  const canSend = s.status === "packed" && ctx.can("sales.shipment.post");
+  const canPod = s.status === "dispatched" && ctx.can("sales.delivery_receipt.create");
+  const canCancel = ["draft", "picked", "packed"].includes(s.status) && ctx.can("sales.shipment.edit");
+  const canReverse = s.status === "dispatched" && ctx.can("sales.shipment.void");
+  const canDraftDr = s.status === "packed" && ctx.can("sales.delivery_receipt.create") && ctx.can("documents.generated_document.create");
+
   const next =
-    s.status === "picked"
-      ? "Next: a colleague who did not pick scans every box against the order."
-      : s.status === "packed" && ctx.can("sales.shipment.post")
-        ? "Next: enter the driver and plate under Dispatch, then dispatch."
-        : s.status === "dispatched" && ctx.can("sales.delivery_receipt.create")
-          ? "Next: record the customer's acknowledgment below."
-          : undefined;
+    s.status === "draft" && v.pick ? (
+      <DoNext text="Next: get the items from the shelf." action={{ label: "Continue getting from shelf", href: `/sales/picking/${v.pick.id}` }} />
+    ) : s.status === "picked" ? (
+      ctx.can("inventory.pack.approve") ? (
+        <DoNext text="Next: second check of the box, by someone who did not take the items off the shelf." action={{ label: "Check the box", href: `/sales/packing/${s.id}` }} />
+      ) : (
+        <DoNext text="Got from the shelf." waitingFor={`Waiting for ${await whoDoes(ctx, "inventory.pack.approve", s.siteId, "a checker")} to check the box a second time.`} />
+      )
+    ) : s.status === "packed" ? (
+      canSend ? (
+        <DoNext text="Next: send it out. Type the driver and the plate number." action={{ label: "Send out", href: "#send" }} />
+      ) : (
+        <DoNext text="The box is checked and ready." waitingFor={`Waiting for ${await whoDoes(ctx, "sales.shipment.post", s.siteId, "the warehouse")} to send it out.`} />
+      )
+    ) : s.status === "dispatched" ? (
+      canPod ? (
+        <DoNext text="Next: when the driver is back with the signed delivery receipt, save the proof of delivery." action={{ label: "Save proof of delivery", href: "#pod" }} />
+      ) : (
+        <DoNext text="Sent out." waitingFor="Waiting for the proof of delivery (signed delivery receipt)." />
+      )
+    ) : s.status === "delivered" ? (
+      <DoNext text="Delivered. Nothing more to do." />
+    ) : (
+      <DoNext text={`${shipWord(s.status)}. Nothing more to do here.`} />
+    );
+
   return (
-    <>
+    <div className="mx-auto max-w-3xl">
       <RecordHeader
-        typeLabel="Shipment"
-        reference={s.shipmentNumber ?? s.deliveryReceiptNumber ?? "Shipment"}
+        typeLabel="Delivery"
+        reference={s.shipmentNumber ?? s.deliveryReceiptNumber ?? "Delivery"}
         title={v.customer.name}
         siteCode={ctx.allowedSites.find((x) => x.id === s.siteId)?.code}
         status={s.status}
+        statusLabel={shipWord(s.status)}
         meta={[
-          ["Order", <Link key="o" href={`/sales/${v.order.id}`} className="text-primary-text hover:underline">{v.order.orderNumber}</Link>],
-          ["DR", s.deliveryReceiptNumber],
+          ["Deliver by", fmtDate(v.order.requestedDeliveryOn)],
+          ["Delivery receipt", s.deliveryReceiptNumber],
         ]}
         steps={shipmentSteps(s.status)}
-        primary={primary}
-        next={next}
-        secondary={<LinkButton href="/sales/shipments" variant="ghost">All shipments</LinkButton>}
-      />
-      {done && DONE[done] && <div className="mb-4" role="status"><Banner tone="ok" title={DONE[done]} /></div>}
-      {v.blockedLots.length > 0 && ["picked", "packed"].includes(s.status) && (
-        <div className="mb-4"><Banner tone="bad" title="A lot on this shipment is no longer released">{v.blockedLots.join(", ")}: dispatch will be refused. Ask QA, or cancel the shipment and re-allocate.</Banner></div>
-      )}
-      {v.exceptions.some((e) => e.kind === "over_shipment") && <div className="mb-4"><Banner tone="warn" title="Over-shipment approved">{v.exceptions.filter((e) => e.kind === "over_shipment").map((e) => `${e.reason} (ref ${e.customerReference}, ${e.approvedByName})`).join("; ")}</Banner></div>}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="flex min-w-0 flex-col gap-4">
-          <Card>
-            <CardTitle>Shipment</CardTitle>
-            <Dl
-              items={[
-                ["Ship to", s.shipToAddress ?? v.customer.shipToAddress],
-                ["DR number", s.deliveryReceiptNumber ?? (v.deliveryReceipt?.status === "draft" ? "Draft (no number until dispatch)" : "—")],
-                ["Carrier · tracking", [s.carrier, s.trackingNumber].filter(Boolean).join(" · ") || "—"],
-                ["Driver · plate", [s.driverName, s.vehiclePlate].filter(Boolean).join(" · ") || "—"],
-                ["Packages · weight", [s.packageCount, s.grossWeight ? `${Number(s.grossWeight)} ${s.weightUom ?? "kg"}` : null].filter(Boolean).join(" · ") || "—"],
-                ["Dispatched", s.dispatchedAt ? fmtDateTime(s.dispatchedAt) : "Not yet"],
-                ["Delivered", s.deliveredAt ? `${fmtDateTime(s.deliveredAt)} · ${s.receivedByName ?? ""}` : "Not yet"],
-                ["Requested delivery", fmtDate(v.order.requestedDeliveryOn)],
-              ]}
-            />
-            {rec && (
-              <p className={`mt-3 text-[13px] ${rec.balanced ? "text-[var(--ok-fg)]" : "text-[var(--bad-fg)]"}`}>
-                Stock reconciliation: lines {fmtQty(rec.linesQty, "pcs", 0)} vs movements {fmtQty(rec.movementsQty, "pcs", 0)} · {rec.balanced ? "no difference" : `difference ${rec.difference}`}
-              </p>
-            )}
-          </Card>
-          <Card>
-            <CardTitle>Boxes and lots · {v.totals.boxes} box(es) · {fmtQty(v.totals.units, "pcs", 0)}</CardTitle>
-            {v.lines.length === 0 ? (
-              <EmptyState title="Nothing verified yet">{s.status === "draft" ? "Picking is in progress." : "Boxes appear here as they are verified."}</EmptyState>
-            ) : (
-              <Table head={["Box", "SKU", "Lot", "Expiry", "From", "Qty", ""]}>
-                {v.lines.map((l) => (
-                  <tr key={l.id}>
-                    <Td className="font-mono text-[12px]">{l.boxNumber ?? "loose"}</Td>
-                    <Td>{l.sku}</Td>
-                    <Td className="font-mono text-[12px]">{l.lotNumber} {l.qualityStatus !== "released" && <StatusChip status={l.qualityStatus} />}</Td>
-                    <Td>{fmtDate(l.expiresOn)}</Td>
-                    <Td>{l.locationCode}</Td>
-                    <Td>{fmtQty(l.qtyBase, l.baseUom, l.baseUom === "pcs" ? 0 : 3)}</Td>
-                    <Td>{l.isOverShipment ? "over-shipment" : ""}</Td>
-                  </tr>
-                ))}
-              </Table>
-            )}
-          </Card>
-          <Card>
-            <CardTitle>History</CardTitle>
-            {v.history.length === 0 ? <EmptyState title="No transitions recorded" /> : (
-              <ul className="flex flex-col gap-1 text-[13px]">
-                {v.history.map((h) => <li key={h.id}>{fmtDateTime(h.at)} · {h.fromState ?? "—"} → {h.toState} · {h.byName}{h.reason ? ` · ${h.reason}` : ""}</li>)}
-              </ul>
-            )}
-          </Card>
-        </div>
-        <div className="flex flex-col gap-4">
-          {s.status === "packed" && (
-            <Card>
-              <CardTitle>Dispatch</CardTitle>
-              {ctx.can("sales.delivery_receipt.create") && ctx.can("documents.generated_document.create") && (
-                <div className="mb-4 border-b border-line pb-4">
-                  <Cmd action={draftDeliveryReceiptAction} fields={{ shipmentId: s.id }} label="Print draft delivery receipt" variant="secondary">
-                    <p className="text-[13px] text-fg-2">A draft DR has no number and never moves stock.</p>
+        primary={
+          ["dispatched", "delivered"].includes(s.status) && drDoc ? (
+            <LinkButton href={`/print/delivery-receipt/${s.id}`} target="_blank" variant="secondary" size="lg">
+              Print delivery receipt
+            </LinkButton>
+          ) : undefined
+        }
+        secondary={
+          <>
+            <LinkButton href="/sales/shipments" variant="ghost">All deliveries</LinkButton>
+            <MoreMenu>
+              <div className="flex flex-col gap-3">
+                <LinkButton href={`/sales/${v.order.id}`} variant="secondary">Open the order</LinkButton>
+                {canDraftDr && (
+                  <Cmd action={draftDeliveryReceiptAction} fields={{ shipmentId: s.id }} label="Print a draft delivery receipt" variant="secondary">
+                    <p className="text-[13px] text-fg-2">A draft has no number and never moves stock.</p>
                   </Cmd>
-                </div>
-              )}
-              {ctx.can("sales.shipment.post") ? (
-                <Cmd action={dispatchShipmentAction} fields={{ shipmentId: s.id }} label="Dispatch shipment" pending="Posting dispatch…" variant="cta" size="lg" confirm="This issues stock and cannot be undone without a return. Dispatch now?">
-                  <Field label="Driver" htmlFor="driverName"><Input id="driverName" name="driverName" required maxLength={80} /></Field>
-                  <Field label="Vehicle plate" htmlFor="vehiclePlate"><Input id="vehiclePlate" name="vehiclePlate" required maxLength={20} autoCapitalize="characters" /></Field>
-                  <Field label="Carrier" htmlFor="carrierName"><Input id="carrierName" name="carrierName" defaultValue={s.carrier ?? "Own truck"} maxLength={80} /></Field>
-                </Cmd>
-              ) : (
-                <p className="text-[13px] text-muted">Packed. Waiting for the warehouse to dispatch.</p>
-              )}
-            </Card>
-          )}
-          {["draft", "picked", "packed"].includes(s.status) && ctx.can("sales.shipment.edit") && (
-            <Card>
-              <ReasonCmd action={cancelShipmentAction} fields={{ shipmentId: s.id }} label="Cancel shipment" placeholder="e.g. Customer moved the delivery" confirm="Cancel this shipment? The allocation is kept." />
-            </Card>
-          )}
-          {["dispatched", "delivered"].includes(s.status) && (
-            <Card>
-              <CardTitle>Delivery receipt {s.deliveryReceiptNumber}</CardTitle>
-              {drDoc ? null : ctx.can("documents.generated_document.create") ? (
-                <Cmd action={generateDeliveryReceiptAction} fields={{ shipmentId: s.id }} label="Generate delivery receipt" variant="secondary">
-                  <Banner tone="warn" title="No DR document yet">The DR number is allocated; the document needs an approved template (Management → System → Templates & labels).</Banner>
-                </Cmd>
-              ) : null}
-              {drDoc && <p className="text-[12px] text-muted">{drDoc.documentNumber} · {drDoc.watermark ?? "issued"} · reprints from the document record need a reason.</p>}
-            </Card>
-          )}
-          {s.status === "dispatched" && ctx.can("sales.delivery_receipt.create") && (
-            <Card>
-              <CardTitle>Acknowledge receipt</CardTitle>
-              <AcknowledgeForm action={acknowledgeAction} shipmentId={s.id} now={manilaNowLocal()} />
-            </Card>
-          )}
-          {s.status === "dispatched" && ctx.can("sales.shipment.void") && (
-            <Card>
-              <CardTitle>Reverse dispatch</CardTitle>
-              <p className="mb-2 text-[13px] text-fg-2">Only when goods never left: posts reversal movements back to the shelf. Delivered goods come back as a customer return.</p>
-              <ReasonCmd action={reverseShipmentAction} fields={{ shipmentId: s.id }} label="Reverse dispatch" placeholder="e.g. Truck broke down at the gate" variant="danger" confirm="Reverse this dispatch? Stock returns to its locations and the DR is voided." />
-            </Card>
-          )}
-          {v.deliveryReceipt?.status === "acknowledged" && (
-            <Card>
-              <CardTitle>Acknowledged</CardTitle>
-              <p className="text-[13px]">{v.deliveryReceipt.receivedByName}{v.deliveryReceipt.receivedByPosition ? ` · ${v.deliveryReceipt.receivedByPosition}` : ""} · {fmtDateTime(v.deliveryReceipt.acknowledgedAt)}</p>
-              {v.deliveryReceipt.remarks && <p className="text-[13px] text-fg-2">Remarks: {v.deliveryReceipt.remarks}</p>}
-            </Card>
-          )}
-          <Card>
-            <CardTitle>Documents</CardTitle>
-            {v.documents.length === 0 ? <EmptyState title="No documents yet" /> : (
-              <ul className="flex flex-col gap-1 text-[13px]">
-                {v.documents.map((d) => (
-                  <li key={d.id}><Link href={`/documents/${d.id}`} className="text-primary-text hover:underline">{d.documentNumber}</Link> · {d.documentKind.replace(/_/g, " ")} · {d.status}{d.watermark ? ` · ${d.watermark}` : ""}</li>
-                ))}
-              </ul>
-            )}
-            {packList && <LinkButton href={`/print/documents/${packList.id}`} target="_blank" variant="secondary" className="mt-3">Print packing list</LinkButton>}
-          </Card>
+                )}
+                {packList && <LinkButton href={`/print/documents/${packList.id}`} target="_blank" variant="secondary">Print the packing list</LinkButton>}
+                {canCancel && <ReasonCmd action={cancelShipmentAction} fields={{ shipmentId: s.id }} label="Cancel this delivery" placeholder="e.g. Customer moved the delivery" confirm="Cancel this delivery? The stock stays set aside for the order." />}
+                {canReverse && (
+                  <div>
+                    <p className="mb-2 text-[13px] text-fg-2">Only when the goods never left: the stock goes back to its shelves. Goods that reached the customer come back as a customer return.</p>
+                    <ReasonCmd action={reverseShipmentAction} fields={{ shipmentId: s.id }} label="Undo sending out" placeholder="e.g. Truck broke down at the gate" variant="danger" confirm="Undo sending out? Stock goes back to its shelves and the delivery receipt is cancelled." />
+                  </div>
+                )}
+                <Help screen="sales.fulfilment" />
+              </div>
+            </MoreMenu>
+          </>
+        }
+      />
+      <PageIntro>This screen is for one delivery to {v.customer.name}: what goes in it, sending it out, and the proof that the customer got it.</PageIntro>
+      {next}
+      {done && DONE[done] && (
+        <div className="mb-4" role="status">
+          <Banner tone="ok" title={DONE[done]} />
         </div>
+      )}
+      {v.blockedLots.length > 0 && ["picked", "packed"].includes(s.status) && (
+        <div className="mb-4">
+          <Banner tone="bad" title="Something in this delivery was stopped by QA">
+            {v.blockedLots.join(", ")}: it cannot be sent out. Ask QA, or cancel the delivery and set aside other stock.
+          </Banner>
+        </div>
+      )}
+      {v.exceptions.some((e) => e.kind === "over_shipment") && (
+        <div className="mb-4">
+          <Banner tone="warn" title="More than ordered: allowed by a manager">
+            {v.exceptions
+              .filter((e) => e.kind === "over_shipment")
+              .map((e) => `${e.reason} (${e.customerReference}, ${e.approvedByName})`)
+              .join("; ")}
+          </Banner>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-4">
+        {canSend && (
+          <Card>
+            <span id="send" className="block scroll-mt-24" />
+            <CardTitle>Send out</CardTitle>
+            <Cmd action={dispatchShipmentAction} fields={{ shipmentId: s.id }} label="Send out now" pending="Sending out…" variant="cta" size="lg" confirm="Stock leaves the shelf now. It can only be undone if the truck never left. Send out?">
+              <Field label="Driver" htmlFor="driverName">
+                <Input id="driverName" name="driverName" required maxLength={80} autoComplete="off" />
+              </Field>
+              <Field label="Plate number" htmlFor="vehiclePlate">
+                <Input id="vehiclePlate" name="vehiclePlate" required maxLength={20} autoCapitalize="characters" autoComplete="off" />
+              </Field>
+              <Field label="Who delivers" htmlFor="carrierName">
+                <Input id="carrierName" name="carrierName" defaultValue={s.carrier ?? "Own truck"} maxLength={80} />
+              </Field>
+            </Cmd>
+          </Card>
+        )}
+        {canPod && (
+          <Card>
+            <span id="pod" className="block scroll-mt-24" />
+            <CardTitle>Proof of delivery</CardTitle>
+            <AcknowledgeForm action={acknowledgeAction} shipmentId={s.id} now={manilaNowLocal()} />
+          </Card>
+        )}
+        {v.deliveryReceipt?.status === "acknowledged" && (
+          <Card>
+            <CardTitle>Proof of delivery</CardTitle>
+            <p className="text-[14px]">
+              {v.deliveryReceipt.receivedByName}
+              {v.deliveryReceipt.receivedByPosition ? ` · ${v.deliveryReceipt.receivedByPosition}` : ""} · {fmtDateTime(v.deliveryReceipt.acknowledgedAt)}
+            </p>
+            {v.deliveryReceipt.remarks && <p className="text-[13px] text-fg-2">Something wrong: {v.deliveryReceipt.remarks}</p>}
+          </Card>
+        )}
+        {["dispatched", "delivered"].includes(s.status) && !drDoc && ctx.can("documents.generated_document.create") && (
+          <Card>
+            <CardTitle>Delivery receipt</CardTitle>
+            <Cmd action={generateDeliveryReceiptAction} fields={{ shipmentId: s.id }} label="Make the delivery receipt" variant="secondary">
+              <Banner tone="warn" title="No delivery receipt paper yet">The number is given; the paper needs an approved template (Management → System → Templates & labels).</Banner>
+            </Cmd>
+          </Card>
+        )}
+
+        <Card>
+          <CardTitle>
+            In this delivery · {v.totals.boxes} box(es) · {fmtQty(v.totals.units, "pcs", 0)}
+          </CardTitle>
+          {v.lines.length === 0 ? (
+            <EmptyState title="Nothing checked yet">{s.status === "draft" ? "The items are being taken off the shelf." : "Boxes show here as they are checked."}</EmptyState>
+          ) : (
+            <ul className="flex flex-col divide-y divide-line">
+              {v.lines.map((l) => (
+                <li key={l.id} className="flex items-start justify-between gap-3 py-2.5">
+                  <div className="min-w-0 text-[14px]">
+                    <p className="font-medium">
+                      {l.boxNumber ? <>Box <span className="font-mono">{l.boxNumber}</span></> : "Loose pieces"} {l.qualityStatus !== "released" && <StatusChip status={l.qualityStatus} />}
+                      {l.isOverShipment ? <span className="ml-1 text-[12px] text-[var(--warn-fg)]">more than ordered</span> : null}
+                    </p>
+                    <p className="text-[13px] text-fg-2">
+                      Expires {fmtDate(l.expiresOn)} · from shelf {l.locationCode}
+                    </p>
+                    <p className="font-mono text-[12px] text-muted">
+                      {l.sku} · lot {l.lotNumber}
+                    </p>
+                  </div>
+                  <span className="whitespace-nowrap text-[15px] font-semibold tabular">{fmtQty(l.qtyBase, l.baseUom, l.baseUom === "pcs" ? 0 : 3)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card>
+          <CardTitle>About this delivery</CardTitle>
+          <Dl
+            items={[
+              ["Deliver to", s.shipToAddress ?? v.customer.shipToAddress],
+              ["Order", <Link key="o" href={`/sales/${v.order.id}`} className="text-primary-text hover:underline">{v.order.orderNumber}</Link>],
+              ["Driver and plate", [s.driverName, s.vehiclePlate].filter(Boolean).join(" · ") || "—"],
+              ["Sent out", s.dispatchedAt ? fmtDateTime(s.dispatchedAt) : "Not yet"],
+              ["Delivered", s.deliveredAt ? `${fmtDateTime(s.deliveredAt)} · ${s.receivedByName ?? ""}` : "Not yet"],
+            ]}
+          />
+          <div className="mt-3">
+            <MoreDetails>
+              <Dl
+                items={[
+                  ["Delivery receipt number", s.deliveryReceiptNumber ?? (v.deliveryReceipt?.status === "draft" ? "Draft (numbered when sent out)" : "—")],
+                  ["Who delivers · tracking", [s.carrier, s.trackingNumber].filter(Boolean).join(" · ") || "—"],
+                  ["Boxes · weight", [s.packageCount, s.grossWeight ? `${Number(s.grossWeight)} ${s.weightUom ?? "kg"}` : null].filter(Boolean).join(" · ") || "—"],
+                ]}
+              />
+              {rec && (
+                <p className={`text-[13px] ${rec.balanced ? "text-[var(--ok-fg)]" : "text-[var(--bad-fg)]"}`}>
+                  Stock check: delivery {fmtQty(rec.linesQty, "pcs", 0)} vs stock moved {fmtQty(rec.movementsQty, "pcs", 0)} · {rec.balanced ? "no difference" : `difference ${rec.difference}`}
+                </p>
+              )}
+              {drDoc && <p className="text-[12px] text-muted">{drDoc.documentNumber} · {drDoc.watermark ?? "issued"} · printing again from the document page asks why.</p>}
+              <p className="text-[13px] font-medium">Papers</p>
+              {v.documents.length === 0 ? (
+                <p className="text-[13px] text-muted">No papers yet.</p>
+              ) : (
+                <ul className="flex flex-col gap-1 text-[13px]">
+                  {v.documents.map((d) => (
+                    <li key={d.id}>
+                      <Link href={`/documents/${d.id}`} className="text-primary-text hover:underline">
+                        {d.documentKind.replace(/_/g, " ")}
+                      </Link>{" "}
+                      <span className="font-mono text-[12px] text-muted">{d.documentNumber}</span> · {d.status}
+                      {d.watermark ? ` · ${d.watermark}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </MoreDetails>
+          </div>
+        </Card>
+
+        <MoreDetails title="What happened">
+          {v.history.length === 0 ? (
+            <p className="text-[13px] text-muted">Nothing recorded yet.</p>
+          ) : (
+            <ul className="flex flex-col gap-1 text-[13px]">
+              {v.history.map((h) => (
+                <li key={h.id}>
+                  {fmtDateTime(h.at)} · {h.fromState ? `${shipWord(h.fromState)} → ` : ""}
+                  {shipWord(h.toState)} · {h.byName}
+                  {h.reason ? ` · ${h.reason}` : ""}
+                </li>
+              ))}
+            </ul>
+          )}
+        </MoreDetails>
       </div>
-    </>
+    </div>
   );
 }

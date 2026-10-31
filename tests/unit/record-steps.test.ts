@@ -83,24 +83,24 @@ describe("record progress strip", () => {
       { label: "Cancelled", state: "blocked" },
     ]);
     expect(goodsReceiptSteps("reversed").map((s) => s.label)).toEqual(["Draft", "Posted", "Reversed"]);
-    expect(shipmentSteps("returned").at(-1)).toEqual({ label: "Returned", state: "blocked" });
-    expect(shipmentSteps("reversed").map((s) => s.label)).toEqual(["Picking", "Picked", "Packed", "Dispatched", "Reversed"]);
+    expect(shipmentSteps("returned").at(-1)).toEqual({ label: "Came back", state: "blocked" });
+    expect(shipmentSteps("reversed").map((s) => s.label)).toEqual(["Get from shelf", "Second check of the box", "Ready to send out", "Sent out", "Sending undone"]);
   });
 
   it("uses the specific word for in-between statuses", () => {
     expect(purchaseOrderSteps("partially_received").find((s) => s.state === "current")?.label).toBe("Partly received");
-    expect(salesOrderSteps("partially_shipped").find((s) => s.state === "current")?.label).toBe("Partly shipped");
-    expect(salesOrderSteps("packed").find((s) => s.state === "current")?.label).toBe("Packed");
+    expect(salesOrderSteps("partially_shipped").find((s) => s.state === "current")?.label).toBe("Partly sent out");
+    expect(salesOrderSteps("packed").find((s) => s.state === "current")?.label).toBe("Box checked");
     expect(salesOrderSteps("pending_approval").find((s) => s.state === "current")?.label).toBe("Approval");
   });
 
-  it("a customer order's steps use the owner's words (mockup review): Stock reserved, Packing, Billed, Done", () => {
-    expect(salesOrderSteps("draft").map((s) => s.label)).toEqual(["Draft", "Approval", "Confirmed", "Stock reserved", "Packing", "Shipped", "Billed", "Done"]);
-    expect(salesOrderSteps("allocated").find((s) => s.state === "current")?.label).toBe("Stock reserved");
-    expect(salesOrderSteps("picking").find((s) => s.state === "current")?.label).toBe("Picking");
+  it("a customer order's steps use grade-5 words (ADR-088): Set aside, Get from shelf, Sent out, Billed, Done", () => {
+    expect(salesOrderSteps("draft").map((s) => s.label)).toEqual(["Draft", "Approval", "Confirmed", "Set aside", "Get from shelf", "Sent out", "Billed", "Done"]);
+    expect(salesOrderSteps("allocated").find((s) => s.state === "current")?.label).toBe("Set aside");
+    expect(salesOrderSteps("picking").find((s) => s.state === "current")?.label).toBe("Getting from shelf");
     expect(salesOrderSteps("invoiced").find((s) => s.state === "current")?.label).toBe("Billed");
     expect(salesOrderSteps("closed").find((s) => s.state === "current")?.label).toBe("Done");
-    for (const old of ["Allocated", "Pick & pack", "Invoiced", "Closed"]) expect(salesOrderSteps("draft").map((s) => s.label)).not.toContain(old);
+    for (const old of ["Allocated", "Pick & pack", "Invoiced", "Closed", "Stock reserved", "Shipped"]) expect(salesOrderSteps("draft").map((s) => s.label)).not.toContain(old);
   });
 
   it("an after-the-fact purchase order never shows a Sent stage", () => {

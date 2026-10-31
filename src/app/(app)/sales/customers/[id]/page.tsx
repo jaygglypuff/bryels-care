@@ -3,11 +3,14 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
-import { CUSTOMER_TRANSITIONS, CUSTOMER_STATUS_LABEL, customerSegmentLabels, customerSegmentOptions, formatAddress, getCustomer360, manilaToday, requirementFormOptions, type CustomerStatus } from "@/modules/sales";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { CUSTOMER_TRANSITIONS, customerSegmentLabels, customerSegmentOptions, formatAddress, getCustomer360, manilaToday, requirementFormOptions, type CustomerStatus } from "@/modules/sales";
+import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { MoreDetails, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { PlainList, PlainRow, RecordNo } from "@/ui/plain-list";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
-import { Money, SalesStatus } from "../../orders/sales-ui";
+import { Money, SalesStatus, ShipChip, salesWord } from "../../orders/sales-ui";
 import {
   AddAddressForm,
   AddContactForm,
@@ -23,13 +26,14 @@ import {
 } from "./customer-forms";
 import { registerAppHooks } from "@/modules/wiring";
 import { PortalAccessPanel } from "./portal-access";
-import { DeleteDraftCard } from "../../../delete-draft-button";
+import { DeleteDraftButton } from "../../../delete-draft-button";
+import { DoNext, whoDoes } from "../../next-step";
 
 registerAppHooks(); // Wave 3 cross-module registrations (src/modules/wiring.ts); cheap and idempotent
 
 export const metadata = { title: "Customer" };
 
-/** Customer 360 (US-4-01, US-4-02, US-4-06; docs/ux-system.md §9.8): every part shows only what the role may see. */
+/** Customer page (US-4-01, US-4-02, US-4-06; docs/ux-system.md §9.8): every part shows only what the role may see. */
 export default async function CustomerDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("masterdata.customer.view")) return <Forbidden what="customers" />;
@@ -51,7 +55,30 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
   const siteCode = (sid: string) => ctx.allowedSites.find((s) => s.id === sid)?.code ?? "";
   const statusOptions = (CUSTOMER_TRANSITIONS[c.status as CustomerStatus] ?? [])
     .filter((to) => (["on_hold"].includes(to) || c.status === "on_hold" ? ctx.can("finance.credit_terms.approve") : canEdit))
-    .map((to) => ({ to, label: CUSTOMER_STATUS_LABEL[to] }));
+    .map((to) => ({ to, label: salesWord(to) }));
+  const canOrder = ctx.can("sales.sales_order.create");
+  const canQuote = ctx.can("sales.quote.create");
+  const canDelete = (c.status === "prospect" || c.status === "active") && (ctx.can("masterdata.customer.edit") || ctx.can("masterdata.customer.create"));
+  // ADR-091: the owner may approve a customer rule they drafted themselves (recorded as "own request").
+  const mayDecideRule = (r: { submittedBy: string | null; createdBy: string | null }) => !ctx.sodConflictAt(r.submittedBy, null) && !ctx.sodConflictAt(r.createdBy, null);
+
+  const next =
+    c.status === "on_hold" ? (
+      <DoNext
+        text="Stopped: unpaid bills. New orders for this customer wait for approval."
+        waitingFor={`Waiting for ${await whoDoes(ctx, "finance.credit_terms.approve", null, "finance")} to start them again when the bills are paid.`}
+      />
+    ) : c.status === "inactive" ? (
+      <DoNext text="This customer is not buying any more. Change it under ⋯ More if they come back." />
+    ) : c.status === "prospect" ? (
+      canQuote ? (
+        <DoNext text="Next: send them a price offer." action={{ label: "Make a price offer", href: `/sales/quotations/new?customer=${c.id}` }} />
+      ) : (
+        <DoNext text="New customer, not buying yet." />
+      )
+    ) : canOrder ? (
+      <DoNext text="Next: when they order, enter it here." action={{ label: "New order for this customer", href: `/sales/new?customer=${c.id}` }} />
+    ) : null;
 
   return (
     <>
@@ -59,85 +86,102 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
         title={c.name}
         subtitle={
           <span className="inline-flex flex-wrap items-center gap-2">
-            <span className="font-mono">{c.code}</span>
+            <Link href="/sales/customers" className="text-primary-text hover:underline">Customers</Link>
+            <RecordNo>{c.code}</RecordNo>
             <SalesStatus status={c.status} />
             {c.segment && <Chip tone="neu">{segLabels.get(c.segment) ?? c.segment}</Chip>}
           </span>
         }
         actions={
-          <>
-            <LinkButton href="/sales/customers" variant="secondary">All customers</LinkButton>
-            {ctx.can("sales.quote.create") && <LinkButton href={`/sales/quotations/new?customer=${c.id}`} variant="secondary">New quotation</LinkButton>}
-            {ctx.can("sales.sales_order.create") && <LinkButton href={`/sales/new?customer=${c.id}`} variant="cta">New order</LinkButton>}
-          </>
+          <MoreMenu>
+            <div className="flex flex-col gap-3">
+              {canQuote && c.status !== "prospect" && <LinkButton href={`/sales/quotations/new?customer=${c.id}`} variant="secondary">Make a price offer</LinkButton>}
+              {canOrder && c.status === "prospect" && <LinkButton href={`/sales/new?customer=${c.id}`} variant="secondary">New order</LinkButton>}
+              {ctx.can("sales.price_list.edit") && <LinkButton href={`/sales/price-lists/new?customer=${c.id}`} variant="secondary">Set prices for this customer</LinkButton>}
+              {statusOptions.length > 0 && <StatusForm customerId={c.id} options={statusOptions} />}
+              {canDelete && (
+                <div>
+                  <p className="mb-2 text-[13px] text-fg-2">If nothing uses this customer yet (no price offer, order, invoice, prices or return), you can delete it with its addresses and contacts.</p>
+                  <DeleteDraftButton kind="customer" id={c.id} what="this customer" label="Delete customer" />
+                </div>
+              )}
+            </div>
+          </MoreMenu>
         }
       />
+      <PageIntro>This screen is for one customer: how to reach them, what they ordered, what they owe and their special rules.</PageIntro>
       {created && (
         <div className="mb-4" role="status">
-          <Banner tone="ok" title="Customer created. Finance sets the credit terms; add requirements and price lists below." />
+          <Banner tone="ok" title={`Customer saved as ${c.code}.`}>Finance sets how much they may owe. Add special rules and prices below when you need them.</Banner>
         </div>
       )}
-      {c.status === "on_hold" && (
-        <div className="mb-4">
-          <Banner tone="hold" title="Credit hold">New orders of this customer stop at credit approval until finance lifts the hold.</Banner>
-        </div>
-      )}
+      {next}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-4">
           <Card>
-            <CardTitle>Profile</CardTitle>
+            <CardTitle>How to reach them</CardTitle>
             <Dl
               items={[
-                ["Ship to (default)", c.shipToAddress],
-                ["Min shelf life at dispatch", `${c.minShelfLifeDays} days (default; product requirements below override it)`],
-                ["Default lead time", c.defaultLeadTimeDays != null ? `${c.defaultLeadTimeDays} days` : "—"],
-                ["Customer since", fmtDate(c.createdAt)],
-                ...(c.notesInternal ? ([["Internal notes", c.notesInternal]] as [string, string][]) : []),
+                ["Phone", c.phone ?? "—"],
+                ["Deliver to", c.shipToAddress],
+                ["Contact person", c.contactName ?? "—"],
+                ["E-mail", c.email ?? "—"],
               ]}
             />
-            {canEdit && <ProfileForm c={c} segments={segOptions} />}
-            <StatusForm customerId={c.id} options={statusOptions} />
+            <div className="mt-3">
+              <MoreDetails>
+                <Dl
+                  items={[
+                    ["Shortest shelf life allowed", `${c.minShelfLifeDays} days left when sent out (a special rule per product can change it)`],
+                    ["Usual days from order to delivery", c.defaultLeadTimeDays != null ? `${c.defaultLeadTimeDays} days` : "—"],
+                    ["Customer since", fmtDate(c.createdAt)],
+                    ...(c.notesInternal ? ([["Note for our team", c.notesInternal]] as [string, string][]) : []),
+                  ]}
+                />
+                {canEdit && <ProfileForm c={c} segments={segOptions} />}
+              </MoreDetails>
+            </div>
           </Card>
 
           <Card>
-            <CardTitle>Credit and terms</CardTitle>
+            <CardTitle>Money</CardTitle>
             {d.credit ? (
               <>
                 <Dl
                   items={[
-                    ["Credit limit", <Money key="l" value={d.credit.limit} />],
-                    ["Payment terms", d.credit.paymentTermsDays != null ? `${d.credit.paymentTermsDays} days` : "—"],
-                    ["Open order exposure", <Money key="e" value={d.credit.exposure} />],
-                    ["Available", <Money key="a" value={d.credit.available} />],
-                    ["Tax identifier", c.taxIdentifier ?? "—"],
+                    ["Most they may owe", <Money key="l" value={d.credit.limit} />],
+                    ["Days to pay", d.credit.paymentTermsDays != null ? `${d.credit.paymentTermsDays} days` : "—"],
+                    ["Open orders worth", <Money key="e" value={d.credit.exposure} />],
+                    ["Still allowed", <Money key="a" value={d.credit.available} />],
+                    ["Tax number", c.taxIdentifier ?? "—"],
                   ]}
                 />
-                <p className="mt-2 text-[12px] text-muted">Open order exposure counts orders from confirmed up to invoiced. Unpaid invoices are not included yet.</p>
+                <p className="mt-2 text-[12px] text-muted">Open orders count from confirmed up to billed. Unpaid invoices are not counted yet.</p>
                 {ctx.can("finance.credit_terms.approve") && <CreditTermsForm c={c} />}
               </>
             ) : (
-              <p className="text-[13px] text-muted">Credit limit, payment terms and tax identifier are visible to finance-authorised roles only.</p>
+              <p className="text-[13px] text-muted">How much they may owe and the days to pay are shown to finance only.</p>
             )}
           </Card>
 
           <Card>
-            <CardTitle>Contacts</CardTitle>
+            <CardTitle>People to talk to</CardTitle>
             {d.contacts.length === 0 ? (
-              <p className="text-[13px] text-muted">No contacts yet.</p>
+              <p className="text-[13px] text-muted">Nobody added yet{canEdit ? ": tap Add contact." : "."}</p>
             ) : (
               <ul className="flex flex-col divide-y divide-line">
                 {d.contacts.map((k) => (
                   <li key={k.id} className="flex flex-wrap items-start justify-between gap-2 py-2">
                     <div>
                       <p className="font-medium">
-                        {k.name} {k.isPrimary && <Chip tone="info">Primary</Chip>}
+                        {k.name} {k.isPrimary && <Chip tone="info">Main contact</Chip>}
                       </p>
                       <p className="text-[12px] text-muted">{[k.roleLabel, k.phone, k.email].filter(Boolean).join(" · ") || "—"}</p>
                     </div>
                     {canEdit && (
                       <div className="flex gap-1">
-                        {!k.isPrimary && <ContactCommand contactId={k.id} command="primary" label="Make primary" />}
+                        {!k.isPrimary && <ContactCommand contactId={k.id} command="primary" label="Make main contact" />}
                         <ContactCommand contactId={k.id} command="remove" label="Remove" confirm={`Remove ${k.name}?`} />
                       </div>
                     )}
@@ -154,14 +198,14 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
               {d.addresses.map((a) => (
                 <li key={a.id} className="flex flex-col gap-1 py-2">
                   <p className="font-medium">
-                    {a.label} {a.isDefaultShipTo && <Chip tone="ok">Default ship-to</Chip>} {a.isDefaultBillTo && <Chip tone="info">Default bill-to</Chip>}
+                    {a.label} {a.isDefaultShipTo && <Chip tone="ok">Usual deliver-to</Chip>} {a.isDefaultBillTo && <Chip tone="info">Usual bill-to</Chip>}
                   </p>
                   <p className="text-[13px] text-fg-2">{formatAddress(a) || "—"}</p>
                   {(a.contactName || a.phone) && <p className="text-[12px] text-muted">{[a.contactName, a.phone].filter(Boolean).join(" · ")}</p>}
                   {canEdit && (
                     <div className="flex flex-wrap gap-1">
-                      {!a.isDefaultShipTo && <AddressCommand addressId={a.id} command="default_ship_to" label="Default ship-to" />}
-                      {!a.isDefaultBillTo && <AddressCommand addressId={a.id} command="default_bill_to" label="Default bill-to" />}
+                      {!a.isDefaultShipTo && <AddressCommand addressId={a.id} command="default_ship_to" label="Make usual deliver-to" />}
+                      {!a.isDefaultBillTo && <AddressCommand addressId={a.id} command="default_bill_to" label="Make usual bill-to" />}
                       {!a.isDefaultShipTo && !a.isDefaultBillTo && <AddressCommand addressId={a.id} command="remove" label="Remove" confirm={`Remove ${a.label}?`} />}
                     </div>
                   )}
@@ -173,37 +217,39 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
 
           {ctx.can("masterdata.customer_requirement.view") && (
             <Card>
-              <CardTitle>Requirements</CardTitle>
+              <CardTitle>Special rules for this customer</CardTitle>
               {d.requirements.length === 0 ? (
-                <EmptyState title="No requirements yet">Agreed specifications (shelf life, minimum order quantity, carton count, artwork, documents) apply to orders and packing once approved.</EmptyState>
+                <EmptyState title="No special rules yet">
+                  For example: at least 12 months before expiry, a minimum order, how many per carton, their label design or papers they need. A rule applies to orders and packing once it is approved.
+                </EmptyState>
               ) : (
                 <ul className="flex flex-col divide-y divide-line">
                   {d.requirements.map((r) => (
                     <li key={r.id} className="flex flex-col gap-1 py-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="font-medium">
-                          {r.kindLabel} <span className="text-muted">· {r.sku ?? "all products"}</span>
+                          {r.kindLabel} <span className="text-muted">· {r.productName ?? r.sku ?? "all products"}</span>
                         </p>
                         <SalesStatus status={r.effective ? "effective" : r.scheduled ? "scheduled" : r.status} />
                       </div>
                       <p className="text-[13px]">
                         <span className="font-semibold">{r.valueLabel}</span>{" "}
                         <span className="text-muted">
-                          · v{r.versionNo} · from {fmtDate(r.effectiveFrom)}
-                          {r.effectiveTo ? ` to ${fmtDate(r.effectiveTo)}` : ""}
+                          · from {fmtDate(r.effectiveFrom)}
+                          {r.effectiveTo ? ` to ${fmtDate(r.effectiveTo)}` : ""} · version {r.versionNo}
                         </span>
                       </p>
-                      {r.status === "pending_approval" && <p className="text-[12px] text-muted">Submitted by {r.submittedByName ?? "—"}; another person approves.</p>}
+                      {r.status === "pending_approval" && <p className="text-[12px] text-muted">Sent by {r.submittedByName ?? "—"}; another person approves (the owner may approve their own).</p>}
                       <div className="flex flex-wrap gap-1">
                         {r.status === "draft" && ctx.can("masterdata.customer_requirement.edit") && <RequirementCommand requirementId={r.id} command="submit" label="Send for approval" />}
-                        {r.status === "pending_approval" && ctx.can("masterdata.customer_requirement.approve") && r.submittedBy !== ctx.userId && r.createdBy !== ctx.userId && (
+                        {r.status === "pending_approval" && ctx.can("masterdata.customer_requirement.approve") && mayDecideRule(r) && (
                           <>
                             <RequirementCommand requirementId={r.id} command="approve" label="Approve" variant="cta" />
-                            <RequirementCommand requirementId={r.id} command="return" label="Return" needsReason />
-                            <RequirementCommand requirementId={r.id} command="reject" label="Reject" needsReason />
+                            <RequirementCommand requirementId={r.id} command="return" label="Send back" needsReason />
+                            <RequirementCommand requirementId={r.id} command="reject" label="Say no" needsReason />
                           </>
                         )}
-                        {r.status === "approved" && ctx.can("masterdata.customer_requirement.approve") && <RequirementCommand requirementId={r.id} command="retire" label="Retire" needsReason />}
+                        {r.status === "approved" && ctx.can("masterdata.customer_requirement.approve") && <RequirementCommand requirementId={r.id} command="retire" label="Stop using" needsReason />}
                       </div>
                     </li>
                   ))}
@@ -215,14 +261,14 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
           )}
 
           <Card>
-            <CardTitle>Customer item codes</CardTitle>
+            <CardTitle>Their own product codes</CardTitle>
             {d.itemCodes.length === 0 ? (
-              <p className="text-[13px] text-muted">No mapping: documents show our SKU codes only.</p>
+              <p className="text-[13px] text-muted">None: our papers show our product codes only.</p>
             ) : (
               <ul className="flex flex-col gap-1 text-[13px]">
                 {d.itemCodes.map((i) => (
                   <li key={i.id}>
-                    <span className="font-mono">{i.sku}</span> → <span className="font-mono font-semibold">{i.customerItemCode}</span>
+                    {i.productName ?? i.sku} → <span className="font-mono font-semibold">{i.customerItemCode}</span>
                     {i.customerDescription ? <span className="text-muted"> · {i.customerDescription}</span> : null}
                   </li>
                 ))}
@@ -234,51 +280,49 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
 
         <div className="flex min-w-0 flex-col gap-4">
           {ctx.can("sales.sales_order.view") && (
-            <Card>
-              <CardTitle>Orders</CardTitle>
+            <section aria-label="Orders" className="flex flex-col gap-2">
+              <h2 className="text-[16px] font-semibold">Orders</h2>
               {d.orders.length === 0 ? (
-                <EmptyState title="No orders yet">Orders for this customer in your sites appear here.</EmptyState>
+                <EmptyState title="No orders yet" action={canOrder && c.status !== "prospect" ? <LinkButton href={`/sales/new?customer=${c.id}`}>New order</LinkButton> : undefined}>
+                  Orders for this customer at your sites show here.
+                </EmptyState>
               ) : (
-                <Table head={["Order", "Site", "Requested", "Value", "Status"]}>
+                <PlainList label="Orders">
                   {d.orders.slice(0, 15).map((o) => (
-                    <tr key={o.id} className="hover:bg-surface-2">
-                      <Td>
-                        <Link className="font-medium text-primary-text hover:underline" href={`/sales/${o.id}`}>
-                          {o.orderNumber}
-                        </Link>
-                        {o.customerPoNumber && <span className="block text-[11px] text-muted">PO {o.customerPoNumber}</span>}
-                      </Td>
-                      <Td>{siteCode(o.siteId)}</Td>
-                      <Td>{fmtDate(o.requestedDeliveryOn)}</Td>
-                      <Td>
-                        <Money value={o.value} />
-                      </Td>
-                      <Td>
-                        <SalesStatus status={o.status} />
-                      </Td>
-                    </tr>
+                    <PlainRow
+                      key={o.id}
+                      href={`/sales/${o.id}`}
+                      title={`Deliver by ${fmtDate(o.requestedDeliveryOn)}`}
+                      code={o.orderNumber}
+                      status={<SalesStatus status={o.status} />}
+                      facts={[siteCode(o.siteId), o.customerPoNumber ? `their no. ${o.customerPoNumber}` : null].filter(Boolean).join(" · ")}
+                      aside={<Money className="text-[15px] font-semibold tabular text-fg" value={o.value} />}
+                    />
                   ))}
-                </Table>
+                </PlainList>
               )}
-              <p className="mt-2 text-[12px] text-muted">{d.openOrders.length} open order{d.openOrders.length === 1 ? "" : "s"}.</p>
-            </Card>
+              <p className="text-[12px] text-muted">{d.openOrders.length} open order{d.openOrders.length === 1 ? "" : "s"}.</p>
+            </section>
           )}
 
           {ctx.can("sales.quote.view") && (
             <Card>
-              <CardTitle>Quotations</CardTitle>
+              <CardTitle>Price offers</CardTitle>
               {d.quotes.length === 0 ? (
-                <p className="text-[13px] text-muted">No quotations yet.</p>
+                <p className="text-[13px] text-muted">No price offers yet.</p>
               ) : (
                 <ul className="flex flex-col divide-y divide-line">
                   {d.quotes.slice(0, 10).map((q) => (
-                    <li key={q.id} className="flex items-center justify-between gap-2 py-2 text-[13px]">
-                      <Link className="font-medium text-primary-text hover:underline" href={`/sales/quotations/${q.id}`}>
-                        {q.quoteNumber}
+                    <li key={q.id}>
+                      <Link href={`/sales/quotations/${q.id}`} className="flex min-h-[48px] flex-wrap items-center justify-between gap-2 py-2 text-[13px] hover:bg-surface-2">
+                        <span className="min-w-0">
+                          Good until {fmtDate(q.validUntil)} <span className="font-mono text-[12px] text-muted">· {q.quoteNumber}</span>
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <SalesStatus status={q.status} />
+                          <Money className="font-semibold tabular" value={q.totalAmount} />
+                        </span>
                       </Link>
-                      <span className="text-muted">valid until {fmtDate(q.validUntil)}</span>
-                      <Money value={q.totalAmount} />
-                      <SalesStatus status={q.status} />
                     </li>
                   ))}
                 </ul>
@@ -288,18 +332,19 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
 
           {ctx.can("sales.price_list.view") && (
             <Card>
-              <CardTitle>Price lists</CardTitle>
+              <CardTitle>Prices</CardTitle>
               {d.priceLists.length === 0 ? (
-                <p className="text-[13px] text-muted">No customer price list: the general list applies.</p>
+                <p className="text-[13px] text-muted">No prices just for them: the general prices apply.</p>
               ) : (
-                <ul className="flex flex-col gap-1 text-[13px]">
+                <ul className="flex flex-col divide-y divide-line">
                   {d.priceLists.map((p) => (
-                    <li key={p.id} className="flex items-center justify-between gap-2">
-                      <Link className="text-primary-text hover:underline" href={`/sales/price-lists/${p.id}`}>
-                        {p.code} v{p.versionNo}
+                    <li key={p.id}>
+                      <Link href={`/sales/price-lists/${p.id}`} className="flex min-h-[48px] flex-wrap items-center justify-between gap-2 py-2 text-[13px] hover:bg-surface-2">
+                        <span>
+                          From {fmtDate(p.effectiveFrom)} <span className="font-mono text-[12px] text-muted">· {p.code} v{p.versionNo}</span>
+                        </span>
+                        <SalesStatus status={p.effective ? "effective" : p.status} />
                       </Link>
-                      <span className="text-muted">from {fmtDate(p.effectiveFrom)}</span>
-                      <SalesStatus status={p.effective ? "effective" : p.status} />
                     </li>
                   ))}
                 </ul>
@@ -309,21 +354,25 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
 
           {ctx.can("sales.shipment.view") && (
             <Card>
-              <CardTitle>Shipments</CardTitle>
+              <CardTitle>Sent out</CardTitle>
               {d.shipments.length === 0 ? (
-                <p className="text-[13px] text-muted">No shipments yet.</p>
+                <p className="text-[13px] text-muted">Nothing sent out yet.</p>
               ) : (
                 <ul className="flex flex-col divide-y divide-line">
                   {d.shipments.slice(0, 10).map((s) => (
                     <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-[13px]">
-                      <span className="font-medium">{s.deliveryReceiptNumber}</span>
-                      <Link className="text-primary-text hover:underline" href={`/sales/${s.orderId}`}>
-                        {s.orderNumber}
-                      </Link>
-                      <span className="text-muted">{s.deliveredAt ? `delivered ${fmtDateTime(s.deliveredAt)}` : `dispatched ${fmtDateTime(s.dispatchedAt)}`}</span>
-                      <Link className="text-primary-text hover:underline" href={`/print/delivery-receipt/${s.id}`} target="_blank">
-                        Print DR
-                      </Link>
+                      <span className="min-w-0">
+                        {s.deliveredAt ? `Delivered ${fmtDateTime(s.deliveredAt)}` : `Sent ${fmtDateTime(s.dispatchedAt)}`}{" "}
+                        <span className="font-mono text-[12px] text-muted">
+                          · <Link className="hover:underline" href={`/sales/${s.orderId}`}>{s.orderNumber}</Link> · {s.deliveryReceiptNumber}
+                        </span>
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <ShipChip status={s.deliveredAt ? "delivered" : "dispatched"} />
+                        <Link className="inline-flex min-h-[44px] items-center text-primary-text hover:underline" href={`/print/delivery-receipt/${s.id}`} target="_blank">
+                          Print delivery receipt
+                        </Link>
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -358,9 +407,9 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
           ))}
 
           <Card>
-            <CardTitle>History</CardTitle>
+            <CardTitle>What happened</CardTitle>
             {d.history.length === 0 ? (
-              <p className="text-[13px] text-muted">No changes recorded.</p>
+              <p className="text-[13px] text-muted">No changes yet.</p>
             ) : (
               <ol className="flex flex-col gap-1.5 text-[13px]">
                 {d.history.map((h) => (
@@ -376,7 +425,6 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
             )}
           </Card>
         </div>
-        {(c.status === "prospect" || c.status === "active") && (ctx.can("masterdata.customer.edit") || ctx.can("masterdata.customer.create")) && <DeleteDraftCard kind="customer" id={c.id} what="customer" note="If nothing uses this customer yet (no quotation, order, invoice, price list or return), you can delete it with its addresses and contacts." />}
       </div>
     </>
   );

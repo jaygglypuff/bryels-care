@@ -4,6 +4,8 @@ import Decimal from "decimal.js";
 import { ArrowLeft, ArrowRight, Plus, Trash2 } from "lucide-react";
 import { Button, Card, CardTitle, Field, Input, Select, Textarea, cx } from "@/ui/core";
 import { FormMessage } from "@/ui/form";
+import { MoreDetails } from "@/ui/guide";
+import { NamePicker } from "../name-picker";
 import { Chip } from "@/ui/status";
 import { fmtDate, fmtMoney, fmtQty } from "@/lib/qty";
 import type { ActionState } from "@/lib/errors";
@@ -43,7 +45,7 @@ export function productOptionLabel(p: ProductOpt): string {
 const STEPS = [
   { n: 1, label: "Customer" },
   { n: 2, label: "Products" },
-  { n: 3, label: "Check & send" },
+  { n: 3, label: "Check and save" },
 ] as const;
 type Step = 1 | 2 | 3;
 
@@ -187,38 +189,50 @@ export function NewOrderForm({
           <CardTitle>Customer</CardTitle>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field label="Customer" htmlFor="customerId" error={fe.customerId}>
-              <Select id="customerId" name={initial ? undefined : "customerId"} value={customerId} disabled={!!initial} onChange={(e) => { setCustomerId(e.target.value); setShipToId(""); setBillToId(""); }} required>
-                <option value="">Choose a customer…</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.code})
-                  </option>
-                ))}
-              </Select>
+              <NamePicker
+                id="customerId"
+                name={initial ? undefined : "customerId"}
+                value={customerId}
+                disabled={!!initial}
+                required
+                placeholder="Choose the customer…"
+                searchLabel="Type part of the customer's name"
+                options={customers.map((c) => ({ value: c.id, label: c.name, also: `${c.code} ${c.shipToAddress}` }))}
+                onChange={(v) => {
+                  setCustomerId(v);
+                  setShipToId("");
+                  setBillToId("");
+                }}
+              />
             </Field>
             <div className="rounded-[12px] border border-line bg-surface-2 px-3 py-2 text-[13px]" aria-live="polite">
               {customer ? (
                 <>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Ship to</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Deliver to</p>
                   <p className="text-fg">{shipTo?.text ?? customer.shipToAddress}</p>
                   {customer.status === "on_hold" && (
                     <p className="mt-1.5">
-                      <Chip tone="hold">Credit hold: the order will need approval</Chip>
+                      <Chip tone="hold">Stopped: unpaid bills. The order will need approval</Chip>
                     </p>
                   )}
                   <p className="mt-1.5">
-                    <Chip tone="info">Min shelf life at dispatch: {customer.minShelfLifeDays} days</Chip>
+                    <Chip tone="info">Wants at least {customer.minShelfLifeDays} days before expiry</Chip>
                   </p>
                 </>
               ) : (
-                <p className="text-muted">Choose a customer to see the ship-to address and minimum shelf life.</p>
+                <p className="text-muted">Choose the customer to see where it goes.</p>
               )}
             </div>
+            <Field label="Deliver by" htmlFor="requestedDeliveryOn" error={fe.requestedDeliveryOn}>
+              <Input id="requestedDeliveryOn" name="requestedDeliveryOn" type="date" min={today} required value={deliveryOn} onChange={(e) => setDeliveryOn(e.target.value)} />
+            </Field>
+            <div className="md:col-span-2">
+              <MoreDetails open={!!(fe.customerPoNumber || fe.shipToAddressId || fe.billToAddressId)}>
             {addresses.length > 1 && (
               <>
-                <Field label="Ship to" htmlFor="shipToAddressId" error={fe.shipToAddressId}>
+                <Field label="Deliver to" htmlFor="shipToAddressId" error={fe.shipToAddressId}>
                   <Select id="shipToAddressId" name="shipToAddressId" value={shipToId} onChange={(e) => setShipToId(e.target.value)}>
-                    <option value="">Default ship-to</option>
+                    <option value="">The usual address</option>
                     {addresses.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.label} — {a.text}
@@ -228,7 +242,7 @@ export function NewOrderForm({
                 </Field>
                 <Field label="Bill to" htmlFor="billToAddressId" error={fe.billToAddressId}>
                   <Select id="billToAddressId" name="billToAddressId" value={billToId} onChange={(e) => setBillToId(e.target.value)}>
-                    <option value="">Default bill-to</option>
+                    <option value="">The usual billing address</option>
                     {addresses.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.label}
@@ -241,9 +255,8 @@ export function NewOrderForm({
             <Field label="Customer's order no." htmlFor="customerPoNumber" error={fe.customerPoNumber} hint="Optional — the number on the customer's purchase order">
               <Input id="customerPoNumber" name="customerPoNumber" maxLength={60} autoComplete="off" value={po} onChange={(e) => setPo(e.target.value)} />
             </Field>
-            <Field label="Requested delivery date" htmlFor="requestedDeliveryOn" error={fe.requestedDeliveryOn}>
-              <Input id="requestedDeliveryOn" name="requestedDeliveryOn" type="date" min={today} required value={deliveryOn} onChange={(e) => setDeliveryOn(e.target.value)} />
-            </Field>
+              </MoreDetails>
+            </div>
           </div>
         </Card>
       </div>
@@ -261,11 +274,11 @@ export function NewOrderForm({
                   setNextKey((k) => k + 1);
                 }}
               >
-                <Plus size={14} /> Add product
+                <Plus size={14} aria-hidden /> Add a product
               </Button>
             }
           >
-            {wizard ? `Products for ${customer?.name ?? "the customer"}` : "Lines"}
+            {wizard ? `Products for ${customer?.name ?? "the customer"}` : "Products"}
           </CardTitle>
           {fe.lines && <p className="mb-3 text-[12px] text-[var(--bad-fg)]">{fe.lines}</p>}
           <ol className="flex flex-col gap-3">
@@ -276,36 +289,37 @@ export function NewOrderForm({
                 <li key={l.key} className="rounded-[12px] border border-line p-3">
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-start">
                     <div className="col-span-2 md:col-span-1">
-                      <Field label={`Product (line ${i + 1})`} htmlFor={`p-${l.key}`} error={fe[`lines.${i}.productId`]}>
-                        <Select id={`p-${l.key}`} value={l.productId} onChange={(e) => update(l.key, { productId: e.target.value })} required>
-                          <option value="">Choose a product…</option>
-                          {sortedProducts.map((x) => (
-                            <option key={x.id} value={x.id}>
-                              {productOptionLabel(x)}
-                            </option>
-                          ))}
-                        </Select>
+                      <Field label={`Product ${i + 1}`} htmlFor={`p-${l.key}`} error={fe[`lines.${i}.productId`]}>
+                        <NamePicker
+                          id={`p-${l.key}`}
+                          value={l.productId}
+                          required
+                          placeholder="Choose a product…"
+                          searchLabel="Type part of the product name"
+                          options={sortedProducts.map((x) => ({ value: x.id, label: productOptionLabel(x), also: x.skuCode }))}
+                          onChange={(v) => update(l.key, { productId: v })}
+                        />
                       </Field>
                       {p && (
                         <p className="mt-1 text-[12px] text-muted">
-                          {p.skuCode} · released and free at {siteName}: <span className="font-medium text-fg tabular">{fmtQty(p.available, "pcs", 0)}</span>
+                          Free on the shelf at {siteName}: <span className="font-medium text-fg tabular">{fmtQty(p.available, "pcs", 0)}</span> <span className="font-mono">· {p.skuCode}</span>
                         </p>
                       )}
                     </div>
-                    <Field label="Qty (pcs)" htmlFor={`q-${l.key}`} error={fe[`lines.${i}.qtyUnits`]}>
+                    <Field label="How many (pcs)" htmlFor={`q-${l.key}`} error={fe[`lines.${i}.qtyUnits`]}>
                       <Input id={`q-${l.key}`} inputMode="numeric" pattern="[0-9]*" value={l.qtyUnits} onChange={(e) => update(l.key, { qtyUnits: e.target.value })} required />
                     </Field>
                     {pricesVisible ? (
                       <Field
-                        label="Unit price (₱)"
+                        label="Price each (₱)"
                         htmlFor={`u-${l.key}`}
                         error={fe[`lines.${i}.unitPrice`]}
-                        hint={listPrice(book, l.productId, l.qtyUnits) ? `List ${listPrice(book, l.productId, l.qtyUnits)} — leave empty to use it` : l.productId && customerId ? "No list price: enter the agreed price" : undefined}
+                        hint={listPrice(book, l.productId, l.qtyUnits) ? `Usual price ₱${listPrice(book, l.productId, l.qtyUnits)}: leave empty to use it` : l.productId && customerId ? "No usual price yet: type the agreed price" : undefined}
                       >
                         <Input id={`u-${l.key}`} inputMode="decimal" value={l.unitPrice} onChange={(e) => update(l.key, { unitPrice: e.target.value })} placeholder={listPrice(book, l.productId, l.qtyUnits) ?? "0.00"} />
                       </Field>
                     ) : (
-                      <p className="pt-6 text-[12px] text-muted">Price from the approved price list</p>
+                      <p className="pt-6 text-[12px] text-muted">The usual price is used</p>
                     )}
                     <div className="col-span-2 flex items-center justify-between gap-2 md:col-span-1 md:flex-col md:items-end md:pt-6">
                       <span className="text-[13px] font-medium tabular">{pricesVisible ? fmtMoney(safeD(l.qtyUnits).times(safeD(effectivePrice(l)))) : ""}</span>
@@ -318,7 +332,7 @@ export function NewOrderForm({
                   </div>
                   {over && (
                     <p className="mt-2 text-[12px] text-[var(--warn-fg)]">
-                      More than the released stock free now. You can still save the order; reserving stock will show what is missing, and you can have it made for this order.
+                      More than is free on the shelf now. You can still save the order; when the stock is set aside you will see what is missing, and you can have it made for this order.
                     </p>
                   )}
                 </li>
@@ -345,7 +359,7 @@ export function NewOrderForm({
               <dd className="font-medium text-fg">{deliveryOn ? fmtDate(deliveryOn) : "—"}</dd>
             </div>
             <div>
-              <dt className="text-[12px] text-muted">Ship to</dt>
+              <dt className="text-[12px] text-muted">Deliver to</dt>
               <dd className="text-fg">{shipTo?.text ?? customer?.shipToAddress ?? "—"}</dd>
             </div>
             <div>
@@ -372,16 +386,16 @@ export function NewOrderForm({
               <span className="font-semibold tabular">{fmtMoney(total)}</span>
             </p>
           )}
-          <p className="mt-3 text-[13px] text-fg-2">Saving creates the order as a draft. On the next screen you send it for confirmation (it may need approval, for example over the credit limit).</p>
+          <p className="mt-3 text-[13px] text-fg-2">Saving keeps the order as a draft. On the next screen you send it; it may need approval (for example when the customer has unpaid bills).</p>
         </Card>
       )}
 
       <div hidden={!show(3)}>
-        <Card>
-          <Field label="Notes" htmlFor="notes" error={fe.notes} hint="Optional — delivery instructions, contact on site">
+        <MoreDetails open={!!fe.notes} title="Add a note (you can skip this)">
+          <Field label="Note" htmlFor="notes" error={fe.notes} hint="For example delivery instructions or who to call on site">
             <Textarea id="notes" name="notes" maxLength={1000} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </Field>
-        </Card>
+        </MoreDetails>
       </div>
 
       <FormMessage state={state} />
@@ -399,7 +413,7 @@ export function NewOrderForm({
           </Button>
         ) : (
           <Button key="submit" type="submit" variant="cta" size="lg" className="flex-1 sm:flex-none" disabled={pending}>
-            {pending ? "Saving…" : initial ? "Save draft" : "Create draft order"}
+            {pending ? "Saving…" : initial ? "Save the draft" : "Save the order"}
           </Button>
         )}
       </div>

@@ -142,8 +142,8 @@ async function portalOneClick(page, name) {
     assert(portalApi === 401, 'portal API rejects the staff cookie (got ' + portalApi + ')');
     await st.goto(BASE + '/sales/customers');
     await st.getByRole('link', { name: 'Mabuhay Pharmacy Group' }).first().click();
-    // Customers is a split view: the list opens the customer panel; portal access is on the full record.
-    await st.getByRole('link', { name: 'Open full record' }).click();
+    // Customers is a split view: the list opens the customer panel; portal access is on the customer page ("See everything").
+    await st.getByRole('link', { name: 'See everything' }).click();
     await st.getByRole('heading', { name: 'Portal access' }).waitFor({ timeout: 20000 });
     assert(await st.getByText('portal.mabuhay@bryels-care.test').isVisible(), 'portal users listed');
     assert(await st.getByText(/link valid until/).first().isVisible(), 'open invitation shown with its expiry');

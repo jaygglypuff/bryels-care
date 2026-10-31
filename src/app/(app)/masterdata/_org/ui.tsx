@@ -42,17 +42,17 @@ export function Saved({ show, title, children }: { show: boolean; title: string;
   return show ? <Banner tone="ok" title={title}>{children}</Banner> : null;
 }
 
-/** A card linking to a detail page (phone list item). */
+/** A card linking to a detail page (phone list item): name first, the system code small and grey (ADR-088). */
 export function RowCard({ href, title, code, meta, chips }: { href: string; title: string; code: string; meta?: ReactNode; chips?: ReactNode }) {
   return (
     <li>
       <Link href={href} className="block rounded-[16px] border border-line bg-surface p-3 hover:bg-surface-2">
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <span className="min-w-0 break-words font-mono text-[13px] font-semibold">{code}</span>
+          <span className="min-w-0 break-words text-[16px] font-semibold text-fg">{title}</span>
           <span className="flex flex-wrap gap-1">{chips}</span>
         </div>
-        <p className="mt-1 break-words text-[14px]">{title}</p>
-        {meta && <p className="mt-1 text-[12px] text-muted">{meta}</p>}
+        {meta && <p className="mt-1 text-[13px] text-fg-2">{meta}</p>}
+        <p className="mt-1 break-words font-mono text-[11px] text-muted">{code}</p>
       </Link>
     </li>
   );

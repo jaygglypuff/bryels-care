@@ -7,6 +7,8 @@ import { equipmentMaintenanceSummary } from "@/modules/maintenance";
 import { businessToday, getEquipment } from "@/modules/masterdata";
 import { Banner, Chip } from "@/ui/status";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { EQUIPMENT_KIND_WORDS } from "../words";
 import { Forbidden } from "../../../forbidden";
 import { decideOverrideAction, reviewServiceAction } from "../../_eng/actions";
 import { CommandForm, DecisionForm } from "../../_eng/forms";
@@ -31,7 +33,8 @@ export default async function EquipmentDetail({ params }: { params: Promise<{ id
         <Link href="/masterdata/equipment" className="text-[13px] text-primary-text hover:underline">
           ← Equipment
         </Link>
-        <PageHeader title={`${e.code} · ${e.name}`} subtitle={`${e.equipmentKind} · ${v.site.code} ${v.site.name}${e.lineLabel ? ` · ${e.lineLabel}` : ""}`} actions={<AvailabilityChip a={a} />} />
+        <PageHeader title={e.name} subtitle={<><span className="font-mono text-[12px] text-muted">{e.code}</span> · {EQUIPMENT_KIND_WORDS[e.equipmentKind] ?? e.equipmentKind} · {v.site.name}{e.lineLabel ? ` · ${e.lineLabel}` : ""}</>} actions={<AvailabilityChip a={a} />} />
+        <PageIntro>This machine&apos;s checks, cleaning and repairs. Record each one here so the system knows whether it may be used.</PageIntro>
       </div>
       {!a.selectable && (
         <Banner tone={a.usable ? "appr" : "bad"} title={a.usable ? "Blocked, but an approved override is active" : "Cannot be used in production"}>

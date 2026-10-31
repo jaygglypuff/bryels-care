@@ -76,7 +76,7 @@ describe("production tabs per role (ADR-080 §11)", () => {
   });
 
   it("Production setup sits in Management, not in Operations", () => {
-    expect(section("owner_director", "Management", "Production setup")).toEqual(["New recipe (step by step)", "Products and formulas", "Steps for each product", "Work instructions", "Inspection plans", "Equipment"]);
+    expect(section("owner_director", "Management", "Production setup")).toEqual(["New recipe (step by step)", "Products and formulas", "Steps for each product", "Work instructions", "Quality checks for items", "Equipment"]);
     const opsHrefs = group("owner_director", "Operations")!.items.map((i) => i.href);
     expect(opsHrefs.some((h) => h.startsWith("/masterdata"))).toBe(false);
   });
@@ -93,7 +93,7 @@ describe("production tabs per role (ADR-080 §11)", () => {
 
   it("receiving steps sit together in Operations → Receiving; picking and dispatch in Packing & dispatch", () => {
     expect(section("owner_director", "Operations", "Receiving")).toEqual(["Expected deliveries", "Receive materials", "Goods receipts", "Put away"]);
-    expect(section("owner_director", "Operations", "Packing & dispatch")).toEqual(expect.arrayContaining(["Boxing", "Picking", "Dispatch"]));
+    expect(section("owner_director", "Operations", "Packing & dispatch")).toEqual(expect.arrayContaining(["Boxing", "To get from shelf", "Send out"]));
   });
 
   it("customer billing sits with Sales & Customers", () => {

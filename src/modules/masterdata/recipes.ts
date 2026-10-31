@@ -4,22 +4,31 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { bomLines, formulaRevisions, formulas, materials, products, routingRevisions, routings, uoms } from "@/db/schema";
+import { bomLines, formulaRevisions, formulas, materials, products, routingRevisions, routings, skus, uoms } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
 import { createFormula, createFormulaRevision, deleteFormulaDraft, saveFormulaRevisionDraft, submitFormulaRevision, withdrawFormulaRevision } from "./formulas";
 import { createMaterial } from "./materials";
-import { changeProductStatus, changeSkuStatus, createProduct, createSku, deleteProduct, productFamilies } from "./products";
+import { changeProductStatus, changeSkuStatus, createProduct, createSku, deleteProduct, productFamilies, updateProduct } from "./products";
 import {
   BATCH_KG_DECIMALS,
+  PER_PIECE_DECIMALS,
   PERCENT_DECIMALS,
   GRAM_DECIMALS,
   RECIPE_BLOCKS,
   type RecipeBlockKey,
   type RecipeDraft,
   WAIT_UNITS,
+  detectPieces,
+  draftPieces,
   fromBomLines,
+  fromPackagingLines,
+  isPieceGText,
+  isPiecesText,
+  piecesFromBatch,
+  piecesToBatchKg,
+  toPackagingLineInputs,
   fromRoutingSteps,
   gramsToKg,
   isDecimalText,
@@ -96,11 +105,33 @@ const StepSchema = z
   })
   .strict();
 
+const PackagingSchema = z
+  .object({
+    materialId: uuid,
+    perPiece: str(30),
+    from: z.object({ qty: str(30), pieces: str(30) }).strict().nullable(),
+    keep: z
+      .object({
+        tolerancePct: str(30).nullable(),
+        toleranceAbsG: str(30).nullable(),
+        phaseCode: str(40).nullable(),
+        scaling: z.enum(["proportional", "fixed"]),
+        isCritical: z.boolean(),
+        requiresChecker: z.boolean(),
+      })
+      .strict(),
+  })
+  .strict();
+
 export const RecipeSaveInput = z
   .object({
     productId: uuid,
     formulaId: uuid.nullable(),
     routingId: uuid.nullable(),
+    batchBy: z.enum(["kg", "pcs"]).default("kg"),
+    pieces: str(12).default(""),
+    pieceG: str(20).default(""),
+    packaging: z.array(PackagingSchema).max(20, "A recipe can have at most 20 packaging items.").default([]),
     batchKg: str(30),
     expectedPct: str(30),
     view: z.enum(["g", "pct"]),
@@ -133,12 +164,29 @@ function renameFields(e: unknown, part: "formula" | "routing"): unknown {
  * revision ids), validated with the services' own schemas. Throws one validation error with every
  * field message found.
  */
-export function prepareRecipe(v: z.output<typeof RecipeSaveInput>) {
+export function prepareRecipe(v: z.output<typeof RecipeSaveInput>, opts: { pieceG?: string | null } = {}) {
   const fe: FieldErrors = {};
-  const batchKg = v.batchKg.trim();
-  if (!isDecimalText(batchKg, BATCH_KG_DECIMALS) || new Decimal(batchKg).lte(0)) fe.batchKg = `Type how many kilograms one batch makes, like 17.6 (at most ${BATCH_KG_DECIMALS} decimals).`;
   const expected = v.expectedPct.trim();
-  if (!isDecimalText(expected, 2) || new Decimal(expected).lte(0) || new Decimal(expected).gt(100)) fe.expectedPct = "Type a number above 0 and at most 100, like 95.";
+  const expectedOk = isDecimalText(expected, 2) && new Decimal(expected).gt(0) && new Decimal(expected).lte(100);
+  if (!expectedOk) fe.expectedPct = "Type a number above 0 and at most 100, like 95.";
+  // ADR-088 §4: by pieces, the batch size is worked out (pieces × grams per piece ÷ expected %) and
+  // stored in the formula's one base, kilograms / grams. The weight per piece comes from the product.
+  const pieceG = opts.pieceG ?? null;
+  const needsPieceG = v.batchBy === "pcs" || v.packaging.length > 0;
+  if (needsPieceG && !isPieceGText(pieceG)) fe.pieceG = "Type how heavy one piece is, in grams, like 135.";
+  let batchKg = v.batchKg.trim();
+  if (v.batchBy === "pcs") {
+    if (!isPiecesText(v.pieces)) fe.pieces = "Type how many pieces one batch makes, as a whole number, like 70.";
+    else if (expectedOk && isPieceGText(pieceG)) batchKg = piecesToBatchKg(v.pieces, pieceG, expected)!;
+  } else if (!isDecimalText(batchKg, BATCH_KG_DECIMALS) || new Decimal(batchKg).lte(0)) fe.batchKg = `Type how many kilograms one batch makes, like 17.6 (at most ${BATCH_KG_DECIMALS} decimals).`;
+  const pieces = fe.pieces || fe.pieceG || fe.batchKg || fe.expectedPct ? "0" : draftPieces({ ...v, batchKg }, pieceG);
+  v.packaging.forEach((p, i) => {
+    const t = p.perPiece.trim();
+    if (p.from ? !isDecimalText(p.from.qty, 6) || !isDecimalText(p.from.pieces, 6) : !isDecimalText(t, PER_PIECE_DECIMALS) || new Decimal(t).lte(0)) {
+      fe[`packaging.${i}.perPiece`] = `Type how many go on one piece, like 1 (at most ${PER_PIECE_DECIMALS} decimals).`;
+    }
+  });
+  if (v.packaging.length && pieces === "0" && !fe.pieceG && !fe.pieces && !fe.batchKg) fe.packaging = "One batch makes less than one piece, so the packaging can't be worked out. Check the batch size.";
   v.lines.forEach((l, i) => {
     const a = l.amount.trim();
     const dp = l.src === "pct" ? PERCENT_DECIMALS : GRAM_DECIMALS;
@@ -146,7 +194,7 @@ export function prepareRecipe(v: z.output<typeof RecipeSaveInput>) {
     const d = l.diff.trim();
     if (!isDecimalText(d, 6)) fe[`lines.${i}.tolerancePct`] = l.diffKind === "pct" ? "Type the allowed difference in percent, like 2." : "Type the allowed difference in grams, like 5.";
   });
-  if (fe.batchKg === undefined && v.view === "pct" && v.lines.length) {
+  if (fe.batchKg === undefined && fe.pieces === undefined && fe.pieceG === undefined && isDecimalText(batchKg, BATCH_KG_DECIMALS) && v.view === "pct" && v.lines.length) {
     const t = recipeTotals(kgToGrams(batchKg), v.lines);
     if (!t.exact) fe.lines = `${percentTotalText(t)}. The amounts must add up to 100%.`;
   }
@@ -166,7 +214,22 @@ export function prepareRecipe(v: z.output<typeof RecipeSaveInput>) {
     effectiveFrom: v.useFrom.trim() || null,
     changeSummary: v.changeSummary.trim() || null,
     notes: v.formulaNotes.trim() || null,
-    lines: toBomLineInputs(batchG, v.lines),
+    // Ingredients first (weighed, in the percent total), then the packaging lines (counted in pieces,
+    // material kind packaging: ADR-092 reads them as "the recipe's packaging lines").
+    lines: [...toBomLineInputs(batchG, v.lines), ...toPackagingLineInputs(pieces, v.packaging)],
+  };
+  const nIngredients = v.lines.length;
+  /** Service field keys of the packaging lines (lines.N after the ingredients) → packaging.i. */
+  const renamePackaging = (e: unknown) => {
+    if (!(e instanceof DomainError) || !v.packaging.length) return e;
+    const fe2 = e.details?.fieldErrors as FieldErrors | undefined;
+    if (!fe2) return e;
+    const out: FieldErrors = {};
+    for (const [k, msg] of Object.entries(fe2)) {
+      const m = /^lines\.(\d+)\.(.*)$/.exec(k);
+      out[m && Number(m[1]) >= nIngredients ? `packaging.${Number(m[1]) - nIngredients}.perPiece` : k] = msg;
+    }
+    return new DomainError(e.code, e.message, { ...e.details, fieldErrors: out });
   };
   const routing = { effectiveFrom: v.useFrom.trim() || null, changeSummary: v.changeSummary.trim() || null, notes: v.routingNotes.trim() || null, steps: toStepInputs(v.steps) };
   // The services' own schemas, before anything is written (same field keys: lines.0.quantityG, steps.2.area …).
@@ -176,14 +239,14 @@ export function prepareRecipe(v: z.output<typeof RecipeSaveInput>) {
   try {
     f = parseInput(SaveFormulaDraftInput, { revisionId: probe, ...formula });
   } catch (e) {
-    throw renameFields(e, "formula");
+    throw renamePackaging(renameFields(e, "formula"));
   }
   try {
     r = parseInput(SaveRoutingDraftInput, { revisionId: probe, ...routing });
   } catch (e) {
     throw renameFields(e, "routing");
   }
-  return { formula, routing, parsedFormula: f, parsedRouting: r };
+  return { formula, routing, parsedFormula: f, parsedRouting: r, batchKg, pieces, renamePackaging };
 }
 
 /* ------------------------------------------------------------------ comparing content */
@@ -294,6 +357,44 @@ export type RecipeSaveResult = {
 };
 
 /**
+ * Grams of one piece of a product: the product's size (net mass per unit, what Finish and the
+ * packaging lines count with), else the net content in grams of its SKU with the same code, else null.
+ */
+async function productPieceG(organizationId: string, product: { id: string; skuCode: string; unitNetMassG: string }): Promise<string | null> {
+  if (new Decimal(product.unitNetMassG || 0).gt(0)) return plain(product.unitNetMassG);
+  const rows = await db
+    .select({ code: skus.code, qty: skus.netContentQty })
+    .from(skus)
+    .innerJoin(uoms, eq(uoms.id, skus.netContentUomId))
+    .where(and(eq(skus.organizationId, organizationId), eq(skus.productId, product.id), eq(uoms.code, "g"), sql`${skus.netContentQty} > 0`))
+    .orderBy(asc(skus.code));
+  const pick = rows.find((r) => r.code === product.skuCode) ?? rows[0];
+  return pick?.qty ? plain(pick.qty) : null;
+}
+
+/**
+ * Ingredients are weighed and packaging is counted: an ingredient line may not be a packaging item
+ * (it would count in the percent total and be weighed) and a packaging line must be one (ADR-092).
+ */
+async function assertMaterialKinds(organizationId: string, v: z.output<typeof RecipeSaveInput>) {
+  const ids = [...new Set([...v.lines.map((l) => l.materialId), ...v.packaging.map((p) => p.materialId)])];
+  if (!ids.length) return;
+  const rows = await db.select({ id: materials.id, name: materials.name, kind: materials.materialKind }).from(materials).where(and(eq(materials.organizationId, organizationId), inArray(materials.id, ids)));
+  const by = new Map(rows.map((r) => [r.id, r]));
+  const fe: FieldErrors = {};
+  v.lines.forEach((l, i) => {
+    const m = by.get(l.materialId);
+    if (m?.kind === "packaging") fe[`lines.${i}.materialId`] = `${m.name} is packaging: add it under "Packaging for each piece", not as an ingredient.`;
+  });
+  v.packaging.forEach((p, i) => {
+    const m = by.get(p.materialId);
+    if (!m) fe[`packaging.${i}.materialId`] = "Choose a packaging item from the list.";
+    else if (m.kind !== "packaging") fe[`packaging.${i}.materialId`] = `${m.name} is not a packaging item. Choose a wrapper, label, bottle or box.`;
+  });
+  if (Object.keys(fe).length) fail(Object.values(fe)[0], fe);
+}
+
+/**
  * Saves the wizard: product → formula draft (ingredients) → routing draft (steps), then optionally
  * sends both for approval. A part that has not changed since its approved version is left alone
  * (no needless new version); a part with an open draft is saved into it; otherwise a new version is
@@ -309,10 +410,23 @@ export async function saveRecipe(ctx: AuthContext, raw: unknown): Promise<Recipe
     ctx.require("masterdata.routing.submit");
   }
   if (v.activateProduct) ctx.require("masterdata.product.edit");
-  const prep = prepareRecipe(v);
 
   const [product] = await db.select().from(products).where(and(eq(products.id, v.productId), eq(products.organizationId, ctx.organizationId))).limit(1);
   if (!product) throw new DomainError("not_found", "Product not found.");
+
+  // ADR-088 §4: the weight of one piece comes from the product (or its SKU's net content). When it has
+  // none, the person types it once and it is saved to the product with the existing product command.
+  const storedPieceG = await productPieceG(ctx.organizationId, product);
+  const typedPieceG = v.pieceG.trim();
+  const usesPieces = v.batchBy === "pcs" || v.packaging.length > 0;
+  const savePieceG = !storedPieceG && usesPieces && isPieceGText(typedPieceG);
+  if (savePieceG && !ctx.can("masterdata.product.edit")) {
+    fail(`${product.name} has no weight per piece yet, and your role can't change products. Ask someone who can edit products to type its size (grams) under Products, or type the batch size in kilograms.`, {
+      pieceG: "Your role can't save this to the product.",
+    });
+  }
+  const prep = prepareRecipe(v, { pieceG: storedPieceG ?? (savePieceG ? typedPieceG : null) });
+  await assertMaterialKinds(ctx.organizationId, v);
 
   // ---- plan the formula part
   let fState: Awaited<ReturnType<typeof formulaState>> | null = null;
@@ -369,6 +483,18 @@ export async function saveRecipe(ctx: AuthContext, raw: unknown): Promise<Recipe
   let rRevId = rState?.open?.id ?? rState?.current?.id ?? null;
   let productActivated = false;
   try {
+    if (savePieceG) {
+      // A true fact about the product, kept even when a later command fails (a product's size can't go back to "none").
+      await updateProduct(ctx, product.id, {
+        code: product.skuCode,
+        name: product.name,
+        family: product.family,
+        unitNetMassG: plain(typedPieceG),
+        unitsPerBox: product.unitsPerBox,
+        shelfLifeDays: product.shelfLifeDays,
+        storageConditions: product.storageConditions,
+      });
+    }
     if (fPlan === "create") {
       const code = await nextCode("formulas", ctx.organizationId, "F");
       const r = await createFormula(ctx, {
@@ -391,7 +517,7 @@ export async function saveRecipe(ctx: AuthContext, raw: unknown): Promise<Recipe
       try {
         await saveFormulaRevisionDraft(ctx, { revisionId: fRevId, ...prep.formula });
       } catch (e) {
-        throw renameFields(e, "formula");
+        throw prep.renamePackaging(renameFields(e, "formula"));
       }
     }
 
@@ -535,6 +661,17 @@ export async function createRecipeIngredient(ctx: AuthContext, raw: unknown) {
   return { id: m.id, code: m.code, name: m.name, kind: m.materialKind, baseUom: m.baseUom, status: m.status };
 }
 
+/**
+ * "Add a new packaging item" inside the wizard (wrapper, label, bottle, box): the existing
+ * createMaterial with kind packaging, counted in pieces, active (ADR-092 reads it as packaging).
+ */
+export async function createRecipePackaging(ctx: AuthContext, raw: unknown) {
+  ctx.require("masterdata.material.create");
+  const v = parseInput(z.object({ name: z.string().trim().min(1, "Type the name, like Soap wrapper 135 g.").max(200) }).strict(), raw);
+  const m = await createMaterial(ctx, { code: null, name: v.name, inciName: null, materialKind: "packaging", baseUom: "pcs", status: "active" });
+  return { id: m.id, code: m.code, name: m.name, kind: m.materialKind, baseUom: m.baseUom, status: m.status };
+}
+
 /* ------------------------------------------------------------------ queries */
 
 /** Choices for the wizard: products, ingredients, product kinds, recipes to copy from, starting values. */
@@ -549,6 +686,7 @@ export async function recipeWizardOptions(ctx: AuthContext) {
         code: products.skuCode,
         family: products.family,
         unitNetMassG: products.unitNetMassG,
+        pieceG: sql<string | null>`case when "products"."unit_net_mass_g" > 0 then "products"."unit_net_mass_g"::text else (select s.net_content_qty::text from ${skus} s join ${uoms} u on u.id = s.net_content_uom_id where s.product_id = "products"."id" and u.code = 'g' and s.net_content_qty > 0 order by (s.code = "products"."sku_code") desc, s.code limit 1) end`,
         status: products.status,
         formulaId: sql<string | null>`(select f.id from ${formulas} f where f.product_id = ${products.id} order by f.code limit 1)`,
       })
@@ -571,7 +709,7 @@ export async function recipeWizardOptions(ctx: AuthContext) {
     getSetting(db, O, "production.weighing.second_person_check", ctx.currentSiteId),
   ]);
   return {
-    products: prods,
+    products: prods.map((p) => ({ ...p, pieceG: p.pieceG ? plain(p.pieceG) : null })),
     materials: mats,
     families: families.map((f) => ({ code: f.value, label: f.label })),
     copySources: ctx.can("masterdata.routing.view") ? recipeRows : [],
@@ -585,6 +723,8 @@ export async function recipeWizardOptions(ctx: AuthContext) {
       createProduct: ctx.can("masterdata.product.create"),
       createMaterial: ctx.can("masterdata.material.create"),
       activateProduct: ctx.can("masterdata.product.edit"),
+      /** Save a missing weight per piece to the product (ADR-088 §4). */
+      editProduct: ctx.can("masterdata.product.edit"),
     },
   };
 }
@@ -613,14 +753,27 @@ export async function getRecipe(ctx: AuthContext, formulaId: string) {
   const rCur = r?.current ?? null;
   const lines = fCur ? await db.select().from(bomLines).where(eq(bomLines.formulaRevisionId, fCur.id)).orderBy(asc(bomLines.lineNo)) : [];
   const steps = rCur ? await loadRoutingSteps(db, rCur.id) : [];
+  const lineMats = lines.length ? await db.select({ id: materials.id, name: materials.name, kind: materials.materialKind }).from(materials).where(inArray(materials.id, [...new Set(lines.map((l) => l.materialId))])) : [];
+  const kindOf = new Map(lineMats.map((m) => [m.id, m.kind]));
+  // ADR-092: packaging lines (material kind packaging) are shown apart, per piece, never in the percent total.
+  const ingredientRows = lines.filter((l) => kindOf.get(l.materialId) !== "packaging");
+  const packagingRows = lines.filter((l) => kindOf.get(l.materialId) === "packaging");
+  const pieceG = await productPieceG(ctx.organizationId, f.product);
+  // ADR-088 §4: a batch size that is exactly "N pieces" is shown back as N pieces.
+  const shownPieces = fCur ? detectPieces(fCur.referenceBatchSizeG, plain(fCur.theoreticalYieldPct), pieceG) : null;
+  const batchPieces = fCur ? piecesFromBatch(fCur.referenceBatchSizeG, fCur.theoreticalYieldPct, pieceG) : "0";
   const draft: RecipeDraft = {
     productId: f.product.id,
     formulaId: f.formula.id,
     routingId: r?.routing.id ?? null,
+    batchBy: shownPieces ? "pcs" : "kg",
+    pieces: shownPieces ?? "",
+    pieceG: "",
     batchKg: fCur ? gramsToKg(fCur.referenceBatchSizeG) : "",
     expectedPct: fCur ? plain(fCur.theoreticalYieldPct) : "100",
     view: "g",
-    lines: fromBomLines(lines),
+    lines: fromBomLines(ingredientRows),
+    packaging: fromPackagingLines(packagingRows, batchPieces),
     steps: fromRoutingSteps(steps),
     changeSummary: f.open?.status === "draft" ? (f.open.changeSummary ?? "") : r?.open?.status === "draft" ? (r.open.changeSummary ?? "") : "",
     useFrom: (f.open?.status === "draft" ? f.open.effectiveFrom : null) ?? (r?.open?.status === "draft" ? r.open.effectiveFrom : null) ?? "",
@@ -633,7 +786,7 @@ export async function getRecipe(ctx: AuthContext, formulaId: string) {
   const anyDraft = f.open?.status === "draft" || r?.open?.status === "draft";
   return {
     formula: { id: f.formula.id, code: f.formula.code, name: f.formula.name },
-    product: { id: f.product.id, name: f.product.name, code: f.product.skuCode, family: f.product.family, unitNetMassG: f.product.unitNetMassG, status: f.product.status },
+    product: { id: f.product.id, name: f.product.name, code: f.product.skuCode, family: f.product.family, unitNetMassG: f.product.unitNetMassG, pieceG, status: f.product.status },
     routing: r ? { id: r.routing.id, code: r.routing.code } : null,
     versions: {
       formula: { open: info(f.open), effective: info(f.effective), current: info(fCur), next: (f.revs[0]?.revisionNo ?? 0) + 1 },
@@ -644,7 +797,7 @@ export async function getRecipe(ctx: AuthContext, formulaId: string) {
     approvalPolicy,
     locks: { ingredients: fPending, steps: !!rPending },
     draft,
-    materialNames: Object.fromEntries((lines.length ? await db.select({ id: materials.id, name: materials.name }).from(materials).where(inArray(materials.id, [...new Set(lines.map((l) => l.materialId))])) : []).map((m) => [m.id, m.name])),
+    materialNames: Object.fromEntries(lineMats.map((m) => [m.id, m.name])),
     can: {
       edit: ctx.can("masterdata.formula.edit") && ctx.can("masterdata.routing.edit"),
       newVersion: ctx.can("masterdata.formula.create") && ctx.can("masterdata.routing.create"),
@@ -658,5 +811,7 @@ export async function getRecipeCopy(ctx: AuthContext, formulaId: string) {
   const r = await getRecipe(ctx, formulaId);
   if (!r) throw new DomainError("not_found", "Recipe not found.");
   const { batchKg, expectedPct, lines, steps } = r.draft;
-  return { from: `${r.product.name} (${r.formula.code})`, batchKg, expectedPct, lines, steps };
+  // Packaging is copied per piece (worked out again for the new product's pieces); the batch size by weight.
+  const packaging = (r.draft.packaging ?? []).filter((p) => p.perPiece).map((p) => ({ ...p, from: null }));
+  return { from: `${r.product.name} (${r.formula.code})`, batchKg, expectedPct, lines, steps, packaging };
 }

@@ -119,8 +119,8 @@ export const LOOKUP_LISTS: Record<LookupListKey, ListDef> = {
 
 /** Lists the owner can change, but on their own screen (they carry more than a label). Shown as links on the Lists screen. */
 export const LISTS_ELSEWHERE: readonly { title: string; description: string; href: string; permission: Permission }[] = [
-  { title: "Reason codes", description: "Why stock was adjusted, scrapped, held or returned (also defect and scrap reasons).", href: "/masterdata/reason-codes", permission: "masterdata.reason_code.view" },
-  { title: "Units of measure", description: "Units such as g, kg, L, pcs and their conversions.", href: "/masterdata/uom", permission: "masterdata.uom.view" },
+  { title: "Reasons", description: "Why stock was adjusted, scrapped, held or returned (also defect and scrap reasons).", href: "/masterdata/reason-codes", permission: "masterdata.reason_code.view" },
+  { title: "Units", description: "Units such as g, kg, L, pcs and their conversions.", href: "/masterdata/uom", permission: "masterdata.uom.view" },
   { title: "Quality and finance lists", description: "Complaint categories, severity levels, risk levels, expense and bill categories. A change needs a second person's approval.", href: "/admin/settings", permission: "platform.settings.view" },
 ];
 

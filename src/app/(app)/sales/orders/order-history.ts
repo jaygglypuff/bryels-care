@@ -1,20 +1,20 @@
 /** One order history entry in plain words, e.g. draft → submitted becomes "Submitted". */
 export function historyLabel(from: string | null, to: string): string {
   if (to === "confirmed" && from === "pending_approval") return "Approved and confirmed";
-  if (to === "confirmed" && from && ["allocated", "picking", "packed"].includes(from)) return "Stock reservation released";
+  if (to === "confirmed" && from && ["allocated", "picking", "packed"].includes(from)) return "Set-aside stock let go";
   if (to === "draft" && from === "pending_approval") return "Sent back to draft";
   if (to === "draft" && !from) return "Created as draft";
-  if (to === "allocated" && from && ["picking", "packed"].includes(from)) return "Pick cancelled, stock still reserved";
+  if (to === "allocated" && from && ["picking", "packed"].includes(from)) return "Getting from shelf stopped, stock still set aside";
   const plain: Record<string, string> = {
     draft: "Back to draft",
     submitted: "Submitted",
     pending_approval: "Sent for approval",
     confirmed: "Confirmed",
-    allocated: "Stock reserved",
-    picking: "Packing started",
-    packed: "Packed and checked",
-    partially_shipped: "Partly shipped",
-    shipped: "Shipped",
+    allocated: "Set aside",
+    picking: "Getting from shelf started",
+    packed: "Box checked a second time",
+    partially_shipped: "Partly sent out",
+    shipped: "Sent out",
     invoiced: "Billed",
     closed: "Done",
     cancelled: "Cancelled",

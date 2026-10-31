@@ -4,6 +4,7 @@ import { requireContext } from "@/lib/auth/context";
 import { D } from "@/lib/qty";
 import { businessToday, getInspectionPlanDetail } from "@/modules/masterdata";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Explain, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
 import { decideInspectionPlanAction, newInspectionPlanRevisionAction, submitInspectionPlanAction } from "../../_eng/actions";
 import { CommandForm, DecisionForm } from "../../_eng/forms";
@@ -25,31 +26,34 @@ export default async function InspectionPlanPage({ params }: { params: Promise<{
   const ctx = await requireContext();
   if (!ctx.can("quality.inspection_plan.view")) return <Forbidden what="inspection plans" />;
   const v = /^[0-9a-f-]{36}$/i.test(id) ? await getInspectionPlanDetail(ctx, id) : null;
-  if (!v) return <EmptyState title="Inspection plan not found" action={<LinkButton href="/masterdata/inspection-plans" variant="secondary">Back</LinkButton>} />;
+  if (!v) return <EmptyState title="Quality checks not found" action={<LinkButton href="/masterdata/inspection-plans" variant="secondary">Back</LinkButton>}>Go back to the list and pick the item by name.</EmptyState>;
   const p = v.plan;
   const today = businessToday();
   return (
     <div className="flex flex-col gap-5">
       <div>
         <Link href="/masterdata/inspection-plans" className="text-[13px] text-primary-text hover:underline">
-          ← Inspection plans
+          ← Quality checks
         </Link>
         <PageHeader
-          title={`${p.code} revision ${p.revisionNo}`}
-          subtitle={`${p.name} · ${v.appliesTo}`}
+          title={p.name}
+          subtitle={<>{v.appliesTo} · version {p.revisionNo} · <span className="font-mono text-[12px] text-muted">{p.code}</span></>}
           actions={
             <>
               <VersionChip status={p.status} label={p.label} />
-              {v.can.newRevision && <CommandForm action={newInspectionPlanRevisionAction} hidden={{ id: p.id }} label="Start new revision" variant="secondary" />}
+              {v.can.newRevision && <CommandForm action={newInspectionPlanRevisionAction} hidden={{ id: p.id }} label="Start a new version" variant="secondary" />}
             </>
           }
         />
       </div>
+      <PageIntro>
+        The checks QA does on this item before it may be used or sold, and the limits for each. The system stores them; QA decides them. <Explain term="version" />
+      </PageIntro>
       <VerifyBanner placeholder={p.isPlaceholder} />
       <Card>
         <Dl
           items={[
-            ["Kind", p.planKind.replace(/_/g, " ")],
+            ["When", p.planKind === "incoming" ? "When a delivery arrives" : p.planKind === "in_process" ? "While making a batch" : "When a batch is finished"],
             ["Effective", <EffectiveRange key="e" from={p.effectiveFrom} to={p.effectiveTo} />],
             ["Approved by", p.approvedByName ?? "—"],
           ]}

@@ -4,18 +4,22 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { getQuote, manilaToday } from "@/modules/sales";
-import { Card, CardTitle, Dl, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { MoreDetails, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { MaskedNote, Money, SalesStatus } from "../../orders/sales-ui";
 import { ConvertQuoteForm, QuoteCommand } from "./commands";
-import { DeleteDraftCard } from "../../../delete-draft-button";
+import { DeleteDraftButton } from "../../../delete-draft-button";
+import { DoNext, whoDoes } from "../../next-step";
 
-export const metadata = { title: "Quotation" };
+export const metadata = { title: "Price offer" };
 
 export default async function QuotePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.quote.view")) return <Forbidden what="quotations" />;
+  if (!ctx.can("sales.quote.view")) return <Forbidden what="price offers" />;
   const { id } = await params;
   const { saved } = await searchParams;
   let d: Awaited<ReturnType<typeof getQuote>>;
@@ -28,144 +32,174 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
   const q = d.quote;
   const today = manilaToday();
   const mine = q.createdBy === ctx.userId || q.submittedBy === ctx.userId;
+  const canEdit = ctx.can("sales.quote.edit");
+  const canConvert = ctx.can("sales.sales_order.create") && !d.expiredByDate;
+  const open = ["draft", "pending_approval", "sent", "accepted"].includes(q.status);
+  const canVoid = open && ctx.can("sales.quote.void");
+  const canDelete = q.status === "draft" && (canEdit || ctx.can("sales.quote.create"));
+
+  const next =
+    q.status === "draft" ? (
+      ctx.can("sales.quote.submit") ? (
+        <DoNext text="Next: send the price offer. A big discount goes to the approver first.">
+          <QuoteCommand quoteId={q.id} command="submit" label="Send the price offer" variant="cta" />
+        </DoNext>
+      ) : (
+        <DoNext text="This price offer is a draft." waitingFor="Waiting for sales to send it." />
+      )
+    ) : q.status === "pending_approval" ? (
+      d.approval?.canApprove ? (
+        <DoNext text={mine ? "Next: approve your own discount (recorded as your own request), or send it back." : "Next: approve the discount, or send it back."} action={{ label: "Approve now", href: "#approve" }} />
+      ) : (
+        <DoNext
+          text={mine ? "You made this offer, so someone else approves the discount." : "The discount needs approval."}
+          waitingFor={`Waiting for ${await whoDoes(ctx, "sales.quote.approve", q.siteId, "the approver")} to approve.`}
+        />
+      )
+    ) : (q.status === "sent" || q.status === "accepted") && canConvert && (q.status === "accepted" || canEdit) ? (
+      <DoNext text="Next: when the customer says yes, make it an order." action={{ label: "Make it an order", href: "#convert" }} />
+    ) : q.status === "sent" || q.status === "accepted" ? (
+      <DoNext text={d.expiredByDate ? `This offer was good until ${fmtDate(q.validUntil)}. Make a new one.` : "Sent to the customer."} waitingFor={d.expiredByDate ? undefined : "Waiting for the customer's answer."} />
+    ) : q.status === "converted" && d.order ? (
+      <DoNext text="This offer is now an order." action={{ label: "Open the order", href: `/sales/${d.order.id}` }} />
+    ) : (
+      <DoNext text="This price offer is closed. Nothing more to do." />
+    );
+
   return (
-    <>
+    <div className="mx-auto max-w-4xl">
       <PageHeader
-        title={q.quoteNumber}
+        title={`Price offer for ${d.customer.name}`}
         subtitle={
           <span className="inline-flex flex-wrap items-center gap-2">
+            <Link href="/sales/quotations" className="text-primary-text hover:underline">Price offers</Link>
+            <RecordNo>{q.quoteNumber}</RecordNo>
             <SalesStatus status={q.status} />
-            <span>{d.customer.name}</span>
           </span>
         }
         actions={
           <>
-            <LinkButton href="/sales/quotations" variant="secondary">All quotations</LinkButton>
             {["sent", "accepted", "converted"].includes(q.status) && (
               <LinkButton href={`/print/quotation/${q.id}`} target="_blank" variant="secondary">
-                Print quotation
+                Print
               </LinkButton>
             )}
+            {(q.status === "draft" && canEdit) || canVoid || canDelete || (q.status === "sent" && canEdit) ? (
+              <MoreMenu>
+                <div className="flex flex-col gap-3">
+                  {q.status === "draft" && canEdit && <LinkButton href={`/sales/quotations/${q.id}/edit`} variant="secondary">Change the draft</LinkButton>}
+                  {q.status === "sent" && canEdit && <QuoteCommand quoteId={q.id} command="accept" label="Customer said yes (order later)" />}
+                  {q.status === "sent" && canEdit && <QuoteCommand quoteId={q.id} command="reject" label="Customer said no" reason />}
+                  {canVoid && <QuoteCommand quoteId={q.id} command="void" label="Cancel this price offer" reason variant="danger" />}
+                  {canDelete && <DeleteDraftButton kind="quote" id={q.id} what="this draft price offer" />}
+                </div>
+              </MoreMenu>
+            ) : null}
           </>
         }
       />
+      <PageIntro>This screen is for one price offer: the prices we promised {d.customer.name}, until when, and the next step.</PageIntro>
       {saved && (
         <div className="mb-4" role="status">
-          <Banner tone="ok" title="Quotation saved as a draft. Submit it to issue it." />
+          <Banner tone="ok" title="Price offer saved as a draft. Send it when it is ready." />
         </div>
       )}
       {d.expiredByDate && ["sent", "accepted"].includes(q.status) && (
         <div className="mb-4">
-          <Banner tone="warn" title={`Validity ended on ${fmtDate(q.validUntil)}`}>It will be marked expired by the nightly job and can no longer be converted.</Banner>
+          <Banner tone="warn" title={`Good until ${fmtDate(q.validUntil)}: too old now`}>It will be marked too old tonight and can no longer become an order.</Banner>
         </div>
       )}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="flex min-w-0 flex-col gap-4">
+      {next}
+
+      <div className="flex flex-col gap-4">
+        {q.status === "pending_approval" && (
           <Card>
-            <CardTitle>Lines</CardTitle>
-            <Table head={["#", "SKU", "Product", "Qty", "List", "Price", "Discount", "Value"]}>
-              {d.lines.map((l) => (
-                <tr key={l.id}>
-                  <Td>{l.lineNo}</Td>
-                  <Td className="font-medium">{l.sku}</Td>
-                  <Td>{l.productName}</Td>
-                  <Td>{fmtQty(l.qtyUnits, "pcs", 0)}</Td>
-                  <Td>
-                    <Money value={l.listUnitAmount} />
-                  </Td>
-                  <Td>
-                    <Money value={l.unitAmount} />
-                  </Td>
-                  <Td>{l.discountPct === undefined ? "—" : `${Number(l.discountPct).toFixed(1)} %`}</Td>
-                  <Td className="font-medium">
-                    <Money value={l.value} />
-                  </Td>
-                </tr>
-              ))}
-              <tr className="bg-surface-2 font-semibold">
-                <Td colSpan={7}>Total{q.taxAmount && q.taxAmount !== "0.0000" ? " (incl. tax)" : ""}</Td>
-                <Td>
-                  <Money value={q.totalAmount} />
-                </Td>
-              </tr>
-            </Table>
-            <MaskedNote fields={q._masked} />
-          </Card>
-          {(q.notesCustomer || q.notesInternal) && (
-            <Card>
-              <CardTitle>Notes</CardTitle>
-              {q.notesCustomer && <p className="text-[13px]">{q.notesCustomer}</p>}
-              {q.notesInternal && <p className="mt-2 rounded-[10px] bg-surface-2 px-3 py-2 text-[13px] text-fg-2">Internal: {q.notesInternal}</p>}
-            </Card>
-          )}
-        </div>
-        <div className="flex flex-col gap-4">
-          <Card>
-            <CardTitle>Details</CardTitle>
-            <Dl
-              items={[
-                ["Customer", ctx.can("masterdata.customer.view") ? <Link key="c" className="text-primary-text hover:underline" href={`/sales/customers/${d.customer.id}`}>{d.customer.name}</Link> : d.customer.name],
-                ["Ship to", d.shipTo?.text ?? d.customer.shipToAddress],
-                ["Valid until", fmtDate(q.validUntil)],
-                ["Prepared by", q.createdByName ?? "—"],
-                ["Issued", q.sentAt ? fmtDateTime(q.sentAt) : "—"],
-                ...(d.order ? ([["Sales order", <Link key="o" className="text-primary-text hover:underline" href={`/sales/${d.order.id}`}>{d.order.orderNumber}</Link>]] as [string, React.ReactNode][]) : []),
-                ...(q.decisionReason ? ([["Reason", q.decisionReason]] as [string, string][]) : []),
-              ]}
-            />
-          </Card>
-          <Card>
-            <CardTitle>Next step</CardTitle>
+            <span id="approve" className="block scroll-mt-24" />
+            <CardTitle>Discount approval</CardTitle>
             <div className="flex flex-col gap-3">
-              {q.status === "draft" && ctx.can("sales.quote.submit") && <QuoteCommand quoteId={q.id} command="submit" label="Submit quotation" variant="cta" />}
-              {q.status === "draft" && ctx.can("sales.quote.edit") && (
-                <LinkButton href={`/sales/quotations/${q.id}/edit`} variant="secondary">
-                  Edit draft
-                </LinkButton>
-              )}
-              {q.status === "pending_approval" && (
+              <Banner tone="warn" title="The discount needs approval">
+                {d.approval?.next ? `Step ${d.approval.next.step}: ${d.approval.next.label}.` : "Waiting for the approver."}
+              </Banner>
+              {d.approval?.canApprove ? (
                 <>
-                  <Banner tone="warn" title="Discount needs approval">
-                    {d.approval?.next ? `Waiting for step ${d.approval.next.step}: ${d.approval.next.label}.` : "Waiting for the approver."}
-                  </Banner>
-                  {d.approval?.canApprove ? (
-                    <>
-                      <QuoteCommand quoteId={q.id} command="approve" label="Approve discount" note variant="cta" />
-                      <QuoteCommand quoteId={q.id} command="return" label="Return to draft" reason />
-                    </>
-                  ) : (
-                    <p className="text-[13px] text-muted">{mine ? "You prepared this quotation, so another person approves it." : "Only the approver of this step can decide."}</p>
-                  )}
+                  <QuoteCommand quoteId={q.id} command="approve" label="Approve discount" note variant="cta" />
+                  <QuoteCommand quoteId={q.id} command="return" label="Send back to draft" reason />
                 </>
+              ) : (
+                <p className="text-[13px] text-muted">{mine ? "You made this offer, so another person approves it." : "Only the approver of this step can decide."}</p>
               )}
-              {q.status === "sent" && ctx.can("sales.quote.edit") && (
-                <>
-                  {ctx.can("sales.sales_order.create") && !d.expiredByDate && <ConvertQuoteForm quoteId={q.id} today={today} />}
-                  <QuoteCommand quoteId={q.id} command="accept" label="Customer accepted" />
-                  <QuoteCommand quoteId={q.id} command="reject" label="Customer declined" reason />
-                </>
-              )}
-              {q.status === "accepted" && ctx.can("sales.sales_order.create") && !d.expiredByDate && <ConvertQuoteForm quoteId={q.id} today={today} />}
-              {["draft", "pending_approval", "sent", "accepted"].includes(q.status) && ctx.can("sales.quote.void") && <QuoteCommand quoteId={q.id} command="void" label="Void quotation" reason variant="danger" />}
-              {["rejected", "expired", "converted", "voided"].includes(q.status) && <p className="text-[13px] text-muted">This quotation is closed.</p>}
             </div>
           </Card>
-          {d.decisions.length > 0 && (
-            <Card>
-              <CardTitle>Approval decisions</CardTitle>
-              <ul className="flex flex-col gap-1 text-[13px]">
-                {d.decisions.map((x) => (
-                  <li key={x.id}>
-                    Step {x.step}: {x.decision} by {x.decidedByName} · {fmtDateTime(x.decidedAt)}
-                    {x.note ? ` · ${x.note}` : ""}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-        </div>
-        {q.status === "draft" && (ctx.can("sales.quote.edit") || ctx.can("sales.quote.create")) && <DeleteDraftCard kind="quote" id={q.id} what="quotation" />}
+        )}
+
+        {(q.status === "sent" || q.status === "accepted") && canConvert && (q.status === "accepted" || canEdit) && (
+          <Card>
+            <span id="convert" className="block scroll-mt-24" />
+            <CardTitle>Make it an order</CardTitle>
+            <ConvertQuoteForm quoteId={q.id} today={today} />
+          </Card>
+        )}
+
+        <Card>
+          <CardTitle>Products and prices</CardTitle>
+          <ul className="flex flex-col divide-y divide-line">
+            {d.lines.map((l) => (
+              <li key={l.id} className="flex items-start justify-between gap-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="font-medium">{l.productName}</p>
+                  <p className="text-[13px] tabular text-fg-2">
+                    {fmtQty(l.qtyUnits, "pcs", 0)} × <Money value={l.unitAmount} />
+                    {l.discountPct !== undefined && Number(l.discountPct) > 0 ? ` · ${Number(l.discountPct).toFixed(1)}% off the usual ` : ""}
+                    {l.discountPct !== undefined && Number(l.discountPct) > 0 && <Money value={l.listUnitAmount} />}
+                  </p>
+                  <p className="font-mono text-[12px] text-muted">{l.sku}</p>
+                </div>
+                <Money className="whitespace-nowrap text-right font-semibold tabular" value={l.value} />
+              </li>
+            ))}
+            <li className="flex justify-between gap-3 py-2.5 font-semibold">
+              <span>Total{q.taxAmount && q.taxAmount !== "0.0000" ? " (with tax)" : ""}</span>
+              <Money className="text-right tabular" value={q.totalAmount} />
+            </li>
+          </ul>
+          <MaskedNote fields={q._masked} />
+        </Card>
+
+        <Card>
+          <CardTitle>About this offer</CardTitle>
+          <Dl
+            items={[
+              ["Customer", ctx.can("masterdata.customer.view") ? <Link key="c" className="text-primary-text hover:underline" href={`/sales/customers/${d.customer.id}`}>{d.customer.name}</Link> : d.customer.name],
+              ["Good until", fmtDate(q.validUntil)],
+              ["Deliver to", d.shipTo?.text ?? d.customer.shipToAddress],
+              ...(d.order ? ([["Order", <Link key="o" className="text-primary-text hover:underline" href={`/sales/${d.order.id}`}>{d.order.orderNumber}</Link>]] as [string, React.ReactNode][]) : []),
+              ...(q.decisionReason ? ([["Why", q.decisionReason]] as [string, string][]) : []),
+            ]}
+          />
+          {q.notesCustomer && <p className="mt-3 text-[13px]">Note to the customer: {q.notesCustomer}</p>}
+          {q.notesInternal && <p className="mt-2 rounded-[10px] bg-surface-2 px-3 py-2 text-[13px] text-fg-2">For our team: {q.notesInternal}</p>}
+          <div className="mt-3">
+            <MoreDetails>
+              <Dl
+                items={[
+                  ["Made by", q.createdByName ?? "—"],
+                  ["Sent", q.sentAt ? fmtDateTime(q.sentAt) : "—"],
+                ]}
+              />
+              {d.decisions.length > 0 && (
+                <ul className="flex flex-col gap-1 text-[13px]">
+                  {d.decisions.map((x) => (
+                    <li key={x.id}>
+                      Step {x.step}: {x.decision} by {x.decidedByName} · {fmtDateTime(x.decidedAt)}
+                      {x.note ? ` · ${x.note}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </MoreDetails>
+          </div>
+        </Card>
       </div>
-    </>
+    </div>
   );
 }

@@ -41,8 +41,10 @@ export function assertPriceListTransition(pl: { status: string; code: string; ve
 
 export type PriceLineInput = { productId: string; minQtyUnits?: string | null; unitAmount: string };
 export type PriceListInput = {
-  code: string;
-  name: string;
+  /** ADR-088: blank = the code of this customer's (or the general) list, so the new draft is its next version; else PL-<customer number> / PL-GENERAL. */
+  code?: string | null;
+  /** Blank = "Prices for <customer>" or "General prices". */
+  name?: string | null;
   partyKind: "customer" | "general";
   customerId?: string | null;
   currency?: string;
@@ -152,17 +154,33 @@ async function assertProducts(tx: Tx, ctx: AuthContext, ids: string[]) {
 /** Creates version 1 of a new list, or the next draft version of an existing code (no open version allowed). */
 export async function createPriceList(ctx: AuthContext, input: PriceListInput) {
   ctx.require("sales.price_list.edit");
-  const code = input.code.trim().toUpperCase();
-  if (!/^[A-Z0-9][A-Z0-9-]{1,29}$/.test(code)) throw new DomainError("validation", "Code: 2–30 letters, digits or dashes.", { field: "code" });
-  if (input.name.trim().length < 3) throw new DomainError("validation", "Enter a name.", { field: "name" });
+  const typedCode = input.code?.trim().toUpperCase() || null;
+  if (typedCode && !/^[A-Z0-9][A-Z0-9-]{1,29}$/.test(typedCode)) throw new DomainError("validation", "Code: 2–30 letters, digits or dashes.", { field: "code" });
+  const typedName = input.name?.trim() || null;
+  if (typedName && typedName.length < 3) throw new DomainError("validation", "Enter a name.", { field: "name" });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.effectiveFrom)) throw new DomainError("validation", "Choose the effective date.", { field: "effectiveFrom" });
   if (input.partyKind === "customer" && !isUuid(input.customerId)) throw new DomainError("validation", "Choose the customer.", { field: "customerId" });
   const lines = validateLines(input.lines);
   return db.transaction(async (tx) => {
+    let party: { code: string; name: string } | null = null;
     if (input.partyKind === "customer") {
-      const [c] = await tx.select({ id: customers.id }).from(customers).where(and(eq(customers.id, input.customerId!), eq(customers.organizationId, ctx.organizationId))).limit(1);
+      const [c] = await tx.select({ id: customers.id, code: customers.code, name: customers.name }).from(customers).where(and(eq(customers.id, input.customerId!), eq(customers.organizationId, ctx.organizationId))).limit(1);
       if (!c) throw new DomainError("validation", "Choose the customer.", { field: "customerId" });
+      party = c;
     }
+    // ADR-088: nobody types a code. The same party's latest list keeps its code (the draft is its next version).
+    const code =
+      typedCode ??
+      (
+        await tx
+          .select({ code: priceLists.code })
+          .from(priceLists)
+          .where(and(eq(priceLists.organizationId, ctx.organizationId), eq(priceLists.partyKind, input.partyKind), party ? eq(priceLists.customerId, input.customerId!) : isNull(priceLists.customerId)))
+          .orderBy(desc(priceLists.createdAt))
+          .limit(1)
+      )[0]?.code ??
+      (party ? `PL-${party.code}`.toUpperCase().replace(/[^A-Z0-9-]/g, "-").slice(0, 30) : "PL-GENERAL");
+    const name = typedName ?? (party ? `Prices for ${party.name}`.slice(0, 120) : "General prices");
     await assertProducts(tx, ctx, lines.map((l) => l.productId));
     const existing = await tx.select().from(priceLists).where(and(eq(priceLists.organizationId, ctx.organizationId), eq(priceLists.code, code))).orderBy(desc(priceLists.versionNo)).for("update");
     if (existing.some((v) => v.status === "draft" || v.status === "pending_approval")) throw new DomainError("conflict", `Price list ${code} already has a draft or pending version.`, { field: "code" });
@@ -175,7 +193,7 @@ export async function createPriceList(ctx: AuthContext, input: PriceListInput) {
       .values({
         organizationId: ctx.organizationId,
         code,
-        name: input.name.trim(),
+        name,
         partyKind: input.partyKind,
         customerId: input.partyKind === "customer" ? input.customerId! : null,
         currency: input.currency ?? "PHP",
@@ -222,7 +240,7 @@ export async function updatePriceListDraft(ctx: AuthContext, id: string, input: 
     const beforeLines = await tx.select().from(priceListLines).where(eq(priceListLines.priceListId, id));
     await tx.delete(priceListLines).where(eq(priceListLines.priceListId, id));
     await insertLines(tx, id, pl.currency, lines);
-    await tx.update(priceLists).set({ name: input.name.trim(), effectiveFrom: input.effectiveFrom, changeSummary: input.changeSummary?.trim() || null, updatedBy: ctx.userId, updatedAt: new Date() }).where(eq(priceLists.id, id));
+    await tx.update(priceLists).set({ name: input.name?.trim() || pl.name, effectiveFrom: input.effectiveFrom, changeSummary: input.changeSummary?.trim() || null, updatedBy: ctx.userId, updatedAt: new Date() }).where(eq(priceLists.id, id));
     await audit(tx, ctx, {
       action: "sales.price_list.changed",
       entityType: "price_list",
@@ -230,7 +248,7 @@ export async function updatePriceListDraft(ctx: AuthContext, id: string, input: 
       entityNumber: `${pl.code} v${pl.versionNo}`,
       siteId: null,
       before: { name: pl.name, effectiveFrom: pl.effectiveFrom, lines: beforeLines.map((l) => ({ productId: l.productId, minQtyUnits: l.minQtyUnits, unitAmount: l.unitAmount })) },
-      after: { name: input.name.trim(), effectiveFrom: input.effectiveFrom, lines },
+      after: { name: input.name?.trim() || pl.name, effectiveFrom: input.effectiveFrom, lines },
     });
   });
 }

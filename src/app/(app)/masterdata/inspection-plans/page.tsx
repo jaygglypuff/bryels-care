@@ -5,12 +5,13 @@ import { fmtDate } from "@/lib/qty";
 import { listInspectionPlans } from "@/modules/masterdata";
 import { Chip } from "@/ui/status";
 import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Explain, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../forbidden";
 import { VersionChip } from "../_eng/ui";
 
-export const metadata: Metadata = { title: "Inspection plans" };
+export const metadata: Metadata = { title: "Quality checks" };
 
-const KIND: Record<string, string> = { incoming: "Incoming", in_process: "In-process", finished_product: "Finished product" };
+const KIND: Record<string, string> = { incoming: "When a delivery arrives", in_process: "While making", finished_product: "Finished product" };
 
 export default async function InspectionPlansPage() {
   const ctx = await requireContext();
@@ -19,12 +20,16 @@ export default async function InspectionPlansPage() {
   return (
     <div>
       <PageHeader
-        title="Inspection plans"
-        subtitle="QA-controlled tests, methods and specification limits. The system stores them; it never decides them."
-        actions={ctx.can("quality.inspection_plan.create") ? <LinkButton href="/masterdata/inspection-plans/new" variant="cta">New plan</LinkButton> : undefined}
+        title="Quality checks"
+        actions={ctx.can("quality.inspection_plan.create") ? <LinkButton href="/masterdata/inspection-plans/new" variant="cta">Add quality checks</LinkButton> : undefined}
       />
+      <PageIntro>
+        For each material or product: what QA checks and the limits. The system stores them; QA decides them. <Explain term="quality_check" />
+      </PageIntro>
       {rows.length === 0 ? (
-        <EmptyState title="No inspection plans yet">QA creates a plan per material (incoming) or product (in-process, finished product).</EmptyState>
+        <EmptyState title="No quality checks yet" action={ctx.can("quality.inspection_plan.create") ? <LinkButton href="/masterdata/inspection-plans/new">Add quality checks for an item</LinkButton> : undefined}>
+          QA adds the checks for each material (when it arrives) or product (while making and when finished).
+        </EmptyState>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {rows.map((p) => (
@@ -32,18 +37,18 @@ export default async function InspectionPlansPage() {
               <Card className="h-full">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="font-mono text-[13px] font-semibold">{p.code}</p>
-                    <p className="font-medium">{p.name}</p>
-                    <p className="text-[12px] text-muted">
-                      {KIND[p.planKind] ?? p.planKind} · {p.appliesTo} · {p.testCount} tests
+                    <p className="text-[16px] font-semibold text-fg">{p.name}</p>
+                    <p className="text-[13px] text-fg-2">
+                      {p.appliesTo} · {KIND[p.planKind] ?? p.planKind} · {p.testCount} check{p.testCount === 1 ? "" : "s"}
                     </p>
+                    <p className="font-mono text-[11px] text-muted">{p.code}</p>
                   </div>
                   {p.effective ? <VersionChip status="approved" label="effective" /> : <VersionChip status={p.open?.status ?? "draft"} />}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {p.isPlaceholder && <Chip tone="warn">Placeholder, QA review pending</Chip>}
-                  {p.effective && <Chip tone="neu">Rev {p.effective.revisionNo} from {p.effective.effectiveFrom ? fmtDate(p.effective.effectiveFrom) : "—"}</Chip>}
-                  {p.open && <Chip tone="appr">Rev {p.open.revisionNo} {p.open.status.replace(/_/g, " ")}</Chip>}
+                  {p.isPlaceholder && <Chip tone="warn">Example only, QA to confirm</Chip>}
+                  {p.effective && <Chip tone="neu">Version {p.effective.revisionNo} from {p.effective.effectiveFrom ? fmtDate(p.effective.effectiveFrom) : "—"}</Chip>}
+                  {p.open && <Chip tone="appr">Version {p.open.revisionNo} {p.open.status.replace(/_/g, " ")}</Chip>}
                 </div>
               </Card>
             </Link>

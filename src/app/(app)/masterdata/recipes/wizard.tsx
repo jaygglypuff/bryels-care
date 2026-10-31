@@ -5,40 +5,52 @@ import { ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, Plus, Searc
 import {
   AREAS_WORDS,
   type AmountUnit,
+  type BatchBy,
   type RecipeDraft,
   type RecipeLineDraft,
+  type RecipePackagingDraft,
   type RecipeReadingDraft,
   type RecipeStepDraft,
+  PER_PIECE_DECIMALS,
   RECIPE_BLOCKS,
   WAIT_UNITS,
+  draftPieces,
   gramsTotalText,
   isDecimalText,
+  isPieceGText,
+  isPiecesText,
   kgToGrams,
   lineGrams,
   lineShown,
   newStep,
+  packagingKeep,
+  packagingQty,
   percentFromGrams,
   percentTotalText,
+  pieceWord,
+  piecesToBatchKg,
   recipeTotals,
   stepPreviewLine,
 } from "@/modules/masterdata/recipe-blocks";
 import type { RecipeWizardOptions } from "@/modules/masterdata";
 import { Button, Card, Input, Select, Textarea, cx } from "@/ui/core";
 import { BlockIcon } from "./block-icon";
-import { RecipeSummary, piecesPerBatch } from "./recipe-summary";
-import { createRecipeIngredientAction, createRecipeProductAction, loadRecipeCopyAction, saveRecipeAction } from "./actions";
+import { RecipeSummary, batchPiecesSentence, piecesPerBatch } from "./recipe-summary";
+import { createRecipeIngredientAction, createRecipePackagingAction, createRecipeProductAction, loadRecipeCopyAction, saveRecipeAction } from "./actions";
 
 type Errors = Record<string, string>;
 type Product = RecipeWizardOptions["products"][number];
 type Material = RecipeWizardOptions["materials"][number];
+/** The wizard's state: the draft with the pieces and packaging fields always present. */
+type WDraft = RecipeDraft & Required<Pick<RecipeDraft, "batchBy" | "pieces" | "pieceG" | "packaging">>;
 
 const TITLES = ["Which product?", "How big is one batch?", "Ingredients", "Steps", "Check and save"] as const;
 
 /** Which wizard screen a server field error belongs to. */
 function screenOf(key: string): number {
   if (key === "productId") return 1;
-  if (key === "batchKg" || key === "expectedPct") return 2;
-  if (key.startsWith("lines")) return 3;
+  if (key === "batchKg" || key === "expectedPct" || key === "pieces" || key === "pieceG") return 2;
+  if (key.startsWith("lines") || key.startsWith("packaging")) return 3;
   if (key.startsWith("steps")) return 4;
   return 5;
 }
@@ -121,7 +133,7 @@ export type WizardStart = {
  */
 export function RecipeWizard({ options, initial, start }: { options: RecipeWizardOptions; initial: RecipeDraft; start: WizardStart }) {
   const router = useRouter();
-  const [d, setD] = useState<RecipeDraft>(initial);
+  const [d, setD] = useState<WDraft>(() => ({ batchBy: "kg", pieces: "", pieceG: "", packaging: [], ...initial }) as WDraft);
   const [screen, setScreen] = useState(start.kind === "new" ? 1 : 2);
   const [errors, setErrors] = useState<Errors>({});
   const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null);
@@ -131,10 +143,16 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
   const [pending, startTransition] = useTransition();
 
   const product = products.find((p) => p.id === d.productId) ?? null;
-  const matName = (id: string) => materials.find((m) => m.id === id)?.name ?? start.materialNames?.[id] ?? "Choose an ingredient";
+  const matName = (id: string) => materials.find((m) => m.id === id)?.name ?? start.materialNames?.[id] ?? "Choose an item";
+  /** Grams of one piece: the product's, else the one typed here (saved to the product when the recipe is saved). */
+  const pieceGOf = (x: WDraft) => products.find((p) => p.id === x.productId)?.pieceG ?? (isPieceGText(x.pieceG) ? x.pieceG.trim() : null);
+  const pieceG = pieceGOf(d);
   const batchG = isDecimalText(d.batchKg, 3) ? kgToGrams(d.batchKg) : "0";
+  const pieces = draftPieces(d, pieceG);
   const totals = useMemo(() => recipeTotals(batchG, d.lines), [batchG, d.lines]);
-  const set = (patch: Partial<RecipeDraft>) => setD((x) => ({ ...x, ...patch }));
+  /** By pieces, the kilograms are always worked out from the pieces (the same function the server uses). */
+  const sync = (x: WDraft): WDraft => (x.batchBy === "pcs" ? { ...x, batchKg: piecesToBatchKg(x.pieces, pieceGOf(x), x.expectedPct) ?? "" } : x);
+  const set = (patch: Partial<WDraft>) => setD((x) => sync({ ...x, ...patch }));
   const setLine = (i: number, patch: Partial<RecipeLineDraft>) => setD((x) => ({ ...x, lines: x.lines.map((l, j) => (j === i ? { ...l, ...patch } : l)) }));
   const setStep = (i: number, patch: Partial<RecipeStepDraft>) => setD((x) => ({ ...x, steps: x.steps.map((s, j) => (j === i ? { ...s, ...patch } : s)) }));
 
@@ -143,8 +161,11 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
     const e: Errors = {};
     if (n === 1 && !d.productId) e.productId = "Choose the product, or make a new one.";
     if (n === 2) {
-      if (!isDecimalText(d.batchKg, 3) || Number(d.batchKg) <= 0) e.batchKg = "Type how many kilograms one batch makes, like 17.6.";
       if (!isDecimalText(d.expectedPct, 2) || Number(d.expectedPct) <= 0 || Number(d.expectedPct) > 100) e.expectedPct = "Type a number above 0 and at most 100, like 95.";
+      if (d.batchBy === "pcs") {
+        if (!isPiecesText(d.pieces)) e.pieces = "Type how many pieces one batch makes, as a whole number, like 70.";
+        if (!pieceG) e.pieceG = options.can.editProduct ? "Type how heavy one piece is, in grams, like 135." : "This product has no weight per piece yet. Choose “By weight (kg)”, or ask someone who can edit products to add its size.";
+      } else if (!isDecimalText(d.batchKg, 3) || Number(d.batchKg) <= 0) e.batchKg = "Type how many kilograms one batch makes, like 17.6.";
     }
     if (n === 3 && !start.locks.ingredients) {
       d.lines.forEach((l, i) => {
@@ -153,6 +174,11 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
         if (!isDecimalText(l.diff, 6)) e[`lines.${i}.tolerancePct`] = "Type the allowed difference.";
       });
       if (d.view === "pct" && d.lines.length && !totals.exact) e.lines = `${percentTotalText(totals)}. The amounts must add up to 100%.`;
+      d.packaging.forEach((p, i) => {
+        if (!p.materialId) e[`packaging.${i}.materialId`] = "Choose the packaging item.";
+        if (!p.from && (!isDecimalText(p.perPiece, PER_PIECE_DECIMALS) || Number(p.perPiece) <= 0)) e[`packaging.${i}.perPiece`] = "Type how many go on one piece, like 1.";
+      });
+      if (d.packaging.length && pieces === "0") e.packaging = pieceG ? "One batch makes less than one piece. Check the batch size on screen 2." : "Packaging is counted per piece: on screen 2 choose “By pieces”, or type how heavy one piece is.";
     }
     if (n === 4 && !start.locks.steps) {
       d.steps.forEach((s, i) => {
@@ -271,9 +297,11 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
           set={set}
           errors={errors}
           product={product}
+          pieceG={pieceG}
+          canEditProduct={options.can.editProduct}
           copySources={start.kind === "new" ? options.copySources : []}
           onCopied={(c, from) => {
-            setD((x) => ({ ...x, batchKg: c.batchKg, expectedPct: c.expectedPct, lines: c.lines, steps: c.steps }));
+            setD((x) => ({ ...x, batchBy: "kg", batchKg: c.batchKg, expectedPct: c.expectedPct, lines: c.lines, steps: c.steps, packaging: c.packaging ?? [] }));
             setBanner({ ok: true, text: `Copied the ingredients and steps of ${from}. Check them on the next screens.` });
           }}
         />
@@ -294,6 +322,8 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
           defaultDiff={options.defaultDiffPct}
           weighCheck={options.weighCheck}
           onMaterialCreated={(m) => setMaterials((ms) => [...ms, m].sort((a, b) => a.name.localeCompare(b.name)))}
+          pieces={pieces}
+          family={product?.family ?? null}
         />
       )}
 
@@ -303,7 +333,7 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
         <Card>
           <RecipeSummary
             productName={product?.name ?? start.productName ?? ""}
-            product={product ? { unitNetMassG: product.unitNetMassG, family: product.family } : null}
+            product={product ? { unitNetMassG: product.unitNetMassG, family: product.family, pieceG } : null}
             draft={d}
             materialName={matName}
             ingredientsLabel={start.ingredientsLabel}
@@ -540,7 +570,7 @@ function NewProductForm({ families, onCancel, onCreated }: { families: { code: s
                 return;
               }
               const { notes, ...prod } = r.data;
-              onCreated({ ...prod, formulaId: null }, notes);
+              onCreated({ ...prod, formulaId: null, pieceG: Number(prod.unitNetMassG) > 0 ? String(Number(prod.unitNetMassG)) : null }, notes);
             })
           }
         >
@@ -556,20 +586,25 @@ function NewProductForm({ families, onCancel, onCreated }: { families: { code: s
 
 /* ================================================================== 2. batch */
 
-type CopyData = { batchKg: string; expectedPct: string; lines: RecipeLineDraft[]; steps: RecipeStepDraft[] };
+type CopyData = { batchKg: string; expectedPct: string; lines: RecipeLineDraft[]; steps: RecipeStepDraft[]; packaging?: RecipePackagingDraft[] };
 
 function BatchScreen({
   d,
   set,
   errors,
   product,
+  pieceG,
+  canEditProduct,
   copySources,
   onCopied,
 }: {
-  d: RecipeDraft;
-  set: (p: Partial<RecipeDraft>) => void;
+  d: WDraft;
+  set: (p: Partial<WDraft>) => void;
   errors: Errors;
   product: Product | null;
+  /** Grams of one piece (the product's, else typed here); null when unknown. */
+  pieceG: string | null;
+  canEditProduct: boolean;
   copySources: RecipeWizardOptions["copySources"];
   onCopied: (c: CopyData, from: string) => void;
 }) {
@@ -577,24 +612,87 @@ function BatchScreen({
   const [confirming, setConfirming] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const pieces = piecesPerBatch(d.batchKg, d.expectedPct, product?.unitNetMassG, product?.family);
+  const byPieces = d.batchBy === "pcs";
+  const pieces = byPieces ? null : piecesPerBatch(d.batchKg, d.expectedPct, pieceG, product?.family);
+  const sentence = byPieces ? batchPiecesSentence(d.pieces, pieceG, d.batchKg, product?.family) : null;
   const hasContent = d.lines.length > 0 || d.steps.length > 0;
+  const productHasWeight = !!product?.pieceG;
+  const word = pieceWord(product?.family);
   return (
     <div className="flex flex-col gap-4">
       <Card className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="rw-batch" hint="One batch is everything you mix in one go, in one pot.">
-            How many kilograms does one batch make?
-          </Label>
-          <div className="flex items-center gap-2">
-            <Input id="rw-batch" inputMode="decimal" className="w-40 text-[20px] font-semibold" value={d.batchKg} placeholder="17.6" onChange={(e) => set({ batchKg: e.target.value.replace(",", ".") })} aria-describedby="rw-batch-note" />
-            <span className="text-[17px] font-medium">kg</span>
+          <span id="rw-by-label" className="text-[15px] font-semibold text-fg">
+            How do you count one batch?
+          </span>
+          <div role="radiogroup" aria-labelledby="rw-by-label" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {(
+              [
+                ["pcs", "By pieces", `For example 70 ${word}`],
+                ["kg", "By weight (kg)", "For example 17.6 kg of mix"],
+              ] as [BatchBy, string, string][]
+            ).map(([k, label, ex]) => (
+              <button
+                key={k}
+                type="button"
+                role="radio"
+                aria-checked={d.batchBy === k}
+                onClick={() => set({ batchBy: k })}
+                className={cx("flex min-h-[56px] flex-col justify-center rounded-[14px] border px-4 py-2 text-left", d.batchBy === k ? "border-primary bg-primary-soft" : "border-line bg-surface hover:bg-surface-2")}
+              >
+                <span className="text-[16px] font-semibold">{label}</span>
+                <span className="text-[12px] text-muted">{ex}</span>
+              </button>
+            ))}
           </div>
-          <ErrorText text={errors.batchKg} />
-          <p id="rw-batch-note" className="text-[13px] text-muted">
-            {isDecimalText(d.batchKg, 3) ? `= ${fmt(kgToGrams(d.batchKg), 3)} g` : "Example: 17.6 kg."} For liquids, weigh them too: type kilograms, not litres.
-          </p>
         </div>
+
+        {byPieces ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="rw-pieces" hint="One batch is everything you mix in one go, in one pot.">
+              How many {word} does one batch make?
+            </Label>
+            <div className="flex items-center gap-2">
+              <Input id="rw-pieces" inputMode="numeric" className="w-40 text-[20px] font-semibold" value={d.pieces} placeholder="70" onChange={(e) => set({ pieces: e.target.value.replace(/[^\d]/g, "") })} />
+              <span className="text-[17px] font-medium">{word}</span>
+            </div>
+            <ErrorText text={errors.pieces} />
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="rw-batch" hint="One batch is everything you mix in one go, in one pot.">
+              How many kilograms does one batch make?
+            </Label>
+            <div className="flex items-center gap-2">
+              <Input id="rw-batch" inputMode="decimal" className="w-40 text-[20px] font-semibold" value={d.batchKg} placeholder="17.6" onChange={(e) => set({ batchKg: e.target.value.replace(",", ".") })} aria-describedby="rw-batch-note" />
+              <span className="text-[17px] font-medium">kg</span>
+            </div>
+            <ErrorText text={errors.batchKg} />
+            <p id="rw-batch-note" className="text-[13px] text-muted">
+              {isDecimalText(d.batchKg, 3) ? `= ${fmt(kgToGrams(d.batchKg), 3)} g` : "Example: 17.6 kg."} For liquids, weigh them too: type kilograms, not litres.
+            </p>
+          </div>
+        )}
+
+        {!productHasWeight &&
+          (byPieces || d.packaging.length > 0) &&
+          (canEditProduct ? (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="rw-piece-g" hint="Without the wrapper. It is saved to the product when you save the recipe.">
+                How heavy is one piece? (g)
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input id="rw-piece-g" inputMode="decimal" className="w-32 text-[18px]" value={d.pieceG} placeholder="135" onChange={(e) => set({ pieceG: e.target.value.replace(",", ".") })} />
+                <span className="text-[17px] font-medium">g</span>
+              </div>
+              <ErrorText text={errors.pieceG} />
+            </div>
+          ) : (
+            <p role="alert" className="rounded-[12px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]">
+              {product?.name ?? "This product"} has no weight per piece yet, so pieces can&apos;t be turned into kilograms. Choose “By weight (kg)”, or ask someone who can edit products to add its size (grams) under Products.
+            </p>
+          ))}
+
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="rw-yield" hint="Out of everything you mix, how much ends up as product you can sell?">
             Expected amount made (%)
@@ -605,6 +703,12 @@ function BatchScreen({
           </div>
           <ErrorText text={errors.expectedPct} />
           {pieces && <p className="text-[14px] font-medium text-fg">One batch makes {pieces}.</p>}
+          {sentence && (
+            <div className="rounded-[12px] bg-surface-2 px-3 py-2" data-testid="batch-pieces">
+              <p className="text-[16px] font-semibold text-fg">{sentence.main}</p>
+              <p className="text-[13px] text-muted">{sentence.how}</p>
+            </div>
+          )}
           <WhatIsThis>
             Some mix always stays in the pot or on the tools. If 100 kg of mix gives 95 kg of soap you can sell, type 95. If nothing is lost, type 100. The detailed screens call this the
             &quot;theoretical yield&quot;. It is used to plan how many pieces a batch makes.
@@ -680,9 +784,11 @@ function IngredientsScreen({
   defaultDiff,
   weighCheck,
   onMaterialCreated,
+  pieces,
+  family,
 }: {
-  d: RecipeDraft;
-  set: (p: Partial<RecipeDraft>) => void;
+  d: WDraft;
+  set: (p: Partial<WDraft>) => void;
   setLine: (i: number, p: Partial<RecipeLineDraft>) => void;
   errors: Errors;
   batchG: string;
@@ -694,6 +800,9 @@ function IngredientsScreen({
   defaultDiff: string;
   weighCheck: "all" | "marked" | "none";
   onMaterialCreated: (m: Material) => void;
+  /** Pieces one batch makes ("0" when unknown). */
+  pieces: string;
+  family: string | null;
 }) {
   const [picking, setPicking] = useState<number | null>(null);
   const unit: AmountUnit = d.view;
@@ -720,6 +829,18 @@ function IngredientsScreen({
             </li>
           ))}
         </ol>
+        {d.packaging.length > 0 && (
+          <>
+            <h2 className="mt-2 text-[15px] font-semibold">Packaging for each piece</h2>
+            <ul className="flex flex-col divide-y divide-line">
+              {d.packaging.map((p, i) => (
+                <li key={i} className="py-2 text-[14px]">
+                  {fmt(p.perPiece, PER_PIECE_DECIMALS)} {matName(p.materialId)} per {pieceWord(family, 1)}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </Card>
     );
   }
@@ -842,9 +963,7 @@ function IngredientsScreen({
       <Button type="button" variant="secondary" size="lg" onClick={addLine}>
         <Plus size={20} aria-hidden /> Add an ingredient
       </Button>
-      <p className="text-[13px] text-muted">
-        Wrappers, labels and bottles are not ingredients: they are counted at the “Wrap / label” or “Fill bottles” step and on the Finish screen (one per piece).
-      </p>
+      <p className="text-[13px] text-muted">Wrappers, labels, bottles and boxes are not ingredients: add them below under “Packaging for each piece”.</p>
 
       <div
         role="status"
@@ -858,24 +977,152 @@ function IngredientsScreen({
         {unit === "g" && d.lines.length > 0 && !totals.exact && <span className="block text-[12px] font-normal">That is allowed in grams, but check it. In percent the total must be exactly 100%.</span>}
       </div>
       <ErrorText text={errors.lines} />
+
+      <PackagingSection d={d} set={set} errors={errors} materials={materials} matName={matName} canCreate={canCreate} onMaterialCreated={onMaterialCreated} pieces={pieces} family={family} />
     </div>
   );
 }
 
-function IngredientPicker({ materials, canCreate, onPick, onCreated, onCancel }: { materials: Material[]; canCreate: boolean; onPick: (id: string) => void; onCreated: (m: Material) => void; onCancel?: () => void }) {
+/**
+ * "Packaging for each piece" (ADR-092): wrappers, labels, bottles, boxes. Saved as the recipe's
+ * packaging lines (packaging items, counted in pieces, scaling with the batch), so they are set aside
+ * and listed on "Get materials". Never weighed and never in the ingredient total.
+ */
+function PackagingSection({
+  d,
+  set,
+  errors,
+  materials,
+  matName,
+  canCreate,
+  onMaterialCreated,
+  pieces,
+  family,
+}: {
+  d: WDraft;
+  set: (p: Partial<WDraft>) => void;
+  errors: Errors;
+  materials: Material[];
+  matName: (id: string) => string;
+  canCreate: boolean;
+  onMaterialCreated: (m: Material) => void;
+  pieces: string;
+  family: string | null;
+}) {
+  const [picking, setPicking] = useState<number | null>(null);
+  const one = pieceWord(family, 1);
+  const many = pieceWord(family);
+  const setItem = (i: number, patch: Partial<RecipePackagingDraft>) => set({ packaging: d.packaging.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
+  const add = () => {
+    set({ packaging: [...d.packaging, { materialId: "", perPiece: "1", from: null, keep: packagingKeep() }] });
+    setPicking(d.packaging.length);
+  };
+  const known = pieces !== "0";
+  return (
+    <section aria-labelledby="pk-title" className="mt-2 flex flex-col gap-3">
+      <Card className="flex flex-col gap-1">
+        <h2 id="pk-title" className="text-[18px] font-semibold">
+          Packaging for each piece
+        </h2>
+        <p className="text-[14px] text-muted">
+          The wrapper, label, bottle or box each {one} needs. They are set aside with the ingredients and listed on “Get materials”; nobody weighs them.
+          {known ? ` One batch makes ${Number(pieces).toLocaleString("en-PH")} ${many}.` : ""}
+        </p>
+        {!known && <p className="text-[13px] text-[var(--warn-fg)]">To count packaging, the system needs the pieces per batch: on screen 2 choose “By pieces”, or give the weight of one piece.</p>}
+      </Card>
+      {d.packaging.map((p, i) => {
+        const err = (k: string) => errors[`packaging.${i}.${k}`];
+        const qty = known ? packagingQty(pieces, p) : "0";
+        return (
+          <Card key={i} className="flex flex-col gap-3 !p-4" data-testid={`packaging-${i + 1}`}>
+            <div className="flex items-start justify-between gap-2">
+              <span className="inline-flex h-9 items-center rounded-full bg-surface-2 px-3 text-[13px] font-semibold">Packaging {i + 1}</span>
+              <IconButton label={`Remove packaging ${i + 1}`} danger onClick={() => set({ packaging: d.packaging.filter((_, j) => j !== i) })}>
+                <Trash2 size={20} />
+              </IconButton>
+            </div>
+            {picking === i || !p.materialId ? (
+              <IngredientPicker
+                mode="packaging"
+                materials={materials}
+                canCreate={canCreate}
+                onPick={(id) => {
+                  setItem(i, { materialId: id });
+                  setPicking(null);
+                }}
+                onCreated={(m) => {
+                  onMaterialCreated(m);
+                  setItem(i, { materialId: m.id });
+                  setPicking(null);
+                }}
+                onCancel={p.materialId ? () => setPicking(null) : undefined}
+              />
+            ) : (
+              <button type="button" onClick={() => setPicking(i)} className="flex min-h-[48px] items-center justify-between rounded-[14px] border border-line px-3 text-left">
+                <span className="text-[16px] font-semibold">{matName(p.materialId)}</span>
+                <span className="text-[13px] text-primary-text">Change</span>
+              </button>
+            )}
+            <ErrorText text={err("materialId")} />
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={`pk-${i}`} className="text-[14px] font-semibold">
+                How many per {one}?
+              </label>
+              <Input
+                id={`pk-${i}`}
+                inputMode="decimal"
+                className="w-28 text-[18px] font-semibold"
+                value={p.perPiece}
+                onChange={(e) => setItem(i, { perPiece: e.target.value.replace(",", "."), from: null })}
+              />
+              <p className="text-[13px] text-muted tabular">{known && Number(qty) > 0 ? `= ${fmt(qty, 6)} for one batch` : ""}</p>
+              <ErrorText text={err("perPiece")} />
+            </div>
+          </Card>
+        );
+      })}
+      <Button type="button" variant="secondary" size="lg" onClick={add}>
+        <Plus size={20} aria-hidden /> Add packaging (wrapper, label, bottle, box)
+      </Button>
+      <ErrorText text={errors.packaging} />
+    </section>
+  );
+}
+
+function IngredientPicker({
+  materials,
+  canCreate,
+  onPick,
+  onCreated,
+  onCancel,
+  mode = "ingredient",
+}: {
+  materials: Material[];
+  canCreate: boolean;
+  onPick: (id: string) => void;
+  onCreated: (m: Material) => void;
+  onCancel?: () => void;
+  /** ingredient: raw materials and intermediates (weighed); packaging: packaging items (counted in pieces). */
+  mode?: "ingredient" | "packaging";
+}) {
   const [q, setQ] = useState("");
   const [making, setMaking] = useState(false);
   const [name, setName] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const term = q.trim().toLowerCase();
-  // Only ingredients: packaging, spare parts and other consumables are not weighed into a batch.
-  const shown = materials.filter((m) => (m.kind === "raw_material" || m.kind === "intermediate") && (!term || `${m.name} ${m.code}`.toLowerCase().includes(term))).slice(0, 30);
+  const pk = mode === "packaging";
+  // Ingredients are weighed into a batch; packaging is counted per piece. Spare parts and other consumables are neither.
+  const kindOk = (k: string) => (pk ? k === "packaging" : k === "raw_material" || k === "intermediate");
+  const shown = materials.filter((m) => kindOk(m.kind) && (!term || `${m.name} ${m.code}`.toLowerCase().includes(term))).slice(0, 30);
+  const W = pk
+    ? { search: "Search packaging", ph: "Type the name, like wrapper", none: "No packaging item with that name.", newLabel: "New packaging item name", newPh: "Soap wrapper 135 g", note: "It is counted in pieces. Add the supplier and details later under Materials.", add: "Add this packaging item", adding: "Adding…", start: "Add a new packaging item" }
+    : { search: "Search ingredients", ph: "Type the ingredient name", none: "No ingredient with that name.", newLabel: "New ingredient name", newPh: "Calamansi Extract", note: "It is weighed in grams. Add the details (INCI name, supplier) later under Materials.", add: "Add this ingredient", adding: "Adding…", start: "Add a new ingredient" };
   return (
     <div className="flex flex-col gap-2 rounded-[14px] border border-line bg-surface-2/60 p-3">
       <div className="relative">
         <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
-        <Input aria-label="Search ingredients" autoFocus placeholder="Type the ingredient name" value={q} onChange={(e) => setQ(e.target.value)} className="pl-10" />
+        <Input aria-label={W.search} autoFocus placeholder={W.ph} value={q} onChange={(e) => setQ(e.target.value)} className="pl-10" />
       </div>
       <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
         {shown.map((m) => (
@@ -889,16 +1136,16 @@ function IngredientPicker({ materials, canCreate, onPick, onCreated, onCancel }:
             </button>
           </li>
         ))}
-        {shown.length === 0 && <li className="px-3 py-2 text-[14px] text-muted">No ingredient with that name.</li>}
+        {shown.length === 0 && <li className="px-3 py-2 text-[14px] text-muted">{W.none}</li>}
       </ul>
       {canCreate &&
         (making ? (
           <div className="flex flex-col gap-2 border-t border-line pt-2">
-            <label htmlFor="ni-name" className="text-[14px] font-semibold">
-              New ingredient name
+            <label htmlFor={pk ? "np-pk-name" : "ni-name"} className="text-[14px] font-semibold">
+              {W.newLabel}
             </label>
-            <Input id="ni-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Calamansi Extract" />
-            <p className="text-[12px] text-muted">It is weighed in grams. Add the details (INCI name, supplier) later under Materials.</p>
+            <Input id={pk ? "np-pk-name" : "ni-name"} value={name} onChange={(e) => setName(e.target.value)} placeholder={W.newPh} />
+            <p className="text-[12px] text-muted">{W.note}</p>
             {msg && <ErrorText text={msg} />}
             <div className="flex gap-2">
               <Button
@@ -907,7 +1154,7 @@ function IngredientPicker({ materials, canCreate, onPick, onCreated, onCancel }:
                 disabled={pending || !name.trim()}
                 onClick={() =>
                   start(async () => {
-                    const r = await createRecipeIngredientAction({ name });
+                    const r = pk ? await createRecipePackagingAction({ name }) : await createRecipeIngredientAction({ name });
                     if (!r.ok || !r.data) {
                       setMsg(r.message ?? "Not saved.");
                       return;
@@ -916,7 +1163,7 @@ function IngredientPicker({ materials, canCreate, onPick, onCreated, onCancel }:
                   })
                 }
               >
-                {pending ? "Adding…" : "Add this ingredient"}
+                {pending ? W.adding : W.add}
               </Button>
               <Button type="button" variant="ghost" onClick={() => setMaking(false)}>
                 Cancel
@@ -932,7 +1179,7 @@ function IngredientPicker({ materials, canCreate, onPick, onCreated, onCancel }:
               setName(q);
             }}
           >
-            <Plus size={18} aria-hidden /> Add a new ingredient
+            <Plus size={18} aria-hidden /> {W.start}
           </Button>
         ))}
       {onCancel && (
@@ -946,7 +1193,7 @@ function IngredientPicker({ materials, canCreate, onPick, onCreated, onCancel }:
 
 /* ================================================================== 4. steps */
 
-function StepsScreen({ d, set, setStep, errors, locked }: { d: RecipeDraft; set: (p: Partial<RecipeDraft>) => void; setStep: (i: number, p: Partial<RecipeStepDraft>) => void; errors: Errors; locked: boolean }) {
+function StepsScreen({ d, set, setStep, errors, locked }: { d: WDraft; set: (p: Partial<WDraft>) => void; setStep: (i: number, p: Partial<RecipeStepDraft>) => void; errors: Errors; locked: boolean }) {
   const [open, setOpen] = useState<number | null>(null);
   if (locked) {
     return (

@@ -50,7 +50,7 @@ describe("scan result card (US-2-13)", () => {
     expect(c.identifier).toBe(lot.lotNumber);
     expect(c.status?.code).toBe("quarantine");
     expect(c.siteCode).toBe("NFD");
-    expect(c.risk?.title).toMatch(/Waiting for check/);
+    expect(c.risk?.title).toMatch(/Waiting for (QA )?check/);
     if (lot.expiresOn) expect(c.expiry?.daysLeft).not.toBeNull();
     const byKey = Object.fromEntries(c.actions.map((a) => [a.key, a]));
     expect(byKey.open.allowed).toBe(true);

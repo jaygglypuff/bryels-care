@@ -3,17 +3,23 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getCustomerReturn } from "@/modules/sales";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
-import { Banner, Chip, StatusChip } from "@/ui/status";
+import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { MoreDetails, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { RecordNo } from "@/ui/plain-list";
+import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
-import { fmtLotQty } from "../../../quality/_ui";
-import { ReturnStatusChip } from "../_ui";
+import { QaStatusChip, fmtLotQty } from "../../../quality/_ui";
+import { ReturnStatusChip, returnWord } from "../_ui";
 import { ApproveReturnForm, CancelReturnForm, CloseReturnButton, InspectReturnButton, PostReturnButton, RemoveLineButton, ScanLineForm, SendBackForm, SubmitReturnButton } from "../forms";
+import { DoNext, whoDoes } from "../../next-step";
 import { Help } from "@/ui/help/help";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Customer return" };
 
-const SHIPMENT_WORD = { not_returned: "Nothing returned yet", partially_returned: "Partly returned", returned: "Fully returned" } as const;
+const SHIPMENT_WORD = { not_returned: "Nothing came back yet", partially_returned: "Part came back", returned: "All came back" } as const;
+const DECISION_WORD: Record<string, string> = { release: "OK to sell again", release_from_hold: "OK to sell again", hold: "Stopped by QA", reject: "Not OK – don't use" };
 
 export default async function ReturnPage({ params }: { params: Promise<{ returnId: string }> }) {
   const ctx = await requireContext();
@@ -25,7 +31,7 @@ export default async function ReturnPage({ params }: { params: Promise<{ returnI
   } catch (e) {
     if (e instanceof DomainError && e.code === "not_found") {
       return (
-        <EmptyState title="Return not found" action={<LinkButton href="/sales/returns" variant="secondary">Returns</LinkButton>}>
+        <EmptyState title="Customer return not found" action={<LinkButton href="/sales/returns" variant="secondary">All customer returns</LinkButton>}>
           This return does not exist or is not at one of your sites.
         </EmptyState>
       );
@@ -33,160 +39,204 @@ export default async function ReturnPage({ params }: { params: Promise<{ returnI
     throw e;
   }
   const h = v.header;
-  const linkCls = "inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2";
+  const live = h.status !== "closed" && h.status !== "cancelled";
+
+  const next = !live ? (
+    <DoNext text={h.status === "closed" ? "Done. Nothing more to do." : "Cancelled. Nothing more to do."} />
+  ) : v.can.submit ? (
+    <DoNext text="Next: when every box is scanned, send the return for approval.">
+      <SubmitReturnButton returnId={h.id} />
+    </DoNext>
+  ) : v.can.scan ? (
+    <DoNext text="Next: scan each box or lot that came back." action={{ label: "Scan a box", href: "#scan" }} />
+  ) : v.can.approve ? (
+    <DoNext text="Next: approve the return (or send it back to be fixed)." action={{ label: "Approve now", href: "#decide" }} />
+  ) : v.can.post ? (
+    <DoNext text="Next: take the goods in. They are kept apart until QA checks them.">
+      <PostReturnButton returnId={h.id} />
+    </DoNext>
+  ) : v.can.inspect ? (
+    <DoNext text="QA has decided every lot. Next: mark it so.">
+      <InspectReturnButton returnId={h.id} />
+    </DoNext>
+  ) : v.can.close ? (
+    <DoNext text="Next: finish the return.">
+      <CloseReturnButton returnId={h.id} />
+    </DoNext>
+  ) : h.status === "submitted" ? (
+    <DoNext text={v.can.approveBlockedReason ?? "Sent for approval."} waitingFor={`Waiting for ${await whoDoes(ctx, "sales.customer_return.approve", h.siteId, "a site manager or QA")} to approve.`} />
+  ) : h.status === "approved" ? (
+    <DoNext text="Approved." waitingFor={`Waiting for ${await whoDoes(ctx, "sales.customer_return.post", h.siteId, "a site manager")} to take the goods in.`} />
+  ) : h.status === "received" ? (
+    <DoNext text="The goods are back in, kept apart." waitingFor={v.can.inspectBlockedReason ? "Waiting for QA to decide each returned lot (open the lot from its line below)." : "Waiting for QA."} />
+  ) : (
+    <DoNext text={returnWord(h.status)} />
+  );
+
   return (
-    <>
+    <div className="mx-auto max-w-3xl">
       <PageHeader
-        title={h.returnNumber}
-        subtitle={`${h.customerName} · ${h.drNumber} · ${h.siteCode}`}
+        title={`Customer return: ${h.customerName}`}
+        subtitle={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <Link href="/sales/returns" className="text-primary-text hover:underline">Customer returns</Link>
+            <RecordNo>{h.returnNumber}</RecordNo>
+            <ReturnStatusChip status={h.status} />
+          </span>
+        }
         actions={
           <>
-            <Help screen="sales.return" />
             {h.receivedAt && (
-              <a className={linkCls} href={`/print/return-receipt/${h.id}`}>
-                Return receipt
-              </a>
+              <LinkButton href={`/print/return-receipt/${h.id}`} variant="secondary">
+                Print return receipt
+              </LinkButton>
             )}
-            <LinkButton href="/sales/returns" variant="secondary">
-              Returns
-            </LinkButton>
+            <MoreMenu>
+              <div className="flex flex-col gap-3">
+                {v.can.sendBack && !v.can.approve && <SendBackForm returnId={h.id} />}
+                {v.can.cancel && (
+                  <div>
+                    <p className="mb-2 text-[14px] font-medium">Cancel this return</p>
+                    <CancelReturnForm returnId={h.id} />
+                  </div>
+                )}
+                <Help screen="sales.return" />
+              </div>
+            </MoreMenu>
           </>
         }
       />
-      <div className="flex flex-col gap-5">
-        {h.status === "received" && (
-          <Banner tone="q" title="In quarantine, waiting for QA">
-            Each returned lot is decided by QA from its lot page (release, hold or reject). Nothing is resold or scrapped before that.
+      <PageIntro>This screen is for one customer return: what came back, from which delivery, and the next step until QA has decided.</PageIntro>
+      {next}
+      {h.status === "received" && (
+        <div className="mb-4">
+          <Banner tone="q" title="Kept apart, waiting for QA">
+            QA decides each returned lot from its lot page (OK to sell again, stop, or not OK). Nothing is sold or thrown away before that.
           </Banner>
-        )}
-        <Card>
-          <CardTitle action={<ReturnStatusChip status={h.status} label={h.statusLabel} />}>Return</CardTitle>
-          <Dl
-            items={[
-              ["Customer", `${h.customerName} (${h.customerCode})`],
-              ["Delivery receipt", `${h.drNumber} · dispatched ${fmtDate(h.dispatchedAt)}${h.deliveredAt ? ` · delivered ${fmtDate(h.deliveredAt)}` : ""}`],
-              ["Order", h.salesOrderId ? <Link key="o" className="text-primary-text hover:underline" href={`/sales/${h.salesOrderId}`}>{h.orderNumber}</Link> : "—"],
-              ["Reason", `${h.reasonName}${h.reasonNote ? ` — ${h.reasonNote}` : ""}`],
-              ["Complaint", h.complaintId ? <Link key="c" className="text-primary-text hover:underline" href={`/quality/complaints/${h.complaintId}`}>{h.complaintNumber}</Link> : "—"],
-              ["Receive into", h.toLocationCode],
-              ["Opened", `${fmtDateTime(h.createdAt)} · ${h.createdByName}`],
-              ["Approved", h.approvedAt ? `${fmtDateTime(h.approvedAt)} · ${h.approvedByName}${h.approvalNote ? ` — ${h.approvalNote}` : ""}` : "—"],
-              ["Received", h.receivedAt ? `${fmtDateTime(h.receivedAt)} · ${h.receivedByName}` : "—"],
-              ["Shipment", SHIPMENT_WORD[v.shipment.state]],
-              ...(h.cancelReason ? ([["Cancelled", h.cancelReason]] as [string, string][]) : []),
-            ]}
-          />
-        </Card>
+        </div>
+      )}
 
-        <Card>
-          <CardTitle>Returned goods</CardTitle>
-          {v.lines.length === 0 ? (
-            <p className="text-[13px] text-muted">No lines yet. Scan the first returned box or lot below.</p>
-          ) : (
-            <Table head={["#", "Lot shipped", "Box", "Quantity", "Condition", "Into", "Return lot", "QA decision", ""]}>
-              {v.lines.map((l) => (
-                <tr key={l.id}>
-                  <Td>{l.lineNo}</Td>
-                  <Td>
-                    {l.lotNumber}
-                    <div className="text-[12px] text-muted">{l.productName ?? ""}</div>
-                  </Td>
-                  <Td className="text-[13px]">
-                    {l.boxNumber ?? "—"}
-                    {l.manualEntry && (
-                      <div>
-                        <Chip tone="warn">typed by hand</Chip>
-                      </div>
-                    )}
-                  </Td>
-                  <Td>{fmtLotQty(l.qtyBase, l.baseUom)}</Td>
-                  <Td className="text-[13px]">{l.conditionLabel}</Td>
-                  <Td className="text-[13px]">{l.toLocationCode}</Td>
-                  <Td>
-                    {l.returnLotId ? (
-                      <span className="inline-flex flex-wrap items-center gap-1">
-                        <Link className="text-primary-text hover:underline" href={`/quality/lots/${l.returnLotId}`}>
-                          {l.returnLotNumber}
-                        </Link>
-                        <StatusChip status={l.returnLotStatus ?? "quarantine"} />
-                      </span>
-                    ) : (
-                      <span className="text-[13px] text-muted">at posting</span>
-                    )}
-                  </Td>
-                  <Td className="text-[13px]">{l.disposition ? `${l.disposition.decision} · ${fmtDate(l.disposition.decidedAt)}` : l.returnLotId ? "Waiting for QA" : "—"}</Td>
-                  <Td>{v.can.scan && <RemoveLineButton returnId={h.id} lineId={l.id} />}</Td>
-                </tr>
-              ))}
-            </Table>
-          )}
-          {v.can.scan && (
-            <div className="mt-4 border-t border-line pt-4">
-              {v.locations.length ? <ScanLineForm returnId={h.id} locations={v.locations} defaultLocationId={h.toLocationId} /> : <p className="text-[13px] text-muted">No active quarantine location for returns at this site.</p>}
-            </div>
-          )}
-        </Card>
-
-        <Card>
-          <CardTitle>Shipped and returned on {h.drNumber}</CardTitle>
-          <Table head={["Lot", "Shipped", "Returned (posted)"]}>
-            {v.shipment.lines.map((s) => (
-              <tr key={s.lotId}>
-                <Td>{s.lotNumber}</Td>
-                <Td>{fmtLotQty(s.qtyBase, s.baseUom)}</Td>
-                <Td>{fmtLotQty(s.returnedQty, s.baseUom)}</Td>
-              </tr>
-            ))}
-          </Table>
-        </Card>
-
-        {h.status !== "closed" && h.status !== "cancelled" && (
+      <div className="flex flex-col gap-4">
+        {v.can.approve && (
           <Card>
-            <CardTitle>Next step</CardTitle>
+            <span id="decide" className="block scroll-mt-24" />
+            <CardTitle>Approve</CardTitle>
             <div className="flex flex-col gap-4">
-              {v.can.submit && <SubmitReturnButton returnId={h.id} />}
-              {v.can.approve && <ApproveReturnForm returnId={h.id} />}
-              {v.can.approveBlockedReason && <p className="text-[13px] text-muted">{v.can.approveBlockedReason}</p>}
+              <ApproveReturnForm returnId={h.id} />
               {v.can.sendBack && (
-                <details>
-                  <summary className="cursor-pointer text-[13px] text-primary-text">Send back to draft</summary>
-                  <div className="mt-3">
-                    <SendBackForm returnId={h.id} />
-                  </div>
-                </details>
+                <MoreDetails title="Send back to be fixed">
+                  <SendBackForm returnId={h.id} />
+                </MoreDetails>
               )}
-              {v.can.post && <PostReturnButton returnId={h.id} />}
-              {v.can.inspect && <InspectReturnButton returnId={h.id} />}
-              {v.can.inspectBlockedReason && <p className="text-[13px] text-muted">{v.can.inspectBlockedReason}</p>}
-              {v.can.close && <CloseReturnButton returnId={h.id} />}
-              {h.status === "submitted" && !v.can.approve && !v.can.approveBlockedReason && <p className="text-[13px] text-muted">Waiting for approval by a site manager or QA (sales.customer_return.approve).</p>}
-              {h.status === "approved" && !v.can.post && <p className="text-[13px] text-muted">Waiting to be received by a site manager (sales.customer_return.post).</p>}
-              {v.can.cancel && (
-                <details>
-                  <summary className="cursor-pointer text-[13px] text-primary-text">Cancel this return</summary>
-                  <div className="mt-3">
-                    <CancelReturnForm returnId={h.id} />
-                  </div>
-                </details>
-              )}
-              <p className="text-[12px] text-muted">Credit notes for returns are not available yet; finance issues them separately.</p>
             </div>
           </Card>
         )}
 
         <Card>
-          <CardTitle>History</CardTitle>
+          <CardTitle>What came back</CardTitle>
+          {v.lines.length === 0 ? (
+            <p className="text-[13px] text-muted">Nothing yet. Scan the first box or lot below.</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-line">
+              {v.lines.map((l) => (
+                <li key={l.id} className="flex flex-col gap-1 py-2.5">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <span className="min-w-0">
+                      <span className="block font-medium">{l.productName ?? "Product"}</span>
+                      <span className="block text-[13px] text-fg-2">
+                        {l.conditionLabel}
+                        {l.boxNumber ? ` · box ${l.boxNumber}` : ""} · kept at {l.toLocationCode}
+                        {l.manualEntry && (
+                          <>
+                            {" "}
+                            <Chip tone="warn">typed by hand</Chip>
+                          </>
+                        )}
+                      </span>
+                    </span>
+                    <span className="whitespace-nowrap text-[15px] font-semibold tabular">{fmtLotQty(l.qtyBase, l.baseUom)}</span>
+                  </div>
+                  <p className="text-[13px]">
+                    {l.returnLotId ? (
+                      <span className="inline-flex flex-wrap items-center gap-1">
+                        Return lot{" "}
+                        <Link className="font-mono text-primary-text hover:underline" href={`/quality/lots/${l.returnLotId}`}>
+                          {l.returnLotNumber}
+                        </Link>
+                        <QaStatusChip status={l.returnLotStatus ?? "quarantine"} />
+                        {l.disposition ? ` · QA: ${DECISION_WORD[l.disposition.decision] ?? l.disposition.decision}, ${fmtDate(l.disposition.decidedAt)}` : ""}
+                      </span>
+                    ) : (
+                      <span className="text-muted">Gets its own return lot when it is taken in.</span>
+                    )}
+                  </p>
+                  <p className="font-mono text-[12px] text-muted">sent as lot {l.lotNumber}</p>
+                  {v.can.scan && (
+                    <div>
+                      <RemoveLineButton returnId={h.id} lineId={l.id} />
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {v.can.scan && (
+            <div className="mt-4 border-t border-line pt-4">
+              <span id="scan" className="block scroll-mt-24" />
+              {v.locations.length ? <ScanLineForm returnId={h.id} locations={v.locations} defaultLocationId={h.toLocationId} /> : <p className="text-[13px] text-muted">This site has no place to keep returned goods apart. Ask an administrator.</p>}
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <CardTitle>About this return</CardTitle>
+          <Dl
+            items={[
+              ["Customer", h.customerName],
+              ["Why", `${h.reasonName}${h.reasonNote ? ` — ${h.reasonNote}` : ""}`],
+              ["From the delivery", `sent ${fmtDate(h.dispatchedAt)}${h.deliveredAt ? `, delivered ${fmtDate(h.deliveredAt)}` : ""} · ${SHIPMENT_WORD[v.shipment.state]}`],
+              ["Order", h.salesOrderId ? <Link key="o" className="text-primary-text hover:underline" href={`/sales/${h.salesOrderId}`}>{h.orderNumber}</Link> : "—"],
+              ...(h.complaintId ? ([["Complaint", <Link key="c" className="text-primary-text hover:underline" href={`/quality/complaints/${h.complaintId}`}>{h.complaintNumber}</Link>]] as [string, React.ReactNode][]) : []),
+            ]}
+          />
+          <div className="mt-3">
+            <MoreDetails>
+              <Dl
+                items={[
+                  ["Customer number", h.customerCode],
+                  ["Delivery receipt", h.drNumber],
+                  ["Kept at", h.toLocationCode],
+                  ["Started", `${fmtDateTime(h.createdAt)} · ${h.createdByName}`],
+                  ["Approved", h.approvedAt ? `${fmtDateTime(h.approvedAt)} · ${h.approvedByName}${h.approvalNote ? ` — ${h.approvalNote}` : ""}` : "—"],
+                  ["Taken in", h.receivedAt ? `${fmtDateTime(h.receivedAt)} · ${h.receivedByName}` : "—"],
+                  ...(h.cancelReason ? ([["Cancelled", h.cancelReason]] as [string, string][]) : []),
+                ]}
+              />
+              <p className="text-[13px] font-medium">Sent and came back on this delivery</p>
+              <ul className="flex flex-col gap-1 text-[13px]">
+                {v.shipment.lines.map((s) => (
+                  <li key={s.lotId}>
+                    Lot <span className="font-mono">{s.lotNumber}</span>: sent {fmtLotQty(s.qtyBase, s.baseUom)}, came back {fmtLotQty(s.returnedQty, s.baseUom)}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[12px] text-muted">Credit notes for returns are not made here yet; finance makes them separately.</p>
+            </MoreDetails>
+          </div>
+        </Card>
+
+        <MoreDetails title="What happened">
           <ol className="flex flex-col gap-1 text-[13px]">
             {v.timeline.map((t, i) => (
               <li key={i}>
-                {fmtDateTime(t.at)} · {t.by}: {t.from ? `${t.from} → ` : ""}
-                {t.to}
+                {fmtDateTime(t.at)} · {t.by}: {t.from ? `${returnWord(t.from)} → ` : ""}
+                {returnWord(t.to)}
                 {t.reason ? ` — ${t.reason}` : ""}
               </li>
             ))}
           </ol>
-        </Card>
+        </MoreDetails>
       </div>
-    </>
+    </div>
   );
 }
