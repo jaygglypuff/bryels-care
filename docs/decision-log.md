@@ -1730,3 +1730,18 @@ renaming printed records needs QA sign-off. New read model `getTopProducts` for 
 Consequences: per-area unit tests `tests/unit/grade5-*.test.ts` guard the intro sentence, no typed codes and the jargon
 titles. Open: 118 of 170 settings have no written description; supplier-bill lines still priced per base unit; the
 finance "Approved by" row lacks "(own request)".
+
+## ADR-096 Recipe advanced-editing screens and product codes (ADR-088/093/094 follow-up, 2026-10-31)
+
+Status: Accepted; A-G5-MD-05 needs the owner.
+
+Decision: the products, formulas ("Recipes (advanced)"), routings ("Steps (advanced)") and work-instruction ("How-to
+sheets") screens follow the grade-5 standard and point first to the step-by-step recipe. A blank code is made in the
+creating transaction: PRD-, SKU- (a product's first sellable item takes the product's code), F-, R-, WI- (numbering
+types SKU, FRM, RTG, WI). A blank code on edit keeps it; typed codes stay unique. Products take shelf life in months.
+`getFormulaRevision` totals exclude packaging lines and return them as `totals.packaging` (closes the ADR-094 open
+point). Approval and QA-independence rules unchanged.
+
+Consequences: tests `tests/integration/masterdata/grade5-recipes-advanced.test.ts`,
+`tests/unit/grade5-recipes-advanced.test.ts`. Open: the recipe wizard still picks F-/R- codes with `nextCode`; switch it
+to server numbering later.

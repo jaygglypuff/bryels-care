@@ -42,9 +42,9 @@ export const QUICK_ACTIONS: QuickAction[] = [
 const SETUP_ITEMS: NavItem[] = [
   // ADR-089: the guided recipe wizard (ingredients and steps in five screens).
   { label: "New recipe (step by step)", href: "/masterdata/recipes/new", permission: "masterdata.formula.create" },
-  { label: "Products and formulas", href: "/masterdata/formulas", permission: "masterdata.formula.view" },
-  { label: "Steps for each product", href: "/masterdata/routings", permission: "masterdata.routing.view" },
-  { label: "Work instructions", href: "/masterdata/work-instructions", permission: "masterdata.work_instruction.view" },
+  { label: "Recipes (advanced)", href: "/masterdata/formulas", permission: "masterdata.formula.view" },
+  { label: "Steps (advanced)", href: "/masterdata/routings", permission: "masterdata.routing.view" },
+  { label: "How-to sheets", href: "/masterdata/work-instructions", permission: "masterdata.work_instruction.view" },
   { label: "Quality checks for items", href: "/masterdata/inspection-plans", permission: "quality.inspection_plan.view" },
   { label: "Equipment", href: "/masterdata/equipment", permission: "masterdata.equipment.view" },
 ];
