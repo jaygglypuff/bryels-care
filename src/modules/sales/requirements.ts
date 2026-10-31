@@ -401,24 +401,41 @@ export async function listArtworkVersions(ctx: AuthContext, customerId?: string 
     .then((rows) => rows.map((r) => ({ ...r.a, sku: r.sku, productName: r.productName })));
 }
 
-export async function createArtworkVersion(ctx: AuthContext, input: { customerId?: string | null; productId: string; artworkCode: string; versionLabel: string; description?: string | null }) {
+/**
+ * Registers a label design version. ADR-088: nobody types a code — a blank `artworkCode` becomes `ART-<product
+ * code>` and a blank `versionLabel` the next `vN` of that design, both decided inside the transaction (the
+ * existing versions of the design are locked first, so two saves at once get v2 and v3).
+ */
+export async function createArtworkVersion(ctx: AuthContext, input: { customerId?: string | null; productId: string; artworkCode?: string | null; versionLabel?: string | null; description?: string | null }) {
   ctx.require("masterdata.customer_requirement.create");
-  const code = input.artworkCode.trim().toUpperCase();
-  if (!/^[A-Z0-9][A-Z0-9._-]{1,39}$/.test(code)) throw new DomainError("validation", "Artwork code: 2–40 letters, digits, dot, dash or underscore.", { field: "artworkCode" });
-  if (!input.versionLabel.trim() || input.versionLabel.trim().length > 20) throw new DomainError("validation", "Enter the version (e.g. v3).", { field: "versionLabel" });
+  const typedCode = input.artworkCode?.trim().toUpperCase() || null;
+  if (typedCode && !/^[A-Z0-9][A-Z0-9._-]{1,39}$/.test(typedCode)) throw new DomainError("validation", "Artwork code: 2–40 letters, digits, dot, dash or underscore.", { field: "artworkCode" });
+  const typedVersion = input.versionLabel?.trim() || null;
+  if (typedVersion && typedVersion.length > 20) throw new DomainError("validation", "Enter the version (e.g. v3).", { field: "versionLabel" });
   return db.transaction(async (tx) => {
     if (input.customerId) await loadCustomerOrg(tx, ctx, input.customerId);
-    const [p] = await tx.select({ id: products.id }).from(products).where(and(eq(products.id, input.productId), eq(products.organizationId, ctx.organizationId))).limit(1);
+    const [p] = isUuid(input.productId) ? await tx.select({ id: products.id, skuCode: products.skuCode }).from(products).where(and(eq(products.id, input.productId), eq(products.organizationId, ctx.organizationId))).limit(1) : [];
     if (!p) throw new DomainError("validation", "Choose a product.", { field: "productId" });
-    const [dup] = await tx.select({ id: artworkVersions.id }).from(artworkVersions).where(and(eq(artworkVersions.organizationId, ctx.organizationId), eq(artworkVersions.artworkCode, code), eq(artworkVersions.versionLabel, input.versionLabel.trim()))).limit(1);
-    if (dup) throw new DomainError("conflict", `Artwork ${code} ${input.versionLabel.trim()} already exists.`, { field: "versionLabel" });
+    const code = typedCode ?? `ART-${p.skuCode}`.toUpperCase().replace(/[^A-Z0-9._-]/g, "-").slice(0, 40);
+    const existing = await tx.select({ id: artworkVersions.id, versionLabel: artworkVersions.versionLabel }).from(artworkVersions).where(and(eq(artworkVersions.organizationId, ctx.organizationId), eq(artworkVersions.artworkCode, code))).for("update");
+    const versionLabel = typedVersion ?? nextVersionLabel(existing.map((e) => e.versionLabel));
+    if (existing.some((e) => e.versionLabel === versionLabel)) throw new DomainError("conflict", `Artwork ${code} ${versionLabel} already exists.`, { field: "versionLabel" });
     const [row] = await tx
       .insert(artworkVersions)
-      .values({ organizationId: ctx.organizationId, customerId: input.customerId || null, productId: p.id, artworkCode: code, versionLabel: input.versionLabel.trim(), description: input.description?.trim() || null, createdBy: ctx.userId })
+      .values({ organizationId: ctx.organizationId, customerId: input.customerId || null, productId: p.id, artworkCode: code, versionLabel, description: input.description?.trim() || null, createdBy: ctx.userId })
       .returning();
     await audit(tx, ctx, { action: "masterdata.artwork_version.created", entityType: "artwork_version", entityId: row.id, entityNumber: `${code} ${row.versionLabel}`, siteId: null, after: row });
     return row;
   });
+}
+
+/** The next "vN" after the highest vN already used (other labels such as "2026-A" are ignored). */
+export function nextVersionLabel(used: string[]): string {
+  const n = used.reduce((m, v) => {
+    const hit = /^v(\d+)$/i.exec(v.trim());
+    return hit ? Math.max(m, Number(hit[1])) : m;
+  }, 0);
+  return `v${n + 1}`;
 }
 
 export async function retireArtworkVersion(ctx: AuthContext, id: string, reason: string) {

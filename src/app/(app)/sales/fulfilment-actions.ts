@@ -71,8 +71,8 @@ export async function allocateOrderAction(_: ActionState, fd: FormData): Promise
     const ctx = await requireContext();
     const r = await allocateOrder(ctx, uuid.parse(str(fd, "orderId")));
     refreshCurrentPage();
-    if (!r.fullyAllocated) return { ok: true, message: describeShortfall(r, "Partly allocated.") };
-    return { ok: true, message: `Allocated by FEFO: ${r.created.map((c) => `${c.lotNumber}${c.boxNumber ? ` box ${c.boxNumber}` : " loose"} ${c.qty}`).join(", ")}.` };
+    if (!r.fullyAllocated) return { ok: true, message: describeShortfall(r, "Part of the stock is set aside.") };
+    return { ok: true, message: `Set aside (oldest expiry first): ${r.created.map((c) => `${c.lotNumber}${c.boxNumber ? ` box ${c.boxNumber}` : " loose"} ${c.qty}`).join(", ")}.` };
   } catch (e) {
     return toActionState(e);
   }
@@ -83,7 +83,7 @@ export async function releaseAllocationsAction(_: ActionState, fd: FormData): Pr
     const ctx = await requireContext();
     const r = await releaseAllocations(ctx, uuid.parse(str(fd, "orderId")), { reason: str(fd, "reason") });
     refreshCurrentPage();
-    return { ok: true, message: `${r.released} allocation(s) released.` };
+    return { ok: true, message: `${r.released} set-aside place(s) let go.` };
   } catch (e) {
     return toActionState(e);
   }
@@ -119,7 +119,7 @@ export async function voidPickLineAction(_: ActionState, fd: FormData): Promise<
     const ctx = await requireContext();
     await voidPickLine(ctx, uuid.parse(str(fd, "pickLineId")), str(fd, "reason"));
     refreshCurrentPage();
-    return { ok: true, message: "Scan taken back." };
+    return { ok: true, message: "Scan undone." };
   } catch (e) {
     return toActionState(e);
   }
@@ -143,7 +143,7 @@ export async function cancelPickAction(_: ActionState, fd: FormData): Promise<Ac
     const ctx = await requireContext();
     await cancelPick(ctx, uuid.parse(str(fd, "pickId")), str(fd, "reason"));
     refreshCurrentPage();
-    return { ok: true, message: "Pick cancelled; the allocation is kept." };
+    return { ok: true, message: "Stopped. The stock stays set aside for the order." };
   } catch (e) {
     return toActionState(e);
   }
@@ -154,7 +154,7 @@ export async function generatePickListAction(_: ActionState, fd: FormData): Prom
     const ctx = await requireContext();
     const r = await generatePickList(ctx, uuid.parse(str(fd, "pickId")), { idempotencyKey: idem(fd) });
     refreshCurrentPage();
-    return { ok: true, message: `Pick list ${r.documentNumber} recorded. Open Print pick list.` };
+    return { ok: true, message: `List ${r.documentNumber} saved. Use Print the list.` };
   } catch (e) {
     return toActionState(e);
   }
@@ -179,7 +179,7 @@ export async function removeShipmentLineAction(_: ActionState, fd: FormData): Pr
     const ctx = await requireContext();
     await removeShipmentLine(ctx, uuid.parse(str(fd, "shipmentLineId")), str(fd, "reason"));
     refreshCurrentPage();
-    return { ok: true, message: "Line removed." };
+    return { ok: true, message: "Taken off." };
   } catch (e) {
     return toActionState(e);
   }
@@ -198,7 +198,7 @@ export async function approveExceptionAction(_: ActionState, fd: FormData): Prom
       password: str(fd, "password") || null,
     });
     refreshCurrentPage();
-    return { ok: true, message: kind === "over_shipment" ? "Over-shipment approved. Scan the extra box again." : "Partial shipment approved." };
+    return { ok: true, message: kind === "over_shipment" ? "Allowed: more than ordered. Scan the extra box again." : "Allowed: send only part." };
   } catch (e) {
     return toActionState(e);
   }
@@ -210,7 +210,7 @@ export async function completePackingAction(_: ActionState, fd: FormData): Promi
     const ctx = await requireContext();
     shipmentId = uuid.parse(str(fd, "shipmentId"));
     const pc = str(fd, "packageCount");
-    if (pc && !/^\d{1,5}$/.test(pc)) return { ok: false, message: "Packages: a whole number.", fieldErrors: { packageCount: "Whole number." } };
+    if (pc && !/^\d{1,5}$/.test(pc)) return { ok: false, message: "Boxes on the truck: a whole number.", fieldErrors: { packageCount: "Whole number." } };
     await completePacking(ctx, shipmentId, { carrierName: str(fd, "carrierName"), trackingNumber: str(fd, "trackingNumber") || null, grossWeightKg: str(fd, "grossWeightKg") || null, packageCount: pc ? Number(pc) : null, idempotencyKey: idem(fd) });
   } catch (e) {
     return toActionState(e);
@@ -224,7 +224,7 @@ export async function draftDeliveryReceiptAction(_: ActionState, fd: FormData): 
     const ctx = await requireContext();
     const r = await generateDraftDeliveryReceipt(ctx, uuid.parse(str(fd, "shipmentId")), { idempotencyKey: idem(fd) });
     refreshCurrentPage();
-    return { ok: true, message: `Draft delivery receipt ${r.documentNumber} recorded (no stock moved). Open Print delivery receipt.` };
+    return { ok: true, message: `Draft delivery receipt ${r.documentNumber} saved (no stock moved). Use Print delivery receipt.` };
   } catch (e) {
     return toActionState(e);
   }
@@ -235,7 +235,7 @@ export async function generateDeliveryReceiptAction(_: ActionState, fd: FormData
     const ctx = await requireContext();
     const r = await generateDeliveryReceipt(ctx, uuid.parse(str(fd, "shipmentId")), { idempotencyKey: idem(fd) });
     refreshCurrentPage();
-    return { ok: true, message: `Delivery receipt ${r.documentNumber} recorded.` };
+    return { ok: true, message: `Delivery receipt ${r.documentNumber} made.` };
   } catch (e) {
     return toActionState(e);
   }
@@ -259,7 +259,7 @@ export async function reverseShipmentAction(_: ActionState, fd: FormData): Promi
     const ctx = await requireContext();
     const r = await reverseShipment(ctx, uuid.parse(str(fd, "shipmentId")), { reason: str(fd, "reason"), idempotencyKey: idem(fd) });
     refreshCurrentPage();
-    return { ok: true, message: `Dispatch reversed: ${r.movements} reversal movement(s) posted; the order is ${r.orderStatus.replace(/_/g, " ")}.` };
+    return { ok: true, message: `Sending out undone: the stock is back on its shelves (${r.movements} movement(s)).` };
   } catch (e) {
     return toActionState(e);
   }
@@ -270,7 +270,7 @@ export async function cancelShipmentAction(_: ActionState, fd: FormData): Promis
     const ctx = await requireContext();
     await cancelShipment(ctx, uuid.parse(str(fd, "shipmentId")), str(fd, "reason"));
     refreshCurrentPage();
-    return { ok: true, message: "Shipment cancelled; the allocation is kept." };
+    return { ok: true, message: "Delivery cancelled. The stock stays set aside for the order." };
   } catch (e) {
     return toActionState(e);
   }
@@ -280,7 +280,7 @@ export async function cancelShipmentAction(_: ActionState, fd: FormData): Promis
 export async function acknowledgeAction(_: ActionState, fd: FormData): Promise<ActionState> {
   try {
     const ctx = await requireContext();
-    const kind = z.enum(["drawn", "photo", "name_only"], { message: "Choose how receipt was confirmed." }).parse(str(fd, "kind"));
+    const kind = z.enum(["drawn", "photo", "name_only"], { message: "Choose the proof." }).parse(str(fd, "kind"));
     const at = str(fd, "receivedAt");
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(at)) return { ok: false, message: "Enter the date and time.", fieldErrors: { receivedAt: "Enter the date and time." } };
     const f = fd.get("file");
@@ -295,7 +295,7 @@ export async function acknowledgeAction(_: ActionState, fd: FormData): Promise<A
       idempotencyKey: idem(fd),
     });
     refreshCurrentPage();
-    return { ok: true, message: "Receipt acknowledged; the delivery receipt was regenerated as ACKNOWLEDGED." };
+    return { ok: true, message: "Proof of delivery saved; the delivery receipt now shows it was received." };
   } catch (e) {
     return toActionState(e);
   }

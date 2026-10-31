@@ -1,17 +1,19 @@
-import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
-import { RETURN_STATUS_LABEL, listCustomerReturns, type CustomerReturnStatus } from "@/modules/sales";
-import { Card, EmptyState, LinkButton, PageHeader, Table, Td, cx } from "@/ui/core";
+import { listCustomerReturns } from "@/modules/sales";
+import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Help } from "@/ui/help/help";
 import { Forbidden } from "../../forbidden";
 import { ReturnStatusChip } from "./_ui";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Customer returns" };
 
 const FILTERS = [
-  ["active", "In progress"],
-  ["closed", "Closed"],
+  ["active", "Not finished"],
+  ["closed", "Done"],
   ["cancelled", "Cancelled"],
   ["all", "All"],
 ] as const;
@@ -21,53 +23,43 @@ export default async function ReturnsPage({ searchParams }: { searchParams: Prom
   if (!ctx.can("sales.customer_return.view")) return <Forbidden what="customer returns" />;
   const { status = "active" } = await searchParams;
   const rows = await listCustomerReturns(ctx, { status });
+  const canCreate = ctx.can("sales.customer_return.create");
   return (
     <>
       <PageHeader
         title="Customer returns"
-        subtitle="Returned boxes are scanned against the delivery receipt, approved, and received into quarantine for QA to disposition."
-        actions={<><Help screen="sales.return" />{ctx.can("sales.customer_return.create") ? <LinkButton href="/sales/returns/new" variant="cta">New return</LinkButton> : undefined}</>}
+        actions={
+          <>
+            {canCreate ? <LinkButton href="/sales/returns/new" variant="cta">New customer return</LinkButton> : undefined}
+            <Help screen="sales.return" />
+          </>
+        }
       />
-      <Card>
-        <nav className="mb-3 flex flex-wrap gap-2" aria-label="Filter returns">
-          {FILTERS.map(([v, label]) => (
-            <Link key={v} href={`/sales/returns?status=${v}`} className={cx("rounded-full border px-3 py-1 text-[13px]", status === v ? "border-ring bg-primary-soft font-medium" : "border-line hover:bg-surface-2")}>
-              {label}
-            </Link>
+      <PageIntro>This screen is for goods a customer sends back. Each box is scanned, approved, and kept apart until QA says what happens to it.</PageIntro>
+      <FilterTabs label="Filter customer returns" active={status} tabs={FILTERS.map(([v, label]) => [v, label, `/sales/returns?status=${v}`] as const)} />
+      {rows.length === 0 ? (
+        <EmptyState title="No customer returns here" action={canCreate ? <LinkButton href="/sales/returns/new">New customer return</LinkButton> : undefined}>
+          {canCreate ? "When a customer sends goods back, tap New customer return and choose the delivery they came from." : "When a customer sends goods back, the warehouse or sales team records it here."}
+        </EmptyState>
+      ) : (
+        <PlainList label="Customer returns">
+          {rows.map((r) => (
+            <PlainRow
+              key={r.id}
+              href={`/sales/returns/${r.id}`}
+              title={r.customerName}
+              code={[r.number, r.drNumber, r.orderNumber].filter(Boolean).join(" · ")}
+              status={<ReturnStatusChip status={r.status} />}
+              facts={
+                <>
+                  {r.lineCount} item(s), {r.totalQty} · started {fmtDateTime(r.createdAt)}
+                  {r.receivedAt ? ` · back in ${fmtDateTime(r.receivedAt)}` : ""} · {r.siteCode}
+                </>
+              }
+            />
           ))}
-        </nav>
-        {rows.length === 0 ? (
-          <EmptyState title="No returns here" action={ctx.can("sales.customer_return.create") ? <LinkButton href="/sales/returns/new" variant="secondary">New return</LinkButton> : undefined}>
-            Open a return from the delivery receipt when a customer sends goods back.
-          </EmptyState>
-        ) : (
-          <Table head={["Return", "Status", "Customer", "Delivery receipt", "Lines", "Opened", "Received"]}>
-            {rows.map((r) => (
-              <tr key={r.id}>
-                <Td className="whitespace-nowrap font-medium">
-                  <Link className="text-primary-text hover:underline" href={`/sales/returns/${r.id}`}>
-                    {r.number}
-                  </Link>
-                  <div className="text-[12px] text-muted">{r.siteCode}</div>
-                </Td>
-                <Td>
-                  <ReturnStatusChip status={r.status} label={RETURN_STATUS_LABEL[r.status as CustomerReturnStatus]} />
-                </Td>
-                <Td>{r.customerName}</Td>
-                <Td className="whitespace-nowrap">
-                  {r.drNumber}
-                  <div className="text-[12px] text-muted">{r.orderNumber}</div>
-                </Td>
-                <Td>
-                  {r.lineCount} <span className="text-[12px] text-muted">({r.totalQty})</span>
-                </Td>
-                <Td className="whitespace-nowrap">{fmtDateTime(r.createdAt)}</Td>
-                <Td className="whitespace-nowrap">{r.receivedAt ? fmtDateTime(r.receivedAt) : "—"}</Td>
-              </tr>
-            ))}
-          </Table>
-        )}
-      </Card>
+        </PlainList>
+      )}
     </>
   );
 }

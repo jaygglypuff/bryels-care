@@ -5,6 +5,8 @@ import { Plus, Trash2 } from "lucide-react";
 import { fmtMoney } from "@/lib/qty";
 import { Button, Card, CardTitle, Field, Input, Select, Textarea } from "@/ui/core";
 import { FormMessage } from "@/ui/form";
+import { MoreDetails } from "@/ui/guide";
+import { NamePicker } from "../name-picker";
 import { Chip } from "@/ui/status";
 import type { PriceBooks } from "../new/order-form";
 import { useActionForm } from "../use-action-form";
@@ -32,7 +34,7 @@ function listPrice(book: PriceBooks[string] | undefined, productId: string, qty:
   return (hit ?? breaks[0]).unitAmount;
 }
 
-/** Quotation entry (W09-01): list prices fill in; a lower price is a discount that may need approval (more than 10 % by default). */
+/** Price offer (quotation, W09-01): usual prices fill in; a lower price is a discount that may need approval (more than 10 % by default). */
 export function QuoteForm({ customers, products, priceBooks, defaultValidUntil, today, initial, initialCustomerId }: { customers: CustomerOpt[]; products: { id: string; skuCode: string; name: string }[]; priceBooks: PriceBooks; defaultValidUntil: string; today: string; initial?: QuoteFormInitial; initialCustomerId?: string }) {
   const { state, pending, onSubmit } = useActionForm(saveQuoteAction);
   const [key] = useState(newKey);
@@ -48,44 +50,38 @@ export function QuoteForm({ customers, products, priceBooks, defaultValidUntil, 
   const customer = customers.find((c) => c.id === customerId);
   const price = (l: Line) => (l.unitPrice.trim() ? l.unitPrice : (listPrice(book, l.productId, l.qtyUnits) ?? ""));
   const total = useMemo(() => lines.reduce((s, l) => s.plus(safeD(l.qtyUnits).times(safeD(price(l)))), new Decimal(0)), [lines, book]); // eslint-disable-line react-hooks/exhaustive-deps
+  const productOptions = useMemo(() => [...products].sort((a, b) => a.name.localeCompare(b.name)).map((p) => ({ value: p.id, label: p.name, also: p.skuCode })), [products]);
   const update = (k: number, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === k ? { ...l, ...patch } : l)));
   return (
-    <form onSubmit={onSubmit} className="flex max-w-4xl flex-col gap-4 pb-24 sm:pb-0">
+    <form onSubmit={onSubmit} className="flex max-w-4xl flex-col gap-4">
       <input type="hidden" name="idempotencyKey" value={key} />
       <input type="hidden" name="lines" value={JSON.stringify(lines.map(({ productId, qtyUnits, unitPrice }) => ({ productId, qtyUnits, unitPrice })))} />
       {initial && <input type="hidden" name="quoteId" value={initial.quoteId} />}
       {initial && <input type="hidden" name="customerId" value={initial.customerId} />}
       <Card>
-        <CardTitle>Customer</CardTitle>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label="Customer" htmlFor="q-customer" error={fe.customerId}>
-            <Select id="q-customer" name={initial ? undefined : "customerId"} value={customerId} disabled={!!initial} onChange={(e) => { setCustomerId(e.target.value); setShipTo(""); }} required>
-              <option value="">Choose a customer…</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.code})
-                </option>
-              ))}
-            </Select>
+            <NamePicker
+              id="q-customer"
+              name={initial ? undefined : "customerId"}
+              value={customerId}
+              disabled={!!initial}
+              required
+              placeholder="Choose the customer…"
+              searchLabel="Type part of the customer's name"
+              options={customers.map((c) => ({ value: c.id, label: c.name, also: c.code }))}
+              onChange={(v) => {
+                setCustomerId(v);
+                setShipTo("");
+              }}
+            />
           </Field>
-          <Field label="Valid until" htmlFor="q-valid" error={fe.validUntil}>
+          <Field label="Good until" htmlFor="q-valid" error={fe.validUntil} hint="After this day the offer is too old to use">
             <Input id="q-valid" name="validUntil" type="date" min={today} value={validUntil} onChange={(e) => setValidUntil(e.target.value)} required />
           </Field>
-          {(customer?.addresses?.length ?? 0) > 1 && (
-            <Field label="Ship to" htmlFor="q-ship" error={fe.shipToAddressId}>
-              <Select id="q-ship" name="shipToAddressId" value={shipTo} onChange={(e) => setShipTo(e.target.value)}>
-                <option value="">Default ship-to</option>
-                {customer!.addresses!.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.label} — {a.text}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          )}
           {customer?.status === "on_hold" && (
             <p>
-              <Chip tone="hold">Customer on credit hold</Chip>
+              <Chip tone="hold">Stopped: unpaid bills</Chip>
             </p>
           )}
         </div>
@@ -102,11 +98,11 @@ export function QuoteForm({ customers, products, priceBooks, defaultValidUntil, 
                 setNextKey((k) => k + 1);
               }}
             >
-              <Plus size={14} /> Add line
+              <Plus size={14} aria-hidden /> Add a product
             </Button>
           }
         >
-          Lines
+          Products and prices
         </CardTitle>
         {fe.lines && <p className="mb-2 text-[12px] text-[var(--bad-fg)]">{fe.lines}</p>}
         <ol className="flex flex-col gap-3">
@@ -116,29 +112,30 @@ export function QuoteForm({ customers, products, priceBooks, defaultValidUntil, 
             return (
               <li key={l.key} className="grid grid-cols-2 gap-3 rounded-[12px] border border-line p-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-start">
                 <div className="col-span-2 md:col-span-1">
-                  <Field label={`Product (line ${i + 1})`} htmlFor={`qp-${l.key}`} error={fe[`lines.${i}.productId`]}>
-                    <Select id={`qp-${l.key}`} value={l.productId} onChange={(e) => update(l.key, { productId: e.target.value })} required>
-                      <option value="">Choose a product…</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.skuCode} · {p.name}
-                        </option>
-                      ))}
-                    </Select>
+                  <Field label={`Product ${i + 1}`} htmlFor={`qp-${l.key}`} error={fe[`lines.${i}.productId`]}>
+                    <NamePicker
+                      id={`qp-${l.key}`}
+                      value={l.productId}
+                      required
+                      placeholder="Choose a product…"
+                      searchLabel="Type part of the product name"
+                      options={productOptions}
+                      onChange={(v) => update(l.key, { productId: v })}
+                    />
                   </Field>
                 </div>
-                <Field label="Qty (pcs)" htmlFor={`qq-${l.key}`} error={fe[`lines.${i}.qtyUnits`]}>
+                <Field label="How many (pcs)" htmlFor={`qq-${l.key}`} error={fe[`lines.${i}.qtyUnits`]}>
                   <Input id={`qq-${l.key}`} inputMode="numeric" value={l.qtyUnits} onChange={(e) => update(l.key, { qtyUnits: e.target.value })} required />
                 </Field>
-                <Field label="Unit price (₱)" htmlFor={`qu-${l.key}`} error={fe[`lines.${i}.unitPrice`]} hint={lp ? `List ${lp}` : l.productId && customerId ? "No list price: enter one" : undefined}>
+                <Field label="Price each (₱)" htmlFor={`qu-${l.key}`} error={fe[`lines.${i}.unitPrice`]} hint={lp ? `Usual price ₱${lp}` : l.productId && customerId ? "No usual price yet: type one" : undefined}>
                   <Input id={`qu-${l.key}`} inputMode="decimal" value={l.unitPrice} placeholder={lp ?? "0.00"} onChange={(e) => update(l.key, { unitPrice: e.target.value })} />
                 </Field>
                 <div className="col-span-2 flex items-center justify-between gap-2 md:col-span-1 md:flex-col md:items-end md:pt-6">
                   <span className="text-[13px] font-medium tabular">{fmtMoney(safeD(l.qtyUnits).times(safeD(price(l))))}</span>
                   {disc && disc.gt(0) && <Chip tone={disc.gt(10) ? "warn" : "info"}>{disc.toDecimalPlaces(1).toString()} % off</Chip>}
                   {lines.length > 1 && (
-                    <Button type="button" variant="ghost" size="sm" aria-label={`Remove line ${i + 1}`} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>
-                      <Trash2 size={14} /> Remove
+                    <Button type="button" variant="ghost" size="sm" aria-label={`Remove product ${i + 1}`} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}>
+                      <Trash2 size={14} aria-hidden /> Remove
                     </Button>
                   )}
                 </div>
@@ -147,24 +144,34 @@ export function QuoteForm({ customers, products, priceBooks, defaultValidUntil, 
           })}
         </ol>
         <div className="mt-3 flex justify-end border-t border-line pt-3 text-[14px]">
-          <span className="text-muted">Quotation value&nbsp;</span>
+          <span className="text-muted">Total&nbsp;</span>
           <span className="font-semibold tabular">{fmtMoney(total)}</span>
         </div>
       </Card>
-      <Card>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Note to the customer" htmlFor="q-notes" error={fe.notesCustomer} hint="Printed on the quotation">
-            <Textarea id="q-notes" name="notesCustomer" value={notesCustomer} onChange={(e) => setNotesCustomer(e.target.value)} maxLength={1000} />
+      <MoreDetails open={!!(fe.notesCustomer || fe.notesInternal || fe.shipToAddressId)}>
+        {(customer?.addresses?.length ?? 0) > 1 && (
+          <Field label="Deliver to" htmlFor="q-ship" error={fe.shipToAddressId}>
+            <Select id="q-ship" name="shipToAddressId" value={shipTo} onChange={(e) => setShipTo(e.target.value)}>
+              <option value="">The usual address</option>
+              {customer!.addresses!.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label} — {a.text}
+                </option>
+              ))}
+            </Select>
           </Field>
-          <Field label="Internal note" htmlFor="q-internal" error={fe.notesInternal} hint="Never printed">
-            <Textarea id="q-internal" name="notesInternal" value={notesInternal} onChange={(e) => setNotesInternal(e.target.value)} maxLength={1000} />
-          </Field>
-        </div>
-      </Card>
+        )}
+        <Field label="Note to the customer" htmlFor="q-notes" error={fe.notesCustomer} hint="Printed on the price offer">
+          <Textarea id="q-notes" name="notesCustomer" value={notesCustomer} onChange={(e) => setNotesCustomer(e.target.value)} maxLength={1000} />
+        </Field>
+        <Field label="Note for our team" htmlFor="q-internal" error={fe.notesInternal} hint="Never printed">
+          <Textarea id="q-internal" name="notesInternal" value={notesInternal} onChange={(e) => setNotesInternal(e.target.value)} maxLength={1000} />
+        </Field>
+      </MoreDetails>
       <FormMessage state={state} />
-      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-surface p-3 sm:static sm:border-0 sm:bg-transparent sm:p-0">
+      <div>
         <Button type="submit" variant="cta" size="lg" className="w-full sm:w-auto" disabled={pending}>
-          {pending ? "Saving…" : "Save draft quotation"}
+          {pending ? "Saving…" : "Save the price offer"}
         </Button>
       </div>
     </form>

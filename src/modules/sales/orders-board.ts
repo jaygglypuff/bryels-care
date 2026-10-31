@@ -25,15 +25,15 @@ import { orderDaysLate } from "./late";
 
 export const BOARD_COLUMNS: { key: OrderStatus; title: string }[] = [
   { key: "draft", title: "Draft" },
-  { key: "pending_approval", title: "Pending approval" },
+  { key: "pending_approval", title: "Waiting for approval" },
   { key: "confirmed", title: "Confirmed" },
-  { key: "allocated", title: "Allocated" },
-  { key: "picking", title: "Picking" },
-  { key: "packed", title: "Packed" },
-  { key: "partially_shipped", title: "Partially shipped" },
-  { key: "shipped", title: "Shipped" },
-  { key: "invoiced", title: "Invoiced" },
-  { key: "closed", title: "Closed" },
+  { key: "allocated", title: "Set aside" },
+  { key: "picking", title: "Getting from shelf" },
+  { key: "packed", title: "Box checked" },
+  { key: "partially_shipped", title: "Partly sent out" },
+  { key: "shipped", title: "Sent out" },
+  { key: "invoiced", title: "Billed" },
+  { key: "closed", title: "Done" },
   { key: "cancelled", title: "Cancelled" },
 ];
 
@@ -111,7 +111,7 @@ function verdict(ctx: AuthContext, o: typeof salesOrders.$inferSelect, from: Ord
   if (from === to) return { allowed: false, reason: "The card is already in this column." };
   if (from === "draft" && (to === "confirmed" || to === "pending_approval")) {
     if (!ctx.canAt("sales.sales_order.submit", o.siteId)) return { allowed: false, reason: "Only sales staff can submit orders." };
-    return { allowed: true, label: "Submit: credit and approval check" };
+    return { allowed: true, label: "Send: credit and approval check" };
   }
   if (from === "pending_approval" && to === "confirmed") {
     if (!canApprove) return { allowed: false, reason: "Only the approver named by the approval rule may confirm this order, and never the person who entered or submitted it." };
@@ -119,7 +119,7 @@ function verdict(ctx: AuthContext, o: typeof salesOrders.$inferSelect, from: Ord
   }
   if (from === "confirmed" && to === "allocated") {
     if (!ctx.canAt("sales.allocation.post", o.siteId)) return { allowed: false, reason: "The warehouse reserves stock for orders." };
-    return { allowed: true, label: "Reserve stock (earliest expiry first)" };
+    return { allowed: true, label: "Set aside the stock (oldest expiry first)" };
   }
   if (to === "cancelled") return { allowed: false, reason: "Cancel from the order page: a reason is required." };
   if (from === "pending_approval" && to === "draft") return { allowed: false, reason: "Return the order from its page: a reason is required." };

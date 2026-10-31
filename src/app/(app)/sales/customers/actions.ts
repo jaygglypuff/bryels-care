@@ -55,7 +55,7 @@ export async function createCustomerW3dAction(_: ActionState, fd: FormData): Pro
   try {
     const ctx = await requireContext();
     const parsed = CustomerCreateSchema.safeParse({
-      ...obj(fd, ["code", "name", "status", "segment", "contactName", "phone", "email", "minShelfLifeDays", "defaultLeadTimeDays", "notesInternal"]),
+      ...obj(fd, ["code", "name", "status", "segment", "contactName", "phone", "email", "minShelfLifeDays", "defaultLeadTimeDays", "notesInternal", "paymentTermsDays"]),
       shipTo: obj(fd, ADDRESS_KEYS, "shipTo."),
     });
     if (!parsed.success) return invalid(parsed.error.issues);

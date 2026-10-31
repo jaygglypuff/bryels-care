@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, useTransition, type ReactNode
 import type { ActionState } from "@/lib/errors";
 import { Button, Field, Input, Select, Textarea, type ButtonVariant } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
+import { MoreDetails } from "@/ui/guide";
 import { Scanner } from "@/ui/scanner";
 import type { ScanActionResult, ScanOptions } from "./fulfilment-actions";
 
@@ -69,7 +70,7 @@ export function ScanPanel({ scan, label, hint, withQty = false, allowManual = fa
       setOffline(false);
       const isLot = value.startsWith("BC:LOT:");
       if (withQty && isLot && !/^\d+(\.\d+)?$/.test(qty.trim())) {
-        setResult({ ok: false, tone: "warn", message: "Lot label scanned: enter the counted loose quantity first, then scan the lot again." });
+        setResult({ ok: false, tone: "warn", message: "That is a lot label: first type how many loose pieces you counted, then scan the lot label again." });
         return;
       }
       const sig = `${value}|${qty}|${manual}|${labelBad}`;
@@ -95,23 +96,23 @@ export function ScanPanel({ scan, label, hint, withQty = false, allowManual = fa
       <p className="text-[12px] text-muted">{hint}</p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {withQty && (
-          <Field label="Loose quantity (for a lot label)" htmlFor="scan-qty" hint="Leave empty for boxes">
+          <Field label="How many loose pieces (only for a lot label)" htmlFor="scan-qty" hint="Leave empty for boxes">
             <Input id="scan-qty" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 6" />
           </Field>
         )}
         {allowManual && (
-          <Field label="Label unreadable? Reason for typing it" htmlFor="scan-manual" hint="Recorded as manual entry">
+          <Field label="Label cannot be read? Say why you type it" htmlFor="scan-manual" hint="Saved as typed by hand">
             <Input id="scan-manual" value={manual} onChange={(e) => setManual(e.target.value)} maxLength={200} placeholder="e.g. Label torn" />
           </Field>
         )}
         {labelCheck && (
           <label className="flex min-h-[44px] items-center gap-2 text-[14px]">
             <input type="checkbox" checked={labelBad} onChange={(e) => setLabelBad(e.target.checked)} className="h-5 w-5" />
-            The next box&apos;s label is wrong (content or artwork)
+            The next box has the wrong label
           </label>
         )}
       </div>
-      {offline && <p role="alert" className="rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">You&apos;re offline. Scans need a connection; scan again when you&apos;re back online.</p>}
+      {offline && <p role="alert" className="rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">No internet. Scans need a connection: scan again when the phone is back online.</p>}
       {result && (
         <p role={result.ok ? "status" : "alert"} className={`rounded-[10px] border px-3 py-2 text-[14px] ${tone}`} data-testid="scan-result">
           {result.message}
@@ -162,7 +163,7 @@ function SignaturePad({ inputName }: { inputName: string }) {
         ref={canvas}
         width={600}
         height={200}
-        aria-label="Signature pad: the receiver signs here"
+        aria-label="Signature box: the person receiving signs here"
         className="h-[140px] w-full touch-none rounded-[12px] border border-line bg-white"
         onPointerDown={(e) => {
           drawing.current = true;
@@ -187,7 +188,7 @@ function SignaturePad({ inputName }: { inputName: string }) {
       />
       <input ref={file} type="file" name={inputName} accept="image/png" className="hidden" tabIndex={-1} aria-hidden="true" />
       <div className="flex items-center justify-between gap-2 text-[12px] text-muted">
-        <span>{hasInk ? "Signature captured." : "Ask the receiver to sign with a finger or stylus."}</span>
+        <span>{hasInk ? "Signature saved." : "Ask the person receiving to sign with a finger."}</span>
         <Button type="button" variant="ghost" size="sm" onClick={clear}>
           Clear
         </Button>
@@ -199,20 +200,17 @@ function SignaturePad({ inputName }: { inputName: string }) {
 export function AcknowledgeForm({ action, shipmentId, now }: { action: Action; shipmentId: string; now: string }) {
   const [kind, setKind] = useState<"drawn" | "photo" | "name_only">("drawn");
   return (
-    <ActionForm action={action} hidden={{ shipmentId }} submit="Save acknowledgment" pending="Saving…" variant="cta" size="lg" className="flex min-w-0 flex-col gap-3" messageBelow>
+    <ActionForm action={action} hidden={{ shipmentId }} submit="Save proof of delivery" pending="Saving…" variant="cta" size="lg" className="flex min-w-0 flex-col gap-3" messageBelow>
       {(fe) => (
         <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Received by (name)" htmlFor="receivedByName" error={fe.receivedByName}>
+            <Field label="Who received it (name)" htmlFor="receivedByName" error={fe.receivedByName}>
               <Input id="receivedByName" name="receivedByName" required maxLength={120} />
             </Field>
-            <Field label="Position" htmlFor="receivedByPosition" error={fe.receivedByPosition}>
-              <Input id="receivedByPosition" name="receivedByPosition" maxLength={80} placeholder="e.g. Store supervisor" />
-            </Field>
-            <Field label="Received at" htmlFor="receivedAt" error={fe.receivedAt} hint="Philippine time">
+            <Field label="When" htmlFor="receivedAt" error={fe.receivedAt} hint="Philippine time">
               <Input id="receivedAt" name="receivedAt" type="datetime-local" max={now} defaultValue={now} required />
             </Field>
-            <Field label="Confirmed by" htmlFor="kind" error={fe.kind}>
+            <Field label="Proof" htmlFor="kind" error={fe.kind}>
               <Select id="kind" name="kind" value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
                 <option value="drawn">Signature drawn on this device</option>
                 <option value="photo">Photo of the signed paper copy</option>
@@ -227,10 +225,15 @@ export function AcknowledgeForm({ action, shipmentId, now }: { action: Action; s
             </Field>
           )}
           {fe.file && kind === "drawn" && <p className="text-[13px] text-[var(--bad-fg)]">{fe.file}</p>}
-          <Field label="Remarks (short, damaged, refused boxes)" htmlFor="remarks" error={fe.remarks}>
+          <Field label="Anything wrong? (missing, damaged or refused boxes)" htmlFor="remarks" error={fe.remarks}>
             <Textarea id="remarks" name="remarks" maxLength={600} rows={2} />
           </Field>
-          <p className="text-[12px] text-muted">This is evidence of receipt, not an electronic signature.</p>
+          <MoreDetails title="Their job (you can skip this)" open={!!fe.receivedByPosition}>
+            <Field label="Their job (optional)" htmlFor="receivedByPosition" error={fe.receivedByPosition}>
+              <Input id="receivedByPosition" name="receivedByPosition" maxLength={80} placeholder="e.g. Store supervisor" />
+            </Field>
+          </MoreDetails>
+          <p className="text-[12px] text-muted">This shows the customer got the goods. It is not an electronic signature.</p>
         </>
       )}
     </ActionForm>

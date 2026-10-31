@@ -303,28 +303,28 @@ Total screens: 250.
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/sales/[orderId]` | ☐ | |
-| `/sales/board` | ☐ | |
-| `/sales/customers/[id]` | ☐ | |
-| `/sales/customers/new` | ☐ | |
-| `/sales/customers` | ☐ | |
-| `/sales/dispatch` | ☐ | |
-| `/sales/new` | ☐ | |
-| `/sales/orders/[orderId]/edit` | ☐ | |
-| `/sales/packing/[shipmentId]` | ☐ | |
-| `/sales` | ☐ | |
-| `/sales/picking/[pickId]` | ☐ | |
-| `/sales/picking` | ☐ | |
-| `/sales/price-lists/[id]/edit` | ☐ | |
-| `/sales/price-lists/[id]` | ☐ | |
-| `/sales/price-lists/new` | ☐ | |
-| `/sales/price-lists` | ☐ | |
-| `/sales/quotations/[id]/edit` | ☐ | |
-| `/sales/quotations/[id]` | ☐ | |
-| `/sales/quotations/new` | ☐ | |
-| `/sales/quotations` | ☐ | |
-| `/sales/returns/[returnId]` | ☐ | |
-| `/sales/returns/new` | ☐ | |
-| `/sales/returns` | ☐ | |
-| `/sales/shipments/[shipmentId]` | ☐ | |
-| `/sales/shipments` | ☐ | |
+| `/sales/[orderId]` | ☑ 2026-10-31 | Record header with grade-5 steps; "What to do next" per status names who we wait for (send / approve / set aside / get from shelf / check box / send out / send the invoice); cancel, let stock go, reorder, delete draft under ⋯ More; lines as rows with ₱ right. |
+| `/sales/board` | ☑ 2026-10-31 | PageIntro; columns renamed (Set aside, Getting from shelf, Box checked, Sent out, Billed, Done); cards name first, number small grey; 44 px move picker. |
+| `/sales/customers/[id]` | ☑ 2026-10-31 | Next step by status (order / price offer / stopped: unpaid bills); special rules, own product codes, money in plain words; owner may approve own rules (ADR-091, sodConflictAt); orders as PlainList. |
+| `/sales/customers/new` | ☑ 2026-10-31 | 4 fields (name, phone, street, city); contact person, days to pay (finance only), number and the rest under More details; CUS number from the server. |
+| `/sales/customers` | ☑ 2026-10-31 | Split view kept; name first, phone, number small grey, ₱ owed right; "Stopped: unpaid bills"; CSV and new order under ⋯ More. |
+| `/sales/dispatch` | ☑ 2026-10-31 | "Send out" dock, phone first: ready to send out / waiting for second check / waiting for proof of delivery as PlainList rows with one action word. |
+| `/sales/new` | ☑ 2026-10-31 | 3-step wizard kept; customer and product picked by name with search (NamePicker); order no., addresses and note under More details. |
+| `/sales/orders/[orderId]/edit` | ☑ 2026-10-31 | PageIntro; same name pickers; plain "only a draft can be changed". |
+| `/sales/packing/[shipmentId]` | ☑ 2026-10-31 | "Second check of the box", phone first: big scan box, boxes checked/to check, finish card (boxes on truck, carrier; tracking and weight under More); checker ≠ picker and manager exception (password) kept. |
+| `/sales` | ☑ 2026-10-31 | PlainList (customer first, ₱ right, number grey, icon status, late in red); FilterTabs; board and help under ⋯ More. |
+| `/sales/picking/[pickId]` | ☑ 2026-10-31 | "Get from shelf", phone first: next shelf and box in words, one scan box, big rows, one green Finish button; finish with items missing (reason), print, stop under ⋯ More. |
+| `/sales/picking` | ☑ 2026-10-31 | "To get from shelf": started first, then ready orders as big cards with one green button on the first; finished folded away. |
+| `/sales/price-lists/[id]/edit` | ☑ 2026-10-31 | PageIntro; same form as new. |
+| `/sales/price-lists/[id]` | ☑ 2026-10-31 | "Prices for <customer>": approve / waiting for <name>; rows name first, ₱ right; new version, stop using, delete draft under ⋯ More; "(own request)" on self-approval. |
+| `/sales/price-lists/new` | ☑ 2026-10-31 | Who, starts on, products and prices; number and name made by the server (customer list keeps its number = next version); name/number/what changed under More details. |
+| `/sales/price-lists` | ☑ 2026-10-31 | "Prices": PlainList, customer first, number grey, waiting-for-approval banner. |
+| `/sales/quotations/[id]/edit` | ☑ 2026-10-31 | PageIntro; "Change price offer". |
+| `/sales/quotations/[id]` | ☑ 2026-10-31 | "Price offer for <customer>": send / approve / make it an order as the next step; accept, decline, cancel, delete under ⋯ More; rows with ₱ right. |
+| `/sales/quotations/new` | ☑ 2026-10-31 | Customer and products by name; good until defaulted; deliver-to and notes under More details. |
+| `/sales/quotations` | ☑ 2026-10-31 | "Price offers": PlainList with ₱ right; CSV under ⋯ More. |
+| `/sales/returns/[returnId]` | ☑ 2026-10-31 | "Customer return": next step per state (scan, send, approve, take in, QA decided, finish) with who we wait for; lines as rows; cancel/send back under ⋯ More. |
+| `/sales/returns/new` | ☑ 2026-10-31 | 3 fields (delivery by customer name, why, explain); where to keep under More details. |
+| `/sales/returns` | ☑ 2026-10-31 | "Customer returns": PlainList, FilterTabs, icon statuses in plain words. |
+| `/sales/shipments/[shipmentId]` | ☑ 2026-10-31 | "Delivery": next step (get from shelf / check box / send out with driver and plate / proof of delivery); cancel and undo sending under ⋯ More; history folded. |
+| `/sales/shipments` | ☑ 2026-10-31 | "Deliveries": PlainList with grade-5 statuses; accountant download folded under More details. |
