@@ -219,7 +219,7 @@ async function kpiValue(page, caption) {
   {
     const page = qa.page;
     await page.goto(BASE + '/quality');
-    await expectText(page, 'QA queue');
+    await expectText(page, 'Check a batch or delivery');
     await page.getByRole('link', { name: facts.coconutLot }).first().waitFor();
     await shot(page, 'qa-queue');
     await page.getByRole('link', { name: facts.coconutLot }).first().click();
@@ -853,12 +853,12 @@ async function kpiValue(page, caption) {
   {
     const noHScroll = async (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
     const { context, page } = await asUser('qa.nfd@bryels-care.test');
-    // ADR-081: the quick-action rail is gone; the QA badge sits on the "Quality check" tab of Operations.
+    // ADR-081/098: the QA badge sits on the "Check a batch or delivery" tab of Operations (the one QA door).
     await page.goto(BASE + '/operations');
     const qaLink = page.locator('header a[href="/quality"]').first();
     const qaLabel = (await qaLink.getAttribute('aria-label')) ?? (await qaLink.innerText()).trim();
     log('QA tab:', qaLabel);
-    assert(/^Quality check(, \d+ open)?/.test(qaLabel), 'QA tab label ' + qaLabel);
+    assert(/^Check a batch or delivery(, \d+ open)?/.test(qaLabel), 'QA tab label ' + qaLabel);
     await context.close();
     const desk = await asUser('manager.nfd@bryels-care.test');
     // [url, destination, main tab or section menu that is highlighted]

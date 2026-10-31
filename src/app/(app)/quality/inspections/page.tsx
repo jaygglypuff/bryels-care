@@ -30,7 +30,7 @@ export default async function InspectionsPage({ searchParams }: { searchParams: 
 
   return (
     <>
-      <PageHeader title="Quality checks (tests)" subtitle={ctx.currentSite.name} actions={<LinkButton href="/quality" variant="secondary">QA queue</LinkButton>} />
+      <PageHeader title="Quality tests" subtitle={ctx.currentSite.name} actions={<LinkButton href="/quality" variant="secondary">Check a batch or delivery</LinkButton>} />
       <PageIntro>
         This screen is for QA: the tests on deliveries and batches. Take a sample, type the results, then a second QA person checks them.
       </PageIntro>
@@ -78,7 +78,7 @@ export default async function InspectionsPage({ searchParams }: { searchParams: 
         <Card>
           <FilterTabs label="Filter quality checks" active={status} tabs={FILTERS.map(([v, l]) => [v, l, `/quality/inspections?status=${v}`] as const)} />
           {rows.length === 0 ? (
-            <EmptyState title="No quality checks here">A check starts from a delivery waiting for QA (open it from the QA queue) or by itself when a batch is finished. Questions? Ask the QA lead.</EmptyState>
+            <EmptyState title="No quality checks here">A check starts from a delivery waiting for QA (open it from Check a batch or delivery) or by itself when a batch is finished. Questions? Ask the QA lead.</EmptyState>
           ) : (
             <PlainList label="Quality checks">
               {rows.map((r) => (

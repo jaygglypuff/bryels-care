@@ -31,8 +31,10 @@ export function NextStep({
   className?: string;
 }) {
   return (
-    <section aria-label="What to do next" className={cx("mb-4 flex flex-wrap items-center gap-3 rounded-[16px] border border-[var(--brand-200)] bg-[var(--brand-50)] p-4", className)}>
-      <div className="min-w-0 flex-1">
+    // Below 480 px the button sits under the sentence (full width) so the words never squeeze to one per line;
+    // from 480 px it goes beside the sentence and wraps under it when the sentence needs the room (UX audit R2).
+    <section aria-label="What to do next" className={cx("mb-4 flex flex-col gap-3 rounded-[16px] border border-[var(--brand-200)] bg-[var(--brand-50)] p-4 min-[480px]:flex-row min-[480px]:flex-wrap min-[480px]:items-center", className)}>
+      <div className="min-w-0 min-[480px]:flex-[1_1_16rem]">
         <p className="text-[12px] font-semibold uppercase tracking-wide text-primary-text">What to do next</p>
         <p className="mt-0.5 text-[16px] font-medium text-fg">{text}</p>
         {waitingFor && (
@@ -42,7 +44,7 @@ export function NextStep({
         )}
       </div>
       {action && (
-        <Link href={action.href} className="inline-flex min-h-[48px] items-center gap-2 rounded-full bg-cta px-5 text-[15px] font-semibold text-white">
+        <Link href={action.href} className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-cta px-5 text-[15px] font-semibold text-white min-[480px]:w-auto">
           {action.label} <ArrowRight size={16} aria-hidden />
         </Link>
       )}
@@ -74,7 +76,7 @@ export function Explain({ term, label }: { term: keyof typeof EXPLAIN | string; 
   if (!text) return null;
   return (
     <details className="inline-block align-middle">
-      <summary className="inline-flex min-h-[32px] cursor-pointer list-none items-center gap-1 text-[13px] font-medium text-primary-text">
+      <summary className="-ml-1 inline-flex min-h-[44px] cursor-pointer list-none items-center gap-1.5 rounded-full px-2 text-[14px] font-medium text-primary-text hover:bg-primary-soft [&::-webkit-details-marker]:hidden">
         <HelpCircle size={14} aria-hidden /> {label ?? "What is this?"}
       </summary>
       <p className="mt-1 max-w-[46ch] rounded-[12px] border border-line bg-surface p-3 text-[14px] text-fg-2">{text}</p>

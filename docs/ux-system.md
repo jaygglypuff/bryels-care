@@ -272,6 +272,21 @@ Design starts at 360 px and adds, never subtracts. Nothing core needs more than 
 > rail. `docs/NEW_NAVIGATION.md` is the current map; the breakpoints, top bar and accessibility rules
 > below still apply.
 
+> **Frame rules after the UX audit, round 2 (2026-10-31).** (1) One door per job: a screen that has a
+> top-bar button is not repeated in the tab rows (Messages = bell at every width; To approve = top-bar
+> button from 640 px, a Home tab on phones); the drawer still lists everything. (2) Menu word = the H1 of the
+> screen (`tests/unit/nav-titles.test.ts`). (3) Every interactive element of the frame is at least 44 x 44 px
+> at 390, 820 and 1440 px; `buttonClass(…, "sm")` is 44 px on touch screens (`pointer: coarse`) and 34 px
+> with a mouse; checkboxes and radios are 20 px and a label wrapping one is at least 44 px tall
+> (`globals.css`); "What is this?" (`Explain`) is 44 px. (4) Phone top bar: menu, logo, **Scan** (icon +
+> word, every role), Messages, account. (5) The phone/tablet tab row scrolls with a fade at the edge and keeps
+> "More" pinned at the right; a destination with one tab shows no row. (6) Rarely used entries are folded
+> under "Advanced" at the end of their section; IT screens sit in "IT and system" (system admin and owner
+> only). (7) Destination descriptions do not fit inside the top-bar pills at any width of the 1480 px
+> frame (measured), so they are tooltips and the open destination's line leads the desktop tab row from 1280 px. (8) Record headers give
+> the title the full width on phones (buttons wrap below); `NextStep` puts its button under the sentence
+> below 480 px.
+
 > **Amended by ADR-024 (2026-10-23).** As built, desktop uses the reference layout instead of
 > the 240 px left navigation of §3.1: a top bar (logo, module pills with the active module as a
 > solid `--cta` pill, site selector, scan, QA bell, account menu), a second pill row for the

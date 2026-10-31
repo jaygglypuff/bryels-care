@@ -1,12 +1,13 @@
 /**
  * ADR-081 (five destinations) and ADR-080 §11 (per role): the menu is Home, Operations, Inventory,
- * Sales & Customers, Management, filtered by permission. Operators get "My work" and "Today's count"; the old
+ * Sales & Customers, Management, filtered by permission. UX audit R2: one door per job, a smaller office menu,
+ * menu words = screen titles (tests/unit/nav-titles.test.ts). Operators get "My work" and "Today"; the old
  * production screens sit in a collapsed Advanced section; Production setup lives in Management; the
  * tab bar has at most five tabs and never shows "Batches" or a bare "Orders".
  */
 import { describe, expect, it } from "vitest";
 import { ROLE_BUNDLES, type Permission } from "@/lib/permissions";
-import { ADVANCED, NAV, buildNav, groupSections, homeHref, isApprover, productionPersona, tabsFor } from "@/app/(app)/nav";
+import { ADVANCED, IT_SYSTEM, NAV, buildNav, canSee, groupSections, homeHref, isApprover, productionPersona, tabsFor } from "@/app/(app)/nav";
 
 const canFor = (role: string) => {
   const set = new Set<string>(ROLE_BUNDLES[role].permissions);
@@ -38,16 +39,103 @@ describe("five destinations", () => {
   it("menu items are filtered by permission (no entry the role cannot open)", () => {
     for (const r of Object.keys(ROLE_BUNDLES)) {
       const can = canFor(r);
-      for (const g of navOf(r)) for (const i of g.items) if (i.permission) expect(can(i.permission), `${r} ${i.href}`).toBe(true);
+      for (const g of navOf(r)) for (const i of g.items) expect(canSee(can, i.permission), `${r} ${i.href}`).toBe(true);
     }
   });
 
-  it("Advanced is always the last section", () => {
+  it("Planning tools and IT and system are always the last sections, in that order", () => {
+    for (const r of Object.keys(ROLE_BUNDLES))
+      for (const g of navOf(r)) {
+        const names = groupSections(g).sections.map((s) => s.name);
+        const tail = names.filter((n) => n === ADVANCED || n === IT_SYSTEM);
+        expect(names.slice(names.length - tail.length), `${r} ${g.label}`).toEqual(tail);
+        if (tail.length === 2) expect(tail).toEqual([ADVANCED, IT_SYSTEM]);
+      }
+  });
+});
+
+describe("one door per job (UX audit R2)", () => {
+  it("no role's menu lists the same screen twice (query strings ignored)", () => {
+    for (const r of Object.keys(ROLE_BUNDLES))
+      for (const approver of [true, false]) {
+        const hrefs = buildNav(canFor(r), [r], { approver }).flatMap((g) => g.items.filter((i) => !i.planned).map((i) => i.href.split("?")[0]));
+        const dups = hrefs.filter((h, i) => hrefs.indexOf(h) !== i);
+        expect(dups, r).toEqual([]);
+      }
+  });
+
+  it("no two entries of a role's menu share a word", () => {
     for (const r of Object.keys(ROLE_BUNDLES)) {
-      const ops = group(r, "Operations");
-      if (!ops) continue;
-      const names = groupSections(ops).sections.map((s) => s.name);
-      if (names.includes(ADVANCED)) expect(names.at(-1)).toBe(ADVANCED);
+      const labels = navOf(r).flatMap((g) => g.items.map((i) => i.label));
+      expect(labels.filter((l, i) => labels.indexOf(l) !== i), r).toEqual([]);
+    }
+  });
+
+  it("To approve is a top-bar button from 640 px and a phone tab; Messages is the top-bar bell, not a tab", () => {
+    const home = group("owner_director", "Home")!.items;
+    expect(home.find((i) => i.href === "/approvals")?.topBar).toBe("wide");
+    expect(home.find((i) => i.href === "/notifications")?.topBar).toBe("always");
+    expect(home.find((i) => i.href === "/action-centre")?.label).toBe("Problems & alerts");
+  });
+
+  it("one QA door, one supplier list, one expense-claims entry", () => {
+    for (const r of Object.keys(ROLE_BUNDLES)) {
+      const hrefs = navOf(r).flatMap((g) => g.items.map((i) => i.href));
+      expect(hrefs, r).not.toContain("/quality/check"); // opens from "Check a batch or delivery"
+      expect(hrefs, r).not.toContain("/masterdata/suppliers"); // "Suppliers we may buy from" links to it
+      expect(hrefs.filter((h) => h.startsWith("/finance/expenses")).length, r).toBeLessThanOrEqual(1);
+    }
+    expect(main("owner_director")).toContain("Check a batch or delivery");
+    expect(section("owner_director", "Management", "Purchasing")).toContain("Suppliers we may buy from");
+    // The owner and site manager approve claims but do not file them; staff file them: one entry for both.
+    for (const r of ["owner_director", "site_manager", "finance", "production_operator"]) expect(section(r, "Home", "Help & my account"), r).toContain("Expense claims");
+    expect(section("owner_director", "Management", "Finance")).not.toContain("Expense approvals");
+  });
+
+  it("the three quality screens have three different names", () => {
+    const all = navOf("owner_director").flatMap((g) => g.items.map((i) => i.label));
+    for (const w of ["Check a batch or delivery", "Quality tests", "Quality checks for each item"]) expect(all).toContain(w);
+    expect(all).not.toContain("Quality check");
+    expect(all).not.toContain("Quality checks");
+  });
+});
+
+describe("a smaller office menu (UX audit R2)", () => {
+  const IT = ["/admin/sessions", "/admin/security", "/admin/devices", "/sync/conflicts", "/admin/diagnostics", "/admin/retention", "/admin/imports", "/admin/imports/legacy-documents"];
+
+  it("IT and system: the rare IT screens, only for the system admin and the owner", () => {
+    for (const r of ["system_admin", "owner_director"]) {
+      const sec = groupSections(group(r, "Management")!).sections.find((s) => s.name === IT_SYSTEM);
+      expect(sec, r).toBeDefined();
+      for (const i of sec!.items) expect(IT, `${r} ${i.href}`).toContain(i.href);
+    }
+    expect(section("owner_director", "Management", IT_SYSTEM).length).toBe(IT.length);
+    for (const r of Object.keys(ROLE_BUNDLES).filter((x) => !["system_admin", "owner_director"].includes(x))) {
+      const hrefs = navOf(r).flatMap((g) => g.items.map((i) => i.href));
+      for (const h of IT) expect(hrefs, `${r} ${h}`).not.toContain(h);
+    }
+  });
+
+  it("Management no longer promises HR (there is no HR module)", () => {
+    expect(NAV.find((g) => g.label === "Management")!.description).not.toMatch(/\bHR\b/);
+  });
+
+  it("the owner's menu is smaller than at the audit (118 entries, all unfolded)", () => {
+    const items = navOf("owner_director").flatMap((g) => g.items);
+    const unfolded = items.filter((i) => !i.advanced && i.section !== ADVANCED && i.section !== IT_SYSTEM);
+    expect(items.length).toBeLessThan(118);
+    expect(unfolded.length).toBeLessThanOrEqual(95);
+  });
+
+  it("Labels printed (ADR-099): in the menus of managers and QA, not of operators and warehouse staff", () => {
+    for (const r of ["production_operator", "warehouse_operator"]) expect(navOf(r).flatMap((g) => g.items.map((i) => i.href)), r).not.toContain("/labels");
+    for (const r of ["site_manager", "qa_qc", "owner_director"]) expect(section(r, "Inventory", "Counts & labels"), r).toContain("Labels printed");
+  });
+
+  it("old production screens are in no menu", () => {
+    for (const r of Object.keys(ROLE_BUNDLES)) {
+      const hrefs = navOf(r).flatMap((g) => g.items.map((i) => i.href));
+      for (const h of ["/production/work-orders", "/production/new", "/production/staging", "/production/board"]) expect(hrefs, `${r} ${h}`).not.toContain(h);
     }
   });
 });
@@ -55,9 +143,9 @@ describe("five destinations", () => {
 describe("production tabs per role (ADR-080 §11)", () => {
   it("operators (ADR-083): only My work and Daily log in Operations, Stock and Scan in Inventory, no sections", () => {
     expect(productionPersona(canFor("production_operator"), ["production_operator"])).toBe("operator");
-    expect(main("production_operator")).toEqual(["My work", "Today's count"]);
+    expect(main("production_operator")).toEqual(["My work", "Today"]);
     expect(groupSections(group("production_operator", "Operations")!).sections).toEqual([]);
-    expect(main("production_operator", "Inventory")).toEqual(["Stock", "Scan"]);
+    expect(main("production_operator", "Inventory")).toEqual(["Stock", "Scan or search"]);
     expect(main("production_operator", "Home")).not.toContain("Problems & alerts");
   });
 
@@ -69,14 +157,17 @@ describe("production tabs per role (ADR-080 §11)", () => {
 
   it("planner, site manager and owner: Production orders, Today, Rejects, New order", () => {
     for (const r of ["production_planner", "site_manager", "owner_director"]) {
-      expect(main(r)).toEqual(expect.arrayContaining(["Operations Center", "Production orders", "Today's count", "Rejects"]));
+      expect(main(r)).toEqual(expect.arrayContaining(["Operations Center", "Production orders", "Today", "Rejects"]));
       expect(section(r, "Operations", ADVANCED)).toEqual([]); // ADR-085: no "Older screens" in Operations
-      expect(section(r, "Management", ADVANCED)).toEqual(expect.arrayContaining(["Production plan (weeks ahead)", "All batches and their records"]));
+      expect(section(r, "Management", ADVANCED)).toEqual(expect.arrayContaining(["Production plan", "Batch records"]));
     }
   });
 
   it("Production setup sits in Management, not in Operations", () => {
-    expect(section("owner_director", "Management", "Production setup")).toEqual(["New recipe (step by step)", "Recipes (advanced)", "Steps (advanced)", "How-to sheets", "Quality checks for items", "Equipment"]);
+    expect(section("owner_director", "Management", "Production setup")).toEqual(["New recipe", "How-to sheets", "Quality checks for each item", "Equipment", "Recipes (advanced)", "Steps (advanced)"]);
+    // UX audit R2: the engineers' editing screens are folded under "Advanced" at the end of Production setup.
+    const setup = groupSections(group("owner_director", "Management")!).sections.find((s) => s.name === "Production setup")!.items;
+    expect(setup.filter((i) => i.advanced).map((i) => i.label)).toEqual(["Recipes (advanced)", "Steps (advanced)"]);
     const opsHrefs = group("owner_director", "Operations")!.items.map((i) => i.href);
     expect(opsHrefs.some((h) => h.startsWith("/masterdata"))).toBe(false);
   });
@@ -92,18 +183,18 @@ describe("production tabs per role (ADR-080 §11)", () => {
   });
 
   it("receiving steps sit together in Operations → Receiving; picking and dispatch in Packing & dispatch", () => {
-    expect(section("owner_director", "Operations", "Receiving")).toEqual(["Deliveries coming", "Receive materials", "Deliveries received", "Put away"]);
+    expect(section("owner_director", "Operations", "Receiving")).toEqual(["Deliveries coming", "Receive a delivery", "Deliveries received", "Put away"]);
     expect(section("owner_director", "Operations", "Packing & dispatch")).toEqual(expect.arrayContaining(["Boxing", "To get from shelf", "Send out"]));
   });
 
   it("customer billing sits with Sales & Customers", () => {
-    expect(section("owner_director", "Sales & Customers", "Billing & payments")).toEqual(["Invoices", "Payments", "Statements", "Credits (money back)"]);
+    expect(section("owner_director", "Sales & Customers", "Billing & payments")).toEqual(["Invoices", "Payments", "Customer statements", "Credits (money back)"]);
   });
 });
 
 describe("bottom tab bar (phone and iPad portrait) per role", () => {
-  it("operator: Home · My work · Today's count · Scan · Menu", () => {
-    expect(tabs("production_operator").map((t) => t.label)).toEqual(["Home", "My work", "Today's count", "Scan", "Menu"]);
+  it("operator: Home · My work · Today · Scan · Menu", () => {
+    expect(tabs("production_operator").map((t) => t.label)).toEqual(["Home", "My work", "Today", "Scan", "Menu"]);
   });
 
   it("warehouse: Home · Receive · Scan · Inventory · Menu", () => {
@@ -120,8 +211,9 @@ describe("bottom tab bar (phone and iPad portrait) per role", () => {
     }
   });
 
-  it("QA: Home · Quality check · Operations · Scan · Menu", () => {
+  it("QA: Home · Quality check · Operations · Scan · Menu (Quality check opens the one QA door)", () => {
     expect(tabs("qa_qc").map((t) => t.label)).toEqual(["Home", "Quality check", "Operations", "Scan", "Menu"]);
+    expect(tabs("qa_qc").find((t) => t.label === "Quality check")!.href).toBe("/quality");
   });
 
   it("never 'Batches', never a bare 'Orders', never the old batch list, at most five tabs, always a way to the menu", () => {

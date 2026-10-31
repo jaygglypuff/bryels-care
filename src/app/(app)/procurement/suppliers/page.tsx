@@ -2,7 +2,7 @@ import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { listSuppliers } from "@/modules/masterdata";
 import { listAslQueue } from "@/modules/procurement";
-import { Card, CardTitle, EmptyState, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { PlainList, PlainRow } from "@/ui/plain-list";
 import { Chip } from "@/ui/status";
@@ -24,7 +24,8 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
   const mine = queue.filter((x) => x.proposedBy !== ctx.userId);
   return (
     <>
-      <PageHeader title="Suppliers we may buy from" />
+      {/* UX audit R2: the one supplier entry in the menu; adding a supplier and its address book live in Master data. */}
+      <PageHeader title="Suppliers we may buy from" actions={ctx.can("masterdata.supplier.create") ? <LinkButton href="/masterdata/suppliers/new" variant="secondary">New supplier</LinkButton> : undefined} />
       <PageIntro>This screen is for which items we may buy from which supplier. Purchasing suggests a supplier for an item; QA says yes or no. Only “yes” items can go on a purchase order.</PageIntro>
       {canDecide && mine.length > 0 && <NextStep text={`Next: ${mine.length} suggestion(s) wait for a QA decision.`} action={{ label: "Open the first", href: `/procurement/suppliers/${mine[0].supplierId}` }} />}
       <SubNav />
@@ -54,7 +55,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
             <button type="submit" className="inline-flex min-h-[44px] items-center rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2">Find</button>
           </form>
           {sups.length === 0 ? (
-            <EmptyState title="No suppliers yet">Suppliers are added under Master data → Suppliers. Ask the administrator or purchasing.</EmptyState>
+            <EmptyState title="No suppliers yet">{ctx.can("masterdata.supplier.create") ? "Add the first one with New supplier." : "Ask purchasing or the administrator to add one."}</EmptyState>
           ) : shown.length === 0 ? (
             <EmptyState title="No supplier with that name">Try fewer letters.</EmptyState>
           ) : (

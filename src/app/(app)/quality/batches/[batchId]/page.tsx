@@ -31,7 +31,7 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
   } catch (e) {
     if (e instanceof DomainError && e.code === "not_found") {
       return (
-        <EmptyState title="Batch not found" action={<LinkButton href="/quality" variant="secondary">Back to QA queue</LinkButton>}>
+        <EmptyState title="Batch not found" action={<LinkButton href="/quality" variant="secondary">Back to the QA list</LinkButton>}>
           This batch does not exist or is not at one of your sites.
         </EmptyState>
       );
@@ -73,7 +73,7 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
                   </LinkButton>
                 )}
                 <LinkButton href="/quality" variant="secondary">
-                  Back to QA queue
+                  Back to the QA list
                 </LinkButton>
               </div>
             </MoreMenu>

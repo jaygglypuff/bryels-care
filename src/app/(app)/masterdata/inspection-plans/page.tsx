@@ -9,7 +9,7 @@ import { Explain, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../forbidden";
 import { VersionChip } from "../_eng/ui";
 
-export const metadata: Metadata = { title: "Quality checks" };
+export const metadata: Metadata = { title: "Quality checks for each item" };
 
 const KIND: Record<string, string> = { incoming: "When a delivery arrives", in_process: "While making", finished_product: "Finished product" };
 
@@ -20,7 +20,7 @@ export default async function InspectionPlansPage() {
   return (
     <div>
       <PageHeader
-        title="Quality checks"
+        title="Quality checks for each item"
         actions={ctx.can("quality.inspection_plan.create") ? <LinkButton href="/masterdata/inspection-plans/new" variant="cta">Add quality checks</LinkButton> : undefined}
       />
       <PageIntro>

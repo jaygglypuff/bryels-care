@@ -49,7 +49,12 @@ export default async function SupplierAslPage({ params }: { params: Promise<{ id
             Supplier · <RecordNo>{s.code}</RecordNo> <SupplierChip status={s.qualityStatus} />
           </span>
         }
-        actions={<LinkButton href="/procurement/suppliers" variant="secondary">All suppliers</LinkButton>}
+        actions={
+          <>
+            {ctx.can("masterdata.supplier.edit") && <LinkButton href={`/masterdata/suppliers/${s.id}`} variant="secondary">Change name, contact or address</LinkButton>}
+            <LinkButton href="/procurement/suppliers" variant="secondary">All suppliers</LinkButton>
+          </>
+        }
       />
       <PageIntro>This screen is for one supplier: which items we may buy from them, their prices and delivery times, and QA&apos;s yes or no on new items.</PageIntro>
       {toDecide.length > 0 ? (

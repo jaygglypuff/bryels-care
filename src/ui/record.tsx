@@ -50,8 +50,10 @@ export function RecordHeader({
   const items = (meta ?? []).filter(([, v]) => v !== null && v !== undefined && v !== "");
   return (
     <header className="mb-4 rounded-[24px] bg-surface p-4 shadow-[var(--shadow-card)] sm:p-6" data-testid="record-header">
+      {/* The title never shares a phone-width row with the buttons: it takes the full row (below 640 px always;
+          above that whenever the buttons would leave it under 18rem), so names never break one word per line. */}
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-[1_1_100%] sm:flex-[1_1_18rem]">
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-semibold uppercase tracking-wide text-muted">
             <span>{typeLabel}</span>
             <span aria-hidden>·</span>
@@ -81,7 +83,7 @@ export function RecordHeader({
             ))}
           </div>
         </div>
-        {secondary && <div className="flex flex-wrap items-center gap-2 [&_a]:min-h-[44px] [&_button]:min-h-[44px]">{secondary}</div>}
+        {secondary && <div className="flex max-w-full flex-wrap items-center gap-2 [&_a]:min-h-[44px] [&_button]:min-h-[44px] [&_summary]:min-h-[44px]">{secondary}</div>}
       </div>
 
       {steps.length > 0 && <RecordProgress steps={steps} />}

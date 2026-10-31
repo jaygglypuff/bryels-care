@@ -35,7 +35,7 @@ export function WhoCanHelp({ permission, siteId, hideEmails = false, lead = "Who
           ))}
         </ul>
       ) : (
-        <span className="block opacity-80">Nobody else holds this yet. An administrator can give the role under Management → People & access → Users.</span>
+        <span className="block opacity-80">Nobody else holds this yet. An administrator can give the role under Management → People & access → People who use the app.</span>
       )}
     </div>
   );

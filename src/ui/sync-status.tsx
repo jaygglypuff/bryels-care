@@ -50,14 +50,14 @@ export function SyncChip({ userId }: { userId: string }) {
   return (
     <Link
       href="/sync"
-      className={cx("flex h-10 min-w-10 items-center justify-center gap-1.5 rounded-full bg-surface px-2.5 text-[12.5px] font-medium shadow-[var(--shadow-card)] hover:text-fg sm:px-3", TONE[l.tone])}
+      className={cx("flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-full bg-surface px-2.5 text-[12.5px] font-medium shadow-[var(--shadow-card)] hover:text-fg sm:px-3", TONE[l.tone])}
       aria-label={`Sync status: ${l.text}. Open sync`}
       title={s.lastSyncAt ? `Last sync ${fmtDateTime(s.lastSyncAt)}` : "Sync status"}
       data-testid="sync-chip"
     >
       {l.icon}
       {!quiet && n > 0 && <span className="sm:hidden">{n}</span>}
-      <span className={cx("hidden", quiet ? "lg:inline" : "sm:inline")}>{l.text}</span>
+      <span className={cx("hidden", quiet ? "lg:inline xl:hidden 2xl:inline" : "sm:inline")}>{l.text}</span>
     </Link>
   );
 }
@@ -146,7 +146,7 @@ export function SignOutButton({ signOut, variant }: { signOut: () => Promise<voi
   return (
     <>
       {variant === "menu" ? (
-        <button type="button" onClick={() => void start()} disabled={busy} className="flex items-center gap-1.5 text-[13px] font-medium text-primary-text hover:underline">
+        <button type="button" onClick={() => void start()} disabled={busy} className="flex min-h-[44px] w-full items-center gap-1.5 text-[13px] font-medium text-primary-text hover:underline">
           <LogOut size={14} /> {busy ? "Signing out…" : "Sign out"}
         </button>
       ) : (

@@ -25,8 +25,8 @@ export function CardTitle({ children, action }: { children: ReactNode; action?: 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="font-display text-[26px] font-semibold tracking-tight text-fg sm:text-[32px]">{title}</h1>
+      <div className="min-w-0 max-w-full">
+        <h1 className="break-words font-display text-[26px] font-semibold tracking-tight text-fg sm:text-[32px]">{title}</h1>
         {subtitle && <p className="mt-1 text-[13px] text-muted">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
@@ -46,7 +46,8 @@ export type ButtonVariant = keyof typeof BTN;
 export function buttonClass(variant: ButtonVariant = "primary", size: "md" | "lg" | "sm" = "md") {
   return cx(
     "inline-flex items-center justify-center gap-2 rounded-full border font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-    size === "lg" ? "min-h-[52px] px-6 text-[16px]" : size === "sm" ? "min-h-[34px] px-3.5 text-[13px]" : "min-h-[44px] px-5 text-[14px]",
+    // "sm" stays compact for a mouse but is a full 44 px target on touch screens (UX audit R2, brief: large targets).
+    size === "lg" ? "min-h-[52px] px-6 text-[16px]" : size === "sm" ? "min-h-[44px] px-3.5 text-[13px] pointer-fine:min-h-[34px]" : "min-h-[44px] px-5 text-[14px]",
     BTN[variant],
   );
 }

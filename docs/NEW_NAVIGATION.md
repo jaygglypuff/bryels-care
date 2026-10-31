@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| Status | Built in slice R1 (2026-10-30) |
+| Status | Built in slice R1 (2026-10-30); round 2 of the UX audit fixes (2026-10-31): one door per job, menu words = screen titles, smaller office menu |
 | Code | `src/app/(app)/nav.ts` (model), `src/app/(app)/shell.tsx` (top bar, section menus, phone tab bar, drawer) |
-| Tests | `tests/unit/nav-per-role.test.ts` |
+| Tests | `tests/unit/nav-per-role.test.ts`, `tests/unit/nav-titles.test.ts` |
 | Read with | `docs/UX_AUDIT.md` (why), `docs/WORKFLOW_ARCHITECTURE.md` (what the Operations destination shows) |
 
 ## 1. Principles
@@ -15,54 +15,65 @@
    printed QR links and tests keep working.
 3. **Each screen is listed once.** (Test: "every screen is listed once".)
 4. **Main tabs + small section menus.** Inside a destination the daily screens are tabs; the rest sit in
-   named menus that open on tap. "Advanced" (the old detailed production screens) is always last.
+   named menus that open on tap. "Planning tools" and "IT and system" are always last.
 5. **Menus never grant access.** Every page and service still checks permission and site on the server;
    hiding a menu entry is only about focus.
 
-## 2. The map
+## 2. The map (UX audit round 2, 2026-10-31; generated from `nav.ts`)
 
-Legend: **tab** = always visible inside the destination; *Section* = a menu of that name.
+Legend: tabs = always visible inside the destination; *Section* = a menu of that name; folded *Advanced* =
+rarely used entries at the end of a section (one more tap). ¹ also the top-bar bell, so the tab rows leave it
+out; ² also the top-bar "To approve" button from 640 px, so the tab row shows it on phones only. The drawer
+(the full menu) lists every entry. Operators see "My work" and "Today" instead of the production tabs;
+floor roles keep only their screens (ADR-083). *IT and system* is for the system admin and the owner only.
 
 ### Home — "Your day at a glance"
-- tabs: Overview (`/dashboard`, per role: owner/manager pipeline + KPIs; operators task tiles), To approve,
-  Notifications, Action centre
-- *Me*: Help & guides, My account, Sync & offline, My expense claims
+- tabs: Overview (`/dashboard`), To approve (`/approvals`) ², Messages (`/notifications`) ¹, Problems & alerts (`/action-centre`)
+- *Help & my account*: Help (`/help`), My account (`/account`), Working without signal (`/sync`), Expense claims (`/finance/expenses`)
 
 ### Operations — "Production and the daily work"
-- tabs: **Operations Center** (`/operations`, landing), production tabs per role (operators: My work, Today;
-  others: Production orders, Today, Rejects, New order), Quality check (`/quality`)
-- *Receiving*: Expected deliveries, Receive materials, Goods receipts, Put away
-- *Quality*: Inspections, Deviations, QA holds, Bulk disposition, Traceability, Complaints, Recall explorer,
-  Recall cases, CAPA, Change control
-- *Packing & dispatch*: Boxing, Repack for a customer, Label verification, Picking, Dispatch, Shipments
-- *Maintenance*: Maintenance, PM plans, Maintenance work orders, Spare parts
-- *Advanced*: Production plan, Work orders (detailed), Board (detailed), Batches (full record), Materials by
-  scan, New batch without an order
+- tabs: Operations Center (`/operations`), Production orders (`/production/orders`), Today (`/production/today`), Rejects (`/production/defects`), Check a batch or delivery (`/quality`), Floor screen (TV) (`/floor`)
+- *Receiving*: Deliveries coming (`/procurement/expected`), Receive a delivery (`/inventory/receive`), Deliveries received (`/inventory/receipts`), Put away (`/inventory/receive/put-away`)
+- *Quality*: Quality tests (`/quality/inspections`), Problem reports (`/quality/deviations`), Stopped by QA (`/quality/holds`), Decide many lots at once (`/quality/bulk`), Where it came from and where it went (`/quality/trace`), Customer complaints (`/quality/complaints`), Who received it (recall check) (`/quality/recall`), Product recalls (`/quality/recalls`), Fix-and-prevent plans (`/quality/capa`), Change requests (`/quality/changes`)
+- *Packing & dispatch*: Boxing (`/warehouse/packs`), Repack for a customer (`/warehouse/repack`), Check the labels in an area (`/quality/label-verification`), To get from shelf (`/sales/picking`), Send out (`/sales/dispatch`), Deliveries (`/sales/shipments`)
+- *Maintenance*: Maintenance (`/maintenance`), Regular maintenance (`/maintenance/plans`), Repair jobs (`/maintenance/work-orders`), Spare parts (`/maintenance/spare-parts`)
 
 ### Inventory — "Track stock and materials"
-- tabs: Stock (`/inventory`, with its own tabs Raw materials · Work in progress · Finished goods · All
-  stock), Scan, Scan to move, Warehouse sections
-- *Stock views*: Locations & stock, Boxes, Availability, Expiry alerts, FEFO & reservations, Stock movements
-- *Stock tasks*: Stock counts, Adjustments, Label print station
+- tabs: Stock (`/inventory`), Scan or search (`/inventory/scan`), Move stock (`/inventory/move`), Warehouse (`/warehouse`)
+- *More stock lists*: Shelves (`/inventory/locations`), Boxes and sacks (`/inventory/containers`), Can we deliver? (`/inventory/availability`), Expiring soon (`/inventory/lots/expiry`), Which one to use first / set aside (`/inventory/lots/reservations`), Stock changes (`/inventory/movements`)
+- *Counts & labels*: Stock counts (`/inventory/counts`), Fix stock (`/inventory/adjustments`), Labels printed (`/labels`; not in the operator and warehouse menus, ADR-099)
 
 ### Sales & Customers — "Orders, deliveries and payments"
-- tabs: Customer orders, New order, Customers, Order board
-- *Selling*: Quotations, Price lists, Customer returns
-- *Billing & payments*: Invoices, Payments, Statements, Credit notes
+- tabs: Customer orders (`/sales`), Customers (`/sales/customers`), Orders as a board (`/sales/board`)
+- *Quotes, prices & returns*: Price offers (`/sales/quotations`), Prices (`/sales/price-lists`), Customer returns (`/sales/returns`)
+- *Billing & payments*: Invoices (`/finance/invoices`), Payments (`/finance/payments`), Customer statements (`/finance/statements`), Credits (money back) (`/finance/credit-notes`)
 
-### Management — "HR, finance, reports and settings"
-- tab: Overview (`/management`, landing: one card per section the user may open)
-- *Reports & analytics*: Dashboards, Trends, Report library, Scheduled reports, KPI definitions
-- *Purchasing*: Purchasing overview, Purchase requests, Purchase orders, Supplier returns, Approved
-  suppliers, Reorder suggestions, Supplier performance, Forecast assumptions
-- *Finance*: Finance overview, Supplier bills, Expense approvals, Periods and locks, Tax configuration
-- *Production setup*: Products and formulas, Steps for each product, Work instructions, Inspection plans,
-  Equipment
-- *Master data*: Materials, Products, Suppliers, Locations, Sites, Warehouses, Production lines, Units of
-  measure, Lists, Reason codes
-- *People & access*: Users, Roles, Sessions, Security, HR & attendance (shown disabled: "Phase 5–6")
-- *System*: Audit log, Settings, Approval rules, Numbering, Templates & labels, Notification rules, Imports,
-  Legacy documents, Devices, Sync conflicts, Retention & holds, Diagnostics
+### Management — "Buying, money, reports and settings"
+- tabs: Management (`/management`)
+- *Reports & analytics*: Business overview (`/analytics/overview`), Reports (`/analytics`), Compare over time (`/analytics/trends`), Lists to download or print (`/reports`); folded *Advanced*: Lists sent by email (`/reports/schedules`), What each number means (`/analytics/definitions`)
+- *Purchasing*: Purchasing (`/procurement`), Requests to buy (`/procurement/requests`), Purchase orders (`/procurement/orders`), Send back to supplier (`/procurement/returns`), Suppliers we may buy from (`/procurement/suppliers`), Running low (`/procurement/reorder`); folded *Advanced*: How suppliers do (`/procurement/performance`), Sales guess (`/procurement/forecast`)
+- *Finance*: Money (`/finance`), Supplier bills (`/finance/bills`), Close the month (`/finance/periods`); folded *Advanced*: Tax rates (`/finance/tax`)
+- *Production setup*: New recipe (`/masterdata/recipes/new`), How-to sheets (`/masterdata/work-instructions`), Quality checks for each item (`/masterdata/inspection-plans`), Equipment (`/masterdata/equipment`); folded *Advanced*: Recipes (advanced) (`/masterdata/formulas`), Steps (advanced) (`/masterdata/routings`)
+- *Master data*: Materials (`/masterdata/materials`), Products (`/masterdata/products`), Locations (`/masterdata/locations`), Sites (`/masterdata/sites`), Warehouses (`/masterdata/warehouses`), Making areas / lines (`/masterdata/lines`); folded *Advanced*: Units (`/masterdata/uom`), Choice lists (`/masterdata/lists`), Reasons (`/masterdata/reason-codes`)
+- *People & access*: People who use the app (`/admin/users`), Roles (what each job may do) (`/admin/roles`)
+- *Rules and settings*: Settings (`/admin/settings`), Who says OK to what (`/admin/approval-rules`), Who gets which message (`/admin/notification-rules`), Labels and printouts (`/admin/templates`), How record numbers look (`/admin/numbering`), History of changes (`/admin/audit`)
+- *Planning tools*: Production plan (`/production/plan`), Batch records (`/production`)
+- *IT and system*: Who is signed in (`/admin/sessions`), Sign-in safety (`/admin/security`), Phones and tablets (`/admin/devices`), Phone changes to check (`/sync/conflicts`), Health of the system (`/admin/diagnostics`), Keeping and deleting old records (`/admin/retention`), Load data from a spreadsheet (`/admin/imports`), Old paper documents (`/admin/imports/legacy-documents`)
+
+### Round 2 rules (UX audit 2026-10-31)
+
+1. **One door per job.** "To approve" is the top-bar button (from 640 px) or a Home tab (phones); Problems &
+   alerts links to it instead of keeping a "To decide" list. "Messages" is only the top-bar bell. One QA door
+   ("Check a batch or delivery", `/quality`; the batch-only list `/quality/check` opens from it); one
+   supplier list in the menu ("Suppliers we may buy from"; it links to adding and editing a supplier); one
+   "Expense claims" entry for people who file or approve claims.
+2. **Menu word = screen title.** Every entry uses the H1 of the screen it opens (test
+   `tests/unit/nav-titles.test.ts`; screens with a dynamic H1 are listed there with the reason).
+3. **Old production screens are in no menu** (`/production/work-orders`, `/production/board`,
+   `/production/staging`, `/production/new`); they redirect to the new flow (round 1).
+4. **Frame targets are at least 44 px** at 390, 820 and 1440 px (top bar, tab rows, drawer, dropdowns,
+   account menu, demo strip); the phone tab row scrolls with a fade and keeps "More" visible.
+5. **Scan in the top bar for every role** (icon + "Scan" on phones, "Scan or search" on tablets).
 
 ### Where things moved (old group → new place)
 

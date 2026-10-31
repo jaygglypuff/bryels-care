@@ -37,7 +37,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
       <PageIntro>This screen is for everyone: messages the system sent you. Tap Open to go to the thing it is about. Press “I&apos;m on it” when you are dealing with it.</PageIntro>
       {ctx.can("quality.disposition.view") && (
         <p className="text-[13px] text-muted">
-          QA decisions waiting are listed in the <Link className="text-primary-text hover:underline" href="/quality">QA queue</Link>.
+          QA decisions waiting are listed in the <Link className="text-primary-text hover:underline" href="/quality">Check a batch or delivery</Link>.
         </p>
       )}
       <Card>

@@ -15,11 +15,11 @@ export function DemoBanner({ canReset, sandbox = false }: { canReset: boolean; s
             <span className="font-semibold">Sandbox</span>
             <span className="hidden sm:inline"> — your own empty practice company</span>
           </span>
-          <Link href="/help#start.getting_started" className="shrink-0 font-semibold underline underline-offset-2 hover:text-[var(--brand-900)]">
+          <Link href="/help#start.getting_started" className="-my-[13px] shrink-0 py-[13px] font-semibold underline underline-offset-2 hover:text-[var(--brand-900)]">
             Getting started guide
           </Link>
           {canReset && (
-            <Link href="/admin/demo" className="hidden shrink-0 font-semibold underline underline-offset-2 hover:text-[var(--brand-900)] sm:inline">
+            <Link href="/admin/demo" className="-my-[13px] hidden shrink-0 py-[13px] font-semibold underline underline-offset-2 hover:text-[var(--brand-900)] sm:inline-block">
               Start over
             </Link>
           )}
@@ -37,7 +37,7 @@ export function DemoBanner({ canReset, sandbox = false }: { canReset: boolean; s
           <span className="sm:hidden"> — fictional data</span>
         </span>
         {canReset && (
-          <Link href="/admin/demo" className="shrink-0 font-semibold underline underline-offset-2 hover:text-[var(--brand-900)]">
+          <Link href="/admin/demo" className="-my-[13px] shrink-0 py-[13px] font-semibold underline underline-offset-2 hover:text-[var(--brand-900)]">
             Reset demo data
           </Link>
         )}

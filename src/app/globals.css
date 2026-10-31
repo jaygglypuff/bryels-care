@@ -64,6 +64,14 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 6px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
+/* Touch targets (UX audit R2, brief: large targets, 44 px). Checkboxes and radios are drawn at 20 px in the
+   brand colour; a label that wraps one is the hit area and is at least 44 px tall wherever it is a block
+   or flex row. Screens never need their own rule for this. In the base layer, so a screen's own size
+   utilities still win. */
+@layer base {
+  input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--brand-600); }
+  label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) { min-height: 44px; cursor: pointer; }
+}
 /* Navigation feedback (src/ui/navigation-progress.tsx, ADR-043): a bar along the top edge after
    150 ms, the previous page held at 60 % opacity after 300 ms; no skeleton, no layout jump. */
 .nav-progress { position: fixed; inset: 0 0 auto 0; z-index: 60; height: 3px; overflow: hidden; pointer-events: none; opacity: 0; animation: nav-progress-in 0s linear 150ms forwards; }

@@ -29,7 +29,7 @@ export default async function BulkDispositionPage({ searchParams }: { searchPara
   const c = await bulkDispositionCandidates(ctx, filter);
   return (
     <>
-      <PageHeader title="Decide many lots at once" subtitle={ctx.currentSite.name} actions={<LinkButton href="/quality" variant="secondary">QA queue</LinkButton>} />
+      <PageHeader title="Decide many lots at once" subtitle={ctx.currentSite.name} actions={<LinkButton href="/quality" variant="secondary">Check a batch or delivery</LinkButton>} />
       <PageIntro>This screen is for QA, mostly when starting with the system: say OK to use (or not OK) for many old lots in one go. Each lot is still checked and saved one by one.</PageIntro>
       {c.rows.length > 0 && <NextStep text={`Next: tick the lots, choose OK or not OK, then confirm with your password (${c.rows.length} lot(s) match).`} />}
       <StepUpGate ctx={ctx} purpose="apply a bulk disposition" />

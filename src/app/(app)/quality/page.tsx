@@ -64,7 +64,7 @@ export default async function QaQueuePage() {
   return (
     <>
       <PageHeader
-        title="QA queue"
+        title="Check a batch or delivery"
         subtitle={`${ctx.currentSite.name}`}
         actions={
           <>

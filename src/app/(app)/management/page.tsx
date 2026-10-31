@@ -10,12 +10,13 @@ export const metadata = { title: "Management" };
 const ABOUT: Record<string, string> = {
   "Reports & analytics": "How the business is doing: sales, batches, stock and quality numbers, and lists to download.",
   Purchasing: "Buying from suppliers: requests, orders, what to buy again.",
-  Finance: "Supplier bills, expense claims, closing a month, tax set-up. Customer invoices are under Sales & Customers.",
+  Finance: "Supplier bills, closing a month, tax set-up. Customer invoices are under Sales & Customers; expense claims under Home.",
   "Production setup": "Recipes, steps, work instructions, QA test plans and machines.",
-  "Master data": "The lists everything else uses: materials, products, suppliers, places, sites.",
-  "People & access": "Who can sign in, their job (role), and sign-in safety.",
-  "IT settings": "Settings, who says OK to what, record numbers, labels, file imports, history of changes.",
-  System: "Settings, who says OK to what, record numbers, labels, file imports, history of changes.",
+  "Master data": "The lists everything else uses: materials, products, places, sites. Suppliers are under Purchasing.",
+  "People & access": "Who can sign in and what each job may do.",
+  "Rules and settings": "Settings, who says OK to what, who gets which message, labels, record numbers, history of changes.",
+  "Planning tools": "The production plan for the weeks ahead and the batch records.",
+  "IT and system": "For the IT person: who is signed in, sign-in safety, phones and tablets, system health, keeping old records, loading data from spreadsheets.",
 };
 
 /**
