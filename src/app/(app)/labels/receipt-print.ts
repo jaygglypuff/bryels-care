@@ -6,9 +6,9 @@ import { getReceipt } from "@/modules/inventory";
 
 /**
  * "Print labels" from a receipt goes straight to the print preview (usability test 2026-10-30).
- * When the choice is clear (one print station, an approved raw-material label size), one label job per
+ * When label printing is set up (a label printer at the site, an approved raw-material label size), one label job per
  * lot is made with one label per container (the receipt's container count, else 1) and the preview of
- * all of them opens. Otherwise the receipt's label page asks for the label size and station.
+ * all of them opens and the print window opens by itself (ADR-099). Otherwise the receipt's label page explains what is missing.
  * Each lot keeps its own idempotency key (`gr:<receipt>:<template>:<lot>`), so pressing again never makes
  * a second set of labels: the same jobs open again.
  */
@@ -18,10 +18,10 @@ export async function receiptLabelsTarget(ctx: AuthContext, receiptId: string, o
   const gr = await getReceipt(ctx, receiptId);
   if (gr.siteId !== ctx.currentSiteId || gr.lines.length === 0) return choose;
   const [stations, templates] = await Promise.all([activeStationsAt(db, ctx.organizationId, gr.siteId), approvedLabelTemplatesFor(db, ctx.organizationId, gr.siteId, "material")]);
-  if (stations.length !== 1 || templates.length === 0) return choose;
+  if (stations.length === 0 || templates.length === 0) return choose;
   const tpl = templates[0];
   const lots = gr.lines.map((l) => ({ lotId: l.lotId, copies: Math.min(Math.max(l.containerCount ?? 1, 1), 99) }));
-  const out = await createLabelJobsForLots(ctx, lots, tpl.id, 1, `gr:${gr.id}:${tpl.id}`, stations[0].id);
+  const out = await createLabelJobsForLots(ctx, lots, tpl.id, 1, `gr:${gr.id}:${tpl.id}`, null);
   return previewHref(gr.id, out, opts.posted);
 }
 
@@ -44,5 +44,6 @@ export function previewHref(receiptId: string, out: { lotId: string; jobId?: str
   if (had.length) q.set("had", had.join(","));
   if (failed.length) q.set("failed", failed.join(","));
   if (posted) q.set("posted", "1");
+  if (jobs.length) q.set("auto", "1");
   return `/print/labels/receipt/${receiptId}?${q.toString()}`;
 }

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Printer } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
@@ -10,6 +9,7 @@ import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
+import { recordHref } from "@/app/print/labels/back";
 import { Forbidden } from "../../../forbidden";
 import { JobStatus, shortRef, STATE_WORDS } from "../../bits";
 import { FailForm, JobCommand, ReprintForm, VoidForm } from "../../forms";
@@ -21,13 +21,12 @@ export const dynamic = "force-dynamic";
  * One label job (US-2-12), grade-5 (ADR-088): one next step (print / try again / nothing), the reprint chain,
  * and the rare actions (cancel, "did not print", old label) in ⋯ More. Reprints keep their reason on record.
  */
-export default async function LabelJobPage({ params, searchParams }: { params: Promise<{ jobId: string }>; searchParams: Promise<{ sent?: string }> }) {
+export default async function LabelJobPage({ params, }: { params: Promise<{ jobId: string }> }) {
   const ctx = await requireContext();
   const reprintReasons = await reprintReasonOptions(ctx);
   const reprintReason = (code: string) => reprintReasons.find((r) => r.code === code) ?? null;
   if (!ctx.can("inventory.label_job.view")) return <Forbidden what="labels" />;
   const { jobId } = await params;
-  const { sent } = await searchParams;
   let j: LabelJobView;
   try {
     j = await getLabelJob(ctx, jobId);
@@ -42,16 +41,16 @@ export default async function LabelJobPage({ params, searchParams }: { params: P
   const canCreate = ctx.can("inventory.label_job.create");
   const canReprint = canCreate && ctx.can("documents.reprint.create") && root?.status === "printed" && !root.voidedAt;
   const canVoid = ctx.can("documents.generated_document.void") && j.status === "printed" && !j.voidedAt;
-  const back = j.entityType === "inventory_lot" ? `/inventory/${j.entityId}` : j.entityType === "location" ? `/inventory/locations/${j.entityId}` : "/labels";
+  const back = recordHref(j.entityType, j.entityId);
   const reason = j.reprintReasonCode ? reprintReason(j.reprintReasonCode)?.label ?? j.reprintReasonCode : null;
   const what = j.entityName ?? j.templateName;
 
   const next = j.voidedAt ? (
     <NextStep text="This label is old: throw it away. A newer label replaces it." />
   ) : j.status === "ready" && canCreate ? (
-    <NextStep text="Print it at 100 % size, then tap “Printed OK”." action={{ label: "Print here", href: `/print/labels/${j.id}` }} />
+    <NextStep text="Not printed yet. Open it and print it." action={{ label: "Print it", href: `/print/labels/${j.id}?back=${encodeURIComponent(back)}` }} />
   ) : j.status === "ready" || j.status === "queued" || j.status === "rendering" ? (
-    <NextStep text="Waiting to be printed." waitingFor={`Waiting for the warehouse at the label printer (${j.stationName}).`} />
+    <NextStep text="Not printed yet." waitingFor="Waiting for someone who may print labels." />
   ) : j.status === "failed" ? (
     <NextStep text="It did not print. Fix the printer, then try again (the label stays the same)." action={canCreate ? { label: "Try again", href: "#retry" } : undefined} />
   ) : j.status === "printed" ? (
@@ -74,7 +73,7 @@ export default async function LabelJobPage({ params, searchParams }: { params: P
           <MoreMenu>
             <div className="flex flex-col gap-3">
               <LinkButton href={back} variant="secondary">Open what the label is for</LinkButton>
-              <LinkButton href="/labels" variant="secondary">Labels to print</LinkButton>
+              <LinkButton href="/labels" variant="secondary">Labels printed</LinkButton>
               {canCreate && ["queued", "ready", "failed"].includes(j.status) && <JobCommand jobId={j.id} kind="cancel" label="Cancel this label" confirm="Cancel this label? It will not be printed." />}
               {canCreate && j.status === "ready" && (
                 <div>
@@ -92,16 +91,10 @@ export default async function LabelJobPage({ params, searchParams }: { params: P
           </MoreMenu>
         }
       />
-      <PageIntro>This screen is for one label: print it, see when it was printed, or print it again when it got lost or damaged.</PageIntro>
-      {sent && <Banner tone="ok" title="Sent to the label printer">{j.stationName} sees it in its list. Print it there, or print it here now.</Banner>}
+      <PageIntro>This screen is for one label: see who printed it and when, or print it again when it got lost or damaged.</PageIntro>
       {j.voidedAt && <Banner tone="bad" title="Old label: throw it away">{j.voidReason}</Banner>}
       {j.status === "failed" && <Banner tone="bad" title="It did not print">{j.errorMessage ?? "The printer did not print it."}</Banner>}
       {next}
-      {canCreate && j.status === "ready" && (
-        <LinkButton href={`/print/labels/${j.id}`} target="_blank" variant="cta" size="lg">
-          <Printer size={18} /> Print here
-        </LinkButton>
-      )}
       {canCreate && j.status === "failed" && (
         <div id="retry">
           <JobCommand jobId={j.id} kind="retry" label="Try again (same label)" variant="cta" />
@@ -113,7 +106,6 @@ export default async function LabelJobPage({ params, searchParams }: { params: P
         <Dl
           items={[
             ["How many", `${j.copies} × ${j.media}`],
-            ["Printer", `${j.stationName}${j.printerName ? ` (${j.printerName})` : ""}`],
             ["State on the label", j.statusAtPrint ? STATE_WORDS[j.statusAtPrint] ?? j.statusAtPrint : "—"],
             ["Asked by", `${j.requestedByName}, ${fmtDateTime(j.requestedAt)}`],
             ["Printed", j.printedAt ? `${j.printedByName}, ${fmtDateTime(j.printedAt)}` : "—"],

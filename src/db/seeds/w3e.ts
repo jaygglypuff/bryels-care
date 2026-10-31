@@ -10,7 +10,7 @@ import * as s from "../schema";
 import { definitionChecksum } from "../../modules/documents/checksum";
 import { boxingNoteRendererV1 } from "../../modules/documents/renderers/boxing-note-v1";
 import { deliveryReceiptRendererV1 } from "../../modules/documents/renderers/delivery-receipt-v1";
-import { labelRendererV1 } from "../../modules/documents/renderers/label-v1";
+import { labelRendererV2 } from "../../modules/documents/renderers/label-v2"; // ADR-099: demo layouts use v2
 import { pickListRendererV1 } from "../../modules/documents/renderers/pick-list-v1";
 import { DEFAULT_LABEL_FIELDS } from "../../modules/documents/schemas";
 import type { Renderer } from "../../modules/documents/renderers/types";
@@ -54,7 +54,7 @@ export async function seedW3e(db: Db) {
   await template("BOXING-NOTE", "Boxing note / packing list (A4)", "boxing_note", boxingNoteRendererV1);
   await template("PICK-LIST", "Pick list (A4)", "pick_list", pickListRendererV1);
   await template("DR-STD", "Delivery receipt (A4, 3 copies)", "delivery_receipt", deliveryReceiptRendererV1);
-  const boxLayout = await template("LBL-BOX", "Box / carton label layout", "label", labelRendererV1, "label/carton/v1");
+  const boxLayout = await template("LBL-BOX", "Box / carton label layout", "label", labelRendererV2, "label/carton/v1");
   await db.insert(s.labelTemplates).values({
     organizationId: O,
     code: "LT-BOX-100X50",

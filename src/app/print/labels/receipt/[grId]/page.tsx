@@ -6,9 +6,9 @@ import { DomainError } from "@/lib/errors";
 import { labelJobForPrint } from "@/modules/documents";
 import { getReceipt } from "@/modules/inventory";
 import { LinkButton } from "@/ui/core";
+import { LabelFace, LabelSheet, LABEL_KIND_WORDS, labelCountWords } from "@/ui/labels";
 import { Banner } from "@/ui/status";
-import { PrintButton } from "../../../lot-label/print-button";
-import { ReceiptPrintedForm } from "./printed-form";
+import { AutoPrint, PrintedCheck, PrintNow } from "../../print-bits";
 
 export const metadata = { title: "Print labels" };
 export const dynamic = "force-dynamic";
@@ -22,13 +22,11 @@ function names(list: string[]): string {
 }
 
 /**
- * Print preview of all the labels made from one receipt (usability test 2026-10-30): one sentence
- * says what was sent and what was skipped ("Labels sent to the printer: 4. Coconut Oil already had
- * labels — not printed again."), one Print button prints them all, and a clear Back link returns to
- * the receipt. Only jobs of this receipt's lots are shown; each is re-rendered from its stored dataset
- * and hash-checked like the single-job print route.
+ * Labels of one delivery (ADR-090, ADR-099): one block per item ("Coconut Oil — 4 labels") showing THE label,
+ * one green "Print N labels" for all of them, then "Did they come out right?". On paper only the labels print,
+ * one per page, each at its own size. Lots that already had labels are named, not printed again.
  */
-export default async function ReceiptLabelsPreview({ params, searchParams }: { params: Promise<{ grId: string }>; searchParams: Promise<{ jobs?: string; had?: string; failed?: string; posted?: string }> }) {
+export default async function ReceiptLabelsPreview({ params, searchParams }: { params: Promise<{ grId: string }>; searchParams: Promise<{ jobs?: string; had?: string; failed?: string; posted?: string; auto?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("inventory.label_job.view")) return <div className="p-6"><Forbidden what="label printing" /></div>;
   const { grId } = await params;
@@ -50,52 +48,74 @@ export default async function ReceiptLabelsPreview({ params, searchParams }: { p
     ),
   );
   const jobs = loaded.filter((r): r is NonNullable<typeof r> => !!r && byLot.has(r.job.entityId));
-  const printable = jobs.filter((r) => r.render && r.render.integrity === "ok" && !r.job.voidedAt && ["ready", "printed"].includes(r.job.status) && r.render.css && r.render.body);
-  const toPrint = printable.filter((r) => r.job.status === "ready");
-  const labelCount = printable.reduce((a, r) => a + r.job.copies, 0);
+  const shown = jobs.filter((r) => r.face && !r.job.voidedAt && ["ready", "printed"].includes(r.job.status));
+  const toPrint = ctx.can("inventory.label_job.create") ? shown.filter((r) => r.job.status === "ready") : [];
+  const printedAlready = shown.filter((r) => r.job.status === "printed");
+  const labelCount = toPrint.reduce((a, r) => a + r.job.copies, 0);
   const had = names(ids(sp.had).map((l) => byLot.get(l)?.materialName ?? "").filter(Boolean));
   const failed = names(ids(sp.failed).map((l) => byLot.get(l)?.materialName ?? "").filter(Boolean));
-  const notOk = jobs.filter((r) => !printable.includes(r));
-  const css = [...new Set(printable.map((r) => r.render!.css!))].join("\n");
-  const sentence = [labelCount > 0 ? `Labels sent to the printer: ${labelCount}.` : "No new labels were made.", had ? `${had} already had labels — not printed again.` : ""].filter(Boolean).join(" ");
+  const notOk = jobs.filter((r) => !shown.includes(r));
+  const back = `/inventory/receive/${gr.id}`;
+  const stick = LABEL_KIND_WORDS.sack.stick;
+  const caption = (r: (typeof shown)[number]) => (
+    <p>
+      <strong className="text-fg">{byLot.get(r.job.entityId)?.materialName ?? r.job.entityName}</strong> · {labelCountWords(r.job.copies)}, all like this · {r.face!.widthMm} × {r.face!.heightMm} mm
+    </p>
+  );
 
   return (
-    <main>
-      <div className="no-print mx-auto max-w-xl space-y-3 px-4 pt-4">
-        <a href={`/inventory/receive/${gr.id}`} className="inline-flex min-h-[44px] items-center gap-2 text-[15px] font-semibold text-primary-text hover:underline">
-          <ArrowLeft size={18} aria-hidden /> Back to receipt {gr.receiptNumber}
+    <main className="min-h-dvh pb-10">
+      <div className="no-print mx-auto grid max-w-2xl gap-4 px-4 pt-4">
+        <a href={back} className="inline-flex min-h-[44px] items-center gap-2 text-[16px] font-semibold text-primary-text hover:underline">
+          <ArrowLeft size={18} aria-hidden /> Back to the delivery
         </a>
-        <h1 className="text-[20px] font-semibold">Labels · {gr.receiptNumber}</h1>
-        {sp.posted && <Banner tone="ok" title={`Receipt ${gr.receiptNumber} saved`}>{gr.lines.length} new {gr.lines.length === 1 ? "lot waits" : "lots wait"} for the quality check. Stick one label on every sack and leave them in the hold area.</Banner>}
-        <p className="rounded-[14px] border border-line bg-surface px-4 py-3 text-[16px] font-medium" role="status" data-testid="labels-summary">
-          {sentence}
-        </p>
+        <div>
+          <h1 className="text-[22px] font-semibold leading-tight">{labelCount > 0 ? `Print ${labelCountWords(labelCount)}` : "Labels"} for this delivery</h1>
+          <p className="mt-1 text-[16px] text-fg-2">{stick} The label says what is inside, so anyone can scan it.</p>
+        </div>
+        {sp.posted && <Banner tone="ok" title="Delivery saved">{gr.lines.length} new {gr.lines.length === 1 ? "lot waits" : "lots wait"} for the quality check. Print the labels, stick them on, and leave the sacks in the hold area.</Banner>}
+        {had && <p className="rounded-[14px] border border-line bg-surface px-4 py-3 text-[15px]" data-testid="labels-summary">{had} already {had.includes(" and ") ? "have" : "has"} labels, so they are not printed again. Lost one? Open the lot and print it again with a reason.</p>}
         {failed && (
           <Banner tone="warn" title={`No labels for ${failed}`}>
             Something went wrong for {failed}. <a className="font-medium underline" href={`/print/lot-label/receipt/${gr.id}`}>Try again</a>.
           </Banner>
         )}
-        {notOk.length > 0 && <Banner tone="warn" title="Some labels cannot be printed">{notOk.map((r) => r.job.entityNumber).join(", ")}: open the print station to see why.</Banner>}
-        {printable.length > 0 && (
-          <>
-            <p className="text-[13px] text-muted">In the print dialog choose the label printer and &quot;Actual size&quot; (100 %). One label per page.</p>
-            <div className="flex flex-wrap gap-2">
-              <PrintButton label={`Print ${labelCount} ${labelCount === 1 ? "label" : "labels"}`} />
-              <LinkButton href="/labels" variant="secondary" size="lg">Print station</LinkButton>
-            </div>
-            {toPrint.length > 0 && ctx.can("inventory.label_job.create") && <ReceiptPrintedForm jobIds={toPrint.map((r) => r.job.id)} receiptId={gr.id} />}
-            {toPrint.length === 0 && <Banner tone="ok" title="Already recorded as printed">Printing again from here is not recorded. For a lost or damaged label use Reprint on the print station, with a reason.</Banner>}
-          </>
+        {notOk.length > 0 && <Banner tone="warn" title="Some labels cannot be printed">{notOk.map((r) => r.job.entityName ?? r.job.entityNumber).join(", ")}: open the lot to print a new label.</Banner>}
+        {toPrint.length > 0 && (
+          <div className="grid gap-2">
+            <PrintNow label={`Print ${labelCountWords(labelCount)}`} />
+            <p className="text-[14px] text-fg-2">
+              In the print window pick the label printer and <strong>Actual size / 100 %</strong>. <strong>Save as PDF</strong> looks exactly like this.
+            </p>
+          </div>
         )}
+        {shown.length === 0 && !had && <Banner tone="info" title="No labels to print">Go back to the delivery and press Print labels.</Banner>}
       </div>
-      {printable.length > 0 && (
-        <>
-          <style>{css}</style>
-          {printable.map((r) => (
-            <div key={r.job.id} className={r.job.status === "printed" ? "no-print" : undefined} dangerouslySetInnerHTML={{ __html: r.render!.body! }} />
-          ))}
-        </>
+
+      {toPrint.length > 0 && (
+        <div className="mx-auto mt-4 max-w-2xl px-4">
+          <LabelSheet faces={toPrint.map((r) => r.face!)} captions={toPrint.map(caption)} />
+        </div>
       )}
+      {printedAlready.length > 0 && (
+        <div className="no-print mx-auto mt-6 grid max-w-2xl gap-3 px-4">
+          <h2 className="text-[17px] font-semibold">Already printed</h2>
+          {printedAlready.map((r) => (
+            <div key={r.job.id} className="grid justify-items-center gap-2">
+              <div className="w-full text-[15px] text-fg-2">{caption(r)}</div>
+              <LabelFace face={r.face!} />
+            </div>
+          ))}
+          <LinkButton href={back} variant="secondary" size="lg">Back to the delivery</LinkButton>
+        </div>
+      )}
+
+      {toPrint.length > 0 && (
+        <div className="no-print mx-auto mt-4 grid max-w-2xl gap-4 px-4">
+          <PrintedCheck jobIds={toPrint.map((r) => r.job.id)} receiptId={gr.id} count={labelCount} stick={stick} back={back} />
+        </div>
+      )}
+      <AutoPrint enabled={toPrint.length > 0 && sp.auto === "1"} />
     </main>
   );
 }

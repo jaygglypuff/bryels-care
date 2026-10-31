@@ -6,9 +6,11 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { sampleLabelEntity } from "./datasets";
 import { insertAndRender } from "./generated";
+import { labelFace } from "./label-face";
 import { fieldKeys, getLabelTemplate } from "./label-templates";
-import { labelRendererV1, type LabelData } from "./renderers/label-v1";
-import { checkDefinition } from "./renderers/registry";
+import { type LabelData } from "./renderers/label-v1";
+import { labelRendererV2 } from "./renderers/label-v2";
+import { checkDefinition, findRenderer } from "./renderers/registry";
 import { shortHash } from "./renderers/shared";
 import { isUuid } from "./templates";
 
@@ -69,8 +71,12 @@ export async function labelTestPage(ctx: AuthContext, labelTemplateId: string) {
     entity: sampleLabelEntity(t.appliesTo),
     testPage: true,
   };
-  const def = labelRendererV1.defaultDefinition("label");
-  const out = labelRendererV1.render(def, {
+  // ADR-099: the test label uses the template's own layout version (v1 or v2), so it is what will print.
+  const [layout] = t.layoutVersion ? await db.select().from(documentTemplateVersions).where(eq(documentTemplateVersions.id, t.layoutVersion.id)).limit(1) : [];
+  const pinned = (layout?.definition as { renderer?: { id: string; version: number } } | undefined)?.renderer;
+  const renderer = (pinned && findRenderer(pinned.id, pinned.version)) || labelRendererV2;
+  const def = layout ? (layout.definition as ReturnType<typeof labelRendererV2.defaultDefinition>) : labelRendererV2.defaultDefinition("label");
+  const out = renderer.render(def, {
     meta: {
       documentNumber: "TEST",
       documentKind: "label",
@@ -92,5 +98,5 @@ export async function labelTestPage(ctx: AuthContext, labelTemplateId: string) {
     },
     data,
   });
-  return { template: t, css: out.css, body: out.body.value };
+  return { template: t, css: out.css, body: out.body.value, face: labelFace(data, out.body.value, out.css) };
 }

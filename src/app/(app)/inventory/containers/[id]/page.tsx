@@ -86,7 +86,7 @@ export default async function BoxPage({ params, searchParams }: { params: Promis
             <div className="flex flex-col gap-2">
               {rest.map((a) =>
                 a.allowed ? (
-                  <LinkButton key={a.key} href={a.href} variant="secondary" target={a.key === "label" ? "_blank" : undefined}>
+                  <LinkButton key={a.key} href={a.href} variant="secondary">
                     {a.label}
                   </LinkButton>
                 ) : (

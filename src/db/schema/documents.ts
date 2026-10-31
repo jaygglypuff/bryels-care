@@ -87,7 +87,8 @@ export const documentTemplateVersions = pgTable(
   ],
 );
 
-export const LABEL_APPLIES_TO = ["material", "wip", "finished_good", "carton", "pallet", "location", "equipment", "sample"] as const;
+/** ADR-099: `product` = the label on each sold piece (bar, jar, box); `finished_good` = the internal lot label on bulk stock. */
+export const LABEL_APPLIES_TO = ["material", "wip", "finished_good", "product", "carton", "pallet", "location", "equipment", "sample"] as const;
 export const LABEL_SYMBOLOGIES = ["qr", "code128", "ean13"] as const;
 /** status: draft → approved → retired; editing an approved template's physical settings returns it to draft. */
 export const LABEL_TEMPLATE_STATUSES = ["draft", "approved", "retired"] as const;

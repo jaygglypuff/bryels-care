@@ -39,12 +39,12 @@ export type PickCandidate = {
   badgeTone?: "ok" | "warn" | "bad" | "info";
 };
 
-/** Label payload types that identify each kind. Batches are numbered records without a typed label. */
+/** Label payload types that identify each kind. A batch is found by its number or by the lot number on its product labels. */
 export const PICK_PAYLOAD_TYPES: Record<PickKind, ScanType[]> = {
   lot: ["LOT"],
   container: ["BOX"],
   location: ["LOC"],
-  batch: [],
+  batch: ["LOT"], // ADR-099: a product label on a bar carries BC:LOT:<the lot the batch will make>
   item: ["MAT", "SKU"],
 };
 

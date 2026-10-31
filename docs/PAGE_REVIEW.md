@@ -145,9 +145,14 @@ Total screens: 250.
 | `/inventory/scan` | ☑ 2026-10-31 | Intro (find anything by scan or words). |
 | `/inventory/stock-card/[lotId]` | ☑ 2026-10-31 | “History: <item>”: one list for phone and desktop (+/− amount, left after), start/end amounts, check kept; print/exports in ⋯ More. |
 | `/inventory/wip` | ☑ 2026-10-31 | “Being made”: product first, steps done, batch number grey. |
-| `/labels/jobs/[jobId]` | ☑ 2026-10-31 | “Label: <item>”; next step by state; reprint with reason kept; cancel/did not print/old label in ⋯ More. |
-| `/labels/new` | ☑ 2026-10-31 | “Print a label: <item>”; 3 fields; already printed → next step to reprint with reason. |
-| `/labels` | ☑ 2026-10-31 | “Labels to print”: what the label is for first, one Print button, cancel/did not print in ⋯ More; status chips with icons. |
+| `/labels/jobs/[jobId]` | ☑ 2026-10-31 | “Label: <item>”; next step by state (not printed → “Print it” opens the print page); reprint with reason kept; no printer/station words; cancel/did not print/old label in ⋯ More (ADR-099). |
+| `/labels/new` | ☑ 2026-10-31 | “Print a label: <item>” for a lot, shelf or box (ADR-099): the label at real size, “Stick one on each …”, where it is scanned, printer in plain words, “How many? [− N +]”, one green “Print N labels”; same label again → “Why print again?” in place; old label out of date → warning; opened without a record → “Which label goes where?” instead of a 404. |
+| `/labels` | ☑ 2026-10-31 | “Labels printed” (ADR-099, was the print-station queue): every label of this site newest first, read only, tabs All / Not printed yet; “Which label goes where?” cards; printers and sizes folded (Settings › Labels and printouts). |
+| `/print/labels/[jobId]` | ☑ 2026-10-31 | Print page (ADR-099): THE label (same component as the preview), “Print N labels” (the print window opens by itself when coming from a task screen), printer in plain words, “Save as PDF looks exactly like this”; then “Did the label come out right?” Yes / No, print again / printer not working; printed → print again with a reason. Paper: one label per page, page = label size (checked as Chrome PDF: 100×50, 70×40, 50×30, Code 128 shelf). |
+| `/print/labels/receipt/[grId]` | ☑ 2026-10-31 | Delivery labels (ADR-090/099): one block per item “Palm Oil · 1 label, all like this”, one “Print N labels” for all, “Did all N labels come out right?”; raw materials and intermediates each get their own approved label; no print-station link. |
+| `/print/lot-label/receipt/[grId]` | ☑ 2026-10-31 | When labels cannot go straight to print: says what is missing (printer, approved label) or lets you change how many per item and the size; shows the label first; no printer choice. |
+| `/print/labels/test/[labelTemplateId]` | ☑ 2026-10-31 | Test label drawn with the template's own layout version; ruler in the status row; page = label size. |
+| `/print/box-label/[containerId]`, `/print/lot-label/[lotId]` | ☑ 2026-10-31 | Redirect to “Print a label” for the box / lot (every label is a recorded label job). |
 | `/warehouse/packs/[packId]` | ☑ 2026-10-31 | “Boxing: <product>”; next step (pack a box / check / waiting for a checker ≠ packer); cancel and boxing note in ⋯ More. |
 | `/warehouse/packs` | ☑ 2026-10-31 | Product first, plain states, number grey; repack in ⋯ More. |
 | `/warehouse` | ☑ 2026-10-31 | Intro; “Scan a label”; parts of the warehouse tiles kept. |

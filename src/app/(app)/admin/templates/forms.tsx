@@ -7,7 +7,7 @@ import { MoreDetails } from "@/ui/guide";
 import { NameAndCode } from "@/ui/name-and-code";
 
 import { APPLIES_TEXT } from "./words";
-const DATASET_TEXT: Record<string, string> = { "label/material/v1": "Materials", "label/wip/v1": "Half-made product", "label/finished_good/v1": "Finished products", "label/location/v1": "Shelves and places", "label/carton/v1": "Boxes (cartons)" };
+const DATASET_TEXT: Record<string, string> = { "label/material/v1": "Materials", "label/wip/v1": "Half-made product", "label/finished_good/v1": "Finished products (lot label on bulk stock)", "label/product/v1": "Product label (on each bar or jar)", "label/location/v1": "Shelves and places", "label/carton/v1": "Boxes (cartons)" };
 import {
   createLabelTemplateAction,
   createTemplateAction,

@@ -21,6 +21,7 @@ export const LABEL_DATASET_FOR: Partial<Record<string, string>> = {
   material: "label/material/v1",
   wip: "label/wip/v1",
   finished_good: "label/finished_good/v1",
+  product: "label/product/v1", // ADR-099: the label on each bar / jar / retail box (no status bar, no bulk quantity)
   location: "label/location/v1",
   carton: "label/carton/v1", // W3E: box labels
 };
@@ -210,12 +211,23 @@ export async function approvedLabelTemplatesFor(tx: DbOrTx, organizationId: stri
     .orderBy(asc(labelTemplates.code));
 }
 
+/**
+ * ADR-099: the templates offered for a label kind. Product labels (on each piece) use `product` templates;
+ * until QA approves one, an approved finished-goods label is used (the batch's product label never shows a
+ * status bar or a bulk quantity, whichever template is used).
+ */
+export async function labelTemplatesForKind(tx: DbOrTx, organizationId: string, siteId: string, appliesTo: string) {
+  const own = await approvedLabelTemplatesFor(tx, organizationId, siteId, appliesTo);
+  if (own.length || appliesTo !== "product") return own;
+  return approvedLabelTemplatesFor(tx, organizationId, siteId, "finished_good");
+}
+
 /** Internal: used by label jobs to validate a template choice and resolve its effective layout. */
 export async function loadPrintableTemplate(tx: DbOrTx, ctx: AuthContext, id: string, appliesTo: string, siteId: string) {
   const t = await load(tx, ctx, id);
   if (t.status !== "approved" || !t.isActive) throw new DomainError("state", `Label template ${t.code} is not approved for printing.`, { field: "labelTemplateId" });
   if (t.siteId && t.siteId !== siteId) throw new DomainError("validation", `Label template ${t.code} belongs to another site.`, { field: "labelTemplateId" });
-  if (t.appliesTo !== appliesTo) throw new DomainError("validation", `Label template ${t.code} is for ${t.appliesTo.replace("_", " ")} labels, not ${appliesTo.replace("_", " ")}.`, { field: "labelTemplateId" });
+  if (t.appliesTo !== appliesTo && !(appliesTo === "product" && t.appliesTo === "finished_good")) throw new DomainError("validation", `Label template ${t.code} is for ${t.appliesTo.replace("_", " ")} labels, not ${appliesTo.replace("_", " ")}.`, { field: "labelTemplateId" });
   const { layout, version } = await checkLayout(tx, ctx, t.documentTemplateId, t.appliesTo, true);
   return { template: t, layout, version };
 }

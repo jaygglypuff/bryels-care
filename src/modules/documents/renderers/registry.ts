@@ -3,6 +3,7 @@ import { templateDefinitionSchema, type TemplateDefinition } from "../schemas";
 import { bmrPaperPageRendererV1 } from "./bmr-paper-page-v1";
 import { bmrRendererV1 } from "./bmr-v1";
 import { labelRendererV1 } from "./label-v1";
+import { labelRendererV2 } from "./label-v2"; // ADR-099
 import { testPageRendererV1 } from "./test-page-v1";
 import { dispensingSheetRendererV1 } from "./dispensing-sheet-v1"; // W2A
 import { travelerRendererV1 } from "./traveler-v1"; // W2A
@@ -17,7 +18,8 @@ import type { FrozenDataset, RenderOutput, Renderer } from "./types";
  * here (US-2-11 AC1); adding a document kind means adding a renderer file and a line below.
  */
 const RENDERERS: readonly Renderer[] = [
-  labelRendererV1,
+  labelRendererV2, // first: new label layouts get v2 by default (ADR-099)
+  labelRendererV1, // kept: labels printed with v1 re-render to the same checksum
   testPageRendererV1,
   bmrRendererV1, // W2D (US-3-17)
   bmrPaperPageRendererV1, // W2D (US-3-20)

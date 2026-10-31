@@ -13,7 +13,7 @@ import type { FrozenDataset, Renderer } from "./types";
  * code/version and the job reference in 5 pt for reprint tracing.
  */
 
-export const LABEL_DATASETS = ["label/material/v1", "label/wip/v1", "label/finished_good/v1", "label/location/v1", "label/test/v1", "label/carton/v1"] as const;
+export const LABEL_DATASETS = ["label/material/v1", "label/wip/v1", "label/finished_good/v1", "label/location/v1", "label/test/v1", "label/carton/v1", "label/product/v1"] as const;
 
 const text = z.string().max(200).nullable().optional();
 export const labelDataSchema = z.object({
@@ -68,17 +68,19 @@ function layoutOf(w: number, h: number): Layout {
   return "small";
 }
 
-function css(d: LabelData): string {
-  const w = d.label.mediaWidthMm;
-  const h = d.label.mediaHeightMm;
+/**
+ * The label stylesheet in three parts (ADR-099): the `@page` rule, the face (how one label looks, also used
+ * for the on-screen preview) and the print rules. `css()` joins them exactly as v1 always did, so stored
+ * label documents keep their checksum. The CSS depends only on the label size.
+ */
+export function labelCssParts(w: number, h: number): { page: string; face: string; print: string } {
   const layout = layoutOf(w, h);
   const pad = 2;
   const qr = layout === "tall" ? Math.min(40, w * 0.45) : Math.max(18, Math.min(h - 2 * pad - 5, w * 0.42, 40));
   const big = layout === "small" ? 9 : layout === "wide" ? 13 : 18;
   const small = layout === "tall" ? 9 : 7;
-  return `
-@page { size: ${mmCss(w)} ${mmCss(h)}; margin: 0; }
-.lbl-sheet { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 16px 8px; }
+  const page = `@page { size: ${mmCss(w)} ${mmCss(h)}; margin: 0; }`;
+  const face = `.lbl-sheet { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 16px 8px; }
 .lbl { width: ${mmCss(w)}; height: ${mmCss(h)}; box-sizing: border-box; padding: ${pad}mm; background: #fff; color: #000;
   font-family: ${FONT_STACK}; overflow: hidden; position: relative; border: 1px solid #bdb9ad; border-radius: 1.5mm;
   display: grid; gap: 2mm; ${layout === "tall" ? "grid-template-rows: auto 1fr;" : `grid-template-columns: ${mmCss(qr)} 1fr;`} }
@@ -101,14 +103,20 @@ function css(d: LabelData): string {
 .lbl-ruler { margin-top: 1mm; }
 .lbl-ruler .bar { height: 2.5mm; border: 0.25mm solid #000; border-top: none; box-sizing: border-box;
   background: repeating-linear-gradient(90deg, #000 0 0.25mm, transparent 0.25mm 5mm); }
-.lbl-ruler p { font: 600 6pt/1.2 ${FONT_STACK}; margin: 0.4mm 0 0; }
-@media print {
+.lbl-ruler p { font: 600 6pt/1.2 ${FONT_STACK}; margin: 0.4mm 0 0; }`;
+  const print = `@media print {
   html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
   .lbl-sheet { display: block; padding: 0; }
   .lbl { border: none; border-radius: 0; break-after: page; page-break-after: always; }
   .lbl:last-child { break-after: auto; page-break-after: auto; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }`;
+  return { page, face, print };
+}
+
+function css(d: LabelData): string {
+  const { page, face, print } = labelCssParts(d.label.mediaWidthMm, d.label.mediaHeightMm);
+  return `\n${page}\n${face}\n${print}`;
 }
 
 const FIELD_ROWS: [LabelFieldKey, string, (e: LabelData["entity"]) => string | null | undefined][] = [

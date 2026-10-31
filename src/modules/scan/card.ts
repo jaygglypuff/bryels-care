@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { containers, equipment, inventoryBalances, inventoryLots, locations, materials, products, sites, warehouses } from "@/db/schema";
+import { batches, containers, equipment, inventoryBalances, inventoryLots, locations, materials, products, sites, warehouses } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { daysUntil, D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
@@ -178,7 +178,7 @@ async function lotCard(ctx: AuthContext, lotId: string, payload: string): Promis
         if (stations.length === 0) reason = `Label printing isn't set up for ${site?.code} yet. Ask an administrator.`;
         else if (templates.length === 0) reason = `No approved label template for ${appliesTo.replace("_", " ")} lots yet.`;
       }
-      actions.push({ key: "label", label: labels.mismatch ? "Print new label" : "Print label", href: `/print/lot-label/${lot.id}`, allowed: !reason, reason });
+      actions.push({ key: "label", label: labels.mismatch ? "Print new label" : "Print label", href: `/labels/new?entityType=inventory_lot&entityId=${lot.id}`, allowed: !reason, reason });
       if (latest) {
         const r = !ctx.can("documents.reprint.create") ? "Your role cannot reprint labels." : !here ? elsewhere : labels.mismatch ? "The status changed; print a new label instead of a reprint." : undefined;
         actions.push({ key: "reprint", label: "Reprint label", href: `/labels/jobs/${latest.reprintOfId ?? latest.id}`, allowed: !r, reason: r });
@@ -235,6 +235,42 @@ async function findLotId(ctx: AuthContext, value: string) {
     .where(and(eq(inventoryLots.organizationId, ctx.organizationId), eq(inventoryLots.lotNumber, value), inArray(inventoryLots.siteId, ctx.allowedSiteIds)))
     .limit(1);
   return lot?.id ?? null;
+}
+
+/**
+ * ADR-099: a product label is printed on the packaging step, before Finish makes the lot. Its code is the lot
+ * number fixed on the batch (BC:LOT:<output lot>), so until the lot exists the scan opens the batch instead of
+ * "not found".
+ */
+async function batchLabelCard(ctx: AuthContext, lotNumber: string, payload: string): Promise<ScanCard | null> {
+  if (!ctx.can("production.batch.view")) return null;
+  const [row] = await db
+    .select({ id: batches.id, batchNumber: batches.batchNumber, status: batches.status, siteId: batches.siteId, made: batches.outputManufacturedOn, expires: batches.outputExpiresOn, product: products.name, sku: products.skuCode })
+    .from(batches)
+    .innerJoin(products, eq(products.id, batches.productId))
+    .where(and(eq(batches.organizationId, ctx.organizationId), eq(batches.outputLotNumber, lotNumber), inArray(batches.siteId, ctx.allowedSiteIds)))
+    .limit(1);
+  if (!row) return null;
+  const site = ctx.allowedSites.find((s) => s.id === row.siteId);
+  return {
+    outcome: "found",
+    payload,
+    entity: "record",
+    caption: "Batch (being made)",
+    identifier: lotNumber,
+    title: row.product,
+    subtitle: `Batch ${row.batchNumber}. The lot ${lotNumber} is made when the batch is finished.`,
+    siteCode: site?.code ?? null,
+    status: { code: row.status },
+    expiry: row.expires ? { date: row.expires, daysLeft: daysUntil(row.expires) } : null,
+    facts: [
+      ["Batch", row.batchNumber],
+      ["Lot on the label", lotNumber],
+      ...(row.made ? ([["Made", fmtDate(row.made)]] as ScanFact[]) : []),
+      ...(row.expires ? ([["Expiry", fmtDate(row.expires)]] as ScanFact[]) : []),
+    ],
+    actions: [{ key: "open", label: "Open batch", href: `/production/${row.id}`, allowed: true, primary: true }],
+  };
 }
 
 async function locationCard(ctx: AuthContext, value: string, payload: string): Promise<ScanCard> {
@@ -487,7 +523,8 @@ export async function resolveScanCard(ctx: AuthContext, raw: string): Promise<Sc
       switch (p.type) {
         case "LOT": {
           const id = await findLotId(ctx, p.value);
-          return id ? await lotCard(ctx, id, payload) : notFound(payload, "lot", ctx);
+          if (id) return await lotCard(ctx, id, payload);
+          return (await batchLabelCard(ctx, p.value, payload)) ?? notFound(payload, "lot", ctx);
         }
         case "LOC":
           return await locationCard(ctx, p.value, payload);

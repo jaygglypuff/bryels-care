@@ -37,7 +37,9 @@ describe("scan-or-pick value resolution", () => {
     expect(classifyPickInput("location", "BC:LOT:L-2610-00001")).toEqual({ kind: "refused", message: wrongKindMessage("location", "LOT") });
     expect(classifyPickInput("container", "BC:LOT:L-1")).toMatchObject({ kind: "refused" });
     expect(classifyPickInput("item", "BC:SKU:SOAP-1")).toEqual({ kind: "label", payload: "BC:SKU:SOAP-1", value: "SOAP-1" });
-    expect(classifyPickInput("batch", "BC:LOT:L-1")).toMatchObject({ kind: "refused" });
+    expect(classifyPickInput("batch", "BC:BOX:BX-1")).toMatchObject({ kind: "refused" });
+    // ADR-099: the product label on a bar carries the lot number the batch will make.
+    expect(classifyPickInput("batch", "BC:LOT:L-1")).toEqual({ kind: "label", payload: "BC:LOT:L-1", value: "L-1" });
   });
 
   it("a label not in the list goes to the server, words go to the name search", () => {

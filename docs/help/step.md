@@ -1,7 +1,7 @@
 ---
 key: production.step
 title: Do a step (Start check, Mix, Curing, Cut, Wrap)
-version: 2
+version: 3
 updated_at: 2026-10-31
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
@@ -32,7 +32,7 @@ Each step has its own screen: what to do, up to 3 things to write down, and one 
 ## Wrap and label
 
 1. The screen shows the wrappers (and labels or boxes) you took at **Get materials**: their lot, shelf and how many. You do not scan them.
-2. Tap **Print labels for this batch**. The labels show the product, lot number, made date and expiry. Open them and print. Stick one label on each bar or box.
+2. Look at the label on the screen: this is the **product label**, the one that goes on each bar (product name, lot number, made date, expiry, storage, and a square code). It has no QA status bar. Tap **Print N labels**, pick the label printer and **Actual size** in the print window, then tap **Yes, they printed**. Stick one label on each bar. Need more later? Print them again and say why. See [Labels](labels.md).
 3. Wrap the bars. Type **How many did you use?** and **How many were spoiled?** on the keypad.
 4. Tap **Step done**. The system records the wrapper lot for this batch. Left-over wrappers are counted at Finish.
 5. If nothing was on the list, the screen asks you to scan or type the wrapper lot you used.
