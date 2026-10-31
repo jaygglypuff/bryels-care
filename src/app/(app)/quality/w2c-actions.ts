@@ -69,7 +69,7 @@ export async function recordSampleAction(_p: ActionState, fd: FormData): Promise
     const ctx = await requireContext();
     const r = await recordSample(ctx, { inspectionId, fromLocationId: str(fd, "fromLocationId"), qty: str(fd, "qty"), containerRef: opt(fd, "containerRef"), note: opt(fd, "note"), idempotencyKey: str(fd, "idempotencyKey") });
     refreshCurrentPage();
-    return { ok: true, message: r.replayed ? `Sample ${r.sampleNo} was already recorded.` : `Sample ${r.sampleNo} recorded; the quantity was posted as a sample consumption.` };
+    return { ok: true, message: r.replayed ? `Sample ${r.sampleNo} was already saved.` : `Sample ${r.sampleNo} saved; that amount was taken out of stock.` };
   } catch (e) {
     return toActionState(e);
   }
@@ -89,7 +89,7 @@ export async function recordResultAction(_p: ActionState, fd: FormData): Promise
       idempotencyKey: opt(fd, "idempotencyKey"),
     });
     refreshCurrentPage();
-    return { ok: true, message: `${r.testName}: ${r.result} — ${r.passed ? "within specification" : "OUT OF SPECIFICATION"}.` };
+    return { ok: true, message: `${r.testName}: ${r.result} — ${r.passed ? "OK" : "NOT OK"}.` };
   } catch (e) {
     return toActionState(e);
   }
@@ -101,7 +101,7 @@ export async function correctResultAction(_p: ActionState, fd: FormData): Promis
     const ctx = await requireContext();
     const r = await correctInspectionResult(ctx, { resultId: str(fd, "resultId"), value: opt(fd, "value"), uom: opt(fd, "uom"), conforms: bool(fd, "conforms"), reason: str(fd, "reason") });
     refreshCurrentPage();
-    return { ok: true, message: `Correction recorded: ${r.result}. The original entry stays visible, struck through.` };
+    return { ok: true, message: `Correction saved: ${r.result}. The first result stays visible, crossed out.` };
   } catch (e) {
     return toActionState(e);
   }
@@ -113,7 +113,7 @@ export async function submitInspectionAction(_p: ActionState, fd: FormData): Pro
     const ctx = await requireContext();
     await submitInspection(ctx, { inspectionId });
     refreshCurrentPage();
-    return { ok: true, message: "Submitted for review by a second QA user." };
+    return { ok: true, message: "Sent: a second QA person checks the results." };
   } catch (e) {
     return toActionState(e);
   }
@@ -137,7 +137,7 @@ export async function cancelInspectionAction(_p: ActionState, fd: FormData): Pro
     const ctx = await requireContext();
     await cancelInspection(ctx, { inspectionId, reason: str(fd, "reason") });
     refreshCurrentPage();
-    return { ok: true, message: "Inspection cancelled." };
+    return { ok: true, message: "Quality check cancelled." };
   } catch (e) {
     return toActionState(e);
   }
@@ -173,7 +173,7 @@ export async function startInvestigationAction(_p: ActionState, fd: FormData): P
     const ctx = await requireContext();
     await startInvestigation(ctx, { deviationId, severity: str(fd, "severity"), investigation: str(fd, "investigation"), impactAssessment: opt(fd, "impactAssessment") });
     refreshCurrentPage();
-    return { ok: true, message: "Severity recorded; the deviation is under investigation." };
+    return { ok: true, message: "Saved: QA is looking into it." };
   } catch (e) {
     return toActionState(e);
   }
@@ -185,7 +185,7 @@ export async function updateInvestigationAction(_p: ActionState, fd: FormData): 
     const ctx = await requireContext();
     await updateInvestigation(ctx, { deviationId, severity: opt(fd, "severity"), investigation: opt(fd, "investigation"), impactAssessment: opt(fd, "impactAssessment"), rootCause: opt(fd, "rootCause") });
     refreshCurrentPage();
-    return { ok: true, message: "Investigation record updated." };
+    return { ok: true, message: "Saved." };
   } catch (e) {
     return toActionState(e);
   }
@@ -205,7 +205,7 @@ export async function containDeviationAction(_p: ActionState, fd: FormData): Pro
       idempotencyKey: str(fd, "idempotencyKey"),
     });
     refreshCurrentPage();
-    return { ok: true, message: `Containment hold ${r.holdNumber} placed and linked.` };
+    return { ok: true, message: `Stopped by QA (${r.holdNumber}).` };
   } catch (e) {
     return toActionState(e);
   }
@@ -218,7 +218,7 @@ export async function closeDeviationAction(_p: ActionState, fd: FormData): Promi
     const permitted = bool(fd, "releasePermitted");
     await closeDeviation(ctx, { deviationId, rootCause: str(fd, "rootCause"), resolution: str(fd, "resolution"), releasePermitted: permitted as boolean, effectivenessCheckOn: opt(fd, "effectivenessCheckOn") });
     refreshCurrentPage();
-    return { ok: true, message: "Deviation closed." };
+    return { ok: true, message: "Problem report closed." };
   } catch (e) {
     return toActionState(e);
   }
@@ -232,7 +232,7 @@ export async function requestConditionalAction(_p: ActionState, fd: FormData): P
     const ctx = await requireContext();
     await requestConditionalRelease(ctx, { batchId, conditions: str(fd, "conditions"), reviewDate: str(fd, "reviewDate"), reason: str(fd, "reason") });
     refreshCurrentPage();
-    return { ok: true, message: "Conditional release requested. A second approver must decide it." };
+    return { ok: true, message: "Asked for “OK with conditions”. A second QA person decides." };
   } catch (e) {
     return toActionState(e);
   }

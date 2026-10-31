@@ -5,6 +5,7 @@ import { fmtDateTime } from "@/lib/qty";
 import { labelVerificationLocations, labelVerificationZone } from "@/modules/quality";
 import { Card, CardTitle, EmptyState, PageHeader, cx } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
+import { NextStep, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../forbidden";
 import { VerifyScanForm } from "../w2c-forms";
 
@@ -26,39 +27,47 @@ export default async function LabelVerificationPage({ searchParams }: { searchPa
   }
   return (
     <>
-      <PageHeader title="Label verification" subtitle={`${ctx.currentSite.code} · scan each labelled box or lot in a zone; the container itself does not change`} />
+      <PageHeader title="Check the labels in an area" subtitle={ctx.currentSite.name} />
+      <PageIntro>This screen is for the warehouse: after new labels are stuck on, choose an area and scan every label there. The list of labels still to scan gets shorter.</PageIntro>
+      {!zone ? (
+        <NextStep text="Next: choose the area you are standing in." />
+      ) : zone.remaining.length > 0 ? (
+        <NextStep text={`Next: scan the next label (${zone.remaining.length} left in this area).`} />
+      ) : (
+        <NextStep text="Every label in this area is checked. Choose the next area." />
+      )}
       <div className="flex flex-col gap-5">
         <Card>
-          <CardTitle>Zone</CardTitle>
+          <CardTitle>Area</CardTitle>
           {zones.length === 0 ? (
-            <EmptyState title="No zones">This site has no active locations.</EmptyState>
+            <EmptyState title="No areas">This site has no storage places yet. Ask the warehouse lead or the administrator to add them.</EmptyState>
           ) : (
-            <nav className="flex flex-wrap gap-2" aria-label="Choose a zone">
+            <nav className="flex flex-wrap gap-2" aria-label="Choose an area">
               {zones.map((z) => (
-                <Link key={z.id} href={`/quality/label-verification?locationId=${z.id}`} className={cx("rounded-full border px-3 py-1.5 text-[13px]", z.id === locationId ? "border-ring bg-primary-soft font-medium" : "border-line hover:bg-surface-2")}>
+                <Link key={z.id} href={`/quality/label-verification?locationId=${z.id}`} className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[14px]", z.id === locationId ? "border-ring bg-primary-soft font-medium" : "border-line hover:bg-surface-2")}>
                   {z.code}
-                  {z.boxes > 0 && <span className="ml-1 text-muted">({z.verifiedBoxes}/{z.boxes} boxes)</span>}
+                  {z.boxes > 0 && <span className="ml-1 text-muted">({z.verifiedBoxes} of {z.boxes} boxes done)</span>}
                 </Link>
               ))}
             </nav>
           )}
-          {locationId && !zone && <p className="mt-3 text-[13px] text-[var(--bad-fg)]">That zone is not at your current site.</p>}
+          {locationId && !zone && <p className="mt-3 text-[13px] text-[var(--bad-fg)]">That area is not at your current site.</p>}
         </Card>
         {zone && (
           <>
             <Card>
-              <CardTitle action={<Chip tone={zone.targetMet ? "ok" : "warn"}>{zone.verifiedPct} % verified · target {zone.targetPct} %</Chip>}>
+              <CardTitle action={<Chip tone={zone.targetMet ? "ok" : "warn"}>{zone.verifiedPct} % checked · goal {zone.targetPct} %</Chip>}>
                 {zone.location.code} · {zone.location.name}
               </CardTitle>
               <p className="mb-3 text-[13px] text-muted">
-                {zone.verified} of {zone.total} label(s) verified, {zone.remaining.length} remaining.
+                {zone.verified} of {zone.total} label(s) checked, {zone.remaining.length} still to scan.
               </p>
-              {zone.canScan ? <VerifyScanForm locationId={zone.location.id} /> : <Banner tone="info" title="View only">Scanning needs inventory.container.edit (warehouse operators).</Banner>}
+              {zone.canScan ? <VerifyScanForm locationId={zone.location.id} /> : <Banner tone="info" title="You can look but not scan">Warehouse people scan the labels here.</Banner>}
             </Card>
             <Card>
-              <CardTitle>Remaining ({zone.remaining.length})</CardTitle>
+              <CardTitle>Still to scan ({zone.remaining.length})</CardTitle>
               {zone.remaining.length === 0 ? (
-                <EmptyState title="Every label in this zone is verified">Move to the next zone.</EmptyState>
+                <EmptyState title="Every label in this area is checked">Go to the next area.</EmptyState>
               ) : (
                 <ul className="flex flex-col divide-y divide-line text-[14px]">
                   {zone.remaining.map((i) => (
@@ -72,9 +81,9 @@ export default async function LabelVerificationPage({ searchParams }: { searchPa
               )}
             </Card>
             <Card>
-              <CardTitle>Verified ({zone.verified})</CardTitle>
+              <CardTitle>Checked ({zone.verified})</CardTitle>
               {zone.verified === 0 ? (
-                <p className="text-[13px] text-muted">Nothing verified yet.</p>
+                <p className="text-[13px] text-muted">Nothing checked yet.</p>
               ) : (
                 <ul className="flex flex-col divide-y divide-line text-[13px]">
                   {zone.items

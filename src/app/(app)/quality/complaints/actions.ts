@@ -59,7 +59,7 @@ export async function startInvestigationAction(_p: ActionState, fd: FormData): P
     const ctx = await requireContext();
     const r = await startComplaintInvestigation(ctx, { complaintId: str(fd, "complaintId"), investigation: str(fd, "investigation"), severity: opt(fd, "severity") });
     refreshCurrentPage();
-    return { ok: true, message: r.recallReviewFlagged ? "Investigation started. The severity prompts a recall assessment; QA and the owner were notified." : "Investigation started." };
+    return { ok: true, message: r.recallReviewFlagged ? "Saved: QA is looking into it. This is serious enough to check if a recall is needed; QA and the owner were told." : "Saved: QA is looking into it." };
   } catch (e) {
     return toActionState(e);
   }
@@ -70,7 +70,7 @@ export async function classifyAction(_p: ActionState, fd: FormData): Promise<Act
     const ctx = await requireContext();
     const r = await classifyComplaint(ctx, { complaintId: str(fd, "complaintId"), severity: str(fd, "severity") });
     refreshCurrentPage();
-    return { ok: true, message: r.recallReviewFlagged ? "Severity recorded. It prompts a recall assessment; QA and the owner were notified." : "Severity recorded." };
+    return { ok: true, message: r.recallReviewFlagged ? "Saved. This is serious enough to check if a recall is needed; QA and the owner were told." : "Saved." };
   } catch (e) {
     return toActionState(e);
   }
@@ -98,7 +98,7 @@ export async function resolveComplaintAction(_p: ActionState, fd: FormData): Pro
     const ctx = await requireContext();
     await resolveComplaint(ctx, { complaintId: str(fd, "complaintId"), resolution: str(fd, "resolution"), rootCause: opt(fd, "rootCause"), customerResponse: opt(fd, "customerResponse") });
     refreshCurrentPage();
-    return { ok: true, message: "Marked resolved; QA closes it." };
+    return { ok: true, message: "Answer saved; QA closes the complaint." };
   } catch (e) {
     return toActionState(e);
   }
@@ -109,7 +109,7 @@ export async function reopenComplaintAction(_p: ActionState, fd: FormData): Prom
     const ctx = await requireContext();
     await reopenComplaint(ctx, { complaintId: str(fd, "complaintId"), reason: str(fd, "reason") });
     refreshCurrentPage();
-    return { ok: true, message: "Back under investigation." };
+    return { ok: true, message: "QA is looking into it again." };
   } catch (e) {
     return toActionState(e);
   }

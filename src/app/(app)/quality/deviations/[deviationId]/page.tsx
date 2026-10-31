@@ -4,9 +4,13 @@ import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getDeviation, listCapas } from "@/modules/quality";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
-import { Banner, Chip, StatusChip } from "@/ui/status";
+import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { RecordNo } from "@/ui/plain-list";
+import { WhoCanHelp } from "@/ui/who-can-help";
+import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
-import { DeviationStatusChip } from "../../_ui";
+import { DeviationStatusChip, QaStatusChip, Timeline } from "../../_ui";
 import { CapaStatusChip } from "../../capa/_ui";
 import { CloseDeviationForm, ContainForm, InvestigateForm, UpdateInvestigationForm } from "../../w2c-forms";
 
@@ -23,8 +27,8 @@ export default async function DeviationPage({ params, searchParams }: { params: 
   } catch (e) {
     if (e instanceof DomainError && e.code === "not_found") {
       return (
-        <EmptyState title="Deviation not found" action={<LinkButton href="/quality/deviations" variant="secondary">Deviations</LinkButton>}>
-          This deviation does not exist or is not at one of your sites.
+        <EmptyState title="Problem report not found" action={<LinkButton href="/quality/deviations" variant="secondary">Problem reports</LinkButton>}>
+          This problem report does not exist or is not at one of your sites. Ask QA if you think it should be here.
         </EmptyState>
       );
     }
@@ -35,36 +39,78 @@ export default async function DeviationPage({ params, searchParams }: { params: 
   const capaRows = ctx.can("quality.capa.view") ? await listCapas(ctx, { deviationId: d.id, status: "all" }) : null;
   return (
     <>
-      <PageHeader title={d.deviationNumber} subtitle={d.sourceLabel} actions={<LinkButton href="/quality/deviations" variant="secondary">Deviations</LinkButton>} />
+      <PageHeader
+        title="Problem report"
+        subtitle={
+          <>
+            {v.batch ? `Batch ${v.batch.number}` : v.lot ? `Lot ${v.lot.number}` : d.sourceLabel} · <RecordNo>{d.deviationNumber}</RecordNo>
+          </>
+        }
+        actions={
+          <MoreMenu>
+            <div className="flex flex-col gap-2">
+              {capaRows && ctx.can("quality.capa.create") && (
+                <LinkButton href={`/quality/capa/new?deviationId=${d.id}`} variant="secondary">
+                  Start a fix-and-prevent plan
+                </LinkButton>
+              )}
+              <LinkButton href="/quality/deviations" variant="secondary">
+                All problem reports
+              </LinkButton>
+            </div>
+          </MoreMenu>
+        }
+      />
+      <PageIntro>This screen is for QA: find out why this happened, stop affected stock if needed, and close the report.</PageIntro>
+      {d.status === "open" ? (
+        v.can.investigate ? (
+          <NextStep text="Next: say how serious it is and what QA will check." action={{ label: "Start looking into it", href: "#investigate" }} />
+        ) : (
+          <>
+            <NextStep text="QA has been told about this problem." waitingFor="Waiting for QA to look into it." />
+            <div className="-mt-2 mb-4">
+              <WhoCanHelp permission="quality.deviation.approve" siteId={d.siteId} hideEmails lead="QA people: " />
+            </div>
+          </>
+        )
+      ) : d.status === "investigating" ? (
+        v.can.close ? (
+          <NextStep text="Next: write what caused it and what was done, then close it." action={{ label: "Close the report", href: "#close" }} />
+        ) : (
+          <NextStep text="QA is looking into it." waitingFor={v.can.closeBlockedReason ?? "Waiting for QA to close it."} />
+        )
+      ) : null}
+
       <div className="flex flex-col gap-5">
-        {sp.opened && <Banner tone="ok" title={`Deviation ${d.deviationNumber} raised`}>QA has been notified. While it is open, the batch and lot it names cannot be released.</Banner>}
+        {sp.opened && <Banner tone="ok" title="Problem report sent">QA has been told. While it is open, its batch and lot cannot be made OK to use.</Banner>}
         <Card>
-          <CardTitle action={<DeviationStatusChip status={d.status} />}>Deviation</CardTitle>
+          <CardTitle action={<DeviationStatusChip status={d.status} />}>What happened</CardTitle>
           <p className="mb-4 whitespace-pre-wrap text-[14px]">{d.description}</p>
           <Dl
             items={[
               ["Batch", v.batch ? <Link key="b" className="text-primary-text hover:underline" href={`/quality/batches/${v.batch.id}`}>{v.batch.number}</Link> : "—"],
-              ["Lot", v.lot ? <span key="l" className="inline-flex flex-wrap items-center gap-2"><Link className="text-primary-text hover:underline" href={`/quality/lots/${v.lot.id}`}>{v.lot.number}</Link><StatusChip status={v.lot.status} /></span> : "—"],
+              ["Lot", v.lot ? <span key="l" className="inline-flex flex-wrap items-center gap-2"><Link className="text-primary-text hover:underline" href={`/quality/lots/${v.lot.id}`}>{v.lot.number}</Link><QaStatusChip status={v.lot.status} /></span> : "—"],
               ["Step", d.stepRef ?? "—"],
-              ["Inspection", v.inspection ? <Link key="i" className="text-primary-text hover:underline" href={`/quality/inspections/${v.inspection.id}`}>{v.inspection.number}</Link> : "—"],
-              ["Result (OOS)", v.result ? `${v.result.testName}: ${v.result.result} (spec ${v.result.specification})` : "—"],
-              ["Raised", `${fmtDateTime(d.raisedAt)} · ${d.raisedByName}`],
-              ["Severity", d.severity ? `${d.severity}${d.classifiedByName ? ` · ${d.classifiedByName}` : ""}` : "Not classified"],
-              ["Closed", d.closedAt ? `${fmtDateTime(d.closedAt)} · ${d.closedByName}` : "—"],
-              ["Release permitted", d.releasePermitted === null ? "—" : d.releasePermitted ? "Yes" : "No"],
-              ["Effectiveness check", d.effectivenessCheckOn ? fmtDate(d.effectivenessCheckOn) : "—"],
+              ["Quality check", v.inspection ? <Link key="i" className="text-primary-text hover:underline" href={`/quality/inspections/${v.inspection.id}`}>{v.inspection.number}</Link> : "—"],
+              ["Test not OK", v.result ? `${v.result.testName}: ${v.result.result} (should be ${v.result.specification})` : "—"],
+              ["Reported", `${d.raisedByName}, ${fmtDateTime(d.raisedAt)}`],
+              ["How serious", d.severity ? `${d.severity}${d.classifiedByName ? ` · ${d.classifiedByName}` : ""}` : "Not rated yet"],
+              ["Closed", d.closedAt ? `${d.closedByName}, ${fmtDateTime(d.closedAt)}` : "—"],
+              ["May the product be made OK?", d.releasePermitted === null ? "—" : d.releasePermitted ? "Yes" : "No"],
+              ["Check again on", d.effectivenessCheckOn ? fmtDate(d.effectivenessCheckOn) : "—"],
             ]}
           />
         </Card>
 
         <Card>
-          <CardTitle>Investigation</CardTitle>
+          <span id="investigate" className="block scroll-mt-24" />
+          <CardTitle>What QA found</CardTitle>
           <Dl
             items={[
-              ["Investigation", d.investigation ?? "—"],
-              ["Impact assessment", d.impactAssessment ?? "—"],
-              ["Root cause", d.rootCause ?? "—"],
-              ["Resolution", d.resolution ?? "—"],
+              ["What QA checks", d.investigation ?? "—"],
+              ["Other batches or lots affected", d.impactAssessment ?? "—"],
+              ["What caused it", d.rootCause ?? "—"],
+              ["What was done", d.resolution ?? "—"],
             ]}
           />
           {v.can.investigate && (
@@ -74,7 +120,7 @@ export default async function DeviationPage({ params, searchParams }: { params: 
           )}
           {!v.can.investigate && v.can.update && (
             <details className="mt-4 border-t border-line pt-4">
-              <summary className="cursor-pointer text-[13px] text-primary-text">Update the investigation record</summary>
+              <summary className="min-h-[44px] cursor-pointer py-2 text-[14px] text-primary-text">Add to what QA found</summary>
               <div className="mt-3">
                 <UpdateInvestigationForm deviationId={d.id} current={{ investigation: d.investigation, impactAssessment: d.impactAssessment, rootCause: d.rootCause }} />
               </div>
@@ -83,9 +129,9 @@ export default async function DeviationPage({ params, searchParams }: { params: 
         </Card>
 
         <Card>
-          <CardTitle>Containment holds</CardTitle>
+          <CardTitle>Stock stopped by QA because of this</CardTitle>
           {v.holds.length === 0 ? (
-            <p className="text-[13px] text-muted">No stock is held for this deviation.</p>
+            <p className="text-[13px] text-muted">No stock was stopped for this report.</p>
           ) : (
             <ul className="flex flex-col gap-1 text-[14px]">
               {v.holds.map((h) => (
@@ -93,15 +139,15 @@ export default async function DeviationPage({ params, searchParams }: { params: 
                   <Link className="font-medium text-primary-text hover:underline" href={`/quality/holds/${h.id}`}>
                     {h.number}
                   </Link>
-                  <Chip tone={h.status === "closed" ? "neu" : "hold"}>{h.status}</Chip>
-                  {h.resolution && <span className="text-[12px] text-muted">resolution {h.resolution}</span>}
+                  <Chip tone={h.status === "closed" ? "neu" : "hold"}>{h.status === "closed" ? "No longer stopped" : "Stopped by QA"}</Chip>
+                  {h.resolution && <span className="text-[12px] text-muted">{h.resolution === "released" ? "made OK again" : "not OK"}</span>}
                 </li>
               ))}
             </ul>
           )}
           {v.can.contain && (
             <details className="mt-4 border-t border-line pt-4">
-              <summary className="cursor-pointer text-[13px] text-primary-text">Place a containment hold</summary>
+              <summary className="min-h-[44px] cursor-pointer py-2 text-[14px] text-primary-text">Stop a lot while QA looks into it</summary>
               <div className="mt-3">
                 <ContainForm deviationId={d.id} defaultLot={v.lot?.number ?? null} reasonCodes={v.holdReasonCodes} />
               </div>
@@ -110,20 +156,19 @@ export default async function DeviationPage({ params, searchParams }: { params: 
         </Card>
 
         <Card>
-          <CardTitle action={capaRows && ctx.can("quality.capa.create") ? <LinkButton href={`/quality/capa/new?deviationId=${d.id}`} variant="secondary" size="sm">Open CAPA</LinkButton> : undefined}>CAPA</CardTitle>
+          <CardTitle>Fix-and-prevent plans</CardTitle>
           {!capaRows ? (
-            <p className="text-[13px] text-muted">Corrective and preventive actions are visible to holders of quality.capa.view.</p>
+            <p className="text-[13px] text-muted">Only QA and managers see the fix-and-prevent plans.</p>
           ) : capaRows.length === 0 ? (
-            <p className="text-[13px] text-muted">No CAPA for this deviation{ctx.can("quality.capa.create") ? "; open one when corrective or preventive action is needed (W07-04)." : "."}</p>
+            <p className="text-[13px] text-muted">No fix-and-prevent plan for this report{ctx.can("quality.capa.create") ? ". Start one (⋯ More) when something must be fixed so it does not happen again." : "."}</p>
           ) : (
             <ul className="flex flex-col gap-1 text-[14px]">
               {capaRows.map((c) => (
                 <li key={c.id} className="flex flex-wrap items-center gap-2">
                   <Link className="font-medium text-primary-text hover:underline" href={`/quality/capa/${c.id}`}>
-                    {c.number}
+                    {c.title} <span className="font-mono text-[12px] font-normal text-muted">{c.number}</span>
                   </Link>
                   <CapaStatusChip status={c.status} />
-                  <span className="text-[13px] text-fg-2">{c.title}</span>
                   {c.overdue && <Chip tone="bad">Overdue</Chip>}
                 </li>
               ))}
@@ -133,26 +178,19 @@ export default async function DeviationPage({ params, searchParams }: { params: 
 
         {d.status !== "closed" && (
           <Card>
-            <CardTitle>Close</CardTitle>
+            <span id="close" className="block scroll-mt-24" />
+            <CardTitle>Close the report</CardTitle>
             {v.can.close ? (
               <CloseDeviationForm deviationId={d.id} rootCause={d.rootCause} />
             ) : (
-              <p className="text-[13px] text-muted">{v.can.closeBlockedReason ?? "Closing needs quality.deviation.approve, held by QA."}</p>
+              <p className="text-[13px] text-muted">{v.can.closeBlockedReason ?? "Only QA can close a problem report."}</p>
             )}
           </Card>
         )}
 
         <Card>
-          <CardTitle>History</CardTitle>
-          <ol className="flex flex-col gap-1 text-[13px]">
-            {v.timeline.map((t, i) => (
-              <li key={i}>
-                {fmtDateTime(t.at)} · {t.by}: {t.from ? `${t.from} → ` : ""}
-                {t.to}
-                {t.reason ? ` — ${t.reason}` : ""}
-              </li>
-            ))}
-          </ol>
+          <CardTitle>What happened (history)</CardTitle>
+          <Timeline rows={v.timeline} word={(s) => ({ open: "new", investigating: "QA looking into it", closed: "closed" })[s] ?? s} />
         </Card>
       </div>
     </>

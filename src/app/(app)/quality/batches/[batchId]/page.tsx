@@ -6,10 +6,14 @@ import { D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
 import { getBatchRelease } from "@/modules/quality/dispositions";
 import { conditionalReleaseState } from "@/modules/quality";
 import { TESTABLE_BATCH_STATUSES } from "@/modules/quality/rules";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td, cx } from "@/ui/core";
-import { Banner, Chip, StatusChip } from "@/ui/status";
+import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
+import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { RecordNo } from "@/ui/plain-list";
+import { WhoCanHelp } from "@/ui/who-can-help";
+import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
-import { DecisionChip, DeviationStatusChip, InspectionStatusChip, Transition, fmtLotQty, statusTone } from "../../_ui";
+import { DecisionHistory, DeviationStatusChip, InspectionStatusChip, QaStatusChip, fmtLotQty, qaWord, statusTone } from "../../_ui";
 import { ConditionalDecideForm, ConditionalRequestForm, StartInspectionButton } from "../../w2c-forms";
 import { decideBatchAction } from "../../actions";
 import { DecisionForm } from "../../decision-form";
@@ -48,137 +52,147 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
   return (
     <>
       <PageHeader
-        title={batch.batchNumber}
-        subtitle={`${v.productName} · ${v.productSku} · batch release`}
+        title={v.productName}
+        subtitle={
+          <>
+            Batch <RecordNo>{batch.batchNumber}</RecordNo> · full QA review
+          </>
+        }
         actions={
           <>
             <Help screen="quality.release" />
-            <LinkButton href="/quality" variant="secondary">
-              QA queue
-            </LinkButton>
-            <LinkButton href={`/print/bmr/${batch.id}`} variant="secondary" target="_blank">
-              Open BMR
-            </LinkButton>
-            <LinkButton href={`/production/${batch.id}`} variant="secondary">
-              Batch record
-            </LinkButton>
+            <MoreMenu>
+              <div className="flex flex-col gap-2">
+                <LinkButton href={`/print/bmr/${batch.id}`} variant="secondary" target="_blank">
+                  Batch record (print)
+                </LinkButton>
+                <LinkButton href={`/production/${batch.id}`} variant="secondary">
+                  Batch on the production screen
+                </LinkButton>
+                {v.can.raiseDeviation && (
+                  <LinkButton href={`/quality/deviations/new?batchId=${batch.id}`} variant="secondary">
+                    Report a problem
+                  </LinkButton>
+                )}
+                <LinkButton href="/quality" variant="secondary">
+                  Back to QA queue
+                </LinkButton>
+              </div>
+            </MoreMenu>
           </>
         }
       />
+      <PageIntro>
+        This screen is for the QA person: see everything about this batch (weighing, steps, tests, problems) and say OK to use or not OK.
+      </PageIntro>
+      <div className="-mt-3 mb-4"><Explain term="batch" /></div>
+      {["awaiting_qc", "quarantined"].includes(batch.status) &&
+        (v.canDecide ? (
+          <NextStep
+            text={v.planDriven && v.inspections.length === 0 ? "Next: start the quality check (tests) for this batch, then decide OK or not OK." : releaseBlocker ? "Next: fix what blocks the OK (see the yellow box below), or say not OK." : "Next: decide OK to use or not OK."}
+            action={{ label: v.planDriven && v.inspections.length === 0 ? "Go to the tests" : "Decide now", href: v.planDriven && v.inspections.length === 0 ? "#tests" : "#decide" }}
+          />
+        ) : (
+          <>
+            <NextStep text="Next: a QA person checks this batch and says OK or not OK." waitingFor="Waiting for QA." />
+            <div className="-mt-2 mb-4">
+              <WhoCanHelp permission="quality.disposition.approve" siteId={batch.siteId} hideEmails lead="QA people who decide: " />
+            </div>
+          </>
+        ))}
 
       <div className="flex flex-col gap-5">
-        <Banner tone={statusTone(batch.status)} title={`Batch status: ${batch.status === "awaiting_qc" ? "awaiting QC" : batch.status.replace("_", " ")}`}>
+        <Banner tone={statusTone(batch.status)} title={`Batch: ${qaWord(batch.status)}`}>
           {batch.status === "quarantined"
-            ? "The inspection was reviewed. Release or reject the batch; the output lot stays in quarantine until you decide."
+            ? "The tests were checked by a second QA person. Say OK to use or not OK; the products wait in the hold area until you decide."
             : batch.status === "awaiting_qc"
-            ? "Review the batch record and test results, then release or reject the batch. The output lot stays in quarantine until you decide."
+            ? "Look at the batch record and the tests, then say OK to use or not OK. The products wait in the hold area until you decide."
             : batch.status === "released"
-              ? "Released: the output lot is usable and was moved to finished-goods storage."
+              ? "OK to use: the products may be sold and were moved to the finished-goods shelves."
               : batch.status === "rejected"
-                ? "Rejected: the output lot is blocked and its stock is in the rejected-goods location."
-                : "This batch is not ready for QA disposition yet."}
+                ? "Not OK – don't use: the products are blocked and in the area for things we cannot use."
+                : "This batch is not finished yet; QA decides after production presses Finish batch."}
         </Banner>
 
         <Card>
-          <CardTitle>Batch summary</CardTitle>
+          <CardTitle>This batch</CardTitle>
           <Dl
             items={[
               ["Product", v.productName],
-              ["Status", <StatusChip key="s" status={batch.status} />],
-              ["Planned size", fmtMass(batch.plannedSizeG)],
-              ["Theoretical yield", batch.theoreticalYieldG ? fmtMass(batch.theoreticalYieldG) : "—"],
-              ["Actual output", batch.actualOutputG ? fmtMass(batch.actualOutputG) : "—"],
-              ["Yield", batch.yieldPct ? `${D(batch.yieldPct).toFixed(1)} %` : "—"],
-              ["Units", batch.actualUnits ? fmtQty(batch.actualUnits, "pcs", 0) : "—"],
-              ["Completed", fmtDateTime(batch.completedAt)],
+              ["Status", <QaStatusChip key="s" status={batch.status} />],
+              ["Pieces made", batch.actualUnits ? fmtQty(batch.actualUnits, "pcs", 0) : "—"],
+              ["Weight made", `${batch.actualOutputG ? fmtMass(batch.actualOutputG) : "—"} (planned ${fmtMass(batch.plannedSizeG)}${batch.theoreticalYieldG ? `, expected ${fmtMass(batch.theoreticalYieldG)}` : ""})`],
+              ["How much came out (yield)", batch.yieldPct ? `${D(batch.yieldPct).toFixed(1)} %` : "—"],
+              ["Finished", fmtDateTime(batch.completedAt)],
               [
-                "Output lot",
+                "Product lot",
                 lot ? (
                   <span key="l" className="inline-flex flex-wrap items-center gap-2">
                     <Link className="text-primary-text hover:underline" href={`/inventory/${lot.id}`}>
                       {lot.lotNumber}
                     </Link>
-                    <StatusChip status={lot.qualityStatus} />
+                    <QaStatusChip status={lot.qualityStatus} />
                   </span>
                 ) : (
                   "—"
                 ),
               ],
-              ["Lot expiry", fmtDate(lot?.expiresOn)],
-              ["Lot stock", v.lotStock.length ? v.lotStock.map((s) => `${fmtLotQty(s.qty, lot?.baseUom)} at ${s.locationCode}`).join(", ") : "—"],
-              ["Checklist", `${stepsDone} of ${v.steps.length} steps completed`],
+              ["Use by", fmtDate(lot?.expiresOn)],
+              ["Where the products are", v.lotStock.length ? v.lotStock.map((s) => `${fmtLotQty(s.qty, lot?.baseUom)} at ${s.locationCode}`).join(", ") : "—"],
+              ["Steps", `${stepsDone} of ${v.steps.length} done`],
             ]}
           />
         </Card>
 
         <Card>
-          <CardTitle action={v.exceptionCount > 0 ? <Chip tone="warn">{v.exceptionCount} exception(s)</Chip> : <Chip tone="ok">All within tolerance</Chip>}>Ingredients dispensed</CardTitle>
+          <CardTitle action={v.exceptionCount > 0 ? <Chip tone="warn">{v.exceptionCount} outside the limits</Chip> : <Chip tone="ok">All within the limits</Chip>}>Ingredients weighed</CardTitle>
           {v.lines.length === 0 ? (
-            <EmptyState title="No ingredient lines">This batch has no ingredient requirements.</EmptyState>
+            <EmptyState title="No ingredients">This batch has no ingredient list.</EmptyState>
           ) : (
-            <Table head={["#", "Material", "Required", "Tolerance", "Dispensed", "Lots used", "Tolerance check", "Weighed / checked by"]}>
+            <ul className="flex flex-col divide-y divide-line">
               {v.lines.map((l) => {
                 const exception = l.status === "exception" || l.dispenses.some((d) => !d.isWithinTolerance);
                 return (
-                  <tr key={l.id} className={cx(exception && "bg-[var(--warn-bg)]")}>
-                    <Td>{l.lineNo}</Td>
-                    <Td>
-                      {l.materialName}
-                      <div className="text-[12px] text-muted">{l.materialCode}</div>
-                    </Td>
-                    <Td>{fmtMass(l.theoreticalQtyG)}</Td>
-                    <Td>± {D(l.tolerancePct).toString()} %</Td>
-                    <Td>{fmtMass(l.dispensedQtyG)}</Td>
-                    <Td>
-                      {l.dispenses.length === 0
-                        ? "—"
-                        : l.dispenses.map((d, i) => (
-                            <div key={i}>
-                              <Link className="whitespace-nowrap text-primary-text hover:underline" href={`/inventory/${d.lotId}`}>
-                                {d.lotNumber}
-                              </Link>{" "}
-                              <span className="whitespace-nowrap text-muted">{fmtMass(d.actualQtyG)}</span>
-                            </div>
-                          ))}
-                    </Td>
-                    <Td>
-                      {l.status === "pending" ? (
-                        <StatusChip status="pending" />
-                      ) : exception ? (
-                        <span>
-                          <StatusChip status="exception" />
-                          {l.dispenses.find((d) => d.exceptionReason) && <div className="mt-0.5 text-[12px]">{l.dispenses.find((d) => d.exceptionReason)?.exceptionReason}</div>}
-                        </span>
-                      ) : (
-                        <Chip tone="ok">Within tolerance</Chip>
-                      )}
-                    </Td>
-                    <Td className="text-[12px]">
-                      {l.dispenses.map((d, i) => (
-                        <div key={i}>
-                          {d.operatorName} / {d.checkerName}
-                        </div>
-                      ))}
-                    </Td>
-                  </tr>
+                  <li key={l.id} className={cx("flex flex-col gap-1 py-2.5 text-[14px]", exception && "-mx-2 rounded-[10px] bg-[var(--warn-bg)] px-2")}>
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{l.materialName}</span>
+                      {l.status === "pending" ? <Chip tone="neu">Not weighed</Chip> : exception ? <Chip tone="warn">Outside the limits</Chip> : <Chip tone="ok">OK</Chip>}
+                    </span>
+                    <span className="text-fg-2">
+                      Needed {fmtMass(l.theoreticalQtyG)} (± {D(l.tolerancePct).toString()} %) · weighed {fmtMass(l.dispensedQtyG)}
+                    </span>
+                    {l.dispenses.find((d) => d.exceptionReason) && <span className="text-[13px]">Why: {l.dispenses.find((d) => d.exceptionReason)?.exceptionReason}</span>}
+                    {l.dispenses.length > 0 && (
+                      <span className="text-[12px] text-muted">
+                        {l.dispenses.map((d, i) => (
+                          <span key={i} className="mr-2 inline-block">
+                            <Link className="font-mono text-primary-text hover:underline" href={`/inventory/${d.lotId}`}>
+                              {d.lotNumber}
+                            </Link>{" "}
+                            {fmtMass(d.actualQtyG)} · {d.operatorName} / {d.checkerName}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                  </li>
                 );
               })}
-            </Table>
+            </ul>
           )}
         </Card>
 
         <Card>
-          <CardTitle action={<Chip tone={stepsDone === v.steps.length ? "ok" : "warn"}>{stepsDone} / {v.steps.length}</Chip>}>Checklist</CardTitle>
+          <CardTitle action={<Chip tone={stepsDone === v.steps.length ? "ok" : "warn"}>{stepsDone} / {v.steps.length}</Chip>}>Steps done</CardTitle>
           <ol className="flex flex-col divide-y divide-line">
             {v.steps.map((s) => (
               <li key={s.routingStepId} className="flex flex-wrap items-start gap-3 py-2">
-                {s.record ? <CheckCircle2 size={18} className="mt-0.5 text-[var(--ok-fg)]" aria-label="Completed" /> : <CircleDashed size={18} className="mt-0.5 text-muted" aria-label="Not completed" />}
+                {s.record ? <CheckCircle2 size={18} className="mt-0.5 text-[var(--ok-fg)]" aria-label="Done" /> : <CircleDashed size={18} className="mt-0.5 text-muted" aria-label="Not done" />}
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">
                     {s.stepNo}. {s.name}
                   </p>
                   <p className="text-[12px] text-muted">
-                    {s.record ? `Conducted by ${s.record.conductedByName}${s.record.checkedByName ? `, checked by ${s.record.checkedByName}` : ""} · ${fmtDateTime(s.record.completedAt)}` : "Not completed"}
+                    {s.record ? `Done by ${s.record.conductedByName}${s.record.checkedByName ? `, checked by ${s.record.checkedByName}` : ""} · ${fmtDateTime(s.record.completedAt)}` : "Not done"}
                   </p>
                 </div>
               </li>
@@ -187,28 +201,30 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
         </Card>
 
         <Card>
-          <CardTitle action={v.inspection ? <InspectionStatusChip status={v.inspection.status} outcome={v.inspection.outcome} /> : undefined}>Inspection</CardTitle>
+          <CardTitle action={v.inspection ? <InspectionStatusChip status={v.inspection.status} outcome={v.inspection.outcome} /> : undefined}>
+            <span id="tests" className="scroll-mt-24">Quality check (tests)</span>
+          </CardTitle>
           {!v.planDriven ? (
-            <p className="text-[13px] text-muted">This batch has no frozen inspection plan (it was created before an approved finished-product plan existed). QA records its results below as free-form entries.</p>
+            <p className="text-[13px] text-muted">This batch has no test list (it was made before QA approved one for this product). Type the results below under “Test results”.</p>
           ) : (
             <>
               <p className="text-[13px] text-fg-2">
-                Plan {v.plan?.code} rev {v.plan?.revisionNo} (frozen when the batch was created)
-                {v.plan?.isPlaceholder ? " · placeholder specification, QA must replace it before production use" : ""}.
+                Tests from the list “quality checks for this item”{v.plan?.code ? <span className="font-mono text-[12px] text-muted"> {v.plan.code} v{v.plan.revisionNo}</span> : null}, fixed when the batch was started
+                {v.plan?.isPlaceholder ? ". This list is demo content: QA must replace it before real use" : ""}.
               </p>
               {v.inspections.length > 0 ? (
                 <ul className="mt-2 flex flex-col gap-1 text-[14px]">
                   {v.inspections.map((i) => (
                     <li key={i.id} className="flex flex-wrap items-center gap-2">
-                      <Link className="font-medium text-primary-text hover:underline" href={`/quality/inspections/${i.id}`}>
-                        {i.number}
+                      <Link className="inline-flex min-h-[44px] items-center font-medium text-primary-text hover:underline" href={`/quality/inspections/${i.id}`}>
+                        Open the tests <span className="ml-1 font-mono text-[12px] font-normal text-muted">{i.number}</span>
                       </Link>
                       <InspectionStatusChip status={i.status} outcome={i.outcome} />
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="mt-2 text-[13px] text-muted">The inspection has not been started.</p>
+                <p className="mt-2 text-[13px] text-muted">The tests have not been started.</p>
               )}
               {v.can.startInspection && (
                 <div className="mt-3">
@@ -220,19 +236,19 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
         </Card>
 
         <Card>
-          <CardTitle action={v.can.raiseDeviation ? <LinkButton href={`/quality/deviations/new?batchId=${batch.id}`} variant="secondary" size="sm">Raise deviation</LinkButton> : undefined}>Deviations</CardTitle>
+          <CardTitle>Problem reports</CardTitle>
           {v.deviations.length === 0 ? (
-            <p className="text-[13px] text-muted">No deviation names this batch or its output lot.</p>
+            <p className="text-[13px] text-muted">No problem was reported for this batch. Something wrong? Use ⋯ More → Report a problem.</p>
           ) : (
             <ul className="flex flex-col divide-y divide-line">
               {v.deviations.map((d) => (
                 <li key={d.id} className="flex flex-wrap items-start gap-2 py-2 text-[14px]">
-                  <Link className="font-medium text-primary-text hover:underline" href={`/quality/deviations/${d.id}`}>
-                    {d.number}
+                  <Link className="min-w-0 flex-1 font-medium text-primary-text hover:underline" href={`/quality/deviations/${d.id}`}>
+                    {d.stepRef ? `${d.stepRef}: ` : ""}
+                    {d.description} <span className="font-mono text-[12px] font-normal text-muted">{d.number}</span>
                   </Link>
                   <DeviationStatusChip status={d.status} />
-                  {d.status === "closed" && d.releasePermitted === false && <Chip tone="rej">Release not permitted</Chip>}
-                  <span className="min-w-0 flex-1 text-[13px] text-fg-2">{d.stepRef ? `${d.stepRef}: ` : ""}{d.description}</span>
+                  {d.status === "closed" && d.releasePermitted === false && <Chip tone="rej">May not be made OK</Chip>}
                 </li>
               ))}
             </ul>
@@ -240,44 +256,51 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
         </Card>
 
         <Card>
-          <CardTitle action={liveTests.length > 0 ? <Chip tone={failed ? "bad" : "ok"}>{passed} passed{failed ? `, ${failed} failed` : ""}</Chip> : undefined}>Test results</CardTitle>
+          <CardTitle action={liveTests.length > 0 ? <Chip tone={failed ? "bad" : "ok"}>{passed} OK{failed ? `, ${failed} not OK` : ""}</Chip> : undefined}>Test results</CardTitle>
           {v.tests.length === 0 ? (
-            <EmptyState title="No test results yet">Record at least one test result before the batch can be released.</EmptyState>
+            <EmptyState title="No test results yet">Type at least one test result before the batch can be made OK to use.</EmptyState>
           ) : (
-            <Table head={["Test", "Specification", "Result", "Outcome", "Tested by", "When"]}>
+            <ul className="flex flex-col divide-y divide-line">
               {v.tests.map((t) => (
-                <tr key={t.id} className={cx(!t.live ? "text-muted" : !t.passed && "bg-[var(--bad-bg)]")}>
-                  <Td className="font-medium">{t.testName}</Td>
-                  <Td>{t.specification}</Td>
-                  <Td>
-                    <span className={cx(!t.live && "line-through")}>{t.result}</span>
-                    {t.correctionReason && <div className="text-[12px] text-muted">Correction: {t.correctionReason}</div>}
-                  </Td>
-                  <Td>{!t.live ? <Chip tone="neu">Superseded</Chip> : t.passed ? <Chip tone="ok">Pass</Chip> : <Chip tone="bad">Fail</Chip>}</Td>
-                  <Td>{t.testedByName}</Td>
-                  <Td className="whitespace-nowrap">{fmtDateTime(t.testedAt)}</Td>
-                </tr>
+                <li key={t.id} className={cx("flex flex-col gap-0.5 py-2.5 text-[14px]", !t.live ? "text-muted" : !t.passed && "-mx-2 rounded-[10px] bg-[var(--bad-bg)] px-2")}>
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{t.testName}</span>
+                    {!t.live ? <Chip tone="neu">Replaced by a newer result</Chip> : t.passed ? <Chip tone="ok">OK</Chip> : <Chip tone="bad">Not OK</Chip>}
+                  </span>
+                  <span>
+                    <span className={cx(!t.live && "line-through")}>{t.result}</span> <span className="text-[13px] text-muted">· should be: {t.specification}</span>
+                  </span>
+                  {t.correctionReason && <span className="text-[12px] text-muted">Correction: {t.correctionReason}</span>}
+                  <span className="text-[12px] text-muted">
+                    {t.testedByName}, {fmtDateTime(t.testedAt)}
+                  </span>
+                </li>
               ))}
-            </Table>
+            </ul>
           )}
           {v.canRecordTest && testable && (
             <div className="mt-5 border-t border-line pt-4">
-              <h3 className="mb-3 text-[14px] font-semibold">Record test result</h3>
-              <TestResultForm batchId={batch.id} />
+              <MoreDetails title="Type a test result by hand">
+                <TestResultForm batchId={batch.id} />
+              </MoreDetails>
             </div>
           )}
-          <p className="mt-3 text-[12px] text-muted">Results are append-only. Specifications and required tests must be set by the company&apos;s QA personnel; the system does not define them.</p>
+          <p className="mt-3 text-[12px] text-muted">Results are never changed; a correction is added as a new line. What “OK” means for each test is set by the company&apos;s QA, not by the system.</p>
         </Card>
 
         <Card>
-          <CardTitle>Batch decision</CardTitle>
+          <span id="decide" className="block scroll-mt-24" />
+          <CardTitle>QA decision</CardTitle>
           {!v.canDecide ? (
-            <p className="text-[13px] text-muted">You can view this batch. Releasing or rejecting needs the QA approval permission (quality.disposition.approve).</p>
+            <div className="text-[13px] text-muted">
+              Only a QA person can say OK or not OK.
+              <WhoCanHelp permission="quality.disposition.approve" siteId={batch.siteId} hideEmails />
+            </div>
           ) : (
             <>
               {releaseBlocker && v.canReject && (
                 <div className="mb-3">
-                  <Banner tone="warn" title="Release is blocked">
+                  <Banner tone="warn" title="“OK to use” is not possible yet">
                     <ul className="list-disc pl-5">
                       {v.blockers.map((b, i) => (
                         <li key={i}>{b.message}</li>
@@ -292,15 +315,15 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
                 options={[
                   {
                     value: "release",
-                    label: "Release batch",
-                    hint: `Batch and lot ${lot?.lotNumber ?? ""} become released; stock moves from quarantine to finished-goods storage.`,
-                    blocker: releaseBlocker && v.canReject ? "Blocked: see the reasons above." : releaseBlocker,
+                    label: "OK to use",
+                    hint: "The products may be sold; they move from the hold area to the finished-goods shelves.",
+                    blocker: releaseBlocker && v.canReject ? "Not possible yet: see the reasons above." : releaseBlocker,
                   },
                   {
                     value: "reject",
-                    label: "Reject batch",
-                    hint: "Batch and lot become rejected; stock moves to the rejected-goods location.",
-                    blocker: v.canReject ? null : "Only a batch awaiting QC can be rejected.",
+                    label: "Not OK – don't use",
+                    hint: "The products are blocked and move to the area for things we cannot use.",
+                    blocker: v.canReject ? null : "Only a batch waiting for QA check can be made not OK.",
                     danger: true,
                   },
                 ]}
@@ -311,44 +334,32 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
 
         {cr && (cr.enabled || cr.pending) && (
           <Card>
-            <CardTitle>Conditional release</CardTitle>
+            <CardTitle>OK with conditions</CardTitle>
             {cr.pending ? (
               <>
                 <p className="mb-3 text-[13px]">
-                  Requested by {cr.pending.requestedByName} on {fmtDateTime(cr.pending.requestedAt)}. Conditions: {cr.pending.conditions}. Review by {fmtDate(cr.pending.reviewDate)}.
+                  Asked by {cr.pending.requestedByName} on {fmtDateTime(cr.pending.requestedAt)}. Conditions: {cr.pending.conditions}. Look at it again by {fmtDate(cr.pending.reviewDate)}.
                 </p>
-                {!cr.canDecide && <p className="mb-3 text-[13px] text-muted">A second approver (not the requester) must decide.</p>}
+                {!cr.canDecide && <p className="mb-3 text-[13px] text-muted">A second QA person (not the one who asked) decides.</p>}
                 <ConditionalDecideForm batchId={batch.id} requestId={cr.pending.id} canDecide={cr.canDecide} canCancel={ctx.can("quality.disposition.approve")} />
               </>
             ) : cr.canRequest && v.canReject ? (
-              <ConditionalRequestForm batchId={batch.id} />
+              <MoreDetails title="Ask for “OK with conditions” (rare)">
+                <ConditionalRequestForm batchId={batch.id} />
+              </MoreDetails>
             ) : (
-              <p className="text-[13px] text-muted">Only a batch awaiting QC or quarantined can be released conditionally.</p>
+              <p className="text-[13px] text-muted">Only a batch waiting for QA check can get “OK with conditions”.</p>
             )}
-            <p className="mt-3 text-[12px] text-muted">Allowed by the company&apos;s QA policy (setting quality.conditional_release.enabled). It never bypasses deviations, holds, failed results or separation of duties.</p>
+            <p className="mt-3 text-[12px] text-muted">Allowed only when the company&apos;s QA turned it on (setting quality.conditional_release.enabled). It never skips open problem reports, QA stops, not-OK tests or the two-person rule.</p>
           </Card>
         )}
 
         <Card>
-          <CardTitle>Decision history</CardTitle>
+          <CardTitle>Past QA decisions</CardTitle>
           {v.history.length === 0 ? (
-            <EmptyState title="No decisions yet">The QA decision on this batch will be listed here.</EmptyState>
+            <EmptyState title="No decisions yet">The OK or not OK on this batch will be listed here with who gave it and why.</EmptyState>
           ) : (
-            <Table head={["When", "Decision", "Status change", "Decided by", "Reason"]}>
-              {v.history.map((h) => (
-                <tr key={h.id}>
-                  <Td className="whitespace-nowrap">{fmtDateTime(h.decidedAt)}</Td>
-                  <Td>
-                    <DecisionChip decision={h.decision} />
-                  </Td>
-                  <Td>
-                    <Transition from={h.fromStatus} to={h.toStatus} />
-                  </Td>
-                  <Td>{h.decidedByName}</Td>
-                  <Td className="text-fg-2">{h.reason ?? "—"}</Td>
-                </tr>
-              ))}
-            </Table>
+            <DecisionHistory rows={v.history} />
           )}
         </Card>
       </div>

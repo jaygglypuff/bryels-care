@@ -1,62 +1,57 @@
-import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { listMaintenancePlans } from "@/modules/maintenance";
-import { Card, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
-import { DueChip, tabCls } from "../_ui";
+import { DueChip } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
 const FILTERS = [
-  ["live", "Active and paused"],
-  ["active", "Active"],
-  ["retired", "Retired"],
+  ["live", "In use and paused"],
+  ["active", "In use"],
+  ["retired", "No longer used"],
   ["all", "All"],
 ] as const;
 
 /** PM plans (US-6-19): time- or usage-based, most urgent first. */
 export default async function PlansPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("maintenance.plan.view")) return <Forbidden what="PM plans" />;
+  if (!ctx.can("maintenance.plan.view")) return <Forbidden what="regular maintenance" />;
   const { status = "live" } = await searchParams;
   const rows = await listMaintenancePlans(ctx, { status });
   return (
     <>
-      <PageHeader title="PM plans" subtitle="Preventive maintenance by time or by usage; an overdue plan blocks the equipment when its blocking rule says so" actions={ctx.can("maintenance.plan.create") ? <LinkButton href="/maintenance/plans/new">New PM plan</LinkButton> : undefined} />
+      <PageHeader title="Regular maintenance" actions={ctx.can("maintenance.plan.create") ? <LinkButton href="/maintenance/plans/new" variant="cta">Plan new regular maintenance</LinkButton> : undefined} />
+      <PageIntro>This screen is for the technician: maintenance that is done every few days or after so many batches, so machines do not break. Late maintenance can block a machine.</PageIntro>
       <Card>
-        <nav className="mb-3 flex flex-wrap gap-2" aria-label="Filter plans">
-          {FILTERS.map(([v, label]) => (
-            <Link key={v} href={`/maintenance/plans?status=${v}`} className={tabCls(status === v)}>
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <FilterTabs label="Filter" active={status} tabs={FILTERS.map(([v, l]) => [v, l, `/maintenance/plans?status=${v}`] as const)} />
         {rows.length === 0 ? (
-          <EmptyState title="No PM plans here" action={ctx.can("maintenance.plan.create") ? <LinkButton href="/maintenance/plans/new" variant="secondary">New PM plan</LinkButton> : undefined}>
-            Create a plan for each piece of equipment that needs preventive maintenance (interval from the manufacturer or the maintenance lead).
+          <EmptyState title="No regular maintenance here" action={ctx.can("maintenance.plan.create") ? <LinkButton href="/maintenance/plans/new" variant="secondary">Plan new regular maintenance</LinkButton> : undefined}>
+            Plan it for each machine that needs it. How often comes from the machine&apos;s manual or the maintenance lead.
           </EmptyState>
         ) : (
-          <Table head={["Plan", "Equipment", "Basis", "Next due", "State", "Work order"]}>
+          <PlainList label="Regular maintenance">
             {rows.map((p) => (
-              <tr key={p.id}>
-                <Td className="whitespace-nowrap font-medium">
-                  <Link className="text-primary-text hover:underline" href={`/maintenance/plans/${p.id}`}>
-                    {p.planNumber}
-                  </Link>
-                  <div className="text-[12px] text-muted">{p.title}</div>
-                </Td>
-                <Td>
-                  {p.equipmentCode} <span className="text-muted">{p.siteCode}</span>
-                </Td>
-                <Td>{p.triggerKind === "time" ? `Every ${p.intervalDays} days` : `Every ${Number(p.usageInterval)} ${p.usageUnit}`}</Td>
-                <Td className="whitespace-nowrap">{p.triggerKind === "time" ? fmtDate(p.nextDueOn) : `${p.usage ?? 0} of ${Number(p.usageInterval)} used`}</Td>
-                <Td>{p.status === "active" ? <DueChip state={p.dueState} /> : <Chip tone="neu">{p.status}</Chip>}</Td>
-                <Td>{p.liveWorkOrder ? <Link className="text-primary-text hover:underline" href={`/maintenance/work-orders/${p.liveWorkOrder.id}`}>{p.liveWorkOrder.number}</Link> : <span className="text-muted">—</span>}</Td>
-              </tr>
+              <PlainRow
+                key={p.id}
+                href={`/maintenance/plans/${p.id}`}
+                title={`${p.equipmentName}: ${p.title}`}
+                code={p.planNumber}
+                tone={p.status === "active" && p.dueState === "overdue" ? "bad" : undefined}
+                status={p.status === "active" ? <DueChip state={p.dueState} /> : <Chip tone="neu">{p.status === "paused" ? "Paused" : "No longer used"}</Chip>}
+                facts={
+                  <>
+                    {p.triggerKind === "time" ? `every ${p.intervalDays} days · next ${fmtDate(p.nextDueOn)}` : `every ${Number(p.usageInterval)} ${p.usageUnit} · ${p.usage ?? 0} used`} · {p.siteCode}
+                    {p.liveWorkOrder ? ` · job ${p.liveWorkOrder.number}` : ""}
+                  </>
+                }
+              />
             ))}
-          </Table>
+          </PlainList>
         )}
       </Card>
     </>

@@ -1,8 +1,10 @@
-import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { DEVIATION_SOURCE_LABEL, listDeviations, type DeviationSource } from "@/modules/quality";
-import { Card, EmptyState, LinkButton, PageHeader, Table, Td, cx } from "@/ui/core";
+import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { DeviationStatusChip } from "../_ui";
@@ -10,7 +12,7 @@ import { DeviationStatusChip } from "../_ui";
 export const dynamic = "force-dynamic";
 
 const FILTERS = [
-  ["active", "Open and investigating"],
+  ["active", "Not closed"],
   ["closed", "Closed"],
   ["all", "All"],
 ] as const;
@@ -24,64 +26,54 @@ export default async function DeviationsPage({ searchParams }: { searchParams: P
   return (
     <>
       <PageHeader
-        title="Deviations"
-        subtitle={`${ctx.currentSite.code} · departures from the process, raised from a step, lot or batch; open deviations block release`}
+        title="Problem reports"
+        subtitle={ctx.currentSite.name}
         actions={
           ctx.can("quality.deviation.export") ? (
-            <>
-              <a className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" href={`/api/v1/quality/deviations/export?status=${exportStatus}&format=csv`}>
-                Export CSV
-              </a>
-              <a className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" href={`/api/v1/quality/deviations/export?status=${exportStatus}&format=xlsx`}>
-                Export XLSX
-              </a>
-            </>
+            <MoreMenu>
+              <div className="flex flex-col gap-2">
+                <a className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" href={`/api/v1/quality/deviations/export?status=${exportStatus}&format=csv`}>
+                  Download (CSV)
+                </a>
+                <a className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" href={`/api/v1/quality/deviations/export?status=${exportStatus}&format=xlsx`}>
+                  Download (Excel)
+                </a>
+              </div>
+            </MoreMenu>
           ) : undefined
         }
       />
+      <PageIntro>This screen is for QA: every time something did not go as planned (a weighing, a step, a test). While a report is open, its batch or lot cannot be made OK to use.</PageIntro>
       <Card>
-        <nav className="mb-3 flex flex-wrap gap-2" aria-label="Filter deviations">
-          {FILTERS.map(([v, label]) => (
-            <Link key={v} href={`/quality/deviations?status=${v}`} className={cx("rounded-full border px-3 py-1 text-[13px]", status === v ? "border-ring bg-primary-soft font-medium" : "border-line hover:bg-surface-2")}>
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <FilterTabs label="Filter problem reports" active={status} tabs={FILTERS.map(([v, l]) => [v, l, `/quality/deviations?status=${v}`] as const)} />
         {rows.length === 0 ? (
-          <EmptyState title="No deviations here" action={<LinkButton href="/production" variant="secondary">Batches</LinkButton>}>
-            Raise a deviation from a batch, lot or inspection page; automatic ones appear when an exception is approved.
+          <EmptyState title="No problem reports here" action={<LinkButton href="/production" variant="secondary">Batches</LinkButton>}>
+            To report a problem, open the batch or lot it is about and use ⋯ More → Report a problem. Reports also appear by themselves when a supervisor approves a weighing or reading outside the limits.
           </EmptyState>
         ) : (
-          <Table head={["Deviation", "Status", "Severity", "Subject", "What happened", "Raised"]}>
+          <PlainList label="Problem reports">
             {rows.map((r) => (
-              <tr key={r.id}>
-                <Td className="whitespace-nowrap font-medium">
-                  <Link className="text-primary-text hover:underline" href={`/quality/deviations/${r.id}`}>
-                    {r.number}
-                  </Link>
-                  <div className="text-[12px] text-muted">{DEVIATION_SOURCE_LABEL[r.source as DeviationSource] ?? r.source}</div>
-                </Td>
-                <Td>
-                  <DeviationStatusChip status={r.status} />
-                  {r.status === "closed" && r.releasePermitted === false && (
-                    <div className="mt-0.5">
-                      <Chip tone="rej">Release not permitted</Chip>
-                    </div>
-                  )}
-                </Td>
-                <Td>{r.severity ?? <span className="text-muted">Not classified</span>}</Td>
-                <Td>
-                  {r.batchNumber ?? r.lotNumber}
-                  {r.stepRef && <div className="text-[12px] text-muted">{r.stepRef}</div>}
-                </Td>
-                <Td className="max-w-[320px] text-[13px] text-fg-2">{r.description}</Td>
-                <Td className="whitespace-nowrap">
-                  {fmtDateTime(r.raisedAt)}
-                  <div className="text-[12px] text-muted">{r.raisedByName}</div>
-                </Td>
-              </tr>
+              <PlainRow
+                key={r.id}
+                href={`/quality/deviations/${r.id}`}
+                title={r.description.length > 90 ? `${r.description.slice(0, 90)}…` : r.description}
+                code={r.number}
+                tone={r.status === "open" ? "bad" : undefined}
+                status={
+                  <>
+                    <DeviationStatusChip status={r.status} />
+                    {r.status === "closed" && r.releasePermitted === false && <Chip tone="rej">May not be made OK</Chip>}
+                  </>
+                }
+                facts={
+                  <>
+                    {r.batchNumber ? `Batch ${r.batchNumber}` : `Lot ${r.lotNumber}`}
+                    {r.stepRef ? ` · ${r.stepRef}` : ""} · {r.raisedByName}, {fmtDateTime(r.raisedAt)} · {r.severity ? `how serious: ${r.severity}` : "not rated yet"} · {DEVIATION_SOURCE_LABEL[r.source as DeviationSource] ?? r.source}
+                  </>
+                }
+              />
             ))}
-          </Table>
+          </PlainList>
         )}
       </Card>
     </>

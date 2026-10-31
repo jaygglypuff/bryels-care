@@ -1,76 +1,61 @@
-import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { listMaintenanceWorkOrders } from "@/modules/maintenance";
-import { Card, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
-import { PriorityChip, WoStatusChip, tabCls } from "../_ui";
+import { KIND_WORD, PriorityChip, WoStatusChip } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
 const FILTERS = [
-  ["live", "Open"],
-  ["mine", "Assigned to me"],
-  ["completed", "Completed"],
+  ["live", "Not done"],
+  ["mine", "Mine"],
+  ["completed", "Done"],
   ["all", "All"],
 ] as const;
 
 /** Maintenance work orders (US-6-19): corrective, inspection and preventive work, newest first. */
 export default async function WorkOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("maintenance.work_order.view")) return <Forbidden what="maintenance work orders" />;
+  if (!ctx.can("maintenance.work_order.view")) return <Forbidden what="repair jobs" />;
   const { status = "live" } = await searchParams;
   const rows = await listMaintenanceWorkOrders(ctx, status === "mine" ? { status: "live", mine: true } : { status });
   return (
     <>
-      <PageHeader title="Maintenance work orders" subtitle="Breakdowns, inspections and preventive maintenance; completing one writes the equipment's service record" actions={ctx.can("maintenance.work_order.create") ? <LinkButton href="/maintenance/work-orders/new">Report a problem</LinkButton> : undefined} />
+      <PageHeader title="Repair jobs" actions={ctx.can("maintenance.work_order.create") ? <LinkButton href="/maintenance/work-orders/new" variant="cta">Report a broken machine</LinkButton> : undefined} />
+      <PageIntro>This screen is for technicians: every repair, check and regular maintenance job. When a job is done, the machine&apos;s history is written by itself.</PageIntro>
       <Card>
-        <nav className="mb-3 flex flex-wrap gap-2" aria-label="Filter work orders">
-          {FILTERS.map(([v, label]) => (
-            <Link key={v} href={`/maintenance/work-orders?status=${v}`} className={tabCls(status === v)}>
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <FilterTabs label="Filter repair jobs" active={status} tabs={FILTERS.map(([v, l]) => [v, l, `/maintenance/work-orders?status=${v}`] as const)} />
         {rows.length === 0 ? (
-          <EmptyState title="No work orders here">Report a problem when equipment breaks down; PM work orders are raised from their plan.</EmptyState>
+          <EmptyState title="No repair jobs here">When a machine breaks, press “Report a broken machine”. Regular maintenance jobs are made from the maintenance that is due. Questions? Ask the maintenance lead.</EmptyState>
         ) : (
-          <Table head={["Work order", "Equipment", "Kind", "State", "Priority", "Technician", "Due", "Raised"]}>
+          <PlainList label="Repair jobs">
             {rows.map((w) => (
-              <tr key={w.id}>
-                <Td className="whitespace-nowrap font-medium">
-                  <Link className="text-primary-text hover:underline" href={`/maintenance/work-orders/${w.id}`}>
-                    {w.workOrderNumber}
-                  </Link>
-                  <div className="max-w-[220px] text-[12px] text-muted">{w.title}</div>
-                </Td>
-                <Td>
-                  {w.equipmentCode} <span className="text-muted">{w.siteCode}</span>
-                </Td>
-                <Td>
-                  {w.kindLabel}
-                  {w.planNumber && <div className="text-[12px] text-muted">{w.planNumber}</div>}
-                </Td>
-                <Td>
-                  <WoStatusChip status={w.status} />
-                </Td>
-                <Td>
-                  <PriorityChip priority={w.priority} />
-                </Td>
-                <Td>{w.assigneeName ?? <span className="text-muted">Unassigned</span>}</Td>
-                <Td className="whitespace-nowrap">
-                  {w.dueDate ? fmtDate(w.dueDate) : "—"}
-                  {w.overdue && (
-                    <div className="mt-0.5">
-                      <Chip tone="bad">Overdue</Chip>
-                    </div>
-                  )}
-                </Td>
-                <Td className="whitespace-nowrap">{fmtDateTime(w.createdAt)}</Td>
-              </tr>
+              <PlainRow
+                key={w.id}
+                href={`/maintenance/work-orders/${w.id}`}
+                title={`${w.equipmentName}: ${w.title}`}
+                code={w.workOrderNumber}
+                tone={w.overdue ? "bad" : undefined}
+                status={
+                  <>
+                    <WoStatusChip status={w.status} />
+                    <PriorityChip priority={w.priority} />
+                    {w.overdue && <Chip tone="bad">Late</Chip>}
+                  </>
+                }
+                facts={
+                  <>
+                    {KIND_WORD[w.kind] ?? w.kindLabel} · {w.assigneeName ?? "nobody yet"}
+                    {w.dueDate ? ` · by ${fmtDate(w.dueDate)}` : ""} · reported {fmtDateTime(w.createdAt)} · {w.siteCode}
+                  </>
+                }
+              />
             ))}
-          </Table>
+          </PlainList>
         )}
       </Card>
     </>

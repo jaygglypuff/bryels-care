@@ -15,26 +15,26 @@ export function TestResultForm({ batchId }: { batchId: string }) {
         <Field label="Test name" htmlFor="testName" error={fe.testName}>
           <Input id="testName" name="testName" required maxLength={120} placeholder="For example: Appearance" />
         </Field>
-        <Field label="Specification" htmlFor="specification" error={fe.specification} hint="As written in the approved specification.">
+        <Field label="What it should be" htmlFor="specification" error={fe.specification} hint="As written in the QA-approved specification.">
           <Input id="specification" name="specification" required maxLength={200} placeholder="For example: Smooth bar, no cracks" />
         </Field>
-        <Field label="Result" htmlFor="result" error={fe.result}>
+        <Field label="What you found" htmlFor="result" error={fe.result}>
           <Input id="result" name="result" required maxLength={200} placeholder="For example: Conforms" />
         </Field>
-        <Field label="Outcome" htmlFor="passed" error={fe.passed}>
+        <Field label="Is it OK?" htmlFor="passed" error={fe.passed}>
           <Select id="passed" name="passed" required defaultValue="">
             <option value="" disabled>
-              Choose pass or fail
+              Choose OK or not OK
             </option>
-            <option value="pass">Pass (within specification)</option>
-            <option value="fail">Fail (out of specification)</option>
+            <option value="pass">OK</option>
+            <option value="fail">Not OK</option>
           </Select>
         </Field>
       </div>
       <FormMessage state={state} />
       <div>
         <SubmitButton variant="secondary" pendingText="Recording…">
-          Record test result
+          Save test result
         </SubmitButton>
       </div>
     </form>

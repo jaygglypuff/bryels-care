@@ -216,12 +216,12 @@ async function kpiValue(page, caption) {
     await shot(page, 'qa-queue');
     await page.getByRole('link', { name: facts.coconutLot }).first().click();
     await page.waitForURL(/\/quality\/lots\//);
-    await expectText(page, 'Quarantined: awaiting QA decision');
+    await expectText(page, 'Waiting for QA check');
     await page.check('input[name=decision][value=release]');
     await page.fill('#reason', 'CoA LOS-25190 reviewed; appearance, colour and odour conform.');
-    await page.getByRole('button', { name: /^Release/ }).click();
+    await page.getByRole('button', { name: /^OK to use/ }).click();
     await expectText(page, 'This lot may be used and shipped');
-    await page.locator('table').getByText('CoA LOS-25190 reviewed').first().waitFor();
+    await page.getByText('CoA LOS-25190 reviewed').first().waitFor();
     await shot(page, 'qa-lot-released', { top: true });
 
     // Expired Acapulco Extract (supplier lot LB-6620)
@@ -234,7 +234,7 @@ async function kpiValue(page, caption) {
     await expectText(page, 'not usable');
     await page.getByRole('link', { name: 'Open QA decision' }).click();
     await page.waitForURL(/\/quality\/lots\//);
-    await expectText(page, 'cannot be released');
+    await expectText(page, 'cannot be made OK');
     const rel = page.locator('input[name=decision][value=release]');
     if (await rel.count()) assert(await rel.isDisabled(), 'release radio disabled for expired lot');
     await shot(page, 'qa-expired-blocked');
@@ -469,11 +469,12 @@ async function kpiValue(page, caption) {
   {
     const page = qa.page;
     await page.goto(BASE + '/quality');
-    await page.getByRole('link', { name: facts.batchNumber }).first().click();
-    await page.waitForURL(/\/quality\/batches\//);
-    await expectText(page, 'Batch status: awaiting QC');
+    // The QA queue row opens the one-page check; the full QA review page has every detail (grade-5 pass, ADR-088).
+    await page.getByRole('link', { name: facts.batchNumber }).first().waitFor();
+    await page.goto(BASE + '/quality/batches/' + facts.batchId);
+    await expectText(page, 'Batch: Waiting for QA check');
     // The finished-product inspection was created when the batch was posted to quarantine.
-    await page.getByRole('link', { name: /^INS-\d{2}-\d{5}$/ }).first().click();
+    await page.getByRole('link', { name: /INS-\d{2}-\d{5}/ }).first().click();
     await page.waitForURL(/\/quality\/inspections\/[0-9a-f-]{36}/);
     facts.inspectionId = page.url().split('/').pop();
     const results = [
@@ -482,13 +483,13 @@ async function kpiValue(page, caption) {
       ['Net weight (n=10)', { value: '136.0' }],
     ];
     for (const [name, r] of results) {
-      const li = page.locator('li', { hasText: name }).filter({ has: page.getByRole('button', { name: 'Record result' }) }).first();
+      const li = page.locator('li', { hasText: name }).filter({ has: page.getByRole('button', { name: 'Save result' }) }).first();
       await li.locator('input[name=value]').fill(r.value);
       if (r.conforms) await li.locator('select[name=conforms]').selectOption(r.conforms);
-      await li.getByRole('button', { name: 'Record result' }).click();
-      await settle(page, page.locator('li', { hasText: name }).getByText('Pass', { exact: true }).first(), 'result ' + name);
+      await li.getByRole('button', { name: 'Save result' }).click();
+      await settle(page, page.locator('li', { hasText: name }).getByText('OK', { exact: true }).first(), 'result ' + name);
     }
-    await expectText(page, 'Awaiting review');
+    await expectText(page, 'Waiting for a second QA person');
     await shot(page, 'qa-inspection-results', { full: true });
   }
   const qaLead = await asUser('qa.lead@bryels-care.test');
@@ -498,15 +499,15 @@ async function kpiValue(page, caption) {
     await page.goto(BASE + '/quality/inspections/' + facts.inspectionId);
     await page.waitForLoadState('networkidle'); // hydrated before the first click
     await page.selectOption('#decision', 'approve');
-    await page.getByRole('button', { name: 'Record review' }).click();
-    await settle(page, page.getByText('Approved · pass').first(), 'inspection review');
+    await page.getByRole('button', { name: 'Save the check' }).click();
+    await settle(page, page.getByText('Checked · OK').first(), 'inspection review');
     await page.goto(BASE + '/quality/batches/' + facts.batchId);
-    await expectText(page, 'Batch status: quarantined');
+    await expectText(page, 'Batch: Waiting for QA check');
     await page.check('input[name=decision][value=release]');
     await page.fill('#reason', 'Inspection approved, all three tests within specification; BMR reviewed, no exceptions.');
     await shot(page, 'qa-batch-tests', { full: true });
-    await page.getByRole('button', { name: 'Release batch' }).click();
-    await expectText(page, 'Batch status: released', 30000);
+    await page.getByRole('button', { name: 'OK to use' }).click();
+    await expectText(page, 'Batch: OK to use', 30000);
     await expectText(page, 'at FG-01');
     await shot(page, 'qa-batch-released', { top: true });
     await qaLead.context.close();
@@ -672,12 +673,13 @@ async function kpiValue(page, caption) {
     await page.selectOption('#customerId', { label: 'Sari Glow Online (CUS-005)' });
     await page.fill('#code', 'BC:LOT:' + facts.fgLot);
     await page.selectOption('#category', 'packaging');
-    await page.fill('#qtyAffected', '2');
     await page.fill('#description', 'Two bars arrived with torn wrappers.');
+    await page.getByText('More details (you can skip this)').click();
+    await page.fill('#qtyAffected', '2');
     await page.fill('#internalNotes', 'Check the packing line wrapper tension (fictional).');
-    await page.getByRole('button', { name: 'Log complaint' }).click();
+    await page.getByRole('button', { name: 'Save the complaint' }).click();
     await page.waitForURL(/\/quality\/complaints\/[0-9a-f-]{36}/, { timeout: 30000 });
-    facts.complaintNumber = (await page.locator('h1').innerText()).trim();
+    facts.complaintNumber = (await page.getByTestId('record-number').first().innerText()).trim();
     assert(/^CMP-\d{2}-\d{4}$/.test(facts.complaintNumber), 'complaint number ' + facts.complaintNumber);
     await expectText(page, facts.fgLot);
     await shot(page, 'complaint-logged');
@@ -722,10 +724,9 @@ async function kpiValue(page, caption) {
   {
     const page = qa.page;
     await page.goto(BASE + '/quality/trace');
-    await page.fill('#q', facts.fgLot);
-    await page.getByRole('button', { name: 'Trace', exact: true }).click();
+    await page.goto(BASE + '/quality/trace?q=' + encodeURIComponent(facts.fgLot));
     await page.waitForURL(/q=/);
-    const rev = page.locator('div', { has: page.getByText('Where it came from (reverse)', { exact: true }) }).last();
+    const rev = page.locator('div', { has: page.getByText('Where it came from', { exact: true }) }).last();
     await expectText(page, facts.coconutLot);
     await expectText(page, 'Laguna Oleo Supply');
     await expectText(page, 'Sari Glow Online');
@@ -738,8 +739,7 @@ async function kpiValue(page, caption) {
     await shot(page, 'trace-coconut-forward', { full: true });
     // Recall explorer (W3F): from the complaint forward to every customer, shipment and box.
     await page.goto(BASE + '/quality/recall');
-    await page.fill('#code', facts.complaintNumber);
-    await page.getByRole('button', { name: 'Explore', exact: true }).click();
+    await page.goto(BASE + '/quality/recall?code=' + encodeURIComponent(facts.complaintNumber));
     await page.waitForURL(/code=/, { timeout: 30000 });
     await expectText(page, 'Sari Glow Online');
     await expectText(page, facts.fgLot);

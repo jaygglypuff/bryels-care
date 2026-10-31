@@ -1,17 +1,18 @@
-import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { listChangeControls } from "@/modules/quality";
-import { Card, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Forbidden } from "../../forbidden";
-import { ChangeStatusChip, filterLinkCls } from "../capa/_ui";
+import { ChangeStatusChip } from "../capa/_ui";
 
 export const dynamic = "force-dynamic";
 
 const FILTERS = [
-  ["active", "Open"],
-  ["submitted", "Under review"],
-  ["approved", "Approved, to implement"],
+  ["active", "Not done"],
+  ["submitted", "Waiting for approval"],
+  ["approved", "Approved – to do"],
   ["closed", "Closed"],
   ["all", "All"],
 ] as const;
@@ -19,53 +20,39 @@ const FILTERS = [
 /** Change control register (US-6-18): proposals to change formula, routing, inspection-plan or work-instruction revisions. */
 export default async function ChangesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.change_control.view")) return <Forbidden what="change control" />;
+  if (!ctx.can("quality.change_control.view")) return <Forbidden what="change requests" />;
   const { status = "active" } = await searchParams;
   const rows = await listChangeControls(ctx, { status });
   return (
     <>
       <PageHeader
-        title="Change control"
-        subtitle="Proposed changes with impact assessment and approval; the change itself is made through the record's own revision workflow"
-        actions={ctx.can("quality.change_control.create") ? <LinkButton href="/quality/changes/new">Propose a change</LinkButton> : undefined}
+        title="Change requests"
+        actions={ctx.can("quality.change_control.create") ? <LinkButton href="/quality/changes/new" variant="cta">Ask for a change</LinkButton> : undefined}
       />
+      <PageIntro>This screen is for QA and managers: before a recipe, its steps or its tests change, someone asks for the change, says what it affects, and it is approved.</PageIntro>
       <Card>
-        <nav className="mb-3 flex flex-wrap gap-2" aria-label="Filter changes">
-          {FILTERS.map(([v, label]) => (
-            <Link key={v} href={`/quality/changes?status=${v}`} className={filterLinkCls(status === v)}>
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <FilterTabs label="Filter change requests" active={status} tabs={FILTERS.map(([v, l]) => [v, l, `/quality/changes?status=${v}`] as const)} />
         {rows.length === 0 ? (
-          <EmptyState title="No change controls here">Propose a change before revising a formula, routing or inspection plan; QA approves it, then the revision follows its own approval.</EmptyState>
+          <EmptyState title="No change requests here">Ask for a change before you change a recipe, its steps or its tests. QA approves it; then the new version gets its own approval. Questions? Ask the QA lead.</EmptyState>
         ) : (
-          <Table head={["Change", "State", "What changes", "Title", "Risk", "Target", "Proposed"]}>
+          <PlainList label="Change requests">
             {rows.map((r) => (
-              <tr key={r.id}>
-                <Td className="whitespace-nowrap font-medium">
-                  <Link className="text-primary-text hover:underline" href={`/quality/changes/${r.id}`}>
-                    {r.number}
-                  </Link>
-                  <div className="text-[12px] text-muted">{r.siteCode ?? "Organization"}</div>
-                </Td>
-                <Td>
-                  <ChangeStatusChip status={r.status} />
-                </Td>
-                <Td>
-                  {r.entityTypeLabel}
-                  {r.entityLabel && <div className="text-[12px] text-muted">{r.entityLabel}</div>}
-                </Td>
-                <Td className="max-w-[280px]">{r.title}</Td>
-                <Td>{r.riskLevel ?? <span className="text-muted">—</span>}</Td>
-                <Td className="whitespace-nowrap">{r.targetDate ? fmtDate(r.targetDate) : "—"}</Td>
-                <Td className="whitespace-nowrap">
-                  {fmtDateTime(r.createdAt)}
-                  <div className="text-[12px] text-muted">{r.createdByName}</div>
-                </Td>
-              </tr>
+              <PlainRow
+                key={r.id}
+                href={`/quality/changes/${r.id}`}
+                title={r.title}
+                code={r.number}
+                status={<ChangeStatusChip status={r.status} />}
+                facts={
+                  <>
+                    {r.entityTypeLabel.replace("Formula revision", "Recipe").replace("Routing revision", "Steps").replace("Inspection plan revision", "Quality checks for this item").replace("Work instruction revision", "Work instruction")}
+                    {r.entityLabel ? ` (${r.entityLabel})` : ""} · {r.riskLevel ? `risk: ${r.riskLevel}` : "risk not rated"}
+                    {r.targetDate ? ` · by ${fmtDate(r.targetDate)}` : ""} · {r.createdByName}, {fmtDateTime(r.createdAt)}
+                  </>
+                }
+              />
             ))}
-          </Table>
+          </PlainList>
         )}
       </Card>
     </>

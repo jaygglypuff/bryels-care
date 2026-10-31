@@ -4,10 +4,14 @@ import { DomainError } from "@/lib/errors";
 import { daysUntil, fmtDate, fmtDateTime } from "@/lib/qty";
 import { getLotDisposition } from "@/modules/quality/dispositions";
 import { issueDownloadUrl, listLotDocuments } from "@/modules/inventory/receiving-documents";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
-import { Banner, Chip, StatusChip } from "@/ui/status";
+import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Explain, NextStep, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { RecordNo } from "@/ui/plain-list";
+import { WhoCanHelp } from "@/ui/who-can-help";
+import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
-import { DecisionChip, DeviationStatusChip, InspectionStatusChip, Transition, fmtLotQty, statusTone } from "../../_ui";
+import { DecisionChip, DeviationStatusChip, InspectionStatusChip, QaStatusChip, Transition, fmtLotQty, statusTone } from "../../_ui";
 import { StartInspectionButton } from "../../w2c-forms";
 import { decideLotAction } from "../../actions";
 import { DecisionForm, type DecisionOption } from "../../decision-form";
@@ -16,19 +20,19 @@ import { Help } from "@/ui/help/help";
 export const dynamic = "force-dynamic";
 
 const BANNER: Record<string, { title: string; body: string }> = {
-  quarantine: { title: "Quarantined: awaiting QA decision", body: "This lot cannot be issued, allocated or shipped until it is released." },
-  on_hold: { title: "On QA hold", body: "Use of this lot is blocked until QA releases it from hold or rejects it." },
-  released: { title: "Released", body: "This lot may be used and shipped through the normal flows." },
-  rejected: { title: "Rejected", body: "This lot is blocked and its stock is in the rejected-goods location." },
-  expired: { title: "Expired", body: "This lot is past its expiry date and cannot be released. Reject it to move the stock to the rejected-goods cage." },
-  recalled: { title: "Recalled", body: "This lot is blocked by a recall." },
+  quarantine: { title: "Waiting for QA check", body: "Nobody can use, set aside or ship this lot until QA says it is OK." },
+  on_hold: { title: "Stopped by QA", body: "Nobody can use this lot until QA says it is OK again, or not OK." },
+  released: { title: "OK to use", body: "This lot may be used and shipped." },
+  rejected: { title: "Not OK – don't use", body: "This lot is blocked; its stock is in the area for things we cannot use." },
+  expired: { title: "Expired – don't use", body: "This lot is past its use-by date and cannot be made OK. Say not OK to move it to the area for things we cannot use." },
+  recalled: { title: "Recalled – don't use", body: "This lot is blocked by a product recall." },
 };
 
 const HINT: Record<string, string> = {
-  release: "Quarantine → Released. The lot becomes usable.",
-  release_from_hold: "On hold → Released.",
-  hold: "Blocks use until QA lifts the hold. Stock stays where it is.",
-  reject: "Lot → Rejected. All stock moves to the rejected-goods location.",
+  release: "People may use it from now on.",
+  release_from_hold: "People may use it again.",
+  hold: "Nobody may use it until QA decides. The stock stays where it is.",
+  reject: "All its stock moves to the area for things we cannot use.",
 };
 
 export default async function LotDispositionPage({ params }: { params: Promise<{ lotId: string }> }) {
@@ -58,9 +62,11 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
   );
   const banner = BANNER[lot.qualityStatus] ?? { title: lot.qualityStatus, body: "" };
   const days = daysUntil(lot.expiresOn);
-  const options: DecisionOption[] = v.decisions.map((d) => ({
+  // Only the choices that fit the lot's status are shown ("OK to use again" only for a lot stopped by QA).
+  const fits = (d: string) => (d === "release_from_hold" ? lot.qualityStatus === "on_hold" : d === "release" ? lot.qualityStatus !== "on_hold" : true);
+  const options: DecisionOption[] = v.decisions.filter((d) => fits(d.decision)).map((d) => ({
     value: d.decision,
-    label: d.label,
+    label: ({ release: "OK to use", release_from_hold: "OK to use again", hold: "Stop it (QA hold)", reject: "Not OK – don't use" } as Record<string, string>)[d.decision] ?? d.label,
     hint: HINT[d.decision],
     blocker: d.blocker,
     danger: d.decision === "reject",
@@ -69,24 +75,54 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
   return (
     <>
       <PageHeader
-        title={lot.lotNumber}
+        title={v.itemName}
         subtitle={
           <>
-            {v.itemName} {v.itemCode && <span className="text-muted">· {v.itemCode}</span>} · {lot.itemKind === "material" ? "Material lot" : "Finished-goods lot"}
+            {lot.itemKind === "material" ? "Delivery (material lot)" : "Finished product lot"} <RecordNo>{lot.lotNumber}</RecordNo>
           </>
         }
         actions={
           <>
             <Help screen="quality.release" />
-            <LinkButton href="/quality" variant="secondary">
-              QA queue
-            </LinkButton>
-            <LinkButton href={`/inventory/${lot.id}`} variant="secondary">
-              Lot details
-            </LinkButton>
+            <MoreMenu>
+              <div className="flex flex-col gap-2">
+                <LinkButton href={`/inventory/${lot.id}`} variant="secondary">
+                  Where this lot is stored
+                </LinkButton>
+                {ctx.can("quality.genealogy.view") && (
+                  <LinkButton href={`/quality/trace?lot=${encodeURIComponent(lot.lotNumber)}`} variant="secondary">
+                    Where it came from and where it went
+                  </LinkButton>
+                )}
+                {v.can.raiseDeviation && (
+                  <LinkButton href={`/quality/deviations/new?lotId=${lot.id}`} variant="secondary">
+                    Report a problem
+                  </LinkButton>
+                )}
+                <LinkButton href="/quality" variant="secondary">
+                  Back to QA queue
+                </LinkButton>
+              </div>
+            </MoreMenu>
           </>
         }
       />
+      <PageIntro>
+        This screen is for the QA person: check this lot and say OK to use or not OK.
+      </PageIntro>
+      <div className="-mt-3 mb-4"><Explain term="lot" /></div>
+      {v.pendingBatch ? (
+        <NextStep text="This lot gets its OK or not OK together with its batch." action={{ label: "Check the batch", href: `/quality/check/${v.pendingBatch.id}` }} />
+      ) : !v.canDecide ? (
+        ["quarantine", "on_hold"].includes(lot.qualityStatus) ? <NextStep text="Next: a QA person checks this lot and says OK or not OK." waitingFor="Waiting for QA." /> : null
+      ) : options.some((o) => !o.blocker) && ["quarantine", "on_hold", "expired"].includes(lot.qualityStatus) ? (
+        <NextStep text={v.expired || lot.qualityStatus === "expired" ? "Next: this lot is past its use-by date. Say not OK (or stop it)." : "Next: look at the papers and the quality check, then decide OK or not OK."} action={{ label: "Decide now", href: "#decide" }} />
+      ) : null}
+      {!v.canDecide && ["quarantine", "on_hold"].includes(lot.qualityStatus) && (
+        <div className="-mt-2 mb-4">
+          <WhoCanHelp permission="quality.disposition.approve" siteId={lot.siteId} hideEmails lead="QA people who decide: " />
+        </div>
+      )}
 
       <div className="flex flex-col gap-5">
         <Banner tone={statusTone(lot.qualityStatus)} title={banner.title}>
@@ -94,48 +130,45 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
         </Banner>
         {v.expired && lot.qualityStatus !== "expired" && (
           <Banner tone="exp" title={`Expiry date passed (${fmtDate(lot.expiresOn)})`}>
-            Release is blocked. Reject the lot or place it on hold.
+            It cannot be made OK to use. Say not OK, or stop it.
           </Banner>
         )}
         {v.pendingBatch && (
-          <Banner tone="appr" title={`Output of batch ${v.pendingBatch.number}`} action={<LinkButton href={`/quality/batches/${v.pendingBatch.id}`} size="sm">Open batch release</LinkButton>}>
-            Finished-goods lots are released or rejected together with their batch.
+          <Banner tone="appr" title={`Made in batch ${v.pendingBatch.number}`}>
+            A finished product lot gets its OK or not OK together with its batch.
           </Banner>
         )}
 
         <div className="grid gap-5 lg:grid-cols-2">
           <Card>
-            <CardTitle>Lot identity</CardTitle>
+            <CardTitle>About this lot</CardTitle>
             <Dl
               items={[
                 ["Lot number", lot.lotNumber],
                 ["Item", v.itemName],
-                ["Status", <StatusChip key="s" status={lot.qualityStatus} />],
-                ["Expiry", <span key="e">{fmtDate(lot.expiresOn)}{days !== null && !v.expired ? <span className="text-muted"> · {days} days</span> : null}</span>],
-                ["Manufactured", fmtDate(lot.manufacturedOn)],
-                ["Base unit", lot.baseUom],
+                ["Status", <QaStatusChip key="s" status={lot.qualityStatus} />],
+                ["Use by", <span key="e">{fmtDate(lot.expiresOn)}{days !== null && !v.expired ? <span className="text-muted"> · {days} days</span> : null}</span>],
+                ["Made on", fmtDate(lot.manufacturedOn)],
               ]}
             />
           </Card>
           <Card>
-            <CardTitle>{lot.itemKind === "material" ? "Receipt" : "Origin"}</CardTitle>
+            <CardTitle>{lot.itemKind === "material" ? "Delivery" : "Where it was made"}</CardTitle>
             {v.receipt ? (
               <Dl
                 items={[
-                  ["Goods receipt", v.receipt.receiptNumber],
                   ["Supplier", v.receipt.supplierName],
-                  ["Supplier lot", lot.supplierLotNumber ?? "—"],
-                  ["Supplier document", v.receipt.supplierDocumentNumber ?? "—"],
-                  ["Received by", v.receipt.receivedByName],
-                  ["Received", fmtDateTime(v.receipt.receivedAt)],
-                  ["Quantity received", fmtLotQty(v.receipt.qtyReceived, lot.baseUom)],
+                  ["Amount received", fmtLotQty(v.receipt.qtyReceived, lot.baseUom)],
+                  ["Received", `${fmtDateTime(v.receipt.receivedAt)} · ${v.receipt.receivedByName}`],
+                  ["Supplier's lot number", lot.supplierLotNumber ?? "—"],
+                  ["Delivery papers", `${v.receipt.receiptNumber}${v.receipt.supplierDocumentNumber ? ` · ${v.receipt.supplierDocumentNumber}` : ""}`],
                 ]}
               />
             ) : (
               <Dl
                 items={[
-                  ["Source batch", v.sourceBatch ? <Link key="b" className="text-primary-text hover:underline" href={`/quality/batches/${v.sourceBatch.id}`}>{v.sourceBatch.number}</Link> : "—"],
-                  ["Batch status", v.sourceBatch ? <StatusChip key="bs" status={v.sourceBatch.status} /> : "—"],
+                  ["Batch", v.sourceBatch ? <Link key="b" className="text-primary-text hover:underline" href={`/quality/batches/${v.sourceBatch.id}`}>{v.sourceBatch.number}</Link> : "—"],
+                  ["Batch status", v.sourceBatch ? <QaStatusChip key="bs" status={v.sourceBatch.status} /> : "—"],
                   ["Supplier", lot.supplierName ?? "—"],
                   ["Supplier lot", lot.supplierLotNumber ?? "—"],
                   ["Created by", v.createdByName ?? "—"],
@@ -148,9 +181,9 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
 
         {lot.itemKind === "material" && (
           <Card>
-            <CardTitle>Supplier documents</CardTitle>
+            <CardTitle>Supplier papers (certificate of analysis, CoA)</CardTitle>
             {docs.length === 0 ? (
-              <p className="text-[13px] text-muted">No CoA or other supplier document is attached to this lot{v.receipt ? "; attach it on the goods receipt" : ""}.</p>
+              <p className="text-[13px] text-muted">No paper from the supplier is attached to this lot{v.receipt ? ". The warehouse attaches it on the delivery (receiving) screen; ask them" : ""}.</p>
             ) : (
               <ul className="space-y-1 text-[13px]">
                 {docs.map((d) => (
@@ -165,35 +198,34 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
         )}
 
         <Card>
-          <CardTitle>Stock on hand</CardTitle>
+          <CardTitle>How much we have and where</CardTitle>
           {v.stock.length === 0 ? (
-            <EmptyState title="No stock on hand">The lot has been fully used, shipped or written off.</EmptyState>
+            <EmptyState title="None left">All of this lot has been used, shipped or thrown away.</EmptyState>
           ) : (
-            <Table head={["Location", "Kind", "Quantity"]}>
-              {v.stock.map((s) => (
-                <tr key={s.locationCode}>
-                  <Td className="font-medium">
-                    {s.locationCode} <span className="font-normal text-muted">· {s.locationName}</span>
-                  </Td>
-                  <Td>{s.kind.charAt(0).toUpperCase() + s.kind.slice(1)}</Td>
-                  <Td>{fmtLotQty(s.qty, lot.baseUom)}</Td>
-                </tr>
+            <ul className="flex flex-col divide-y divide-line text-[14px]">
+              {v.stock.map((st) => (
+                <li key={st.locationCode} className="flex flex-wrap items-baseline justify-between gap-2 py-2">
+                  <span>
+                    {st.locationName} <span className="font-mono text-[12px] text-muted">{st.locationCode}</span>
+                  </span>
+                  <span className="font-medium tabular">{fmtLotQty(st.qty, lot.baseUom)}</span>
+                </li>
               ))}
-            </Table>
+            </ul>
           )}
         </Card>
 
         {lot.itemKind === "material" && (
           <Card>
-            <CardTitle>Incoming inspection</CardTitle>
+            <CardTitle>Quality check (tests on arrival)</CardTitle>
             {v.inspections.length === 0 ? (
-              <p className="text-[13px] text-muted">No inspection recorded for this lot. Start one to sample it and enter the approved incoming plan&apos;s tests.</p>
+              <p className="text-[13px] text-muted">No quality check yet. Start one to take a sample and type the test results.</p>
             ) : (
               <ul className="flex flex-col gap-1 text-[14px]">
                 {v.inspections.map((i) => (
                   <li key={i.id} className="flex flex-wrap items-center gap-2">
-                    <Link className="font-medium text-primary-text hover:underline" href={`/quality/inspections/${i.id}`}>
-                      {i.number}
+                    <Link className="inline-flex min-h-[44px] items-center font-medium text-primary-text hover:underline" href={`/quality/inspections/${i.id}`}>
+                      Open the quality check <span className="ml-1 font-mono text-[12px] font-normal text-muted">{i.number}</span>
                     </Link>
                     <InspectionStatusChip status={i.status} outcome={i.outcome} />
                   </li>
@@ -209,19 +241,18 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
         )}
 
         <Card>
-          <CardTitle action={v.can.raiseDeviation ? <LinkButton href={`/quality/deviations/new?lotId=${lot.id}`} variant="secondary" size="sm">Raise deviation</LinkButton> : undefined}>Deviations</CardTitle>
+          <CardTitle>Problem reports</CardTitle>
           {v.deviations.length === 0 ? (
-            <p className="text-[13px] text-muted">No deviation names this lot.</p>
+            <p className="text-[13px] text-muted">No problem was reported for this lot. Something wrong? Use ⋯ More → Report a problem.</p>
           ) : (
             <ul className="flex flex-col divide-y divide-line">
               {v.deviations.map((d) => (
                 <li key={d.id} className="flex flex-wrap items-start gap-2 py-2 text-[14px]">
-                  <Link className="font-medium text-primary-text hover:underline" href={`/quality/deviations/${d.id}`}>
-                    {d.number}
+                  <Link className="min-w-0 flex-1 font-medium text-primary-text hover:underline" href={`/quality/deviations/${d.id}`}>
+                    {d.description} <span className="font-mono text-[12px] font-normal text-muted">{d.number}</span>
                   </Link>
                   <DeviationStatusChip status={d.status} />
-                  {d.status === "closed" && d.releasePermitted === false && <Chip tone="rej">Release not permitted</Chip>}
-                  <span className="min-w-0 flex-1 text-[13px] text-fg-2">{d.description}</span>
+                  {d.status === "closed" && d.releasePermitted === false && <Chip tone="rej">May not be made OK</Chip>}
                 </li>
               ))}
             </ul>
@@ -229,43 +260,48 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
         </Card>
 
         <Card>
+          <span id="decide" className="block scroll-mt-24" />
           <CardTitle>QA decision</CardTitle>
           {v.canDecide ? (
             <>
               {v.isReceiver && (
                 <div className="mb-3">
                   <Banner tone="warn" title="You received this lot">
-                    Separation of duties: another QA user must release it. You may still place it on hold or reject it.
+                    Another QA person must say OK to use. You may still stop it or say not OK.
                   </Banner>
                 </div>
               )}
               <DecisionForm action={decideLotAction} hidden={{ lotId: lot.id }} options={options} />
             </>
           ) : (
-            <p className="text-[13px] text-muted">You can view this lot. Recording a QA decision needs the QA approval permission (quality.disposition.approve).</p>
+            <div className="text-[13px] text-muted">
+              Only a QA person can say OK or not OK.
+              <WhoCanHelp permission="quality.disposition.approve" siteId={lot.siteId} hideEmails />
+            </div>
           )}
         </Card>
 
         <Card>
-          <CardTitle>Decision history</CardTitle>
+          <CardTitle>Past QA decisions</CardTitle>
           {v.history.length === 0 ? (
-            <EmptyState title="No decisions yet">Every QA decision on this lot is listed here with who made it and why.</EmptyState>
+            <EmptyState title="No decisions yet">Every OK or not OK on this lot is listed here with who gave it and why. Decisions are never changed afterwards.</EmptyState>
           ) : (
-            <Table head={["When", "Decision", "Status change", "Decided by", "Reason"]}>
+            <ul className="flex flex-col divide-y divide-line">
               {v.history.map((h) => (
-                <tr key={h.id}>
-                  <Td className="whitespace-nowrap">{fmtDateTime(h.decidedAt)}</Td>
-                  <Td>
+                <li key={h.id} className="flex flex-col gap-1 py-2.5 text-[14px]">
+                  <span className="flex flex-wrap items-center gap-2">
                     <DecisionChip decision={h.decision} />
-                  </Td>
-                  <Td>
+                    <span className="text-[13px] text-fg-2">
+                      {h.decidedByName}, {fmtDateTime(h.decidedAt)}
+                    </span>
+                  </span>
+                  {h.reason && <span className="text-fg-2">“{h.reason}”</span>}
+                  <span className="text-[12px]">
                     <Transition from={h.fromStatus} to={h.toStatus} />
-                  </Td>
-                  <Td>{h.decidedByName}</Td>
-                  <Td className="text-fg-2">{h.reason ?? "—"}</Td>
-                </tr>
+                  </span>
+                </li>
               ))}
-            </Table>
+            </ul>
           )}
         </Card>
       </div>

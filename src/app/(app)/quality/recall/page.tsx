@@ -4,15 +4,51 @@ import Decimal from "decimal.js";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { recallScope, type RecallMode, type RecallQuery } from "@/modules/quality";
-import { Card, CardTitle, EmptyState, Input, Kpi, PageHeader, Table, Td, buttonClass, cx } from "@/ui/core";
+import { Card, CardTitle, EmptyState, Input, Kpi, PageHeader, Select, Table, Td, buttonClass, cx } from "@/ui/core";
+import { listLots } from "@/modules/inventory";
+import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
-import { fmtLotQty } from "../_ui";
+import { QaStatusChip, fmtLotQty } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
-const RELATION_WORD = { subject: "Subject", source: "Made the subject", downstream: "Used it", sibling: "Shares an input lot" } as const;
-const ROLE_WORD = { start: "Subject", upstream: "Input (upstream)", downstream: "Made from it (downstream)" } as const;
+const RELATION_WORD = { subject: "The one you chose", source: "Made it", downstream: "Used it", sibling: "Used the same material lot" } as const;
+const ROLE_WORD = { start: "The one you chose", upstream: "Went into it", downstream: "Made from it" } as const;
+/** Pick a lot by its name instead of typing its number (ADR-088): the lots of the current site, newest use-by first. */
+async function lotChoices(ctx: Awaited<ReturnType<typeof requireContext>>) {
+  if (!ctx.can("inventory.lot.view")) return [];
+  const rows = await listLots(ctx, { includeEmpty: true });
+  return rows.map((l) => ({ lotNumber: l.lotNumber, label: `${l.itemName} · ${l.lotNumber}${l.supplierName ? ` · ${l.supplierName}` : ""}` }));
+}
+
+function PickLot({ action, name, lots, button, selected }: { action: string; name: string; lots: { lotNumber: string; label: string }[]; button: string; selected?: string }) {
+  if (lots.length === 0) return null;
+  return (
+    <form method="get" action={action} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <label htmlFor={`pick-${name}`} className="text-[13px] font-medium">
+          Choose the material or product (lot)
+        </label>
+        <Select id={`pick-${name}`} name={name} defaultValue={selected ?? ""} required>
+          <option value="" disabled>
+            Choose…
+          </option>
+          {lots.map((l) => (
+            <option key={l.lotNumber} value={l.lotNumber}>
+              {l.label}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <button type="submit" className={buttonClass("cta")}>
+        <Search size={16} /> {button}
+      </button>
+    </form>
+  );
+}
+
 
 function queryString(q: RecallQuery, mode?: RecallMode) {
   const p = new URLSearchParams();
@@ -32,7 +68,7 @@ export default async function RecallPage({ searchParams }: { searchParams: Promi
   const complaintId = sp.complaintId && /^[0-9a-f-]{36}$/i.test(sp.complaintId) && ctx.can("quality.complaint.view") ? sp.complaintId : undefined;
   const q: RecallQuery = complaintId ? { complaintId } : sp.supplierLot?.trim() ? { supplierLot: sp.supplierLot.trim() } : { code: sp.code?.trim() || undefined };
   const searched = !!(q.complaintId || q.supplierLot || q.code);
-  const r = await recallScope(ctx, { ...q, mode });
+  const [r, lots] = await Promise.all([recallScope(ctx, { ...q, mode }), lotChoices(ctx)]);
   const linkCls = "inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2";
   const outstanding = r.customers.flatMap((c) => c.outstanding);
   const outByUom = new Map<string, Decimal>();
@@ -41,59 +77,69 @@ export default async function RecallPage({ searchParams }: { searchParams: Promi
   return (
     <>
       <PageHeader
-        title="Recall explorer"
-        subtitle="Read-only: every lot, batch, box, shipment and customer affected, from the stock ledger. Open a recall case from this scope to act on it."
+        title="Who received it (recall check)"
         actions={
           r.subject && (ctx.can("quality.genealogy.export") || ctx.can("quality.recall_case.create")) ? (
             <>
               {ctx.can("quality.recall_case.create") && (
-                <a className={linkCls} href={`/quality/recalls/new?${queryString(q, r.mode)}`}>
-                  Open recall case
+                <a className={buttonClass("cta")} href={`/quality/recalls/new?${queryString(q, r.mode)}`}>
+                  Start a product recall
                 </a>
               )}
               {ctx.can("quality.genealogy.export") && (
-                <>
-                  <a className={linkCls} href={`/api/v1/quality/recall/export?${queryString(q, r.mode)}&format=csv`}>
-                    Export CSV
-                  </a>
-                  <a className={linkCls} href={`/api/v1/quality/recall/export?${queryString(q, r.mode)}&format=xlsx`}>
-                    Export XLSX
-                  </a>
-                </>
+                <MoreMenu>
+                  <div className="flex flex-col gap-2">
+                    <a className={linkCls} href={`/api/v1/quality/recall/export?${queryString(q, r.mode)}&format=csv`}>
+                      Download (CSV)
+                    </a>
+                    <a className={linkCls} href={`/api/v1/quality/recall/export?${queryString(q, r.mode)}&format=xlsx`}>
+                      Download (Excel)
+                    </a>
+                  </div>
+                </MoreMenu>
               )}
             </>
           ) : undefined
         }
       />
+      <PageIntro>This screen is for QA when something may be wrong with a product: see every customer who got it and how much is still with them. It only shows; nothing is changed.</PageIntro>
+      {!searched && <NextStep text="Next: choose the material or product below, or scan a label or complaint number." />}
+      {r.subject && ctx.can("quality.recall_case.create") && <NextStep text="If the product must come back, start a product recall from this list." action={{ label: "Start a product recall", href: `/quality/recalls/new?${queryString(q, r.mode)}` }} />}
+
       <div className="flex flex-col gap-5">
         <Card>
+          <PickLot action="/quality/recall" name="code" lots={lots} button="Show" selected={q.code} />
+          <div className={lots.length ? "mt-3" : ""}>
+          <MoreDetails title="Scan a label, or a complaint or supplier's lot number" open={lots.length === 0 || (!!q.code && !r.subject)}>
           <form method="get" action="/quality/recall" className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               <label htmlFor="code" className="text-[13px] font-medium">
-                Lot, box, batch or complaint number (scan or type)
+                Scan a label (lot, box or batch) or the complaint number
               </label>
-              <Input id="code" name="code" defaultValue={q.code ?? ""} placeholder="L-2610-00015, BC:BOX:…, B-26-0001 or CMP-26-0001" autoComplete="off" />
+              <Input id="code" name="code" defaultValue={q.code ?? ""} autoComplete="off" />
             </div>
-            <button type="submit" className={buttonClass("cta")}>
-              <Search size={16} /> Explore
+            <button type="submit" className={buttonClass("secondary")}>
+              <Search size={16} /> Show
             </button>
           </form>
           <form method="get" action="/quality/recall" className="mt-3 flex flex-col gap-2 border-t border-line pt-3 sm:flex-row sm:items-end">
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               <label htmlFor="supplierLot" className="text-[13px] font-medium">
-                Or a supplier&apos;s lot number
+                Or the supplier&apos;s lot number (from their label)
               </label>
-              <Input id="supplierLot" name="supplierLot" defaultValue={q.supplierLot ?? ""} placeholder="LOS-24871" autoComplete="off" />
+              <Input id="supplierLot" name="supplierLot" defaultValue={q.supplierLot ?? ""} autoComplete="off" />
             </div>
             <button type="submit" className={buttonClass("secondary")}>
-              <Search size={16} /> Explore forward
+              <Search size={16} /> Show where it went
             </button>
           </form>
+          </MoreDetails>
+          </div>
           <p className="mt-2 text-[12px] text-muted">Only records at your sites ({ctx.allowedSites.map((s) => s.code).join(", ")}) are shown.</p>
         </Card>
 
         {!searched ? (
-          <EmptyState title="Start from a code">Scan or type a lot, box, batch or complaint number, or a supplier&apos;s lot number, to list every customer who received affected product.</EmptyState>
+          <EmptyState title="Choose something first">Choose a material or product (or scan a label, or use a complaint number) to list every customer who got it.</EmptyState>
         ) : !r.subject ? (
           <EmptyState title="Nothing found">{r.notFoundMessage}</EmptyState>
         ) : (
@@ -101,7 +147,7 @@ export default async function RecallPage({ searchParams }: { searchParams: Promi
             <Card>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{r.subject.kind.replace("_", " ")}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">You chose</p>
                   <p className="text-[16px] font-semibold">
                     {r.subject.kind === "complaint" && r.subject.id ? (
                       <Link className="text-primary-text hover:underline" href={`/quality/complaints/${r.subject.id}`}>
@@ -115,49 +161,53 @@ export default async function RecallPage({ searchParams }: { searchParams: Promi
                 </div>
                 <nav className="flex flex-wrap gap-2" aria-label="Direction">
                   {(["forward", "reverse"] as const).map((m) => (
-                    <Link key={m} href={`/quality/recall?${queryString(q, m)}`} className={cx("rounded-full border px-3 py-1 text-[13px]", r.mode === m ? "border-ring bg-primary-soft font-medium" : "border-line hover:bg-surface-2")}>
-                      {m === "forward" ? "Forward: where it went" : "Reverse: inputs and sibling batches too"}
+                    <Link key={m} href={`/quality/recall?${queryString(q, m)}`} className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[13px]", r.mode === m ? "border-ring bg-primary-soft font-medium" : "border-line hover:bg-surface-2")}>
+                      {m === "forward" ? "Only where it went" : "Also batches that used the same materials"}
                     </Link>
                   ))}
                 </nav>
               </div>
               <p className="mt-2 text-[12px] text-muted">
-                Point in time {fmtDateTime(r.asOf)} · sites included: {r.siteCodes.join(", ")} · depth limit {r.maxDepth}
+                As of {fmtDateTime(r.asOf)} · sites: {r.siteCodes.join(", ")}
               </p>
             </Card>
-            {r.depthLimitHit && <Banner tone="warn" title={`The trace reached the depth limit of ${r.maxDepth}`}>Some branches were cut. Explore again from one of the deepest lots to continue.</Banner>}
-            {r.hiddenCount > 0 && <Banner tone="warn" title={`${r.hiddenCount} linked record(s) are at sites outside your access`}>They are not shown or followed. Ask a user with access to those sites (or the owner) to complete the list.</Banner>}
+            {r.depthLimitHit && <Banner tone="warn" title="The list is too long to show in full">Some parts were cut. Look again from one of the last lots shown.</Banner>}
+            {r.hiddenCount > 0 && <Banner tone="warn" title={`${r.hiddenCount} linked record(s) are at sites you cannot see`}>They are not shown. Ask someone with access to those sites (or the owner) to look too.</Banner>}
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <Kpi label="Customers" value={r.customers.length} />
-              <Kpi label="Shipment lines" value={r.shipments.length} />
+              <Kpi label="Deliveries" value={r.shipments.length} />
               <Kpi label="Still at customers" value={[...outByUom.entries()].map(([u, n]) => fmtLotQty(n.toString(), u)).join(" · ") || "0"} tone={outByUom.size ? "warn" : "neutral"} />
-              <Kpi label="Lots / batches" value={`${r.lots.length} / ${r.batches.length}`} />
+              <Kpi label="Lots and batches" value={`${r.lots.length} / ${r.batches.length}`} />
             </div>
 
             <Card>
-              <CardTitle>Affected customers</CardTitle>
+              <CardTitle>Customers who got it</CardTitle>
               {r.customers.length === 0 ? (
-                <p className="text-[13px] text-muted">No shipment of an affected lot has been dispatched from your sites.</p>
+                <p className="text-[13px] text-muted">Nothing of it has been sent to a customer from your sites.</p>
               ) : (
-                <Table head={["Customer", "Ship-to", "DR numbers", "Lots", "Still at customer"]}>
+                <ul className="flex flex-col divide-y divide-line text-[14px]">
                   {r.customers.map((c) => (
-                    <tr key={c.customerId}>
-                      <Td className="font-medium">{c.customerName}</Td>
-                      <Td className="max-w-[260px] text-[13px]">{c.shipTo}</Td>
-                      <Td className="text-[13px]">{c.drNumbers.join(", ")}</Td>
-                      <Td className="text-[13px]">{c.lotNumbers.join(", ")}</Td>
-                      <Td className="whitespace-nowrap">{c.outstanding.map((o) => fmtLotQty(o.qty, o.uom)).join(" · ")}</Td>
-                    </tr>
+                    <li key={c.customerId} className="flex flex-col gap-0.5 py-2">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{c.customerName}</span>
+                        {c.outstanding.length > 0 && <Chip tone="warn">Still with them: {c.outstanding.map((o) => fmtLotQty(o.qty, o.uom)).join(" · ")}</Chip>}
+                      </span>
+                      <span className="text-[13px] text-fg-2">{c.shipTo}</span>
+                      <span className="text-[12px] text-muted">
+                        Delivery receipts {c.drNumbers.join(", ")} · lots <span className="font-mono">{c.lotNumbers.join(", ")}</span>
+                      </span>
+                    </li>
                   ))}
-                </Table>
+                </ul>
               )}
             </Card>
 
+            <MoreDetails title="Details: deliveries, stock still here, boxes, batches and lots">
             <Card>
-              <CardTitle>Shipments</CardTitle>
+              <CardTitle>Deliveries</CardTitle>
               {r.shipments.length === 0 ? (
-                <p className="text-[13px] text-muted">No shipments.</p>
+                <p className="text-[13px] text-muted">No deliveries.</p>
               ) : (
                 <Table head={["DR / order", "Customer", "Lot", "Shipped", "Returned", "Still at customer", "Boxes", "Dispatched"]}>
                   {r.shipments.map((s) => (
@@ -190,7 +240,7 @@ export default async function RecallPage({ searchParams }: { searchParams: Promi
 
             <div className="grid gap-5 xl:grid-cols-2">
               <Card>
-                <CardTitle>Stock still in our warehouses</CardTitle>
+                <CardTitle>Still in our warehouses</CardTitle>
                 {r.stock.length === 0 ? (
                   <p className="text-[13px] text-muted">No affected stock on hand at your sites.</p>
                 ) : (
@@ -203,7 +253,7 @@ export default async function RecallPage({ searchParams }: { searchParams: Promi
                           </Link>
                         </Td>
                         <Td>
-                          <StatusChip status={s.status} />
+                          <QaStatusChip status={s.status} />
                         </Td>
                         <Td className="text-[13px]">
                           {s.siteCode} {s.locationCode} <span className="text-muted">({s.locationKind})</span>
@@ -256,7 +306,7 @@ export default async function RecallPage({ searchParams }: { searchParams: Promi
                           {b.number}
                         </Link>
                         <span className="text-fg-2">{b.productName}</span>
-                        <StatusChip status={b.status} />
+                        <QaStatusChip status={b.status} />
                         <Chip tone={b.relation === "sibling" ? "warn" : "info"}>{RELATION_WORD[b.relation]}</Chip>
                         <span className="text-[12px] text-muted">
                           {b.siteCode}
@@ -276,17 +326,18 @@ export default async function RecallPage({ searchParams }: { searchParams: Promi
                         {l.number}
                       </Link>
                       <span className="text-fg-2">{l.itemName}</span>
-                      <StatusChip status={l.status} />
+                      <QaStatusChip status={l.status} />
                       <span className="text-[12px] text-muted">
                         {ROLE_WORD[l.role]}
-                        {l.viaBatchNumber ? ` · via ${l.viaBatchNumber}` : l.originLotNumber ? ` · re-lotted from ${l.originLotNumber}` : ""}
-                        {l.supplierLot ? ` · supplier lot ${l.supplierLot}` : ""}
+                        {l.viaBatchNumber ? ` · via ${l.viaBatchNumber}` : l.originLotNumber ? ` · new number for ${l.originLotNumber}` : ""}
+                        {l.supplierLot ? ` · supplier's lot ${l.supplierLot}` : ""}
                       </span>
                     </li>
                   ))}
                 </ul>
               </Card>
             </div>
+            </MoreDetails>
           </>
         )}
       </div>

@@ -153,6 +153,11 @@ describe("lot disposition", () => {
     expect((await lot("L-2610-00009")).qualityStatus).toBe("released");
     const ev = await db.select().from(auditEvents).where(eq(auditEvents.entityId, l.id));
     expect(ev.map((e) => e.action)).toEqual(expect.arrayContaining(["quality.disposition.held", "quality.disposition.released"]));
+    // The QA queue lists recent decisions name first (ADR-088): the material's name, the lot number second.
+    const recent = (await getQaQueue(qa)).decisions.find((d) => d.subjectId === l.id);
+    expect(recent?.subjectNumber).toBe("L-2610-00009");
+    expect(recent?.subjectName).toBeTruthy();
+    expect(recent?.subjectName).not.toBe("L-2610-00009");
   });
 
   it("does not decide a finished-goods lot whose batch is still awaiting QC", async () => {

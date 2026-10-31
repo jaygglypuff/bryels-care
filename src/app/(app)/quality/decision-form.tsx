@@ -31,7 +31,7 @@ export function DecisionForm({
     return (
       <div className="flex flex-col gap-2">
         <FormMessage state={state} />
-        <p className="text-[13px] text-muted">No decision is available for the current status.</p>
+        <p className="text-[13px] text-muted">Nothing can be decided right now:</p>
         <ul className="list-disc pl-5 text-[13px] text-fg-2">
           {options.map((o) => (
             <li key={o.value}>
@@ -49,7 +49,7 @@ export function DecisionForm({
         <input key={k} type="hidden" name={k} value={v} />
       ))}
       <fieldset className="grid gap-2 sm:grid-cols-2">
-        <legend className="mb-2 text-[13px] font-medium text-fg">Decision</legend>
+        <legend className="mb-2 text-[13px] font-medium text-fg">Your decision</legend>
         {options.map((o) => (
           <label
             key={o.value}
@@ -74,8 +74,8 @@ export function DecisionForm({
           </label>
         ))}
       </fieldset>
-      <Field label="Reason (required)" htmlFor="reason" error={state?.fieldErrors?.reason} hint="At least 5 characters. Recorded with your name and the time; decisions are never edited.">
-        <Textarea id="reason" name="reason" required minLength={5} maxLength={1000} placeholder="For example: CoA reviewed, appearance and odour conform." />
+      <Field label="Why? (required)" htmlFor="reason" error={state?.fieldErrors?.reason} hint="A short sentence. It is saved with your name and the time and is never changed afterwards.">
+        <Textarea id="reason" name="reason" required minLength={5} maxLength={1000} placeholder="For example: supplier papers checked, colour and smell are OK." />
       </Field>
       <FormMessage state={state} />
       <div>

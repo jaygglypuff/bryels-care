@@ -126,74 +126,74 @@ async function step(name, fn, u) {
   await step('qa: start inspection (redirect)', async () => {
     const p = qa.page;
     await p.goto(BASE + '/quality');
-    await p.getByRole('link', { name: 'L-2610-00013', exact: true }).first().click();
+    await p.getByRole('link', { name: /L-2610-00013/ }).first().click();
     await p.waitForURL(/\/quality\/lots\//);
-    await p.getByRole('button', { name: 'Start inspection' }).click();
+    await p.getByRole('button', { name: 'Start the quality check' }).click();
     await p.waitForURL(/\/quality\/inspections\/[0-9a-f-]{36}/, { timeout: 15000 });
   }, qa);
   await step('qa: record sample', async () => {
     const p = qa.page;
     await p.locator('input[name=qty]').first().fill('10');
-    await p.getByRole('button', { name: 'Record sample' }).click();
-    await fresh(qa, p.getByText(/^Sample 1 recorded/).first(), 'sample message');
-    await fresh(qa, p.getByRole('cell', { name: '10.0 g' }).first(), 'sample row');
+    await p.getByRole('button', { name: 'Save sample' }).click();
+    await fresh(qa, p.getByText(/^Sample 1 saved/).first(), 'sample message');
+    await fresh(qa, p.getByText('Sample 1: 10.0 g').first(), 'sample row');
   }, qa);
   await step('qa: record every result', async () => {
     const p = qa.page;
     for (let guard = 0; guard < 8; guard++) {
-      const li = p.locator('li').filter({ has: p.getByRole('button', { name: 'Record result' }) }).first();
+      const li = p.locator('li').filter({ has: p.getByRole('button', { name: 'Save result' }) }).first();
       if (!(await li.count())) break;
       const title = (await li.locator('p').first().innerText()).trim();
       await li.locator('input[name=value]').fill('Conforms (repro)');
       const conforms = li.locator('select[name=conforms]');
       if (await conforms.count()) await conforms.selectOption('yes');
-      await li.getByRole('button', { name: 'Record result' }).click();
-      await fresh(qa, p.locator('li', { hasText: title }).getByText('Pass', { exact: true }).first(), 'result ' + title);
+      await li.getByRole('button', { name: 'Save result' }).click();
+      await fresh(qa, p.locator('li', { hasText: title }).getByText('OK', { exact: true }).first(), 'result ' + title);
     }
   }, qa);
   await step('qa: awaiting review after the last result', async () => {
-    await fresh(qa, qa.page.getByText('Awaiting review').first(), 'inspection status after last result');
+    await fresh(qa, qa.page.getByText('Waiting for a second QA person').first(), 'inspection status after last result');
     qa.inspectionUrl = qa.page.url();
   }, qa);
   await step('qa: review by a second QA user', async () => {
     const p = ql.page;
     await p.goto(BASE + '/quality/inspections');
-    await p.getByRole('link', { name: /^INS-\d{2}-\d{5}$/ }).filter({ hasText: (await qa.page.locator('h1').innerText()).trim() }).first().click();
+    await p.getByRole('link', { name: new RegExp((await qa.page.getByTestId('record-number').first().innerText()).trim()) }).first().click();
     await p.waitForURL(/\/quality\/inspections\/[0-9a-f-]{36}/);
     await p.selectOption('#decision', 'approve');
-    await p.getByRole('button', { name: 'Record review' }).click();
-    await fresh(ql, p.getByText('Approved · pass').first(), 'review refresh');
+    await p.getByRole('button', { name: 'Save the check' }).click();
+    await fresh(ql, p.getByText('Checked · OK').first(), 'review refresh');
   }, ql);
 
   // 5. Holds: place (redirect), then mark under investigation (in place).
   await step('hold: place (redirect) and investigate', async () => {
     const p = qa.page;
     await p.goto(BASE + '/quality/holds');
-    await p.getByRole('link', { name: 'Place hold' }).first().click();
+    await p.getByRole('link', { name: 'Stop a lot' }).first().click();
     await p.waitForURL(/\/quality\/holds\/new/);
-    await p.fill('#lot', 'L-2610-00012');
+    await p.selectOption('#lot', 'L-2610-00012');
     await p.selectOption('#reasonCode', { index: 1 });
     await p.fill('#reason', 'Repro: supplier notice received, checking the lot');
-    await p.getByRole('button', { name: 'Place hold' }).click();
+    await p.getByRole('button', { name: 'Stop it' }).click();
     await p.waitForURL(/\/quality\/holds\/[0-9a-f-]{36}/, { timeout: 15000 });
     const note = p.locator('textarea[name=note], input[name=note]').first();
     await note.waitFor({ timeout: 10000 });
     await note.fill('Repro: investigating with the supplier');
-    await p.getByRole('button', { name: 'Mark investigating' }).click();
+    await p.getByRole('button', { name: 'Save: QA is looking into it' }).click();
     // The investigate form leaves with the open state; the status and the timeline show the change.
-    await fresh(qa, p.getByText('Investigating', { exact: true }).first(), 'investigate refresh (status)');
+    await fresh(qa, p.getByText('QA is looking into it', { exact: true }).first(), 'investigate refresh (status)');
     await fresh(qa, p.getByText('Repro: investigating with the supplier').first(), 'investigate refresh (timeline)');
-    qa.holdNumber = (await p.locator('h1').innerText()).trim();
+    qa.holdNumber = (await p.getByTestId('record-number').first().innerText()).trim();
   }, qa);
   await step('hold: lift by a second QA user', async () => {
     const p = ql.page;
     await p.goto(BASE + '/quality/holds');
-    await p.getByRole('link', { name: qa.holdNumber }).first().click();
+    await p.getByRole('link', { name: new RegExp(qa.holdNumber) }).first().click();
     await p.waitForURL(/\/quality\/holds\/[0-9a-f-]{36}/);
     await p.fill('#lift-reason', 'Repro: supplier confirmed, contents unaffected');
-    await p.getByRole('button', { name: 'Lift hold' }).click();
+    await p.getByRole('button', { name: 'Save the decision' }).click();
     // The lift form leaves with the active state; the status and the resolution show the change.
-    await fresh(ql, p.getByText('Closed', { exact: true }).first(), 'lift refresh (status)');
+    await fresh(ql, p.getByText('No longer stopped', { exact: true }).first(), 'lift refresh (status)');
     await fresh(ql, p.getByText('Repro: supplier confirmed, contents unaffected').first(), 'lift refresh (resolution shown)');
   }, ql);
 

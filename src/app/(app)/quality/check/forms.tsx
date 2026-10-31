@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from "rea
 import { Button, Field, Input, Select, Textarea } from "@/ui/core";
 import { ActionForm, FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { Chip } from "@/ui/status";
+import { MoreDetails } from "@/ui/guide";
 import { decideQualityCheckAction, saveTestResultsAction } from "./actions";
 
 /**
@@ -80,19 +81,21 @@ export function PassForm({ batchId, maker, canPass }: { batchId: string; maker: 
       <input type="hidden" name="batchId" value={batchId} />
       <input type="hidden" name="decision" value="pass" />
       <label className="flex min-h-[48px] items-center gap-3 text-[15px]">
-        <input type="checkbox" name="recordReviewed" value="yes" className="h-6 w-6" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} />I reviewed the batch record and the exceptions above
+        <input type="checkbox" name="recordReviewed" value="yes" className="h-6 w-6" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} />I looked at the batch record and the things that did not go as planned
       </label>
       {fe.recordReviewed && <p className="text-[14px] text-[var(--bad-fg)]">{fe.recordReviewed}</p>}
       {maker?.ownerOverride && (
-        <Field label="Why do you pass a batch you worked on? (printed on the batch record)" htmlFor="overrideReason" error={fe.overrideReason} hint={`You ${maker.what.join(", ")} on this batch. This is recorded.`}>
+        <Field label="Why do you say OK to a batch you worked on? (printed on the batch record)" htmlFor="overrideReason" error={fe.overrideReason} hint={`You ${maker.what.join(", ")} on this batch. This is recorded.`}>
           <Textarea id="overrideReason" name="overrideReason" rows={2} maxLength={1000} required placeholder="For example: No separate QA person yet" value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} />
         </Field>
       )}
+      <MoreDetails title="Add a note (optional)">
       <Field label="Note (optional)" htmlFor="pass-reason" error={fe.reason}>
         <Input id="pass-reason" name="reason" maxLength={1000} autoComplete="off" value={note} onChange={(e) => setNote(e.target.value)} />
       </Field>
+      </MoreDetails>
       <FormMessage state={state} />
-      <ConfirmStep formRef={formRef} open={open} setOpen={setOpen} ask="Pass" question="Pass this batch?" detail="The stock becomes ready to sell." yes="Yes, pass" pending="Passing…" disabled={!reviewed || !canPass} testId="pass" />
+      <ConfirmStep formRef={formRef} open={open} setOpen={setOpen} ask="OK to use" question="Say OK to use for this batch?" detail="The stock becomes ready to sell." yes="Yes, OK to use" pending="Saving…" disabled={!reviewed || !canPass} testId="pass" />
     </form>
   );
 }
@@ -127,11 +130,11 @@ export function FailForm({ batchId }: { batchId: string }) {
     <form ref={formRef} action={dispatch} className="flex flex-col gap-3" onSubmit={(e) => !open && e.preventDefault()}>
       <input type="hidden" name="batchId" value={batchId} />
       <input type="hidden" name="decision" value="fail" />
-      <Field label="Why does it fail?" htmlFor="fail-reason" error={fe.reason}>
+      <Field label="Why is it not OK?" htmlFor="fail-reason" error={fe.reason}>
         <Textarea id="fail-reason" name="reason" rows={2} required maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />
       </Field>
       <FormMessage state={state} />
-      <ConfirmStep formRef={formRef} open={open} setOpen={setOpen} ask="Fail" question="Fail this batch?" detail="The stock is moved to the rejected area. This cannot be undone here." yes="Yes, fail" pending="Saving…" variant="danger" testId="fail" />
+      <ConfirmStep formRef={formRef} open={open} setOpen={setOpen} ask="Not OK – don't use" question="Say not OK for this batch?" detail="The stock is moved to the area for things we cannot use. This cannot be undone here." yes="Yes, not OK" pending="Saving…" variant="danger" testId="fail" />
     </form>
   );
 }
@@ -177,11 +180,11 @@ export function TestsForm({ inspectionId, tests }: { inspectionId: string; tests
                 </div>
               ) : (
                 <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  <Field label="Conforms to the specification?" htmlFor={`${p}conforms`} error={fe[`${p}conforms`]}>
+                  <Field label="Is it OK?" htmlFor={`${p}conforms`} error={fe[`${p}conforms`]}>
                     <Select id={`${p}conforms`} name={`${p}conforms`} value={x.conforms} onChange={(e) => set(t.id, "conforms", e.target.value)}>
                       <option value="">Not tested yet</option>
-                      <option value="yes">Yes, conforms</option>
-                      <option value="no">No, out of specification</option>
+                      <option value="yes">Yes, OK</option>
+                      <option value="no">No, not OK</option>
                     </Select>
                   </Field>
                   <Field label={t.valueKind === "text" ? "Observation" : "Note (optional)"} htmlFor={`${p}value`} error={fe[`${p}value`]}>

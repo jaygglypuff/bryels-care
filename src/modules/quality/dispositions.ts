@@ -179,11 +179,22 @@ async function recentDecisions(ctx: AuthContext, siteId: string, limit: number) 
     .limit(limit);
   const lotIds = rows.filter((r) => r.subjectType === "lot").map((r) => r.subjectId);
   const batchIds = rows.filter((r) => r.subjectType === "batch").map((r) => r.subjectId);
-  const lotNums = lotIds.length ? await db.select({ id: inventoryLots.id, n: inventoryLots.lotNumber }).from(inventoryLots).where(inArray(inventoryLots.id, lotIds)) : [];
-  const batchNums = batchIds.length ? await db.select({ id: batches.id, n: batches.batchNumber }).from(batches).where(inArray(batches.id, batchIds)) : [];
+  // The name comes first on screen (ADR-088): the material or product, then the number small and grey.
+  const lotNums = lotIds.length
+    ? await db
+        .select({ id: inventoryLots.id, n: inventoryLots.lotNumber, name: sql<string | null>`coalesce(${materials.name}, ${products.name})` })
+        .from(inventoryLots)
+        .leftJoin(materials, eq(materials.id, inventoryLots.materialId))
+        .leftJoin(products, eq(products.id, inventoryLots.productId))
+        .where(inArray(inventoryLots.id, lotIds))
+    : [];
+  const batchNums = batchIds.length
+    ? await db.select({ id: batches.id, n: batches.batchNumber, name: products.name }).from(batches).leftJoin(products, eq(products.id, batches.productId)).where(inArray(batches.id, batchIds))
+    : [];
   return rows.map((r) => ({
     ...r,
     subjectNumber: (r.subjectType === "lot" ? lotNums : batchNums).find((x) => x.id === r.subjectId)?.n ?? "—",
+    subjectName: ((r.subjectType === "lot" ? lotNums : batchNums).find((x) => x.id === r.subjectId)?.name as string | null | undefined) ?? null,
     href: r.subjectType === "lot" ? `/quality/lots/${r.subjectId}` : `/quality/batches/${r.subjectId}`,
   }));
 }

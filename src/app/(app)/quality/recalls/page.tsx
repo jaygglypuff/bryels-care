@@ -1,16 +1,20 @@
-import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { listRecallCases } from "@/modules/quality";
-import { Card, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Forbidden } from "../../forbidden";
-import { RecallStatusChip, filterLinkCls } from "../capa/_ui";
+import { RecallStatusChip } from "../capa/_ui";
+
+const KIND_WORD: Record<string, string> = { recall: "Product recall", withdrawal: "Take off the shelves (withdrawal)", mock: "Practice recall (drill)" };
+
 
 export const dynamic = "force-dynamic";
 
 const FILTERS = [
-  ["active", "Open"],
-  ["submitted", "Awaiting approval"],
+  ["active", "Not done"],
+  ["submitted", "Waiting for approval"],
   ["closed", "Closed"],
   ["all", "All"],
 ] as const;
@@ -18,56 +22,39 @@ const FILTERS = [
 /** Recall cases (US-6-18, ux-system §9.14): recalls, withdrawals and mock recall drills. */
 export default async function RecallCasesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.recall_case.view")) return <Forbidden what="recall cases" />;
+  if (!ctx.can("quality.recall_case.view")) return <Forbidden what="product recalls" />;
   const { status = "active" } = await searchParams;
   const rows = await listRecallCases(ctx, { status });
   return (
     <>
       <PageHeader
-        title="Recall cases"
-        subtitle="Opened from the recall explorer; two approvals, then lots are marked recalled, customers notified and returns reconciled"
-        actions={ctx.can("quality.genealogy.view") ? <LinkButton href="/quality/recall">Recall explorer</LinkButton> : undefined}
+        title="Product recalls"
+        actions={ctx.can("quality.genealogy.view") ? <LinkButton href="/quality/recall" variant="cta">Start from a product</LinkButton> : undefined}
       />
+      <PageIntro>This screen is for QA and the owner: when a product must come back from customers. Two people approve, then the stock is stopped, customers are told and the products are counted back.</PageIntro>
       <Card>
-        <nav className="mb-3 flex flex-wrap gap-2" aria-label="Filter recall cases">
-          {FILTERS.map(([v, label]) => (
-            <Link key={v} href={`/quality/recalls?status=${v}`} className={filterLinkCls(status === v)}>
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <FilterTabs label="Filter product recalls" active={status} tabs={FILTERS.map(([v, l]) => [v, l, `/quality/recalls?status=${v}`] as const)} />
         {rows.length === 0 ? (
-          <EmptyState title="No recall cases here" action={ctx.can("quality.genealogy.view") ? <LinkButton href="/quality/recall" variant="secondary">Recall explorer</LinkButton> : undefined}>
-            Trace a lot, box, batch or complaint in the recall explorer and open a case from its scope. Run a mock recall to practise.
+          <EmptyState title="No product recalls here" action={ctx.can("quality.genealogy.view") ? <LinkButton href="/quality/recall" variant="secondary">Who received it</LinkButton> : undefined}>
+            Start from the product: “Who received it” lists every customer, then “Start a product recall”. A practice recall (drill) is a good way to learn it. Questions? Ask the QA lead.
           </EmptyState>
         ) : (
-          <Table head={["Case", "State", "Kind", "Title", "From", "Scope", "Opened"]}>
+          <PlainList label="Product recalls">
             {rows.map((r) => (
-              <tr key={r.id}>
-                <Td className="whitespace-nowrap font-medium">
-                  <Link className="text-primary-text hover:underline" href={`/quality/recalls/${r.id}`}>
-                    {r.number}
-                  </Link>
-                </Td>
-                <Td>
-                  <RecallStatusChip status={r.status} />
-                </Td>
-                <Td>{r.kindLabel}</Td>
-                <Td className="max-w-[280px]">{r.title}</Td>
-                <Td className="whitespace-nowrap">{r.subjectCode}</Td>
-                <Td className="whitespace-nowrap">
-                  {r.lots} lot(s)
-                  <div className="text-[12px] text-muted">
-                    {r.notified}/{r.customers} customer(s) notified
-                  </div>
-                </Td>
-                <Td className="whitespace-nowrap">
-                  {fmtDateTime(r.openedAt)}
-                  <div className="text-[12px] text-muted">{r.openedByName}</div>
-                </Td>
-              </tr>
+              <PlainRow
+                key={r.id}
+                href={`/quality/recalls/${r.id}`}
+                title={r.title}
+                code={r.number}
+                status={<RecallStatusChip status={r.status} />}
+                facts={
+                  <>
+                    {KIND_WORD[r.kind] ?? r.kindLabel} · {r.lots} lot(s) · {r.notified} of {r.customers} customer(s) told · {r.openedByName}, {fmtDateTime(r.openedAt)}
+                  </>
+                }
+              />
             ))}
-          </Table>
+          </PlainList>
         )}
       </Card>
     </>

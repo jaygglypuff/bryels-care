@@ -1,9 +1,10 @@
-import Link from "next/link";
 import { Search } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { listComplaints } from "@/modules/quality";
-import { Card, EmptyState, Input, LinkButton, PageHeader, Table, Td, buttonClass, cx } from "@/ui/core";
+import { Card, EmptyState, Input, LinkButton, PageHeader, buttonClass } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Help } from "@/ui/help/help";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
@@ -12,7 +13,7 @@ import { ComplaintStatusChip, TraceMatchChip } from "./_ui";
 export const dynamic = "force-dynamic";
 
 const FILTERS = [
-  ["active", "Open, investigating, resolved"],
+  ["active", "Not closed"],
   ["closed", "Closed"],
   ["all", "All"],
 ] as const;
@@ -25,62 +26,52 @@ export default async function ComplaintsPage({ searchParams }: { searchParams: P
   return (
     <>
       <PageHeader
-        title="Complaints"
-        subtitle={`Customer complaints at your sites (${ctx.allowedSites.map((s) => s.code).join(", ")}), traced from the label's lot or box`}
-        actions={<><Help screen="quality.complaint" />{ctx.can("quality.complaint.create") ? <LinkButton href="/quality/complaints/new" variant="cta">Log complaint</LinkButton> : undefined}</>}
+        title="Customer complaints"
+        actions={<><Help screen="quality.complaint" />{ctx.can("quality.complaint.create") ? <LinkButton href="/quality/complaints/new" variant="cta">Write down a complaint</LinkButton> : undefined}</>}
       />
+      <PageIntro>This screen is for sales and QA: write down what a customer complains about, then QA finds out why and answers.</PageIntro>
       <Card>
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <nav className="flex flex-wrap gap-2" aria-label="Filter complaints">
-            {FILTERS.map(([v, label]) => (
-              <Link key={v} href={`/quality/complaints?status=${v}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className={cx("rounded-full border px-3 py-1 text-[13px]", status === v ? "border-ring bg-primary-soft font-medium" : "border-line hover:bg-surface-2")}>
-                {label}
-              </Link>
-            ))}
-          </nav>
+          <FilterTabs label="Filter complaints" active={status} tabs={FILTERS.map(([v, l]) => [v, l, `/quality/complaints?status=${v}${q ? `&q=${encodeURIComponent(q)}` : ""}`] as const)} />
           <form method="get" action="/quality/complaints" className="flex min-w-0 gap-2">
             <input type="hidden" name="status" value={status} />
-            <Input name="q" defaultValue={q} placeholder="Number, customer or lot" aria-label="Search complaints" className="min-w-0" />
+            <Input name="q" defaultValue={q} placeholder="Customer, product or number" aria-label="Search complaints" className="min-w-0" />
             <button type="submit" className={buttonClass("secondary")} aria-label="Search">
               <Search size={16} />
             </button>
           </form>
         </div>
         {rows.length === 0 ? (
-          <EmptyState title={q ? "No complaint matches" : "No complaints here"} action={ctx.can("quality.complaint.create") ? <LinkButton href="/quality/complaints/new" variant="secondary">Log complaint</LinkButton> : undefined}>
-            {q ? "Try another number, customer name or lot." : "Complaints logged by sales or QA appear here with their trace status."}
+          <EmptyState title={q ? "No complaint matches" : "No complaints here"} action={ctx.can("quality.complaint.create") ? <LinkButton href="/quality/complaints/new" variant="secondary">Write down a complaint</LinkButton> : undefined}>
+            {q ? "Try another customer name, product or number." : "When a customer calls or writes about a problem, sales or QA write it down here. Questions? Ask the QA lead."}
           </EmptyState>
         ) : (
-          <Table head={["Complaint", "Status", "Customer", "Product / lot", "Category", "Severity", "Received"]}>
+          <PlainList label="Complaints">
             {rows.map((r) => (
-              <tr key={r.id}>
-                <Td className="whitespace-nowrap font-medium">
-                  <Link className="text-primary-text hover:underline" href={`/quality/complaints/${r.id}`}>
-                    {r.number}
-                  </Link>
-                  <div className="text-[12px] text-muted">{r.siteCode}</div>
-                </Td>
-                <Td>
-                  <ComplaintStatusChip status={r.status} />
-                  {r.recallReviewFlagged && (
-                    <div className="mt-0.5">
-                      <Chip tone="bad">Recall assessment</Chip>
-                    </div>
-                  )}
-                </Td>
-                <Td>{r.customerName}</Td>
-                <Td>
-                  {r.productName ?? "—"}
-                  <div className="flex flex-wrap items-center gap-1 text-[12px] text-muted">
-                    {r.lotNumber ?? ""} <TraceMatchChip match={r.traceMatch} />
-                  </div>
-                </Td>
-                <Td className="text-[13px]">{r.categoryLabel}</Td>
-                <Td>{r.severity ?? <span className="text-muted">Awaiting QA</span>}</Td>
-                <Td className="whitespace-nowrap">{fmtDateTime(r.receivedAt)}</Td>
-              </tr>
+              <PlainRow
+                key={r.id}
+                href={`/quality/complaints/${r.id}`}
+                title={`${r.customerName}: ${r.categoryLabel}`}
+                code={r.number}
+                tone={r.recallReviewFlagged ? "bad" : undefined}
+                status={
+                  <>
+                    <ComplaintStatusChip status={r.status} />
+                    {r.recallReviewFlagged && <Chip tone="bad">Check if a recall is needed</Chip>}
+                  </>
+                }
+                facts={
+                  <>
+                    {r.productName ?? "Product not known"}
+                    {r.lotNumber ? ` · lot ${r.lotNumber}` : ""} · {r.severity ? `how serious: ${r.severity}` : "not rated yet"} · {fmtDateTime(r.receivedAt)}
+                    <span className="ml-1 inline-block align-middle">
+                      <TraceMatchChip match={r.traceMatch} />
+                    </span>
+                  </>
+                }
+              />
             ))}
-          </Table>
+          </PlainList>
         )}
       </Card>
     </>

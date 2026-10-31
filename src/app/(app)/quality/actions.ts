@@ -35,8 +35,8 @@ export async function decideLotAction(_prev: ActionState, fd: FormData): Promise
     const r = await decideLot(ctx, input);
     revalidatePath("/quality");
     revalidatePath(`/quality/lots/${input.lotId}`);
-    const verb = { released: "released", on_hold: "placed on hold", rejected: "rejected" }[r.toStatus] ?? r.toStatus;
-    return { ok: true, message: `Lot ${r.lotNumber} ${verb}.${r.movedTo ? ` Stock moved to ${r.movedTo}.` : ""}` };
+    const verb = { released: "OK to use", on_hold: "stopped by QA", rejected: "not OK – don't use" }[r.toStatus] ?? r.toStatus;
+    return { ok: true, message: `Saved: lot ${r.lotNumber} is ${verb}.${r.movedTo ? ` The stock was moved to ${r.movedTo}.` : ""}` };
   } catch (e) {
     return fail(e);
   }
@@ -57,7 +57,7 @@ export async function decideBatchAction(_prev: ActionState, fd: FormData): Promi
     revalidatePath(`/quality/batches/${input.batchId}`);
     return {
       ok: true,
-      message: `Batch ${r.batchNumber} ${r.toStatus}.${r.lotNumber ? ` Lot ${r.lotNumber} is ${r.toStatus}${r.movedTo ? ` and was moved to ${r.movedTo}` : ""}.` : ""}`,
+      message: `Saved: batch ${r.batchNumber} is ${r.toStatus === "released" ? "OK to use" : r.toStatus === "rejected" ? "not OK – don't use" : r.toStatus}.${r.movedTo ? ` The products were moved to ${r.movedTo}.` : ""}`,
     };
   } catch (e) {
     return fail(e);
@@ -69,7 +69,7 @@ const TestResultSchema = z.object({
   testName: z.string().trim().min(1, "Enter the test name.").max(120),
   specification: z.string().trim().min(1, "Enter the specification.").max(200),
   result: z.string().trim().min(1, "Enter the result.").max(200),
-  passed: z.enum(["pass", "fail"], { message: "Choose pass or fail." }),
+  passed: z.enum(["pass", "fail"], { message: "Choose OK or not OK." }),
 });
 
 export async function recordTestResultAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
@@ -85,7 +85,7 @@ export async function recordTestResultAction(_prev: ActionState, fd: FormData): 
     const row = await recordTestResult(ctx, { ...input, passed: input.passed === "pass" });
     revalidatePath("/quality");
     revalidatePath(`/quality/batches/${input.batchId}`);
-    return { ok: true, message: `Recorded ${row.testName}: ${row.result} (${row.passed ? "pass" : "fail"}).` };
+    return { ok: true, message: `Saved ${row.testName}: ${row.result} (${row.passed ? "OK" : "not OK"}).` };
   } catch (e) {
     return fail(e);
   }

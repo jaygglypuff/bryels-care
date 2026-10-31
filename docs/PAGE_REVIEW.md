@@ -157,14 +157,14 @@ Total screens: 250.
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/maintenance` | ☐ | |
-| `/maintenance/plans/[planId]` | ☐ | |
-| `/maintenance/plans/new` | ☐ | |
-| `/maintenance/plans` | ☐ | |
-| `/maintenance/spare-parts` | ☐ | |
-| `/maintenance/work-orders/[workOrderId]` | ☐ | |
-| `/maintenance/work-orders/new` | ☐ | |
-| `/maintenance/work-orders` | ☐ | |
+| `/maintenance` | ☑ 2026-10-31 | Intro; next step = late maintenance or open repair job; plain KPIs; name-first lists; secondary links in ⋯ More. |
+| `/maintenance/plans/[planId]` | ☑ 2026-10-31 | "Machine: what to do" title, number small; next step = make the job; pause/stop in ⋯ More; edit folded. |
+| `/maintenance/plans/new` | ☑ 2026-10-31 | "Plan new regular maintenance": 5 fields (machine, what, every N days default 30, who, steps); rest under More details. |
+| `/maintenance/plans` | ☑ 2026-10-31 | "Regular maintenance"; name-first list with due chips (Late/Due soon); 44 px filter tabs. |
+| `/maintenance/spare-parts` | ☑ 2026-10-31 | Name-first list, "running low" + next step to reorder; add form folded, 2 visible fields, site hidden when one. |
+| `/maintenance/work-orders/[workOrderId]` | ☑ 2026-10-31 | "Repair job": next step Start / The job is done / waiting for technician (+ who can help); pause/cancel in ⋯ More. |
+| `/maintenance/work-orders/new` | ☑ 2026-10-31 | "Report a broken machine": 5 fields (machine, what is wrong, urgency, technician, broken now); rest folded. |
+| `/maintenance/work-orders` | ☑ 2026-10-31 | "Repair jobs"; machine + problem first, number grey; status/urgency chips with icons. |
 
 ## Setup (master data, recipes) (38)
 
@@ -268,36 +268,36 @@ Total screens: 250.
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/quality/batches/[batchId]` | ☐ | |
-| `/quality/bulk` | ☐ | |
-| `/quality/capa/[capaId]` | ☐ | |
-| `/quality/capa/new` | ☐ | |
-| `/quality/capa` | ☐ | |
-| `/quality/changes/[changeId]` | ☐ | |
-| `/quality/changes/new` | ☐ | |
-| `/quality/changes` | ☐ | |
-| `/quality/check/[batchId]` | ☐ | |
-| `/quality/check` | ☐ | |
-| `/quality/complaints/[complaintId]` | ☐ | |
-| `/quality/complaints/new` | ☐ | |
-| `/quality/complaints` | ☐ | |
-| `/quality/deviations/[deviationId]` | ☐ | |
-| `/quality/deviations/new` | ☐ | |
-| `/quality/deviations` | ☐ | |
-| `/quality/holds/[holdId]` | ☐ | |
-| `/quality/holds/issue` | ☐ | |
-| `/quality/holds/new` | ☐ | |
-| `/quality/holds` | ☐ | |
-| `/quality/inspections/[inspectionId]` | ☐ | |
-| `/quality/inspections` | ☐ | |
-| `/quality/label-verification` | ☐ | |
-| `/quality/lots/[lotId]` | ☐ | |
-| `/quality` | ☐ | |
-| `/quality/recall` | ☐ | |
-| `/quality/recalls/[recallId]` | ☐ | |
-| `/quality/recalls/new` | ☐ | |
-| `/quality/recalls` | ☐ | |
-| `/quality/trace` | ☐ | |
+| `/quality/batches/[batchId]` | ☑ 2026-10-31 | Product first; next step (start tests / decide); weighing, tests, history as phone lists; OK to use / Not OK; OK with conditions folded. |
+| `/quality/bulk` | ☑ 2026-10-31 | "Decide many lots at once": filter folded, name-first tick list, note folded, password kept. |
+| `/quality/capa/[capaId]` | ☑ 2026-10-31 | "Fix-and-prevent plan": next step by state; things to do (fix now / prevent) with who and date; cancel in ⋯ More. |
+| `/quality/capa/new` | ☑ 2026-10-31 | 4 visible fields (short name, problem, who looks after it = me, finish by); source/site folded, no code. |
+| `/quality/capa` | ☑ 2026-10-31 | "Fix-and-prevent plans"; title first, number grey; download in ⋯ More. |
+| `/quality/changes/[changeId]` | ☑ 2026-10-31 | "Change request": next step by state (write effects, send, decide, make, confirm); cancel in ⋯ More. |
+| `/quality/changes/new` | ☑ 2026-10-31 | 4 visible fields (short name, what changes, what, why); version link, site, date folded. |
+| `/quality/changes` | ☑ 2026-10-31 | "Change requests"; title first; plain status chips with icons. |
+| `/quality/check/[batchId]` | ☑ 2026-10-31 | Product first; next step; OK to use / Not yet / Not OK – don't use; note folded; maker/tester rules kept. |
+| `/quality/check` | ☑ 2026-10-31 | "Batches waiting for QA check"; next step to the oldest; batch number grey. |
+| `/quality/complaints/[complaintId]` | ☑ 2026-10-31 | "Complaint from <customer>": next step by state; trace, letter, plan, return in ⋯ More. |
+| `/quality/complaints/new` | ☑ 2026-10-31 | 5 visible fields (customer, kind, product, label number optional, what they say); rest folded. |
+| `/quality/complaints` | ☑ 2026-10-31 | Customer + problem first; plain status ("New – QA to look", "Answered – to close"). |
+| `/quality/deviations/[deviationId]` | ☑ 2026-10-31 | "Problem report": next step (start looking / close); stop a lot folded; plan in ⋯ More. |
+| `/quality/deviations/new` | ☑ 2026-10-31 | "Report a problem": 2 fields (step, what happened). |
+| `/quality/deviations` | ☑ 2026-10-31 | "Problem reports"; what happened first; download in ⋯ More. |
+| `/quality/holds/[holdId]` | ☑ 2026-10-31 | "Stopped by QA: <item>": next step let go / not OK (second QA person); lots as list. |
+| `/quality/holds/issue` | ☑ 2026-10-31 | "Take out stopped stock": lot picked by name (scan folded); exception banner kept. |
+| `/quality/holds/new` | ☑ 2026-10-31 | "Stop a lot": lot picked by name (scan folded), 4 fields. |
+| `/quality/holds` | ☑ 2026-10-31 | "Stopped by QA" list; exception screen in ⋯ More. |
+| `/quality/inspections/[inspectionId]` | ☑ 2026-10-31 | "Quality check: <item>": next step by state; samples list; Is it OK?; second-person check kept; cancel in ⋯ More. |
+| `/quality/inspections` | ☑ 2026-10-31 | "Quality checks (tests)"; item first; plain states. |
+| `/quality/label-verification` | ☑ 2026-10-31 | "Check the labels in an area": next step, 44 px area chips, scan field. |
+| `/quality/lots/[lotId]` | ☑ 2026-10-31 | Item first; next step "decide"; only fitting choices; OK to use / Stop / Not OK; history as list. |
+| `/quality` | ☑ 2026-10-31 | QA queue: next step to the oldest batch/lot; name-first lists; older decisions folded; other screens in ⋯ More. |
+| `/quality/recall` | ☑ 2026-10-31 | "Who received it": pick the product by name (scan folded); customers list; details folded; start recall = green. |
+| `/quality/recalls/[recallId]` | ☑ 2026-10-31 | "Product recall": next step per state; lots and customers as lists; downloads/cancel in ⋯ More. |
+| `/quality/recalls/new` | ☑ 2026-10-31 | 3 visible fields (kind, short name, why); class and obligations folded. |
+| `/quality/recalls` | ☑ 2026-10-31 | "Product recalls"; title first; plain status chips. |
+| `/quality/trace` | ☑ 2026-10-31 | "Where it came from and where it went": pick by name; scan/supplier lot folded; customers list. |
 
 ## Sales & customers (25)
 

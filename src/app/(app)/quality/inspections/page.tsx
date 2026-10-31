@@ -2,7 +2,9 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { inspectionCandidates, listInspections } from "@/modules/quality";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader, Table, Td, cx } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Explain, PageIntro } from "@/ui/guide";
+import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { InspectionStatusChip } from "../_ui";
@@ -11,9 +13,9 @@ import { StartInspectionButton } from "../w2c-forms";
 export const dynamic = "force-dynamic";
 
 const FILTERS = [
-  ["open", "Open"],
-  ["approved", "Approved"],
-  ["rejected", "Rejected"],
+  ["open", "Not finished"],
+  ["approved", "Checked"],
+  ["rejected", "Not accepted"],
   ["cancelled", "Cancelled"],
   ["all", "All"],
 ] as const;
@@ -27,25 +29,23 @@ export default async function InspectionsPage({ searchParams }: { searchParams: 
 
   return (
     <>
-      <PageHeader
-        title="Inspections"
-        subtitle={`${ctx.currentSite.code} · sampling, test results against the approved inspection plan, and review by a second QA user`}
-        actions={<LinkButton href="/quality" variant="secondary">QA queue</LinkButton>}
-      />
+      <PageHeader title="Quality checks (tests)" subtitle={ctx.currentSite.name} actions={<LinkButton href="/quality" variant="secondary">QA queue</LinkButton>} />
+      <PageIntro>
+        This screen is for QA: the tests on deliveries and batches. Take a sample, type the results, then a second QA person checks them.
+      </PageIntro>
+      <div className="-mt-3 mb-4"><Explain term="quality_check" /></div>
       <div className="flex flex-col gap-5">
         {candidates.batches.length > 0 && (
           <Card>
-            <CardTitle>Batches waiting for their inspection to start</CardTitle>
+            <CardTitle>Batches waiting for their tests to start</CardTitle>
             <ul className="flex flex-col divide-y divide-line">
               {candidates.batches.map((b) => (
                 <li key={b.id} className="flex flex-wrap items-center justify-between gap-3 py-2">
                   <div className="min-w-0">
                     <Link className="font-medium text-primary-text hover:underline" href={`/quality/batches/${b.id}`}>
-                      {b.number}
+                      {b.productName}
                     </Link>
-                    <p className="text-[13px] text-muted">
-                      {b.productName} · plan {b.planCode} rev {b.planRevision} · {b.status.replace(/_/g, " ")}
-                    </p>
+                    <p className="font-mono text-[12px] text-muted">{b.number}</p>
                   </div>
                   {canStart && <StartInspectionButton batchId={b.id} />}
                 </li>
@@ -56,18 +56,16 @@ export default async function InspectionsPage({ searchParams }: { searchParams: 
 
         {candidates.steps.length > 0 && (
           <Card>
-            <CardTitle>Steps waiting for an in-process check</CardTitle>
-            <p className="mb-2 text-[13px] text-muted">The step stays blocked until a second QA user approves a passing in-process inspection.</p>
+            <CardTitle>Production steps waiting for a QA check</CardTitle>
+            <p className="mb-2 text-[13px] text-muted">Production cannot go on with the step until a second QA person accepts an OK check.</p>
             <ul className="flex flex-col divide-y divide-line">
               {candidates.steps.map((st) => (
                 <li key={st.processStepRecordId} className="flex flex-wrap items-center justify-between gap-3 py-2">
                   <div className="min-w-0">
                     <Link className="font-medium text-primary-text hover:underline" href={`/production/${st.batchId}`}>
-                      {st.batchNumber} · step {st.stepNo}
+                      Step {st.stepNo}: {st.stepName}
                     </Link>
-                    <p className="text-[13px] text-muted">
-                      {st.stepName} · plan {st.planCode} rev {st.planRevision}
-                    </p>
+                    <p className="font-mono text-[12px] text-muted">{st.batchNumber}</p>
                   </div>
                   {ctx.can("quality.inspection.approve") && <StartInspectionButton batchId={st.batchId} processStepRecordId={st.processStepRecordId} />}
                 </li>
@@ -77,50 +75,33 @@ export default async function InspectionsPage({ searchParams }: { searchParams: 
         )}
 
         <Card>
-          <nav className="mb-3 flex flex-wrap gap-2" aria-label="Filter inspections">
-            {FILTERS.map(([v, label]) => (
-              <Link key={v} href={`/quality/inspections?status=${v}`} className={cx("rounded-full border px-3 py-1 text-[13px]", status === v ? "border-ring bg-primary-soft font-medium" : "border-line hover:bg-surface-2")}>
-                {label}
-              </Link>
-            ))}
-          </nav>
+          <FilterTabs label="Filter quality checks" active={status} tabs={FILTERS.map(([v, l]) => [v, l, `/quality/inspections?status=${v}`] as const)} />
           {rows.length === 0 ? (
-            <EmptyState title="No inspections here">Inspections start from a quarantined material lot (lot page) or a batch with an approved inspection plan.</EmptyState>
+            <EmptyState title="No quality checks here">A check starts from a delivery waiting for QA (open it from the QA queue) or by itself when a batch is finished. Questions? Ask the QA lead.</EmptyState>
           ) : (
-            <Table head={["Inspection", "Subject", "Plan", "Status", "Results", "Due"]}>
+            <PlainList label="Quality checks">
               {rows.map((r) => (
-                <tr key={r.id} className={cx(r.overdue && "bg-[var(--warn-bg)]")}>
-                  <Td className="whitespace-nowrap font-medium">
-                    <Link className="text-primary-text hover:underline" href={`/quality/inspections/${r.id}`}>
-                      {r.number}
-                    </Link>
-                    <div className="text-[12px] text-muted">{r.kind.replace(/_/g, " ")}</div>
-                  </Td>
-                  <Td>
-                    {r.batchNumber ?? r.lotNumber}
-                    <div className="text-[12px] text-muted">{r.itemName}</div>
-                  </Td>
-                  <Td>
-                    {r.planCode} rev {r.planRevision}
-                    {r.planIsPlaceholder && (
-                      <div className="mt-0.5">
-                        <Chip tone="warn">Placeholder spec</Chip>
-                      </div>
-                    )}
-                  </Td>
-                  <Td>
-                    <InspectionStatusChip status={r.status} outcome={r.outcome} />
-                  </Td>
-                  <Td>
-                    {r.liveResults} / {r.requiredTests} required
-                  </Td>
-                  <Td className="whitespace-nowrap">
-                    {fmtDateTime(r.dueAt)}
-                    {r.overdue && <div className="text-[12px] font-medium text-[var(--warn-fg)]">Overdue</div>}
-                  </Td>
-                </tr>
+                <PlainRow
+                  key={r.id}
+                  href={`/quality/inspections/${r.id}`}
+                  title={r.itemName ?? r.batchNumber ?? r.lotNumber}
+                  code={r.number}
+                  tone={r.overdue ? "warn" : undefined}
+                  status={
+                    <>
+                      <InspectionStatusChip status={r.status} outcome={r.outcome} />
+                      {r.planIsPlaceholder && <Chip tone="warn">Demo test list</Chip>}
+                      {r.overdue && <Chip tone="bad">Late</Chip>}
+                    </>
+                  }
+                  facts={
+                    <>
+                      {r.kind === "incoming" ? "Delivery" : r.kind === "in_process" ? "Production step, batch" : "Batch"} {r.batchNumber ?? r.lotNumber} · {r.liveResults} of {r.requiredTests} tests typed{r.dueAt ? ` · due ${fmtDateTime(r.dueAt)}` : ""}
+                    </>
+                  }
+                />
               ))}
-            </Table>
+            </PlainList>
           )}
         </Card>
       </div>

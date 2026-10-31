@@ -1,17 +1,19 @@
-import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { listCapas } from "@/modules/quality";
-import { Card, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
-import { CapaStatusChip, exportLinkCls, filterLinkCls } from "./_ui";
+import { CapaStatusChip, exportLinkCls } from "./_ui";
 
 export const dynamic = "force-dynamic";
 
 const FILTERS = [
-  ["active", "Open, in progress, verification"],
-  ["verification", "Verification"],
+  ["active", "Not done"],
+  ["verification", "Checking the fix"],
   ["mine", "Mine"],
   ["closed", "Closed"],
   ["all", "All"],
@@ -20,70 +22,55 @@ const FILTERS = [
 /** CAPA register (US-6-18, ux-system §9.14): source, owner, due date (overdue in danger), state. */
 export default async function CapaListPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.capa.view")) return <Forbidden what="CAPA" />;
+  if (!ctx.can("quality.capa.view")) return <Forbidden what="fix-and-prevent plans" />;
   const { status = "active" } = await searchParams;
   const rows = await listCapas(ctx, status === "mine" ? { status: "active", mine: true } : { status });
   const exportStatus = status === "mine" ? "active" : status;
   return (
     <>
       <PageHeader
-        title="CAPA"
-        subtitle="Corrective and preventive actions from deviations, complaints and audits; closure needs an effective check and a second person"
+        title="Fix-and-prevent plans"
         actions={
           <>
-            {ctx.can("quality.capa.create") && <LinkButton href="/quality/capa/new">Open CAPA</LinkButton>}
-            <a className={exportLinkCls} href={`/api/v1/quality/capa/export?status=${exportStatus}&format=csv`}>
-              Export CSV
-            </a>
+            {ctx.can("quality.capa.create") && <LinkButton href="/quality/capa/new" variant="cta">Start a plan</LinkButton>}
+            <MoreMenu>
+              <a className={exportLinkCls} href={`/api/v1/quality/capa/export?status=${exportStatus}&format=csv`}>
+                Download (CSV)
+              </a>
+            </MoreMenu>
           </>
         }
       />
+      <PageIntro>This screen is for QA and managers: when something went wrong, plan what to fix now and what to change so it does not happen again (in QA language: CAPA).</PageIntro>
       <Card>
-        <nav className="mb-3 flex flex-wrap gap-2" aria-label="Filter CAPAs">
-          {FILTERS.map(([v, label]) => (
-            <Link key={v} href={`/quality/capa?status=${v}`} className={filterLinkCls(status === v)}>
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <FilterTabs label="Filter plans" active={status} tabs={FILTERS.map(([v, l]) => [v, l, `/quality/capa?status=${v}`] as const)} />
         {rows.length === 0 ? (
-          <EmptyState title="No CAPAs here" action={<LinkButton href="/quality/deviations" variant="secondary">Deviations</LinkButton>}>
-            Open a CAPA from a deviation or complaint page, or for an audit finding.
+          <EmptyState title="No plans here" action={<LinkButton href="/quality/deviations" variant="secondary">Problem reports</LinkButton>}>
+            Start a plan from a problem report or a complaint (⋯ More there), or with “Start a plan” for an audit finding. Questions? Ask the QA lead.
           </EmptyState>
         ) : (
-          <Table head={["CAPA", "State", "Source", "Title", "Owner", "Due", "Actions"]}>
+          <PlainList label="Fix-and-prevent plans">
             {rows.map((r) => (
-              <tr key={r.id}>
-                <Td className="whitespace-nowrap font-medium">
-                  <Link className="text-primary-text hover:underline" href={`/quality/capa/${r.id}`}>
-                    {r.number}
-                  </Link>
-                  <div className="text-[12px] text-muted">{r.siteCode}</div>
-                </Td>
-                <Td>
-                  <CapaStatusChip status={r.status} />
-                </Td>
-                <Td>
-                  {r.sourceLabel}
-                  {r.sourceReference && <div className="text-[12px] text-muted">{r.sourceReference}</div>}
-                </Td>
-                <Td className="max-w-[280px]">{r.title}</Td>
-                <Td>{r.ownerName}</Td>
-                <Td className="whitespace-nowrap">
-                  {r.dueDate ? fmtDate(r.dueDate) : "—"}
-                  {r.overdue && (
-                    <div className="mt-0.5">
-                      <Chip tone="bad">Overdue</Chip>
-                    </div>
-                  )}
-                </Td>
-                <Td className="whitespace-nowrap">
-                  {r.openActions} open
-                  {r.overdueActions > 0 && <div className="text-[12px] text-[var(--bad-fg)]">{r.overdueActions} overdue</div>}
-                </Td>
-              </tr>
+              <PlainRow
+                key={r.id}
+                href={`/quality/capa/${r.id}`}
+                title={r.title}
+                code={r.number}
+                tone={r.overdue ? "bad" : undefined}
+                status={
+                  <>
+                    <CapaStatusChip status={r.status} />
+                    {r.overdue && <Chip tone="bad">Late</Chip>}
+                  </>
+                }
+                facts={
+                  <>
+                    {r.ownerName} · {r.dueDate ? `by ${fmtDate(r.dueDate)}` : "no date"} · {r.openActions} thing(s) to do{r.overdueActions > 0 ? `, ${r.overdueActions} late` : ""} · from {r.sourceLabel === "Deviation" ? "problem report" : r.sourceLabel.toLowerCase()} {r.sourceReference ?? ""}
+                  </>
+                }
+              />
             ))}
-          </Table>
+          </PlainList>
         )}
       </Card>
     </>

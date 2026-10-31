@@ -1,29 +1,29 @@
 ---
 key: quality.complaint
-title: Log and handle a customer complaint
-version: 1
-updated_at: 2026-10-25
+title: Write down and handle a customer complaint
+version: 2
+updated_at: 2026-10-31
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
-Record the complaint with the code from the customer's label, so QA can trace it from a verified record.
+Write down what the customer says, with the number from the product label if they have it, so QA can check what we sent them.
 
-## Log
+## Write it down
 
-1. Open **Complaints** and press **Log complaint**.
-2. Choose the **Customer**. Scan or type the **Lot or box from the label**. It is checked against what was shipped to this customer.
-3. If the customer does not have the label, choose the **Product (when there is no code)**.
-4. Choose the **Category**. Categories are set by the company's QA.
-5. Write **What the customer reports** in plain words. This text appears on the acknowledgement. Use **Internal notes** for anything that is not for the customer.
-6. Press **Log complaint**.
+1. Open **Customer complaints** and press **Write down a complaint**.
+2. Choose the **Customer** and **What kind of problem?** (the kinds are set by the company's QA).
+3. Choose **Which product?**, or leave **From the label** and scan or read out the **Number on the product label**. It is checked against what we sent this customer.
+4. Write **What does the customer report?** in plain words. The customer sees this text on the letter we send back.
+5. Under **More details (you can skip this)**: how it reached us, when, how many pieces, the customer's own reference, **Notes for us only**, and whether a sample came back.
+6. Press **Save the complaint**.
 
-## Investigate (QA)
+## Look into it (QA)
 
-1. Press **Start investigation** with an **Investigation plan**, and record the severity with **Record severity**. A severe class prompts a recall assessment, and QA and the owner are notified.
-2. Use **Trace this lot** to see where the lot went, and **Raise deviation** if production must investigate.
-3. Returned goods are handled with **Start a return**.
+1. Press **Start looking into it** with **What will QA check?** and **How serious?**. A serious level means QA and the owner must check whether a product recall is needed; they are told.
+2. **⋯ More → Who else received this product** shows where the lot went; **Send a problem report to QA about this complaint** starts a problem report.
+3. Goods that come back: **⋯ More → Take the goods back (return)**.
 
-## Resolve and close
+## Answer and close
 
-1. Press **Mark resolved** with the **Resolution** and, if needed, a **Reply to the customer**.
-2. Press **Close complaint**. A closed complaint cannot be edited. Use **Reopen investigation** with a reason if new facts appear before closing.
+1. Press **Save the answer** with **What did QA find and do?** and, if needed, the **Answer to the customer**.
+2. Press **Close the complaint**. A closed complaint cannot be changed. Before closing, **Look into it again** (with a reason) if new facts appear.

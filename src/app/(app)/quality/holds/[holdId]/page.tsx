@@ -4,15 +4,17 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { getHold } from "@/modules/inventory/holds";
-import { Card, CardTitle, Dl, EmptyState, Field, PageHeader, Select, Table, Td } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, Field, PageHeader, Select } from "@/ui/core";
 import { fmtLotQty } from "@/ui/inventory/bits";
-import { HoldStatusChip } from "@/ui/receiving";
-import { Banner, StatusChip } from "@/ui/status";
+import { Banner } from "@/ui/status";
+import { NextStep, PageIntro } from "@/ui/guide";
+import { RecordNo } from "@/ui/plain-list";
+import { HoldChip, QaStatusChip, Timeline, qaWord } from "../../_ui";
 import { ActionForm, ReasonField } from "../../../inventory/receive/[grId]/forms";
 import { Forbidden } from "../../../forbidden";
 import { investigateHoldAction, liftHoldAction } from "../actions";
 
-export const metadata = { title: "QA hold" };
+export const metadata = { title: "Stopped by QA" };
 
 export default async function HoldPage({ params, searchParams }: { params: Promise<{ holdId: string }>; searchParams: Promise<{ placed?: string }> }) {
   const ctx = await requireContext();
@@ -30,78 +32,85 @@ export default async function HoldPage({ params, searchParams }: { params: Promi
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <PageHeader
-        title={h.holdNumber}
+        title={`Stopped by QA: ${h.lots[0]?.itemName ?? (h.locationName ? `place ${h.locationName}` : "")}${h.lots.length > 1 ? ` and ${h.lots.length - 1} more` : ""}`}
         subtitle={
           <>
-            <Link href="/quality/holds" className="text-primary-text hover:underline">QA holds</Link> · {h.lotNumber ? `lot ${h.lotNumber}` : `location ${h.locationCode}`} · <HoldStatusChip status={h.status} />
+            <Link href="/quality/holds" className="text-primary-text hover:underline">Stopped by QA</Link> · {h.lotNumber ? `lot ${h.lotNumber}` : `place ${h.locationCode}`} · <RecordNo>{h.holdNumber}</RecordNo> · <HoldChip status={h.status} />
           </>
         }
       />
-      {placed && <Banner tone="hold" title={`Hold ${h.holdNumber} placed`}>{h.lots.length} lot(s) are on hold. Move them to a hold location; a different QA user lifts the hold.</Banner>}
-      {active && h.locationCode && <Banner tone="warn" title={`Location ${h.locationCode} is blocked`}>No stock can be put away into it while the hold is open.</Banner>}
+      <PageIntro>This screen is for QA: see what is stopped and why, and let it go (or say not OK) when QA has finished looking.</PageIntro>
+      {active &&
+        (h.can.lift ? (
+          <NextStep text="Next: when QA has finished looking, let it go or say not OK." action={{ label: "Decide now", href: "#lift" }} />
+        ) : (
+          <NextStep text="The lots stay stopped." waitingFor={h.can.liftBlockedReason ? "Waiting for a second QA person: you stopped it, so someone else lets it go." : "Waiting for QA to let it go."} />
+        ))}
+      {placed && <Banner tone="hold" title="Stopped">{h.lots.length} lot(s) are stopped. Move them to the hold area; another QA person lets them go.</Banner>}
+      {active && h.locationCode && <Banner tone="warn" title={`Place ${h.locationCode} is blocked`}>Nothing can be put there while it is stopped.</Banner>}
 
       <Card>
-        <CardTitle>Affected lots</CardTitle>
+        <CardTitle>Lots that are stopped</CardTitle>
         {h.lots.length === 0 ? (
-          <EmptyState title="No lots were affected">The location had no stock that could be put on hold when the hold was placed.</EmptyState>
+          <EmptyState title="No lots were stopped">The place was empty when it was stopped.</EmptyState>
         ) : (
-          <Table head={["Lot", "Item", "On hand", "Before hold", "Now"]}>
+          <ul className="flex flex-col divide-y divide-line text-[14px]">
             {h.lots.map((l) => (
-              <tr key={l.lotId}>
-                <Td><Link href={`/inventory/${l.lotId}`} className="font-mono text-primary-text hover:underline">{l.lotNumber}</Link></Td>
-                <Td>{l.itemCode} · {l.itemName}</Td>
-                <Td className="tabular">{fmtLotQty(l.onHand, l.baseUom)}</Td>
-                <Td><StatusChip status={l.previousStatus} /></Td>
-                <Td><StatusChip status={l.qualityStatus} /></Td>
-              </tr>
+              <li key={l.lotId} className="flex flex-col gap-1 py-2">
+                <span className="flex flex-wrap items-center gap-2">
+                  <Link href={`/quality/lots/${l.lotId}`} className="font-medium text-primary-text hover:underline">
+                    {l.itemName}
+                  </Link>
+                  <span className="font-mono text-[12px] text-muted">{l.lotNumber}</span>
+                  <QaStatusChip status={l.qualityStatus} />
+                </span>
+                <span className="text-[13px] text-fg-2">
+                  {fmtLotQty(l.onHand, l.baseUom)} · before: {qaWord(l.previousStatus)}
+                </span>
+              </li>
             ))}
-          </Table>
+          </ul>
         )}
       </Card>
 
       <Card>
-        <CardTitle>Hold</CardTitle>
+        <CardTitle>Why it was stopped</CardTitle>
         <Dl
           items={[
-            ["Reason", `${h.reasonLabel}: ${h.reason}`],
-            ["Opened", `${fmtDateTime(h.openedAt)} by ${h.openedByName}`],
-            ["Resolution", h.resolution ? `${h.resolution} · ${h.closeReason} (${h.closedByName}, ${fmtDateTime(h.closedAt)})` : "—"],
+            ["Why", `${h.reasonLabel}: ${h.reason}`],
+            ["Stopped by", `${h.openedByName}, ${fmtDateTime(h.openedAt)}`],
+            ["Outcome", h.resolution ? `${h.resolution === "released" ? "Let go" : "Not OK"} · ${h.closeReason} (${h.closedByName}, ${fmtDateTime(h.closedAt)})` : "—"],
           ]}
         />
-        <h3 className="mt-4 text-[14px] font-semibold">Timeline</h3>
-        <ol className="mt-2 space-y-1 text-[13px]">
-          {h.timeline.map((t, i) => (
-            <li key={i}>
-              {fmtDateTime(t.at)} · {t.from ? `${t.from} → ` : ""}
-              {t.to} · {t.by}
-              {t.reason ? ` · ${t.reason}` : ""}
-            </li>
-          ))}
-        </ol>
+        <h3 className="mt-4 text-[14px] font-semibold">What happened</h3>
+        <div className="mt-2">
+          <Timeline rows={h.timeline} word={(s) => ({ open: "stopped", investigating: "QA looking into it", closed: "no longer stopped" })[s] ?? s} />
+        </div>
       </Card>
 
       {h.can.investigate && (
         <Card>
-          <CardTitle>Mark as under investigation</CardTitle>
-          <ActionForm action={investigateHoldAction} hidden={{ holdId: h.id }} submit="Mark investigating" variant="secondary">
-            <ReasonField id="investigate-note" name="note" label="Note" placeholder="e.g. supplier asked for photos" />
+          <CardTitle>QA is looking into it</CardTitle>
+          <ActionForm action={investigateHoldAction} hidden={{ holdId: h.id }} submit="Save: QA is looking into it" variant="secondary">
+            <ReasonField id="investigate-note" name="note" label="What is QA checking?" placeholder="e.g. supplier asked for photos" />
           </ActionForm>
         </Card>
       )}
       {active && (h.can.lift || h.can.liftBlockedReason) && (
         <Card>
-          <CardTitle>Lift hold</CardTitle>
+          <span id="lift" className="block scroll-mt-24" />
+          <CardTitle>Let it go, or not OK</CardTitle>
           {h.can.liftBlockedReason ? (
             <p className="text-[13px] text-muted">{h.can.liftBlockedReason}</p>
           ) : (
-            <ActionForm action={liftHoldAction} hidden={{ holdId: h.id }} submit="Lift hold" variant="cta" confirm="Lift this hold and record the closing dispositions?">
-              <Field label="Resolution" htmlFor="resolution">
+            <ActionForm action={liftHoldAction} hidden={{ holdId: h.id }} submit="Save the decision" variant="cta" confirm="Save this QA decision for every lot?">
+              <Field label="Decision" htmlFor="resolution">
                 <Select id="resolution" name="resolution" defaultValue="released">
-                  <option value="released">Released: lots return to their status before the hold (quarantine stays quarantine)</option>
-                  <option value="rejected">Rejected: every lot is rejected</option>
+                  <option value="released">Let it go: each lot goes back to how it was before (waiting for QA check stays waiting)</option>
+                  <option value="rejected">Not OK – don&apos;t use: every lot</option>
                 </Select>
               </Field>
-              <ReasonField id="lift-reason" placeholder="e.g. investigation closed; contents unaffected" />
+              <ReasonField id="lift-reason" label="Why?" placeholder="e.g. QA checked; the contents are fine" />
             </ActionForm>
           )}
         </Card>
