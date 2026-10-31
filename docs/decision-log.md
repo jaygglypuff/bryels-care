@@ -1618,7 +1618,7 @@ immutability and batch snapshots are unchanged; the detailed pages remain as "ad
 
 Consequences: new setting `masterdata.recipe.default_allowed_difference_pct` (default 2); assumptions A-RW-01..05
 (A-RW-05, "later steps wait" ticked by default, flagged for QA); fixed the list counts and the advanced formula
-editor reset bugs. Open: batch size in kg only (litres need density); packaging per piece is handled by ADR-088 §3.
+editor reset bugs. Open: litres need a density. Batch size by pieces and packaging per piece: ADR-094.
 
 ## ADR-090 Warehouse screens speak in friendly units and plain words (usability test 2026-10-30)
 
@@ -1678,7 +1678,7 @@ the approved finished-goods template; the first print fixes `output_lot_number`,
 Finish posts the lot with them; extra copies go through Reprint with a reason.
 
 Consequences: migration 0031 (`batch_materials.bom_line_id` nullable; `batches.output_*`; label copies ≤ 999); tests
-`tests/integration/production/packaging-flow.test.ts`. The recipe wizard does not yet offer packaging per piece (next).
+`tests/integration/production/packaging-flow.test.ts`. The recipe wizard offers packaging per piece (ADR-094).
 
 ## ADR-093 Setup records never need a typed code (ADR-088 addendum, 2026-10-31)
 
@@ -1695,3 +1695,20 @@ in the same transaction (`createMaterialWithUsualSupplier`, needs `masterdata.su
 
 Consequences: tests `tests/integration/masterdata/adr088-no-code-setup.test.ts`; menu renamed Reasons, Units, Choice
 lists, Making areas / lines, Quality checks for items.
+
+## ADR-094 Recipe wizard by pieces and packaging per piece (ADR-088 §4 and ADR-092 as built, 2026-10-31)
+
+Status: Accepted; A-RW-06 needs the owner, A-RW-07 needs QA and the owner.
+
+Decision: the wizard's batch size is typed "By pieces" (default for new recipes) or "By weight (kg)". By pieces, batch
+grams = pieces × grams per piece × 100 ÷ expected amount made %, rounded up to a whole gram (decimal.js), stored only as
+the formula's reference batch size; a stored size that is exactly N pieces is shown back as N. Grams per piece is the
+product's size, else the net content of its same-code SKU; a missing one is typed once and saved through
+`updateProduct` (needs `masterdata.product.edit`). "Packaging for each piece" saves recipe packaging lines (material
+kind packaging, made inline as packaging/pcs; quantity = pieces × per piece; proportional; 0% allowed difference; no
+weighing check) after the ingredient lines; ADR-092 sets these aside and lists them on Get materials; they are outside
+the percent total and never weighed. `saveRecipe` refuses packaging as an ingredient and non-packaging as packaging.
+Formula and production services unchanged; no migration.
+
+Consequences: tests `tests/unit/masterdata-recipe-pieces.test.ts`, `tests/integration/masterdata/recipe-wizard.test.ts`;
+the advanced formula revision page still adds packaging pieces into its gram total (to fix).
