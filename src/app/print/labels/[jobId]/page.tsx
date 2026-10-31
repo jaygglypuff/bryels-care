@@ -35,11 +35,11 @@ export default async function PrintLabelJobPage({ params }: { params: Promise<{ 
           <div className="min-w-0">
             <h1 className="break-all text-[18px] font-semibold">Labels · {job.entityNumber}</h1>
             <p className="text-[13px] text-muted">
-              {job.templateCode} · {job.media} · {job.copies} {job.copies === 1 ? "label" : "labels"}, one per page{job.reprintNo ? ` · REPRINT ${job.reprintNo}` : ""}. Printer: {job.printerName ?? job.stationName}. Choose &quot;Actual size&quot; (100 %).
+              Label size {job.media} · {job.copies} {job.copies === 1 ? "label" : "labels"}, one per page{job.reprintNo ? ` · REPRINT ${job.reprintNo}` : ""}. Printer: {job.printerName ?? job.stationName}. Choose &quot;Actual size&quot; (100 %).
             </p>
           </div>
           <div className="flex gap-2">
-            <LinkButton href={`/labels/jobs/${job.id}`} variant="secondary" size="lg">Back</LinkButton>
+            <LinkButton href={`/labels/jobs/${job.id}`} variant="secondary" size="lg">← Back</LinkButton>
             {printable && <PrintButton label={`Print ${job.copies}`} />}
           </div>
         </div>

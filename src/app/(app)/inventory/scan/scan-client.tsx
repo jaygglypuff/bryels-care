@@ -25,7 +25,8 @@ export function ScanClient() {
       const c = await scanCardAction(value);
       setCard(c);
       const summary = c.outcome === "found" ? `${c.title} · ${c.caption} ${c.identifier}` : c.message;
-      setRecent((r) => [{ payload: c.payload || value, summary, at: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) }, ...r].slice(0, 8));
+      // Words show as typed; the time is Manila time like the rest of the app (usability test 2026-10-30).
+      setRecent((r) => [{ payload: c.outcome === "found" ? c.payload || value : value, summary, at: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Manila" }) }, ...r].slice(0, 8));
       setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     });
   }, []);
@@ -33,7 +34,7 @@ export function ScanClient() {
   return (
     <div className="space-y-4">
       <Card>
-        <Scanner onScan={onScan} pending={pending} placeholder="Scan, or type a name or number" />
+        <Scanner onScan={onScan} pending={pending} placeholder="Scan, or type a name or number" keepCase />
         {offline && (
           <p role="alert" className="mt-3 rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
             You&apos;re offline. Look-ups need a connection; scan again when you&apos;re back online.

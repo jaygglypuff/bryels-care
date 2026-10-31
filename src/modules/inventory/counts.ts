@@ -27,7 +27,9 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
 import { reasonCodeOptions } from "@/modules/masterdata";
+import { baseOfUnit, parseQtyText } from "@/lib/units";
 import { postMovement } from "./ledger";
+import { qtyInputToBase } from "./units";
 import { isUuid } from "./lots";
 import { claimIdempotencyKey, stateMachine, storeIdempotentResult } from "./command-kit";
 import { getInventorySetting } from "./policy";
@@ -245,6 +247,8 @@ export type RecordCountInput = {
   /** For an unlabelled find (no lot): what the counter sees. */
   unlabelledDescription?: string | null;
   qty: string;
+  /** Unit the quantity was typed in (kg/g, L/mL, pcs); converted to the lot's base unit here. Empty = base unit. */
+  qtyUom?: string | null;
   note?: string | null;
   idempotencyKey: string;
 };
@@ -256,9 +260,13 @@ export type RecordCountInput = {
  */
 export async function recordCount(ctx: AuthContext, input: RecordCountInput) {
   ctx.require("inventory.stock_count.submit");
-  if (!QTY_RE.test(input.qty ?? "")) throw new DomainError("validation", "Enter the counted quantity (0 or more, up to 6 decimals).");
+  if (!input.qtyUom && !parseQtyText(input.qty)?.unit && !QTY_RE.test(input.qty ?? "")) throw new DomainError("validation", "Enter the counted quantity (0 or more, up to 6 decimals).");
   if (!input.lotId && !input.unlabelledDescription?.trim()) throw new DomainError("validation", "Scan the lot, or describe the unlabelled item.");
-  const qty = new Decimal(input.qty);
+  // Unlabelled finds have no lot: their unit is the one typed (kg → counted in g).
+  const typedUnit = parseQtyText(input.qty)?.unit ?? (input.qtyUom || null);
+  const unlabelledBase = input.lotId || !typedUnit ? null : baseOfUnit(typedUnit);
+  if (!input.lotId && typedUnit && !unlabelledBase) throw new DomainError("validation", `"${typedUnit}" is not a unit. Use kg, g, L, mL or pcs.`, { field: "qty" });
+  let qty = input.lotId ? new Decimal(0) : unlabelledBase ? qtyInputToBase(input.qty, input.qtyUom, unlabelledBase, { allowZero: true }) : new Decimal(input.qty);
   return db.transaction(async (tx) => {
     const c = await lockCount(tx, ctx, input.countId);
     if (c.status !== "in_progress") throw new DomainError("state", `Count ${c.countNumber} is not open for counting (it is ${c.status.replace("_", " ")}).`);
@@ -284,6 +292,7 @@ export async function recordCount(ctx: AuthContext, input: RecordCountInput) {
       if (!isUuid(input.lotId)) throw new DomainError("not_found", "Lot not found in your sites.");
       const [lot] = await tx.select().from(inventoryLots).where(eq(inventoryLots.id, input.lotId)).limit(1);
       if (!lot || lot.siteId !== c.siteId) throw new DomainError("not_found", "Lot not found at this count's site.");
+      qty = qtyInputToBase(input.qty, input.qtyUom, lot.baseUom, { allowZero: true });
       if (lot.baseUom === "pcs" && !qty.isInteger()) throw new DomainError("validation", "This lot is counted in pieces; enter a whole number.");
       [line] = await tx
         .select()
@@ -308,6 +317,7 @@ export async function recordCount(ctx: AuthContext, input: RecordCountInput) {
           isUnlabelled: true,
           isUnexpected: true,
           description: input.unlabelledDescription!.trim().slice(0, 500),
+          baseUom: unlabelledBase,
           expectedQtyBase: "0",
         })
         .returning();
@@ -413,11 +423,11 @@ export async function submitCount(ctx: AuthContext, countId: string) {
  * W03-06: blind recount of a line by a counter who has not counted it before (SoD,
  * `sod.count.recounter_not_counter`). Stored alongside the first count; the variance uses it.
  */
-export async function recordRecount(ctx: AuthContext, input: { lineId: string; qty: string; note?: string | null; idempotencyKey?: string }) {
+export async function recordRecount(ctx: AuthContext, input: { lineId: string; qty: string; qtyUom?: string | null; note?: string | null; idempotencyKey?: string }) {
   ctx.require("inventory.stock_count.submit");
   if (!isUuid(input.lineId)) throw new DomainError("not_found", "Count line not found.");
-  if (!QTY_RE.test(input.qty ?? "")) throw new DomainError("validation", "Enter the recounted quantity (0 or more, up to 6 decimals).");
-  const qty = new Decimal(input.qty);
+  if (!input.qtyUom && !parseQtyText(input.qty)?.unit && !QTY_RE.test(input.qty ?? "")) throw new DomainError("validation", "Enter the recounted quantity (0 or more, up to 6 decimals).");
+  let qty = input.qtyUom || parseQtyText(input.qty)?.unit ? new Decimal(0) : new Decimal(input.qty);
   return db.transaction(async (tx) => {
     const [l0] = await tx.select().from(stockCountLines).where(eq(stockCountLines.id, input.lineId)).limit(1);
     if (!l0) throw new DomainError("not_found", "Count line not found.");
@@ -437,6 +447,10 @@ export async function recordRecount(ctx: AuthContext, input: { lineId: string; q
       throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: a recount must be done by a different counter than the one who counted this line.", { ...ctx.refusalDetails(),
         rule: "sod.count.recounter_not_counter",
       });
+    }
+    if (input.qtyUom || parseQtyText(input.qty)?.unit) {
+      if (!line.baseUom) throw new DomainError("validation", "This line has no unit; enter the amount as a plain number.", { field: "qty" });
+      qty = qtyInputToBase(input.qty, input.qtyUom, line.baseUom, { allowZero: true });
     }
     if (line.baseUom === "pcs" && !qty.isInteger()) throw new DomainError("validation", "This lot is counted in pieces; enter a whole number.");
     await tx.insert(stockCountEntries).values({

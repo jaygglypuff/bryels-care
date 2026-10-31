@@ -64,7 +64,7 @@ export default async function NewLabelPage({ searchParams }: { searchParams: Pro
             {o.history.map((j) => (
               <li key={j.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <Link href={`/labels/jobs/${j.id}`} className="text-primary-text hover:underline">
-                  {j.templateCode} · {j.copies}×{j.reprintNo ? ` · REPRINT ${j.reprintNo}` : ""}
+                  {j.media} · {j.copies}×{j.reprintNo ? ` · REPRINT ${j.reprintNo}` : ""}
                 </Link>
                 <span className="text-muted">{fmtDateTime(j.requestedAt)} · {j.statusAtPrint ? STATUS_AT_PRINT[j.statusAtPrint] ?? j.statusAtPrint : ""}</span>
                 <JobStatus status={j.status} voided={!!j.voidedAt} />

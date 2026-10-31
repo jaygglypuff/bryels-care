@@ -83,10 +83,10 @@ export default async function LotPage({ params, searchParams }: { params: Promis
   if (ctx.can("inventory.container.create") && lot.siteId === ctx.currentSiteId) {
     actions.push({ key: "box", label: "Pack into a box", href: `/inventory/containers/new?lot=${lot.id}`, icon: <Boxes size={16} />, reason: onHand.lte(0) ? "No stock left in this lot." : undefined });
   }
-  if (ctx.can("inventory.lot.edit")) actions.push({ key: "edit", label: "Correct dates / supplier lot", href: `/inventory/lots/${lot.id}/edit`, icon: <PenLine size={16} /> });
-  if (lot.siteId === ctx.currentSiteId) actions.push({ key: "fefo", label: ctx.can("inventory.reservation.create") ? "FEFO rank / reserve" : "FEFO rank", href: `/inventory/lots/reservations?lot=${lot.id}`, icon: <Target size={16} /> });
+  if (ctx.can("inventory.lot.edit")) actions.push({ key: "edit", label: "Correct dates / supplier's code", href: `/inventory/lots/${lot.id}/edit`, icon: <PenLine size={16} /> });
+  if (lot.siteId === ctx.currentSiteId) actions.push({ key: "fefo", label: ctx.can("inventory.reservation.create") ? "Use the one that expires first / set aside for orders" : "Use the one that expires first", href: `/inventory/lots/reservations?lot=${lot.id}`, icon: <Target size={16} /> });
   if (ctx.can("inventory.label_job.create")) actions.push({ key: "label", label: "Print label", href: `/labels/new?entityType=inventory_lot&entityId=${lot.id}`, icon: <Printer size={16} /> }); // W1E: label jobs
-  if (ctx.can("quality.genealogy.view")) actions.push({ key: "trace", label: "Genealogy", href: `/quality/trace?lot=${encodeURIComponent(lot.lotNumber)}`, icon: <Share2 size={16} /> });
+  if (ctx.can("quality.genealogy.view")) actions.push({ key: "trace", label: "Where it came from and where it went", href: `/quality/trace?lot=${encodeURIComponent(lot.lotNumber)}`, icon: <Share2 size={16} /> });
   const blocked = usable ? [] : [
     { label: lot.itemKind === "product" ? "Allocate / ship" : "Issue to production", reason: `blocked while the lot is ${expired && lot.qualityStatus === "released" ? "expired" : STATUS_WORDS[lot.qualityStatus] ?? lot.qualityStatus}.` },
   ];
@@ -102,18 +102,18 @@ export default async function LotPage({ params, searchParams }: { params: Promis
         }
         actions={
           <>
-            {ctx.can("inventory.movement.view") && <LinkButton href={`/inventory/stock-card/${lot.id}`} variant="secondary" size="sm">Stock card</LinkButton>}
+            {ctx.can("inventory.movement.view") && <LinkButton href={`/inventory/stock-card/${lot.id}`} variant="secondary" size="sm">Batch details</LinkButton>}
             <StatusChip status={lot.qualityStatus} className="px-3 py-1 text-[13px]" />
           </>
         }
       />
 
-      {moved && <Banner tone="ok" title={`Stock moved (${moved})`}>The transfer is posted to the ledger below.</Banner>}
+      {moved && <Banner tone="ok" title={`Stock moved (${moved})`}>The move is saved. It is in the history of moves below.</Banner>}
       {edited && <Banner tone="ok" title="Lot details corrected">The old and new values are in the audit trail.</Banner>}
       <nav className="flex flex-wrap gap-2 text-[13px]" aria-label="Lot sections">
-        <a href="#movements" className="rounded-full border border-line px-3 py-1.5 hover:bg-surface-2">Movements</a>
+        <a href="#movements" className="rounded-full border border-line px-3 py-1.5 hover:bg-surface-2">History of moves</a>
         <a href="#documents" className="rounded-full border border-line px-3 py-1.5 hover:bg-surface-2">Documents</a>
-        {ctx.can("quality.genealogy.view") && <Link href={`/quality/trace?lot=${encodeURIComponent(lot.lotNumber)}`} className="rounded-full border border-line px-3 py-1.5 hover:bg-surface-2">Genealogy</Link>}
+        {ctx.can("quality.genealogy.view") && <Link href={`/quality/trace?lot=${encodeURIComponent(lot.lotNumber)}`} className="rounded-full border border-line px-3 py-1.5 hover:bg-surface-2">Where it came from and where it went</Link>}
         {boxes.length > 0 && <a href="#boxes" className="rounded-full border border-line px-3 py-1.5 hover:bg-surface-2">Boxes ({boxes.length})</a>}
       </nav>
       <RiskBanner lot={lot} canSeeQa={ctx.can("quality.disposition.view")} />
@@ -128,7 +128,7 @@ export default async function LotPage({ params, searchParams }: { params: Promis
               ["Kind", lot.itemKind === "product" ? "Finished goods" : "Material"],
               ["On hand", <strong key="oh">{fmtLotQty(onHand.toString(), lot.baseUom)}</strong>],
               ["Supplier", lot.supplierName ?? "—"],
-              ["Supplier lot", lot.supplierLotNumber ?? "—"],
+              ["Supplier's code on the sack", lot.supplierLotNumber ?? "—"],
               ...(lot.itemKind === "material" ? [["Brand", lot.brand ?? "—"] as [string, string]] : []),
               ["Manufactured", fmtDate(lot.manufacturedOn)],
               ["Expiry", <Expiry key="ex" date={lot.expiresOn} warnDays={EXPIRY_WARN_DAYS} />],
@@ -136,7 +136,8 @@ export default async function LotPage({ params, searchParams }: { params: Promis
               ["Source batch", lot.batchNumber && lot.sourceBatchId ? <Link href={`/production/${lot.sourceBatchId}`} className="text-primary-text hover:underline">{lot.batchNumber}</Link> : "—"],
               ["Base unit", lot.baseUom],
               ["Site", site ? `${site.code} · ${site.name}` : "—"],
-              ["Storage", lot.storageConditions ?? "—"],
+              // Usability test 2026-10-30: no empty "Storage —" row; the shelf is under "Where it is".
+              ...(lot.storageConditions ? [["How to store", lot.storageConditions] as [string, string]] : []),
             ]}
           />
         </Card>
@@ -166,7 +167,7 @@ export default async function LotPage({ params, searchParams }: { params: Promis
       </div>
 
       <Card>
-        <CardTitle>Stock by location</CardTitle>
+        <CardTitle>Where it is</CardTitle>
         {lot.balances.length === 0 ? (
           <EmptyState title="No stock left">All of this lot has been consumed, shipped or moved out.</EmptyState>
         ) : (
@@ -177,7 +178,7 @@ export default async function LotPage({ params, searchParams }: { params: Promis
                   <span className="font-mono font-semibold">{b.code}</span> <span className="text-muted">· {b.name} · {b.warehouseCode}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <LocationKindChip kind={b.kind} />
+                  {b.kind !== "storage" && <LocationKindChip kind={b.kind} />}
                   <span className="font-semibold tabular">{fmtLotQty(b.qtyBase, lot.baseUom)}</span>
                 </div>
               </li>
@@ -204,7 +205,7 @@ export default async function LotPage({ params, searchParams }: { params: Promis
         <ul className="space-y-1 text-[13px]">
           <li>Goods receipt: {lot.receipt ? <Link href={`/inventory/receive/${lot.receipt.id}`} className="text-primary-text hover:underline">{lot.receipt.number}</Link> : "—"}</li>
           <li>Source batch: {lot.batchNumber && lot.sourceBatchId ? <Link href={`/production/${lot.sourceBatchId}`} className="text-primary-text hover:underline">{lot.batchNumber}</Link> : "—"}</li>
-          <li className="text-muted">Supplier certificates (CoA) are attached to receipts when file attachments ship (US-2-08).</li>
+          <li className="text-muted">Supplier certificates (CoA) are on the receipt page.</li>
         </ul>
       </Card>
 
@@ -212,7 +213,7 @@ export default async function LotPage({ params, searchParams }: { params: Promis
       <LotMigrationSection ctx={ctx} lotId={lot.id} />
 
       <Card id="movements">
-        <CardTitle>Movement ledger</CardTitle>
+        <CardTitle>History of moves</CardTitle>
         {lot.movements.length === 0 ? (
           <EmptyState title="No movements yet" />
         ) : (

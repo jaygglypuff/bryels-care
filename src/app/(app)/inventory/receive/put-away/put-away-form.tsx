@@ -51,13 +51,13 @@ export function PutAwayForm({
           <Select id="fromLocationId" name="fromLocationId" defaultValue={defaultFrom}>
             {balances.map((b) => (
               <option key={b.locationId} value={b.locationId}>
-                {b.code} · {b.name} ({b.boxed ? `${b.looseQtyText} loose of ${b.qtyText}` : b.qtyText})
+                {b.code} · {b.name} ({b.boxed ? `${b.looseQtyText} not in a box, of ${b.qtyText}` : b.qtyText})
               </option>
             ))}
           </Select>
         </Field>
         <div className="grid grid-cols-[1fr_auto] items-end gap-2">
-          <Field label="Quantity (optional)" htmlFor="qty" error={fe.qty} hint="Leave empty to move everything from there.">
+          <Field label="How much? (optional)" htmlFor="qty" error={fe.qty} hint="Leave empty to move everything from there.">
             <Input id="qty" name="qty" inputMode="decimal" autoComplete="off" />
           </Field>
           {units.length > 1 ? (

@@ -6,6 +6,7 @@ import { DomainError } from "@/lib/errors";
 import { activeStationsAt, approvedLabelTemplatesFor, labelHistory } from "@/modules/documents";
 import { db } from "@/db/client";
 import { getReceipt } from "@/modules/inventory";
+import { ArrowLeft } from "lucide-react";
 import { LinkButton } from "@/ui/core";
 import { Banner } from "@/ui/status";
 
@@ -31,22 +32,23 @@ export default async function ReceiptLabelsPage({ params, searchParams }: { para
     approvedLabelTemplatesFor(db, ctx.organizationId, gr.siteId, "material"),
     Promise.all(gr.lines.map((l) => labelHistory(ctx, "inventory_lot", l.lotId))),
   ]);
-  const alreadyLabelled = printed.filter((h) => h.some((j) => !j.voidedAt && j.status !== "cancelled")).length;
+  const labelledNames = [...new Set(gr.lines.filter((_, i) => printed[i].some((j) => !j.voidedAt && j.status !== "cancelled")).map((l) => l.materialName))];
+  const labelledText = labelledNames.length <= 1 ? (labelledNames[0] ?? "") : `${labelledNames.slice(0, -1).join(", ")} and ${labelledNames.at(-1)}`;
   return (
-    <main className="mx-auto max-w-xl space-y-4 px-4 py-6">
+    <main className="mx-auto max-w-xl space-y-4 px-4 py-4">
+      <a href={`/inventory/receive/${gr.id}`} className="inline-flex min-h-[44px] items-center gap-2 text-[15px] font-semibold text-primary-text hover:underline">
+        <ArrowLeft size={18} aria-hidden /> Back to receipt {gr.receiptNumber}
+      </a>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-[18px] font-semibold">Labels · {gr.receiptNumber}</h1>
           <p className="text-[13px] text-muted">{gr.lines.length} {gr.lines.length === 1 ? "lot" : "lots"}: {gr.lines.map((l) => l.lotNumber).join(", ")}</p>
         </div>
-        <div className="flex gap-2">
-          <LinkButton href={`/inventory/receive/${gr.id}`} variant="secondary" size="lg">Back</LinkButton>
-          <LinkButton href="/labels" variant="secondary" size="lg">Print station</LinkButton>
-        </div>
+        <LinkButton href="/labels" variant="secondary" size="lg">Print station</LinkButton>
       </div>
       {posted && (
-        <Banner tone="ok" title={`Receipt ${gr.receiptNumber} posted`}>
-          {gr.lines.length} new {gr.lines.length === 1 ? "lot is" : "lots are"} waiting for the quality check. Print the labels now, stick one on every container and leave them in the hold area.
+        <Banner tone="ok" title={`Receipt ${gr.receiptNumber} saved`}>
+          {gr.lines.length} new {gr.lines.length === 1 ? "lot waits" : "lots wait"} for the quality check. Print the labels now, stick one on every sack and leave them in the hold area.
         </Banner>
       )}
       {gr.siteId !== ctx.currentSiteId ? (
@@ -54,10 +56,10 @@ export default async function ReceiptLabelsPage({ params, searchParams }: { para
       ) : stations.length === 0 ? (
         <Banner tone="info" title={`Label printing isn't set up for ${site?.code} yet`}>Ask an administrator to add a print station for this site.</Banner>
       ) : templates.length === 0 ? (
-        <Banner tone="info" title="No approved raw material label template">QA must approve a label template before labels can print.</Banner>
+        <Banner tone="info" title="No label size is ready yet">QA must approve a raw material label before labels can print.</Banner>
       ) : (
         <section className="rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)]">
-          {alreadyLabelled > 0 && <p className="mb-3 text-[13px] text-[var(--warn-fg)]">{alreadyLabelled} of these lots already have labels; those are skipped. Use Reprint on the label job for a lost or damaged label.</p>}
+          {labelledText && <p className="mb-3 text-[14px] text-[var(--warn-fg)]">{labelledText} already {labelledNames.length === 1 ? "has" : "have"} labels — not printed again. For a lost or damaged label, use Reprint on the print station.</p>}
           <ReceiptJobsForm
             grId={gr.id}
             lots={gr.lines.map((l) => ({ lotId: l.lotId, lotNumber: l.lotNumber, materialName: l.materialName, containerCount: l.containerCount ?? null }))}

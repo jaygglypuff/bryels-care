@@ -3,7 +3,8 @@
 module.exports = function autoConfirm() {
   const click = () => {
     for (const d of document.querySelectorAll('[role="alertdialog"]')) {
-      const yes = [...d.querySelectorAll('button')].find((b) => /^Yes, continue$/.test(b.textContent.trim()));
+      // Also the warehouse screens' named confirmations (usability test 2026-10-30); never "Yes, 50 g"-style answers.
+      const yes = [...d.querySelectorAll('button')].find((b) => /^Yes, (continue|start the count|finish|save to stock)$/.test(b.textContent.trim()));
       if (yes && !yes.dataset.autoConfirmed) { yes.dataset.autoConfirmed = '1'; yes.click(); }
     }
   };

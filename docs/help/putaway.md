@@ -1,12 +1,12 @@
 ---
 key: inventory.putaway
 title: Put away a received lot
-version: 2
+version: 3
 updated_at: 2026-10-30
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
-Move goods out of the hold area or the dock to the shelf they belong on. QA tells you nothing by phone: the **To put away** list shows every lot QA has released that is still waiting.
+Move goods out of the hold area or the dock to the shelf they belong on. When QA releases a lot you get a message (the bell at the top), for example "Coconut Oil lot L-2610-00024 is ready — put it on A-01". The **To put away** list shows every lot QA has released that is still waiting. The **Put away** tile on Home shows how many.
 
 ## The To put away list
 
@@ -30,7 +30,7 @@ Move goods out of the hold area or the dock to the shelf they belong on. QA tell
 
 ## How much
 
-1. Leave **Quantity** empty to move everything from that place.
+1. Leave **How much?** empty to move everything from that place.
 2. To move a part, type it in kg (or g, pcs, L as shown next to the field).
 
 ## Confirm

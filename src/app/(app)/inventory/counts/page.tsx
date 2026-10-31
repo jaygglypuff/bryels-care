@@ -24,7 +24,7 @@ export default async function CountsPage({ searchParams }: { searchParams: Promi
     <div className="space-y-5">
       <PageHeader
         title="Stock counts"
-        subtitle={`${ctx.currentSite.code} · plan blind cycle or full counts; released counts freeze their locations until posted or cancelled`}
+        subtitle={`${ctx.currentSite.code} · count what is on the shelves; while a count runs, nobody can move stock on its shelves`}
         actions={
           <>
             <Help screen="inventory.count" />
@@ -48,16 +48,16 @@ export default async function CountsPage({ searchParams }: { searchParams: Promi
                 <li key={c.id}>
                   <Link href={`/inventory/counts/${c.id}`} className="block rounded-[12px] border border-line p-3">
                     <div className="flex items-start justify-between gap-2"><span className="font-mono font-semibold text-primary-text">{c.countNumber}</span><CountStatusChip status={c.status} /></div>
-                    <p className="mt-1 text-[13px]">{c.countKind} · {c.locations} location(s){c.isBlind ? " · blind" : ""}</p>
+                    <p className="mt-1 text-[13px]">{c.locations} {c.locations === 1 ? "shelf" : "shelves"}{c.isBlind ? " · without seeing the expected amount" : ""}</p>
                   </Link>
                 </li>
               ))}
             </ul>
-            <Table className="hidden sm:block" head={["Count", "Kind", "Locations", "Lines", "Scheduled", "Planned by", "Status"]}>
+            <Table className="hidden sm:block" head={["Count", "Kind", "Shelves", "Lines", "Day", "Planned by", "Status"]}>
               {counts.map((c) => (
                 <tr key={c.id}>
                   <Td><Link href={`/inventory/counts/${c.id}`} className="font-mono font-semibold text-primary-text hover:underline">{c.countNumber}</Link></Td>
-                  <Td>{c.countKind}{c.isBlind ? <> <Chip>blind</Chip></> : null}</Td>
+                  <Td>{c.countKind}{c.isBlind ? <> <Chip>expected amount hidden</Chip></> : null}</Td>
                   <Td>{c.locations}</Td>
                   <Td>{c.lines}</Td>
                   <Td>{fmtDate(c.scheduledFor)}</Td>
@@ -69,7 +69,7 @@ export default async function CountsPage({ searchParams }: { searchParams: Promi
           </>
         )}
       </Card>
-      <p className="text-[12px] text-muted">Statuses: {Object.values(COUNT_STATUS_LABEL).join(" → ")}.</p>
+      <p className="text-[12px] text-muted">Steps: {Object.values(COUNT_STATUS_LABEL).join(" → ")}.</p>
     </div>
   );
 }

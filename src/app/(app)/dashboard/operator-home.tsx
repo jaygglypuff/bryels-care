@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, ClipboardList, Factory, PackagePlus, ScanLine, ShieldCheck, Truck } from "lucide-react";
+import { ArrowRight, ArrowRightLeft, ClipboardCheck, ClipboardList, Factory, PackageCheck, PackagePlus, ScanLine, ShieldCheck, Truck, Wrench } from "lucide-react";
 import type { ReactNode } from "react";
 import type { OperatorTile } from "@/modules/analytics";
 import type { FloorTask } from "@/modules/production";
@@ -12,12 +12,20 @@ const ICON: Record<OperatorTile["key"], ReactNode> = {
   batches: <Factory size={26} />,
   qa: <ShieldCheck size={26} />,
   dispatch: <Truck size={26} />,
+  putaway: <PackageCheck size={26} />,
+  move: <ArrowRightLeft size={26} />,
+  count: <ClipboardCheck size={26} />,
+  fix: <Wrench size={26} />,
 };
+
+/** Warehouse tiles (usability test 2026-10-30): six big tiles, two per row on a phone, with live counts. */
+const WAREHOUSE_KEYS: OperatorTile["key"][] = ["putaway", "move", "count", "fix"];
 
 /** Large task tiles for operators without production tasks (warehouse, QA): verbs, live counts, 44 px+ targets. */
 export function OperatorHome({ tiles, siteLabel, updated }: { tiles: OperatorTile[]; siteLabel: string; updated: string }) {
   if (tiles.length === 0)
     return <EmptyState title="No tasks for your role yet">Your role has no task screens at this site. Ask your site manager if you need access.</EmptyState>;
+  if (tiles.some((t) => WAREHOUSE_KEYS.includes(t.key))) return <WarehouseTiles tiles={tiles} siteLabel={siteLabel} updated={updated} />;
   return (
     <>
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -45,6 +53,35 @@ export function OperatorHome({ tiles, siteLabel, updated }: { tiles: OperatorTil
       </ul>
       <p className="mt-4 text-center text-[12px] text-muted">
         Counts for {siteLabel} · updated {updated} · all figures from posted transactions
+      </p>
+    </>
+  );
+}
+
+function WarehouseTiles({ tiles, siteLabel, updated }: { tiles: OperatorTile[]; siteLabel: string; updated: string }) {
+  return (
+    <>
+      <ul className="grid grid-cols-2 gap-3 xl:grid-cols-3" aria-label="What do you need to do?" data-testid="warehouse-tiles">
+        {tiles.map((t) => (
+          <li key={t.key} className="min-w-0">
+            <Link
+              href={t.href}
+              data-testid={`tile-${t.key}`}
+              className="group flex h-full min-h-[148px] flex-col gap-2 rounded-[18px] border border-line bg-surface p-4 transition-shadow hover:shadow-[0_4px_12px_rgba(28,27,24,.08)] active:bg-surface-2 sm:min-h-[168px] sm:p-5"
+            >
+              <span className="flex items-center justify-between gap-2">
+                <span className="grid size-12 shrink-0 place-items-center rounded-[12px] bg-primary-soft text-primary-text">{ICON[t.key]}</span>
+                <span className="tabular text-[30px] font-semibold leading-none text-fg">{t.count.toLocaleString("en-PH")}</span>
+              </span>
+              <span className="text-[19px] font-semibold leading-tight text-fg">{t.title}</span>
+              <span className="text-[13px] leading-snug text-fg-2">{t.countLabel}</span>
+              <span className="hidden text-[13px] leading-snug text-muted sm:block">{t.description}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-4 text-center text-[12px] text-muted">
+        Numbers for {siteLabel} · updated {updated}
       </p>
     </>
   );

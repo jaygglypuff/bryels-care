@@ -43,7 +43,7 @@ export function SplitForm({ containerId, contents, idempotencyKey }: { container
 }
 
 export function MergeForm({ containerId, idempotencyKey }: { containerId: string; idempotencyKey: string }) {
-  const { state, pending, onSubmit } = useActionForm(mergeAction.bind(null, containerId), "Merge these boxes into one new box? The scanned boxes will be emptied.");
+  const { state, pending, onSubmit, confirmBox } = useActionForm(mergeAction.bind(null, containerId), "Merge these boxes into one new box? The scanned boxes will be emptied.");
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3">
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
@@ -51,9 +51,11 @@ export function MergeForm({ containerId, idempotencyKey }: { containerId: string
         <Input id="others" name="others" autoComplete="off" autoCapitalize="characters" required placeholder="BC:BOX:BX-00000012" className="font-mono" />
       </Field>
       <FormMessage state={state} />
-      <Button type="submit" variant="cta" disabled={pending}>
-        {pending ? "Merging…" : "Merge into a new box"}
-      </Button>
+      {confirmBox ?? (
+        <Button type="submit" variant="cta" disabled={pending}>
+          {pending ? "Merging…" : "Merge into a new box"}
+        </Button>
+      )}
     </form>
   );
 }

@@ -2,7 +2,9 @@
 import Link from "next/link";
 import { startTransition, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ArrowRight, Boxes, MapPin, RotateCcw, ScanLine } from "lucide-react";
-import { Button, Card, Field, Input, Select, Textarea, inputClass } from "@/ui/core";
+import { Button, Card, Field, Select, Textarea, inputClass } from "@/ui/core";
+import { baseToUnitText, fmtFriendly, friendlyUnitFor, toBaseQty } from "@/lib/units";
+import { QtyUnitInput } from "@/ui/qty-unit-input";
 import { Banner, StatusChip } from "@/ui/status";
 import type { MoveResult } from "@/modules/inventory/moves";
 import { lookupDestinationAction, lookupSourceAction, postMoveAction, undoMoveAction, type SourceInfo } from "./actions";
@@ -52,7 +54,7 @@ function UndoToast({ result, onDone }: { result: MoveResult; onDone: () => void 
   const canUndo = !!result.undo && left > 0 && !msg?.ok;
   return (
     <div role="status" aria-live="polite" className="space-y-2">
-      <Banner tone={result.alreadyMoved ? "info" : "ok"} title={result.alreadyMoved ? "Already moved" : `Posted ${result.transferNumber}`}>
+      <Banner tone={result.alreadyMoved ? "info" : "ok"} title={result.alreadyMoved ? "Already moved" : `Saved ${result.transferNumber}`}>
         {result.message}
       </Banner>
       {msg && (
@@ -88,7 +90,15 @@ function UndoToast({ result, onDone }: { result: MoveResult; onDone: () => void 
 export function MoveFlow({ locations, initialSource, initialDestination }: { locations: Loc[]; initialSource: SourceInfo | null; initialDestination: Loc | null }) {
   const [source, setSource] = useState<SourceInfo | null>(initialSource);
   const [fromId, setFromId] = useState<string>(initialSource?.kind === "lot" ? (initialSource.locations[0]?.id ?? "") : "");
-  const [qty, setQty] = useState<string>(initialSource?.kind === "lot" ? (initialSource.locations[0]?.loose ?? "") : "");
+  // Usability test 2026-10-30: the amount starts in the friendly unit (60 kg, not 60000 g).
+  const startAmount = (src: SourceInfo | null, locId?: string) => {
+    if (src?.kind !== "lot") return { qty: "", unit: "" };
+    const l = src.locations.find((x) => x.id === locId) ?? src.locations[0];
+    const u = friendlyUnitFor(l?.loose ?? "0", src.baseUom);
+    return { qty: l ? baseToUnitText(l.loose, src.baseUom, u) : "", unit: u };
+  };
+  const [qty, setQty] = useState<string>(() => startAmount(initialSource).qty);
+  const [unit, setUnit] = useState<string>(() => startAmount(initialSource).unit);
   const [dest, setDest] = useState<Loc | null>(initialDestination);
   const [reason, setReason] = useState("");
   const [key, setKey] = useState(newKey);
@@ -100,12 +110,15 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
   const fromLoc = source?.kind === "lot" ? source.locations.find((l) => l.id === fromId) : null;
   const sourceLocationId = source?.kind === "box" ? source.location?.id : fromId;
   const destWrongKind = !!(dest && source && !source.allowedKinds.includes(dest.kind));
+  const parsedAmount = source?.kind === "lot" && qty.trim() ? toBaseQty(qty, unit, source.baseUom) : null;
+  const moveAmountText = source?.kind === "lot" ? (parsedAmount?.ok ? fmtFriendly(parsedAmount.qtyBase, source.baseUom) : `${qty} ${unit}`) : "";
   const step = !source ? 1 : source.kind === "lot" && (!fromId || !qty) ? 2 : !dest ? 3 : 4;
 
   const reset = () => {
     setSource(null);
     setDest(null);
     setQty("");
+    setUnit("");
     setFromId("");
     setReason("");
     setError(null);
@@ -146,7 +159,9 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
                 setSource(r.data);
                 if (r.data.kind === "lot") {
                   setFromId(r.data.locations[0]?.id ?? "");
-                  setQty(r.data.locations[0]?.loose ?? "");
+                  const a = startAmount(r.data);
+                  setQty(a.qty);
+                  setUnit(a.unit);
                 }
               })
             }
@@ -160,7 +175,7 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
                 <ul className="mt-1 text-[13px]">
                   {source.contents.map((c) => (
                     <li key={c.lotNumber}>
-                      {c.qty} {c.uom} {c.itemName} · lot {c.lotNumber} <StatusChip status={c.status} />
+                      {fmtFriendly(c.qty, c.uom)} {c.itemName} · lot {c.lotNumber} <StatusChip status={c.status} />
                     </li>
                   ))}
                   <li className="text-muted">At {source.location?.code ?? "—"}</li>
@@ -191,25 +206,27 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
             <p className="text-[13px] text-muted">This lot has no stock left at any location.</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="2 · From location" htmlFor="from">
+              <Field label="2 · Take it from" htmlFor="from">
                 <Select
                   id="from"
                   value={fromId}
                   onChange={(e) => {
                     setFromId(e.target.value);
-                    setQty(source.locations.find((l) => l.id === e.target.value)?.loose ?? "");
+                    const a = startAmount(source, e.target.value);
+                    setQty(a.qty);
+                    setUnit(a.unit);
                   }}
                 >
                   {source.locations.map((l) => (
                     <option key={l.id} value={l.id}>
-                      {l.code} · loose {l.loose} {source.baseUom}
-                      {Number(l.boxed) > 0 ? ` (+${l.boxed} in boxes)` : ""}
+                      {l.code} · {fmtFriendly(l.loose, source.baseUom)} not in a box
+                      {Number(l.boxed) > 0 ? ` (+${fmtFriendly(l.boxed, source.baseUom)} in boxes)` : ""}
                     </option>
                   ))}
                 </Select>
               </Field>
-              <Field label={`Quantity (${source.baseUom})`} htmlFor="qty" hint={fromLoc ? `Loose at ${fromLoc.code}: ${fromLoc.loose}. Boxed stock moves with its box.` : undefined}>
-                <Input id="qty" inputMode="decimal" autoComplete="off" value={qty} onChange={(e) => setQty(e.target.value)} className="tabular" />
+              <Field label="How much?" htmlFor="qty" hint={fromLoc ? `${fmtFriendly(fromLoc.loose, source.baseUom)} not in a box at ${fromLoc.code}. Stock in a box moves with its box.` : undefined}>
+                <QtyUnitInput id="qty" baseUom={source.baseUom} qty={qty} onQtyChange={setQty} unit={unit || undefined} onUnitChange={setUnit} unitLabel="Unit for the amount" />
               </Field>
             </div>
           )}
@@ -235,7 +252,7 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
                   })
                 }
               />
-              <Field label="…or choose" htmlFor="destPick" hint={`Allowed for this stock: ${source.allowedKinds.join(", ")} locations.`}>
+              <Field label="…or choose" htmlFor="destPick">
                 <Select id="destPick" defaultValue="" onChange={(e) => setDest(locations.find((l) => l.id === e.target.value) ?? null)}>
                   <option value="" disabled>
                     Choose a location…
@@ -262,8 +279,8 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
           )}
           {destWrongKind && (
             <div className="mt-3">
-              <Banner tone="warn" title="Wrong location class">
-                This stock may only go to {source.allowedKinds.join(" / ")} locations, not {dest!.kind}. Scan another location.
+              <Banner tone="warn" title="This stock cannot go there">
+                {dest!.code} is a {dest!.kind} place. Choose a place from the list above, or scan another shelf.
               </Banner>
             </div>
           )}
@@ -273,7 +290,7 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
       {source && dest && !destWrongKind && (
         <div className="sticky bottom-0 -mx-4 space-y-3 border-t border-line bg-surface px-4 py-3 sm:static sm:mx-0 sm:rounded-[24px] sm:border-0 sm:p-5 sm:shadow-[var(--shadow-card)]">
           <p className="flex flex-wrap items-center gap-2 text-[15px]">
-            Move <strong className="font-mono">{source.kind === "box" ? source.number : `${qty} ${source.baseUom} of ${source.lotNumber}`}</strong>
+            Move <strong className="font-mono">{source.kind === "box" ? source.number : `${moveAmountText} of ${source.lotNumber}`}</strong>
             {source.kind === "lot" && fromLoc ? <> from {fromLoc.code}</> : source.kind === "box" ? <> from {source.location?.code}</> : null}
             <ArrowRight size={16} /> <strong className="font-mono">{dest.code}</strong>?
           </p>
@@ -289,7 +306,7 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
                 setError(null);
                 const r = await postMoveAction({
                   idempotencyKey: key,
-                  source: source.kind === "box" ? { kind: "box", containerId: source.id } : { kind: "lot", lotId: source.id, fromLocationId: fromId, qty },
+                  source: source.kind === "box" ? { kind: "box", containerId: source.id } : { kind: "lot", lotId: source.id, fromLocationId: fromId, qty, qtyUom: unit || undefined },
                   toLocationId: dest.id,
                   reason: reason || undefined,
                 });
@@ -298,10 +315,10 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
               })
             }
           >
-            {busy ? "Posting move…" : "Confirm move"}
+            {busy ? "Saving the move…" : "Confirm move"}
           </Button>
           <p className="text-[12px] text-muted">
-            Tapping twice or reloading never posts twice. Wrong scan? You can undo your own move for a short time afterwards. <Link href="/inventory/scan" className="text-primary-text hover:underline">Look up instead</Link>
+            Tapping twice or reloading never saves twice. Wrong scan? You can undo your own move for a short time afterwards. <Link href="/inventory/scan" className="text-primary-text hover:underline">Look up instead</Link>
           </p>
         </div>
       )}

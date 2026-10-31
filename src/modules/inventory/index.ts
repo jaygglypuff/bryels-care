@@ -21,7 +21,7 @@ export { getReceipt, receivingFormData, getReceiptDocument, listReceipts, export
 export * from "./receiving-state";
 export { uploadReceiptDocument, issueDownloadUrl, redeemDownload, voidAttachment, listLotDocuments, SUPPLIER_DOCUMENT_KINDS, SUPPLIER_DOCUMENT_LABELS, type SupplierDocumentKind } from "./receiving-documents";
 export { putAwayLot, putAwayOptions, putAwayQtyToBase } from "./receiving-putaway";
-export { lotsToPutAway, type PutAwayTask } from "./put-away-queue"; // consultant review flow A: released lots still in quarantine/hold/receiving
+export { lotsToPutAway, putAwayHintForLot, type PutAwayTask, type PutAwayHint } from "./put-away-queue"; // consultant review flow A: released lots still in quarantine/hold/receiving
 export {
   placeHold,
   liftHold,

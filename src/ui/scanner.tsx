@@ -24,6 +24,18 @@ type DetectorCtor = (new (opts: { formats: string[] }) => Detector) & { getSuppo
 export type ScanMode = "scanner" | "camera" | "type";
 const MODE_KEY = "bc.scan.mode";
 const TERM_KEY = "bc.scan.terminator";
+/** Set once a hardware (keyboard-wedge) scanner was seen on this device: fast key bursts ending a scan. */
+const WEDGE_KEY = "bc.scan.wedge_seen";
+
+/** A phone or tablet without a seen hardware scanner: tapping the box should open the keyboard. */
+function touchWithoutScanner(): boolean {
+  try {
+    if (localStorage.getItem(WEDGE_KEY) === "1") return false;
+  } catch {
+    /* private mode */
+  }
+  return typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches;
+}
 
 /** ZXing fallback with the same interface as BarcodeDetector (QR + Code 128 only). */
 async function zxingDetector(): Promise<Detector> {
@@ -80,12 +92,15 @@ export function Scanner({
   autoFocus = true,
   label = "Scan a label or type a number",
   placeholder = "BC:LOT:L-2610-00001 · L-2610-00001 · B-26-0001",
+  keepCase = false,
 }: {
   onScan: (value: string) => void;
   pending?: boolean;
   autoFocus?: boolean;
   label?: string;
   placeholder?: string;
+  /** Pass the text as typed (not upper-cased) to onScan, so messages show the search words as written. */
+  keepCase?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -97,11 +112,15 @@ export function Scanner({
   const [torch, setTorch] = useState<{ supported: boolean; on: boolean }>({ supported: false, on: false });
   const [flash, setFlash] = useState(false);
   const trackRef = useRef<MediaStreamTrack | null>(null);
+  // Keystroke timing: a hardware scanner types a whole code in a few milliseconds per key.
+  const keys = useRef<number[]>([]);
 
   useEffect(() => {
     try {
       const m = localStorage.getItem(MODE_KEY) as ScanMode | null;
       if (m === "camera" || m === "scanner" || m === "type") setMode(m);
+      // Usability test 2026-10-30: on a phone with no scanner seen, start in Type so a tap opens the keyboard.
+      else if (touchWithoutScanner()) setMode("type");
       const t = localStorage.getItem(TERM_KEY) as ScanTerminator | null;
       if (t && (SCAN_TERMINATORS as readonly string[]).includes(t)) setTerminator(t);
     } catch {
@@ -121,6 +140,7 @@ export function Scanner({
     (raw: string) => {
       const v = normalizeScanInput(raw);
       if (!v || !guard.current.accept(v)) return;
+      const typed = String(raw ?? "").replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim();
       setFlash(true);
       setTimeout(() => setFlash(false), 300);
       try {
@@ -128,9 +148,9 @@ export function Scanner({
       } catch {
         /* not supported */
       }
-      onScan(v);
+      onScan(keepCase ? typed : v);
     },
-    [onScan],
+    [onScan, keepCase],
   );
 
   // Keep the wedge input focused so the next scan lands in it.
@@ -283,12 +303,25 @@ export function Scanner({
             name="code"
             data-testid="scan-input"
             autoComplete="off"
-            autoCapitalize="characters"
+            autoCapitalize={keepCase ? "none" : "characters"}
             spellCheck={false}
             enterKeyHint="search"
             inputMode={mode === "scanner" ? "none" : "text"}
             placeholder={placeholder}
+            onPointerDown={(e) => {
+              // A tap with a finger on a phone where no scanner was seen: open the keyboard right away.
+              if (mode === "scanner" && e.pointerType !== "mouse" && touchWithoutScanner()) {
+                e.currentTarget.inputMode = "text";
+                setMode("type");
+              }
+            }}
             onKeyDown={(e) => {
+              const now = performance.now();
+              keys.current = [...keys.current.filter((t) => now - t < 400), now];
+              if ((e.key === "Enter" || e.key === "Tab") && keys.current.length >= 6) {
+                const gaps = keys.current.slice(1).map((t, i) => t - keys.current[i]);
+                if (gaps.every((g) => g < 35)) remember(WEDGE_KEY, "1");
+              }
               if (e.key === "Tab" && isTerminatorKey("Tab", terminator)) {
                 e.preventDefault();
                 e.currentTarget.form?.requestSubmit();
@@ -302,7 +335,7 @@ export function Scanner({
             {pending ? "Looking up…" : "Look up"}
           </Button>
         </div>
-        {mode === "scanner" && <p className="text-[12px] text-muted">Scan with a handheld scanner; the code lands here. Tap Type to use the phone keyboard.</p>}
+        {mode === "scanner" && <p className="text-[12px] text-muted">Scan with a handheld scanner; the code lands here. Or tap the box and type.</p>}
       </form>
 
       <details className="text-[13px]">

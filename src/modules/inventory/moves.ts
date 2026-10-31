@@ -29,6 +29,8 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
 import { fmtDateTime } from "@/lib/qty";
+import { fmtFriendly, parseQtyText } from "@/lib/units";
+import { qtyInputToBase } from "./units";
 import { postMovement } from "./ledger";
 import { allowedDestinationKinds, isUuid } from "./lots";
 import { claimIdempotencyKey, storeIdempotentResult } from "./command-kit";
@@ -39,7 +41,8 @@ import { getInventorySetting } from "./policy";
 /** Statuses of a box that may be moved, split or merged. */
 export const MOVABLE_BOX_STATUSES = ["open", "sealed"] as const;
 
-export type MoveSource = { kind: "box"; containerId: string } | { kind: "lot"; lotId: string; fromLocationId: string; qty: string };
+/** qtyUom: the unit the quantity was typed in (kg/g, L/mL, pcs); converted to the lot's base unit on the server. Empty = base unit. */
+export type MoveSource = { kind: "box"; containerId: string } | { kind: "lot"; lotId: string; fromLocationId: string; qty: string; qtyUom?: string | null };
 
 export type ScanMoveInput = {
   idempotencyKey: string;
@@ -159,11 +162,11 @@ async function describeTransfer(tx: Tx, ctx: AuthContext, transferId: string, fl
   const [box] = tr.containerId ? await tx.select({ id: containers.id, number: containers.containerNumber }).from(containers).where(eq(containers.id, tr.containerId)) : [];
   const postedAt = tr.completedAt ?? tr.createdAt;
   const what = box
-    ? `box ${box.number} (${lines.map((l) => `${new Decimal(l.qtyBase).toString()} ${l.baseUom} ${l.itemName}, lot ${l.lotNumber}`).join("; ")})`
-    : lines.map((l) => `${new Decimal(l.qtyBase).toString()} ${l.baseUom} of ${l.itemName}, lot ${l.lotNumber}`).join("; ");
+    ? `box ${box.number} (${lines.map((l) => `${fmtFriendly(l.qtyBase, l.baseUom)} ${l.itemName}, lot ${l.lotNumber}`).join("; ")})`
+    : lines.map((l) => `${fmtFriendly(l.qtyBase, l.baseUom)} of ${l.itemName}, lot ${l.lotNumber}`).join("; ");
   const mine = tr.requestedBy === ctx.userId;
   const message = flags.alreadyMoved
-    ? `Already moved to ${to.code} at ${fmtDateTime(postedAt)} by ${mine ? "you" : by?.name} (${tr.transferNumber}). Nothing was posted.`
+    ? `Already moved to ${to.code} at ${fmtDateTime(postedAt)} by ${mine ? "you" : by?.name} (${tr.transferNumber}). Nothing was saved again.`
     : `Moved ${what} to ${to.code} · ${to.name}. ${tr.transferNumber}.`;
   return {
     transferId: tr.id,
@@ -195,7 +198,14 @@ export async function scanMove(ctx: AuthContext, input: ScanMoveInput): Promise<
   if (src.kind === "box" && !isUuid(src.containerId)) throw new DomainError("not_found", "Box not found in your sites.");
   if (src.kind === "lot") {
     if (!isUuid(src.lotId)) throw new DomainError("not_found", "Lot not found in your sites.");
-    if (!QTY_RE.test(src.qty ?? "") || new Decimal(src.qty).lte(0)) throw new DomainError("validation", "Enter a quantity greater than zero (up to 6 decimals).");
+  }
+  // Usability test 2026-10-30: the quantity may be typed in kg/L ("20 kg"); converted to the base unit here.
+  let lotQtyBase: Decimal | null = null;
+  if (src.kind === "lot") {
+    if (!src.qtyUom && !parseQtyText(src.qty)?.unit && !QTY_RE.test(src.qty ?? "")) throw new DomainError("validation", "Enter a quantity greater than zero (up to 6 decimals).");
+    const [l] = await db.select({ baseUom: inventoryLots.baseUom }).from(inventoryLots).where(and(eq(inventoryLots.id, src.lotId), eq(inventoryLots.organizationId, ctx.organizationId))).limit(1);
+    if (!l) throw new DomainError("not_found", "Lot not found in your sites.");
+    lotQtyBase = qtyInputToBase(src.qty, src.qtyUom, l.baseUom);
   }
   const key = `scan_move:${input.idempotencyKey}`;
   const body = { source: src, toLocationId: input.toLocationId };
@@ -223,7 +233,7 @@ export async function scanMove(ctx: AuthContext, input: ScanMoveInput): Promise<
       lineSpecs = contents.map((c) => ({ lotId: c.lotId, qty: new Decimal(c.qtyBase) }));
     } else {
       fromLocationId = src.fromLocationId;
-      lineSpecs = [{ lotId: src.lotId, qty: new Decimal(src.qty) }];
+      lineSpecs = [{ lotId: src.lotId, qty: lotQtyBase! }];
     }
 
     // V-DUP: the same source and destination moved by this user moments ago.
@@ -274,7 +284,7 @@ export async function scanMove(ctx: AuthContext, input: ScanMoveInput): Promise<
         const boxed = await boxedQty(tx, lot.id, from.id);
         throw new DomainError(
           "insufficient_stock",
-          `Only ${loose.toString()} ${lot.baseUom} of lot ${lot.lotNumber} is loose at ${from.code}${boxed.gt(0) ? `; ${boxed.toString()} ${lot.baseUom} is in boxes, so scan the box to move it` : ""}.`,
+          `Only ${fmtFriendly(loose, lot.baseUom)} of lot ${lot.lotNumber} is loose at ${from.code}${boxed.gt(0) ? `; ${fmtFriendly(boxed, lot.baseUom)} is in boxes, so scan the box to move it` : ""}.`,
         );
       }
     }

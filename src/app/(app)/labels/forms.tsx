@@ -1,7 +1,7 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState, type FormEvent } from "react";
 import type { ActionState } from "@/lib/errors";
-import { Field, Input, Select, Textarea } from "@/ui/core";
+import { Button, Field, Input, Select, Textarea } from "@/ui/core";
 import { FormMessage, SubmitButton } from "@/ui/form";
 import {
   cancelAction,
@@ -17,6 +17,44 @@ import {
 type Action = (prev: ActionState, f: FormData) => Promise<ActionState>;
 const ACTIONS: Record<string, Action> = { printed: markPrintedAction, retry: retryAction, cancel: cancelAction };
 
+/** On-page confirmation for a form with a server action (ADR-083: no browser pop-ups). */
+function useOnPageConfirm(question: string | undefined) {
+  const [asking, setAsking] = useState(false);
+  const confirmed = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+    if (!question) return;
+    if (confirmed.current) {
+      confirmed.current = false;
+      setAsking(false);
+      return;
+    }
+    e.preventDefault();
+    setAsking(true);
+  };
+  const box = asking ? (
+    <div role="alertdialog" aria-label="Please confirm" className="flex flex-col gap-2 rounded-[14px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3">
+      <p className="text-[14px] font-medium text-fg">{question}</p>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="cta"
+          onClick={() => {
+            confirmed.current = true;
+            formRef.current?.requestSubmit();
+          }}
+        >
+          Yes, continue
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => setAsking(false)}>
+          Back
+        </Button>
+      </div>
+    </div>
+  ) : null;
+  return { formRef, onSubmit, box };
+}
+
 function useKey() {
   const [key] = useState(() => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`));
   return key;
@@ -25,18 +63,15 @@ function useKey() {
 /** One-button command on a job (printed / retry / cancel). */
 export function JobCommand({ jobId, kind, label, variant = "secondary", confirm }: { jobId: string; kind: "printed" | "retry" | "cancel"; label: string; variant?: "cta" | "secondary" | "danger"; confirm?: string }) {
   const [state, action] = useActionState<ActionState, FormData>(ACTIONS[kind], null);
+  const c = useOnPageConfirm(confirm);
   return (
-    <form
-      action={action}
-      onSubmit={(e) => {
-        if (confirm && !window.confirm(confirm)) e.preventDefault();
-      }}
-      className="space-y-2"
-    >
+    <form ref={c.formRef} action={action} onSubmit={c.onSubmit} className="space-y-2">
       <input type="hidden" name="jobId" value={jobId} />
-      <SubmitButton variant={variant} pendingText="Saving…" className="w-full sm:w-auto">
-        {label}
-      </SubmitButton>
+      {c.box ?? (
+        <SubmitButton variant={variant} pendingText="Saving…" className="w-full sm:w-auto">
+          {label}
+        </SubmitButton>
+      )}
       <FormMessage state={state} />
     </form>
   );
@@ -58,19 +93,14 @@ export function FailForm({ jobId }: { jobId: string }) {
 
 export function VoidForm({ jobId }: { jobId: string }) {
   const [state, action] = useActionState<ActionState, FormData>(voidAction, null);
+  const c = useOnPageConfirm("Void this label? It will be listed as superseded and must be destroyed. This cannot be undone.");
   return (
-    <form
-      action={action}
-      onSubmit={(e) => {
-        if (!window.confirm("Void this label? It will be listed as superseded and must be destroyed. This cannot be undone.")) e.preventDefault();
-      }}
-      className="space-y-2"
-    >
+    <form ref={c.formRef} action={action} onSubmit={c.onSubmit} className="space-y-2">
       <input type="hidden" name="jobId" value={jobId} />
       <Field label="Why does the label no longer match?" htmlFor={`void-${jobId}`} error={state?.fieldErrors?.reason}>
         <Input id={`void-${jobId}`} name="reason" placeholder="Repacked into a new drum" required minLength={5} />
       </Field>
-      <SubmitButton variant="danger" pendingText="Voiding…">Void label</SubmitButton>
+      {c.box ?? <SubmitButton variant="danger" pendingText="Voiding…">Void label</SubmitButton>}
       <FormMessage state={state} />
     </form>
   );
@@ -120,18 +150,18 @@ export function CreateJobForm({ entityType, entityId, templates, stations }: { e
       <input type="hidden" name="entityType" value={entityType} />
       <input type="hidden" name="entityId" value={entityId} />
       <input type="hidden" name="idempotencyKey" value={key} />
-      <Field label="Label template" htmlFor="labelTemplateId" error={fe.labelTemplateId}>
+      <Field label="Label size" htmlFor="labelTemplateId" error={fe.labelTemplateId}>
         <Select id="labelTemplateId" name="labelTemplateId" value={tpl} onChange={(e) => setTpl(e.target.value)} required>
           {templates.map((x) => (
-            <option key={x.id} value={x.id}>{x.code} · {x.media}</option>
+            <option key={x.id} value={x.id}>{x.name.includes("mm") ? x.name : `${x.media} · ${x.name}`}</option>
           ))}
         </Select>
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Copies" htmlFor="copies" error={fe.copies} hint="One per container.">
+        <Field label="How many labels?" htmlFor="copies" error={fe.copies} hint="One for each sack or container.">
           <Input id="copies" name="copies" type="number" inputMode="numeric" min={1} max={99} defaultValue={t?.copiesDefault ?? 1} key={tpl} required />
         </Field>
-        <Field label="Print station" htmlFor="printStationId" error={fe.printStationId}>
+        <Field label="Which printer?" htmlFor="printStationId" error={fe.printStationId}>
           <Select id="printStationId" name="printStationId" defaultValue={stations.length === 1 ? stations[0].id : ""} required>
             {stations.length > 1 && <option value="">Choose…</option>}
             {stations.map((s) => (
@@ -149,7 +179,7 @@ export function CreateJobForm({ entityType, entityId, templates, stations }: { e
   );
 }
 
-/** One label per container: the copies of each lot start at its container count (1 when not recorded). */
+/** One label per sack/container: the number of labels of each lot starts at the receipt's container count (1 when not recorded). */
 export function ReceiptJobsForm({ grId, templates, stations, lots }: { grId: string; templates: TemplateOpt[]; stations: StationOpt[]; lots: { lotId: string; lotNumber: string; materialName: string; containerCount: number | null }[] }) {
   const [state, action] = useActionState<ActionState, FormData>(createReceiptLabelJobsAction, null);
   const fe = state?.fieldErrors ?? {};
@@ -157,28 +187,28 @@ export function ReceiptJobsForm({ grId, templates, stations, lots }: { grId: str
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="grId" value={grId} />
-      <Field label="Label template" htmlFor="labelTemplateId" error={fe.labelTemplateId}>
+      <Field label="Label size" htmlFor="labelTemplateId" error={fe.labelTemplateId}>
         <Select id="labelTemplateId" name="labelTemplateId" required defaultValue={templates[0]?.id}>
           {templates.map((x) => (
-            <option key={x.id} value={x.id}>{x.code} · {x.media}</option>
+            <option key={x.id} value={x.id}>{x.name.includes("mm") ? x.name : `${x.media} · ${x.name}`}</option>
           ))}
         </Select>
       </Field>
       <fieldset className="space-y-2">
-        <legend className="mb-1 text-[14px] font-semibold">Labels to print (one per container)</legend>
+        <legend className="mb-1 text-[14px] font-semibold">One label for each sack or container</legend>
         {lots.map((l) => (
-          <div key={l.lotId} className="grid grid-cols-[1fr_96px] items-end gap-3" data-testid="receipt-label-lot">
+          <div key={l.lotId} className="grid grid-cols-[1fr_120px] items-end gap-3" data-testid="receipt-label-lot">
             <p className="pb-3 text-[14px]">
-              <span className="font-mono font-semibold">{l.lotNumber}</span> <span className="text-muted">· {l.materialName}{l.containerCount ? ` · ${l.containerCount} ${l.containerCount === 1 ? "container" : "containers"}` : ""}</span>
+              <span className="font-semibold">{l.materialName}</span> <span className="font-mono text-muted">· {l.lotNumber}</span>
             </p>
-            <Field label="Copies" htmlFor={`copies-${l.lotId}`} error={fe[`copies-${l.lotId}`] ?? fe.copies}>
+            <Field label="How many sacks/containers?" htmlFor={`copies-${l.lotId}`} error={fe[`copies-${l.lotId}`] ?? fe.copies}>
               <Input id={`copies-${l.lotId}`} name={`copies-${l.lotId}`} type="number" inputMode="numeric" min={1} max={99} defaultValue={Math.min(Math.max(l.containerCount ?? 1, 1), 99)} required />
             </Field>
           </div>
         ))}
       </fieldset>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Print station" htmlFor="printStationId" error={fe.printStationId}>
+        <Field label="Which printer?" htmlFor="printStationId" error={fe.printStationId}>
           <Select id="printStationId" name="printStationId" defaultValue={stations.length === 1 ? stations[0].id : ""} required>
             {stations.length > 1 && <option value="">Choose…</option>}
             {stations.map((s) => (
@@ -188,7 +218,7 @@ export function ReceiptJobsForm({ grId, templates, stations, lots }: { grId: str
         </Field>
       </div>
       <FormMessage state={state} />
-      <SubmitButton variant="cta" size="lg" pendingText="Sending…">Send {lotCount} {lotCount === 1 ? "label job" : "label jobs"} to the station</SubmitButton>
+      <SubmitButton variant="cta" size="lg" pendingText="Making the labels…">Print labels for {lotCount} {lotCount === 1 ? "lot" : "lots"}</SubmitButton>
     </form>
   );
 }

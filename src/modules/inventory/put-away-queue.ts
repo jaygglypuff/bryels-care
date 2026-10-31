@@ -1,7 +1,7 @@
 import "server-only";
 import { sql } from "drizzle-orm";
 import Decimal from "decimal.js";
-import { db } from "@/db/client";
+import { db, type Tx } from "@/db/client";
 import type { AuthContext } from "@/lib/auth/context";
 import { SECTION_LABELS, isSection, sectionForItem, sectionSql, type LocationSection } from "@/modules/masterdata";
 import { fmtStock } from "./low-stock";
@@ -152,4 +152,42 @@ export async function lotsToPutAway(ctx: AuthContext, opts: { limit?: number } =
       suggested: firstBin.get(section) ?? null,
     };
   });
+}
+
+export type PutAwayHint = { lotId: string; lotNumber: string; itemName: string; organizationId: string; siteId: string; fromCodes: string[]; suggestedCode: string | null };
+
+/**
+ * QA release hand-off (usability test 2026-10-30): where a released lot waits (quarantine, hold or
+ * receiving places not under an open QA hold) and the shelf to put it on (the same rule as
+ * lotsToPutAway). Null when none of its stock waits there. Runs in the caller's transaction (the
+ * release), so the warehouse is told in the same commit; no authorization here: the caller already
+ * decided the lot.
+ */
+export async function putAwayHintForLot(q: Tx | typeof db, lotId: string): Promise<PutAwayHint | null> {
+  const rows = await q.execute<{ lot_number: string; item_name: string; item_kind: string; material_kind: string | null; organization_id: string; site_id: string; code: string }>(sql`
+    select lot.lot_number, coalesce(m.name, p.name, '') as item_name, lot.item_kind, m.material_kind, lot.organization_id, lot.site_id, l.code
+    from inventory_lots lot
+    join inventory_balances b on b.lot_id = lot.id and b.qty_base > 0
+    join locations l on l.id = b.location_id
+    left join materials m on m.id = lot.material_id
+    left join products p on p.id = lot.product_id
+    where lot.id = ${lotId} and lot.quality_status = 'released'
+      and (lot.expires_on is null or lot.expires_on >= ${TODAY_SQL})
+      and l.kind in (${sql.join(
+        SOURCE_KINDS.map((k) => sql`${k}`),
+        sql`, `,
+      )})
+      and l.id not in (select h.location_id from quality_holds h where h.site_id = lot.site_id and h.status in ('open', 'investigating') and h.location_id is not null)
+    order by l.code`);
+  if (rows.length === 0) return null;
+  const r = rows[0];
+  const section = sectionForItem({ itemKind: r.item_kind === "product" ? "product" : "material", materialKind: r.material_kind });
+  const bins = await q.execute<{ code: string; section: string }>(sql`
+    select l.code, ${sectionSql("l", "w")} as section
+    from locations l join warehouses w on w.id = l.warehouse_id
+    where l.site_id = ${r.site_id} and l.is_active and l.status = 'active' and l.kind = 'storage'
+      and l.id not in (select h.location_id from quality_holds h where h.site_id = ${r.site_id} and h.status in ('open', 'investigating') and h.location_id is not null)
+    order by l.code asc`);
+  const bin = bins.find((b) => (isSection(b.section) ? b.section : "other") === section);
+  return { lotId, lotNumber: r.lot_number, itemName: r.item_name, organizationId: r.organization_id, siteId: r.site_id, fromCodes: [...new Set(rows.map((x) => x.code))], suggestedCode: bin?.code ?? null };
 }

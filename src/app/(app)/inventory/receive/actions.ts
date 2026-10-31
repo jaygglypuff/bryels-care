@@ -8,6 +8,7 @@ import { createReceiptDraft, postReceipt, receiveAndPost, updateReceiptDraft } f
 import { DISCREPANCY_KINDS } from "@/modules/inventory/receiving-state";
 import { receiveAgainstPurchaseOrder } from "@/modules/procurement";
 import { registerAppHooks } from "@/modules/wiring";
+import { receiptLabelsTargetSafe } from "@/app/(app)/labels/receipt-print";
 
 registerAppHooks(); // PO receiving hooks (src/modules/wiring.ts); cheap and idempotent
 
@@ -21,7 +22,7 @@ const LineSchema = z
     materialId: z.uuid({ message: "Choose a material." }),
     qty: z.string().trim().regex(QTY_RE, { message: "Enter a quantity like 25000 or 12.5." }),
     uom: z.string().trim().max(8).optional(),
-    supplierLotNumber: z.string().trim().min(1, { message: "Enter the supplier's lot number from the container label." }).max(80),
+    supplierLotNumber: z.string().trim().min(1, { message: "Enter the supplier's code from the sack or container label." }).max(80),
     brand: z.string().trim().max(80, { message: "Brand: use at most 80 characters." }).optional(),
     manufacturedOn: optDate,
     expiresOn: z.string().regex(DATE_RE, { message: "Enter the expiry date." }),
@@ -44,7 +45,7 @@ const ReceiptSchema = z
     purchaseOrderId: z.union([z.literal(""), z.uuid()]).optional(),
     intent: z.enum(["draft", "post"]),
     supplierName: z.string().trim().max(200).optional(),
-    supplierDocumentNumber: z.string().trim().min(1, { message: "Enter the delivery document number (DR / invoice)." }).max(80),
+    supplierDocumentNumber: z.string().trim().min(1, { message: "Enter the number on the supplier's paper (delivery receipt or invoice)." }).max(80),
     unplannedReasonCode: z.string().trim().max(40).optional(),
     notes: z.string().trim().max(1000).optional(),
     lines: z.array(LineSchema).min(1, { message: "Add at least one line." }).max(50),
@@ -57,8 +58,8 @@ export async function saveReceiptAction(_prev: ActionState, formData: FormData):
   let target: string;
   try {
     const ctx = await requireContext();
-    // Consultant review flow A: after posting, go straight to the receipt's labels ("Save and print labels").
-    const afterPost = (receiptId: string) => (ctx.can("inventory.label_job.create") ? `/print/lot-label/receipt/${receiptId}?posted=1` : `/inventory/receive/${receiptId}?posted=1`);
+    // Consultant review flow A + usability test 2026-10-30: after saving, "Save and print labels" opens the print preview.
+    const afterPost = (receiptId: string) => receiptLabelsTargetSafe(ctx, receiptId, { posted: true });
     let lines: unknown = [];
     try {
       lines = JSON.parse(String(formData.get("lines") ?? "[]"));
@@ -114,14 +115,14 @@ export async function saveReceiptAction(_prev: ActionState, formData: FormData):
         intent: d.intent,
         lines: header.lines.map((l, i) => ({ ...l, purchaseOrderLineId: d.lines[i].purchaseOrderLineId || null })),
       });
-      target = r.posted ? afterPost(r.receiptId) : `/inventory/receive/${r.receiptId}?saved=1`;
+      target = r.posted ? await afterPost(r.receiptId) : `/inventory/receive/${r.receiptId}?saved=1`;
     } else if (d.receiptId) {
       await updateReceiptDraft(ctx, d.receiptId, header);
       if (d.intent === "post") await postReceipt(ctx, { receiptId: d.receiptId });
-      target = d.intent === "post" ? afterPost(d.receiptId) : `/inventory/receive/${d.receiptId}?saved=1`;
+      target = d.intent === "post" ? await afterPost(d.receiptId) : `/inventory/receive/${d.receiptId}?saved=1`;
     } else if (d.intent === "post") {
       const r = await receiveAndPost(ctx, { idempotencyKey: d.idempotencyKey, ...header });
-      target = afterPost(r.receiptId);
+      target = await afterPost(r.receiptId);
     } else {
       const r = await createReceiptDraft(ctx, { idempotencyKey: d.idempotencyKey, ...header });
       target = `/inventory/receive/${r.receiptId}?saved=1`;

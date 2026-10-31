@@ -16,7 +16,7 @@ tablet. Record each row as Pass / Fail with a screen recording or photo (AC-20).
 | P-2 | Devices: at least one Android phone (Chrome, D1 in `docs/testing.md` §7) and one tablet (D3). An iPhone (Safari, D2) if the company uses them. Write the model and browser version in the results table. | ☐ |
 | P-3 | Demo or staging data only (never the production database for this test). Demo accounts use the password `demo1234`. | ☐ |
 | P-4 | People: a site manager (approves devices, resolves conflicts), a warehouse operator (counts), a production operator (weighs), a second production operator (checker). Demo: `manager.nfd@`, `warehouse.nfd@`, `operator.nfd@`, `checker.nfd@bryels-care.test`. | ☐ |
-| P-5 | A count is released (Warehouse › Stock counts › open the planned count › **Release and freeze**) with the warehouse operator as a counter. | ☐ |
+| P-5 | A count is released (Warehouse › Stock counts › open the planned count › **Start count**, then **Yes, start the count**) with the warehouse operator as a counter. | ☐ |
 | P-6 | A batch is in process with its line clearance signed (Production › Batches; demo batch `B-26-0004`). | ☐ |
 | P-7 | Agree the clock-difference threshold to watch (A-OFF-05, default 10 minutes; Q-TST-04). | ☐ |
 

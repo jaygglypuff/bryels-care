@@ -19,7 +19,7 @@ function JobCard({ j, canAct }: { j: LabelJobView; canAct: boolean }) {
         <div className="min-w-0">
           <p className="break-all font-mono text-[16px] font-semibold">{j.entityNumber}</p>
           <p className="text-[13px] text-muted">
-            {j.templateCode} · {j.media} · {j.copies} {j.copies === 1 ? "copy" : "copies"}
+            Label size {j.media} · {j.copies} {j.copies === 1 ? "label" : "labels"}
             {j.reprintNo > 0 ? ` · REPRINT ${j.reprintNo}` : ""}
             {j.statusAtPrint ? ` · status at print ${STATUS_AT_PRINT[j.statusAtPrint] ?? j.statusAtPrint}` : ""}
           </p>
@@ -100,7 +100,7 @@ export default async function StationPage({ searchParams }: { searchParams: Prom
             {q.printed.map((j) => (
               <li key={j.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <Link href={`/labels/jobs/${j.id}`} className="min-w-0 break-all font-mono text-primary-text hover:underline">{j.entityNumber}</Link>
-                <span className="text-muted">{j.templateCode} · {j.copies}× · {j.printedByName} {fmtDateTime(j.printedAt)}{j.reprintNo ? ` · REPRINT ${j.reprintNo}` : ""}</span>
+                <span className="text-muted">{j.media} · {j.copies}× · {j.printedByName} {fmtDateTime(j.printedAt)}{j.reprintNo ? ` · REPRINT ${j.reprintNo}` : ""}</span>
                 <JobStatus status={j.status} voided={!!j.voidedAt} />
               </li>
             ))}

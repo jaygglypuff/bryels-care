@@ -1,8 +1,9 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState, type FormEvent } from "react";
 import { AlertTriangle, ChevronDown, Plus, Trash2 } from "lucide-react";
 import type { ActionState } from "@/lib/errors";
 import { SECTION_LABELS, isSection } from "@/lib/location-sections";
+import { fmtFriendly, friendlyUnit, normalizeUnit, toBaseQty, unusualAmount } from "@/lib/units";
 import { Button, Card, Field, Input, Select, Textarea } from "@/ui/core";
 import { FormMessage, SubmitButton } from "@/ui/form";
 import { saveReceiptAction } from "./actions";
@@ -27,6 +28,11 @@ type Material = {
   section?: string;
   units: string[];
   brand?: string | null;
+  /** ADR-076 standard pack (e.g. 25 kg); the receive form starts in its unit. */
+  standardPackQty?: string | null;
+  standardPackUom?: string | null;
+  /** Last posted receipts of this material, base unit (for the "is this amount right?" question). */
+  pastQtyBase?: string[];
 };
 type Location = { id: string; code: string; name: string; kind: string; section?: string };
 type Supplier = { id: string; code: string; name: string; qualityStatus: string };
@@ -62,7 +68,49 @@ export type ReceiptFormInitial = {
   lines: ReceiptFormLine[];
 };
 
-type Line = ReceiptFormLine & { key: number; expiryTouched: boolean; purchaseOrderLineId?: string; po?: PoFormLine; skip?: boolean; notOnPo?: boolean };
+type Line = ReceiptFormLine & { key: number; expiryTouched: boolean; purchaseOrderLineId?: string; po?: PoFormLine; skip?: boolean; notOnPo?: boolean; amountOk?: boolean };
+
+/**
+ * The unit a receive line starts in (usability test 2026-10-30: Palm Oil started in g and "50" saved
+ * 50 g): the material's standard pack unit (ADR-076) when it can be entered, else kg for gram items,
+ * L for millilitre items, pcs for count items.
+ */
+function startUnit(mat: Material | undefined): string {
+  if (!mat) return "";
+  const pack = mat.standardPackUom ?? "";
+  if (pack && mat.units.includes(pack)) return pack;
+  const f = friendlyUnit(mat.baseUom);
+  return mat.units.includes(f) || f === mat.baseUom ? f : mat.baseUom;
+}
+
+/** The standard pack in the base unit, when it is a plain unit (kg/g, L/mL, pcs). */
+function packBase(mat: Material): string | null {
+  if (!mat.standardPackQty) return null;
+  const r = toBaseQty(mat.standardPackQty, mat.standardPackUom ?? mat.baseUom, mat.baseUom);
+  return r.ok ? r.qtyBase.toString() : null;
+}
+
+type AmountQuestion = { key: number; text: string; keepLabel: string; change: { uom: string; label: string } };
+
+/** "50 g of Palm Oil? Most deliveries are 25 kg sacks." or null when the amount looks normal. */
+function amountQuestion(l: Line, mat: Material | undefined): AmountQuestion | null {
+  if (!mat || l.skip || l.amountOk || !l.qty.trim()) return null;
+  const unit = normalizeUnit(l.uom) ?? l.uom;
+  const r = toBaseQty(l.qty, unit, mat.baseUom);
+  if (!r.ok) return null; // a unit the form cannot convert (a pack unit): the server converts and checks
+  const pack = packBase(mat);
+  const u = unusualAmount({ qtyBase: r.qtyBase, baseUom: mat.baseUom, typedQty: l.qty, typedUnit: unit, packQtyBase: pack, pastQtyBase: mat.pastQtyBase ?? [] });
+  if (!u) return null;
+  const ref = fmtFriendly(u.referenceBase, mat.baseUom);
+  const container = mat.baseUom === "g" ? "sacks" : "containers";
+  const amountTyped = `${l.qty.trim()} ${unit}`;
+  return {
+    key: l.key,
+    text: `${amountTyped} of ${mat.name}? ${pack ? `Most deliveries are ${ref} ${container}.` : `Past deliveries were about ${ref}.`}`,
+    keepLabel: `Yes, ${amountTyped}`,
+    change: { uom: u.suggestUnit, label: `Change to ${l.qty.trim()} ${u.suggestUnit}` },
+  };
+}
 
 const DISCREPANCIES = [
   ["", "No problem"],
@@ -131,7 +179,7 @@ export function ReceiveForm({
       key,
       materialId,
       qty: "",
-      uom: mat?.baseUom ?? "",
+      uom: startUnit(mat),
       supplierLotNumber: "",
       manufacturedOn: "",
       expiresOn: defaultExpiry(mat, ""),
@@ -160,8 +208,9 @@ export function ReceiveForm({
         if (l.key !== key) return l;
         const n = { ...l, ...patch };
         const mat = matOf(n.materialId);
+        if ("qty" in patch || "uom" in patch || "materialId" in patch) n.amountOk = false;
         if ("materialId" in patch) {
-          n.uom = mat?.baseUom ?? "";
+          n.uom = startUnit(mat);
           n.locationId = suggestedLocation(mat, locations, defaultLocationId);
         }
         if (!n.expiryTouched && ("materialId" in patch || "manufacturedOn" in patch)) n.expiresOn = defaultExpiry(mat, n.manufacturedOn);
@@ -174,7 +223,7 @@ export function ReceiveForm({
   // Lines are sent in screen order (skipped PO lines left out); field errors come back as lines.<index>.<field>.
   const indexOf = new Map(sent.map((l, i) => [l.key, i]));
   const payload = JSON.stringify(
-    sent.map(({ key: _k, expiryTouched: _e, po: _p, skip: _s, notOnPo, lineId, purchaseOrderLineId, ...rest }) => ({
+    sent.map(({ key: _k, expiryTouched: _e, po: _p, skip: _s, amountOk: _a, notOnPo, lineId, purchaseOrderLineId, ...rest }) => ({
       ...rest,
       brand: rest.brand?.trim() || matOf(rest.materialId)?.brand || "",
       lineId: lineId ?? "",
@@ -183,9 +232,25 @@ export function ReceiveForm({
     })),
   );
   const today = manilaToday();
+  // On-page question before saving an unusual amount (no browser pop-up).
+  const formRef = useRef<HTMLFormElement>(null);
+  const [asking, setAsking] = useState(false);
+  const questions = asking ? sent.map((l) => amountQuestion(l, matOf(l.materialId))).filter((x): x is AmountQuestion => !!x) : [];
+  const onSubmit = (e: FormEvent<HTMLFormElement>) => {
+    const open = sent.map((l) => amountQuestion(l, matOf(l.materialId))).filter(Boolean);
+    if (open.length > 0) {
+      e.preventDefault();
+      setAsking(true);
+      document.getElementById(`line-${open[0]!.key}-qty`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  };
+  const answer = (key: number, patch: Partial<Line>) => {
+    setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch, amountOk: true } : l)));
+  };
+  const allAnswered = asking && questions.length === 0;
 
   return (
-    <form action={action} className="space-y-4">
+    <form ref={formRef} action={action} onSubmit={onSubmit} className="space-y-4">
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
       <input type="hidden" name="receiptId" value={initial?.receiptId ?? ""} />
       <input type="hidden" name="purchaseOrderId" value={po?.purchaseOrderId ?? ""} />
@@ -216,7 +281,7 @@ export function ReceiveForm({
               </datalist>
             </Field>
           )}
-          <Field label="Delivery receipt or invoice no." htmlFor="supplierDocumentNumber" error={fe.supplierDocumentNumber} hint="The number on the supplier's paper.">
+          <Field label="Number on the supplier's paper" htmlFor="supplierDocumentNumber" error={fe.supplierDocumentNumber} hint="The delivery receipt or invoice number.">
             <Input id="supplierDocumentNumber" name="supplierDocumentNumber" required autoComplete="off" defaultValue={initial?.supplierDocumentNumber} />
           </Field>
           {!po && (
@@ -250,6 +315,8 @@ export function ReceiveForm({
         const storeIn = mat?.section ? storageBySection[mat.section] ?? [] : [];
         const moreErrors = ["manufacturedOn", "retestOn", "containerCount", "locationId", "discrepancyKind", "discrepancyNote"].some((f) => err(f));
         const title = mat ? `${mat.name}` : `Item ${pos + 1}`;
+        const question = questions.find((q) => q.key === l.key);
+        const pack = mat ? packBase(mat) : null;
         return (
           <Card key={l.key} className={`@container ${l.skip ? "opacity-60" : ""}`} aria-labelledby={id("title")} data-testid={`receipt-line-${pos + 1}`}>
             <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
@@ -294,7 +361,7 @@ export function ReceiveForm({
 
                 {/* Main fields: 1 column on a phone, 2 on a portrait tablet card, 3–4 on a wide card. */}
                 <div className="grid grid-cols-1 gap-4 @md:grid-cols-2 @4xl:grid-cols-4">
-                  <Field label="Quantity received" htmlFor={id("qty")} error={err("qty") ?? err("uom")} hint={mat ? (mat.baseUom === "g" ? "e.g. 25 kg" : `Counted in ${mat.baseUom}`) : undefined}>
+                  <Field label="How much came?" htmlFor={id("qty")} error={err("qty") ?? err("uom")} hint={mat ? (pack ? `Usually ${fmtFriendly(pack, mat.baseUom)} per ${mat.baseUom === "g" ? "sack" : mat.baseUom === "mL" ? "container" : "pack"}. Check the unit.` : `Check the unit: ${mat.units.join(", ")}.`) : undefined}>
                     {/* Fixed-width unit box beside a flexible number box: no overlap at any width. */}
                     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_96px] items-center gap-2">
                       <Input id={id("qty")} inputMode="decimal" autoComplete="off" value={l.qty} onChange={(e) => update(l.key, { qty: e.target.value })} required className="tabular" />
@@ -305,8 +372,21 @@ export function ReceiveForm({
                         {!mat && !l.uom && <option value="">—</option>}
                       </Select>
                     </div>
+                    {question && (
+                      <div role="alertdialog" aria-label="Is this amount right?" className="mt-2 flex flex-col gap-2 rounded-[14px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3" data-testid={`amount-question-${pos + 1}`}>
+                        <p className="text-[15px] font-semibold text-fg">{question.text}</p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" variant="secondary" size="lg" onClick={() => answer(l.key, {})}>
+                            {question.keepLabel}
+                          </Button>
+                          <Button type="button" variant="cta" size="lg" onClick={() => answer(l.key, { uom: question.change.uom })}>
+                            {question.change.label}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </Field>
-                  <Field label="Supplier lot no." htmlFor={id("slot")} error={err("supplierLotNumber")} hint="From the label on the sack, drum or box.">
+                  <Field label="Supplier's code on the sack" htmlFor={id("slot")} error={err("supplierLotNumber")} hint="The lot number on the supplier's label (sack, drum or box).">
                     <Input id={id("slot")} autoComplete="off" value={l.supplierLotNumber} onChange={(e) => update(l.key, { supplierLotNumber: e.target.value })} required />
                   </Field>
                   <Field label="Expiry date" htmlFor={id("exp")} error={err("expiresOn")} hint={mat?.shelfLifeDays && !l.expiryTouched ? `Filled in from the ${mat.shelfLifeDays}-day shelf life. Change it to the date on the label.` : "The date on the supplier's label."}>
@@ -329,7 +409,7 @@ export function ReceiveForm({
 
                 {l.notOnPo && (
                   <div className="mt-4">
-                    <Field label="Why did this come? (not on the order)" htmlFor={id("whynot")} error={err("discrepancyNote")} hint="Saved as a draft; purchasing approves it before posting.">
+                    <Field label="Why did this come? (not on the order)" htmlFor={id("whynot")} error={err("discrepancyNote")} hint="Kept as not finished; purchasing approves it before it is saved.">
                       <Input id={id("whynot")} value={l.discrepancyNote} onChange={(e) => update(l.key, { discrepancyNote: e.target.value })} required />
                     </Field>
                   </div>
@@ -413,17 +493,22 @@ export function ReceiveForm({
 
       {fe.lines && <p className="text-[13px] text-[var(--bad-fg)]">{fe.lines}</p>}
       <FormMessage state={state} />
+      {allAnswered && (
+        <p role="status" className="rounded-[10px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-3 py-2 text-[14px] text-[var(--ok-fg)]">
+          Thank you. Now tap the save button again.
+        </p>
+      )}
       <div className="sticky bottom-[calc(76px+env(safe-area-inset-bottom))] z-20 -mx-4 flex flex-wrap lg:bottom-0 items-center justify-between gap-3 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-[16px] sm:border">
         <p className="text-[13px] text-muted">
-          {sent.length} {sent.length === 1 ? "item" : "items"} · posting makes {sent.length} {sent.length === 1 ? "lot" : "lots"}
+          {sent.length} {sent.length === 1 ? "item" : "items"} · saving makes {sent.length} {sent.length === 1 ? "lot" : "lots"}
         </p>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           <SubmitButton name="intent" value="draft" variant="secondary" size="lg" pendingText="Saving…" className="flex-1 sm:flex-none" formNoValidate>
-            Save draft
+            Save for later
           </SubmitButton>
           {canPost && (
-            <SubmitButton name="intent" value="post" variant="cta" size="lg" pendingText="Posting…" className="flex-1 sm:flex-none">
-              {printLabels ? "Save and print labels" : "Post receipt"}
+            <SubmitButton name="intent" value="post" variant="cta" size="lg" pendingText="Saving…" className="flex-1 sm:flex-none">
+              {printLabels ? "Save and print labels" : "Save receipt"}
             </SubmitButton>
           )}
         </div>

@@ -40,7 +40,7 @@ export default async function ReceivePage({ searchParams }: { searchParams: Prom
       actions={
         <>
           <Help screen="inventory.receive" />
-          {ctx.can("procurement.goods_receipt.view") && <LinkButton href="/inventory/receipts" variant="secondary">Receipts & drafts</LinkButton>}
+          {ctx.can("procurement.goods_receipt.view") && <LinkButton href="/inventory/receipts" variant="secondary">Receipts &amp; not finished</LinkButton>}
           {ctx.can("inventory.movement.post") && <LinkButton href="/inventory/receive/put-away" variant="secondary">Put away</LinkButton>}
         </>
       }

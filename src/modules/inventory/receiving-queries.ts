@@ -81,11 +81,21 @@ export async function receivingFormData(ctx: AuthContext) {
     .select({ supplierId: supplierMaterials.supplierId, materialId: supplierMaterials.materialId, brand: supplierMaterials.brand, packQty: supplierMaterials.packQty, packUom: supplierMaterials.packUom })
     .from(supplierMaterials)
     .where(and(eq(supplierMaterials.organizationId, ctx.organizationId), or(sql`${supplierMaterials.brand} is not null`, sql`${supplierMaterials.packQty} is not null`)));
+  // Usability test 2026-10-30: the last posted receipts per material (base unit), so the form can ask
+  // "50 g of Palm Oil? Most deliveries are 25 kg sacks." before saving an unusual amount.
+  const past = await db.execute<{ material_id: string; qty: string }>(sql`
+    select material_id, qty_base::text as qty from (
+      select l.material_id, l.qty_base, row_number() over (partition by l.material_id order by g.posted_at desc nulls last) as rn
+      from goods_receipt_lines l join goods_receipts g on g.id = l.goods_receipt_id
+      where g.organization_id = ${ctx.organizationId} and g.status = 'posted'
+    ) x where rn <= 10`);
+  const pastBy = new Map<string, string[]>();
+  for (const r of past) pastBy.set(r.material_id, [...(pastBy.get(r.material_id) ?? []), r.qty]);
   return {
     supplierPacks: packs,
     // Units from the approved conversions (W2G UOM service), incl. a material's own pack units.
     // S6 (ADR-077): the section the item belongs in (raw material → Raw materials, packaging → Packaging).
-    materials: await Promise.all(mats.map(async (m) => ({ ...m, section: sectionForItem({ itemKind: "material", materialKind: m.materialKind }), units: await enterableUnits(db, ctx.organizationId, m.baseUom, m.id) }))),
+    materials: await Promise.all(mats.map(async (m) => ({ ...m, pastQtyBase: pastBy.get(m.id) ?? [], section: sectionForItem({ itemKind: "material", materialKind: m.materialKind }), units: await enterableUnits(db, ctx.organizationId, m.baseUom, m.id) }))),
     locations: locs,
     // Storage places per section, to tell the operator where the stock goes after the QA check.
     storageBySection: await storageCodesBySection(ctx.currentSiteId),
