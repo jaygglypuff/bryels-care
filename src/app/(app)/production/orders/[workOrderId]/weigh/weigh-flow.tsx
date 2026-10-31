@@ -1,14 +1,14 @@
 "use client";
 import Decimal from "decimal.js";
 import Link from "next/link";
-import { AlertTriangle, Camera, CheckCircle2, Circle, UserCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, UserCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { fmtDate, fmtMass, fmtQty } from "@/lib/qty";
 import type { WeighView } from "@/modules/production";
 import { Button, cx, Input, Select } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { Keypad, KeypadField } from "@/ui/keypad";
-import { Scanner } from "@/ui/scanner";
+import { ScanOrPick } from "@/ui/scan-or-pick";
 import { Chip } from "@/ui/status";
 import {
   checkWeighingAction,
@@ -159,7 +159,6 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
   // UX audit 2026-10-31 item 5: the label is scanned with the camera (or a scanner); typing the last 4
   // stays only as the fallback for a damaged label (the lot confirmation of ADR-080 §3 is kept).
   const [typeLast4, setTypeLast4] = useState(false);
-  const [camera, setCamera] = useState(false);
   const [scanNote, setScanNote] = useState<string | null>(null);
   const [active, setActive] = useState<"lot" | "qty">("qty");
   const onScan = (raw: string) => {
@@ -170,7 +169,6 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
       setLotIdx(i);
       setLotCode(`BC:LOT:${card.lots[i].lotNumber}`);
       setScanNote(null);
-      setCamera(false);
     } else {
       setLotCode("");
       setScanNote(`This label says ${code}. Take a lot from the list for ${card.materialName}.`);
@@ -284,14 +282,22 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
                 <p className="inline-flex items-center gap-2 text-[16px] font-semibold text-[var(--ok-fg)]">
                   <CheckCircle2 size={18} aria-hidden /> Label scanned: lot {lotCode.slice(7)}
                 </p>
-              ) : !camera ? (
-                <Button type="button" variant="secondary" size="lg" onClick={() => setCamera(true)}>
-                  <Camera size={18} aria-hidden /> Scan the lot label
-                </Button>
               ) : (
-                <div className="rounded-[14px] bg-surface-2 p-3">
-                  <Scanner onScan={onScan} autoFocus={false} label="Point the camera at the lot label on the container" placeholder="Lot label" />
-                </div>
+                // ADR-098 ScanOrPick: the set-aside lots are listed, but the confirmation is a SCAN of the
+                // container's label (A-SCAN-11 "a tap is not a scan"; ADR-080 §3 lot confirmation).
+                <ScanOrPick
+                  key={`scan-${card.batchMaterialId}`}
+                  kind="lot"
+                  mode="emit"
+                  label="Scan the lot label on the container"
+                  hint="Camera or handheld scanner. The lot must be one set aside for this ingredient."
+                  candidatesLabel="Lots you may use"
+                  candidates={card.lots.map((l) => ({ value: l.lotId, title: card.materialName, detail: `lot ${l.lotNumber} · ${l.locationName || l.locationCode}`, code: l.lotNumber, codes: [l.lotNumber] }))}
+                  allowTap={false}
+                  onlyCandidates
+                  search={false}
+                  onEmit={(value, c) => onScan(c?.code ?? value)}
+                />
               )}
               {scanNote && <p className="text-[14px] text-[var(--bad-fg)]">{scanNote}</p>}
               {fe.lotConfirm && <p className="text-[14px] text-[var(--bad-fg)]">{fe.lotConfirm}</p>}

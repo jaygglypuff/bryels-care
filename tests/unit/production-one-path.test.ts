@@ -192,6 +192,6 @@ describe("grep: no module builds a work link to /production/${batchId}", () => {
     const src = readFileSync(path.join(ROOT, "src/app/(app)/production/orders/[workOrderId]/step/[n]/packaging-box.tsx"), "utf8");
     expect(src).not.toMatch(/scan or type it/i);
     expect(src).not.toMatch(/name="lotRef"[^>]*font-mono/);
-    expect(src).toContain("Scan with camera");
+    expect(src).toContain("<ScanOrPick");
   });
 });

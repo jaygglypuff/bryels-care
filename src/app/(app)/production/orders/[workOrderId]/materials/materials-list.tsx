@@ -4,6 +4,7 @@ import { useState } from "react";
 import { fmtDate, fmtMass, fmtQty } from "@/lib/qty";
 import { Button, cx, Input } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
+import { ScanOrPick } from "@/ui/scan-or-pick";
 import { pickAction } from "../flow-actions";
 
 type Line = {
@@ -262,16 +263,22 @@ function MoreDetails({
           <input type="hidden" name="batchId" value={batchId} />
           <input type="hidden" name="batchMaterialId" value={line.id} />
           <input type="hidden" name="pick" value="taken" />
-          <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-[14px] font-medium">
-            Scan the lot label
-            <Input
-              id={`lot-${line.id}`}
+          <div className="min-w-[220px] flex-1">
+            {/* ADR-098: the site asks to scan each label; a tap is not a scan (A-SCAN-11), so only scanning fills it. */}
+            <ScanOrPick
+              kind="lot"
               name="lotCode"
-              autoComplete="off"
-              placeholder="BC:LOT:…"
-              className="min-h-[52px] font-mono text-[16px]"
+              submit="code"
+              label="Scan the lot label"
+              hint="Camera or handheld scanner."
+              candidatesLabel="Lot to take"
+              candidates={line.lots.map((l) => ({ value: l.lotNumber, title: line.name, detail: `lot ${l.lotNumber} · ${l.place}`, code: l.lotNumber, codes: [l.lotNumber] }))}
+              allowTap={false}
+              onlyCandidates
+              search={false}
+              required
             />
-          </label>
+          </div>
           <SubmitButton size="lg">Taken</SubmitButton>
           {(error || fe[`lot-${line.id}`]) && (
             <p className="w-full text-[13px] text-[var(--bad-fg)]">

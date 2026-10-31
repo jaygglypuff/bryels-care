@@ -41,7 +41,7 @@ Each step has its own screen: what to do, up to 3 things to write down, and one 
 2. **Which label?** The box **Labels for this batch** shows a small picture of the label: product, lot number, expiry. Use only labels printed for this batch. Tap **Print labels for this batch (N labels)**, open them and print. Stick one label on each bar or box. Labels can only be printed from this step on, because printing fixes the lot number and the expiry.
 3. Wrap the bars. Type **How many did you use?** and **How many were spoiled?** on the keypad.
 4. Tap **Step done**. The system records the wrapper lot for this batch. Left-over wrappers are counted at Finish.
-5. If no wrappers were on the list (older products), the screen shows the wrappers and labels that are ready to use at your site as big cards: name, lot, shelf and how many. **Tap the one you took** (check the lot number on its box or roll), or tap **Scan with camera** and point the camera at its label. Say how many you took and tap **I took these**. You never type a code.
+5. If no wrappers were on the list (older products), the screen shows the wrappers and labels that are ready to use at your site as big cards: name, lot, shelf and how many. **Tap the one you took** (check the lot number on its box or roll), or tap **Scan** and point the camera (or the handheld scanner) at its label, or **Find by name**. Say how many you took and tap **I took these**. You never type a code.
 
 ## After the last step
 

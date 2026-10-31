@@ -30,7 +30,7 @@ function OwnCheck(p: Props) {
   return (
     <section className="grid gap-3 rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" aria-label="Your check" data-testid="own-check">
       <h2 className="text-[22px] font-semibold text-fg">
-        {p.viewer.displayName}, did you check {step.name}
+        {p.viewer.displayName}, did you check {plainWords(step.name)}
         {step.record?.conductedBy ? ` done by ${step.record.conductedBy}` : ""}?
       </h2>
       <p className="text-[15px] text-muted">You sign with your own account. Look at the work first.</p>
@@ -76,7 +76,7 @@ function StepCheck(p: Props) {
     return (
       <section className="rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" aria-label="Second check">
         <h2 className="text-[22px] font-semibold text-fg">Second check needed</h2>
-        <p className="mt-1 text-[16px] text-muted">Ask someone to check {step.name}. They pick their name here, or open this step on their own phone (My work shows &quot;Check {step.name.toLowerCase()}&quot;).</p>
+        <p className="mt-1 text-[16px] text-muted">Ask someone to check {plainWords(step.name)}. They pick their name here, or open this step on their own phone (My work shows &quot;Check {step.name.toLowerCase()}&quot;).</p>
         {others.length ? (
           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {others.map((c) => (
@@ -97,7 +97,7 @@ function StepCheck(p: Props) {
       <input type="hidden" name="stepKind" value={step.kind} />
       <input type="hidden" name="checkerId" value={who.id} />
       <h2 className="text-[22px] font-semibold text-fg">
-        {who.displayName}, you checked {step.name}
+        {who.displayName}, you checked {plainWords(step.name)}
         {step.record?.conductedBy ? ` done by ${step.record.conductedBy}` : ""}?
       </h2>
       {p.passwordRequired && (
@@ -653,7 +653,7 @@ function FieldsCard(p: Props) {
               {f.valueKind === "numeric" ? (
                 <KeypadField
                   id={`f-${f.id}`}
-                  label={fieldQuestion(f.code, f.name) ? `${fieldQuestion(f.code, f.name)} (${f.name})` : f.name}
+                  label={fieldQuestion(f.code, f.name) ? `${fieldQuestion(f.code, f.name)} (${plainWords(f.name)})` : plainWords(f.name)}
                   unit={f.uom}
                   value={values[f.id] ?? ""}
                   active={active === f.id}

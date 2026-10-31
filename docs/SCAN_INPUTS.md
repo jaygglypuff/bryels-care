@@ -89,26 +89,22 @@ candidates on the phone; **one → hidden** = a single candidate is chosen and s
 | `/maintenance/*` | Which machine? | equipment | Drop-down by name | unchanged (picked by name; no code typed). Equipment labels (`BC:EQP`) are not a ScanOrPick kind yet | n/a |
 | `/procurement/returns/[id]` | Which lot? | rejected lot + place | Drop-down | tap · scan · words (list) | ✓ |
 
-## Owned by the production / labels pass (not changed here)
+## Production (adopted by the production pass, one path for production work 2026-10-31)
 
-Two other engineers own `src/app/(app)/production/**`, `src/app/(app)/labels/**` and `src/app/print/**` right now. These
-fields should adopt `<ScanOrPick>` (API below). The server side already improved for them: `resolveLotRef` and
-`resolveLocationRef` now refuse the placeholder ("BC:LOT:…") and labels of another kind in plain words.
+The old batch workspace forms are gone (`/production/[batchId]` is a read-only batch record), so the packaging,
+transfer and step fields of that page no longer exist. Production fields now:
 
-| Route | Field | Identifies | Today | Should become |
+| Route | Field | Identifies | Setup | Done |
 |---|---|---|---|---|
-| `/production/[batchId]` (exec-forms) dispense | `lotRef` "BC:LOT:… or lot number" | lot | Text box | `kind="lot"` candidates = lots set aside for the ingredient |
-| `/production/[batchId]` dispense | `locationRef` "BC:LOC:… or code, e.g. A-01" | shelf | Text box | `kind="location"` candidates = chosen lot's `places`, `hideWhenSingle` |
-| `/production/[batchId]` packaging step | `lotRef` "BC:LOT:…" (**the owner's screenshot**) | packaging lot | Text box | `kind="lot"` candidates = packaging lots set aside |
-| `/production/[batchId]` packaging step | `locationRef` "Location (if several) e.g. PKG-01" (**the owner's screenshot**) | shelf | Text box | `kind="location"` candidates = places of the chosen lot, `hideWhenSingle` |
-| `/production/[batchId]` transfer | `locationRef` "BC:LOC:QUA-01" | shelf | Text box | `kind="location"` candidates = allowed QA places |
-| `/production/[batchId]` scale / equipment | `equipmentRef` | equipment | Drop-down | (equipment kind not in ScanOrPick yet) |
-| `/production/[batchId]/finish` | `locationRef` | shelf | Drop-down | `kind="location"` |
-| `/production/orders/[id]/materials` | `lotCode` "BC:LOT:…" | lot | Text box | `kind="lot"` candidates = set-aside lots |
-| `/production/orders/[id]/weigh` | `lotConfirm` "BC:LOT:…" | lot | Text box | `kind="lot"`, `onlyCandidates` |
-| `/production/orders/[id]/step/[n]` packaging box | `lotRef` | lot | Text box | `kind="lot"` |
-| `/production/staging/[batchId]` | lot "BC:LOT:L-2610-00042", staging place "BC:LOC:…" | lot, shelf | Text boxes | `kind="lot"` + `kind="location"` |
-| `/labels/**`, `/print/**` | reprint reason, copies | — | Text | no lot/box identified by typing (labels pass to confirm) |
+| `/production/orders/[id]/step/[n]` packaging box (no packaging lines) | `lotRef` + `locationRef` | packaging lot, shelf | `kind="lot"` candidates = released packaging lots at the site (tap · scan · words); then `kind="location"` = places of the chosen lot, `hideWhenSingle`, `onlyCandidates` | ✓ |
+| `/production/orders/[id]/step/[n]` packaging box (packaging lines) | — | — | the taken lot is shown; nothing to identify | ✓ |
+| `/production/orders/[id]/weigh` | `lotConfirm` | lot | `kind="lot"`, `mode="emit"`, `allowTap={false}`, `onlyCandidates` (a tap is not a scan, A-SCAN-11; ADR-080 §3); typing the last 4 only for a damaged label | ✓ |
+| `/production/orders/[id]/weigh/more` ("Other ways to weigh", exec-forms `WeighForm`) | `lotRef` + `locationRef` | lot, shelf | `kind="lot"` candidates = usable lots (FEFO) with `places`; `kind="location"` `hideWhenSingle` | ✓ |
+| `/production/orders/[id]/materials` (setting scan_lots) | `lotCode` | lot | `kind="lot"`, `allowTap={false}`, `onlyCandidates`, candidates = the lot to take | ✓ |
+| `/production/[batchId]/finish` | `locationRef` | hold area | `kind="location"`, candidates = hold areas, `onlyCandidates` | ✓ |
+| `/production/staging/[batchId]` ("Lots and sheets") QA substitution | `substituteLotCode` | lot | `kind="lot"` scan · words | ✓ (scan-to-stage removed: Materials list) |
+| step card equipment | `equipmentRef` | equipment | big radio cards (equipment kind not in ScanOrPick yet) | open |
+| `/labels/**`, `/print/**` | reprint reason, copies | — | no lot/box identified by typing (labels pass to confirm) | — |
 
 ## Component API (for adopters)
 

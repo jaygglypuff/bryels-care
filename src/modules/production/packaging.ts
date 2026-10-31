@@ -211,7 +211,7 @@ export async function packagingBlockers(q: DbOrTx, batch: BatchRow, step: Snapsh
     // itself; only when nothing is waiting to be recorded must the lot be scanned or typed.
     const { packagingLinesOf } = await import("./packaging-flow");
     const line = (await packagingLinesOf(q, batch)).some((l) => l.plan.length > 0);
-    if (!line) out.push({ message: "No wrappers or labels are recorded for this batch. Scan or type the lot you used.", exceptionable: false });
+    if (!line) out.push({ message: "No wrappers or labels are recorded for this batch. Tap the wrapper or label you took (or scan its label) above.", exceptionable: false });
   }
   for (const { r, materialName, lotNumber } of rows) {
     if (!r.countedAt) continue;

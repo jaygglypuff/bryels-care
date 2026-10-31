@@ -8,13 +8,14 @@ import { fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
 /** Staging quantities in grams with one decimal: what the operator reads on the container and the scale. */
 const g = (v: string) => fmtQty(v, "g", 1);
 import { batchSheets, canSeeStaging, continueHref, flowHref, getStagingView, type StagingView } from "@/modules/production";
-import { Card, CardTitle, Field, Input, LinkButton, PageHeader, Select, Textarea } from "@/ui/core";
+import { Card, CardTitle, Field, LinkButton, PageHeader, Select, Textarea } from "@/ui/core";
 import { Help } from "@/ui/help/help";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { generateSheetAction, substitutionAction } from "../../work-orders/actions";
 import { CommandForm } from "../../work-orders/command-form";
 import { NextStep, PageIntro } from "@/ui/guide";
+import { ScanOrPick } from "@/ui/scan-or-pick";
 
 export const metadata: Metadata = { title: "Lots and sheets" };
 export const dynamic = "force-dynamic";
@@ -126,9 +127,7 @@ export default async function StageBatchPage({ params }: { params: Promise<{ bat
                   ))}
               </Select>
             </Field>
-            <Field label="Substitute lot (scan or type)" htmlFor="substituteLotCode">
-              <Input id="substituteLotCode" name="substituteLotCode" required autoComplete="off" className="font-mono" />
-            </Field>
+            <ScanOrPick kind="lot" name="substituteLotCode" submit="code" label="Substitute lot (same material)" hint="Scan its label or find it by name." required />
             <Field label="Reason" htmlFor="reason">
               <Textarea id="reason" name="reason" required minLength={5} maxLength={500} className="min-h-[56px]" />
             </Field>

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Field, Input, Select, Textarea, cx } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
+import { ScanOrPick } from "@/ui/scan-or-pick";
 import { finishBatchAction } from "./actions";
 
 /**
@@ -280,15 +281,20 @@ export function FinishForm(p: FinishFormProps) {
         <summary className="cursor-pointer text-[15px] font-semibold">More details</summary>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <Count id="rejectsWrapped" label="Rejects that were already wrapped" value={wrapped} onChange={setWrapped} error={fe.rejectsWrapped} hint="They used a wrapper, so they count as wrappers used." />
-          <Field label="Hold area" htmlFor="locationRef" error={fe.locationRef ?? fe.location}>
-            <Select id="locationRef" name="locationRef" value={locationRef} onChange={(e) => setLocationRef(e.target.value)}>
-              {p.holdOptions.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name} ({l.code})
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <div className="sm:col-span-2">
+            <ScanOrPick
+              kind="location"
+              name="locationRef"
+              label="Hold area"
+              candidates={p.holdOptions.map((l) => ({ value: l.id, title: l.name, detail: l.code, code: l.code, codes: [l.code] }))}
+              value={locationRef || null}
+              onChange={(v) => setLocationRef(v ?? "")}
+              onlyCandidates
+              search={false}
+              required
+              error={fe.locationRef ?? fe.location ?? null}
+            />
+          </div>
           {p.packaging
             .filter((m) => !m.counted)
             .map((m) => (
