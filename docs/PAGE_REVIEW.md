@@ -170,41 +170,41 @@ Total screens: 250.
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/masterdata/equipment/[id]` | ☐ | |
-| `/masterdata/equipment/new` | ☐ | |
-| `/masterdata/equipment` | ☐ | |
+| `/masterdata/equipment/[id]` | ☑ | name first, code grey, plain kind words, PageIntro (2026-10-31) |
+| `/masterdata/equipment/new` | ☑ | 3 visible fields (name, kind, making area); EQP- number; dates and rules under More details |
+| `/masterdata/equipment` | ☑ | name first, plain kinds, 'Can it be used?', empty state with button |
 | `/masterdata/formulas/[id]` | ☐ | |
 | `/masterdata/formulas/[id]/revisions/[revisionId]` | ☐ | |
 | `/masterdata/formulas/new` | ☐ | |
 | `/masterdata/formulas` | ☐ | |
-| `/masterdata/inspection-plans/[id]` | ☐ | |
-| `/masterdata/inspection-plans/new` | ☐ | |
-| `/masterdata/inspection-plans` | ☐ | |
-| `/masterdata/lines/[id]` | ☐ | |
-| `/masterdata/lines` | ☐ | |
-| `/masterdata/lists` | ☐ | |
-| `/masterdata/locations/[id]` | ☐ | |
-| `/masterdata/locations` | ☐ | |
-| `/masterdata/materials/[id]` | ☐ | |
-| `/masterdata/materials/new` | ☐ | |
-| `/masterdata/materials` | ☐ | |
+| `/masterdata/inspection-plans/[id]` | ☑ | "Quality checks" wording, name first, version Explain; test codes optional (made from names), extras under More details |
+| `/masterdata/inspection-plans/new` | ☑ | 2 visible fields (which item, when); name and QCP- number by the system |
+| `/masterdata/inspection-plans` | ☑ | renamed Quality checks, name first, empty state with button |
+| `/masterdata/lines/[id]` | ☑ | Making area / line; name + team visible; code and notes under More details |
+| `/masterdata/lines` | ☑ | Making areas; add = name (+ team, site only if >1); LINE- number |
+| `/masterdata/lists` | ☑ | renamed Choice lists, PageIntro (codes were already automatic) |
+| `/masterdata/locations/[id]` | ☑ | name first; name, type, inside visible; code/section/pickable under More details |
+| `/masterdata/locations` | ☑ | name first, code grey; add = name, type, inside (warehouse only if >1); LOC- number |
+| `/masterdata/materials/[id]` | ☑ | name first, See stock button, same 3-question form; status changes folded |
+| `/masterdata/materials/new` | ☑ | 3 questions (name, kind buttons, buy/count buttons) + usual supplier and pack; rest under More details with defaults by kind |
+| `/masterdata/materials` | ☑ | name first, kind, unit, stock links to /inventory/items/material/<id>; extra filters folded |
 | `/masterdata/products/[id]` | ☐ | |
 | `/masterdata/products/[id]/skus/[skuId]` | ☐ | |
 | `/masterdata/products` | ☐ | |
-| `/masterdata/reason-codes/[id]` | ☐ | |
-| `/masterdata/reason-codes` | ☐ | |
+| `/masterdata/reason-codes/[id]` | ☑ | renamed Reasons; words + where offered + note; code read-only under More details |
+| `/masterdata/reason-codes` | ☑ | renamed Reasons; add = words + where; code made from the words |
 | `/masterdata/routings/[id]` | ☐ | |
 | `/masterdata/routings/[id]/revisions/[revisionId]` | ☐ | |
 | `/masterdata/routings/new` | ☐ | |
 | `/masterdata/routings` | ☐ | |
-| `/masterdata/sites/[id]` | ☐ | |
-| `/masterdata/sites` | ☐ | |
-| `/masterdata/suppliers/[id]` | ☐ | |
-| `/masterdata/suppliers/new` | ☐ | |
-| `/masterdata/suppliers` | ☐ | |
-| `/masterdata/uom` | ☐ | |
-| `/masterdata/warehouses/[id]` | ☐ | |
-| `/masterdata/warehouses` | ☐ | |
+| `/masterdata/sites/[id]` | ☑ | name first; name, address, city visible; code/time zone under More details; teams by name only (DEP-) |
+| `/masterdata/sites` | ☑ | add = name (+ address, city); site code made from the name's initials |
+| `/masterdata/suppliers/[id]` | ☑ | name first, plain labels (pay within, order to delivery, QA status), materials by name |
+| `/masterdata/suppliers/new` | ☑ | 4 visible fields (name, contact, phone, email); SUP- number; rest under More details |
+| `/masterdata/suppliers` | ☑ | name first, code grey, plain columns, empty state says what to do |
+| `/masterdata/uom` | ☑ | renamed Units; add = name + what it measures; short name made from the name |
+| `/masterdata/warehouses/[id]` | ☑ | name first, special places by name, code under More details |
+| `/masterdata/warehouses` | ☑ | add = name + what is kept (site only if >1); WH- number |
 | `/masterdata/work-instructions/[id]` | ☐ | |
 | `/masterdata/work-instructions/new` | ☐ | |
 | `/masterdata/work-instructions` | ☐ | |

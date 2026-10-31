@@ -83,7 +83,36 @@ export function uniqueConflict(e: unknown, message: string, field = "code"): nev
   throw e;
 }
 
-/** Explicit state machine helper: throws a 409 `state` error when the move is not in the table. */
+/**
+ * Codes made from the name for records whose code is a short word rather than a running number
+ * (ADR-088: nobody types a code). `snake` gives "pest_found" (reason codes, units); `initials` gives
+ * "MP" for "Main Plant" (site codes, which appear in document numbers and allow 6 characters).
+ * A code already taken gets a number: pest_found_2, MP2. Pure apart from `taken`.
+ */
+export async function codeFromName(name: string, style: "snake" | "initials", max: number, taken: (code: string) => Promise<boolean>): Promise<string> {
+  const words = name
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean);
+  let base: string;
+  if (style === "snake") {
+    base = words.join("_").toLowerCase().slice(0, max - 3).replace(/_+$/, "");
+    if (!/^[a-z]/.test(base)) base = `x_${base}`.replace(/_+$/, "").slice(0, max - 3);
+  } else {
+    base = (words.length > 1 ? words.map((w) => w[0]).join("") : (words[0] ?? "").slice(0, 3)).toUpperCase().slice(0, Math.min(4, max - 2));
+    if (!base) base = "S";
+  }
+  const sep = style === "snake" ? "_" : "";
+  if (!(await taken(base))) return base;
+  for (let i = 2; i < 100; i += 1) {
+    const c = `${base}${sep}${i}`;
+    if (c.length <= max && !(await taken(c))) return c;
+  }
+  throw new DomainError("conflict", "Could not make a free code from this name; type one under More details.", { field: "code" });
+}
+
+/** Explicit state machine helper:throws a 409 `state` error when the move is not in the table. */
 export function assertTransition<S extends string>(table: Record<S, readonly S[]>, from: S, to: S, what: string): void {
   if (!(table[from] ?? []).includes(to)) throw new DomainError("state", `${what} cannot go from ${from.replace(/_/g, " ")} to ${to.replace(/_/g, " ")}.`, { field: "status" });
 }

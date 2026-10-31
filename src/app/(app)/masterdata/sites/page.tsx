@@ -1,6 +1,7 @@
 import { requireContext } from "@/lib/auth/context";
 import { listSites } from "@/modules/masterdata";
 import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { MoreDetails, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../forbidden";
 import { ActionForm, Grid, TextField } from "../_org/form";
 import { saveSiteAction } from "../_org/actions";
@@ -18,11 +19,11 @@ export default async function SitesPage({ searchParams }: { searchParams: Promis
     <div className="space-y-5">
       <PageHeader
         title="Sites"
-        subtitle="Plants and warehouses of the organization. The site code appears in document numbers and is fixed once used."
-        actions={<LinkButton href={all === "1" ? "/masterdata/sites" : "/masterdata/sites?all=1"} variant="secondary">{all === "1" ? "Hide inactive" : "Show inactive"}</LinkButton>}
+        actions={<LinkButton href={all === "1" ? "/masterdata/sites" : "/masterdata/sites?all=1"} variant="secondary">{all === "1" ? "Hide switched-off sites" : "Show switched-off sites"}</LinkButton>}
       />
+      <PageIntro>A site is one address where you work or keep stock, for example the factory or a store room in another town.</PageIntro>
       {rows.length === 0 ? (
-        <EmptyState title="No sites">{canAdmin ? "Add the first site below." : "Sites are set up by the system administrator."}</EmptyState>
+        <EmptyState title="No sites yet">{canAdmin ? "Add your factory below: type its name and press Add site." : "Ask the owner or the system administrator to add a site."}</EmptyState>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {rows.map((s) => (
@@ -32,23 +33,27 @@ export default async function SitesPage({ searchParams }: { searchParams: Promis
               code={s.code}
               title={s.name}
               chips={<ActiveChip active={s.isActive} />}
-              meta={`${s.timezone}${s.city ? ` · ${s.city}` : ""} · ${s.warehouses} warehouse${s.warehouses === 1 ? "" : "s"} · ${s.departments} department${s.departments === 1 ? "" : "s"} · ${s.lines} line${s.lines === 1 ? "" : "s"}`}
+              meta={`${s.city ? `${s.city} · ` : ""}${s.warehouses} warehouse${s.warehouses === 1 ? "" : "s"} · ${s.lines} making area${s.lines === 1 ? "" : "s"}`}
             />
           ))}
         </ul>
       )}
       {canAdmin && (
         <AddCard title="Add a site">
-          <ActionForm action={saveSiteAction} submitLabel="Create site" variant="cta">
+          <ActionForm action={saveSiteAction} submitLabel="Add site" variant="cta">
+            <TextField name="name" label="Name of the place" placeholder="e.g. Batangas store room" />
             <Grid>
-              <TextField name="code" label="Code" placeholder="BTG" mono hint="1 to 6 capital letters or digits; used as {SITE} in numbers." />
-              <TextField name="name" label="Name" placeholder="Batangas Annex" />
-              <TextField name="timezone" label="Time zone (optional)" placeholder="Asia/Manila" hint="Defaults to the organization's time zone." />
-              <TextField name="addressLine1" label="Address (optional)" />
-              <TextField name="city" label="City (optional)" />
-              <TextField name="province" label="Province (optional)" />
-              <TextField name="country" label="Country code (optional)" placeholder="PH" />
+              <TextField name="addressLine1" label="Street address (optional)" />
+              <TextField name="city" label="Town or city (optional)" />
             </Grid>
+            <MoreDetails>
+              <Grid>
+                <TextField name="code" label="Your own code (optional)" placeholder="The system makes one from the name" mono hint="1 to 6 capital letters or digits. It appears in document numbers." />
+                <TextField name="timezone" label="Time zone" placeholder="Asia/Manila" hint="Leave empty to use the company's time zone." />
+                <TextField name="province" label="Province" />
+                <TextField name="country" label="Country code" placeholder="PH" hint="Leave empty for the Philippines." />
+              </Grid>
+            </MoreDetails>
           </ActionForm>
         </AddCard>
       )}

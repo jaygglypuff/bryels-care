@@ -149,7 +149,7 @@ export async function deleteSupplier(ctx: AuthContext, supplierId: string) {
  */
 export async function updateSupplier(ctx: AuthContext, supplierId: string, input: SupplierInput) {
   ctx.require("masterdata.supplier.edit");
-  const v = parseOrThrow(SupplierInputSchema, input);
+  const parsed = parseOrThrow(SupplierInputSchema, input);
   if (!UUID_RE.test(supplierId)) throw new DomainError("not_found", "Supplier not found.");
   return db.transaction(async (tx) => {
     const [before] = await tx
@@ -159,6 +159,7 @@ export async function updateSupplier(ctx: AuthContext, supplierId: string, input
       .for("update")
       .limit(1);
     if (!before) throw new DomainError("not_found", "Supplier not found.");
+    const v = { ...parsed, code: parsed.code ?? before.code };
     await assertUnique(ctx, v, before.id);
     const category = v.category === undefined ? before.category : await assertLookupValue(tx, ctx.organizationId, "supplier_category", v.category, { field: "category", keep: before.category });
     const [after] = await tx

@@ -182,6 +182,7 @@ export {
   MATERIAL_CLASS_LABELS,
   MATERIAL_STATUSES,
   MATERIAL_TRANSITIONS,
+  MATERIAL_KIND_DEFAULTS,
   materialWarnings,
   listMaterials as listMaterialMaster,
   getMaterial,

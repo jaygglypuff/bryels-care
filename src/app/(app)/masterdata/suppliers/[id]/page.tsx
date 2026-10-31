@@ -6,6 +6,7 @@ import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getSupplier, lookupOptions } from "@/modules/masterdata";
 import { Card, CardTitle, Dl, EmptyState, PageHeader, Table, Td } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
 import { ReceiptStatusChip, SupplierStatusChip } from "@/ui/receiving";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -32,44 +33,45 @@ export default async function SupplierPage({ params, searchParams }: { params: P
         title={s.name}
         subtitle={
           <>
-            <Link href="/masterdata/suppliers" className="text-primary-text hover:underline">Suppliers</Link> · {s.code} · <SupplierStatusChip status={s.qualityStatus} />
+            <Link href="/masterdata/suppliers" className="text-primary-text hover:underline">Suppliers</Link> · <span className="font-mono text-[12px] text-muted">{s.code}</span> · <SupplierStatusChip status={s.qualityStatus} />
           </>
         }
         actions={
           // Wave 4 W4A: approved-material list, prices, MOQ and lead times live on the procurement screen.
           <Link href={`/procurement/suppliers/${s.id}`} className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2">
-            Approved list and prices
+            What we buy here and prices
           </Link>
         }
       />
+      <PageIntro>A company you buy from: who to call, and which materials QA has approved from them.</PageIntro>
       {saved && <Banner tone="ok" title="Supplier saved" />}
-      {s.qualityStatus === "suspended" && <Banner tone="bad" title="Suspended: receipt lines from this supplier cannot be posted">{s.qualityStatusReason}</Banner>}
+      {s.qualityStatus === "suspended" && <Banner tone="bad" title="Suspended: deliveries from this supplier cannot be received">{s.qualityStatusReason}</Banner>}
       <Card>
         <CardTitle>Details</CardTitle>
         <Dl
           items={[
             ["Contact", [s.contactName, s.phone, s.email].filter(Boolean).join(" · ") || "—"],
             ["Address", [s.addressLine1, s.city, s.country].filter(Boolean).join(", ") || "—"],
-            ["Payment terms", s.paymentTermsDays != null ? `${s.paymentTermsDays} days` : "—"],
-            ["Lead time", s.defaultLeadTimeDays != null ? `${s.defaultLeadTimeDays} days` : "—"],
-            ["Active", s.isActive ? "Yes" : "No"],
+            ["Pay within", s.paymentTermsDays != null ? `${s.paymentTermsDays} days` : "—"],
+            ["Order to delivery", s.defaultLeadTimeDays != null ? `${s.defaultLeadTimeDays} days` : "—"],
+            ["In use", s.isActive ? "Yes" : "No"],
             ["Updated", fmtDateTime(s.updatedAt)],
           ]}
         />
       </Card>
       <Card>
-        <CardTitle>Materials supplied</CardTitle>
+        <CardTitle>Materials we buy here</CardTitle>
         {s.materials.length === 0 ? (
-          <p className="text-[13px] text-muted">No materials listed. The approved-supplier list and its approvals arrive with purchasing (Phase 6).</p>
+          <p className="text-[13px] text-muted">None yet. Add one from a material&apos;s page (Usual supplier) or under &quot;What we buy here and prices&quot;.</p>
         ) : (
           <ul className="flex flex-wrap gap-2">
             {s.materials.map((m) => (
               <li key={m.id}>
                 <Chip tone={m.isApproved ? "ok" : "neu"}>
-                  {m.materialCode} · {m.materialName}
+                  {m.materialName}
                   {m.brand ? ` · ${m.brand}` : ""}
                   {m.packQty ? ` · ${Number(m.packQty).toLocaleString("en-PH", { maximumFractionDigits: 6 })} ${m.packUom}` : ""}
-                  {m.isApproved ? "" : " (not yet approved)"}
+                  {m.isApproved ? "" : " (waiting for QA)"}
                 </Chip>
               </li>
             ))}
@@ -78,9 +80,9 @@ export default async function SupplierPage({ params, searchParams }: { params: P
       </Card>
       {ctx.can("procurement.goods_receipt.view") && (
         <Card>
-          <CardTitle>Recent receipts at your sites</CardTitle>
+          <CardTitle>Recent deliveries at your sites</CardTitle>
           {s.receipts.length === 0 ? (
-            <EmptyState title="No receipts yet" />
+            <EmptyState title="No deliveries yet">Deliveries from this supplier show here once received.</EmptyState>
           ) : (
             <Table head={["Receipt", "Status", "Supplier doc", "Received"]}>
               {s.receipts.map((r) => (
@@ -97,7 +99,7 @@ export default async function SupplierPage({ params, searchParams }: { params: P
       )}
       {ctx.can("masterdata.supplier.edit") && (
         <div>
-          <h2 className="mb-3 font-display text-[17px] font-semibold">Edit supplier</h2>
+          <h2 className="mb-3 font-display text-[17px] font-semibold">Change details</h2>
           <SupplierForm initial={s} categories={await lookupOptions(db, ctx.organizationId, "supplier_category", { keep: s.category })} />
         </div>
       )}
