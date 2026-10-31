@@ -4,15 +4,10 @@ import { Button, Field, Input, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { approveOrderAction, reorderAction, returnOrderAction, submitOrderAction, voidOrderAction } from "./actions";
 
-/** Draft → submit (credit and approval check). The server decides: confirmed, or pending approval with the reason. */
+/** Draft → submit (customer requirements, minimum order, credit and approval check). The server decides: confirmed, or pending approval with the reason. */
 export function SubmitOrderForm({ orderId }: { orderId: string }) {
   return (
-    <ActionForm action={submitOrderAction} hidden={{ orderId }} submit="Submit and confirm order" pending="Checking credit and approvals…" variant="cta" size="lg">
-      <p className="text-[13px] text-fg-2">
-        Submitting applies the customer&apos;s approved requirements, checks the minimum order quantity and runs the credit and approval rules. Within limits the order confirms itself;
-        otherwise it waits for the approver.
-      </p>
-    </ActionForm>
+    <ActionForm action={submitOrderAction} hidden={{ orderId }} submit="Send the order" pending="Checking credit and approvals…" variant="cta" size="lg" />
   );
 }
 
@@ -53,7 +48,7 @@ function ReasonForm({ orderId, action, button, label, placeholder, confirm, vari
 }
 
 export function ReturnOrderForm({ orderId }: { orderId: string }) {
-  return <ReasonForm orderId={orderId} action={returnOrderAction} button="Return to draft" label="Why does it need changes?" placeholder="e.g. Split into two deliveries" />;
+  return <ReasonForm orderId={orderId} action={returnOrderAction} button="Send back to draft" label="What needs to change?" placeholder="e.g. Split into two deliveries" />;
 }
 
 export function CancelOrderPanel({ orderId, hasAllocations }: { orderId: string; hasAllocations: boolean }) {
@@ -65,16 +60,16 @@ export function CancelOrderPanel({ orderId, hasAllocations }: { orderId: string;
       label="Reason for cancelling"
       placeholder="e.g. Customer withdrew the PO"
       variant="danger"
-      confirm={`Cancel this order? This cannot be undone.${hasAllocations ? " Its allocated stock will be released." : ""}`}
+      confirm={`Cancel this order? This cannot be undone.${hasAllocations ? " The stock set aside for it becomes free." : ""}`}
     />
   );
 }
 
 export function ReorderForm({ orderId, today }: { orderId: string; today: string }) {
   return (
-    <ActionForm action={reorderAction} hidden={{ orderId }} submit="Reorder at today's prices" pending="Creating draft…" variant="secondary" className="flex flex-col gap-2">
+    <ActionForm action={reorderAction} hidden={{ orderId }} submit="Make a new order like this" pending="Making the draft…" variant="secondary" className="flex flex-col gap-2">
       {(fe) => (
-        <Field label="Requested delivery for the new order" htmlFor="reorder-date" error={fe.requestedDeliveryOn ?? fe.form}>
+        <Field label="Deliver the new order by" htmlFor="reorder-date" error={fe.requestedDeliveryOn ?? fe.form}>
           <Input id="reorder-date" name="requestedDeliveryOn" type="date" min={today} required />
         </Field>
       )}

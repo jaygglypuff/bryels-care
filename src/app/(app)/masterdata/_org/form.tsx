@@ -67,6 +67,7 @@ export function TextField({
   mono,
   inputMode,
   readOnly,
+  type = "text",
 }: {
   name: string;
   label: string;
@@ -76,6 +77,7 @@ export function TextField({
   mono?: boolean;
   inputMode?: "numeric" | "decimal" | "text";
   readOnly?: boolean;
+  type?: "text" | "date" | "email" | "tel";
 }) {
   const error = useErr(name);
   return (
@@ -83,6 +85,7 @@ export function TextField({
       <Input
         id={`f-${name}`}
         name={name}
+        type={type}
         defaultValue={defaultValue ?? ""}
         placeholder={placeholder}
         inputMode={inputMode}
@@ -147,6 +150,57 @@ export function CheckField({ name, label, defaultChecked, hint }: { name: string
       {hint && !error && <p className="text-[12px] text-muted">{hint}</p>}
       {error && <p className="text-[12px] text-[var(--bad-fg)]">{error}</p>}
     </div>
+  );
+}
+
+/**
+ * Big choice buttons (ADR-088): a radio group that looks like large tappable cards, one per option,
+ * with a plain explanation under each. Uncontrolled with `defaultValue`, or controlled with
+ * `value` + `onChange` when other boxes follow the choice.
+ */
+export function ChoiceField({
+  name,
+  label,
+  options,
+  defaultValue,
+  value,
+  onChange,
+  columns = 3,
+}: {
+  name: string;
+  label: string;
+  options: { value: string; label: string; help?: string }[];
+  defaultValue?: string | null;
+  value?: string;
+  onChange?: (v: string) => void;
+  columns?: 2 | 3;
+}) {
+  const error = useErr(name);
+  return (
+    <fieldset className="flex min-w-0 flex-col gap-2">
+      <legend className="mb-2 text-[15px] font-semibold text-fg">{label}</legend>
+      <div className={cx("grid grid-cols-1 gap-2", columns === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+        {options.map((o) => (
+          <label
+            key={o.value}
+            className="flex min-h-[56px] cursor-pointer items-start gap-3 rounded-[14px] border border-line-strong bg-surface p-3 has-[:checked]:border-primary has-[:checked]:ring-1 has-[:checked]:ring-primary has-[:checked]:bg-[var(--brand-50)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--lime-200)]"
+          >
+            <input
+              type="radio"
+              name={name}
+              value={o.value}
+              {...(value !== undefined ? { checked: value === o.value, onChange: () => onChange?.(o.value) } : { defaultChecked: defaultValue === o.value })}
+              className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary,#2e7d32)]"
+            />
+            <span className="min-w-0">
+              <span className="block text-[15px] font-medium text-fg">{o.label}</span>
+              {o.help && <span className="block text-[13px] text-fg-2">{o.help}</span>}
+            </span>
+          </label>
+        ))}
+      </div>
+      {error && <p className="text-[12px] text-[var(--bad-fg)]">{error}</p>}
+    </fieldset>
   );
 }
 

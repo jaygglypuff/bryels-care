@@ -4,6 +4,8 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { customerOutstanding, customerSegmentLabels, getCustomer360, listCustomers, type Customer360 } from "@/modules/sales";
 import { EmptyState, Input, LinkButton, PageHeader, Select, buttonClass, cx } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
 import { Forbidden } from "../../forbidden";
 import { Money } from "../orders/sales-ui";
 import { CustomerPanel, PANEL_TABS, type PanelTab } from "./customer-panel";
@@ -50,23 +52,33 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
     <>
       <PageHeader
         title="Customers"
-        subtitle="Who you sell to, what they ordered and what they owe."
         actions={
           <>
-            {ctx.can("masterdata.customer.export") && (
-              <a className={buttonClass("secondary")} href={`/api/v1/sales/customers/export?format=csv${f.q ? `&q=${encodeURIComponent(f.q)}` : ""}`}>
-                Export CSV
-              </a>
-            )}
-            {canCreate ? <LinkButton href="/sales/customers/new" variant="secondary">New customer</LinkButton> : null}
-            {ctx.can("sales.sales_order.create") ? (
-              <LinkButton href={selected ? `/sales/new?customer=${selected.customer.id}` : "/sales/new"} variant="cta">
-                <Plus size={16} aria-hidden /> New customer order
+            {canCreate ? (
+              <LinkButton href="/sales/customers/new" variant="cta">
+                <Plus size={16} aria-hidden /> New customer
               </LinkButton>
             ) : null}
+            {(ctx.can("masterdata.customer.export") || ctx.can("sales.sales_order.create")) && (
+              <MoreMenu>
+                <div className="flex flex-col gap-2">
+                  {ctx.can("sales.sales_order.create") && (
+                    <LinkButton href={selected ? `/sales/new?customer=${selected.customer.id}` : "/sales/new"} variant="secondary">
+                      New customer order
+                    </LinkButton>
+                  )}
+                  {ctx.can("masterdata.customer.export") && (
+                    <a className={buttonClass("secondary")} href={`/api/v1/sales/customers/export?format=csv${f.q ? `&q=${encodeURIComponent(f.q)}` : ""}`}>
+                      Download the list (CSV)
+                    </a>
+                  )}
+                </div>
+              </MoreMenu>
+            )}
           </>
         }
       />
+      <PageIntro>This screen is for the people and shops we sell to: find a customer by name, see what they ordered and what they owe, or add a new one.</PageIntro>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] lg:items-start">
         {/* Left: the list (its own screen below 1024 px). */}
@@ -74,15 +86,15 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
           <form className="mb-3 flex flex-col gap-2" role="search" action="/sales/customers">
             <div className="relative">
               <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
-              <Input name="q" defaultValue={f.q ?? ""} placeholder="Search customer: name, e-mail or phone" aria-label="Search customers" className="pl-10" type="search" />
+              <Input name="q" defaultValue={f.q ?? ""} placeholder="Customer name or phone" aria-label="Search customers" className="pl-10" type="search" />
             </div>
             <div className="flex gap-2">
               <Select name="status" defaultValue={f.status ?? ""} aria-label="Status" className="min-w-0 flex-1">
-                <option value="">All statuses</option>
+                <option value="">Everyone</option>
                 <option value="active">Active</option>
-                <option value="prospect">Prospect</option>
-                <option value="on_hold">Credit hold</option>
-                <option value="inactive">Inactive</option>
+                <option value="prospect">New, not buying yet</option>
+                <option value="on_hold">Stopped: unpaid bills</option>
+                <option value="inactive">Not buying any more</option>
               </Select>
               <Select name="segment" defaultValue={f.segment ?? ""} aria-label="Customer type" className="min-w-0 flex-1">
                 <option value="">All types</option>
@@ -98,8 +110,8 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
             </div>
           </form>
           {rows.length === 0 ? (
-            <EmptyState title={filtered ? "No customers match" : "No customers yet"} action={canCreate && !filtered ? <LinkButton href="/sales/customers/new">Add a customer</LinkButton> : undefined}>
-              {filtered ? "Try other words, or clear the filters." : "Customers you add here can be chosen on quotations and customer orders."}
+            <EmptyState title={filtered ? "No customers match" : "No customers yet"} action={canCreate && !filtered ? <LinkButton href="/sales/customers/new">New customer</LinkButton> : undefined}>
+              {filtered ? "Try fewer letters of the name, or choose Everyone." : canCreate ? "Tap New customer and type the name, phone and address. The system gives the customer number." : "The sales team adds customers. Ask them to add the one you need."}
             </EmptyState>
           ) : (
             <ul className="flex flex-col gap-2" aria-label="Customers">
@@ -120,17 +132,19 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block font-semibold text-fg">{c.name}</span>
-                        {(c.email || c.phone) && <span className="block truncate text-[12.5px] text-muted">{c.email ?? c.phone}</span>}
-                        {c.outstanding !== undefined && Number(c.outstanding) > 0 && (
-                          <span className="block text-[13px] text-fg-2">
-                            <Money value={c.outstanding} /> owed
-                          </span>
-                        )}
+                        {(c.phone || c.email) && <span className="block truncate text-[12.5px] text-fg-2">{c.phone ?? c.email}</span>}
                         <span className={cx("block text-[12.5px]", c.openOrders > 0 ? "font-medium text-primary-text" : "text-muted")}>
                           {c.openOrders} open order{c.openOrders === 1 ? "" : "s"}
-                          {c.status !== "active" ? ` · ${c.status === "on_hold" ? "credit hold" : c.status}` : ""}
+                          {c.status === "on_hold" ? " · stopped: unpaid bills" : c.status === "prospect" ? " · new, not buying yet" : c.status === "inactive" ? " · not buying any more" : ""}
+                          <span className="ml-1 font-mono text-[11.5px] text-muted">· {c.code}</span>
                         </span>
                       </span>
+                      {c.outstanding !== undefined && Number(c.outstanding) > 0 && (
+                        <span className="shrink-0 text-right text-[13px] text-fg-2">
+                          <Money className="block text-[14px] font-semibold tabular text-fg" value={c.outstanding} />
+                          owes
+                        </span>
+                      )}
                     </Link>
                   </li>
                 );
@@ -148,7 +162,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
               This customer does not exist in your organization.
             </EmptyState>
           ) : (
-            <EmptyState title="Choose a customer">Pick a customer on the left to see their orders, history and details.</EmptyState>
+            <EmptyState title="Choose a customer">Tap a customer on the left to see their orders, what happened and their details.</EmptyState>
           )}
         </div>
       </div>

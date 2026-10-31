@@ -6,7 +6,7 @@ import { REASON_CATEGORIES, type ReasonCategory, reasonCodes } from "@/db/schema
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { assertUuid, bool, diff, optInt, optText, reqText, uniqueConflict } from "./org-common";
+import { assertUuid, bool, codeFromName, diff, optInt, optText, optionalCode, reqText, uniqueConflict } from "./org-common";
 import { DEFAULT_REASON_CODES, REASON_NOTE_MAX, reasonCodesFor } from "./reason-codes-defaults";
 import { parseInput } from "./schemas";
 import { runInTx, type InTx } from "@/lib/tx";
@@ -44,11 +44,14 @@ const appliesTo = z
   .transform((a) => [...new Set(a)]);
 const ReasonCodeCreate = z
   .object({
-    code: z
-      .string()
-      .trim()
-      .toLowerCase()
-      .regex(/^[a-z][a-z0-9_]{0,39}$/, "Code: lower-case letters, digits and underscore, starting with a letter (max 40), e.g. spillage."),
+    /** ADR-088: optional; blank = made from the label ("Pest found" → pest_found). */
+    code: optionalCode(
+      z
+        .string()
+        .trim()
+        .toLowerCase()
+        .regex(/^[a-z][a-z0-9_]{0,39}$/, "Code: lower-case letters, digits and underscore, starting with a letter (max 40), e.g. spillage."),
+    ),
     name: reqText("the label people see", 120),
     description: optText(500),
     appliesTo,
@@ -141,12 +144,13 @@ export async function createReasonCode(ctx: AuthContext, raw: unknown, opts?: In
   ctx.require("masterdata.reason_code.admin");
   const v = parseInput(ReasonCodeCreate, raw);
   return runInTx(opts, async (tx) => {
+    const code = v.code ?? (await codeFromName(v.name, "snake", 40, async (c) => (await tx.select({ id: reasonCodes.id }).from(reasonCodes).where(and(eq(reasonCodes.organizationId, ctx.organizationId), eq(reasonCodes.code, c))).limit(1)).length > 0));
     const [r] = await tx
       .insert(reasonCodes)
-      .values({ organizationId: ctx.organizationId, ...v, sortOrder: v.sortOrder ?? 100, createdBy: ctx.userId, updatedBy: ctx.userId })
+      .values({ organizationId: ctx.organizationId, ...v, code, sortOrder: v.sortOrder ?? 100, createdBy: ctx.userId, updatedBy: ctx.userId })
       .returning()
-      .catch((e) => uniqueConflict(e, `Reason code ${v.code} already exists.`));
-    await audit(tx, ctx, { action: "masterdata.reason_code.created", entityType: "reason_code", entityId: r.id, entityNumber: r.code, siteId: null, after: v });
+      .catch((e) => uniqueConflict(e, `Reason code ${code} already exists.`));
+    await audit(tx, ctx, { action: "masterdata.reason_code.created", entityType: "reason_code", entityId: r.id, entityNumber: r.code, siteId: null, after: { ...v, code, codeAssigned: !v.code } });
     return r;
   });
 }

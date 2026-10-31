@@ -5,14 +5,15 @@ import { DomainError } from "@/lib/errors";
 import { customerOptions, getQuote, manilaToday, priceBook, quoteProductOptions } from "@/modules/sales";
 import { LinkButton, PageHeader } from "@/ui/core";
 import { Banner } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../../forbidden";
 import { QuoteForm } from "../../quote-form";
 
-export const metadata = { title: "Edit quotation" };
+export const metadata = { title: "Change price offer" };
 
 export default async function EditQuotePage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.quote.edit") || !ctx.can("sales.quote.create")) return <Forbidden what="editing quotations" />;
+  if (!ctx.can("sales.quote.edit") || !ctx.can("sales.quote.create")) return <Forbidden what="changing price offers" />;
   const { id } = await params;
   let d: Awaited<ReturnType<typeof getQuote>>;
   try {
@@ -25,9 +26,10 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
   if (q.status !== "draft") {
     return (
       <>
-        <PageHeader title={`Edit ${q.quoteNumber}`} />
-        <Banner tone="info" title="Only a draft can be edited" action={<LinkButton href={`/sales/quotations/${q.id}`} variant="secondary">Back</LinkButton>}>
-          Void it and issue a new quotation if the terms changed.
+        <PageHeader title="Change price offer" />
+        <PageIntro>This screen is for changing a draft price offer. This one was already sent, so it cannot be changed.</PageIntro>
+        <Banner tone="info" title="Only a draft can be changed" action={<LinkButton href={`/sales/quotations/${q.id}`} variant="secondary">Back</LinkButton>}>
+          Cancel it (⋯ More) and make a new price offer if the prices changed.
         </Banner>
       </>
     );
@@ -36,7 +38,8 @@ export default async function EditQuotePage({ params }: { params: Promise<{ id: 
   const book = await priceBook(ctx, q.customerId);
   return (
     <>
-      <PageHeader title={`Edit ${q.quoteNumber}`} actions={<LinkButton href={`/sales/quotations/${q.id}`} variant="secondary">Back</LinkButton>} />
+      <PageHeader title={`Change price offer for ${d.customer.name}`} actions={<LinkButton href={`/sales/quotations/${q.id}`} variant="ghost">Back</LinkButton>} />
+      <PageIntro>This screen is for changing a draft price offer: products, amounts and prices. Save, then send it.</PageIntro>
       <QuoteForm
         customers={customers.filter((c) => c.id === q.customerId)}
         products={products}

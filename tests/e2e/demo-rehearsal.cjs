@@ -527,31 +527,31 @@ async function kpiValue(page, caption) {
   {
     const { context, page } = await asUser('sales@bryels-care.test');
     await page.goto(BASE + '/sales/quotations/new');
-    await page.selectOption('#q-customer', { label: 'Sari Glow Online (CUS-005)' });
+    await page.selectOption('#q-customer', { label: 'Sari Glow Online' }); // grade-5: picked by name (ADR-088)
     await page.fill('#q-valid', manilaDate(14));
-    const opt = await page.locator('#qp-1 option', { hasText: 'ACS-135' }).first().innerText();
+    const opt = await page.locator('#qp-1 option', { hasText: 'Acapulco Soap 135 g' }).first().innerText();
     await page.selectOption('#qp-1', { label: opt });
     await page.fill('#qq-1', '60');
     await page.fill('#qu-1', '72.50');
     await expectText(page, '4,350.00');
     await shot(page, 'sales-new-quotation');
-    await page.getByRole('button', { name: 'Save draft quotation' }).click();
+    await page.getByRole('button', { name: 'Save the price offer' }).click();
     await page.waitForURL(/\/sales\/quotations\/[0-9a-f-]{36}\?saved=1/, { timeout: 30000 });
-    facts.quoteNumber = (await page.locator('h1').innerText()).trim();
+    facts.quoteNumber = (await page.getByTestId('record-number').first().innerText()).trim();
     assert(/^QT-\d{2}-\d{5}$/.test(facts.quoteNumber), 'quotation number ' + facts.quoteNumber);
-    await page.getByRole('button', { name: 'Submit quotation' }).click();
+    await page.getByRole('button', { name: 'Send the price offer' }).click();
     // A 3.3 % discount on the PHP 75.00 list price is within the 10 % rule: the quotation is sent.
-    await settle(page, page.getByRole('button', { name: 'Convert to sales order' }), 'quotation submit');
+    await settle(page, page.getByRole('button', { name: 'Make it an order' }), 'quotation submit');
     await page.fill('#cv-date', manilaDate(3));
     await page.fill('#cv-po', 'SGO-PO-2231');
     await shot(page, 'quotation-sent');
-    await page.getByRole('button', { name: 'Convert to sales order' }).click();
+    await page.getByRole('button', { name: 'Make it an order' }).click();
     await page.waitForURL(/\/sales\/[0-9a-f-]{36}(\?|$)/, { timeout: 30000 });
     facts.orderId = page.url().split('/').pop().split('?')[0];
     facts.orderNumber = (await page.locator('[data-testid=record-reference]').innerText()).trim(); // R3 record header
     await expectText(page, facts.quoteNumber);
     // Sari Glow's open orders plus this one exceed its credit limit: the order waits for finance.
-    await page.getByRole('button', { name: 'Submit and confirm order' }).click();
+    await page.getByRole('button', { name: 'Send the order' }).click();
     await page.waitForURL(/done=pending_approval/, { timeout: 30000 });
     await expectText(page, 'Needs approval');
     log('quotation', facts.quoteNumber, '-> order', facts.orderNumber, 'pending approval');
@@ -583,16 +583,16 @@ async function kpiValue(page, caption) {
     await page.getByRole('link', { name: /SO-\d{2}-00002/ }).first().click();
     await page.waitForURL(/\/sales\/[0-9a-f-]{36}/);
     await expectText(page, 'Isla Spa Supplies');
-    await page.getByRole('button', { name: /Reserve stock/ }).click();
+    await page.getByRole('button', { name: /Set aside/ }).click();
     await page.waitForURL(/done=allocated/, { timeout: 30000 });
 
     await page.goto(BASE + '/sales/' + facts.orderId);
-    await page.getByRole('button', { name: /Reserve stock/ }).click();
+    await page.getByRole('button', { name: /Set aside/ }).click();
     await page.waitForURL(/done=allocated/, { timeout: 30000 });
     await expectText(page, facts.fgLot);
     await shot(page, 'order-allocated-fefo', { full: true });
     // Pick: the finished lot is loose (not boxed), so the lot label is scanned with the counted quantity.
-    await page.getByRole('button', { name: 'Start pick list' }).click();
+    await page.getByRole('button', { name: 'Get from shelf' }).click();
     await page.waitForURL(/\/sales\/picking\/[0-9a-f-]{36}/, { timeout: 30000 });
     // FEFO may split the order over the older lot and the new finished lot: scan every row of the list.
     await expectText(page, facts.fgLot);
@@ -608,7 +608,7 @@ async function kpiValue(page, caption) {
       await page.getByTestId('scan-result').getByText(new RegExp('Picked .*' + (r.box || r.lot))).waitFor({ timeout: 30000 });
     }
     await shot(page, 'pick-scanned');
-    await page.getByRole('button', { name: 'Complete pick' }).click();
+    await page.getByRole('button', { name: 'Finish getting from shelf' }).click();
     await page.waitForURL(/\/sales\/shipments\/[0-9a-f-]{36}\?done=picked/, { timeout: 30000 });
     facts.shipmentId = page.url().split('/').pop().split('?')[0];
     log('picked', facts.orderNumber);
@@ -629,7 +629,7 @@ async function kpiValue(page, caption) {
       await page.getByTestId('scan-result').getByText(r.box ? new RegExp('Box ' + r.box + ' verified') : new RegExp('Verified .*' + r.lot)).waitFor({ timeout: 30000 });
     }
     await shot(page, 'pack-verified');
-    await page.getByRole('button', { name: 'Complete packing' }).click();
+    await page.getByRole('button', { name: 'Finish the check' }).click();
     await page.waitForURL(/done=packed/, { timeout: 30000 });
     await context.close();
   }
@@ -639,9 +639,9 @@ async function kpiValue(page, caption) {
     page.once('dialog', (d) => d.accept());
     await page.fill('#driverName', 'Ramon Aquino');
     await page.fill('#vehiclePlate', 'NBC 1234');
-    await page.getByRole('button', { name: 'Dispatch shipment' }).click();
+    await page.getByRole('button', { name: 'Send out now' }).click();
     await page.waitForURL(/done=dispatched/, { timeout: 30000 });
-    await expectText(page, 'Dispatched');
+    await expectText(page, 'Sent out');
     await shot(page, 'order-shipped');
     const drHref = await page.locator('a[href^="/print/delivery-receipt/"]').first().getAttribute('href');
     await page.goto(BASE + drHref);
@@ -655,10 +655,11 @@ async function kpiValue(page, caption) {
     // The driver brings back the signed copy: the warehouse records the acknowledgment (W3E, US-4-13).
     await page.goto(BASE + '/sales/shipments/' + facts.shipmentId);
     await page.fill('#receivedByName', 'Liza Manalo');
+    await page.getByText('Their job (you can skip this)').click();
     await page.fill('#receivedByPosition', 'Store supervisor');
     await page.selectOption('#kind', 'name_only');
     await page.fill('#remarks', 'All boxes received in good order.');
-    await page.getByRole('button', { name: 'Save acknowledgment' }).click();
+    await page.getByRole('button', { name: 'Save proof of delivery' }).click();
     await settle(page, page.getByText('Liza Manalo · Store supervisor').first(), 'DR acknowledgment', 30000);
     facts.drNumber = (await page.locator('a[href^="/print/delivery-receipt/"]').first().innerText().catch(() => '')).trim();
     await shot(page, 'dr-acknowledged');
@@ -691,16 +692,16 @@ async function kpiValue(page, caption) {
     await page.selectOption('#reasonCode', { index: 4 });
     const reasonLabel = await page.locator('#reasonCode option:checked').innerText();
     if (/explain/i.test(reasonLabel)) await page.fill('#reasonNote', 'Torn wrappers (complaint ' + facts.complaintNumber + ')');
-    await page.getByRole('button', { name: 'Open return' }).click();
+    await page.getByRole('button', { name: 'Start the customer return' }).click();
     await page.waitForURL(/\/sales\/returns\/[0-9a-f-]{36}/, { timeout: 30000 });
     facts.returnId = page.url().split('/').pop().split('?')[0];
-    facts.returnNumber = (await page.locator('h1').innerText()).trim();
+    facts.returnNumber = (await page.getByTestId('record-number').first().innerText()).trim();
     await page.fill('#code', 'BC:LOT:' + facts.fgLot);
     await page.fill('#qty', '2');
     await page.selectOption('#condition', 'damaged');
-    await page.getByRole('button', { name: 'Add line' }).click();
-    await settle(page, page.getByRole('button', { name: 'Submit for approval' }), 'return line');
-    await page.getByRole('button', { name: 'Submit for approval' }).click();
+    await page.getByRole('button', { name: 'Add to the return' }).click();
+    await settle(page, page.getByRole('button', { name: 'Send for approval' }), 'return line');
+    await page.getByRole('button', { name: 'Send for approval' }).click();
     await settle(page, page.getByText('Waiting for approval').first(), 'return submit');
     await shot(page, 'return-submitted');
     await context.close();
@@ -709,11 +710,11 @@ async function kpiValue(page, caption) {
     // The site manager (not the person who opened it) approves and receives the goods into quarantine.
     const { context, page } = await asUser('manager.nfd@bryels-care.test');
     await page.goto(BASE + '/sales/returns/' + facts.returnId);
-    await page.getByRole('button', { name: 'Approve return' }).click();
-    await settle(page, page.getByRole('button', { name: 'Receive into quarantine' }), 'return approval');
+    await page.getByRole('button', { name: 'Approve the return' }).click();
+    await settle(page, page.getByRole('button', { name: 'Take it in (kept apart for QA)' }), 'return approval');
     page.once('dialog', (d) => d.accept());
-    await page.getByRole('button', { name: 'Receive into quarantine' }).click();
-    await settle(page, page.getByText('Received in quarantine').first(), 'return posting', 30000);
+    await page.getByRole('button', { name: 'Take it in (kept apart for QA)' }).click();
+    await settle(page, page.getByText('Back in, waiting for QA check').first(), 'return posting', 30000);
     facts.returnLot = (await page.locator('a[href^="/inventory/"]').filter({ hasText: /^L-/ }).last().innerText().catch(() => '')).trim();
     await shot(page, 'return-in-quarantine');
     log('return', facts.returnNumber, 'received into quarantine', facts.returnLot);

@@ -6,7 +6,8 @@ import { departments, productionLines, sites } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { assertUuid, bool, diff, isReferenced, reqText, scanCode, uniqueConflict } from "./org-common";
+import { assertUuid, bool, diff, isReferenced, optionalCode, reqText, scanCode, uniqueConflict } from "./org-common";
+import { assignMasterCode } from "@/lib/numbering";
 import { parseInput } from "./schemas";
 
 /**
@@ -14,7 +15,7 @@ import { parseInput } from "./schemas";
  * the BMR header. Site-scoped: `masterdata.department.admin` plus the site in the caller's scope.
  */
 const DepartmentInput = z
-  .object({ siteId: z.string().uuid("Choose a site."), code: scanCode("Department code", "PROD"), name: reqText("the department name", 120), isActive: bool(true) })
+  .object({ siteId: z.string().uuid("Choose a site."), code: optionalCode(scanCode("Department code", "PROD")), name: reqText("the department name", 120), isActive: bool(true) })
   .strict();
 
 export async function listDepartments(ctx: AuthContext, opts: { siteId?: string; includeInactive?: boolean } = {}) {
@@ -34,11 +35,15 @@ export async function createDepartment(ctx: AuthContext, raw: unknown) {
   const v = parseInput(DepartmentInput, raw);
   ctx.requireSite(v.siteId);
   return db.transaction(async (tx) => {
+    // ADR-088: a blank code gets the next DEP-nnnn.
+    const code =
+      v.code ??
+      (await assignMasterCode(tx, ctx.organizationId, "DEP", async (c) => (await tx.select({ id: departments.id }).from(departments).where(and(eq(departments.organizationId, ctx.organizationId), eq(departments.code, c))).limit(1)).length > 0));
     const [d] = await tx
       .insert(departments)
-      .values({ organizationId: ctx.organizationId, siteId: v.siteId, code: v.code, name: v.name, isActive: v.isActive, createdBy: ctx.userId, updatedBy: ctx.userId })
+      .values({ organizationId: ctx.organizationId, siteId: v.siteId, code, name: v.name, isActive: v.isActive, createdBy: ctx.userId, updatedBy: ctx.userId })
       .returning()
-      .catch((e) => uniqueConflict(e, `Department code ${v.code} already exists at this site.`));
+      .catch((e) => uniqueConflict(e, `Department code ${code} already exists at this site.`));
     await audit(tx, ctx, { action: "masterdata.department.created", entityType: "department", entityId: d.id, entityNumber: d.code, siteId: d.siteId, after: { code: d.code, name: d.name } });
     return d;
   });
@@ -53,7 +58,8 @@ export async function updateDepartment(ctx: AuthContext, departmentId: string, r
     const [before] = await tx.select().from(departments).where(and(eq(departments.id, departmentId), eq(departments.organizationId, ctx.organizationId))).for("update").limit(1);
     if (!before) throw new DomainError("not_found", "Department not found.");
     ctx.requireSite(before.siteId);
-    if (v.code !== before.code && (await isReferenced(tx, "departments", before.id)).referenced) {
+    const code = v.code ?? before.code;
+    if (code !== before.code && (await isReferenced(tx, "departments", before.id)).referenced) {
       throw new DomainError("state", `Department code ${before.code} is in use; it can no longer change.`, { field: "code" });
     }
     if (!v.isActive && before.isActive) {
@@ -62,10 +68,10 @@ export async function updateDepartment(ctx: AuthContext, departmentId: string, r
     }
     const [after] = await tx
       .update(departments)
-      .set({ code: v.code, name: v.name, isActive: v.isActive, updatedAt: new Date(), updatedBy: ctx.userId })
+      .set({ code, name: v.name, isActive: v.isActive, updatedAt: new Date(), updatedBy: ctx.userId })
       .where(eq(departments.id, before.id))
       .returning()
-      .catch((e) => uniqueConflict(e, `Department code ${v.code} already exists at this site.`));
+      .catch((e) => uniqueConflict(e, `Department code ${code} already exists at this site.`));
     const d = diff(before, after, ["code", "name", "isActive"]);
     if (d.changed.length) {
       const action = before.isActive && !after.isActive ? "masterdata.department.deactivated" : "masterdata.department.updated";

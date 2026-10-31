@@ -84,11 +84,13 @@ const SO_STAGES: readonly Stage[] = [
   { label: "Draft", statuses: ["draft"] },
   { label: "Approval", statuses: ["submitted", "pending_approval"] },
   { label: "Confirmed", statuses: ["confirmed"] },
+  // Grade-5 words (ADR-088 sales pass): "Set aside" (allocated), "Get from shelf" (picking), "Sent out"
+  // (shipped). The statuses themselves are unchanged.
   // Plain words (owner mockup review 2026-10-30): "Stock reserved" (allocated), "Packing" (picking and
   // packed), "Billed" (invoiced), "Done" (closed). The statuses themselves are unchanged.
-  { label: "Stock reserved", statuses: ["allocated"] },
-  { label: "Packing", statuses: ["picking", "packed"], currentLabel: { picking: "Picking", packed: "Packed" } },
-  { label: "Shipped", statuses: ["partially_shipped", "shipped"], currentLabel: { partially_shipped: "Partly shipped" } },
+  { label: "Set aside", statuses: ["allocated"] },
+  { label: "Get from shelf", statuses: ["picking", "packed"], currentLabel: { picking: "Getting from shelf", packed: "Box checked" } },
+  { label: "Sent out", statuses: ["partially_shipped", "shipped"], currentLabel: { partially_shipped: "Partly sent out" } },
   { label: "Billed", statuses: ["invoiced"] },
   { label: "Done", statuses: ["closed"] },
 ];
@@ -102,16 +104,16 @@ export function salesOrderSteps(status: string): RecordStep[] {
  * draft (picking) → picked → packed → dispatched → delivered; cancelled from draft|picked|packed;
  * reversed from dispatched (goods never left); returned from dispatched|delivered. */
 const SHIPMENT_STAGES: readonly Stage[] = [
-  { label: "Picking", statuses: ["draft"] },
-  { label: "Picked", statuses: ["picked"] },
-  { label: "Packed", statuses: ["packed"] },
-  { label: "Dispatched", statuses: ["dispatched"] },
+  { label: "Get from shelf", statuses: ["draft"] },
+  { label: "Second check of the box", statuses: ["picked"] },
+  { label: "Ready to send out", statuses: ["packed"] },
+  { label: "Sent out", statuses: ["dispatched"] },
   { label: "Delivered", statuses: ["delivered"] },
 ];
 
 export function shipmentSteps(status: string): RecordStep[] {
   if (status === "cancelled") return stopped("Cancelled");
-  if (status === "reversed") return stoppedAfter(SHIPMENT_STAGES, 3, "Reversed");
-  if (status === "returned") return stoppedAfter(SHIPMENT_STAGES, 3, "Returned");
+  if (status === "reversed") return stoppedAfter(SHIPMENT_STAGES, 3, "Sending undone");
+  if (status === "returned") return stoppedAfter(SHIPMENT_STAGES, 3, "Came back");
   return strip(SHIPMENT_STAGES, status);
 }

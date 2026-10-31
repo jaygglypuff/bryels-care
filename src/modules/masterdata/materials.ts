@@ -43,8 +43,8 @@ const MaterialInput = z
     name: reqText("the material name", 200),
     inciName: optText(300),
     commonName: optText(200),
-    materialKind: z.enum(MATERIAL_CLASSES, { message: "Choose the material class." }),
-    baseUom: z.string().trim().min(1, "Choose the base unit."),
+    materialKind: z.enum(MATERIAL_CLASSES, { message: "Choose what kind it is: ingredient, packaging or supplies." }),
+    baseUom: z.string({ message: "Choose how you buy and count it: by weight, by volume or by the piece." }).trim().min(1, "Choose how you buy and count it: by weight, by volume or by the piece."),
     shelfLifeDays: optInt("Shelf life", 1, 3650),
     retestDays: optInt("Retest interval", 1, 3650),
     storageConditions: optText(300),
@@ -61,8 +61,36 @@ const MaterialInput = z
   })
   .strict();
 export type MaterialInput = z.input<typeof MaterialInput>;
-/** Create: the code may be left blank; the next MAT-nnnn is assigned (ADR-075). */
-const CreateInput = MaterialInput.extend({ code: optionalCode(scanCode("Material code", "MAT-0070")), status: z.enum(["draft", "active"]).default("active") }).strict();
+
+/**
+ * ADR-088: what a new material gets when the form leaves a box alone. Ingredients and packaging arrive
+ * waiting for the QA check and need a certificate (CoA); supplies (cleaning agents, spare parts) do not.
+ * Assumption A-G5-MD-01, to be confirmed by the company's QA reviewer; QA changes it per material under
+ * "More details".
+ */
+export const MATERIAL_KIND_DEFAULTS: Record<MaterialClass, { requiresCoa: boolean; requiresIncomingInspection: boolean }> = {
+  raw_material: { requiresCoa: true, requiresIncomingInspection: true },
+  intermediate: { requiresCoa: true, requiresIncomingInspection: true },
+  packaging: { requiresCoa: true, requiresIncomingInspection: true },
+  consumable: { requiresCoa: false, requiresIncomingInspection: false },
+};
+/** A checkbox the form may leave out ("" or missing = use the default of the kind). */
+const optBool = z
+  .union([z.boolean(), z.literal("on"), z.literal("true"), z.literal("false"), z.literal(""), z.null(), z.undefined()])
+  .transform((v) => (v === undefined || v === null || v === "" ? null : v === true || v === "on" || v === "true"));
+
+/** Create: the code may be left blank; the next MAT-nnnn is assigned (ADR-075). QA flags default by kind (ADR-088). */
+const CreateInput = MaterialInput.extend({
+  code: optionalCode(scanCode("Material code", "MAT-0070")),
+  status: z.enum(["draft", "active"]).default("active"),
+  requiresCoa: optBool,
+  requiresIncomingInspection: optBool,
+}).strict();
+/** Edit: a blank code keeps the code; a missing allocation rule keeps the rule (the form no longer shows it). */
+const UpdateInput = MaterialInput.extend({
+  code: optionalCode(scanCode("Material code", "MAT-0070")),
+  allocationRule: z.enum(["fefo", "fifo"]).optional(),
+}).strict();
 
 /** Fields every list and export may show (DTO allow-list; no cost fields). */
 const LIST_FIELDS = {
@@ -114,7 +142,7 @@ export async function listMaterials(ctx: AuthContext, f: MaterialFilter = {}, li
         like ? or(ilike(materials.code, like), ilike(materials.name, like), ilike(materials.inciName, like), ilike(materials.commonName, like), ilike(materials.brand, like)) : undefined,
       ),
     )
-    .orderBy(asc(materials.code))
+    .orderBy(asc(materials.name), asc(materials.code))
     .limit(limit);
   return rows.map((r) => ({ ...r, warnings: materialWarnings(r) }));
 }
@@ -173,12 +201,14 @@ export async function createMaterial(ctx: AuthContext, raw: unknown, opts?: InTx
     await assertBaseUom(tx, ctx.organizationId, v.baseUom);
     const code = v.code ?? (await assignMasterCode(tx, ctx.organizationId, "MAT", (c) => materialCodeTaken(tx, ctx.organizationId, c)));
     const extra = await extraFields(tx, ctx.organizationId, v, v.baseUom, null);
+    const dflt = MATERIAL_KIND_DEFAULTS[v.materialKind];
+    const flags = { requiresCoa: v.requiresCoa ?? dflt.requiresCoa, requiresIncomingInspection: v.requiresIncomingInspection ?? dflt.requiresIncomingInspection };
     const [m] = await tx
       .insert(materials)
-      .values({ organizationId: ctx.organizationId, ...v, ...extra, code })
+      .values({ organizationId: ctx.organizationId, ...v, ...flags, ...extra, code })
       .returning()
       .catch((e) => uniqueConflict(e, `Material code ${code} is already in use.`));
-    await audit(tx, ctx, { action: "masterdata.material.created", entityType: "material", entityId: m.id, entityNumber: m.code, siteId: null, after: { ...v, ...extra, code, codeAssigned: !v.code } });
+    await audit(tx, ctx, { action: "masterdata.material.created", entityType: "material", entityId: m.id, entityNumber: m.code, siteId: null, after: { ...v, ...flags, ...extra, code, codeAssigned: !v.code } });
     return { ...m, warnings: materialWarnings(m) };
   });
 }
@@ -220,10 +250,11 @@ const FIELDS = ["code", "name", "inciName", "commonName", "materialKind", "baseU
 export async function updateMaterial(ctx: AuthContext, materialId: string, raw: unknown) {
   ctx.require("masterdata.material.edit");
   assertUuid(materialId, "Material");
-  const v = parseInput(MaterialInput, raw);
+  const p = parseInput(UpdateInput, raw);
   return db.transaction(async (tx) => {
     const [before] = await tx.select().from(materials).where(and(eq(materials.id, materialId), eq(materials.organizationId, ctx.organizationId))).for("update").limit(1);
     if (!before) throw new DomainError("not_found", "Material not found.");
+    const v = { ...p, code: p.code ?? before.code, allocationRule: p.allocationRule ?? (before.allocationRule as "fefo" | "fifo") };
     if (before.status === "discontinued") throw new DomainError("state", "A discontinued material can no longer be edited.");
     if (v.code !== before.code || v.baseUom !== before.baseUom) {
       const ref = await isReferenced(tx, "materials", before.id);
@@ -299,7 +330,7 @@ export const materialsExport: ExportDefinition<MaterialFilter & Record<string, u
 export async function materialFormOptions(ctx: AuthContext, opts: { keepCategory?: string | null } = {}) {
   const [categories, units] = await Promise.all([
     lookupOptions(db, ctx.organizationId, "material_category", { keep: opts.keepCategory }),
-    db.select({ code: uoms.code, name: uoms.name }).from(uoms).where(and(eq(uoms.organizationId, ctx.organizationId), eq(uoms.isActive, true))).orderBy(asc(uoms.dimension), asc(uoms.code)),
+    db.select({ code: uoms.code, name: uoms.name, dimension: uoms.dimension }).from(uoms).where(and(eq(uoms.organizationId, ctx.organizationId), eq(uoms.isActive, true))).orderBy(asc(uoms.dimension), asc(uoms.code)),
   ]);
   return { categories, packUnits: units };
 }

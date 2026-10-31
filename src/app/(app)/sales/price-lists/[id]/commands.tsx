@@ -17,7 +17,7 @@ export function PriceListCommand({ priceListId, command, label, reason, note, va
       {(fe) => (
         <>
           {reason && (
-            <Field label="Reason" htmlFor={`pl-${command}-reason`} error={fe.reason}>
+            <Field label="Why?" htmlFor={`pl-${command}-reason`} error={fe.reason}>
               <Input id={`pl-${command}-reason`} name="reason" required minLength={3} maxLength={300} />
             </Field>
           )}
@@ -34,9 +34,9 @@ export function PriceListCommand({ priceListId, command, label, reason, note, va
 
 export function NewVersionForm({ priceListId, today }: { priceListId: string; today: string }) {
   return (
-    <ActionForm action={newVersionAction} hidden={{ priceListId }} submit="Start a new version" variant="secondary" pending="Creating draft…">
+    <ActionForm action={newVersionAction} hidden={{ priceListId }} submit="Start new prices from these" variant="secondary" pending="Making the draft…">
       {(fe) => (
-        <Field label="New version effective from" htmlFor="nv-from" error={fe.effectiveFrom ?? fe.form}>
+        <Field label="New prices start on" htmlFor="nv-from" error={fe.effectiveFrom ?? fe.form}>
           <Input id="nv-from" name="effectiveFrom" type="date" min={today} defaultValue={today} required />
         </Field>
       )}

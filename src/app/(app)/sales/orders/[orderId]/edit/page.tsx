@@ -5,15 +5,16 @@ import { D } from "@/lib/qty";
 import { canSeePrices, customerOptions, getOrder, manilaToday, priceBook, productAvailability } from "@/modules/sales";
 import { Banner } from "@/ui/status";
 import { LinkButton, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../../forbidden";
 import { NewOrderForm, type PriceBooks } from "../../../new/order-form";
 import { editOrderAction } from "../../actions";
 
-export const metadata = { title: "Edit order" };
+export const metadata = { title: "Change draft order" };
 
 export default async function EditOrderPage({ params }: { params: Promise<{ orderId: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.sales_order.edit")) return <Forbidden what="editing sales orders" />;
+  if (!ctx.can("sales.sales_order.edit")) return <Forbidden what="changing customer orders" />;
   const { orderId } = await params;
   let data: Awaited<ReturnType<typeof getOrder>>;
   try {
@@ -26,9 +27,10 @@ export default async function EditOrderPage({ params }: { params: Promise<{ orde
   if (order.status !== "draft") {
     return (
       <>
-        <PageHeader title={`Edit ${order.orderNumber}`} />
-        <Banner tone="info" title="Only a draft can be edited" action={<LinkButton href={`/sales/${order.id}`} variant="secondary">Back to the order</LinkButton>}>
-          This order is {order.status.replace(/_/g, " ")}. Cancel it with a reason and enter a new one if the customer changed the PO.
+        <PageHeader title="Change order" />
+        <PageIntro>This screen is for changing a draft order. This order was already sent, so it cannot be changed here.</PageIntro>
+        <Banner tone="info" title="Only a draft can be changed" action={<LinkButton href={`/sales/${order.id}`} variant="secondary">Back to the order</LinkButton>}>
+          If the customer changed their order, cancel this one with a reason (⋯ More on the order) and enter a new one.
         </Banner>
       </>
     );
@@ -39,10 +41,11 @@ export default async function EditOrderPage({ params }: { params: Promise<{ orde
   return (
     <>
       <PageHeader
-        title={`Edit ${order.orderNumber}`}
-        subtitle="Draft order: change lines, dates or addresses, then save. Prices are resolved again from the approved price list."
-        actions={<LinkButton href={`/sales/${order.id}`} variant="secondary">Back</LinkButton>}
+        title={`Change draft order for ${data.customer.name}`}
+        subtitle={<span className="font-mono text-[13px] text-muted">{order.orderNumber}</span>}
+        actions={<LinkButton href={`/sales/${order.id}`} variant="ghost">Back</LinkButton>}
       />
+      <PageIntro>This screen is for changing a draft order: products, amounts, the delivery date or address. The usual prices are looked up again when you save.</PageIntro>
       <NewOrderForm
         customers={customers.filter((c) => c.id === order.customerId)}
         products={products}

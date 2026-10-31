@@ -9,7 +9,7 @@ import { Money, OrderChip, SalesStatus } from "../orders/sales-ui";
 export type PanelTab = "orders" | "history" | "details";
 export const PANEL_TABS: { key: PanelTab; label: string }[] = [
   { key: "orders", label: "Orders" },
-  { key: "history", label: "History" },
+  { key: "history", label: "What happened" },
   { key: "details", label: "Details" },
 ];
 
@@ -58,7 +58,7 @@ export function CustomerPanel({
           <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-muted">
             <span>Customer since {since}</span>
             <SalesStatus status={c.status} />
-            <span className="font-mono text-[12px]">{c.code}</span>
+            <span className="font-mono text-[12px] text-muted">{c.code}</span>
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -68,7 +68,7 @@ export function CustomerPanel({
             </LinkButton>
           )}
           <LinkButton href={`/sales/customers/${c.id}`} variant="secondary">
-            Open full record
+            See everything
           </LinkButton>
         </div>
       </div>
@@ -94,20 +94,20 @@ export function CustomerPanel({
             <>
               <dl className="grid grid-cols-3 gap-2">
                 <Total label="Total orders" value={d.orders.length.toLocaleString("en-PH")} />
-                <Total label="Outstanding" value={outstanding === undefined ? <span className="text-[13px] font-normal text-muted">Finance only</span> : <Money value={outstanding} />} />
+                <Total label="Owes us" value={outstanding === undefined ? <span className="text-[13px] font-normal text-muted">Finance only</span> : <Money value={outstanding} />} />
                 <Total label="Last order" value={last ? fmtDate(last) : "—"} />
               </dl>
               <h3 className="mt-5 text-[15px] font-semibold text-fg">Recent orders</h3>
               {d.orders.length === 0 ? (
-                <p className="mt-2 text-[14px] text-muted">No orders yet.</p>
+                <p className="mt-2 text-[14px] text-muted">No orders yet. Tap &quot;New order for this customer&quot; when they order.</p>
               ) : (
                 <ul className="mt-2 divide-y divide-line rounded-[14px] border border-line">
                   {[...d.orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, RECENT).map((o) => (
                     <li key={o.id}>
                       <Link href={`/sales/${o.id}`} className="flex min-h-[52px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2 hover:bg-surface-2">
                         <span className="min-w-0">
-                          <span className="font-medium text-fg">{o.orderNumber}</span>
-                          <span className="block text-[12px] text-muted">{fmtDate(o.createdAt)}</span>
+                          <span className="font-medium text-fg">{fmtDate(o.createdAt)}</span>
+                          <span className="block font-mono text-[12px] text-muted">{o.orderNumber}</span>
                         </span>
                         <span className="flex items-center gap-3">
                           <Money className="font-medium tabular" value={o.value} />
@@ -158,24 +158,24 @@ export function CustomerPanel({
         <div className="mt-4">
           <Dl
             items={[
-              ["Contact", c.contactName ?? "—"],
-              ["E-mail", c.email ?? "—"],
               ["Phone", c.phone ?? "—"],
-              ["Ship to", c.shipToAddress],
-              ["Min shelf life at dispatch", `${c.minShelfLifeDays} days`],
-              ["Customer code", c.code],
+              ["Deliver to", c.shipToAddress],
+              ["Contact person", c.contactName ?? "—"],
+              ["E-mail", c.email ?? "—"],
+              ["Shortest shelf life allowed", `${c.minShelfLifeDays} days left when sent out`],
+              ["Customer number", c.code],
               ...(d.credit
                 ? ([
-                    ["Credit limit", <Money key="l" value={d.credit.limit} />],
-                    ["Payment terms", d.credit.paymentTermsDays != null ? `${d.credit.paymentTermsDays} days` : "—"],
+                    ["Most they may owe", <Money key="l" value={d.credit.limit} />],
+                    ["Days to pay", d.credit.paymentTermsDays != null ? `${d.credit.paymentTermsDays} days` : "—"],
                   ] as [string, React.ReactNode][])
                 : []),
             ]}
           />
           <p className="mt-3 text-[13px] text-muted">
-            Addresses, contacts, requirements and price lists are on the{" "}
+            Addresses, contacts, special rules and prices are on{" "}
             <Link href={`/sales/customers/${c.id}`} className="font-medium text-primary-text hover:underline">
-              full record
+              the customer page
             </Link>
             .
           </p>

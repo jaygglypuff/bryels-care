@@ -45,7 +45,7 @@ const SETUP_ITEMS: NavItem[] = [
   { label: "Products and formulas", href: "/masterdata/formulas", permission: "masterdata.formula.view" },
   { label: "Steps for each product", href: "/masterdata/routings", permission: "masterdata.routing.view" },
   { label: "Work instructions", href: "/masterdata/work-instructions", permission: "masterdata.work_instruction.view" },
-  { label: "Inspection plans", href: "/masterdata/inspection-plans", permission: "quality.inspection_plan.view" },
+  { label: "Quality checks for items", href: "/masterdata/inspection-plans", permission: "quality.inspection_plan.view" },
   { label: "Equipment", href: "/masterdata/equipment", permission: "masterdata.equipment.view" },
 ];
 
@@ -117,9 +117,9 @@ export const NAV: NavGroup[] = [
         { label: "Boxing", href: "/warehouse/packs", permission: "inventory.pack.view" },
         { label: "Repack for a customer", href: "/warehouse/repack", permission: "inventory.container.edit" },
         { label: "Check labels in an area", href: "/quality/label-verification", permission: "inventory.container.edit" },
-        { label: "Picking", href: "/sales/picking", permission: "sales.pick.view" },
-        { label: "Dispatch", href: "/sales/dispatch", permission: "sales.shipment.view" },
-        { label: "Shipments", href: "/sales/shipments", permission: "sales.shipment.view" },
+        { label: "To get from shelf", href: "/sales/picking", permission: "sales.pick.view" },
+        { label: "Send out", href: "/sales/dispatch", permission: "sales.shipment.view" },
+        { label: "Deliveries", href: "/sales/shipments", permission: "sales.shipment.view" },
       ]),
       ...inSection("Maintenance", [
         { label: "Maintenance", href: "/maintenance", permission: "maintenance.work_order.view" },
@@ -162,10 +162,10 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Customer orders", href: "/sales", permission: "sales.sales_order.view" },
       { label: "Customers", href: "/sales/customers", permission: "masterdata.customer.view" },
-      { label: "Order board", href: "/sales/board", permission: "sales.sales_order.view" },
+      { label: "Orders as a board", href: "/sales/board", permission: "sales.sales_order.view" },
       ...inSection("Quotes, prices & returns", [
-        { label: "Quotations", href: "/sales/quotations", permission: "sales.quote.view" },
-        { label: "Price lists", href: "/sales/price-lists", permission: "sales.price_list.view" },
+        { label: "Price offers", href: "/sales/quotations", permission: "sales.quote.view" },
+        { label: "Prices", href: "/sales/price-lists", permission: "sales.price_list.view" },
         { label: "Customer returns", href: "/sales/returns", permission: "sales.customer_return.view" },
       ]),
       ...inSection("Billing & payments", [
@@ -216,10 +216,10 @@ export const NAV: NavGroup[] = [
         { label: "Locations", href: "/masterdata/locations", permission: "masterdata.location.view" },
         { label: "Sites", href: "/masterdata/sites", permission: "masterdata.site.view" },
         { label: "Warehouses", href: "/masterdata/warehouses", permission: "masterdata.warehouse.view" },
-        { label: "Production lines", href: "/masterdata/lines", permission: "masterdata.production_line.view" },
-        { label: "Units of measure", href: "/masterdata/uom", permission: "masterdata.uom.view" },
-        { label: "Lists", href: "/masterdata/lists", permission: "masterdata.lookup_value.view" },
-        { label: "Reason codes", href: "/masterdata/reason-codes", permission: "masterdata.reason_code.view" },
+        { label: "Making areas / lines", href: "/masterdata/lines", permission: "masterdata.production_line.view" },
+        { label: "Units", href: "/masterdata/uom", permission: "masterdata.uom.view" },
+        { label: "Choice lists", href: "/masterdata/lists", permission: "masterdata.lookup_value.view" },
+        { label: "Reasons", href: "/masterdata/reason-codes", permission: "masterdata.reason_code.view" },
       ]),
       ...inSection("People & access", [
         { label: "Users", href: "/admin/users", permission: "identity.user.view" },

@@ -128,7 +128,7 @@ export async function getLocation(ctx: AuthContext, locationId: string) {
   const children = await db.select({ id: locations.id, code: locations.code, name: locations.name, status: locations.status }).from(locations).where(eq(locations.parentLocationId, l.id)).orderBy(asc(locations.code));
   const roles = await db.select({ role: warehouseSpecialLocations.role }).from(warehouseSpecialLocations).where(eq(warehouseSpecialLocations.locationId, l.id));
   const [stock] = await db.select({ lots: sql<number>`count(distinct ${inventoryBalances.lotId})::int` }).from(inventoryBalances).where(and(eq(inventoryBalances.locationId, l.id), sql`${inventoryBalances.qtyBase} > 0`));
-  const parentRow = l.parentLocationId ? (await db.select({ id: locations.id, code: locations.code }).from(locations).where(eq(locations.id, l.parentLocationId)))[0] : null;
+  const parentRow = l.parentLocationId ? (await db.select({ id: locations.id, code: locations.code, name: locations.name }).from(locations).where(eq(locations.id, l.parentLocationId)))[0] : null;
   return { ...l, warehouse: w, parent: parentRow ?? null, children, specialRoles: roles.map((r) => r.role), lotsInStock: stock?.lots ?? 0 };
 }
 
@@ -205,9 +205,11 @@ export async function createLocation(ctx: AuthContext, raw: unknown, opts?: InTx
  */
 export async function updateLocation(ctx: AuthContext, locationId: string, raw: unknown) {
   ctx.require("masterdata.location.edit");
-  const v = parseInput(LocationInput.omit({ warehouseId: true }), raw);
+  // ADR-088: the code may be left blank on edit (kept as is).
+  const p = parseInput(LocationInput.omit({ warehouseId: true }).extend({ code: optionalCode(scanCode("Location code", "A-03")) }), raw);
   return db.transaction(async (tx) => {
     const before = await loadLocation(tx, ctx, locationId, true);
+    const v = { ...p, code: p.code ?? before.code };
     if (v.code !== before.code) {
       if ((await isReferenced(tx, "locations", before.id, ["locations"])).referenced) throw new DomainError("state", `Location ${before.code} has been used; its code can no longer change.`, { field: "code" });
       await assertOrgUniqueCode(tx, ctx, v.code, before.id);

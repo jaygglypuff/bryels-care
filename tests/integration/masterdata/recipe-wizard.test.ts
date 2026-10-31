@@ -7,8 +7,24 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
+import Decimal from "decimal.js";
 import { db } from "@/db/client";
-import { bomLines, formulaRevisions, formulas, materials, organizations, products, routingRevisions, routingStepChecklistItems, routingStepParameters, routingSteps, routings, skus } from "@/db/schema";
+import {
+  batchMaterials,
+  batches,
+  bomLines,
+  formulaRevisions,
+  formulas,
+  materials,
+  organizations,
+  products,
+  routingRevisions,
+  routingStepChecklistItems,
+  routingStepParameters,
+  routingSteps,
+  routings,
+  skus,
+} from "@/db/schema";
 import { AuthContext, type SiteRef } from "@/lib/auth/context";
 import {
   type RecipeSaveInput,
@@ -16,6 +32,7 @@ import {
   createFormula,
   createProduct,
   createRecipeIngredient,
+  createRecipePackaging,
   createRecipeProduct,
   createRouting,
   decideFormulaRevision,
@@ -25,12 +42,13 @@ import {
   listFormulas,
   listRoutings,
   newStep,
+  packagingKeep,
   recipeWizardOptions,
   saveFormulaRevisionDraft,
   saveRecipe,
   saveRoutingRevisionDraft,
 } from "@/modules/masterdata";
-import { createBatch } from "@/modules/production";
+import { type FormulaSnapshot, createBatch, getMaterialsList, getWeighView } from "@/modules/production";
 import { allowDirectBatches } from "../../support/w2b";
 import { expectCode, manilaDate, setupW1D } from "./helpers";
 
@@ -314,6 +332,107 @@ describe("list counts (usability test bug)", () => {
     expect(r.effective?.stepCount).toBeGreaterThan(0);
     const [{ n }] = (await db.execute(sql`select count(*)::int as n from routing_steps where routing_revision_id = ${r.effective!.id}`)) as unknown as { n: number }[];
     expect(r.effective?.stepCount).toBe(n);
+  });
+});
+
+describe("by pieces and packaging for each piece (ADR-088 §4, ADR-092)", () => {
+  const wrapperLine = (materialId: string, perPiece = "1") => ({ materialId, perPiece, from: null, keep: packagingKeep() });
+
+  it("70 bars of 135 g at 95 % → batch size 9,948 g; the wrapper is a packaging line of 70 pcs, outside the percent total; shown back as 70 bars", async () => {
+    const pid = await newProduct("Wizard Soap Pieces");
+    const wrapper = await createRecipePackaging(planner, { name: "Soap wrapper 135 g (pieces test)" });
+    expect(wrapper).toMatchObject({ kind: "packaging", baseUom: "pcs", status: "active" });
+    // percent view, three ingredients at exactly 100 %, plus one packaging line: accepted (packaging is not in the total)
+    const r = await saveRecipe(planner, input(pid, { batchBy: "pcs", pieces: "70", batchKg: "", packaging: [wrapperLine(wrapper.id)] }));
+    const [rev] = await db.select().from(formulaRevisions).where(eq(formulaRevisions.id, r.formula.revisionId));
+    expect(rev.referenceBatchSizeG).toBe("9948.000000");
+    expect(rev.theoreticalYieldPct).toBe("95.000000");
+    const lines = await db.select().from(bomLines).where(eq(bomLines.formulaRevisionId, rev.id)).orderBy(asc(bomLines.lineNo));
+    expect(lines).toHaveLength(4);
+    // ingredients in grams of the 9,948 g batch
+    expect(lines.slice(0, 3).map((l) => l.quantityG)).toEqual(["2104.449660", "4910.452176", "2933.098164"]);
+    expect(lines.slice(0, 3).reduce((a, l) => a.plus(l.quantityG), new Decimal(0)).eq(9948)).toBe(true);
+    // the packaging line: 70 pieces, counted not weighed, scales with the batch
+    expect(lines[3]).toMatchObject({ materialId: wrapper.id, quantityG: "70.000000", tolerancePct: "0.000000", toleranceAbsG: null, scaling: "proportional", requiresChecker: false, isCritical: false });
+
+    const view = await getRecipe(planner, r.formulaId);
+    expect(view!.draft).toMatchObject({ batchBy: "pcs", pieces: "70", batchKg: "9.948" });
+    expect(view!.draft.lines).toHaveLength(3);
+    expect(view!.draft.packaging).toEqual([expect.objectContaining({ materialId: wrapper.id, perPiece: "1" })]);
+    expect(view!.product.pieceG).toBe("135");
+    // saving what was read back changes nothing
+    await saveRecipe(planner, { ...view!.draft, submit: false, activateProduct: false });
+    const again = await db.select().from(bomLines).where(eq(bomLines.formulaRevisionId, rev.id)).orderBy(asc(bomLines.lineNo));
+    expect(again.map(({ id: _i, ...l }) => l)).toEqual(lines.map(({ id: _i, ...l }) => l));
+    // "Copy from another recipe" carries the packaging per piece (worked out again for the new product)
+    expect((await getRecipeCopy(planner, r.formulaId)).packaging).toEqual([expect.objectContaining({ materialId: wrapper.id, perPiece: "1", from: null })]);
+  });
+
+  it("refuses packaging as an ingredient, an ingredient as packaging, and pieces that are not a whole number", async () => {
+    const pid = await newProduct("Wizard Soap Kinds");
+    const wrapper = await createRecipePackaging(planner, { name: "Soap wrapper (kinds test)" });
+    const asIngredient = input(pid);
+    asIngredient.lines = [...asIngredient.lines.slice(0, 2), { ...asIngredient.lines[2], materialId: wrapper.id }];
+    const a = await expectCode(saveRecipe(planner, asIngredient), "validation");
+    expect(a.details?.fieldErrors).toHaveProperty("lines.2.materialId");
+    const b = await expectCode(saveRecipe(planner, input(pid, { packaging: [wrapperLine(mats[0].id)] })), "validation");
+    expect(b.details?.fieldErrors).toHaveProperty("packaging.0.materialId");
+    const c = await expectCode(saveRecipe(planner, input(pid, { batchBy: "pcs", pieces: "7.5" })), "validation");
+    expect(c.details?.fieldErrors).toHaveProperty("pieces");
+    const d = await expectCode(saveRecipe(planner, input(pid, { packaging: [wrapperLine(wrapper.id, "0")] })), "validation");
+    expect(d.details?.fieldErrors).toHaveProperty("packaging.0.perPiece");
+    expect(await db.select().from(formulas).where(eq(formulas.productId, pid))).toHaveLength(0);
+  });
+
+  it("a product without a weight per piece: asked once and saved to the product, only by someone who may edit products", async () => {
+    const pid = await newProduct("Wizard Soap No Weight");
+    await db.update(products).set({ unitNetMassG: "0" }).where(eq(products.id, pid)); // legacy row without a size
+    const noWeight = await expectCode(saveRecipe(planner, input(pid, { batchBy: "pcs", pieces: "70" })), "validation");
+    expect(noWeight.details?.fieldErrors).toHaveProperty("pieceG");
+    // the site manager may edit recipes but not products: refused with a plain reason, nothing written
+    const mgr = await expectCode(saveRecipe(manager, input(pid, { batchBy: "pcs", pieces: "70", pieceG: "135" })), "validation");
+    expect(mgr.message).toMatch(/can't change products/);
+    expect((await db.select().from(products).where(eq(products.id, pid)))[0].unitNetMassG).toBe("0.000000");
+    expect(await db.select().from(formulas).where(eq(formulas.productId, pid))).toHaveLength(0);
+    const r = await saveRecipe(planner, input(pid, { batchBy: "pcs", pieces: "70", pieceG: "135" }));
+    expect((await db.select().from(products).where(eq(products.id, pid)))[0].unitNetMassG).toBe("135.000000");
+    const [rev] = await db.select().from(formulaRevisions).where(eq(formulaRevisions.id, r.formula.revisionId));
+    expect(rev.referenceBatchSizeG).toBe("9948.000000");
+  });
+
+  it("refuses people without masterdata.formula.create / masterdata.material.create, and writes nothing", async () => {
+    const pid = await newProduct("Wizard Soap Pieces Roles");
+    const [pkg] = await db.select({ id: materials.id }).from(materials).where(and(eq(materials.materialKind, "packaging"), eq(materials.status, "active"))).limit(1);
+    const byPieces = input(pid, { batchBy: "pcs", pieces: "70", packaging: [wrapperLine(pkg.id)] });
+    await expectCode(saveRecipe(operator, byPieces), "forbidden");
+    await expectCode(saveRecipe(qa, byPieces), "forbidden");
+    await expectCode(createRecipePackaging(operator, { name: "x" }), "forbidden");
+    await expectCode(createRecipePackaging(manager, { name: "x" }), "forbidden");
+    expect(await db.select().from(formulas).where(eq(formulas.productId, pid))).toHaveLength(0);
+  });
+
+  it("an approved recipe by pieces: a batch lists the wrapper on Get materials (recipe packaging line, not weighed), scaled to the batch", async () => {
+    const pid = await newProduct("Wizard Soap Pieces Batch");
+    const wrapper = await createRecipePackaging(planner, { name: "Soap wrapper (batch test)" });
+    const r = await saveRecipe(planner, input(pid, { batchBy: "pcs", pieces: "70", batchKg: "", packaging: [wrapperLine(wrapper.id)], submit: true, activateProduct: true }));
+    await decideFormulaRevision(qa, { id: r.formula.revisionId, decision: "approved" });
+    await decideFormulaRevision(manager, { id: r.formula.revisionId, decision: "approved" });
+    await decideRoutingRevision(qa, { id: r.routing!.revisionId, decision: "approved" });
+    await decideRoutingRevision(manager, { id: r.routing!.revisionId, decision: "approved" });
+    // two batches' worth: 19.896 kg → 140 wrappers
+    const b = await createBatch(manager, { formulaRevisionId: r.formula.revisionId, plannedSizeKg: "19.896", plannedStartOn: today });
+    const [row] = await db.select().from(batches).where(eq(batches.id, b.batchId));
+    const snap = row.formulaSnapshot as FormulaSnapshot;
+    expect(snap.packaging).toEqual([expect.objectContaining({ materialId: wrapper.id, source: "recipe", qty: "140" })]);
+    const [bm] = await db.select().from(batchMaterials).where(and(eq(batchMaterials.batchId, b.batchId), eq(batchMaterials.materialId, wrapper.id)));
+    expect(bm.status).toBe("packaging");
+    expect(new Decimal(bm.theoreticalQtyG).eq(140)).toBe(true);
+    const list = await getMaterialsList(operator, b.batchId);
+    const l = list.lines.find((x) => x.materialId === wrapper.id)!;
+    expect(l).toMatchObject({ materialKind: "packaging", baseUom: "pcs", weighingOpen: false, needsCheck: false });
+    expect(new Decimal(l.qty).eq(140)).toBe(true);
+    // never on the Weigh screen
+    expect((await getWeighView(operator, b.batchId)).cards.map((c) => c.materialName)).not.toContain(wrapper.name);
   });
 });
 

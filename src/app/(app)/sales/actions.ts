@@ -89,7 +89,7 @@ export async function allocateAction(orderId: string, _: ActionState): Promise<A
   revalidatePath(`/sales/${orderId}`);
   if (r.fullyAllocated) redirect(`/sales/${orderId}?done=allocated`);
   // Partial allocation is saved; the order stays confirmed and the shortfall is reported.
-  return { ok: false, message: describeShortfall(r, `Partly allocated (${r.created.length} pick line${r.created.length === 1 ? "" : "s"} added).`) };
+  return { ok: false, message: describeShortfall(r, `Part of the stock is set aside (${r.created.length} shelf place${r.created.length === 1 ? "" : "s"}).`) };
 }
 
 export async function dispatchAction(orderId: string, _: ActionState, fd: FormData): Promise<ActionState> {

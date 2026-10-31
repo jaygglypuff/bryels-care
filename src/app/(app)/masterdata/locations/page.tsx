@@ -3,6 +3,7 @@ import { requireContext } from "@/lib/auth/context";
 import { LOCATION_KINDS, LOCATION_KIND_LABELS, SPECIAL_ROLE_LABELS, listLocations, locationFormOptions, type LocationKind, type SpecialRole } from "@/modules/masterdata";
 import { LOCATION_SECTIONS, SECTION_LABELS, isSection } from "@/lib/location-sections";
 import { Card, CardTitle, EmptyState, Input, LinkButton, PageHeader, Select } from "@/ui/core";
+import { MoreDetails, PageIntro } from "@/ui/guide";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { ActionForm, CheckField, Grid, SelectField, TextField } from "../_org/form";
@@ -42,7 +43,7 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
   const opts = await locationFormOptions(ctx, siteId);
   const groups = new Map<string, { title: string; rows: Row[] }>();
   for (const r of rows) {
-    const g = groups.get(r.warehouseId) ?? { title: `${r.siteCode} · ${r.warehouseCode} · ${r.warehouseName}`, rows: [] };
+    const g = groups.get(r.warehouseId) ?? { title: r.warehouseName, rows: [] };
     g.rows.push(r);
     groups.set(r.warehouseId, g);
   }
@@ -55,9 +56,9 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
     <div className="space-y-5">
       <PageHeader
         title="Locations"
-        subtitle={`${site.code} · ${site.name}. A location is a place where stock is kept: a room, rack, shelf or bin.`}
         actions={canCreate && opts.warehouses.length > 0 ? <LinkButton href="#add" variant="cta">+ Add location</LinkButton> : undefined}
       />
+      <PageIntro>A location is a place where stock sits at {site.name}: a room, rack, shelf or bin. Tap Edit to rename one.</PageIntro>
       <LocationHelp canSeeSites={ctx.can("masterdata.site.view")} />
       <Card>
         <form method="get" className="flex flex-wrap items-end gap-3">
@@ -66,7 +67,7 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
               Site
               <Select name="site" defaultValue={siteId}>
                 {ctx.allowedSites.map((s) => (
-                  <option key={s.id} value={s.id}>{s.code}</option>
+                  <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </Select>
             </label>
@@ -76,12 +77,12 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
             <Select name="warehouse" defaultValue={sp.warehouse ?? ""}>
               <option value="">All</option>
               {opts.warehouses.map((w) => (
-                <option key={w.id} value={w.id}>{w.code}</option>
+                <option key={w.id} value={w.id}>{w.name}</option>
               ))}
             </Select>
           </label>
           <label className="flex min-w-0 flex-col gap-1 text-[13px]">
-            Class
+            Type of place
             <Select name="kind" defaultValue={sp.kind ?? ""}>
               <option value="">All</option>
               {LOCATION_KINDS.map((k) => (
@@ -91,17 +92,17 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
           </label>
           <label className="flex min-w-[160px] flex-1 flex-col gap-1 text-[13px]">
             Search
-            <Input name="q" defaultValue={sp.q} placeholder="Code or name" />
+            <Input name="q" defaultValue={sp.q} placeholder="Name or number" />
           </label>
           <label className="flex items-center gap-2 pb-3 text-[13px]">
-            <input type="checkbox" name="all" value="1" defaultChecked={sp.all === "1"} className="size-4" /> Inactive too
+            <input type="checkbox" name="all" value="1" defaultChecked={sp.all === "1"} className="size-4" /> Switched-off too
           </label>
           <button type="submit" className="min-h-[44px] rounded-full bg-primary px-5 text-[14px] font-medium text-white">Filter</button>
         </form>
       </Card>
       {rows.length === 0 ? (
         <EmptyState title={filtered ? "No locations match" : "No locations at this site"} action={filtered ? <LinkButton href="/masterdata/locations" variant="secondary">Clear filters</LinkButton> : undefined}>
-          {filtered ? "Try another filter." : canCreate ? "Add the first location below." : "Locations are set up by the site manager or system administrator."}
+          {filtered ? "Try another filter." : canCreate ? (opts.warehouses.length ? "Add the first place below: type its name and press Add location." : "First add a warehouse under Setup → Warehouses.") : "Ask the site manager or the system administrator to add locations."}
         </EmptyState>
       ) : (
         [...groups.entries()].map(([wid, g]) => (
@@ -112,8 +113,8 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
                 <li key={l.id} style={{ marginLeft: `${Math.min(depth, 3) * 16}px` }}>
                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-line p-3">
                     <div className="min-w-0">
-                      <Link href={`/masterdata/locations/${l.id}`} className="font-mono font-semibold text-primary-text hover:underline">{l.code}</Link>
-                      <span className="ml-2 text-[13px]">{l.name}</span>
+                      <Link href={`/masterdata/locations/${l.id}`} className="font-medium text-primary-text hover:underline">{l.name}</Link>
+                      <span className="ml-2 font-mono text-[11px] text-muted">{l.code}</span>
                       <p className="text-[12px] text-muted">
                         {isSection(l.effectiveSection) ? SECTION_LABELS[l.effectiveSection] : "Other areas"} · {LOCATION_KIND_LABELS[l.kind as LocationKind] ?? l.kind} ·{" "}
                         {canSeeLots && l.lotCount > 0 ? <Link className="underline" href={`/inventory?loc=${l.id}`}>{l.lotCount} lot{l.lotCount === 1 ? "" : "s"} in stock</Link> : `${l.lotCount} lots in stock`}
@@ -139,16 +140,24 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
       {canCreate && opts.warehouses.length > 0 && (
         <Card id="add">
           <CardTitle>Add a location</CardTitle>
-          <ActionForm action={saveLocationAction} submitLabel="Create location" variant="cta">
+          <ActionForm action={saveLocationAction} submitLabel="Add location" variant="cta">
+            <TextField name="name" label="Name of the place" placeholder="e.g. Oils rack A-03" />
             <Grid>
-              <SelectField name="warehouseId" label="Warehouse" defaultValue={sp.warehouse ?? opts.warehouses[0].id} options={opts.warehouses.map((w) => ({ value: w.id, label: `${w.siteCode} · ${w.code} · ${w.name}` }))} />
-              <SelectField name="kind" label="Type of place" defaultValue="storage" options={LOCATION_KINDS.map((k) => ({ value: k, label: LOCATION_KIND_LABELS[k] }))} hint="Receiving, quarantine, hold, rejected and recall locations can be designated per warehouse." />
-              <TextField name="code" label="Code (optional)" placeholder="Automatic, e.g. LOC-0001" mono hint="Leave blank and the system gives the next number. Unique across the company; printed as BC:LOC:<code>." />
-              <TextField name="name" label="Name" placeholder="Oils rack A-03" />
-              <SelectField name="section" label="Warehouse section" defaultValue={""} emptyLabel="— work it out from the type —" options={LOCATION_SECTIONS.map((x) => ({ value: x, label: SECTION_LABELS[x] }))} hint="Groups stock on the warehouse screens (Raw materials, Packaging, Finished goods…). Does not change any stock rule." />
-              <SelectField name="parentLocationId" label="Inside (optional)" emptyLabel="— top level —" options={opts.locations.map((l) => ({ value: l.id, label: `${l.code} · ${l.name}` }))} hint="Builds the zone → rack → bin tree; same warehouse only." />
+              {opts.warehouses.length > 1 ? (
+                <SelectField name="warehouseId" label="In which warehouse?" defaultValue={sp.warehouse ?? opts.warehouses[0].id} options={opts.warehouses.map((w) => ({ value: w.id, label: w.name }))} />
+              ) : (
+                <input type="hidden" name="warehouseId" value={opts.warehouses[0].id} />
+              )}
+              <SelectField name="kind" label="Type of place" defaultValue="storage" options={LOCATION_KINDS.map((k) => ({ value: k, label: LOCATION_KIND_LABELS[k] }))} hint="Most places are storage. Delivery, QA waiting, rejected and recall places are special." />
+              <SelectField name="parentLocationId" label="Inside a bigger place? (optional)" emptyLabel="No" options={opts.locations.map((l) => ({ value: l.id, label: l.name }))} hint="For example shelf 3 inside rack A." />
             </Grid>
-            <CheckField name="isPickable" label="Pickable (stock here may be picked for orders and batches)" defaultChecked />
+            <MoreDetails>
+              <Grid>
+                <TextField name="code" label="Your own code (optional)" placeholder="The system gives one, e.g. LOC-0001" mono hint="Printed on the shelf label." />
+                <SelectField name="section" label="Warehouse section" defaultValue={""} emptyLabel="Work it out from the type" options={LOCATION_SECTIONS.map((x) => ({ value: x, label: SECTION_LABELS[x] }))} hint="Groups stock on the warehouse screens. Does not change any stock rule." />
+              </Grid>
+              <CheckField name="isPickable" label="Stock here may be taken for orders and batches" defaultChecked />
+            </MoreDetails>
           </ActionForm>
         </Card>
       )}

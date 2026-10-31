@@ -4,11 +4,12 @@ import { LISTS_ELSEWHERE, listLookupLists } from "@/modules/masterdata";
 import { Card, CardTitle, Input, PageHeader } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { Help } from "@/ui/help/help";
+import { PageIntro } from "@/ui/guide";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { addLookupValueAction, deleteLookupValueAction, moveLookupValueAction, renameLookupValueAction, setLookupValueActiveAction } from "./actions";
 
-export const metadata = { title: "Lists" };
+export const metadata = { title: "Choice lists" };
 
 /**
  * Master data → Lists (ADR-076): every dropdown list the owner may change, in one place. Options are
@@ -17,14 +18,15 @@ export const metadata = { title: "Lists" };
  */
 export default async function ListsPage({ searchParams }: { searchParams: Promise<{ list?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.lookup_value.view")) return <Forbidden what="lists" />;
+  if (!ctx.can("masterdata.lookup_value.view")) return <Forbidden what="choice lists" />;
   const sp = await searchParams;
   const lists = await listLookupLists(ctx);
   const canAdmin = ctx.can("masterdata.lookup_value.admin");
   const elsewhere = LISTS_ELSEWHERE.filter((l) => ctx.can(l.permission));
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <PageHeader title="Lists" subtitle="The choices shown in dropdowns. Add an option, rename it, move it up or down, or turn it off. Old records keep their option." actions={<Help screen="masterdata.lists" />} />
+      <PageHeader title="Choice lists" actions={<Help screen="masterdata.lists" />} />
+      <PageIntro>The choices people pick from, like material categories or customer types. Type a new choice and press Add; old records keep theirs.</PageIntro>
       <nav aria-label="Lists on this page" className="flex flex-wrap gap-2">
         {lists.map((l) => (
           <a key={l.key} href={`#list-${l.key}`} className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-4 text-[14px] font-medium hover:bg-surface-2">
@@ -116,7 +118,7 @@ export default async function ListsPage({ searchParams }: { searchParams: Promis
         </Card>
       )}
       <p className="text-[13px] text-muted">
-        Some lists are fixed because the program works with them: statuses, location types and material class. They are not shown here.
+        Some lists are fixed because the program works with them: statuses, types of place and kinds of material. They are not shown here.
       </p>
     </div>
   );

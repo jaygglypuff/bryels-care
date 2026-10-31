@@ -24,14 +24,13 @@ function Card({ c, columns, busy, onMove, onDragStart }: { c: OrderCard; columns
       aria-label={`Order ${c.orderNumber}`}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-        <Link href={`/sales/${c.id}`} className="whitespace-nowrap text-[13px] font-semibold text-primary-text hover:underline">
-          {c.orderNumber}
+        <Link href={`/sales/${c.id}`} className="min-w-0 text-[14px] font-semibold text-fg hover:underline">
+          {c.customerName}
         </Link>
-        {c.value !== undefined && <span className="whitespace-nowrap text-[13px] font-semibold tabular">{fmtMoney(c.value)}</span>}
+        {c.value !== undefined && <span className="whitespace-nowrap text-right text-[13px] font-semibold tabular">{fmtMoney(c.value)}</span>}
       </div>
-      <p className="mt-1 text-[13px] font-medium">{c.customerName}</p>
-      <p className="text-[12px] text-muted tabular">
-        {c.lineCount} {c.lineCount === 1 ? "product" : "products"} · {fmtQty(c.units, "pcs", 0)} · deliver by {fmtDate(c.requestedDeliveryOn)}
+      <p className="mt-0.5 text-[12px] text-muted tabular">
+        {c.lineCount} {c.lineCount === 1 ? "product" : "products"} · {fmtQty(c.units, "pcs", 0)} · deliver by {fmtDate(c.requestedDeliveryOn)} <span className="font-mono">· {c.orderNumber}</span>
       </p>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {c.daysLate > 0 && (
@@ -46,7 +45,7 @@ function Card({ c, columns, busy, onMove, onDragStart }: { c: OrderCard; columns
         ))}
         {c.warnings.map((r) => (
           <Chip key={r.code + r.message} tone="info">
-            {r.code === "moq" ? "Below minimum order quantity" : r.code === "lead_time" ? "Shorter than the usual lead time" : r.message}
+            {r.code === "moq" ? "Less than their smallest order" : r.code === "lead_time" ? "Less time than they usually need" : r.message}
           </Chip>
         ))}
       </div>
@@ -55,7 +54,7 @@ function Card({ c, columns, busy, onMove, onDragStart }: { c: OrderCard; columns
           <span className="sr-only">Move {c.orderNumber} to</span>
           <select
             disabled={busy}
-            className="min-h-[34px] w-full min-w-0 rounded-full border border-line bg-surface px-3 text-[12px]"
+            className="min-h-[44px] w-full min-w-0 rounded-full border border-line bg-surface px-3 text-[12px]"
             defaultValue=""
             onChange={(e) => {
               if (e.target.value) onMove(c, e.target.value);
@@ -168,8 +167,8 @@ export function OrderBoardView({ board }: { board: OrderBoard }) {
         ))}
       </div>
       <p className="mt-1 text-[12px] text-muted">
-        Moves you can make here: submit a draft (the credit check decides whether it is confirmed or needs approval), approve an order when you are its approver, and reserve stock for a
-        confirmed order (warehouse). Sending back, cancelling, picking, packing and shipping are done on the order page.
+        Moves you can make here: send a draft (the credit check decides if it is confirmed or needs approval), approve an order when you are its approver, and set aside the stock for a
+        confirmed order (warehouse). Sending back, cancelling, getting from shelf, the second check and sending out are done on the order page.
       </p>
     </div>
   );

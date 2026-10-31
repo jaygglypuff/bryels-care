@@ -3,6 +3,7 @@ import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { listSuppliers } from "@/modules/masterdata";
 import { Card, EmptyState, Input, LinkButton, PageHeader, Select, Table, Td } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
 import { SupplierStatusChip } from "@/ui/receiving";
 import { Forbidden } from "../../forbidden";
 
@@ -20,7 +21,6 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
     <>
       <PageHeader
         title="Suppliers"
-        subtitle="Organization-wide. A suspended supplier blocks receipt lines until procurement or QA resolves it."
         actions={
           <>
             {ctx.can("masterdata.supplier.export") && (
@@ -32,14 +32,15 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
           </>
         }
       />
+      <PageIntro>The companies you buy from. A supplier QA has suspended cannot deliver until QA lifts it.</PageIntro>
       <Card className="mb-4">
         <form className="flex flex-wrap items-end gap-3" method="get">
           <label className="flex min-w-[180px] flex-1 flex-col gap-1 text-[13px]">
             Search
-            <Input name="q" defaultValue={sp.q} placeholder="Code, name, contact, city" />
+            <Input name="q" defaultValue={sp.q} placeholder="Name, contact, town or number" />
           </label>
           <label className="flex flex-col gap-1 text-[13px]">
-            Quality status
+            QA status
             <Select name="status" defaultValue={sp.status ?? ""}>
               <option value="">All</option>
               <option value="approved">Approved</option>
@@ -49,9 +50,9 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
             </Select>
           </label>
           <label className="flex items-center gap-2 pb-3 text-[13px]">
-            <input type="checkbox" name="all" value="1" defaultChecked={sp.all === "1"} className="size-4" /> Include inactive
+            <input type="checkbox" name="all" value="1" defaultChecked={sp.all === "1"} className="size-4" /> Switched-off too
           </label>
-          <button type="submit" className="min-h-[44px] rounded-full bg-primary px-5 text-[14px] font-medium text-white">Filter</button>
+          <button type="submit" className="min-h-[44px] rounded-full bg-primary px-5 text-[14px] font-medium text-white">Search</button>
         </form>
       </Card>
       {rows.length === 0 ? (
@@ -59,7 +60,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
           title={filtered ? "No suppliers match" : "No suppliers yet"}
           action={filtered ? <LinkButton href="/masterdata/suppliers" variant="secondary">Clear filters</LinkButton> : canCreate ? <LinkButton href="/masterdata/suppliers/new">Add a supplier</LinkButton> : undefined}
         >
-          {filtered ? "Try another search." : "Suppliers you add here can be chosen on goods receipts."}
+          {filtered ? "Try another word, or clear the search." : canCreate ? "Add the companies you buy from. Only the name is needed." : "Ask the owner or purchasing to add suppliers."}
         </EmptyState>
       ) : (
         <>
@@ -72,21 +73,21 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
                       <span className="font-semibold">{s.name}</span>
                       <SupplierStatusChip status={s.qualityStatus} />
                     </div>
-                    <p className="text-[12px] text-muted">
-                      {s.code} · {s.contactName ?? "No contact"} · {s.receipts} receipt{s.receipts === 1 ? "" : "s"}
+                    <p className="text-[13px] text-fg-2">
+                      {s.contactName ?? "No contact"}{s.phone ? ` · ${s.phone}` : ""} · {s.receipts} deliver{s.receipts === 1 ? "y" : "ies"}
                     </p>
+                    <p className="font-mono text-[11px] text-muted">{s.code}</p>
                   </Card>
                 </Link>
               </li>
             ))}
           </ul>
-          <Table className="hidden sm:block" head={["Code", "Name", "Contact", "Terms", "Lead time", "Quality", "Receipts"]}>
+          <Table className="hidden sm:block" head={["Name", "Contact", "Pay within", "Order to delivery", "QA status", "Deliveries"]}>
             {rows.map((s) => (
               <tr key={s.id} className="hover:bg-surface-2">
-                <Td className="font-mono text-[12px]">{s.code}</Td>
                 <Td>
                   <Link href={`/masterdata/suppliers/${s.id}`} className="font-medium text-primary-text hover:underline">{s.name}</Link>
-                  {!s.isActive && <span className="block text-[12px] text-muted">inactive</span>}
+                  <span className="block font-mono text-[12px] text-muted">{s.code}{!s.isActive ? " · switched off" : ""}</span>
                 </Td>
                 <Td>
                   {s.contactName ?? "—"}

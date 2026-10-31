@@ -170,41 +170,41 @@ Total screens: 250.
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/masterdata/equipment/[id]` | ☐ | |
-| `/masterdata/equipment/new` | ☐ | |
-| `/masterdata/equipment` | ☐ | |
+| `/masterdata/equipment/[id]` | ☑ | name first, code grey, plain kind words, PageIntro (2026-10-31) |
+| `/masterdata/equipment/new` | ☑ | 3 visible fields (name, kind, making area); EQP- number; dates and rules under More details |
+| `/masterdata/equipment` | ☑ | name first, plain kinds, 'Can it be used?', empty state with button |
 | `/masterdata/formulas/[id]` | ☐ | |
 | `/masterdata/formulas/[id]/revisions/[revisionId]` | ☐ | |
 | `/masterdata/formulas/new` | ☐ | |
 | `/masterdata/formulas` | ☐ | |
-| `/masterdata/inspection-plans/[id]` | ☐ | |
-| `/masterdata/inspection-plans/new` | ☐ | |
-| `/masterdata/inspection-plans` | ☐ | |
-| `/masterdata/lines/[id]` | ☐ | |
-| `/masterdata/lines` | ☐ | |
-| `/masterdata/lists` | ☐ | |
-| `/masterdata/locations/[id]` | ☐ | |
-| `/masterdata/locations` | ☐ | |
-| `/masterdata/materials/[id]` | ☐ | |
-| `/masterdata/materials/new` | ☐ | |
-| `/masterdata/materials` | ☐ | |
+| `/masterdata/inspection-plans/[id]` | ☑ | "Quality checks" wording, name first, version Explain; test codes optional (made from names), extras under More details |
+| `/masterdata/inspection-plans/new` | ☑ | 2 visible fields (which item, when); name and QCP- number by the system |
+| `/masterdata/inspection-plans` | ☑ | renamed Quality checks, name first, empty state with button |
+| `/masterdata/lines/[id]` | ☑ | Making area / line; name + team visible; code and notes under More details |
+| `/masterdata/lines` | ☑ | Making areas; add = name (+ team, site only if >1); LINE- number |
+| `/masterdata/lists` | ☑ | renamed Choice lists, PageIntro (codes were already automatic) |
+| `/masterdata/locations/[id]` | ☑ | name first; name, type, inside visible; code/section/pickable under More details |
+| `/masterdata/locations` | ☑ | name first, code grey; add = name, type, inside (warehouse only if >1); LOC- number |
+| `/masterdata/materials/[id]` | ☑ | name first, See stock button, same 3-question form; status changes folded |
+| `/masterdata/materials/new` | ☑ | 3 questions (name, kind buttons, buy/count buttons) + usual supplier and pack; rest under More details with defaults by kind |
+| `/masterdata/materials` | ☑ | name first, kind, unit, stock links to /inventory/items/material/<id>; extra filters folded |
 | `/masterdata/products/[id]` | ☐ | |
 | `/masterdata/products/[id]/skus/[skuId]` | ☐ | |
 | `/masterdata/products` | ☐ | |
-| `/masterdata/reason-codes/[id]` | ☐ | |
-| `/masterdata/reason-codes` | ☐ | |
+| `/masterdata/reason-codes/[id]` | ☑ | renamed Reasons; words + where offered + note; code read-only under More details |
+| `/masterdata/reason-codes` | ☑ | renamed Reasons; add = words + where; code made from the words |
 | `/masterdata/routings/[id]` | ☐ | |
 | `/masterdata/routings/[id]/revisions/[revisionId]` | ☐ | |
 | `/masterdata/routings/new` | ☐ | |
 | `/masterdata/routings` | ☐ | |
-| `/masterdata/sites/[id]` | ☐ | |
-| `/masterdata/sites` | ☐ | |
-| `/masterdata/suppliers/[id]` | ☐ | |
-| `/masterdata/suppliers/new` | ☐ | |
-| `/masterdata/suppliers` | ☐ | |
-| `/masterdata/uom` | ☐ | |
-| `/masterdata/warehouses/[id]` | ☐ | |
-| `/masterdata/warehouses` | ☐ | |
+| `/masterdata/sites/[id]` | ☑ | name first; name, address, city visible; code/time zone under More details; teams by name only (DEP-) |
+| `/masterdata/sites` | ☑ | add = name (+ address, city); site code made from the name's initials |
+| `/masterdata/suppliers/[id]` | ☑ | name first, plain labels (pay within, order to delivery, QA status), materials by name |
+| `/masterdata/suppliers/new` | ☑ | 4 visible fields (name, contact, phone, email); SUP- number; rest under More details |
+| `/masterdata/suppliers` | ☑ | name first, code grey, plain columns, empty state says what to do |
+| `/masterdata/uom` | ☑ | renamed Units; add = name + what it measures; short name made from the name |
+| `/masterdata/warehouses/[id]` | ☑ | name first, special places by name, code under More details |
+| `/masterdata/warehouses` | ☑ | add = name + what is kept (site only if >1); WH- number |
 | `/masterdata/work-instructions/[id]` | ☐ | |
 | `/masterdata/work-instructions/new` | ☐ | |
 | `/masterdata/work-instructions` | ☐ | |
@@ -303,31 +303,32 @@ Total screens: 250.
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/sales/[orderId]` | ☐ | |
-| `/sales/board` | ☐ | |
-| `/sales/customers/[id]` | ☐ | |
-| `/sales/customers/new` | ☐ | |
-| `/sales/customers` | ☐ | |
-| `/sales/dispatch` | ☐ | |
-| `/sales/new` | ☐ | |
-| `/sales/orders/[orderId]/edit` | ☐ | |
-| `/sales/packing/[shipmentId]` | ☐ | |
-| `/sales` | ☐ | |
-| `/sales/picking/[pickId]` | ☐ | |
-| `/sales/picking` | ☐ | |
-| `/sales/price-lists/[id]/edit` | ☐ | |
-| `/sales/price-lists/[id]` | ☐ | |
-| `/sales/price-lists/new` | ☐ | |
-| `/sales/price-lists` | ☐ | |
-| `/sales/quotations/[id]/edit` | ☐ | |
-| `/sales/quotations/[id]` | ☐ | |
-| `/sales/quotations/new` | ☐ | |
-| `/sales/quotations` | ☐ | |
-| `/sales/returns/[returnId]` | ☐ | |
-| `/sales/returns/new` | ☐ | |
-| `/sales/returns` | ☐ | |
-| `/sales/shipments/[shipmentId]` | ☐ | |
-| `/sales/shipments` | ☐ | |
+| `/sales/[orderId]` | ☑ 2026-10-31 | Record header with grade-5 steps; "What to do next" per status names who we wait for (send / approve / set aside / get from shelf / check box / send out / send the invoice); cancel, let stock go, reorder, delete draft under ⋯ More; lines as rows with ₱ right. |
+| `/sales/board` | ☑ 2026-10-31 | PageIntro; columns renamed (Set aside, Getting from shelf, Box checked, Sent out, Billed, Done); cards name first, number small grey; 44 px move picker. |
+| `/sales/customers/[id]` | ☑ 2026-10-31 | Next step by status (order / price offer / stopped: unpaid bills); special rules, own product codes, money in plain words; owner may approve own rules (ADR-091, sodConflictAt); orders as PlainList. |
+| `/sales/customers/new` | ☑ 2026-10-31 | 4 fields (name, phone, street, city); contact person, days to pay (finance only), number and the rest under More details; CUS number from the server. |
+| `/sales/customers` | ☑ 2026-10-31 | Split view kept; name first, phone, number small grey, ₱ owed right; "Stopped: unpaid bills"; CSV and new order under ⋯ More. |
+| `/sales/dispatch` | ☑ 2026-10-31 | "Send out" dock, phone first: ready to send out / waiting for second check / waiting for proof of delivery as PlainList rows with one action word. |
+| `/sales/new` | ☑ 2026-10-31 | 3-step wizard kept; customer and product picked by name with search (NamePicker); order no., addresses and note under More details. |
+| `/sales/orders/[orderId]/edit` | ☑ 2026-10-31 | PageIntro; same name pickers; plain "only a draft can be changed". |
+| `/sales/packing/[shipmentId]` | ☑ 2026-10-31 | "Second check of the box", phone first: big scan box, boxes checked/to check, finish card (boxes on truck, carrier; tracking and weight under More); checker ≠ picker and manager exception (password) kept. |
+| `/sales` | ☑ 2026-10-31 | PlainList (customer first, ₱ right, number grey, icon status, late in red); FilterTabs; board and help under ⋯ More. |
+| `/sales/picking/[pickId]` | ☑ 2026-10-31 | "Get from shelf", phone first: next shelf and box in words, one scan box, big rows, one green Finish button; finish with items missing (reason), print, stop under ⋯ More. |
+| `/sales/picking` | ☑ 2026-10-31 | "To get from shelf": started first, then ready orders as big cards with one green button on the first; finished folded away. |
+| `/sales/price-lists/[id]/edit` | ☑ 2026-10-31 | PageIntro; same form as new. |
+| `/sales/price-lists/[id]` | ☑ 2026-10-31 | "Prices for <customer>": approve / waiting for <name>; rows name first, ₱ right; new version, stop using, delete draft under ⋯ More; "(own request)" on self-approval. |
+| `/sales/price-lists/new` | ☑ 2026-10-31 | Who, starts on, products and prices; number and name made by the server (customer list keeps its number = next version); name/number/what changed under More details. |
+| `/sales/price-lists` | ☑ 2026-10-31 | "Prices": PlainList, customer first, number grey, waiting-for-approval banner. |
+| `/sales/quotations/[id]/edit` | ☑ 2026-10-31 | PageIntro; "Change price offer". |
+| `/sales/quotations/[id]` | ☑ 2026-10-31 | "Price offer for <customer>": send / approve / make it an order as the next step; accept, decline, cancel, delete under ⋯ More; rows with ₱ right. |
+| `/sales/quotations/new` | ☑ 2026-10-31 | Customer and products by name; good until defaulted; deliver-to and notes under More details. |
+| `/sales/quotations` | ☑ 2026-10-31 | "Price offers": PlainList with ₱ right; CSV under ⋯ More. |
+| `/sales/returns/[returnId]` | ☑ 2026-10-31 | "Customer return": next step per state (scan, send, approve, take in, QA decided, finish) with who we wait for; lines as rows; cancel/send back under ⋯ More. |
+| `/sales/returns/new` | ☑ 2026-10-31 | 3 fields (delivery by customer name, why, explain); where to keep under More details. |
+| `/sales/returns` | ☑ 2026-10-31 | "Customer returns": PlainList, FilterTabs, icon statuses in plain words. |
+| `/sales/shipments/[shipmentId]` | ☑ 2026-10-31 | "Delivery": next step (get from shelf / check box / send out with driver and plate / proof of delivery); cancel and undo sending under ⋯ More; history folded. |
+| `/sales/shipments` | ☑ 2026-10-31 | "Deliveries": PlainList with grade-5 statuses; accountant download folded under More details. |
+
 
 ## Notes from the Home, Settings & people, Reports and Help pass (2026-10-31)
 

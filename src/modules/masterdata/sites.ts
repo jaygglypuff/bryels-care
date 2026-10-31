@@ -6,7 +6,7 @@ import { departments, inventoryBalances, organizations, productionLines, sites, 
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { assertUuid, diff, isReferenced, optText, reqText, uniqueConflict } from "./org-common";
+import { assertUuid, codeFromName, diff, isReferenced, optText, optionalCode, reqText, uniqueConflict } from "./org-common";
 import { parseInput } from "./schemas";
 
 /**
@@ -29,11 +29,14 @@ function validTimeZone(tz: string): boolean {
 
 const SiteInput = z
   .object({
-    code: z
-      .string()
-      .trim()
-      .toUpperCase()
-      .regex(SITE_CODE_RE, "Site code: 1 to 6 capital letters or digits (used in document numbers), e.g. NFD."),
+    /** ADR-088: optional; blank = made from the name on create ("Main Plant" → MP), kept on edit. */
+    code: optionalCode(
+      z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(SITE_CODE_RE, "Site code: 1 to 6 capital letters or digits (used in document numbers), e.g. NFD."),
+    ),
     name: reqText("the site name", 120),
     timezone: optText(64).refine((v) => v === null || validTimeZone(v), "Choose a valid time zone, e.g. Asia/Manila."),
     addressLine1: optText(200),
@@ -84,12 +87,13 @@ export async function createSite(ctx: AuthContext, raw: unknown) {
   const v = parseInput(SiteInput, raw);
   const timezone = v.timezone ?? (await orgTimezone(ctx));
   return db.transaction(async (tx) => {
+    const code = v.code ?? (await codeFromName(v.name, "initials", 6, async (c) => (await tx.select({ id: sites.id }).from(sites).where(and(eq(sites.organizationId, ctx.organizationId), eq(sites.code, c))).limit(1)).length > 0));
     const [s] = await tx
       .insert(sites)
-      .values({ organizationId: ctx.organizationId, code: v.code, name: v.name, timezone, addressLine1: v.addressLine1, city: v.city, province: v.province, country: v.country ?? "PH" })
+      .values({ organizationId: ctx.organizationId, code, name: v.name, timezone, addressLine1: v.addressLine1, city: v.city, province: v.province, country: v.country ?? "PH" })
       .returning()
-      .catch((e) => uniqueConflict(e, `Site code ${v.code} is already in use.`));
-    await audit(tx, ctx, { action: "masterdata.site.created", entityType: "site", entityId: s.id, entityNumber: s.code, siteId: s.id, after: { ...v, timezone } });
+      .catch((e) => uniqueConflict(e, `Site code ${code} is already in use.`));
+    await audit(tx, ctx, { action: "masterdata.site.created", entityType: "site", entityId: s.id, entityNumber: s.code, siteId: s.id, after: { ...v, code, timezone, codeAssigned: !v.code } });
     return s;
   });
 }
@@ -103,16 +107,17 @@ export async function updateSite(ctx: AuthContext, siteId: string, raw: unknown)
     const [before] = await tx.select().from(sites).where(and(eq(sites.id, siteId), eq(sites.organizationId, ctx.organizationId))).for("update").limit(1);
     if (!before) throw new DomainError("not_found", "Site not found.");
     if (before.isActive) ctx.requireSite(before.id);
-    if (v.code !== before.code) {
+    const code = v.code ?? before.code;
+    if (code !== before.code) {
       const ref = await isReferenced(tx, "sites", before.id);
       if (ref.referenced) throw new DomainError("state", `Site code ${before.code} is already used (${ref.by.slice(0, 3).join(", ")}); it can no longer change.`, { field: "code" });
     }
     const [after] = await tx
       .update(sites)
-      .set({ code: v.code, name: v.name, timezone: v.timezone ?? before.timezone, addressLine1: v.addressLine1, city: v.city, province: v.province, country: v.country ?? before.country })
+      .set({ code, name: v.name, timezone: v.timezone ?? before.timezone, addressLine1: v.addressLine1, city: v.city, province: v.province, country: v.country ?? before.country })
       .where(eq(sites.id, before.id))
       .returning()
-      .catch((e) => uniqueConflict(e, `Site code ${v.code} is already in use.`));
+      .catch((e) => uniqueConflict(e, `Site code ${code} is already in use.`));
     const d = diff(before, after, SITE_FIELDS);
     if (d.changed.length) await audit(tx, ctx, { action: "masterdata.site.changed", entityType: "site", entityId: after.id, entityNumber: after.code, siteId: after.id, before: d.before, after: d.after });
     return after;

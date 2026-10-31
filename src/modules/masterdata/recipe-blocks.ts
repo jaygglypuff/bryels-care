@@ -153,6 +153,159 @@ export function fromBomLines(
   }));
 }
 
+/* ------------------------------------------------------------------ batch by pieces (ADR-088 §4) */
+
+/**
+ * "One batch makes 70 bars of 135 g". The formula keeps its one stored base, the reference batch
+ * size in grams; pieces are only another way to type it:
+ *
+ *   batch grams = pieces × grams per piece × 100 ÷ expected amount made (%)   rounded UP to whole grams
+ *   pieces      = batch grams × expected % ÷ 100 ÷ grams per piece             rounded DOWN (as Finish)
+ *
+ * Rounding the batch up means the batch always makes at least the pieces asked for, and reading the
+ * pieces back from the stored batch gives the same number again (so an edit shows the pieces back).
+ */
+export type BatchBy = "kg" | "pcs";
+export const PIECE_G_DECIMALS = 3;
+export const MAX_PIECES = 1_000_000;
+
+/** A whole number of pieces from 1 to 1,000,000. */
+export function isPiecesText(v: string): boolean {
+  const t = v.trim();
+  return /^\d{1,7}$/.test(t) && Number(t) >= 1 && Number(t) <= MAX_PIECES;
+}
+
+/** A weight per piece in grams above 0 (at most 3 decimals). */
+export function isPieceGText(v: string | null | undefined): boolean {
+  return !!v && isDecimalText(v, PIECE_G_DECIMALS) && new Dx(v.trim()).gt(0);
+}
+
+/** Batch grams for N pieces (whole grams, rounded up); null when an input is missing or not valid. */
+export function piecesToBatchG(pieces: string, pieceG: string | null | undefined, expectedPct: string): string | null {
+  if (!isPiecesText(pieces) || !isPieceGText(pieceG) || !isDecimalText(expectedPct, 2)) return null;
+  const y = new Dx(expectedPct.trim());
+  if (y.lte(0) || y.gt(100)) return null;
+  return plain(new Dx(pieces.trim()).mul(pieceG!.trim()).mul(100).div(y).toDecimalPlaces(0, Decimal.ROUND_UP));
+}
+
+/** Same as piecesToBatchG, in kilograms (3 decimals at most, exact). */
+export function piecesToBatchKg(pieces: string, pieceG: string | null | undefined, expectedPct: string): string | null {
+  const g = piecesToBatchG(pieces, pieceG, expectedPct);
+  return g === null ? null : gramsToKg(g);
+}
+
+/** Whole pieces one batch makes (rounded down); "0" when the weight per piece is unknown. */
+export function piecesFromBatch(batchG: Num, expectedPct: Num, pieceG: Num | null | undefined): string {
+  if (pieceG === null || pieceG === undefined || pieceG === "") return "0";
+  const m = new Dx(pieceG);
+  const b = new Dx(batchG || 0);
+  if (m.lte(0) || b.lte(0)) return "0";
+  return plain(b.mul(expectedPct || 0).div(100).div(m).floor());
+}
+
+/**
+ * When a stored batch size is exactly what "N pieces" gives, the recipe was made by pieces: returns
+ * N (shown back when editing); else null (the recipe is shown by weight).
+ */
+export function detectPieces(batchG: Num, expectedPct: string, pieceG: string | null | undefined): string | null {
+  const n = piecesFromBatch(batchG, expectedPct, pieceG);
+  if (n === "0") return null;
+  const back = piecesToBatchG(n, pieceG, expectedPct);
+  return back !== null && new Dx(back).eq(batchG) ? n : null;
+}
+
+/** Pieces one batch of this draft makes: the typed number when by pieces, else worked out from the weight. */
+export function draftPieces(d: Pick<RecipeDraft, "batchKg" | "expectedPct"> & { batchBy?: BatchBy; pieces?: string }, pieceG: string | null | undefined): string {
+  if (d.batchBy === "pcs") return isPiecesText(d.pieces ?? "") ? plain(d.pieces!.trim()) : "0";
+  if (!isDecimalText(d.batchKg, BATCH_KG_DECIMALS)) return "0";
+  return piecesFromBatch(kgToGrams(d.batchKg), d.expectedPct, pieceG);
+}
+
+/** "bars" for soap, else "pieces" (one word for the person; nothing is stored). */
+export function pieceWord(family: string | null | undefined, n: number | string = 2): string {
+  const soap = (family ?? "").toLowerCase().includes("soap");
+  const one = String(n) === "1";
+  return soap ? (one ? "bar" : "bars") : one ? "piece" : "pieces";
+}
+
+/* ------------------------------------------------------------------ packaging for each piece (ADR-092) */
+
+/** Saved with a packaging line as it is (from advanced editing, or the defaults of a new line). */
+export type PackagingKeep = { tolerancePct: string | null; toleranceAbsG: string | null; phaseCode: string | null; scaling: "proportional" | "fixed"; isCritical: boolean; requiresChecker: boolean };
+/** A packaging line is counted, never weighed: no allowed difference, no second-person weighing check, scales with the batch. */
+export const packagingKeep = (): PackagingKeep => ({ tolerancePct: "0", toleranceAbsG: null, phaseCode: null, scaling: "proportional", isCritical: false, requiresChecker: false });
+
+export type RecipePackagingDraft = {
+  materialId: string;
+  /** "How many per piece" as typed (1 wrapper per bar; 0.0209 box per bar). */
+  perPiece: string;
+  /**
+   * The stored line this came from (its quantity for `pieces` pieces), kept while the person does not
+   * change "how many per piece", so opening and saving an unchanged recipe changes nothing.
+   */
+  from: { qty: string; pieces: string } | null;
+  keep: PackagingKeep;
+};
+export const PER_PIECE_DECIMALS = 4;
+
+/** Per piece shown for a stored line: quantity ÷ pieces (4 decimals). */
+export function perPieceOf(qty: Num, pieces: Num): string {
+  const n = new Dx(pieces);
+  return n.gt(0) ? plain(new Dx(qty).div(n).toDecimalPlaces(PER_PIECE_DECIMALS)) : "";
+}
+
+/** Quantity of a packaging line for one batch of `pieces` pieces (6 decimals; the material's unit, usually pcs). */
+export function packagingQty(pieces: Num, p: RecipePackagingDraft): string {
+  if (p.from) {
+    if (p.keep.scaling === "fixed" || new Dx(p.from.pieces).eq(pieces)) return plain(p.from.qty);
+    const fp = new Dx(p.from.pieces);
+    if (fp.gt(0)) return plain(new Dx(p.from.qty).mul(pieces).div(fp).toDecimalPlaces(6));
+  }
+  if (!isDecimalText(p.perPiece, PER_PIECE_DECIMALS)) return "0";
+  return plain(new Dx(pieces).mul(p.perPiece.trim()).toDecimalPlaces(6));
+}
+
+/** Input lines of saveFormulaRevisionDraft for the packaging (after the ingredients; never in the percent total). */
+export function toPackagingLineInputs(pieces: Num, list: RecipePackagingDraft[]) {
+  return list.map((p) => ({
+    materialId: p.materialId,
+    quantityG: packagingQty(pieces, p),
+    tolerancePct: p.keep.tolerancePct,
+    toleranceAbsG: p.keep.toleranceAbsG,
+    phaseCode: p.keep.phaseCode,
+    scaling: p.keep.scaling,
+    isCritical: p.keep.isCritical,
+    requiresChecker: p.keep.requiresChecker,
+  }));
+}
+
+/** Stored packaging lines → wizard packaging, per piece worked out from the pieces of the batch. */
+export function fromPackagingLines(
+  rows: { materialId: string; quantityG: string; tolerancePct: string | null; toleranceAbsG: string | null; phaseCode: string | null; scaling: string; isCritical: boolean; requiresChecker: boolean }[],
+  pieces: Num,
+): RecipePackagingDraft[] {
+  return rows.map((r) => ({
+    materialId: r.materialId,
+    perPiece: perPieceOf(r.quantityG, pieces),
+    from: { qty: plain(r.quantityG), pieces: plain(pieces) },
+    keep: {
+      tolerancePct: r.tolerancePct === null ? null : plain(r.tolerancePct),
+      toleranceAbsG: r.toleranceAbsG === null ? null : plain(r.toleranceAbsG),
+      phaseCode: r.phaseCode,
+      scaling: r.scaling === "fixed" ? "fixed" : "proportional",
+      isCritical: r.isCritical,
+      requiresChecker: r.requiresChecker,
+    },
+  }));
+}
+
+/** "1 Soap wrapper per bar" / "0.0209 Shipping box per bar". */
+export function packagingText(perPiece: string, name: string, family: string | null | undefined): string {
+  const n = perPiece.trim();
+  const shown = isDecimalText(n, 6) ? Number(n).toLocaleString("en-PH", { maximumFractionDigits: PER_PIECE_DECIMALS }) : "?";
+  return `${shown} ${name} per ${pieceWord(family, 1)}`;
+}
+
 /* ------------------------------------------------------------------ steps */
 
 /**
@@ -455,6 +608,14 @@ export type RecipeDraft = {
   useFrom: string;
   formulaNotes: string;
   routingNotes: string;
+  /** How the batch size is typed: kilograms, or pieces converted to kilograms (stored as kg; ADR-088 §4). */
+  batchBy?: BatchBy;
+  /** Pieces one batch makes, when by pieces. */
+  pieces?: string;
+  /** Grams per piece typed in the wizard, only when the product has none yet (saved to the product). */
+  pieceG?: string;
+  /** Wrappers, labels, bottles, boxes for each piece (recipe packaging lines, ADR-092). */
+  packaging?: RecipePackagingDraft[];
 };
 
 /** Plain names of the areas a "Check the area is clean" step can be about (AREAS in schemas.ts). */
