@@ -76,7 +76,7 @@ describe("production tabs per role (ADR-080 §11)", () => {
   });
 
   it("Production setup sits in Management, not in Operations", () => {
-    expect(section("owner_director", "Management", "Production setup")).toEqual(["New recipe (step by step)", "Products and formulas", "Steps for each product", "Work instructions", "Inspection plans", "Equipment"]);
+    expect(section("owner_director", "Management", "Production setup")).toEqual(["New recipe (step by step)", "Products and formulas", "Steps for each product", "Work instructions", "Quality checks for items", "Equipment"]);
     const opsHrefs = group("owner_director", "Operations")!.items.map((i) => i.href);
     expect(opsHrefs.some((h) => h.startsWith("/masterdata"))).toBe(false);
   });

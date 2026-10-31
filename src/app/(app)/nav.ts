@@ -45,7 +45,7 @@ const SETUP_ITEMS: NavItem[] = [
   { label: "Products and formulas", href: "/masterdata/formulas", permission: "masterdata.formula.view" },
   { label: "Steps for each product", href: "/masterdata/routings", permission: "masterdata.routing.view" },
   { label: "Work instructions", href: "/masterdata/work-instructions", permission: "masterdata.work_instruction.view" },
-  { label: "Inspection plans", href: "/masterdata/inspection-plans", permission: "quality.inspection_plan.view" },
+  { label: "Quality checks for items", href: "/masterdata/inspection-plans", permission: "quality.inspection_plan.view" },
   { label: "Equipment", href: "/masterdata/equipment", permission: "masterdata.equipment.view" },
 ];
 
@@ -216,10 +216,10 @@ export const NAV: NavGroup[] = [
         { label: "Locations", href: "/masterdata/locations", permission: "masterdata.location.view" },
         { label: "Sites", href: "/masterdata/sites", permission: "masterdata.site.view" },
         { label: "Warehouses", href: "/masterdata/warehouses", permission: "masterdata.warehouse.view" },
-        { label: "Production lines", href: "/masterdata/lines", permission: "masterdata.production_line.view" },
-        { label: "Units of measure", href: "/masterdata/uom", permission: "masterdata.uom.view" },
-        { label: "Lists", href: "/masterdata/lists", permission: "masterdata.lookup_value.view" },
-        { label: "Reason codes", href: "/masterdata/reason-codes", permission: "masterdata.reason_code.view" },
+        { label: "Making areas / lines", href: "/masterdata/lines", permission: "masterdata.production_line.view" },
+        { label: "Units", href: "/masterdata/uom", permission: "masterdata.uom.view" },
+        { label: "Choice lists", href: "/masterdata/lists", permission: "masterdata.lookup_value.view" },
+        { label: "Reasons", href: "/masterdata/reason-codes", permission: "masterdata.reason_code.view" },
       ]),
       ...inSection("People & access", [
         { label: "Users", href: "/admin/users", permission: "identity.user.view" },

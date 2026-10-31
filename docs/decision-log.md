@@ -1679,3 +1679,19 @@ Finish posts the lot with them; extra copies go through Reprint with a reason.
 
 Consequences: migration 0031 (`batch_materials.bom_line_id` nullable; `batches.output_*`; label copies ≤ 999); tests
 `tests/integration/production/packaging-flow.test.ts`. The recipe wizard does not yet offer packaging per piece (next).
+
+## ADR-093 Setup records never need a typed code (ADR-088 addendum, 2026-10-31)
+
+Status: Accepted; A-G5-MD-01..04 (QA defaults per kind, site code rule, usual-supplier proposal) need owner/QA
+confirmation.
+
+Decision: every set-up record's code is optional and made by the system in the creating transaction. New numbering
+types WH, LINE, DEP and QCP (`{PREFIX}-{SEQ}`, never reset) alongside MAT, SUP, LOC, EQP. Site codes are the initials of
+the name (max 6, numbered on clash) because they feed `{SITE}` in document numbers. Reason and unit short names and
+quality-check test codes are made from the words. A blank code on edit keeps the code; typed codes stay unique. A new
+material is three questions (name, kind, how it is counted); it takes its CoA and QA-check defaults from its kind, its
+allocation rule is always first-expiry-first, and a usual supplier picked on the form is proposed for the approved list
+in the same transaction (`createMaterialWithUsualSupplier`, needs `masterdata.supplier.edit`; QA still approves).
+
+Consequences: tests `tests/integration/masterdata/adr088-no-code-setup.test.ts`; menu renamed Reasons, Units, Choice
+lists, Making areas / lines, Quality checks for items.
