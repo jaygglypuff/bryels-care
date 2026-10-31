@@ -1745,3 +1745,20 @@ point). Approval and QA-independence rules unchanged.
 Consequences: tests `tests/integration/masterdata/grade5-recipes-advanced.test.ts`,
 `tests/unit/grade5-recipes-advanced.test.ts`. Open: the recipe wizard still picks F-/R- codes with `nextCode`; switch it
 to server numbering later.
+
+## ADR-097 Inventory and warehouse screens in plain words (ADR-088 delivery, 2026-10-31)
+
+Status: Accepted; A-G5-I1 (display words) and A-G5-I2 (finding lots by words) need the owner.
+
+Decision: all 38 /inventory, /labels and /warehouse screens follow ADR-088: an intro line, one next step on record
+pages, rare actions in ⋯ More, at most 5 visible fields, and plain words from `src/ui/inventory/words.ts` (stock
+change, undo kept on record, saved to stock, used in making, moved, box or sack, shelf, being made, set aside, can we
+deliver?, waiting for QA check, stopped by QA). FEFO is applied silently. Ledger tables are replaced by the shared
+`MovementList` rows with friendly units (`fmtLotQty`, no trailing zeros). Lots are found by scan or by words
+(`keywordMatches`, ADR-085) in move, count, fix stock and put away, and boxes are picked by content, so no code is
+typed. Stored codes, permissions, the REVERSE confirmation word, exports and label status words are unchanged. Every
+control is kept: immutable ledger with reasoned undo, count freeze and independent review, two approvers, ADR-091.
+
+Consequences: test `tests/unit/grade5-inventory.test.ts`; menu items renamed (Stock changes, Deliveries received,
+Shelves, Boxes and sacks, Being made, Expiring soon, Can we deliver?, Move stock…). With this every screen in
+`docs/PAGE_REVIEW.md` is ☑.

@@ -97,7 +97,7 @@ export const NAV: NavGroup[] = [
       ...inSection("Receiving", [
         { label: "Deliveries coming", href: "/procurement/expected", permission: "procurement.purchase_order.view" },
         { label: "Receive materials", href: "/inventory/receive", permission: "procurement.goods_receipt.create" },
-        { label: "Goods receipts", href: "/inventory/receipts", permission: "procurement.goods_receipt.view" },
+        { label: "Deliveries received", href: "/inventory/receipts", permission: "procurement.goods_receipt.view" },
         { label: "Put away", href: "/inventory/receive/put-away", permission: "inventory.movement.post" },
       ]),
       ...inSection("Quality", [
@@ -137,20 +137,20 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Stock", href: "/inventory", permission: "inventory.lot.view" },
       { label: "Scan", href: "/inventory/scan", permission: "inventory.lot.view" },
-      { label: "Scan to move", href: "/inventory/move", permission: "inventory.movement.post" },
+      { label: "Move stock", href: "/inventory/move", permission: "inventory.movement.post" },
       { label: "Warehouse sections", href: "/warehouse", permission: "inventory.lot.view" }, // S6 (ADR-077)
       ...inSection("More stock lists", [
-        { label: "Locations & stock", href: "/inventory/locations", permission: "masterdata.location.view" },
-        { label: "Boxes", href: "/inventory/containers", permission: "inventory.container.view" },
+        { label: "Shelves", href: "/inventory/locations", permission: "masterdata.location.view" },
+        { label: "Boxes and sacks", href: "/inventory/containers", permission: "inventory.container.view" },
         { label: "Availability", href: "/inventory/availability", permission: "inventory.balance.view" },
-        { label: "Expiry alerts", href: "/inventory/lots/expiry", permission: "inventory.lot.view" },
+        { label: "Expiring soon", href: "/inventory/lots/expiry", permission: "inventory.lot.view" },
         { label: "FEFO & reservations", href: "/inventory/lots/reservations", permission: "inventory.lot.view" },
-        { label: "Stock movements", href: "/inventory/movements", permission: "inventory.movement.view" },
+        { label: "Stock changes", href: "/inventory/movements", permission: "inventory.movement.view" },
       ]),
       ...inSection("Counts & labels", [
         { label: "Stock counts", href: "/inventory/counts", permission: "inventory.stock_count.view" },
         { label: "Adjustments", href: "/inventory/adjustments", permission: "inventory.adjustment.view" },
-        { label: "Label print station", href: "/labels", permission: "inventory.label_job.view" },
+        { label: "Labels to print", href: "/labels", permission: "inventory.label_job.view" },
       ]),
     ],
   },
