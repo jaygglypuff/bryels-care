@@ -1662,3 +1662,20 @@ Decision:
 Consequences: tests `tests/integration/governance/top-role-self-approval.test.ts`; the finance detail pages' "Approved
 by" row lacks the "(own request)" suffix (the step list has it); the seeded owner role lacks some sales/procurement
 create strings (covered by the owner override in the demo).
+
+## ADR-092 Packaging and labels in the production flow (ADR-088 §3 as built, 2026-10-31)
+
+Status: Accepted; label content (A-G5-02) needs the regulatory adviser's sign-off, the per-product packaging setup
+(A-G5-01) needs owner/QA confirmation.
+
+Decision: a batch's packaging lines are the recipe's packaging lines, else the per-product setup
+`production.packaging.per_piece` (expected pieces × per piece × (1 + spare %), rounded up). They are batch lines with
+status `packaging`: set aside first-expiry-first at approval, listed on Get materials with lot and shelf, never
+weighed. "Step done" on the packaging step records the issue against the taken lot (no scan; same postings and audit
+as the scan path, `source: materials_list`) and converts the reservation; the step asks only how many were used and
+spoiled; Finish still reconciles. "Print labels for this batch (N labels)" creates one label job (up to 999 copies) on
+the approved finished-goods template; the first print fixes `output_lot_number`, made date and expiry on the batch and
+Finish posts the lot with them; extra copies go through Reprint with a reason.
+
+Consequences: migration 0031 (`batch_materials.bom_line_id` nullable; `batches.output_*`; label copies ≤ 999); tests
+`tests/integration/production/packaging-flow.test.ts`. The recipe wizard does not yet offer packaging per piece (next).
