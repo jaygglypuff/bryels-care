@@ -714,7 +714,7 @@ export async function getPurchaseOrder(ctx: AuthContext, poId: string) {
   const [sourceReceipt] = po.sourceGoodsReceiptId
     ? await db.select({ id: goodsReceipts.id, receiptNumber: goodsReceipts.receiptNumber, receivedAt: goodsReceipts.receivedAt, supplierDocumentNumber: goodsReceipts.supplierDocumentNumber }).from(goodsReceipts).where(eq(goodsReceipts.id, po.sourceGoodsReceiptId))
     : [];
-  const progress = await approvalProgress(db, ctx.organizationId, { recordType: "purchase_order", recordId: po.id, siteId: po.siteId, basis: basisOf(po) });
+  const progress = await approvalProgress(db, ctx.organizationId, { recordType: "purchase_order", recordId: po.id, siteId: po.siteId, basis: basisOf(po), requesterIds: [po.createdBy, po.submittedBy] });
   const decisions = await decisionsOf(db, ctx.organizationId, "purchase_order", po.id);
   const documents = ctx.can("documents.generated_document.view") ? (await documentsForSourceRead(ctx.organizationId, "purchase_order", po.id, ["purchase_order"])).map((d) => ({ id: d.d.id, documentNumber: d.d.documentNumber, status: d.d.status, generatedAt: d.d.generatedAt, generatedByName: d.generatedByName })) : [];
   const excluded = [po.createdBy, po.submittedBy];

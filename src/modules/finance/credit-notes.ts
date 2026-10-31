@@ -352,7 +352,7 @@ export async function getCreditNote(ctx: AuthContext, id: string) {
     invoice: { id: row.i.id, invoiceNumber: row.i.invoiceNumber, status: row.i.status, totalAmount: row.i.totalAmount, openAmount: m4(openAmountOf(row.i)), issueDate: row.i.issueDate },
     customerReturn: ret ?? null,
     progress,
-    canApprove: cn.status === "submitted" && canDecide(ctx, "credit_note", progress, cn.submittedAt, [cn.createdBy, cn.submittedBy]),
+    canApprove: cn.status === "submitted" && canDecide(ctx, "credit_note", progress, cn.submittedAt, [cn.createdBy, cn.submittedBy], cn.siteId),
     posterBlocked: cn.status === "approved" && !!progress && !progress.posterMayEqualApprover && progress.approvers.some((u) => ctx.sodConflict(u)),
     decisions: await decisionsOf(db, ctx.organizationId, "credit_note", cn.id),
     names: Object.fromEntries(await namesOf(db, [cn.createdBy, cn.submittedBy, cn.approvedBy, cn.postedBy, cn.voidedBy])),

@@ -336,7 +336,7 @@ export async function releaseWorkOrder(ctx: AuthContext, workOrderId: string, op
       const wo = await lockWorkOrder(tx, ctx, workOrderId);
       if (wo.status !== "planned") await transitionWorkOrder(tx, ctx, wo, "released"); // 409 with plain words
       if (await getSetting(tx, ctx.organizationId, "approvals.sod.work_order_release", wo.siteId)) {
-        if (ctx.sodBlocks(wo.submittedBy === ctx.userId, "You planned this work order; another person with release permission must release it.")) {
+        if (ctx.sodBlocksAt(wo.submittedBy === ctx.userId, "You planned this work order; another person with release permission must release it.", wo.siteId)) {
           throw new DomainError("separation_of_duties", "You planned this work order; another person with release permission must release it.", ctx.refusalDetails());
         }
       }

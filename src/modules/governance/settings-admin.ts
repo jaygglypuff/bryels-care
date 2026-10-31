@@ -73,6 +73,13 @@ export const ChangeSettingInput = z
   })
   .strict();
 
+/** ADR-088 §2: a change of an `ownerOnly` setting is always a change request, and only the Owner/Director approves it. */
+function requireOwnerFor(ctx: AuthContext, def: SettingDefinition) {
+  if (def.ownerOnly && !ctx.roleCodes.includes("owner_director")) {
+    throw new DomainError("forbidden", "Only the owner can approve a change of this setting.", { permission: "platform.settings.approve", role: "owner_director" });
+  }
+}
+
 /** US-1-19 AC3 / US-1-14: change a setting (direct or as a change request). */
 export async function changeSetting(ctx: AuthContext, raw: z.input<typeof ChangeSettingInput>, password: string | null | undefined) {
   ctx.require("platform.settings.admin");
@@ -95,7 +102,7 @@ export async function changeSetting(ctx: AuthContext, raw: z.input<typeof Change
 
   return db.transaction(async (tx) => {
     const scope = input.siteId ? "site" : "organization";
-    if (def.requiresApproval) {
+    if (def.requiresApproval || def.ownerOnly) {
       const [dup] = await tx
         .select({ id: settingChangeRequests.id })
         .from(settingChangeRequests)
@@ -167,6 +174,7 @@ export async function approveSettingChange(ctx: AuthContext, id: string, input: 
     if (r.status !== "submitted") throw new DomainError("state", `This change request is ${r.status}; only a submitted request can be approved.`);
     ctx.assertSeparation(r.submittedBy === ctx.userId, "SEPARATION_OF_DUTIES: you submitted this change, so a different person must approve it.");
     if (!isSettingKey(r.key)) throw new DomainError("state", "This setting no longer exists in the registry; reject the request.");
+    requireOwnerFor(ctx, SETTINGS[r.key] as SettingDefinition);
     const ev = await evaluateApprovalRulesAudited(tx, ctx, { documentType: "setting_change_request", siteId: r.siteId, recordId: r.id, recordNumber: r.key });
     const step = ev.steps[0];
     if (step && !canDecideEvaluatedStep(ctx, step)) {

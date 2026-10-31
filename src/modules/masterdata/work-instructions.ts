@@ -3,11 +3,12 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { users, workInstructionRevisions, workInstructions } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
+import { approverLabel } from "@/lib/auth/self-approval";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { CreateWorkInstructionInput, DecisionInput, SaveWorkInstructionDraftInput, parseInput } from "./schemas";
-import { approvalState, assertDraft, assertVersionTransition, businessToday, canDecideStep, effectiveLabel, isIsoDate, recordApprovalDecision, supersedeOverlapping } from "./versioning";
+import { approvalState, assertDraft, assertVersionTransition, businessToday, approvalSodConflict, canDecideStep, effectiveLabel, isIsoDate, recordApprovalDecision, supersedeOverlapping } from "./versioning";
 
 /**
  * Work instructions (US-3-02): controlled step text, versioned like formulas. One approval by a
@@ -152,10 +153,10 @@ export async function getWorkInstruction(ctx: AuthContext, id: string) {
         label: effectiveLabel(r),
         createdByName: r.createdBy ? names.get(r.createdBy) : null,
         submittedByName: r.submittedBy ? names.get(r.submittedBy) : null,
-        approvedByName: r.approvedBy ? names.get(r.approvedBy) : null,
+        approvedByName: r.approvedBy ? approverLabel(names.get(r.approvedBy), r.approvedBy, [r.createdBy, r.submittedBy]) : null,
         approval,
         canDecide:
-          r.status === "pending_approval" && canDecideStep(ctx, approval.nextStep) && ![r.createdBy, r.submittedBy].some((u) => ctx.sodConflict(u)),
+          r.status === "pending_approval" && canDecideStep(ctx, approval.nextStep) && ![r.createdBy, r.submittedBy].some((u) => approvalSodConflict(ctx, "work_instruction_revision", approval.nextStep, u, null)) && !approval.decisions.some((d) => approvalSodConflict(ctx, "work_instruction_revision", approval.nextStep, d.decidedBy, null)),
       };
     }),
   );

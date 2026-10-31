@@ -5,7 +5,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
 import { customerRequirements, customers, priceLists, quotes, salesOrders, users } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
-import { type ApprovalVerdict, OWN_REQUEST_REASON, sodRequired, stepVerdict } from "@/modules/governance";
+import { type ApprovalVerdict, OWN_REQUEST_REASON, selfApprovalNote, sodRequired, stepVerdict } from "@/modules/governance";
 import { approvalProgress } from "./crm-approvals";
 import { canSeePrices } from "./crm-support";
 import { REQUIREMENT_KIND_LABEL } from "./requirements";
@@ -33,7 +33,7 @@ export async function salesOrderApprovalVerdicts(ctx: AuthContext, ids: string[]
   const prices = canSeePrices(ctx);
   for (const { o, customer, by } of rows) {
     const progress = await approvalProgress(db, ctx.organizationId, { recordType: "sales_order", recordId: o.id, siteId: o.siteId, basis: (o.approvalBasis ?? {}) as Record<string, string | boolean> });
-    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: "sales.sales_order.approve", siteId: o.siteId, pendingSince: o.submittedAt, excludedUserIds: [o.createdBy, o.submittedBy], priorApproverIds: approversOf(progress), sod });
+    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: "sales.sales_order.approve", siteId: o.siteId, pendingSince: o.submittedAt, excludedUserIds: [o.createdBy, o.submittedBy], priorApproverIds: approversOf(progress), sod, operational: true });
     const why = (o.approvalReasons ?? []).map((r) => r.message).filter(Boolean);
     out.set(o.id, {
       ...v,
@@ -61,7 +61,7 @@ export async function quoteApprovalVerdicts(ctx: AuthContext, ids: string[]): Pr
   const prices = canSeePrices(ctx);
   for (const { q, customer, by } of rows) {
     const progress = await approvalProgress(db, ctx.organizationId, { recordType: "quote", recordId: q.id, siteId: q.siteId, basis: { discount_pct: q.maxDiscountPct } });
-    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: "sales.quote.approve", siteId: q.siteId, pendingSince: q.submittedAt, excludedUserIds: [q.createdBy, q.submittedBy], priorApproverIds: approversOf(progress), sod });
+    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: "sales.quote.approve", siteId: q.siteId, pendingSince: q.submittedAt, excludedUserIds: [q.createdBy, q.submittedBy], priorApproverIds: approversOf(progress), sod, operational: true });
     const discount = new Decimal(q.maxDiscountPct ?? 0).gt(0) && prices ? `Needs approval: price up to ${new Decimal(q.maxDiscountPct).toDecimalPlaces(1).toString()} % below the price list` : null;
     out.set(q.id, { ...v, requestedById: q.submittedBy ?? q.createdBy, requestedByName: by, amount: prices ? q.totalAmount : null, currency: q.currency, title: `Quotation for ${customer}`, why: discount });
   }
@@ -78,7 +78,7 @@ export async function priceListApprovalVerdicts(ctx: AuthContext, ids: string[])
     .where(and(eq(priceLists.organizationId, ctx.organizationId), inArray(priceLists.id, ids), eq(priceLists.status, "pending_approval")));
   for (const { p, by } of rows) {
     const progress = await approvalProgress(db, ctx.organizationId, { recordType: "price_list", recordId: p.id, siteId: null, basis: {} });
-    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: "sales.price_list.approve", siteId: null, pendingSince: p.submittedAt, excludedUserIds: [p.submittedBy, p.updatedBy, p.createdBy], priorApproverIds: approversOf(progress) });
+    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: "sales.price_list.approve", siteId: null, pendingSince: p.submittedAt, excludedUserIds: [p.submittedBy, p.updatedBy, p.createdBy], priorApproverIds: approversOf(progress), operational: true });
     out.set(p.id, { ...v, requestedById: p.submittedBy, requestedByName: by, title: `Price list ${p.name} (version ${p.versionNo})`, why: p.changeSummary ? p.changeSummary.slice(0, 160) : null });
   }
   return out;
@@ -96,13 +96,14 @@ export async function customerRequirementApprovalVerdicts(ctx: AuthContext, ids:
   for (const { r, customer, by } of rows) {
     const kind = REQUIREMENT_KIND_LABEL[r.requirementKind as keyof typeof REQUIREMENT_KIND_LABEL] ?? r.requirementKind.replace(/_/g, " ");
     const value = r.valueNumeric ?? r.valueText ?? null;
-    const own = ctx.sodConflict(r.submittedBy) || ctx.sodConflict(r.createdBy);
+    const own = ctx.sodConflictAt(r.submittedBy, null) || ctx.sodConflictAt(r.createdBy, null);
     const may = ctx.can("masterdata.customer_requirement.approve");
     out.set(r.id, {
       canDecide: may && !own,
       waitingForRoles: [],
       stepLabel: null,
       blockedReason: may && own ? OWN_REQUEST_REASON : null,
+      ...(may && !own && ctx.selfApprovesAt(null) && [r.submittedBy, r.createdBy].includes(ctx.userId) ? { ownRequest: true, selfApprovalNote: selfApprovalNote(ctx) } : {}),
       requestedById: r.submittedBy ?? r.createdBy,
       requestedByName: by,
       title: `${customer}: ${kind}${value ? ` ${String(value).replace(/\.0+$/, "")}` : ""} (version ${r.versionNo})`,

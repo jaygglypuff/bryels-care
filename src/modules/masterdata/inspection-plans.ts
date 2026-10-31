@@ -3,11 +3,12 @@ import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-o
 import { type DbOrTx, type Tx, db } from "@/db/client";
 import { inspectionPlanTests, inspectionPlans, materials, products, users } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
+import { approverLabel } from "@/lib/auth/self-approval";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { CreateInspectionPlanInput, DecisionInput, SaveInspectionPlanDraftInput, parseInput } from "./schemas";
-import { approvalState, assertDraft, assertVersionTransition, businessToday, canDecideStep, effectiveLabel, isIsoDate, recordApprovalDecision, requireAny, supersedeOverlapping } from "./versioning";
+import { approvalState, assertDraft, assertVersionTransition, businessToday, approvalSodConflict, canDecideStep, effectiveLabel, isIsoDate, recordApprovalDecision, requireAny, supersedeOverlapping } from "./versioning";
 
 /**
  * Inspection plans (US-3-03, FR-quality-03 plans). A plan is a QA-controlled list of tests with
@@ -230,13 +231,13 @@ export async function getInspectionPlanDetail(ctx: AuthContext, planId: string) 
   const names = ids.length ? new Map((await db.select({ id: users.id, n: users.displayName }).from(users).where(inArray(users.id, ids))).map((u) => [u.id, u.n])) : new Map<string, string>();
   const nm = (id: string | null) => (id ? (names.get(id) ?? null) : null);
   return {
-    plan: { ...p, label: effectiveLabel(p), createdByName: nm(p.createdBy), submittedByName: nm(p.submittedBy), approvedByName: nm(p.approvedBy) },
+    plan: { ...p, label: effectiveLabel(p), createdByName: nm(p.createdBy), submittedByName: nm(p.submittedBy), approvedByName: approverLabel(nm(p.approvedBy), p.approvedBy, [p.createdBy, p.submittedBy]) },
     appliesTo: row.productName ? `${row.productName} (${row.productSku})` : row.materialName ? `${row.materialName} (${row.materialCode})` : "—",
     tests,
     revisions: revisions.map((r) => ({ ...r, label: effectiveLabel(r) })),
     approval: {
       ...approval,
-      canDecide: p.status === "pending_approval" && canDecideStep(ctx, approval.nextStep) && ![p.createdBy, p.submittedBy].some((u) => ctx.sodConflict(u)) && !approval.decisions.some((d) => ctx.sodConflict(d.decidedBy)),
+      canDecide: p.status === "pending_approval" && canDecideStep(ctx, approval.nextStep) && ![p.createdBy, p.submittedBy].some((u) => approvalSodConflict(ctx, "inspection_plan", approval.nextStep, u, p.siteId)) && !approval.decisions.some((d) => approvalSodConflict(ctx, "inspection_plan", approval.nextStep, d.decidedBy, p.siteId)),
     },
     can: {
       edit: p.status === "draft" && ctx.can("quality.inspection_plan.edit"),

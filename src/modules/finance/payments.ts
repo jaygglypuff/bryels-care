@@ -434,7 +434,7 @@ export async function getPayment(ctx: AuthContext, id: string) {
     .leftJoin(expenseClaims, eq(expenseClaims.id, paymentApplications.expenseClaimId))
     .where(eq(paymentApplications.paymentRecordId, p.id))
     .orderBy(asc(paymentApplications.createdAt));
-  const progress: Progress | null = ["submitted", "approved"].includes(p.status) ? await approvalProgress(db, ctx.organizationId, { recordType: "payment_record", recordId: p.id, siteId: p.siteId, basis: { amount: p.amount } }) : null;
+  const progress: Progress | null = ["submitted", "approved"].includes(p.status) ? await approvalProgress(db, ctx.organizationId, { recordType: "payment_record", recordId: p.id, siteId: p.siteId, basis: { amount: p.amount }, requesterIds: [p.createdBy, p.submittedBy] }) : null;
   const open = ["draft", "submitted", "approved"].includes(p.status) ? await openDocumentsFor(db, ctx, p) : [];
   const oldestFirst = await getSetting(db, ctx.organizationId, "finance.payment.apply_oldest_first");
   const preview = ["draft", "submitted", "approved"].includes(p.status) ? (p.applicationPlan?.length ? p.applicationPlan : oldestFirst ? allocateOldestFirst(open, D(p.amount).plus(p.withheldAmount)) : []) : [];
@@ -445,7 +445,7 @@ export async function getPayment(ctx: AuthContext, id: string) {
     applications: apps.map((a) => ({ ...a.a, documentNumber: a.invoiceNumber ?? a.billNumber ?? a.claimNumber, documentHref: a.a.invoiceId ? `/finance/invoices/${a.a.invoiceId}` : a.a.supplierBillId ? `/finance/bills/${a.a.supplierBillId}` : `/finance/expenses/${a.a.expenseClaimId}` })),
     preview: preview.map((x) => ({ ...x, number: open.find((o) => o.documentId === x.documentId)?.number ?? "—" })),
     progress,
-    canApprove: p.status === "submitted" && canDecide(ctx, "payment_record", progress, p.submittedAt, [p.createdBy, p.submittedBy]),
+    canApprove: p.status === "submitted" && canDecide(ctx, "payment_record", progress, p.submittedAt, [p.createdBy, p.submittedBy], p.siteId),
     posterBlocked: p.status === "approved" && !!progress && !progress.posterMayEqualApprover && progress.approvers.some((u) => ctx.sodConflict(u)),
     decisions: await decisionsOf(db, ctx.organizationId, "payment_record", p.id),
     names: Object.fromEntries(await namesOf(db, [p.createdBy, p.submittedBy, p.approvedBy, p.postedBy, p.voidedBy])),

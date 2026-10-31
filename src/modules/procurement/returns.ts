@@ -263,7 +263,7 @@ export async function postSupplierReturn(ctx: AuthContext, input: { returnId: st
     ctx.requireAt("procurement.supplier_return.post", sr.siteId);
     if (sr.status === "posted" && sr.postIdempotencyKey === input.idempotencyKey) return { returnId: sr.id, returnNumber: sr.returnNumber, movements: (await tx.select().from(supplierReturnLines).where(eq(supplierReturnLines.supplierReturnId, sr.id))).length, replayed: true };
     if (sr.status !== "approved") throw new DomainError("state", `Supplier return ${sr.returnNumber} is ${SR_STATUS_LABEL[sr.status as SrStatus].toLowerCase()}; only approved returns are posted.`);
-    ctx.assertSeparation(sr.approvedBy === ctx.userId, "You approved this return, so another person must post it (separation of duties).", { code: "SEPARATION_OF_DUTIES" });
+    ctx.assertSeparationAt(sr.approvedBy === ctx.userId, "You approved this return, so another person must post it (separation of duties).", sr.siteId, { code: "SEPARATION_OF_DUTIES" });
     const lines = await tx.select().from(supplierReturnLines).where(eq(supplierReturnLines.supplierReturnId, sr.id)).orderBy(asc(supplierReturnLines.lineNo));
     if (!lines.length) throw new DomainError("validation", "The return has no lines.");
     const correlationId = uuidv7();
@@ -337,7 +337,7 @@ export async function getSupplierReturn(ctx: AuthContext, returnId: string) {
     .innerJoin(users, eq(users.id, supplierReturnStateTransitions.actorId))
     .where(eq(supplierReturnStateTransitions.supplierReturnId, sr.id))
     .orderBy(asc(supplierReturnStateTransitions.occurredAt));
-  const progress = await approvalProgress(db, ctx.organizationId, { recordType: "supplier_return", recordId: sr.id, siteId: sr.siteId, basis: basisOf(sr) });
+  const progress = await approvalProgress(db, ctx.organizationId, { recordType: "supplier_return", recordId: sr.id, siteId: sr.siteId, basis: basisOf(sr), requesterIds: [sr.createdBy, sr.submittedBy] });
   const decisions = await decisionsOf(db, ctx.organizationId, "supplier_return", sr.id);
   return {
     sr: { ...sr, status: sr.status as SrStatus, creditExpectedAmount: prices ? sr.creditExpectedAmount : null },
@@ -353,7 +353,7 @@ export async function getSupplierReturn(ctx: AuthContext, returnId: string) {
       edit: sr.status === "draft" && ctx.canAt("procurement.supplier_return.create", sr.siteId) && ctx.currentSiteId === sr.siteId,
       submit: sr.status === "draft" && ctx.canAt("procurement.supplier_return.create", sr.siteId),
       decide: sr.status === "submitted" && canDecide(ctx, "supplier_return", progress, sr.siteId, sr.submittedAt, [sr.createdBy, sr.submittedBy]),
-      post: sr.status === "approved" && ctx.canAt("procurement.supplier_return.post", sr.siteId) && !ctx.sodConflict(sr.approvedBy),
+      post: sr.status === "approved" && ctx.canAt("procurement.supplier_return.post", sr.siteId) && !ctx.sodConflictAt(sr.approvedBy, sr.siteId),
       cancel: ["draft", "submitted", "approved"].includes(sr.status) && (ctx.canAt("procurement.supplier_return.create", sr.siteId) || ctx.canAt("procurement.supplier_return.approve", sr.siteId)),
       seePrices: prices,
     },

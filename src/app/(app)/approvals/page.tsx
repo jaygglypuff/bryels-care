@@ -55,7 +55,8 @@ function Row({ a, decidable }: { a: ApprovalRow; decidable: boolean }) {
           ) : null}
           waiting {waited(a.ageMinutes)}
         </p>
-        {!decidable && a.waitingFor && <p className="mt-1 text-[13px] font-medium text-[var(--warn-fg)]">{a.waitingFor}{a.stepLabel ? ` · step: ${a.stepLabel}` : ""}</p>}
+        {decidable && a.selfApprovalNote && <p className="mt-1 text-[13px] font-medium text-fg-2">{a.selfApprovalNote}</p>}
+        {!decidable && a.waitingFor &&<p className="mt-1 text-[13px] font-medium text-[var(--warn-fg)]">{a.waitingFor}{a.stepLabel ? ` · step: ${a.stepLabel}` : ""}</p>}
         {decidable && !inline && <p className="mt-1 text-[13px] text-muted">Open the record to decide (it needs more details than a tap).</p>}
       </div>
       <div className="flex w-full shrink-0 flex-col gap-2 md:w-72 md:items-stretch">

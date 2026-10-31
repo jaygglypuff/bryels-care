@@ -18,6 +18,7 @@ import {
 } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
+import { approverLabel } from "@/lib/auth/self-approval";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
 import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
@@ -28,7 +29,7 @@ import { claimIdempotencyKey, stateMachine, storeIdempotentResult } from "./comm
 import { assertLocationsNotFrozen } from "./counts";
 import { looseQty } from "./moves";
 import { getInventorySetting } from "./policy";
-import { type ApprovalEvaluation, canDecideEvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited } from "@/modules/governance";
+import { type ApprovalEvaluation, type ApprovalVerdict, canDecideEvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited, stepVerdict } from "@/modules/governance";
 
 /** Value basis of the `stock_adjustment` approval rules; an unknown value counts as above every bound when configured. */
 function adjustmentBasis(total: Decimal.Value, valueUnknown: boolean, unknownNeeds: boolean) {
@@ -201,8 +202,8 @@ export async function submitAdjustment(ctx: AuthContext, id: string) {
   });
 }
 
-function assertNotOwn(a: { createdBy: string; submittedBy: string | null }, ctx: AuthContext) {
-  if (ctx.sodBlocks(a.createdBy === ctx.userId || a.submittedBy === ctx.userId, "SEPARATION_OF_DUTIES: you drafted or submitted this adjustment, so someone else must approve it.")) {
+function assertNotOwn(a: { createdBy: string; submittedBy: string | null; siteId: string }, ctx: AuthContext) {
+  if (ctx.sodBlocksAt(a.createdBy === ctx.userId || a.submittedBy === ctx.userId, "SEPARATION_OF_DUTIES: you drafted or submitted this adjustment, so someone else must approve it.", a.siteId)) {
     throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: you drafted or submitted this adjustment, so someone else must approve it.", { ...ctx.refusalDetails(), rule: "authz.sod.approve_own" });
   }
 }
@@ -231,7 +232,7 @@ export async function approveAdjustment(ctx: AuthContext, id: string, note?: str
       const roles = stepDef.roleCodes.map((r) => r.replace(/_/g, " ")).join(" or ");
       throw new DomainError("forbidden", step === 2 ? `This adjustment is above the approval threshold; the second approval needs the ${roles} role.` : `This approval needs the ${roles} role.`);
     }
-    ctx.assertSeparation(step === 2 && decisions.some((d) => d.decidedBy === ctx.userId), "SEPARATION_OF_DUTIES: the second approval must come from a different person than the first.");
+    ctx.assertSeparationAt(step === 2 && decisions.some((d) => d.decidedBy === ctx.userId), "SEPARATION_OF_DUTIES: the second approval must come from a different person than the first.", a.siteId);
     await tx.insert(approvalDecisions).values({ organizationId: a.organizationId, siteId: a.siteId, recordType: "stock_adjustment", recordId: a.id, step, decision: "approved", decidedBy: ctx.userId, note: note?.trim() || null });
     const final = step === 2 || !a.requiresSecondApproval;
     if (final) {
@@ -313,7 +314,7 @@ export async function postAdjustment(ctx: AuthContext, id: string, idempotencyKe
     if (claimed) return { ...claimed.replay, replayed: true };
     const a = await lockAdjustment(tx, ctx, id);
     if (a.status !== "approved") throw new DomainError("state", `Adjustment ${a.adjustmentNumber} is ${a.status}; only an approved adjustment can be posted.`, { rule: "inventory.adjustment_post_requires_approval" });
-    if (ctx.sodBlocks(a.requiresSecondApproval && a.approvedBy === ctx.userId, "SEPARATION_OF_DUTIES: above the approval threshold the person who posts must differ from the final approver.")) {
+    if (ctx.sodBlocksAt(a.requiresSecondApproval && a.approvedBy === ctx.userId, "SEPARATION_OF_DUTIES: above the approval threshold the person who posts must differ from the final approver.", a.siteId)) {
       throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: above the approval threshold the person who posts must differ from the final approver.", ctx.refusalDetails());
     }
     const lines = await tx.select().from(stockAdjustmentLines).where(eq(stockAdjustmentLines.stockAdjustmentId, a.id)).orderBy(asc(stockAdjustmentLines.lineNo));
@@ -487,11 +488,11 @@ export async function getAdjustment(ctx: AuthContext, id: string) {
     decisions,
     createdByName: name(a.createdBy),
     submittedByName: name(a.submittedBy),
-    approvedByName: name(a.approvedBy),
+    approvedByName: approverLabel(name(a.approvedBy), a.approvedBy, [a.createdBy, a.submittedBy]),
     postedByName: name(a.postedBy),
     can: {
       submit: a.status === "draft" && ctx.can("inventory.adjustment.submit"),
-      approve: a.status === "submitted" && ctx.can("inventory.adjustment.approve") && !(own && !ctx.ownerOverride) && !decisions.some((d) => ctx.sodConflict(d.byId) && d.decision === "approved"),
+      approve: a.status === "submitted" && ctx.can("inventory.adjustment.approve") && !(own && !ctx.ownerOverride && !ctx.selfApprovesAt(a.siteId)) && !decisions.some((d) => ctx.sodConflictAt(d.byId, a.siteId) && d.decision === "approved"),
       post: a.status === "approved" && ctx.can("inventory.adjustment.post"),
       cancel: ["draft", "submitted", "approved"].includes(a.status) && (a.createdBy === ctx.userId ? ctx.can("inventory.adjustment.create") : ctx.can("inventory.adjustment.approve")),
       awaitingSecondStep: a.status === "submitted" && a.requiresSecondApproval && stepDone,
@@ -524,4 +525,43 @@ export async function deleteDraftAdjustment(ctx: AuthContext, id: string) {
     });
     return { deleted: a.adjustmentNumber };
   });
+}
+
+/**
+ * "To approve" verdicts for stock adjustments (ADR-083 §8, ADR-088 §2; registered in src/modules/wiring.ts): the
+ * same step, role and same-person rules as `approveAdjustment`, read only, caller's sites only. A top role at
+ * the adjustment's site may decide their own adjustment and both steps (setting approvals.top_roles_self_approve).
+ */
+export async function adjustmentApprovalVerdicts(ctx: AuthContext, ids: string[]): Promise<Map<string, ApprovalVerdict>> {
+  const out = new Map<string, ApprovalVerdict>();
+  if (!ids.length || !ctx.allowedSiteIds.length) return out;
+  const rows = await db
+    .select({ a: stockAdjustments, by: users.displayName })
+    .from(stockAdjustments)
+    .leftJoin(users, eq(users.id, stockAdjustments.submittedBy))
+    .where(and(eq(stockAdjustments.organizationId, ctx.organizationId), inArray(stockAdjustments.id, ids), inArray(stockAdjustments.siteId, ctx.allowedSiteIds), eq(stockAdjustments.status, "submitted")));
+  for (const { a, by } of rows) {
+    const decisions = await db
+      .select()
+      .from(approvalDecisions)
+      .where(and(eq(approvalDecisions.recordType, "stock_adjustment"), eq(approvalDecisions.recordId, a.id), eq(approvalDecisions.decision, "approved")));
+    const step = decisions.some((d) => d.step === 1) ? 2 : 1;
+    const unknownNeeds = await getInventorySetting(db, a.organizationId, a.siteId, "inventory.adjustment.unknown_value_requires_second_step");
+    const ev = await evaluateApprovalRules(db, a.organizationId, { documentType: "stock_adjustment", siteId: a.siteId, basis: adjustmentBasis(a.totalValueAmount ?? 0, a.valueUnknown, unknownNeeds) });
+    const pendingSince = step === 1 ? a.submittedAt : (decisions.find((d) => d.step === 1)?.decidedAt ?? null);
+    const v = stepVerdict(ctx, {
+      step: ev.steps[step - 1] ?? null,
+      stepsCount: step === 1 ? ev.steps.length : undefined,
+      basePermission: "inventory.adjustment.approve",
+      siteId: a.siteId,
+      pendingSince,
+      excludedUserIds: [a.createdBy, a.submittedBy],
+      priorApproverIds: step === 2 ? decisions.map((d) => d.decidedBy) : [],
+      operational: true,
+      // approveAdjustment checks the step roles as configured (canDecideEvaluatedStep): no stand-in.
+      roleStandIn: false,
+    });
+    out.set(a.id, { ...v, requestedById: a.submittedBy ?? a.createdBy, requestedByName: by });
+  }
+  return out;
 }

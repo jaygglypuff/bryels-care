@@ -13,6 +13,7 @@ import {
   workInstructions,
 } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
+import { approverLabel } from "@/lib/auth/self-approval";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
@@ -23,6 +24,7 @@ import {
   assertDraft,
   assertVersionTransition,
   businessToday,
+  approvalSodConflict,
   canDecideStep,
   effectiveLabel,
   isIsoDate,
@@ -453,7 +455,7 @@ export async function getRoutingRevision(ctx: AuthContext, revisionId: string) {
   const draftScope = r.rev.status === "draft" && r.rev.supersedesId ? computeChangeScope(await loadRoutingSteps(db, r.rev.supersedesId), steps) : null;
   return {
     ...r,
-    revision: { ...r.rev, label: effectiveLabel(r.rev), createdByName: nm(r.rev.createdBy), submittedByName: nm(r.rev.submittedBy), approvedByName: nm(r.rev.approvedBy) },
+    revision: { ...r.rev, label: effectiveLabel(r.rev), createdByName: nm(r.rev.createdBy), submittedByName: nm(r.rev.submittedBy), approvedByName: approverLabel(nm(r.rev.approvedBy), r.rev.approvedBy, [r.rev.createdBy, r.rev.submittedBy]) },
     steps,
     draftScope,
     approval: {
@@ -461,8 +463,8 @@ export async function getRoutingRevision(ctx: AuthContext, revisionId: string) {
       canDecide:
         r.rev.status === "pending_approval" &&
         canDecideStep(ctx, approval.nextStep) &&
-        ![r.rev.createdBy, r.rev.submittedBy].some((u) => ctx.sodConflict(u)) &&
-        !approval.decisions.some((d) => ctx.sodConflict(d.decidedBy)),
+        ![r.rev.createdBy, r.rev.submittedBy].some((u) => approvalSodConflict(ctx, "routing_revision", approval.nextStep, u, null)) &&
+        !approval.decisions.some((d) => approvalSodConflict(ctx, "routing_revision", approval.nextStep, d.decidedBy, null)),
     },
     can: {
       edit: r.rev.status === "draft" && ctx.can("masterdata.routing.edit"),

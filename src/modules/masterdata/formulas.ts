@@ -4,6 +4,7 @@ import Decimal from "decimal.js";
 import { type DbOrTx, db } from "@/db/client";
 import { bomLines, formulaRevisions, formulas, materials, products, users } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
+import { approverLabel } from "@/lib/auth/self-approval";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { z } from "zod";
@@ -14,6 +15,7 @@ import {
   assertDraft,
   assertVersionTransition,
   businessToday,
+  approvalSodConflict,
   canDecideStep,
   effectiveLabel,
   isIsoDate,
@@ -504,7 +506,7 @@ export async function getFormula(ctx: AuthContext, formulaId: string) {
       changeSummary: r.changeSummary,
       createdByName: nm(r.createdBy),
       submittedByName: nm(r.submittedBy),
-      approvedByName: nm(r.approvedBy),
+      approvedByName: approverLabel(nm(r.approvedBy), r.approvedBy, [r.createdBy, r.submittedBy]),
       createdAt: r.createdAt,
     })),
     effectiveRevisionId: revisions.find((r) => effectiveLabel(r, today) === "effective")?.id ?? null,
@@ -564,7 +566,7 @@ export async function getFormulaRevision(ctx: AuthContext, revisionId: string) {
   return {
     formula,
     product: { id: product.id, name: product.name, skuCode: product.skuCode },
-    revision: { ...rev, label: effectiveLabel(rev, today), createdByName: nm(rev.createdBy), submittedByName: nm(rev.submittedBy), approvedByName: nm(rev.approvedBy) },
+    revision: { ...rev, label: effectiveLabel(rev, today), createdByName: nm(rev.createdBy), submittedByName: nm(rev.submittedBy), approvedByName: approverLabel(nm(rev.approvedBy), rev.approvedBy, [rev.createdBy, rev.submittedBy]) },
     lines: dtoLines,
     showPercentages: showPct,
     totals: { sumG: total.toString(), referenceBatchSizeG: rev.referenceBatchSizeG, differenceG: total.minus(ref).toString() },
@@ -573,7 +575,7 @@ export async function getFormulaRevision(ctx: AuthContext, revisionId: string) {
     headerChanges,
     approval: {
       ...approval,
-      canDecide: rev.status === "pending_approval" && canDecideStep(ctx, approval.nextStep) && !excluded.some((u) => ctx.sodConflict(u)) && !approval.decisions.some((d) => ctx.sodConflict(d.decidedBy)),
+      canDecide: rev.status === "pending_approval" && canDecideStep(ctx, approval.nextStep) && !excluded.some((u) => approvalSodConflict(ctx, "formula_revision", approval.nextStep, u, null)) && !approval.decisions.some((d) => approvalSodConflict(ctx, "formula_revision", approval.nextStep, d.decidedBy, null)),
     },
     can: {
       edit: rev.status === "draft" && ctx.can("masterdata.formula.edit"),

@@ -256,9 +256,9 @@ export async function orderCounts(ctx: AuthContext) {
 async function orderApproval(ctx: AuthContext, o: OrderRow) {
   if (o.status !== "pending_approval") return null;
   const basis = (o.approvalBasis ?? {}) as Record<string, string | boolean>;
-  const progress = await approvalProgress(db, ctx.organizationId, { recordType: "sales_order", recordId: o.id, siteId: o.siteId, basis });
+  const progress = await approvalProgress(db, ctx.organizationId, { recordType: "sales_order", recordId: o.id, siteId: o.siteId, basis, requesterIds: [o.createdBy, o.submittedBy] });
   const sod = await sodRequired(db, ctx.organizationId, "sales_order");
-  return { ...progress, canApprove: canDecide(ctx, "sales_order", progress.next, o.submittedAt, [o.createdBy, o.submittedBy], sod) && ctx.canAt("sales.sales_order.approve", o.siteId), sod };
+  return { ...progress, canApprove: canDecide(ctx, "sales_order", progress.next, o.submittedAt, [o.createdBy, o.submittedBy], sod, o.siteId) && ctx.canAt("sales.sales_order.approve", o.siteId), sod };
 }
 
 export async function getOrder(ctx: AuthContext, orderId: string) {

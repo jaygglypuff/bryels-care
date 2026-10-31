@@ -194,7 +194,7 @@ export async function getWorkOrder(ctx: AuthContext, workOrderId: string) {
       canEdit: ctx.can("production.work_order.edit") && wo.status === "draft",
       canPlan: ctx.can("production.work_order.submit") && wo.status === "draft",
       canRelease: ctx.can("production.work_order.approve") && wo.status === "planned",
-      releaseBlockedBySod: sodOn && ctx.sodConflict(wo.submittedBy),
+      releaseBlockedBySod: sodOn && ctx.sodConflictAt(wo.submittedBy, wo.siteId),
       canTopUp: ctx.can("production.work_order.approve") && (wo.status === "released" || wo.status === "in_progress"),
       canCancel: ctx.can("production.work_order.void") && ["draft", "planned", "released"].includes(wo.status),
       canCreateBatch: ctx.can("production.batch.create") && ["planned", "released", "in_progress"].includes(wo.status) && activeBatches < wo.batchCount && wo.siteId === ctx.currentSiteId,

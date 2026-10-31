@@ -237,7 +237,7 @@ export async function approveRequirement(ctx: AuthContext, id: string, note?: st
   return db.transaction(async (tx) => {
     const r = await lockRequirement(tx, ctx, id);
     assertRequirementTransition(r, "approved");
-    if (ctx.sodBlocks(r.submittedBy === ctx.userId || r.createdBy === ctx.userId, "You drafted or submitted this requirement, so another person must approve it.")) {
+    if (ctx.sodBlocksAt(r.submittedBy === ctx.userId || r.createdBy === ctx.userId, "You drafted or submitted this requirement, so another person must approve it.", null)) {
       throw new DomainError("separation_of_duties", "You drafted or submitted this requirement, so another person must approve it.", ctx.refusalDetails());
     }
     const parent = and(

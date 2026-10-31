@@ -83,7 +83,7 @@ export async function orderBoard(ctx: AuthContext) {
     const status = o.status as OrderStatus;
     const moves: Record<string, MoveVerdict> = {};
     const approval = status === "pending_approval" ? await approvalProgress(db, ctx.organizationId, { recordType: "sales_order", recordId: o.id, siteId: o.siteId, basis: (o.approvalBasis ?? {}) as Record<string, string | boolean> }) : null;
-    for (const col of BOARD_COLUMNS) moves[col.key] = verdict(ctx, o, status, col.key, approval ? canDecide(ctx, "sales_order", approval.next, o.submittedAt, [o.createdBy, o.submittedBy], sod) : false);
+    for (const col of BOARD_COLUMNS) moves[col.key] = verdict(ctx, o, status, col.key, approval ? canDecide(ctx, "sales_order", approval.next, o.submittedAt, [o.createdBy, o.submittedBy], sod, o.siteId) : false);
     cards.push({
       id: o.id,
       orderNumber: o.orderNumber,
