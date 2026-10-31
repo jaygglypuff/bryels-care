@@ -399,7 +399,7 @@ labels"; the job is recorded against the site's first label printer and printed 
 `window.print()`. The print page uses the same `<LabelFace>` as the preview: the renderer's face CSS scoped by
 size (`.lf-<w>x<h>`) plus a named `@page` per size, so a PDF ("Save as PDF") has one page per label at the label
 size, mixed sizes included. Kinds: material / wip / finished_good (internal lot label with status at print),
-**product** (new, migration 0033: the label on each bar; no status bar, no quantity; batch labels use it, falling
+**product** (new, migration 0032: the label on each bar; no status bar, no quantity; batch labels use it, falling
 back to an approved finished-goods label), carton, location. Renderer `label` **v2** (name largest, then code and
 expiry; QR always inside; status and trace rows never overlap) is the default for new layouts; v1 stays registered
 so labels printed with it re-render to the same checksum. A product label's `BC:LOT:<lot>` opens the batch on
