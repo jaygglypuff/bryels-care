@@ -5,10 +5,13 @@ import { fmtDateTime } from "@/lib/qty";
 import { DEFAULT_LABEL_FIELDS, getLabelTemplate, LABEL_DATASET_FOR, LABEL_FIELD_KEYS, labelLayoutTemplates } from "@/modules/documents";
 import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
+import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { RecordNo } from "@/ui/plain-list";
 import { Forbidden } from "../../../../forbidden";
 import { LabelStatusOp, LabelTemplateForm } from "../../forms";
+import { APPLIES_TEXT } from "../../words";
 
-export const metadata = { title: "Label template" };
+export const metadata = { title: "Label" };
 export const dynamic = "force-dynamic";
 
 export default async function LabelTemplatePage({ params }: { params: Promise<{ id: string }> }) {
@@ -27,40 +30,51 @@ export default async function LabelTemplatePage({ params }: { params: Promise<{ 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <PageHeader
-        title={t.code}
-        subtitle={t.name}
+        title={t.name}
+        subtitle={<RecordNo>{t.code}</RecordNo>}
         actions={
           <>
             <LinkButton href="/admin/templates" variant="secondary">Back</LinkButton>
-            <LinkButton href={`/print/labels/test/${t.id}`} target="_blank" variant="secondary">Test page</LinkButton>
+            <LinkButton href={`/print/labels/test/${t.id}`} target="_blank" variant="secondary">Print a test label</LinkButton>
           </>
         }
       />
-      {t.status === "draft" && <Banner tone="warn" title="Draft: not printable">QA must approve this label template (someone other than {t.editorName}, who made the last change).</Banner>}
-      {!t.layoutVersion && <Banner tone="warn" title="Layout has no approved version">Layout {t.layoutCode} needs an approved version before labels can print.</Banner>}
-      <Card>
+      <PageIntro>This screen is for QA and the IT person: one label – what it is for, its size and what is printed on it. It prints only after QA said OK.</PageIntro>
+      {t.status === "draft" && ctx.can("masterdata.label_template.approve") && t.updatedBy !== ctx.userId && <NextStep text="This label waits for your OK. Print a test label first and check it." action={{ label: "Decide", href: "#decide" }} />}
+      {t.status === "draft" && !(ctx.can("masterdata.label_template.approve") && t.updatedBy !== ctx.userId) && <NextStep text="This label cannot print yet." waitingFor={`QA must say OK (someone other than ${t.editorName}, who made the last change).`} />}
+      {!t.layoutVersion && <Banner tone="warn" title="Its page layout has no OK'd version">The layout needs a version QA said OK to before labels can print.</Banner>}
+      <Card id="decide">
         <div className="mb-3 flex items-center gap-2">
-          <CardTitle>Configuration</CardTitle>
-          <Chip tone={t.status === "approved" ? "ok" : t.status === "draft" ? "warn" : "neu"}>{t.status}</Chip>
+          <CardTitle>About this label</CardTitle>
+          <Chip tone={t.status === "approved" ? "ok" : t.status === "draft" ? "warn" : "neu"}>{t.status === "approved" ? "OK for printing" : t.status === "draft" ? "Draft – QA must OK it" : "Not used any more"}</Chip>
         </div>
         <Dl
           items={[
-            ["Applies to", t.appliesTo.replace("_", " ")],
-            ["Media", `${Number(t.mediaWidthMm)} × ${Number(t.mediaHeightMm)} mm · ${t.dpi} dpi`],
-            ["Symbology", t.symbology === "qr" ? "QR Code" : "Code 128"],
-            ["Layout", `${t.layoutCode}${t.layoutVersion ? ` v${t.layoutVersion.versionNo}` : " (no approved version)"}`],
-            ["Fields", t.fieldKeys.map((k) => k.replace(/_/g, " ")).join(", ") || "—"],
+            ["For", APPLIES_TEXT[t.appliesTo] ?? t.appliesTo.replace(/_/g, " ")],
+            ["Size", `${Number(t.mediaWidthMm)} × ${Number(t.mediaHeightMm)} mm`],
+            ["What is printed", t.fieldKeys.map((k) => k.replace(/_/g, " ")).join(", ") || "—"],
             ["Last change", `${t.editorName}, ${fmtDateTime(t.updatedAt)}`],
-            ["Approved", t.approvedAt ? `${t.approverName}, ${fmtDateTime(t.approvedAt)}` : "—"],
+            ["OK'd by", t.approvedAt ? `${t.approverName}, ${fmtDateTime(t.approvedAt)}` : "—"],
           ]}
         />
+        <div className="mt-3">
+          <MoreDetails title="Printer details">
+            <Dl
+              items={[
+                ["Barcode", t.symbology === "qr" ? "QR code" : "Code 128"],
+                ["Printer sharpness", `${t.dpi} dpi`],
+                ["Page layout", `${t.layoutCode}${t.layoutVersion ? ` version ${t.layoutVersion.versionNo}` : " (no OK'd version)"}`],
+              ]}
+            />
+          </MoreDetails>
+        </div>
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start">
-          {t.status === "draft" && ctx.can("masterdata.label_template.approve") && (t.updatedBy === ctx.userId ? <p className="text-[13px] text-muted">You made the last change, so someone else must approve.</p> : <LabelStatusOp id={t.id} op="approve" />)}
+          {t.status === "draft" && ctx.can("masterdata.label_template.approve") && (t.updatedBy === ctx.userId ? <p className="text-[13px] text-muted">You made the last change, so someone else must say OK.</p> : <LabelStatusOp id={t.id} op="approve" />)}
         </div>
       </Card>
       {canEdit && (
         <Card>
-          <CardTitle>Edit</CardTitle>
+          <CardTitle>Change this label</CardTitle>
           <LabelTemplateForm
             layouts={layouts}
             appliesTo={Object.keys(LABEL_DATASET_FOR)}
@@ -73,7 +87,7 @@ export default async function LabelTemplatePage({ params }: { params: Promise<{ 
       {t.status !== "retired" && ctx.can("masterdata.label_template.approve") && (
         <Card>
           <details>
-            <summary className="cursor-pointer text-[14px] font-semibold">Retire this template</summary>
+            <summary className="flex min-h-[44px] cursor-pointer items-center text-[14px] font-semibold">⋯ Stop using this label</summary>
             <div className="mt-3"><LabelStatusOp id={t.id} op="retire" /></div>
           </details>
         </Card>

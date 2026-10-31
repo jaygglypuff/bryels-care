@@ -173,7 +173,7 @@ function TrendCharts({ t }: { t: Trends }) {
       <li>Click a point to open its records.</li>
     </ul>
   );
-  return <ChartFrame title="Trends" subtitle="One small chart per number, each starting at zero; figures saved each night" chart={charts} table={table} legend={legend} meta={updated} stale={t.freshness.stale ? t.freshness.reason : null} />;
+  return <ChartFrame title="The charts" subtitle="One small chart per number, each starting at zero; figures saved each night" chart={charts} table={table} legend={legend} meta={updated} stale={t.freshness.stale ? t.freshness.reason : null} />;
 }
 
 /** US-5-16 trends page (docs/ux-system.md §9.15). */

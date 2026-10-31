@@ -2,14 +2,20 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { listLabelTemplates, listStations, listTemplates, recentDocuments } from "@/modules/documents";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { MoreDetails, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { PlainList, PlainRow } from "@/ui/plain-list";
+import { APPLIES_TEXT } from "./words";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 
-export const metadata = { title: "Templates & labels" };
+export const metadata = { title: "Labels and printouts" };
 export const dynamic = "force-dynamic";
 
 const STATUS_TONE: Record<string, "ok" | "warn" | "neu" | "bad"> = { approved: "ok", draft: "neu", pending_approval: "warn", retired: "bad" };
+const STATUS_TEXT: Record<string, string> = { approved: "OK for printing", draft: "Draft – QA must OK it", pending_approval: "Waits for QA's OK", retired: "Not used any more" };
+
 
 export default async function TemplatesPage() {
   const ctx = await requireContext();
@@ -26,89 +32,103 @@ export default async function TemplatesPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Templates & labels"
-        subtitle="Versioned document layouts, label templates and print stations. Layouts are configuration of built-in renderers; QA approves every version."
+        title="Labels and printouts"
         actions={
           <>
-            {ctx.can("documents.template.create") && <LinkButton href="/admin/templates/new" variant="cta">New layout</LinkButton>}
-            {ctx.can("masterdata.label_template.create") && <LinkButton href="/admin/templates/labels/new" variant="secondary">New label template</LinkButton>}
-            {ctx.can("documents.print_station.admin") && <LinkButton href="/admin/templates/stations" variant="secondary">Print stations</LinkButton>}
+            {ctx.can("masterdata.label_template.create") && <LinkButton href="/admin/templates/labels/new" variant="cta">New label</LinkButton>}
+            {(ctx.can("documents.template.create") || ctx.can("documents.print_station.admin")) && (
+              <MoreMenu>
+                <div className="flex flex-col gap-2">
+                  {ctx.can("documents.template.create") && <LinkButton href="/admin/templates/new" variant="secondary" size="sm">New page layout</LinkButton>}
+                  {ctx.can("documents.print_station.admin") && <LinkButton href="/admin/templates/stations" variant="secondary" size="sm">Label printers (where they are)</LinkButton>}
+                </div>
+              </MoreMenu>
+            )}
           </>
         }
       />
+      <PageIntro>This screen is for QA and the IT person: how labels and printed pages look, and which label printers there are. A label prints only after QA said OK to it.</PageIntro>
 
       {canLabels && (
-        <Card>
-          <CardTitle>Label templates</CardTitle>
+        <section aria-labelledby="labels-h">
+          <h2 id="labels-h" className="mb-2 font-display text-[18px] font-semibold">Labels</h2>
           {labels.length === 0 ? (
-            <EmptyState title="No label templates yet.">Create one, then ask QA to approve it before labels can print.</EmptyState>
+            <Card>
+              <EmptyState title="No labels yet">Press “New label”, then ask QA to OK it before it can print.</EmptyState>
+            </Card>
           ) : (
-            <Table head={["Code", "Applies to", "Media", "Symbology", "Layout", "Status"]}>
+            <PlainList label="Labels">
               {labels.map((l) => (
-                <tr key={l.id}>
-                  <Td><Link href={`/admin/templates/labels/${l.id}`} className="font-mono text-primary-text hover:underline">{l.code}</Link><div className="text-[12px] text-muted">{l.name}</div></Td>
-                  <Td>{l.appliesTo.replace("_", " ")}</Td>
-                  <Td>{Number(l.mediaWidthMm)} × {Number(l.mediaHeightMm)} mm · {l.dpi} dpi</Td>
-                  <Td>{l.symbology === "qr" ? "QR" : "Code 128"}</Td>
-                  <Td className="font-mono">{l.layoutCode}</Td>
-                  <Td><Chip tone={STATUS_TONE[l.status] ?? "neu"}>{l.status}</Chip></Td>
-                </tr>
+                <PlainRow
+                  key={l.id}
+                  href={`/admin/templates/labels/${l.id}`}
+                  title={l.name}
+                  code={l.code}
+                  status={<Chip tone={STATUS_TONE[l.status] ?? "neu"}>{STATUS_TEXT[l.status] ?? l.status}</Chip>}
+                  facts={`${APPLIES_TEXT[l.appliesTo] ?? l.appliesTo.replace(/_/g, " ")} · ${Number(l.mediaWidthMm)} × ${Number(l.mediaHeightMm)} mm · ${l.symbology === "qr" ? "QR code" : "bar code"}`}
+                />
               ))}
-            </Table>
+            </PlainList>
           )}
-        </Card>
+        </section>
       )}
 
       {canDocs && (
-        <Card>
-          <CardTitle>Document layouts</CardTitle>
+        <section aria-labelledby="layouts-h">
+          <h2 id="layouts-h" className="mb-2 font-display text-[18px] font-semibold">Page layouts</h2>
           {templates.length === 0 ? (
-            <EmptyState title="No document layouts yet." />
+            <Card>
+              <EmptyState title="No page layouts yet">Layouts come with the app; QA says OK to each version.</EmptyState>
+            </Card>
           ) : (
-            <Table head={["Code", "Kind", "Page", "Effective version", "Latest", "Waiting approval"]}>
+            <PlainList label="Page layouts">
               {templates.map((t) => (
-                <tr key={t.id}>
-                  <Td><Link href={`/admin/templates/${t.id}`} className="font-mono text-primary-text hover:underline">{t.code}</Link><div className="text-[12px] text-muted">{t.name}</div></Td>
-                  <Td>{t.templateKind.replace(/_/g, " ")}</Td>
-                  <Td>{t.pageSize === "label" ? "label media" : `${t.pageSize} ${t.orientation}`}</Td>
-                  <Td>{t.approvedVersionNo ? <Chip tone="ok">v{t.approvedVersionNo}</Chip> : <Chip tone="warn">none</Chip>}</Td>
-                  <Td>v{t.latestVersionNo}</Td>
-                  <Td>{t.pendingCount ? <Chip tone="warn">{t.pendingCount}</Chip> : "—"}</Td>
-                </tr>
+                <PlainRow
+                  key={t.id}
+                  href={`/admin/templates/${t.id}`}
+                  title={t.name}
+                  code={t.code}
+                  status={
+                    <>
+                      {t.approvedVersionNo ? <Chip tone="ok">In use: version {t.approvedVersionNo}</Chip> : <Chip tone="warn">No version OK&apos;d yet</Chip>}
+                      {t.pendingCount > 0 && <Chip tone="warn">{t.pendingCount} waits for QA</Chip>}
+                    </>
+                  }
+                  facts={`${t.templateKind.replace(/_/g, " ")} · ${t.pageSize === "label" ? "label paper" : `${t.pageSize} ${t.orientation}`}`}
+                />
               ))}
-            </Table>
+            </PlainList>
           )}
-        </Card>
+        </section>
       )}
 
       {stations.length > 0 && (
-        <Card>
-          <CardTitle>Print stations</CardTitle>
-          <ul className="divide-y divide-line text-[13px]">
+        <MoreDetails title={`Label printers (${stations.length})`}>
+          <ul className="divide-y divide-line text-[14px]">
             {stations.map((s) => (
               <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                <span><span className="font-mono">{s.siteCode} · {s.code}</span> · {s.name}</span>
-                <span className="text-muted">{s.printerName}</span>
-                <Chip tone={s.isActive ? "ok" : "neu"}>{s.isActive ? "Active" : "Inactive"}</Chip>
+                <span>
+                  {s.name} <span className="text-muted">· {s.siteCode} · {s.printerName}</span>
+                </span>
+                <Chip tone={s.isActive ? "ok" : "neu"}>{s.isActive ? "In use" : "Not used"}</Chip>
               </li>
             ))}
           </ul>
-        </Card>
+        </MoreDetails>
       )}
 
       {docs.length > 0 && (
-        <Card>
-          <CardTitle>Recently generated documents</CardTitle>
+        <MoreDetails title="Recently printed pages">
           <ul className="divide-y divide-line text-[13px]">
             {docs.map((d) => (
               <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                <Link href={`/documents/${d.id}`} className="font-mono text-primary-text hover:underline">{d.documentNumber}</Link>
-                <span className="text-muted">{d.documentKind.replace(/_/g, " ")} · {d.templateCode} v{d.versionNo} · {d.generatedByName}, {fmtDateTime(d.generatedAt)}</span>
-                <Chip tone={d.status === "ready" ? "ok" : d.status === "void" ? "bad" : "warn"}>{d.watermark ?? d.status}</Chip>
+                <Link href={`/documents/${d.id}`} className="inline-flex min-h-[40px] items-center font-mono text-primary-text hover:underline">{d.documentNumber}</Link>
+                <span className="text-muted">{d.documentKind.replace(/_/g, " ")} · {d.generatedByName}, {fmtDateTime(d.generatedAt)}</span>
+                <Chip tone={d.status === "ready" ? "ok" : d.status === "void" ? "bad" : "warn"}>{d.watermark ?? (d.status === "ready" ? "Ready" : d.status)}</Chip>
               </li>
             ))}
           </ul>
-        </Card>
+        </MoreDetails>
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 import { requireContext } from "@/lib/auth/context";
 import { isDemoMode } from "@/lib/demo";
 import { DEMO_RESET_CONFIRM_WORD, demoResetStatus } from "@/modules/platform";
+import { PageIntro } from "@/ui/guide";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Banner } from "@/ui/status";
 import { StepUpGate } from "../users/step-up-gate";
@@ -22,7 +23,8 @@ export default async function DemoResetPage() {
   const status = await demoResetStatus(ctx);
   return (
     <>
-      <PageHeader title="Reset demo data" subtitle="Start the demo again from a fresh copy of the fictional company." />
+      <PageHeader title="Reset demo data" />
+      <PageIntro>This screen is for the owner, in the demo only: start the demo again from a fresh copy of the made-up company. Everyone is signed out. Real data is never touched.</PageIntro>
       {!status.available ? (
         <Banner tone={status.realAccounts > 0 ? "bad" : "warn"} title="Reset is not available">
           {status.reason}

@@ -2,8 +2,9 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { listActiveSessions } from "@/modules/identity";
-import { Card, CardTitle, EmptyState, PageHeader } from "@/ui/core";
+import { Card, EmptyState, PageHeader } from "@/ui/core";
 import { Chip } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../forbidden";
 import { CommandForm } from "../users/[id]/command-form";
 
@@ -18,9 +19,10 @@ export default async function SessionsPage() {
   const canVoid = ctx.can("identity.session.void");
   return (
     <>
-      <PageHeader title="Sessions" subtitle={`${sessions.length} signed-in device(s) · revocation applies on the device's next request`} />
+      <PageHeader title="Who is signed in" subtitle={`${sessions.length} device(s)`} />
+      <PageIntro>This screen is for the IT person: every phone, tablet and computer where someone is signed in. If a phone is lost, press “Sign out” on it; it is signed out the next time it is used.</PageIntro>
       <Card>
-        <CardTitle>Signed in now</CardTitle>
+        
         {sessions.length === 0 ? (
           <EmptyState title="Nobody is signed in" />
         ) : (
@@ -41,15 +43,15 @@ export default async function SessionsPage() {
                   <p className="mt-1 flex flex-wrap gap-1">
                     {s.current && <Chip tone="ok">You, this device</Chip>}
                     {s.deviceClass === "shared" && <Chip tone="info">Shared device</Chip>}
-                    {s.privileged && <Chip tone="warn">Privileged</Chip>}
-                    {s.mfaVerified && <Chip tone="ok">Two-step verified</Chip>}
+                    {s.privileged && <Chip tone="warn">Can approve</Chip>}
+                    {s.mfaVerified && <Chip tone="ok">Extra code checked</Chip>}
                   </p>
                 </div>
                 {canVoid && !s.current && (
                   <details className="w-full sm:w-auto">
-                    <summary className="cursor-pointer text-[13px] font-medium text-primary-text">Sign out</summary>
+                    <summary className="flex min-h-[44px] cursor-pointer items-center text-[14px] font-medium text-primary-text">Sign out</summary>
                     <div className="mt-2 sm:w-72">
-                      <CommandForm userId={s.userId} op="revoke_session" label="Sign out this device" hidden={{ sessionId: s.id }} reason={{ label: "Reason" }} />
+                      <CommandForm userId={s.userId} op="revoke_session" label="Sign out this device" hidden={{ sessionId: s.id }} reason={{ label: "Why" }} />
                     </div>
                   </details>
                 )}

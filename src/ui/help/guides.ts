@@ -13,6 +13,13 @@ export type Guide = { key: string; title: string; version: number; updatedAt: st
 
 /** Screen key → file in docs/help. */
 export const GUIDE_FILES: Record<string, string> = {
+  // ADR-088 grade-5 help: one "your day in 5 steps" guide per role, and the glossary
+  "role.owner": "role-owner.md",
+  "role.site_manager": "role-site-manager.md",
+  "role.operator": "role-operator.md",
+  "role.warehouse": "role-warehouse.md",
+  "role.qa": "role-qa.md",
+  "start.words": "words.md",
   // ADR-072: the end-to-end walkthrough for the empty sandbox company (listed first on /help)
   "start.getting_started": "getting-started.md",
   // ADR-075: codes, locations, deleting drafts, To approve, notifications
@@ -120,4 +127,19 @@ export function listGuides(): Guide[] {
   return Object.keys(GUIDE_FILES)
     .map((k) => loadGuide(k))
     .filter((g): g is Guide => !!g);
+}
+
+/** The five role guides on /help, in menu order, with the role codes each one is for (ADR-088). */
+export const ROLE_GUIDES: { key: string; label: string; roles: string[] }[] = [
+  { key: "role.owner", label: "Owner", roles: ["owner_director"] },
+  { key: "role.site_manager", label: "Site manager", roles: ["site_manager", "production_planner", "system_admin", "finance", "sales_cs", "procurement", "auditor"] },
+  { key: "role.operator", label: "Machine operator", roles: ["production_operator"] },
+  { key: "role.warehouse", label: "Warehouse", roles: ["warehouse_operator"] },
+  { key: "role.qa", label: "QA", roles: ["qa_qc"] },
+];
+
+/** Task guides: everything that is not a role guide or the glossary (still opened by the "?" on each screen). */
+export function listTaskGuides(): Guide[] {
+  const skip = new Set([...ROLE_GUIDES.map((r) => r.key), "start.words"]);
+  return listGuides().filter((g) => !skip.has(g.key));
 }
