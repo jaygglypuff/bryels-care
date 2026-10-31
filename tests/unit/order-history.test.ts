@@ -13,7 +13,7 @@ describe("orderHistory (customer order page)", () => {
       ],
       { at: at(1), byName: "Lia" },
     );
-    expect(h.map((e) => e.label)).toEqual(["Created as draft", "Confirmed", "Stock reserved"]);
+    expect(h.map((e) => e.label)).toEqual(["Created as draft", "Confirmed", "Set aside"]);
     expect(h.map((e) => e.who)).toEqual(["Lia", "Lia", "Ben"]);
   });
 
@@ -23,6 +23,6 @@ describe("orderHistory (customer order page)", () => {
 
   it("adds the entry row before later moves when the creation was not recorded", () => {
     const h = orderHistory([{ id: "9", fromState: "confirmed", toState: "allocated", occurredAt: at(8), actorName: "Ben", reason: null }], { at: at(1), byName: "Ana" });
-    expect(h.map((e) => e.label)).toEqual(["Order entered", "Stock reserved"]);
+    expect(h.map((e) => e.label)).toEqual(["Order entered", "Set aside"]);
   });
 });

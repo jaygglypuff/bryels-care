@@ -17,7 +17,7 @@ export function QuoteCommand({ quoteId, command, label, reason, note, variant = 
       {(fe) => (
         <>
           {reason && (
-            <Field label="Reason" htmlFor={`qc-${command}`} error={fe.reason}>
+            <Field label="Why?" htmlFor={`qc-${command}`} error={fe.reason}>
               <Input id={`qc-${command}`} name="reason" required minLength={3} maxLength={300} />
             </Field>
           )}
@@ -34,13 +34,13 @@ export function QuoteCommand({ quoteId, command, label, reason, note, variant = 
 
 export function ConvertQuoteForm({ quoteId, today }: { quoteId: string; today: string }) {
   return (
-    <ActionForm action={convertQuoteAction} hidden={{ quoteId }} submit="Convert to sales order" variant="cta" pending="Creating the order…">
+    <ActionForm action={convertQuoteAction} hidden={{ quoteId }} submit="Make it an order" variant="cta" pending="Making the order…">
       {(fe) => (
         <div className="grid grid-cols-1 gap-3">
-          <Field label="Requested delivery" htmlFor="cv-date" error={fe.requestedDeliveryOn ?? fe.form}>
+          <Field label="Deliver by" htmlFor="cv-date" error={fe.requestedDeliveryOn ?? fe.form}>
             <Input id="cv-date" name="requestedDeliveryOn" type="date" min={today} required />
           </Field>
-          <Field label="Customer PO number (optional)" htmlFor="cv-po" error={fe.customerPoNumber}>
+          <Field label="Customer's order no. (optional)" htmlFor="cv-po" error={fe.customerPoNumber}>
             <Input id="cv-po" name="customerPoNumber" maxLength={60} />
           </Field>
         </div>
