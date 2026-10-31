@@ -10,6 +10,7 @@ import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
 import { createFormula, createFormulaRevision, deleteFormulaDraft, saveFormulaRevisionDraft, submitFormulaRevision, withdrawFormulaRevision } from "./formulas";
 import { createMaterial } from "./materials";
+import { monthsToDays } from "./products-shelf-life";
 import { changeProductStatus, changeSkuStatus, createProduct, createSku, deleteProduct, productFamilies, updateProduct } from "./products";
 import {
   BATCH_KG_DECIMALS,
@@ -597,13 +598,8 @@ const RecipeProductInput = z
   })
   .strict();
 
-/**
- * Shelf life typed in months → days for the product (A-RW-01): months × 365 ÷ 12, rounded
- * (24 → 730, 12 → 365, 6 → 183). QA confirms the shelf life; this is only the unit change.
- */
-export function monthsToDays(months: number) {
-  return Math.round((months * 365) / 12);
-}
+/** Shelf life months → days (A-RW-01); one rule, shared with the product form (products-shelf-life.ts). */
+export { monthsToDays };
 
 /**
  * "Make a new product" inside the wizard, in one go with the existing services: the product (code

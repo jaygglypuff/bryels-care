@@ -7,6 +7,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { approverLabel } from "@/lib/auth/self-approval";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
+import { assignMasterCode } from "@/lib/numbering";
 import { z } from "zod";
 import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { CreateFormulaInput, DecisionInput, RetireInput, SaveFormulaDraftInput, parseInput } from "./schemas";
@@ -79,9 +80,12 @@ export async function createFormula(ctx: AuthContext, raw: unknown) {
   return db.transaction(async (tx) => {
     const [product] = await tx.select().from(products).where(and(eq(products.id, input.productId), eq(products.organizationId, ctx.organizationId))).limit(1);
     if (!product) throw new DomainError("not_found", "Product not found.");
-    const [dup] = await tx.select({ id: formulas.id }).from(formulas).where(and(eq(formulas.organizationId, ctx.organizationId), eq(formulas.code, input.code))).limit(1);
-    if (dup) throw new DomainError("conflict", `Formula code ${input.code} is already used.`, { fieldErrors: { code: "This code is already used." } });
-    const [f] = await tx.insert(formulas).values({ organizationId: ctx.organizationId, productId: product.id, code: input.code, name: input.name }).returning();
+    const used = async (c: string) => (await tx.select({ id: formulas.id }).from(formulas).where(and(eq(formulas.organizationId, ctx.organizationId), eq(formulas.code, c))).limit(1)).length > 0;
+    // ADR-093: a blank code gets the next F-nnnn in this transaction (typed codes stay unique).
+    const code = input.code ?? (await assignMasterCode(tx, ctx.organizationId, "FRM", used));
+    if (input.code && (await used(input.code))) throw new DomainError("conflict", `Formula code ${input.code} is already used.`, { fieldErrors: { code: "This code is already used." } });
+    const name = (input.name ?? product.name).slice(0, 120);
+    const [f] = await tx.insert(formulas).values({ organizationId: ctx.organizationId, productId: product.id, code, name }).returning();
     const [rev] = await tx
       .insert(formulaRevisions)
       .values({
@@ -94,7 +98,7 @@ export async function createFormula(ctx: AuthContext, raw: unknown) {
         createdBy: ctx.userId,
       })
       .returning();
-    await audit(tx, ctx, { action: "masterdata.formula.created", entityType: "formula", entityId: f.id, entityNumber: f.code, siteId: null, after: { code: f.code, name: f.name, product: product.skuCode } });
+    await audit(tx, ctx, { action: "masterdata.formula.created", entityType: "formula", entityId: f.id, entityNumber: f.code, siteId: null, after: { code: f.code, codeAssigned: !input.code, name: f.name, product: product.skuCode } });
     await audit(tx, ctx, { action: "masterdata.formula_revision.drafted", entityType: "formula_revision", entityId: rev.id, entityNumber: label(f.code, rev), siteId: null, after: { status: "draft", revisionNo: 1 } });
     return { formulaId: f.id, revisionId: rev.id };
   });
@@ -525,7 +529,8 @@ export async function getFormulaRevision(ctx: AuthContext, revisionId: string) {
   const { rev, formula, product, lines } = loaded;
   const showPct = canSeeFormulaPercentages(ctx);
   const ref = new Decimal(rev.referenceBatchSizeG);
-  const total = lines.reduce((acc, l) => acc.plus(l.line.quantityG), new Decimal(0));
+  // Packaging lines (material kind packaging, ADR-094) hold pieces, not grams: they are outside the gram total.
+  const { sumG: total, packaging } = formulaTotals(lines.map(({ line, material }) => ({ quantityG: line.quantityG, materialKind: material.materialKind, materialName: material.name })));
   const dtoLines = lines.map(({ line, material }) => {
     const q = new Decimal(line.quantityG);
     const band = line.toleranceAbsG !== null ? new Decimal(line.toleranceAbsG) : q.mul(line.tolerancePct ?? 0).div(100);
@@ -535,6 +540,8 @@ export async function getFormulaRevision(ctx: AuthContext, revisionId: string) {
       materialId: material.id,
       materialCode: material.code,
       materialName: material.name,
+      materialKind: material.materialKind,
+      isPackaging: material.materialKind === "packaging",
       inciName: material.inciName,
       baseUom: material.baseUom,
       quantityG: line.quantityG,
@@ -572,7 +579,7 @@ export async function getFormulaRevision(ctx: AuthContext, revisionId: string) {
     revision: { ...rev, label: effectiveLabel(rev, today), createdByName: nm(rev.createdBy), submittedByName: nm(rev.submittedBy), approvedByName: approverLabel(nm(rev.approvedBy), rev.approvedBy, [rev.createdBy, rev.submittedBy]) },
     lines: dtoLines,
     showPercentages: showPct,
-    totals: { sumG: total.toString(), referenceBatchSizeG: rev.referenceBatchSizeG, differenceG: total.minus(ref).toString() },
+    totals: { sumG: total.toString(), referenceBatchSizeG: rev.referenceBatchSizeG, differenceG: total.minus(ref).toString(), packaging },
     baseRevision: baseRev ? { id: baseRev.id, revisionNo: baseRev.revisionNo } : null,
     redline,
     headerChanges,
@@ -590,6 +597,21 @@ export async function getFormulaRevision(ctx: AuthContext, revisionId: string) {
   };
 }
 export type FormulaRevisionView = NonNullable<Awaited<ReturnType<typeof getFormulaRevision>>>;
+
+/**
+ * Gram total of a recipe version and its packaging per batch (ADR-094): ingredient lines add up in
+ * grams; packaging lines (material kind packaging) hold pieces, so they are listed separately and
+ * never added to the grams. Pure; decimal.js.
+ */
+export function formulaTotals(lines: { quantityG: string; materialKind: string; materialName: string }[]) {
+  let sumG = new Decimal(0);
+  const packaging: { materialName: string; pieces: string }[] = [];
+  for (const l of lines) {
+    if (l.materialKind === "packaging") packaging.push({ materialName: l.materialName, pieces: new Decimal(l.quantityG).toString() });
+    else sumG = sumG.plus(l.quantityG);
+  }
+  return { sumG, packaging };
+}
 
 type LineLike = { materialId: string; lineNo: number; quantityG: string; tolerancePct: string | null; toleranceAbsG: string | null; phaseCode: string | null; scaling: string };
 const tolText = (l: LineLike) => (l.toleranceAbsG !== null ? `±${new Decimal(l.toleranceAbsG).toString()} g` : `±${new Decimal(l.tolerancePct ?? 0).toString()} %`);

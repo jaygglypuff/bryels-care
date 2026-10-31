@@ -71,7 +71,24 @@ export function CommandForm({
 }
 
 /** Approve or reject the waiting step; the final approval may set the effective date. */
-export function DecisionForm({ action, id, stepLabel, isFinal, defaultEffectiveFrom, today }: { action: Action; id: string; stepLabel: string; isFinal: boolean; defaultEffectiveFrom?: string | null; today: string }) {
+export function DecisionForm({
+  action,
+  id,
+  stepLabel,
+  isFinal,
+  defaultEffectiveFrom,
+  today,
+  plain = false,
+}: {
+  action: Action;
+  id: string;
+  stepLabel: string;
+  isFinal: boolean;
+  defaultEffectiveFrom?: string | null;
+  today: string;
+  /** Grade-5 words (ADR-088): "Use from", "Say OK", "Not OK". Default keeps the original words for the other screens. */
+  plain?: boolean;
+}) {
   const [state, run] = useActionState<ActionState, FormData>(action, null);
   const fe = state?.fieldErrors ?? {};
   return (
@@ -79,20 +96,25 @@ export function DecisionForm({ action, id, stepLabel, isFinal, defaultEffectiveF
       <input type="hidden" name="id" value={id} />
       <p className="text-[13px] font-medium">Your decision: {stepLabel}</p>
       {isFinal && (
-        <Field label="Effective from" htmlFor={`eff-${id}`} error={fe.effectiveFrom} hint="New batches planned on or after this date use this revision; the current one is superseded on that date.">
+        <Field
+          label={plain ? "Use from" : "Effective from"}
+          htmlFor={`eff-${id}`}
+          error={fe.effectiveFrom}
+          hint={plain ? "New batches from this day use this version; the old version stops that day." : "New batches planned on or after this date use this revision; the current one is superseded on that date."}
+        >
           <Input id={`eff-${id}`} name="effectiveFrom" type="date" min={today} defaultValue={defaultEffectiveFrom && defaultEffectiveFrom >= today ? defaultEffectiveFrom : today} />
         </Field>
       )}
-      <Field label="Note (required to reject)" htmlFor={`note-${id}`} error={fe.note}>
-        <Textarea id={`note-${id}`} name="note" placeholder="What you checked, or why you reject" />
+      <Field label={plain ? "Note (needed when it is not OK)" : "Note (required to reject)"} htmlFor={`note-${id}`} error={fe.note}>
+        <Textarea id={`note-${id}`} name="note" placeholder={plain ? "What you checked, or what must change" : "What you checked, or why you reject"} />
       </Field>
       <FormMessage state={state} />
       <div className="flex flex-wrap gap-2">
         <SubmitButton name="decision" value="approved" variant="cta" pendingText="Saving…">
-          Approve
+          {plain ? "Say OK" : "Approve"}
         </SubmitButton>
         <SubmitButton name="decision" value="rejected" variant="danger" pendingText="Saving…">
-          Reject
+          {plain ? "Not OK" : "Reject"}
         </SubmitButton>
       </div>
     </form>

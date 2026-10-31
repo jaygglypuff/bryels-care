@@ -11,10 +11,10 @@ export function WorkInstructionEditor({ revisionId, body, changeSummary }: { rev
   return (
     <form action={action} className="flex flex-col gap-3">
       <input type="hidden" name="id" value={revisionId} />
-      <Field label="Instruction text" htmlFor={`wi-${revisionId}`} error={fe.bodyMarkdown}>
+      <Field label="What should the worker do?" htmlFor={`wi-${revisionId}`} error={fe.bodyMarkdown}>
         <Textarea id={`wi-${revisionId}`} name="bodyMarkdown" defaultValue={body} className="min-h-[200px]" />
       </Field>
-      <Field label="Change summary" htmlFor={`wic-${revisionId}`} error={fe.changeSummary}>
+      <Field label="What changed and why (optional)" htmlFor={`wic-${revisionId}`} error={fe.changeSummary}>
         <Input id={`wic-${revisionId}`} name="changeSummary" defaultValue={changeSummary ?? ""} />
       </Field>
       <FormMessage state={state} />

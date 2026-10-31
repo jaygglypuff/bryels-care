@@ -1,23 +1,30 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
-import { D, fmtDateTime } from "@/lib/qty";
-import { AREAS, EQUIPMENT_KINDS, STEP_KINDS, approvedWorkInstructionOptions, businessToday, getRoutingRevision, waitText } from "@/modules/masterdata";
+import { D, fmtDate, fmtDateTime } from "@/lib/qty";
+import { AREAS, AREAS_WORDS, EQUIPMENT_KINDS, STEP_KINDS, approvedWorkInstructionOptions, businessToday, getRoutingRevision, listFormulas, waitText } from "@/modules/masterdata";
 import { Banner, Chip } from "@/ui/status";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Explain, NextStep, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { RecordNo } from "@/ui/plain-list";
 import { Forbidden } from "../../../../../forbidden";
 import { decideRoutingAction, retireRoutingAction, submitRoutingAction, withdrawRoutingAction } from "../../../../_eng/actions";
 import { CommandForm, DecisionForm } from "../../../../_eng/forms";
 import { DeleteDraftButton } from "../../../../../delete-draft-button";
-import { ApprovalPanel, EffectiveRange, VerifyBanner, VersionChip } from "../../../../_eng/ui";
+import { ApprovalPanel, VerifyBanner } from "../../../../_eng/ui";
+import { PlainVersionChip, stepKindWords, useFromText, NEXT_WRAP } from "../../../../_eng/plain";
+import { waitingForApprover } from "../../../../_eng/waiting";
 import { RoutingStepEditor, type StepDraft } from "./step-editor";
 
-export const metadata: Metadata = { title: "Routing revision" };
+export const metadata: Metadata = { title: "Steps version (advanced)" };
+
+const SCOPE_WORDS: Record<string, string> = { sequencing_only: "only the order of the steps (one manager OK)", quality_relevant: "what the steps do (QA and a manager say OK)" };
 
 const limits = (p: { minValue: string | null; targetValue: string | null; maxValue: string | null; uom: string | null }) => {
   const f = (v: string | null) => (v === null ? null : D(v).toString());
-  const parts = [f(p.minValue) && `min ${f(p.minValue)}`, f(p.targetValue) && `target ${f(p.targetValue)}`, f(p.maxValue) && `max ${f(p.maxValue)}`].filter(Boolean);
-  return parts.length ? `${parts.join(" · ")} ${p.uom ?? ""}` : `${p.uom ?? ""} · limits not set`;
+  const parts = [f(p.minValue) && `at least ${f(p.minValue)}`, f(p.targetValue) && `aim for ${f(p.targetValue)}`, f(p.maxValue) && `at most ${f(p.maxValue)}`].filter(Boolean);
+  return parts.length ? `${parts.join(" · ")} ${p.uom ?? ""}` : `${p.uom ?? ""} · no limits set`;
 };
 
 export default async function RoutingRevisionPage({ params }: { params: Promise<{ id: string; revisionId: string }> }) {
@@ -25,11 +32,22 @@ export default async function RoutingRevisionPage({ params }: { params: Promise<
   const ctx = await requireContext();
   if (!ctx.can("masterdata.routing.view")) return <Forbidden what="routings" />;
   const v = /^[0-9a-f-]{36}$/i.test(revisionId) ? await getRoutingRevision(ctx, revisionId) : null;
-  if (!v || v.routing.id !== id) return <EmptyState title="Revision not found" action={<LinkButton href="/masterdata/routings" variant="secondary">Back to routings</LinkButton>} />;
+  if (!v || v.routing.id !== id)
+    return (
+      <EmptyState title="Version not found" action={<LinkButton href="/masterdata/routings" variant="secondary">All steps</LinkButton>}>
+        It may have been deleted. Open the product&apos;s steps and pick a version from the list.
+      </EmptyState>
+    );
   const r = v.revision;
   const today = businessToday();
   const lastStep = Math.max(...v.approval.policy.map((p) => p.step));
   const wis = v.can.edit ? await approvedWorkInstructionOptions(ctx) : [];
+  const recipe = ctx.can("masterdata.formula.view") ? ((await listFormulas(ctx)).find((f) => f.productId === v.product.id) ?? null) : null;
+  const canChange = ctx.can("masterdata.formula.create") && ctx.can("masterdata.formula.edit") && ctx.can("masterdata.routing.create") && ctx.can("masterdata.routing.edit");
+  const nextPolicy = v.approval.nextStep ? v.approval.policy.find((p) => p.step === v.approval.nextStep!.step) : null;
+  const waiting = r.status === "pending_approval" && !v.approval.canDecide ? await waitingForApprover(ctx, "masterdata.routing.approve", nextPolicy, v.approval.policy.length) : null;
+  const recipeLink = recipe ? (canChange ? { label: "Make a new version (step by step)", href: `/masterdata/recipes/${recipe.formulaId}?new=1` } : { label: "Open the recipe", href: `/masterdata/recipes/${recipe.formulaId}` }) : undefined;
+  const hasMore = v.can.withdraw || v.can.retire || (v.can.edit && r.status === "draft" && !r.submittedAt);
   const initial: StepDraft[] = v.steps.map((s) => ({
     name: s.name,
     code: s.code ?? "",
@@ -58,35 +76,81 @@ export default async function RoutingRevisionPage({ params }: { params: Promise<
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <Link href={`/masterdata/routings/${v.routing.id}`} className="text-[13px] text-primary-text hover:underline">
-          ← {v.routing.code}
+        <Link href={`/masterdata/routings/${v.routing.id}`} className="inline-flex min-h-[44px] items-center text-[14px] text-primary-text hover:underline">
+          ← Steps for {v.product.name}
         </Link>
-        <PageHeader title={`${v.routing.code} revision ${r.revisionNo}`} subtitle={`${v.routing.name} · ${v.product.name}`} actions={<VersionChip status={r.status} label={r.label} />} />
+        <PageHeader
+          title={`Version ${r.revisionNo} of the steps for ${v.product.name}`}
+          subtitle={
+            <>
+              Steps (advanced) · <RecordNo>{v.routing.code}</RecordNo> <PlainVersionChip status={r.status} label={r.label} />
+            </>
+          }
+          actions={
+            hasMore ? (
+              <MoreMenu>
+                <div className="flex flex-col gap-3">
+                  {v.can.withdraw && <CommandForm action={withdrawRoutingAction} hidden={{ id: r.id }} label="Take it back to change it" variant="secondary" />}
+                  {v.can.edit && r.status === "draft" && !r.submittedAt && <DeleteDraftButton kind="routing_revision" id={r.id} what="this draft version and its steps (steps with no other version are removed too)" />}
+                  {v.can.retire && <CommandForm action={retireRoutingAction} hidden={{ id: r.id }} label="Stop using this version" variant="danger" reasonLabel="Why?" />}
+                </div>
+              </MoreMenu>
+            ) : undefined
+          }
+        />
       </div>
-      {r.status === "approved" && <Banner tone="info" title="Approved revisions are read-only">Batches keep the routing revision they were created with. Start a new revision to change the steps.</Banner>}
+      <PageIntro>
+        This screen is for one version of the steps a worker follows. Most people use New recipe (step by step). These screens are for advanced changes. <Explain term="version" label="What is a version?" />
+      </PageIntro>
+
+      {r.status === "draft" ? (
+        v.can.submit ? (
+          <NextStep className={NEXT_WRAP} text="Next: check the steps and press Save, then send them for approval." action={{ label: "Send for approval", href: "#send" }} />
+        ) : (
+          <NextStep className={NEXT_WRAP} text="This version is being written." waitingFor={`Waiting for ${r.createdByName ?? "the planner"} to finish it and send it for approval.`} />
+        )
+      ) : r.status === "pending_approval" ? (
+        v.approval.canDecide ? (
+          <NextStep className={NEXT_WRAP} text="Next: check the steps, then say OK or not OK." action={{ label: "Decide", href: "#decide" }} />
+        ) : (
+          <NextStep className={NEXT_WRAP} text="Sent for approval." waitingFor={waiting ?? "Waiting for approval."} />
+        )
+      ) : r.status === "approved" ? (
+        <NextStep className={NEXT_WRAP} text={r.label === "effective" ? "This version is in use. To change the steps, make a new version." : "This version is approved."} action={recipeLink} />
+      ) : r.status === "rejected" ? (
+        <NextStep className={NEXT_WRAP} text="This version was not OK'd. Read the note in the approval box, then make a new version." action={recipeLink} />
+      ) : (
+        <NextStep className={NEXT_WRAP} text="This version is no longer used." action={recipeLink} />
+      )}
+
+      {r.status === "approved" && <Banner tone="info" title="An approved version cannot change">Batches keep the steps they started with. Make a new version to change them.</Banner>}
       <VerifyBanner />
       <Card>
         <Dl
           items={[
-            ["Effective", <EffectiveRange key="e" from={r.effectiveFrom} to={r.effectiveTo} />],
-            ["Change scope", r.changeScope ? r.changeScope.replace(/_/g, " ") : v.draftScope ? `${v.draftScope.replace(/_/g, " ")} (if submitted now)` : "—"],
+            ["Use from", useFromText(r.effectiveFrom, r.effectiveTo, fmtDate).replace(/^Use from:? ?/, "") || "—"],
+            ["This change is about", r.changeScope ? (SCOPE_WORDS[r.changeScope] ?? r.changeScope.replace(/_/g, " ")) : v.draftScope ? `${SCOPE_WORDS[v.draftScope] ?? v.draftScope.replace(/_/g, " ")} (if sent now)` : "—"],
             ["Steps", String(v.steps.length)],
-            ["Submitted by", r.submittedByName ? `${r.submittedByName}${r.submittedAt ? ` · ${fmtDateTime(r.submittedAt)}` : ""}` : "—"],
-            ["Final approver", r.approvedByName ?? "—"],
+            ["Sent by", r.submittedByName ? `${r.submittedByName}${r.submittedAt ? ` · ${fmtDateTime(r.submittedAt)}` : ""}` : "—"],
+            ["Last OK by", r.approvedByName ?? "—"],
           ]}
         />
-        {r.changeSummary && <p className="mt-3 text-[13px]"><span className="font-medium">Change:</span> {r.changeSummary}</p>}
+        {r.changeSummary && (
+          <p className="mt-3 text-[14px]">
+            <span className="font-medium">What changed:</span> {r.changeSummary}
+          </p>
+        )}
       </Card>
 
       {v.can.edit ? (
         <Card>
-          <CardTitle>Edit draft steps</CardTitle>
+          <CardTitle>Change the draft steps</CardTitle>
           <RoutingStepEditor
             revisionId={r.id}
             initial={initial}
             effectiveFrom={r.effectiveFrom}
             changeSummary={r.changeSummary}
-            workInstructions={wis.map((w) => ({ id: w.id, label: `${w.code} rev ${w.revisionNo} · ${w.name}${w.effectiveTo ? " (superseded)" : ""}` }))}
+            workInstructions={wis.map((w) => ({ id: w.id, label: `${w.name} (version ${w.revisionNo})${w.effectiveTo ? " (old version)" : ""}` }))}
             stepKinds={STEP_KINDS}
             areas={AREAS}
             equipmentKinds={EQUIPMENT_KINDS}
@@ -97,7 +161,7 @@ export default async function RoutingRevisionPage({ params }: { params: Promise<
         <Card>
           <CardTitle>Steps</CardTitle>
           {v.steps.length === 0 ? (
-            <EmptyState title="No steps" />
+            <p className="text-[14px] text-fg-2">No steps yet.</p>
           ) : (
             <ol className="flex flex-col divide-y divide-line">
               {v.steps.map((s) => (
@@ -106,16 +170,16 @@ export default async function RoutingRevisionPage({ params }: { params: Promise<
                     {s.stepNo}. {s.name}
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1.5">
-                    <Chip tone="neu">{s.stepKind.replace(/_/g, " ")}{s.area ? ` (${s.area})` : ""}</Chip>
-                    {s.requiresChecker && <Chip tone="info">Checker required</Chip>}
-                    {s.requiresEquipment && <Chip tone="info">Equipment: {s.equipmentKind}</Chip>}
+                    <Chip tone="neu">{stepKindWords(s.stepKind)}{s.area ? ` (${AREAS_WORDS[s.area] ?? s.area})` : ""}</Chip>
+                    {s.requiresChecker && <Chip tone="info">A second person checks</Chip>}
+                    {s.requiresEquipment && <Chip tone="info">Needs a {s.equipmentKind}</Chip>}
                     {s.minDurationMinutes && <Chip tone="neu">Wait at least {waitText(s.minDurationMinutes)}</Chip>}
                   </div>
                   {s.instruction && <p className="mt-1 text-[13px] text-fg-2">{s.instruction}</p>}
                   {s.workInstruction && (
                     <details className="mt-1 text-[13px]">
-                      <summary className="cursor-pointer text-primary-text">
-                        Work instruction {s.workInstruction.code} rev {s.workInstruction.revisionNo}
+                      <summary className="flex min-h-[44px] cursor-pointer items-center text-primary-text">
+                        How-to sheet: {s.workInstruction.name} (version {s.workInstruction.revisionNo})
                       </summary>
                       <p className="mt-1 whitespace-pre-wrap rounded-[10px] bg-surface-2/60 p-2 text-[12px]">{s.workInstruction.bodyMarkdown}</p>
                     </details>
@@ -148,23 +212,25 @@ export default async function RoutingRevisionPage({ params }: { params: Promise<
       )}
 
       {(r.status !== "draft" || v.approval.decisions.length > 0) && (
-        <ApprovalPanel approval={v.approval} status={r.status} what="steps">
-          {v.approval.canDecide && v.approval.nextStep && (
-            <DecisionForm action={decideRoutingAction} id={r.id} stepLabel={`step ${v.approval.nextStep.step}, ${v.approval.nextStep.label}`} isFinal={v.approval.nextStep.step === lastStep} defaultEffectiveFrom={r.effectiveFrom} today={today} />
-          )}
-        </ApprovalPanel>
+        <section id="decide" className="scroll-mt-20">
+          <ApprovalPanel approval={v.approval} status={r.status} what="steps">
+            {v.approval.canDecide && v.approval.nextStep && (
+              <DecisionForm action={decideRoutingAction} id={r.id} stepLabel={`OK ${v.approval.nextStep.step} of ${v.approval.policy.length}, ${v.approval.nextStep.label}`} isFinal={v.approval.nextStep.step === lastStep} defaultEffectiveFrom={r.effectiveFrom} today={today} plain />
+            )}
+            {r.status === "pending_approval" && !v.approval.canDecide && (
+              <p className="text-[13px] text-muted">You cannot decide this step: it needs another job, or you wrote, sent or already approved this version.</p>
+            )}
+          </ApprovalPanel>
+        </section>
       )}
 
-      {(v.can.submit || v.can.withdraw || v.can.retire) && (
-        <Card>
-          <CardTitle>Actions</CardTitle>
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            {v.can.submit && <CommandForm action={submitRoutingAction} hidden={{ id: r.id }} label="Submit for approval" variant="cta" confirmText="Save the draft first. A sequencing-only change needs one site manager approval; any other change needs QA and a site manager or owner." />}
-            {v.can.withdraw && <CommandForm action={withdrawRoutingAction} hidden={{ id: r.id }} label="Withdraw to draft" variant="secondary" />}
-            {v.can.edit && r.status === "draft" && !r.submittedAt && <DeleteDraftButton kind="routing_revision" id={r.id} what="this draft revision and its steps (a routing with no other revision is removed too)" />}
-            {v.can.retire && <CommandForm action={retireRoutingAction} hidden={{ id: r.id }} label="Retire revision" variant="danger" reasonLabel="Reason for retiring" />}
-          </div>
-        </Card>
+      {v.can.submit && (
+        <section id="send" className="scroll-mt-20">
+          <Card>
+            <CardTitle>Send for approval</CardTitle>
+            <CommandForm action={submitRoutingAction} hidden={{ id: r.id }} label="Send for approval" variant="cta" confirmText="Press Save above first. If only the order of the steps changed, one manager says OK; any other change needs QA and a manager or the owner." />
+          </Card>
+        </section>
       )}
     </div>
   );

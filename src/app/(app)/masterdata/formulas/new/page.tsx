@@ -1,54 +1,47 @@
 import type { Metadata } from "next";
 import { requireContext } from "@/lib/auth/context";
 import { formulaFormOptions } from "@/modules/masterdata";
-import { Card, EmptyState, Field, Input, LinkButton, PageHeader, Select } from "@/ui/core";
+import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { NEXT_WRAP } from "../../_eng/plain";
 import { Forbidden } from "../../../forbidden";
 import { createFormulaAction } from "../../_eng/actions";
-import { CreateForm } from "../../_eng/forms";
+import { ActionForm, Grid, SelectField, TextField } from "../../_org/form";
 
-export const metadata: Metadata = { title: "New formula" };
+export const metadata: Metadata = { title: "New recipe (advanced)" };
 
+/** New recipe header (advanced editing, ADR-089): three questions; the system gives the number (F-nnnn, ADR-093). */
 export default async function NewFormulaPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.formula.create")) return <Forbidden what="creating formulas" />;
+  if (!ctx.can("masterdata.formula.create")) return <Forbidden what="making recipes" />;
   const { products } = await formulaFormOptions(ctx);
+  const canWizard = ctx.can("masterdata.routing.create");
   return (
-    <div className="mx-auto max-w-2xl">
-      <PageHeader title="New formula" subtitle="Creates the formula header and a draft revision 1. Add ingredient lines on the next page." />
+    <div className="mx-auto max-w-2xl space-y-5">
+      <PageHeader title="New recipe (advanced)" />
+      <PageIntro>This screen is for starting a recipe by hand. Most people use New recipe (step by step). These screens are for advanced changes.</PageIntro>
+      {canWizard && <NextStep className={NEXT_WRAP} text="Easier: the step-by-step recipe asks one thing at a time and adds the steps too." action={{ label: "New recipe (step by step)", href: "/masterdata/recipes/new" }} />}
       {products.length === 0 ? (
-        <EmptyState title="No products yet" action={<LinkButton href="/masterdata/products" variant="secondary">Products</LinkButton>}>
-          A formula belongs to a product. Create the product first.
+        <EmptyState title="No products yet" action={<LinkButton href="/masterdata/products?new=1#new-product" variant="secondary">Add a product</LinkButton>}>
+          A recipe belongs to a product. Add the product first, or use New recipe (step by step), which can make it for you.
         </EmptyState>
       ) : (
         <Card>
-          <CreateForm action={createFormulaAction} submitLabel="Create draft formula" cancelHref="/masterdata/formulas">
-            <Field label="Product" htmlFor="productId">
-              <Select id="productId" name="productId" required>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.skuCode})
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Formula code" htmlFor="code" hint='"Batch Formula No." on the BMR, e.g. F-ACS-02.'>
-                <Input id="code" name="code" required autoComplete="off" className="font-mono uppercase" placeholder="F-XXX-01" />
-              </Field>
-              <Field label="Name" htmlFor="name">
-                <Input id="name" name="name" required placeholder="Acapulco Soap" />
-              </Field>
-              <Field label="Reference batch size (g)" htmlFor="referenceBatchSizeG" hint="Line quantities are entered per this size.">
-                <Input id="referenceBatchSizeG" name="referenceBatchSizeG" inputMode="decimal" required placeholder="17600" />
-              </Field>
-              <Field label="Theoretical yield (%)" htmlFor="theoreticalYieldPct" hint="Process-owner value; verify before production use.">
-                <Input id="theoreticalYieldPct" name="theoreticalYieldPct" inputMode="decimal" required placeholder="95" />
-              </Field>
-            </div>
-            <Field label="Why is this formula needed? (optional)" htmlFor="changeSummary">
-              <Input id="changeSummary" name="changeSummary" />
-            </Field>
-          </CreateForm>
+          <ActionForm action={createFormulaAction} submitLabel="Start the recipe (draft)" pendingText="Starting…" variant="primary" cancelHref="/masterdata/formulas">
+            <SelectField name="productId" label="Which product is it for?" options={products.map((p) => ({ value: p.id, label: p.name }))} />
+            <Grid>
+              <TextField name="referenceBatchSizeG" label="How much does one batch weigh? (grams)" inputMode="decimal" placeholder="e.g. 17600" hint="The ingredient amounts are typed for this batch weight." />
+              <TextField name="theoreticalYieldPct" label="Expected amount made (%)" inputMode="decimal" placeholder="e.g. 95" hint="How much of the batch weight ends up as product. The process owner confirms it." />
+            </Grid>
+            <p className="text-[13px] text-muted">You add the ingredients on the next screen. The system gives the recipe a number.</p>
+            <MoreDetails>
+              <Grid>
+                <TextField name="name" label="Recipe name (optional)" placeholder="The product's name" />
+                <TextField name="changeSummary" label="Why is this recipe needed? (optional)" />
+                <TextField name="code" label="Your own code (optional)" placeholder="The system gives one, e.g. F-0001" mono hint="The batch paper shows it as the recipe number." />
+              </Grid>
+            </MoreDetails>
+          </ActionForm>
         </Card>
       )}
     </div>

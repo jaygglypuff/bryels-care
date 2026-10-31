@@ -1,111 +1,75 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
-import { D, fmtDate, fmtQty } from "@/lib/qty";
+import { D, fmtQty } from "@/lib/qty";
 import { listFormulas } from "@/modules/masterdata";
-import { Card, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { EmptyState, PageHeader } from "@/ui/core";
+import { Explain, NextStep, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { PlainList, PlainRow } from "@/ui/plain-list";
 import { CommandForm } from "../_eng/forms";
 import { soapExampleAction } from "../_eng/actions";
 import { Forbidden } from "../../forbidden";
-import { VersionChip } from "../_eng/ui";
-import { RecipeRowAction } from "../recipes/recipe-links";
+import { PlainVersionChip, NEXT_WRAP } from "../_eng/plain";
 
-export const metadata: Metadata = { title: "Formulas" };
+export const metadata: Metadata = { title: "Recipes (advanced)" };
 
 export default async function FormulasPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.formula.view")) return <Forbidden what="formulas" />;
+  if (!ctx.can("masterdata.formula.view")) return <Forbidden what="recipes" />;
   const rows = await listFormulas(ctx);
   const pending = rows.filter((r) => r.open?.status === "pending_approval").length;
   // ADR-089: the step-by-step recipe wizard needs both the formula and the routing rights.
   const canWizard = ctx.can("masterdata.formula.create") && ctx.can("masterdata.routing.create");
-  const canChange = canWizard && ctx.can("masterdata.formula.edit") && ctx.can("masterdata.routing.edit") && ctx.can("masterdata.routing.view");
+  const canCreate = ctx.can("masterdata.formula.create");
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
-        title="Recipes (formulas)"
-        subtitle={`A recipe is the ingredients (formula) and the steps of a product. Only approved versions can be used, and each batch keeps the version it started with.${pending ? ` ${pending} version(s) waiting for approval.` : ""}`}
+        title="Recipes (advanced)"
         actions={
-          ctx.can("masterdata.formula.create") ? (
-            <>
-              <CommandForm action={soapExampleAction} hidden={{}} label="Use the Acapulco soap example" variant="secondary" pendingText="Adding…" />
-              <LinkButton href="/masterdata/formulas/new" variant="secondary">New formula (advanced editing)</LinkButton>
-              {canWizard && (
-                <LinkButton href="/masterdata/recipes/new" variant="cta" size="lg">
-                  New recipe (step by step)
-                </LinkButton>
-              )}
-            </>
+          canCreate ? (
+            <MoreMenu>
+              <div className="flex flex-col gap-3">
+                <Link href="/masterdata/formulas/new" className="inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text underline">
+                  New recipe (advanced)
+                </Link>
+                <CommandForm action={soapExampleAction} hidden={{}} label="Add the Acapulco soap example" variant="secondary" pendingText="Adding…" />
+              </div>
+            </MoreMenu>
           ) : undefined
         }
       />
-      {rows.length === 0 ? (
-        <EmptyState title="No formulas yet">Formulas are drafted by the planner and approved by QA and a site manager before batches can use them.</EmptyState>
+      <PageIntro>
+        This screen is for advanced changes to the ingredients of a recipe. Most people use New recipe (step by step). These screens are for advanced changes.
+        {pending ? ` ${pending} version${pending === 1 ? " is" : "s are"} waiting for an OK.` : ""} <Explain term="version" label="What is a version?" />
+      </PageIntro>
+      {canWizard ? (
+        <NextStep className={NEXT_WRAP} text="Making or changing a recipe? Do it one screen at a time." action={{ label: "New recipe (step by step)", href: "/masterdata/recipes/new" }} />
       ) : (
-        <>
-          <div className="flex flex-col gap-3 md:hidden">
-            {rows.map((f) => (
-              <Card key={f.formulaId}>
-                <Link href={`/masterdata/formulas/${f.formulaId}`} className="block">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-mono text-[13px] font-semibold">
-                        {f.code} {f.effective ? `version ${f.effective.revisionNo}` : ""}
-                      </p>
-                      <p className="font-medium">{f.productName}</p>
-                    </div>
-                    {f.effective ? <VersionChip status="approved" label="effective" /> : <VersionChip status={f.open?.status ?? "draft"} />}
-                  </div>
-                  <p className="mt-1 text-[12px] text-muted tabular">
-                    {f.effective ? `${fmtQty(D(f.effective.referenceBatchSizeG).div(1000), "kg", 1)} batch · ${f.effective.lineCount} ingredients` : "No approved version yet"}
-                  </p>
-                  {f.open && <p className="mt-1 text-[12px] text-[var(--appr-fg)]">Version {f.open.revisionNo}: {f.open.status === "pending_approval" ? "waiting for approval" : f.open.status.replace(/_/g, " ")}</p>}
-                </Link>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <RecipeRowAction formulaId={f.formulaId} openStatus={f.open?.status} canChange={canChange} />
-                  <Link href={`/masterdata/formulas/${f.formulaId}`} className="inline-flex min-h-[44px] items-center px-2 text-[13px] text-primary-text hover:underline">
-                    Advanced editing
-                  </Link>
-                </div>
-              </Card>
-            ))}
-          </div>
-          <div className="hidden md:block">
-            <Table head={["Recipe", "Product", "Version in use", "Use from", "Batch size", "Ingredients", "Open version", ""]}>
-              {rows.map((f) => (
-                <tr key={f.formulaId} className="hover:bg-surface-2/60">
-                  <Td>
-                    <Link href={`/masterdata/formulas/${f.formulaId}`} className="font-mono font-semibold text-primary-text hover:underline">
-                      {f.code}
-                    </Link>
-                    <span className="block text-[12px] text-muted">{f.name}</span>
-                  </Td>
-                  <Td>
-                    {f.productName} <span className="text-muted">({f.productSku})</span>
-                  </Td>
-                  <Td>{f.effective ? <span className="flex items-center gap-2">Version {f.effective.revisionNo} <VersionChip status="approved" label="effective" /></span> : <span className="text-muted">None</span>}</Td>
-                  <Td className="whitespace-nowrap">{f.effective?.effectiveFrom ? fmtDate(f.effective.effectiveFrom) : "—"}</Td>
-                  <Td className="whitespace-nowrap">{f.effective ? fmtQty(D(f.effective.referenceBatchSizeG).div(1000), "kg", 1) : "—"}</Td>
-                  <Td>{f.effective?.lineCount ?? "—"}</Td>
-                  <Td>
-                    {f.open ? (
-                      <Link href={`/masterdata/formulas/${f.formulaId}/revisions/${f.open.id}`} className="flex items-center gap-2 hover:underline">
-                        Version {f.open.revisionNo} <VersionChip status={f.open.status} />
-                      </Link>
-                    ) : f.scheduled ? (
-                      <span className="flex items-center gap-2">Version {f.scheduled.revisionNo} <VersionChip status="approved" label="scheduled" /></span>
-                    ) : (
-                      "—"
-                    )}
-                  </Td>
-                  <Td>
-                    <RecipeRowAction formulaId={f.formulaId} openStatus={f.open?.status} canChange={canChange} />
-                  </Td>
-                </tr>
-              ))}
-            </Table>
-          </div>
-        </>
+        <NextStep className={NEXT_WRAP} text="To see a recipe the simple way, open the recipe list." action={{ label: "Open the recipes", href: "/masterdata/recipes" }} />
+      )}
+      {rows.length === 0 ? (
+        <EmptyState title="No recipes yet">
+          {canWizard ? "Make the first one with New recipe (step by step). QA and a manager approve it before batches can use it." : "The planner makes recipes; QA and a manager approve them before batches can use them."}
+        </EmptyState>
+      ) : (
+        <PlainList label="Recipes">
+          {rows.map((f) => (
+            <PlainRow
+              key={f.formulaId}
+              href={`/masterdata/formulas/${f.formulaId}`}
+              title={f.productName}
+              code={f.code}
+              status={f.effective ? <PlainVersionChip status="approved" label="effective" /> : <PlainVersionChip status={f.open?.status ?? "draft"} />}
+              facts={[
+                f.effective ? `Version ${f.effective.revisionNo} in use · ${fmtQty(D(f.effective.referenceBatchSizeG).div(1000), "kg", 1)} a batch · ${f.effective.lineCount} ingredient lines` : "No approved version yet",
+                f.open ? `version ${f.open.revisionNo} ${f.open.status === "pending_approval" ? "waiting for an OK" : "being written"}` : f.scheduled ? `version ${f.scheduled.revisionNo} starts later` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            />
+          ))}
+        </PlainList>
       )}
     </div>
   );

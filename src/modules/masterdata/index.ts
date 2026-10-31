@@ -24,6 +24,7 @@ export {
   listFormulas,
   getFormula,
   getFormulaRevision,
+  formulaTotals,
   formulaFormOptions,
   approvedFormulaRevisionOptions,
   canSeeFormulaPercentages,
@@ -176,7 +177,7 @@ export {
   type ProductInput,
   type SkuInput,
 } from "./products";
-export { expiryFor, expiryBaseDate, isValidGtin, PRODUCT_STATUSES, PRODUCT_TRANSITIONS, type ExpiryBasis, type ProductStatus } from "./products-shelf-life";
+export { expiryFor, expiryBaseDate, isValidGtin, daysToWholeMonths, PRODUCT_STATUSES, PRODUCT_TRANSITIONS, type ExpiryBasis, type ProductStatus } from "./products-shelf-life";
 export {
   MATERIAL_CLASSES,
   MATERIAL_CLASS_LABELS,

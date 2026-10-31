@@ -1,108 +1,95 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
-import { D, fmtDateTime, fmtQty } from "@/lib/qty";
+import { D, fmtDate, fmtQty } from "@/lib/qty";
 import { getFormula } from "@/modules/masterdata";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Explain, NextStep, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { PlainList, PlainRow, RecordNo } from "@/ui/plain-list";
 import { Forbidden } from "../../../forbidden";
 import { newFormulaRevisionAction } from "../../_eng/actions";
 import { CommandForm } from "../../_eng/forms";
-import { EffectiveRange, VerifyBanner, VersionChip } from "../../_eng/ui";
+import { VerifyBanner } from "../../_eng/ui";
+import { PlainVersionChip, useFromText, NEXT_WRAP } from "../../_eng/plain";
 
-export const metadata: Metadata = { title: "Formula" };
+export const metadata: Metadata = { title: "Recipe (advanced)" };
 
 export default async function FormulaDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.formula.view")) return <Forbidden what="formulas" />;
+  if (!ctx.can("masterdata.formula.view")) return <Forbidden what="recipes" />;
   const f = /^[0-9a-f-]{36}$/i.test(id) ? await getFormula(ctx, id) : null;
   if (!f) {
-    return <EmptyState title="Formula not found" action={<LinkButton href="/masterdata/formulas" variant="secondary">Back to formulas</LinkButton>} />;
+    return (
+      <EmptyState title="Recipe not found" action={<LinkButton href="/masterdata/formulas" variant="secondary">All recipes</LinkButton>}>
+        It may have been deleted. Go back to the list and look for the product name.
+      </EmptyState>
+    );
   }
   const canNew = ctx.can("masterdata.formula.create") && !f.openRevisionId;
+  const canChange = ctx.can("masterdata.formula.create") && ctx.can("masterdata.formula.edit") && ctx.can("masterdata.routing.create") && ctx.can("masterdata.routing.edit") && ctx.can("masterdata.routing.view");
+  const open = f.revisions.find((r) => r.id === f.openRevisionId) ?? null;
+  const showBatch = ctx.can("production.batch.create") && !!f.effectiveRevisionId;
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <Link href="/masterdata/formulas" className="text-[13px] text-primary-text hover:underline">
-          ← Formulas
+        <Link href="/masterdata/formulas" className="inline-flex min-h-[44px] items-center text-[14px] text-primary-text hover:underline">
+          ← All recipes (advanced)
         </Link>
         <PageHeader
-          title={`${f.formula.code} · ${f.formula.name}`}
-          subtitle={`${f.product.name} (${f.product.skuCode})`}
-          actions={
+          title={`Recipe for ${f.product.name}`}
+          subtitle={
             <>
-              {f.effectiveRevisionId && (
-                <LinkButton href={`/masterdata/formulas/${f.formula.id}/revisions/${f.effectiveRevisionId}`} variant="secondary">
-                  Effective revision
-                </LinkButton>
-              )}
-              {ctx.can("production.batch.create") && f.effectiveRevisionId && (
-                <LinkButton href="/production/new" variant="cta">
-                  New batch
-                </LinkButton>
-              )}
+              Recipe (advanced) · <RecordNo>{f.formula.code}</RecordNo>
             </>
+          }
+          actions={
+            canNew || showBatch ? (
+              <MoreMenu>
+                <div className="flex flex-col gap-3">
+                  {showBatch && (
+                    <Link href="/production/new" className="inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text underline">
+                      Make a batch
+                    </Link>
+                  )}
+                  {canNew && <CommandForm action={newFormulaRevisionAction} hidden={{ formulaId: f.formula.id }} label="Start a new version here (advanced)" pendingText="Starting…" variant="secondary" />}
+                </div>
+              </MoreMenu>
+            ) : undefined
           }
         />
       </div>
+      <PageIntro>
+        This screen is for the versions of one recipe. Most people use New recipe (step by step). These screens are for advanced changes. <Explain term="version" label="What is a version?" />
+      </PageIntro>
+      {open ? (
+        <NextStep
+          text={open.status === "pending_approval" ? `Version ${open.revisionNo} is waiting for an OK.` : `Version ${open.revisionNo} is being written.`}
+          action={{ label: `Open version ${open.revisionNo}`, href: `/masterdata/formulas/${f.formula.id}/revisions/${open.id}` }}
+        />
+      ) : canChange ? (
+        <NextStep className={NEXT_WRAP} text="To change this recipe, make a new version. Batches already made keep their version." action={{ label: "Make a new version (step by step)", href: `/masterdata/recipes/${f.formula.id}?new=1` }} />
+      ) : (
+        <NextStep className={NEXT_WRAP} text="See this recipe the simple way: ingredients and steps on one page." action={{ label: "Open the recipe", href: `/masterdata/recipes/${f.formula.id}` }} />
+      )}
       <VerifyBanner />
       <Card>
-        <CardTitle
-          action={
-            canNew ? (
-              <div className="w-auto">
-                <CommandForm action={newFormulaRevisionAction} hidden={{ formulaId: f.formula.id }} label="Start new revision" pendingText="Starting…" variant="secondary" />
-              </div>
-            ) : undefined
-          }
-        >
-          Revisions
-        </CardTitle>
+        <CardTitle>Versions</CardTitle>
         {f.revisions.length === 0 ? (
-          <EmptyState title="No revision yet" />
+          <p className="text-[14px] text-fg-2">No version yet. Use New recipe (step by step) to write the first one.</p>
         ) : (
-          <>
-            <ul className="flex flex-col gap-2 md:hidden">
-              {f.revisions.map((r) => (
-                <li key={r.id}>
-                  <Link href={`/masterdata/formulas/${f.formula.id}/revisions/${r.id}`} className="block rounded-[14px] border border-line p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold">Rev {r.revisionNo}</span>
-                      <VersionChip status={r.status} label={r.label} />
-                    </div>
-                    <p className="mt-1 text-[12px] text-muted">
-                      <EffectiveRange from={r.effectiveFrom} to={r.effectiveTo} />
-                    </p>
-                    {r.changeSummary && <p className="mt-1 text-[12px]">{r.changeSummary}</p>}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <div className="hidden md:block">
-              <Table head={["Revision", "Status", "Effective", "Reference size", "Change", "Submitted by", "Final approver", "Created"]}>
-                {f.revisions.map((r) => (
-                  <tr key={r.id} className="hover:bg-surface-2/60">
-                    <Td>
-                      <Link href={`/masterdata/formulas/${f.formula.id}/revisions/${r.id}`} className="font-semibold text-primary-text hover:underline">
-                        Rev {r.revisionNo}
-                      </Link>
-                    </Td>
-                    <Td>
-                      <VersionChip status={r.status} label={r.label} />
-                    </Td>
-                    <Td className="whitespace-nowrap">
-                      <EffectiveRange from={r.effectiveFrom} to={r.effectiveTo} />
-                    </Td>
-                    <Td>{fmtQty(D(r.referenceBatchSizeG).div(1000), "kg", 2)}</Td>
-                    <Td className="max-w-[260px]">{r.changeSummary ?? "—"}</Td>
-                    <Td>{r.submittedByName ?? "—"}</Td>
-                    <Td>{r.approvedByName ?? "—"}</Td>
-                    <Td className="whitespace-nowrap">{fmtDateTime(r.createdAt)}</Td>
-                  </tr>
-                ))}
-              </Table>
-            </div>
-          </>
+          <PlainList label="Versions">
+            {f.revisions.map((r) => (
+              <PlainRow
+                key={r.id}
+                href={`/masterdata/formulas/${f.formula.id}/revisions/${r.id}`}
+                title={`Version ${r.revisionNo}`}
+                status={<PlainVersionChip status={r.status} label={r.label} />}
+                facts={[useFromText(r.effectiveFrom, r.effectiveTo, fmtDate), `${fmtQty(D(r.referenceBatchSizeG).div(1000), "kg", 2)} a batch`, r.changeSummary, r.approvedByName ? `OK by ${r.approvedByName}` : null].filter(Boolean).join(" · ")}
+              />
+            ))}
+          </PlainList>
         )}
       </Card>
     </div>

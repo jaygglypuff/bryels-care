@@ -78,11 +78,18 @@ export const BomLineInput = z
   });
 export type BomLineInput = z.input<typeof BomLineInput>;
 
+/** A code the user may leave blank (ADR-093): blank becomes null and the service numbers the record. */
+const blankCode = (label: string) => z.preprocess((v) => (v === undefined || v === null || (typeof v === "string" && v.trim() === "") ? null : v), codeSchema(label).nullable());
+/** A name the user may leave blank: the service uses the product's name. */
+const optName = (max: number) => z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? null : v), z.string().trim().max(max, `Use at most ${max} characters.`).nullable().optional());
+
 export const CreateFormulaInput = z
   .object({
     productId: uuid,
-    code: codeSchema("Formula code"),
-    name: reqText("the formula name", 120),
+    /** ADR-093: optional; blank = the next F-nnnn. */
+    code: blankCode("Recipe code"),
+    /** Optional; blank = the product's name. */
+    name: optName(120),
     referenceBatchSizeG: dec("the reference batch size in grams"),
     theoreticalYieldPct: dec("the theoretical yield %"),
     changeSummary: optText(1000),
@@ -186,7 +193,8 @@ export const StepInput = z
 export type StepInput = z.input<typeof StepInput>;
 
 export const CreateRoutingInput = z
-  .object({ productId: uuid, code: codeSchema("Routing code"), name: reqText("the routing name", 120), changeSummary: optText(1000) })
+  // ADR-093: code optional (blank = the next R-nnnn); name optional (blank = "Steps for <product>").
+  .object({ productId: uuid, code: blankCode("Steps code"), name: optName(120), changeSummary: optText(1000) })
   .strict();
 
 export const SaveRoutingDraftInput = z
@@ -202,7 +210,8 @@ export const SaveRoutingDraftInput = z
 /* ------------------------------------------------------------------ work instructions */
 
 export const CreateWorkInstructionInput = z
-  .object({ code: codeSchema("Instruction code"), name: reqText("the instruction name", 120), bodyMarkdown: reqText("the instruction text", 20000) })
+  // ADR-093: code optional (blank = the next WI-nnnn).
+  .object({ code: blankCode("How-to sheet code"), name: reqText("the name of the how-to sheet", 120), bodyMarkdown: reqText("the instruction text", 20000) })
   .strict();
 export const SaveWorkInstructionDraftInput = z
   .object({ revisionId: uuid, bodyMarkdown: reqText("the instruction text", 20000), changeSummary: optText(1000) })

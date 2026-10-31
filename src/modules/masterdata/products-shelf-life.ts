@@ -22,6 +22,21 @@ export function expiryFor(sku: { shelfLifeDays: number | null }, baseDate: strin
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Shelf life typed in months → days for the product (A-RW-01): months × 365 ÷ 12, rounded
+ * (24 → 730, 12 → 365, 6 → 183). QA confirms the shelf life; this is only the unit change.
+ */
+export function monthsToDays(months: number) {
+  return Math.round((months * 365) / 12);
+}
+
+/** Days → whole months when the days are exactly what `monthsToDays` makes (730 → 24), else null (shown in days). */
+export function daysToWholeMonths(days: number | null | undefined): number | null {
+  if (!days) return null;
+  const m = Math.round((days * 12) / 365);
+  return m >= 1 && monthsToDays(m) === days ? m : null;
+}
+
 /** GS1 check digit (mod 10) for GTIN-8/12/13/14. A data-format check, not a business rule. */
 export function isValidGtin(gtin: string): boolean {
   if (!/^(\d{8}|\d{12}|\d{13}|\d{14})$/.test(gtin)) return false;

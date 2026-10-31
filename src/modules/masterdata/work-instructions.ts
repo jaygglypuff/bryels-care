@@ -6,6 +6,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { approverLabel } from "@/lib/auth/self-approval";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
+import { assignMasterCode } from "@/lib/numbering";
 import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { CreateWorkInstructionInput, DecisionInput, SaveWorkInstructionDraftInput, parseInput } from "./schemas";
 import { approvalState, assertDraft, assertVersionTransition, businessToday, approvalSodConflict, canDecideStep, effectiveLabel, isIsoDate, recordApprovalDecision, supersedeOverlapping } from "./versioning";
@@ -35,14 +36,16 @@ export async function createWorkInstruction(ctx: AuthContext, raw: unknown) {
   ctx.require("masterdata.work_instruction.create");
   const input = parseInput(CreateWorkInstructionInput, raw);
   return db.transaction(async (tx) => {
-    const [dup] = await tx.select({ id: workInstructions.id }).from(workInstructions).where(and(eq(workInstructions.organizationId, ctx.organizationId), eq(workInstructions.code, input.code)));
-    if (dup) throw new DomainError("conflict", `Instruction code ${input.code} is already used.`, { fieldErrors: { code: "This code is already used." } });
-    const [wi] = await tx.insert(workInstructions).values({ organizationId: ctx.organizationId, code: input.code, name: input.name, createdBy: ctx.userId }).returning();
+    const used = async (c: string) => (await tx.select({ id: workInstructions.id }).from(workInstructions).where(and(eq(workInstructions.organizationId, ctx.organizationId), eq(workInstructions.code, c))).limit(1)).length > 0;
+    // ADR-093: a blank code gets the next WI-nnnn in this transaction (typed codes stay unique).
+    const code = input.code ?? (await assignMasterCode(tx, ctx.organizationId, "WI", used));
+    if (input.code && (await used(input.code))) throw new DomainError("conflict", `Instruction code ${input.code} is already used.`, { fieldErrors: { code: "This code is already used." } });
+    const [wi] = await tx.insert(workInstructions).values({ organizationId: ctx.organizationId, code, name: input.name, createdBy: ctx.userId }).returning();
     const [rev] = await tx
       .insert(workInstructionRevisions)
       .values({ workInstructionId: wi.id, revisionNo: 1, status: "draft", bodyMarkdown: input.bodyMarkdown, changeSummary: "First revision", createdBy: ctx.userId })
       .returning();
-    await audit(tx, ctx, { action: "masterdata.work_instruction.created", entityType: "work_instruction", entityId: wi.id, entityNumber: wi.code, siteId: null, after: { code: wi.code, name: wi.name } });
+    await audit(tx, ctx, { action: "masterdata.work_instruction.created", entityType: "work_instruction", entityId: wi.id, entityNumber: wi.code, siteId: null, after: { code: wi.code, codeAssigned: !input.code, name: wi.name } });
     return { workInstructionId: wi.id, revisionId: rev.id };
   });
 }

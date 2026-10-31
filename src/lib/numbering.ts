@@ -84,6 +84,11 @@ export const NUMBERING_DEFAULTS = {
   LINE: masterCode("LINE"),
   DEP: masterCode("DEP"),
   QCP: masterCode("QCP"),
+  // Grade-5 pass of the recipe "advanced editing" screens: sellable items, recipes (advanced), steps and how-to sheets
+  SKU: masterCode("SKU"),
+  FRM: masterCode("F"),
+  RTG: masterCode("R"),
+  WI: masterCode("WI"),
 } satisfies Record<string, NumberingRuleSpec>;
 
 export type DocumentType = keyof typeof NUMBERING_DEFAULTS;
@@ -206,7 +211,7 @@ async function allocateSequence(tx: DbOrTx, organizationId: string, documentType
 }
 
 /** Master-data code types (ADR-075). */
-export const MASTER_CODE_TYPES = ["MAT", "PRD", "SUP", "CUS", "LOC", "EQP", "WH", "LINE", "DEP", "QCP"] as const;
+export const MASTER_CODE_TYPES = ["MAT", "PRD", "SUP", "CUS", "LOC", "EQP", "WH", "LINE", "DEP", "QCP", "SKU", "FRM", "RTG", "WI"] as const;
 export type MasterCodeType = (typeof MASTER_CODE_TYPES)[number];
 
 /**

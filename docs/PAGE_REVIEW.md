@@ -173,10 +173,10 @@ Total screens: 250.
 | `/masterdata/equipment/[id]` | ☑ | name first, code grey, plain kind words, PageIntro (2026-10-31) |
 | `/masterdata/equipment/new` | ☑ | 3 visible fields (name, kind, making area); EQP- number; dates and rules under More details |
 | `/masterdata/equipment` | ☑ | name first, plain kinds, 'Can it be used?', empty state with button |
-| `/masterdata/formulas/[id]` | ☐ | |
-| `/masterdata/formulas/[id]/revisions/[revisionId]` | ☐ | |
-| `/masterdata/formulas/new` | ☐ | |
-| `/masterdata/formulas` | ☐ | |
+| `/masterdata/formulas/[id]` | ☑ 2026-10-31 | “Recipe for <product>”, code grey; versions as a list (use from, OK by); next step opens the open version or “Make a new version (step by step)”; start-here in ⋯ More. |
+| `/masterdata/formulas/[id]/revisions/[revisionId]` | ☑ 2026-10-31 | Next step by status (Send for approval / Waiting for <name> (QA) / Make a new version (step by step)); batch weight, expected amount made, allowed difference, use from; gram total without packaging, “Packaging per batch” apart; approval panel kept. |
+| `/masterdata/formulas/new` | ☑ 2026-10-31 | Points to New recipe (step by step) first; 3 visible fields (product, batch weight, expected amount made); name, reason and code folded (F- number). |
+| `/masterdata/formulas` | ☑ 2026-10-31 | “Recipes (advanced)”: intro + green New recipe (step by step); product name first, code grey (PlainList); advanced new and example in ⋯ More. |
 | `/masterdata/inspection-plans/[id]` | ☑ | "Quality checks" wording, name first, version Explain; test codes optional (made from names), extras under More details |
 | `/masterdata/inspection-plans/new` | ☑ | 2 visible fields (which item, when); name and QCP- number by the system |
 | `/masterdata/inspection-plans` | ☑ | renamed Quality checks, name first, empty state with button |
@@ -188,15 +188,15 @@ Total screens: 250.
 | `/masterdata/materials/[id]` | ☑ | name first, See stock button, same 3-question form; status changes folded |
 | `/masterdata/materials/new` | ☑ | 3 questions (name, kind buttons, buy/count buttons) + usual supplier and pack; rest under More details with defaults by kind |
 | `/masterdata/materials` | ☑ | name first, kind, unit, stock links to /inventory/items/material/<id>; extra filters folded |
-| `/masterdata/products/[id]` | ☐ | |
-| `/masterdata/products/[id]/skus/[skuId]` | ☐ | |
-| `/masterdata/products` | ☐ | |
+| `/masterdata/products/[id]` | ☑ 2026-10-31 | Name first; green “Open the recipe” / “Make a recipe (step by step)”; “How it is sold” (sellable items, What is this?) as a list; 5-field form, storage and code folded; stop/delete in ⋯ More. |
+| `/masterdata/products/[id]/skus/[skuId]` | ☑ 2026-10-31 | “Sellable item” (pack size) with What is this?; 4 visible fields; barcode, boxes, stock unit, code folded (product code or SKU- number); next step: make it ready to sell. |
+| `/masterdata/products` | ☑ 2026-10-31 | Name first, size, good for N months, ways to sell, stock (PlainList); green Make a recipe (step by step); add form = 5 questions, PRD- number, months. |
 | `/masterdata/reason-codes/[id]` | ☑ | renamed Reasons; words + where offered + note; code read-only under More details |
 | `/masterdata/reason-codes` | ☑ | renamed Reasons; add = words + where; code made from the words |
-| `/masterdata/routings/[id]` | ☐ | |
-| `/masterdata/routings/[id]/revisions/[revisionId]` | ☐ | |
-| `/masterdata/routings/new` | ☐ | |
-| `/masterdata/routings` | ☐ | |
+| `/masterdata/routings/[id]` | ☑ 2026-10-31 | “Steps for <product>”; versions as a list; next step opens the open version or the step-by-step recipe; start-here in ⋯ More. |
+| `/masterdata/routings/[id]/revisions/[revisionId]` | ☑ 2026-10-31 | Next step by status (Send for approval / Waiting for <name> / Make a new version (step by step)); plain step kinds and areas; how-to sheet by name; 44 px move buttons; approval panel kept. |
+| `/masterdata/routings/new` | ☑ 2026-10-31 | Points to New recipe (step by step) first; 1 visible field (product); name “Steps for …” and R- number by the system. |
+| `/masterdata/routings` | ☑ 2026-10-31 | “Steps (advanced)”: intro + green New recipe (step by step); product first, code grey; how-to sheets, advanced new and example in ⋯ More. |
 | `/masterdata/sites/[id]` | ☑ | name first; name, address, city visible; code/time zone under More details; teams by name only (DEP-) |
 | `/masterdata/sites` | ☑ | add = name (+ address, city); site code made from the name's initials |
 | `/masterdata/suppliers/[id]` | ☑ | name first, plain labels (pay within, order to delivery, QA status), materials by name |
@@ -205,9 +205,9 @@ Total screens: 250.
 | `/masterdata/uom` | ☑ | renamed Units; add = name + what it measures; short name made from the name |
 | `/masterdata/warehouses/[id]` | ☑ | name first, special places by name, code under More details |
 | `/masterdata/warehouses` | ☑ | add = name + what is kept (site only if >1); WH- number |
-| `/masterdata/work-instructions/[id]` | ☐ | |
-| `/masterdata/work-instructions/new` | ☐ | |
-| `/masterdata/work-instructions` | ☐ | |
+| `/masterdata/work-instructions/[id]` | ☑ 2026-10-31 | “How-to sheet”, name first; next step (send for an OK / waiting for <name> / start a new version); older versions folded. |
+| `/masterdata/work-instructions/new` | ☑ 2026-10-31 | 2 visible fields (name, text); WI- number, own code folded. |
+| `/masterdata/work-instructions` | ☑ 2026-10-31 | “How-to sheets”: name first, code grey, plain version status; empty state with button. |
 
 ## Operations (2)
 

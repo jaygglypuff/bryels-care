@@ -16,6 +16,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { approverLabel } from "@/lib/auth/self-approval";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
+import { assignMasterCode } from "@/lib/numbering";
 import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { type ApprovalRuleType, loadApprovalPolicy } from "./approval-policy";
 import { CreateRoutingInput, DecisionInput, RetireInput, SaveRoutingDraftInput, parseInput } from "./schemas";
@@ -162,11 +163,14 @@ export async function createRouting(ctx: AuthContext, raw: unknown) {
   return db.transaction(async (tx) => {
     const [product] = await tx.select().from(products).where(and(eq(products.id, input.productId), eq(products.organizationId, ctx.organizationId)));
     if (!product) throw new DomainError("not_found", "Product not found.");
-    const [dup] = await tx.select({ id: routings.id }).from(routings).where(and(eq(routings.organizationId, ctx.organizationId), eq(routings.code, input.code)));
-    if (dup) throw new DomainError("conflict", `Routing code ${input.code} is already used.`, { fieldErrors: { code: "This code is already used." } });
-    const [r] = await tx.insert(routings).values({ organizationId: ctx.organizationId, productId: product.id, code: input.code, name: input.name, createdBy: ctx.userId }).returning();
+    const used = async (c: string) => (await tx.select({ id: routings.id }).from(routings).where(and(eq(routings.organizationId, ctx.organizationId), eq(routings.code, c))).limit(1)).length > 0;
+    // ADR-093: a blank code gets the next R-nnnn in this transaction (typed codes stay unique).
+    const code = input.code ?? (await assignMasterCode(tx, ctx.organizationId, "RTG", used));
+    if (input.code && (await used(input.code))) throw new DomainError("conflict", `Routing code ${input.code} is already used.`, { fieldErrors: { code: "This code is already used." } });
+    const name = (input.name ?? `Steps for ${product.name}`).slice(0, 120);
+    const [r] = await tx.insert(routings).values({ organizationId: ctx.organizationId, productId: product.id, code, name, createdBy: ctx.userId }).returning();
     const [rev] = await tx.insert(routingRevisions).values({ routingId: r.id, revisionNo: 1, status: "draft", changeSummary: input.changeSummary ?? "First revision", createdBy: ctx.userId }).returning();
-    await audit(tx, ctx, { action: "masterdata.routing.created", entityType: "routing", entityId: r.id, entityNumber: r.code, siteId: null, after: { code: r.code, product: product.skuCode } });
+    await audit(tx, ctx, { action: "masterdata.routing.created", entityType: "routing", entityId: r.id, entityNumber: r.code, siteId: null, after: { code: r.code, codeAssigned: !input.code, product: product.skuCode } });
     await audit(tx, ctx, { action: "masterdata.routing_revision.drafted", entityType: "routing_revision", entityId: rev.id, entityNumber: lbl(r.code, 1), siteId: null, after: { status: "draft", revisionNo: 1 } });
     return { routingId: r.id, revisionId: rev.id };
   });

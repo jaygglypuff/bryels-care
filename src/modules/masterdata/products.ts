@@ -11,7 +11,7 @@ import { assertLookupValue, lookupOptions } from "./lookups";
 import { assertTransition, assertUuid, diff, isReferenced, optInt, optText, optUuid, optionalCode, reqText, scanCode, uniqueConflict } from "./org-common";
 import { assignMasterCode } from "@/lib/numbering";
 import { assertMayDeleteDraft, assertNeverSubmittedDraft, creatorOf, hardDeleteDraft } from "@/lib/draft-delete";
-import { PRODUCT_STATUSES, PRODUCT_TRANSITIONS, type ProductStatus, isValidGtin } from "./products-shelf-life";
+import { PRODUCT_STATUSES, PRODUCT_TRANSITIONS, type ProductStatus, isValidGtin, monthsToDays } from "./products-shelf-life";
 import { parseInput } from "./schemas";
 import { runInTx, type InTx } from "@/lib/tx";
 
@@ -42,18 +42,31 @@ const ProductInput = z
     family: reqText("the product family", 40),
     unitNetMassG: dec("the net mass per unit in grams"),
     unitsPerBox: optInt("Units per box", 1, 100000).refine((v) => v !== null, "Enter the units per box."),
-    shelfLifeDays: optInt("Shelf life", 1, 3650).refine((v) => v !== null, "Enter the shelf life in days."),
+    /** Days, or leave out and give `shelfLifeMonths` (grade-5 form: "Good for (months)"); one of the two is needed. */
+    shelfLifeDays: optInt("Shelf life", 1, 3650),
+    shelfLifeMonths: optInt("Good for (months)", 1, 120).optional(),
     storageConditions: optText(300),
   })
   .strict();
 export type ProductInput = z.input<typeof ProductInput>;
-/** Create: the code may be left blank; the next PRD-nnnn is assigned (ADR-075). */
+/**
+ * Create and edit: the code may be left blank (ADR-075, ADR-093). On create the next PRD-nnnn is
+ * assigned; on edit a blank code keeps the product's code.
+ */
 const CreateProductInput = ProductInput.extend({ code: optionalCode(scanCode("Product code", "ACS-135")) }).strict();
 
-const SkuInput = z
+/** Shelf life in days from the days or the months typed (months x 365 / 12, A-RW-01); refused when neither is given. */
+function shelfDays(v: { shelfLifeDays: number | null; shelfLifeMonths?: number | null }): number {
+  const days = v.shelfLifeDays ?? (v.shelfLifeMonths ? monthsToDays(v.shelfLifeMonths) : null);
+  if (days === null) throw new DomainError("validation", "Type how many months it stays good, like 24.", { fieldErrors: { shelfLifeMonths: "Type how many months it stays good, like 24.", shelfLifeDays: "Enter the shelf life." } });
+  return days;
+}
+
+const SkuBase = z
   .object({
     productId: z.string().uuid("Choose the product."),
-    code: scanCode("SKU code", "ACS-135-12"),
+    /** Blank on create: the product's own code for its first sellable item, else the next SKU-nnnn; blank on edit keeps the code. */
+    code: optionalCode(scanCode("SKU code", "ACS-135-12")),
     name: reqText("the SKU name", 160),
     variantLabel: optText(80),
     packFormat: optText(80),
@@ -68,10 +81,10 @@ const SkuInput = z
     storageConditions: optText(300),
     allocationRule: z.enum(["fefo", "fifo"]).default("fefo"),
   })
-  .strict()
-  .superRefine((v, c) => {
-    if (v.netContentQty && !v.netContentUomId) c.addIssue({ code: "custom", path: ["netContentUomId"], message: "Choose the unit of the net content." });
-  });
+  .strict();
+const SkuInput = SkuBase.superRefine((v, c) => {
+  if (v.netContentQty && !v.netContentUomId) c.addIssue({ code: "custom", path: ["netContentUomId"], message: "Choose the unit of the net content." });
+});
 export type SkuInput = z.input<typeof SkuInput>;
 
 const StatusInput = z.object({ id: z.string().uuid(), status: z.enum(PRODUCT_STATUSES), reason: optText(500) }).strict();
@@ -144,6 +157,7 @@ async function assertProductCodeFree(q: DbOrTx, ctx: AuthContext, code: string, 
 export async function createProduct(ctx: AuthContext, raw: unknown, opts?: InTx) {
   ctx.require("masterdata.product.create");
   const v = parseInput(CreateProductInput, raw);
+  const shelfLifeDays = shelfDays(v);
   return runInTx(opts, async (tx) => {
     const family = await normaliseFamily(tx, ctx.organizationId, v.family);
     // ADR-075: a blank code gets the next PRD-nnnn (skipping codes used by a product or an SKU).
@@ -157,10 +171,10 @@ export async function createProduct(ctx: AuthContext, raw: unknown, opts?: InTx)
     await assertProductCodeFree(tx, ctx, code);
     const [p] = await tx
       .insert(products)
-      .values({ organizationId: ctx.organizationId, skuCode: code, name: v.name, family, unitNetMassG: v.unitNetMassG, unitsPerBox: v.unitsPerBox!, shelfLifeDays: v.shelfLifeDays!, storageConditions: v.storageConditions, status: "draft" })
+      .values({ organizationId: ctx.organizationId, skuCode: code, name: v.name, family, unitNetMassG: v.unitNetMassG, unitsPerBox: v.unitsPerBox!, shelfLifeDays, storageConditions: v.storageConditions, status: "draft" })
       .returning()
       .catch((e) => uniqueConflict(e, `Product code ${code} is already in use.`));
-    await audit(tx, ctx, { action: "masterdata.product.created", entityType: "product", entityId: p.id, entityNumber: p.skuCode, siteId: null, after: { ...v, code, codeAssigned: !v.code, family, status: "draft" } });
+    await audit(tx, ctx, { action: "masterdata.product.created", entityType: "product", entityId: p.id, entityNumber: p.skuCode, siteId: null, after: { ...v, shelfLifeDays, code, codeAssigned: !v.code, family, status: "draft" } });
     return { ...p, code: p.skuCode };
   });
 }
@@ -195,11 +209,14 @@ export async function deleteProduct(ctx: AuthContext, productId: string) {
 export async function updateProduct(ctx: AuthContext, productId: string, raw: unknown) {
   ctx.require("masterdata.product.edit");
   assertUuid(productId, "Product");
-  const v = parseInput(ProductInput, raw);
+  const parsed = parseInput(CreateProductInput, raw);
+  const shelfLifeDays = shelfDays(parsed);
   return db.transaction(async (tx) => {
     const [before] = await tx.select().from(products).where(and(eq(products.id, productId), eq(products.organizationId, ctx.organizationId))).for("update").limit(1);
     if (!before) throw new DomainError("not_found", "Product not found.");
     if (before.status === "discontinued") throw new DomainError("state", "A discontinued product can no longer be edited.");
+    // ADR-093: a blank code keeps the product's code.
+    const v = { ...parsed, code: parsed.code ?? before.skuCode };
     const family = await normaliseFamily(tx, ctx.organizationId, v.family, before.family);
     if (v.code !== before.skuCode) {
       const ref = await isReferenced(tx, "products", before.id);
@@ -208,7 +225,7 @@ export async function updateProduct(ctx: AuthContext, productId: string, raw: un
     }
     const [after] = await tx
       .update(products)
-      .set({ skuCode: v.code, name: v.name, family, unitNetMassG: v.unitNetMassG, unitsPerBox: v.unitsPerBox!, shelfLifeDays: v.shelfLifeDays!, storageConditions: v.storageConditions })
+      .set({ skuCode: v.code, name: v.name, family, unitNetMassG: v.unitNetMassG, unitsPerBox: v.unitsPerBox!, shelfLifeDays, storageConditions: v.storageConditions })
       .where(eq(products.id, before.id))
       .returning()
       .catch((e) => uniqueConflict(e, `Product code ${v.code} is already in use.`));
@@ -297,7 +314,8 @@ export async function getSku(ctx: AuthContext, skuId: string) {
 }
 
 async function assertSkuRefs(q: DbOrTx, ctx: AuthContext, v: z.output<typeof SkuInput>, skuId?: string) {
-  const [p] = await q.select().from(products).where(and(eq(products.id, v.productId), eq(products.organizationId, ctx.organizationId))).limit(1);
+  // Locked: a blank code may take the product's own code, and two such creates must not both pick it.
+  const [p] = await q.select().from(products).where(and(eq(products.id, v.productId), eq(products.organizationId, ctx.organizationId))).for("update").limit(1);
   if (!p) throw new DomainError("not_found", "Product not found.", { field: "productId" });
   if (p.status === "discontinued") throw new DomainError("state", `Product ${p.skuCode} is discontinued.`, { field: "productId" });
   const ids = [v.uomBaseId, v.netContentUomId].filter((x): x is string => !!x);
@@ -306,10 +324,27 @@ async function assertSkuRefs(q: DbOrTx, ctx: AuthContext, v: z.output<typeof Sku
   if (!base || !base.isActive) throw new DomainError("validation", "Choose an active stock unit.", { field: "uomBaseId" });
   if (!base.isBase) throw new DomainError("validation", `${base.code} is not a base unit; SKUs are stocked in a base unit (usually pcs).`, { field: "uomBaseId" });
   if (v.netContentUomId && !units.some((u) => u.id === v.netContentUomId && u.isActive)) throw new DomainError("validation", "Choose an active unit for the net content.", { field: "netContentUomId" });
-  const [clash] = await q.select({ id: products.id }).from(products).where(and(eq(products.organizationId, ctx.organizationId), eq(products.skuCode, v.code), ne(products.id, p.id))).limit(1);
-  if (clash) throw new DomainError("conflict", `${v.code} is another product's code; choose a different SKU code.`, { field: "code" });
+  if (v.code) {
+    const [clash] = await q.select({ id: products.id }).from(products).where(and(eq(products.organizationId, ctx.organizationId), eq(products.skuCode, v.code), ne(products.id, p.id))).limit(1);
+    if (clash) throw new DomainError("conflict", `${v.code} is another product's code; choose a different SKU code.`, { field: "code" });
+  }
   void skuId;
   return p;
+}
+
+/**
+ * The code of a sellable item whose code was left blank (ADR-093): the product's own code when no SKU
+ * has it yet (BC:SKU scans resolve product codes, so the first pack size scans as the product), else
+ * the next SKU-nnnn that no SKU or product uses. Runs in the creating transaction with the product
+ * row locked; the unique index stays the last guard.
+ */
+async function nextSkuCode(tx: DbOrTx, ctx: AuthContext, p: { skuCode: string }): Promise<string> {
+  const used = async (c: string) => (await tx.select({ id: skus.id }).from(skus).where(and(eq(skus.organizationId, ctx.organizationId), eq(skus.code, c))).limit(1)).length > 0;
+  if (!(await used(p.skuCode))) return p.skuCode;
+  return assignMasterCode(tx, ctx.organizationId, "SKU", async (c) => {
+    if (await used(c)) return true;
+    return (await tx.select({ id: products.id }).from(products).where(and(eq(products.organizationId, ctx.organizationId), eq(products.skuCode, c))).limit(1)).length > 0;
+  });
 }
 
 /** `opts.tx`: run inside a caller's transaction (savepoint), e.g. an import chunk (W3C, src/lib/tx.ts). */
@@ -317,13 +352,14 @@ export async function createSku(ctx: AuthContext, raw: unknown, opts?: InTx) {
   ctx.require("masterdata.sku.create");
   const v = parseInput(SkuInput, raw);
   return runInTx(opts, async (tx) => {
-    await assertSkuRefs(tx, ctx, v);
+    const p = await assertSkuRefs(tx, ctx, v);
+    const code = v.code ?? (await nextSkuCode(tx, ctx, p));
     const [s] = await tx
       .insert(skus)
-      .values({ organizationId: ctx.organizationId, ...v, status: "draft", createdBy: ctx.userId, updatedBy: ctx.userId })
+      .values({ organizationId: ctx.organizationId, ...v, code, status: "draft", createdBy: ctx.userId, updatedBy: ctx.userId })
       .returning()
-      .catch((e) => uniqueConflict(e, `SKU code ${v.code} is already in use.`));
-    await audit(tx, ctx, { action: "masterdata.sku.created", entityType: "sku", entityId: s.id, entityNumber: s.code, siteId: null, after: { ...v, status: "draft" } });
+      .catch((e) => uniqueConflict(e, `SKU code ${code} is already in use.`));
+    await audit(tx, ctx, { action: "masterdata.sku.created", entityType: "sku", entityId: s.id, entityNumber: s.code, siteId: null, after: { ...v, code, codeAssigned: !v.code, status: "draft" } });
     return s;
   });
 }
@@ -333,10 +369,12 @@ const SKU_FIELDS = ["code", "name", "variantLabel", "packFormat", "netContentQty
 export async function updateSku(ctx: AuthContext, skuId: string, raw: unknown) {
   ctx.require("masterdata.sku.edit");
   assertUuid(skuId, "SKU");
-  const v = parseInput(SkuInput, raw);
+  const parsed = parseInput(SkuInput, raw);
   return db.transaction(async (tx) => {
     const [before] = await tx.select().from(skus).where(and(eq(skus.id, skuId), eq(skus.organizationId, ctx.organizationId))).for("update").limit(1);
     if (!before) throw new DomainError("not_found", "SKU not found.");
+    // ADR-093: a blank code keeps the sellable item's code.
+    const v = { ...parsed, code: parsed.code ?? before.code };
     if (before.status === "discontinued") throw new DomainError("state", "A discontinued SKU can no longer be edited.");
     if (v.productId !== before.productId) throw new DomainError("validation", "An SKU cannot move to another product; create a new SKU.", { field: "productId" });
     await assertSkuRefs(tx, ctx, v, before.id);

@@ -1,47 +1,49 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { listWorkInstructions } from "@/modules/masterdata";
-import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Explain, PageIntro } from "@/ui/guide";
+import { PlainList, PlainRow } from "@/ui/plain-list";
 import { Forbidden } from "../../forbidden";
-import { VersionChip } from "../_eng/ui";
+import { PlainVersionChip } from "../_eng/plain";
 
-export const metadata: Metadata = { title: "Work instructions" };
+export const metadata: Metadata = { title: "How-to sheets" };
 
 export default async function WorkInstructionsPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.work_instruction.view")) return <Forbidden what="work instructions" />;
+  if (!ctx.can("masterdata.work_instruction.view")) return <Forbidden what="how-to sheets" />;
   const rows = await listWorkInstructions(ctx);
+  const canCreate = ctx.can("masterdata.work_instruction.create");
   return (
-    <div>
-      <PageHeader
-        title="Work instructions"
-        subtitle="Controlled step text linked from routing steps. Each revision is approved by someone other than its author."
-        actions={ctx.can("masterdata.work_instruction.create") ? <LinkButton href="/masterdata/work-instructions/new" variant="cta">New instruction</LinkButton> : undefined}
-      />
+    <div className="space-y-5">
+      <PageHeader title="How-to sheets" actions={canCreate ? <LinkButton href="/masterdata/work-instructions/new" variant="cta">New how-to sheet</LinkButton> : undefined} />
+      <PageIntro>
+        This screen is for the written how-to sheets a worker can open from a step (for example how to mix lye safely). Someone other than the writer says OK to each version.{" "}
+        <Explain term="version" label="What is a version?" />
+      </PageIntro>
       {rows.length === 0 ? (
-        <EmptyState title="No work instructions yet" />
+        <EmptyState title="No how-to sheets yet" action={canCreate ? <LinkButton href="/masterdata/work-instructions/new">Write the first one</LinkButton> : undefined}>
+          {canCreate ? "Write the safety and how-to text once; steps can then show it to the worker." : "QA or the planner writes how-to sheets."}
+        </EmptyState>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <PlainList label="How-to sheets">
           {rows.map((w) => (
-            <Link key={w.id} href={`/masterdata/work-instructions/${w.id}`}>
-              <Card className="h-full">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-mono text-[13px] font-semibold">{w.code}</p>
-                    <p className="font-medium">{w.name}</p>
-                  </div>
-                  {w.effective ? <VersionChip status="approved" label="effective" /> : <VersionChip status={w.open?.status ?? "draft"} />}
-                </div>
-                <p className="mt-1 text-[12px] text-muted">
-                  {w.effective ? `Rev ${w.effective.revisionNo} effective ${w.effective.effectiveFrom ? fmtDate(w.effective.effectiveFrom) : ""}` : "No effective revision"}
-                  {w.open ? ` · rev ${w.open.revisionNo} ${w.open.status.replace(/_/g, " ")}` : ""}
-                </p>
-              </Card>
-            </Link>
+            <PlainRow
+              key={w.id}
+              href={`/masterdata/work-instructions/${w.id}`}
+              title={w.name}
+              code={w.code}
+              status={w.effective ? <PlainVersionChip status="approved" label="effective" /> : <PlainVersionChip status={w.open?.status ?? "draft"} />}
+              facts={[
+                w.effective ? `Version ${w.effective.revisionNo} in use${w.effective.effectiveFrom ? ` since ${fmtDate(w.effective.effectiveFrom)}` : ""}` : "No approved version yet",
+                w.open ? `version ${w.open.revisionNo} ${w.open.status === "pending_approval" ? "waiting for an OK" : "being written"}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            />
           ))}
-        </div>
+        </PlainList>
       )}
     </div>
   );

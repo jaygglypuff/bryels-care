@@ -1,32 +1,29 @@
 import type { Metadata } from "next";
 import { requireContext } from "@/lib/auth/context";
-import { Card, Field, Input, PageHeader, Textarea } from "@/ui/core";
+import { Card, PageHeader } from "@/ui/core";
+import { MoreDetails, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
 import { createWorkInstructionAction } from "../../_eng/actions";
-import { CreateForm } from "../../_eng/forms";
+import { ActionForm, TextField, TextareaField } from "../../_org/form";
 
-export const metadata: Metadata = { title: "New work instruction" };
+export const metadata: Metadata = { title: "New how-to sheet" };
 
+/** New how-to sheet: a name and the text; the system gives the number (WI-nnnn, ADR-093). */
 export default async function NewWorkInstructionPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.work_instruction.create")) return <Forbidden what="creating work instructions" />;
+  if (!ctx.can("masterdata.work_instruction.create")) return <Forbidden what="writing how-to sheets" />;
   return (
-    <div className="mx-auto max-w-2xl">
-      <PageHeader title="New work instruction" subtitle="Creates draft revision 1. Submit it for approval when the text is final." />
+    <div className="mx-auto max-w-2xl space-y-5">
+      <PageHeader title="New how-to sheet" />
+      <PageIntro>This screen is for writing a how-to sheet: a name and the text. It starts as a draft; send it for an OK when the text is final.</PageIntro>
       <Card>
-        <CreateForm action={createWorkInstructionAction} submitLabel="Create draft" cancelHref="/masterdata/work-instructions">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Code" htmlFor="code">
-              <Input id="code" name="code" required className="font-mono uppercase" placeholder="WI-LOTION-EMUL" />
-            </Field>
-            <Field label="Name" htmlFor="name">
-              <Input id="name" name="name" required />
-            </Field>
-          </div>
-          <Field label="Instruction text" htmlFor="bodyMarkdown" hint="Numbered steps, safety notes. Verify with authorized personnel before production use.">
-            <Textarea id="bodyMarkdown" name="bodyMarkdown" required className="min-h-[200px]" />
-          </Field>
-        </CreateForm>
+        <ActionForm action={createWorkInstructionAction} submitLabel="Save as draft" pendingText="Saving…" variant="cta" cancelHref="/masterdata/work-instructions">
+          <TextField name="name" label="What is it called?" placeholder="e.g. Mixing lye safely" />
+          <TextareaField name="bodyMarkdown" label="What should the worker do?" placeholder={"1. Put on gloves and goggles.\n2. …"} hint="Numbered steps and safety notes. QA checks the text before it is used." />
+          <MoreDetails>
+            <TextField name="code" label="Your own code (optional)" placeholder="The system gives one, e.g. WI-0001" mono />
+          </MoreDetails>
+        </ActionForm>
       </Card>
     </div>
   );

@@ -148,10 +148,10 @@ export function RoutingStepEditor({
     <form key={round} action={action} className="flex flex-col gap-4">
       <input type="hidden" name="payload" value={payload} />
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Proposed effective date" htmlFor="r-eff" error={fe.effectiveFrom} hint="The final approver confirms it.">
+        <Field label="Use from (optional)" htmlFor="r-eff" error={fe.effectiveFrom} hint="The last person to say OK confirms the day.">
           <Input id="r-eff" type="date" min={today} value={eff} onChange={(e) => setEff(e.target.value)} />
         </Field>
-        <Field label="Change summary" htmlFor="r-chg" error={fe.changeSummary}>
+        <Field label="What changed and why" htmlFor="r-chg" error={fe.changeSummary}>
           <Input id="r-chg" value={chg} onChange={(e) => setChg(e.target.value)} />
         </Field>
       </div>
@@ -164,12 +164,12 @@ export function RoutingStepEditor({
             <legend className="px-1 text-[12px] font-semibold text-muted">Step {i + 1}</legend>
             <div className="grid gap-3 sm:grid-cols-6">
               <div className="sm:col-span-2">
-                <Field label="Name" htmlFor={`${pid}-name`} error={err("name")}>
+                <Field label="What is the step called?" htmlFor={`${pid}-name`} error={err("name")}>
                   <Input id={`${pid}-name`} value={s.name} onChange={(e) => set(i, { name: e.target.value })} />
                 </Field>
               </div>
               <div className="sm:col-span-2">
-                <Field label="Kind" htmlFor={`${pid}-kind`} error={err("stepKind")}>
+                <Field label="What kind of step?" htmlFor={`${pid}-kind`} error={err("stepKind")}>
                   <Select id={`${pid}-kind`} value={s.stepKind} onChange={(e) => set(i, { stepKind: e.target.value, ...(e.target.value === "dispensing" ? { requiresChecker: true } : {}) })}>
                     {stepKinds.map((k) => (
                       <option key={k} value={k}>
@@ -180,7 +180,7 @@ export function RoutingStepEditor({
                 </Field>
               </div>
               <div className="sm:col-span-2">
-                <Field label="Area" htmlFor={`${pid}-area`} error={err("area")}>
+                <Field label="Where?" htmlFor={`${pid}-area`} error={err("area")}>
                   <Select id={`${pid}-area`} value={s.area} onChange={(e) => set(i, { area: e.target.value })}>
                     <option value="">—</option>
                     {areas.map((a) => (
@@ -192,12 +192,12 @@ export function RoutingStepEditor({
                 </Field>
               </div>
               <div className="sm:col-span-6">
-                <Field label="Short guidance shown on the step" htmlFor={`${pid}-ins`} error={err("instruction")}>
+                <Field label="What to do (shown to the worker)" htmlFor={`${pid}-ins`} error={err("instruction")}>
                   <Input id={`${pid}-ins`} value={s.instruction} onChange={(e) => set(i, { instruction: e.target.value })} />
                 </Field>
               </div>
               <div className="sm:col-span-3">
-                <Field label="Work instruction (approved revision)" htmlFor={`${pid}-wi`} error={err("workInstructionRevisionId")}>
+                <Field label="How-to sheet (approved)" htmlFor={`${pid}-wi`} error={err("workInstructionRevisionId")}>
                   <Select id={`${pid}-wi`} value={s.workInstructionRevisionId} onChange={(e) => set(i, { workInstructionRevisionId: e.target.value })}>
                     <option value="">None</option>
                     {workInstructions.map((w) => (
@@ -209,9 +209,9 @@ export function RoutingStepEditor({
                 </Field>
               </div>
               <div className="sm:col-span-2">
-                <Field label="Equipment type" htmlFor={`${pid}-eq`} error={err("equipmentKind")}>
+                <Field label="Machine or tool needed" htmlFor={`${pid}-eq`} error={err("equipmentKind")}>
                   <Select id={`${pid}-eq`} value={s.equipmentKind} onChange={(e) => set(i, { equipmentKind: e.target.value, requiresEquipment: !!e.target.value })}>
-                    <option value="">Not required</option>
+                    <option value="">None</option>
                     {equipmentKinds.map((k) => (
                       <option key={k} value={k}>
                         {k}
@@ -253,7 +253,7 @@ export function RoutingStepEditor({
             </div>
 
             <div className="mt-2">
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-muted">Parameters</p>
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-muted">Readings to write down</p>
               {err("parameters") && <p className="text-[12px] text-[var(--bad-fg)]">{err("parameters")}</p>}
               {s.parameters.map((p, k) => {
                 const perr = (f: string) => fe[`steps.${i}.parameters.${k}.${f}`];
@@ -276,7 +276,7 @@ export function RoutingStepEditor({
                       <Input aria-label="Unit" placeholder="°C, min, pcs" value={p.uom} onChange={(e) => setParam(i, k, { uom: e.target.value })} disabled={p.valueKind !== "numeric"} />
                     </label>
                     <div className="flex items-end justify-end">
-                      <button type="button" aria-label="Remove parameter" onClick={() => set(i, { parameters: s.parameters.filter((_, j) => j !== k) })} className="rounded-full p-2 text-[var(--bad-fg)] hover:bg-surface-2">
+                      <button type="button" aria-label="Remove parameter" onClick={() => set(i, { parameters: s.parameters.filter((_, j) => j !== k) })} className="inline-flex size-11 items-center justify-center rounded-full text-[var(--bad-fg)] hover:bg-surface-2">
                         <Trash2 size={15} />
                       </button>
                     </div>
@@ -319,13 +319,13 @@ export function RoutingStepEditor({
             </div>
 
             <div className="mt-2 flex gap-1">
-              <button type="button" aria-label={`Move step ${i + 1} up`} onClick={() => move(i, -1)} className="rounded-full p-2 hover:bg-surface-2">
+              <button type="button" aria-label={`Move step ${i + 1} up`} onClick={() => move(i, -1)} className="inline-flex size-11 items-center justify-center rounded-full hover:bg-surface-2">
                 <ArrowUp size={16} />
               </button>
-              <button type="button" aria-label={`Move step ${i + 1} down`} onClick={() => move(i, 1)} className="rounded-full p-2 hover:bg-surface-2">
+              <button type="button" aria-label={`Move step ${i + 1} down`} onClick={() => move(i, 1)} className="inline-flex size-11 items-center justify-center rounded-full hover:bg-surface-2">
                 <ArrowDown size={16} />
               </button>
-              <button type="button" aria-label={`Remove step ${i + 1}`} onClick={() => setSteps((ss) => ss.filter((_, j) => j !== i))} className="rounded-full p-2 text-[var(--bad-fg)] hover:bg-surface-2">
+              <button type="button" aria-label={`Remove step ${i + 1}`} onClick={() => setSteps((ss) => ss.filter((_, j) => j !== i))} className="inline-flex size-11 items-center justify-center rounded-full text-[var(--bad-fg)] hover:bg-surface-2">
                 <Trash2 size={16} />
               </button>
             </div>

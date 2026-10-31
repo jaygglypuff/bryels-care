@@ -24,6 +24,7 @@ const NUM_TYPE: Record<string, string> = {
   CMP: "Customer complaints", RT: "Customer returns", IMP: "File imports", LDOC: "Old paper documents", PR: "Requests to buy", PO: "Orders to suppliers", SRT: "Returns to suppliers",
   INV: "Customer invoices", BILL: "Supplier bills", PAY: "Payments", CN: "Credit notes", EXP: "Expense claims", CAPA: "Fix-and-prevent plans", CC: "Change requests", RC: "Product recalls",
   PM: "Regular maintenance", MWO: "Repair jobs", MAT: "Materials", PRD: "Products", SUP: "Suppliers", CUS: "Customers", LOC: "Places (shelves, rooms)",
+  SKU: "Sellable items (pack sizes)", FRM: "Recipes", RTG: "Steps for each product", WI: "How-to sheets",
 };
 const numTypeText = (t: string) => NUM_TYPE[t] ?? t.replace(/_/g, " ");
 
