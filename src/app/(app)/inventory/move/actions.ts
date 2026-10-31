@@ -137,7 +137,8 @@ const MoveSchema = z.object({
   idempotencyKey: z.uuid(),
   source: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("box"), containerId: z.uuid() }).strict(),
-    z.object({ kind: z.literal("lot"), lotId: z.uuid(), fromLocationId: z.uuid(), qty: z.string().trim().regex(/^\d{1,12}(\.\d{1,6})?$/, { message: "Enter a quantity like 1500 or 12.5." }) }).strict(),
+    // The amount may carry its unit ("20 kg"); the unit picker sends qtyUom. The server converts (decimal.js).
+    z.object({ kind: z.literal("lot"), lotId: z.uuid(), fromLocationId: z.uuid(), qty: z.string().trim().min(1, { message: "Enter how much to move, like 20 or 12.5." }).max(40), qtyUom: z.string().trim().max(8).optional() }).strict(),
   ]),
   toLocationId: z.uuid({ message: "Scan or choose the destination." }),
   reason: z.string().trim().max(500).optional(),

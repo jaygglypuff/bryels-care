@@ -180,14 +180,14 @@ export async function createLabelJob(ctx: AuthContext, raw: unknown) {
  * `copies` per lot overrides the default (the receipt screen offers one label per container).
  */
 export async function createLabelJobsForLots(ctx: AuthContext, lots: { lotId: string; copies?: number | null }[], labelTemplateId: string, copies: number, keyBase: string, printStationId?: string | null) {
-  const out: { lotId: string; jobId?: string; error?: string }[] = [];
+  const out: { lotId: string; jobId?: string; error?: string; code?: string }[] = [];
   for (const l of lots) {
     try {
       const r = await createLabelJob(ctx, { labelTemplateId, entityType: "inventory_lot", entityId: l.lotId, copies: l.copies ?? copies, printStationId, idempotencyKey: `${keyBase}:${l.lotId}` });
       out.push({ lotId: l.lotId, jobId: r.jobId });
     } catch (e) {
       if (e instanceof DomainError && (e.code === "forbidden" || (e.code === "state" && e.details?.setup))) throw e;
-      out.push({ lotId: l.lotId, error: e instanceof Error ? e.message : String(e) });
+      out.push({ lotId: l.lotId, error: e instanceof Error ? e.message : String(e), code: e instanceof DomainError ? e.code : undefined });
     }
   }
   return out;

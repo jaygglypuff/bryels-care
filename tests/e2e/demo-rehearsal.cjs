@@ -140,21 +140,26 @@ async function kpiValue(page, caption) {
     await page.getByText('More details').first().click();
     await page.fill('#notes', 'Seals intact, drums clean and dry.');
     await page.selectOption('#line-1-material', { label: 'MAT-0012 · Coconut Oil' });
-    await page.fill('#line-1-qty', '25000');
+    // Usability test 2026-10-30: the unit starts at the item's usual buying unit (kg for Coconut Oil).
+    await page.fill('#line-1-qty', '25');
     await page.fill('#line-1-slot', 'LOS-25190');
     facts.coconutExpiry = manilaDate(365);
     await page.fill('#line-1-exp', facts.coconutExpiry);
     const locLabel = await page.locator('#line-1-loc option:checked').textContent();
     assert(/QUA-01/.test(locLabel), 'default receiving location is quarantine, got ' + locLabel);
     await shot(page, 'receive-form');
-    // Consultant review flow A: one button posts and opens the receipt's labels (copies = containers).
+    // Consultant review flow A + usability test 2026-10-30: one button saves and opens the label print preview
+    // (or, when the label size or printer must be chosen, the receipt's label page first).
     await page.getByRole('button', { name: 'Save and print labels' }).click();
-    await page.waitForURL(/\/print\/lot-label\/receipt\/[0-9a-f-]{36}\?posted=1/, { timeout: 30000 });
-    await expectText(page, 'posted');
-    const receiptId = page.url().split('/').pop().split('?')[0];
-    await page.locator('[data-testid=receipt-label-lot]').first().waitFor();
-    await page.getByRole('button', { name: /Send 1 label job/ }).click();
-    await page.getByText(/label job\(s\) sent to the print station/).waitFor({ timeout: 20000 });
+    await page.waitForURL(/\/print\/(labels|lot-label)\/receipt\/[0-9a-f-]{36}\?/, { timeout: 30000 });
+    const receiptId = page.url().split('?')[0].split('/').pop();
+    if (/\/print\/lot-label\//.test(page.url())) {
+      await page.locator('[data-testid=receipt-label-lot]').first().waitFor();
+      await page.getByRole('button', { name: /Print labels for 1 lot/ }).click();
+      await page.waitForURL(/\/print\/labels\/receipt\//, { timeout: 30000 });
+    }
+    await expectText(page, 'saved');
+    await page.getByText(/^Labels sent to the printer: \d+\./).waitFor({ timeout: 20000 });
     await page.goto(BASE + '/inventory/receive/' + receiptId);
     facts.receiptNumber = (await page.locator('[data-testid=record-reference]').innerText()).trim(); // R3 record header
     facts.coconutLot = (await page.locator('[data-testid=created-lot]').first().innerText()).trim();
@@ -251,7 +256,7 @@ async function kpiValue(page, caption) {
     await page.getByRole('textbox', { name: 'Reason (optional)' }).fill('Put-away after QA release');
     await shot(page, 'move-to-rack');
     await page.getByRole('button', { name: 'Confirm move' }).click();
-    await page.getByText(/^Posted TR-\d{2}-\d{6}$/).waitFor({ timeout: 20000 });
+    await page.getByText(/^Saved TR-\d{2}-\d{6}$/).waitFor({ timeout: 20000 });
     await expectText(page, 'to A-01');
     assert(await page.getByRole('button', { name: /^Undo \(\d+s\)$/ }).count() === 1, 'undo offered for own move');
     await shot(page, 'move-posted-undo');

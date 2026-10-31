@@ -22,7 +22,9 @@ import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
 import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { assertReasonCode } from "@/modules/masterdata";
+import { fmtFriendly, parseQtyText } from "@/lib/units";
 import { postMovement } from "./ledger";
+import { qtyInputToBase } from "./units";
 import { isUuid } from "./lots";
 import { claimIdempotencyKey, stateMachine, storeIdempotentResult } from "./command-kit";
 import { assertLocationsNotFrozen } from "./counts";
@@ -55,12 +57,18 @@ export const adjustmentMachine = stateMachine<AdjustmentStatus>("stock_adjustmen
 const QTY_RE = /^\d{1,12}(\.\d{1,6})?$/;
 const MONEY_RE = /^\d{1,14}(\.\d{1,4})?$/;
 
+/** Reasons used by data migration only; offered to and accepted from holders of inventory.balance.admin only. */
+export const MIGRATION_ONLY_ADJUSTMENT_REASONS = ["opening_balance", "data_correction"] as const;
+
 export type AdjustmentLineInput = {
   lotId?: string | null;
   locationId: string;
   containerId?: string | null;
   direction: "increase" | "decrease";
   qty: string;
+  /** Unit the quantity was typed in (kg/g, L/mL, pcs); empty = the lot's base unit. */
+  qtyUom?: string | null;
+  /** Cost per base unit (per g, mL or piece). */
   unitCost?: string | null;
   note?: string | null;
   /** Found stock with no lot yet (W03 "found unlabelled"): the lot to create at posting, on QA hold. */
@@ -83,6 +91,10 @@ export async function createAdjustment(ctx: AuthContext, input: CreateAdjustment
   ctx.requireSite(ctx.currentSiteId);
   // Shared reason codes, category `adjustment` (US-1-24): active code; codes that need a note (Other) get one.
   await assertReasonCode(db, ctx.organizationId, "adjustment", input.reasonCode, input.reasonNote);
+  // Usability test 2026-10-30: data-migration reasons are for administrators (inventory.balance.admin) only.
+  if ((MIGRATION_ONLY_ADJUSTMENT_REASONS as readonly string[]).includes(input.reasonCode) && !ctx.can("inventory.balance.admin")) {
+    throw new DomainError("forbidden", "This reason is only for data migration. Choose what happened to the stock (found, lost, damaged…).", { field: "reasonCode" });
+  }
   if (!input.lines?.length) throw new DomainError("validation", "Add at least one line.");
   if (input.lines.length > 100) throw new DomainError("validation", "An adjustment can have at most 100 lines.");
   const key = `adjustment_create:${input.idempotencyKey}`;
@@ -97,7 +109,10 @@ export async function createAdjustment(ctx: AuthContext, input: CreateAdjustment
       lineNo++;
       const where = `Line ${lineNo}`;
       if (l.direction !== "increase" && l.direction !== "decrease") throw new DomainError("validation", `${where}: choose increase or decrease.`);
-      if (!QTY_RE.test(l.qty ?? "") || new Decimal(l.qty).lte(0)) throw new DomainError("validation", `${where}: enter a quantity greater than zero.`);
+      const withUnit = !!l.qtyUom || !!parseQtyText(l.qty)?.unit;
+      if (!withUnit && (!QTY_RE.test(l.qty ?? "") || new Decimal(l.qty).lte(0))) throw new DomainError("validation", `${where}: enter a quantity greater than zero.`);
+      // Usability test 2026-10-30: the amount may be typed in kg/L ("20 kg"); converted to the base unit (decimal.js).
+      const toBase = (baseUom: string) => (withUnit ? qtyInputToBase(l.qty, l.qtyUom, baseUom, { where }) : new Decimal(l.qty));
       if (l.unitCost && !MONEY_RE.test(l.unitCost)) throw new DomainError("validation", `${where}: enter the unit cost as a number (up to 4 decimals).`);
       const [loc] = isUuid(l.locationId) ? await tx.select().from(locations).where(eq(locations.id, l.locationId)) : [];
       if (!loc || loc.siteId !== siteId) throw new DomainError("validation", `${where}: choose a location of this site.`);
@@ -110,7 +125,7 @@ export async function createAdjustment(ctx: AuthContext, input: CreateAdjustment
         uom = lot.baseUom;
         if (l.direction === "decrease") {
           const [bal] = await tx.select().from(inventoryBalances).where(and(eq(inventoryBalances.lotId, lot.id), eq(inventoryBalances.locationId, loc.id)));
-          if (new Decimal(bal?.qtyBase ?? 0).lt(l.qty)) throw new DomainError("insufficient_stock", `${where}: only ${new Decimal(bal?.qtyBase ?? 0).toString()} ${lot.baseUom} of lot ${lot.lotNumber} is at ${loc.code}.`);
+          if (new Decimal(bal?.qtyBase ?? 0).lt(toBase(lot.baseUom))) throw new DomainError("insufficient_stock", `${where}: only ${fmtFriendly(bal?.qtyBase ?? 0, lot.baseUom)} of lot ${lot.lotNumber} is at ${loc.code}.`);
         }
       } else {
         ctx.require("inventory.lot.create");
@@ -127,7 +142,8 @@ export async function createAdjustment(ctx: AuthContext, input: CreateAdjustment
           uom = p.baseUom;
         }
       }
-      if (uom === "pcs" && !new Decimal(l.qty).isInteger()) throw new DomainError("validation", `${where}: this item is counted in pieces; enter a whole number.`);
+      const qtyBase = toBase(uom);
+      if (uom === "pcs" && !qtyBase.isInteger()) throw new DomainError("validation", `${where}: this item is counted in pieces; enter a whole number.`);
       if (l.containerId) {
         const [box] = isUuid(l.containerId) ? await tx.select().from(containers).where(eq(containers.id, l.containerId)) : [];
         if (!box || box.siteId !== siteId || box.currentLocationId !== loc.id) throw new DomainError("validation", `${where}: the box is not at ${loc.code}.`);
@@ -140,7 +156,7 @@ export async function createAdjustment(ctx: AuthContext, input: CreateAdjustment
         locationId: loc.id,
         containerId: l.containerId || null,
         direction: l.direction,
-        qtyBase: new Decimal(l.qty).toString(),
+        qtyBase: qtyBase.toString(),
         unitCostAmount: l.unitCost || null,
         note: l.note?.trim() || null,
         newLotMaterialId: lotId ? null : l.newLot?.materialId || null,

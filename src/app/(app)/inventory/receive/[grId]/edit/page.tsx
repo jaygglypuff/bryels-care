@@ -8,7 +8,7 @@ import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Forbidden } from "../../../../forbidden";
 import { ReceiveForm } from "../../receive-form";
 
-export const metadata = { title: "Edit receipt draft" };
+export const metadata = { title: "Change the receipt (not finished)" };
 
 export default async function EditReceiptPage({ params }: { params: Promise<{ grId: string }> }) {
   const ctx = await requireContext();
@@ -24,14 +24,14 @@ export default async function EditReceiptPage({ params }: { params: Promise<{ gr
   if (gr.status !== "draft" || gr.siteId !== ctx.currentSiteId) {
     return (
       <EmptyState title={gr.status !== "draft" ? "This receipt is no longer a draft" : "Switch to the receipt's site to edit it"} action={<LinkButton href={`/inventory/receive/${gr.id}`} variant="secondary">Back to the receipt</LinkButton>}>
-        Posted receipts are corrected by reversal, never edited.
+        Saved receipts are corrected by reversing them, never changed.
       </EmptyState>
     );
   }
   const data = await receivingFormData(ctx);
   return (
     <div className="mx-auto max-w-3xl">
-      <PageHeader title="Edit receipt draft" subtitle={`${ctx.currentSite.code} · ${gr.supplierName}`} />
+      <PageHeader title="Change the receipt (not finished)" subtitle={`${ctx.currentSite.code} · ${gr.supplierName}`} />
       <ReceiveForm
         idempotencyKey={randomUUID()}
         materials={data.materials}

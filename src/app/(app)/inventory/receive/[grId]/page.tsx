@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { randomUUID } from "node:crypto";
 import { notFound } from "next/navigation";
-import { AlertTriangle, CheckCircle2, FileText, Pencil, Printer } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, Pencil } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
@@ -18,6 +18,7 @@ import { goodsReceiptSteps } from "@/ui/record-steps";
 import { Forbidden } from "../../../forbidden";
 import { approveDiscrepancyAction, cancelDraftAction, createPoFromReceiptAction, linkSupplierAction, postDraftAction, recordDiscrepancyAction, reverseReceiptAction, voidFileAction } from "./actions";
 import { ActionForm, ReasonField, UploadWidget } from "./forms";
+import { printReceiptLabelsAction } from "../../../labels/actions";
 
 export const metadata = { title: "Goods receipt" };
 
@@ -82,20 +83,19 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
   const atf = gr.status === "posted" && !gr.purchaseOrderId ? await poFromReceiptOptions(ctx, gr.id) : null;
   const hidden = { receiptId: gr.id };
   const canPutAway = gr.status === "posted" && ctx.can("inventory.movement.post");
+  // Usability test 2026-10-30: printing from the receipt goes straight to the print preview.
   const printLabels = gr.can.printLabels && (
-    <LinkButton href={`/print/lot-label/receipt/${gr.id}`} target="_blank" variant={gr.status === "posted" ? "cta" : "secondary"} size="lg">
-      <Printer size={18} /> Print labels ({gr.lines.length})
-    </LinkButton>
+    <ActionForm action={printReceiptLabelsAction} hidden={hidden} submit={`Print labels (${gr.lines.length})`} variant={gr.status === "posted" ? "cta" : "secondary"} pendingText="Making the labels…" className="inline-flex" />
   );
   // One next action (R3): post a draft; once posted, label the containers, then put the stock away.
   const primary = gr.can.post ? (
     <ActionForm
       action={postDraftAction}
       hidden={hidden}
-      submit={ctx.can("inventory.label_job.create") ? "Save and print labels" : "Post receipt"}
+      submit={ctx.can("inventory.label_job.create") ? "Save and print labels" : "Save receipt"}
       variant="cta"
-      pendingText="Posting receipt…"
-      confirm="Post this receipt? Lots and stock are created and can only be corrected by reversal."
+      pendingText="Saving receipt…"
+      confirm="Save this receipt? The lots and stock are made now. Mistakes can only be fixed by reversing it."
     />
   ) : gr.can.printLabels ? (
     printLabels
@@ -107,19 +107,19 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
     <div className="mx-auto max-w-3xl space-y-4">
       <RecordHeader
         typeLabel="Goods receipt"
-        reference={gr.receiptNumber ?? "Draft"}
+        reference={gr.receiptNumber ?? "Not finished"}
         title={gr.supplierName}
         siteCode={ctx.allowedSites.find((x) => x.id === gr.siteId)?.code}
         status={gr.status}
         meta={[
           ["Received", fmtDateTime(gr.receivedAt)],
-          ["Delivery note", gr.supplierDocumentNumber],
+          ["Number on the supplier's paper", gr.supplierDocumentNumber],
         ]}
         steps={goodsReceiptSteps(gr.status)}
         primary={primary}
         next={
           gr.can.post
-            ? "Posting creates one quarantined lot and one receipt movement per line, and allocates the receipt number."
+            ? "Saving makes one lot per item. The lots wait for the QA check. The receipt gets its number."
             : gr.status === "posted" && gr.can.printLabels
               ? "Next: stick a label on every container and leave them in the hold area. After QA approves the lot, put it away."
               : undefined
@@ -129,7 +129,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
             {canPutAway && gr.can.printLabels && <LinkButton href="/inventory/receive/put-away" variant="secondary">Put away</LinkButton>}
             {gr.can.edit && (
               <LinkButton href={`/inventory/receive/${gr.id}/edit`} variant="secondary">
-                <Pencil size={16} /> Edit draft
+                <Pencil size={16} /> Change it
               </LinkButton>
             )}
             {ctx.can("procurement.goods_receipt.create") && <LinkButton href="/inventory/receive" variant="ghost">Receive more</LinkButton>}
@@ -138,22 +138,22 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
         }
       />
       {posted && gr.status === "posted" && (
-        <Banner tone="ok" title={`Receipt ${gr.receiptNumber} posted`}>
+        <Banner tone="ok" title={`Receipt ${gr.receiptNumber} saved`}>
           <span className="inline-flex items-center gap-1">
             <CheckCircle2 size={14} /> {gr.lines.length} new {gr.lines.length === 1 ? "lot is" : "lots are"} waiting for the quality check. Stick a label on every container and leave them in the hold area; put them away after QA approves.
           </span>
         </Banner>
       )}
-      {saved && gr.status === "draft" && <Banner tone="info" title="Draft saved">Nothing is in stock yet. Attach documents, record discrepancies, then post.</Banner>}
-      {gr.status === "draft" && !saved && <Banner tone="info" title="Draft: not posted">No lot, label or stock exists until the receipt is posted.</Banner>}
+      {saved && gr.status === "draft" && <Banner tone="info" title="Saved for later">Nothing is in stock yet. Add papers or problems, then save the receipt.</Banner>}
+      {gr.status === "draft" && !saved && <Banner tone="info" title="Not finished">No lot, label or stock exists until the receipt is saved.</Banner>}
       {gr.status === "reversed" && (
         <Banner tone="rej" title="Receipt reversed">
           {gr.reversalReason} · by {gr.reversedByName} on {fmtDateTime(gr.reversedAt)}. The lots stay on record with zero stock.
         </Banner>
       )}
-      {gr.status === "cancelled" && <Banner tone="neu" title="Draft cancelled">{gr.cancelReason}</Banner>}
+      {gr.status === "cancelled" && <Banner tone="neu" title="Cancelled (it was not finished)">{gr.cancelReason}</Banner>}
       {gr.supplierBlocked && gr.status === "draft" && (
-        <Banner tone="bad" title="Supplier suspended: posting is blocked (V-ASL)">{gr.supplier?.reason ?? "Procurement or QA must resolve the supplier's status first."}</Banner>
+        <Banner tone="bad" title="Supplier stopped: this receipt cannot be saved (V-ASL)">{gr.supplier?.reason ?? "Procurement or QA must resolve the supplier's status first."}</Banner>
       )}
       {!gr.supplierId && gr.status !== "cancelled" && (
         <Banner tone="warn" title="Supplier not in the supplier list">
@@ -229,15 +229,15 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
                       {l.lotNumber}
                     </Link>
                   ) : (
-                    <p className="text-[13px] font-semibold text-muted">Line {l.lineNo} · lot created at posting</p>
+                    <p className="text-[13px] font-semibold text-muted">Line {l.lineNo} · the lot is made when the receipt is saved</p>
                   )}
                   <p className="text-[13px]">
-                    {l.materialName} <span className="text-muted">· {l.materialCode} · supplier lot {l.supplierLotNumber ?? "—"}{l.brand ? ` · brand ${l.brand}` : ""}</span>
+                    {l.materialName} <span className="text-muted">· {l.materialCode} · supplier&apos;s code on the sack {l.supplierLotNumber ?? "—"}{l.brand ? ` · brand ${l.brand}` : ""}</span>
                   </p>
                   <p className="text-[12px] text-muted">
                     Expires {fmtDate(l.expiresOn)}
                     {l.retestOn ? ` · retest ${fmtDate(l.retestOn)}` : ""} · at {l.locationCode} ({l.locationName})
-                    {l.containerCount ? ` · ${l.containerCount} containers` : ""}
+                    {l.containerCount ? ` · ${l.containerCount} sacks/containers` : ""}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
@@ -323,13 +323,13 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
         <CardTitle>Receipt</CardTitle>
         <Dl
           items={[
-            ["Receipt no.", gr.receiptNumber ?? "Allocated at posting"],
+            ["Receipt no.", gr.receiptNumber ?? "Given when saved"],
             ["Status", <ReceiptStatusChip key="s" status={gr.status} />],
             ["Supplier", gr.supplier ? <Link key="sup" href={`/masterdata/suppliers/${gr.supplier.id}`} className="text-primary-text hover:underline">{gr.supplierName} ({gr.supplier.code})</Link> : `${gr.supplierName} (not in the supplier list)`],
-            ["Supplier document", gr.supplierDocumentNumber ?? "—"],
+            ["Number on the supplier's paper", gr.supplierDocumentNumber ?? "—"],
             ["Unplanned reason", gr.reasonLabel ?? "—"],
             ["Received", `${fmtDateTime(gr.receivedAt)} by ${gr.receivedByName}`],
-            ["Posted", gr.postedAt ? `${fmtDateTime(gr.postedAt)} by ${gr.postedByName}` : "—"],
+            ["Saved", gr.postedAt ? `${fmtDateTime(gr.postedAt)} by ${gr.postedByName}` : "—"],
             ["Notes", gr.notes ?? "—"],
           ]}
         />
@@ -357,16 +357,16 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
 
       {(gr.can.cancel || gr.can.reverse) && (
         <Card>
-          <CardTitle>{gr.can.cancel ? "Cancel draft" : "Reverse receipt"}</CardTitle>
+          <CardTitle>{gr.can.cancel ? "Cancel (not finished)" : "Reverse receipt"}</CardTitle>
           <p className="mb-3 text-[13px] text-muted">
-            {gr.can.cancel ? "The draft is kept for the record and can no longer be posted." : "Posts a reversal for every line out of its receipt location. Refused if stock has moved since; move it back first. The lots stay on record."}
+            {gr.can.cancel ? "It is kept for the record and can no longer be saved to stock." : "Takes every line back out of its receiving place. Refused if stock has moved since; move it back first. The lots stay on record."}
           </p>
           <ActionForm
             action={gr.can.cancel ? cancelDraftAction : reverseReceiptAction}
             hidden={hidden}
-            submit={gr.can.cancel ? "Cancel draft" : "Reverse receipt"}
+            submit={gr.can.cancel ? "Cancel it" : "Reverse receipt"}
             variant="danger"
-            confirm={gr.can.cancel ? "Cancel this draft?" : "Reverse this posted receipt? This posts reversal movements."}
+            confirm={gr.can.cancel ? "Cancel this unfinished receipt?" : "Reverse this saved receipt? The stock is taken back out."}
           >
             <ReasonField id="cancel-reason" placeholder={gr.can.cancel ? "e.g. delivery refused at the dock" : "e.g. received at the wrong site"} />
           </ActionForm>

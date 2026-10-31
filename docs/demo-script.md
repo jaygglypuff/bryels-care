@@ -116,8 +116,9 @@ of the demo.
 **Say:** "The new lot gets its own number and goes straight into **Quarantined**. Nobody can use
 it until QA releases it."
 
-4. Click **Print labels (1)**. A new tab opens the receipt's label request: keep the approved
-   raw-material template and the NFD print station and click **Send 1 label job to the station**.
+4. Click **Print labels (1)**. With one approved label size and the NFD print station the print
+   preview opens straight away and says "Labels sent to the printer: 1." (with several printers or
+   label sizes the receipt's label page asks first; click **Print labels for 1 lot**).
 5. Click **Print station**. The lot is in **To print**; click **Print**. A new tab shows the
    100 × 50 mm label with a QR code and "STATUS AT PRINT: QUARANTINE". (Use the browser's print
    dialog at 100 % on a real label printer.) Click **Printed OK**: the job is recorded as printed

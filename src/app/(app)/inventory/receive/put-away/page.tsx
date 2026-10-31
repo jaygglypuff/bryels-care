@@ -7,7 +7,6 @@ import { lotsToPutAway, type PutAwayTask } from "@/modules/inventory/put-away-qu
 import { putAwayOptions } from "@/modules/inventory/receiving-putaway";
 import { keywordMatches, type KeywordMatch } from "@/modules/scan";
 import { Card, CardTitle, EmptyState, Field, Input, PageHeader } from "@/ui/core";
-import { LocationKindChip } from "@/ui/inventory/bits";
 import { Banner, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { PutAwayForm } from "./put-away-form";
@@ -40,7 +39,7 @@ function TaskCard({ t }: { t: PutAwayTask }) {
           <p className="truncate text-[15px] font-semibold">{t.itemName || t.itemCode}</p>
           <p className="text-[13px] text-fg-2">
             Lot <span className="font-mono">{t.lotNumber}</span>
-            {t.supplierLotNumber ? ` · supplier lot ${t.supplierLotNumber}` : ""} · released {fmtDate(t.releasedAt)}
+            {t.supplierLotNumber ? ` · supplier's code ${t.supplierLotNumber}` : ""} · QA OK {fmtDate(t.releasedAt)}
           </p>
           <p className="mt-1 text-[14px]">
             <b>{allBoxed ? t.boxedQtyText : t.qtyText}</b>
@@ -165,21 +164,15 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
             <span className="font-mono">{opts.lot.lotNumber}</span>
           </CardTitle>
           <p className="mb-2 text-[14px]">
-            <b>{opts.lot.itemName}</b> <span className="text-muted">· {opts.lot.itemCode}{opts.lot.supplierLotNumber ? ` · supplier lot ${opts.lot.supplierLotNumber}` : ""}</span>
+            <b>{opts.lot.itemName}</b> <span className="text-muted">· {opts.lot.itemCode}{opts.lot.supplierLotNumber ? ` · supplier's code on the sack ${opts.lot.supplierLotNumber}` : ""}</span>
           </p>
-          <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[13px] text-muted" data-testid="putaway-allowed-kinds">
-            <span>May go to:</span>
-            {opts.allowedKinds.map((k) => (
-              <LocationKindChip key={k} kind={k} />
-            ))}
-          </div>
           <p className="mb-3 rounded-[10px] bg-surface-2 px-3 py-2 text-[14px]" data-testid="putaway-suggested-section">
             Belongs in: <strong>{opts.suggestedSectionLabel}</strong>
             {opts.suggestedCodes.length ? ` · ${opts.suggestedCodes.join(", ")}` : " · no allowed place in that section right now"}
           </p>
           {opts.lot.qualityStatus === "quarantine" && <Banner tone="warn" title="Waiting for QA">This lot is not released yet. It can only move between quarantine and hold areas. Put it on a shelf after QA approves it.</Banner>}
           {opts.balances.length === 0 ? (
-            <EmptyState title="No stock to put away">This lot has no stock on hand (not yet posted, consumed or reversed).</EmptyState>
+            <EmptyState title="No stock to put away">This lot has no stock now (not saved yet, used up, or reversed).</EmptyState>
           ) : opts.destinations.length === 0 ? (
             <Banner tone="warn" title="No allowed location">There is no active, unblocked location of an allowed type at this site. Ask the site manager to set one up.</Banner>
           ) : (

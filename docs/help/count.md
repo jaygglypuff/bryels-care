@@ -1,28 +1,38 @@
 ---
 key: inventory.count
 title: Count stock
-version: 1
-updated_at: 2026-10-24
+version: 2
+updated_at: 2026-10-30
 sop: SOP to be mapped by the warehouse lead (US-9-08)
 ---
 
-Counting checks that the stock in the system matches what is on the shelf. While a count is open its locations are frozen: nobody can move stock in or out.
+Counting checks that the stock in the system matches what is on the shelf. While a count runs, nobody can move stock on its shelves.
 
-## Count a location
+## Start the count
 
-1. Open your assigned count and choose the **Location**.
-2. **Scan the lot label** of each container, then enter what you counted in the unit shown.
-3. In a blind count you do not see the expected quantity. Count what is there, not what you think should be there.
-4. Found stock without a label? Record it as unlabelled; do not invent a lot number.
-5. Press **Save count** for each location.
+1. The manager opens the count and taps **Start count**.
+2. The page asks: "Start count? Nobody can move stock on these shelves until you finish." Tap **Yes, start the count**.
 
-## Recount
+## Count shelf by shelf
 
-- A line with a large difference goes to a **Recount** by a different person. Count it again from the start.
-- Press **Save recount** when done.
+1. Each shelf has its own box, for example **Shelf B-01: scan each sack and type how much**.
+2. Scan the label of each sack, or type the lot number.
+3. Type how much is there and check the unit (**kg** or **g**, **L** or **mL**, **pcs**). You can also type "20 kg". The line under the box shows what will be saved.
+4. If you count without seeing the expected amount, count what is there, not what you think should be there.
+5. Found something without a label? Choose **No label (I found it here)** and say what it is. Do not invent a lot number.
+6. The bar at the top shows how much is counted.
 
-## Approval
+## Finish
 
-- A site manager reviews the **Variance** of every line and gives a reason for each difference.
-- Large differences need a second approval (for example the owner). Nobody approves a count they counted.
-- After approval the differences are posted as adjustments and the locations are unfrozen.
+1. When every shelf is done, scroll to the bottom and tap **Finish count**.
+2. A sack that is not there: type 0 for it.
+
+## Count again
+
+- A line with a large difference must be counted again by a different person. Count it from the start and tap **Save the new count**.
+
+## Differences
+
+- A site manager checks the **Differences** and gives a reason for each one.
+- Large differences need a second OK (for example the owner). Nobody approves a count they counted.
+- After approval the manager taps **Save to stock**. The shelves open again.

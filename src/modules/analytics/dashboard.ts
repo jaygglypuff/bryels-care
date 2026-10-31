@@ -13,12 +13,17 @@ import {
   products,
   salesOrderLines,
   salesOrders,
+  stockAdjustments,
+  stockCounts,
+  transferRequests,
   userSiteAssignments,
   users,
 } from "@/db/schema";
 import { activeAssignment } from "@/lib/auth/assignments";
 import type { AuthContext, SiteRef } from "@/lib/auth/context";
 import { D } from "@/lib/qty";
+import { lotsToPutAway } from "@/modules/inventory";
+import { expectedReceipts } from "@/modules/procurement";
 
 /**
  * Owner overview and operator home read models (docs/analytics-kpis.md §2.1, §3).
@@ -469,7 +474,7 @@ async function recentActivity(ctx: AuthContext, scope: DashboardScope, siteCode:
 // ---------- operator home ----------
 
 export type OperatorTile = {
-  key: "receive" | "scan" | "batches" | "qa" | "dispatch";
+  key: "receive" | "scan" | "batches" | "qa" | "dispatch" | "putaway" | "move" | "count" | "fix";
   title: string;
   href: string;
   count: number;
@@ -483,8 +488,12 @@ export async function getOperatorHome(ctx: AuthContext): Promise<OperatorTile[]>
   const site = ctx.currentSiteId;
   const { tz, today } = await orgClock(ctx);
   const tiles: Promise<OperatorTile>[] = [];
+  // Usability test 2026-10-30: warehouse people (inventory.movement.post) get six big tiles in plain
+  // words — Receive, Put away, Move, Count, Fix stock, Find — each with a live count of the current site.
+  const warehouse = ctx.can("inventory.movement.post");
+  if (warehouse) tiles.push(...warehouseTiles(ctx, site, tz, today));
 
-  if (ctx.can("procurement.goods_receipt.create"))
+  if (!warehouse && ctx.can("procurement.goods_receipt.create"))
     tiles.push(
       db
         .select({ n: sql<number>`count(*)::int` })
@@ -492,7 +501,7 @@ export async function getOperatorHome(ctx: AuthContext): Promise<OperatorTile[]>
         .where(and(eq(goodsReceipts.siteId, site), sql`${goodsReceipts.receivedAt} >= ${dayStart(today, tz)}`))
         .then(([r]) => ({ key: "receive", title: "Receive materials", href: "/inventory/receive", count: Number(r?.n ?? 0), countLabel: "deliveries recorded today", description: "Record a delivery that arrived and print its labels." })),
     );
-  if (ctx.can("inventory.lot.view")) {
+  if (!warehouse && ctx.can("inventory.lot.view")) {
     const oh = onHandSubquery([site]);
     tiles.push(
       db
@@ -542,5 +551,87 @@ export async function getOperatorHome(ctx: AuthContext): Promise<OperatorTile[]>
         .then(([r]) => ({ key: "dispatch", title: "Dispatch orders", href: "/sales", count: Number(r?.n ?? 0), countLabel: "orders allocated, ready to ship", description: "Pick allocated stock, dispatch and print the delivery receipt." })),
     );
   return Promise.all(tiles);
+}
+
+const plural = (n: number, one: string, many: string) => `${n === 1 ? one : many}`;
+
+/** The six warehouse tiles; each needs its own permission (the server decides, the tile only links). */
+function warehouseTiles(ctx: AuthContext, site: string, tz: string, today: string): Promise<OperatorTile>[] {
+  const out: Promise<OperatorTile>[] = [];
+  if (ctx.can("procurement.goods_receipt.create")) {
+    out.push(
+      (ctx.can("procurement.purchase_order.view") ? expectedReceipts(ctx, { siteId: site }) : Promise.resolve([])).then((rows) => {
+        const due = new Map<string, string | null>();
+        for (const r of rows) due.set(r.purchaseOrderId, r.expectedDate ? String(r.expectedDate).slice(0, 10) : null);
+        const n = [...due.values()].filter((d) => d === today).length;
+        const late = [...due.values()].filter((d) => !!d && d < today).length;
+        return {
+          key: "receive" as const,
+          title: "Receive",
+          href: "/inventory/receive",
+          count: n,
+          countLabel: `${plural(n, "delivery", "deliveries")} expected today${late ? ` (+${late} late)` : ""}`,
+          description: "A delivery came? Write it down and print the labels.",
+        };
+      }),
+    );
+  }
+  if (ctx.can("inventory.lot.view")) {
+    out.push(
+      lotsToPutAway(ctx).then((rows) => {
+        const n = new Set(rows.map((r) => r.lotId)).size;
+        return { key: "putaway" as const, title: "Put away", href: "/inventory/receive/put-away", count: n, countLabel: `${plural(n, "lot", "lots")} ready for a shelf`, description: "QA said OK. Take it from the waiting area to its shelf." };
+      }),
+    );
+  }
+  out.push(
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(transferRequests)
+      .where(and(eq(transferRequests.siteId, site), sql`${transferRequests.createdAt} >= ${dayStart(today, tz)}`, isNull(transferRequests.undoneAt)))
+      .then(([r]) => {
+        const n = Number(r?.n ?? 0);
+        return { key: "move" as const, title: "Move", href: "/inventory/move", count: n, countLabel: `${plural(n, "move", "moves")} today`, description: "Scan a sack or box, then scan the new shelf." };
+      }),
+  );
+  if (ctx.can("inventory.stock_count.view")) {
+    out.push(
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(stockCounts)
+        .where(and(eq(stockCounts.siteId, site), inArray(stockCounts.status, ["planned", "in_progress", "recount"])))
+        .then(([r]) => {
+          const n = Number(r?.n ?? 0);
+          return { key: "count" as const, title: "Count", href: "/inventory/counts", count: n, countLabel: `${plural(n, "count", "counts")} to do`, description: "Count what is on the shelves." };
+        }),
+    );
+  }
+  if (ctx.can("inventory.adjustment.view")) {
+    out.push(
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(stockAdjustments)
+        .where(and(eq(stockAdjustments.siteId, site), inArray(stockAdjustments.status, ["draft", "rejected"]), ...(ctx.can("inventory.adjustment.approve") ? [] : [eq(stockAdjustments.createdBy, ctx.userId)])))
+        .then(([r]) => {
+          const n = Number(r?.n ?? 0);
+          return { key: "fix" as const, title: "Fix stock", href: "/inventory/adjustments", count: n, countLabel: "not finished or sent back", description: "Found, missing or damaged stock." };
+        }),
+    );
+  }
+  if (ctx.can("inventory.lot.view")) {
+    const oh = onHandSubquery([site]);
+    out.push(
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(inventoryLots)
+        .innerJoin(oh, eq(oh.lotId, inventoryLots.id))
+        .where(eq(inventoryLots.siteId, site))
+        .then(([r]) => {
+          const n = Number(r?.n ?? 0);
+          return { key: "scan" as const, title: "Find", href: "/inventory/scan", count: n, countLabel: `${plural(n, "lot", "lots")} in stock`, description: "Scan or search: a label, a name or a number." };
+        }),
+    );
+  }
+  return out;
 }
 

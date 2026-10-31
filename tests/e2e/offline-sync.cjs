@@ -80,8 +80,8 @@ async function waitFor(fn, label, timeout = 30000) {
       await mg.getByRole('link', { name: 'CNT-26-0001', exact: true }).first().click();
       await mg.waitForURL(/\/inventory\/counts\/[0-9a-f-]{36}$/);
       countId = mg.url().split('/').pop();
-      await mg.getByRole('button', { name: 'Release and freeze' }).click();
-      await mg.getByText('Counting (frozen)', { exact: true }).first().waitFor({ timeout: 15000 });
+      await mg.getByRole('button', { name: 'Start count' }).click(); // auto-confirm presses "Yes, start the count"
+      await mg.getByText('Counting now (shelves locked)', { exact: true }).first().waitFor({ timeout: 15000 });
     });
 
     await step('US-7-06: the warehouse operator asks to register the phone; /sync fits 390 px', async () => {

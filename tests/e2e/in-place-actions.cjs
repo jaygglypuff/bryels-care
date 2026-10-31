@@ -83,10 +83,11 @@ async function step(name, fn, u) {
     await p.goto(BASE + '/inventory/counts');
     await p.getByRole('link', { name: 'CNT-26-0001', exact: true }).first().click();
     await p.waitForURL(/\/inventory\/counts\/[0-9a-f-]{36}$/);
-    await p.getByRole('button', { name: 'Release and freeze' }).click();
-    // The release form leaves with the Planned state; the page itself shows the new state.
-    await fresh(mg, p.getByText('Counting (frozen)', { exact: true }).first(), 'count release refresh (status)');
-    await fresh(mg, p.getByText(/^0 of [1-9]\d* lines counted$/).first(), 'count lines snapshotted');
+    // Usability test 2026-10-30: "Start count" asks on the page; auto-confirm presses "Yes, start the count".
+    await p.getByRole('button', { name: 'Start count' }).click();
+    // The start form leaves with the Not started state; the page itself shows the new state.
+    await fresh(mg, p.getByText('Counting now (shelves locked)', { exact: true }).first(), 'count release refresh (status)');
+    await fresh(mg, p.getByText(/^0 of [1-9]\d* counted$/).first(), 'count lines snapshotted');
   }, mg);
   await step('count: cancel', async () => {
     const p = mg.page;

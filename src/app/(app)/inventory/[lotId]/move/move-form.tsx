@@ -72,7 +72,7 @@ export function MoveForm({
       </Field>
       <FormMessage state={state} />
       <div className="sticky bottom-0 -mx-4 border-t border-line bg-surface px-4 py-3 sm:static sm:mx-0 sm:border-0 sm:p-0">
-        <SubmitButton variant="cta" size="lg" className="w-full sm:w-auto" pendingText="Posting move…">
+        <SubmitButton variant="cta" size="lg" className="w-full sm:w-auto" pendingText="Saving the move…">
           Post move
         </SubmitButton>
       </div>

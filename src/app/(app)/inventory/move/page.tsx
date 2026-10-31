@@ -36,7 +36,7 @@ export default async function MovePage({ searchParams }: { searchParams: Promise
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
-      <PageHeader title="Scan to move" subtitle={`${ctx.currentSite.code} · scan the box or lot, the quantity, then the destination; confirm once`} actions={<Help screen="inventory.move" />} />
+      <PageHeader title="Scan to move" subtitle={`${ctx.currentSite.code} · scan the sack, box or lot, say how much, scan the shelf, then tap Confirm`} actions={<Help screen="inventory.move" />} />
       {locations.length === 0 ? (
         <EmptyState title="No locations at this site">Locations are set up by the system administrator.</EmptyState>
       ) : (
@@ -44,7 +44,7 @@ export default async function MovePage({ searchParams }: { searchParams: Promise
       )}
       {ctx.can("inventory.movement.view") && (
         <Card>
-          <CardTitle action={<Link href="/inventory/movements" className="text-[13px] text-primary-text hover:underline">Full ledger</Link>}>Recent moves</CardTitle>
+          <CardTitle action={<Link href="/inventory/movements" className="text-[13px] text-primary-text hover:underline">History of moves</Link>}>Recent moves</CardTitle>
           {recent.length === 0 ? (
             <EmptyState title="No moves yet">Scan-moves and inter-site transfers at this site appear here.</EmptyState>
           ) : (

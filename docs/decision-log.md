@@ -1619,3 +1619,19 @@ immutability and batch snapshots are unchanged; the detailed pages remain as "ad
 Consequences: new setting `masterdata.recipe.default_allowed_difference_pct` (default 2); assumptions A-RW-01..05
 (A-RW-05, "later steps wait" ticked by default, flagged for QA); fixed the list counts and the advanced formula
 editor reset bugs. Open: batch size in kg only (litres need density); packaging per piece is handled by ADR-088 §3.
+
+## ADR-090 Warehouse screens speak in friendly units and plain words (usability test 2026-10-30)
+
+Status: Accepted (owner delegated decisions; the 20x unusual-amount factor, A-UX-09, needs the owner's and the
+warehouse lead's confirmation).
+
+Decision: quantities on receive, move, count and adjustment are entered in a friendly unit (kg/g, L/mL, pcs; "20 kg"
+typed is accepted), starting from the item's standard-pack unit, else kg, L or pcs. The server converts to the lot's
+base unit with decimal.js (`qtyInputToBase`, optional `qtyUom` on `scanMove`/`recordCount`/`recordRecount`/
+`createAdjustment`) and refuses unknown units or the wrong kind; stored quantities stay in base units (ADR-010).
+Receive asks on the page before saving an amount more than 20x off the standard pack or recent receipts ("50 g of Palm
+Oil? Most deliveries are 25 kg sacks."). A QA release messages `inventory.movement.post` holders at the lot's site
+once per lot, inside the release transaction, with the suggested shelf. Receipt labels go straight to one print
+preview. Stock counts go shelf by shelf. Adjustments look the lot up by words and are sent to the manager in one
+action. Reasons `opening_balance` and `data_correction` require `inventory.balance.admin`. Warehouse users get a
+six-tile Home (Receive, Put away, Move, Count, Fix stock, Find). Stored codes and statuses are unchanged.

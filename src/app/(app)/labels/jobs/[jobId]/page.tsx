@@ -41,7 +41,7 @@ export default async function LabelJobPage({ params, searchParams }: { params: P
     <div className="mx-auto max-w-3xl space-y-5">
       <PageHeader
         title={`Label · ${j.entityNumber}`}
-        subtitle={`${j.templateCode} · ${j.media} · ref ${shortRef(j.id)}${j.reprintNo ? ` · REPRINT ${j.reprintNo}` : ""}`}
+        subtitle={`Label size ${j.media} · ref ${shortRef(j.id)}${j.reprintNo ? ` · REPRINT ${j.reprintNo}` : ""}`}
         actions={
           <>
             <LinkButton href="/labels" variant="secondary">Print station</LinkButton>

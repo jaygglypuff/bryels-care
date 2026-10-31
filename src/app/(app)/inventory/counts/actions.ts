@@ -19,7 +19,9 @@ import {
 } from "@/modules/inventory/counts";
 import { actionError, str } from "../_kit/action-state";
 
-const QTY = z.string().trim().regex(/^\d{1,12}(\.\d{1,6})?$/, { message: "Enter the counted quantity, e.g. 0, 24 or 12.5." });
+/** The amount as typed ("24", "24.5 kg"); the unit picker sends qtyUom. The service converts to the base unit. */
+const QTY = z.string().trim().min(1, { message: "Enter how much you counted, e.g. 0, 24 or 12.5." }).max(40);
+const unitOf = (fd: FormData) => str(fd, "qtyUom") || null;
 
 const Plan = z
   .object({
@@ -62,7 +64,7 @@ export async function releaseCountAction(id: string): Promise<ActionState> {
   try {
     const ctx = await requireContext();
     const r = await releaseCount(ctx, id);
-    return done(id, `Released: ${r.lines} line(s) snapshotted; the locations are frozen.`);
+    return done(id, `Count started: ${r.lines} ${r.lines === 1 ? "line" : "lines"} to count. Nobody can move stock on these shelves until you finish.`);
   } catch (e) {
     return actionError(e);
   }
@@ -72,7 +74,7 @@ export async function cancelCountAction(id: string, _p: ActionState, fd: FormDat
   try {
     const ctx = await requireContext();
     await cancelCount(ctx, id, str(fd, "reason"));
-    return done(id, "Count cancelled; the locations are no longer frozen.");
+    return done(id, "Count cancelled. Stock on these shelves can move again.");
   } catch (e) {
     return actionError(e);
   }
@@ -93,8 +95,8 @@ export async function recordCountAction(id: string, _p: ActionState, fd: FormDat
     } else if (!unlabelled) {
       return { ok: false, message: "Scan the lot label, or describe the unlabelled item.", fieldErrors: { lotCode: "Scan or type the lot." } };
     }
-    const r = await recordCount(ctx, { countId: id, locationId, lotId, unlabelledDescription: lotId ? null : unlabelled, qty, idempotencyKey: str(fd, "idempotencyKey") });
-    return done(id, r.previous ? `Updated: your new count is saved; the earlier count (${r.previous.qty}) is kept in the history.` : "Count saved.");
+    const r = await recordCount(ctx, { countId: id, locationId, lotId, unlabelledDescription: lotId ? null : unlabelled, qty, qtyUom: unitOf(fd), idempotencyKey: str(fd, "idempotencyKey") });
+    return done(id, r.previous ? "Saved. Your new amount replaces your earlier one; the earlier one is kept in the history." : "Saved. Scan the next sack.");
   } catch (e) {
     return actionError(e);
   }
@@ -104,7 +106,7 @@ export async function submitCountAction(id: string): Promise<ActionState> {
   try {
     const ctx = await requireContext();
     const r = await submitCount(ctx, id);
-    return done(id, r.recounts ? `Submitted. ${r.recounts} line(s) need a blind recount by a different counter.` : "Submitted for variance review.");
+    return done(id, r.recounts ? `Count finished. ${r.recounts} ${r.recounts === 1 ? "line needs" : "lines need"} to be counted again by someone else.` : "Count finished. The manager checks the differences next.");
   } catch (e) {
     return actionError(e);
   }
@@ -113,8 +115,8 @@ export async function submitCountAction(id: string): Promise<ActionState> {
 export async function recountAction(id: string, lineId: string, _p: ActionState, fd: FormData): Promise<ActionState> {
   try {
     const ctx = await requireContext();
-    await recordRecount(ctx, { lineId, qty: QTY.parse(str(fd, "qty")), idempotencyKey: str(fd, "idempotencyKey") || undefined });
-    return done(id, "Recount saved; the first count is kept.");
+    await recordRecount(ctx, { lineId, qty: QTY.parse(str(fd, "qty")), qtyUom: unitOf(fd), idempotencyKey: str(fd, "idempotencyKey") || undefined });
+    return done(id, "Saved. The first count is kept too.");
   } catch (e) {
     return actionError(e);
   }
@@ -131,7 +133,7 @@ export async function approveCountAction(id: string, _p: ActionState, fd: FormDa
       }
     }
     const r = await approveCount(ctx, id, { lines, note: str(fd, "note") || null });
-    return done(id, r.status === "pending_approval" ? "Approved (step 1). A second approval is needed above the threshold." : "Variances approved. Post the count to adjust stock.");
+    return done(id, r.status === "pending_approval" ? "Approved (step 1). The differences are large, so a second person must approve too." : "Differences approved. Tap Save to stock to fix the stock.");
   } catch (e) {
     return actionError(e);
   }
@@ -141,7 +143,7 @@ export async function rejectLinesAction(id: string, _p: ActionState, fd: FormDat
   try {
     const ctx = await requireContext();
     const r = await rejectCountLines(ctx, id, { lineIds: fd.getAll("lineIds").map(String), note: str(fd, "reason") });
-    return done(id, `${r.lines} line(s) sent back for a blind recount.`);
+    return done(id, `${r.lines} ${r.lines === 1 ? "line" : "lines"} sent back to be counted again.`);
   } catch (e) {
     return actionError(e);
   }
@@ -151,7 +153,7 @@ export async function postCountAction(id: string, idempotencyKey: string): Promi
   try {
     const ctx = await requireContext();
     const r = await postCount(ctx, id, idempotencyKey);
-    return done(id, `Posted: ${r.movements} adjustment movement(s); the locations are unfrozen.`);
+    return done(id, `Saved to stock: ${r.movements} ${r.movements === 1 ? "change" : "changes"}. Stock on these shelves can move again.`);
   } catch (e) {
     return actionError(e);
   }

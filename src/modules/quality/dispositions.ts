@@ -29,6 +29,7 @@ import { deviationBlockerMessages, deviationFacts, deviationsFor } from "./devia
 import { batchInspectionFacts, inspectionsFor, lotInspectionFacts } from "./inspections";
 import { liveResults } from "./inspection-rules";
 import { queueStatusLabel } from "./status-labels";
+import { notifyLotReadyForPutAway } from "./put-away-notify";
 import { assertPaperRecordsReviewed, paperRecordBlockers, syncWorkOrderProgress } from "@/modules/production";
 import {
   BATCH_AWAITING_DECISION,
@@ -464,6 +465,8 @@ async function decideLotTx(ctx: AuthContext, input: DecideLotInput) {
       before: { qualityStatus: lot.qualityStatus },
       after: { qualityStatus: t.to, decision: input.decision, dispositionId, movedTo: toLocationCode, moved },
     });
+    // Usability test 2026-10-30: tell the site's warehouse people the lot can be put away (same transaction).
+    if (t.to === "released") await notifyLotReadyForPutAway(tx, ctx.userId, lot.id);
     return { dispositionId, lotId: lot.id, siteId: lot.siteId, lotNumber: lot.lotNumber, fromStatus: lot.qualityStatus, toStatus: t.to, movedTo: toLocationCode };
   });
 }
@@ -803,6 +806,7 @@ export async function decideBatchInTx(tx: Tx, ctx: AuthContext, input: { batchId
         before: { qualityStatus: lot.qualityStatus },
         after: { qualityStatus: lotTo, dispositionId: lotDispositionId, batch: batch.batchNumber, movedTo: toLocationCode, moved },
       });
+      if (lotTo === "released") await notifyLotReadyForPutAway(tx, ctx.userId, lot.id);
     }
     return { batchNumber: batch.batchNumber, toStatus: t.to, lotNumber: lot?.lotNumber ?? null, lotId: lot?.id ?? null, siteId: batch.siteId, lotDispositionId, batchDispositionId, movedTo: toLocationCode };
   }

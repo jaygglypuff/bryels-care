@@ -14,6 +14,7 @@ import {
   voidLabelJob,
 } from "@/modules/documents";
 import { getReceipt } from "@/modules/inventory";
+import { previewHref, receiptLabelsTarget } from "./receipt-print";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 
@@ -44,23 +45,41 @@ export async function createLabelJobAction(_prev: ActionState, f: FormData): Pro
   redirect(target);
 }
 
-/** One label job per lot of a goods receipt; each lot keeps its own key so a retry never doubles labels. */
+/**
+ * One label job per lot of a goods receipt; each lot keeps its own key so a retry never doubles labels.
+ * Then the print preview of all of them opens, with one clear sentence about what was sent and what was
+ * skipped (usability test 2026-10-30).
+ */
 export async function createReceiptLabelJobsAction(_prev: ActionState, f: FormData): Promise<ActionState> {
-  let msg: string;
+  let target: string;
   try {
     const ctx = await requireContext();
     const gr = await getReceipt(ctx, str(f, "grId"));
-    // Copies per lot (default on the form: one per container); the service validates 1–99.
+    // Copies per lot (default on the form: one per sack/container); the service validates 1–99.
     const lots = gr.lines.map((l) => ({ lotId: l.lotId, copies: str(f, `copies-${l.lotId}`) ? Number(str(f, `copies-${l.lotId}`)) : null }));
     const out = await createLabelJobsForLots(ctx, lots, str(f, "labelTemplateId"), Number(str(f, "copies") || "1"), `gr:${gr.id}:${str(f, "labelTemplateId")}`, str(f, "printStationId") || null);
-    const failed = out.filter((o) => o.error);
-    if (failed.length === out.length) return { ok: false, message: failed[0]?.error ?? "No labels were created." };
-    msg = `${out.length - failed.length} label job(s) sent to the print station.${failed.length ? ` ${failed.length} skipped: ${failed[0].error}` : ""}`;
+    const made = out.filter((o) => o.jobId);
+    const other = out.filter((o) => !o.jobId && o.code !== "conflict");
+    if (made.length === 0 && other.length > 0) return { ok: false, message: other[0]?.error ?? "No labels were made." };
+    target = previewHref(gr.id, out);
   } catch (e) {
     return withField(e);
   }
   revalidatePath("/labels");
-  return { ok: true, message: msg };
+  redirect(target);
+}
+
+/** Receipt page "Print labels": straight to the print preview when the label size and printer are clear. */
+export async function printReceiptLabelsAction(_prev: ActionState, f: FormData): Promise<ActionState> {
+  let target: string;
+  try {
+    const ctx = await requireContext();
+    target = await receiptLabelsTarget(ctx, str(f, "receiptId"));
+  } catch (e) {
+    return withField(e);
+  }
+  revalidatePath("/labels");
+  redirect(target);
 }
 
 async function jobAction(fn: () => Promise<unknown>, okMessage: string): Promise<ActionState> {
@@ -114,4 +133,17 @@ export async function reprintAction(_prev: ActionState, f: FormData): Promise<Ac
   }
   revalidatePath("/labels");
   redirect(target);
+}
+
+/** Receipt print preview: records every ready job of the receipt as printed (each job is checked by the service). */
+export async function markReceiptJobsPrintedAction(_prev: ActionState, f: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const ids = str(f, "jobIds").split(",").filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 50);
+    for (const id of ids) await markLabelJobPrinted(ctx, id);
+  } catch (e) {
+    return withField(e);
+  }
+  revalidatePath("/labels");
+  return { ok: true, message: "Recorded as printed. Stick one label on every sack now." };
 }

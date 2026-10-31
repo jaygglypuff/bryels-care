@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { receiptLabelsTargetSafe } from "../../../labels/receipt-print";
 import { requireContext } from "@/lib/auth/context";
 import { toActionState, type ActionState } from "@/lib/errors";
 import {
@@ -25,17 +26,17 @@ function done(receiptId: string, message: string): ActionState {
 
 export async function postDraftAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   const receiptId = str(fd, "receiptId");
-  let printAfter = false;
+  let target: string;
   try {
     const ctx = await requireContext();
     await postReceipt(ctx, { receiptId });
-    // Consultant review flow A: "Save and print labels" goes straight to the receipt's labels.
-    printAfter = ctx.can("inventory.label_job.create");
+    // Consultant review flow A + usability test 2026-10-30: "Save and print labels" opens the print preview.
+    target = await receiptLabelsTargetSafe(ctx, receiptId, { posted: true });
   } catch (e) {
     return toActionState(e);
   }
   revalidatePath("/inventory");
-  redirect(printAfter ? `/print/lot-label/receipt/${receiptId}?posted=1` : `/inventory/receive/${receiptId}?posted=1`);
+  redirect(target);
 }
 
 export async function cancelDraftAction(_p: ActionState, fd: FormData): Promise<ActionState> {
