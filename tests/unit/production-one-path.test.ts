@@ -195,3 +195,21 @@ describe("grep: no module builds a work link to /production/${batchId}", () => {
     expect(src).toContain("<ScanOrPick");
   });
 });
+
+describe("labels only from the packaging step (A-ONE-02) and plain step words", () => {
+  it("labelPrintBlocker names the first open step before packaging; none once it is reached", async () => {
+    const { labelPrintBlocker } = await import("@/modules/production/packaging-flow");
+    const rec = (n: number) => ({ stepNo: n, status: "completed" });
+    expect(labelPrintBlocker(STEPS, [rec(1)])).toMatch(/Packaging and labeling.*Finish "Weigh" first/);
+    expect(labelPrintBlocker(STEPS, [1, 2, 3, 4, 5].map(rec))).toBeNull();
+    const noPack = STEPS.filter((s) => s.stepKind !== "packaging");
+    expect(labelPrintBlocker(noPack, [1, 2, 3].map(rec))).toMatch(/every making step/);
+  });
+
+  it("plainWords replaces jargon in configured step names and keeps the capital", async () => {
+    const { plainWords } = await import("@/modules/production/plain-words");
+    expect(plainWords("Weighing area line clearance")).toBe("Weighing area clean-area check");
+    expect(plainWords("Transfer to quarantine storage area until QA disposition")).toBe("Put in the hold area until QA checks it");
+    expect(plainWords("Wrappers destroyed")).toBe("Wrappers spoiled");
+  });
+});

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Hourglass, UserCheck, Wrench, XCircle } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { StepCardView } from "@/modules/production";
 import { Button, cx, Input, Select, Textarea } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
@@ -137,6 +137,8 @@ type Props = {
   fullRecordHref: string;
   /** Packaging step (ADR-088 §3): the wrappers taken at Get materials and the label button. */
   packaging?: StepCardView["packaging"];
+  /** ADR-099 label panel (server-rendered), only when printing is allowed. */
+  labelsPanel?: ReactNode;
   /** "Not yet": an earlier step is open; no form is shown (the banner above links to the right step). */
   blocked?: boolean;
   /** The signed-in person: may they sign the second check of this step on their own device? */
@@ -207,7 +209,7 @@ export function StepCard(p: Props) {
         )}
       </section>
       <div className="grid min-w-0 content-start gap-4">
-        {p.packaging && <PackagingBox batchId={p.batchId} stepNo={step.stepNo} packaging={p.packaging} canPerform={p.canPerform} done={step.status === "completed"} />}
+        {p.packaging && <PackagingBox batchId={p.batchId} stepNo={step.stepNo} packaging={p.packaging} canPerform={p.canPerform} done={step.status === "completed"} labelsPanel={p.labelsPanel} />}
         {p.equipment && <EquipmentBox {...p} equipment={p.equipment} />}
         {p.blocked && step.status !== "completed" ? (
           <p className="text-[15px] text-muted" data-testid="step-not-yet">This step opens when the earlier steps are done (see the yellow box above).</p>

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { CheckCircle2, Package, Printer, Tag } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { StepCardView } from "@/modules/production";
 import { fmtDate } from "@/lib/qty";
 import { Input } from "@/ui/core";
@@ -23,7 +23,7 @@ const uomWord = (u: string) => (u === "pcs" ? "pcs" : u);
  *   (name, lot, shelf, quantity) to tap, with Scan (camera or handheld) and Find by name (ScanOrPick). Nobody types a code.
  * - Always: which label to use (a small preview of this batch's product label) and the print button.
  */
-export function PackagingBox({ batchId, stepNo, packaging, canPerform, done }: { batchId: string; stepNo: number; packaging: Packaging; canPerform: boolean; done: boolean }) {
+export function PackagingBox({ batchId, stepNo, packaging, canPerform, done, labelsPanel }: { batchId: string; stepNo: number; packaging: Packaging; canPerform: boolean; done: boolean; labelsPanel?: ReactNode }) {
   return (
     <div className="grid gap-3">
       {packaging.lines.length > 0 && (
@@ -59,7 +59,8 @@ export function PackagingBox({ batchId, stepNo, packaging, canPerform, done }: {
         </p>
       )}
       {packaging.needsScan && canPerform && <ChooseLot batchId={batchId} stepNo={stepNo} choices={packaging.choices} defaultCount={packaging.labels.defaultCount} />}
-      <LabelPrint batchId={batchId} labels={packaging.labels} />
+      {/* ADR-099: the label panel (preview, how many, Print N labels) once printing is allowed; before that the reason. */}
+      {labelsPanel ?? <LabelPrint batchId={batchId} labels={packaging.labels} />}
     </div>
   );
 }

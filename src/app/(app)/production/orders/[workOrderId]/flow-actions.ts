@@ -5,6 +5,7 @@ import { coSign } from "@/lib/auth/co-sign";
 import { type ActionState, DomainError, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
 import type { Permission } from "@/lib/permissions";
+import type { PrintLabelsState } from "@/ui/labels/actions";
 import { approveStepException, batchSiteId, checkDispense, checkStep, confirmPicked, issuePackaging, printBatchLabels, recordDispense, returnStep, selectEquipment, stepDone, submitChecklist } from "@/modules/production";
 import { registerAppHooks } from "@/modules/wiring";
 
@@ -261,5 +262,21 @@ export async function checkWeighingOwnAction(_: ActionState, fd: FormData): Prom
     return { ok: true, message: `${r.materialName}: checked by you (${ctx.displayName}).` };
   } catch (e) {
     return toActionState(e);
+  }
+}
+
+/**
+ * The batch's product labels from the ADR-099 label panel (`<PrintLabelsPanel action=…>`): same form fields
+ * (entityId = batch, copies, idempotencyKey); printBatchLabels fixes lot number and dates the first time.
+ */
+export async function printBatchLabelsPanelAction(_: PrintLabelsState, fd: FormData): Promise<PrintLabelsState> {
+  try {
+    const ctx = await requireContext();
+    const r = await printBatchLabels(ctx, { batchId: uuid.parse(str(fd, "entityId")), copies: str(fd, "copies") ?? "", idempotencyKey: opt(fd, "idempotencyKey") ?? "" });
+    refreshCurrentPage();
+    return { ok: true, jobId: r.jobId };
+  } catch (e) {
+    const s = toActionState(e);
+    return { ok: false, message: s?.message, fieldErrors: s?.fieldErrors };
   }
 }

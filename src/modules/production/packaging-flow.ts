@@ -6,7 +6,7 @@ import { batchMaterialPicks, batchMaterialStagings, batchMaterials, batches, inv
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
-import { nextNumber } from "@/lib/numbering";
+import { nextNumber, peekNextNumber } from "@/lib/numbering";
 import { getSetting } from "@/lib/settings";
 import { activeStationsAt, createLabelJob, labelTemplatesForKind } from "@/modules/documents";
 import { lockLots } from "@/modules/inventory";
@@ -225,10 +225,27 @@ export async function batchLabelInfo(ctx: AuthContext, batch: BatchRow) {
     defaultCount: Math.max(1, Math.min(999, pieces.toNumber() || 1)),
     lotNumber: batch.outputLotNumber,
     expiresOn: batch.outputExpiresOn,
+    /** Printing may happen now (batch state and the packaging-step gate); the panel is shown only then. */
+    allowed: LABEL_STATES.includes(batch.status) && !stepGate,
+    /** What the label will say (ADR-099 preview): the frozen values, else the next lot number and the dates the first print fixes. */
+    values: LABEL_STATES.includes(batch.status) && !stepGate ? await batchLabelValues(ctx, batch) : null,
     template: template ? { id: template.id, code: template.code, name: template.name } : null,
     canPrint: canPrint && !why,
     why,
   };
+}
+
+/**
+ * The lot number, made date and expiry the batch's product label shows: frozen on the batch after the first
+ * print, else a preview (next LOT number, not reserved; dates by `production.output.expiry_basis`), exactly
+ * what printBatchLabels will fix.
+ */
+export async function batchLabelValues(ctx: AuthContext, batch: BatchRow): Promise<{ lotNumber: string; manufacturedOn: string | null; expiresOn: string; provisional: boolean }> {
+  if (batch.outputLotNumber && batch.outputExpiresOn) return { lotNumber: batch.outputLotNumber, manufacturedOn: batch.outputManufacturedOn ?? null, expiresOn: batch.outputExpiresOn, provisional: false };
+  const [product] = await db.select().from(products).where(eq(products.id, batch.productId)).limit(1);
+  const basis = await getSetting(db, ctx.organizationId, "production.output.expiry_basis");
+  const dates = batchExpiryDates(batch, sortedSteps(batch.formulaSnapshot as FormulaSnapshot), await stepRecords(db, batch.id), basis, product.shelfLifeDays);
+  return { lotNumber: await peekNextNumber(db, ctx.organizationId, "LOT"), manufacturedOn: dates.manufacturedOn, expiresOn: dates.expiresOn, provisional: true };
 }
 
 /**

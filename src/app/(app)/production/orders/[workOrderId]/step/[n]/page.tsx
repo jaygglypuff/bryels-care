@@ -11,6 +11,8 @@ import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../../../forbidden";
 import { FlowHeader, NoBatch, orderHrefOf, pickBatch } from "../../flow-shared";
 import { plainWords } from "@/modules/production/plain-words";
+import { PrintLabelsPanel } from "@/ui/labels/print-labels-panel";
+import { printBatchLabelsPanelAction } from "../../flow-actions";
 import { StepCard } from "./step-card";
 
 export const metadata: Metadata = { title: "Step" };
@@ -88,6 +90,20 @@ export default async function StepPage({ params, searchParams }: { params: Promi
         fullRecordHref={batchRecordHref(b.id)}
         packaging={v.packaging}
         blocked={!!v.blockedReason}
+        labelsPanel={
+          v.packaging?.labels.allowed && v.packaging.labels.values ? (
+            <PrintLabelsPanel
+              ctx={ctx}
+              entityType="batch"
+              entityId={b.id}
+              kind="bar"
+              copies={v.packaging.labels.defaultCount}
+              sentence="Stick one label on each bar."
+              action={printBatchLabelsPanelAction}
+              batchValues={v.packaging.labels.values}
+            />
+          ) : undefined
+        }
         viewer={v.viewer}
         equipment={v.equipment}
       />

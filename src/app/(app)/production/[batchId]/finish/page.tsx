@@ -12,6 +12,8 @@ import { WhoCanHelp } from "@/ui/who-can-help";
 import { Forbidden } from "../../../forbidden";
 import { PageIntro } from "@/ui/guide";
 import { LabelPrint } from "../../orders/[workOrderId]/step/[n]/packaging-box";
+import { printBatchLabelsPanelAction } from "../../orders/[workOrderId]/flow-actions";
+import { PrintLabelsPanel } from "@/ui/labels/print-labels-panel";
 import { FinishForm } from "./forms";
 
 export const metadata: Metadata = { title: "Finish batch" };
@@ -101,7 +103,11 @@ export default async function FinishPage({ params }: { params: Promise<{ batchId
           />
         </Card>
       )}
-      {!v.labels.why || v.labels.lotNumber ? <LabelPrint batchId={v.batch.id} labels={v.labels} /> : null}
+      {v.labels.allowed && v.labels.values ? (
+        <PrintLabelsPanel ctx={ctx} entityType="batch" entityId={v.batch.id} kind="bar" copies={v.labels.defaultCount} sentence="Stick one label on each bar." action={printBatchLabelsPanelAction} batchValues={v.labels.values} />
+      ) : v.labels.lotNumber ? (
+        <LabelPrint batchId={v.batch.id} labels={v.labels} />
+      ) : null}
     </div>
   );
 }
