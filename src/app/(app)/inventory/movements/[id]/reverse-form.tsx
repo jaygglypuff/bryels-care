@@ -37,56 +37,56 @@ export function ReverseForm({
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="inline-flex min-h-[44px] items-center rounded-full border border-transparent bg-[#c62828] px-5 text-[14px] font-medium text-white hover:bg-[#8a1c1c]">
-        Reverse this movement…
+        Undo this stock change…
       </button>
     );
   }
   return (
-    <form action={action} className="space-y-4 rounded-[18px] border border-[var(--bad-bd)] bg-[var(--bad-bg)]/40 p-4" aria-label="Reverse movement">
+    <form action={action} className="space-y-4 rounded-[18px] border border-[var(--bad-bd)] bg-[var(--bad-bg)]/40 p-4" aria-label="Undo this stock change">
       <p className="text-[14px] text-fg">
-        <strong>This posts a reversal</strong> that moves {summary} back. The original line stays in the ledger unchanged; the reversal fails if the stock has since moved on.
+        <strong>This saves an undo</strong> that puts {summary} back. The first stock change stays on record unchanged. The undo is refused if the stock has moved on since.
       </p>
       <input type="hidden" name="movementId" value={movementId} />
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
-      <Field label="Reason" htmlFor="reason" error={fe.reason}>
+      <Field label="Why undo it?" htmlFor="reason" error={fe.reason}>
         <Textarea id="reason" name="reason" required minLength={3} maxLength={500} placeholder="e.g. Scanned the wrong destination rack" />
       </Field>
       {canReplace && (
         <label className="flex items-center gap-2 text-[14px]">
           <input type="checkbox" name="withReplacement" checked={withReplacement} onChange={(e) => setWithReplacement(e.target.checked)} className="size-5" />
-          Also post the corrected move (replacement)
+          Also save the right move
         </label>
       )}
       {withReplacement && (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Correct source" htmlFor="replacementFrom" error={fe.replacementFrom}>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <Field label="Where it really came from" htmlFor="replacementFrom" error={fe.replacementFrom}>
             <Select id="replacementFrom" name="replacementFrom" defaultValue={defaults.fromId ?? ""} required>
               <option value="" disabled>Choose…</option>
               {locations.map((l) => (
-                <option key={l.id} value={l.id}>{l.code} · {l.name}</option>
+                <option key={l.id} value={l.id}>{l.name} ({l.code})</option>
               ))}
             </Select>
           </Field>
-          <Field label="Correct destination" htmlFor="replacementTo" error={fe.replacementTo}>
+          <Field label="Where it really went" htmlFor="replacementTo" error={fe.replacementTo}>
             <Select id="replacementTo" name="replacementTo" defaultValue="" required>
               <option value="" disabled>Choose…</option>
               {locations.map((l) => (
-                <option key={l.id} value={l.id}>{l.code} · {l.name} ({l.kind})</option>
+                <option key={l.id} value={l.id}>{l.name} ({l.code})</option>
               ))}
             </Select>
           </Field>
-          <Field label={`Correct quantity (${baseUom})`} htmlFor="replacementQty" error={fe.replacementQty}>
+          <Field label={`How much really moved (${baseUom})`} htmlFor="replacementQty" error={fe.replacementQty}>
             <Input id="replacementQty" name="replacementQty" inputMode="decimal" defaultValue={defaults.qty} required className="tabular" />
           </Field>
         </div>
       )}
-      <Field label="Type REVERSE to confirm" htmlFor="confirmation" error={fe.confirmation}>
+      <Field label="To be sure, type the word REVERSE" htmlFor="confirmation" error={fe.confirmation}>
         <Input id="confirmation" name="confirmation" autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} required />
       </Field>
       <FormMessage state={state} />
       <div className="flex flex-wrap gap-2">
-        <SubmitButton variant="danger" disabled={typed.trim().toUpperCase() !== "REVERSE"} pendingText="Posting reversal…">
-          Post reversal
+        <SubmitButton variant="danger" disabled={typed.trim().toUpperCase() !== "REVERSE"} pendingText="Saving the undo…">
+          Undo it (kept on record)
         </SubmitButton>
         <button type="button" onClick={() => setOpen(false)} className="min-h-[44px] rounded-full border border-line bg-surface px-5 text-[14px]">
           Cancel

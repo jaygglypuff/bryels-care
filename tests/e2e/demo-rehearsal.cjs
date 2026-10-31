@@ -139,7 +139,7 @@ async function kpiValue(page, caption) {
     await page.fill('#supplierDocumentNumber', 'DR-88213');
     await page.getByText('More details').first().click();
     await page.fill('#notes', 'Seals intact, drums clean and dry.');
-    await page.selectOption('#line-1-material', { label: 'MAT-0012 · Coconut Oil' });
+    await page.selectOption('#line-1-material', { label: 'Coconut Oil' }); // grade-5: items by name (ADR-088)
     // Usability test 2026-10-30: the unit starts at the item's usual buying unit (kg for Coconut Oil).
     await page.fill('#line-1-qty', '25');
     await page.fill('#line-1-slot', 'LOS-25190');
@@ -165,7 +165,7 @@ async function kpiValue(page, caption) {
     facts.coconutLot = (await page.locator('[data-testid=created-lot]').first().innerText()).trim();
     assert(/^GR-\d{2}-\d{5}$/.test(facts.receiptNumber), 'receipt number ' + facts.receiptNumber);
     assert(/^L-\d{4}-\d{5}$/.test(facts.coconutLot), 'lot number ' + facts.coconutLot);
-    await expectText(page, '25.00 kg');
+    await expectText(page, '25 kg');
     await expectText(page, 'Waiting for QA');
     log('received', facts.receiptNumber, 'lot', facts.coconutLot);
     await shot(page, 'receipt-posted');
@@ -203,7 +203,7 @@ async function kpiValue(page, caption) {
     await card.getByRole('link', { name: 'Open lot' }).click();
     await page.waitForURL(/\/inventory\/[0-9a-f-]{36}$/, { timeout: 20000 });
     facts.coconutLotId = page.url().split('/').pop();
-    assert((await page.locator('h1').innerText()).includes(facts.coconutLot), 'scanned lot page');
+    assert((await page.locator('[data-testid=record-number]').first().innerText()).includes(facts.coconutLot), 'scanned lot page'); // grade-5: item name is the title, lot number small
   }
 
   // ---------------- d. QA releases the new lot; expired lot cannot be released ----------------
@@ -231,8 +231,8 @@ async function kpiValue(page, caption) {
     facts.expiredLot = (await expiredLink.innerText()).trim();
     await expiredLink.click();
     await page.waitForURL(/\/inventory\/[0-9a-f-]{36}$/);
-    await expectText(page, 'not usable');
-    await page.getByRole('link', { name: 'Open QA decision' }).click();
+    await expectText(page, 'do not use');
+    await page.getByRole('link', { name: 'See the QA decision' }).first().click();
     await page.waitForURL(/\/quality\/lots\//);
     await expectText(page, 'cannot be made OK');
     const rel = page.locator('input[name=decision][value=release]');
@@ -245,9 +245,9 @@ async function kpiValue(page, caption) {
   {
     const page = wh.page;
     await page.goto(BASE + '/inventory/' + facts.coconutLotId);
-    await expectText(page, 'Released');
+    await expectText(page, 'Ready to use');
     // Scan-to-move (US-2-14): the lot is preloaded from the lot page; scan the rack label, confirm.
-    await page.getByRole('link', { name: 'Move stock' }).click();
+    await page.getByRole('link', { name: 'Move stock' }).first().click();
     await page.waitForURL(/\/inventory\/move\?lot=/);
     await page.locator('#dst').waitFor();
     await page.locator('#dst').fill('BC:LOC:A-01');

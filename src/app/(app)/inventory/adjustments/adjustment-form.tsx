@@ -4,6 +4,7 @@ import { Minus, Plus, ScanLine, Trash2 } from "lucide-react";
 import { Button, Field, Input, Select } from "@/ui/core";
 import { FormMessage } from "@/ui/form";
 import { QtyUnitInput } from "@/ui/qty-unit-input";
+import { MoreDetails } from "@/ui/guide";
 import { friendlyUnit } from "@/lib/units";
 import { useActionForm } from "../_kit/forms";
 import { createAdjustmentAction, findLotsForAdjustmentAction, type AdjustmentLotOption } from "./actions";
@@ -36,7 +37,7 @@ function LotLine({ i, row, set, remove, canRemove, fe }: { i: number; row: Row; 
       {!row.lot ? (
         <div className="flex flex-col gap-2">
           <label htmlFor={id("lotSearch")} className="flex items-center gap-2 text-[14px] font-semibold">
-            <ScanLine size={16} /> Scan or type the lot
+            <ScanLine size={16} /> Scan the label, or type the item name
           </label>
           <div className="flex gap-2">
             <Input
@@ -44,7 +45,7 @@ function LotLine({ i, row, set, remove, canRemove, fe }: { i: number; row: Row; 
               value={row.search}
               autoComplete="off"
               enterKeyHint="search"
-              placeholder="Scan, or type the last digits or the item name"
+              placeholder="Scan, or type a name"
               onChange={(e) => set({ search: e.target.value })}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -79,7 +80,7 @@ function LotLine({ i, row, set, remove, canRemove, fe }: { i: number; row: Row; 
             <span className="font-semibold">{row.lot.itemName}</span> · <span className="font-mono">{row.lot.lotNumber}</span>
             <span className="block text-[13px] text-muted">{row.lot.detail}</span>
           </p>
-          <Button type="button" variant="ghost" size="sm" onClick={() => set({ lot: null, locationId: "", options: [], message: null })}>
+          <Button type="button" variant="ghost" onClick={() => set({ lot: null, locationId: "", options: [], message: null })}>
             Change
           </Button>
         </div>
@@ -119,14 +120,18 @@ function LotLine({ i, row, set, remove, canRemove, fe }: { i: number; row: Row; 
           <Field label={row.direction === "decrease" ? "How much to take away?" : "How much to add?"} htmlFor={id("qty")} error={fe[`qty_${i}`] ?? fe[`qtyUom_${i}`]}>
             <QtyUnitInput id={id("qty")} name={id("qty")} unitName={id("qtyUom")} baseUom={row.lot.baseUom} qty={row.qty} onQtyChange={(v) => set({ qty: v })} unit={row.unit || undefined} onUnitChange={(u) => set({ unit: u })} required />
           </Field>
-          <Field label={`Cost per ${row.lot.baseUom} in ₱ (optional)`} htmlFor={id("unitCost")} error={fe[`unitCost_${i}`]} hint="Leave empty if you do not know it.">
-            <Input id={id("unitCost")} name={id("unitCost")} inputMode="decimal" autoComplete="off" />
-          </Field>
+          <div className="sm:col-span-2">
+            <MoreDetails open={!!fe[`unitCost_${i}`]}>
+              <Field label={`Cost per ${row.lot.baseUom} in ₱`} htmlFor={id("unitCost")} error={fe[`unitCost_${i}`]} hint="Leave empty if you do not know it.">
+                <Input id={id("unitCost")} name={id("unitCost")} inputMode="decimal" autoComplete="off" />
+              </Field>
+            </MoreDetails>
+          </div>
         </div>
       )}
       {canRemove && (
         <div>
-          <Button type="button" variant="ghost" size="sm" onClick={remove} aria-label={`Remove lot ${i + 1}`}>
+          <Button type="button" variant="ghost" onClick={remove} aria-label={`Remove lot ${i + 1}`}>
             <Trash2 size={16} /> Remove this lot
           </Button>
         </div>

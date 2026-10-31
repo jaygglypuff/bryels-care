@@ -2,6 +2,7 @@ import { requireContext } from "@/lib/auth/context";
 import { sectionSummary } from "@/modules/inventory/sections";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { SectionTile } from "@/ui/inventory/sections";
+import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../forbidden";
 
 export const dynamic = "force-dynamic";
@@ -20,12 +21,13 @@ export default async function WarehouseHomePage() {
     ctx.can("procurement.goods_receipt.create") && { href: "/inventory/receive", label: "Receive a delivery", cta: true },
     ctx.can("inventory.movement.post") && { href: "/inventory/receive/put-away", label: "Put away" },
     ctx.can("inventory.movement.post") && { href: "/inventory/move", label: "Move stock" },
-    { href: "/inventory/scan", label: "Scan / look up" },
+    { href: "/inventory/scan", label: "Scan a label" },
     ctx.can("inventory.stock_count.view") && { href: "/inventory/counts", label: "Stock counts" },
   ].filter(Boolean) as { href: string; label: string; cta?: boolean }[];
   return (
     <div className="space-y-5">
-      <PageHeader title="Warehouse" subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · where everything is, by section`} />
+      <PageHeader title="Warehouse" subtitle={ctx.currentSite.name} />
+      <PageIntro>This screen is for the warehouse: the jobs of the day are one tap away, and each part of the warehouse shows how many lots are there.</PageIntro>
       <div className="flex flex-wrap gap-2">
         {tasks.map((t) => (
           <LinkButton key={t.href} href={t.href} variant={t.cta ? "cta" : "secondary"} size="lg">
@@ -34,9 +36,9 @@ export default async function WarehouseHomePage() {
         ))}
       </div>
       <Card>
-        <CardTitle action={<LinkButton href="/inventory" variant="ghost" size="sm">All stock</LinkButton>}>Sections</CardTitle>
+        <CardTitle action={<LinkButton href="/inventory" variant="ghost">All stock</LinkButton>}>Parts of the warehouse</CardTitle>
         {shown.length === 0 ? (
-          <EmptyState title="No places set up yet">Ask the site manager to add the warehouse places and give each one a section in Master data → Locations.</EmptyState>
+          <EmptyState title="No places set up yet">Ask the site manager to add the shelves and say which part of the warehouse each is in (Setup → Shelves).</EmptyState>
         ) : (
           <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Warehouse sections">
             {shown.map((t) => (
@@ -46,7 +48,7 @@ export default async function WarehouseHomePage() {
             ))}
           </ul>
         )}
-        <p className="mt-3 text-[12px] text-muted">A lot kept in two sections is counted in both. “Not ready to use” = waiting for QA, on hold, rejected or expired.</p>
+        <p className="mt-3 text-[12px] text-muted">A lot kept in two sections is counted in both. “Not ready to use” = waiting for QA check, stopped by QA, rejected or expired.</p>
       </Card>
     </div>
   );

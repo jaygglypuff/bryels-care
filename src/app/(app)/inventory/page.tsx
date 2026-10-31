@@ -6,6 +6,8 @@ import { stockByItem } from "@/modules/inventory";
 import { LOCATION_SECTIONS, SECTION_LABELS, isSection } from "@/lib/location-sections";
 import { Card, EmptyState, LinkButton, PageHeader, Select, buttonClass, cx } from "@/ui/core";
 import { Banner } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
 import { STATUS_CHIPS, normaliseStockStatus } from "@/ui/inventory/item-status";
 import { StockItemList, WhatIsALot } from "@/ui/inventory/stock-items";
 import { StockSearch } from "@/ui/inventory/stock-search";
@@ -49,15 +51,28 @@ export default async function StockPage({ searchParams }: { searchParams: Promis
     <div className="space-y-4">
       <PageHeader
         title={TITLE[kind]}
-        subtitle={`${ctx.currentSite.name} · what is in stock, if it is OK to use, and when it expires`}
+        subtitle={ctx.currentSite.name}
         actions={
-          ctx.can("procurement.goods_receipt.create") ? (
-            <LinkButton href="/inventory/receive" variant="cta">
-              <Plus size={18} aria-hidden /> New receiving
-            </LinkButton>
-          ) : undefined
+          <>
+            {ctx.can("procurement.goods_receipt.create") && (
+              <LinkButton href="/inventory/receive" variant="cta">
+                <Plus size={18} aria-hidden /> Receive a delivery
+              </LinkButton>
+            )}
+            <MoreMenu>
+              <div className="flex flex-col gap-2">
+                {ctx.can("inventory.balance.view") && <LinkButton href="/inventory/availability" variant="secondary">Can we deliver?</LinkButton>}
+                <LinkButton href="/inventory/lots/expiry" variant="secondary">Expiring soon</LinkButton>
+                <LinkButton href="/inventory/lots/reservations" variant="secondary">Which one to use first / set aside</LinkButton>
+                {ctx.can("inventory.movement.view") && <LinkButton href="/inventory/movements" variant="secondary">Stock changes</LinkButton>}
+                {ctx.can("masterdata.location.view") && <LinkButton href="/inventory/locations" variant="secondary">Shelves</LinkButton>}
+                {ctx.can("inventory.container.view") && <LinkButton href="/inventory/containers" variant="secondary">Boxes and sacks</LinkButton>}
+              </div>
+            </MoreMenu>
+          </>
         }
       />
+      <PageIntro>This screen is for seeing what is in stock, if it is OK to use, and when it expires. Tap a row to see its lots; the one that expires first is listed first.</PageIntro>
       <StockTabs active={kind} />
 
       <StockSearch defaultQ={q} keep={keep} />

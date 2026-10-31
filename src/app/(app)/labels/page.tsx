@@ -3,64 +3,78 @@ import { Printer } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { listStations, stationQueue, type LabelJobView } from "@/modules/documents";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
+import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { MoreDetails, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../forbidden";
-import { JobStatus, shortRef, STATUS_AT_PRINT } from "./bits";
+import { JobStatus, STATE_WORDS } from "./bits";
 import { FailForm, JobCommand } from "./forms";
 
-export const metadata = { title: "Label print station" };
+export const metadata = { title: "Labels to print" };
 export const dynamic = "force-dynamic";
 
+/** One label waiting at the station: what it is for first, the number small; Print is the one button, the rest in ⋯ More. */
 function JobCard({ j, canAct }: { j: LabelJobView; canAct: boolean }) {
   return (
-    <li className="rounded-[16px] border border-line bg-surface p-4" data-testid="station-job">
+    <li className="px-4 py-3" data-testid="station-job">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="break-all font-mono text-[16px] font-semibold">{j.entityNumber}</p>
-          <p className="text-[13px] text-muted">
-            Label size {j.media} · {j.copies} {j.copies === 1 ? "label" : "labels"}
-            {j.reprintNo > 0 ? ` · REPRINT ${j.reprintNo}` : ""}
-            {j.statusAtPrint ? ` · status at print ${STATUS_AT_PRINT[j.statusAtPrint] ?? j.statusAtPrint}` : ""}
+        <div className="min-w-0 flex-1">
+          <p className="flex flex-wrap items-center gap-2 text-[15px] font-semibold">
+            {j.entityName ?? j.templateName} <JobStatus status={j.status} voided={!!j.voidedAt} />
           </p>
-          <p className="text-[12px] text-muted">Requested by {j.requestedByName}, {fmtDateTime(j.requestedAt)} · ref {shortRef(j.id)}</p>
+          <p className="mt-0.5 text-[13px] text-fg-2">
+            {j.copies} {j.copies === 1 ? "label" : "labels"}, {j.media}
+            {j.reprintNo > 0 ? ` · printed again (${j.reprintNo})` : ""}
+            {j.statusAtPrint ? ` · ${STATE_WORDS[j.statusAtPrint] ?? j.statusAtPrint}` : ""} · asked by {j.requestedByName}, {fmtDateTime(j.requestedAt)}
+            <span className="ml-1 break-all font-mono text-[12px] text-muted">· {j.entityNumber}</span>
+          </p>
         </div>
-        <JobStatus status={j.status} voided={!!j.voidedAt} />
       </div>
       {j.status === "failed" && j.errorMessage && <p className="mt-2 text-[13px] text-[var(--bad-fg)]">{j.errorMessage}</p>}
       {canAct && (
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start">
+        <div className="mt-3 flex flex-wrap items-start gap-2">
           {j.status === "ready" && (
             <LinkButton href={`/print/labels/${j.id}`} target="_blank" variant="cta" size="lg">
               <Printer size={18} /> Print
             </LinkButton>
           )}
-          {j.status === "failed" && <JobCommand jobId={j.id} kind="retry" label="Retry (same label)" variant="cta" />}
-          {["queued", "ready", "failed"].includes(j.status) && <JobCommand jobId={j.id} kind="cancel" label="Cancel" confirm="Cancel this label job? It will not be printed." />}
-          <LinkButton href={`/labels/jobs/${j.id}`} variant="secondary">Details</LinkButton>
+          {j.status === "failed" && <JobCommand jobId={j.id} kind="retry" label="Try again (same label)" variant="cta" />}
+          <MoreMenu>
+            <div className="flex flex-col gap-3">
+              <LinkButton href={`/labels/jobs/${j.id}`} variant="secondary">See this label</LinkButton>
+              {["queued", "ready", "failed"].includes(j.status) && <JobCommand jobId={j.id} kind="cancel" label="Cancel" confirm="Cancel this label? It will not be printed." />}
+              {j.status === "ready" && (
+                <div>
+                  <p className="mb-2 text-[13px] font-medium">The printer did not print it?</p>
+                  <FailForm jobId={j.id} />
+                </div>
+              )}
+            </div>
+          </MoreMenu>
         </div>
-      )}
-      {canAct && j.status === "ready" && (
-        <details className="mt-2 text-[13px]">
-          <summary className="cursor-pointer text-muted">The printer failed?</summary>
-          <div className="mt-2"><FailForm jobId={j.id} /></div>
-        </details>
       )}
     </li>
   );
 }
 
+/**
+ * Labels to print (the label print station, US-2-12), grade-5 (ADR-088): what each label is for first, one
+ * Print button; cancel and "did not print" in ⋯ More. Printed labels of the last 24 hours below.
+ */
 export default async function StationPage({ searchParams }: { searchParams: Promise<{ station?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.label_job.view")) return <Forbidden what="the label print station" />;
+  if (!ctx.can("inventory.label_job.view")) return <Forbidden what="labels to print" />;
   const { station: wanted } = await searchParams;
   const stations = await listStations(ctx, { siteId: ctx.currentSiteId });
   if (stations.length === 0) {
     return (
-      <div className="space-y-5">
-        <PageHeader title="Label print station" subtitle={ctx.currentSite.code} />
-        <Banner tone="info" title={`Label printing isn't set up for ${ctx.currentSite.code} yet`} action={ctx.can("documents.print_station.admin") ? <LinkButton href="/admin/templates/stations" variant="secondary" size="sm">Add a print station</LinkButton> : undefined}>
-          A print station is the PC or tablet next to the label printer. {ctx.can("documents.print_station.admin") ? "Add one to start printing labels at this site." : "Ask an administrator to add one."}
+      <div className="space-y-4">
+        <PageHeader title="Labels to print" subtitle={ctx.currentSite.name} />
+        <PageIntro>This screen is for printing labels at the label printer. Labels asked for from phones and receiving wait here.</PageIntro>
+        <Banner tone="info" title={`Label printing is not set up for ${ctx.currentSite.name} yet`} action={ctx.can("documents.print_station.admin") ? <LinkButton href="/admin/templates/stations" variant="secondary">Add a label printer</LinkButton> : undefined}>
+          A label printer needs a PC or tablet next to it. {ctx.can("documents.print_station.admin") ? "Add one to start printing labels at this site." : "Ask the system administrator to add one."}
         </Banner>
       </div>
     );
@@ -69,44 +83,45 @@ export default async function StationPage({ searchParams }: { searchParams: Prom
   const q = await stationQueue(ctx, station.id);
   const canAct = ctx.can("inventory.label_job.create");
   return (
-    <div className="space-y-5">
-      <PageHeader title="Label print station" subtitle={`${ctx.currentSite.code} · ${station.name} · printer: ${station.printerName}`} />
-      {stations.length > 1 && (
-        <nav aria-label="Print station" className="flex flex-wrap gap-2">
-          {stations.map((s) => (
-            <Link key={s.id} href={`/labels?station=${s.id}`} aria-current={s.id === station.id ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[14px]", s.id === station.id ? "border-primary bg-primary-soft font-semibold text-primary-text" : "border-line bg-surface")}>
-              {s.name}
-            </Link>
-          ))}
-        </nav>
-      )}
-      <Banner tone="info" title="Print at 100 %">
-        In the print dialog choose this station&apos;s label printer, the label size and &quot;Actual size&quot; (no fit to page). Then tap &quot;Printed OK&quot; so the job leaves the queue.
-      </Banner>
-      <Card>
-        <CardTitle>To print ({q.toPrint.length})</CardTitle>
+    <div className="space-y-4">
+      <PageHeader title="Labels to print" subtitle={`${ctx.currentSite.name} · ${station.name}`} />
+      <PageIntro>This screen is for printing the labels that are waiting at this printer. Tap Print, print at 100 % size, then tap “Printed OK” so the label leaves the list.</PageIntro>
+      {stations.length > 1 && <FilterTabs label="Label printer" active={station.id} tabs={stations.map((s) => [s.id, s.name, `/labels?station=${s.id}`] as const)} />}
+      <MoreDetails title="How to print at the right size">
+        <p className="text-[14px] text-fg-2">
+          In the print window choose the label printer ({station.printerName}), the label size, and &quot;Actual size&quot; (not &quot;Fit to page&quot;). Then tap &quot;Printed OK&quot;.
+        </p>
+      </MoreDetails>
+      <section className="space-y-2">
+        <h2 className="text-[16px] font-semibold">To print · {q.toPrint.length}</h2>
         {q.toPrint.length === 0 ? (
-          <EmptyState title="Nothing to print right now.">Labels requested from phones and receiving appear here.</EmptyState>
+          <EmptyState title="Nothing to print right now">Labels asked for from phones and receiving show here. Nothing to do.</EmptyState>
         ) : (
-          <ul className="space-y-3">{q.toPrint.map((j) => <JobCard key={j.id} j={j} canAct={canAct} />)}</ul>
+          <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface">{q.toPrint.map((j) => <JobCard key={j.id} j={j} canAct={canAct} />)}</ul>
         )}
-      </Card>
-      <Card>
-        <CardTitle>Printed in the last 24 hours ({q.printed.length})</CardTitle>
+      </section>
+      <section className="space-y-2">
+        <h2 className="text-[16px] font-semibold">Printed in the last 24 hours · {q.printed.length}</h2>
         {q.printed.length === 0 ? (
-          <p className="text-[13px] text-muted">No labels printed here in the last 24 hours.</p>
+          <p className="text-[14px] text-fg-2">No labels printed here in the last 24 hours.</p>
         ) : (
-          <ul className="divide-y divide-line text-[13px]">
+          <PlainList label="Printed labels">
             {q.printed.map((j) => (
-              <li key={j.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                <Link href={`/labels/jobs/${j.id}`} className="min-w-0 break-all font-mono text-primary-text hover:underline">{j.entityNumber}</Link>
-                <span className="text-muted">{j.media} · {j.copies}× · {j.printedByName} {fmtDateTime(j.printedAt)}{j.reprintNo ? ` · REPRINT ${j.reprintNo}` : ""}</span>
-                <JobStatus status={j.status} voided={!!j.voidedAt} />
-              </li>
+              <PlainRow
+                key={j.id}
+                href={`/labels/jobs/${j.id}`}
+                title={j.entityName ?? j.templateName}
+                status={<JobStatus status={j.status} voided={!!j.voidedAt} />}
+                facts={<>{j.copies} × {j.media} · {j.printedByName} {fmtDateTime(j.printedAt)}{j.reprintNo ? ` · printed again (${j.reprintNo})` : ""}</>}
+                code={j.entityNumber}
+              />
             ))}
-          </ul>
+          </PlainList>
         )}
-      </Card>
+      </section>
+      <p className="text-[13px] text-fg-2">
+        To print a new label, open the lot or shelf and choose <Link href="/inventory" className="font-medium text-primary-text underline">Print a label</Link> in ⋯ More.
+      </p>
     </div>
   );
 }

@@ -7,7 +7,9 @@ import { lotsToPutAway, type PutAwayTask } from "@/modules/inventory/put-away-qu
 import { putAwayOptions } from "@/modules/inventory/receiving-putaway";
 import { keywordMatches, type KeywordMatch } from "@/modules/scan";
 import { Card, CardTitle, EmptyState, Field, Input, PageHeader } from "@/ui/core";
-import { Banner, StatusChip } from "@/ui/status";
+import { Banner } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
+import { LotStatusChip } from "@/ui/inventory/bits";
 import { Forbidden } from "../../../forbidden";
 import { PutAwayForm } from "./put-away-form";
 import { Help } from "@/ui/help/help";
@@ -96,8 +98,8 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
     <Card>
       <form method="get" className="flex flex-wrap items-end gap-3">
         <div className="min-w-[220px] flex-1">
-          <Field label={opts ? "Another lot" : "Or scan the lot label"} htmlFor="lot" hint="Scan the label, or type the lot number, its last digits, or the supplier's lot number.">
-            <Input id="lot" name="lot" defaultValue={opts ? "" : lotRef} placeholder="BC:LOT:L-2610-00012 or 0012" autoComplete="off" autoFocus={!opts && tasks.length === 0} required />
+          <Field label={opts ? "Another lot" : "Or scan the lot label"} htmlFor="lot" hint="Scan the label, or type the item name (for example coconut oil).">
+            <Input id="lot" name="lot" defaultValue={opts ? "" : lotRef} placeholder="Scan, or type the item name" autoComplete="off" autoFocus={!opts && tasks.length === 0} required />
           </Field>
         </div>
         <button type="submit" className="min-h-[44px] rounded-full bg-primary px-5 text-[14px] font-medium text-white">Find lot</button>
@@ -113,7 +115,7 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
       </h2>
       {tasks.length === 0 ? (
         <Card>
-          <EmptyState title="Nothing to put away">Lots appear here when QA releases them while they are still in the hold area or at the dock.</EmptyState>
+          <EmptyState title="Nothing to put away">Lots show here when QA says OK while they are still in the QA area or at the dock. Nothing to do now.</EmptyState>
         </Card>
       ) : (
         <ul className="space-y-2" data-testid="putaway-tasks">
@@ -150,7 +152,8 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <PageHeader title="Put away" subtitle={`${ctx.currentSite.code} · take released lots out of the hold area to their shelf`} actions={<><Help screen="inventory.putaway" /></>} />
+      <PageHeader title="Put away" subtitle={ctx.currentSite.name} actions={<Help screen="inventory.putaway" />} />
+      <PageIntro>This screen is for taking lots that QA said OK out of the QA area to their shelf. Tap a lot in the list; the shelf is suggested, you only confirm.</PageIntro>
       {moved && <Banner tone="ok" title="Put away">{moved}</Banner>}
 
       {searching && finder}
@@ -160,21 +163,21 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
 
       {opts && (
         <Card>
-          <CardTitle action={<StatusChip status={opts.lot.qualityStatus} />}>
-            <span className="font-mono">{opts.lot.lotNumber}</span>
+          <CardTitle action={<LotStatusChip status={opts.lot.qualityStatus} expiresOn={opts.lot.expiresOn} />}>
+            {opts.lot.itemName}
           </CardTitle>
           <p className="mb-2 text-[14px]">
-            <b>{opts.lot.itemName}</b> <span className="text-muted">· {opts.lot.itemCode}{opts.lot.supplierLotNumber ? ` · supplier's code on the sack ${opts.lot.supplierLotNumber}` : ""}</span>
+            Lot <span className="font-mono text-[13px] text-muted">{opts.lot.lotNumber}</span>{opts.lot.supplierLotNumber ? <span className="text-muted"> · supplier&apos;s code on the sack {opts.lot.supplierLotNumber}</span> : null}
           </p>
           <p className="mb-3 rounded-[10px] bg-surface-2 px-3 py-2 text-[14px]" data-testid="putaway-suggested-section">
             Belongs in: <strong>{opts.suggestedSectionLabel}</strong>
             {opts.suggestedCodes.length ? ` · ${opts.suggestedCodes.join(", ")}` : " · no allowed place in that section right now"}
           </p>
-          {opts.lot.qualityStatus === "quarantine" && <Banner tone="warn" title="Waiting for QA">This lot is not released yet. It can only move between quarantine and hold areas. Put it on a shelf after QA approves it.</Banner>}
+          {opts.lot.qualityStatus === "quarantine" && <Banner tone="warn" title="Waiting for QA check">This lot is not OK to use yet. It can only move between the QA areas. Put it on a shelf after QA says OK.</Banner>}
           {opts.balances.length === 0 ? (
             <EmptyState title="No stock to put away">This lot has no stock now (not saved yet, used up, or reversed).</EmptyState>
           ) : opts.destinations.length === 0 ? (
-            <Banner tone="warn" title="No allowed location">There is no active, unblocked location of an allowed type at this site. Ask the site manager to set one up.</Banner>
+            <Banner tone="warn" title="No shelf it may go to">There is no free shelf of the right kind at this site. Ask the site manager to set one up.</Banner>
           ) : (
             <PutAwayForm
               key={`${opts.lot.id}:${from?.locationId ?? ""}:${suggestedDest?.id ?? ""}`}

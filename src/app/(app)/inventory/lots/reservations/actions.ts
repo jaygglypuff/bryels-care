@@ -11,7 +11,7 @@ const Reserve = z
     lotId: z.uuid(),
     locationId: z.uuid(),
     qty: z.string().trim().regex(/^\d{1,12}(\.\d{1,6})?$/, { message: "Enter a quantity like 24 or 12.5." }),
-    demandReference: z.string().trim().min(3, { message: "Say what it is reserved for (at least 3 characters)." }).max(200),
+    demandReference: z.string().trim().min(3, { message: "Say what it is set aside for (at least 3 letters)." }).max(200),
     ttlHours: z.union([z.literal(""), z.string().regex(/^\d{1,4}$/, { message: "Whole hours, e.g. 72." })]),
     idempotencyKey: z.uuid(),
   })
@@ -30,7 +30,7 @@ export async function reserveAction(_p: ActionState, fd: FormData): Promise<Acti
     });
     const r = await createReservation(ctx, { ...i, demandType: "manual", ttlHours: i.ttlHours ? Number(i.ttlHours) : null });
     revalidatePath("/inventory/lots/reservations");
-    return { ok: true, message: `Reserved (${r.reservationNumber}). Available-to-promise is reduced until it is released or expires.` };
+    return { ok: true, message: `Set aside (${r.reservationNumber}). Nobody else can take it until it is used, let go, or the time runs out.` };
   } catch (e) {
     return actionError(e);
   }
@@ -40,7 +40,7 @@ export async function releaseReservationAction(id: string, _p: ActionState, fd: 
   try {
     await releaseReservation(await requireContext(), id, str(fd, "reason"));
     revalidatePath("/inventory/lots/reservations");
-    return { ok: true, message: "Released." };
+    return { ok: true, message: "Let go. Others can use it again." };
   } catch (e) {
     return actionError(e);
   }

@@ -5,7 +5,7 @@ export type StockTab = "all" | "material" | "wip" | "product";
 
 const TABS: { key: StockTab; label: string; href: string }[] = [
   { key: "material", label: "Raw materials", href: "/inventory?kind=material" },
-  { key: "wip", label: "Work in progress", href: "/inventory/wip" },
+  { key: "wip", label: "Being made", href: "/inventory/wip" },
   { key: "product", label: "Finished goods", href: "/inventory?kind=product" },
   { key: "all", label: "All stock", href: "/inventory?kind=all" },
 ];

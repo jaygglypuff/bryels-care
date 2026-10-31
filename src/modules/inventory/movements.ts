@@ -14,7 +14,7 @@ import { assertLocationsNotFrozen } from "./freeze";
 import { assertHoldAllowsMove } from "./holds";
 import { looseQty } from "./moves";
 
-export const MOVEMENT_TYPES: MovementType[] = ["receipt", "issue", "transfer", "consumption", "output", "adjustment", "shipment", "reversal"];
+export const MOVEMENT_TYPES: MovementType[] = ["receipt", "issue", "transfer", "consumption", "output", "adjustment", "return", "shipment", "reversal"];
 
 const fromLoc = alias(locations, "from_loc");
 const toLoc = alias(locations, "to_loc");
@@ -39,6 +39,8 @@ export async function listMovements(ctx: AuthContext, f: { type?: string } = {})
       productName: products.name,
       fromCode: fromLoc.code,
       toCode: toLoc.code,
+      fromName: fromLoc.name,
+      toName: toLoc.name,
       sourceDocumentType: stockMovements.sourceDocumentType,
       sourceDocumentId: stockMovements.sourceDocumentId,
       sourceDocumentNumber: stockMovements.sourceDocumentNumber,

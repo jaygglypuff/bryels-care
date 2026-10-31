@@ -1,10 +1,10 @@
 import "server-only";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import Decimal from "decimal.js";
 import { uuidv7 } from "uuidv7";
 import { db } from "@/db/client";
-import { inventoryLots, locations, stockMovements, users } from "@/db/schema";
+import { inventoryLots, locations, materials, products, stockMovements, users } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -186,6 +186,9 @@ export async function getMovementDetail(ctx: AuthContext, movementId: string) {
     lotExpiresOn: inventoryLots.expiresOn,
     fromCode: fromLoc.code,
     toCode: toLoc.code,
+    fromName: fromLoc.name,
+    toName: toLoc.name,
+    itemName: sql<string | null>`coalesce(${materials.name}, ${products.name})`,
     postedByName: users.displayName,
   };
   const base = () =>
@@ -193,6 +196,8 @@ export async function getMovementDetail(ctx: AuthContext, movementId: string) {
       .select(select)
       .from(stockMovements)
       .innerJoin(inventoryLots, eq(inventoryLots.id, stockMovements.lotId))
+      .leftJoin(materials, eq(materials.id, inventoryLots.materialId))
+      .leftJoin(products, eq(products.id, inventoryLots.productId))
       .leftJoin(fromLoc, eq(fromLoc.id, stockMovements.fromLocationId))
       .leftJoin(toLoc, eq(toLoc.id, stockMovements.toLocationId))
       .innerJoin(users, eq(users.id, stockMovements.postedBy));

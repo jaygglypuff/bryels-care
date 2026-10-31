@@ -6,19 +6,26 @@ import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { getLabelJob, labelHistory, reprintReasonOptions, type LabelJobView } from "@/modules/documents";
 import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
-import { JobStatus, shortRef, STATUS_AT_PRINT } from "../../bits";
+import { JobStatus, shortRef, STATE_WORDS } from "../../bits";
 import { FailForm, JobCommand, ReprintForm, VoidForm } from "../../forms";
 
-export const metadata = { title: "Label job" };
+export const metadata = { title: "Label" };
 export const dynamic = "force-dynamic";
 
+/**
+ * One label job (US-2-12), grade-5 (ADR-088): one next step (print / try again / nothing), the reprint chain,
+ * and the rare actions (cancel, "did not print", old label) in ⋯ More. Reprints keep their reason on record.
+ */
 export default async function LabelJobPage({ params, searchParams }: { params: Promise<{ jobId: string }>; searchParams: Promise<{ sent?: string }> }) {
   const ctx = await requireContext();
   const reprintReasons = await reprintReasonOptions(ctx);
   const reprintReason = (code: string) => reprintReasons.find((r) => r.code === code) ?? null;
-  if (!ctx.can("inventory.label_job.view")) return <Forbidden what="label jobs" />;
+  if (!ctx.can("inventory.label_job.view")) return <Forbidden what="labels" />;
   const { jobId } = await params;
   const { sent } = await searchParams;
   let j: LabelJobView;
@@ -34,89 +41,126 @@ export default async function LabelJobPage({ params, searchParams }: { params: P
   const root = chain.find((h) => h.id === rootId);
   const canCreate = ctx.can("inventory.label_job.create");
   const canReprint = canCreate && ctx.can("documents.reprint.create") && root?.status === "printed" && !root.voidedAt;
-  const back = j.entityType === "inventory_lot" ? `/inventory/${j.entityId}` : "/labels";
+  const canVoid = ctx.can("documents.generated_document.void") && j.status === "printed" && !j.voidedAt;
+  const back = j.entityType === "inventory_lot" ? `/inventory/${j.entityId}` : j.entityType === "location" ? `/inventory/locations/${j.entityId}` : "/labels";
   const reason = j.reprintReasonCode ? reprintReason(j.reprintReasonCode)?.label ?? j.reprintReasonCode : null;
+  const what = j.entityName ?? j.templateName;
+
+  const next = j.voidedAt ? (
+    <NextStep text="This label is old: throw it away. A newer label replaces it." />
+  ) : j.status === "ready" && canCreate ? (
+    <NextStep text="Print it at 100 % size, then tap “Printed OK”." action={{ label: "Print here", href: `/print/labels/${j.id}` }} />
+  ) : j.status === "ready" || j.status === "queued" || j.status === "rendering" ? (
+    <NextStep text="Waiting to be printed." waitingFor={`Waiting for the warehouse at the label printer (${j.stationName}).`} />
+  ) : j.status === "failed" ? (
+    <NextStep text="It did not print. Fix the printer, then try again (the label stays the same)." action={canCreate ? { label: "Try again", href: "#retry" } : undefined} />
+  ) : j.status === "printed" ? (
+    <NextStep text="Printed. Stick it on the sack or box. Nothing more to do." />
+  ) : (
+    <NextStep text="Cancelled. Nothing more to do." />
+  );
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="mx-auto max-w-3xl space-y-4">
       <PageHeader
-        title={`Label · ${j.entityNumber}`}
-        subtitle={`Label size ${j.media} · ref ${shortRef(j.id)}${j.reprintNo ? ` · REPRINT ${j.reprintNo}` : ""}`}
+        title={`Label: ${what}`}
+        subtitle={
+          <span className="flex flex-wrap items-center gap-2">
+            <RecordNo>{j.entityNumber}</RecordNo> <JobStatus status={j.status} voided={!!j.voidedAt} />
+            {j.reprintNo ? <span>printed again ({j.reprintNo})</span> : null}
+          </span>
+        }
         actions={
-          <>
-            <LinkButton href="/labels" variant="secondary">Print station</LinkButton>
-            <LinkButton href={back} variant="secondary">Record</LinkButton>
-          </>
+          <MoreMenu>
+            <div className="flex flex-col gap-3">
+              <LinkButton href={back} variant="secondary">Open what the label is for</LinkButton>
+              <LinkButton href="/labels" variant="secondary">Labels to print</LinkButton>
+              {canCreate && ["queued", "ready", "failed"].includes(j.status) && <JobCommand jobId={j.id} kind="cancel" label="Cancel this label" confirm="Cancel this label? It will not be printed." />}
+              {canCreate && j.status === "ready" && (
+                <div>
+                  <p className="mb-2 text-[13px] font-medium">The printer did not print it?</p>
+                  <FailForm jobId={j.id} />
+                </div>
+              )}
+              {canVoid && (
+                <div>
+                  <p className="mb-2 text-[13px] text-fg-2">After a repack or split, mark the old label so anyone who scans it is warned.</p>
+                  <VoidForm jobId={j.id} />
+                </div>
+              )}
+            </div>
+          </MoreMenu>
         }
       />
-      {sent && <Banner tone="ok" title="Sent to the print station">{j.stationName} will see it in its queue. Print it there, or print it here now.</Banner>}
-      {j.voidedAt && <Banner tone="bad" title="Superseded label — destroy">{j.voidReason}</Banner>}
-      {j.status === "failed" && <Banner tone="bad" title="Printing failed">{j.errorMessage ?? "The job failed."} Retry keeps the same label identity.</Banner>}
+      <PageIntro>This screen is for one label: print it, see when it was printed, or print it again when it got lost or damaged.</PageIntro>
+      {sent && <Banner tone="ok" title="Sent to the label printer">{j.stationName} sees it in its list. Print it there, or print it here now.</Banner>}
+      {j.voidedAt && <Banner tone="bad" title="Old label: throw it away">{j.voidReason}</Banner>}
+      {j.status === "failed" && <Banner tone="bad" title="It did not print">{j.errorMessage ?? "The printer did not print it."}</Banner>}
+      {next}
+      {canCreate && j.status === "ready" && (
+        <LinkButton href={`/print/labels/${j.id}`} target="_blank" variant="cta" size="lg">
+          <Printer size={18} /> Print here
+        </LinkButton>
+      )}
+      {canCreate && j.status === "failed" && (
+        <div id="retry">
+          <JobCommand jobId={j.id} kind="retry" label="Try again (same label)" variant="cta" />
+        </div>
+      )}
 
       <Card>
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <CardTitle>Job</CardTitle>
-          <JobStatus status={j.status} voided={!!j.voidedAt} />
-        </div>
+        <CardTitle>About this label</CardTitle>
         <Dl
           items={[
-            ["Copies", String(j.copies)],
-            ["Station", `${j.stationName} (${j.printerName ?? "—"})`],
-            ["Status at print", j.statusAtPrint ? STATUS_AT_PRINT[j.statusAtPrint] ?? j.statusAtPrint : "—"],
-            ["Requested", `${j.requestedByName}, ${fmtDateTime(j.requestedAt)}`],
+            ["How many", `${j.copies} × ${j.media}`],
+            ["Printer", `${j.stationName}${j.printerName ? ` (${j.printerName})` : ""}`],
+            ["State on the label", j.statusAtPrint ? STATE_WORDS[j.statusAtPrint] ?? j.statusAtPrint : "—"],
+            ["Asked by", `${j.requestedByName}, ${fmtDateTime(j.requestedAt)}`],
             ["Printed", j.printedAt ? `${j.printedByName}, ${fmtDateTime(j.printedAt)}` : "—"],
-            ["Document", j.generatedDocumentId && j.documentNumber ? <Link key="d" href={`/documents/${j.generatedDocumentId}`} className="text-primary-text hover:underline">{j.documentNumber}</Link> : "—"],
-            ...(reason ? ([["Reprint reason", `${reason}${j.reprintNote ? `: ${j.reprintNote}` : ""}`]] as [string, string][]) : []),
+            ...(reason ? ([["Why printed again", `${reason}${j.reprintNote ? `: ${j.reprintNote}` : ""}`]] as [string, string][]) : []),
           ]}
         />
-        {canCreate && (
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start">
-            {j.status === "ready" && (
-              <LinkButton href={`/print/labels/${j.id}`} target="_blank" variant="cta" size="lg">
-                <Printer size={18} /> Print here
-              </LinkButton>
-            )}
-            {j.status === "failed" && <JobCommand jobId={j.id} kind="retry" label="Retry (same label)" variant="cta" />}
-            {["queued", "ready", "failed"].includes(j.status) && <JobCommand jobId={j.id} kind="cancel" label="Cancel job" confirm="Cancel this label job? It will not be printed." />}
-          </div>
-        )}
-        {canCreate && j.status === "ready" && (
-          <details className="mt-3 text-[13px]">
-            <summary className="cursor-pointer text-muted">The printer failed?</summary>
-            <div className="mt-2"><FailForm jobId={j.id} /></div>
-          </details>
-        )}
+        <div className="mt-3">
+          <MoreDetails>
+            <Dl
+              items={[
+                ["Label layout", j.templateName],
+                ["Reference", shortRef(j.id)],
+                ["Paper record", j.generatedDocumentId && j.documentNumber ? <Link key="d" href={`/documents/${j.generatedDocumentId}`} className="text-primary-text hover:underline">{j.documentNumber}</Link> : "—"],
+              ]}
+            />
+          </MoreDetails>
+        </div>
       </Card>
 
-      <Card>
-        <CardTitle>Prints and reprints</CardTitle>
-        <ol className="divide-y divide-line text-[13px]">
+      <section className="space-y-2">
+        <h2 className="text-[16px] font-semibold">First print and prints again</h2>
+        <ol className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface">
           {chain.map((h) => (
-            <li key={h.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-              <Link href={`/labels/jobs/${h.id}`} className="text-primary-text hover:underline">{h.reprintNo ? `Reprint ${h.reprintNo}` : "Original"} · {h.copies}×</Link>
-              <span className="text-muted">{h.printedAt ? `${h.printedByName}, ${fmtDateTime(h.printedAt)}` : fmtDateTime(h.requestedAt)}{h.reprintReasonCode ? ` · ${reprintReason(h.reprintReasonCode)?.label ?? h.reprintReasonCode}` : ""}</span>
-              <JobStatus status={h.status} voided={!!h.voidedAt} />
+            <li key={h.id}>
+              <Link href={`/labels/jobs/${h.id}`} className="flex min-h-[52px] flex-wrap items-center justify-between gap-2 px-4 py-2 hover:bg-surface-2">
+                <span className="min-w-0 text-[14px]">
+                  <span className="font-semibold">{h.reprintNo ? `Printed again (${h.reprintNo})` : "First print"}</span> · {h.copies}×
+                  <span className="block text-[13px] text-fg-2">
+                    {h.printedAt ? `${h.printedByName}, ${fmtDateTime(h.printedAt)}` : fmtDateTime(h.requestedAt)}
+                    {h.reprintReasonCode ? ` · ${reprintReason(h.reprintReasonCode)?.label ?? h.reprintReasonCode}` : ""}
+                  </span>
+                </span>
+                <JobStatus status={h.status} voided={!!h.voidedAt} />
+              </Link>
             </li>
           ))}
         </ol>
-      </Card>
+      </section>
 
       {canReprint ? (
         <Card>
-          <CardTitle>Reprint this label</CardTitle>
-          <p className="mb-3 text-[13px] text-muted">For a lost or damaged label with the same content. The reprint is marked REPRINT n, linked to the original and logged with your reason.</p>
+          <CardTitle>Print this label again</CardTitle>
+          <p className="mb-3 text-[13px] text-fg-2">For a lost or damaged label with the same content. It is marked as printed again, linked to the first one, and kept on record with your reason.</p>
           <ReprintForm jobId={rootId} reasons={reprintReasons} maxCopies={Math.max(1, root?.copies ?? 1)} />
         </Card>
       ) : (
-        root?.status === "printed" && !root.voidedAt && <p className="text-[13px] text-muted">Your role cannot reprint labels.</p>
-      )}
-
-      {ctx.can("documents.generated_document.void") && j.status === "printed" && !j.voidedAt && (
-        <Card>
-          <CardTitle>Label no longer matches?</CardTitle>
-          <p className="mb-3 text-[13px] text-muted">After a repack or split, void the old label so the scan card warns anyone who scans it.</p>
-          <VoidForm jobId={j.id} />
-        </Card>
+        root?.status === "printed" && !root.voidedAt && <p className="text-[13px] text-fg-2">Your job cannot print labels again. Ask the warehouse lead.</p>
       )}
     </div>
   );

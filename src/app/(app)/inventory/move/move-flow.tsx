@@ -5,9 +5,10 @@ import { ArrowRight, Boxes, MapPin, RotateCcw, ScanLine } from "lucide-react";
 import { Button, Card, Field, Select, Textarea, inputClass } from "@/ui/core";
 import { baseToUnitText, fmtFriendly, friendlyUnitFor, toBaseQty } from "@/lib/units";
 import { QtyUnitInput } from "@/ui/qty-unit-input";
-import { Banner, StatusChip } from "@/ui/status";
+import { Banner } from "@/ui/status";
 import type { MoveResult } from "@/modules/inventory/moves";
-import { lookupDestinationAction, lookupSourceAction, postMoveAction, undoMoveAction, type SourceInfo } from "./actions";
+import { LOCATION_KIND_WORDS, LotStatusChip } from "@/ui/inventory/bits";
+import { lookupDestinationAction, lookupSourceAction, postMoveAction, undoMoveAction, type LotMatch, type SourceInfo } from "./actions";
 
 type Loc = { id: string; code: string; name: string; kind: string };
 
@@ -103,6 +104,7 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
   const [reason, setReason] = useState("");
   const [key, setKey] = useState(newKey);
   const [error, setError] = useState<string | null>(null);
+  const [matches, setMatches] = useState<LotMatch[]>([]);
   const [result, setResult] = useState<MoveResult | null>(null);
   const [busy, start] = useTransition();
 
@@ -114,7 +116,26 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
   const moveAmountText = source?.kind === "lot" ? (parsedAmount?.ok ? fmtFriendly(parsedAmount.qtyBase, source.baseUom) : `${qty} ${unit}`) : "";
   const step = !source ? 1 : source.kind === "lot" && (!fromId || !qty) ? 2 : !dest ? 3 : 4;
 
+  const pickSource = (v: string) =>
+    start(async () => {
+      setError(null);
+      const r = await lookupSourceAction(v);
+      if (!r.ok) {
+        setMatches(r.matches ?? []);
+        return setError(r.matches?.length ? null : r.message);
+      }
+      setMatches([]);
+      setSource(r.data);
+      if (r.data.kind === "lot") {
+        setFromId(r.data.locations[0]?.id ?? "");
+        const a = startAmount(r.data);
+        setQty(a.qty);
+        setUnit(a.unit);
+      }
+    });
+
   const reset = () => {
+    setMatches([]);
     setSource(null);
     setDest(null);
     setQty("");
@@ -131,7 +152,7 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
   return (
     <div className="space-y-4">
       <ol className="flex flex-wrap gap-2 text-[12px] font-medium text-muted" aria-label="Steps">
-        {["Scan box or lot", "Quantity", "Scan destination", "Confirm"].map((s, i) => (
+        {["What", "How much", "Which shelf", "Confirm"].map((s, i) => (
           <li key={s} className={`rounded-full border px-3 py-1 ${step === i + 1 ? "border-primary bg-primary-soft text-primary-text" : "border-line"}`}>
             {i + 1}. {s}
           </li>
@@ -145,44 +166,45 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
 
       <Card>
         {!source ? (
-          <ScanField
-            id="src"
-            label="1 · Scan the box or lot label"
-            placeholder="BC:BOX:BX-00000001 · L-2610-00001"
-            busy={busy}
-            autoFocus
-            onScan={(v) =>
-              start(async () => {
-                setError(null);
-                const r = await lookupSourceAction(v);
-                if (!r.ok) return setError(r.message);
-                setSource(r.data);
-                if (r.data.kind === "lot") {
-                  setFromId(r.data.locations[0]?.id ?? "");
-                  const a = startAmount(r.data);
-                  setQty(a.qty);
-                  setUnit(a.unit);
-                }
-              })
-            }
-          />
+          <div className="space-y-3">
+            <ScanField
+              id="src"
+              label="1 · Scan the label, or type the item name"
+              placeholder="Scan, or type a name"
+              busy={busy}
+              autoFocus
+              onScan={(v) => pickSource(v)}
+            />
+            {matches.length > 0 && (
+              <ul className="flex flex-col gap-2" aria-label="Matching lots">
+                {matches.map((m) => (
+                  <li key={m.lotNumber}>
+                    <button type="button" onClick={() => pickSource(`BC:LOT:${m.lotNumber}`)} className="flex min-h-[52px] w-full flex-col items-start rounded-[12px] border border-line px-3 py-2 text-left hover:bg-surface-2">
+                      <span className="text-[14px] font-semibold">{m.title} <span className="font-mono text-[12px] font-normal text-muted">{m.lotNumber}</span></span>
+                      <span className="text-[13px] text-muted">{m.detail}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         ) : (
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="flex items-center gap-2 text-[13px] text-muted">{source.kind === "box" ? <Boxes size={15} /> : null} {source.kind === "box" ? "Box" : "Lot"}</p>
-              <p className="font-mono text-[18px] font-semibold">{source.kind === "box" ? source.number : source.lotNumber}</p>
+              <p className="text-[18px] font-semibold">{source.kind === "box" ? <span className="font-mono">{source.number}</span> : source.itemName}</p>
               {source.kind === "box" ? (
                 <ul className="mt-1 text-[13px]">
                   {source.contents.map((c) => (
                     <li key={c.lotNumber}>
-                      {fmtFriendly(c.qty, c.uom)} {c.itemName} · lot {c.lotNumber} <StatusChip status={c.status} />
+                      {fmtFriendly(c.qty, c.uom)} {c.itemName} · lot {c.lotNumber} <LotStatusChip status={c.status} />
                     </li>
                   ))}
                   <li className="text-muted">At {source.location?.code ?? "—"}</li>
                 </ul>
               ) : (
                 <p className="text-[13px]">
-                  {source.itemName} <StatusChip status={source.status} />
+                  <span className="font-mono text-[12px] text-muted">{source.lotNumber}</span> <LotStatusChip status={source.status} />
                 </p>
               )}
             </div>
@@ -203,7 +225,7 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
       {source?.kind === "lot" && (
         <Card>
           {source.locations.length === 0 ? (
-            <p className="text-[13px] text-muted">This lot has no stock left at any location.</p>
+            <p className="text-[13px] text-muted">This lot has no stock left on any shelf.</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="2 · Take it from" htmlFor="from">
@@ -239,8 +261,8 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
             <div className="space-y-3">
               <ScanField
                 id="dst"
-                label="3 · Scan the destination location"
-                placeholder="BC:LOC:A-01 · A-01"
+                label="3 · Scan the shelf label"
+                placeholder="Scan the shelf label"
                 busy={busy}
                 autoFocus={source.kind === "box"}
                 onScan={(v) =>
@@ -252,16 +274,16 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
                   })
                 }
               />
-              <Field label="…or choose" htmlFor="destPick">
+              <Field label="…or choose the shelf" htmlFor="destPick">
                 <Select id="destPick" defaultValue="" onChange={(e) => setDest(locations.find((l) => l.id === e.target.value) ?? null)}>
                   <option value="" disabled>
-                    Choose a location…
+                    Choose a shelf…
                   </option>
                   {allowed
                     .filter((l) => l.id !== sourceLocationId)
                     .map((l) => (
                       <option key={l.id} value={l.id}>
-                        {l.code} · {l.name} ({l.kind})
+                        {l.name} ({l.code}){l.kind !== "storage" ? ` · ${LOCATION_KIND_WORDS[l.kind] ?? l.kind}` : ""}
                       </option>
                     ))}
                 </Select>
@@ -280,7 +302,7 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
           {destWrongKind && (
             <div className="mt-3">
               <Banner tone="warn" title="This stock cannot go there">
-                {dest!.code} is a {dest!.kind} place. Choose a place from the list above, or scan another shelf.
+                {dest!.name} is a place for “{(LOCATION_KIND_WORDS[dest!.kind] ?? dest!.kind).toLowerCase()}”. Choose a shelf from the list above, or scan another shelf.
               </Banner>
             </div>
           )}
@@ -290,7 +312,7 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
       {source && dest && !destWrongKind && (
         <div className="sticky bottom-0 -mx-4 space-y-3 border-t border-line bg-surface px-4 py-3 sm:static sm:mx-0 sm:rounded-[24px] sm:border-0 sm:p-5 sm:shadow-[var(--shadow-card)]">
           <p className="flex flex-wrap items-center gap-2 text-[15px]">
-            Move <strong className="font-mono">{source.kind === "box" ? source.number : `${moveAmountText} of ${source.lotNumber}`}</strong>
+            Move <strong>{source.kind === "box" ? <span className="font-mono">{source.number}</span> : `${moveAmountText} of ${source.itemName}`}</strong>
             {source.kind === "lot" && fromLoc ? <> from {fromLoc.code}</> : source.kind === "box" ? <> from {source.location?.code}</> : null}
             <ArrowRight size={16} /> <strong className="font-mono">{dest.code}</strong>?
           </p>

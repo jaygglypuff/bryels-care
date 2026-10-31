@@ -1,54 +1,72 @@
-import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { expiryAlerts } from "@/modules/inventory/lots-admin";
-import { Card, CardTitle, EmptyState, PageHeader, Table, Td } from "@/ui/core";
-import { Chip, StatusChip } from "@/ui/status";
-import { Expiry, fmtLotQty } from "@/ui/inventory/bits";
+import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { PlainList, PlainRow } from "@/ui/plain-list";
+import { Chip } from "@/ui/status";
+import { Expiry, LotStatusChip, fmtLotQty } from "@/ui/inventory/bits";
 import { Forbidden } from "../../../forbidden";
 
-export const metadata = { title: "Expiry alerts" };
+export const metadata = { title: "Expiring soon" };
 
 /**
- * US-2-16 expiry alert list (A-KPI-03 buckets from settings). The nightly notification job
- * (expiring_lot notifications to site_manager and qa_qc) needs the jobs platform (US-2-03).
+ * US-2-16 expiry list (A-KPI-03 buckets from settings), grade-5 (ADR-088): item first, the expiry date
+ * with days left, how much is left on the right in friendly units, lot number small and grey. The order is
+ * "use the one that expires first" (FEFO, a hidden rule). The nightly notification job (expiring_lot
+ * notifications to site_manager and qa_qc) needs the jobs platform (US-2-03).
  */
 export default async function ExpiryPage() {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.lot.view")) return <Forbidden what="expiry alerts" />;
+  if (!ctx.can("inventory.lot.view")) return <Forbidden what="expiry dates" />;
   const { buckets, rows } = await expiryAlerts(ctx);
   const groups = ["expired", ...buckets.map((b) => `≤ ${b} days`)];
+  const title = (g: string) => (g === "expired" ? "Already expired, still in stock" : `Expires within ${g.replace("≤ ", "")}`);
   return (
-    <div className="space-y-5">
-      <PageHeader title="Expiry alerts" subtitle={`${ctx.currentSite.code} · lots with stock that expired or expire within ${buckets.at(-1)} days, earliest first (FEFO)`} />
-      <div className="flex flex-wrap gap-2">
+    <div className="space-y-4">
+      <PageHeader title="Expiring soon" subtitle={ctx.currentSite.name} />
+      <PageIntro>
+        This screen is for stock that has expired or expires within {buckets.at(-1)} days, the earliest first. Use the one that expires first; move expired stock out of the way and tell QA.
+      </PageIntro>
+      <div className="flex flex-wrap gap-2" aria-label="How many in each group">
         {groups.map((g) => (
-          <Chip key={g} tone={g === "expired" ? "bad" : "warn"}>{g}: {rows.filter((r) => r.bucket === g).length}</Chip>
+          <Chip key={g} tone={g === "expired" ? "bad" : "warn"}>
+            {g === "expired" ? "Expired" : `Within ${g.replace("≤ ", "")}`}: {rows.filter((r) => r.bucket === g).length}
+          </Chip>
         ))}
       </div>
-      {groups.map((g) => {
-        const list = rows.filter((r) => r.bucket === g);
-        return (
-          <Card key={g}>
-            <CardTitle>{g === "expired" ? "Expired, still in stock" : `Expiring ${g}`}</CardTitle>
-            {list.length === 0 ? (
-              <EmptyState title="Nothing here" />
-            ) : (
-              <Table head={["Lot", "Item", "Expiry", "On hand", "Locations", "Status"]}>
+      {rows.length === 0 && (
+        <EmptyState title="Nothing expires soon" action={<LinkButton href="/inventory" variant="secondary">See all stock</LinkButton>}>
+          No stock at {ctx.currentSite.name} has expired or expires within {buckets.at(-1)} days. Nothing to do.
+        </EmptyState>
+      )}
+      {rows.length > 0 &&
+        groups.map((g) => {
+          const list = rows.filter((r) => r.bucket === g);
+          if (list.length === 0) return null;
+          return (
+            <section key={g} className="space-y-2">
+              <h2 className={g === "expired" ? "text-[16px] font-semibold text-[var(--bad-fg)]" : "text-[16px] font-semibold"}>{title(g)} · {list.length}</h2>
+              <PlainList label={title(g)}>
                 {list.map((r) => (
-                  <tr key={r.id}>
-                    <Td><Link href={`/inventory/${r.id}`} className="font-mono font-semibold text-primary-text hover:underline">{r.lotNumber}</Link></Td>
-                    <Td>{r.itemName}<div className="text-[12px] text-muted">{r.itemCode}</div></Td>
-                    <Td><Expiry date={r.expiresOn} /></Td>
-                    <Td className="font-medium">{fmtLotQty(r.onHand, r.baseUom)}</Td>
-                    <Td className="text-[12px]">{r.locationCodes}</Td>
-                    <Td><StatusChip status={r.qualityStatus} /></Td>
-                  </tr>
+                  <PlainRow
+                    key={r.id}
+                    href={`/inventory/${r.id}`}
+                    title={r.itemName}
+                    status={<LotStatusChip status={r.qualityStatus} expiresOn={r.expiresOn} />}
+                    tone={g === "expired" ? "bad" : undefined}
+                    facts={
+                      <>
+                        <Expiry date={r.expiresOn} compact /> {r.locationCodes ? ` · on ${r.locationCodes}` : ""}
+                      </>
+                    }
+                    code={r.lotNumber}
+                    aside={<span className="font-semibold tabular text-[15px] text-fg">{fmtLotQty(r.onHand, r.baseUom)}</span>}
+                  />
                 ))}
-              </Table>
-            )}
-          </Card>
-        );
-      })}
+              </PlainList>
+            </section>
+          );
+        })}
     </div>
   );
 }

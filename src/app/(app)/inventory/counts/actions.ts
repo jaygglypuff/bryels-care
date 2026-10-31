@@ -17,6 +17,7 @@ import {
   releaseCount,
   submitCount,
 } from "@/modules/inventory/counts";
+import { keywordMatches } from "@/modules/scan";
 import { actionError, str } from "../_kit/action-state";
 
 /** The amount as typed ("24", "24.5 kg"); the unit picker sends qtyUom. The service converts to the base unit. */
@@ -99,6 +100,29 @@ export async function recordCountAction(id: string, _p: ActionState, fd: FormDat
     return done(id, r.previous ? "Saved. Your new amount replaces your earlier one; the earlier one is kept in the history." : "Saved. Scan the next sack.");
   } catch (e) {
     return actionError(e);
+  }
+}
+
+/**
+ * Find a lot by words while counting (grade-5, ADR-088: never type a code). The same keyword look-up as the
+ * scan box and Fix stock (keywordMatches, ADR-085; the caller's sites, site shown when several); returns lot numbers the
+ * count form puts into its lot field. Read-only; the count service checks the lot again on save.
+ */
+export async function findLotsForCountAction(raw: string): Promise<{ ok: true; lots: { lotNumber: string; title: string; detail: string }[] } | { ok: false; message: string }> {
+  try {
+    const ctx = await requireContext();
+    ctx.require("inventory.stock_count.submit");
+    const text = String(raw ?? "").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 100);
+    if (text.length < 2) return { ok: false, message: "Type at least 2 letters of the item name." };
+    const lots = (await keywordMatches(ctx, text))
+      .map((m) => ({ lotNumber: m.title.split(" · lot ").pop() ?? "", title: m.title.split(" · lot ")[0], detail: m.detail }))
+      .filter((m) => m.lotNumber)
+      .slice(0, 12);
+    if (lots.length === 0) return { ok: false, message: `Nothing matches "${text}". Try another word, or choose "No label".` };
+    return { ok: true, lots };
+  } catch (e) {
+    const r = actionError(e);
+    return { ok: false, message: r?.message ?? "Could not search. Try again." };
   }
 }
 

@@ -352,7 +352,7 @@ export function ReceiveForm({
                       <Select id={id("material")} value={l.materialId} onChange={(e) => update(l.key, { materialId: e.target.value })} required>
                         <option value="" disabled>Choose the item…</option>
                         {materials.map((m) => (
-                          <option key={m.id} value={m.id}>{m.code} · {m.name}</option>
+                          <option key={m.id} value={m.id}>{m.name}</option>
                         ))}
                       </Select>
                     </Field>
@@ -440,7 +440,7 @@ export function ReceiveForm({
                     <Field label="Retest date (optional)" htmlFor={id("retest")} error={err("retestOn")}>
                       <Input id={id("retest")} type="date" value={l.retestOn} onChange={(e) => update(l.key, { retestOn: e.target.value })} className="min-w-0" />
                     </Field>
-                    <Field label="Containers (optional)" htmlFor={id("containers")} error={err("containerCount")} hint="Sacks, drums or boxes: one label each.">
+                    <Field label="How many sacks, drums or boxes? (optional)" htmlFor={id("containers")} error={err("containerCount")}  hint="One label is printed for each.">
                       <Input id={id("containers")} inputMode="numeric" value={l.containerCount} onChange={(e) => update(l.key, { containerCount: e.target.value })} />
                     </Field>
                     <Field label="Put it in" htmlFor={id("loc")} error={err("locationId")} hint={mat && !mat.requiresIncomingInspection ? "This item can be used right away (no QA check)." : "New lots wait for the QA check."}>
@@ -450,7 +450,7 @@ export function ReceiveForm({
                             {locs
                               .filter((x) => (x.section ?? "other") === s)
                               .map((x) => (
-                                <option key={x.id} value={x.id}>{x.code} · {x.name}</option>
+                                <option key={x.id} value={x.id}>{x.name} ({x.code})</option>
                               ))}
                           </optgroup>
                         ))}

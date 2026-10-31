@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Help } from "@/ui/help/help";
 import { notFound } from "next/navigation";
 import { randomUUID } from "node:crypto";
@@ -11,7 +10,10 @@ import { fmtFriendly } from "@/lib/units";
 import { db } from "@/db/client";
 import { reasonCodeOptions } from "@/modules/masterdata";
 import { getCount, type CountDetail } from "@/modules/inventory/counts";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { RecordNo } from "@/ui/plain-list";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { CommandForm } from "../../_kit/forms";
@@ -31,9 +33,10 @@ const amt = (v: string | null | undefined, uom: string | null, signed = false) =
 };
 
 /**
- * One stock count (W03; usability test 2026-10-30): start the count with an on-page question, walk
- * shelf by shelf ("Shelf B-01: scan each sack and type how much"), a progress bar, and "Finish count"
- * at the bottom after the shelves. Statuses and words are plain; the stored codes are unchanged.
+ * One stock count (W03; usability test 2026-10-30; grade-5 ADR-088): one next step by state, shelf by shelf
+ * ("Shelf B-01: scan each sack and type how much"), a progress bar, "Finish count" after the shelves. Shelves
+ * stay frozen while the count runs; differences need a manager who did not count (and a second OK when the
+ * rule asks). Cancel and the paper sheet are in ⋯ More. Statuses and words are plain; stored codes unchanged.
  */
 export default async function CountPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireContext();
@@ -48,85 +51,129 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
   }
   const canCount = ctx.can("inventory.stock_count.submit") && (c.counters.length === 0 || c.isCounter);
   const canApprove = c.canApproveVariances;
-  const label = (l: CountDetail["lines"][number]) => (l.isUnlabelled ? `No label at ${l.locationCode}: ${l.description}` : `${l.locationCode} · ${l.lotNumber} · ${l.itemName}`);
+  const label = (l: CountDetail["lines"][number]) => (l.isUnlabelled ? `No label on ${l.locationCode}: ${l.description}` : `${l.itemName} on ${l.locationCode} · ${l.lotNumber}`);
   const variant = c.lines.filter((l) => !l.isUnlabelled && l.variance !== null && !new Decimal(l.variance).isZero());
   const recountLines = c.lines.filter((l) => l.lineStatus === "recount_required");
   const firstStepDone = c.status === "pending_approval";
-  const shelves = c.scope.map((s) => s.code).join(", ");
+  const shelves = c.scope.map((s) => s.name).join(", ");
   const pct = c.progress.lines > 0 ? Math.round((c.progress.linesCounted / c.progress.lines) * 100) : 0;
   const counting = c.status === "in_progress" && canCount;
+  const counters = c.counters.map((u) => u.name).join(", ");
+  const locked = ["in_progress", "counted", "recount", "pending_approval", "approved"].includes(c.status);
+  const canCancel = !["posted", "cancelled"].includes(c.status) && ctx.can("inventory.stock_count.approve");
+
+  const next = (() => {
+    switch (c.status) {
+      case "planned":
+        return ctx.can("inventory.stock_count.create") ? (
+          <NextStep text="Start the count when you are at the shelves (button below). Nobody can move stock on them until you finish." />
+        ) : (
+          <NextStep text="This count has not started." waitingFor="Waiting for the warehouse lead or site manager to start it." />
+        );
+      case "in_progress":
+        return counting ? (
+          <NextStep text={`Count shelf by shelf: ${c.progress.linesCounted} of ${c.progress.lines} done. Then tap Finish count at the bottom.`} action={{ label: "Count the next shelf", href: "#shelves" }} />
+        ) : (
+          <NextStep text="The shelves are being counted." waitingFor={`Waiting for ${counters || "the counters"} (warehouse) to count every shelf.`} />
+        );
+      case "recount":
+        return ctx.can("inventory.stock_count.submit") && recountLines.some((l) => !l.countedByMe) ? (
+          <NextStep text="Some lines are very different. Count them again (you will not see the first amount)." action={{ label: "Count again", href: "#recount" }} />
+        ) : (
+          <NextStep text="Some lines must be counted again." waitingFor="Waiting for someone who did not count them the first time (warehouse)." />
+        );
+      case "counted":
+      case "pending_approval":
+        return canApprove ? (
+          <NextStep text={firstStepDone ? "Give the second OK for the differences." : "Check the differences and say why each one happened."} action={{ label: firstStepDone ? "Give second OK" : "Check the differences", href: "#check" }} />
+        ) : (
+          <NextStep text="Counted." waitingFor={firstStepDone ? "Waiting for a second manager (site manager or owner) to give the second OK." : "Waiting for a manager who did not count (site manager) to check the differences."} />
+        );
+      case "approved":
+        return ctx.can("inventory.stock_count.post") ? (
+          <NextStep text="The differences are approved. Save them to stock (button below) to open the shelves again." />
+        ) : (
+          <NextStep text="Approved." waitingFor="Waiting for the site manager to save the differences to stock." />
+        );
+      case "posted":
+        return <NextStep text="Saved to stock. The shelves are open again. Nothing more to do." />;
+      case "cancelled":
+        return <NextStep text="This count was cancelled. Nothing more to do." />;
+      default:
+        return null;
+    }
+  })();
+  const doForm =
+    c.status === "planned" && ctx.can("inventory.stock_count.create") ? (
+      <CommandForm action={releaseCountAction.bind(null, c.id)} label="Start count" variant="cta" size="lg" confirmText="Start count? Nobody can move stock on these shelves until you finish." confirmLabel="Yes, start the count" />
+    ) : c.status === "approved" && ctx.can("inventory.stock_count.post") ? (
+      <CommandForm action={postCountAction.bind(null, c.id, randomUUID())} label="Save to stock" variant="cta" size="lg" confirmText="Save the approved differences to stock? The shelves open again." confirmLabel="Yes, save to stock" />
+    ) : null;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
-        title={c.countNumber}
+        title={`Count: ${shelves || "shelves"}`}
         subtitle={
-          <>
-            <Link href="/inventory/counts" className="text-primary-text hover:underline">Stock counts</Link> · {c.countKind === "cycle" ? "a few shelves" : c.countKind} ·{" "}
-            {c.isBlind ? "count without seeing the expected amount" : "expected amounts shown"} · {shelves}
-          </>
+          <span className="flex flex-wrap items-center gap-2">
+            <RecordNo>{c.countNumber}</RecordNo> <CountStatusChip status={c.status} /> {c.isBlind ? "counters do not see the expected amount" : "expected amounts shown"}
+          </span>
         }
         actions={
-          <>
-            <Help screen="inventory.count" />
-            <CountStatusChip status={c.status} />
-            <LinkButton href={`/inventory/counts/${c.id}/sheet`} variant="secondary" size="sm" target="_blank">Paper count sheet</LinkButton>
-          </>
+          <MoreMenu>
+            <div className="flex flex-col gap-3">
+              <LinkButton href={`/inventory/counts/${c.id}/sheet`} variant="secondary" target="_blank">Paper count sheet</LinkButton>
+              <Help screen="inventory.count" />
+              {canCancel && (
+                <div>
+                  <p className="mb-2 text-[13px] text-fg-2">Cancelling opens the shelves again. Nothing in stock changes.</p>
+                  <CommandForm action={cancelCountAction.bind(null, c.id)} label="Cancel count" variant="secondary" reason={{ label: "Why cancel?", placeholder: "e.g. we need stock from these shelves now" }} />
+                </div>
+              )}
+              <LinkButton href="/inventory/counts" variant="ghost">All counts</LinkButton>
+            </div>
+          </MoreMenu>
         }
       />
-      {["in_progress", "counted", "recount", "pending_approval", "approved"].includes(c.status) && (
-        <Banner tone="warn" title="Shelves locked">Nobody can move stock on {shelves} until this count is saved or cancelled.</Banner>
-      )}
+      <PageIntro>This screen is for one stock count: start it, count each shelf, then a manager checks the differences before stock changes.</PageIntro>
+      {locked && <Banner tone="warn" title="Shelves locked">Nobody can move stock on {shelves} until this count is saved or cancelled.</Banner>}
       {c.status === "cancelled" && <Banner tone="info" title="Cancelled">{c.cancelReason}</Banner>}
+      {next}
+      {doForm && (
+        <Card id="do">
+          {doForm}
+        </Card>
+      )}
 
-      <div className="grid gap-5 lg:grid-cols-[2fr_1fr]">
-        <Card>
-          <CardTitle>How far are we?</CardTitle>
-          <p className="font-display text-[24px] font-semibold tabular">
-            {c.progress.linesCounted} of {c.progress.lines} counted
-          </p>
-          <div className="mt-2 h-4 w-full overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-label="Count progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} data-testid="count-progress">
-            <div className="h-full rounded-full bg-[var(--primary)] transition-[width] duration-500" style={{ width: `${pct}%` }} />
-          </div>
-          <p className="mt-1.5 text-[13px] text-muted">
-            {c.progress.locationsCounted} of {c.progress.locations} {c.progress.locations === 1 ? "shelf" : "shelves"} done
-          </p>
-          <div className="mt-4">
+      <Card>
+        <CardTitle>How far are we?</CardTitle>
+        <p className="font-display text-[24px] font-semibold tabular">
+          {c.progress.linesCounted} of {c.progress.lines} counted
+        </p>
+        <div className="mt-2 h-4 w-full overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-label="Count progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} data-testid="count-progress">
+          <div className="h-full rounded-full bg-[var(--primary)] transition-[width] duration-500" style={{ width: `${pct}%` }} />
+        </div>
+        <p className="mt-1.5 text-[13px] text-muted">
+          {c.progress.locationsCounted} of {c.progress.locations} {c.progress.locations === 1 ? "shelf" : "shelves"} done
+        </p>
+        <div className="mt-3">
+          <MoreDetails title="Who and when">
             <Dl
               items={[
-                ["Who counts", c.counters.map((u) => u.name).join(", ") || "Anyone with count rights"],
+                ["Who counts", counters || "Anyone who may count"],
                 ["Day", fmtDate(c.scheduledFor)],
                 ["Started", fmtDateTime(c.frozenAt)],
                 ["Finished", fmtDateTime(c.submittedAt)],
                 ["Approved", fmtDateTime(c.approvedAt)],
-                ["Saved", fmtDateTime(c.postedAt)],
+                ["Saved to stock", fmtDateTime(c.postedAt)],
               ]}
             />
-          </div>
-        </Card>
-        <Card>
-          <CardTitle>Next step</CardTitle>
-          <div className="flex flex-col gap-3">
-            {c.status === "planned" && ctx.can("inventory.stock_count.create") && (
-              <CommandForm action={releaseCountAction.bind(null, c.id)} label="Start count" variant="cta" size="lg" confirmText="Start count? Nobody can move stock on these shelves until you finish." confirmLabel="Yes, start the count" />
-            )}
-            {c.status === "planned" && !ctx.can("inventory.stock_count.create") && <p className="text-[13px] text-muted">Your manager starts this count.</p>}
-            {counting && <p className="text-[14px]">Go shelf by shelf below. When every sack is counted, tap <strong>Finish count</strong> at the bottom.</p>}
-            {c.status === "recount" && <p className="text-[13px]">Some lines are very different. Someone who did not count them must count them again.</p>}
-            {(c.status === "counted" || c.status === "pending_approval") && !canApprove && <p className="text-[13px] text-muted">Waiting for a manager who did not count to check the differences.</p>}
-            {c.status === "approved" && ctx.can("inventory.stock_count.post") && (
-              <CommandForm action={postCountAction.bind(null, c.id, randomUUID())} label="Save to stock" variant="cta" confirmText="Save the approved differences to stock? The shelves open again." confirmLabel="Yes, save to stock" />
-            )}
-            {c.status === "posted" && <p className="text-[13px] text-muted">Saved. The changes are in the history of moves.</p>}
-            {!["posted", "cancelled"].includes(c.status) && ctx.can("inventory.stock_count.approve") && (
-              <CommandForm action={cancelCountAction.bind(null, c.id)} label="Cancel count" variant="secondary" reason={{ label: "Why cancel?", placeholder: "e.g. we need stock from these shelves now" }} />
-            )}
-          </div>
-        </Card>
-      </div>
+          </MoreDetails>
+        </div>
+      </Card>
 
       {counting && (
-        <section aria-label="Count shelf by shelf" className="space-y-4">
+        <section id="shelves" aria-label="Count shelf by shelf" className="space-y-4">
           {c.scope.map((s, i) => {
             const lines = c.lines.filter((l) => l.locationId === s.id);
             const done = lines.length > 0 && lines.every((l) => l.counted);
@@ -180,7 +227,7 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
       )}
 
       {c.status === "recount" && recountLines.length > 0 && (
-        <Card>
+        <Card id="recount">
           <CardTitle>Count again (without seeing the earlier amount)</CardTitle>
           <div className="flex flex-col gap-4">
             {recountLines.map((l) =>
@@ -195,7 +242,7 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
       )}
 
       {(c.status === "counted" || c.status === "pending_approval") && canApprove && (
-        <Card>
+        <Card id="check">
           <CardTitle>{firstStepDone ? "Second OK" : "Check the differences"}</CardTitle>
           {variant.length === 0 ? <p className="mb-3 text-[13px]">No differences. Approve to close the count without changing stock.</p> : null}
           <ApproveForm
@@ -224,53 +271,56 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
         </Card>
       )}
 
-      <Card>
-        <CardTitle>{c.reveal ? "Differences" : "Lines (expected amounts hidden)"}</CardTitle>
+      <section className="space-y-2">
+        <h2 className="text-[16px] font-semibold">{c.reveal ? "What was counted" : "What was counted (expected amounts hidden)"}</h2>
         {c.lines.length === 0 ? (
-          <EmptyState title={c.status === "planned" ? "Not started yet" : "No lines"}>{c.status === "planned" ? "The list of sacks is made when the count starts." : "These shelves held no stock when the count started."}</EmptyState>
+          <EmptyState title={c.status === "planned" ? "Not started yet" : "Nothing on these shelves"}>{c.status === "planned" ? "The list of sacks is made when the count starts." : "These shelves held no stock when the count started."}</EmptyState>
         ) : (
-          <Table head={c.reveal ? ["Shelf", "Lot / item", "Expected", "Counted (by)", "Counted again (by)", "Difference", "Reason", "Saved"] : ["Shelf", "Lot / item", "Counted"]}>
+          <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface" aria-label="Count lines">
             {c.lines.map((l) => (
-              <tr key={l.id}>
-                <Td className="font-mono">{l.locationCode}</Td>
-                <Td>
-                  {l.isUnlabelled ? (
-                    <>
-                      <Chip tone="warn">No label</Chip> {l.description}
-                    </>
-                  ) : (
-                    <>
-                      <span className="font-mono">{l.lotNumber}</span> <span className="text-muted">· {l.itemName}</span>
-                      {l.isUnexpected && (
-                        <>
-                          {" "}
-                          <Chip tone="info">found</Chip>
-                        </>
-                      )}
-                    </>
-                  )}
-                </Td>
-                {c.reveal ? (
-                  <>
-                    <Td>{amt(l.expected, l.baseUom)}</Td>
-                    <Td>{l.firstCount ? `${amt(l.firstCount.qty, l.baseUom)} (${l.firstCount.by})` : "—"}</Td>
-                    <Td>{l.recount ? `${amt(l.recount.qty, l.baseUom)} (${l.recount.by})` : "—"}</Td>
-                    <Td className="font-semibold">
-                      {amt(l.variance, l.baseUom, true)}
-                      {l.autoApproved ? " (small, approved by the rule)" : ""}
-                    </Td>
-                    <Td>{l.reasonCode?.replace(/_/g, " ") ?? "—"}</Td>
-                    <Td>{l.adjustmentMovementId ? <Chip tone="ok">Saved</Chip> : l.isUnlabelled ? <span className="text-[12px] text-muted">A manager adds it with a found-stock fix</span> : "—"}</Td>
-                  </>
-                ) : (
-                  <Td>{l.entries.length ? `${amt(l.entries.at(-1)!.qty, l.baseUom)} by you` : l.counted ? "Counted" : "Not yet"}</Td>
-                )}
-              </tr>
+              <li key={l.id} className="px-4 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] font-semibold">
+                      {l.isUnlabelled ? <>No label: {l.description}</> : l.itemName}{" "}
+                      {l.isUnlabelled && <Chip tone="warn">No label</Chip>}
+                      {l.isUnexpected && <Chip tone="info">Found here</Chip>}
+                      {l.adjustmentMovementId && <Chip tone="ok"><CheckCircle2 size={13} aria-hidden /> Saved to stock</Chip>}
+                    </p>
+                    <p className="mt-0.5 text-[13px] text-fg-2">
+                      On {l.locationCode}
+                      {!l.isUnlabelled && <span className="ml-1 font-mono text-[12px] text-muted">· {l.lotNumber}</span>}
+                    </p>
+                    {c.reveal && (
+                      <p className="mt-0.5 text-[13px] text-fg-2 tabular">
+                        Should be {amt(l.expected, l.baseUom)} · counted {l.firstCount ? `${amt(l.firstCount.qty, l.baseUom)} (${l.firstCount.by})` : "—"}
+                        {l.recount ? ` · again ${amt(l.recount.qty, l.baseUom)} (${l.recount.by})` : ""}
+                        {l.reasonCode ? ` · why: ${l.reasonCode.replace(/_/g, " ")}` : ""}
+                        {l.isUnlabelled && !l.adjustmentMovementId ? " · a manager adds it with a found-stock fix" : ""}
+                      </p>
+                    )}
+                  </div>
+                  <div className="shrink-0 text-right text-[15px] font-semibold tabular">
+                    {c.reveal ? (
+                      <>
+                        {amt(l.variance, l.baseUom, true)}
+                        <span className="block text-[12px] font-normal text-muted">{l.autoApproved ? "small, OK by the rule" : "difference"}</span>
+                      </>
+                    ) : l.entries.length ? (
+                      `${amt(l.entries.at(-1)!.qty, l.baseUom)} by you`
+                    ) : l.counted ? (
+                      "Counted"
+                    ) : (
+                      <span className="font-normal text-muted">Not yet</span>
+                    )}
+                  </div>
+                </div>
+              </li>
             ))}
-          </Table>
+          </ul>
         )}
         {c.decisions.length > 0 && (
-          <ul className="mt-3 space-y-1 text-[12px] text-muted">
+          <ul className="mt-2 space-y-1 text-[13px] text-fg-2">
             {c.decisions.map((d, i) => (
               <li key={i}>
                 Step {d.step}: {d.decision} by {d.by}, {fmtDateTime(d.at)}
@@ -279,7 +329,7 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
             ))}
           </ul>
         )}
-      </Card>
+      </section>
     </div>
   );
 }

@@ -6,6 +6,8 @@ import { DomainError } from "@/lib/errors";
 import { getItemStock, type ItemStock } from "@/modules/inventory";
 import { LinkButton, cx } from "@/ui/core";
 import { Banner } from "@/ui/status";
+import { PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
 import { WhatIsALot } from "@/ui/inventory/stock-items";
 import { BigNumber, ExpiringList, LotList, MovementList, PlacesList, Quiet, Section, ShowMore, SupplierBrandTotals, SupplierList, TotalSentence } from "@/ui/inventory/item-page";
 import { Forbidden } from "../../../../forbidden";
@@ -45,7 +47,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
     isMat && ctx.can("procurement.goods_receipt.create") ? { href: "/inventory/receive", label: "Receive more", icon: <PackagePlus size={18} aria-hidden />, main: true } : null,
     isMat && ctx.can("procurement.reorder_suggestion.view") ? { href: "/procurement/reorder", label: "Order more", icon: <ShoppingCart size={18} aria-hidden />, main: false } : null,
     !isMat && ctx.can("production.work_order.view") ? { href: "/production/plan", label: "Plan more", icon: <Factory size={18} aria-hidden />, main: false } : null,
-    ctx.can("inventory.movement.post") && !nothing ? { href: firstUsable && !r.scope.all ? `/inventory/move?lot=${firstUsable.lotId}` : "/inventory/move", label: "Scan to move", icon: <ScanLine size={18} aria-hidden />, main: false } : null,
+    ctx.can("inventory.movement.post") && !nothing ? { href: firstUsable && !r.scope.all ? `/inventory/move?lot=${firstUsable.lotId}` : "/inventory/move", label: "Move stock", icon: <ScanLine size={18} aria-hidden />, main: false } : null,
   ].filter((a): a is NonNullable<typeof a> => a !== null);
 
   const fourth = r.minimum && r.belowMinimum
@@ -61,7 +63,9 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
           </Link>
         </nav>
         <h1 className="font-display text-[28px] font-semibold leading-tight tracking-tight text-fg sm:text-[34px]">{it.name}</h1>
-        <p className="mt-1 max-w-prose text-[15px] text-fg-2">Everything about {it.name}: how much we have, from whom, and what expires first.</p>
+        <div className="mt-4">
+          <PageIntro>This screen is for everything about {it.name}: how much we have, from whom, where it is, and which one to use first.</PageIntro>
+        </div>
         <p className="mt-1 text-[12px] text-muted">
           {[it.group, it.usualBrand ? `usual brand ${it.usualBrand}` : null, it.shelfLifeDays ? `keeps about ${it.shelfLifeDays} days` : null, it.storageConditions, `code ${it.code}`].filter(Boolean).join(" · ")}
         </p>
@@ -71,21 +75,39 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
         <div className="flex flex-wrap items-center justify-between gap-3">
           {r.scope.canAll ? (
             <nav aria-label="Which sites" className="inline-flex rounded-full border border-line bg-surface p-1 text-[14px]">
-              <Link href={base} aria-current={!r.scope.all ? "true" : undefined} className={cx("inline-flex min-h-[40px] items-center rounded-full px-4", !r.scope.all ? "bg-[var(--brand-600)] font-semibold text-white" : "text-fg-2")}>
+              <Link href={base} aria-current={!r.scope.all ? "true" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-4", !r.scope.all ? "bg-[var(--brand-600)] font-semibold text-white" : "text-fg-2")}>
                 This plant
               </Link>
-              <Link href={`${base}?all=1`} aria-current={r.scope.all ? "true" : undefined} className={cx("inline-flex min-h-[40px] items-center rounded-full px-4", r.scope.all ? "bg-[var(--brand-600)] font-semibold text-white" : "text-fg-2")}>
+              <Link href={`${base}?all=1`} aria-current={r.scope.all ? "true" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-4", r.scope.all ? "bg-[var(--brand-600)] font-semibold text-white" : "text-fg-2")}>
                 All plants
               </Link>
             </nav>
           ) : <span />}
           {actions.length > 0 && (
-            <div className="flex w-full flex-wrap gap-2 sm:w-auto" data-testid="item-actions">
-              {actions.map((a) => (
-                <LinkButton key={a.label} href={a.href} variant={a.main ? "cta" : "secondary"} className="flex-1 sm:flex-none">
-                  {a.icon} {a.label}
-                </LinkButton>
-              ))}
+            <div className="flex w-full flex-wrap items-start gap-2 sm:w-auto" data-testid="item-actions">
+              {/* One main button; the rest in ⋯ More (ADR-088). Without a main action the first one leads. */}
+              {(() => {
+                const main = actions.find((a) => a.main) ?? actions[0];
+                const rest = actions.filter((a) => a !== main);
+                return (
+                  <>
+                    <LinkButton href={main.href} variant={main.main ? "cta" : "secondary"} className="flex-1 sm:flex-none">
+                      {main.icon} {main.label}
+                    </LinkButton>
+                    {rest.length > 0 && (
+                      <MoreMenu>
+                        <div className="flex flex-col gap-2">
+                          {rest.map((a) => (
+                            <LinkButton key={a.label} href={a.href} variant="secondary">
+                              {a.icon} {a.label}
+                            </LinkButton>
+                          ))}
+                        </div>
+                      </MoreMenu>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>

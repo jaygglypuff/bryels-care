@@ -11,6 +11,7 @@ import { DomainError } from "@/lib/errors";
 import { allowedDestinationKinds } from "@/modules/inventory/lots";
 import { boxedQty, scanMove, undoMove, type MoveResult } from "@/modules/inventory/moves";
 import { findContainerByNumber, getContainer } from "@/modules/inventory/containers";
+import { keywordMatches } from "@/modules/scan";
 import { actionError } from "../_kit/action-state";
 
 export type SourceInfo =
@@ -34,7 +35,8 @@ export type SourceInfo =
       locations: { id: string; code: string; loose: string; boxed: string }[];
     };
 
-type Lookup<T> = { ok: true; data: T } | { ok: false; message: string };
+export type LotMatch = { lotNumber: string; title: string; detail: string };
+type Lookup<T> = { ok: true; data: T } | { ok: false; message: string; matches?: LotMatch[] };
 
 const clean = (raw: string) => raw.replace(/[\u0000-\u001f\u007f]/g, "").trim().toUpperCase().slice(0, 100);
 
@@ -44,7 +46,7 @@ export async function lookupSourceAction(raw: string): Promise<Lookup<SourceInfo
     const ctx = await requireContext();
     ctx.require("inventory.movement.post");
     const code = clean(raw);
-    if (!code) return { ok: false, message: "Scan a box or lot label, or type its number." };
+    if (!code) return { ok: false, message: "Scan a box or lot label, or type the item name." };
     if (code.startsWith("BC:BOX:") || /^BX-/.test(code)) {
       if (!ctx.can("inventory.container.view")) return { ok: false, message: "Your role cannot open boxes." };
       const hit = await findContainerByNumber(ctx, code);
@@ -73,7 +75,18 @@ export async function lookupSourceAction(raw: string): Promise<Lookup<SourceInfo
       .leftJoin(products, eq(products.id, inventoryLots.productId))
       .where(and(eq(inventoryLots.organizationId, ctx.organizationId), eq(inventoryLots.lotNumber, number), eq(inventoryLots.siteId, ctx.currentSiteId)))
       .limit(1);
-    if (!lot) return { ok: false, message: `No lot or box matches ${number} at ${ctx.currentSite.code}.` };
+    if (!lot) {
+      // Grade-5 (ADR-088): never type a code. Words ("coconut oil") find lots by name (keywordMatches, ADR-085).
+      const words = raw.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 100);
+      const matches = ctx.can("inventory.lot.view")
+        ? (await keywordMatches(ctx, words))
+            .map((m) => ({ lotNumber: m.title.split(" · lot ").pop() ?? "", title: m.title.split(" · lot ")[0], detail: m.detail }))
+            .filter((m) => m.lotNumber && !m.detail.startsWith("none left"))
+            .slice(0, 8)
+        : [];
+      if (matches.length) return { ok: false, message: matches.length === 1 ? "Is this the one? Tap it." : `${matches.length} lots match. Tap the right one.`, matches };
+      return { ok: false, message: `Nothing matches "${words}" at ${ctx.currentSite.name}. Scan the label, or try another word.` };
+    }
     return { ok: true, data: await lotSource(lot.lot, lot.mName ?? lot.pName ?? "") };
   } catch (e) {
     return { ok: false, message: actionError(e)?.message ?? "Lookup failed." };

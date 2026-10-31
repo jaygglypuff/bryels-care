@@ -1,117 +1,112 @@
 import Link from "next/link";
+import { Search } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { listReceipts } from "@/modules/inventory/receiving";
-import { Card, EmptyState, Input, LinkButton, PageHeader, Select, Table, Td } from "@/ui/core";
+import { EmptyState, Input, LinkButton, PageHeader, buttonClass } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { ReceiptStatusChip } from "@/ui/receiving";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 
-export const metadata = { title: "Goods receipts" };
+export const metadata = { title: "Deliveries received" };
 
+const TABS = [
+  ["", "All"],
+  ["draft", "Not finished"],
+  ["posted", "Saved to stock"],
+  ["reversed", "Undone"],
+  ["cancelled", "Cancelled"],
+] as const;
+
+/** Deliveries received (goods receipts), grade-5 (ADR-088): supplier first, receipt number small and grey. */
 export default async function ReceiptsPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; open?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.goods_receipt.view")) return <Forbidden what="goods receipts" />;
+  if (!ctx.can("procurement.goods_receipt.view")) return <Forbidden what="deliveries received" />;
   const sp = await searchParams;
-  const rows = await listReceipts(ctx, { status: sp.status, q: sp.q, openDiscrepancies: sp.open === "1" });
-  const filtered = !!(sp.status || sp.q || sp.open);
-  const exportQs = new URLSearchParams(Object.entries({ status: sp.status ?? "", q: sp.q ?? "" }).filter(([, v]) => v)).toString();
+  const status = TABS.some(([k]) => k && k === sp.status) ? sp.status : undefined;
+  const q = sp.q?.trim() ?? "";
+  const rows = await listReceipts(ctx, { status, q, openDiscrepancies: sp.open === "1" });
+  const filtered = !!(status || q || sp.open);
+  const exportQs = new URLSearchParams(Object.entries({ status: status ?? "", q }).filter(([, v]) => v)).toString();
+  const link = (over: { status?: string; open?: string }) => {
+    const p = new URLSearchParams();
+    const all = { status, q: q || undefined, open: sp.open, ...over };
+    for (const [k, v] of Object.entries(all)) if (v) p.set(k, v);
+    const s = p.toString();
+    return `/inventory/receipts${s ? `?${s}` : ""}`;
+  };
+  const canCreate = ctx.can("procurement.goods_receipt.create");
   return (
-    <>
+    <div className="space-y-4">
       <PageHeader
-        title="Goods receipts"
-        subtitle={`${ctx.currentSite.code} · drafts, posted and reversed receipts, newest first`}
+        title="Deliveries received"
+        subtitle={ctx.currentSite.name}
         actions={
           <>
-            {ctx.can("procurement.goods_receipt.export") && (
-              <a href={`/api/v1/procurement/goods-receipts/export${exportQs ? `?${exportQs}` : ""}`} className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2">
-                Export CSV
-              </a>
-            )}
-            {ctx.can("procurement.goods_receipt.create") && <LinkButton href="/inventory/receive" variant="cta">Receive materials</LinkButton>}
+            {canCreate && <LinkButton href="/inventory/receive" variant="cta">Receive a delivery</LinkButton>}
+            <MoreMenu>
+              <div className="flex flex-col gap-2">
+                {ctx.can("procurement.goods_receipt.export") && (
+                  <a href={`/api/v1/procurement/goods-receipts/export${exportQs ? `?${exportQs}` : ""}`} className={buttonClass("secondary")}>
+                    Download as CSV
+                  </a>
+                )}
+                <LinkButton href={link({ open: sp.open === "1" ? undefined : "1" })} variant="secondary">{sp.open === "1" ? "Show all deliveries" : "Only deliveries with a problem"}</LinkButton>
+                {ctx.can("inventory.movement.post") && <LinkButton href="/inventory/receive/put-away" variant="secondary">Put away</LinkButton>}
+              </div>
+            </MoreMenu>
           </>
         }
       />
-      <Card className="mb-4">
-        <form className="flex flex-wrap items-end gap-3" method="get">
-          <label className="flex min-w-[180px] flex-1 flex-col gap-1 text-[13px]">
-            Search
-            <Input name="q" defaultValue={sp.q} placeholder="GR number, supplier, DR no." />
-          </label>
-          <label className="flex flex-col gap-1 text-[13px]">
-            Status
-            <Select name="status" defaultValue={sp.status ?? ""}>
-              <option value="">All</option>
-              <option value="draft">Draft</option>
-              <option value="posted">Posted</option>
-              <option value="reversed">Reversed</option>
-              <option value="cancelled">Cancelled</option>
-            </Select>
-          </label>
-          <label className="flex items-center gap-2 pb-3 text-[13px]">
-            <input type="checkbox" name="open" value="1" defaultChecked={sp.open === "1"} className="size-4" /> Open discrepancies only
-          </label>
-          <button type="submit" className="min-h-[44px] rounded-full bg-primary px-5 text-[14px] font-medium text-white">Filter</button>
-        </form>
-      </Card>
+      <PageIntro>This screen is for every delivery written down at this site, newest first: unfinished ones, saved ones, and ones that were undone. Tap one to see it.</PageIntro>
+      <form method="get" className="flex flex-wrap gap-2" role="search">
+        {status && <input type="hidden" name="status" value={status} />}
+        {sp.open === "1" && <input type="hidden" name="open" value="1" />}
+        <div className="relative min-w-0 flex-1 basis-[220px] sm:max-w-[420px]">
+          <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
+          <Input type="search" name="q" defaultValue={q} placeholder="Supplier name" aria-label="Search deliveries" className="pl-10" />
+        </div>
+        <button type="submit" className={buttonClass("secondary")}>Search</button>
+        {q && <Link href={link({})} className={buttonClass("ghost")}>Clear</Link>}
+      </form>
+      <FilterTabs label="Filter by state" active={status ?? ""} tabs={TABS.map(([k, t]) => [k, t, link({ status: k || undefined })] as const)} />
+      {sp.open === "1" && <p className="text-[13px] text-fg-2">Showing only deliveries with a problem not yet sorted out.</p>}
       {rows.length === 0 ? (
         <EmptyState
-          title={filtered ? "No receipts match these filters" : "No goods receipts yet"}
-          action={filtered ? <LinkButton href="/inventory/receipts" variant="secondary">Clear filters</LinkButton> : ctx.can("procurement.goods_receipt.create") ? <LinkButton href="/inventory/receive">Receive materials</LinkButton> : undefined}
+          title={filtered ? "No deliveries match" : "No deliveries yet"}
+          action={filtered ? <LinkButton href="/inventory/receipts" variant="secondary">Show all</LinkButton> : canCreate ? <LinkButton href="/inventory/receive" variant="cta">Receive a delivery</LinkButton> : undefined}
         >
-          {filtered ? "Try another search or status." : "Receipts you save or post at this site appear here."}
+          {filtered ? "Try another supplier name or state." : canCreate ? "When a delivery arrives, tap Receive a delivery." : "Deliveries written down at this site show here."}
         </EmptyState>
       ) : (
-        <>
-          <ul className="flex flex-col gap-3 sm:hidden">
-            {rows.map((r) => (
-              <li key={r.id}>
-                <Link href={`/inventory/receive/${r.id}`}>
-                  <Card className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono font-semibold text-primary-text">{r.receiptNumber ?? "Draft"}</span>
-                      <ReceiptStatusChip status={r.status} />
-                    </div>
-                    <p className="text-[13px]">{r.supplierName}</p>
-                    <p className="text-[12px] text-muted">
-                      {fmtDateTime(r.receivedAt)} · {r.lineCount} {r.lineCount === 1 ? "line" : "lines"}
-                      {r.openDiscrepancies ? ` · ${r.openDiscrepancies} open discrepancy` : ""}
-                    </p>
-                  </Card>
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <Table className="hidden sm:block" head={["Receipt", "Status", "Supplier", "Supplier doc", "Received", "Lines", "Attention"]}>
-            {rows.map((r) => (
-              <tr key={r.id} className="hover:bg-surface-2">
-                <Td>
-                  <Link href={`/inventory/receive/${r.id}`} className="font-mono font-medium text-primary-text hover:underline">
-                    {r.receiptNumber ?? "Draft"}
-                  </Link>
-                </Td>
-                <Td><ReceiptStatusChip status={r.status} /></Td>
-                <Td>
-                  {r.supplierName}
-                  {!r.supplierId && <span className="block text-[12px] text-[var(--warn-fg)]">not in supplier list</span>}
-                </Td>
-                <Td>{r.supplierDocumentNumber ?? "—"}</Td>
-                <Td>
-                  {fmtDateTime(r.receivedAt)}
-                  <span className="block text-[12px] text-muted">{r.receivedByName}</span>
-                </Td>
-                <Td>{r.lineCount}</Td>
-                <Td>
-                  <div className="flex flex-wrap gap-1">
-                    {r.openDiscrepancies > 0 && <Chip tone="warn">{r.openDiscrepancies} discrepancy</Chip>}
-                    {r.documentsMissing > 0 && <Chip tone="warn">CoA missing</Chip>}
-                  </div>
-                </Td>
-              </tr>
-            ))}
-          </Table>
-        </>
+        <PlainList label="Deliveries received">
+          {rows.map((r) => (
+            <PlainRow
+              key={r.id}
+              href={`/inventory/receive/${r.id}`}
+              title={r.supplierName}
+              status={
+                <>
+                  <ReceiptStatusChip status={r.status} />
+                  {r.openDiscrepancies > 0 && <Chip tone="warn">{r.openDiscrepancies} problem{r.openDiscrepancies === 1 ? "" : "s"}</Chip>}
+                  {r.documentsMissing > 0 && <Chip tone="warn">Certificate missing</Chip>}
+                  {!r.supplierId && <Chip tone="warn">Supplier not in the list</Chip>}
+                </>
+              }
+              facts={
+                <>
+                  {fmtDateTime(r.receivedAt)} · {r.lineCount} {r.lineCount === 1 ? "item" : "items"} · {r.receivedByName}
+                </>
+              }
+              code={r.receiptNumber ?? undefined}
+              tone={r.openDiscrepancies > 0 ? "warn" : undefined}
+            />
+          ))}
+        </PlainList>
       )}
-    </>
+    </div>
   );
 }

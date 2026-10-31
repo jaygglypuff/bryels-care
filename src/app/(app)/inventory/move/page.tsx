@@ -1,19 +1,22 @@
-import Link from "next/link";
 import { Help } from "@/ui/help/help";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { listRecentTransfers, listSiteLocations } from "@/modules/inventory/moves";
 import { getContainer } from "@/modules/inventory/containers";
-import { Card, CardTitle, EmptyState, PageHeader, Table, Td } from "@/ui/core";
+import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
 import { Chip } from "@/ui/status";
+import { placeWords } from "@/ui/inventory/bits";
 import { Forbidden } from "../../forbidden";
 import { lookupSourceAction, lotSourceById, type SourceInfo } from "./actions";
 import { MoveFlow } from "./move-flow";
 
-export const metadata = { title: "Scan to move" };
+export const metadata = { title: "Move stock" };
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
+/** Move stock (scan to move, US-2-14), grade-5 (ADR-088): scan or find by name, how much, scan or choose the shelf, confirm. */
 export default async function MovePage({ searchParams }: { searchParams: Promise<{ box?: string; lot?: string; to?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("inventory.movement.post")) return <Forbidden what="moving stock" />;
@@ -35,35 +38,47 @@ export default async function MovePage({ searchParams }: { searchParams: Promise
   const recent = ctx.can("inventory.movement.view") ? await listRecentTransfers(ctx, 15) : [];
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
-      <PageHeader title="Scan to move" subtitle={`${ctx.currentSite.code} · scan the sack, box or lot, say how much, scan the shelf, then tap Confirm`} actions={<Help screen="inventory.move" />} />
+    <div className="mx-auto max-w-2xl space-y-4">
+      <PageHeader
+        title="Move stock"
+        subtitle={ctx.currentSite.name}
+        actions={
+          <MoreMenu>
+            <div className="flex flex-col gap-2">
+              <Help screen="inventory.move" />
+              {ctx.can("inventory.movement.view") && <LinkButton href="/inventory/movements" variant="secondary">All stock changes</LinkButton>}
+            </div>
+          </MoreMenu>
+        }
+      />
+      <PageIntro>This screen is for moving stock to another shelf: scan the sack, box or lot (or type the item name), say how much, scan the shelf, then tap Confirm.</PageIntro>
       {locations.length === 0 ? (
-        <EmptyState title="No locations at this site">Locations are set up by the system administrator.</EmptyState>
+        <EmptyState title="No shelves at this site">Shelves are set up by the system administrator (Setup). Ask them to add the shelves of this site.</EmptyState>
       ) : (
         <MoveFlow locations={locations} initialSource={initialSource} initialDestination={initialDestination} />
       )}
       {ctx.can("inventory.movement.view") && (
-        <Card>
-          <CardTitle action={<Link href="/inventory/movements" className="text-[13px] text-primary-text hover:underline">History of moves</Link>}>Recent moves</CardTitle>
+        <section className="space-y-2">
+          <h2 className="text-[16px] font-semibold">Recent moves</h2>
           {recent.length === 0 ? (
-            <EmptyState title="No moves yet">Scan-moves and inter-site transfers at this site appear here.</EmptyState>
+            <p className="text-[14px] text-fg-2">No moves yet. Moves at this site show here.</p>
           ) : (
-            <Table head={["Number", "What", "From → to", "By", "When", ""]}>
+            <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line bg-surface" aria-label="Recent moves">
               {recent.map((t) => (
-                <tr key={t.id}>
-                  <Td className="font-mono">{t.number}</Td>
-                  <Td>{t.boxNumber ? `Box ${t.boxNumber}` : t.kind === "inter_site" ? "Inter-site" : "Lot stock"}</Td>
-                  <Td className="font-mono text-[12px]">
-                    {t.fromCode} → {t.toCode}
-                  </Td>
-                  <Td>{t.byName}</Td>
-                  <Td className="whitespace-nowrap">{fmtDateTime(t.completedAt)}</Td>
-                  <Td>{t.undoneAt ? <Chip tone="warn">Undone</Chip> : null}</Td>
-                </tr>
+                <li key={t.id} className="flex min-h-[56px] flex-wrap items-center justify-between gap-2 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-semibold">
+                      {t.boxNumber ? `Box ${t.boxNumber}` : t.kind === "inter_site" ? "To another site" : "Loose stock"} {t.undoneAt && <Chip tone="warn">Undone</Chip>}
+                    </p>
+                    <p className="text-[13px] text-fg-2">
+                      {placeWords(t.fromCode, t.toCode)} · {t.byName} · {fmtDateTime(t.completedAt)} <span className="font-mono text-[12px] text-muted">· {t.number}</span>
+                    </p>
+                  </div>
+                </li>
               ))}
-            </Table>
+            </ul>
           )}
-        </Card>
+        </section>
       )}
     </div>
   );

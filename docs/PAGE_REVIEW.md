@@ -114,44 +114,44 @@ Total screens: 250.
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/inventory/[lotId]/move` | ☐ | |
-| `/inventory/[lotId]` | ☐ | |
-| `/inventory/adjustments/[id]` | ☐ | |
-| `/inventory/adjustments/new` | ☐ | |
-| `/inventory/adjustments` | ☐ | |
-| `/inventory/availability` | ☐ | |
-| `/inventory/containers/[id]` | ☐ | |
-| `/inventory/containers/new` | ☐ | |
-| `/inventory/containers` | ☐ | |
-| `/inventory/counts/[id]` | ☐ | |
-| `/inventory/counts/[id]/sheet` | ☐ | |
-| `/inventory/counts` | ☐ | |
-| `/inventory/items/[kind]/[id]` | ☐ | |
-| `/inventory/locations/[id]` | ☐ | |
-| `/inventory/locations` | ☐ | |
-| `/inventory/lots/[lotId]/edit` | ☐ | |
-| `/inventory/lots/expiry` | ☐ | |
-| `/inventory/lots` | ☐ | |
-| `/inventory/lots/reservations` | ☐ | |
-| `/inventory/move` | ☐ | |
-| `/inventory/movements/[id]` | ☐ | |
-| `/inventory/movements` | ☐ | |
-| `/inventory` | ☐ | |
-| `/inventory/receipts` | ☐ | |
-| `/inventory/receive/[grId]/edit` | ☐ | |
-| `/inventory/receive/[grId]` | ☐ | |
-| `/inventory/receive` | ☐ | |
-| `/inventory/receive/put-away` | ☐ | |
-| `/inventory/scan` | ☐ | |
-| `/inventory/stock-card/[lotId]` | ☐ | |
-| `/inventory/wip` | ☐ | |
-| `/labels/jobs/[jobId]` | ☐ | |
-| `/labels/new` | ☐ | |
-| `/labels` | ☐ | |
-| `/warehouse/packs/[packId]` | ☐ | |
-| `/warehouse/packs` | ☐ | |
-| `/warehouse` | ☐ | |
-| `/warehouse/repack` | ☐ | |
+| `/inventory/[lotId]/move` | ☑ 2026-10-31 | “Move <item>”: 4 fields (from shelf, to shelf, how much, why), shelves by name, only allowed places; “Move it”. |
+| `/inventory/[lotId]` | ☑ 2026-10-31 | Item name title, lot number grey + plain status chip; next step by state (move / waiting for QA / do not use); 8 secondary actions in ⋯ More; history as stock-change rows; details folded. |
+| `/inventory/adjustments/[id]` | ☑ 2026-10-31 | “Fix stock: <item>”; next step or “Waiting for a site manager (not the person who made it)” / owner second OK (ADR-091 kept); cancel/delete in ⋯ More; lines as rows with Add/Take away. |
+| `/inventory/adjustments/new` | ☑ 2026-10-31 | Intro; lot by scan or item name (keywordMatches); cost per unit folded. |
+| `/inventory/adjustments` | ☑ 2026-10-31 | Item names first, reason in words, number grey; state tabs; banner for approvers. |
+| `/inventory/availability` | ☑ 2026-10-31 | “Can we deliver?”: one row per item, free amount right (friendly units), tap for lots per shelf; date and the sum folded; exports in ⋯ More. |
+| `/inventory/containers/[id]` | ☑ 2026-10-31 | Contents name as title, box number grey, plain box state; next step (print label / close / move); split/merge/repack in ⋯ More; merge/repack pick boxes on the same shelf (no typed box numbers). |
+| `/inventory/containers/new` | ☑ 2026-10-31 | “Pack into a box or sack”: what (by name), shelf (only if more than one), how much; kind/part box/notes folded. |
+| `/inventory/containers` | ☑ 2026-10-31 | “Boxes and sacks”: what is inside first, shelf by name, state tabs (Closed, Open, On the way…). |
+| `/inventory/counts/[id]` | ☑ 2026-10-31 | Shelves as title; next step by state (start / count / waiting for manager / save); shelf-by-shelf count kept; tap expected lot or scan or find by name; differences as cards (no wide table); cancel in ⋯ More; freeze banner kept. |
+| `/inventory/counts/[id]/sheet` | ☑ 2026-10-31 | Intro (screen only); item first; print header no longer hidden by the print rule. |
+| `/inventory/counts` | ☑ 2026-10-31 | Open and finished counts as rows (shelves first, number grey); plan form: shelves + counters, rest folded. |
+| `/inventory/items/[kind]/[id]` | ☑ 2026-10-31 | Intro; one main button, others in ⋯ More; six numbers and lists from ADR-090 kept. |
+| `/inventory/locations/[id]` | ☑ 2026-10-31 | Shelf name title, code grey; next step “Move stock here” or count banner; lots as rows with amounts. |
+| `/inventory/locations` | ☑ 2026-10-31 | “Shelves”: name first, code grey, part-of-warehouse tabs, “Being counted · no moves” chip. |
+| `/inventory/lots/[lotId]/edit` | ☑ 2026-10-31 | “Fix details”: expiry + supplier code + why; made-on/brand folded. |
+| `/inventory/lots/expiry` | ☑ 2026-10-31 | “Expiring soon”: groups as rows, item first, days left, amount right; empty state says nothing to do. |
+| `/inventory/lots` | ☑ 2026-10-31 | Redirect to /inventory (kept). |
+| `/inventory/lots/reservations` | ☑ 2026-10-31 | “Which one to use first / set aside”: items by name, FEFO rule hidden (“Use this first”), reasons in words; set-aside rows with “Let it go”; hours folded. |
+| `/inventory/move` | ☑ 2026-10-31 | Intro; scan or type the item name (matches to tap); shelves by name; recent moves as rows. |
+| `/inventory/movements/[id]` | ☑ 2026-10-31 | “Moved: <item>”; next step; undo (kept on record) with reason + typed REVERSE kept at the bottom; details folded; undo rows as list. |
+| `/inventory/movements` | ☑ 2026-10-31 | “Stock changes”: PlainList rows (item, type chip with icon, shelves in words, who, when; amount right); plain filter chips. 390 px: everything visible. |
+| `/inventory` | ☑ 2026-10-31 | Intro; “Receive a delivery”; other stock screens in ⋯ More; ADR-090 list kept. |
+| `/inventory/receipts` | ☑ 2026-10-31 | “Deliveries received”: supplier first, plain state chips, problem chips; tabs; export and problem filter in ⋯ More. |
+| `/inventory/receive/[grId]/edit` | ☑ 2026-10-31 | Intro; plain words (saved delivery is never changed; undo it). |
+| `/inventory/receive/[grId]` | ☑ 2026-10-31 | “Delivery received”; item name first then lot; “Something wrong with this item?”; undo/cancel and links in ⋯ More. |
+| `/inventory/receive` | ☑ 2026-10-31 | Intro; receipts/put-away/help in ⋯ More; items and shelves by name. |
+| `/inventory/receive/put-away` | ☑ 2026-10-31 | Intro; find by scan or item name; item name title; plain QA words. |
+| `/inventory/scan` | ☑ 2026-10-31 | Intro (find anything by scan or words). |
+| `/inventory/stock-card/[lotId]` | ☑ 2026-10-31 | “History: <item>”: one list for phone and desktop (+/− amount, left after), start/end amounts, check kept; print/exports in ⋯ More. |
+| `/inventory/wip` | ☑ 2026-10-31 | “Being made”: product first, steps done, batch number grey. |
+| `/labels/jobs/[jobId]` | ☑ 2026-10-31 | “Label: <item>”; next step by state; reprint with reason kept; cancel/did not print/old label in ⋯ More. |
+| `/labels/new` | ☑ 2026-10-31 | “Print a label: <item>”; 3 fields; already printed → next step to reprint with reason. |
+| `/labels` | ☑ 2026-10-31 | “Labels to print”: what the label is for first, one Print button, cancel/did not print in ⋯ More; status chips with icons. |
+| `/warehouse/packs/[packId]` | ☑ 2026-10-31 | “Boxing: <product>”; next step (pack a box / check / waiting for a checker ≠ packer); cancel and boxing note in ⋯ More. |
+| `/warehouse/packs` | ☑ 2026-10-31 | Product first, plain states, number grey; repack in ⋯ More. |
+| `/warehouse` | ☑ 2026-10-31 | Intro; “Scan a label”; parts of the warehouse tiles kept. |
+| `/warehouse/repack` | ☑ 2026-10-31 | Scan boxes, customer by name, why; units per box folded. |
 
 ## Maintenance (8)
 

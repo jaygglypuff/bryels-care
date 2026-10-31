@@ -5,11 +5,11 @@ import { Chip } from "./status";
 export function ReceiptStatusChip({ status }: { status: string }) {
   switch (status) {
     case "draft":
-      return <Chip tone="neu"><CircleDashed size={13} /> Draft</Chip>;
+      return <Chip tone="neu"><CircleDashed size={13} /> Not finished</Chip>;
     case "posted":
-      return <Chip tone="ok"><CheckCircle2 size={13} /> Posted</Chip>;
+      return <Chip tone="ok"><CheckCircle2 size={13} /> Saved to stock</Chip>;
     case "reversed":
-      return <Chip tone="rej"><RotateCcw size={13} /> Reversed</Chip>;
+      return <Chip tone="rej"><RotateCcw size={13} /> Undone (kept on record)</Chip>;
     case "cancelled":
       return <Chip tone="neu"><Ban size={13} /> Cancelled</Chip>;
     default:

@@ -4,6 +4,7 @@ import { DEFAULT_REASON_CODES, reasonCodeOptions } from "@/modules/masterdata";
 import { db } from "@/db/client";
 import { MIGRATION_ONLY_ADJUSTMENT_REASONS } from "@/modules/inventory/adjustments";
 import { Card, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
 import { AdjustmentForm } from "../adjustment-form";
 import { plainAdjustmentReason } from "../reason-words";
@@ -26,7 +27,8 @@ export default async function NewAdjustmentPage() {
     .map((r) => ({ code: r.code, requiresNote: r.requiresNote, label: plainAdjustmentReason(r.code, r.label, defaults.get(r.code)) }));
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <PageHeader title="Fix stock" subtitle={`${ctx.currentSite.code} · tell us what happened; a manager approves it before stock changes`} />
+      <PageHeader title="Fix stock" subtitle={ctx.currentSite.name} />
+      <PageIntro>This screen is for telling us that stock was found, is missing or got damaged. Say what happened, scan or find each lot by name, and send it; a manager approves it before stock changes.</PageIntro>
       <Card>
         <AdjustmentForm reasons={reasons} idempotencyKey={randomUUID()} />
       </Card>
