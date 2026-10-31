@@ -1804,3 +1804,22 @@ A product label's `BC:LOT:<lot>` opens the batch until Finish makes the lot.
 Consequences: tests `tests/unit/labels/*`, `tests/integration/documents/label-preview.test.ts`; help `docs/help/labels.md`.
 Live data: QA must approve a v2 layout version and a `product` template on existing databases (demo reset seeds them).
 Safari on iOS ignores `@page` size (print to a label printer with matching paper).
+
+## ADR-100 One path for production work (owner complaint and UX audit A, 2026-10-31)
+
+Status: Accepted; A-ONE-01..05 need the owner/QA.
+
+Decision: every "do work" link is built in `src/modules/production/flow-paths.ts` and opens a flow screen
+(`/production/orders/<wo|without-order>/{materials,weigh,weigh/more,step/n,continue}?batch=…`, Finish, Check quality).
+`/production/<batch>` is a read-only Batch record with "Continue this batch" for people who can act; the old action
+forms are removed. Batches without a production order use the same screens under `without-order`. The step card gains
+the start check, second-person checks on the checker's own phone (confirm or send back with a reason), equipment
+choice and extra fields under More details; configured step names show a plain subtitle. The packaging step shows the
+taken wrapper lot, or the released packaging lots via ScanOrPick when the batch has no packaging lines; product labels
+use the ADR-099 panel and the server refuses printing before the packaging step. Weighing lot confirmation is a scan
+(typing the last 4 is the fallback for a damaged label). QA decisions are taken on Check quality only. Superseded
+screens redirect: `/production/new`, `/production/work-orders(/new)`, `/production/staging` → production orders.
+
+Consequences: tests `tests/unit/production-one-path.test.ts`, `tests/integration/production/one-path.test.ts`; no
+migration. Open: redo (rework) has no service to move a batch in and out of `rework_approved`; the board is still tall
+on phones; the closure page is reachable by URL for operators (actions server-checked).
