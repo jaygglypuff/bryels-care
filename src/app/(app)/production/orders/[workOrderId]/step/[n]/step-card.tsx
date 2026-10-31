@@ -771,9 +771,11 @@ function FieldsCard(p: Props) {
             <AlertTriangle size={18} className="mt-0.5 shrink-0" aria-hidden />{" "}
             {step.blockers
               .map((b) =>
-                b.message.replace(
-                  /controlled exception with a deviation \(CX-TOL\)/,
-                  "approval",
+                plainWords(
+                  b.message.replace(
+                    /controlled exception with a deviation \(CX-TOL\)/,
+                    "approval",
+                  ),
                 ),
               )
               .join(" ")}

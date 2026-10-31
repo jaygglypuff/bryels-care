@@ -266,7 +266,7 @@ The same six operator screens serve both products; only the step setup (routing)
 
 No packaging line at all (no recipe line, no setup, or a batch made before migration 0031): Get materials says so, and the packaging step shows the released packaging lots at the site as tap-to-choose cards (name, lot, shelf, quantity, first expiry first) to tap, scan or find by name (`ScanOrPick`, ADR-098). The tapped card sends the lot id and shelf id to the existing `issuePackaging` (same lot, material, site, hold and stock checks). Nobody types a code.
 
-Labels: the box "Labels for this batch" shows a small preview (product, lot, expiry, label design) and links to the label job's print page (the print view itself belongs to the label work under `/print` and `/labels`). Printing fixes the lot number, made date and expiry, so `printBatchLabels` refuses it until every step before the first packaging/filling step is done (`labelPrintBlocker`, server rule; the button shows the reason).
+Labels: from the packaging step on, the step and Finish show the ADR-099 label panel (`PrintLabelsPanel`, kind "bar": the real label preview with the lot number and dates the first print will fix, "How many?", one "Print N labels"); its action is a thin adapter around `printBatchLabels`. Before the packaging step the box only says why labels cannot be printed yet. Printing fixes the lot number, made date and expiry, so `printBatchLabels` refuses it until every step before the first packaging/filling step is done (`labelPrintBlocker`, server rule; the button shows the reason).
 
 ## 4.4 One path for production work (2026-10-31)
 
