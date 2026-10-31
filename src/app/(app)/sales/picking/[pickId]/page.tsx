@@ -105,7 +105,7 @@ export default async function PickPage({ params }: { params: Promise<{ pickId: s
         {canScan && short.length > 0 && (
           <Card>
             <CardTitle>Scan the box</CardTitle>
-            <ScanPanel scan={pickScanAction.bind(null, v.pick.id)} label="Scan the box label (or the lot label for loose pieces)" hint="A box that is not on this list is refused. Scanning the same box twice counts once." withQty allowManual />
+            <ScanPanel scan={pickScanAction.bind(null, v.pick.id)} label="Scan the box label (or the lot label for loose pieces)" hint="A box that is not on this list is refused. Scanning the same box twice counts once." withQty allowManual candidates={short.filter((r) => !r.blocked).map((r) => ({ value: r.boxNumber ? `BC:BOX:${r.boxNumber}` : `BC:LOT:${r.lotNumber}`, title: r.productName, detail: `shelf ${r.locationCode} · ${r.boxNumber ? `box ${r.boxNumber}` : `${q(String(Number(r.qty) - Number(r.picked)), r.baseUom)} loose`} · lot ${r.lotNumber}`, codes: [r.boxNumber ?? r.lotNumber] }))} />
           </Card>
         )}
 

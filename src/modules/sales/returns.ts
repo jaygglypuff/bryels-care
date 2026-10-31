@@ -31,7 +31,8 @@ import { allowedDestinationKinds, lockLots, postMovement } from "@/modules/inven
 import { assertReasonCode, reasonCodeOptions, reasonLabels } from "@/modules/masterdata";
 import { notifyRoles } from "@/modules/platform";
 import { RETURN_CONDITION_LABEL, RETURN_STATUS_LABEL, canMoveReturn, type CustomerReturnStatus, type ReturnLineCondition } from "./returns-rules";
-import { LEFT_SITE_SHIPMENT_STATUSES, applyShipmentReturned, lotsOfBox, returnedQtyByLot, shipmentInScope, shipmentReturnState, shipmentsOfBox, shippedLotsOf } from "./returns-shipments";
+import { LEFT_SITE_SHIPMENT_STATUSES, applyShipmentReturned, lotsOfBox, returnedQtyByLot, shipmentInScope, shipmentBoxes, shipmentReturnState, shipmentsOfBox, shippedLotsOf } from "./returns-shipments";
+import { fmtFriendly } from "@/lib/units";
 
 /**
  * Customer returns received by scan into quarantine (US-4-16, process maps W09-11 and W07-09).
@@ -607,6 +608,21 @@ export async function getCustomerReturn(ctx: AuthContext, returnId: string) {
     .where(eq(customerReturnStateTransitions.customerReturnId, r.id))
     .orderBy(asc(customerReturnStateTransitions.occurredAt));
   const shipmentState = await shipmentReturnState(db, r.shipmentId);
+  // What left on this delivery, as tap targets for "which box or lot came back?" (ScanOrPick, owner review 2026-10-31).
+  const scanCandidates: { value: string; title: string; detail: string; codes: string[] }[] = [];
+  if (r.status === "draft") {
+    const [shippedLots, boxes] = await Promise.all([shippedLotsOf(db, r.shipmentId), shipmentBoxes(db, ctx.organizationId, [r.shipmentId])]);
+    const names = shippedLots.length
+      ? new Map(
+          (await db.select({ id: inventoryLots.id, name: products.name }).from(inventoryLots).leftJoin(products, eq(products.id, inventoryLots.productId)).where(inArray(inventoryLots.id, shippedLots.map((l) => l.lotId)))).map((x) => [x.id, x.name ?? ""]),
+        )
+      : new Map<string, string>();
+    for (const b of boxes) {
+      const lot = shippedLots.find((l) => l.lotId === b.lotId);
+      scanCandidates.push({ value: `BC:BOX:${b.containerNumber}`, title: names.get(b.lotId) || "Box", detail: `box ${b.containerNumber} · ${fmtFriendly(b.qtyBase, lot?.baseUom ?? "pcs")}${lot ? ` · lot ${lot.lotNumber}` : ""}`, codes: [b.containerNumber] });
+    }
+    for (const l of shippedLots) scanCandidates.push({ value: `BC:LOT:${l.lotNumber}`, title: names.get(l.lotId) || `Lot ${l.lotNumber}`, detail: `lot ${l.lotNumber} · ${fmtFriendly(l.qtyBase, l.baseUom)} sent (loose or any box)`, codes: [l.lotNumber] });
+  }
   const reasonName = (await reasonLabels(db, ctx.organizationId, [r.reasonCode])).get(r.reasonCode) ?? r.reasonCode;
   const sodOn = await getSetting(db, ctx.organizationId, "approvals.sod.customer_return");
   const own = ctx.sodConflict(r.createdBy) || ctx.sodConflict(r.submittedBy);
@@ -627,6 +643,7 @@ export async function getCustomerReturn(ctx: AuthContext, returnId: string) {
       disposition: disp.find((d) => d.subjectId === l.line.returnLotId) ?? null,
     })),
     shipment: shipmentState,
+    scanCandidates,
     timeline,
     locations: await returnLocations(db, ctx, r.siteId),
     can: {

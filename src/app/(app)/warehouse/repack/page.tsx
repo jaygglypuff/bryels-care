@@ -1,6 +1,8 @@
 import { requireContext } from "@/lib/auth/context";
 import { listCustomers } from "@/modules/sales";
-import { Card, Field, Input, PageHeader, Select, Textarea } from "@/ui/core";
+import { Card, Field, Input, PageHeader, Select } from "@/ui/core";
+import { ScanOrPick, type PickCandidate } from "@/ui/scan-or-pick";
+import { listContainers } from "@/modules/inventory";
 import { MoreDetails, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../forbidden";
 import { repackAction } from "../../sales/fulfilment-actions";
@@ -17,6 +19,12 @@ export const metadata = { title: "Repack for a customer" };
 export default async function RepackPage() {
   const ctx = await requireContext();
   if (!ctx.can("inventory.container.edit") || !ctx.can("inventory.pack.create")) return <Forbidden what="repacking" />;
+  // The boxes it can be: product boxes at this site whose lots QA said OK (the service checks again).
+  const boxes: PickCandidate[] = ctx.can("inventory.container.view")
+    ? (await listContainers(ctx))
+        .filter((b) => b.qualityStatuses === "released" && b.itemNames)
+        .map((b) => ({ value: b.containerNumber, title: b.itemNames ?? "Box", detail: `box ${b.containerNumber}${b.locationCode ? ` · on ${b.locationCode}` : ""}${b.contents ? ` · ${b.contents.split(", ").map((c) => c.split(" · ")[0]).join(", ")}` : ""}`, code: b.containerNumber, codes: [b.containerNumber] }))
+    : [];
   const customers = ctx.can("masterdata.customer.view") ? [...(await listCustomers(ctx))].sort((a, b) => a.name.localeCompare(b.name)) : [];
   return (
     <div className="space-y-4">
@@ -24,9 +32,17 @@ export default async function RepackPage() {
       <PageIntro>This screen is for putting boxes of one product into new boxes of the size a customer wants. Scan the boxes, choose the customer, and say why. The old labels stop working; print the new ones.</PageIntro>
       <Card className="max-w-2xl">
         <Cmd action={repackAction} fields={{}} label="Repack" pending="Repacking…" variant="cta" size="lg" confirm="Repack these boxes? Their old labels stop working; print the new ones.">
-          <Field label="Scan each box" htmlFor="boxes" hint="Scan the label of every box to repack. Same product, same shelf, QA OK.">
-            <Textarea id="boxes" name="boxes" rows={4} required placeholder="Scan the box labels" />
-          </Field>
+          <ScanOrPick
+            kind="container"
+            name="boxes"
+            submit="code"
+            multiple
+            required
+            label="Which boxes?"
+            hint="Tap every box to repack, or scan its label. Same product, same shelf, QA OK."
+            candidates={boxes}
+            candidatesLabel="Boxes of products that QA said OK"
+          />
           <Field label="For which customer?" htmlFor="customerId" hint="Their box size is used when it is known.">
             <Select id="customerId" name="customerId" defaultValue="">
               <option value="">No customer (choose the box size below)</option>

@@ -1,8 +1,11 @@
 import { Help } from "@/ui/help/help";
 import { requireContext } from "@/lib/auth/context";
-import { fmtDateTime } from "@/lib/qty";
+import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { listRecentTransfers, listSiteLocations } from "@/modules/inventory/moves";
 import { getContainer } from "@/modules/inventory/containers";
+import { isPastExpiry, listLots } from "@/modules/inventory/lots";
+import type { PickCandidate } from "@/ui/scan-or-pick";
+import { fmtFriendly } from "@/lib/units";
 import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
@@ -36,6 +39,24 @@ export default async function MovePage({ searchParams }: { searchParams: Promise
   }
   const initialDestination = sp.to ? (locations.find((l) => l.id === sp.to) ?? null) : null;
   const recent = ctx.can("inventory.movement.view") ? await listRecentTransfers(ctx, 15) : [];
+  // Lots with stock here, as tap targets (ScanOrPick): earliest expiry first, like the shelves are used.
+  // Each row says where, how much, until when and its state; usable first, waiting for QA next, expired or stopped last (live audit 2026-10-31).
+  const rank = (l: { qualityStatus: string; expiresOn: string | null }) => (isPastExpiry(l.expiresOn) || ["rejected", "recalled", "expired", "on_hold"].includes(l.qualityStatus) ? 2 : l.qualityStatus === "quarantine" ? 1 : 0);
+  const lots: PickCandidate[] =
+    ctx.can("inventory.lot.view") && !initialSource
+      ? (await listLots(ctx))
+          .map((l) => ({ l, r: rank(l) }))
+          .sort((a, b) => a.r - b.r)
+          .map(({ l, r }) => ({
+            value: l.id,
+            title: l.itemName,
+            detail: [`${fmtFriendly(l.onHand, l.baseUom)}${l.locationCodes ? ` on ${l.locationCodes}` : ""}`, l.expiresOn ? `${isPastExpiry(l.expiresOn) ? "EXPIRED" : "use by"} ${fmtDate(l.expiresOn)}` : null, `lot ${l.lotNumber}`].filter(Boolean).join(" · "),
+            code: l.lotNumber,
+            codes: [l.lotNumber],
+            badge: r === 2 ? (isPastExpiry(l.expiresOn) ? "expired" : l.qualityStatus === "on_hold" ? "stopped by QA" : l.qualityStatus.replace(/_/g, " ")) : r === 1 ? "waiting for QA check" : undefined,
+            badgeTone: r === 2 ? ("bad" as const) : r === 1 ? ("warn" as const) : undefined,
+          }))
+      : [];
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
@@ -55,7 +76,7 @@ export default async function MovePage({ searchParams }: { searchParams: Promise
       {locations.length === 0 ? (
         <EmptyState title="No shelves at this site">Shelves are set up by the system administrator (Setup). Ask them to add the shelves of this site.</EmptyState>
       ) : (
-        <MoveFlow locations={locations} initialSource={initialSource} initialDestination={initialDestination} />
+        <MoveFlow locations={locations} initialSource={initialSource} initialDestination={initialDestination} lots={lots} />
       )}
       {ctx.can("inventory.movement.view") && (
         <section className="space-y-2">

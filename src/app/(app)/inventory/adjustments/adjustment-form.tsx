@@ -1,106 +1,72 @@
 "use client";
-import { useState, useTransition } from "react";
-import { Minus, Plus, ScanLine, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Minus, Plus, Trash2 } from "lucide-react";
 import { Button, Field, Input, Select } from "@/ui/core";
 import { FormMessage } from "@/ui/form";
 import { QtyUnitInput } from "@/ui/qty-unit-input";
 import { MoreDetails } from "@/ui/guide";
 import { friendlyUnit } from "@/lib/units";
 import { useActionForm } from "../_kit/forms";
-import { createAdjustmentAction, findLotsForAdjustmentAction, type AdjustmentLotOption } from "./actions";
+import { ScanOrPick, type PickCandidate } from "@/ui/scan-or-pick";
+import { createAdjustmentAction, type AdjustmentLotOption } from "./actions";
 
 type Reason = { code: string; label: string; requiresNote: boolean };
 type Row = { key: number; search: string; lot: AdjustmentLotOption | null; options: AdjustmentLotOption[]; message: string | null; locationId: string; direction: "decrease" | "increase"; qty: string; unit: string };
 
 const blankRow = (key: number): Row => ({ key, search: "", lot: null, options: [], message: null, locationId: "", direction: "decrease", qty: "", unit: "" });
 
-/** One lot of the adjustment: scan or type the lot, pick the shelf that holds it, Take away / Add, how much. */
-function LotLine({ i, row, set, remove, canRemove, fe }: { i: number; row: Row; set: (p: Partial<Row>) => void; remove: () => void; canRemove: boolean; fe: Record<string, string> }) {
-  const [busy, start] = useTransition();
-  const find = () => {
-    const text = row.search.trim();
-    if (!text) return;
-    start(async () => {
-      const r = await findLotsForAdjustmentAction(text);
-      if (!r.ok) return set({ options: [], message: r.message });
-      if (r.lots.length === 1) return choose(r.lots[0]);
-      set({ options: r.lots, message: `${r.lots.length} lots match. Tap the right one.` });
-    });
+/** A lot found by <ScanOrPick> (tap, scan or name), with the shelves that hold it at this site. */
+function toOption(c: PickCandidate): AdjustmentLotOption {
+  return {
+    id: c.value,
+    lotNumber: c.code ?? "",
+    itemName: c.title,
+    baseUom: c.uom ?? "pcs",
+    detail: c.detail ?? "",
+    shelves: (c.places ?? []).map((p) => ({ id: p.value, code: p.code ?? "", qtyBase: "", text: (p.detail ?? "").split(" · ")[1]?.replace(/ here$/, "") ?? "" })),
   };
+}
+
+/** One lot of the adjustment: scan the label or find it by name, pick the shelf that holds it, Take away / Add, how much. */
+function LotLine({ i, row, set, remove, canRemove, fe }: { i: number; row: Row; set: (p: Partial<Row>) => void; remove: () => void; canRemove: boolean; fe: Record<string, string> }) {
   const choose = (lot: AdjustmentLotOption) => set({ lot, options: [], message: null, locationId: lot.shelves[0]?.id ?? "", unit: friendlyUnit(lot.baseUom) });
   const id = (f: string) => `${f}_${i}`;
   return (
     <fieldset className="grid min-w-0 gap-3 rounded-[16px] border border-line p-3" data-testid={`adjustment-line-${i + 1}`}>
       <legend className="px-1 text-[13px] font-medium text-muted">Lot {i + 1}</legend>
-      <input type="hidden" name={id("lotId")} value={row.lot?.id ?? ""} />
       <input type="hidden" name={id("note")} value="" />
-      {!row.lot ? (
-        <div className="flex flex-col gap-2">
-          <label htmlFor={id("lotSearch")} className="flex items-center gap-2 text-[14px] font-semibold">
-            <ScanLine size={16} /> Scan the label, or type the item name
-          </label>
-          <div className="flex gap-2">
-            <Input
-              id={id("lotSearch")}
-              value={row.search}
-              autoComplete="off"
-              enterKeyHint="search"
-              placeholder="Scan, or type a name"
-              onChange={(e) => set({ search: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  find();
-                }
-              }}
-              className="min-h-[52px] min-w-0 flex-1 text-[16px]"
-            />
-            <Button type="button" variant="secondary" size="lg" onClick={find} disabled={busy}>
-              {busy ? "…" : "Find"}
-            </Button>
-          </div>
-          {fe[`lotId_${i}`] && <p className="text-[13px] text-[var(--bad-fg)]">{fe[`lotId_${i}`]}</p>}
-          {row.message && <p className="text-[13px] text-fg-2" role="status">{row.message}</p>}
-          {row.options.length > 0 && (
-            <ul className="flex flex-col gap-2" aria-label="Matching lots">
-              {row.options.map((o) => (
-                <li key={o.id}>
-                  <button type="button" onClick={() => choose(o)} className="flex min-h-[52px] w-full flex-col items-start rounded-[12px] border border-line px-3 py-2 text-left hover:bg-surface-2">
-                    <span className="text-[14px] font-semibold">{o.itemName} · <span className="font-mono">{o.lotNumber}</span></span>
-                    <span className="text-[13px] text-muted">{o.detail}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : (
-        <div className="flex flex-wrap items-start justify-between gap-2 rounded-[12px] bg-surface-2 px-3 py-2">
-          <p className="min-w-0 text-[14px]">
-            <span className="font-semibold">{row.lot.itemName}</span> · <span className="font-mono">{row.lot.lotNumber}</span>
-            <span className="block text-[13px] text-muted">{row.lot.detail}</span>
-          </p>
-          <Button type="button" variant="ghost" onClick={() => set({ lot: null, locationId: "", options: [], message: null })}>
-            Change
-          </Button>
-        </div>
-      )}
+      <ScanOrPick
+        kind="lot"
+        name={id("lotId")}
+        id={id("lot")}
+        label="Which lot?"
+        hint="Scan the label on the sack or box, or find the item by name."
+        value={row.lot?.id ?? null}
+        onChange={(_v, c) => (c ? choose(toOption(c)) : set({ lot: null, locationId: "", options: [], message: null }))}
+        error={fe[`lotId_${i}`]}
+      />
 
       {row.lot && (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Which shelf?" htmlFor={id("locationId")} error={fe[`locationId_${i}`]}>
-            {row.lot.shelves.length === 0 ? (
-              <p className="text-[13px] text-muted">This lot is on no shelf now. Ask your manager how to add found stock.</p>
-            ) : (
-              <Select id={id("locationId")} name={id("locationId")} value={row.locationId} onChange={(e) => set({ locationId: e.target.value })}>
-                {row.lot.shelves.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.code} · {s.text} there now
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
+          {row.lot.shelves.length === 0 ? (
+            <p className="text-[13px] text-muted sm:col-span-2">This lot is on no shelf now. Ask your manager how to add found stock.</p>
+          ) : (
+            <div className="sm:col-span-2">
+              <ScanOrPick
+                kind="location"
+                name={id("locationId")}
+                id={id("shelf")}
+                label="Which shelf?"
+                candidates={row.lot.shelves.map((sh) => ({ value: sh.id, title: sh.code, detail: `${sh.text} there now`, code: sh.code, codes: [sh.code] }))}
+                value={row.locationId}
+                hideWhenSingle
+                onlyCandidates
+                search={false}
+                onChange={(v) => v !== row.locationId && set({ locationId: v ?? "" })}
+                error={fe[`locationId_${i}`]}
+              />
+            </div>
+          )}
           <fieldset className="min-w-0">
             <legend className="mb-1.5 text-[13px] font-medium">Take away or add?</legend>
             <div className="grid grid-cols-2 gap-2" role="radiogroup">

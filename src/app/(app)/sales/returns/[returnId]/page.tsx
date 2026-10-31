@@ -183,7 +183,7 @@ export default async function ReturnPage({ params }: { params: Promise<{ returnI
           {v.can.scan && (
             <div className="mt-4 border-t border-line pt-4">
               <span id="scan" className="block scroll-mt-24" />
-              {v.locations.length ? <ScanLineForm returnId={h.id} locations={v.locations} defaultLocationId={h.toLocationId} /> : <p className="text-[13px] text-muted">This site has no place to keep returned goods apart. Ask an administrator.</p>}
+              {v.locations.length ? <ScanLineForm returnId={h.id} locations={v.locations} defaultLocationId={h.toLocationId} candidates={v.scanCandidates} /> : <p className="text-[13px] text-muted">This site has no place to keep returned goods apart. Ask an administrator.</p>}
             </div>
           )}
         </Card>

@@ -34,7 +34,7 @@ export function ScanClient() {
   return (
     <div className="space-y-4">
       <Card>
-        <Scanner onScan={onScan} pending={pending} placeholder="Scan, or type a name or number" keepCase />
+        <Scanner onScan={onScan} pending={pending} label="Scan the label, or type what it is" placeholder="e.g. coconut oil" keepCase />
         {offline && (
           <p role="alert" className="mt-3 rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
             You&apos;re offline. Look-ups need a connection; scan again when you&apos;re back online.
@@ -76,12 +76,13 @@ export function ScanClient() {
 
       <Card>
         <details>
-          <summary className="min-h-[44px] cursor-pointer py-2 text-[15px] font-semibold">What can I scan or type?</summary>
+          <summary className="min-h-[44px] cursor-pointer py-2 text-[15px] font-semibold">Where is the label?</summary>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] text-fg-2">
-            <li>Words: a material or product name (&quot;coconut oil&quot;), a customer or supplier name. Every word must match; capitals do not matter.</li>
-            <li>A lot number from a container label, or part of it (for example the last 4 digits), or the supplier&apos;s own lot number</li>
-            <li>A batch, customer order, purchase order, delivery receipt or goods receipt number</li>
-            <li>Any printed label: lots, places in the warehouse, materials, products and documents</li>
+            <li>Sacks, drums and pails: the white lot label on the side, with a square barcode.</li>
+            <li>Boxes and cartons: the box label on the short side (it says &quot;Box&quot; and &quot;n of N&quot;).</li>
+            <li>Shelves: the shelf label on the front edge of the shelf.</li>
+            <li>Papers (batch sheet, delivery receipt): the square barcode at the top right.</li>
+            <li>No label, or it will not scan? Type what it is: a material or product name (&quot;coconut oil&quot;), a customer or supplier name. Every word must match; capitals do not matter.</li>
           </ul>
           <p className="mt-2 text-[12px] text-muted">Only records at your sites and screens your role may open are shown. Web links are never opened from a scan.</p>
         </details>
