@@ -205,7 +205,7 @@ export async function labelEntity(ctx: AuthContext, entityType: string, entityId
  * with exactly these, so the bars and the stock record always agree. No status word: the label goes on
  * the product. The barcode is the lot's BC:LOT payload (it scans once the batch is finished).
  */
-export async function batchLabelEntity(ctx: AuthContext, batchId: string): Promise<LabelEntity> {
+export async function batchLabelEntity(ctx: AuthContext, batchId: string, values?: BatchLabelValues | null): Promise<LabelEntity> {
   ctx.require("production.batch.view");
   if (!isUuid(batchId)) throw new DomainError("not_found", "Batch not found in your sites.");
   const [row] = await db
@@ -215,14 +215,18 @@ export async function batchLabelEntity(ctx: AuthContext, batchId: string): Promi
     .where(and(eq(batches.id, batchId), eq(batches.organizationId, ctx.organizationId), inArray(batches.siteId, ctx.allowedSiteIds)))
     .limit(1);
   if (!row) throw new DomainError("not_found", "Batch not found in your sites.");
-  const { b, p } = row;
+  const fixed = !!(row.b.outputLotNumber && row.b.outputExpiresOn);
+  // Preview only (ADR-099): before the first print the production module may pass the values it will fix.
+  const b = fixed || !values ? row.b : { ...row.b, outputLotNumber: values.lotNumber, outputManufacturedOn: values.manufacturedOn ?? null, outputExpiresOn: values.expiresOn };
+  const { p } = row;
   if (!b.outputLotNumber || !b.outputExpiresOn) throw new DomainError("state", `Print the labels of batch ${b.batchNumber} from its packaging step.`);
   return {
     entityType: "batch",
     entityId: b.id,
     siteId: b.siteId,
     number: b.batchNumber,
-    appliesTo: "finished_good",
+    // ADR-099: the product label on each piece (template kind `product`; an approved finished-goods lot label is the fallback).
+    appliesTo: "product",
     // Content identity: same lot and dates = the same label (a second print is a controlled reprint).
     state: `${b.outputLotNumber}|${b.outputManufacturedOn ?? ""}|${b.outputExpiresOn}`,
     revisionAt: new Date(b.createdAt),
@@ -241,6 +245,14 @@ export async function batchLabelEntity(ctx: AuthContext, batchId: string): Promi
       statusWord: null,
     },
   };
+}
+
+/** Values a batch's product label will carry, passed by the production module for a preview before the first print. */
+export type BatchLabelValues = { lotNumber: string; manufacturedOn?: string | null; expiresOn: string };
+
+export async function labelEntityFor(ctx: AuthContext, entityType: string, entityId: string, batchValues?: BatchLabelValues | null): Promise<LabelEntity> {
+  if (entityType === "batch") return batchLabelEntity(ctx, entityId, batchValues);
+  return labelEntity(ctx, entityType, entityId);
 }
 
 /** Sample data for label test pages (T-01): clearly fictional, never a real lot. */

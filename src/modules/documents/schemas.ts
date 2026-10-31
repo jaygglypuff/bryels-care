@@ -111,8 +111,9 @@ export type LabelFields = z.infer<typeof labelFieldsSchema>;
 /** Default field sets per applies_to (docs/reports-and-templates.md §8.3). */
 export const DEFAULT_LABEL_FIELDS: Record<(typeof LABEL_APPLIES_TO)[number], LabelFieldKey[]> = {
   material: ["item_name", "inci_name", "supplier", "brand", "supplier_lot", "received", "expiry", "quantity", "storage", "status_word", "scan_to_verify"],
-  wip: ["item_name", "batch", "manufactured", "expiry", "quantity", "status_word", "scan_to_verify"],
-  finished_good: ["item_name", "batch", "manufactured", "expiry", "quantity", "status_word", "scan_to_verify"],
+  wip: ["item_name", "batch", "manufactured", "expiry", "quantity", "storage", "status_word", "scan_to_verify"],
+  finished_good: ["item_name", "batch", "manufactured", "expiry", "quantity", "storage", "status_word", "scan_to_verify"],
+  product: ["item_name", "batch", "manufactured", "expiry", "storage"],
   carton: ["item_name", "batch", "expiry", "quantity", "packed", "packer", "customer_marks", "box_of", "status_word", "scan_to_verify"],
   pallet: ["item_name", "quantity"],
   location: ["location_name", "warehouse", "location_kind", "allowed_statuses"],

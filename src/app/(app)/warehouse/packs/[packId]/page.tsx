@@ -134,13 +134,13 @@ export default async function PackPage({ params, searchParams }: { params: Promi
             <Card>
               <CardTitle>Box labels</CardTitle>
               {v.labelTemplate ? (
-                <Cmd action={packLabelsAction} fields={{ packId: p.id }} label="Send the missing labels to the label printer" variant="secondary">
+                <Cmd action={packLabelsAction} fields={{ packId: p.id }} label="Make the missing box labels" variant="secondary">
                   <p className="text-[13px] text-fg-2">One label per box: BC:BOX, SKU, lot, expiry, units, packed date, packer initials, box n of N.</p>
                 </Cmd>
               ) : (
                 <Banner tone="warn" title="Box labels are not set up">Ask the system administrator to approve a box label layout (Settings → Labels and printouts).</Banner>
               )}
-              <LinkButton href="/labels" variant="ghost" className="mt-2">Labels to print</LinkButton>
+              <LinkButton href="/labels?show=not_printed" variant="ghost" className="mt-2">Print the box labels (not printed yet)</LinkButton>
             </Card>
           )}
           {boxing && ctx.can("inventory.pack.submit") && live.length > 0 && (

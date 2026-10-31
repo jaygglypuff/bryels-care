@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gt, inArray, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, or, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { db } from "@/db/client";
 import { batches, containerContents, containers, inventoryBalances, inventoryLots, locations, materials, products } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
@@ -134,13 +134,14 @@ async function locationCandidates(ctx: AuthContext, where: SQL[]): Promise<PickC
 
 async function batchCandidates(ctx: AuthContext, where: SQL[]): Promise<PickCandidate[]> {
   const rows = await db
-    .select({ id: batches.id, number: batches.batchNumber, status: batches.status, name: products.name })
+    .select({ id: batches.id, number: batches.batchNumber, status: batches.status, name: products.name, outputLot: batches.outputLotNumber })
     .from(batches)
     .innerJoin(products, eq(products.id, batches.productId))
     .where(and(eq(batches.organizationId, ctx.organizationId), eq(batches.siteId, ctx.currentSiteId), ...where))
     .orderBy(sql`${batches.createdAt} desc`)
     .limit(LIMIT);
-  return rows.map((r) => ({ value: r.id, title: r.name, detail: `batch ${r.number} · ${r.status.replace(/_/g, " ")}`, code: r.number, codes: [r.number] }));
+  // ADR-099: the lot number on the batch's product labels also finds the batch.
+  return rows.map((r) => ({ value: r.id, title: r.name, detail: `batch ${r.number} · ${r.status.replace(/_/g, " ")}`, code: r.number, codes: r.outputLot ? [r.number, r.outputLot] : [r.number] }));
 }
 
 async function itemCandidates(ctx: AuthContext, text: string | null, code: string | null, id: string | null): Promise<PickCandidate[]> {
@@ -224,7 +225,7 @@ export async function resolvePickRef(ctx: AuthContext, kind: PickKind, raw: stri
       hits = await locationCandidates(ctx, [id ? eq(locations.id, id) : eq(locations.code, code!)]);
       break;
     case "batch":
-      hits = await batchCandidates(ctx, [id ? eq(batches.id, id) : eq(batches.batchNumber, code!)]);
+      hits = await batchCandidates(ctx, [id ? eq(batches.id, id) : or(eq(batches.batchNumber, code!), eq(batches.outputLotNumber, code!))!]);
       break;
     case "item":
       hits = await itemCandidates(ctx, null, code, id);

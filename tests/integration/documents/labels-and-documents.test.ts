@@ -258,8 +258,8 @@ describe("label jobs, print station and reprint (US-2-12, T-06, T-07)", () => {
     const printable = await labelJobForPrint(whNfd, jobId);
     expect(printable.render?.integrity).toBe("ok");
     expect(printable.render?.body).toContain(`data-payload="BC:LOT:${lot.lotNumber}"`);
-    expect(printable.render?.body).toContain("STATUS AT PRINT: QUARANTINE");
-    expect(printable.render?.body).toContain("Scan to verify current status");
+    expect(printable.render?.body).toContain("QUARANTINE <small>at print</small>"); // ADR-099: label v2 says the status at print
+    expect(printable.render?.body).toContain("scan to check now");
     expect(printable.render?.css).toContain("@page { size: 100mm 50mm; margin: 0; }");
     expect(printable.render?.body).not.toMatch(/https?:\/\//);
     const [station] = await db.select().from(printStations).where(eq(printStations.siteId, nfd.id));
@@ -336,7 +336,7 @@ describe("label jobs, print station and reprint (US-2-12, T-06, T-07)", () => {
       expect(await lastAudit("documents.label_job.voided", o.id)).toBeTruthy();
     }
     const p = await labelJobForPrint(whNfd, r.jobId);
-    expect(p.render?.body).toContain(">RELEASED<");
+    expect(p.render?.body).toMatch(/class="lbl-status">RELEASED/); // ADR-099: label v2 status bar
   });
 
   it("manual void needs documents.generated_document.void and a reason", async () => {

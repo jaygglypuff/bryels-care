@@ -1,0 +1,2 @@
+ALTER TABLE "label_templates" DROP CONSTRAINT "label_templates_applies_to_ck";--> statement-breakpoint
+ALTER TABLE "label_templates" ADD CONSTRAINT "label_templates_applies_to_ck" CHECK ("label_templates"."applies_to" in ('material', 'wip', 'finished_good', 'product', 'carton', 'pallet', 'location', 'equipment', 'sample'));

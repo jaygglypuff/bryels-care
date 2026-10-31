@@ -9,6 +9,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { labelEntity, type LabelEntity } from "./datasets";
 import { insertAndRender, markDocumentVoid, parseReprint, renderForDisplay, renderInTx } from "./generated";
+import { labelFace } from "./label-face";
 import { approvedLabelTemplatesFor, fieldKeys, loadPrintableTemplate } from "./label-templates";
 import type { LabelData } from "./renderers/label-v1";
 import { shortHash, STATUS_WORD } from "./renderers/shared";
@@ -28,7 +29,7 @@ export type LabelJobRow = typeof labelJobs.$inferSelect;
 const LIVE = ["queued", "rendering", "ready", "printed"] as const;
 
 function setupRequired(siteCode: string) {
-  return new DomainError("state", `Label printing isn't set up for ${siteCode} yet. Ask an administrator to add a print station.`, { setup: "print_station" });
+  return new DomainError("state", `Label printing isn't set up for ${siteCode} yet. Ask the administrator to add a label printer (Settings › Labels and printouts).`, { setup: "print_station" });
 }
 
 async function siteCodeOf(tx: DbOrTx, siteId: string) {
@@ -96,8 +97,10 @@ export async function createLabelJob(ctx: AuthContext, raw: unknown) {
 
     const stations = await activeStationsAt(tx, ctx.organizationId, e.siteId);
     if (stations.length === 0) throw setupRequired(await siteCodeOf(tx, e.siteId));
-    const station = input.printStationId ? stations.find((s) => s.id === input.printStationId) : stations.length === 1 ? stations[0] : null;
-    if (!station) throw new DomainError("validation", "Choose the print station that should print this label.", { field: "printStationId" });
+    // ADR-099: people print where they work; the job is recorded against the site's first label printer
+    // unless a caller names one (the printer itself is chosen in the browser's print window).
+    const station = input.printStationId ? stations.find((s) => s.id === input.printStationId) : stations[0];
+    if (!station) throw new DomainError("validation", "That label printer is not set up at this site.", { field: "printStationId" });
 
     const { template, layout, version } = await loadPrintableTemplate(tx, ctx, input.labelTemplateId, e.appliesTo, e.siteId);
 
@@ -178,12 +181,20 @@ export async function createLabelJob(ctx: AuthContext, raw: unknown) {
 /**
  * Creates one job per lot of a goods receipt (W01-07). Each lot keeps its own idempotency key.
  * `copies` per lot overrides the default (the receipt screen offers one label per container).
+ * ADR-099: a delivery can mix raw materials and intermediates; a lot whose kind does not match the chosen
+ * template gets the first approved template of its own kind (raw material label vs intermediate label).
  */
 export async function createLabelJobsForLots(ctx: AuthContext, lots: { lotId: string; copies?: number | null }[], labelTemplateId: string, copies: number, keyBase: string, printStationId?: string | null) {
   const out: { lotId: string; jobId?: string; error?: string; code?: string }[] = [];
+  const [chosen] = isUuid(labelTemplateId) ? await db.select().from(labelTemplates).where(and(eq(labelTemplates.id, labelTemplateId), eq(labelTemplates.organizationId, ctx.organizationId))).limit(1) : [];
   for (const l of lots) {
     try {
-      const r = await createLabelJob(ctx, { labelTemplateId, entityType: "inventory_lot", entityId: l.lotId, copies: l.copies ?? copies, printStationId, idempotencyKey: `${keyBase}:${l.lotId}` });
+      let templateId = labelTemplateId;
+      if (chosen) {
+        const e = await labelEntity(ctx, "inventory_lot", l.lotId);
+        if (e.appliesTo !== chosen.appliesTo) templateId = (await approvedLabelTemplatesFor(db, ctx.organizationId, e.siteId, e.appliesTo))[0]?.id ?? labelTemplateId;
+      }
+      const r = await createLabelJob(ctx, { labelTemplateId: templateId, entityType: "inventory_lot", entityId: l.lotId, copies: l.copies ?? copies, printStationId, idempotencyKey: `${keyBase}:${l.lotId}` });
       out.push({ lotId: l.lotId, jobId: r.jobId });
     } catch (e) {
       if (e instanceof DomainError && (e.code === "forbidden" || (e.code === "state" && e.details?.setup))) throw e;
@@ -406,9 +417,12 @@ const jobColumns = {
   statusAtPrint: generatedDocuments.sourceState,
   // Grade-5 queue (ADR-088): what the label is for, in words (item or shelf name), next to the number.
   templateName: labelTemplates.name,
+  appliesTo: labelTemplates.appliesTo,
   entityName: sql<string | null>`case ${labelJobs.entityType}
     when 'inventory_lot' then (select coalesce(m.name, p.name) from inventory_lots l left join materials m on m.id = l.material_id left join products p on p.id = l.product_id where l.id = ${labelJobs.entityId})
     when 'location' then (select x.name from locations x where x.id = ${labelJobs.entityId})
+    when 'batch' then (select p.name from batches b join products p on p.id = b.product_id where b.id = ${labelJobs.entityId})
+    when 'container' then (select 'Box ' || c.container_number from containers c where c.id = ${labelJobs.entityId})
     else null end`,
 };
 
@@ -424,7 +438,7 @@ function jobsQuery() {
 }
 
 type JobListRow = Awaited<ReturnType<ReturnType<typeof jobsQuery>["where"]>>[number];
-const flat = (r: JobListRow) => ({ ...r.j, templateCode: r.templateCode, templateName: r.templateName, entityName: r.entityName, media: r.media, stationCode: r.stationCode, stationName: r.stationName, requestedByName: r.requestedByName, printedByName: r.printedByName, documentNumber: r.documentNumber, statusAtPrint: r.statusAtPrint });
+const flat = (r: JobListRow) => ({ ...r.j, templateCode: r.templateCode, templateName: r.templateName, appliesTo: r.appliesTo, entityName: r.entityName, media: r.media, stationCode: r.stationCode, stationName: r.stationName, requestedByName: r.requestedByName, printedByName: r.printedByName, documentNumber: r.documentNumber, statusAtPrint: r.statusAtPrint });
 export type LabelJobView = ReturnType<typeof flat>;
 
 /** The station queue: jobs to print (ready/failed/rendering) plus the last 24 h of printed ones. */
@@ -444,6 +458,21 @@ export async function stationQueue(ctx: AuthContext, stationId: string) {
     .limit(200);
   const jobs = rows.map(flat);
   return { station: st, toPrint: jobs.filter((j) => j.status !== "printed"), printed: jobs.filter((j) => j.status === "printed") };
+}
+
+/**
+ * "Labels printed" (ADR-099): every label of the user's current site, newest first, read only. Labels are
+ * printed on the task screens; this list is for finding a label again (reprint with a reason, see who
+ * printed it) and for the few that were made but not printed yet.
+ */
+export async function siteLabelList(ctx: AuthContext, opts: { siteId?: string; show?: "all" | "not_printed" } = {}) {
+  ctx.require("inventory.label_job.view");
+  const siteId = opts.siteId ?? ctx.currentSiteId;
+  if (!ctx.allowedSiteIds.includes(siteId)) return [];
+  const conds = [eq(labelJobs.organizationId, ctx.organizationId), eq(labelJobs.siteId, siteId)];
+  if (opts.show === "not_printed") conds.push(inArray(labelJobs.status, ["queued", "rendering", "ready", "failed"]));
+  const rows = await jobsQuery().where(and(...conds)).orderBy(desc(labelJobs.requestedAt)).limit(200);
+  return rows.map(flat);
 }
 
 /** Label history of one record (newest first); voided labels are the "superseded — destroy" list. */
@@ -467,8 +496,11 @@ export async function getLabelJob(ctx: AuthContext, jobId: string) {
 /** The job's label pages for the print route: re-rendered from the frozen dataset and hash-checked. */
 export async function labelJobForPrint(ctx: AuthContext, jobId: string) {
   const job = await getLabelJob(ctx, jobId);
-  if (!job.generatedDocumentId) return { job, render: null };
+  if (!job.generatedDocumentId) return { job, render: null, face: null };
   const [doc] = await db.select().from(generatedDocuments).where(eq(generatedDocuments.id, job.generatedDocumentId)).limit(1);
-  if (doc.status !== "ready" && doc.status !== "superseded" && doc.status !== "void") return { job, render: null, doc };
-  return { job, doc, render: await renderForDisplay(doc) };
+  if (doc.status !== "ready" && doc.status !== "superseded" && doc.status !== "void") return { job, render: null, doc, face: null };
+  const render = await renderForDisplay(doc);
+  // ADR-099: the face shown and printed is the hash-checked body with the same label stylesheet, scoped by size.
+  const face = render.integrity === "ok" && render.body ? labelFace((doc.dataset as FrozenDataset<LabelData>).data, render.body, render.css ?? "") : null;
+  return { job, doc, render, face };
 }

@@ -5,7 +5,6 @@ import { Button, Field, Input, Select, Textarea } from "@/ui/core";
 import { FormMessage, SubmitButton } from "@/ui/form";
 import {
   cancelAction,
-  createLabelJobAction,
   createReceiptLabelJobsAction,
   markFailedAction,
   markPrintedAction,
@@ -137,50 +136,9 @@ export function ReprintForm({ jobId, reasons, maxCopies }: { jobId: string; reas
 }
 
 type TemplateOpt = { id: string; code: string; name: string; media: string; copiesDefault: number };
-type StationOpt = { id: string; code: string; name: string; printerName: string };
-
-export function CreateJobForm({ entityType, entityId, templates, stations }: { entityType: string; entityId: string; templates: TemplateOpt[]; stations: StationOpt[] }) {
-  const [state, action] = useActionState<ActionState, FormData>(createLabelJobAction, null);
-  const key = useKey();
-  const [tpl, setTpl] = useState(templates[0]?.id ?? "");
-  const fe = state?.fieldErrors ?? {};
-  const t = templates.find((x) => x.id === tpl);
-  return (
-    <form action={action} className="space-y-4">
-      <input type="hidden" name="entityType" value={entityType} />
-      <input type="hidden" name="entityId" value={entityId} />
-      <input type="hidden" name="idempotencyKey" value={key} />
-      <Field label="Label size" htmlFor="labelTemplateId" error={fe.labelTemplateId}>
-        <Select id="labelTemplateId" name="labelTemplateId" value={tpl} onChange={(e) => setTpl(e.target.value)} required>
-          {templates.map((x) => (
-            <option key={x.id} value={x.id}>{x.name.includes("mm") ? x.name : `${x.media} · ${x.name}`}</option>
-          ))}
-        </Select>
-      </Field>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="How many labels?" htmlFor="copies" error={fe.copies} hint="One for each sack or container.">
-          <Input id="copies" name="copies" type="number" inputMode="numeric" min={1} max={99} defaultValue={t?.copiesDefault ?? 1} key={tpl} required />
-        </Field>
-        <Field label="Which printer?" htmlFor="printStationId" error={fe.printStationId}>
-          <Select id="printStationId" name="printStationId" defaultValue={stations.length === 1 ? stations[0].id : ""} required>
-            {stations.length > 1 && <option value="">Choose…</option>}
-            {stations.map((s) => (
-              <option key={s.id} value={s.id}>{s.name} ({s.printerName})</option>
-            ))}
-          </Select>
-        </Field>
-      </div>
-      <FormMessage state={state} />
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <SubmitButton name="then" value="station" variant="cta" size="lg" pendingText="Sending…">Send to the label printer</SubmitButton>
-        <SubmitButton name="then" value="print" variant="secondary" size="lg" pendingText="Preparing…">Print here now</SubmitButton>
-      </div>
-    </form>
-  );
-}
 
 /** One label per sack/container: the number of labels of each lot starts at the receipt's container count (1 when not recorded). */
-export function ReceiptJobsForm({ grId, templates, stations, lots }: { grId: string; templates: TemplateOpt[]; stations: StationOpt[]; lots: { lotId: string; lotNumber: string; materialName: string; containerCount: number | null }[] }) {
+export function ReceiptJobsForm({ grId, templates, lots }: { grId: string; templates: TemplateOpt[]; lots: { lotId: string; lotNumber: string; materialName: string; containerCount: number | null }[] }) {
   const [state, action] = useActionState<ActionState, FormData>(createReceiptLabelJobsAction, null);
   const fe = state?.fieldErrors ?? {};
   const lotCount = lots.length;
@@ -207,16 +165,6 @@ export function ReceiptJobsForm({ grId, templates, stations, lots }: { grId: str
           </div>
         ))}
       </fieldset>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Which printer?" htmlFor="printStationId" error={fe.printStationId}>
-          <Select id="printStationId" name="printStationId" defaultValue={stations.length === 1 ? stations[0].id : ""} required>
-            {stations.length > 1 && <option value="">Choose…</option>}
-            {stations.map((s) => (
-              <option key={s.id} value={s.id}>{s.name} ({s.printerName})</option>
-            ))}
-          </Select>
-        </Field>
-      </div>
       <FormMessage state={state} />
       <SubmitButton variant="cta" size="lg" pendingText="Making the labels…">Print labels for {lotCount} {lotCount === 1 ? "lot" : "lots"}</SubmitButton>
     </form>

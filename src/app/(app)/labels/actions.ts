@@ -5,7 +5,6 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError, toActionState, type ActionState } from "@/lib/errors";
 import {
   cancelLabelJob,
-  createLabelJob,
   createLabelJobsForLots,
   markLabelJobFailed,
   markLabelJobPrinted,
@@ -25,26 +24,6 @@ function withField(e: unknown): ActionState {
   return s;
 }
 
-export async function createLabelJobAction(_prev: ActionState, f: FormData): Promise<ActionState> {
-  let target: string;
-  try {
-    const ctx = await requireContext();
-    const r = await createLabelJob(ctx, {
-      labelTemplateId: str(f, "labelTemplateId"),
-      entityType: str(f, "entityType") as "inventory_lot" | "location",
-      entityId: str(f, "entityId"),
-      copies: str(f, "copies"),
-      printStationId: str(f, "printStationId") || null,
-      idempotencyKey: str(f, "idempotencyKey"),
-    });
-    target = str(f, "then") === "print" ? `/print/labels/${r.jobId}` : `/labels/jobs/${r.jobId}?sent=1`;
-  } catch (e) {
-    return withField(e);
-  }
-  revalidatePath("/labels");
-  redirect(target);
-}
-
 /**
  * One label job per lot of a goods receipt; each lot keeps its own key so a retry never doubles labels.
  * Then the print preview of all of them opens, with one clear sentence about what was sent and what was
@@ -57,7 +36,7 @@ export async function createReceiptLabelJobsAction(_prev: ActionState, f: FormDa
     const gr = await getReceipt(ctx, str(f, "grId"));
     // Copies per lot (default on the form: one per sack/container); the service validates 1–99.
     const lots = gr.lines.map((l) => ({ lotId: l.lotId, copies: str(f, `copies-${l.lotId}`) ? Number(str(f, `copies-${l.lotId}`)) : null }));
-    const out = await createLabelJobsForLots(ctx, lots, str(f, "labelTemplateId"), Number(str(f, "copies") || "1"), `gr:${gr.id}:${str(f, "labelTemplateId")}`, str(f, "printStationId") || null);
+    const out = await createLabelJobsForLots(ctx, lots, str(f, "labelTemplateId"), Number(str(f, "copies") || "1"), `gr:${gr.id}:${str(f, "labelTemplateId")}`, null);
     const made = out.filter((o) => o.jobId);
     const other = out.filter((o) => !o.jobId && o.code !== "conflict");
     if (made.length === 0 && other.length > 0) return { ok: false, message: other[0]?.error ?? "No labels were made." };
@@ -127,7 +106,7 @@ export async function reprintAction(_prev: ActionState, f: FormData): Promise<Ac
       copies: str(f, "copies") || "1",
       idempotencyKey: str(f, "idempotencyKey"),
     });
-    target = `/labels/jobs/${r.jobId}?sent=1`;
+    target = `/print/labels/${r.jobId}?auto=1`;
   } catch (e) {
     return withField(e);
   }

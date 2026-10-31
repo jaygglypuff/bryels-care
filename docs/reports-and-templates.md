@@ -392,6 +392,20 @@ Rules: a batch cannot leave `awaiting_qc` while any `paper_then_transcribe` step
 
 ## 8. Labels
 
+**ADR-099 (2026-10-31): labels are printed where the work happens.** Every task screen that prints (delivery,
+packaging step, box, lot, shelf) shows the label from the same renderer and approved layout as the label job
+(`labelPreview` → `<LabelPrintCard>` / `<PrintLabelsPanel>` in `src/ui/labels`), "How many?" and one "Print N
+labels"; the job is recorded against the site's first label printer and printed from `/print/labels/[jobId]` with
+`window.print()`. The print page uses the same `<LabelFace>` as the preview: the renderer's face CSS scoped by
+size (`.lf-<w>x<h>`) plus a named `@page` per size, so a PDF ("Save as PDF") has one page per label at the label
+size, mixed sizes included. Kinds: material / wip / finished_good (internal lot label with status at print),
+**product** (new, migration 0032: the label on each bar; no status bar, no quantity; batch labels use it, falling
+back to an approved finished-goods label), carton, location. Renderer `label` **v2** (name largest, then code and
+expiry; QR always inside; status and trace rows never overlap) is the default for new layouts; v1 stays registered
+so labels printed with it re-render to the same checksum. A product label's `BC:LOT:<lot>` opens the batch on
+the Scan screen and in batch pickers until Finish makes the lot. `/labels` is "Labels printed" (history; the
+station queue is gone from the floor).
+
 ### 8.1 Payload grammar (ADR-017, `docs/security.md` §2.7)
 
 `BC:<TYPE>:<VALUE>` where `TYPE` ∈ `LOT` (`inventory_lots.lot_number`), `BOX` (`containers.container_number`), `LOC` (`locations.code`), `MAT` (`materials.code`), `SKU` (`skus.code`), `EQP` (`equipment.code`, A-PROC-42, accepted in ADR-017 and `docs/data-model.md` §9.5), `DOC` (`generated_documents.document_number`). `VALUE` matches `^[A-Z0-9][A-Z0-9._-]{0,63}$` (1–64 characters; the same CHECK as `docs/data-model.md` §9.4 and `docs/security.md` §4.9); uppercase only so QR alphanumeric mode applies (smaller codes). Numbering rules must emit only letters, digits, dot, underscore and hyphen. The payload is never a URL and never carries quantity, status or dates: those are read from the server at scan time so a stale label cannot mislead. Any other string scanned is "not recognised" (W02-01). Human-readable text under the code repeats the value, not the prefix.

@@ -8,7 +8,7 @@ import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
 import { getSetting } from "@/lib/settings";
-import { activeStationsAt, approvedLabelTemplatesFor, createLabelJob } from "@/modules/documents";
+import { activeStationsAt, createLabelJob, labelTemplatesForKind } from "@/modules/documents";
 import { lockLots } from "@/modules/inventory";
 import { assertLotUsable } from "@/modules/inventory/ledger";
 import { assertLocationNotHeld } from "@/modules/inventory/holds";
@@ -197,7 +197,8 @@ export function labelPrintBlocker(steps: { stepNo: number; stepKind: string; nam
 
 async function batchLabelTemplate(q: DbOrTx, organizationId: string, siteId: string) {
   const code = (await getSetting(q, organizationId, "production.packaging.batch_label_template", siteId)).trim().toUpperCase();
-  const all = await approvedLabelTemplatesFor(q, organizationId, siteId, "finished_good");
+  // ADR-099: the product label (kind `product`) goes on each bar; an approved finished-goods label is the fallback.
+  const all = await labelTemplatesForKind(q, organizationId, siteId, "product");
   return (code ? all.find((t) => t.code === code) : null) ?? all[0] ?? null;
 }
 
@@ -218,7 +219,7 @@ export async function batchLabelInfo(ctx: AuthContext, batch: BatchRow) {
       : !template
         ? "No approved product label is set up for this site. Ask the site manager (Settings › Labels)."
         : !stations.length
-          ? "No label printer is set up for this site. Ask the site manager to add a print station."
+          ? "No label printer is set up for this site. Ask the administrator (Settings › Labels and printouts)."
           : null;
   return {
     defaultCount: Math.max(1, Math.min(999, pieces.toNumber() || 1)),

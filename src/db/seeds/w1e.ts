@@ -7,7 +7,7 @@ import { and, eq } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as s from "../schema";
 import { definitionChecksum } from "../../modules/documents/checksum";
-import { labelRendererV1 } from "../../modules/documents/renderers/label-v1";
+import { labelRendererV2 } from "../../modules/documents/renderers/label-v2"; // ADR-099: demo layouts use v2
 import { testPageRendererV1 } from "../../modules/documents/renderers/test-page-v1";
 import { DEFAULT_LABEL_FIELDS } from "../../modules/documents/schemas";
 
@@ -25,7 +25,7 @@ export async function seedW1e(db: Db) {
   const approvedAt = new Date(Date.now() - 14 * 86_400_000);
 
   async function layout(code: string, name: string, kind: "label" | "test_page", dataset?: string) {
-    const definition = kind === "label" ? labelRendererV1.defaultDefinition("label", dataset) : testPageRendererV1.defaultDefinition("test_page");
+    const definition = kind === "label" ? labelRendererV2.defaultDefinition("label", dataset) : testPageRendererV1.defaultDefinition("test_page");
     const [t] = await db
       .insert(s.documentTemplates)
       .values({ organizationId: O, code, name, templateKind: kind, pageSize: kind === "label" ? "label" : "A4", orientation: "portrait", createdBy: admin, createdAt: approvedAt })
@@ -52,6 +52,8 @@ export async function seedW1e(db: Db) {
   const wip = await layout("LBL-WIP", "Intermediate (WIP) label layout", "label", "label/wip/v1");
   const fg = await layout("LBL-FG", "Finished goods lot label layout", "label", "label/finished_good/v1");
   const loc = await layout("LBL-LOC", "Storage location label layout", "label", "label/location/v1");
+  // ADR-099: the product label stuck on each bar or jar (no status bar, no bulk quantity).
+  const prod = await layout("LBL-PROD", "Product label layout (on each piece)", "label", "label/product/v1");
   await layout("TEST-A4", "A4 printer test page", "test_page");
 
   const lt = (code: string, name: string, documentTemplateId: string, appliesTo: keyof typeof DEFAULT_LABEL_FIELDS, w: string, h: string, symbology: "qr" | "code128" = "qr") => ({
@@ -76,7 +78,8 @@ export async function seedW1e(db: Db) {
     lt("LT-RM-100X50", "Raw material 100 × 50 mm (drums, sacks)", rm, "material", "100", "50"),
     lt("LT-RM-50X30", "Raw material 50 × 30 mm (small containers)", rm, "material", "50", "30"),
     lt("LT-WIP-100X50", "Intermediate 100 × 50 mm", wip, "wip", "100", "50"),
-    lt("LT-FG-100X50", "Finished goods lot 100 × 50 mm", fg, "finished_good", "100", "50"),
+    lt("LT-FG-100X50", "Finished goods lot label 100 × 50 mm (bulk stock)", fg, "finished_good", "100", "50"),
+    lt("LT-PROD-70X40", "Product label 70 × 40 mm (one on each bar)", prod, "product", "70", "40"),
     lt("LT-LOC-100X50", "Rack / bin location 100 × 50 mm", loc, "location", "100", "50"),
     lt("LT-LOC-C128", "Location 100 × 50 mm, Code 128 (linear scanners)", loc, "location", "100", "50", "code128"),
   ]);
@@ -86,7 +89,7 @@ export async function seedW1e(db: Db) {
     siteId: nfd.id,
     code: "WH1-DESK",
     name: "Warehouse 1 label desk (PC)",
-    printerName: "Thermal printer WH1 (203 dpi, demo)",
+    printerName: "Label printer, Warehouse 1",
     notes: "Fictional demo station. Set media 100 × 50 mm and 'Actual size' in the print dialog.",
     createdBy: admin,
   });

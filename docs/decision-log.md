@@ -1782,3 +1782,25 @@ Consequences: field inventory in `docs/SCAN_INPUTS.md`; tests `tests/unit/scan/s
 `tests/integration/scan/scan-or-pick.test.ts`. Open: production fields adopt the component (production pass); receiving
 without a purchase order still has 6 fields and mixes spare parts into the item list; machine labels `BC:EQP` not yet
 accepted in these fields.
+
+## ADR-099 Labels are printed where the work happens (UX audit round 1, 2026-10-31)
+
+Status: Accepted. A-LBL-01 (label sizes) needs the owner and the warehouse lead; A-LBL-02 (product label content)
+needs QA and the regulatory adviser.
+
+Decision: every screen that prints a label (delivery, packaging step, box, lot, shelf) shows the label rendered by the
+same renderer and approved layout as the label job (`labelPreview`), says where it goes and where it is scanned, then
+offers "How many?" and one "Print N labels". The job is recorded against the site's first active label printer;
+people never choose a "print station", they pick the printer in the browser's print window. `/print/labels/[jobId]`
+prints with `window.print()` using the same `LabelFace` component, size-scoped CSS and a named `@page` per size, so
+paper and "Save as PDF" are one page per label at the label size. `/labels` becomes "Labels printed" (history);
+printers and templates stay under Settings › Labels and printouts. Job states, idempotency, reprint-with-reason,
+superseding and voiding are unchanged. New label kind `product` (migration 0032) for the label on each piece: no
+status bar, no bulk quantity; batch labels use it, falling back to an approved finished-goods label. Label renderer v2
+(name largest, QR always inside, rows never overlap) is the default for new layouts; v1 stays registered so printed
+labels re-render to their checksum; existing approved layouts move to v2 only when QA approves a new layout version.
+A product label's `BC:LOT:<lot>` opens the batch until Finish makes the lot.
+
+Consequences: tests `tests/unit/labels/*`, `tests/integration/documents/label-preview.test.ts`; help `docs/help/labels.md`.
+Live data: QA must approve a v2 layout version and a `product` template on existing databases (demo reset seeds them).
+Safari on iOS ignores `@page` size (print to a label printer with matching paper).
