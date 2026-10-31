@@ -1823,3 +1823,18 @@ screens redirect: `/production/new`, `/production/work-orders(/new)`, `/producti
 Consequences: tests `tests/unit/production-one-path.test.ts`, `tests/integration/production/one-path.test.ts`; no
 migration. Open: redo (rework) has no service to move a batch in and out of `rework_approved`; the board is still tall
 on phones; the closure page is reachable by URL for operators (actions server-checked).
+
+## ADR-101 One door per job, menu words = screen titles, 44 px frame (UX audit round 2, part 1, 2026-10-31)
+
+Status: Accepted; A-UX-11 needs the owner.
+
+Decision: a screen with its own top-bar button is not repeated in the tab rows. Messages is the bell at every width;
+To approve is a top-bar button from 640 px and a Home tab on phones; Problems & alerts links to To approve and keeps no
+list of decisions. QA decisions have one door ("Check a batch or delivery", `/quality`), suppliers one entry
+("Suppliers we may buy from"), expense claims one entry. Every menu word equals the H1 of its screen
+(`tests/unit/nav-titles.test.ts`, with listed runtime-title exceptions); no role menu lists a screen twice. Rarely used
+entries fold under "Advanced" in their section; IT screens sit in "IT and system" for system admin and owner only
+(menus never grant access; pages still check it). The frame meets 44 px at 390, 820 and 1440 px; small buttons are
+44 px on touch screens, 34 px with a mouse; checkbox/radio labels are ≥44 px rows. Phones get Scan in the top bar for
+every role; record headers give the title the full width; destination descriptions are tooltips. No schema or
+permission change.
