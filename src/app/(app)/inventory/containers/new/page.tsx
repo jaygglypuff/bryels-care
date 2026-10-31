@@ -17,13 +17,13 @@ export default async function NewBoxPage({ searchParams }: { searchParams: Promi
   const { lot } = await searchParams;
   // Loose stock per lot × shelf at the current site.
   const locs = await listSiteLocations(ctx);
-  const byLot = new Map<string, { id: string; label: string; uom: string; locations: { id: string; code: string; name: string; loose: string }[] }>();
+  const byLot = new Map<string, { id: string; label: string; lotNumber: string; uom: string; locations: { id: string; code: string; name: string; loose: string }[] }>();
   for (const l of locs) {
     const d = await getLocationDetail(ctx, l.id);
     for (const r of d.lots) {
       const loose = Decimal.max(new Decimal(r.onHand).minus(r.boxed), 0);
       if (loose.lte(0)) continue;
-      const entry = byLot.get(r.id) ?? { id: r.id, label: `${r.itemName} · lot ${r.lotNumber}`, uom: r.baseUom, locations: [] };
+      const entry = byLot.get(r.id) ?? { id: r.id, label: `${r.itemName} · lot ${r.lotNumber}`, lotNumber: r.lotNumber, uom: r.baseUom, locations: [] };
       entry.locations.push({ id: l.id, code: l.code, name: l.name, loose: loose.toString() });
       byLot.set(r.id, entry);
     }

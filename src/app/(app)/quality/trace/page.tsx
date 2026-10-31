@@ -3,7 +3,8 @@ import { Boxes, Factory, PackageOpen, Search, Truck } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { traceGenealogy, type TraceNode } from "@/modules/quality/genealogy";
-import { Card, CardTitle, EmptyState, Input, PageHeader, Select, buttonClass } from "@/ui/core";
+import { Card, CardTitle, EmptyState, Input, PageHeader, buttonClass } from "@/ui/core";
+import { LotPickerNav } from "../lot-picker-nav";
 import { listLots } from "@/modules/inventory";
 import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
@@ -20,33 +21,6 @@ async function lotChoices(ctx: Awaited<ReturnType<typeof requireContext>>) {
   const rows = await listLots(ctx, { includeEmpty: true });
   return rows.map((l) => ({ lotNumber: l.lotNumber, label: `${l.itemName} · ${l.lotNumber}${l.supplierName ? ` · ${l.supplierName}` : ""}` }));
 }
-
-function PickLot({ action, name, lots, button, selected }: { action: string; name: string; lots: { lotNumber: string; label: string }[]; button: string; selected?: string }) {
-  if (lots.length === 0) return null;
-  return (
-    <form method="get" action={action} className="flex flex-col gap-2 sm:flex-row sm:items-end">
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <label htmlFor={`pick-${name}`} className="text-[13px] font-medium">
-          Choose the material or product (lot)
-        </label>
-        <Select id={`pick-${name}`} name={name} defaultValue={selected ?? ""} required>
-          <option value="" disabled>
-            Choose…
-          </option>
-          {lots.map((l) => (
-            <option key={l.lotNumber} value={l.lotNumber}>
-              {l.label}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <button type="submit" className={buttonClass("cta")}>
-        <Search size={16} /> {button}
-      </button>
-    </form>
-  );
-}
-
 
 function NodeIcon({ kind }: { kind: TraceNode["kind"] }) {
   const cls = "mt-0.5 shrink-0 text-muted";
@@ -159,21 +133,10 @@ export default async function TracePage({ searchParams }: { searchParams: Promis
 
       <div className="flex flex-col gap-5">
         <Card>
-          <PickLot action="/quality/trace" name="lot" lots={lots} button="Show" selected={t.query.lotNumber ?? undefined} />
-          <div className={lots.length ? "mt-3" : ""}>
-          <MoreDetails title="Scan a label, or a batch number or a supplier's lot number" open={lots.length === 0 || (!!q && !t.root)}>
+          <LotPickerNav action="/quality/trace" candidateParam="lot" scanParam="q" lots={lots.slice(0, 300)} label="Which material or product (lot)?" />
+          <div className="mt-3">
+          <MoreDetails title="Only have the supplier's lot number?" open={!!t.query.supplierLot && !t.root}>
           <form method="get" action="/quality/trace" className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <label htmlFor="q" className="text-[13px] font-medium">
-                Scan the label (lot or batch)
-              </label>
-              <Input id="q" name="q" defaultValue={shownCode} autoComplete="off" />
-            </div>
-            <button type="submit" className={buttonClass("secondary")}>
-              <Search size={16} /> Show
-            </button>
-          </form>
-          <form method="get" action="/quality/trace" className="mt-3 flex flex-col gap-2 border-t border-line pt-3 sm:flex-row sm:items-end">
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               <label htmlFor="supplierLot" className="text-[13px] font-medium">
                 Or the supplier&apos;s lot number (from their label)

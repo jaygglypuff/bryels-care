@@ -2,6 +2,7 @@
 import { Field, Input, Select, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { MoreDetails } from "@/ui/guide";
+import { ScanOrPick } from "@/ui/scan-or-pick";
 import {
   classifyAction,
   closeComplaintAction,
@@ -54,9 +55,18 @@ export function LogComplaintForm({ customers, products, categories, channels, de
               ))}
             </Select>
           </Field>
-          <Field label="Number on the product label (optional: scan it or read it out)" htmlFor="code" error={fe.code} hint="We check it against what we sent this customer. Leave empty if the customer does not have it.">
-            <Input id="code" name="code" autoComplete="off" defaultValue={defaultCode ?? ""} />
-          </Field>
+          <div className="sm:col-span-2">
+            <ScanOrPick
+              kind="lot"
+              name="code"
+              submit="code"
+              label="Which lot? (optional)"
+              hint="Scan the product label, or type part of the number the customer reads out (for example the last 4 digits) and tap the lot. We check it against what we sent this customer."
+              candidates={defaultCode ? [{ value: defaultCode, title: `Lot ${defaultCode}`, code: defaultCode, codes: [defaultCode] }] : []}
+              defaultValue={defaultCode}
+              error={fe.code}
+            />
+          </div>
           <div className="sm:col-span-2">
             <Field label="What does the customer report?" htmlFor="description" error={fe.description} hint="The customer sees this text on the letter we send back.">
               <Textarea id="description" name="description" required minLength={5} maxLength={4000} />

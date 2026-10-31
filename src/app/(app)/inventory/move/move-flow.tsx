@@ -1,46 +1,19 @@
 "use client";
 import Link from "next/link";
-import { startTransition, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { ArrowRight, Boxes, MapPin, RotateCcw, ScanLine } from "lucide-react";
-import { Button, Card, Field, Select, Textarea, inputClass } from "@/ui/core";
+import { startTransition, useEffect, useMemo, useState, useTransition } from "react";
+import { ArrowRight, Boxes, MapPin, RotateCcw } from "lucide-react";
+import { Button, Card, Field, Textarea } from "@/ui/core";
+import { ScanOrPick, type PickCandidate } from "@/ui/scan-or-pick";
 import { baseToUnitText, fmtFriendly, friendlyUnitFor, toBaseQty } from "@/lib/units";
 import { QtyUnitInput } from "@/ui/qty-unit-input";
 import { Banner } from "@/ui/status";
 import type { MoveResult } from "@/modules/inventory/moves";
 import { LOCATION_KIND_WORDS, LotStatusChip } from "@/ui/inventory/bits";
-import { lookupDestinationAction, lookupSourceAction, postMoveAction, undoMoveAction, type LotMatch, type SourceInfo } from "./actions";
+import { lookupSourceAction, postMoveAction, undoMoveAction, type LotMatch, type SourceInfo } from "./actions";
 
 type Loc = { id: string; code: string; name: string; kind: string };
 
 const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
-
-/** Scan field: a keyboard-wedge scanner types and presses Enter; typing works the same. */
-function ScanField({ id, label, placeholder, onScan, busy, autoFocus }: { id: string; label: string; placeholder: string; onScan: (v: string) => void; busy: boolean; autoFocus?: boolean }) {
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (autoFocus) ref.current?.focus();
-  }, [autoFocus]);
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        const v = ref.current?.value ?? "";
-        if (v.trim()) onScan(v);
-      }}
-      className="flex flex-col gap-2"
-    >
-      <label htmlFor={id} className="flex items-center gap-2 text-[14px] font-semibold">
-        <ScanLine size={16} /> {label}
-      </label>
-      <div className="flex gap-2">
-        <input ref={ref} id={id} autoComplete="off" autoCapitalize="characters" spellCheck={false} enterKeyHint="go" placeholder={placeholder} className={`${inputClass} min-h-[52px] min-w-0 flex-1 font-mono text-[16px]`} />
-        <Button type="submit" variant="secondary" disabled={busy}>
-          {busy ? "…" : "Find"}
-        </Button>
-      </div>
-    </form>
-  );
-}
 
 function UndoToast({ result, onDone }: { result: MoveResult; onDone: () => void }) {
   const until = result.undo ? new Date(result.undo.until).getTime() : 0;
@@ -88,7 +61,7 @@ function UndoToast({ result, onDone }: { result: MoveResult; onDone: () => void 
   );
 }
 
-export function MoveFlow({ locations, initialSource, initialDestination }: { locations: Loc[]; initialSource: SourceInfo | null; initialDestination: Loc | null }) {
+export function MoveFlow({ locations, initialSource, initialDestination, lots = [] }: { locations: Loc[]; initialSource: SourceInfo | null; initialDestination: Loc | null; lots?: PickCandidate[] }) {
   const [source, setSource] = useState<SourceInfo | null>(initialSource);
   const [fromId, setFromId] = useState<string>(initialSource?.kind === "lot" ? (initialSource.locations[0]?.id ?? "") : "");
   // Usability test 2026-10-30: the amount starts in the friendly unit (60 kg, not 60000 g).
@@ -167,13 +140,17 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
       <Card>
         {!source ? (
           <div className="space-y-3">
-            <ScanField
-              id="src"
-              label="1 · Scan the label, or type the item name"
-              placeholder="Scan, or type a name"
-              busy={busy}
-              autoFocus
-              onScan={(v) => pickSource(v)}
+            <ScanOrPick
+              mode="emit"
+              kind="lot"
+              alsoAccept={["container"]}
+              id="move-src"
+              label="1 · What are you moving?"
+              hint="Tap the lot, scan the label of the sack, box or lot, or find the item by name."
+              candidates={lots}
+              candidatesLabel="Lots with stock here"
+              pending={busy}
+              onEmit={(v, c) => pickSource(c?.code ? `BC:LOT:${c.code}` : v)}
             />
             {matches.length > 0 && (
               <ul className="flex flex-col gap-2" aria-label="Matching lots">
@@ -228,25 +205,23 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
             <p className="text-[13px] text-muted">This lot has no stock left on any shelf.</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="2 · Take it from" htmlFor="from">
-                <Select
-                  id="from"
-                  value={fromId}
-                  onChange={(e) => {
-                    setFromId(e.target.value);
-                    const a = startAmount(source, e.target.value);
-                    setQty(a.qty);
-                    setUnit(a.unit);
-                  }}
-                >
-                  {source.locations.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.code} · {fmtFriendly(l.loose, source.baseUom)} not in a box
-                      {Number(l.boxed) > 0 ? ` (+${fmtFriendly(l.boxed, source.baseUom)} in boxes)` : ""}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+              <ScanOrPick
+                kind="location"
+                id="move-from"
+                label="2 · Take it from"
+                candidates={source.locations.map((l) => ({ value: l.id, title: l.code, detail: `${fmtFriendly(l.loose, source.baseUom)} not in a box${Number(l.boxed) > 0 ? ` (+${fmtFriendly(l.boxed, source.baseUom)} in boxes)` : ""}`, code: l.code, codes: [l.code] }))}
+                value={fromId}
+                hideWhenSingle
+                onlyCandidates
+                search={false}
+                onChange={(v) => {
+                  if ((v ?? "") === fromId) return;
+                  setFromId(v ?? "");
+                  const a = startAmount(source, v ?? undefined);
+                  setQty(a.qty);
+                  setUnit(a.unit);
+                }}
+              />
               <Field label="How much?" htmlFor="qty" hint={fromLoc ? `${fmtFriendly(fromLoc.loose, source.baseUom)} not in a box at ${fromLoc.code}. Stock in a box moves with its box.` : undefined}>
                 <QtyUnitInput id="qty" baseUom={source.baseUom} qty={qty} onQtyChange={setQty} unit={unit || undefined} onUnitChange={setUnit} unitLabel="Unit for the amount" />
               </Field>
@@ -258,37 +233,23 @@ export function MoveFlow({ locations, initialSource, initialDestination }: { loc
       {source && (
         <Card>
           {!dest ? (
-            <div className="space-y-3">
-              <ScanField
-                id="dst"
-                label="3 · Scan the shelf label"
-                placeholder="Scan the shelf label"
-                busy={busy}
-                autoFocus={source.kind === "box"}
-                onScan={(v) =>
-                  start(async () => {
-                    setError(null);
-                    const r = await lookupDestinationAction(v);
-                    if (!r.ok) return setError(r.message);
-                    setDest(r.data);
-                  })
-                }
-              />
-              <Field label="…or choose the shelf" htmlFor="destPick">
-                <Select id="destPick" defaultValue="" onChange={(e) => setDest(locations.find((l) => l.id === e.target.value) ?? null)}>
-                  <option value="" disabled>
-                    Choose a shelf…
-                  </option>
-                  {allowed
-                    .filter((l) => l.id !== sourceLocationId)
-                    .map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.name} ({l.code}){l.kind !== "storage" ? ` · ${LOCATION_KIND_WORDS[l.kind] ?? l.kind}` : ""}
-                      </option>
-                    ))}
-                </Select>
-              </Field>
-            </div>
+            <ScanOrPick
+              kind="location"
+              id="move-dst"
+              label="3 · Which shelf does it go to?"
+              candidates={allowed
+                .filter((l) => l.id !== sourceLocationId)
+                .map((l) => ({ value: l.id, title: l.name, detail: `${l.code}${l.kind !== "storage" ? ` · ${LOCATION_KIND_WORDS[l.kind] ?? l.kind}` : ""}`, code: l.code, codes: [l.code] }))}
+              candidatesLabel="Shelves it may go to"
+              onChange={(v) => {
+                if (!v) return;
+                const l = locations.find((x) => x.id === v);
+                if (l) {
+                  setError(null);
+                  setDest(l);
+                } else setError("That shelf is not in use at this site. Tap one of the shelves above.");
+              }}
+            />
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="flex items-center gap-2">

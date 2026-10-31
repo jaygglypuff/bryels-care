@@ -29,6 +29,7 @@ export async function holdReasonOptions(q: typeof db | Tx, organizationId: strin
   return (await reasonCodeOptions(q, organizationId, "hold")).map((r) => ({ code: r.code, label: r.label }));
 }
 import { isPastExpiry, isUuid } from "./lots";
+import { classifyPickInput, missingMessage, notFoundMessage } from "@/lib/scan/pick";
 
 /**
  * Quality holds (US-2-10 AC3, data-model §6.7) and the held-stock issue exception (AC2, CX-LOT).
@@ -59,29 +60,41 @@ function reasonText(v: string | null | undefined, field = "reason") {
   return r;
 }
 
+/**
+ * What a lot or location field sent: a tapped candidate id, a label payload (BC:LOT:…) or a plain number.
+ * The placeholder text ("BC:LOT:…"), words and labels of another kind are refused in plain words
+ * (owner review 2026-10-31: "Lot BC not found in your sites" after the placeholder was sent).
+ */
+function refValue(kind: "lot" | "location", ref: string): { id: string } | { code: string } {
+  const v = (ref ?? "").trim();
+  if (isUuid(v)) return { id: v };
+  const c = classifyPickInput(kind, v, [], true);
+  if (c.kind === "label") return { code: c.value };
+  if (c.kind === "empty") throw new DomainError("validation", missingMessage(kind, false), { field: kind });
+  throw new DomainError("validation", c.kind === "refused" ? c.message : notFoundMessage(kind, false), { field: kind });
+}
+
 /** Finds a lot by id, BC:LOT payload or lot number inside the caller's sites. */
 export async function resolveLotRef(q: Tx | typeof db, ctx: AuthContext, ref: string) {
-  const v = (ref ?? "").trim();
-  const number = v.toUpperCase().replace(/^BC:LOT:/, "");
+  const r = refValue("lot", ref);
   const [lot] = await q
     .select()
     .from(inventoryLots)
-    .where(and(eq(inventoryLots.organizationId, ctx.organizationId), isUuid(v) ? eq(inventoryLots.id, v) : eq(inventoryLots.lotNumber, number)))
+    .where(and(eq(inventoryLots.organizationId, ctx.organizationId), "id" in r ? eq(inventoryLots.id, r.id) : eq(inventoryLots.lotNumber, r.code)))
     .limit(1);
-  if (!lot || !ctx.allowedSiteIds.includes(lot.siteId)) throw new DomainError("not_found", `Lot ${number || v} not found in your sites.`, { field: "lot" });
+  if (!lot || !ctx.allowedSiteIds.includes(lot.siteId)) throw new DomainError("not_found", notFoundMessage("lot", false), { field: "lot" });
   return lot;
 }
 
 /** Finds a location by id, BC:LOC payload or code inside a site. */
 export async function resolveLocationRef(q: Tx | typeof db, ctx: AuthContext, siteId: string, ref: string) {
-  const v = (ref ?? "").trim();
-  const code = v.toUpperCase().replace(/^BC:LOC:/, "");
+  const r = refValue("location", ref);
   const [loc] = await q
     .select()
     .from(locations)
-    .where(and(eq(locations.siteId, siteId), isUuid(v) ? eq(locations.id, v) : eq(locations.code, code)))
+    .where(and(eq(locations.siteId, siteId), "id" in r ? eq(locations.id, r.id) : eq(locations.code, r.code)))
     .limit(1);
-  if (!loc) throw new DomainError("not_found", `Location ${code || v} not found at this site.`, { field: "location" });
+  if (!loc) throw new DomainError("not_found", notFoundMessage("location", false), { field: "location" });
   ctx.requireSite(loc.siteId);
   return loc;
 }

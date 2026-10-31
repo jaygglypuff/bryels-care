@@ -337,3 +337,20 @@ Total screens: 250.
 - Help: five role guides (`docs/help/role-*.md`, "Your day in 5 steps") and `docs/help/words.md`; task guides stay (the "?" on screens and `/help#key`).
 - Settings without a written description show their current value as the sentence; 118 of 170 settings in `src/lib/settings.ts` still need a one-sentence `description` from their module owner.
 - Menu labels to rename in `nav.ts` (not changed here): "Dashboards" → "Reports", "Report library" → "Lists to download or print", "Scheduled reports" → "Lists sent by email", "Trends" → "Compare over time", "KPI definitions" → "What each number means", "Users" → "People", "Sessions" → "Who is signed in", "Security" → "Sign-in safety", "Audit log" → "History of changes", "Approval rules" → "Who says OK to what", "Numbering" → "How record numbers look", "Templates & labels" → "Labels and printouts", "Notification rules" → "Who gets which message", "Imports" → "Load data from a spreadsheet", "Legacy documents" → "Old paper documents", "Devices" → "Phones and tablets", "Sync conflicts" → "Phone changes to check", "Retention & holds" → "Keeping and deleting old records", "Diagnostics" → "Health of the system", "Sync & offline" → "Working without signal".
+
+
+## Notes from the scan-or-pick pass (2026-10-31, owner: "How would he scan it?")
+
+- One shared field for "which lot / box / shelf / batch / item": `src/ui/scan-or-pick.tsx`. Every field it replaced, and
+  the production and labels fields still to adopt it, are listed in `docs/SCAN_INPUTS.md`.
+- Verified at 390 × 844 (touch) on the dev server: Move stock completed by taps only and again by a scanner burst
+  (lot label, then shelf label); wrong label kind and the placeholder text refused in plain words; find by name lists
+  usable lots first and expired last, each with amount, shelf name and use-by date. Pack into a box completed by taps;
+  the lot's move page completed by taps; Fix stock filled by a scanner burst (shelf chosen by itself, the only one);
+  Put away shows only lots waiting to be put away. The QA, sales and maintenance screens are covered by the
+  integration tests; their live phone run was cut short by the sandbox running out of memory (see the report).
+- Receiving (live audit): brand and "Why no purchase order?" under More details, migration reasons removed, shelf names
+  instead of codes. Still 6 fields without a purchase order (supplier, paper number, item, amount, supplier's lot,
+  expiry); spare parts are still in the item list (next step: group them).
+- Scan screen: "Scan the label, or type what it is", the camera fallback offers the handheld scanner or a name, and
+  "Where is the label?" replaces "What can I scan or type?" (A-SCAN-13 needs the warehouse lead).

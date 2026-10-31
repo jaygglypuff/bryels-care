@@ -4,7 +4,7 @@ import { syncAgent } from "@/lib/offline/agent";
 import type { OutboxEntry } from "@/lib/offline/store";
 import { parseScan } from "@/lib/scan/payload";
 import { Button, Card, CardTitle, EmptyState, Field, Input, Select, Textarea } from "@/ui/core";
-import { Scanner } from "@/ui/scanner";
+import { ScanOrPick } from "@/ui/scan-or-pick";
 import { Chip, StatusChip } from "@/ui/status";
 import type { Ref } from "./workspace";
 
@@ -37,7 +37,7 @@ export function CountCapture({ siteId, data, queue, onQueued }: { siteId: string
   function onScan(raw: string) {
     setMsg(null);
     const p = parseScan(raw);
-    if (p.kind === "invalid") return setMsg({ ok: false, text: "That is not a label of ours. Scan the lot or location label, or type the number." });
+    if (p.kind === "invalid") return setMsg({ ok: false, text: "That is not a label of ours. Scan the lot or shelf label, or tap the lot in the list." });
     if (p.kind === "typed" && p.type === "LOC") {
       const l = scope.find((x) => x.code === p.value);
       return l ? setLocationId(l.id) : setMsg({ ok: false, text: `Location ${p.value} is not on this count sheet.` });
@@ -116,7 +116,19 @@ export function CountCapture({ siteId, data, queue, onQueued }: { siteId: string
         </Field>
       </div>
       <div className="mt-3">
-        <Scanner onScan={onScan} label="Scan the lot (or the location)" placeholder="BC:LOT:L-2610-00001 · L-2610-00001" autoFocus={false} />
+        <ScanOrPick
+          mode="emit"
+          kind="lot"
+          alsoAccept={["location"]}
+          id="oc-lot-pick"
+          label="Which lot? (you can also scan the shelf label)"
+          candidates={data.lots
+            .filter((l) => !location || l.balances.some((b) => b.locationId === location.id))
+            .map((l) => ({ value: `BC:LOT:${l.lotNumber}`, title: l.itemName ?? l.lotNumber, detail: `lot ${l.lotNumber}`, code: l.lotNumber, codes: [l.lotNumber] }))}
+          candidatesLabel={location ? `Lots on ${location.code} (as saved on this phone)` : "Lots at this site (as saved on this phone)"}
+          onlyCandidates
+          onEmit={(v) => onScan(v)}
+        />
       </div>
       {lot && !unlabelled && (
         <p className="mt-2 flex flex-wrap items-center gap-2 text-[14px]" data-testid="oc-lot">

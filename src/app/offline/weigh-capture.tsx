@@ -6,7 +6,7 @@ import type { ReferenceLot } from "@/lib/offline/protocol";
 import type { OutboxEntry } from "@/lib/offline/store";
 import { parseScan } from "@/lib/scan/payload";
 import { Button, Card, CardTitle, EmptyState, Field, Input, Select } from "@/ui/core";
-import { Scanner } from "@/ui/scanner";
+import { ScanOrPick } from "@/ui/scan-or-pick";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import type { Ref } from "./workspace";
 
@@ -165,7 +165,20 @@ export function WeighCapture({ siteId, data, queue, onQueued }: { siteId: string
         <>
           {fefo && <p className="mt-2 text-[13px] text-muted">Suggested (FEFO, as cached): {fefo.lotNumber}{fefo.expiresOn ? `, expires ${fefo.expiresOn}` : ""}</p>}
           <div className="mt-3">
-            <Scanner onScan={onScan} label="Scan the container's lot label" placeholder="BC:LOT:L-2610-00001" autoFocus={false} />
+            <ScanOrPick
+              mode="emit"
+              kind="lot"
+              alsoAccept={["location"]}
+              id="ow-lot-pick"
+              label="Which container are you weighing from?"
+              hint="Scan its lot label, or tap it in the list."
+              candidates={data.lots
+                .filter((l) => !lotProblem(l, line.materialId, line.materialName, line.reservedLotIds, names) && l.balances.some((b) => new Decimal(b.qty).gt(0)))
+                .map((l) => ({ value: `BC:LOT:${l.lotNumber}`, title: l.itemName ?? l.lotNumber, detail: `lot ${l.lotNumber}${l.expiresOn ? ` · expires ${l.expiresOn}` : ""}`, code: l.lotNumber, codes: [l.lotNumber] }))}
+              candidatesLabel="Lots set aside or OK for this ingredient (as saved on this phone)"
+              onlyCandidates
+              onEmit={(v) => onScan(v)}
+            />
           </div>
           {lot && (
             <p className="mt-2 flex flex-wrap items-center gap-2 text-[14px]" data-testid="ow-lot">

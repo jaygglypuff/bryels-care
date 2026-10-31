@@ -19,7 +19,7 @@ export async function putAwayAction(_p: ActionState, fd: FormData): Promise<Acti
       qtyUom: String(fd.get("qtyUom") ?? "") || null,
       idempotencyKey: String(fd.get("idempotencyKey") ?? ""),
     });
-    message = `${r.replayed ? "Already put away" : "Done"}: lot ${r.lotNumber} is now at ${location.trim().toUpperCase().replace(/^BC:LOC:/, "")} · movement ${r.number}.`;
+    message = `${r.replayed ? "Already put away" : "Done"}: lot ${r.lotNumber} is ${r.toCode ? `now at ${r.toCode}` : "put away"} · movement ${r.number}.`;
   } catch (e) {
     return toActionState(e);
   }

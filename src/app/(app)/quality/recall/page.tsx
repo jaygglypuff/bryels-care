@@ -4,12 +4,13 @@ import Decimal from "decimal.js";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { recallScope, type RecallMode, type RecallQuery } from "@/modules/quality";
-import { Card, CardTitle, EmptyState, Input, Kpi, PageHeader, Select, Table, Td, buttonClass, cx } from "@/ui/core";
+import { Card, CardTitle, EmptyState, Input, Kpi, PageHeader, Table, Td, buttonClass, cx } from "@/ui/core";
 import { listLots } from "@/modules/inventory";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
+import { LotPickerNav } from "../lot-picker-nav";
 import { QaStatusChip, fmtLotQty } from "../_ui";
 
 export const dynamic = "force-dynamic";
@@ -23,31 +24,6 @@ async function lotChoices(ctx: Awaited<ReturnType<typeof requireContext>>) {
   return rows.map((l) => ({ lotNumber: l.lotNumber, label: `${l.itemName} · ${l.lotNumber}${l.supplierName ? ` · ${l.supplierName}` : ""}` }));
 }
 
-function PickLot({ action, name, lots, button, selected }: { action: string; name: string; lots: { lotNumber: string; label: string }[]; button: string; selected?: string }) {
-  if (lots.length === 0) return null;
-  return (
-    <form method="get" action={action} className="flex flex-col gap-2 sm:flex-row sm:items-end">
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <label htmlFor={`pick-${name}`} className="text-[13px] font-medium">
-          Choose the material or product (lot)
-        </label>
-        <Select id={`pick-${name}`} name={name} defaultValue={selected ?? ""} required>
-          <option value="" disabled>
-            Choose…
-          </option>
-          {lots.map((l) => (
-            <option key={l.lotNumber} value={l.lotNumber}>
-              {l.label}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <button type="submit" className={buttonClass("cta")}>
-        <Search size={16} /> {button}
-      </button>
-    </form>
-  );
-}
 
 
 function queryString(q: RecallQuery, mode?: RecallMode) {
@@ -103,26 +79,15 @@ export default async function RecallPage({ searchParams }: { searchParams: Promi
         }
       />
       <PageIntro>This screen is for QA when something may be wrong with a product: see every customer who got it and how much is still with them. It only shows; nothing is changed.</PageIntro>
-      {!searched && <NextStep text="Next: choose the material or product below, or scan a label or complaint number." />}
+      {!searched && <NextStep text="Next: tap the material or product below, or scan its label. From a complaint: open the complaint and tap Who received it." />}
       {r.subject && ctx.can("quality.recall_case.create") && <NextStep text="If the product must come back, start a product recall from this list." action={{ label: "Start a product recall", href: `/quality/recalls/new?${queryString(q, r.mode)}` }} />}
 
       <div className="flex flex-col gap-5">
         <Card>
-          <PickLot action="/quality/recall" name="code" lots={lots} button="Show" selected={q.code} />
-          <div className={lots.length ? "mt-3" : ""}>
-          <MoreDetails title="Scan a label, or a complaint or supplier's lot number" open={lots.length === 0 || (!!q.code && !r.subject)}>
+          <LotPickerNav action="/quality/recall" candidateParam="code" scanParam="code" lots={lots.slice(0, 300)} label="Which material or product (lot)? You can also scan a box label." />
+          <div className="mt-3">
+          <MoreDetails title="Only have the supplier's lot number?" open={!!q.supplierLot && !r.subject}>
           <form method="get" action="/quality/recall" className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <label htmlFor="code" className="text-[13px] font-medium">
-                Scan a label (lot, box or batch) or the complaint number
-              </label>
-              <Input id="code" name="code" defaultValue={q.code ?? ""} autoComplete="off" />
-            </div>
-            <button type="submit" className={buttonClass("secondary")}>
-              <Search size={16} /> Show
-            </button>
-          </form>
-          <form method="get" action="/quality/recall" className="mt-3 flex flex-col gap-2 border-t border-line pt-3 sm:flex-row sm:items-end">
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               <label htmlFor="supplierLot" className="text-[13px] font-medium">
                 Or the supplier&apos;s lot number (from their label)

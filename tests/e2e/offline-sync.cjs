@@ -24,6 +24,14 @@ const PW = 'demo1234';
 let browser;
 const results = [];
 
+
+/** A handheld (keyboard-wedge) scanner: a fast key burst ending in Enter with nothing focused (ScanOrPick). */
+async function scanBurst(page, text) {
+  await page.evaluate(() => document.activeElement && document.activeElement.blur && document.activeElement.blur());
+  await page.keyboard.type(text, { delay: 4 });
+  await page.keyboard.press('Enter');
+}
+
 async function signIn(page, email) {
   await page.goto(BASE + '/sign-in');
   await page.fill('#email', email);
@@ -120,8 +128,7 @@ async function waitFor(fn, label, timeout = 30000) {
       await dev.getByText('Count (blind)').waitFor({ timeout: 15000 });
       await noSideScroll(dev, '/offline');
       await dev.selectOption('#oc-location', { label: 'PKG-01 · Packaging shelf' });
-      await dev.fill('[data-testid=scan-input]', `BC:LOT:${pkgLot.lot_number}`);
-      await dev.press('[data-testid=scan-input]', 'Enter');
+      await scanBurst(dev, `BC:LOT:${pkgLot.lot_number}`);
       await dev.locator('[data-testid=oc-lot]').waitFor();
       await dev.fill('#oc-qty', '7');
       await dev.getByRole('button', { name: 'Save count on this device' }).click();
@@ -178,8 +185,7 @@ async function waitFor(fn, label, timeout = 30000) {
       await dev.selectOption('#ow-line', target.id);
       const hint = await dev.getByText(/^Suggested \(FEFO, as cached\): /).innerText();
       const lotNo = hint.replace(/^Suggested \(FEFO, as cached\): /, '').split(',')[0].trim();
-      await dev.fill('[data-testid=scan-input]', `BC:LOT:${lotNo}`);
-      await dev.press('[data-testid=scan-input]', 'Enter');
+      await scanBurst(dev, `BC:LOT:${lotNo}`);
       await dev.locator('[data-testid=ow-lot]').waitFor();
       if (await dev.locator('#ow-loc').count()) await dev.selectOption('#ow-loc', { index: 1 });
       await dev.fill('#ow-qty', String(Number(target.qty)));

@@ -1,12 +1,13 @@
 "use client";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import { fmtFriendly } from "@/lib/units";
 import { Button, Field, Input, Select, Textarea } from "@/ui/core";
 import { FormMessage } from "@/ui/form";
 import { QtyUnitInput } from "@/ui/qty-unit-input";
 import { MoreDetails } from "@/ui/guide";
+import { ScanOrPick } from "@/ui/scan-or-pick";
 import { useActionForm } from "../_kit/forms";
-import { approveCountAction, findLotsForCountAction, planCountAction, recordCountAction, recountAction, rejectLinesAction } from "./actions";
+import { approveCountAction, planCountAction, recordCountAction, recountAction, rejectLinesAction } from "./actions";
 
 const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
@@ -67,57 +68,6 @@ export function PlanCountForm({ locations, counters, kinds }: { locations: { id:
   );
 }
 
-/** "Not in the list? Find it by name": the keyword look-up (ADR-085) for a lot found on the wrong shelf. */
-function FindByWords({ onPick, id }: { onPick: (lotNumber: string) => void; id: string }) {
-  const [text, setText] = useState("");
-  const [busy, start] = useTransition();
-  const [res, setRes] = useState<{ lots: { lotNumber: string; title: string; detail: string }[]; message: string | null }>({ lots: [], message: null });
-  const find = () =>
-    start(async () => {
-      const r = await findLotsForCountAction(text);
-      setRes(r.ok ? { lots: r.lots, message: r.lots.length > 1 ? `${r.lots.length} lots match. Tap the right one.` : null } : { lots: [], message: r.message });
-      if (r.ok && r.lots.length === 1) onPick(r.lots[0].lotNumber);
-    });
-  return (
-    <MoreDetails title="Not in the list and no barcode? Find it by name">
-      <div className="flex gap-2">
-        <label htmlFor={id} className="sr-only">Item name</label>
-        <Input
-          id={id}
-          value={text}
-          autoComplete="off"
-          enterKeyHint="search"
-          placeholder="e.g. coconut oil"
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              find();
-            }
-          }}
-          className="min-w-0 flex-1"
-        />
-        <Button type="button" variant="secondary" onClick={find} disabled={busy}>
-          {busy ? "…" : "Find"}
-        </Button>
-      </div>
-      {res.message && <p className="text-[13px] text-fg-2" role="status">{res.message}</p>}
-      {res.lots.length > 1 && (
-        <ul className="flex flex-col gap-2" aria-label="Matching lots">
-          {res.lots.map((o) => (
-            <li key={o.lotNumber}>
-              <button type="button" onClick={() => onPick(o.lotNumber)} className="flex min-h-[52px] w-full flex-col items-start rounded-[12px] border border-line px-3 py-2 text-left hover:bg-surface-2">
-                <span className="text-[14px] font-semibold">{o.title} <span className="font-mono text-[12px] font-normal text-muted">{o.lotNumber}</span></span>
-                <span className="text-[13px] text-muted">{o.detail}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </MoreDetails>
-  );
-}
-
 export type ShelfLine ={ lotNumber: string | null; itemName: string | null; baseUom: string | null; counted: boolean; mine: string | null; unlabelled: boolean; description: string | null };
 
 /**
@@ -132,13 +82,11 @@ export function ShelfCountForm({ countId, location, lines }: { countId: string; 
   const [mode, setMode] = useState<"lot" | "unlabelled">("lot");
   const [lotCode, setLotCode] = useState("");
   const [qty, setQty] = useState("");
-  const lotRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (state?.ok) {
       setKey(newKey());
       setLotCode("");
       setQty("");
-      lotRef.current?.focus();
     }
   }, [state]);
   const fe = state?.fieldErrors ?? {};
@@ -152,9 +100,9 @@ export function ShelfCountForm({ countId, location, lines }: { countId: string; 
     <form onSubmit={onSubmit} className="flex flex-col gap-3" data-testid={`shelf-form-${location.code}`}>
       <input type="hidden" name="idempotencyKey" value={key} />
       <input type="hidden" name="locationId" value={location.id} />
-      {lines.length > 0 && (
-        <ul className="divide-y divide-line rounded-[12px] border border-line text-[14px]" aria-label={`What should be on ${location.code}`}>
-          {lines.map((l, i) => (
+      {lines.some((l) => l.unlabelled) && (
+        <ul className="divide-y divide-line rounded-[12px] border border-line text-[14px]" aria-label={`Found without a label on ${location.code}`}>
+          {lines.filter((l) => l.unlabelled).map((l, i) => (
             <li key={`${l.lotNumber ?? "x"}-${i}`} className="flex min-h-[44px] flex-wrap items-center justify-between gap-2 px-3 py-2">
               <span className="min-w-0">
                 {l.unlabelled ? (
@@ -179,32 +127,18 @@ export function ShelfCountForm({ countId, location, lines }: { countId: string; 
         </label>
       </div>
       {mode === "lot" ? (
-        <div className="flex flex-col gap-2">
-          {known ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] bg-surface-2 px-3 py-2 text-[14px]">
-              <span className="min-w-0"><span className="font-semibold">{known.itemName}</span> <span className="font-mono text-[12px] text-muted">{known.lotNumber}</span></span>
-              <Button type="button" variant="ghost" onClick={() => { setLotCode(""); lotRef.current?.focus(); }}>Change</Button>
-            </div>
-          ) : (
-            expected.length > 0 && (
-              <div>
-                <p className="mb-1.5 text-[14px] font-medium">Tap what you are counting</p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {expected.map((l) => (
-                    <button key={l.lotNumber!} type="button" onClick={() => setLotCode(l.lotNumber!)} className="flex min-h-[48px] flex-col items-start justify-center rounded-[12px] border border-line px-3 py-1.5 text-left hover:bg-surface-2">
-                      <span className="text-[14px] font-semibold">{l.itemName}</span>
-                      <span className="font-mono text-[12px] text-muted">{l.lotNumber}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )
-          )}
-          <Field label={known ? "Lot (from the label)" : "Or scan the label"} htmlFor={id("lotCode")} error={fe.lotCode}>
-            <Input ref={lotRef} id={id("lotCode")} name="lotCode" autoComplete="off" autoCapitalize="characters" placeholder="Scan the label" className="min-h-[52px] font-mono text-[16px]" value={lotCode} onChange={(e) => setLotCode(e.target.value)} />
-          </Field>
-          {!known && <FindByWords onPick={(n) => setLotCode(n)} id={id("words")} />}
-        </div>
+        <ScanOrPick
+          kind="lot"
+          name="lotCode"
+          submit="code"
+          id={id("lot")}
+          label="What are you counting?"
+          candidates={expected.map((l) => ({ value: l.lotNumber!, title: l.itemName ?? l.lotNumber!, detail: `lot ${l.lotNumber}${l.mine ? ` · you counted ${l.mine}` : l.counted ? " · counted" : ""}`, code: l.lotNumber!, codes: [l.lotNumber!] }))}
+          candidatesLabel={`What should be on ${location.code}`}
+          value={lotCode}
+          onChange={(v) => setLotCode(v ?? "")}
+          error={fe.lotCode}
+        />
       ) : (
         <Field label="What is it? (QA will find out)" htmlFor={id("unlabelled")}>
           <Input id={id("unlabelled")} name="unlabelled" maxLength={300} placeholder="e.g. white 5 kg pail, no label, behind the rack" className="min-h-[52px]" />
