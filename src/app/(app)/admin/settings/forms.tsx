@@ -20,14 +20,14 @@ export function SettingForm({ settingKey, kind, current, sites, requiresApproval
         {sites.length > 0 && (
           <Field label="Applies to" htmlFor={id("site")} error={fe.siteId}>
             <Select id={id("site")} name="siteId" defaultValue="">
-              <option value="">Whole organization</option>
+              <option value="">All sites</option>
               {sites.map((s) => (
-                <option key={s.id} value={s.id}>Site {s.code} only</option>
+                <option key={s.id} value={s.id}>Only {s.code}</option>
               ))}
             </Select>
           </Field>
         )}
-        <Field label="New value" htmlFor={id("value")} error={fe.value} hint={kind === "json" ? "JSON, same shape as the current value." : undefined}>
+        <Field label="New value" htmlFor={id("value")} error={fe.value} hint={kind === "json" ? "Technical format (JSON), same shape as now. Ask the IT person if unsure." : undefined}>
           {kind === "boolean" ? (
             <Select id={id("value")} name="value" defaultValue={current}>
               <option value="true">On</option>
@@ -40,19 +40,19 @@ export function SettingForm({ settingKey, kind, current, sites, requiresApproval
           )}
         </Field>
       </div>
-      <label className="flex items-center gap-2 text-[13px]">
-        <input type="checkbox" name="clearValue" /> Remove the stored value (use the default or the organization value)
+      <label className="flex min-h-[44px] items-center gap-2 text-[14px]">
+        <input type="checkbox" name="clearValue" className="size-5" /> Go back to the starting value
       </label>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Reason" htmlFor={id("reason")} error={fe.reason}>
+        <Field label="Why you change it" htmlFor={id("reason")} error={fe.reason}>
           <Input id={id("reason")} name="reason" required minLength={3} maxLength={500} placeholder="Why this changes" />
         </Field>
-        <Field label="Your password" htmlFor={id("password")} error={fe.password} hint="Not needed within 10 minutes of “Confirm it’s you”; two-step sign-in users confirm there.">
+        <Field label="Your password" htmlFor={id("password")} error={fe.password} hint="Not needed within 10 minutes of “Confirm it’s you”.">
           <Input id={id("password")} name="password" type="password" autoComplete="current-password" />
         </Field>
       </div>
       <FormMessage state={state} />
-      <SubmitButton variant="primary" size="sm" pendingText="Saving…">{requiresApproval ? "Submit for approval" : "Save change"}</SubmitButton>
+      <SubmitButton variant="primary" pendingText="Saving…">{requiresApproval ? "Send for OK" : "Save change"}</SubmitButton>
     </form>
   );
 }
@@ -68,22 +68,22 @@ export function RequestDecision({ id, canApprove, isOwn }: { id: string; canAppr
         <div className="flex flex-col gap-2 sm:flex-row">
           <form action={approve} className="flex flex-1 flex-wrap items-end gap-2">
             <input type="hidden" name="id" value={id} />
-            <Input name="note" placeholder="Note (optional)" aria-label="Approval note" className="!min-h-[36px] w-40 text-[13px]" />
-            <Input name="password" type="password" placeholder="Your password" aria-label="Your password" autoComplete="current-password" className="!min-h-[36px] w-40 text-[13px]" />
+            <Input name="note" placeholder="Note (optional)" aria-label="Approval note" className="w-full sm:w-40" />
+            <Input name="password" type="password" placeholder="Your password" aria-label="Your password" autoComplete="current-password" className="w-full sm:w-40" />
             <SubmitButton size="sm" pendingText="Approving…">Approve</SubmitButton>
           </form>
           <form action={reject} className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="id" value={id} />
-            <Input name="reason" required minLength={3} placeholder="Reason" aria-label="Reason for rejecting" className="!min-h-[36px] w-40 text-[13px]" />
-            <SubmitButton size="sm" variant="ghost" pendingText="Rejecting…">Reject</SubmitButton>
+            <Input name="reason" required minLength={3} placeholder="Reason" aria-label="Reason for rejecting" className="w-full sm:w-40" />
+            <SubmitButton size="sm" variant="ghost" pendingText="Saving…">Not OK</SubmitButton>
           </form>
         </div>
       )}
       {isOwn && (
         <form action={cancel} className="flex items-center gap-2">
           <input type="hidden" name="id" value={id} />
-          <p className="text-[12px] text-muted">You submitted this; another person must approve it.</p>
-          <SubmitButton size="sm" variant="ghost" pendingText="Withdrawing…">Withdraw</SubmitButton>
+          <p className="text-[13px] text-muted">You asked for this; another person must say OK.</p>
+          <SubmitButton size="sm" variant="ghost" pendingText="Saving…">Take back</SubmitButton>
         </form>
       )}
       <FormMessage state={aState ?? rState ?? cState} />

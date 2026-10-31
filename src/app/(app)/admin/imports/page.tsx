@@ -1,8 +1,10 @@
-import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { IMPORT_STATUS_LABELS, importKindCatalogue, listImportJobs, listMappingProfiles, type ImportJobStatus } from "@/modules/imports";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { MoreDetails, PageIntro } from "@/ui/guide";
+import { MoreMenu } from "@/ui/more-menu";
+import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Help } from "@/ui/help/help";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
@@ -27,105 +29,105 @@ export default async function ImportsPage({ searchParams }: { searchParams: Prom
   const label = Object.fromEntries(kinds.map((k) => [k.kind, k.label]));
   const canCreate = ctx.can("platform.import_job.create");
   const uploadSites = ctx.allowedSites.filter((s) => ctx.canAt("platform.import_job.create", s.id));
+  const STATUS_FILTERS = ["under_review", "submitted", "approved", "posted", "failed"] as const;
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Imports"
-        subtitle="Load master data, opening stock and scanned records from spreadsheets: upload → map columns → validate → review → approve → post."
-        actions={<><Help screen="platform.import" />{ctx.can("documents.legacy_document.view") ? <LinkButton href="/admin/imports/legacy-documents" variant="secondary">Legacy documents</LinkButton> : undefined}</>}
+        title="Load data from a spreadsheet"
+        actions={
+          <>
+            <Help screen="platform.import" />
+            {ctx.can("documents.legacy_document.view") && (
+              <MoreMenu>
+                <LinkButton href="/admin/imports/legacy-documents" variant="secondary" size="sm">Old paper documents (scans)</LinkButton>
+              </MoreMenu>
+            )}
+          </>
+        }
       />
+      <PageIntro>This screen is for the IT person or the owner, when starting out: load materials, products, suppliers or opening stock from Excel. Steps: download the template, fill it in, upload it, match the columns, check, get an OK, then save it for good.</PageIntro>
       {canCreate && uploadSites.length > 0 ? (
         <Card>
-          <CardTitle>New import</CardTitle>
-          <p className="mb-3 text-[13px] text-muted">Start from the template of the kind (below). Load in this order: units and reason codes, locations, materials, products, suppliers, then scanned BMRs and the opening stock count.</p>
-          <UploadForm kinds={kinds.map((k) => ({ kind: k.kind, label: k.label, available: k.available, unavailableReason: k.unavailableReason }))} sites={uploadSites} currentSiteId={uploadSites.some((s) => s.id === ctx.currentSiteId) ? ctx.currentSiteId : uploadSites[0].id} />
+          <CardTitle>Load a new file</CardTitle>
+          <p className="mb-3 text-[13px] text-muted">Load in this order: units and reasons, places, materials, products, suppliers, then scanned batch records and the opening stock count.</p>
+          <UploadForm
+            kinds={kinds.map((k) => ({ kind: k.kind, label: k.label, available: k.available, unavailableReason: k.unavailableReason }))}
+            sites={uploadSites}
+            currentSiteId={uploadSites.some((s) => s.id === ctx.currentSiteId) ? ctx.currentSiteId : uploadSites[0].id}
+            profiles={profiles.map((p) => ({ code: p.code, name: p.name, kindLabel: label[p.importKind] ?? p.importKind }))}
+          />
         </Card>
       ) : (
-        <Banner tone="info" title="Read only">Your role can see imports but not upload them.</Banner>
+        <Banner tone="info" title="You can look, not load">Your role can see the files loaded so far but not load new ones. Ask the owner.</Banner>
       )}
-      <Card>
-        <CardTitle>Imports</CardTitle>
-        <div className="mb-3 flex flex-wrap gap-2 text-[13px]">
-          <Link className="text-primary-text underline" href="/admin/imports">All</Link>
-          {(["under_review", "submitted", "approved", "posted", "failed"] as const).map((s) => (
-            <Link key={s} className="text-primary-text underline" href={`/admin/imports?status=${s}`}>
-              {IMPORT_STATUS_LABELS[s]}
-            </Link>
-          ))}
-        </div>
+      <section aria-labelledby="imports-h">
+        <h2 id="imports-h" className="mb-2 font-display text-[18px] font-semibold">Files loaded</h2>
+        <FilterTabs
+          label="Filter files"
+          active={f.status ?? "all"}
+          tabs={[["all", "All", "/admin/imports"] as const, ...STATUS_FILTERS.map((s) => [s, IMPORT_STATUS_LABELS[s], `/admin/imports?status=${s}`] as const)]}
+        />
         {jobs.length === 0 ? (
-          <EmptyState title="No imports yet">{f.status ? "No import has this status." : "Uploaded files appear here with their validation results."}</EmptyState>
+          <Card>
+            <EmptyState title="No files yet">{f.status ? "No file has this status." : "Files you upload appear here with what was found in them."}</EmptyState>
+          </Card>
         ) : (
-          <Table head={["Import", "Kind", "Site", "File", "Status", "Rows", "Created", "Uploaded"]}>
+          <PlainList label="Files loaded">
             {jobs.map((j) => (
-              <tr key={j.id}>
-                <Td>
-                  <Link className="font-mono text-primary-text underline" href={`/admin/imports/${j.id}`}>
-                    {j.importNumber}
-                  </Link>
-                  {j.source === "loader" && <span className="ml-1 text-[12px] text-muted">(loader)</span>}
-                </Td>
-                <Td>{label[j.importKind] ?? j.importKind}</Td>
-                <Td>{j.siteCode}</Td>
-                <Td className="max-w-[220px] truncate">{j.fileName}</Td>
-                <Td>
-                  <Chip tone={STATUS_TONE[j.status as ImportJobStatus] ?? "neu"}>{IMPORT_STATUS_LABELS[j.status as ImportJobStatus] ?? j.status}</Chip>
-                </Td>
-                <Td className="text-[13px]">
-                  {j.rowsTotal} · ok {j.rowsAccepted + j.rowsHold} · dup {j.rowsDuplicate} · rej {j.rowsRejected}
-                  {j.rowsPossibleDuplicate ? ` · review ${j.rowsPossibleDuplicate}` : ""}
-                </Td>
-                <Td>{j.rowsCreated}</Td>
-                <Td className="text-[13px]">
-                  {j.uploadedBy} · {fmtDateTime(j.uploadedAt)}
-                </Td>
-              </tr>
+              <PlainRow
+                key={j.id}
+                href={`/admin/imports/${j.id}`}
+                title={`${label[j.importKind] ?? j.importKind}: ${j.fileName}`}
+                code={j.importNumber}
+                status={<Chip tone={STATUS_TONE[j.status as ImportJobStatus] ?? "neu"}>{IMPORT_STATUS_LABELS[j.status as ImportJobStatus] ?? j.status}</Chip>}
+                tone={j.status === "failed" ? "bad" : undefined}
+                facts={
+                  <>
+                    {j.rowsTotal} rows · {j.rowsAccepted + j.rowsHold} OK · {j.rowsDuplicate} already there · {j.rowsRejected} refused
+                    {j.rowsPossibleDuplicate ? ` · ${j.rowsPossibleDuplicate} to check` : ""} · {j.siteCode} · {j.uploadedBy} · {fmtDateTime(j.uploadedAt)}
+                  </>
+                }
+              />
             ))}
-          </Table>
+          </PlainList>
         )}
-      </Card>
+      </section>
       <Card>
-        <CardTitle>Templates</CardTitle>
+        <CardTitle>Templates to fill in</CardTitle>
         <ul className="divide-y divide-line text-[14px]">
           {kinds.map((k) => (
             <li key={k.kind} className="flex flex-col gap-1 py-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
+              <div className="min-w-0">
                 <span className="font-medium">{k.label}</span>
                 <p className="text-[13px] text-muted">{k.available ? k.description : k.unavailableReason}</p>
               </div>
-              <div className="flex gap-3 text-[13px]">
-                <a className="text-primary-text underline" href={`/api/v1/imports/templates/${k.kind}?format=xlsx`}>
-                  XLSX
+              <div className="flex gap-2 text-[14px]">
+                <a className="inline-flex min-h-[44px] items-center rounded-full border border-line px-4 text-primary-text" href={`/api/v1/imports/templates/${k.kind}?format=xlsx`}>
+                  Excel
                 </a>
-                <a className="text-primary-text underline" href={`/api/v1/imports/templates/${k.kind}?format=csv`}>
+                <a className="inline-flex min-h-[44px] items-center rounded-full border border-line px-4 text-primary-text" href={`/api/v1/imports/templates/${k.kind}?format=csv`}>
                   CSV
                 </a>
               </div>
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-[12px] text-muted">Example rows are fictional; delete them before you upload. Formulas and macros are never run; only the values are read.</p>
+        <p className="mt-2 text-[13px] text-muted">The example rows are made up; delete them before you upload. Formulas and macros are never run; only the values are read.</p>
       </Card>
-      <Card>
-        <CardTitle>Saved mapping profiles</CardTitle>
+      <MoreDetails title={`Saved column matchings (${profiles.length})`}>
         {profiles.length === 0 ? (
-          <p className="text-[13px] text-muted">None yet. Save a mapping as a profile on an import to reuse it for the next file from the same source.</p>
+          <p className="text-[13px] text-muted">None yet. When you match the columns of a file, you can save the matching for the next file from the same place.</p>
         ) : (
-          <Table head={["Code", "Name", "Kind", "Version", "Saved by"]}>
+          <ul className="divide-y divide-line text-[14px]">
             {profiles.map((p) => (
-              <tr key={p.id}>
-                <Td className="font-mono">{p.code}</Td>
-                <Td>{p.name}</Td>
-                <Td>{label[p.importKind] ?? p.importKind}</Td>
-                <Td>v{p.version}</Td>
-                <Td className="text-[13px]">
-                  {p.createdBy} · {fmtDateTime(p.createdAt)}
-                </Td>
-              </tr>
+              <li key={p.id} className="py-2">
+                <span className="font-medium">{p.name}</span> <span className="text-muted">· {label[p.importKind] ?? p.importKind} · change {p.version} · {p.createdBy} · {fmtDateTime(p.createdAt)}</span>
+                <span className="block font-mono text-[12px] text-muted">{p.code}</span>
+              </li>
             ))}
-          </Table>
+          </ul>
         )}
-      </Card>
+      </MoreDetails>
     </div>
   );
 }

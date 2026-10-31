@@ -1,63 +1,70 @@
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { issueImportFileUrl, searchLegacyDocuments } from "@/modules/imports";
-import { Card, CardTitle, EmptyState, Input, PageHeader, Table, Td } from "@/ui/core";
+import { Card, EmptyState, Input, PageHeader, buttonClass } from "@/ui/core";
+import { MoreDetails, PageIntro } from "@/ui/guide";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { VerifyForm } from "../forms";
 
-export const metadata = { title: "Legacy documents" };
+export const metadata = { title: "Old paper documents" };
 
-/** Search of the scanned paper records by the number staff know (US-2-26, R-17). */
+/** Search of the scanned paper records by the number staff know (US-2-26, R-17). One card per document (phone-friendly). */
 export default async function LegacyDocumentsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("documents.legacy_document.view")) return <Forbidden what="legacy documents" />;
+  if (!ctx.can("documents.legacy_document.view")) return <Forbidden what="old paper documents" />;
   const { q } = await searchParams;
   const docs = await searchLegacyDocuments(ctx, { q });
   const links = new Map<string, string>();
   if (ctx.can("documents.file_attachment.view")) for (const d of docs) links.set(d.id, (await issueImportFileUrl(ctx, d.fileAttachmentId)).url);
   return (
     <div className="space-y-5">
-      <PageHeader title="Legacy documents" subtitle="Scanned paper batch records and other historical documents, indexed at go-live. They are history only: never batches, never stock." />
+      <PageHeader title="Old paper documents" />
+      <PageIntro>This screen is for finding a scanned paper record from before the app (for example an old batch record). Type the number written on the paper or the product name. These are history only: they are never batches or stock.</PageIntro>
       <Card>
-        <form className="mb-3 flex gap-2" action="/admin/imports/legacy-documents">
-          <Input name="q" defaultValue={q ?? ""} placeholder="Legacy number, LDOC number or product" aria-label="Search" />
+        <form className="mb-3 flex gap-2" action="/admin/imports/legacy-documents" role="search">
+          <Input name="q" defaultValue={q ?? ""} placeholder="Number on the paper, or product" aria-label="Search old documents" />
+          <button className={buttonClass("secondary")}>Search</button>
         </form>
         {docs.length === 0 ? (
-          <EmptyState title="No legacy documents">{q ? "Nothing matches the search." : "Scanned records appear here after a legacy documents import is posted."}</EmptyState>
+          <EmptyState title="Nothing found">{q ? "Check the number, or try the product name." : "Scanned records appear here after they are loaded (see below)."}</EmptyState>
         ) : (
-          <Table head={["Document", "Legacy number", "Product", "Dates", "Disposition", "Index check", "Scan"]}>
+          <ul aria-label="Old documents" className="flex flex-col divide-y divide-line rounded-[16px] border border-line">
             {docs.map((d) => (
-              <tr key={d.id} className="align-top">
-                <Td className="font-mono">{d.documentNumber}</Td>
-                <Td>
-                  {d.legacyKind.toUpperCase()} {d.legacyNumber}
-                </Td>
-                <Td>{d.productCode ? `${d.productCode} ${d.productName}` : "—"}</Td>
-                <Td className="text-[13px]">
-                  {d.startDate ? fmtDate(d.startDate) : "?"} – {d.endDate ? fmtDate(d.endDate) : "?"}
-                  {d.expiryDate ? ` · exp ${fmtDate(d.expiryDate)}` : ""}
-                </Td>
-                <Td>{d.disposition ?? "—"}</Td>
-                <Td className="text-[13px]">
-                  {d.verifiedAt ? (
-                    <Chip tone="ok">Verified by {d.verifiedByName}</Chip>
-                  ) : ctx.can("documents.legacy_document.approve") && d.indexedBy !== ctx.userId ? (
-                    <VerifyForm documentId={d.id} />
-                  ) : (
-                    <Chip tone="warn">Not verified (indexed by {d.indexedByName})</Chip>
-                  )}
-                </Td>
-                <Td>{links.get(d.id) ? <a className="text-primary-text underline" href={links.get(d.id)}>Download</a> : "—"}</Td>
-              </tr>
+              <li key={d.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[15px] font-semibold text-fg">
+                    {d.productName ?? "No product"} · {d.legacyKind.toUpperCase()} {d.legacyNumber}
+                  </p>
+                  <p className="text-[13px] text-fg-2">
+                    {d.startDate ? fmtDate(d.startDate) : "?"} – {d.endDate ? fmtDate(d.endDate) : "?"}
+                    {d.expiryDate ? ` · expires ${fmtDate(d.expiryDate)}` : ""}
+                    {d.disposition ? ` · QA: ${d.disposition}` : ""}
+                    <span className="ml-1 font-mono text-[12px] text-muted">· {d.documentNumber}</span>
+                  </p>
+                  <div className="mt-1 text-[13px]">
+                    {d.verifiedAt ? (
+                      <Chip tone="ok">Checked by {d.verifiedByName}</Chip>
+                    ) : ctx.can("documents.legacy_document.approve") && d.indexedBy !== ctx.userId ? (
+                      <VerifyForm documentId={d.id} />
+                    ) : (
+                      <Chip tone="warn">Not checked yet (typed in by {d.indexedByName})</Chip>
+                    )}
+                  </div>
+                </div>
+                {links.get(d.id) && (
+                  <a className={buttonClass("secondary", "sm")} href={links.get(d.id)}>
+                    Open the scan
+                  </a>
+                )}
+              </li>
             ))}
-          </Table>
+          </ul>
         )}
       </Card>
-      <Card>
-        <CardTitle>How documents are added</CardTitle>
-        <p className="text-[13px] text-muted">Use the “Legacy documents (scanned BMRs)” import: fill the template with the header fields as printed, upload the scans with matching file names, validate, approve and post. A second person verifies each index against its scan.</p>
-      </Card>
+      <MoreDetails title="How old documents are added">
+        <p className="text-[13px] text-muted">Use “Load data from a spreadsheet” → “Legacy documents (scanned BMRs)”: fill the template with what is printed on each paper, upload the scans with the same file names, check, get an OK and save. A second person checks each entry against its scan.</p>
+      </MoreDetails>
     </div>
   );
 }

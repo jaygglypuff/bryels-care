@@ -1,6 +1,8 @@
 "use client";
 import { Field, Input, Select } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
+import { MoreDetails } from "@/ui/guide";
+import { plainRole } from "@/ui/role-names";
 import { saveNotificationRuleAction } from "../../action-centre/actions";
 
 export type RuleValue = {
@@ -26,9 +28,9 @@ function RoleBoxes({ name, label, selected, roles, error }: { name: string; labe
       <legend className="px-1 text-[13px] font-medium">{label}</legend>
       <div className="grid gap-1 sm:grid-cols-2">
         {roles.map((r) => (
-          <label key={r.code} className="flex items-center gap-2 text-[13px]">
-            <input type="checkbox" name={name} value={r.code} defaultChecked={selected.includes(r.code)} />
-            <span className="truncate">{r.name}</span>
+          <label key={r.code} className="flex min-h-[44px] items-center gap-2 text-[14px]">
+            <input type="checkbox" name={name} value={r.code} defaultChecked={selected.includes(r.code)} className="size-5" />
+            <span className="min-w-0 break-words">{plainRole(r.code, r.name)}</span>
           </label>
         ))}
       </div>
@@ -41,51 +43,53 @@ function RoleBoxes({ name, label, selected, roles, error }: { name: string; labe
 export function NotificationRuleForm({ value, opts }: { value: RuleValue; opts: Opts }) {
   const p = (k: string) => `${value.id ?? "new"}-${k}`;
   return (
-    <ActionForm action={saveNotificationRuleAction} hidden={{ id: value.id, version: value.version !== undefined ? String(value.version) : undefined }} submit={value.id ? "Save rule" : "Add rule"} variant="secondary" size="sm">
+    <ActionForm action={saveNotificationRuleAction} hidden={{ id: value.id, version: value.version !== undefined ? String(value.version) : undefined }} submit={value.id ? "Save rule" : "Add rule"} variant="primary">
       {(fe) => (
         <div className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Item kind" htmlFor={p("kind")} error={fe.itemKind}>
-              <Select id={p("kind")} name="itemKind" defaultValue={value.itemKind}>
-                {opts.kinds.map((k) => (
-                  <option key={k.kind} value={k.kind}>{k.label}</option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Where" htmlFor={p("site")} error={fe.siteId}>
-              <Select id={p("site")} name="siteId" defaultValue={value.siteId ?? ""}>
-                <option value="">Every site</option>
-                {opts.sites.map((s) => (
-                  <option key={s.id} value={s.id}>Site {s.code} (beats the organization rule)</option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Rule name" htmlFor={p("name")} error={fe.name}>
-              <Input id={p("name")} name="name" defaultValue={value.name} required minLength={3} maxLength={120} />
-            </Field>
-            <Field label="Severity" htmlFor={p("sev")} error={fe.severity}>
-              <Select id={p("sev")} name="severity" defaultValue={value.severity}>
-                <option value="info">Info</option>
-                <option value="warning">Warning</option>
-                <option value="critical">Critical</option>
-              </Select>
-            </Field>
-          </div>
+          <Field label="When this happens" htmlFor={p("kind")} error={fe.itemKind}>
+            <Select id={p("kind")} name="itemKind" defaultValue={value.itemKind}>
+              {opts.kinds.map((k) => (
+                <option key={k.kind} value={k.kind}>{k.label}</option>
+              ))}
+            </Select>
+          </Field>
           <div className="grid gap-3 lg:grid-cols-2">
-            <RoleBoxes name="ownerRoleCodes" label="Notify when it opens" selected={value.ownerRoleCodes} roles={opts.roles} error={fe.ownerRoleCodes} />
-            <RoleBoxes name="escalationRoleCodes" label="Escalate to" selected={value.escalationRoleCodes} roles={opts.roles} error={fe.escalationRoleCodes} />
+            <RoleBoxes name="ownerRoleCodes" label="Tell these people" selected={value.ownerRoleCodes} roles={opts.roles} error={fe.ownerRoleCodes} />
+            <RoleBoxes name="escalationRoleCodes" label="If nobody reacts, also tell" selected={value.escalationRoleCodes} roles={opts.roles} error={fe.escalationRoleCodes} />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
-            <Field label="Escalate when unacknowledged for (hours)" htmlFor={p("hours")} error={fe.escalateAfterHours} hint="Empty = never escalate">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Nobody reacted after (hours)" htmlFor={p("hours")} error={fe.escalateAfterHours} hint="Empty = never pass it up">
               <Input id={p("hours")} name="escalateAfterHours" type="number" min={1} max={720} defaultValue={value.escalateAfterHours ?? ""} />
             </Field>
-            <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" name="emailOnOpen" defaultChecked={value.emailOnOpen} /> Email when it opens</label>
-            <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" name="emailOnEscalation" defaultChecked={value.emailOnEscalation} /> Email on escalation</label>
-            <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" name="isActive" defaultChecked={value.isActive} /> Rule active</label>
+            <Field label="Why you change this" htmlFor={p("reason")} error={fe.reason}>
+              <Input id={p("reason")} name="reason" required minLength={3} maxLength={500} />
+            </Field>
           </div>
-          <Field label="Reason for the change" htmlFor={p("reason")} error={fe.reason}>
-            <Input id={p("reason")} name="reason" required minLength={3} maxLength={500} />
-          </Field>
+          <MoreDetails open={!!(fe.siteId || fe.name || fe.severity)}>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field label="Where" htmlFor={p("site")} error={fe.siteId}>
+                <Select id={p("site")} name="siteId" defaultValue={value.siteId ?? ""}>
+                  <option value="">Every site</option>
+                  {opts.sites.map((s) => (
+                    <option key={s.id} value={s.id}>Only {s.code} (wins over “every site”)</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Name of this rule" htmlFor={p("name")} error={fe.name}>
+                <Input id={p("name")} name="name" defaultValue={value.name || "Tell the right people"} required minLength={3} maxLength={120} />
+              </Field>
+              <Field label="How serious" htmlFor={p("sev")} error={fe.severity}>
+                <Select id={p("sev")} name="severity" defaultValue={value.severity}>
+                  <option value="info">For information</option>
+                  <option value="warning">Look at it soon</option>
+                  <option value="critical">Urgent</option>
+                </Select>
+              </Field>
+            </div>
+            <label className="flex min-h-[44px] items-center gap-2 text-[14px]"><input type="checkbox" name="emailOnOpen" defaultChecked={value.emailOnOpen} className="size-5" /> Also send an email when it happens</label>
+            <label className="flex min-h-[44px] items-center gap-2 text-[14px]"><input type="checkbox" name="emailOnEscalation" defaultChecked={value.emailOnEscalation} className="size-5" /> Also send an email when it is passed up</label>
+            <label className="flex min-h-[44px] items-center gap-2 text-[14px]"><input type="checkbox" name="isActive" defaultChecked={value.isActive} className="size-5" /> This rule is on</label>
+          </MoreDetails>
         </div>
       )}
     </ActionForm>

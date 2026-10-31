@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import type { ActionState } from "@/lib/errors";
 import { Button, Field, Input, Select, Textarea } from "@/ui/core";
 import { ActionForm, FormMessage } from "@/ui/form";
+import { MoreDetails } from "@/ui/guide";
 import { approveAction, decideAction, postAction, rejectAction, returnAction, saveMappingAction, submitAction, validateAction, verifyLegacyAction, voidAction } from "./actions";
 
 const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
@@ -11,7 +12,7 @@ const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? 
 type KindOption = { kind: string; label: string; available: boolean; unavailableReason: string | null };
 
 /** Step 1 (upload): multipart POST to /api/v1/imports, then opens the new import. */
-export function UploadForm({ kinds, sites, currentSiteId }: { kinds: KindOption[]; sites: { id: string; code: string; name: string }[]; currentSiteId: string }) {
+export function UploadForm({ kinds, sites, currentSiteId, profiles = [] }: { kinds: KindOption[]; sites: { id: string; code: string; name: string }[]; currentSiteId: string; profiles?: { code: string; name: string; kindLabel: string }[] }) {
   const router = useRouter();
   const key = useRef<string>(newKey());
   const [busy, setBusy] = useState(false);
@@ -44,7 +45,7 @@ export function UploadForm({ kinds, sites, currentSiteId }: { kinds: KindOption[
       <Field label="What are you importing?" htmlFor="imp-kind">
         <Select id="imp-kind" name="kind" required defaultValue="">
           <option value="" disabled>
-            Choose the import kind
+            Choose what is in the file
           </option>
           {kinds.map((k) => (
             <option key={k.kind} value={k.kind} disabled={!k.available}>
@@ -54,11 +55,11 @@ export function UploadForm({ kinds, sites, currentSiteId }: { kinds: KindOption[
           ))}
         </Select>
       </Field>
-      <Field label="Site" htmlFor="imp-site" hint="Opening stock and locations load into this site.">
+      <Field label="Site" htmlFor="imp-site" hint="Opening stock and places load into this site.">
         <Select id="imp-site" name="siteId" defaultValue={currentSiteId}>
           {sites.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.code} · {s.name}
+              {s.name}
             </option>
           ))}
         </Select>
@@ -66,9 +67,20 @@ export function UploadForm({ kinds, sites, currentSiteId }: { kinds: KindOption[
       <Field label="File (CSV UTF-8 or .xlsx, up to 20 MB)" htmlFor="imp-file" error={field === "file" ? (msg?.message ?? undefined) : undefined}>
         <Input id="imp-file" name="file" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required />
       </Field>
-      <Field label="Saved mapping profile (optional)" htmlFor="imp-map" hint="Code of a profile saved from an earlier file.">
-        <Input id="imp-map" name="mappingCode" placeholder="e.g. PURCHASE-LIST" maxLength={64} />
-      </Field>
+      <div className="sm:col-span-2">
+        <MoreDetails>
+          <Field label="Use saved column matching (optional)" htmlFor="imp-map" hint="Saved from an earlier file of the same kind.">
+            <Select id="imp-map" name="mappingCode" defaultValue="">
+              <option value="">No, I will match the columns</option>
+              {profiles.map((pr) => (
+                <option key={pr.code} value={pr.code}>
+                  {pr.name} ({pr.kindLabel})
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </MoreDetails>
+      </div>
       {field === "reuploadReason" && (
         <div className="sm:col-span-2">
           <Field label="Reason to load the same file again" htmlFor="imp-reason">
@@ -127,6 +139,23 @@ export function ScanUploadForm({ jobId }: { jobId: string }) {
 
 type Col = { key: string; label: string; required?: boolean; hint: string };
 
+/** "Save this matching" by name; its technical code is made from the name (ADR-088), editable on request. */
+function ProfileFields({ error, nameError }: { error?: string; nameError?: string }) {
+  const [name, setName] = useState("");
+  const [code, setCode] = useState<string | null>(null);
+  const auto = name.trim() ? name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) : "";
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <Field label="Save this matching for next time: name (optional)" htmlFor="map-pn" hint="For the next file from the same place." error={nameError}>
+        <Input id="map-pn" name="profileName" maxLength={120} placeholder="e.g. Purchase list export" value={name} onChange={(e) => setName(e.target.value)} />
+      </Field>
+      <Field label="Technical name (made for you)" htmlFor="map-pc" error={error}>
+        <Input id="map-pc" name="profileCode" maxLength={64} value={code ?? auto} onChange={(e) => setCode(e.target.value)} className="font-mono" />
+      </Field>
+    </div>
+  );
+}
+
 /** Step 2 (mapping): template column → file column, formats (A-MIG-04), optional profile save. */
 export function MappingForm({ jobId, columns, headers, mapping }: { jobId: string; columns: Col[]; headers: string[]; mapping: { columns: Record<string, string | null>; dateFormat: string; decimalSeparator: string; thousandsSeparator: string } | null }) {
   return (
@@ -147,8 +176,9 @@ export function MappingForm({ jobId, columns, headers, mapping }: { jobId: strin
               </Field>
             ))}
           </div>
+          <MoreDetails title="Dates, numbers and saving this matching (you can skip this)">
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Date format in the file" htmlFor="map-date">
+            <Field label="How dates are written in the file" htmlFor="map-date">
               <Select id="map-date" name="dateFormat" defaultValue={mapping?.dateFormat ?? "DD/MM/YYYY"}>
                 <option value="DD/MM/YYYY">DD/MM/YYYY (31/01/2027)</option>
                 <option value="MM/DD/YYYY">MM/DD/YYYY (01/31/2027)</option>
@@ -170,14 +200,8 @@ export function MappingForm({ jobId, columns, headers, mapping }: { jobId: strin
               </Select>
             </Field>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Save as profile (code, optional)" htmlFor="map-pc" hint="Reuse this mapping for the next file from the same source." error={fe.profileCode ?? fe["profile.code"]}>
-              <Input id="map-pc" name="profileCode" maxLength={64} placeholder="e.g. PURCHASE-LIST" />
-            </Field>
-            <Field label="Profile name" htmlFor="map-pn" error={fe["profile.name"]}>
-              <Input id="map-pn" name="profileName" maxLength={120} placeholder="e.g. Purchase list export" />
-            </Field>
-          </div>
+          <ProfileFields error={fe.profileCode ?? fe["profile.code"]} nameError={fe["profile.name"]} />
+          </MoreDetails>
         </>
       )}
     </ActionForm>
