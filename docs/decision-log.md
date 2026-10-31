@@ -1712,3 +1712,21 @@ Formula and production services unchanged; no migration.
 
 Consequences: tests `tests/unit/masterdata-recipe-pieces.test.ts`, `tests/integration/masterdata/recipe-wizard.test.ts`;
 the advanced formula revision page still adds packaging pieces into its gram total (to fix).
+
+## ADR-095 Grade-5 pass of every screen completed (ADR-088 delivery, 2026-10-31)
+
+Status: Accepted.
+
+Decision: all screens in `docs/PAGE_REVIEW.md` (Production, Quality, Maintenance, Setup, Inventory, Purchasing,
+Finance, Sales, Reports, Settings & people, Home, Help, Operations) follow the standard: one "This screen is for…"
+sentence, a "What to do next" box on record pages, at most five visible fields with the rest folded, no typed codes,
+names before codes, plain words, phone 390 px without sideways scroll. Shared pieces: `src/ui/guide.tsx`,
+`src/ui/plain-list.tsx`, `src/ui/name-and-code.tsx`, `src/ui/qty-unit-input.tsx`. Menu items use the same words as the
+screens (e.g. Problem reports, Stopped by QA, Repair jobs, To get from shelf, Send out, Price offers, Requests to buy,
+Running low, Money, Close the month, People, History of changes). Help is five role guides ("Your day in 5 steps") plus
+"Words we use". Stored codes, statuses, permission strings, exports and printed GMP records keep their names;
+renaming printed records needs QA sign-off. New read model `getTopProducts` for the Reports landing.
+
+Consequences: per-area unit tests `tests/unit/grade5-*.test.ts` guard the intro sentence, no typed codes and the jargon
+titles. Open: 118 of 170 settings have no written description; supplier-bill lines still priced per base unit; the
+finance "Approved by" row lacks "(own request)".
