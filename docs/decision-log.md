@@ -1762,3 +1762,23 @@ control is kept: immutable ledger with reasoned undo, count freeze and independe
 Consequences: test `tests/unit/grade5-inventory.test.ts`; menu items renamed (Stock changes, Deliveries received,
 Shelves, Boxes and sacks, Being made, Expiring soon, Can we deliver?, Move stock…). With this every screen in
 `docs/PAGE_REVIEW.md` is ☑.
+
+## ADR-098 One way to identify stock things (UX audit round 1, 2026-10-31)
+
+Status: Accepted; A-SCAN-10..14 need the owner/QA (tap is not a scan, order of found lots, label places, receiving
+layout).
+
+Decision: every field that identifies a lot, box, shelf, batch or item uses `<ScanOrPick>` (`src/ui/scan-or-pick.tsx`):
+tap one of the expected candidates, scan (camera or handheld scanner), or find by name — never a bare code text box;
+the value is a hidden input only a tap, scan or found item can fill, so a placeholder can never be submitted. Servers
+(`resolveLotRef`, `resolveLocationRef`, `findLotForCount`, `findPickCandidates`/`resolvePickRef` in
+`src/modules/scan/pick.ts`, site and permission scoped) accept a candidate id, a `BC:` label or a plain number and
+refuse the placeholder, words, labels of another kind and other sites' records. A tap is recorded as "entered by hand"
+(with a reason where a scan was expected), never as a scan. Verification scans (second check of a box, boxing check,
+label verification) cannot be tapped. Found lots list usable stock first, then waiting for QA, then expired or stopped
+(marked), each with shelf, amount and use-by date.
+
+Consequences: field inventory in `docs/SCAN_INPUTS.md`; tests `tests/unit/scan/scan-or-pick.test.ts`,
+`tests/integration/scan/scan-or-pick.test.ts`. Open: production fields adopt the component (production pass); receiving
+without a purchase order still has 6 fields and mixes spare parts into the item list; machine labels `BC:EQP` not yet
+accepted in these fields.
