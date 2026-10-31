@@ -228,6 +228,7 @@ export {
   prepareRecipe,
   createRecipeProduct,
   createRecipeIngredient,
+  createRecipePackaging,
   recipeWizardOptions,
   getRecipe,
   getRecipeCopy,

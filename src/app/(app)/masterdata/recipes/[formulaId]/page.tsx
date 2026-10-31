@@ -113,7 +113,7 @@ function RecipeOverview({ r, saved }: { r: RecipeView; saved?: string }) {
       <Card>
         <RecipeSummary
           productName={r.product.name}
-          product={{ unitNetMassG: r.product.unitNetMassG, family: r.product.family }}
+          product={{ unitNetMassG: r.product.unitNetMassG, family: r.product.family, pieceG: r.product.pieceG }}
           draft={r.draft}
           materialName={(id) => r.materialNames[id] ?? "Unknown ingredient"}
           ingredientsLabel={word(fShown)}

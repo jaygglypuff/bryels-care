@@ -18,6 +18,11 @@ export default async function NewRecipePage({ searchParams }: { searchParams: Pr
     productId: pre?.id ?? "",
     formulaId: null,
     routingId: null,
+    // ADR-088 §4: new recipes start "by pieces" (the owner counts batches in pieces); by weight is one tap away.
+    batchBy: "pcs",
+    pieces: "",
+    pieceG: "",
+    packaging: [],
     batchKg: "",
     expectedPct: "100",
     view: "pct",

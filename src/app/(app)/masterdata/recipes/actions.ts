@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { requireContext } from "@/lib/auth/context";
 import { type ActionState, toActionState } from "@/lib/errors";
-import { createRecipeIngredient, createRecipeProduct, getRecipeCopy, saveRecipe } from "@/modules/masterdata";
+import { createRecipeIngredient, createRecipePackaging, createRecipeProduct, getRecipeCopy, saveRecipe } from "@/modules/masterdata";
 
 /**
  * Server actions of the guided recipe wizard (ADR-089): thin adapters that call the masterdata
@@ -49,6 +49,17 @@ export async function createRecipeIngredientAction(payload: unknown) {
       const ctx = await requireContext();
       const m = await createRecipeIngredient(ctx, payload);
       return { data: m, message: `Ingredient ${m.name} added (${m.code}).` };
+    },
+    ["/masterdata/materials"],
+  );
+}
+
+export async function createRecipePackagingAction(payload: unknown) {
+  return run(
+    async () => {
+      const ctx = await requireContext();
+      const m = await createRecipePackaging(ctx, payload);
+      return { data: m, message: `Packaging item ${m.name} added (${m.code}).` };
     },
     ["/masterdata/materials"],
   );
