@@ -3,22 +3,25 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { creditNoteReasons, creditableReturns, getInvoice } from "@/modules/finance";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
 import { Money } from "../../finance-ui";
 import { CreditNoteForm } from "./credit-note-form";
 
-export const metadata = { title: "New credit note" };
+export const metadata = { title: "Give a credit (money back)" };
 
+/** New credit note on one sent invoice: why and how much; the credit number is made when it is saved to the books. */
 export default async function NewCreditNotePage({ searchParams }: { searchParams: Promise<{ invoiceId?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("finance.credit_note.create")) return <Forbidden what="credit notes" />;
+  if (!ctx.can("finance.credit_note.create")) return <Forbidden what="credits (money back)" />;
   const { invoiceId } = await searchParams;
   if (!invoiceId) {
     return (
       <>
-        <PageHeader title="New credit note" />
-        <EmptyState title="Choose the invoice first" action={<LinkButton href="/finance/invoices?status=issued">Open issued invoices</LinkButton>}>
-          A credit note always belongs to one issued invoice.
+        <PageHeader title="Give a credit (money back)" />
+        <PageIntro>This screen is for lowering what a customer owes on one invoice. Open the invoice first.</PageIntro>
+        <EmptyState title="Pick the invoice first" action={<LinkButton href="/finance/invoices?status=issued">Invoices not paid yet</LinkButton>}>
+          A credit always belongs to one sent invoice. Open it and choose ⋯ More → “Give a credit (money back)”.
         </EmptyState>
       </>
     );
@@ -36,16 +39,19 @@ export default async function NewCreditNotePage({ searchParams }: { searchParams
   const canVoid = Number(i.paidAmount) === 0 && Number(i.creditedAmount) === 0;
   return (
     <>
-      <PageHeader title={`Credit note for ${i.invoiceNumber ?? "invoice"}`} subtitle={d.customer.name} actions={<LinkButton href={`/finance/invoices/${i.id}`} variant="secondary">Back to invoice</LinkButton>} />
+      <PageHeader title={`Money back for ${d.customer.name}`} subtitle={`On invoice ${i.invoiceNumber ?? "—"}`} actions={<LinkButton href={`/finance/invoices/${i.id}`} variant="secondary">Back to the invoice</LinkButton>} />
+      <PageIntro>This screen is for lowering what {d.customer.name} owes on this invoice: say why and how much. A second person approves it, then finance saves it to the books.</PageIntro>
       {!["issued", "partially_paid"].includes(i.status) ? (
-        <EmptyState title="This invoice cannot take a credit">Only an issued invoice with an open amount can be credited.</EmptyState>
+        <EmptyState title="This invoice cannot get a credit" action={<LinkButton href={`/finance/invoices/${i.id}`} variant="secondary">Back to the invoice</LinkButton>}>
+          Only an invoice that was sent and is not fully paid can get money back. Ask finance if this looks wrong.
+        </EmptyState>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <CreditNoteForm invoiceId={i.id} reasons={reasons} returns={returns.map((r) => ({ id: r.id, label: `${r.returnNumber} (${r.status})` }))} canVoid={canVoid} />
+          <CreditNoteForm invoiceId={i.id} reasons={reasons} returns={returns.map((r) => ({ id: r.id, label: `Return ${r.returnNumber} (${r.status})` }))} canVoid={canVoid} openAmount={i.openAmount} />
           <Card>
-            <CardTitle>Invoice</CardTitle>
-            <Dl items={[["Total", <Money key="t" value={i.totalAmount} />], ["Open", <Money key="o" value={i.openAmount} />], ["Tax", <Money key="x" value={i.taxAmount} />]]} />
-            <p className="mt-3 text-[12px] text-muted">The tax share of a credit is pro rata to the invoice&apos;s tax (placeholder treatment for the accountant to confirm).</p>
+            <CardTitle>The invoice</CardTitle>
+            <Dl items={[["Total", <Money key="t" value={i.totalAmount} />], ["Still to pay", <Money key="o" value={i.openAmount} />], ["Tax in it", <Money key="x" value={i.taxAmount} />]]} />
+            <p className="mt-3 text-[13px] text-muted">The tax part of a credit follows the invoice&apos;s tax share (for the accountant to confirm).</p>
           </Card>
         </div>
       )}

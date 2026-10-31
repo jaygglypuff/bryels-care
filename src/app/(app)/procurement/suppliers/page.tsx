@@ -1,78 +1,75 @@
-import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
-import { fmtDateTime } from "@/lib/qty";
+import { fmtDate } from "@/lib/qty";
 import { listSuppliers } from "@/modules/masterdata";
 import { listAslQueue } from "@/modules/procurement";
-import { Card, CardTitle, EmptyState, PageHeader, Table, Td } from "@/ui/core";
+import { Card, CardTitle, EmptyState, PageHeader } from "@/ui/core";
+import { NextStep, PageIntro } from "@/ui/guide";
+import { PlainList, PlainRow } from "@/ui/plain-list";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
-import { SubNav } from "../_ui";
+import { SubNav, SupplierChip } from "../_ui";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Approved suppliers" };
+export const metadata = { title: "Suppliers we may buy from" };
 
-/** Approved-supplier list (US-6-01, W04-11): proposals waiting for QA, then every supplier. */
-export default async function SuppliersPage() {
+/** Approved-supplier list (US-6-01, W04-11): what waits for QA, then every supplier by name. */
+export default async function SuppliersPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("masterdata.supplier.view")) return <Forbidden what="suppliers" />;
+  const { q } = await searchParams;
   const [queue, sups] = await Promise.all([listAslQueue(ctx), listSuppliers(ctx)]);
+  const needle = (q ?? "").trim().toLowerCase();
+  const shown = needle ? sups.filter((s) => s.name.toLowerCase().includes(needle) || s.code.toLowerCase().includes(needle)) : sups;
+  const canDecide = ctx.can("masterdata.supplier.approve");
+  const mine = queue.filter((x) => x.proposedBy !== ctx.userId);
   return (
     <>
-      <PageHeader title="Approved suppliers" subtitle="Procurement proposes supplier × material pairs; QA approves or suspends them. Only approved pairs can be ordered." />
+      <PageHeader title="Suppliers we may buy from" />
+      <PageIntro>This screen is for which items we may buy from which supplier. Purchasing suggests a supplier for an item; QA says yes or no. Only “yes” items can go on a purchase order.</PageIntro>
+      {canDecide && mine.length > 0 && <NextStep text={`Next: ${mine.length} suggestion(s) wait for a QA decision.`} action={{ label: "Open the first", href: `/procurement/suppliers/${mine[0].supplierId}` }} />}
       <SubNav />
       <div className="flex flex-col gap-5">
-        <Card>
-          <CardTitle>Waiting for QA</CardTitle>
-          {queue.length === 0 ? (
-            <p className="text-[13px] text-muted">No proposals waiting.</p>
-          ) : (
-            <Table head={["Supplier", "Material", "Proposal", "Proposed by", "Evidence / note"]}>
-              {queue.map((q) => (
-                <tr key={q.id}>
-                  <Td>
-                    <Link className="text-primary-text hover:underline" href={`/procurement/suppliers/${q.supplierId}`}>
-                      {q.supplierName}
-                    </Link>
-                  </Td>
-                  <Td>
-                    {q.materialCode}
-                    <div className="text-[12px] text-muted">{q.materialName}</div>
-                  </Td>
-                  <Td>
-                    <Chip tone={q.action === "suspend" ? "warn" : "appr"}>{q.actionLabel}</Chip>
-                  </Td>
-                  <Td className="whitespace-nowrap">
-                    {q.proposedByName}
-                    <div className="text-[12px] text-muted">{fmtDateTime(q.proposedAt)}</div>
-                  </Td>
-                  <Td className="text-[13px]">{q.note}</Td>
-                </tr>
+        {queue.length > 0 && (
+          <Card>
+            <CardTitle>Waiting for QA</CardTitle>
+            <PlainList label="Waiting for QA">
+              {queue.map((x) => (
+                <PlainRow
+                  key={x.id}
+                  href={`/procurement/suppliers/${x.supplierId}`}
+                  title={`${x.supplierName} · ${x.materialName}`}
+                  code={x.materialCode}
+                  status={<Chip tone={x.action === "suspend" ? "warn" : "appr"}>{x.action === "suspend" ? "Stop buying – QA to decide" : "Start buying – QA to decide"}</Chip>}
+                  facts={`Suggested by ${x.proposedByName}, ${fmtDate(x.proposedAt)}${x.note ? ` · ${x.note}` : ""}`}
+                />
               ))}
-            </Table>
-          )}
-        </Card>
+            </PlainList>
+          </Card>
+        )}
         <Card>
-          <CardTitle>Suppliers</CardTitle>
+          <CardTitle>All suppliers</CardTitle>
+          <form method="get" role="search" className="mb-3 flex flex-wrap items-center gap-2">
+            <label htmlFor="s-q" className="sr-only">Find a supplier</label>
+            <input id="s-q" name="q" defaultValue={q ?? ""} placeholder="Type part of the supplier's name" autoComplete="off" className="min-h-[44px] min-w-0 flex-1 rounded-[12px] border border-line bg-surface px-3 text-[15px]" />
+            <button type="submit" className="inline-flex min-h-[44px] items-center rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2">Find</button>
+          </form>
           {sups.length === 0 ? (
-            <EmptyState title="No suppliers yet">Suppliers are created under Master data → Suppliers.</EmptyState>
+            <EmptyState title="No suppliers yet">Suppliers are added under Master data → Suppliers. Ask the administrator or purchasing.</EmptyState>
+          ) : shown.length === 0 ? (
+            <EmptyState title="No supplier with that name">Try fewer letters.</EmptyState>
           ) : (
-            <Table head={["Supplier", "Quality status", "Lead time", "Receipts"]}>
-              {sups.map((s) => (
-                <tr key={s.id}>
-                  <Td>
-                    <Link className="text-primary-text hover:underline" href={`/procurement/suppliers/${s.id}`}>
-                      {s.name}
-                    </Link>
-                    <div className="text-[12px] text-muted">{s.code}</div>
-                  </Td>
-                  <Td>
-                    <Chip tone={s.qualityStatus === "approved" ? "ok" : s.qualityStatus === "suspended" ? "bad" : "warn"}>{s.qualityStatus}</Chip>
-                  </Td>
-                  <Td>{s.defaultLeadTimeDays !== null ? `${s.defaultLeadTimeDays} d` : "—"}</Td>
-                  <Td>{s.receipts}</Td>
-                </tr>
+            <PlainList label="Suppliers">
+              {shown.map((s) => (
+                <PlainRow
+                  key={s.id}
+                  href={`/procurement/suppliers/${s.id}`}
+                  title={s.name}
+                  code={s.code}
+                  status={<SupplierChip status={s.qualityStatus} />}
+                  facts={`${s.defaultLeadTimeDays !== null ? `Takes about ${s.defaultLeadTimeDays} day(s) to deliver` : "Delivery time not set"} · ${s.receipts} deliver${s.receipts === 1 ? "y" : "ies"}`}
+                />
               ))}
-            </Table>
+            </PlainList>
           )}
         </Card>
       </div>

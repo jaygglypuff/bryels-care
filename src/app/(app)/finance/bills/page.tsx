@@ -1,72 +1,59 @@
-import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { listSupplierBills } from "@/modules/finance";
-import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { NextStep, PageIntro } from "@/ui/guide";
+import { PlainList, PlainRow } from "@/ui/plain-list";
 import { Forbidden } from "../../forbidden";
-import { FinanceStatus, Money, ResponsiveList, StatusTabs } from "../finance-ui";
+import { FinanceStatus, RowAmount, StatusTabs } from "../finance-ui";
 
 export const metadata = { title: "Supplier bills" };
 
 const TABS = [
   ["", "All"],
-  ["draft", "Draft"],
-  ["disputed", "In dispute"],
+  ["draft", "Drafts"],
+  ["disputed", "Does not match"],
   ["submitted", "To approve"],
-  ["approved", "To post"],
-  ["posted", "Posted"],
-  ["partially_paid", "Partly paid"],
+  ["approved", "To save to the books"],
+  ["posted", "To pay"],
+  ["partially_paid", "Part paid"],
   ["paid", "Paid"],
 ] as const;
 
-/** US-6-11: what we owe suppliers, matched against receipts (and purchase orders once connected). */
+/** US-6-11: supplier bills (money we owe), checked against the order and the delivery. Supplier first, amount right. */
 export default async function BillsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("finance.supplier_bill.view")) return <Forbidden what="supplier bills" />;
   const { status = "" } = await searchParams;
   const rows = await listSupplierBills(ctx, { status: status || undefined });
+  const canCreate = ctx.can("finance.supplier_bill.create");
+  const disputed = status ? [] : rows.filter((r) => r.status === "disputed");
   return (
     <>
-      <PageHeader
-        title="Supplier bills"
-        subtitle="Enter the supplier's bill against a posted goods receipt; the three-way match runs at submission and parks variances in dispute."
-        actions={ctx.can("finance.supplier_bill.create") ? <LinkButton href="/finance/bills/new" variant="cta">Enter a bill</LinkButton> : undefined}
-      />
+      <PageHeader title="Supplier bills" actions={canCreate ? <LinkButton href="/finance/bills/new" variant="cta">Enter a supplier bill</LinkButton> : undefined} />
+      <PageIntro>This screen is for the money we owe suppliers. Type in each supplier bill; the system checks the bill against the order and the delivery before anyone approves it.</PageIntro>
+      {disputed.length > 0 && <NextStep text={`Next: ${disputed.length} supplier bill(s) do not match the order or the delivery. Check them.`} action={{ label: "Show them", href: "/finance/bills?status=disputed" }} />}
       <StatusTabs base="/finance/bills" current={status} tabs={TABS} />
       {rows.length === 0 ? (
-        <EmptyState title={status ? "No bills in this state" : "No supplier bills yet"}>Bills appear here once entered.</EmptyState>
+        <EmptyState title={status ? "No supplier bills here" : "No supplier bills yet"} action={canCreate ? <LinkButton href="/finance/bills/new" variant="secondary">Enter a supplier bill</LinkButton> : undefined}>
+          When a supplier sends a bill, type it in with “Enter a supplier bill”. Questions? Ask finance.
+        </EmptyState>
       ) : (
-        <ResponsiveList
-          rows={rows}
-          rowKey={(r) => r.id}
-          head={["Bill", "Supplier", "Supplier ref.", "Receipt", "Bill date", "Due", "Total", "Status"]}
-          cells={(r) => [
-            <Link key="n" className="font-medium text-primary-text hover:underline" href={`/finance/bills/${r.id}`}>
-              {r.billNumber}
-            </Link>,
-            r.supplierName,
-            r.supplierReference,
-            r.receiptNumber ?? (r.categoryCode ? `No PO · ${r.categoryCode}` : r.billKind === "credit" ? "Supplier credit" : "—"),
-            fmtDate(r.billDate),
-            fmtDate(r.dueDate),
-            <Money key="t" value={r.totalAmount} />,
-            <FinanceStatus key="s" status={r.status} />,
-          ]}
-          mobile={(r) => (
-            <Link href={`/finance/bills/${r.id}`}>
-              <Card className="flex flex-col gap-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold">{r.billNumber}</span>
-                  <FinanceStatus status={r.status} />
-                </div>
-                <p className="text-[13px]">
-                  {r.supplierName} · {r.supplierReference}
-                </p>
-                <Money value={r.totalAmount} className="text-[12px] text-muted" />
-              </Card>
-            </Link>
-          )}
-        />
+        <PlainList label="Supplier bills">
+          {rows.map((r) => (
+            <PlainRow
+              key={r.id}
+              testId="bill-row"
+              href={`/finance/bills/${r.id}`}
+              title={r.supplierName}
+              code={r.billNumber}
+              tone={r.status === "disputed" ? "bad" : undefined}
+              status={<FinanceStatus status={r.status} label={r.billKind === "credit" && r.status === "posted" ? "In the books" : undefined} />}
+              facts={`${r.billKind === "credit" ? "Money back from supplier · " : ""}their bill ${r.supplierReference} · ${r.dueDate ? `due ${fmtDate(r.dueDate)}` : `dated ${fmtDate(r.billDate)}`}${r.categoryCode ? ` · ${r.categoryCode.replace(/_/g, " ")}` : ""}`}
+              aside={<RowAmount value={r.totalAmount} />}
+            />
+          ))}
+        </PlainList>
       )}
     </>
   );

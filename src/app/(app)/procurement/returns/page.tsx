@@ -1,62 +1,60 @@
-import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
-import { fmtDateTime } from "@/lib/qty";
+import { fmtDate } from "@/lib/qty";
 import { listSupplierReturns } from "@/modules/procurement";
-import { Card, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Explain, PageIntro } from "@/ui/guide";
+import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Forbidden } from "../../forbidden";
-import { FilterPills, SrChip, SubNav, money } from "../_ui";
+import { Amount, SrChip, SubNav, money } from "../_ui";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Supplier returns" };
+export const metadata = { title: "Send back to supplier" };
 
 const FILTERS = [
-  ["open", "Open"],
+  ["open", "Not done"],
   ["submitted", "To approve"],
-  ["approved", "To post"],
-  ["posted", "Posted"],
+  ["approved", "Ready to send back"],
+  ["posted", "Sent back"],
   ["cancelled", "Cancelled"],
   ["all", "All"],
 ] as const;
 
+/** Supplier returns (W04-09) as "Send back to supplier": supplier first, money back expected on the right. */
 export default async function SupplierReturnsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.supplier_return.view")) return <Forbidden what="supplier returns" />;
+  if (!ctx.can("procurement.supplier_return.view")) return <Forbidden what="returns to suppliers" />;
   const { status = "open" } = await searchParams;
   const rows = await listSupplierReturns(ctx, { status });
   const prices = ctx.can("masterdata.supplier_price.view");
+  const canCreate = ctx.can("procurement.supplier_return.create");
   return (
     <>
-      <PageHeader
-        title="Supplier returns"
-        subtitle="Rejected lots go back to the supplier: draft, approval by a second person, then posting issues the stock (W04-09)."
-        actions={ctx.can("procurement.supplier_return.create") ? <LinkButton href="/procurement/returns/new" variant="cta">New supplier return</LinkButton> : undefined}
-      />
+      <PageHeader title="Send back to supplier" actions={canCreate ? <LinkButton href="/procurement/returns/new" variant="cta">Send something back</LinkButton> : undefined} />
+      <PageIntro>
+        This screen is for goods that QA said are not OK and that go back to the supplier: a second person approves, then the goods leave and the stock goes down. <Explain term="lot" />
+      </PageIntro>
       <SubNav />
       <Card>
-        <FilterPills base="/procurement/returns" current={status} items={FILTERS} />
+        <FilterTabs label="Filter returns" active={status} tabs={FILTERS.map(([v, l]) => [v, l, `/procurement/returns?status=${v}`] as const)} />
         {rows.length === 0 ? (
-          <EmptyState title="No supplier returns here">Only lots that QA rejected can be returned.</EmptyState>
+          <EmptyState title="Nothing going back here" action={canCreate ? <LinkButton href="/procurement/returns/new" variant="secondary">Send something back</LinkButton> : undefined}>
+            Only lots that QA marked “Not OK” can go back. Ask QA if a delivery should be returned.
+          </EmptyState>
         ) : (
-          <Table head={["Return", "Status", "Supplier", "Lines", ...(prices ? ["Expected credit"] : []), "Created", "Posted"]}>
+          <PlainList label="Returns to suppliers">
             {rows.map((r) => (
-              <tr key={r.id}>
-                <Td className="whitespace-nowrap font-medium">
-                  <Link className="text-primary-text hover:underline" href={`/procurement/returns/${r.id}`}>
-                    {r.number}
-                  </Link>
-                  <div className="text-[12px] text-muted">{r.siteCode}</div>
-                </Td>
-                <Td>
-                  <SrChip status={r.status} />
-                </Td>
-                <Td>{r.supplierName}</Td>
-                <Td>{r.lines}</Td>
-                {prices && <Td>{r.credit ? money(r.credit) : "—"}</Td>}
-                <Td className="whitespace-nowrap">{fmtDateTime(r.createdAt)}</Td>
-                <Td className="whitespace-nowrap">{r.postedAt ? fmtDateTime(r.postedAt) : "—"}</Td>
-              </tr>
+              <PlainRow
+                key={r.id}
+                testId="sr-row"
+                href={`/procurement/returns/${r.id}`}
+                title={r.supplierName}
+                code={r.number}
+                status={<SrChip status={r.status} />}
+                facts={`${r.lines} lot(s) · started ${fmtDate(r.createdAt)}${r.postedAt ? ` · sent back ${fmtDate(r.postedAt)}` : ""} · ${r.siteCode}`}
+                aside={prices && r.credit ? <Amount>{money(r.credit)} back</Amount> : undefined}
+              />
             ))}
-          </Table>
+          </PlainList>
         )}
       </Card>
     </>

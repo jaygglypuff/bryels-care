@@ -234,7 +234,7 @@ export async function listPurchaseRequests(ctx: AuthContext, f: PrFilter = {}) {
   if (f.status === "open") conds.push(inArray(purchaseRequests.status, ["draft", "submitted", "approved"]));
   else if (f.status && f.status !== "all") conds.push(eq(purchaseRequests.status, f.status));
   const rows = await db
-    .select({ pr: purchaseRequests, siteCode: sites.code, requestedByName: users.displayName, lines: sql<number>`(select count(*)::int from purchase_request_lines l where l.purchase_request_id = ${purchaseRequests.id})` })
+    .select({ pr: purchaseRequests, siteCode: sites.code, requestedByName: users.displayName, lines: sql<number>`(select count(*)::int from purchase_request_lines l where l.purchase_request_id = ${purchaseRequests.id})`, items: sql<string | null>`(select string_agg(m.name, ', ' order by l.line_no) from purchase_request_lines l join materials m on m.id = l.material_id where l.purchase_request_id = ${purchaseRequests.id})` })
     .from(purchaseRequests)
     .innerJoin(sites, eq(sites.id, purchaseRequests.siteId))
     .innerJoin(users, eq(users.id, purchaseRequests.requestedBy))
@@ -244,8 +244,8 @@ export async function listPurchaseRequests(ctx: AuthContext, f: PrFilter = {}) {
   const q = f.q?.trim().toLowerCase();
   const prices = canSeePrices(ctx);
   return rows
-    .filter((r) => !q || r.pr.requestNumber.toLowerCase().includes(q) || (r.pr.justification ?? "").toLowerCase().includes(q))
-    .map((r) => ({ id: r.pr.id, number: r.pr.requestNumber, status: r.pr.status as PrStatus, siteCode: r.siteCode, requestedByName: r.requestedByName, neededByDate: r.pr.neededByDate, lines: Number(r.lines), estimatedTotalAmount: prices ? r.pr.estimatedTotalAmount : undefined, createdAt: r.pr.createdAt, submittedAt: r.pr.submittedAt }));
+    .filter((r) => !q || r.pr.requestNumber.toLowerCase().includes(q) || (r.pr.justification ?? "").toLowerCase().includes(q) || (r.items ?? "").toLowerCase().includes(q))
+    .map((r) => ({ id: r.pr.id, number: r.pr.requestNumber, status: r.pr.status as PrStatus, siteCode: r.siteCode, requestedByName: r.requestedByName, neededByDate: r.pr.neededByDate, lines: Number(r.lines), items: r.items ?? "", estimatedTotalAmount: prices ? r.pr.estimatedTotalAmount : undefined, createdAt: r.pr.createdAt, submittedAt: r.pr.submittedAt }));
 }
 
 export async function getPurchaseRequest(ctx: AuthContext, requestId: string) {

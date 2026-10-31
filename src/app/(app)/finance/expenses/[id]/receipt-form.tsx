@@ -7,9 +7,9 @@ import { uploadReceiptAction } from "../../actions";
 export function ReceiptForm({ id, storageReady }: { id: string; storageReady: boolean }) {
   if (!storageReady) return <p className="text-[13px] text-muted">File storage isn&apos;t set up on this server, so receipts cannot be attached yet. Ask the administrator.</p>;
   return (
-    <ActionForm action={uploadReceiptAction} hidden={{ id }} submit="Attach receipt" variant="secondary" pending="Uploading…">
+    <ActionForm action={uploadReceiptAction} hidden={{ id }} submit="Add the receipt" variant="cta" pending="Adding…">
       {(fe) => (
-        <Field label="Receipt (photo or PDF)" htmlFor="e-file" error={fe.file}>
+        <Field label="Photo of the receipt (or a PDF)" htmlFor="e-file" error={fe.file}>
           <Input id="e-file" name="file" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required className="py-2" />
         </Field>
       )}

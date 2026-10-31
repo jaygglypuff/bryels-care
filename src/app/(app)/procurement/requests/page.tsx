@@ -1,65 +1,59 @@
-import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
-import { fmtDate, fmtDateTime } from "@/lib/qty";
+import { fmtDate } from "@/lib/qty";
 import { listPurchaseRequests } from "@/modules/procurement";
-import { Card, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { PageIntro } from "@/ui/guide";
+import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Forbidden } from "../../forbidden";
-import { FilterPills, PrChip, SubNav, money } from "../_ui";
+import { Amount, PrChip, SubNav, money } from "../_ui";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Purchase requests" };
+export const metadata = { title: "Requests to buy" };
 
 const FILTERS = [
-  ["open", "Open"],
+  ["open", "Not done"],
   ["submitted", "To approve"],
   ["approved", "Approved"],
-  ["converted", "Converted"],
-  ["rejected", "Rejected"],
+  ["converted", "Ordered"],
+  ["rejected", "Not approved"],
   ["cancelled", "Cancelled"],
   ["all", "All"],
 ] as const;
 
+/** Requests to buy (purchase requests): what is wanted first, who asked, estimate on the right, number small and grey. */
 export default async function RequestsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.purchase_request.view")) return <Forbidden what="purchase requests" />;
+  if (!ctx.can("procurement.purchase_request.view")) return <Forbidden what="requests to buy" />;
   const { status = "open" } = await searchParams;
   const rows = await listPurchaseRequests(ctx, { status });
   const prices = ctx.can("masterdata.supplier_price.view");
+  const canCreate = ctx.can("procurement.purchase_request.create");
   return (
     <>
-      <PageHeader
-        title="Purchase requests"
-        subtitle="Anyone who needs material asks here; the approver per the approval rules decides; procurement converts approved lines into purchase orders."
-        actions={ctx.can("procurement.purchase_request.create") ? <LinkButton href="/procurement/requests/new" variant="cta">New request</LinkButton> : undefined}
-      />
+      <PageHeader title="Requests to buy" actions={canCreate ? <LinkButton href="/procurement/requests/new" variant="cta">Ask to buy something</LinkButton> : undefined} />
+      <PageIntro>This screen is for asking the company to buy something. The manager approves it, then purchasing orders it from a supplier.</PageIntro>
       <SubNav />
       <Card>
-        <FilterPills base="/procurement/requests" current={status} items={FILTERS} />
+        <FilterTabs label="Filter requests" active={status} tabs={FILTERS.map(([v, l]) => [v, l, `/procurement/requests?status=${v}`] as const)} />
         {rows.length === 0 ? (
-          <EmptyState title="No requests here" action={ctx.can("procurement.purchase_request.create") ? <LinkButton href="/procurement/requests/new" variant="secondary">New request</LinkButton> : undefined}>
-            Requests also come from accepted reorder suggestions.
+          <EmptyState title="No requests here" action={canCreate ? <LinkButton href="/procurement/requests/new" variant="secondary">Ask to buy something</LinkButton> : undefined}>
+            Need an item? Tap “Ask to buy something”. Requests also come from the “Running low” list.
           </EmptyState>
         ) : (
-          <Table head={["Request", "Status", "Requested by", "Needed by", "Lines", ...(prices ? ["Estimate"] : []), "Created"]}>
+          <PlainList label="Requests to buy">
             {rows.map((r) => (
-              <tr key={r.id}>
-                <Td className="whitespace-nowrap font-medium">
-                  <Link className="text-primary-text hover:underline" href={`/procurement/requests/${r.id}`}>
-                    {r.number}
-                  </Link>
-                  <div className="text-[12px] text-muted">{r.siteCode}</div>
-                </Td>
-                <Td>
-                  <PrChip status={r.status} />
-                </Td>
-                <Td>{r.requestedByName}</Td>
-                <Td className="whitespace-nowrap">{r.neededByDate ? fmtDate(r.neededByDate) : "—"}</Td>
-                <Td>{r.lines}</Td>
-                {prices && <Td className="whitespace-nowrap">{r.estimatedTotalAmount ? money(r.estimatedTotalAmount) : "—"}</Td>}
-                <Td className="whitespace-nowrap">{fmtDateTime(r.createdAt)}</Td>
-              </tr>
+              <PlainRow
+                key={r.id}
+                testId="pr-row"
+                href={`/procurement/requests/${r.id}`}
+                title={r.items || "No items yet"}
+                code={r.number}
+                status={<PrChip status={r.status} />}
+                facts={`Asked by ${r.requestedByName}${r.neededByDate ? ` · needed by ${fmtDate(r.neededByDate)}` : ""} · ${r.siteCode}`}
+                aside={prices && r.estimatedTotalAmount ? <Amount>{money(r.estimatedTotalAmount)}</Amount> : undefined}
+              />
             ))}
-          </Table>
+          </PlainList>
         )}
       </Card>
     </>

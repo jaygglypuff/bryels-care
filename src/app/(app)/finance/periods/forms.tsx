@@ -11,7 +11,7 @@ export function PeriodCommand({ command, periodCode, requestId, label, openItems
   const [open, setOpen] = useState(false);
   if (!open)
     return (
-      <Button type="button" variant={variant === "danger" ? "secondary" : variant} size="sm" onClick={() => setOpen(true)}>
+      <Button type="button" variant={variant === "danger" ? "secondary" : variant} onClick={() => setOpen(true)}>
         {label}
       </Button>
     );
@@ -19,31 +19,31 @@ export function PeriodCommand({ command, periodCode, requestId, label, openItems
   const needsPassword = command === "lock" || command === "request_unlock" || command === "approve_unlock";
   const f = `${command}-${periodCode}`;
   return (
-    <ActionForm action={periodCommandAction} hidden={{ command, periodCode, requestId }} submit={label} variant={variant} size="sm" pending="Saving…">
+    <ActionForm action={periodCommandAction} hidden={{ command, periodCode, requestId }} submit={label} variant={variant} pending="Saving…">
       {(fe) => (
         <>
           {needsReason && (
-            <Field label="Reason" htmlFor={`${f}-r`} error={fe.reason}>
+            <Field label="Why" htmlFor={`${f}-r`} error={fe.reason}>
               <Input id={`${f}-r`} name="reason" required minLength={3} maxLength={500} />
             </Field>
           )}
           {command === "approve_unlock" && (
-            <Field label="Note (optional)" htmlFor={`${f}-n`}>
+            <Field label="Note (you can skip this)" htmlFor={`${f}-n`}>
               <Input id={`${f}-n`} name="note" maxLength={500} />
             </Field>
           )}
           {command === "lock" && openItems > 0 && (
             <>
-              <label className="flex items-center gap-2 text-[13px]">
-                <input type="checkbox" name="acknowledge" /> Lock anyway: I acknowledge the {openItems} open document(s)
+              <label className="flex min-h-[44px] items-center gap-2 text-[14px]">
+                <input type="checkbox" name="acknowledge" className="h-5 w-5" /> Close it anyway: I know {openItems} paper(s) dated this month are not finished
               </label>
-              <Field label="Why they can stay open" htmlFor={`${f}-a`} error={fe.acknowledgementNote}>
+              <Field label="Why they can stay unfinished" htmlFor={`${f}-a`} error={fe.acknowledgementNote}>
                 <Input id={`${f}-a`} name="acknowledgementNote" maxLength={500} />
               </Field>
             </>
           )}
           {needsPassword && (
-            <Field label="Your password" htmlFor={`${f}-p`} error={fe.password} hint="Restricted: confirm it's you.">
+            <Field label="Your password" htmlFor={`${f}-p`} error={fe.password} hint="Type your password to show it is you.">
               <Input id={`${f}-p`} name="password" type="password" autoComplete="current-password" />
             </Field>
           )}

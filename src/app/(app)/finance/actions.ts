@@ -59,18 +59,18 @@ const str = (fd: FormData, k: string) => {
 const uuid = z.string().uuid("Choose a valid record.");
 
 const MESSAGES: Record<string, string> = {
-  submit: "Submitted.",
+  submit: "Sent for approval.",
   approve: "Your approval is recorded.",
-  return: "Returned to draft.",
-  reject: "Rejected.",
+  return: "Sent back to change.",
+  reject: "Not approved.",
   cancel: "Cancelled.",
-  issue: "Issued and posted.",
-  post: "Posted.",
-  record: "Payment recorded and applied.",
-  void: "Reversed with a reversal posting.",
+  issue: "Saved to the books.",
+  post: "Saved to the books.",
+  record: "Payment saved to the books.",
+  void: "Cancelled. It stays on record with your reason.",
   edit: "Saved.",
-  approve_variance: "Variance approved; the bill continues to approval.",
-  rematch: "Matched again.",
+  approve_variance: "Difference accepted; the bill goes on to approval.",
+  rematch: "Checked again.",
 };
 
 /** One entry point for every in-place finance command (the page re-renders in the response). */
@@ -88,12 +88,12 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
     switch (`${entity}:${command}`) {
       case "invoice:submit": {
         const r = await submitInvoice(ctx, id);
-        message = r.status === "approved" ? "Submitted; no approval needed, ready to issue." : "Submitted for approval.";
+        message = r.status === "approved" ? "No approval needed: ready to save to the books." : "Sent for approval.";
         break;
       }
       case "invoice:approve": {
         const r = await approveInvoice(ctx, id, note);
-        message = r.approved ? "Approved: ready to issue." : "Your approval is recorded; the next step is still open.";
+        message = r.approved ? "Approved: ready to save to the books." : "Your approval is recorded; the next step is still open.";
         break;
       }
       case "invoice:return":
@@ -104,7 +104,7 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         break;
       case "invoice:issue": {
         const r = await issueInvoice(ctx, id, { password, idempotencyKey: key });
-        message = `Issued as ${r.invoiceNumber}.`;
+        message = `Saved to the books as invoice ${r.invoiceNumber}.`;
         break;
       }
       case "invoice:void":
@@ -118,7 +118,7 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         break;
       case "credit_note:approve": {
         const r = await decideCreditNote(ctx, id, { decision: "approved", note });
-        message = r.approved ? "Approved: ready to issue." : "Your approval is recorded; the next step is still open.";
+        message = r.approved ? "Approved: ready to save to the books." : "Your approval is recorded; the next step is still open.";
         break;
       }
       case "credit_note:return":
@@ -129,7 +129,7 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         break;
       case "credit_note:issue": {
         const r = await issueCreditNote(ctx, id, { password, idempotencyKey: key });
-        message = `Issued as ${r.creditNoteNumber} and applied to the invoice.`;
+        message = `Saved to the books as ${r.creditNoteNumber} and taken off the invoice.`;
         break;
       }
       case "credit_note:void":
@@ -137,12 +137,12 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         break;
       case "payment:submit": {
         const r = await submitPayment(ctx, id);
-        message = r.status === "approved" ? "No approval needed: ready to record." : "Submitted for approval.";
+        message = r.status === "approved" ? "No approval needed: ready to save to the books." : "Sent for approval.";
         break;
       }
       case "payment:approve": {
         const r = await decidePayment(ctx, id, { decision: "approved", note });
-        message = r.approved ? "Approved: ready to record." : "Your approval is recorded; the next step is still open.";
+        message = r.approved ? "Approved: ready to save to the books." : "Your approval is recorded; the next step is still open.";
         break;
       }
       case "payment:return":
@@ -153,7 +153,7 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         break;
       case "payment:record": {
         const r = await recordPayment(ctx, id, { password, idempotencyKey: key });
-        message = `Recorded: ${r.applied} applied, ${r.unapplied} left on account.`;
+        message = `Saved to the books: ${r.applied} used on bills or invoices, ${r.unapplied} kept for later.`;
         break;
       }
       case "payment:void":
@@ -161,12 +161,12 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         break;
       case "bill:submit": {
         const r = await submitSupplierBill(ctx, id);
-        message = r.status === "disputed" ? "The three-way match found a variance: the bill is in dispute." : "Matched and submitted for approval.";
+        message = r.status === "disputed" ? "The bill does not match the order or the delivery: check it." : "It matches the order and the delivery. Sent for approval.";
         break;
       }
       case "bill:approve": {
         const r = await decideSupplierBill(ctx, id, { decision: "approved", note });
-        message = r.approved ? "Approved: ready to post." : "Your approval is recorded; the next step is still open.";
+        message = r.approved ? "Approved: ready to save to the books." : "Your approval is recorded; the next step is still open.";
         break;
       }
       case "bill:return":
@@ -186,7 +186,7 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         break;
       case "bill:rematch": {
         const r = await resolveBillDispute(ctx, id, { action: "rematch" });
-        message = r.status === "disputed" ? "Still outside tolerance: the bill stays in dispute." : "Matched within tolerance; submitted for approval.";
+        message = r.status === "disputed" ? "It still does not match: check it." : "It matches now. Sent for approval.";
         break;
       }
       case "bill:edit":
@@ -194,11 +194,11 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         break;
       case "expense:submit":
         await submitExpenseClaim(ctx, id);
-        message = "Submitted for approval.";
+        message = "Sent for approval.";
         break;
       case "expense:approve": {
         const r = await decideExpenseClaim(ctx, id, { decision: "approved", note });
-        message = r.status === "approved" ? "Approved: finance can post it." : "Your approval is recorded; the next step is still open.";
+        message = r.status === "approved" ? "Approved: finance saves it to the books next." : "Your approval is recorded; the next step is still open.";
         break;
       }
       case "expense:reject":
@@ -212,7 +212,7 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         break;
       case "expense:post":
         await postExpenseClaim(ctx, id, { password, idempotencyKey: key });
-        message = "Posted: the claim is payable to the claimant.";
+        message = "Saved to the books: the person can now be paid back.";
         break;
       case "expense:void":
         await voidExpenseClaim(ctx, id, { reason, password });
@@ -238,20 +238,20 @@ export async function periodCommandAction(_: ActionState, fd: FormData): Promise
     if (command === "lock") {
       const code = z.string().regex(/^\d{4}-\d{2}$/).parse(str(fd, "periodCode"));
       await lockPeriod(ctx, code, { reason, acknowledge: str(fd, "acknowledge") === "on", acknowledgementNote: str(fd, "acknowledgementNote") || null, password });
-      message = `Period ${code} locked.`;
+      message = `Month ${code} closed. Nothing more can be saved in it.`;
     } else if (command === "request_unlock") {
       const code = z.string().regex(/^\d{4}-\d{2}$/).parse(str(fd, "periodCode"));
       await requestPeriodUnlock(ctx, code, { reason, password });
-      message = "Unlock requested; the owner has been asked to approve it.";
+      message = "Asked to open the month again; the owner has been asked to approve.";
     } else if (command === "approve_unlock") {
       const r = await approvePeriodUnlock(ctx, uuid.parse(str(fd, "requestId")), { note: str(fd, "note") || null, password });
-      message = r.unlocked ? `Period ${r.period.periodCode} is open again. Re-export it to the accountant.` : "Your approval is recorded.";
+      message = r.unlocked ? `Month ${r.period.periodCode} is open again. Send it to the accountant again after fixing.` : "Your approval is recorded.";
     } else if (command === "reject_unlock") {
       await rejectPeriodUnlock(ctx, uuid.parse(str(fd, "requestId")), { reason });
-      message = "Unlock rejected; the period stays locked.";
+      message = "Not approved; the month stays closed.";
     } else {
       await cancelPeriodUnlock(ctx, uuid.parse(str(fd, "requestId")));
-      message = "Unlock request withdrawn.";
+      message = "Request taken back.";
     }
     refreshCurrentPage();
     return { ok: true, message };
@@ -271,7 +271,8 @@ export async function taxCommandAction(_: ActionState, fd: FormData): Promise<Ac
       const r = await proposeTaxConfiguration(
         ctx,
         {
-          code: str(fd, "code") ?? "",
+          // ADR-088: nobody types a code. Empty = made from the name ("VAT 12%" → "VAT12"); the same code makes a new version.
+          code: (str(fd, "code") ?? "").trim() || (str(fd, "name") ?? "").toUpperCase().replace(/[^A-Z0-9]+/g, "").slice(0, 20),
           name: str(fd, "name") ?? "",
           kind: (str(fd, "kind") ?? "other") as never,
           ratePct: str(fd, "ratePct") ?? "",

@@ -41,6 +41,8 @@ import {
 } from "@/modules/procurement";
 import { registerAppHooks } from "@/modules/wiring";
 import type { DiscrepancyKind } from "@/modules/inventory";
+import { normalizeUnit, parseQtyText, toBaseQty } from "@/lib/units";
+import { DomainError } from "@/lib/errors";
 
 /*
  * Procurement server actions (Wave 4 W4A). Thin adapters: read the form, call the service with the
@@ -66,6 +68,28 @@ function rows(fd: FormData, key: string): Record<string, string>[] {
     out.set(i, { ...(out.get(i) ?? {}), [m[2]]: v });
   }
   return [...out.entries()].sort((a, b) => a[0] - b[0]).map(([, r]) => r).filter((r) => (r[key] ?? "").trim() !== "");
+}
+
+/**
+ * Friendly quantity box (src/ui/qty-unit-input.tsx): "20 kg" typed in the box wins over the unit picker.
+ * Only splits the text; the service converts and refuses units that do not fit the item (V-UOM).
+ */
+function qtyAndUnit(qty: string | undefined, uom: string | undefined): { qty: string; uom: string | null } {
+  const p = parseQtyText(qty);
+  if (!p) return { qty: qty ?? "", uom: uom || null };
+  const typed = p.unit ? normalizeUnit(p.unit) ?? p.unit : null;
+  return { qty: p.qty, uom: typed ?? (uom || null) };
+}
+
+/** Friendly amount ("25 kg", or 25 + picker kg) → base-unit text for services that take base quantities. */
+function baseText(fd: FormData, field: string): string | null {
+  const text = opt(fd, field);
+  if (text === null) return null;
+  const base = opt(fd, "baseUom");
+  if (!base) return text;
+  const r = toBaseQty(text, opt(fd, `${field}Unit`), base);
+  if (!r.ok) throw new DomainError("validation", r.message, { field });
+  return r.qtyBase.toString();
 }
 
 async function inPlace(fn: () => Promise<string>): Promise<ActionState> {
@@ -148,7 +172,7 @@ export async function createRequestAction(_p: ActionState, fd: FormData): Promis
       neededByDate: opt(fd, "neededByDate"),
       justification: opt(fd, "justification"),
       idempotencyKey: opt(fd, "idempotencyKey"),
-      lines: rows(fd, "materialId").map((l) => ({ materialId: l.materialId, qty: l.qty ?? "", uom: l.uom || null, estimatedUnitAmount: l.estimatedUnitAmount || null, suggestedSupplierId: l.suggestedSupplierId || null, note: l.note || null })),
+      lines: rows(fd, "materialId").map((l) => ({ materialId: l.materialId, ...qtyAndUnit(l.qty, l.uom), estimatedUnitAmount: l.estimatedUnitAmount || null, suggestedSupplierId: l.suggestedSupplierId || null, note: l.note || null })),
     });
     id = r.requestId;
   } catch (e) {
@@ -187,6 +211,7 @@ export async function cancelRequestAction(_p: ActionState, fd: FormData): Promis
 
 export async function createOrderAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   let id: string;
+  let sent: "1" | "0" | null = null;
   try {
     const ctx = await requireContext();
     const r = await createPurchaseOrder(ctx, {
@@ -198,14 +223,24 @@ export async function createOrderAction(_p: ActionState, fd: FormData): Promise<
       isUrgent: fd.get("isUrgent") === "yes",
       urgentReason: opt(fd, "urgentReason"),
       idempotencyKey: opt(fd, "idempotencyKey"),
-      lines: rows(fd, "qty").map((l) => ({ materialId: l.materialId ?? "", qty: l.qty, uom: l.uom || null, unitAmount: l.unitAmount || null, expectedDate: l.expectedDate || null, purchaseRequestLineId: l.purchaseRequestLineId || null })),
+      lines: rows(fd, "qty").map((l) => ({ materialId: l.materialId ?? "", ...qtyAndUnit(l.qty, l.uom), unitAmount: l.unitAmount || null, expectedDate: l.expectedDate || null, purchaseRequestLineId: l.purchaseRequestLineId || null })),
     });
     id = r.purchaseOrderId;
+    // "Save and send for approval" (grade-5 wizard): the draft is saved first; if sending fails the draft stays
+    // and the order page says so (its button shows the reason).
+    if (fd.get("intent") === "submit") {
+      try {
+        await submitPurchaseOrder(ctx, { purchaseOrderId: id });
+        sent = "1";
+      } catch {
+        sent = "0";
+      }
+    }
   } catch (e) {
     return toActionState(e);
   }
   revalidatePath("/procurement/orders");
-  redirect(`/procurement/orders/${id}`);
+  redirect(`/procurement/orders/${id}${sent ? `?sent=${sent}` : "?saved=1"}`);
 }
 
 export async function submitOrderAction(_p: ActionState, fd: FormData): Promise<ActionState> {
@@ -334,7 +369,7 @@ export async function addReturnLineAction(_p: ActionState, fd: FormData): Promis
   return inPlace(async () => {
     const ctx = await requireContext();
     const [lotId, locationId] = str(fd, "lotLocation").split("|");
-    const r = await addSupplierReturnLine(ctx, { returnId: str(fd, "returnId"), lotId: lotId || null, lotCode: opt(fd, "lotCode"), locationId: locationId || str(fd, "locationId"), qty: str(fd, "qty"), uom: opt(fd, "uom"), creditExpectedAmount: opt(fd, "creditExpectedAmount") });
+    const r = await addSupplierReturnLine(ctx, { returnId: str(fd, "returnId"), lotId: lotId || null, lotCode: opt(fd, "lotCode"), locationId: locationId || str(fd, "locationId"), ...qtyAndUnit(str(fd, "qty"), opt(fd, "uom") ?? undefined), creditExpectedAmount: opt(fd, "creditExpectedAmount") });
     return `Line ${r.lineNo}: lot ${r.lotNumber}.`;
   });
 }
@@ -393,8 +428,8 @@ export async function recomputeReorderAction(_p: ActionState): Promise<ActionSta
 export async function savePolicyAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   return inPlace(async () => {
     const ctx = await requireContext();
-    await saveReorderPolicy(ctx, { materialId: str(fd, "materialId"), minStockBase: str(fd, "minStockBase"), safetyStockBase: opt(fd, "safetyStockBase"), preferredSupplierId: opt(fd, "preferredSupplierId"), isActive: fd.get("isActive") !== "no" });
-    return "Policy saved.";
+    await saveReorderPolicy(ctx, { materialId: str(fd, "materialId"), minStockBase: baseText(fd, "minStockBase") ?? "", safetyStockBase: baseText(fd, "safetyStockBase"), preferredSupplierId: opt(fd, "preferredSupplierId"), isActive: fd.get("isActive") !== "no" });
+    return "Minimum saved.";
   });
 }
 
@@ -402,7 +437,7 @@ export async function acceptSuggestionAction(_p: ActionState, fd: FormData): Pro
   let id: string;
   try {
     const ctx = await requireContext();
-    const r = await acceptReorderSuggestion(ctx, { suggestionId: str(fd, "suggestionId"), qty: opt(fd, "qty"), note: opt(fd, "note"), idempotencyKey: opt(fd, "idempotencyKey") });
+    const r = await acceptReorderSuggestion(ctx, { suggestionId: str(fd, "suggestionId"), qty: baseText(fd, "qty"), note: opt(fd, "note"), idempotencyKey: opt(fd, "idempotencyKey") });
     id = r.requestId;
   } catch (e) {
     return toActionState(e);
@@ -414,7 +449,7 @@ export async function dismissSuggestionAction(_p: ActionState, fd: FormData): Pr
   return inPlace(async () => {
     const ctx = await requireContext();
     await dismissReorderSuggestion(ctx, { suggestionId: str(fd, "suggestionId"), note: str(fd, "note") });
-    return "Suggestion dismissed.";
+    return "Hidden from the list.";
   });
 }
 

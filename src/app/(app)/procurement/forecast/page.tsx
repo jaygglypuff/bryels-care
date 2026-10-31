@@ -1,143 +1,149 @@
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { forecastRows } from "@/modules/procurement";
-import { Card, CardTitle, EmptyState, Field, Input, PageHeader, Select, Table, Td } from "@/ui/core";
+import { Card, CardTitle, EmptyState, Field, Input, PageHeader, Select } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
+import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { decideOverrideAction, submitOverrideAction } from "../actions";
 import { SubNav } from "../_ui";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Forecast assumptions" };
+export const metadata = { title: "Sales guess" };
 
 function months(start: string, n: number) {
   const [y, m] = start.split("-").map(Number);
   return Array.from({ length: n }, (_, k) => new Date(Date.UTC(y, m - 1 + k, 1)).toISOString().slice(0, 10));
 }
+const monthName = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
+const OVERRIDE_WORD: Record<string, string> = { submitted: "waiting for a second person", approved: "approved", rejected: "not approved", superseded: "replaced" };
 
 /**
- * Forecast assumptions and overrides (US-6-20, docs/ux-system.md §9.15, docs/analytics-kpis.md §6). Every
- * figure here is an estimate: never an Actual, never a hero KPI, never an automatic order. A SKU that
- * fails the sufficiency check shows the reason and no number.
+ * Forecast assumptions and overrides (US-6-20, docs/ux-system.md §9.15, docs/analytics-kpis.md §6) as "Sales guess".
+ * Every figure here is an estimate: never an actual, never a hero KPI, never an automatic order. A product without
+ * enough history shows the reason and no number.
  */
 export default async function ForecastPage() {
   const ctx = await requireContext();
-  if (!ctx.can("analytics.forecast.view")) return <Forbidden what="forecasts" />;
+  if (!ctx.can("analytics.forecast.view")) return <Forbidden what="sales guesses" />;
   const f = await forecastRows(ctx);
   const canEdit = ctx.allowedSiteIds.some((s) => ctx.canAt("analytics.forecast.edit", s));
   const canApprove = ctx.allowedSiteIds.some((s) => ctx.canAt("analytics.forecast.approve", s));
   const periods = months(f.nextPeriodStart, f.horizonMonths);
+  const toDecide = canApprove ? f.rows.flatMap((r) => r.overrides.filter((o) => o.status === "submitted")) : [];
   return (
     <>
-      <PageHeader title="Forecast assumptions" subtitle={`SKU × site × month · history ${f.historyMonths} months · horizon ${f.horizonMonths} months · SES α ${f.alpha}`} />
+      <PageHeader title="Sales guess" />
+      <PageIntro>This screen is for a guess of how much of each product we may sell next month, from past customer orders. It is only a guess: nothing is ordered from it. If you know better, change the number; a second person approves it.</PageIntro>
+      {toDecide.length > 0 && <NextStep text={`Next: ${toDecide.length} changed guess(es) wait for your approval.`} action={{ label: "Open the list", href: "#guesses" }} />}
       <SubNav />
       <div className="flex flex-col gap-5">
         <Banner tone="warn" title={f.banner}>
-          Demand history is confirmed sales order quantity by the month of confirmation. The method with the lowest backtest error (WAPE over the last 3 months) is shown with its metrics; overrides need a second person before planning uses them.
+          Based on confirmed customer orders by month ({f.historyMonths} months back, {f.horizonMonths} month(s) ahead). <span className="text-[13px]">We try several ways and show the one that would have guessed best over the last 3 months.</span>
         </Banner>
         <Card>
-          <CardTitle>Forecast (estimate) for {f.nextPeriodStart.slice(0, 7)}</CardTitle>
+          <span id="guesses" className="block scroll-mt-24" />
+          <CardTitle>Guess for {monthName(f.nextPeriodStart)}</CardTitle>
           {f.rows.length === 0 ? (
-            <EmptyState title="No demand history yet">Forecasts appear once confirmed sales orders exist for a SKU at your sites.</EmptyState>
+            <EmptyState title="No sales history yet">A guess appears once customers have confirmed orders for a product at your sites.</EmptyState>
           ) : (
-            <Table head={["SKU", "Method", "History", "WAPE / MAE / bias", "Next month (estimate)", "Band", "Overrides"]}>
+            <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line">
               {f.rows.map((r) => (
-                <tr key={`${r.siteId}-${r.productId}`}>
-                  <Td>
-                    {r.sku}
-                    <div className="text-[12px] text-muted">
-                      {r.productName} · {r.siteCode}
-                    </div>
-                  </Td>
+                <li key={`${r.siteId}-${r.productId}`} className="px-4 py-3">
+                  <p className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="font-semibold">{r.productName}</span>
+                    <span className="font-mono text-[12px] text-muted">
+                      {r.sku} · {r.siteCode}
+                    </span>
+                  </p>
                   {r.forecast.sufficient ? (
                     <>
-                      <Td className="text-[13px]">
-                        {r.forecast.methodLabel}
-                        {r.forecast.alpha !== null && ` (α ${r.forecast.alpha})`}
-                        {r.forecast.intermittent && (
-                          <div>
-                            <Chip tone="warn">intermittent</Chip>
-                          </div>
-                        )}
-                      </Td>
-                      <Td>{r.forecast.historyMonths} months</Td>
-                      <Td className="text-[13px]">
-                        {r.forecast.metrics.wape ?? "—"} % / {r.forecast.metrics.mae} / {r.forecast.metrics.bias ?? "—"} %
-                        {r.forecast.others.length > 0 && <div className="text-[12px] text-muted">others: {r.forecast.others.map((o) => `${o.method} ${o.wape ?? "—"} %`).join(", ")}</div>}
-                      </Td>
-                      <Td className="whitespace-nowrap">
-                        <Chip tone="info">Estimate</Chip> {r.forecast.next} {r.baseUom}
-                      </Td>
-                      <Td className="text-[13px]">{r.forecast.band ? `${r.forecast.band.p10}–${r.forecast.band.p90}` : r.forecast.bandText}</Td>
+                      <p className="mt-1 text-[16px]">
+                        <Chip tone="info">Guess</Chip> about <strong className="tabular-nums">{r.forecast.next}</strong> {r.baseUom}
+                        {r.forecast.band ? <span className="text-[14px] text-fg-2"> (likely {r.forecast.band.p10}–{r.forecast.band.p90})</span> : null}
+                        {r.forecast.intermittent && <span className="ml-1"><Chip tone="warn">sells now and then</Chip></span>}
+                      </p>
+                      <details>
+                        <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-[14px] text-primary-text">How good is this guess</summary>
+                        <p className="text-[13px] text-fg-2">
+                          Way: {r.forecast.methodLabel}
+                          {r.forecast.alpha !== null && ` (α ${r.forecast.alpha})`} · {r.forecast.historyMonths} months of history · off by {r.forecast.metrics.wape ?? "—"} % on average (MAE {r.forecast.metrics.mae}, bias {r.forecast.metrics.bias ?? "—"} %)
+                          {!r.forecast.band && r.forecast.bandText ? ` · ${r.forecast.bandText}` : ""}
+                        </p>
+                        {r.forecast.others.length > 0 && <p className="text-[12px] text-muted">Other ways: {r.forecast.others.map((o) => `${o.method} ${o.wape ?? "—"} %`).join(", ")}</p>}
+                      </details>
                     </>
                   ) : (
-                    <Td colSpan={5} className="text-[13px] text-muted">
-                      {r.forecast.text}
-                    </Td>
+                    <p className="mt-1 text-[14px] text-fg-2">{r.forecast.text}</p>
                   )}
-                  <Td className="text-[12px]">
-                    {r.overrides.length === 0
-                      ? "—"
-                      : r.overrides.map((o) => (
-                          <div key={o.id} className="mb-1">
-                            <Chip tone={o.status === "approved" ? "ok" : o.status === "submitted" ? "appr" : "neu"}>Overridden · {o.status}</Chip> {o.periodStart.slice(0, 7)}: {o.overrideQty} (forecast {o.baselineQty ?? "none"}) — {o.reason} · {o.submittedByName} {fmtDateTime(o.submittedAt)}
-                            {canApprove && o.status === "submitted" && (
-                              <div className="mt-1 flex flex-wrap gap-2">
-                                <ActionForm action={decideOverrideAction} hidden={{ overrideId: o.id, decision: "approved" }} submit="Approve" variant="cta" size="sm" />
-                                <ActionForm action={decideOverrideAction} hidden={{ overrideId: o.id, decision: "rejected" }} submit="Reject" variant="secondary" size="sm" className="flex items-end gap-1">
-                                  <Input name="note" placeholder="Reason" aria-label="Reason" required />
-                                </ActionForm>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                  </Td>
-                </tr>
+                  {r.overrides.map((o) => (
+                    <div key={o.id} className="mt-2 rounded-[10px] bg-surface-2 p-3 text-[14px]">
+                      <p>
+                        <Chip tone={o.status === "approved" ? "ok" : o.status === "submitted" ? "appr" : "neu"}>Changed · {OVERRIDE_WORD[o.status] ?? o.status}</Chip> {monthName(o.periodStart)}: <strong>{Number(o.overrideQty).toLocaleString("en-PH")}</strong> (guess was {o.baselineQty !== null ? Number(o.baselineQty).toLocaleString("en-PH") : "none"}) — {o.reason}
+                      </p>
+                      <p className="text-[12px] text-muted">
+                        {o.submittedByName}, {fmtDateTime(o.submittedAt)}
+                      </p>
+                      {canApprove && o.status === "submitted" && (
+                        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                          <ActionForm action={decideOverrideAction} hidden={{ overrideId: o.id, decision: "approved" }} submit="Approve" variant="cta" />
+                          <ActionForm action={decideOverrideAction} hidden={{ overrideId: o.id, decision: "rejected" }} submit="Do not approve" variant="secondary">
+                            <Input name="note" placeholder="Why not" aria-label="Why not" required />
+                          </ActionForm>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </li>
               ))}
-            </Table>
+            </ul>
           )}
         </Card>
         {canEdit && f.rows.length > 0 && (
           <Card>
-            <CardTitle>Enter an override</CardTitle>
-            <ActionForm action={submitOverrideAction} submit="Submit override" variant="secondary" className="grid gap-3 sm:grid-cols-5 sm:items-end">
-              <Field label="SKU and site" htmlFor="sku">
-                <Select id="sku" name="productId" required defaultValue="">
-                  <option value="" disabled>
-                    Choose…
-                  </option>
-                  {f.rows.map((r) => (
-                    <option key={`${r.siteId}-${r.productId}`} value={r.productId}>
-                      {r.sku} · {r.siteCode}
+            <CardTitle>I know better: change a guess</CardTitle>
+            <ActionForm action={submitOverrideAction} submit="Send for approval" variant="secondary">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Product" htmlFor="sku">
+                  <Select id="sku" name="productId" required defaultValue="">
+                    <option value="" disabled>
+                      Pick a product…
                     </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Site" htmlFor="siteId">
-                <Select id="siteId" name="siteId" defaultValue={ctx.currentSiteId}>
-                  {ctx.allowedSites.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.code}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Month" htmlFor="periodStart">
-                <Select id="periodStart" name="periodStart" defaultValue={periods[0]}>
-                  {periods.map((p) => (
-                    <option key={p} value={p}>
-                      {p.slice(0, 7)}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Quantity (units)" htmlFor="overrideQty">
-                <Input id="overrideQty" name="overrideQty" inputMode="numeric" required />
-              </Field>
-              <Field label="Reason" htmlFor="reason">
-                <Input id="reason" name="reason" required />
-              </Field>
+                    {[...new Map(f.rows.map((r) => [r.productId, r])).values()].map((r) => (
+                      <option key={r.productId} value={r.productId}>
+                        {r.productName}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Month" htmlFor="periodStart">
+                  <Select id="periodStart" name="periodStart" defaultValue={periods[0]}>
+                    {periods.map((p) => (
+                      <option key={p} value={p}>
+                        {monthName(p)}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="How many we will sell" htmlFor="overrideQty">
+                  <Input id="overrideQty" name="overrideQty" inputMode="numeric" required />
+                </Field>
+                <Field label="Why you know better" htmlFor="reason">
+                  <Input id="reason" name="reason" required placeholder="For example: big order promised by a customer" />
+                </Field>
+              </div>
+              <MoreDetails>
+                <Field label="Site" htmlFor="siteId">
+                  <Select id="siteId" name="siteId" defaultValue={ctx.currentSiteId}>
+                    {ctx.allowedSites.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              </MoreDetails>
             </ActionForm>
           </Card>
         )}

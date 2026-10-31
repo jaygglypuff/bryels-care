@@ -84,25 +84,25 @@ Total screens: 250.
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/finance/bills/[id]` | ☐ | |
-| `/finance/bills/new` | ☐ | |
-| `/finance/bills` | ☐ | |
-| `/finance/credit-notes/[id]` | ☐ | |
-| `/finance/credit-notes/new` | ☐ | |
-| `/finance/credit-notes` | ☐ | |
-| `/finance/expenses/[id]` | ☐ | |
-| `/finance/expenses/new` | ☐ | |
-| `/finance/expenses` | ☐ | |
-| `/finance/invoices/[id]` | ☐ | |
-| `/finance/invoices` | ☐ | |
-| `/finance` | ☐ | |
-| `/finance/payments/[id]` | ☐ | |
-| `/finance/payments/new` | ☐ | |
-| `/finance/payments` | ☐ | |
-| `/finance/periods` | ☐ | |
-| `/finance/statements/[customerId]` | ☐ | |
-| `/finance/statements` | ☐ | |
-| `/finance/tax` | ☐ | |
+| `/finance/bills/[id]` | ☑ 2026-10-31 | Supplier first; next step by state (check against order and delivery, approve, save to the books, pay); match results in words; cancel / cancel (kept on record) in ⋯ More; password kept. |
+| `/finance/bills/new` | ☑ 2026-10-31 | Supplier, delivery, their bill number (from their paper), date, prices; kind and note folded; our number automatic. |
+| `/finance/bills` | ☑ 2026-10-31 | "Supplier bills" (money we owe): supplier first, ₱ right, plain status chips; "does not match" next step. |
+| `/finance/credit-notes/[id]` | ☑ 2026-10-31 | "Credit (money back)": next step by state; save to the books with password; cancels in ⋯ More. |
+| `/finance/credit-notes/new` | ☑ 2026-10-31 | 3 visible fields (why, explain, how much); customer return and whole-invoice credit folded. |
+| `/finance/credit-notes` | ☑ 2026-10-31 | "Credits (money back)": customer first, amount right; empty state says start from the invoice. |
+| `/finance/expenses/[id]` | ☑ 2026-10-31 | Person first; next step (add receipt, send, decide, save to the books, pay back); take back / cancel in ⋯ More. |
+| `/finance/expenses/new` | ☑ 2026-10-31 | "Claim money I spent": 4 fields (what for, how much, when = today, kind); site folded (default current). |
+| `/finance/expenses` | ☑ 2026-10-31 | Person first, ₱ right, plain claim states; next step for approvers. |
+| `/finance/invoices/[id]` | ☑ 2026-10-31 | Customer first; next step by state (send, approve, save to the books, record payment); items as rows; credit, print, cancels in ⋯ More; password kept. |
+| `/finance/invoices` | ☑ 2026-10-31 | Customer first, ₱ right; deliveries without an invoice folded after 3; plain states (sent – not paid yet, late). |
+| `/finance` | ☑ 2026-10-31 | "Money": money customers owe us / money we owe, "how late" buckets, next step, money screens with plain names. |
+| `/finance/payments/[id]` | ☑ 2026-10-31 | Name first, money in/out; what it pays; save to the books with password; cancels in ⋯ More. |
+| `/finance/payments/new` | ☑ 2026-10-31 | 4 visible fields (who, how much, when = today, how) + which invoices (oldest first); references, withheld, note folded. |
+| `/finance/payments` | ☑ 2026-10-31 | Name first with in/out arrow, ₱ right, "kept for later" amount. |
+| `/finance/periods` | ☑ 2026-10-31 | "Close the month": month names, next step (close last month / decide reopen), older months folded; password and open-papers check kept. |
+| `/finance/statements/[customerId]` | ☑ 2026-10-31 | "They owe us" big, how-late buckets, unpaid invoices as rows, print as next step; other day in ⋯ More. |
+| `/finance/statements` | ☑ 2026-10-31 | Customer search, name first, amount owed right (largest first). |
+| `/finance/tax` | ☑ 2026-10-31 | "Tax rates": rows in words; add-rate form 4 fields + password; code picked or made from the name (never typed); second-person check kept. |
 
 ## Home & help (1)
 
@@ -220,23 +220,23 @@ Total screens: 250.
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/procurement/expected/[poId]` | ☐ | |
-| `/procurement/expected` | ☐ | |
-| `/procurement/forecast` | ☐ | |
-| `/procurement/orders/[id]` | ☐ | |
-| `/procurement/orders/new` | ☐ | |
-| `/procurement/orders` | ☐ | |
-| `/procurement` | ☐ | |
-| `/procurement/performance` | ☐ | |
-| `/procurement/reorder` | ☐ | |
-| `/procurement/requests/[id]` | ☐ | |
-| `/procurement/requests/new` | ☐ | |
-| `/procurement/requests` | ☐ | |
-| `/procurement/returns/[id]` | ☐ | |
-| `/procurement/returns/new` | ☐ | |
-| `/procurement/returns` | ☐ | |
-| `/procurement/suppliers/[id]` | ☐ | |
-| `/procurement/suppliers` | ☐ | |
+| `/procurement/expected/[poId]` | ☑ 2026-10-31 | Redirect only (to Receive with the order filled in); no screen of its own. |
+| `/procurement/expected` | ☑ 2026-10-31 | "Deliveries coming": supplier first, due date right, row opens Receive; late next step. |
+| `/procurement/forecast` | ☑ 2026-10-31 | "Sales guess": product first, guess in words, quality folded; change-a-guess form 4 fields, site folded; second-person approval kept. |
+| `/procurement/orders/[id]` | ☑ 2026-10-31 | Supplier first; next step by state (send for approval, approve, send to supplier, receive); items as rows with ₱; print, supplier answer, close, cancel in ⋯ More. |
+| `/procurement/orders/new` | ☑ 2026-10-31 | 4-step wizard: supplier by name with search → items (friendly units, pack/price shown) → arrival date (lead-time default) → check and send; extras folded; number automatic. |
+| `/procurement/orders` | ☑ 2026-10-31 | Supplier first, ₱ right, plain states; search; download in ⋯ More. |
+| `/procurement` | ☑ 2026-10-31 | "Purchasing": next step, plain tiles, late deliveries as rows. |
+| `/procurement/performance` | ☑ 2026-10-31 | "How suppliers do": one row per supplier, plain measures; "no data yet" never 0 %. |
+| `/procurement/reorder` | ☑ 2026-10-31 | "Running low": buy-about sentence per item, friendly-unit amount, hide with reason; minimums form folded (friendly units); check again in ⋯ More. |
+| `/procurement/requests/[id]` | ☑ 2026-10-31 | "Request to buy": items as title; next step (send, decide, make purchase order); cancel in ⋯ More. |
+| `/procurement/requests/new` | ☑ 2026-10-31 | "Ask to buy something": item by name, how much (friendly units), needed by (+7 days), why; supplier/price folded. |
+| `/procurement/requests` | ☑ 2026-10-31 | "Requests to buy": items first, who asked, estimate right. |
+| `/procurement/returns/[id]` | ☑ 2026-10-31 | "Return to supplier": next step (add lots, approve, goods left); add a lot with 2 fields; cancel in ⋯ More. |
+| `/procurement/returns/new` | ☑ 2026-10-31 | Supplier by name with search; why + explain; delivery and their return number folded. |
+| `/procurement/returns` | ☑ 2026-10-31 | "Send back to supplier": supplier first, money back right. |
+| `/procurement/suppliers/[id]` | ☑ 2026-10-31 | Supplier with plain status; items with QA yes/no; price/minimum/days form 5 visible fields; "order from this supplier" next step. |
+| `/procurement/suppliers` | ☑ 2026-10-31 | "Suppliers we may buy from": waiting for QA as rows, search, plain supplier status. |
 
 ## Production (21)
 
