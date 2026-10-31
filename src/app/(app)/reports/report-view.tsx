@@ -42,7 +42,9 @@ export function ReportTable({ out, screenCap }: { out: ReportOutput; screenCap: 
           {/* Phones and small tablets: one card per row, the first column as the title (no sideways scroll). */}
           <ul aria-label="Rows" className="flex flex-col divide-y divide-line overflow-hidden rounded-[16px] border border-line md:hidden">
             {out.rows.map((r, i) => {
-              const [head, ...rest] = out.columns;
+              // The row's "what" first (item, product, customer, title), not the site code; then the rest.
+              const head = out.columns.find((c) => /^(item|product|customer|title|name|supplier)/i.test(c.key) || /^(item|product|customer|title|supplier)/i.test(c.header)) ?? out.columns[0];
+              const rest = out.columns.filter((c) => c !== head);
               const title = r[head.key] ?? "—";
               return (
                 <li key={i} className="px-4 py-3">
