@@ -269,7 +269,7 @@ export async function getPurchaseRequest(ctx: AuthContext, requestId: string) {
     .orderBy(asc(purchaseRequestStateTransitions.occurredAt));
   const [site] = await db.select({ code: sites.code, name: sites.name }).from(sites).where(eq(sites.id, pr.siteId));
   const [requester] = await db.select({ name: users.displayName }).from(users).where(eq(users.id, pr.requestedBy));
-  const progress = await approvalProgress(db, ctx.organizationId, { recordType: "purchase_request", recordId: pr.id, siteId: pr.siteId, basis: basisOf(pr) });
+  const progress = await approvalProgress(db, ctx.organizationId, { recordType: "purchase_request", recordId: pr.id, siteId: pr.siteId, basis: basisOf(pr), requesterIds: [pr.createdBy, pr.requestedBy, pr.submittedBy] });
   const decisions = await decisionsOf(db, ctx.organizationId, "purchase_request", pr.id);
   const excluded = [pr.createdBy, pr.requestedBy, pr.submittedBy];
   return {

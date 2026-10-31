@@ -218,7 +218,7 @@ export async function approveProductionPlan(ctx: AuthContext, planId: string, no
   return db.transaction(async (tx) => {
     const p = await lockPlan(tx, ctx, planId);
     planMachine.assert(p.status, "approved", `Plan ${p.planNumber}`);
-    if (ctx.sodBlocks((await getSetting(tx, ctx.organizationId, "approvals.sod.production_plan", p.siteId)) && p.submittedBy === ctx.userId, "You built this plan; another person with approval permission must approve it.")) {
+    if (ctx.sodBlocksAt((await getSetting(tx, ctx.organizationId, "approvals.sod.production_plan", p.siteId)) && p.submittedBy === ctx.userId, "You built this plan; another person with approval permission must approve it.", p.siteId)) {
       throw new DomainError("separation_of_duties", "You built this plan; another person with approval permission must approve it.", ctx.refusalDetails());
     }
     const now = new Date();
@@ -387,7 +387,7 @@ export async function getProductionPlan(ctx: AuthContext, planId: string) {
     lines: out,
     approvalRequired,
     actions: {
-      canApprove: ctx.can("production.production_plan.approve") && p.status === "draft" && !(sod && ctx.sodConflict(p.submittedBy)),
+      canApprove: ctx.can("production.production_plan.approve") && p.status === "draft" && !(sod && ctx.sodConflictAt(p.submittedBy, p.siteId)),
       canClose: ctx.can("production.production_plan.edit") && p.status !== "closed",
       canConvert: ctx.can("production.work_order.create") && p.status !== "closed" && (!approvalRequired || p.status === "approved") && p.siteId === ctx.currentSiteId,
     },

@@ -4,6 +4,8 @@ import type { DbOrTx } from "@/db/client";
 import { auditEvents } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 
+const NOT_A_DECISION = new Set<string>(["platform.approval_rule.evaluated", "identity.authorization.denied"]);
+
 /**
  * Writes an append-only audit event in the caller's transaction. action = module.entity.event.
  * People are recorded in actor_id. Background jobs are recorded as actor_label `system:<code>`
@@ -26,6 +28,10 @@ export async function audit(
   },
 ) {
   const actor = ctx.actor;
+  // ADR-088 §2: a top role approving their own operational record. The event it enabled carries `ownRequest: true`.
+  // Bookkeeping events written before the decision (rule evaluation, refusals) leave the flag for the decision itself.
+  const selfApprovals = NOT_A_DECISION.has(e.action) ? [] : ctx.takeSelfApprovals();
+  const after = selfApprovals.length ? { ...(e.after && typeof e.after === "object" && !Array.isArray(e.after) ? (e.after as object) : e.after === undefined || e.after === null ? {} : { value: e.after }), ownRequest: true } : e.after;
   const [row] = await tx.insert(auditEvents).values({
     organizationId: ctx.organizationId,
     siteId: "siteId" in e ? (e.siteId ?? null) : ctx.currentSiteId,
@@ -38,9 +44,26 @@ export async function audit(
     entityNumber: e.entityNumber ?? null,
     reason: e.reason ?? null,
     before: (e.before as object) ?? null,
-    after: (e.after as object) ?? null,
+    after: (after as object) ?? null,
     correlationId: e.correlationId ?? ctx.correlationId,
   }).returning({ id: auditEvents.id });
+  if (selfApprovals.length) {
+    // Lets the deferred same-person triggers accept this transaction's rows, on the operational tables only
+    // (src/db/sql/adr088.sql); quality release tables never read this flag.
+    await tx.execute(sql`select set_config('bc.self_approval', 'on', true)`);
+    await tx.insert(auditEvents).values({
+      organizationId: ctx.organizationId,
+      siteId: "siteId" in e ? (e.siteId ?? null) : ctx.currentSiteId,
+      actorId: ctx.userId,
+      action: "governance.self_approval.used",
+      entityType: e.entityType,
+      entityId: e.entityId ?? null,
+      entityNumber: e.entityNumber ?? null,
+      reason: "Own request approved by a top role (setting approvals.top_roles_self_approve)",
+      after: { forAction: e.action, rules: selfApprovals, roles: ctx.roleCodes.filter((r) => r === "owner_director" || r === "site_manager") },
+      correlationId: e.correlationId ?? ctx.correlationId,
+    });
+  }
   // ADR-073: what the owner override let through in this operation is recorded next to the event it enabled.
   const overrides = ctx.takeOwnerOverrides();
   if (overrides.length) {

@@ -276,7 +276,7 @@ export async function getExpenseClaim(ctx: AuthContext, id: string) {
   const [c] = await db.select().from(expenseClaims).where(and(eq(expenseClaims.id, id), eq(expenseClaims.organizationId, ctx.organizationId), inArray(expenseClaims.siteId, ctx.allowedSiteIds))).limit(1);
   if (!c || (c.claimantUserId !== ctx.userId && !canSeeOthers(ctx, c.siteId))) throw new DomainError("not_found", "Expense claim not found.");
   ctx.requireSite(c.siteId);
-  const progress: Progress | null = c.status === "submitted" || c.status === "approved" ? await approvalProgress(db, ctx.organizationId, { recordType: "expense_claim", recordId: c.id, siteId: c.siteId, basis: { amount: c.amount } }) : null;
+  const progress: Progress | null = c.status === "submitted" || c.status === "approved" ? await approvalProgress(db, ctx.organizationId, { recordType: "expense_claim", recordId: c.id, siteId: c.siteId, basis: { amount: c.amount }, requesterIds: [c.claimantUserId] }) : null;
   const [receipt] = c.receiptAttachmentId ? await db.select({ id: fileAttachments.id, fileName: fileAttachments.fileName, sizeBytes: fileAttachments.sizeBytes, contentType: fileAttachments.contentType }).from(fileAttachments).where(eq(fileAttachments.id, c.receiptAttachmentId)).limit(1) : [];
   const cats = await expenseCategories(ctx.organizationId);
   const limit = await getSetting(db, ctx.organizationId, "finance.expense.receipt_required_above");
@@ -289,7 +289,7 @@ export async function getExpenseClaim(ctx: AuthContext, id: string) {
     receiptLimit: String(limit),
     isClaimant: c.claimantUserId === ctx.userId,
     progress,
-    canApprove: c.status === "submitted" && canDecide(ctx, "expense_claim", progress, c.submittedAt, [c.claimantUserId]),
+    canApprove: c.status === "submitted" && canDecide(ctx, "expense_claim", progress, c.submittedAt, [c.claimantUserId], c.siteId),
     posterBlocked: c.status === "approved" && (ctx.sodConflict(c.claimantUserId) || (!!progress && !progress.posterMayEqualApprover && progress.approvers.some((u) => ctx.sodConflict(u)))),
     decisions: await decisionsOf(db, ctx.organizationId, "expense_claim", c.id),
     names: Object.fromEntries(await namesOf(db, [c.claimantUserId, c.approvedBy, c.rejectedBy, c.postedBy, c.voidedBy])),

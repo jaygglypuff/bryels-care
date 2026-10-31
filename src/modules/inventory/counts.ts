@@ -33,7 +33,7 @@ import { qtyInputToBase } from "./units";
 import { isUuid } from "./lots";
 import { claimIdempotencyKey, stateMachine, storeIdempotentResult } from "./command-kit";
 import { getInventorySetting } from "./policy";
-import { canDecideEvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited } from "@/modules/governance";
+import { type ApprovalVerdict, canDecideEvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited, stepVerdict } from "@/modules/governance";
 
 type CountLineRow = typeof stockCountLines.$inferSelect;
 
@@ -514,7 +514,7 @@ export async function approveCount(ctx: AuthContext, countId: string, input: App
     const c = await lockCount(tx, ctx, countId);
     if (c.status !== "counted" && c.status !== "pending_approval") throw new DomainError("state", `Count ${c.countNumber} is ${c.status.replace("_", " ")}; there is nothing to approve.`);
     const counters = await countersOf(tx, c.id);
-    if (ctx.sodBlocks(counters.has(ctx.userId), "SEPARATION_OF_DUTIES: you counted or are assigned to this count, so you cannot approve its variances.")) {
+    if (ctx.sodBlocksAt(counters.has(ctx.userId), "SEPARATION_OF_DUTIES: you counted or are assigned to this count, so you cannot approve its variances.", c.siteId)) {
       throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: you counted or are assigned to this count, so you cannot approve its variances.", { ...ctx.refusalDetails(), rule: "sod.count.approver_not_counter" });
     }
     const lines = await tx.select().from(stockCountLines).where(eq(stockCountLines.stockCountId, c.id));
@@ -576,7 +576,7 @@ export async function approveCount(ctx: AuthContext, countId: string, input: App
       .where(and(eq(approvalDecisions.recordType, "stock_count"), eq(approvalDecisions.recordId, c.id), eq(approvalDecisions.cycle, await countApprovalCycle(tx, c.id)), eq(approvalDecisions.step, 1), eq(approvalDecisions.decision, "approved")))
       .orderBy(desc(approvalDecisions.decidedAt))
       .limit(1);
-    ctx.assertSeparation(first?.decidedBy === ctx.userId, "SEPARATION_OF_DUTIES: the second approval must come from a different person than the first.");
+    ctx.assertSeparationAt(first?.decidedBy === ctx.userId, "SEPARATION_OF_DUTIES: the second approval must come from a different person than the first.", c.siteId);
     await tx.insert(approvalDecisions).values({ organizationId: c.organizationId, siteId: c.siteId, recordType: "stock_count", recordId: c.id, cycle: await countApprovalCycle(tx, c.id), step: 2, decision: "approved", decidedBy: ctx.userId, note: input.note?.trim() || null });
     countMachine.assert(c.status, "approved", `Count ${c.countNumber}`);
     await tx.update(stockCounts).set({ status: "approved", approvedBy: ctx.userId, approvedAt: new Date(), updatedAt: new Date() }).where(eq(stockCounts.id, c.id));
@@ -602,7 +602,7 @@ export async function rejectCountLines(ctx: AuthContext, countId: string, input:
     const c = await lockCount(tx, ctx, countId);
     countMachine.assert(c.status, "recount", `Count ${c.countNumber}`);
     const counters = await countersOf(tx, c.id);
-    ctx.assertSeparation(counters.has(ctx.userId), "SEPARATION_OF_DUTIES: you counted or are assigned to this count, so you cannot decide on its variances.");
+    ctx.assertSeparationAt(counters.has(ctx.userId), "SEPARATION_OF_DUTIES: you counted or are assigned to this count, so you cannot decide on its variances.", c.siteId);
     const ids = input.lineIds.filter(isUuid);
     const lines = ids.length ? await tx.select().from(stockCountLines).where(and(eq(stockCountLines.stockCountId, c.id), inArray(stockCountLines.id, ids))) : [];
     const rejectable = lines.filter((l) => !l.isUnlabelled);
@@ -642,7 +642,7 @@ export async function postCount(ctx: AuthContext, countId: string, idempotencyKe
     if (claimed) return { ...claimed.replay, replayed: true };
     const c = await lockCount(tx, ctx, countId);
     countMachine.assert(c.status, "posted", `Count ${c.countNumber}`);
-    if (ctx.sodBlocks(c.requiresSecondApproval && c.approvedBy === ctx.userId, "SEPARATION_OF_DUTIES: above the approval threshold the person who posts must differ from the final approver.")) {
+    if (ctx.sodBlocksAt(c.requiresSecondApproval && c.approvedBy === ctx.userId, "SEPARATION_OF_DUTIES: above the approval threshold the person who posts must differ from the final approver.", c.siteId)) {
       throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: above the approval threshold the person who posts must differ from the final approver.", ctx.refusalDetails());
     }
     const lines = await tx.select().from(stockCountLines).where(eq(stockCountLines.stockCountId, c.id));
@@ -818,6 +818,8 @@ export async function getCount(ctx: AuthContext, countId: string) {
     scope,
     counters: assigned,
     isCounter,
+    // ADR-088 §2: a counter may still approve as a top role at the site (or under the owner override).
+    canApproveVariances: ctx.canAt("inventory.stock_count.approve", c.siteId) && !(isCounter && ctx.sodConflictAt(ctx.userId, c.siteId)),
     reveal,
     lines: outLines,
     decisions,
@@ -841,4 +843,40 @@ export async function findLotForCount(ctx: AuthContext, countId: string, raw: st
     .where(and(eq(inventoryLots.organizationId, ctx.organizationId), eq(inventoryLots.siteId, c.siteId), eq(inventoryLots.lotNumber, code)))
     .limit(1);
   return lot ?? null;
+}
+
+/**
+ * "To approve" verdicts for count variances waiting for the second step (ADR-083 §8, ADR-088 §2; registered in
+ * src/modules/wiring.ts): the same role and same-person rules as `approveCount`, read only, caller's sites only.
+ */
+export async function countApprovalVerdicts(ctx: AuthContext, ids: string[]): Promise<Map<string, ApprovalVerdict>> {
+  const out = new Map<string, ApprovalVerdict>();
+  if (!ids.length || !ctx.allowedSiteIds.length) return out;
+  const rows = await db
+    .select()
+    .from(stockCounts)
+    .where(and(eq(stockCounts.organizationId, ctx.organizationId), inArray(stockCounts.id, ids), inArray(stockCounts.siteId, ctx.allowedSiteIds), eq(stockCounts.status, "pending_approval")));
+  for (const c of rows) {
+    const lines = await db.select().from(stockCountLines).where(eq(stockCountLines.stockCountId, c.id));
+    const ev = await evaluateApprovalRules(db, c.organizationId, { documentType: "stock_count_variance", siteId: c.siteId, basis: countVarianceBasis(lines) });
+    const firsts = await db
+      .select({ by: approvalDecisions.decidedBy })
+      .from(approvalDecisions)
+      .where(and(eq(approvalDecisions.recordType, "stock_count"), eq(approvalDecisions.recordId, c.id), eq(approvalDecisions.step, 1), eq(approvalDecisions.decision, "approved")))
+      .orderBy(desc(approvalDecisions.decidedAt))
+      .limit(1);
+    const counters = await countersOf(db, c.id);
+    const v = stepVerdict(ctx, {
+      step: ev.steps[1] ?? null,
+      basePermission: "inventory.stock_count.approve",
+      siteId: c.siteId,
+      pendingSince: c.updatedAt,
+      excludedUserIds: [...counters],
+      priorApproverIds: firsts.map((f) => f.by),
+      operational: true,
+      roleStandIn: false,
+    });
+    out.set(c.id, v);
+  }
+  return out;
 }

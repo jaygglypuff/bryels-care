@@ -545,7 +545,7 @@ export async function getSupplierBill(ctx: AuthContext, id: string) {
   ctx.requireSite(row.b.siteId);
   const b = row.b;
   const lines = await db.select().from(supplierBillLines).where(eq(supplierBillLines.supplierBillId, b.id)).orderBy(asc(supplierBillLines.lineNo));
-  const progress: Progress | null = ["submitted", "approved"].includes(b.status) ? await approvalProgress(db, ctx.organizationId, { recordType: "supplier_bill", recordId: b.id, siteId: b.siteId, basis: { amount: b.totalAmount } }) : null;
+  const progress: Progress | null = ["submitted", "approved"].includes(b.status) ? await approvalProgress(db, ctx.organizationId, { recordType: "supplier_bill", recordId: b.id, siteId: b.siteId, basis: { amount: b.totalAmount }, requesterIds: [b.createdBy, b.submittedBy] }) : null;
   const [creditFor] = b.creditForBillId ? await db.select({ id: supplierBills.id, billNumber: supplierBills.billNumber }).from(supplierBills).where(eq(supplierBills.id, b.creditForBillId)).limit(1) : [];
   const credits = await db.select({ id: supplierBills.id, billNumber: supplierBills.billNumber, status: supplierBills.status, total: supplierBills.totalAmount }).from(supplierBills).where(eq(supplierBills.creditForBillId, b.id));
   // W4A supplier returns expecting a credit from this supplier: a dispute can be resolved by entering that credit.
@@ -560,7 +560,7 @@ export async function getSupplierBill(ctx: AuthContext, id: string) {
     credits,
     expectedSupplierCredits,
     progress,
-    canApprove: b.status === "submitted" && canDecide(ctx, "supplier_bill", progress, b.submittedAt, [b.createdBy, b.submittedBy]) && (!!b.goodsReceiptId || !!b.purchaseOrderId || ctx.hasAnyRole(["finance"])),
+    canApprove: b.status === "submitted" && canDecide(ctx, "supplier_bill", progress, b.submittedAt, [b.createdBy, b.submittedBy], b.siteId) && (!!b.goodsReceiptId || !!b.purchaseOrderId || ctx.hasAnyRole(["finance"])),
     canApproveVariance: b.status === "disputed" && ctx.canAt("finance.supplier_bill.approve", b.siteId) && !ctx.sodConflict(b.createdBy) && !ctx.sodConflict(b.submittedBy),
     posterBlocked: b.status === "approved" && !!progress && !progress.posterMayEqualApprover && progress.approvers.some((u) => ctx.sodConflict(u)),
     decisions: await decisionsOf(db, ctx.organizationId, "supplier_bill", b.id),

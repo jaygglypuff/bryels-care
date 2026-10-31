@@ -516,7 +516,7 @@ export async function getInvoice(ctx: AuthContext, id: string) {
   const inv = row.i;
   const lines = await db.select().from(invoiceLines).where(eq(invoiceLines.invoiceId, inv.id)).orderBy(asc(invoiceLines.lineNo));
   const basis = { amount: inv.totalAmount };
-  const progress: Progress | null = inv.status === "submitted" || inv.status === "approved" ? await approvalProgress(db, ctx.organizationId, { recordType: "invoice", recordId: inv.id, siteId: inv.siteId, basis }) : null;
+  const progress: Progress | null = inv.status === "submitted" || inv.status === "approved" ? await approvalProgress(db, ctx.organizationId, { recordType: "invoice", recordId: inv.id, siteId: inv.siteId, basis, requesterIds: [inv.createdBy, inv.submittedBy] }) : null;
   const decisions = await decisionsOf(db, ctx.organizationId, "invoice", inv.id);
   const names = await namesOf(db, [inv.createdBy, inv.submittedBy, inv.approvedBy, inv.postedBy, inv.voidedBy]);
   const postings = await postingsOf(db, ctx.organizationId, "invoice", [inv.id]);
@@ -536,7 +536,7 @@ export async function getInvoice(ctx: AuthContext, id: string) {
     shipment: { id: row.s.id, number: row.s.shipmentNumber ?? row.s.deliveryReceiptNumber, drNumber: row.s.deliveryReceiptNumber, dispatchedAt: row.s.dispatchedAt, status: row.s.status },
     lines,
     progress,
-    canApprove: inv.status === "submitted" && canDecide(ctx, "invoice", progress, inv.submittedAt, [inv.createdBy, inv.submittedBy]),
+    canApprove: inv.status === "submitted" && canDecide(ctx, "invoice", progress, inv.submittedAt, [inv.createdBy, inv.submittedBy], inv.siteId),
     posterBlocked: inv.status === "approved" && !!progress && !progress.posterMayEqualApprover && progress.approvers.some((u) => ctx.sodConflict(u)),
     decisions,
     names: Object.fromEntries(names),

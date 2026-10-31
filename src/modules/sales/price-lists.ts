@@ -127,7 +127,7 @@ export async function getPriceList(ctx: AuthContext, id: string) {
     .from(users)
     .where(inArray(users.id, [pl.createdBy, pl.updatedBy, pl.submittedBy, pl.approvedBy].filter((x): x is string => !!x)));
   const name = (u: string | null) => (u ? (people.find((p) => p.id === u)?.name ?? "") : null);
-  const progress = pl.status === "pending_approval" ? await approvalProgress(db, ctx.organizationId, { recordType: "price_list", recordId: pl.id, siteId: null, basis: {} }) : null;
+  const progress = pl.status === "pending_approval" ? await approvalProgress(db, ctx.organizationId, { recordType: "price_list", recordId: pl.id, siteId: null, basis: {}, requesterIds: [pl.submittedBy, pl.updatedBy, pl.createdBy] }) : null;
   return {
     priceList: { ...pl, createdByName: name(pl.createdBy), updatedByName: name(pl.updatedBy), submittedByName: name(pl.submittedBy), approvedByName: name(pl.approvedBy) },
     customer: cust[0] ?? null,

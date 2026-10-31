@@ -362,7 +362,7 @@ export async function approveShipmentException(ctx: AuthContext, shipmentId: str
   if (!peek[0] || !ctx.allowedSiteIds.includes(peek[0].siteId)) throw new DomainError("not_found", "Shipment not found in your sites.");
   ctx.requireAt("sales.over_shipment.approve", peek[0].siteId);
   const [order] = await db.select().from(salesOrders).where(eq(salesOrders.id, peek[0].orderId)).limit(1);
-  if (ctx.sodBlocks(order.createdBy === ctx.userId, "You created this order, so someone else must approve the exception.")) {
+  if (ctx.sodBlocksAt(order.createdBy === ctx.userId, "You created this order, so someone else must approve the exception.", order.siteId)) {
     await auditDenied(ctx, { permission: "sales.over_shipment.approve", entityType: "shipment", entityId: shipmentId, siteId: order.siteId, rule: "sod.over_shipment.not_order_creator" });
     throw new DomainError("separation_of_duties", "You created this order, so someone else must approve the exception.", { ...ctx.refusalDetails(), rule: "sod.over_shipment.not_order_creator" });
   }
@@ -560,6 +560,6 @@ export async function getPackingView(ctx: AuthContext, shipmentId: string) {
     scans: scans.map((x) => ({ ...x.sc, scannedByName: x.by })),
     fullShipmentRequired: req.some((r) => r.fullShipmentRequired),
     isPicker: pickers.has(ctx.userId) && !ctx.ownerOverride,
-    canOverApprove: ctx.can("sales.over_shipment.approve") && !ctx.sodConflict(order.o.createdBy),
+    canOverApprove: ctx.can("sales.over_shipment.approve") && !ctx.sodConflictAt(order.o.createdBy, order.o.siteId),
   };
 }

@@ -5,7 +5,7 @@ import { db, type DbOrTx } from "@/db/client";
 import { formulaRevisions, products, users, workOrders } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { getSetting } from "@/lib/settings";
-import { type ApprovalVerdict, OWN_REQUEST_REASON } from "@/modules/governance";
+import { type ApprovalVerdict, OWN_REQUEST_REASON, selfApprovalNote } from "@/modules/governance";
 import { getEffectiveFormulaRevision } from "@/modules/masterdata";
 import { notifyUsers, usersHoldingPermissionAt } from "@/modules/platform/notifications";
 import { pieceWord, shortDay } from "./production-order-status";
@@ -93,12 +93,14 @@ export async function productionOrderApprovalVerdicts(ctx: AuthContext, ids: str
     if (!sodBySite.has(wo.siteId)) sodBySite.set(wo.siteId, !!(await getSetting(db, ctx.organizationId, "approvals.sod.work_order_release", wo.siteId)));
     const maker = makerOf(wo);
     const holds = ctx.canAt(APPROVE, wo.siteId);
-    const sodBlocks = sodBySite.get(wo.siteId)! && ctx.sodConflict(maker);
+    const sodBlocks = sodBySite.get(wo.siteId)! && ctx.sodConflictAt(maker, wo.siteId);
+    const ownRequest = holds && !sodBlocks && !!maker && maker === ctx.userId && ctx.selfApprovesAt(wo.siteId);
     out.set(wo.id, {
       canDecide: holds && !sodBlocks,
       waitingForRoles: [],
       stepLabel: null,
       blockedReason: holds && sodBlocks ? (maker === ctx.userId ? SOD_REASON : OWN_REQUEST_REASON) : null,
+      ...(ownRequest ? { ownRequest: true, selfApprovalNote: selfApprovalNote(ctx) } : {}),
       requestedById: maker,
       requestedByName: maker ? (names.get(maker) ?? null) : null,
       title: `Production order ${wo.workOrderNumber} · ${await productionOrderSummary(db, ctx, wo, product)}`,

@@ -41,6 +41,8 @@ export type ApprovalRow = ActionItemView & {
   ownRequest: boolean;
   /** The signed-in user may decide the open step now (Approve / Reject shown). */
   canDecide: boolean;
+  /** ADR-088 §2: plain words when a top role decides their own request ("You can approve this yourself because you are the owner."). */
+  selfApprovalNote: string | null;
   /** Plain words for the "Waiting for others" section, e.g. "Waiting for the site manager". */
   waitingFor: string | null;
   /** Label of the open approval step, when the record has steps. */
@@ -180,6 +182,7 @@ export async function listMyApprovals(ctx: AuthContext): Promise<ApprovalRow[]> 
       requestedBy,
       ownRequest,
       canDecide,
+      selfApprovalNote: canDecide && v?.ownRequest ? (v.selfApprovalNote ?? null) : null,
       waitingFor: canDecide ? null : waitingText(v?.waitingForRoles ?? [], names, blocked),
       // The step label only when it adds something to "Waiting for the site manager" ("… above 10 % discount").
       stepLabel: v?.stepLabel && !(canDecide ? "" : waitingText(v.waitingForRoles ?? [], names, blocked)).toLowerCase().includes(v.stepLabel.replace(/\s*\bapproval\b.*$/i, "").toLowerCase()) ? v.stepLabel : null,

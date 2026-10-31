@@ -47,7 +47,7 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
     throw e;
   }
   const canCount = ctx.can("inventory.stock_count.submit") && (c.counters.length === 0 || c.isCounter);
-  const canApprove = ctx.can("inventory.stock_count.approve") && !c.isCounter;
+  const canApprove = c.canApproveVariances;
   const label = (l: CountDetail["lines"][number]) => (l.isUnlabelled ? `No label at ${l.locationCode}: ${l.description}` : `${l.locationCode} · ${l.lotNumber} · ${l.itemName}`);
   const variant = c.lines.filter((l) => !l.isUnlabelled && l.variance !== null && !new Decimal(l.variance).isZero());
   const recountLines = c.lines.filter((l) => l.lineStatus === "recount_required");

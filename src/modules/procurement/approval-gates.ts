@@ -25,7 +25,7 @@ export async function purchaseRequestApprovalVerdicts(ctx: AuthContext, ids: str
     .where(and(eq(purchaseRequests.organizationId, ctx.organizationId), inArray(purchaseRequests.id, ids), inArray(purchaseRequests.siteId, ctx.allowedSiteIds), eq(purchaseRequests.status, "submitted")));
   for (const { r, requester } of rows) {
     const progress = await approvalProgress(db, ctx.organizationId, { recordType: "purchase_request", recordId: r.id, siteId: r.siteId, basis: { amount: r.estimatedTotalAmount ?? "unbounded" } });
-    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: BASE_APPROVE.purchase_request, siteId: r.siteId, pendingSince: r.submittedAt, excludedUserIds: [r.createdBy, r.requestedBy, r.submittedBy], priorApproverIds: approversOf(progress) });
+    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: BASE_APPROVE.purchase_request, siteId: r.siteId, pendingSince: r.submittedAt, excludedUserIds: [r.createdBy, r.requestedBy, r.submittedBy], priorApproverIds: approversOf(progress), operational: true });
     out.set(r.id, { ...v, requestedById: r.requestedBy, requestedByName: requester, amount: r.estimatedTotalAmount, currency: r.currency, why: r.justification ? r.justification.slice(0, 160) : null });
   }
   return out;
@@ -42,7 +42,7 @@ export async function purchaseOrderApprovalVerdicts(ctx: AuthContext, ids: strin
     .where(and(eq(purchaseOrders.organizationId, ctx.organizationId), inArray(purchaseOrders.id, ids), inArray(purchaseOrders.siteId, ctx.allowedSiteIds), eq(purchaseOrders.status, "submitted")));
   for (const { o, supplier, by } of rows) {
     const progress = await approvalProgress(db, ctx.organizationId, { recordType: "purchase_order", recordId: o.id, siteId: o.siteId, basis: { amount: o.totalAmount } });
-    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: BASE_APPROVE.purchase_order, siteId: o.siteId, pendingSince: o.submittedAt, excludedUserIds: [o.createdBy, o.submittedBy], priorApproverIds: approversOf(progress) });
+    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: BASE_APPROVE.purchase_order, siteId: o.siteId, pendingSince: o.submittedAt, excludedUserIds: [o.createdBy, o.submittedBy], priorApproverIds: approversOf(progress), operational: true });
     out.set(o.id, { ...v, requestedById: o.submittedBy, requestedByName: by, amount: o.totalAmount, currency: o.currency, title: `Purchase order to ${supplier}`, why: o.isUrgent ? `Urgent${o.urgentReason ? `: ${o.urgentReason}` : ""}` : null });
   }
   return out;
@@ -59,7 +59,7 @@ export async function supplierReturnApprovalVerdicts(ctx: AuthContext, ids: stri
     .where(and(eq(supplierReturns.organizationId, ctx.organizationId), inArray(supplierReturns.id, ids), inArray(supplierReturns.siteId, ctx.allowedSiteIds), eq(supplierReturns.status, "submitted")));
   for (const { r, supplier, by } of rows) {
     const progress = await approvalProgress(db, ctx.organizationId, { recordType: "supplier_return", recordId: r.id, siteId: r.siteId, basis: { amount: r.creditExpectedAmount ?? "unbounded" } });
-    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: BASE_APPROVE.supplier_return, siteId: r.siteId, pendingSince: r.submittedAt, excludedUserIds: [r.createdBy, r.submittedBy], priorApproverIds: approversOf(progress) });
+    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: BASE_APPROVE.supplier_return, siteId: r.siteId, pendingSince: r.submittedAt, excludedUserIds: [r.createdBy, r.submittedBy], priorApproverIds: approversOf(progress), operational: true });
     out.set(r.id, { ...v, requestedById: r.submittedBy, requestedByName: by, amount: r.creditExpectedAmount, currency: r.currency, title: `Return to ${supplier}`, why: r.reasonNote ? r.reasonNote.slice(0, 160) : null });
   }
   return out;

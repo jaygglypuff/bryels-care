@@ -986,6 +986,42 @@ submitted_by}` and, for multi-approval, that `(record_type, record_id, step, dec
 not already present. Violation → 409 `SEPARATION_OF_DUTIES`. Users with two roles do not
 escape the rule: SoD compares user ids, not roles.
 
+#### 5.1.1 Top roles approve their own operational records (ADR-088 §2, A-GOV-SELF-01)
+
+Setting `approvals.top_roles_self_approve` (organization; default **on**; restricted; every change is a
+change request that only an `owner_director` approves). While on, "same user" in the table above does
+not block a **top role at the record's site** for the record types below. Top role = `owner_director`
+with an organization-wide assignment (every site and organization-level records), or `site_manager`
+assigned at that site (or organization-wide). A person who is site manager at RVS and planner at NFD is
+a top role at RVS only.
+
+| Record type | Same-person rules lifted for a top role | Role steps |
+|---|---|---|
+| Production order (approve / release, `approvals.sod.work_order_release`), production plan | creator / planner | – |
+| Purchase request, purchase order, supplier return | creator/submitter; one person per step; supplier return poster ≠ approver | owner also decides the site-manager step **of their own record** |
+| Stock adjustment, count variance | drafter/submitter, counter; second step ≠ first; poster ≠ final approver | as configured (step 2 stays `owner_director`) |
+| Price list, customer requirement (organization level: owner only) | editor/submitter | as configured |
+| Quotation, sales order (credit / value approval), over-shipment exception | creator/submitter; one person per step | owner also decides the site-manager and finance steps **of their own record** |
+| Expense claim | claimant; one person per step | owner also decides the finance step **of their own claim** |
+| Invoice, supplier bill, credit note, payment record | creator/submitter; one person per step | **as configured** ("where the rules allow the owner": the owner decides only steps naming `owner_director`); poster ≠ approver and the bill variance rule unchanged |
+| Formula, routing, work-instruction revision; inspection plan | preparer/submitter; one person per step — **not at a step naming `qa_qc`** | as configured |
+
+Never lifted (GMP independence; ADR-080 §8 performer ≠ releaser): lot/batch disposition and
+release, Check quality, conditional release, QA hold lift, inspection review, dispensing / process-step /
+output / pack checks, equipment overrides, batch reopen, settings, numbering, tax, period unlock,
+retention, import approval. An owner who also holds `qa_qc` is still refused on these.
+
+Implementation: services call `ctx.sodBlocksAt(conflict, rule, siteId)` / `ctx.assertSeparationAt` /
+`ctx.sodConflictAt` (screens) and `ctx.actsAsAnyRoleAt(roles, siteId, requesterIds)` for the owner's
+role stand-in; quality services keep `ctx.sodBlocks`. Each pass is recorded by `audit()` as
+`governance.self_approval.used` (rules passed, roles) plus `ownRequest: true` on the decision event,
+and sets the transaction-local `bc.self_approval = on`, which the deferred same-person triggers accept
+only on the operational tables listed in `src/db/sql/adr088.sql` (never `quality_holds`,
+`disposition_requests`, `inspections`, dispensing, process steps, packs). "To approve" verdicts use the
+same rules (`stepVerdict(..., { operational: true })`), so the badge counts the user's own decidable
+items and the row says "You can approve this yourself because you are the owner / site manager". The
+ADR-073 owner override is unchanged and still applies when this setting is off.
+
 ### 5.2 `approval_rules`
 
 The table is defined in `docs/data-model.md` §3.1 (`approval_rules`, Phase 1, soft-deletable,

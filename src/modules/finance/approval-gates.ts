@@ -23,7 +23,7 @@ export async function expenseClaimApprovalVerdicts(ctx: AuthContext, ids: string
   const cats = rows.length ? await expenseCategories(ctx.organizationId) : [];
   for (const { c, claimant } of rows) {
     const progress = await approvalProgress(db, ctx.organizationId, { recordType: "expense_claim", recordId: c.id, siteId: c.siteId, basis: { amount: c.amount } });
-    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: BASE_APPROVE.expense_claim, siteId: c.siteId, pendingSince: c.submittedAt, excludedUserIds: [c.claimantUserId], priorApproverIds: progress.approvers });
+    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: BASE_APPROVE.expense_claim, siteId: c.siteId, pendingSince: c.submittedAt, excludedUserIds: [c.claimantUserId], priorApproverIds: progress.approvers, operational: true });
     const category = cats.find((x) => x.code === c.categoryCode)?.label ?? null;
     out.set(c.id, {
       ...v,
@@ -49,7 +49,7 @@ export async function invoiceApprovalVerdicts(ctx: AuthContext, ids: string[]): 
     .where(and(eq(invoices.organizationId, ctx.organizationId), inArray(invoices.id, ids), inArray(invoices.siteId, ctx.allowedSiteIds), eq(invoices.status, "submitted")));
   for (const { i, customer, submitter } of rows) {
     const progress = await approvalProgress(db, ctx.organizationId, { recordType: "invoice", recordId: i.id, siteId: i.siteId, basis: { amount: i.totalAmount } });
-    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: BASE_APPROVE.invoice, siteId: i.siteId, pendingSince: i.submittedAt, excludedUserIds: [i.createdBy, i.submittedBy], priorApproverIds: progress.approvers });
+    const v = stepVerdict(ctx, { step: progress.next, stepsCount: progress.steps.length, basePermission: BASE_APPROVE.invoice, siteId: i.siteId, pendingSince: i.submittedAt, excludedUserIds: [i.createdBy, i.submittedBy], priorApproverIds: progress.approvers, operational: true, roleStandIn: false });
     out.set(i.id, { ...v, requestedById: i.submittedBy, requestedByName: submitter, amount: i.totalAmount, currency: i.currency, title: `Invoice for ${customer}` });
   }
   return out;

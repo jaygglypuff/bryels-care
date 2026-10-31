@@ -29,6 +29,9 @@ beforeAll(async () => {
   acs = await productId("ACS-135");
   const [u] = await db.select().from(users).where(eq(users.email, "owner@bryels-care.test"));
   ownerId = u.id;
+  // ADR-088 §2 (top roles approve their own records, default on) is tested in top-role-self-approval.test.ts;
+  // switched off here so these tests see the ADR-073 override alone.
+  await setOrgSetting(w.orgId, "approvals.top_roles_self_approve", false);
 }, 120_000);
 
 describe("ADR-073 owner override", () => {

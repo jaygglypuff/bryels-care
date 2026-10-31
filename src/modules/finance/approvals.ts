@@ -3,6 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 import type { DbOrTx, Tx } from "@/db/client";
 import { approvalDecisions, users } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
+import { approverLabel } from "@/lib/auth/self-approval";
 import { DomainError } from "@/lib/errors";
 import type { Permission } from "@/lib/permissions";
 import { type ApprovalBasis, type ApprovalDocumentType, type EvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited, rolesAllowedNow } from "@/modules/governance";
@@ -55,7 +56,7 @@ export type Progress = {
   posterMayEqualApprover: boolean;
 };
 
-export type ApprovalArgs = { recordType: FinanceRecordType; recordId: string; siteId: string | null; basis: ApprovalBasis; on?: Date };
+export type ApprovalArgs = { recordType: FinanceRecordType; recordId: string; siteId: string | null; basis: ApprovalBasis; on?: Date; /** ADR-088 §2: who asked, so a step they approved themselves reads "<name> (own request)". */ requesterIds?: (string | null | undefined)[] };
 
 /** The steps that apply (no audit) with the decisions of the open cycle. */
 export async function approvalProgress(q: DbOrTx, organizationId: string, args: ApprovalArgs): Promise<Progress> {
@@ -64,7 +65,7 @@ export async function approvalProgress(q: DbOrTx, organizationId: string, args: 
   const cycle = currentCycle(decisions);
   const open = decisions.filter((d) => d.cycle === cycle && d.decision === "approved");
   const steps = ev.steps.map((s) => {
-    const approvals = open.filter((d) => d.step === s.step).map((d) => ({ by: d.decidedBy, name: d.decidedByName, at: d.decidedAt }));
+    const approvals = open.filter((d) => d.step === s.step).map((d) => ({ by: d.decidedBy, name: approverLabel(d.decidedByName, d.decidedBy, args.requesterIds ?? []) ?? d.decidedByName, at: d.decidedAt }));
     return { ...s, permission: s.permission ?? BASE_APPROVE[args.recordType], approvals, done: approvals.length >= s.requiredCount };
   });
   return {
@@ -83,15 +84,15 @@ export async function evaluateAtSubmit(tx: Tx, ctx: AuthContext, args: ApprovalA
 }
 
 /** UI hint: whether the caller could decide the next step now (the service re-checks everything). */
-export function canDecide(ctx: AuthContext, recordType: FinanceRecordType, progress: Progress | null, pendingSince: Date | null, excludedUserIds: (string | null | undefined)[]) {
+export function canDecide(ctx: AuthContext, recordType: FinanceRecordType, progress: Progress | null, pendingSince: Date | null, excludedUserIds: (string | null | undefined)[], siteId: string | null = null) {
   const step = progress?.next;
   if (!step) return false;
   if (!ctx.can(BASE_APPROVE[recordType])) return false;
   if (step.permission && !ctx.can(step.permission as Permission)) return false;
   const roles = rolesAllowedNow(step, pendingSince);
-  if (roles.length > 0 && !ctx.hasAnyRole(roles)) return false;
-  if (excludedUserIds.some((u) => ctx.sodConflict(u))) return false;
-  if (progress.approvers.some((u) => ctx.sodConflict(u))) return false;
+  if (roles.length > 0 && !(recordType === "expense_claim" ? ctx.hasAnyRoleAt(roles, siteId, excludedUserIds) : ctx.hasAnyRole(roles))) return false;
+  if (excludedUserIds.some((u) => ctx.sodConflictAt(u, siteId))) return false;
+  if (progress.approvers.some((u) => ctx.sodConflictAt(u, siteId))) return false;
   return true;
 }
 
@@ -115,7 +116,7 @@ export async function recordDecision(
   const base = BASE_APPROVE[args.recordType];
   if (args.siteId) ctx.requireAt(base, args.siteId);
   else ctx.require(base);
-  if (ctx.sodBlocks(args.excludedUserIds.some((u) => u && u === ctx.userId), "You created or submitted this record, so another person must decide on it.")) {
+  if (ctx.sodBlocksAt(args.excludedUserIds.some((u) => u && u === ctx.userId), "You created or submitted this record, so another person must decide on it.", args.siteId)) {
     throw new DomainError("separation_of_duties", "You created or submitted this record, so another person must decide on it.", { ...ctx.refusalDetails(), ...SOD_CODE });
   }
   await evaluateApprovalRulesAudited(tx, ctx, { documentType: args.recordType as ApprovalDocumentType, siteId: args.siteId, basis: args.basis, recordId: args.recordId, recordNumber: args.recordNumber });
@@ -124,14 +125,14 @@ export async function recordDecision(
   if (step) {
     if (step.permission) ctx.require(step.permission as Permission);
     const roles = rolesAllowedNow(step, args.pendingSince);
-    if (roles.length > 0 && !ctx.actsAsAnyRole(roles)) {
+    if (roles.length > 0 && !(args.recordType === "expense_claim" ? ctx.actsAsAnyRoleAt(roles, args.siteId, args.excludedUserIds) : ctx.actsAsAnyRole(roles))) {
       throw new DomainError("forbidden", `Step ${step.step} (${step.label}) must be decided by ${roles.map((r) => r.replace(/_/g, " ")).join(" or ")}.`);
     }
   }
   if (args.requireRole && args.decision === "approved" && !ctx.actsAsAnyRole([args.requireRole])) {
     throw new DomainError("forbidden", `This record must be approved by ${args.requireRole.replace(/_/g, " ")}.`);
   }
-  if (ctx.sodBlocks(args.decision === "approved" && progress.approvers.includes(ctx.userId), "You already approved a step of this record. A different person must decide this step.")) {
+  if (ctx.sodBlocksAt(args.decision === "approved" && progress.approvers.includes(ctx.userId), "You already approved a step of this record. A different person must decide this step.", args.siteId)) {
     throw new DomainError("separation_of_duties", "You already approved a step of this record. A different person must decide this step.", { ...ctx.refusalDetails(), ...SOD_CODE });
   }
   if (args.decision !== "approved" && !(args.note ?? "").trim()) throw new DomainError("validation", "Give the reason.", { field: "reason" });

@@ -1635,3 +1635,30 @@ once per lot, inside the release transaction, with the suggested shelf. Receipt 
 preview. Stock counts go shelf by shelf. Adjustments look the lot up by words and are sent to the manager in one
 action. Reasons `opening_balance` and `data_correction` require `inventory.balance.admin`. Warehouse users get a
 six-tile Home (Receive, Put away, Move, Count, Fix stock, Find). Stored codes and statuses are unchanged.
+
+## ADR-091 Top roles approve their own operational records (ADR-088 §2 as built, 2026-10-31)
+
+Status: Accepted (owner request); flagged for review under A-GOV-SELF-01 (owner, accountant, QA adviser).
+
+Decision:
+- Setting `approvals.top_roles_self_approve` (organization, default on, restricted, `ownerOnly`): any change is a
+  change request only an Owner/Director can approve.
+- Top role: the Owner/Director (organization-wide, including organization-level records such as price lists, customer
+  requirements and recipes) or a Site Manager at the record's site only.
+- A top role may approve operational records they created or submitted and decide every step: production orders and
+  plans, purchase requests and orders, supplier returns (and post them), stock adjustments and count variances (both
+  steps and post), price lists and customer requirements (owner only), quotations, sales orders and over-shipment
+  exceptions, expense claims, finance documents at steps whose roles the rules give them, and recipe/routing/work
+  instruction revisions at steps that do not name QA. On their own records the owner may stand in for another
+  role's step (never QA). Other people's records keep their role steps and escalation.
+- Enforcement in services (`ctx.sodBlocksAt`, `assertSeparationAt`, `sodConflictAt`, `actsAsAnyRoleAt`); `audit()`
+  writes `governance.self_approval.used`, flags the decision `ownRequest: true` and sets the transaction-local
+  `bc.self_approval`, which the same-person trigger (`src/db/sql/adr088.sql`, migration 0030) honours on 15 operational
+  tables only. "To approve" verdicts apply the same rule; records show "<name> (own request)".
+- Unchanged: lot/batch release, quality check pass/fail, conditional release, hold lift, inspection review and floor
+  checks keep an independent second person (GMP, ADR-080 §8), even for an owner holding QA; finance posting rules
+  (poster ≠ approver, bill variance, own expense posting); ADR-073 owner override.
+
+Consequences: tests `tests/integration/governance/top-role-self-approval.test.ts`; the finance detail pages' "Approved
+by" row lacks the "(own request)" suffix (the step list has it); the seeded owner role lacks some sales/procurement
+create strings (covered by the owner override in the demo).

@@ -3,6 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { type DbOrTx, type Tx } from "@/db/client";
 import { approvalDecisions, users } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
+import { approverLabel } from "@/lib/auth/self-approval";
 import { DomainError } from "@/lib/errors";
 import type { Permission } from "@/lib/permissions";
 import { type ApprovalBasis, type EvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited, rolesAllowedNow } from "@/modules/governance";
@@ -46,7 +47,7 @@ export type ApprovalProgress = {
   cycle: number;
 };
 
-export async function approvalProgress(q: DbOrTx, organizationId: string, args: { recordType: ProcRecordType; recordId: string; siteId: string; basis: ApprovalBasis }): Promise<ApprovalProgress> {
+export async function approvalProgress(q: DbOrTx, organizationId: string, args: { recordType: ProcRecordType; recordId: string; siteId: string; basis: ApprovalBasis; requesterIds?: (string | null | undefined)[] }): Promise<ApprovalProgress> {
   const ev = await evaluateApprovalRules(q, organizationId, { documentType: args.recordType, siteId: args.siteId, basis: args.basis });
   const decisions = await decisionsOf(q, organizationId, args.recordType, args.recordId);
   const cycle = currentCycle(decisions);
@@ -54,7 +55,7 @@ export async function approvalProgress(q: DbOrTx, organizationId: string, args: 
   // No matching rule → the base permission alone (one approver), still recorded (§5.2).
   const evSteps = ev.steps.length ? ev.steps : [{ step: 1, label: "Approval", ruleIds: [], roleCodes: [], permission: BASE_APPROVE[args.recordType], requiredCount: 1, posterMayEqualApprover: false, escalation: null } satisfies EvaluatedStep];
   const steps = evSteps.map((s) => {
-    const approvals = open.filter((d) => d.step === s.step).map((d) => ({ by: d.decidedBy, name: d.decidedByName, at: d.decidedAt }));
+    const approvals = open.filter((d) => d.step === s.step).map((d) => ({ by: d.decidedBy, name: approverLabel(d.decidedByName, d.decidedBy, args.requesterIds ?? []) ?? d.decidedByName, at: d.decidedAt }));
     return { ...s, permission: s.permission ?? BASE_APPROVE[args.recordType], approvals, done: approvals.length >= s.requiredCount };
   });
   return { steps, next: steps.find((s) => !s.done) ?? null, cycle };
@@ -67,9 +68,9 @@ export function canDecide(ctx: AuthContext, recordType: ProcRecordType, progress
   if (!ctx.canAt(BASE_APPROVE[recordType], siteId)) return false;
   if (step.permission && !ctx.can(step.permission as Permission)) return false;
   const roles = rolesAllowedNow(step, pendingSince);
-  if (roles.length > 0 && !ctx.hasAnyRole(roles)) return false;
-  if (excludedUserIds.some((u) => ctx.sodConflict(u))) return false;
-  if (progress.steps.some((s) => s.approvals.some((a) => ctx.sodConflict(a.by)))) return false;
+  if (roles.length > 0 && !ctx.hasAnyRoleAt(roles, siteId, excludedUserIds)) return false;
+  if (excludedUserIds.some((u) => ctx.sodConflictAt(u, siteId))) return false;
+  if (progress.steps.some((s) => s.approvals.some((a) => ctx.sodConflictAt(a.by, siteId)))) return false;
   return true;
 }
 
@@ -93,7 +94,7 @@ export async function recordDecision(
   },
 ): Promise<{ final: boolean; step: EvaluatedStep | null; nextStep: EvaluatedStep | null }> {
   ctx.requireAt(BASE_APPROVE[args.recordType], args.siteId);
-  if (ctx.sodBlocks(args.excludedUserIds.some((u) => u && u === ctx.userId), "You created or submitted this record, so another person must decide on it (separation of duties).")) {
+  if (ctx.sodBlocksAt(args.excludedUserIds.some((u) => u && u === ctx.userId), "You created or submitted this record, so another person must decide on it (separation of duties).", args.siteId)) {
     throw new DomainError("separation_of_duties", "You created or submitted this record, so another person must decide on it (separation of duties).", { ...ctx.refusalDetails(), code: "SEPARATION_OF_DUTIES" });
   }
   await evaluateApprovalRulesAudited(tx, ctx, { documentType: args.recordType, siteId: args.siteId, basis: args.basis, recordId: args.recordId, recordNumber: args.recordNumber });
@@ -102,10 +103,10 @@ export async function recordDecision(
   if (step) {
     if (step.permission) ctx.require(step.permission as Permission);
     const roles = rolesAllowedNow(step, args.pendingSince);
-    if (roles.length > 0 && !ctx.actsAsAnyRole(roles)) {
+    if (roles.length > 0 && !ctx.actsAsAnyRoleAt(roles, args.siteId, args.excludedUserIds)) {
       throw new DomainError("forbidden", `Step ${step.step} (${step.label}) must be decided by ${roles.map((r) => r.replace(/_/g, " ")).join(" or ")}.`);
     }
-    if (ctx.sodBlocks(progress.steps.some((s) => s.approvals.some((a) => a.by === ctx.userId)), "You already approved a step of this record. A different person must decide this step.")) {
+    if (ctx.sodBlocksAt(progress.steps.some((s) => s.approvals.some((a) => a.by === ctx.userId)), "You already approved a step of this record. A different person must decide this step.", args.siteId)) {
       throw new DomainError("separation_of_duties", "You already approved a step of this record. A different person must decide this step.", { ...ctx.refusalDetails(), code: "SEPARATION_OF_DUTIES" });
     }
   }

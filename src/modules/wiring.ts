@@ -20,7 +20,7 @@ import { registerEquipmentAvailabilityProvider } from "@/modules/masterdata";
 import { registerActionItemSource, registerApprovalGate } from "@/modules/action-centre";
 import { customersKind, failedImportCandidates, importApprovalCandidates, importWizardStats, registerImportKind } from "@/modules/imports";
 import { registerImportStatsProvider } from "@/modules/platform/diagnostics-phase5";
-import { registerReceivingPoHooks } from "@/modules/inventory";
+import { adjustmentApprovalVerdicts, countApprovalVerdicts, registerReceivingPoHooks } from "@/modules/inventory";
 import {
   aslApprovalCandidates,
   latePoCandidates,
@@ -184,4 +184,7 @@ export function registerAppHooks() {
   registerApprovalGate("approval.recall_case", recallCaseApprovalVerdicts);
   // Consultant review 2026-10-30 (flow B): production orders waiting for Approve, with the SoD rule of approveProductionOrder.
   registerApprovalGate("approval.production_order", productionOrderApprovalVerdicts);
+  // ADR-088 §2: stock adjustments and count variances, so a top role sees (and the badge counts) their own.
+  registerApprovalGate("approval.stock_adjustment", adjustmentApprovalVerdicts);
+  registerApprovalGate("approval.stock_count", countApprovalVerdicts);
 }

@@ -31,6 +31,8 @@ export type SettingDefinition = {
   description?: string;
   requiresApproval?: boolean;
   restricted?: boolean;
+  /** ADR-088 §2: every change is a change request (as `requiresApproval`) that only an Owner/Director may approve. */
+  ownerOnly?: boolean;
 };
 
 const MaintenanceSchema = z.object({ enabled: z.boolean(), allowed_role_codes: z.array(z.string().regex(/^[a-z_]+$/)).max(20) }).strict();
@@ -401,6 +403,28 @@ export const SETTINGS = {
     label: "Owner can do every step alone (owner override)",
     description: "When on, the Owner/Director can do any step, including approvals and checks that normally need a different person or another role (for example QA release). Every such step is recorded in the audit log as an owner override. Quality and GMP rules normally require an independent second person: confirm with your QA adviser before switching this on for real production.",
     restricted: true,
+  },
+  /**
+   * ADR-088 §2 (owner: "a site manager or owner still needs approval from another person … when they are
+   * already the highest in hierarchy"). When on, a person holding Owner/Director (organization-wide) or Site
+   * Manager (at the record's site) may approve operational records they created or submitted themselves and
+   * decide every step of them alone; the owner may also decide steps reserved for the site manager. Role
+   * restrictions of other steps (finance, QA) still apply. Quality decisions that release a lot or batch for
+   * use stay independent and QA-only. Each own-request approval is audited (`governance.self_approval.used`).
+   * A change is a request that only the owner approves (`ownerOnly`), with re-authentication. Assumption A-GOV-SELF-01.
+   */
+  "approvals.top_roles_self_approve": {
+    scopes: ["organization"],
+    schema: z.boolean(),
+    default: true as boolean,
+    assumption: "A-GOV-SELF-01",
+    group: "Approvals",
+    label: "Owner and site managers can approve their own requests",
+    description:
+      "When on, the owner and a site manager (at their own site) can approve production orders, purchase requests and orders, supplier returns, stock adjustments and counts, price lists, quotations, customer orders and requirements, expense claims, finance documents and recipes they made themselves. The record shows \"(own request)\". Releasing a material or product lot for use always stays with QA. A change takes effect only when the owner approves it.",
+    requiresApproval: true,
+    restricted: true,
+    ownerOnly: true,
   },
   /** Alert thresholds evaluated by `platform.alerts_evaluate` (docs/deployment-railway.md §8.3, A-DEP-11). */
   "alerts.worker_heartbeat_max_seconds": { scopes: ["organization"], schema: z.number().int().min(60).max(86_400), default: 300, assumption: "A-DEP-11", group: "Alerts", label: "Worker silent after (seconds)" },

@@ -171,7 +171,7 @@ export async function approveProductionOrder(ctx: AuthContext, workOrderId: stri
         }
         if (await getSetting(tx, ctx.organizationId, "approvals.sod.work_order_release", wo.siteId)) {
           const maker = from === "planned" ? wo.submittedBy : wo.createdBy;
-          ctx.assertSeparation(maker === ctx.userId, "You created this production order; another person who can approve must approve it.");
+          ctx.assertSeparationAt(maker === ctx.userId, "You created this production order; another person who can approve must approve it.", wo.siteId);
         }
         if (from === "draft") {
           await planLockedWorkOrder(tx, ctx, wo);
@@ -301,7 +301,7 @@ export async function getProductionOrder(ctx: AuthContext, workOrderId: string, 
   const maker = wo.status === "planned" ? wo.submittedBy : wo.createdBy;
   const actions = productionOrderActions(view, { siteId: wo.siteId, cancelReason: wo.cancelReason, workOrderId: wo.id }, allowedFor(ctx, wo.siteId), {
     can: ctx.can("production.work_order.approve") && ctx.canAt("production.work_order.approve", wo.siteId),
-    sodConflict: sodOn && ctx.sodConflict(maker),
+    sodConflict: sodOn && ctx.sodConflictAt(maker, wo.siteId),
   });
   const canLog = ctx.can("production.daily_log.view");
   const logs = canLog ? await listDailyLogs(ctx, wo.id) : null;
@@ -398,7 +398,7 @@ export async function listProductionOrders(ctx: AuthContext, f: { status?: strin
       const pieces = piecesOf(r.wo, r.unitNetMassG, r.yieldPct, r.madeUnits, r.productFamily);
       const actions = productionOrderActions(view, { siteId: r.wo.siteId, cancelReason: r.wo.cancelReason, workOrderId: r.wo.id }, allowedFor(ctx, r.wo.siteId), {
         can: ctx.can("production.work_order.approve") && ctx.canAt("production.work_order.approve", r.wo.siteId),
-        sodConflict: sodOn && ctx.sodConflict(r.wo.status === "planned" ? r.wo.submittedBy : r.wo.createdBy), // the list links to the order page, which approves
+        sodConflict: sodOn && ctx.sodConflictAt(r.wo.status === "planned" ? r.wo.submittedBy : r.wo.createdBy, r.wo.siteId), // the list links to the order page, which approves
       });
       return {
         id: r.wo.id,

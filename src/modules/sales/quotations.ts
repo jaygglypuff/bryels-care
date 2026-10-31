@@ -151,7 +151,7 @@ export async function getQuote(ctx: AuthContext, id: string) {
     decisionsOf(db, ctx.organizationId, "quote", q.id),
   ]);
   const prices = canSeePrices(ctx);
-  const progress = q.status === "pending_approval" ? await approvalProgress(db, ctx.organizationId, { recordType: "quote", recordId: q.id, siteId: q.siteId, basis: { discount_pct: q.maxDiscountPct } }) : null;
+  const progress = q.status === "pending_approval" ? await approvalProgress(db, ctx.organizationId, { recordType: "quote", recordId: q.id, siteId: q.siteId, basis: { discount_pct: q.maxDiscountPct }, requesterIds: [q.createdBy, q.submittedBy] }) : null;
   const sod = await sodRequired(db, ctx.organizationId, "quote");
   const name = (u: string | null) => (u ? (people.find((p) => p.id === u)?.name ?? "") : null);
   const { creditLimitAmount, paymentTermsDays, taxIdentifier, ...customer } = row.c;
@@ -169,7 +169,7 @@ export async function getQuote(ctx: AuthContext, id: string) {
         : { id: l.id, lineNo: l.lineNo, productId: l.productId, sku, productName, qtyUnits: l.qtyUnits, unitAmount: undefined, listUnitAmount: undefined, discountPct: undefined, value: undefined, _masked: ["unitAmount", "listUnitAmount", "discountPct", "value"] },
     ),
     decisions,
-    approval: progress ? { ...progress, canApprove: canDecide(ctx, "quote", progress.next, q.submittedAt, [q.createdBy, q.submittedBy], sod) && ctx.canAt("sales.quote.approve", q.siteId) } : null,
+    approval: progress ? { ...progress, canApprove: canDecide(ctx, "quote", progress.next, q.submittedAt, [q.createdBy, q.submittedBy], sod, q.siteId) && ctx.canAt("sales.quote.approve", q.siteId) } : null,
     expiredByDate: q.validUntil < businessDate(),
   };
 }

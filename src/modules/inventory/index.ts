@@ -44,8 +44,8 @@ export { runExpiryCheck } from "./holds-expiry";
 export { scanMove, undoMove, interSiteTransfer, looseQty, boxedQty, listRecentTransfers, listSiteLocations, type MoveResult, type ScanMoveInput, type UndoResult } from "./moves";
 export { describeBoxForScan, describeLocationForScan, describeLotForScan, type ScanCard } from "./moves-scan-cards";
 export { createBox, voidBoxesForReversal, splitBox, mergeBoxes, repackBox, setBoxStatus, getContainer, listContainers, findContainerByNumber, boxAllowedActions, containerLineageGraph, type AllowedAction, type ContainerDetail } from "./containers";
-export { assertLocationsNotFrozen, activeCountsForLocations, createCount, releaseCount, cancelCount, recordCount, submitCount, recordRecount, approveCount, rejectCountLines, postCount, listCounts, getCount, eligibleCounters, findLotForCount, type CountDetail } from "./counts";
-export { createAdjustment, submitAdjustment, approveAdjustment, rejectAdjustment, cancelAdjustment, deleteDraftAdjustment, postAdjustment, listAdjustments, getAdjustment, type AdjustmentDetail } from "./adjustments";
+export { assertLocationsNotFrozen, activeCountsForLocations, countApprovalVerdicts, createCount, releaseCount, cancelCount, recordCount, submitCount, recordRecount, approveCount, rejectCountLines, postCount, listCounts, getCount, eligibleCounters, findLotForCount, type CountDetail } from "./counts";
+export { adjustmentApprovalVerdicts, createAdjustment, submitAdjustment, approveAdjustment, rejectAdjustment, cancelAdjustment, deleteDraftAdjustment, postAdjustment, listAdjustments, getAdjustment, type AdjustmentDetail } from "./adjustments";
 export {
   recommendLots,
   createReservation,

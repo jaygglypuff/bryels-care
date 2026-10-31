@@ -42,7 +42,7 @@ export type AccessDetail = {
  * `readOnly`: set when the read-only maintenance mode applies to this user (US-2-30); mutating
  * permission checks and `assertWritable()` then refuse with `read_only` before any write.
  */
-export type ContextOptions = { actor?: Actor; correlationId?: string | null; session?: SessionInfo | null; access?: AccessDetail; readOnly?: boolean; ownerOverride?: OwnerOverride };
+export type ContextOptions = { actor?: Actor; correlationId?: string | null; session?: SessionInfo | null; access?: AccessDetail; readOnly?: boolean; ownerOverride?: OwnerOverride; selfApproval?: SelfApproval };
 
 /**
  * ADR-073 owner override (setting `governance.owner_override`): the owner holds every permission and
@@ -50,6 +50,15 @@ export type ContextOptions = { actor?: Actor; correlationId?: string | null; ses
  * `used` collects what the override let through until `audit()` records it.
  */
 export type OwnerOverride = { basePermissions: ReadonlySet<string>; used: string[] };
+
+/**
+ * ADR-088 §2 (setting `approvals.top_roles_self_approve`, default on): where this person holds a top role
+ * — Owner/Director (organization-wide) or Site Manager (at the site, or organization-wide) — they may approve
+ * their own operational records and decide every step of them alone. Present only when the setting is on and
+ * the person holds a top role somewhere. `used` collects the same-person rules passed until `audit()` records
+ * them. Quality decisions that release a lot or batch for use never consult this (GMP independence).
+ */
+export type SelfApproval = { ownerOrgWide: boolean; managerOrgWide: boolean; managerSiteIds: ReadonlySet<string>; used: string[] };
 
 /**
  * The authorization context every service call receives (ADR-005).
@@ -153,6 +162,88 @@ export class AuthContext {
     if (this.sodBlocks(conflict, message)) throw new DomainError("separation_of_duties", message, { ...this.lastRequired, ...details });
   }
 
+  /**
+   * ADR-088 §2: true when this person holds a top role at `siteId` (Owner/Director organization-wide, or Site
+   * Manager there) and the organization lets top roles approve their own operational records. A null site
+   * (organization-level record) needs the top role organization-wide.
+   */
+  selfApprovesAt(siteId: string | null | undefined): boolean {
+    const s = this.options.selfApproval;
+    if (!s) return false;
+    if (s.ownerOrgWide || s.managerOrgWide) return !siteId || this.allowedSiteIds.includes(siteId);
+    return !!siteId && this.allowedSiteIds.includes(siteId) && s.managerSiteIds.has(siteId);
+  }
+
+  /** ADR-088 §2: the owner (organization-wide) also decides operational steps reserved for the site manager. */
+  private ownerAt(siteId: string | null | undefined): boolean {
+    const s = this.options.selfApproval;
+    return !!s?.ownerOrgWide && (!siteId || this.allowedSiteIds.includes(siteId));
+  }
+
+  private noteSelfApproval(rule: string) {
+    const s = this.options.selfApproval!;
+    if (!s.used.includes(rule)) s.used.push(rule);
+  }
+
+  /**
+   * Separation of duties for OPERATIONAL approvals (ADR-088 §2: production orders, purchasing, stock
+   * adjustments and counts, price lists, quotations, customer orders and requirements, supplier returns,
+   * expense claims and finance documents, master-data revisions). A same-person conflict does not block a
+   * top role at the record's site; the pass is recorded by the next `audit()` as an own-request approval.
+   * Otherwise this is `sodBlocks` (owner override included). Never use it for quality decisions that release
+   * a lot or batch for use (QA disposition, quality check, conditional release): those keep `sodBlocks`.
+   */
+  sodBlocksAt(conflict: boolean, rule: string, siteId: string | null | undefined): boolean {
+    if (!conflict) return false;
+    if (this.selfApprovesAt(siteId)) {
+      this.noteSelfApproval(rule);
+      return false;
+    }
+    return this.sodBlocks(conflict, rule);
+  }
+
+  /** Throws `separation_of_duties` when `conflict` blocks this person at the site (see `sodBlocksAt`). */
+  assertSeparationAt(conflict: boolean, message: string, siteId: string | null | undefined, details?: Record<string, unknown>): void {
+    if (this.sodBlocksAt(conflict, message, siteId)) throw new DomainError("separation_of_duties", message, { ...this.lastRequired, ...details });
+  }
+
+  /** For screens (records nothing): `sodConflict` for an operational record at the site (ADR-088 §2). */
+  sodConflictAt(userId: string | null | undefined, siteId: string | null | undefined): boolean {
+    return this.sodConflict(userId) && !this.selfApprovesAt(siteId);
+  }
+
+  /**
+   * For screens: `hasAnyRole` for a step of an operational record whose steps the owner may all decide
+   * (ADR-088 §2: production, purchasing, stock, sales, expense claims). With the top-role rule on, the owner
+   * (highest in the hierarchy) also decides, on a record they asked for themselves, a step reserved for another
+   * role — never a step that names QA. Records asked by others keep their role steps (and the escalation delays).
+   * Finance documents and master-data revisions do not use this: their role steps stay as configured.
+   */
+  hasAnyRoleAt(roles: readonly string[], siteId: string | null | undefined, requesterIds: readonly (string | null | undefined)[]): boolean {
+    return this.hasAnyRole(roles) || this.ownerStandsIn(roles, siteId, requesterIds);
+  }
+
+  /** For decisions: `actsAsAnyRole` for an operational approval step at the site (see `hasAnyRoleAt`). */
+  actsAsAnyRoleAt(roles: readonly string[], siteId: string | null | undefined, requesterIds: readonly (string | null | undefined)[]): boolean {
+    if (roles.some((r) => this.roleCodes.includes(r))) return true;
+    if (this.ownerStandsIn(roles, siteId, requesterIds)) {
+      this.noteSelfApproval(`The owner decided a step reserved for ${roles.join(" or ")}.`);
+      return true;
+    }
+    return this.actsAsAnyRole(roles);
+  }
+
+  private ownerStandsIn(roles: readonly string[], siteId: string | null | undefined, requesterIds: readonly (string | null | undefined)[]): boolean {
+    return roles.length > 0 && !roles.includes("qa_qc") && this.ownerAt(siteId) && requesterIds.some((u) => !!u && u === this.userId);
+  }
+
+  /** The own-request approvals since the last call, emptied (read by `audit()`). */
+  takeSelfApprovals(): string[] {
+    const s = this.options.selfApproval;
+    if (!s || s.used.length === 0) return [];
+    return s.used.splice(0, s.used.length);
+  }
+
   /** The owner-override uses since the last call, emptied (read by `audit()`). */
   takeOwnerOverrides(): string[] {
     const o = this.options.ownerOverride;
@@ -249,9 +340,16 @@ export async function buildContextForUser(userId: string, preferredSiteId?: stri
     perms = new Set<string>(PERMISSIONS);
     access = { ...access, orgPermissions: perms };
   }
+  // ADR-088 §2: top roles (owner organization-wide, site manager at their sites) approve their own operational records.
+  let selfApproval: SelfApproval | undefined;
+  const top = loaded.topRoles;
+  if ((top.ownerOrgWide || top.managerOrgWide || top.managerSiteIds.size > 0) && (await getSetting(db, loaded.u.organizationId, "approvals.top_roles_self_approve"))) {
+    selfApproval = { ...top, used: [] };
+  }
   return new AuthContext(loaded.u.id, loaded.u.organizationId, loaded.u.displayName, loaded.u.email, loaded.roleCodes, perms, loaded.siteRows, current, {
     access,
     ownerOverride,
+    selfApproval,
     ...options,
     readOnly,
   });
@@ -309,7 +407,12 @@ async function loadAccess(userId: string, now: Date = new Date()) {
   }
   const perms = new Set<string>([...orgPermissions, ...[...sitePermissions.values()].flatMap((x) => [...x])]);
   const access: AccessDetail = { orgWide, orgPermissions, sitePermissions, warehouseScopes };
-  return { u, siteRows, roleCodes: [...new Set(assignments.map((a) => a.roleCode))], perms, access };
+  const topRoles = {
+    ownerOrgWide: assignments.some((a) => a.roleCode === "owner_director" && a.orgWide),
+    managerOrgWide: assignments.some((a) => a.roleCode === "site_manager" && a.orgWide),
+    managerSiteIds: new Set(assignments.filter((a) => a.roleCode === "site_manager" && !a.orgWide && !!a.siteId).map((a) => a.siteId!)),
+  };
+  return { u, siteRows, roleCodes: [...new Set(assignments.map((a) => a.roleCode))], perms, access, topRoles };
 }
 
 /**

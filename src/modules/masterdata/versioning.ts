@@ -96,6 +96,28 @@ export async function approvalState(dbx: DbOrTx, organizationId: string, recordT
   return { policy, decisions, nextStep };
 }
 
+/**
+ * ADR-088 §2: recipes, routings, work instructions and inspection plans are operational master data: a top
+ * role may approve their own at a step that is not a QA step (the step's role still applies). A step naming
+ * qa_qc keeps the independent second person even for a QA user who is also the owner or a site manager, so the
+ * QA approval of a recipe and every inspection plan (QA-only steps) stay independent. Equipment overrides
+ * keep the independent second person.
+ */
+const SELF_APPROVABLE: readonly ApprovalRecordType[] = ["formula_revision", "routing_revision", "work_instruction_revision", "inspection_plan"];
+
+function selfApprovable(recordType: ApprovalRecordType, step: ApprovalStepPolicy | null) {
+  return SELF_APPROVABLE.includes(recordType) && !!step && !step.roles.includes("qa_qc");
+}
+
+function sodBlocksFor(ctx: AuthContext, recordType: ApprovalRecordType, step: ApprovalStepPolicy, conflict: boolean, rule: string, siteId: string | null | undefined) {
+  return selfApprovable(recordType, step) ? ctx.sodBlocksAt(conflict, rule, siteId ?? null) : ctx.sodBlocks(conflict, rule);
+}
+
+/** For screens: whether `userId` blocks the caller on a record of this type (same-person rule, ADR-088 §2). */
+export function approvalSodConflict(ctx: AuthContext, recordType: ApprovalRecordType, step: ApprovalStepPolicy | null, userId: string | null | undefined, siteId: string | null | undefined) {
+  return selfApprovable(recordType, step) ? ctx.sodConflictAt(userId, siteId ?? null) : ctx.sodConflict(userId);
+}
+
 /** True when the caller may decide the given step (role + permission), ignoring separation of duties. */
 export function canDecideStep(ctx: AuthContext, step: ApprovalStepPolicy | null) {
   if (!step) return false;
@@ -138,10 +160,10 @@ export async function recordApprovalDecision(
   if (step.roles.length > 0 && !ctx.actsAsAnyRole(step.roles)) {
     throw new DomainError("forbidden", `Step ${step.step} (${step.label}) must be decided by ${step.roles.map((r) => r.replace(/_/g, " ")).join(" or ")}.`);
   }
-  if (ctx.sodBlocks(args.excludedUserIds.some((u) => u && u === ctx.userId), "You prepared or requested this record, so another person must approve it.")) {
+  if (sodBlocksFor(ctx, args.recordType, step, args.excludedUserIds.some((u) => u && u === ctx.userId), "You prepared or requested this record, so another person must approve it.", args.siteId)) {
     throw new DomainError("separation_of_duties", "You prepared or requested this record, so another person must approve it.", ctx.refusalDetails());
   }
-  if (ctx.sodBlocks(state.decisions.some((d) => d.decidedBy === ctx.userId), "You already approved an earlier step. A different person must decide this step.")) {
+  if (sodBlocksFor(ctx, args.recordType, step, state.decisions.some((d) => d.decidedBy === ctx.userId), "You already approved an earlier step. A different person must decide this step.", args.siteId)) {
     throw new DomainError("separation_of_duties", "You already approved an earlier step. A different person must decide this step.", ctx.refusalDetails());
   }
   if (args.decision === "rejected" && !args.note?.trim()) throw new DomainError("validation", "Enter the reason for rejecting.");
