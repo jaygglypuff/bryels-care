@@ -26,14 +26,14 @@ function Card({ c, onMove, busy, columns, onDragStart }: { c: BoardCard; onMove:
       aria-label={`${c.kind === "work_order" ? "Production order" : "Batch"} ${c.number}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-1.5">
-        <Link href={c.href} className="whitespace-nowrap font-mono text-[13px] font-semibold text-primary-text hover:underline">
-          {c.number}
+        <Link href={c.href} className="min-w-0 text-[14px] font-semibold text-primary-text hover:underline">
+          {c.productName}
         </Link>
-        <StatusChip status={c.status} />
+        <StatusChip status={c.status} label={boardWord(c.kind, c.status)} />
       </div>
-      <p className="mt-1 text-[13px] font-medium">{c.productName}</p>
+      <p className="mt-1 font-mono text-[12px] text-muted">{c.number}</p>
       <p className="text-[12px] text-muted tabular">
-        {c.kind === "work_order" ? `WO · ${c.batchCount} batch${c.batchCount === 1 ? "" : "es"} · ${fmtMass(c.sizeG)}` : `${fmtMass(c.sizeG)}${c.workOrderNumber ? ` · ${c.workOrderNumber}` : ""}`}
+        {c.kind === "work_order" ? `Order · ${c.batchCount} batch${c.batchCount === 1 ? "" : "es"} · ${fmtMass(c.sizeG)}` : `${fmtMass(c.sizeG)}${c.workOrderNumber ? ` · ${c.workOrderNumber}` : ""}`}
       </p>
       <p className="text-[12px] text-muted">
         {c.lineCode ?? "No line"} · {c.plannedStart ? `start ${fmtDate(c.plannedStart)}` : "not scheduled"}
@@ -98,6 +98,17 @@ function Card({ c, onMove, busy, columns, onDragStart }: { c: BoardCard; onMove:
  * carousel). Drops are checked against the server-computed verdicts first: a refused move only
  * opens the explanation; an allowed one calls the server, which re-checks everything.
  */
+
+/**
+ * One status vocabulary (ADR-080 §1; UX audit 2026-10-31 item 7): the board shows the same words as
+ * Production orders (Draft, Approved, In progress, Quality check, Done, Failed, Cancelled).
+ */
+function boardWord(kind: string, status: string): string {
+  const wo: Record<string, string> = { draft: "Draft", planned: "Draft", released: "Approved", in_progress: "In progress", completed: "Quality check", closed: "Done", cancelled: "Cancelled" };
+  const batch: Record<string, string> = { draft: "Approved", planned: "Approved", materials_staged: "Materials ready", in_process: "In progress", rework_approved: "In progress", awaiting_qc: "Quality check", quarantined: "Quality check", released: "Done", closed: "Done", rejected: "Failed" };
+  return (kind === "work_order" ? wo[status] : batch[status]) ?? status.replace(/_/g, " ");
+}
+
 export function BoardView({ board }: { board: ProductionBoard }) {
   const dragged = useRef<BoardCard | null>(null);
   const [over, setOver] = useState<string | null>(null);

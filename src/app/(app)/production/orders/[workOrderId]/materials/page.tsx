@@ -8,7 +8,7 @@ import { Explain, PageIntro } from "@/ui/guide";
 import { Help } from "@/ui/help/help";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../../forbidden";
-import { FlowHeader, NoBatch, pickBatch } from "../flow-shared";
+import { FlowHeader, NoBatch, orderHrefOf, pickBatch } from "../flow-shared";
 import { MaterialsList } from "./materials-list";
 
 export const metadata: Metadata = { title: "Materials list" };
@@ -20,7 +20,7 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
   if (!canTickMaterials(ctx) && !ctx.can("production.batch.view")) return <Forbidden what="the materials list" />;
   const { workOrderId } = await params;
   const { batch: batchParam } = await searchParams;
-  const orderHref = `/production/orders/${workOrderId}`;
+  let orderHref = orderHrefOf(workOrderId);
   let picked;
   try {
     picked = await pickBatch(ctx, workOrderId, batchParam, (f) => f.status === "planned");
@@ -29,6 +29,7 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
     throw e;
   }
   if (!picked.batch) return <NoBatch orderHref={orderHref}>Nothing to take. This order has no materials set aside yet. Approve the order first.</NoBatch>;
+  orderHref = picked.backHref;
   let v: MaterialsListView;
   try {
     v = await getMaterialsList(ctx, picked.batch.batchId);
@@ -54,7 +55,7 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
       {v.ready && (
         <div className="mb-4">
           <Banner tone="ok" title="Materials ready" action={next.href ? <LinkButton href={next.href} variant="cta" size="lg">{next.label}</LinkButton> : undefined}>
-            Every line is taken. Start the batch with the Start check.
+            Every line is taken. Next: {next.label}.
           </Banner>
         </div>
       )}
@@ -67,6 +68,11 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
         <div className="mb-4">
           <Banner tone="neu" title="View only">{v.tickDeniedReason}</Banner>
         </div>
+      )}
+      {v.lines.length > 0 && !v.lines.some((l) => l.materialKind === "packaging") && (
+        <p className="mb-3 rounded-[14px] border border-line bg-surface-2/60 p-3 text-[15px] text-fg-2" data-testid="no-packaging-lines">
+          No wrappers or labels are on this list (this product has no packaging set up per piece). Take the wrappers or labels you need; on the packaging step you tap the one you took.
+        </p>
       )}
       {v.lines.length === 0 ? (
         <NoBatch orderHref={orderHref}>Nothing to take. This batch has no ingredients.</NoBatch>

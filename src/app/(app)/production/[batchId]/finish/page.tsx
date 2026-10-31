@@ -4,7 +4,7 @@ import { db } from "@/db/client";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
-import { type FinishView, getFinishView, pieceWord } from "@/modules/production";
+import { batchRecordHref, type FinishView, getFinishView, pieceWord } from "@/modules/production";
 import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Help } from "@/ui/help/help";
 import { Banner } from "@/ui/status";
@@ -33,7 +33,7 @@ export default async function FinishPage({ params }: { params: Promise<{ batchId
     if (e instanceof DomainError && e.code === "not_found") notFound();
     throw e;
   }
-  const back = v.order ? `/production/orders/${v.order.id}` : `/production/${v.batch.id}`;
+  const back = v.order ? `/production/orders/${v.order.id}` : batchRecordHref(v.batch.id);
   const word = pieceWord(v.product.family, 2);
   const requirePassword = await getSetting(db, ctx.organizationId, "production.sign_off.require_password");
   const finished = v.batch.status === "awaiting_qc" || v.batch.status === "quarantined";

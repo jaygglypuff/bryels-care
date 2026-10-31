@@ -1,11 +1,12 @@
 import "server-only";
 import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "@/db/client";
-import { batches, processStepRecords, products, workOrders } from "@/db/schema";
+import { batchMaterials, batches, dispenseRecords, processStepRecords, products, workOrders } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { whoCanDo } from "@/modules/identity";
 import { currentStepOf } from "./flow-facts";
 import { batchNextAction, type NextAction } from "./production-order-next";
+import { firstStepNo, flowHref } from "./flow-paths";
 import { batchStatusView, type BatchFact } from "./production-order-status";
 import { type FormulaSnapshot, isWeighingStep } from "./shared";
 
@@ -19,12 +20,13 @@ import { type FormulaSnapshot, isWeighingStep } from "./shared";
  * | Batch state                                   | Task (verb + thing)               | Permission at the site               |
  * |-----------------------------------------------|-----------------------------------|--------------------------------------|
  * | planned, order approved (released/in_progress)| Get the materials                 | inventory.movement.post              |
- * | planned, no order (older batches)             | Get the materials                 | production.batch.edit                |
+ * | planned, no order (older batches)             | Get the materials (same list)     | production.batch.edit                |
  * | materials_staged                              | Start the batch                   | production.line_clearance.create     |
  * | in_process, weighing step                     | Weigh the ingredients             | production.dispense_record.create    |
  * | in_process, curing/resting not over           | Curing until Sat 1 Nov            | — (nobody can act; shown as waiting) |
  * | in_process, curing/resting over               | Curing is over: end it            | production.process_step_record.create|
  * | in_process, step waiting for a check          | Check <step>                      | step check permission, not the doer  |
+ * | in_process, a weighing waits for its check    | Check a weighing (Weigh screen)   | dispense_record.approve, not weigher |
  * | in_process, transfer step or every step done  | Finish the batch                  | production.batch.post                |
  * | in_process, any other step                    | <step name>                       | step perform permission              |
  * | rework_approved                               | Redo the steps QA asked for       | production.process_step_record.create|
@@ -52,7 +54,7 @@ export type FloorTask = {
   stepsTotal: number;
   /** Steps done ÷ steps, 0–100 (whole number). */
   percent: number;
-  /** The one screen to continue on (order screens when the batch has an order, else the batch page). */
+  /** The one screen to continue on: always a production flow screen (flow-paths.ts), never the batch record. */
   href: string;
   /** "Start" before the batch has started, "Check" for a second-person check, else "Continue". */
   buttonLabel: string;
@@ -134,6 +136,13 @@ export async function myFloorTasks(ctx: AuthContext, now: Date = new Date()): Pr
     .select({ batchId: processStepRecords.batchId, stepNo: processStepRecords.stepNo, name: processStepRecords.name, kind: processStepRecords.stepKind, status: processStepRecords.status, startedAt: processStepRecords.startedAt, earliestCompletionAt: processStepRecords.earliestCompletionAt, conductedBy: processStepRecords.conductedBy })
     .from(processStepRecords)
     .where(inArray(processStepRecords.batchId, rows.map((r) => r.id)));
+  // Weighings that still wait for the second person's check (2026-10-31 audit: the checker's Home showed
+  // no "Check" task). Only lines that need a check (formula snapshot), never the checker's own weighings.
+  const unchecked = await db
+    .select({ batchId: batchMaterials.batchId, lineNo: batchMaterials.lineNo, operatorId: dispenseRecords.operatorId })
+    .from(dispenseRecords)
+    .innerJoin(batchMaterials, eq(batchMaterials.id, dispenseRecords.batchMaterialId))
+    .where(and(inArray(batchMaterials.batchId, rows.map((r) => r.id)), isNull(dispenseRecords.checkerId), isNull(dispenseRecords.voidedAt)));
   const can = { can: (p: string) => ctx.can(p as never) && ctx.canAt(p as never, siteId), userId: ctx.userId };
   const whoCache = new Map<string, Promise<string>>();
   const waitingFor = (permission: string) => {
@@ -149,13 +158,8 @@ export async function myFloorTasks(ctx: AuthContext, now: Date = new Date()): Pr
     const fact: BatchFact = { id: r.id, batchNumber: r.batchNumber, status: r.status, startedAt: r.startedAt, plannedSteps: planned, stepRecords: mine };
     const view = { ...batchStatusView(fact, now), id: r.id, batchNumber: r.batchNumber };
     const cur = currentStepOf(snap, mine, now);
-    let action = batchNextAction(view, siteId, can, r.workOrderId ?? undefined);
-    // An older batch made without an order: the batch page confirms the materials (production.batch.edit).
-    if (r.status === "planned" && !r.workOrderId) {
-      action = can.can("production.batch.edit")
-        ? { kind: "link", label: "Start", href: `/production/${r.id}`, hint: `Batch ${r.batchNumber}: bring the materials to the weighing area, then confirm them.`, batchId: r.id }
-        : { kind: "wait", title: "Waiting for materials", hint: `Batch ${r.batchNumber}: the materials are brought to the weighing area.`, who: { permission: "production.batch.edit", siteId }, batchId: r.id };
-    }
+    // A batch made without an order uses the same flow screens (`without-order`, flow-paths.ts).
+    const action: NextAction = batchNextAction(view, siteId, can, r.workOrderId);
     if (action.kind === "none" || action.kind === "approve") continue;
     const total = planned.length || cur?.total || 0;
     const index = r.status === "in_process" || r.status === "rework_approved" ? (cur?.index ?? total) : null;
@@ -163,8 +167,20 @@ export async function myFloorTasks(ctx: AuthContext, now: Date = new Date()): Pr
     const t = taskOf(action, cur ? { name: cur.name, kind: cur.kind, status: cur.status } : null, cur?.waitingLabel ?? null, r.status);
     const word = t.kind === "weigh" ? "Weighing" : cur?.name ?? "Every step done";
     const stepLabel = index !== null && total > 0 ? `Step ${Math.min(index, total)} of ${total} · ${cur ? word : "Every step done"}` : r.status === "materials_staged" ? "Materials ready · not started" : "Not started";
-    const canDo = action.kind === "link";
-    const href = action.kind === "link" ? action.href : r.workOrderId ? `/production/orders/${r.workOrderId}` : `/production/${r.id}`;
+    let canDo = action.kind === "link";
+    // A weighing of this batch waits for my check (someone else weighed it): the task is "Check".
+    const toCheck =
+      r.status === "in_process" && can.can("production.dispense_record.approve")
+        ? unchecked.filter((u) => u.batchId === r.id && u.operatorId !== ctx.userId && snap.lines.find((l) => l.lineNo === u.lineNo)?.requiresChecker !== false).length
+        : 0;
+    if (toCheck > 0) {
+      t.kind = "check";
+      t.title = toCheck === 1 ? "Check a weighing" : `Check ${toCheck} weighings`;
+      canDo = true;
+    }
+    // Waiting (curing, a check by someone else, no permission): the same flow screen, which shows why.
+    const ref = { batchId: r.id, workOrderId: r.workOrderId };
+    const href = toCheck > 0 ? flowHref(ref, "weigh") : action.kind === "link" ? action.href : r.status === "planned" ? flowHref(ref, "materials") : flowHref(ref, `step/${cur?.stepNo ?? firstStepNo(planned)}`);
     tasks.push({
       batchId: r.id,
       batchNumber: r.batchNumber,
@@ -180,8 +196,8 @@ export async function myFloorTasks(ctx: AuthContext, now: Date = new Date()): Pr
       href,
       buttonLabel: t.kind === "check" ? "Check" : r.status === "planned" || r.status === "materials_staged" ? "Start" : canDo ? "Continue" : "Open",
       canDo,
-      waitingFor: action.kind === "wait" && action.who ? await waitingFor(action.who.permission) : null,
-      hint: action.hint,
+      waitingFor: toCheck === 0 && action.kind === "wait" && action.who ? await waitingFor(action.who.permission) : null,
+      hint: toCheck > 0 ? `Batch ${r.batchNumber}: ${toCheck === 1 ? "a weighing waits" : `${toCheck} weighings wait`} for your check. Look at the container and the scale, then confirm.` : action.hint,
       assignedToMe: !!r.assignedOperatorId && r.assignedOperatorId === ctx.userId,
     });
   }

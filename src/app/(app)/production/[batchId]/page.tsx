@@ -1,60 +1,38 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getSetting } from "@/lib/settings";
 import { db } from "@/db/client";
-import { uuidv7 } from "uuidv7";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
+import type { Permission } from "@/lib/permissions";
 import { D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
 import {
   type BatchExecution,
+  type BatchFlowFacts,
   type BatchRecord,
   type ExecStep,
+  type NextScreen,
   checkPermission,
-  equipmentOptions,
   getBatchExecution,
+  getBatchFlowFacts,
   getBatchRecord,
   isWeighingStep,
-  packagingLotOptions,
+  nextBatchScreen,
   performPermission,
   progressLabel,
   waitingWords,
-  quarantineLocations,
-  signerOptions,
-  usableLotsForBatch,
 } from "@/modules/production";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td, cx } from "@/ui/core";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
-import { StartBatchForm } from "./forms";
-import {
-  ChecklistForm,
-  CompleteStepForm,
-  DecideScrapForm,
-  EquipmentForm,
-  ExceptionForm,
-  OneTap,
-  PackagingCountForm,
-  PackagingIssueForm,
-  ReadingForm,
-  ReasonForm,
-  ScrapForm,
-  TransferForm,
-  WeighForm,
-  YieldForm,
-  type Person,
-  type ScaleOpt,
-  SignOffProvider,
-} from "./exec-forms";
+import { DecideScrapForm, ReasonForm } from "./exec-forms";
 import { registerAppHooks } from "@/modules/wiring";
-import { Help } from "@/ui/help/help";
 import { whoCanDo } from "@/modules/identity";
-import { Explain, PageIntro } from "@/ui/guide";
+import { Explain, NextStep, PageIntro } from "@/ui/guide";
 
 // Execution ↔ QA hooks (idempotent; also registered at server start in src/instrumentation.ts).
 registerAppHooks();
 
-export const metadata: Metadata = { title: "Batch" };
+export const metadata: Metadata = { title: "Batch record" };
 
 type Params = { params: Promise<{ batchId: string }>; searchParams: Promise<{ step?: string }> };
 
@@ -88,7 +66,6 @@ function stepChip(s: ExecStep, currentNo: number | null, running: boolean): { la
   if (running && currentNo !== null && s.stepNo === currentNo + 1) return { label: "Next", tone: "neu" };
   return { label: "Later", tone: "neu" };
 }
-const LINE_STATUS: Record<string, string> = { pending: "Pending", partial: "Part weighed", dispensed: "Weighed", exception: "Exception" };
 
 function auditLine(a: BatchRecord["audits"][number]): string {
   const after = (a.after ?? {}) as Record<string, unknown>;
@@ -237,14 +214,42 @@ function PackagingTable({ step }: { step: ExecStep }) {
     </ul>
   );
 }
+/** The permission that lets a person act on the batch's next screen (what "Continue" opens). */
+function permissionFor(next: NextScreen, step: BatchFlowFacts["currentStep"]): Permission[] {
+  switch (next.action) {
+    case "get_materials":
+      return ["production.batch.edit", "inventory.movement.post"];
+    case "start":
+      return step?.status === "awaiting_check" ? [checkPermission(step.kind)] : ["production.line_clearance.create"];
+    case "weigh":
+      return ["production.dispense_record.create", "production.dispense_record.approve"];
+    case "step":
+      return step ? (step.status === "awaiting_check" ? [checkPermission(step.kind)] : [performPermission(step.kind)]) : ["production.process_step_record.create"];
+    case "wait":
+      return ["production.process_step_record.create"];
+    case "finish":
+      return ["production.batch.post"];
+    case "quality_check":
+      return ["quality.disposition.approve"];
+    default:
+      return [];
+  }
+}
 
-export default async function BatchWorkspace({ params, searchParams }: Params) {
+/**
+ * The batch record (read-only, one path for production work 2026-10-31): what happened in a batch —
+ * steps with who did and checked them, readings, equipment, materials weighed, packaging, labels,
+ * output, rejects, quality and the timeline. For QA and managers ("See the full batch record"). Nothing
+ * is done here: while the batch is being made, a person who can act sees one big "Continue this batch"
+ * button that opens the production screen for the next thing to do. The only actions left are the
+ * approvals of older yield and reject records (made before Finish existed), which have no other screen.
+ */
+export default async function BatchRecordPage({ params }: Params) {
   const { batchId } = await params;
-  const sp = await searchParams;
   const ctx = await requireContext();
   if (!ctx.can("production.batch.view")) return <Forbidden what="production batches" />;
   const notFound = (
-    <EmptyState title="Batch not found" action={<LinkButton href="/production" variant="secondary">Back to batches</LinkButton>}>
+    <EmptyState title="Batch not found" action={<LinkButton href="/production" variant="secondary">Back to batch records</LinkButton>}>
       It does not exist or belongs to a site you are not assigned to.
     </EmptyState>
   );
@@ -252,35 +257,21 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
 
   let rec: BatchRecord;
   let ex: BatchExecution;
+  let facts: BatchFlowFacts;
   try {
-    [rec, ex] = await Promise.all([getBatchRecord(ctx, batchId), getBatchExecution(ctx, batchId)]);
+    [rec, ex, facts] = await Promise.all([getBatchRecord(ctx, batchId), getBatchExecution(ctx, batchId), getBatchFlowFacts(ctx, db, batchId)]);
   } catch (e) {
     if (e instanceof DomainError && (e.code === "not_found" || e.code === "forbidden")) return notFound;
     throw e;
   }
   const { batch, product, snapshot } = rec;
-  const running = batch.status === "in_process" || batch.status === "materials_staged";
-  const viewNo = sp.step && /^\d+$/.test(sp.step) ? Number(sp.step) : (ex.currentStepNo ?? ex.steps.at(-1)?.stepNo ?? 1);
-  const step = ex.steps.find((s) => s.stepNo === viewNo) ?? ex.steps[0];
   const total = ex.steps.length;
   const site = ctx.allowedSites.find((s) => s.id === batch.siteId);
-  const canPerform = step ? ctx.can(performPermission(step.stepKind)) || (isWeighingStep(step.stepKind) && ctx.can("production.process_step_record.create")) : false;
-  const canCheckStep = step ? ctx.can(checkPermission(step.stepKind)) : false;
-  const working = !!step && running && step.isCurrent && (step.status === "pending" || step.status === "in_progress") && canPerform;
-  const key = () => uuidv7();
-
-  // Data only the active step screen needs.
-  const needs = (k: string) => working && step.stepKind === k;
-  const [checkers, approvers, scales, mixers, pkgLots, quarantine, fefo, yieldApprovers]: [Person[], Person[], ScaleOpt[], ScaleOpt[], Awaited<ReturnType<typeof packagingLotOptions>>, Awaited<ReturnType<typeof quarantineLocations>>, Awaited<ReturnType<typeof usableLotsForBatch>>, Person[]] = await Promise.all([
-    running && step ? signerOptions(ctx, batch.siteId, step.stepKind === "dispensing" ? "production.dispense_record.approve" : step.stepKind === "transfer" ? "production.process_step_record.approve" : checkPermission(step.stepKind)) : Promise.resolve([]),
-    running ? signerOptions(ctx, batch.siteId, "production.over_tolerance_dispense.approve") : Promise.resolve([]),
-    working && isWeighingStep(step.stepKind) ? equipmentOptions(ctx, batch.siteId, step.equipmentKind ?? "scale") : Promise.resolve([]),
-    working && step.requiresEquipment && !isWeighingStep(step.stepKind) ? equipmentOptions(ctx, batch.siteId, step.equipmentKind ?? null) : Promise.resolve([]),
-    needs("packaging") || needs("filling") ? packagingLotOptions(ctx, batch.siteId) : Promise.resolve([]),
-    ex.readyForTransfer ? quarantineLocations(ctx, batch.siteId) : Promise.resolve([]),
-    working && isWeighingStep(step.stepKind) ? usableLotsForBatch(ctx, batch.id) : Promise.resolve({}),
-    ex.readyForTransfer ? signerOptions(ctx, batch.siteId, "production.process_step_record.approve") : Promise.resolve([]),
-  ]);
+  const next = nextBatchScreen(facts, new Date(), ex.steps);
+  const perms = permissionFor(next, facts.currentStep);
+  const canAct = !!next.href && perms.some((p) => ctx.can(p) && ctx.canAt(p, batch.siteId));
+  const whoActs = next.href && !canAct && perms[0] ? waitingWords(await whoCanDo(ctx, perms[0], batch.siteId)) : null;
+  const beingMade = ["planned", "materials_staged", "in_process", "rework_approved"].includes(batch.status);
 
   const timeline = [
     ...rec.transitions.map((t) => ({
@@ -293,363 +284,162 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
     ...rec.audits.map((a) => ({ at: a.occurredAt, who: a.actor, text: auditLine(a), reason: a.reason, kind: "audit" as const })),
   ].sort((a, z) => new Date(z.at).getTime() - new Date(a.at).getTime());
   const lastDisposition = rec.dispositions.at(-1);
-  const exceptionable = step?.blockers.some((b) => b.exceptionable) ?? false;
-  const ingById = new Map(rec.ingredients.map((i) => [i.id, i]));
+  const pendingYield = ex.yieldRecord && !ex.yieldRecord.isWithinLimits && !ex.yieldRecord.approvedBy ? ex.yieldRecord : null;
+  const pendingScrap = ex.scrap.filter((s) => s.requiresApproval && s.status === "recorded");
 
-  const requirePassword = await getSetting(db, ctx.organizationId, "production.sign_off.require_password");
-  const stepHelp = !step ? "production.step" : isWeighingStep(step.stepKind) ? "production.weighing" : step.stepKind === "line_clearance" || step.checklist.length > 0 ? "production.line_clearance" : "production.step";
-  // UX review: an operator who cannot do this step is told who does it (names or roles, never e-mail addresses).
-  const whoDoes = running && step?.isCurrent && !canPerform && step.status !== "awaiting_check" ? waitingWords(await whoCanDo(ctx, performPermission(step.stepKind), batch.siteId)) : null;
-  // UX review: on the weighing step only the first ingredient still to weigh is the green, numbered action.
-  const toWeigh = step && isWeighingStep(step.stepKind) ? ex.ingredients.filter((i) => i.status === "pending" || i.status === "partial") : [];
-  const nextWeighId = toWeigh[0]?.id ?? null;
-  const completeBlocked = !step
-    ? null
-    : isWeighingStep(step.stepKind) && toWeigh.length > 0
-      ? `Weigh all ${ex.ingredients.length} ingredients first (${toWeigh.length} still to weigh).`
-      : step.blockers.length > 0
-        ? step.blockers.length === 1
-          ? step.blockers[0].message
-          : `${step.blockers[0].message} (${step.blockers.length} things still to do before this step is done.)`
-        : null;
   return (
-    <SignOffProvider requirePassword={requirePassword}>
     <div className="flex flex-col gap-5">
       <div>
-        <Link href="/production" className="text-[13px] text-primary-text hover:underline">
-          ← Batches
+        <Link href="/production" className="inline-flex min-h-[44px] items-center text-[14px] text-primary-text hover:underline">
+          ← Batch records
         </Link>
         <PageHeader
-          title={batch.batchNumber}
+          title={`Batch record ${batch.batchNumber}`}
           subtitle={
             <span className="flex flex-wrap items-center gap-2">
               <StatusChip status={batch.status} label={STATE_LABEL[batch.status]} />
-              <span>
-                {[product.name, site?.name, progressLabel(batch.status, ex.stepsCompleted, total)].filter(Boolean).join(" · ")}
-              </span>
+              <span>{[product.name, site?.name, progressLabel(batch.status, ex.stepsCompleted, total)].filter(Boolean).join(" · ")}</span>
             </span>
           }
           actions={
-            <>
-              {/* UX review: one visible help for this step; the rest under "More" so the next action stands out. */}
-              <Help screen={stepHelp} label="How to do this step" text="? How to do this step" />
-              <details className="relative" data-testid="batch-more-menu">
-                <summary className="inline-flex min-h-[44px] cursor-pointer list-none items-center gap-1 rounded-full border border-line bg-surface px-4 text-[14px] font-medium text-fg hover:bg-surface-2 [&::-webkit-details-marker]:hidden" aria-label="More actions">
-                  <span aria-hidden>⋯</span> More
-                </summary>
-                <div className="absolute right-0 z-20 mt-1.5 flex w-[min(280px,calc(100vw-2rem))] flex-col gap-1.5 rounded-[14px] border border-line bg-surface p-2 shadow-[0_8px_24px_rgba(28,27,24,.14)]">
-                  <Help screen="production.weighing" label="Help: weighing" text="Help: weighing" />
-                  <Help screen="production.line_clearance" label="Help: clean-area check" text="Help: clean-area check" />
-                  <LinkButton href={`/print/bmr/${batch.id}`} variant="secondary" target="_blank">
-                    Print batch record
-                  </LinkButton>
+            <details className="relative" data-testid="batch-more-menu">
+              <summary className="inline-flex min-h-[44px] cursor-pointer list-none items-center gap-1 rounded-full border border-line bg-surface px-4 text-[14px] font-medium text-fg hover:bg-surface-2 [&::-webkit-details-marker]:hidden" aria-label="More actions">
+                <span aria-hidden>⋯</span> More
+              </summary>
+              <div className="absolute right-0 z-20 mt-1.5 flex w-[min(280px,calc(100vw-2rem))] flex-col gap-1.5 rounded-[14px] border border-line bg-surface p-2 shadow-[0_8px_24px_rgba(28,27,24,.14)]">
+                <LinkButton href={`/print/bmr/${batch.id}`} variant="secondary" target="_blank">
+                  Print batch record
+                </LinkButton>
+                {(ctx.can("production.batch.approve") || ctx.can("production.batch.admin") || ctx.can("quality.disposition.approve")) && (
                   <LinkButton href={`/production/${batch.id}/closure`} variant="secondary">
                     Close the batch and paper pages
                   </LinkButton>
-                </div>
-              </details>
-              {batch.status === "planned" && !batch.workOrderId && ctx.can("production.batch.edit") && <StartBatchForm batchId={batch.id} />}
-              {batch.status === "planned" && batch.workOrderId && (
-                <LinkButton href={`/production/orders/${batch.workOrderId}/materials?batch=${batch.id}`} variant="cta">
-                  Get materials
-                </LinkButton>
-              )}
-            </>
+                )}
+                {batch.workOrderId && (
+                  <LinkButton href={`/production/orders/${batch.workOrderId}`} variant="secondary">
+                    Open the production order
+                  </LinkButton>
+                )}
+              </div>
+            </details>
           }
         />
-        <PageIntro>Everything recorded for this batch: weighing, steps, counts and checks. It becomes the batch record (BMR).</PageIntro>
+        <PageIntro>What happened in this batch: every step, who did and checked it, the numbers written, the materials weighed, wrappers, labels and the result. The work itself is done on the production screens.</PageIntro>
         <div className="-mt-2 mb-3">
           <Explain term="batch_record" />
         </div>
       </div>
 
-      {batch.status === "planned" && (
-        <Banner tone="info" title="Planned, not started">
-          {batch.workOrderId
-            ? "The warehouse stages the reserved lots by scan; the batch is ready when every ingredient is at the staging location."
-            : ctx.can("production.batch.edit")
-              ? "Confirm the materials when they are at the weighing area, then sign the clean-area check."
-              : "An operator confirms the materials when they are at the weighing area."}
-        </Banner>
-      )}
-      {batch.status === "materials_staged" && <Banner tone="info" title="Materials ready">Sign the weighing-area clean-area check (step 1) to start the batch.</Banner>}
-      {batch.status === "awaiting_qc" && (
-        <Banner tone="appr" title="Waiting for quality approval">
-          Output lot {rec.outputLot?.lotNumber} ({fmtQty(batch.actualUnits, "pcs", 0)}) is in the hold area. Quality reviews the record and approves or rejects the batch.
-        </Banner>
-      )}
-      {batch.status === "released" && <Banner tone="ok" title="Approved by quality">The output lot may be used for sales orders.</Banner>}
-      {batch.status === "rejected" && <Banner tone="rej" title="Rejected by quality">The output lot is blocked. Follow the rejected-goods procedure.</Banner>}
+      {next.href && canAct ? (
+        <NextStep
+          text={beingMade ? `This batch is being made. Next: ${next.label}.` : `Next: ${next.label}.`}
+          action={{ label: beingMade ? `Continue this batch → ${next.label}` : next.label, href: next.href }}
+        />
+      ) : next.href && whoActs ? (
+        <NextStep text={beingMade ? `This batch is being made. Next: ${next.label}.` : `Next: ${next.label}.`} waitingFor={`${whoActs} can do this.`} />
+      ) : null}
+      {next.disabledReason && <p className="-mt-2 text-[14px] text-muted">{next.disabledReason}</p>}
 
-      <nav aria-label="Batch steps">
-        <ol className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {ex.steps.map((s) => {
-            const st = stepChip(s, ex.currentStepNo ?? null, running);
-            return (
-              <li key={s.stepNo} className="min-w-0">
-                <Link
-                  href={`/production/${batch.id}?step=${s.stepNo}`}
-                  data-testid={`stepper-${s.stepNo}`}
-                  aria-current={s.stepNo === step?.stepNo ? "step" : undefined}
-                  className={cx(
-                    "flex h-full min-h-[44px] items-center gap-2 rounded-[14px] border px-3 py-2 text-[13px] leading-snug",
-                    s.stepNo === step?.stepNo ? "border-primary bg-[var(--green-50)] font-semibold" : "border-line bg-surface",
-                  )}
-                >
-                  <span className="tabular">{s.stepNo}</span>
-                  <span className="min-w-0 flex-1 break-words">{s.name}</span>
-                  <Chip tone={st.tone}>{st.label}</Chip>
-                </Link>
-              </li>
-            );
-          })}
-        </ol>
-      </nav>
+      {batch.status === "awaiting_qc" && (
+        <Banner tone="appr" title="Waiting for the quality check">
+          Output lot {rec.outputLot?.lotNumber} ({fmtQty(batch.actualUnits, "pcs", 0)}) is in the hold area. QA checks the record and passes or fails the batch.
+        </Banner>
+      )}
+      {batch.status === "released" && <Banner tone="ok" title="Passed the quality check">The finished lot may be sold.</Banner>}
+      {batch.status === "rejected" && <Banner tone="rej" title="Failed the quality check">The finished lot is blocked. Follow the rejected-goods procedure.</Banner>}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-5">
-          {step && (
-            <Card data-testid={`step-panel-${step.stepNo}`}>
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-muted">
-                Step {step.stepNo} of {total}
-                {step.area ? ` · ${step.area} area` : ""}
-              </p>
-              <h2 className="text-[20px] font-semibold text-fg">{step.name}</h2>
-              {step.instruction && <p className="mt-1 text-[14px] text-fg-2">{step.instruction}</p>}
-              {step.workInstruction && (
-                <details className="mt-2 text-[13px]">
-                  <summary className="cursor-pointer text-primary-text">
-                    Work instruction {step.workInstruction.code}, version {step.workInstruction.revisionNo} (as when the batch started)
+          <section aria-label="Steps" className="flex flex-col gap-2" data-testid="record-steps">
+            <h2 className="text-[17px] font-semibold text-fg">Steps</h2>
+            {ex.steps.map((s) => {
+              const st = stepChip(s, ex.currentStepNo ?? null, beingMade);
+              return (
+                <details key={s.stepNo} className="rounded-[16px] border border-line bg-surface px-4 py-1" open={s.isCurrent && beingMade ? true : undefined} data-testid={`record-step-${s.stepNo}`}>
+                  <summary className="flex min-h-[52px] cursor-pointer list-none items-center gap-2 py-2 text-[15px] [&::-webkit-details-marker]:hidden">
+                    <span className="tabular text-muted">{s.stepNo}</span>
+                    <span className="min-w-0 flex-1 break-words font-medium text-fg">{s.name}</span>
+                    <Chip tone={st.tone}>{st.label}</Chip>
                   </summary>
-                  <pre className="mt-2 whitespace-pre-wrap rounded-[10px] bg-surface-2 p-3 font-sans">{step.workInstruction.bodyMarkdown}</pre>
+                  <div className="flex flex-col gap-3 pb-3">
+                    {s.instruction && <p className="text-[14px] text-fg-2">{s.instruction}</p>}
+                    {s.workInstruction && (
+                      <details className="text-[13px]">
+                        <summary className="cursor-pointer text-primary-text">
+                          How-to sheet {s.workInstruction.code}, version {s.workInstruction.revisionNo} (as when the batch started)
+                        </summary>
+                        <pre className="mt-2 whitespace-pre-wrap rounded-[10px] bg-surface-2 p-3 font-sans">{s.workInstruction.bodyMarkdown}</pre>
+                      </details>
+                    )}
+                    <SignLine step={s} />
+                    {s.record?.earliestCompletionAt && s.status !== "completed" && <p className="text-[13px] text-fg-2">Minimum wait until {fmtDateTime(s.record.earliestCompletionAt)}.</p>}
+                    {s.record?.blockedReason && s.status !== "completed" && <p className="text-[13px] text-[var(--warn-fg)]">Not done yet: {s.record.blockedReason}</p>}
+                    {s.status === "awaiting_check" && <p className="text-[13px] text-[var(--warn-fg)]">Waiting for the second person&apos;s check.</p>}
+                    {!s.record && <p className="text-[13px] text-muted">Not started.</p>}
+                    {s.record && <StepSummary step={s} />}
+                    {isWeighingStep(s.stepKind) && <WeighingList ex={ex} />}
+                  </div>
                 </details>
-              )}
-              <div className="mt-3 flex flex-col gap-3">
-                <SignLine step={step} />
-                {step.record?.earliestCompletionAt && step.status !== "completed" && (
-                  <Banner tone="info" title={`Minimum hold until ${fmtDateTime(step.record.earliestCompletionAt)}`}>
-                    {step.minDurationMinutes} min minimum from the routing; ending earlier needs a QA exception.
-                  </Banner>
-                )}
-                {step.record?.blockedReason && step.status !== "completed" && <Banner tone="warn" title="Blocked">{step.record.blockedReason}</Banner>}
-                {step.isCurrent && step.blockers.length > 0 && step.status !== "awaiting_check" && step.status !== "pending" && (
-                  <div className="rounded-[12px] border border-line bg-surface-2/60 p-3 text-[13px]">
-                    <p className="font-semibold">Before this step can be signed off:</p>
-                    <ul className="mt-1 list-disc pl-5">
-                      {step.blockers.map((b, i) => (
-                        <li key={i}>{b.message}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+              );
+            })}
+          </section>
 
-                {step.status === "awaiting_check" && (
-                  <div className="flex flex-wrap gap-2">
-                    {canCheckStep && step.record?.conductedById !== ctx.userId ? (
-                      <>
-                        <OneTap kind="checkStep" hidden={{ batchId: batch.id, stepNo: step.stepNo, idempotencyKey: key() }} label={`Check and sign step ${step.stepNo}`} />
-                        <ReasonForm kind="return" hidden={{ batchId: batch.id, stepNo: String(step.stepNo) }} label="Return to operator" reasonLabel="What must be corrected?" />
-                      </>
-                    ) : (
-                      <p className="text-[13px] text-muted">Waiting for a checker (another person) to sign from their own device, or on this device.</p>
-                    )}
-                  </div>
-                )}
-
-                {!running && step.status !== "completed" && batch.status !== "planned" && <p className="text-[13px] text-muted">The batch is {(STATE_LABEL[batch.status] ?? batch.status).toLowerCase()}; steps cannot be worked on.</p>}
-                {running && !step.isCurrent && step.status !== "completed" && <p className="text-[13px] text-muted">Complete the earlier steps first.</p>}
-                {whoDoes && <p className="text-[14px] text-fg-2" data-testid="who-does-step">{whoDoes} can do this step. You can follow progress here.</p>}
-
-                {/* Line clearance / checklist */}
-                {working && step.checklist.length > 0 && (
-                  <ChecklistForm batchId={batch.id} stepNo={step.stepNo} items={step.checklist} checkers={checkers} idem={key()} />
-                )}
-
-                {/* Weighing */}
-                {isWeighingStep(step.stepKind) && (
-                  <ol className="flex flex-col gap-3">
-                    {ex.ingredients.map((ing, i) => {
-                      const r = ingById.get(ing.id);
-                      const lastVoided = [...ing.weighings].reverse().find((w) => w.voided && !ing.weighings.some((x) => x.supersedesId === w.id));
-                      const open = ing.status === "pending" || ing.status === "partial";
-                      const rec0 = fefo[r?.materialId ?? ""]?.[0];
-                      return (
-                        <li key={ing.id} className="rounded-[14px] border border-line bg-surface p-3.5" data-testid={`ingredient-${ing.lineNo}`}>
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                                Ingredient {i + 1} of {ex.ingredients.length}
-                              </p>
-                              <p className="text-[16px] font-semibold">{ing.materialName}</p>
-                              <p className="text-[13px] tabular text-fg-2">
-                                Target {fmtQty(ing.theoreticalQtyG, "g", 1)}
-                                {r ? ` · allowed ${fmtQty(r.minG, "", 1)}–${fmtQty(r.maxG, "g", 1)}` : ""} · {D(ing.dispensedQtyG).gt(0) ? `weighed ${fmtQty(ing.dispensedQtyG, "g", 1)}` : "not weighed yet"}
-                              </p>
-                            </div>
-                            <StatusChip status={ing.status} label={LINE_STATUS[ing.status] ?? ing.status} />
-                          </div>
-                          {ing.weighings.length > 0 && (
-                            <ul className="mt-2 flex flex-col gap-2 text-[13px]">
-                              {ing.weighings.map((w) => (
-                                <li key={w.id} className={cx("rounded-[10px] border px-3 py-2", w.voided ? "border-line text-muted line-through" : w.within ? "border-line bg-surface-2/60" : "border-[var(--warn-bd)] bg-[var(--warn-bg)]")}>
-                                  #{w.sequence} · {fmtQty(w.qtyG, "g", 1)}
-                                  {w.entered && w.entered !== `${D(w.qtyG).toString()} g` ? ` (entered ${w.entered})` : ""} · lot {w.lotNumber} · {w.locationCode} · {w.scale ?? "no scale"} · by {w.operator}
-                                  {w.partial ? " · part" : ""} · {w.checker ? `checked by ${w.checker}` : "not checked yet"}
-                                  {w.exceptionApprovedBy && <span className="block">Exception approved by {w.exceptionApprovedBy}: {w.exceptionReason}</span>}
-                                  {w.voided && <span className="block no-underline">Voided by {w.voidedBy}: {w.voidReason}</span>}
-                                  {!w.voided && running && (
-                                    <div className="mt-2 flex flex-wrap gap-2 no-underline">
-                                      {!w.checker && ctx.can("production.dispense_record.approve") && w.operatorId !== ctx.userId && (
-                                        <OneTap kind="checkDispense" hidden={{ batchId: batch.id, dispenseRecordId: w.id, idempotencyKey: key() }} label="Check this weighing" variant="secondary" />
-                                      )}
-                                      {ctx.can("production.dispense_record.void") && step.status === "in_progress" && (
-                                        <ReasonForm kind="void" hidden={{ batchId: batch.id, dispenseRecordId: w.id }} label="Void" reasonLabel="Why is this weighing void?" />
-                                      )}
-                                    </div>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                          {working && open && r && (
-                            <details className="mt-3" open={ing.id === nextWeighId && ing.status === "partial" ? true : undefined}>
-                              {ing.id === nextWeighId ? (
-                                <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-center gap-2 rounded-full bg-cta px-5 text-[16px] font-semibold text-white sm:inline-flex [&::-webkit-details-marker]:hidden" data-testid="weigh-next">
-                                  <span className="grid size-6 place-items-center rounded-full bg-white/20 text-[13px]" aria-label="Do this first">1.</span>
-                                  Weigh {ing.materialName}
-                                </summary>
-                              ) : (
-                                <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-center gap-2 rounded-full border border-line bg-surface px-4 text-[14px] font-medium text-fg-2 sm:inline-flex [&::-webkit-details-marker]:hidden">
-                                  Weigh {ing.materialName}
-                                  <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[12px] text-muted">{toWeigh[1]?.id === ing.id ? "Next" : "Later"}</span>
-                                </summary>
-                              )}
-                              <WeighForm
-                                batchId={batch.id}
-                                ing={{ id: ing.id, lineNo: ing.lineNo, materialCode: ing.materialCode, materialName: ing.materialName, inciName: r.inciName, theoreticalQtyG: ing.theoreticalQtyG, tolerancePct: r.tolerancePct, minG: r.minG, maxG: r.maxG, dispensedQtyG: ing.dispensedQtyG, status: ing.status, recommended: rec0 ? `${rec0.lotNumber} at ${rec0.locationCode}, exp ${fmtDate(rec0.expiresOn)}` : null }}
-                                scales={scales}
-                                checkers={checkers}
-                                approvers={approvers}
-                                idem={key()}
-                                replaces={lastVoided && ing.status === "pending" ? { id: lastVoided.id } : null}
-                                needsChecker={(batch.formulaSnapshot as { lines?: { lineNo: number; requiresChecker?: boolean }[] }).lines?.find((x) => x.lineNo === ing.lineNo)?.requiresChecker !== false}
-                                lots={(fefo[r?.materialId ?? ""] ?? []).map((l) => ({ lotNumber: l.lotNumber, locationCode: l.locationCode, locationName: l.locationName, qty: l.qty, expiresOn: l.expiresOn }))}
-                              />
-                            </details>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ol>
-                )}
-
-                {/* Process readings and equipment */}
-                {working && step.requiresEquipment && !isWeighingStep(step.stepKind) && <EquipmentForm batchId={batch.id} stepNo={step.stepNo} kind={step.equipmentKind ?? null} options={mixers} />}
-                {step.equipmentUses.length > 0 && !isWeighingStep(step.stepKind) && (
-                  <p className="text-[13px] text-fg-2">
-                    Equipment: {step.equipmentUses.map((u) => `${u.code}${u.reasons.length ? ` (recorded warnings: ${u.reasons.join(", ")})` : ""}${u.override ? " under approved override" : ""}`).join(", ")}
-                  </p>
-                )}
-                {working && step.status === "pending" && step.minDurationMinutes && (
-                  <OneTap kind="startStep" hidden={{ batchId: batch.id, stepNo: step.stepNo }} label="Start the hold timer" />
-                )}
-                {working && step.parameters.map((p) => <ReadingForm key={p.id} batchId={batch.id} stepNo={step.stepNo} p={p} idem={key()} />)}
-
-                {/* Packaging */}
-                {(step.stepKind === "packaging" || step.stepKind === "filling") && (
-                  <>
-                    {step.packaging.length > 0 && <PackagingTable step={step} />}
-                    {working && (
-                      <>
-                        <PackagingIssueForm batchId={batch.id} stepNo={step.stepNo} suggestions={pkgLots.slice(0, 4).map((l) => `${l.lotNumber} (${l.materialName}, ${fmtQty(l.qty, l.uom, 0)} at ${l.locationCode})`)} idem={key()} />
-                        {step.packaging.map((p) => (
-                          <div key={p.id} className="rounded-[12px] border border-line p-3">
-                            <p className="mb-2 text-[13px] font-medium">
-                              Count {p.materialName} · lot {p.lotNumber} (issued {fmtQty(p.issued, p.uom, 0)})
-                            </p>
-                            <PackagingCountForm batchId={batch.id} row={{ id: p.id, materialName: p.materialName, lotNumber: p.lotNumber, issued: p.issued, uom: p.uom, counted: p.counted }} />
-                          </div>
-                        ))}
-                      </>
-                    )}
-                  </>
-                )}
-
-                {working && exceptionable && <ExceptionForm batchId={batch.id} stepNo={step.stepNo} approvers={approvers} />}
-
-                {working && step.stepKind !== "transfer" && step.checklist.length === 0 && (
-                  <CompleteStepForm batchId={batch.id} stepNo={step.stepNo} stepKind={step.stepKind} requiresChecker={step.requiresChecker} checkers={checkers} idem={key()} disabledReason={completeBlocked} />
-                )}
-
-                {step.stepKind === "transfer" && step.status !== "completed" && <p className="text-[13px] text-fg-2">Record the yield below, then move the batch to the hold area with the checker.</p>}
-                {step.status === "completed" && <StepSummary step={step} />}
-              </div>
-            </Card>
-          )}
-
-          {(ex.readyForTransfer || ex.yieldRecord || ex.outputs.length > 0) && (
-            <Card data-testid="yield-transfer">
-              <CardTitle>Pieces made and move to the hold area</CardTitle>
+          {(ex.yieldRecord || ex.outputs.length > 0 || ex.scrap.length > 0) && (
+            <Card data-testid="record-output">
+              <CardTitle>Pieces made, rejects and the hold area</CardTitle>
               {ex.yieldRecord && (
                 <div className={cx("mb-3 rounded-[12px] border p-3 text-[13px]", ex.yieldRecord.isWithinLimits ? "border-line" : "border-[var(--warn-bd)] bg-[var(--warn-bg)]")}>
                   <p className="tabular">
-                    <b>{fmtQty(ex.yieldRecord.actualUnits, "pcs", 0)}</b> · {fmtMass(ex.yieldRecord.actualBase)} of {fmtMass(ex.yieldRecord.theoreticalBase)} expected ·{" "}
-                    <b>{fmtQty(ex.yieldRecord.yieldPct, "%", 2)}</b> of the expected amount (OK {D(ex.yieldRecord.minPct).toString()}–{D(ex.yieldRecord.maxPct).toString()} %)
+                    <b>{fmtQty(ex.yieldRecord.actualUnits, "pcs", 0)}</b> · {fmtMass(ex.yieldRecord.actualBase)} of {fmtMass(ex.yieldRecord.theoreticalBase)} expected · <b>{fmtQty(ex.yieldRecord.yieldPct, "%", 2)}</b> of the expected amount (OK {D(ex.yieldRecord.minPct).toString()}–{D(ex.yieldRecord.maxPct).toString()} %)
                   </p>
                   <p className="text-fg-2">Recorded by {ex.yieldRecord.recordedByName} · {fmtDateTime(ex.yieldRecord.recordedAt)}</p>
-                  {!ex.yieldRecord.isWithinLimits &&
-                    (ex.yieldRecord.approvedBy ? (
-                      <p>Approved by {ex.yieldRecord.approvedByName}: {ex.yieldRecord.approvalReason}</p>
-                    ) : ctx.can("production.yield_record.approve") && ex.yieldRecord.recordedBy !== ctx.userId && running ? (
-                      <ReasonForm kind="approveYield" hidden={{ batchId: batch.id, yieldRecordId: ex.yieldRecord.id }} label="Approve yield (opens a deviation)" reasonLabel="Assessment and decision" />
-                    ) : (
-                      <p>Outside the range: a site manager or QA (not the recorder) must approve it with a deviation.</p>
-                    ))}
+                  {ex.yieldRecord.approvedBy && <p>Approved by {ex.yieldRecord.approvedByName}: {ex.yieldRecord.approvalReason}</p>}
                 </div>
               )}
-              {running && ex.readyForTransfer && ctx.can("production.yield_record.create") && (
-                <YieldForm batchId={batch.id} unitNetMassG={product.unitNetMassG} theoreticalG={batch.theoreticalYieldG ?? "0"} range={ex.yieldLimits} hasCurrent={!!ex.yieldRecord} idem={key()} />
+              <p className="text-[13px] font-semibold">Rejects</p>
+              {ex.scrap.length === 0 ? (
+                <p className="text-[13px] text-muted">None recorded.</p>
+              ) : (
+                <ul className="mt-1 flex flex-col gap-2 text-[13px]">
+                  {ex.scrap.map((s) => (
+                    <li key={s.id} className="rounded-[10px] border border-line p-2.5">
+                      {s.recordKind === "scrap" ? "Thrown away" : "Redo"} {fmtQty(s.qty, s.uom, 0)} · {s.reasonLabel}
+                      {s.note ? ` · ${s.note}` : ""} · {s.recordedByName} · <b>{s.status}</b>
+                    </li>
+                  ))}
+                </ul>
               )}
-              <div className="mt-4 flex flex-col gap-3">
-                <p className="text-[13px] font-semibold">Rejects</p>
-                {ex.scrap.length === 0 ? (
-                  <p className="text-[13px] text-muted">None recorded.</p>
-                ) : (
-                  <ul className="flex flex-col gap-2 text-[13px]">
-                    {ex.scrap.map((s) => (
-                      <li key={s.id} className="rounded-[10px] border border-line p-2.5">
-                        {s.recordKind === "scrap" ? "Scrap" : "Rework"} {fmtQty(s.qty, s.uom, 0)} · {s.reasonLabel}
-                        {s.note ? ` · ${s.note}` : ""} · {s.recordedByName} · <b>{s.status}</b>
-                        {s.requiresApproval && s.status === "recorded" && (ctx.can("production.scrap_rework_record.approve") && s.recordedBy !== ctx.userId ? <DecideScrapForm batchId={batch.id} id={s.id} /> : <span className="block text-[var(--warn-fg)]">Needs approval by a site manager or QA.</span>)}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {running && ex.readyForTransfer && ctx.can("production.scrap_rework_record.create") && <ScrapForm batchId={batch.id} reasonCodes={ex.reasonCodes} idem={key()} />}
-              </div>
-              <div className="mt-4 flex flex-col gap-3">
-                <p className="text-[13px] font-semibold">Move to the hold area until quality approves</p>
-                {ex.outputs.map((o) => (
+              <p className="mt-3 text-[13px] font-semibold">Finished lot</p>
+              {ex.outputs.length === 0 ? (
+                <p className="text-[13px] text-muted">Not finished yet.</p>
+              ) : (
+                ex.outputs.map((o) => (
                   <p key={o.id} className="text-[13px]">
-                    Output lot <span className="font-mono">{o.lotNumber}</span> · {fmtQty(o.qtyBase, o.baseUom, 0)} · {o.locationCode} · expires {fmtDate(o.expiresOn)} {o.qualityStatus && <StatusChip status={o.qualityStatus} />}
+                    Lot <span className="font-mono">{o.lotNumber}</span> · {fmtQty(o.qtyBase, o.baseUom, 0)} · {o.locationCode} · expires {fmtDate(o.expiresOn)} {o.qualityStatus && <StatusChip status={o.qualityStatus} />}
                   </p>
+                ))
+              )}
+            </Card>
+          )}
+
+          {(pendingYield || pendingScrap.length > 0) && (
+            <Card data-testid="record-approvals">
+              <CardTitle>Older records waiting for a manager&apos;s approval</CardTitle>
+              <p className="mb-2 text-[13px] text-fg-2">Recorded before the Finish screen existed. A site manager or QA (not the person who recorded it) decides.</p>
+              {pendingYield &&
+                (ctx.can("production.yield_record.approve") && pendingYield.recordedBy !== ctx.userId && beingMade ? (
+                  <ReasonForm kind="approveYield" hidden={{ batchId: batch.id, yieldRecordId: pendingYield.id }} label="Approve the pieces made (opens a problem report)" reasonLabel="What you checked and decided" />
+                ) : (
+                  <p className="text-[13px]">Pieces made outside the range: waiting for a site manager or QA.</p>
                 ))}
-                {running && ex.readyForTransfer && (
-                  <>
-                    {ex.transferBlockers.length > 0 ? (
-                      <ul className="list-disc pl-5 text-[13px] text-[var(--warn-fg)]">
-                        {ex.transferBlockers.map((b, i) => (
-                          <li key={i}>{b}</li>
-                        ))}
-                      </ul>
-                    ) : ctx.can("production.batch.post") ? (
-                      <TransferForm batchId={batch.id} checkers={yieldApprovers} quarantine={quarantine} idem={key()} />
-                    ) : (
-                      <p className="text-[13px] text-muted">Your role cannot post the batch.</p>
-                    )}
-                  </>
-                )}
-              </div>
+              {pendingScrap.map((s) => (
+                <div key={s.id} className="mt-2 text-[13px]">
+                  <p>
+                    {fmtQty(s.qty, s.uom, 0)} {s.reasonLabel} by {s.recordedByName}
+                  </p>
+                  {ctx.can("production.scrap_rework_record.approve") && s.recordedBy !== ctx.userId ? <DecideScrapForm batchId={batch.id} id={s.id} /> : <p className="text-[var(--warn-fg)]">Needs approval by a site manager or QA.</p>}
+                </div>
+              ))}
             </Card>
           )}
         </div>
@@ -664,6 +454,7 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
                 ["Planned size", `${fmtQty(D(batch.plannedSizeG).div(1000), "kg", 2)}`],
                 ["Started", fmtDateTime(batch.startedAt)],
                 ["Expected output", fmtMass(batch.theoreticalYieldG)],
+                ["Production order", batch.workOrderId ? "Yes" : "Made without an order"],
                 ["Stock updates", ex.postings.consumption || ex.postings.output ? `${ex.postings.consumption ?? 0} materials used · ${ex.postings.output ?? 0} finished goods` : ex.postAtDispense ? "At each weighing" : "When the batch moves to the hold area"],
               ]}
             />
@@ -675,7 +466,7 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
                 <StatusChip status={lastDisposition.toStatus} /> {lastDisposition.decidedByName} · {fmtDateTime(lastDisposition.decidedAt)}
               </p>
             ) : (
-              <p className="text-[13px] text-muted">{batch.status === "awaiting_qc" ? "Waiting for quality approval." : "No quality decision yet."}</p>
+              <p className="text-[13px] text-muted">{batch.status === "awaiting_qc" ? "Waiting for the quality check." : "No quality decision yet."}</p>
             )}
             {rec.tests.length > 0 && (
               <ul className="mt-2 flex flex-col divide-y divide-line text-[13px]">
@@ -736,6 +527,28 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
         </Card>
       )}
     </div>
-    </SignOffProvider>
+  );
+}
+
+
+/** Weighings of every ingredient, read-only (who, lot, scale, checker, voids and approvals). */
+function WeighingList({ ex }: { ex: BatchExecution }) {
+  return (
+    <ol className="flex flex-col gap-2">
+      {ex.ingredients.map((ing) => (
+        <li key={ing.id} className="rounded-[12px] border border-line bg-surface-2/40 p-3 text-[13px]" data-testid={`ingredient-${ing.lineNo}`}>
+          <p className="font-medium text-fg">
+            {ing.materialName} <span className="text-muted">· target {fmtQty(ing.theoreticalQtyG, "g", 1)} · {D(ing.dispensedQtyG).gt(0) ? `weighed ${fmtQty(ing.dispensedQtyG, "g", 1)}` : "not weighed yet"}</span>
+          </p>
+          {ing.weighings.map((w) => (
+            <p key={w.id} className={w.voided ? "text-muted line-through" : "text-fg-2"}>
+              {fmtQty(w.qtyG, "g", 1)} · lot {w.lotNumber} · {w.locationCode} · {w.scale ?? "no scale"} · by {w.operator} · {w.checker ? `checked by ${w.checker}` : "not checked"}
+              {w.exceptionApprovedBy ? ` · approved by ${w.exceptionApprovedBy}: ${w.exceptionReason}` : ""}
+              {w.voided ? ` · undone by ${w.voidedBy}: ${w.voidReason}` : ""}
+            </p>
+          ))}
+        </li>
+      ))}
+    </ol>
   );
 }

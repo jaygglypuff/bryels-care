@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
+import { flowHref } from "@/modules/production";
 import { inspectionCandidates, listInspections } from "@/modules/quality";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Explain, PageIntro } from "@/ui/guide";
@@ -62,7 +63,7 @@ export default async function InspectionsPage({ searchParams }: { searchParams: 
               {candidates.steps.map((st) => (
                 <li key={st.processStepRecordId} className="flex flex-wrap items-center justify-between gap-3 py-2">
                   <div className="min-w-0">
-                    <Link className="font-medium text-primary-text hover:underline" href={`/production/${st.batchId}`}>
+                    <Link className="font-medium text-primary-text hover:underline" href={flowHref({ batchId: st.batchId, workOrderId: st.workOrderId }, `step/${st.stepNo}`)}>
                       Step {st.stepNo}: {st.stepName}
                     </Link>
                     <p className="font-mono text-[12px] text-muted">{st.batchNumber}</p>

@@ -834,6 +834,8 @@ export async function inspectionCandidates(ctx: AuthContext) {
         eq(batches.siteId, siteId),
         inArray(batches.status, ["awaiting_qc", "in_process"]),
         sql`not exists (select 1 from ${inspections} i where i.batch_id = ${batches.id} and i.inspection_plan_id = ${batches.inspectionPlanId} and i.process_step_record_id is null and i.status <> 'cancelled')`,
+        // UX audit 2026-10-31 item 10: a batch still being weighed is not waiting for its tests yet.
+        sql`(${batches.status} <> 'in_process' or not exists (select 1 from batch_materials bm where bm.batch_id = ${batches.id} and bm.status in ('pending', 'partial')))`,
       ),
     )
     .orderBy(asc(batches.batchNumber));
@@ -842,6 +844,7 @@ export async function inspectionCandidates(ctx: AuthContext) {
     .select({
       batchId: batches.id,
       batchNumber: batches.batchNumber,
+      workOrderId: batches.workOrderId,
       processStepRecordId: processStepRecords.id,
       stepNo: processStepRecords.stepNo,
       stepName: processStepRecords.name,

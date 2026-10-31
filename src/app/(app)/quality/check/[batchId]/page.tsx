@@ -16,6 +16,7 @@ import { Forbidden } from "../../../forbidden";
 import { StartInspectionButton } from "../../w2c-forms";
 import { qaWord } from "../../_ui";
 import { FailForm, NotYetForm, PassForm, TestsForm } from "../forms";
+import { TestResultForm } from "../../batches/[batchId]/test-form";
 
 export const metadata: Metadata = { title: "Check quality" };
 export const dynamic = "force-dynamic";
@@ -147,7 +148,23 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
           <Card>
             <CardTitle>Tests (quality check)</CardTitle>
             {!v.planDriven ? (
-              <p className="text-[14px] text-muted">This batch has no test list. Type the tests on the full QA review page (⋯ More).</p>
+              <div className="space-y-3" data-testid="free-tests">
+                {v.freeTests.length === 0 ? (
+                  <p className="text-[14px] text-muted">This batch has no test list. Type each test you did here.</p>
+                ) : (
+                  <ul className="divide-y divide-line">
+                    {v.freeTests.map((t) => (
+                      <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-[15px]">
+                        <span>
+                          {t.name}: <b>{t.result}</b> <span className="text-muted">· {t.by}</span>
+                        </span>
+                        <Chip tone={t.passed ? "ok" : "bad"}>{t.passed ? "Pass" : "Fail"}</Chip>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {v.canRecordFreeTest && <TestResultForm batchId={v.batch.id} />}
+              </div>
             ) : !v.inspection ? (
               <div className="space-y-2">
                 <p className="text-[14px] text-muted">The tests have not been started.</p>

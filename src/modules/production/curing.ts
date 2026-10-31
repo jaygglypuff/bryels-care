@@ -6,6 +6,7 @@ import { notifyUsers } from "@/modules/platform/notifications";
 import type { JobRunContext } from "@/modules/platform/job-definition";
 import { eligibleSigners } from "./execution";
 import { WAIT_STEP_KINDS, shortDay } from "./flow-facts";
+import { flowHref } from "./flow-paths";
 
 /**
  * Curing / resting reminder (ADR-080 V2-5, UX review S8): when the minimum wait of a started curing
@@ -39,7 +40,7 @@ export async function remindCuringReady(run: Pick<JobRunContext, "asOf"> & { ctx
     steps += 1;
     const people = await eligibleSigners(db, w.organizationId, w.siteId, "production.batch.edit");
     const word = /mou?ld/i.test(w.rec.name) ? "mould time" : w.rec.stepKind === "hold" ? "resting" : "curing";
-    const link = w.workOrderId ? `/production/orders/${w.workOrderId}/step/${w.rec.stepNo}?batch=${w.rec.batchId}` : `/production/${w.rec.batchId}`;
+    const link = flowHref({ batchId: w.rec.batchId, workOrderId: w.workOrderId }, `step/${w.rec.stepNo}`);
     const ids = await notifyUsers(
       db,
       people.map((p) => p.id),

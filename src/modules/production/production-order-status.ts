@@ -153,8 +153,13 @@ export function batchStatusView(b: BatchFact, now: Date = new Date()): BatchStat
     case "draft":
     case "planned":
       return { ...base, stage: "approved", status: "approved", subtitle: (b.materialsTaken ?? 0) > 0 ? "Getting materials" : null };
-    case "materials_staged":
-      return { ...base, stage: "approved", status: "approved", subtitle: "Materials ready" };
+    case "materials_staged": {
+      // The Start check (first step) may already be answered and waiting for its second-person check.
+      const first = planned[0];
+      const rec = first ? records.find((r) => r.stepNo === first.stepNo) : undefined;
+      const step = first ? { stepNo: first.stepNo, name: first.name, kind: first.stepKind, status: rec?.status ?? "pending", conductedBy: rec?.conductedBy ?? null } : null;
+      return { ...base, stage: "approved", status: "approved", step, subtitle: rec?.status === "awaiting_check" ? `${first!.name} · waiting for a check` : "Materials ready" };
+    }
     case "rework_approved":
       return { ...base, stage: "in_progress", status: "in_progress", subtitle: "Redo" };
     case "in_process": {

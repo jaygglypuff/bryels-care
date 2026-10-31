@@ -5,7 +5,7 @@ import { coSign } from "@/lib/auth/co-sign";
 import { type ActionState, DomainError, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
 import type { Permission } from "@/lib/permissions";
-import { approveStepException, batchSiteId, checkDispense, checkStep, confirmPicked, issuePackaging, printBatchLabels, recordDispense, stepDone, submitChecklist } from "@/modules/production";
+import { approveStepException, batchSiteId, checkDispense, checkStep, confirmPicked, issuePackaging, printBatchLabels, recordDispense, returnStep, selectEquipment, stepDone, submitChecklist } from "@/modules/production";
 import { registerAppHooks } from "@/modules/wiring";
 
 // Execution ↔ QA hooks (deviations for early ends and out-of-range values); idempotent.
@@ -193,13 +193,72 @@ export async function printBatchLabelsAction(_: LabelActionState, fd: FormData):
   }
 }
 
-/** Packaging step without wrappers on the materials list: the operator scans or types the lot used (fallback). */
+/**
+ * Packaging step without wrappers on the materials list: the operator TAPS the lot card they used (lot id
+ * and shelf id from the list) or scans its label with the camera; nobody types a code (2026-10-31).
+ */
 export async function packagingLotAction(_: ActionState, fd: FormData): Promise<ActionState> {
   try {
     const ctx = await requireContext();
-    const r = await issuePackaging(ctx, { batchId: uuid.parse(str(fd, "batchId")), stepNo: stepNoOf(fd), lotRef: str(fd, "lotRef") ?? "", qty: str(fd, "qty") ?? "", locationRef: opt(fd, "locationRef"), idempotencyKey: opt(fd, "idempotencyKey") });
+    const lotRef = (str(fd, "lotRef") ?? "").trim();
+    if (!lotRef) throw new DomainError("validation", "Tap the wrapper or label you used, or scan its label.", { field: "lot", fieldErrors: { lot: "Tap a card or scan." } });
+    const r = await issuePackaging(ctx, { batchId: uuid.parse(str(fd, "batchId")), stepNo: stepNoOf(fd), lotRef, qty: str(fd, "qty") ?? "", locationRef: opt(fd, "locationRef"), idempotencyKey: opt(fd, "idempotencyKey") });
     refreshCurrentPage();
-    return { ok: true, message: `${r.materialName} lot ${r.lotNumber} recorded.` };
+    return { ok: true, message: `${r.materialName} lot ${r.lotNumber} recorded for this batch.` };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * One path for production work (2026-10-31): what the old batch workspace did, now on the flow
+ * screens. Same services, same rules; only the screen changed.
+ * ------------------------------------------------------------------------------------------- */
+
+/** The checker signs a step from their OWN signed-in phone or tablet (own session, no name pick). */
+export async function checkStepOwnAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const r = await checkStep(ctx, { batchId: uuid.parse(str(fd, "batchId")), stepNo: stepNoOf(fd), idempotencyKey: opt(fd, "idempotencyKey") });
+    refreshCurrentPage();
+    return { ok: true, message: `${r.name}: checked by you (${ctx.displayName}).` };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** The checker sends a step back to the person who did it, with what must be corrected. */
+export async function returnStepCardAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    await returnStep(ctx, { batchId: uuid.parse(str(fd, "batchId")), stepNo: stepNoOf(fd), reason: str(fd, "reason") ?? "" });
+    refreshCurrentPage();
+    return { ok: true, message: "Sent back. The person who did the step corrects it and taps Step done again." };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** The equipment (mixer, mould…) used on this step, chosen from the list. */
+export async function equipmentCardAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const ref = z.string().trim().min(1, "Choose the equipment.").parse(str(fd, "equipmentRef") ?? "");
+    const r = await selectEquipment(ctx, { batchId: uuid.parse(str(fd, "batchId")), stepNo: stepNoOf(fd), equipmentRef: ref });
+    refreshCurrentPage();
+    return { ok: true, message: `${r.equipmentCode} recorded on this step${r.warnings.length ? ` (warnings kept on record: ${r.warnings.join(", ")})` : ""}.` };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** The checker confirms a weighing from their OWN signed-in phone (own session). */
+export async function checkWeighingOwnAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const r = await checkDispense(ctx, { dispenseRecordId: uuid.parse(str(fd, "dispenseRecordId")), signedOn: "own_session", idempotencyKey: opt(fd, "idempotencyKey") });
+    refreshCurrentPage();
+    return { ok: true, message: `${r.materialName}: checked by you (${ctx.displayName}).` };
   } catch (e) {
     return toActionState(e);
   }

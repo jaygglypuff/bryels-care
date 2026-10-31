@@ -4,6 +4,19 @@ import { db } from "@/db/client";
 import { batches, goodsReceipts, inventoryLots, locations, materials, salesOrders, shipments } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 
+/** Batch states in which a scanned batch opens its next production screen (flow-paths.ts continueHref). */
+const BATCH_BEING_MADE = ["planned", "materials_staged", "in_process", "rework_approved"];
+
+/**
+ * Where a scanned batch opens. One path for production work (2026-10-31): a batch being made opens
+ * "continue" (a server redirect to its next production flow screen; `without-order` for a batch made
+ * without a production order, same segment as flow-paths.ts); any other batch opens its batch record.
+ * Built here, not imported, because modules talk through their public index and production imports inventory.
+ */
+export function batchScanHref(b: { id: string; status: string; workOrderId: string | null }): string {
+  return BATCH_BEING_MADE.includes(b.status) ? `/production/orders/${b.workOrderId ?? "without-order"}/continue?batch=${b.id}` : `/production/${b.id}`;
+}
+
 export type ScanResult = { ok: true; href: string; label: string } | { ok: false; message: string };
 
 const NOT_FOUND = (code: string): ScanResult => ({
@@ -60,13 +73,14 @@ export async function resolveScan(ctx: AuthContext, raw: string): Promise<ScanRe
   if (type === "LOT") return NOT_FOUND(value);
 
   const [batch] = await db
-    .select({ id: batches.id, n: batches.batchNumber })
+    .select({ id: batches.id, n: batches.batchNumber, status: batches.status, workOrderId: batches.workOrderId })
     .from(batches)
     .where(and(eq(batches.organizationId, ctx.organizationId), eq(batches.batchNumber, value), inArray(batches.siteId, sitesIn)))
     .limit(1);
   if (batch) {
     if (!ctx.can("production.batch.view")) return { ok: false, message: `${batch.n} is a production batch; your role cannot open batches.` };
-    return { ok: true, href: `/production/${batch.id}`, label: `Batch ${batch.n}` };
+    // One path (2026-10-31): a batch being made opens its next production screen; otherwise its batch record.
+    return { ok: true, href: batchScanHref({ id: batch.id, status: batch.status, workOrderId: batch.workOrderId }), label: `Batch ${batch.n}` };
   }
 
   const [so] = await db

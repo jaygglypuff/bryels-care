@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { getWeighView, type WeighView } from "@/modules/production";
+import { batchRecordHref, getWeighView, type WeighView } from "@/modules/production";
 import { LinkButton } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
 import { Help } from "@/ui/help/help";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../../forbidden";
-import { FlowHeader, NoBatch, pickBatch } from "../flow-shared";
+import { FlowHeader, NoBatch, orderHrefOf, pickBatch } from "../flow-shared";
 import { WeighFlow } from "./weigh-flow";
 
 export const metadata: Metadata = { title: "Weigh" };
@@ -20,11 +21,13 @@ export default async function WeighPage({ params, searchParams }: { params: Prom
   if (!ctx.can("production.batch.view")) return <Forbidden what="weighing" />;
   const { workOrderId } = await params;
   const { batch: batchParam } = await searchParams;
-  const orderHref = `/production/orders/${workOrderId}`;
+  let orderHref = orderHrefOf(workOrderId);
   let v: WeighView;
   try {
-    const { batch } = await pickBatch(ctx, workOrderId, batchParam, (f) => f.status === "in_process" && f.currentStep?.kind === "dispensing");
+    const picked = await pickBatch(ctx, workOrderId, batchParam, (f) => f.status === "in_process" && f.currentStep?.kind === "dispensing");
+    const batch = picked.batch;
     if (!batch) return <NoBatch orderHref={orderHref}>Nothing to weigh. This order has no batch yet.</NoBatch>;
+    orderHref = picked.backHref;
     v = await getWeighView(ctx, batch.batchId);
   } catch (e) {
     if (e instanceof DomainError && e.code === "not_found") notFound();
@@ -69,8 +72,14 @@ export default async function WeighPage({ params, searchParams }: { params: Prom
         totalTarget={v.totalTarget}
         stepBlockers={(v.step?.blockers ?? []).map((x) => x.message)}
         nextHref={v.step ? stepHref(v.step.stepNo + 1) : null}
-        fullRecordHref={`/production/${b.id}`}
+        moreHref={`/production/orders/${workOrderId}/weigh/more?batch=${b.id}`}
+        viewer={{ userId: ctx.userId, displayName: ctx.displayName, canCheck: ctx.can("production.dispense_record.approve") && ctx.canAt("production.dispense_record.approve", b.siteId) }}
       />
+      <p className="mt-6 text-[15px]">
+        <Link href={batchRecordHref(b.id)} className="inline-flex min-h-[44px] items-center text-primary-text underline">
+          See the full batch record
+        </Link>
+      </p>
     </div>
   );
 }

@@ -180,6 +180,21 @@ export async function issueTakenPackagingLocked(tx: Tx, ctx: AuthContext, batch:
 
 const LABEL_STATES = ["in_process", "awaiting_qc", "quarantined"];
 
+/**
+ * Printing fixes the finished lot number, made date and expiry (ADR-092), so it is allowed only once the
+ * batch has reached its packaging step: every step before the first packaging / filling step is done
+ * (2026-10-31 audit: the button was live while the batch was still at weighing). A batch without a
+ * packaging step may print once every step except Finish is done. Pure: returns the reason, or null.
+ */
+export function labelPrintBlocker(steps: { stepNo: number; stepKind: string; name: string }[], recs: { stepNo: number; status: string }[]): string | null {
+  const ordered = [...steps].sort((a, z) => a.stepNo - z.stepNo);
+  const pk = ordered.find((s) => (RECONCILED_STEP_KINDS as readonly string[]).includes(s.stepKind));
+  const before = pk ? ordered.filter((s) => s.stepNo < pk.stepNo) : ordered.filter((s) => s.stepKind !== "transfer");
+  const open = before.find((s) => !["completed", "skipped"].includes(recs.find((r) => r.stepNo === s.stepNo)?.status ?? ""));
+  if (!open) return null;
+  return pk ? `Labels are printed on the step "${pk.name}". Finish "${open.name}" first.` : `Labels are printed when every making step is done. Finish "${open.name}" first.`;
+}
+
 async function batchLabelTemplate(q: DbOrTx, organizationId: string, siteId: string) {
   const code = (await getSetting(q, organizationId, "production.packaging.batch_label_template", siteId)).trim().toUpperCase();
   const all = await approvedLabelTemplatesFor(q, organizationId, siteId, "finished_good");
@@ -193,10 +208,13 @@ export async function batchLabelInfo(ctx: AuthContext, batch: BatchRow) {
   const template = await batchLabelTemplate(db, ctx.organizationId, batch.siteId);
   const stations = await activeStationsAt(db, ctx.organizationId, batch.siteId);
   const canPrint = ctx.can("inventory.label_job.create") && LABEL_STATES.includes(batch.status);
+  const stepGate = batch.status === "in_process" && !batch.outputLotNumber ? labelPrintBlocker(sortedSteps(batch.formulaSnapshot as FormulaSnapshot), await stepRecords(db, batch.id)) : null;
   const why = !ctx.can("inventory.label_job.create")
     ? "You cannot print labels. Ask the supervisor."
     : !LABEL_STATES.includes(batch.status)
       ? "Labels are printed once the batch is being made."
+      : stepGate
+        ? stepGate
       : !template
         ? "No approved product label is set up for this site. Ask the site manager (Settings › Labels)."
         : !stations.length
@@ -226,6 +244,9 @@ export async function printBatchLabels(ctx: AuthContext, input: { batchId: strin
     const b = await lockBatch(tx, ctx, input.batchId);
     if (!LABEL_STATES.includes(b.status)) throw new DomainError("state", `Batch ${b.batchNumber} is ${b.status.replace(/_/g, " ")}. Labels are printed while the batch is being made or waiting for QA.`);
     if (b.outputLotNumber) return b;
+    // Printing fixes lot and dates: only from the packaging step on (labelPrintBlocker).
+    const gate = b.status === "in_process" ? labelPrintBlocker(sortedSteps(b.formulaSnapshot as FormulaSnapshot), await stepRecords(tx, b.id)) : null;
+    if (gate) throw new DomainError("state", gate, { rule: "V-STATE" });
     const [product] = await tx.select().from(products).where(eq(products.id, b.productId)).limit(1);
     const basis = await getSetting(tx, ctx.organizationId, "production.output.expiry_basis");
     const dates = batchExpiryDates(b, sortedSteps(b.formulaSnapshot as FormulaSnapshot), await stepRecords(tx, b.id), basis, product.shelfLifeDays);

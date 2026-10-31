@@ -8,7 +8,7 @@ import { StatusChip } from "@/ui/status";
 import { Forbidden } from "../forbidden";
 import { PageIntro } from "@/ui/guide";
 
-export const metadata: Metadata = { title: "Batches" };
+export const metadata: Metadata = { title: "Batch records" };
 
 const COLUMNS: { key: string; title: string; statuses: string[]; hint: string }[] = [
   { key: "planned", title: "Planned", statuses: ["draft", "planned"], hint: "Waiting to start" },
@@ -50,6 +50,11 @@ function BatchCard({ b }: { b: BatchListRow }) {
   );
 }
 
+/**
+ * Batch records (read-only, one path for production work 2026-10-31): every batch at the site, each
+ * opening its batch record (what happened). Work on a batch is done from My work / Production orders;
+ * a batch is made by approving a production order, so there is no "New batch" here any more.
+ */
 export default async function BatchesPage() {
   const ctx = await requireContext();
   if (!ctx.can("production.batch.view")) return <Forbidden what="production batches" />;
@@ -59,18 +64,18 @@ export default async function BatchesPage() {
   return (
     <div>
       <PageHeader
-        title="Batches"
+        title="Batch records"
         subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · ${rows.length} batch${rows.length === 1 ? "" : "es"}`}
-        actions={ctx.can("production.batch.create") ? <LinkButton href="/production/new" variant="cta">New batch</LinkButton> : undefined}
+        actions={ctx.can("production.work_order.view") ? <LinkButton href="/production/orders" variant="secondary">Production orders</LinkButton> : undefined}
       />
-      <PageIntro>Every batch at this site. Open one to see its full record.</PageIntro>
+      <PageIntro>Every batch at this site. Open one to see its record: who did each step, the numbers, materials and checks. To work on a batch, open My work or Production orders.</PageIntro>
 
       {rows.length === 0 ? (
         <EmptyState
           title="No batches at this site yet"
-          action={ctx.can("production.batch.create") ? <LinkButton href="/production/new">Plan the first batch</LinkButton> : undefined}
+          action={ctx.can("production.work_order.create") ? <LinkButton href="/production/orders/new">New production order</LinkButton> : undefined}
         >
-          Batches are created from an approved formula. Once planned they appear here and move across the board as work progresses.
+          A batch is made when a production order is approved. It then appears here with its record.
         </EmptyState>
       ) : (
         <>

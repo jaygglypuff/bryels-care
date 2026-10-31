@@ -7,20 +7,25 @@ import { fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
 
 /** Staging quantities in grams with one decimal: what the operator reads on the container and the scale. */
 const g = (v: string) => fmtQty(v, "g", 1);
-import { batchSheets, canSeeStaging, getStagingView, type StagingView } from "@/modules/production";
+import { batchSheets, canSeeStaging, continueHref, flowHref, getStagingView, type StagingView } from "@/modules/production";
 import { Card, CardTitle, Field, Input, LinkButton, PageHeader, Select, Textarea } from "@/ui/core";
 import { Help } from "@/ui/help/help";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { generateSheetAction, substitutionAction } from "../../work-orders/actions";
 import { CommandForm } from "../../work-orders/command-form";
-import { StageFlow, StageLotButton } from "./stage-flow";
-import Decimal from "decimal.js";
-import { PageIntro } from "@/ui/guide";
+import { NextStep, PageIntro } from "@/ui/guide";
 
-export const metadata: Metadata = { title: "Stage materials" };
+export const metadata: Metadata = { title: "Lots and sheets" };
 export const dynamic = "force-dynamic";
 
+/**
+ * Lots and sheets of a batch (one path for production work, 2026-10-31). Getting the materials is done
+ * on the Materials list (/production/orders/<order>/materials, which also scans labels and moves stock
+ * when the site settings ask for it); this page no longer stages by scan. What stays: which lots are set
+ * aside and where they went, the QA substitution of a lot (controlled exception) and the printed weighing
+ * sheet and traveler.
+ */
 export default async function StageBatchPage({ params }: { params: Promise<{ batchId: string }> }) {
   const ctx = await requireContext();
   if (!canSeeStaging(ctx)) return <Forbidden what="material staging" />;
@@ -38,7 +43,7 @@ export default async function StageBatchPage({ params }: { params: Promise<{ bat
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader
-        title={`Stage · ${b.batchNumber}`}
+        title={`Lots and sheets · ${b.batchNumber}`}
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
             <StatusChip status={b.status} />
@@ -50,35 +55,16 @@ export default async function StageBatchPage({ params }: { params: Promise<{ bat
         }
         actions={<><Help screen="production.staging" />{v.workOrder ? <LinkButton href={`/production/work-orders/${v.workOrder.id}?tab=materials`} variant="secondary">Production order</LinkButton> : undefined}</>}
       />
-      <PageIntro>Scan each set-aside lot and the making area to move it there. Most sites use Get materials instead.</PageIntro>
-      {!v.workOrder && <Banner tone="info" title="No production order">This batch was created without a production order, so no lots are reserved for it. Staging by scan applies to work-order batches.</Banner>}
+      <PageIntro>Which lots are set aside for this batch, a QA lot change, and the printed weighing sheet. To get the materials, use the Materials list.</PageIntro>
+      {b.status === "planned" ? (
+        <NextStep text="Take the materials on the list to the making area and tick them." action={{ label: "Get materials", href: flowHref({ batchId: b.id, workOrderId: v.workOrder?.id ?? null }, "materials") }} />
+      ) : ["materials_staged", "in_process", "rework_approved"].includes(b.status) && ctx.can("production.batch.view") ? (
+        <NextStep text={`Batch ${b.batchNumber} is ready or being made.`} action={{ label: "Continue this batch", href: continueHref({ batchId: b.id, workOrderId: v.workOrder?.id ?? null }) }} />
+      ) : null}
+      {!v.workOrder && <Banner tone="info" title="No production order">This batch was created without a production order, so no lots are set aside for it.</Banner>}
       {v.workOrder && !["released", "in_progress"].includes(v.workOrder.status) && (
         <Banner tone="warn" title={`Production order ${v.workOrder.status.replace(/_/g, " ")}`}>Materials are reserved when the production order is released. Ask the site manager to release it.</Banner>
       )}
-      {b.status !== "planned" && (
-        <div className="mb-4">
-          <Banner tone={v.allStaged ? "ok" : "info"} title={v.allStaged ? "All ingredients staged" : `Batch is ${b.status.replace(/_/g, " ")}`}>
-            {b.status === "materials_staged" ? "The batch is ready for the weighing-area clean-area check." : <Link className="underline" href={`/production/${b.id}`}>Open the batch workspace</Link>}
-          </Banner>
-          {b.status === "materials_staged" && ctx.can("production.batch.view") && (
-            <div className="mt-3">
-              <LinkButton href={`/production/${b.id}`} variant="cta">
-                Open batch workspace
-              </LinkButton>
-            </div>
-          )}
-        </div>
-      )}
-
-      {v.canStage && (
-        <details className="mb-2">
-          <summary className="cursor-pointer text-[13px] text-primary-text">Scan labels instead (barcode scanner)</summary>
-          <div className="mt-2">
-            <StageFlow batchId={b.id} stagingLocations={v.stagingLocations} />
-          </div>
-        </details>
-      )}
-
       <div className="mt-4 space-y-3">
         {v.lines.map((l) => (
           <Card key={l.batchMaterialId} className="p-4 sm:p-5">
@@ -91,24 +77,17 @@ export default async function StageBatchPage({ params }: { params: Promise<{ bat
                   {l.materialCode} · need {g(l.theoreticalQtyG)} · staged {g(l.staged)}
                 </p>
               </div>
-              {l.isStaged ? <Chip tone="ok">Staged</Chip> : <Chip tone="info">{g(l.remaining)} to stage</Chip>}
+              {l.isStaged ? <Chip tone="ok">At the making area</Chip> : <Chip tone="info">{g(l.remaining)} still on the shelf</Chip>}
             </div>
             {!l.isStaged &&
               (l.expected.length ? (
                 <ul className="mt-3 space-y-2">
-                  {l.expected.map((x) => {
-                    const take = Decimal.min(new Decimal(x.qty), new Decimal(l.remaining)).toString();
-                    return (
-                      <li key={`${x.lotId}-${x.locationId}`} className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-line p-2.5">
-                        <span className="text-[13.5px]">
-                          <span className="font-mono font-medium">{x.lotNumber}</span> · {g(x.qty)} at {x.locationCode}
-                          {x.expiresOn ? ` · exp ${fmtDate(x.expiresOn)}` : ""}
-                        </span>
-                        {v.canStage && <StageLotButton batchId={b.id} lotNumber={x.lotNumber} qty={take} toLocationCode={v.stagingLocations[0]?.code ?? null} label={`Bring ${g(take)} to production`} />}
-                      </li>
-                    );
-                  })}
-                  {v.stagingLocations.length === 0 && <li className="text-[12.5px] text-muted">No production staging area is set for this warehouse (Master data → Locations).</li>}
+                  {l.expected.map((x) => (
+                    <li key={`${x.lotId}-${x.locationId}`} className="rounded-[12px] border border-line p-2.5 text-[13.5px]">
+                      Set aside: <span className="font-mono font-medium">{x.lotNumber}</span> · {g(x.qty)} at {x.locationCode}
+                      {x.expiresOn ? ` · exp ${fmtDate(x.expiresOn)}` : ""}
+                    </li>
+                  ))}
                 </ul>
               ) : (
                 <p className="mt-2 text-[13px]">No lot is set aside for this ingredient. Approve the production order again, or ask the planner.</p>

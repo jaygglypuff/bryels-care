@@ -7,7 +7,7 @@
  *
  * | Batch (simple status)                         | Action (button)            | Permission at the site               |
  * |-----------------------------------------------|----------------------------|--------------------------------------|
- * | Approved (planned)                            | Get materials              | inventory.movement.post              |
+ * | Approved (planned)                            | Get materials              | inventory.movement.post or batch.edit|
  * | Approved · Materials ready                    | Start                      | production.line_clearance.create     |
  * | In progress · weighing step                   | Weigh                      | production.dispense_record.create    |
  * | In progress · curing not over                 | wait "Curing until …"      | —                                    |
@@ -19,10 +19,13 @@
  * | Quality check                                 | Check quality              | quality.disposition.approve          |
  * | Passed / Failed                               | none                       | —                                    |
  *
- * Without the permission the action becomes "wait" with who can help (WhoCanHelp). Stage G3: Finish opens
- * `/production/<batch>/finish` (finishBatch) and Check quality opens `/quality/check/<batch>`.
+ * Without the permission the action becomes "wait" with who can help (WhoCanHelp). Every link is a flow
+ * screen from flow-paths.ts (one path, 2026-10-31): materials, step/<n> (Start check, steps, checks,
+ * curing, packaging, Redo), weigh, `/production/<batch>/finish` and `/quality/check/<batch>`; never the
+ * read-only batch record. A batch without an order uses the `without-order` segment.
  */
 import { PRODUCTION_ORDER_LABEL, type BatchStatusView, type ProductionOrderStatusView } from "./production-order-status";
+import { finishHref, flowHref, qualityCheckHref } from "./flow-paths";
 
 export type Who = { permission: string; siteId: string };
 
@@ -55,35 +58,46 @@ function gate(u: ActionCan, siteId: string, permission: string, link: { label: s
 }
 
 /** The action of one batch of the order. */
-export function batchNextAction(b: BatchStatusView & { id: string; batchNumber: string }, siteId: string, u: ActionCan, workOrderId?: string): NextAction {
+export function batchNextAction(b: BatchStatusView & { id: string; batchNumber: string }, siteId: string, u: ActionCan, workOrderId?: string | null): NextAction {
   const id = b.id;
-  // ADR-080 stage G2 screens (materials list, weigh cards, step cards) when the batch belongs to an order.
-  const fp = (screen: string) => (workOrderId ? `/production/orders/${workOrderId}/${screen}?batch=${id}` : `/production/${id}`);
+  // ADR-080 stage G2 screens (materials list, weigh cards, step cards), with or without an order.
+  const fp = (screen: Parameters<typeof flowHref>[1]) => flowHref({ batchId: id, workOrderId }, screen);
   const nr = b.batchNumber;
   switch (b.stage) {
     case "approved":
-      if (b.batchStatus === "materials_staged") return gate(u, siteId, "production.line_clearance.create", { label: "Start", href: `/production/${id}`, hint: `Batch ${nr}: do the start check, then start making it.`, batchId: id }, "Ready to start");
+      if (b.batchStatus === "materials_staged") {
+        const s = b.step;
+        const start = fp(`step/${s?.stepNo ?? 1}`);
+        if (s?.status === "awaiting_check") {
+          const perm = checkPermission(s.kind);
+          if (u.can(perm) && s.conductedBy !== u.userId) return { kind: "link", label: `Check ${s.name}`, href: start, hint: `Batch ${nr}: ${s.name} needs a second person's check before the batch starts.`, batchId: id };
+          return { kind: "wait", title: "Waiting for a check", hint: `Batch ${nr}: another person checks ${s.name}.`, who: { permission: perm, siteId }, batchId: id };
+        }
+        return gate(u, siteId, "production.line_clearance.create", { label: "Start", href: start, hint: `Batch ${nr}: do the start check, then start making it.`, batchId: id }, "Ready to start");
+      }
+      // Same rule as the Materials list (canTickMaterials): the storekeeper or a production person may tick.
+      if (u.can("production.batch.edit")) return { kind: "link", label: "Get materials", href: fp("materials"), hint: `Batch ${nr}: take the materials on the list to the making area.`, batchId: id };
       return gate(u, siteId, "inventory.movement.post", { label: "Get materials", href: fp("materials"), hint: `Batch ${nr}: take the materials on the list to the making area.`, batchId: id }, "Waiting for materials");
     case "in_progress": {
-      if (b.batchStatus === "rework_approved") return gate(u, siteId, "production.process_step_record.create", { label: "Redo", href: `/production/${id}`, hint: `Batch ${nr}: redo the steps QA asked for.`, batchId: id }, "Waiting for the redo");
+      if (b.batchStatus === "rework_approved") return gate(u, siteId, "production.process_step_record.create", { label: "Redo", href: fp(`step/${b.step?.stepNo ?? 1}`), hint: `Batch ${nr}: redo the steps QA asked for.`, batchId: id }, "Waiting for the redo");
       const s = b.step;
-      if (!s) return gate(u, siteId, "production.batch.post", { label: "Finish", href: `/production/${id}/finish`, hint: `Batch ${nr}: every step is done. Count the good pieces and send the batch for the quality check.`, batchId: id }, "Ready to finish");
+      if (!s) return gate(u, siteId, "production.batch.post", { label: "Finish", href: finishHref(id), hint: `Batch ${nr}: every step is done. Count the good pieces and send the batch for the quality check.`, batchId: id }, "Ready to finish");
       const stepOf = b.stepsTotal > 0 ? ` (step ${s.stepNo} of ${b.stepsTotal})` : "";
       if (b.waitUntil && !b.waitOver) return { kind: "wait", title: b.subtitle ?? "Waiting", hint: `Batch ${nr}: ${s.name}${stepOf}. Press Curing finished on that day. Ending early needs approval.`, who: null, batchId: id };
       if (b.waitUntil && b.waitOver) return gate(u, siteId, "production.process_step_record.create", { label: "Curing finished", href: fp(`step/${s.stepNo}`), hint: `Batch ${nr}: ${s.name}${stepOf}. The waiting time is over.`, batchId: id }, "Curing time over");
       if (s.status === "awaiting_check") {
         const perm = checkPermission(s.kind);
-        if (u.can(perm) && s.conductedBy !== u.userId) return { kind: "link", label: `Check ${s.name}`, href: `/production/${id}`, hint: `Batch ${nr}: ${s.name}${stepOf} needs a second person's check.`, batchId: id };
+        if (u.can(perm) && s.conductedBy !== u.userId) return { kind: "link", label: `Check ${s.name}`, href: fp(`step/${s.stepNo}`), hint: `Batch ${nr}: ${s.name}${stepOf} needs a second person's check.`, batchId: id };
         return { kind: "wait", title: "Waiting for a check", hint: `Batch ${nr}: another person checks ${s.name}${stepOf}.`, who: { permission: perm, siteId }, batchId: id };
       }
       // The last step (move to the hold area) is what Finish does: one plain button, the simple Finish screen.
-      if (s.kind === "transfer") return gate(u, siteId, "production.batch.post", { label: "Finish", href: `/production/${id}/finish`, hint: `Batch ${nr}: count the good pieces and send the batch for the quality check.`, batchId: id }, "Ready to finish");
+      if (s.kind === "transfer") return gate(u, siteId, "production.batch.post", { label: "Finish", href: finishHref(id), hint: `Batch ${nr}: count the good pieces and send the batch for the quality check.`, batchId: id }, "Ready to finish");
       if (WEIGH_KINDS.includes(s.kind)) return gate(u, siteId, performPermission(s.kind), { label: "Weigh", href: fp("weigh"), hint: `Batch ${nr}: weigh the ingredients${stepOf}.`, batchId: id }, "Ready to weigh");
       return gate(u, siteId, performPermission(s.kind), { label: s.name, href: fp(`step/${s.stepNo}`), hint: `Batch ${nr}: ${s.name}${stepOf}.`, batchId: id }, `Next: ${s.name}`);
     }
     case "quality_check":
-      if (b.warn) return u.can("quality.disposition.approve") ? { kind: "link", label: "Check quality", href: `/quality/check/${id}`, hint: `Batch ${nr} is on hold in the quality check.`, batchId: id } : { kind: "wait", title: "Quality check · On hold", hint: `Batch ${nr} is on hold. QA checks it again.`, who: { permission: "quality.disposition.approve", siteId }, batchId: id };
-      return gate(u, siteId, "quality.disposition.approve", { label: "Check quality", href: `/quality/check/${id}`, hint: `Batch ${nr} is in the hold area, waiting for the quality check.`, batchId: id }, "Waiting for the quality check");
+      if (b.warn) return u.can("quality.disposition.approve") ? { kind: "link", label: "Check quality", href: qualityCheckHref(id), hint: `Batch ${nr} is on hold in the quality check.`, batchId: id } : { kind: "wait", title: "Quality check · On hold", hint: `Batch ${nr} is on hold. QA checks it again.`, who: { permission: "quality.disposition.approve", siteId }, batchId: id };
+      return gate(u, siteId, "quality.disposition.approve", { label: "Check quality", href: qualityCheckHref(id), hint: `Batch ${nr} is in the hold area, waiting for the quality check.`, batchId: id }, "Waiting for the quality check");
     case "passed":
       return { kind: "none", hint: `Batch ${nr} passed the quality check. Ready to sell.`, batchId: id };
     case "failed":

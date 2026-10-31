@@ -15,8 +15,6 @@ import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { DecisionHistory, DeviationStatusChip, InspectionStatusChip, QaStatusChip, fmtLotQty, qaWord, statusTone } from "../../_ui";
 import { ConditionalDecideForm, ConditionalRequestForm, StartInspectionButton } from "../../w2c-forms";
-import { decideBatchAction } from "../../actions";
-import { DecisionForm } from "../../decision-form";
 import { TestResultForm } from "./test-form";
 import { Help } from "@/ui/help/help";
 
@@ -67,7 +65,7 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
                   Batch record (print)
                 </LinkButton>
                 <LinkButton href={`/production/${batch.id}`} variant="secondary">
-                  Batch on the production screen
+                  See the full batch record
                 </LinkButton>
                 {v.can.raiseDeviation && (
                   <LinkButton href={`/quality/deviations/new?batchId=${batch.id}`} variant="secondary">
@@ -89,8 +87,8 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
       {["awaiting_qc", "quarantined"].includes(batch.status) &&
         (v.canDecide ? (
           <NextStep
-            text={v.planDriven && v.inspections.length === 0 ? "Next: start the quality check (tests) for this batch, then decide OK or not OK." : releaseBlocker ? "Next: fix what blocks the OK (see the yellow box below), or say not OK." : "Next: decide OK to use or not OK."}
-            action={{ label: v.planDriven && v.inspections.length === 0 ? "Go to the tests" : "Decide now", href: v.planDriven && v.inspections.length === 0 ? "#tests" : "#decide" }}
+            text="Next: type the tests and say OK to use, not yet, or not OK on the Check quality screen (one place, the same rules for everyone)."
+            action={{ label: "Check quality", href: `/quality/check/${batch.id}` }}
           />
         ) : (
           <>
@@ -298,36 +296,18 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
             </div>
           ) : (
             <>
-              {releaseBlocker && v.canReject && (
-                <div className="mb-3">
-                  <Banner tone="warn" title="“OK to use” is not possible yet">
-                    <ul className="list-disc pl-5">
-                      {v.blockers.map((b, i) => (
-                        <li key={i}>{b.message}</li>
-                      ))}
-                    </ul>
-                  </Banner>
-                </div>
+              {["awaiting_qc", "quarantined"].includes(batch.status) ? (
+                <p className="text-[14px] text-fg-2" data-testid="decide-on-check">
+                  OK to use, not yet and not OK are decided on the Check quality screen, so every QA person gets the same rules and the same reasons.
+                </p>
+              ) : (
+                <p className="text-[14px] text-muted">{releaseBlocker ?? "Nothing to decide now."}</p>
               )}
-              <DecisionForm
-                action={decideBatchAction}
-                hidden={{ batchId: batch.id }}
-                options={[
-                  {
-                    value: "release",
-                    label: "OK to use",
-                    hint: "The products may be sold; they move from the hold area to the finished-goods shelves.",
-                    blocker: releaseBlocker && v.canReject ? "Not possible yet: see the reasons above." : releaseBlocker,
-                  },
-                  {
-                    value: "reject",
-                    label: "Not OK – don't use",
-                    hint: "The products are blocked and move to the area for things we cannot use.",
-                    blocker: v.canReject ? null : "Only a batch waiting for QA check can be made not OK.",
-                    danger: true,
-                  },
-                ]}
-              />
+              {["awaiting_qc", "quarantined"].includes(batch.status) && (
+                <LinkButton href={`/quality/check/${batch.id}`} variant="cta" size="lg" className="mt-2">
+                  Check quality
+                </LinkButton>
+              )}
             </>
           )}
         </Card>

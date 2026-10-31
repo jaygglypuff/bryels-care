@@ -8,6 +8,7 @@ import type { Permission } from "@/lib/permissions";
 import { getSetting, type SettingValue } from "@/lib/settings";
 import { type FormulaSnapshot, manilaToday } from "./shared";
 import { planWorkOrder, releaseWorkOrder } from "./work-orders";
+import { continueHref } from "./flow-paths";
 
 /**
  * Production board (US-3-07, docs/ux-system.md §9.3, A-UX-12): work orders and batches of a site
@@ -32,11 +33,11 @@ export function boardMove(card: CardRef, column: BoardColumn, can: (p: Permissio
   if ((targets as string[]).includes(card.status)) return { allowed: false, reason: "The card is already in this column." };
   if (card.kind === "work_order") {
     if (card.status === "draft" && (targets as string[]).includes("planned")) {
-      return can("production.work_order.submit") ? { allowed: true, action: "plan_work_order", label: "Plan work order" } : { allowed: false, reason: "Planning a work order needs the planner permission (production.work_order.submit)." };
+      return can("production.work_order.submit") ? { allowed: true, action: "plan_work_order", label: "Get ready for approval (stays Draft)" } : { allowed: false, reason: "Planning a work order needs the planner permission (production.work_order.submit)." };
     }
     if (card.status === "planned" && (targets as string[]).includes("released")) {
       return can("production.work_order.approve")
-        ? { allowed: true, action: "release_work_order", label: "Release and reserve materials" }
+        ? { allowed: true, action: "release_work_order", label: "Approve and set materials aside" }
         : { allowed: false, reason: "Releasing a work order needs release permission (production.work_order.approve), held by the site manager." };
     }
     if (column.workOrderStatuses.length === 0) return { allowed: false, reason: "This column shows batches. Work orders move on by creating and running their batches." };
@@ -209,7 +210,8 @@ export async function getProductionBoard(ctx: AuthContext, f: BoardFilter = {}) 
       assignees: assignees.slice(0, 4),
       progress: { done: Math.min(x.stepsDone, snap.steps.length), total: snap.steps.length },
       risks,
-      href: x.b.status === "planned" && x.wo ? `/production/staging/${x.b.id}` : `/production/${x.b.id}`,
+      // One path (2026-10-31): a running batch opens its next flow screen; a finished one its batch record.
+      href: continueHref({ batchId: x.b.id, workOrderId: x.wo?.id ?? null }),
       moves: verdicts({ kind: "batch", status: x.b.status, hasWorkOrder: !!x.wo }),
     });
   }

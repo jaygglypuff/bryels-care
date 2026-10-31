@@ -159,6 +159,8 @@ export {
   type NextScreen,
   type PickProgress,
 } from "./flow-facts";
+// One path for production work (2026-10-31): every "do work" link is a flow screen.
+export { NO_ORDER_SEGMENT, flowHref, continueHref, finishHref, qualityCheckHref, batchRecordHref, flowBackHref, firstStepNo, isOldWorkspaceHref, type FlowScreen } from "./flow-paths";
 export { remindCuringReady, dueWaits } from "./curing";
 export { confirmLot } from "./dispensing";
 // UX review (operators): one task per batch the user can act on now or soon, with or without an order.

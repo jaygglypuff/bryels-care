@@ -37,10 +37,11 @@ export function ProgressStrip({ steps, note }: { steps: { key: string; label: st
         {steps.map((s, i) => (
           <li key={s.key} aria-current={s.state === "current" ? "step" : undefined} className="min-w-0">
             <div className={cx("h-2 rounded-full", s.state === "done" ? "bg-[var(--ok-fg)]" : s.state === "current" ? "bg-primary" : "bg-surface-2")} />
-            <p className={cx("mt-1.5 flex items-center gap-1 text-[12px] leading-tight sm:text-[13px]", s.state === "current" ? "font-semibold text-fg" : "text-muted")}>
+            <p className={cx("mt-1.5 flex items-center gap-1 text-[11px] leading-tight sm:text-[13px]", s.state === "current" ? "font-semibold text-fg" : "text-muted")}>
               {s.state === "done" && <CheckCircle2 size={13} aria-hidden className="shrink-0" />}
-              <span className="min-w-0 break-words">
-                {i + 1}. {s.label}
+              <span className="min-w-0 hyphens-none [overflow-wrap:normal] [word-break:keep-all]">
+                <span className="hidden sm:inline">{i + 1}. </span>
+                {s.label}
               </span>
             </p>
           </li>
@@ -57,11 +58,11 @@ export function ProgressStrip({ steps, note }: { steps: { key: string; label: st
 }
 
 /** The next action of an order or batch: a big button, a wait with who can help, or a sentence. Never a fake button. */
-export function ActionButton({ a, size = "lg", approve }: { a: NextAction; size?: "lg" | "md"; approve?: React.ReactNode }) {
+export function ActionButton({ a, size = "lg", approve, secondary = false }: { a: NextAction; size?: "lg" | "md"; approve?: React.ReactNode; secondary?: boolean }) {
   if (a.kind === "approve") return <>{approve}</>;
   if (a.kind === "link")
     return (
-      <LinkButton href={a.href} variant="cta" size={size} className="w-full justify-center sm:w-auto">
+      <LinkButton href={a.href} variant={secondary ? "secondary" : "cta"} size={size} className="w-full justify-center sm:w-auto">
         {a.label}
       </LinkButton>
     );

@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Hourglass, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Hourglass, UserCheck, Wrench, XCircle } from "lucide-react";
 import { useState } from "react";
 import type { StepCardView } from "@/modules/production";
 import { Button, cx, Input, Select, Textarea } from "@/ui/core";
@@ -9,10 +9,60 @@ import { Keypad, KeypadField } from "@/ui/keypad";
 import {
   checklistCardAction,
   checkStepAction,
+  checkStepOwnAction,
   endEarlyAction,
+  equipmentCardAction,
+  returnStepCardAction,
   stepDoneAction,
 } from "../../flow-actions";
+import { plainWords } from "@/modules/production/plain-words";
 import { PackagingBox } from "./packaging-box";
+
+/**
+ * The checker is signed in on THIS device (their own phone or tablet): one tap "Yes, I checked" in their
+ * own name (checkStep on their session, like the old batch workspace), or send it back with a reason.
+ */
+function OwnCheck(p: Props) {
+  const { step } = p;
+  const [state, action] = useInPlaceAction(checkStepOwnAction);
+  const [back, setBack] = useState(false);
+  const [bState, bAction] = useInPlaceAction(returnStepCardAction);
+  return (
+    <section className="grid gap-3 rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" aria-label="Your check" data-testid="own-check">
+      <h2 className="text-[22px] font-semibold text-fg">
+        {p.viewer.displayName}, did you check {step.name}
+        {step.record?.conductedBy ? ` done by ${step.record.conductedBy}` : ""}?
+      </h2>
+      <p className="text-[15px] text-muted">You sign with your own account. Look at the work first.</p>
+      <form action={action} className="grid gap-2">
+        <input type="hidden" name="batchId" value={p.batchId} />
+        <input type="hidden" name="stepNo" value={step.stepNo} />
+        <SubmitButton variant="cta" size="lg" pendingText="Saving…" className="w-full">
+          <UserCheck size={20} aria-hidden /> Yes, I checked it
+        </SubmitButton>
+        <FormMessage state={state} />
+      </form>
+      {!back ? (
+        <Button type="button" variant="secondary" size="lg" onClick={() => setBack(true)}>
+          Something is wrong: send it back
+        </Button>
+      ) : (
+        <form action={bAction} className="grid gap-2 rounded-[14px] bg-surface-2 p-3">
+          <input type="hidden" name="batchId" value={p.batchId} />
+          <input type="hidden" name="stepNo" value={step.stepNo} />
+          <label className="flex flex-col gap-1 text-[15px] font-medium">
+            What must be corrected?
+            <Textarea name="reason" required minLength={5} className="text-[16px]" />
+          </label>
+          <SubmitButton variant="primary" size="lg" pendingText="Saving…">
+            Send it back
+          </SubmitButton>
+          <FormMessage state={bState} />
+        </form>
+      )}
+    </section>
+  );
+}
 
 /** Second check of a step on this tablet: pick a name, then a confirm addressed to the checker (2 taps, ADR-078). */
 function StepCheck(p: Props) {
@@ -20,11 +70,13 @@ function StepCheck(p: Props) {
   const [state, action] = useInPlaceAction(checkStepAction);
   const [who, setWho] = useState<Person | null>(null);
   const others = p.checkers.filter((c) => c.id !== step.record?.conductedById);
+  // The signed-in person may check (not the one who did the step): they sign in their own name.
+  if (p.viewer.canCheck && !p.viewer.isDoer) return <OwnCheck {...p} />;
   if (!who)
     return (
       <section className="rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" aria-label="Second check">
         <h2 className="text-[22px] font-semibold text-fg">Second check needed</h2>
-        <p className="mt-1 text-[16px] text-muted">Ask someone to check {step.name}. They pick their name.</p>
+        <p className="mt-1 text-[16px] text-muted">Ask someone to check {step.name}. They pick their name here, or open this step on their own phone (My work shows &quot;Check {step.name.toLowerCase()}&quot;).</p>
         {others.length ? (
           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {others.map((c) => (
@@ -79,9 +131,18 @@ type Props = {
   nextHref: string | null;
   nextLabel: string | null;
   weighHref: string;
+  /** The Finish screen of the batch (the last step, transfer). */
+  finishHref: string;
+  /** The read-only batch record ("See the full batch record"). */
   fullRecordHref: string;
   /** Packaging step (ADR-088 §3): the wrappers taken at Get materials and the label button. */
   packaging?: StepCardView["packaging"];
+  /** "Not yet": an earlier step is open; no form is shown (the banner above links to the right step). */
+  blocked?: boolean;
+  /** The signed-in person: may they sign the second check of this step on their own device? */
+  viewer: StepCardView["viewer"];
+  /** Steps that need equipment (mixer, mould…): what was used and the list to choose from. */
+  equipment: StepCardView["equipment"];
 };
 
 /** Plain question under a configured field name (the step's own names are configuration, ADR-088). */
@@ -107,9 +168,17 @@ export function StepCard(p: Props) {
         aria-label="What to do"
       >
         {step.instruction ? (
-          <p className="whitespace-pre-line text-[18px] leading-snug text-fg">
-            {step.instruction}
-          </p>
+          <>
+            <p className="whitespace-pre-line text-[18px] leading-snug text-fg">
+              {plainWords(step.instruction)}
+            </p>
+            {(plainWords(step.instruction) !== step.instruction || plainWords(step.name) !== step.name) && (
+              <details className="mt-2 text-[13px] text-muted">
+                <summary className="min-h-[44px] cursor-pointer py-2">Exact words of the step setup</summary>
+                <p className="whitespace-pre-line">{step.name}: {step.instruction}</p>
+              </details>
+            )}
+          </>
         ) : (
           <p className="text-[16px] text-muted">
             No instruction for this step.
@@ -139,7 +208,10 @@ export function StepCard(p: Props) {
       </section>
       <div className="grid min-w-0 content-start gap-4">
         {p.packaging && <PackagingBox batchId={p.batchId} stepNo={step.stepNo} packaging={p.packaging} canPerform={p.canPerform} done={step.status === "completed"} />}
-        {step.status === "completed" ? (
+        {p.equipment && <EquipmentBox {...p} equipment={p.equipment} />}
+        {p.blocked && step.status !== "completed" ? (
+          <p className="text-[15px] text-muted" data-testid="step-not-yet">This step opens when the earlier steps are done (see the yellow box above).</p>
+        ) : step.status === "completed" ? (
           p.nextHref && p.nextLabel ? (
             <Link
               href={p.nextHref}
@@ -159,7 +231,7 @@ export function StepCard(p: Props) {
           </Link>
         ) : step.isTransfer ? (
           <Link
-            href={`${p.fullRecordHref}/finish`}
+            href={p.finishHref}
             className="inline-flex min-h-[56px] w-full items-center justify-center rounded-full bg-cta px-8 text-[17px] font-semibold text-white"
           >
             Go to Finish
@@ -173,6 +245,55 @@ export function StepCard(p: Props) {
         )}
       </div>
     </div>
+  );
+}
+
+/** The equipment used on this step (mixer, mould, pot): pick it from the list; warnings stay on record. */
+function EquipmentBox(p: Props & { equipment: NonNullable<Props["equipment"]> }) {
+  const { step, equipment } = p;
+  const [state, action] = useInPlaceAction(equipmentCardAction);
+  const open = step.status === "pending" || step.status === "in_progress";
+  return (
+    <section className="rounded-[16px] border border-line bg-surface p-4" aria-label="Equipment" data-testid="step-equipment">
+      <h2 className="flex items-center gap-2 text-[17px] font-semibold text-fg">
+        <Wrench size={18} aria-hidden /> Equipment for this step
+      </h2>
+      {equipment.uses.length > 0 ? (
+        <p className="mt-1 text-[16px] text-fg-2">
+          Using {equipment.uses.map((u) => `${u.code}${u.reasons.length ? ` (warnings: ${u.reasons.join(", ")})` : ""}${u.override ? " (approved)" : ""}`).join(", ")}
+        </p>
+      ) : (
+        <p className="mt-1 text-[15px] text-muted">Choose what you use before Step done.</p>
+      )}
+      {open && p.canPerform && equipment.canChoose && (
+        equipment.options.length ? (
+          <form action={action} className="mt-3 grid gap-2">
+            <input type="hidden" name="batchId" value={p.batchId} />
+            <input type="hidden" name="stepNo" value={step.stepNo} />
+            <div className="grid gap-2 sm:grid-cols-2">
+              {equipment.options.map((o) => (
+                <label key={o.id} className={cx("flex min-h-[56px] cursor-pointer items-center gap-3 rounded-[14px] border px-3 py-2 text-[16px]", o.usable ? "border-line-strong bg-surface" : "border-line bg-surface-2 text-muted")}>
+                  <input type="radio" name="equipmentRef" value={o.code} disabled={!o.usable} required className="size-5" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium text-fg">{o.name}</span>
+                    <span className="block text-[13px] text-muted">
+                      {o.code}
+                      {!o.usable && o.blocking.length ? ` · cannot be used: ${o.blocking.join(", ")}` : o.reasons.length ? ` · ${o.reasons.join(", ")}` : ""}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <SubmitButton variant="secondary" size="lg" pendingText="Saving…">
+              Use this equipment
+            </SubmitButton>
+            <FormMessage state={state} />
+          </form>
+        ) : (
+          <p className="mt-2 text-[15px] text-[var(--warn-fg)]">No {equipment.kind ?? "equipment"} is set up at this site. Ask the site manager.</p>
+        )
+      )}
+    </section>
   );
 }
 
@@ -514,7 +635,7 @@ function FieldsCard(p: Props) {
         <input
           type="hidden"
           name="parameterIds"
-          value={step.fields.map((f) => f.id).join(",")}
+          value={[...step.fields, ...step.moreFields].map((f) => f.id).join(",")}
         />
         {step.fields.length === 0 && (
           <p className="text-[16px] text-muted">
@@ -621,17 +742,26 @@ function FieldsCard(p: Props) {
               Note
               <Textarea name="notes" className="text-[16px]" />
             </label>
-            {(step.moreFields.length > 0 || step.requiresEquipment) && (
-              <Link
-                href={p.fullRecordHref}
-                className="text-primary-text underline"
-              >
-                {step.requiresEquipment
-                  ? "Choose the equipment"
-                  : "More fields"}{" "}
-                on the full batch record
-              </Link>
-            )}
+            {step.moreFields.map((f) => (
+              <label key={f.id} className="flex flex-col gap-1 text-[15px] font-medium">
+                {f.name}
+                {f.uom ? ` (${f.uom})` : ""}
+                {f.minValue || f.maxValue ? <span className="text-[13px] font-normal text-muted">OK {f.limits}</span> : null}
+                <Input
+                  name={`param-${f.id}`}
+                  defaultValue={f.reading?.value ?? ""}
+                  inputMode={f.valueKind === "numeric" ? "decimal" : undefined}
+                  className="min-h-[52px] text-[16px]"
+                />
+                {f.reading && (
+                  <span className="text-[13px] font-normal text-muted">
+                    Saved: {f.reading.value}
+                    {f.reading.isWithinLimits ? "" : " (outside the range)"}. To change it, type the new value and say why:
+                    <Input name={`correction-${f.id}`} placeholder="Why change it?" className="mt-1 min-h-[48px] text-[15px]" />
+                  </span>
+                )}
+              </label>
+            ))}
           </div>
         </details>
         {step.blockers.length > 0 && (

@@ -1,16 +1,18 @@
 "use client";
 import Decimal from "decimal.js";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Circle, UserCheck } from "lucide-react";
+import { AlertTriangle, Camera, CheckCircle2, Circle, UserCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { fmtDate, fmtMass, fmtQty } from "@/lib/qty";
 import type { WeighView } from "@/modules/production";
 import { Button, cx, Input, Select } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { Keypad, KeypadField } from "@/ui/keypad";
+import { Scanner } from "@/ui/scanner";
 import { Chip } from "@/ui/status";
 import {
   checkWeighingAction,
+  checkWeighingOwnAction,
   stepDoneAction,
   weighAction,
   type FlowActionState,
@@ -48,7 +50,10 @@ export function WeighFlow(p: {
   totalTarget: string;
   stepBlockers: string[];
   nextHref: string | null;
-  fullRecordHref: string;
+  /** "Other ways to weigh" for one ingredient (container weight, two lots, approval, undo): `${moreHref}&line=<id>`. */
+  moreHref: string;
+  /** The signed-in person: may they confirm a weighing in their own name (own phone)? */
+  viewer: { userId: string; displayName: string; canCheck: boolean };
 }) {
   const firstOpen = Math.max(
     0,
@@ -124,6 +129,7 @@ export function WeighFlow(p: {
               weighing={card.waitingForCheck[0]}
               checkers={p.checkers}
               passwordRequired={p.passwordRequired}
+              viewer={p.viewer}
             />
           ) : card.done ? (
             <p className="rounded-[20px] border border-line bg-surface p-5 text-[17px]">
@@ -150,9 +156,26 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
   const [lotIdx, setLotIdx] = useState(0);
   const [lotCode, setLotCode] = useState("");
   const [qty, setQty] = useState("");
-  const [active, setActive] = useState<"lot" | "qty">(
-    p.lotConfirm === "last4" ? "lot" : "qty",
-  );
+  // UX audit 2026-10-31 item 5: the label is scanned with the camera (or a scanner); typing the last 4
+  // stays only as the fallback for a damaged label (the lot confirmation of ADR-080 §3 is kept).
+  const [typeLast4, setTypeLast4] = useState(false);
+  const [camera, setCamera] = useState(false);
+  const [scanNote, setScanNote] = useState<string | null>(null);
+  const [active, setActive] = useState<"lot" | "qty">("qty");
+  const onScan = (raw: string) => {
+    const code = raw.trim().toUpperCase().replace(/^BC:LOT:/, "");
+    const alnum = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const i = card.lots.findIndex((l) => alnum(l.lotNumber) === alnum(code));
+    if (i >= 0) {
+      setLotIdx(i);
+      setLotCode(`BC:LOT:${card.lots[i].lotNumber}`);
+      setScanNote(null);
+      setCamera(false);
+    } else {
+      setLotCode("");
+      setScanNote(`This label says ${code}. Take a lot from the list for ${card.materialName}.`);
+    }
+  };
   const [scale, setScale] = useState(
     p.scales.find((s) => s.usable)?.code ?? "",
   );
@@ -254,37 +277,43 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
           <input type="hidden" name="equipmentRef" value={scale} />
         )}
         <div className="grid gap-3">
-          {p.lotConfirm === "last4" && (
-            <>
-              <input type="hidden" name="lotConfirm" value={lotCode} />
-              <KeypadField
-                id={`lot-${card.batchMaterialId}`}
-                label="Last 4 of the lot on the label"
-                value={lotCode}
-                active={active === "lot"}
-                onFocus={() => setActive("lot")}
-                error={fe.lotConfirm ?? null}
-              />
-            </>
-          )}
-          {p.lotConfirm === "scan" && (
-            <label className="flex flex-col gap-1 text-[15px] font-medium">
-              Scan the lot label
-              <Input
-                name="lotConfirm"
-                value={lotCode}
-                onChange={(e) => setLotCode(e.target.value)}
-                autoComplete="off"
-                placeholder="BC:LOT:…"
-                className="min-h-[56px] font-mono text-[18px]"
-              />
-              {fe.lotConfirm && (
-                <span className="text-[13px] text-[var(--bad-fg)]">
-                  {fe.lotConfirm}
-                </span>
+          {p.lotConfirm === "last4" && <input type="hidden" name="lotConfirm" value={lotCode} />}
+          {p.lotConfirm !== "none" && (
+            <div className="grid gap-2" data-testid="lot-scan">
+              {lotCode.startsWith("BC:LOT:") ? (
+                <p className="inline-flex items-center gap-2 text-[16px] font-semibold text-[var(--ok-fg)]">
+                  <CheckCircle2 size={18} aria-hidden /> Label scanned: lot {lotCode.slice(7)}
+                </p>
+              ) : !camera ? (
+                <Button type="button" variant="secondary" size="lg" onClick={() => setCamera(true)}>
+                  <Camera size={18} aria-hidden /> Scan the lot label
+                </Button>
+              ) : (
+                <div className="rounded-[14px] bg-surface-2 p-3">
+                  <Scanner onScan={onScan} autoFocus={false} label="Point the camera at the lot label on the container" placeholder="Lot label" />
+                </div>
               )}
-            </label>
+              {scanNote && <p className="text-[14px] text-[var(--bad-fg)]">{scanNote}</p>}
+              {fe.lotConfirm && <p className="text-[14px] text-[var(--bad-fg)]">{fe.lotConfirm}</p>}
+              {p.lotConfirm === "last4" && !lotCode.startsWith("BC:LOT:") && (
+                !typeLast4 ? (
+                  <button type="button" className="min-h-[44px] text-left text-[14px] text-primary-text underline" onClick={() => { setTypeLast4(true); setActive("lot"); }}>
+                    Label damaged? Type the last 4 characters instead
+                  </button>
+                ) : (
+                  <KeypadField
+                    id={`lot-${card.batchMaterialId}`}
+                    label="Last 4 of the lot on the label"
+                    value={lotCode}
+                    active={active === "lot"}
+                    onFocus={() => setActive("lot")}
+                    error={null}
+                  />
+                )
+              )}
+            </div>
           )}
+          {p.lotConfirm === "scan" && <input type="hidden" name="lotConfirm" value={lotCode} />}
           <KeypadField
             id={`qty-${card.batchMaterialId}`}
             label="Weight"
@@ -320,7 +349,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
                 Weigh again
               </Button>
               <Link
-                href={p.fullRecordHref}
+                href={`${p.moreHref}&line=${card.batchMaterialId}`}
                 className="inline-flex min-h-[52px] items-center rounded-full border border-line px-5 text-[15px] text-fg"
               >
                 Ask for approval
@@ -364,11 +393,10 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
                 </label>
               )}
               <Link
-                href={p.fullRecordHref}
-                className="text-primary-text underline"
+                href={`${p.moreHref}&line=${card.batchMaterialId}`}
+                className="inline-flex min-h-[44px] items-center text-primary-text underline"
               >
-                Container weight, split over two lots, undo a weighing (full
-                batch record)
+                Container weight, split over two lots, undo a weighing
               </Link>
             </div>
           </details>
@@ -403,16 +431,35 @@ function SecondCheck({
   weighing,
   checkers,
   passwordRequired,
+  viewer,
 }: {
   batchId: string;
   card: Card;
   weighing: Card["waitingForCheck"][number];
   checkers: Person[];
   passwordRequired: boolean;
+  viewer: { userId: string; displayName: string; canCheck: boolean };
 }) {
   const [state, action] = useInPlaceAction(checkWeighingAction);
+  const [ownState, ownAction] = useInPlaceAction(checkWeighingOwnAction);
   const [who, setWho] = useState<Person | null>(null);
   const others = checkers.filter((c) => c.id !== weighing.operatorId);
+  // The checker opened this screen on their own phone: one tap in their own name (own session).
+  if (viewer.canCheck && viewer.userId !== weighing.operatorId)
+    return (
+      <form action={ownAction} className="grid gap-3 rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" data-testid="own-weigh-check">
+        <input type="hidden" name="batchId" value={batchId} />
+        <input type="hidden" name="dispenseRecordId" value={weighing.id} />
+        <h2 className="text-[22px] font-semibold text-fg">
+          {viewer.displayName}, did you watch {weighing.operator} weigh {g(weighing.qtyG)} of {card.materialName}, lot {weighing.lotNumber}?
+        </h2>
+        <p className="text-[15px] text-muted">You sign with your own account.</p>
+        <SubmitButton variant="cta" size="lg" pendingText="Saving…">
+          <UserCheck size={20} aria-hidden /> Yes, I checked it
+        </SubmitButton>
+        <FormMessage state={ownState} />
+      </form>
+    );
   return (
     <section
       className="rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5"
@@ -445,8 +492,8 @@ function SecondCheck({
             </div>
           ) : (
             <p className="mt-4 text-[16px]">
-              No one else here can check. Ask the owner or the production lead
-              to approve it on the full batch record.
+              No one else here can check. The checker opens this Weigh screen on
+              their own phone and confirms it there.
             </p>
           )}
           <p className="mt-3 text-[13px] text-muted">

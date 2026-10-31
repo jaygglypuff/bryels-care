@@ -267,6 +267,18 @@ export async function getQualityCheck(ctx: AuthContext, batchId: string) {
         }
       : null,
     planDriven: !!batch.inspectionPlanId,
+    /** Batches without a test list: results typed by hand (one place, 2026-10-31 audit item 4). Live rows only. */
+    freeTests: batch.inspectionPlanId
+      ? []
+      : (
+          await db
+            .select({ id: testResults.id, name: testResults.testName, result: testResults.result, passed: testResults.passed, supersedesId: testResults.supersedesId, by: users.displayName })
+            .from(testResults)
+            .innerJoin(users, eq(users.id, testResults.testedBy))
+            .where(eq(testResults.batchId, batch.id))
+            .orderBy(asc(testResults.testedAt))
+        ).filter((t, _i, all) => !all.some((x) => x.supersedesId === t.id)),
+    canRecordFreeTest: !batch.inspectionPlanId && ctx.can("quality.test_result.create") && ["in_process", "awaiting_qc", "quarantined"].includes(batch.status),
     blockers: stateBlockers,
     independence: { isMaker: !!mine, what: mine ? [...mine] : [], ownerOverride: ctx.ownerOverride },
     isTester: testers.has(ctx.userId),

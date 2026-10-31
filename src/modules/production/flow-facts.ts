@@ -5,6 +5,7 @@ import { batchMaterialPicks, batchMaterials, batches, processStepRecords } from 
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { type FormulaSnapshot, addDays, isWeighingStep, manilaToday } from "./shared";
+import { finishHref, firstStepNo, flowHref, qualityCheckHref } from "./flow-paths";
 
 /**
  * Production flow v2 (ADR-080, stage G2): the facts of a batch that the simple status read model
@@ -168,29 +169,31 @@ export type NextScreen = {
   stepNo: number | null;
 };
 
-/** The base path of the G2 operator screens of a batch. */
+/** The G2 operator screen of a batch; a batch without an order uses the `without-order` segment (flow-paths.ts). */
 export function flowPath(f: Pick<BatchFlowFacts, "workOrderId" | "batchId">, screen: "materials" | "weigh" | `step/${number}`): string {
-  return f.workOrderId ? `/production/orders/${f.workOrderId}/${screen}?batch=${f.batchId}` : `/production/${f.batchId}`;
+  return flowHref(f, screen);
 }
 
 /**
  * "What is the next screen for this batch" (ADR-080 §11, one big button). Pure: the hub (G1) calls it
- * with `batchFlowFacts`. Finish (G3) and Check quality (G3) link to the full batch record until built.
+ * with `batchFlowFacts`. Every href is a flow screen (flow-paths.ts), never the read-only batch record.
  */
-export function nextBatchScreen(f: BatchFlowFacts, now = new Date()): NextScreen {
+export function nextBatchScreen(f: BatchFlowFacts, now = new Date(), steps?: { stepNo: number }[]): NextScreen {
   const none: NextScreen = { action: "none", label: "", href: null, disabledReason: null, stepNo: null };
   if (f.status === "planned") {
     if (!f.pick.complete) return { action: "get_materials", label: "Get materials", href: flowPath(f, "materials"), disabledReason: null, stepNo: null };
   }
   if (f.status === "planned" || f.status === "materials_staged") {
     const s = f.currentStep;
-    return { action: "start", label: "Start", href: s ? flowPath(f, `step/${s.stepNo}`) : `/production/${f.batchId}`, disabledReason: null, stepNo: s?.stepNo ?? null };
+    const n = s?.stepNo ?? firstStepNo(steps);
+    return { action: "start", label: s?.status === "awaiting_check" ? `Check ${s.name}` : "Start", href: flowPath(f, `step/${n}`), disabledReason: null, stepNo: n };
   }
   if (f.status === "in_process" || f.status === "rework_approved") {
     const s = f.currentStep;
-    if (!s) return { action: "finish", label: "Go to Finish", href: `/production/${f.batchId}/finish`, disabledReason: null, stepNo: null };
+    if (f.status === "rework_approved") return { action: "step", label: "Redo", href: flowPath(f, `step/${s?.stepNo ?? firstStepNo(steps)}`), disabledReason: null, stepNo: s?.stepNo ?? null };
+    if (!s) return { action: "finish", label: "Go to Finish", href: finishHref(f.batchId), disabledReason: null, stepNo: null };
     if (isWeighingStep(s.kind)) return { action: "weigh", label: "Weigh", href: flowPath(f, "weigh"), disabledReason: null, stepNo: s.stepNo };
-    if (s.kind === "transfer") return { action: "finish", label: "Go to Finish", href: `/production/${f.batchId}/finish`, disabledReason: null, stepNo: s.stepNo };
+    if (s.kind === "transfer") return { action: "finish", label: "Go to Finish", href: finishHref(f.batchId), disabledReason: null, stepNo: s.stepNo };
     if (isWaitStep(s.kind) && s.status === "in_progress" && s.readyAt) {
       const word = /mou?ld/i.test(s.name) ? "Mould time finished" : s.kind === "hold" ? "Resting finished" : "Curing finished";
       const early = s.readyAt.getTime() > now.getTime();
@@ -204,7 +207,7 @@ export function nextBatchScreen(f: BatchFlowFacts, now = new Date()): NextScreen
     }
     return { action: "step", label: s.name, href: flowPath(f, `step/${s.stepNo}`), disabledReason: null, stepNo: s.stepNo };
   }
-  if (f.status === "awaiting_qc" || f.status === "quarantined") return { action: "quality_check", label: "Check quality", href: `/production/${f.batchId}`, disabledReason: null, stepNo: null };
+  if (f.status === "awaiting_qc" || f.status === "quarantined") return { action: "quality_check", label: "Check quality", href: qualityCheckHref(f.batchId), disabledReason: null, stepNo: null };
   return none;
 }
 

@@ -314,7 +314,7 @@ export async function packagingLotOptions(ctx: AuthContext, siteId: string) {
   ctx.requireSite(siteId);
   const today = manilaToday();
   return db
-    .select({ lotId: inventoryLots.id, lotNumber: inventoryLots.lotNumber, materialCode: materials.code, materialName: materials.name, expiresOn: inventoryLots.expiresOn, locationCode: locations.code, qty: inventoryBalances.qtyBase, uom: inventoryLots.baseUom })
+    .select({ lotId: inventoryLots.id, lotNumber: inventoryLots.lotNumber, materialCode: materials.code, materialName: materials.name, expiresOn: inventoryLots.expiresOn, locationId: locations.id, locationCode: locations.code, locationName: locations.name, qty: inventoryBalances.qtyBase, uom: inventoryLots.baseUom })
     .from(inventoryLots)
     .innerJoin(materials, eq(materials.id, inventoryLots.materialId))
     .innerJoin(inventoryBalances, eq(inventoryBalances.lotId, inventoryLots.id))

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
-import { getWorkOrder, progressLabel, workOrderFormOptions, type WorkOrderDetail } from "@/modules/production";
+import { batchRecordHref, continueHref, getWorkOrder, progressLabel, workOrderFormOptions, type WorkOrderDetail } from "@/modules/production";
 import { Card, CardTitle, Dl, EmptyState, Field, LinkButton, PageHeader, Table, Td, Textarea, cx } from "@/ui/core";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -158,7 +158,7 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 {d.batches.map((b) => (
-                  <Link key={b.id} href={b.status === "planned" ? `/production/staging/${b.id}` : `/production/${b.id}`} className="block rounded-[16px] border border-line bg-surface p-3.5 hover:shadow-sm">
+                  <Link key={b.id} href={["planned", "materials_staged", "in_process", "rework_approved"].includes(b.status) ? continueHref({ batchId: b.id, workOrderId: wo.id }) : batchRecordHref(b.id)} className="block rounded-[16px] border border-line bg-surface p-3.5 hover:shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-mono text-[13px] font-semibold">{b.batchNumber}</span>
                       <StatusChip status={b.status} />

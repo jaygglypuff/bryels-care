@@ -2,13 +2,13 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
-import { processStepRecords } from "@/db/schema";
+import { processStepRecords, products } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
 import { checkPermission, findStep, finishStep, openStep, performPermission, sortedSteps, stepRecords } from "./execution";
 import { postPackagingConsumption } from "./execution-postings";
-import { getBatchExecution, signerOptions } from "./execution-queries";
+import { equipmentOptions, getBatchExecution, packagingLotOptions, signerOptions } from "./execution-queries";
 import { currentStepOf, isWaitStep, shortDay, waitLabel } from "./flow-facts";
 import { currentPackaging, RECONCILED_STEP_KINDS } from "./packaging";
 import { batchLabelInfo, issueTakenPackagingLocked, packagingLinesOf } from "./packaging-flow";
@@ -46,6 +46,8 @@ export async function getStepCard(ctx: AuthContext, batchId: string, stepNo: num
   const blockedReason =
     b.status === "planned"
       ? "Get the materials first."
+      : b.status === "rework_approved"
+        ? `QA asked for a redo of batch ${b.batchNumber}. The redo steps are agreed with QA first; QA records the redo on the quality check.`
       : !executable
         ? b.status === "materials_staged"
           ? `Do the Start check first.`
@@ -53,7 +55,25 @@ export async function getStepCard(ctx: AuthContext, batchId: string, stepNo: num
         : earlier
           ? `Finish "${earlier.name}" first.`
           : null;
-  const canPerform = ctx.can(performPermission(step.stepKind));
+  const canPerform = ctx.can(performPermission(step.stepKind)) && ctx.canAt(performPermission(step.stepKind), b.siteId);
+  // The person looking at the screen (own phone): may they sign the second-person check of this step?
+  const checkPerm = checkPermission(step.stepKind);
+  const viewer = {
+    userId: ctx.userId,
+    displayName: ctx.displayName,
+    canCheck: ctx.can(checkPerm) && ctx.canAt(checkPerm, b.siteId),
+    isDoer: !!step.record && step.record.conductedById === ctx.userId,
+  };
+  // Equipment of the step (old workspace parity): chosen on the step screen, not on the batch record.
+  const needsEquipment = !!step.requiresEquipment && !isWeighingStep(step.stepKind);
+  const equipment = needsEquipment
+    ? {
+        kind: step.equipmentKind ?? null,
+        uses: step.equipmentUses.map((u) => ({ code: u.code, reasons: u.reasons, override: !!u.override })),
+        options: (await equipmentOptions(ctx, b.siteId, step.equipmentKind ?? null)).map((o) => ({ id: o.id, code: o.code, name: o.name, usable: o.usable, reasons: o.reasons, blocking: o.blocking })),
+        canChoose: ctx.can("production.equipment_use.create"),
+      }
+    : null;
   const checkers = step.requiresChecker ? await signerOptions(ctx, b.siteId, checkPermission(step.stepKind)) : [];
   const approvers = isWaitStep(step.stepKind) || step.parameters.length ? await signerOptions(ctx, b.siteId, "production.over_tolerance_dispense.approve") : [];
   // ADR-088 §3: the packaging step shows the wrappers/labels taken at Get materials and the label button.
@@ -94,14 +114,9 @@ export async function getStepCard(ctx: AuthContext, batchId: string, stepNo: num
     next: next ? { stepNo: next.stepNo, name: next.name, kind: next.stepKind } : null,
     isLastMakingStep: !!next && next.stepKind === "transfer",
     current: current ? { stepNo: current.stepNo, name: current.name } : null,
-    packaging: isPackaging
-      ? {
-          lines: packagingLines,
-          /** Nothing on the list and nothing recorded: the operator scans (or types) the lot used (fallback). */
-          needsScan: issuedHere.length === 0 && !packagingLines.some((l) => l.plan.length > 0 || l.issued.length > 0),
-          labels: await batchLabelInfo(ctx, b),
-        }
-      : null,
+    packaging: isPackaging ? await packagingBox(ctx, b, packagingLines, issuedHere.length) : null,
+    viewer,
+    equipment,
     blockedReason,
     canPerform: canPerform && !blockedReason && step.status !== "completed",
     checkers: checkers.map((c) => ({ id: c.id, displayName: c.displayName })),
@@ -110,6 +125,45 @@ export async function getStepCard(ctx: AuthContext, batchId: string, stepNo: num
   };
 }
 export type StepCardView = Awaited<ReturnType<typeof getStepCard>>;
+
+/**
+ * The packaging box of the packaging step (ADR-092 and the one-path fix of 2026-10-31). With packaging
+ * lines (recipe or per-piece setup) it shows the lots taken at Get materials. Without any (older recipes),
+ * it offers the released packaging lots at the site as tap-to-choose cards (name, lot, shelf, quantity)
+ * and the camera scanner; nobody types a code. `recorded` = issues already recorded on this step.
+ */
+async function packagingBox(ctx: AuthContext, b: Awaited<ReturnType<typeof getBatchExecution>>["batch"], lines: Awaited<ReturnType<typeof packagingLinesOf>>, recorded: number) {
+  const fromList = lines.some((l) => l.plan.length > 0 || l.issued.length > 0);
+  const labels = await batchLabelInfo(ctx, b);
+  const choose = !fromList;
+  const choices = choose
+    ? (await packagingLotOptions(ctx, b.siteId)).map((o) => ({
+        lotId: o.lotId,
+        lotNumber: o.lotNumber,
+        materialName: o.materialName,
+        locationId: o.locationId,
+        shelf: o.locationName || o.locationCode,
+        qty: new Decimal(o.qty).toString(),
+        uom: o.uom,
+        expiresOn: o.expiresOn,
+      }))
+    : [];
+  return {
+    lines,
+    /** Nothing on the materials list: the operator picks the lot used from `choices` (or scans it). */
+    needsScan: choose && recorded === 0,
+    /** No packaging line: lots to choose from, first expiry first. */
+    choose,
+    choices,
+    recorded,
+    labels: { ...labels, productName: ((await productNameOf(b.productId)) ?? "") as string },
+  };
+}
+
+async function productNameOf(productId: string) {
+  const [p] = await db.select({ name: products.name }).from(products).where(eq(products.id, productId)).limit(1);
+  return p?.name ?? null;
+}
 
 export type StepDoneInput = {
   batchId: string;

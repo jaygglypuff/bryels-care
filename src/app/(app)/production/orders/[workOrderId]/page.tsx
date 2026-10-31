@@ -1,10 +1,10 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
-import { assigneeChoices, defectTypes, getProductionOrder, type DailyLogRow, type ProductionOrderView } from "@/modules/production";
+import { assigneeChoices, batchRecordHref, continueHref, defectTypes, getProductionOrder, NO_ORDER_SEGMENT, type DailyLogRow, type ProductionOrderView } from "@/modules/production";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { Help } from "@/ui/help/help";
@@ -79,7 +79,7 @@ function BatchRows({ v }: { v: ProductionOrderView }) {
               </p>
             </div>
             <div className="min-w-[160px]">
-              {b.action.kind === "none" ? <p className="text-[13px] text-muted">{b.action.hint}</p> : <ActionButton a={b.action} size="md" />}
+              {b.action.kind === "none" ? <p className="text-[13px] text-muted">{b.action.hint}</p> : <ActionButton a={b.action} size="md" secondary />}
             </div>
           </li>
         ))}
@@ -138,6 +138,8 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
   const ctx = await requireContext();
   if (!ctx.can("production.work_order.view")) return <Forbidden what="production orders" />;
   const { workOrderId } = await params;
+  // Flow screens of a batch without an order live under /production/orders/without-order/…; it has no hub.
+  if (workOrderId === NO_ORDER_SEGMENT) redirect("/production/orders");
   const sp = await searchParams;
   const tab: Tab = TABS.some(([k]) => k === sp.tab) ? (sp.tab as Tab) : "today";
   let v: ProductionOrderView;
@@ -327,12 +329,12 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {v.batches.map((b) => (
-                    <Link key={b.id} href={b.status === "planned" ? `/production/orders/${wo.id}/materials?batch=${b.id}` : `/production/${b.id}`} className="block rounded-[16px] border border-line bg-surface p-3.5 hover:shadow-sm">
+                    <Link key={b.id} href={["planned", "materials_staged", "in_process", "rework_approved"].includes(b.status) ? continueHref({ batchId: b.id, workOrderId: wo.id }) : batchRecordHref(b.id)} className="block rounded-[16px] border border-line bg-surface p-3.5 hover:shadow-sm">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-mono text-[13px] font-semibold">{b.batchNumber}</span>
                         <Chip tone={b.status === "closed" || b.status === "released" ? "ok" : b.status === "rejected" ? "rej" : "info"}>{b.word}</Chip>
                       </div>
-                      <p className="mt-1 text-[13px] text-muted">Open the full batch record</p>
+                      <p className="mt-1 text-[13px] text-muted">{["planned", "materials_staged", "in_process", "rework_approved"].includes(b.status) ? "Continue this batch" : "See the full batch record"}</p>
                     </Link>
                   ))}
                 </div>

@@ -164,7 +164,7 @@ export function DailyLogForm({ workOrderId, defectTypes, batches, today, initial
       hidden={correcting ? { logId: initial.logId } : { workOrderId }}
       submit={correcting ? "Save correction" : "Save to daily log"}
       pending="Saving…"
-      variant={correcting ? "primary" : "cta"}
+      variant={correcting ? "primary" : "secondary"}
       className="flex flex-col gap-4"
     >
       {(fe) => (

@@ -2,13 +2,15 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { getStepCard, nextBatchScreen, type StepCardView } from "@/modules/production";
+import Link from "next/link";
+import { batchRecordHref, finishHref, getStepCard, nextBatchScreen, type StepCardView } from "@/modules/production";
 import { LinkButton } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
 import { Help } from "@/ui/help/help";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../../../forbidden";
-import { FlowHeader, NoBatch, pickBatch } from "../../flow-shared";
+import { FlowHeader, NoBatch, orderHrefOf, pickBatch } from "../../flow-shared";
+import { plainWords } from "@/modules/production/plain-words";
 import { StepCard } from "./step-card";
 
 export const metadata: Metadata = { title: "Step" };
@@ -32,12 +34,14 @@ export default async function StepPage({ params, searchParams }: { params: Promi
   const stepNo = Number(n);
   if (!Number.isInteger(stepNo) || stepNo < 1 || stepNo > 999) notFound();
   const { batch: batchParam } = await searchParams;
-  const orderHref = `/production/orders/${workOrderId}`;
+  let orderHref = orderHrefOf(workOrderId);
   let v: StepCardView;
   let facts;
   try {
-    const { batch } = await pickBatch(ctx, workOrderId, batchParam, (f) => f.currentStep?.stepNo === stepNo);
+    const picked = await pickBatch(ctx, workOrderId, batchParam, (f) => f.currentStep?.stepNo === stepNo);
+    const batch = picked.batch;
     if (!batch) return <NoBatch orderHref={orderHref}>This order has no batch yet. Approve it first.</NoBatch>;
+    orderHref = picked.backHref;
     facts = batch;
     v = await getStepCard(ctx, batch.batchId, stepNo);
   } catch (e) {
@@ -47,11 +51,11 @@ export default async function StepPage({ params, searchParams }: { params: Promi
   const b = v.batch;
   const href = (s: number) => `/production/orders/${workOrderId}/step/${s}?batch=${b.id}`;
   const next = nextBatchScreen(facts);
-  const nextHref = v.next ? (v.next.kind === "dispensing" || v.next.kind === "weighing" ? `/production/orders/${workOrderId}/weigh?batch=${b.id}` : v.next.kind === "transfer" ? `/production/${b.id}` : href(v.next.stepNo)) : null;
+  const nextHref = v.next ? (v.next.kind === "dispensing" || v.next.kind === "weighing" ? `/production/orders/${workOrderId}/weigh?batch=${b.id}` : v.next.kind === "transfer" ? finishHref(b.id) : href(v.next.stepNo)) : null;
   return (
     <div className="mx-auto max-w-5xl pb-24 text-[16px]">
       <FlowHeader
-        title={v.step.name}
+        title={plainWords(v.step.name)}
         batchNumber={b.batchNumber}
         orderHref={orderHref}
         progress={<span>Step {v.step.index} of {v.step.total}</span>}
@@ -80,9 +84,18 @@ export default async function StepPage({ params, searchParams }: { params: Promi
         nextHref={nextHref}
         nextLabel={v.next ? (v.next.kind === "transfer" ? "Go to Finish" : v.next.kind === "dispensing" || v.next.kind === "weighing" ? "Weigh" : v.next.name) : null}
         weighHref={`/production/orders/${workOrderId}/weigh?batch=${b.id}`}
-        fullRecordHref={`/production/${b.id}`}
+        finishHref={finishHref(b.id)}
+        fullRecordHref={batchRecordHref(b.id)}
         packaging={v.packaging}
+        blocked={!!v.blockedReason}
+        viewer={v.viewer}
+        equipment={v.equipment}
       />
+      <p className="mt-6 text-[15px]">
+        <Link href={batchRecordHref(b.id)} className="inline-flex min-h-[44px] items-center text-primary-text underline">
+          See the full batch record
+        </Link>
+      </p>
     </div>
   );
 }
