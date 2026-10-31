@@ -1,7 +1,8 @@
 "use client";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { Field, Input, Select, Textarea, cx } from "@/ui/core";
 import { MoreDetails } from "@/ui/guide";
+import { ScanOrPick } from "@/ui/scan-or-pick";
 import { ActionForm, FormMessage, SubmitButton } from "@/ui/form";
 import {
   bulkDispositionAction,
@@ -34,23 +35,25 @@ export function SampleForm({ inspectionId, locations, uom }: { inspectionId: str
     <ActionForm action={recordSampleAction} hidden={{ inspectionId }} submit="Save sample" pending="Saving…" variant="secondary" confirm="This amount is taken out of stock as a sample. Continue?">
       {(fe) => (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Taken from (place)" htmlFor="fromLocationId" error={fe.fromLocationId}>
-            <Select id="fromLocationId" name="fromLocationId" required defaultValue={locations[0]?.id ?? ""}>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.code} ({l.qty} {uom})
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <div className="sm:col-span-2">
+            <ScanOrPick
+              kind="location"
+              name="fromLocationId"
+              label="Taken from which place?"
+              candidates={locations.map((l) => ({ value: l.id, title: l.code, detail: `${l.qty} ${uom} here`, code: l.code, codes: [l.code] }))}
+              hideWhenSingle
+              onlyCandidates
+              search={false}
+              required
+              error={fe.fromLocationId}
+            />
+          </div>
           <Field label={`How much (${uom})`} htmlFor="qty" error={fe.qty}>
             <Input id="qty" name="qty" required inputMode="decimal" autoComplete="off" />
           </Field>
           <div className="sm:col-span-2">
             <MoreDetails>
-              <Field label="Box it came from (optional: scan the box label)" htmlFor="containerRef" error={fe.containerRef}>
-                <Input id="containerRef" name="containerRef" autoComplete="off" />
-              </Field>
+              <ScanOrPick kind="container" name="containerRef" submit="code" label="Box it came from (optional)" hint="Scan the box label, or find the box by what is inside." error={fe.containerRef} />
               <Field label="Note (optional)" htmlFor="note" error={fe.note}>
                 <Input id="note" name="note" maxLength={500} />
               </Field>
@@ -243,15 +246,11 @@ export function ContainForm({ deviationId, defaultLot, reasonCodes }: { deviatio
       {(fe) => (
         <>
           {defaultLot ? (
-            <MoreDetails title="Stop a different lot (scan its label)">
-              <Field label="Other lot (scan the label)" htmlFor="lotRef" error={fe.lotRef ?? fe.lot} hint={`Leave empty to stop ${defaultLot}.`}>
-                <Input id="lotRef" name="lotRef" autoComplete="off" />
-              </Field>
+            <MoreDetails title="Stop a different lot">
+              <ScanOrPick kind="lot" name="lotRef" label="Other lot" hint={`Choose none to stop ${defaultLot}.`} error={fe.lotRef ?? fe.lot} />
             </MoreDetails>
           ) : (
-            <Field label="Lot to stop (scan the label)" htmlFor="lotRef" error={fe.lotRef ?? fe.lot}>
-              <Input id="lotRef" name="lotRef" autoComplete="off" />
-            </Field>
+            <ScanOrPick kind="lot" name="lotRef" label="Lot to stop" required error={fe.lotRef ?? fe.lot} />
           )}
           <Field label="Kind of reason" htmlFor="reasonCode" error={fe.reasonCode}>
             <Select id="reasonCode" name="reasonCode" defaultValue="investigation">
@@ -445,31 +444,26 @@ export function BulkForm({ rows, reasonCodes }: { rows: BulkRow[]; reasonCodes: 
 }
 
 export function VerifyScanForm({ locationId }: { locationId: string }) {
-  const [state, dispatch] = useActionState<VerifyState, FormData>(async (p, fd) => {
-    const r = await verifyLabelAction(p, fd);
-    ref.current?.reset();
-    setTimeout(() => input.current?.focus(), 0);
-    return r;
-  }, null);
-  const ref = useRef<HTMLFormElement>(null);
-  const input = useRef<HTMLInputElement>(null);
+  // Each label is checked by a real scan (camera or handheld scanner): this IS the check, so nothing is
+  // tapped or typed (owner review 2026-10-31). The scanned value is sent with the form.
+  const [state, dispatch] = useActionState<VerifyState, FormData>(verifyLabelAction, null);
+  const [pending, startVerify] = useTransition();
+  const send = (scan: string) => {
+    const fd = new FormData();
+    fd.set("locationId", locationId);
+    fd.set("scan", scan);
+    startVerify(() => dispatch(fd));
+  };
   return (
-    <form ref={ref} action={dispatch} className="flex flex-col gap-3">
-      <input type="hidden" name="locationId" value={locationId} />
-      <Field label="Scan a box or lot label" htmlFor="scan" error={state?.fieldErrors?.scan} hint="The scanner sends it by itself. A label that will not scan: type what is under the barcode and press Enter.">
-        <Input ref={input} id="scan" name="scan" required autoFocus autoComplete="off" inputMode="text" />
-      </Field>
+    <div className="flex flex-col gap-3">
+      <ScanOrPick mode="emit" kind="container" alsoAccept={["lot"]} id="verify-scan" label="Scan a box or lot label" hint="Each scan is checked against the record. A label that will not scan: print a new one and destroy the old one." search={false} pending={pending} onEmit={(v) => send(v)} error={state?.fieldErrors?.scan} />
+      {pending && <p className="text-[13px] text-muted" role="status">Checking…</p>}
       {state?.ok && state.message && (
         <p role="status" className={cx("rounded-[10px] border px-3 py-2 text-[14px] font-medium", state.last?.status === "verified" ? "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]" : "border-[var(--warn-bd)] bg-[var(--warn-bg)] text-[var(--warn-fg)]")}>
           {state.message}
         </p>
       )}
       {state && !state.ok && <FormMessage state={state} />}
-      <div>
-        <SubmitButton variant="cta" pendingText="Checking…">
-          Check this label
-        </SubmitButton>
-      </div>
-    </form>
+    </div>
   );
 }

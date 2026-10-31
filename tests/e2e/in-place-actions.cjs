@@ -13,6 +13,15 @@ const PW = 'demo1234';
 const manilaDate = (o = 0) => new Date(Date.now() + o * 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 let browser;
 
+
+/** A handheld (keyboard-wedge) scanner: a fast key burst ending in Enter with nothing focused (ScanOrPick). */
+async function scanBurst(page, text) {
+  await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+  await page.evaluate(() => document.activeElement && document.activeElement.blur && document.activeElement.blur());
+  await page.keyboard.type(text, { delay: 4 });
+  await page.keyboard.press('Enter');
+}
+
 async function asUser(email) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-PH', timezoneId: 'Asia/Manila' });
   await context.addInitScript(autoConfirm);
@@ -171,7 +180,7 @@ async function step(name, fn, u) {
     await p.goto(BASE + '/quality/holds');
     await p.getByRole('link', { name: 'Stop a lot' }).first().click();
     await p.waitForURL(/\/quality\/holds\/new/);
-    await p.selectOption('#lot', 'L-2610-00012');
+    await scanBurst(p, 'BC:LOT:L-2610-00012'); // ScanOrPick: the lot label, scanned
     await p.selectOption('#reasonCode', { index: 1 });
     await p.fill('#reason', 'Repro: supplier notice received, checking the lot');
     await p.getByRole('button', { name: 'Stop it' }).click();

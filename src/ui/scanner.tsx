@@ -90,9 +90,11 @@ export function Scanner({
   onScan,
   pending = false,
   autoFocus = true,
-  label = "Scan a label or type a number",
-  placeholder = "BC:LOT:L-2610-00001 · L-2610-00001 · B-26-0001",
+  label = "Scan the label on the sack, box or shelf",
+  placeholder = "or type a name, e.g. coconut oil",
   keepCase = false,
+  cameraOnly = false,
+  onClose,
 }: {
   onScan: (value: string) => void;
   pending?: boolean;
@@ -101,11 +103,14 @@ export function Scanner({
   placeholder?: string;
   /** Pass the text as typed (not upper-cased) to onScan, so messages show the search words as written. */
   keepCase?: boolean;
+  /** Camera view only (used by `<ScanOrPick>`): no mode buttons, no text box; "Stop camera" calls onClose. */
+  cameraOnly?: boolean;
+  onClose?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const guard = useRef(createDuplicateGuard());
-  const [mode, setMode] = useState<ScanMode>("scanner");
+  const [mode, setMode] = useState<ScanMode>(cameraOnly ? "camera" : "scanner");
   const [terminator, setTerminator] = useState<ScanTerminator>(DEFAULT_SCAN_TERMINATOR);
   const [cameraState, setCameraState] = useState<"off" | "starting" | "on" | "denied" | "unavailable">("off");
   const [engine, setEngine] = useState<"native" | "zxing" | null>(null);
@@ -116,6 +121,7 @@ export function Scanner({
   const keys = useRef<number[]>([]);
 
   useEffect(() => {
+    if (cameraOnly) return;
     try {
       const m = localStorage.getItem(MODE_KEY) as ScanMode | null;
       if (m === "camera" || m === "scanner" || m === "type") setMode(m);
@@ -126,7 +132,7 @@ export function Scanner({
     } catch {
       /* private mode */
     }
-  }, []);
+  }, [cameraOnly]);
 
   const remember = (key: string, v: string) => {
     try {
@@ -230,13 +236,14 @@ export function Scanner({
   };
 
   const chooseMode = (m: ScanMode) => {
+    if (cameraOnly && m !== "camera") return onClose?.();
     setMode(m);
     remember(MODE_KEY, m);
   };
 
   return (
     <div className={cx("space-y-3 rounded-[20px] transition-shadow", flash && "ring-4 ring-[var(--ok-bd)]")} data-testid="scanner">
-      <div role="radiogroup" aria-label="Scan mode" className="flex flex-wrap gap-2">
+      {!cameraOnly && <div role="radiogroup" aria-label="Scan mode" className="flex flex-wrap gap-2">
         {(
           [
             ["scanner", "Scanner", <ScanLine key="s" size={16} />],
@@ -258,7 +265,7 @@ export function Scanner({
             {icon} {text}
           </button>
         ))}
-      </div>
+      </div>}
 
       {mode === "camera" && (
         <div className="space-y-2">
@@ -281,18 +288,18 @@ export function Scanner({
           </div>
           {cameraState === "denied" && (
             <p role="alert" className="rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
-              Camera access is off. Type the lot number or the material name instead.
+              {cameraOnly ? "Camera access is off. Use the handheld scanner, or find it by name." : "Camera access is off. Use the handheld scanner, or type what it is (for example coconut oil)."}
             </p>
           )}
           {cameraState === "unavailable" && (
             <p role="alert" className="rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
-              The camera could not be opened on this device. Type the lot number or the material name instead.
+              {cameraOnly ? "The camera could not be opened on this device. Use the handheld scanner, or find it by name." : "The camera could not be opened on this device. Use the handheld scanner, or type what it is (for example coconut oil)."}
             </p>
           )}
         </div>
       )}
 
-      <form onSubmit={submit} className="space-y-2">
+      {!cameraOnly && <form onSubmit={submit} className="space-y-2">
         <label htmlFor="scan-input" className="flex items-center gap-2 text-[15px] font-semibold">
           <ScanLine size={18} /> {label}
         </label>
@@ -335,10 +342,10 @@ export function Scanner({
             {pending ? "Looking up…" : "Look up"}
           </Button>
         </div>
-        {mode === "scanner" && <p className="text-[12px] text-muted">Scan with a handheld scanner; the code lands here. Or tap the box and type.</p>}
-      </form>
+        {mode === "scanner" && <p className="text-[12px] text-muted">Point the handheld scanner at the label and press its button. No label? Tap the box and type what it is.</p>}
+      </form>}
 
-      <details className="text-[13px]">
+      {!cameraOnly && <details className="text-[13px]">
         <summary className="cursor-pointer text-muted">Scanner settings</summary>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <label htmlFor="scan-terminator" className="text-fg-2">My scanner ends a scan with</label>
@@ -358,7 +365,7 @@ export function Scanner({
           </select>
           <span className="text-[12px] text-muted">Saved on this device.</span>
         </div>
-      </details>
+      </details>}
     </div>
   );
 }

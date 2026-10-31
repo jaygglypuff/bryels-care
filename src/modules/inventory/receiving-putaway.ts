@@ -101,7 +101,7 @@ export async function putAwayLot(ctx: AuthContext, input: PutAwayInput) {
       .from(stockMovements)
       .where(and(eq(stockMovements.organizationId, ctx.organizationId), eq(stockMovements.idempotencyKey, key)))
       .limit(1);
-    if (dup) return { movementId: dup.id, number: dup.number ?? "", lotNumber: lot.lotNumber, replayed: true };
+    if (dup) return { movementId: dup.id, number: dup.number ?? "", lotNumber: lot.lotNumber, replayed: true, toCode: null as string | null };
 
     const to = await resolveLocationRef(tx, ctx, lot.siteId, input.locationRef);
     if (!to.isActive) throw new DomainError("validation", `Location ${to.code} is inactive.`, { field: "location" });
@@ -183,6 +183,6 @@ export async function putAwayLot(ctx: AuthContext, input: PutAwayInput) {
       idempotencyKey: key,
       meta: { fromCode: from.code, toCode: to.code, scanned: { lot: input.lotRef.startsWith("BC:"), location: input.locationRef.startsWith("BC:") } },
     });
-    return { movementId: movement.id, number, lotNumber: lot.lotNumber, replayed: false };
+    return { movementId: movement.id, number, lotNumber: lot.lotNumber, replayed: false, toCode: to.code as string | null };
   });
 }

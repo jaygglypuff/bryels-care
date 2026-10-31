@@ -4,7 +4,7 @@ import type { ActionState } from "@/lib/errors";
 import { Button, Field, Input, Select, Textarea, type ButtonVariant } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { MoreDetails } from "@/ui/guide";
-import { Scanner } from "@/ui/scanner";
+import { ScanOrPick, type PickCandidate } from "@/ui/scan-or-pick";
 import type { ScanActionResult, ScanOptions } from "./fulfilment-actions";
 
 /**
@@ -49,11 +49,14 @@ const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? 
 type ScanFn = (payload: string, opts: ScanOptions, key: string) => Promise<ScanActionResult>;
 
 /**
- * Scan panel. `withQty`: a lot scan (BC:LOT) asks for the counted quantity first. `allowManual`: a
- * typed number can be flagged as manual entry with a reason (label unreadable). `labelCheck`: the
- * checker can mark a box's label as wrong.
+ * Scan panel (ScanOrPick in emit mode; owner review 2026-10-31: no code text box). The camera button or a
+ * handheld scanner sends each label; nothing is typed. `withQty`: a lot label (loose pieces) needs the
+ * counted pieces first. `candidates` + `allowManual` (picking): the boxes still to take are listed and
+ * can be TAPPED when a label will not scan; a tap is saved as "by hand" with a reason (audited).
+ * Without `allowManual` (second check, pack check) the list is not tappable: the checker must scan.
+ * `labelCheck`: the checker can mark a box's label as wrong.
  */
-export function ScanPanel({ scan, label, hint, withQty = false, allowManual = false, labelCheck = false }: { scan: ScanFn; label: string; hint: string; withQty?: boolean; allowManual?: boolean; labelCheck?: boolean }) {
+export function ScanPanel({ scan, label, hint, withQty = false, allowManual = false, labelCheck = false, candidates = [] }: { scan: ScanFn; label: string; hint: string; withQty?: boolean; allowManual?: boolean; labelCheck?: boolean; candidates?: PickCandidate[] }) {
   const [pending, start] = useTransition();
   const [result, setResult] = useState<ScanActionResult | null>(null);
   const [qty, setQty] = useState("");
@@ -62,7 +65,7 @@ export function ScanPanel({ scan, label, hint, withQty = false, allowManual = fa
   const [offline, setOffline] = useState(false);
   const last = useRef<{ payload: string; key: string } | null>(null);
   const onScan = useCallback(
-    (value: string) => {
+    (value: string, via: "tap" | "scan") => {
       if (typeof navigator !== "undefined" && navigator.onLine === false) {
         setOffline(true);
         return;
@@ -73,11 +76,13 @@ export function ScanPanel({ scan, label, hint, withQty = false, allowManual = fa
         setResult({ ok: false, tone: "warn", message: "That is a lot label: first type how many loose pieces you counted, then scan the lot label again." });
         return;
       }
-      const sig = `${value}|${qty}|${manual}|${labelBad}`;
+      // A tap is never a scan: it is saved as entered by hand, with the reason.
+      const manualReason = via === "tap" ? manual.trim() || "Label would not scan: tapped in the list" : manual.trim();
+      const sig = `${value}|${qty}|${manualReason}|${labelBad}`;
       if (!last.current || last.current.payload !== sig) last.current = { payload: sig, key: newKey() };
       const k = last.current.key;
       start(async () => {
-        const r = await scan(value, { qty: isLot ? qty.trim() : null, manualEntryReason: manual.trim() || null, labelOk: !labelBad }, k);
+        const r = await scan(value, { qty: isLot ? qty.trim() : null, manualEntryReason: manualReason || null, labelOk: !labelBad }, k);
         setResult(r);
         if (r.ok) {
           last.current = null;
@@ -92,16 +97,28 @@ export function ScanPanel({ scan, label, hint, withQty = false, allowManual = fa
   const tone = result?.tone === "ok" ? "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]" : result?.tone === "warn" ? "border-[var(--warn-bd)] bg-[var(--warn-bg)] text-[var(--warn-fg)]" : "border-[var(--bad-bd)] bg-[var(--bad-bg)] text-[var(--bad-fg)]";
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <Scanner onScan={onScan} pending={pending} label={label} placeholder="BC:BOX:BX-00000012 · BC:LOT:L-2610-00015" />
-      <p className="text-[12px] text-muted">{hint}</p>
+      {withQty && (
+        <Field label="How many loose pieces (only for a lot label)" htmlFor="scan-qty" hint="Leave empty for boxes">
+          <Input id="scan-qty" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 6" />
+        </Field>
+      )}
+      <ScanOrPick
+        mode="emit"
+        kind="container"
+        alsoAccept={["lot"]}
+        id="scan-panel"
+        label={label}
+        hint={hint}
+        candidates={candidates}
+        candidatesLabel={candidates.length ? (allowManual ? "Still to take (tap one only if its label will not scan)" : "Still to check") : undefined}
+        allowTap={allowManual}
+        search={false}
+        pending={pending}
+        onEmit={(v, _c, via) => onScan(v, via)}
+      />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {withQty && (
-          <Field label="How many loose pieces (only for a lot label)" htmlFor="scan-qty" hint="Leave empty for boxes">
-            <Input id="scan-qty" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 6" />
-          </Field>
-        )}
         {allowManual && (
-          <Field label="Label cannot be read? Say why you type it" htmlFor="scan-manual" hint="Saved as typed by hand">
+          <Field label="Label will not scan? Say why, then tap it in the list" htmlFor="scan-manual" hint="Saved as entered by hand">
             <Input id="scan-manual" value={manual} onChange={(e) => setManual(e.target.value)} maxLength={200} placeholder="e.g. Label torn" />
           </Field>
         )}

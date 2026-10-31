@@ -1,36 +1,30 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import type { ActionState } from "@/lib/errors";
 import { Field, Input, Select, Textarea } from "@/ui/core";
 import { FormMessage, SubmitButton } from "@/ui/form";
-import { MoreDetails } from "@/ui/guide";
+import { ScanOrPick, type PickCandidate } from "@/ui/scan-or-pick";
+import { resolvePickAction } from "../../scan-pick-actions";
 import { issueHeldStockAction, placeHoldAction } from "./actions";
 
 type Loc = { id: string; code: string; name: string; kind: string; held: boolean };
 type Reason = { code: string; label: string };
 type LotOpt = { lotNumber: string; itemName: string; onHand: string };
 
-/** Pick the lot by its name (no code typing, ADR-088); scanning a label stays possible under "More details". */
-function LotPicker({ lots, fe, defaultLot, required = true }: { lots: LotOpt[]; fe: Record<string, string>; defaultLot?: string; required?: boolean }) {
-  const known = !defaultLot || lots.some((l) => l.lotNumber === defaultLot);
+/** Which lot: tap it, scan its label or find it by name (ScanOrPick; no code typing, ADR-088). */
+function LotPicker({ lots, fe, defaultLot, required = true, onChange }: { lots: LotOpt[]; fe: Record<string, string>; defaultLot?: string; required?: boolean; onChange?: (lotNumber: string | null, c: PickCandidate | null) => void }) {
   return (
-    <>
-      <Field label="Which lot?" htmlFor="lot" error={fe.lot}>
-        <Select id="lot" name="lot" required={required && known && lots.length > 0} defaultValue={known ? (defaultLot ?? "") : ""}>
-          <option value="">Choose…</option>
-          {lots.map((l) => (
-            <option key={l.lotNumber} value={l.lotNumber}>
-              {l.itemName} · {l.lotNumber} ({l.onHand})
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <MoreDetails title="Not in the list? Scan the label" open={!known || lots.length === 0}>
-        <Field label="Scan the lot label" htmlFor="lotScan" error={fe.lotScan}>
-          <Input id="lotScan" name="lotScan" autoComplete="off" defaultValue={known ? "" : defaultLot} />
-        </Field>
-      </MoreDetails>
-    </>
+    <ScanOrPick
+      kind="lot"
+      name="lot"
+      submit="code"
+      label="Which lot?"
+      candidates={lots.map((l) => ({ value: l.lotNumber, title: l.itemName, detail: `lot ${l.lotNumber} · ${l.onHand}`, code: l.lotNumber, codes: [l.lotNumber] }))}
+      defaultValue={defaultLot}
+      required={required}
+      onChange={(v, c) => onChange?.(v, c)}
+      error={fe.lot ?? fe.lotScan}
+    />
   );
 }
 
@@ -61,16 +55,15 @@ export function PlaceHoldForm({ locations, reasonCodes, defaultLot, lots }: { lo
       {scope === "lot" ? (
         <LotPicker lots={lots} fe={fe} defaultLot={defaultLot} />
       ) : (
-        <Field label="Which place?" htmlFor="locationId" error={fe.locationId}>
-          <Select id="locationId" name="locationId" required defaultValue="">
-            <option value="" disabled>Choose…</option>
-            {locations.map((l) => (
-              <option key={l.id} value={l.id} disabled={l.held}>
-                {l.name} · {l.code}{l.held ? " · already stopped" : ""}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <ScanOrPick
+          kind="location"
+          name="locationId"
+          label="Which place?"
+          candidates={locations.map((l) => ({ value: l.id, title: l.name, detail: l.code, code: l.code, codes: [l.code], disabledReason: l.held ? "Already stopped" : undefined }))}
+          onlyCandidates
+          required
+          error={fe.locationId}
+        />
       )}
       <Field label="Kind of reason" htmlFor="reasonCode" error={fe.reasonCode}>
         <Select id="reasonCode" name="reasonCode" required defaultValue={reasonCodes[0]?.code}>
@@ -90,6 +83,17 @@ export function PlaceHoldForm({ locations, reasonCodes, defaultLot, lots }: { lo
 
 export function HeldIssueForm({ locations, lots }: { locations: { id: string; code: string; name: string; kind: string }[]; lots: LotOpt[] }) {
   const [key, setKey] = useState(() => crypto.randomUUID());
+  // "From which place?" offers only the places that hold the chosen lot (one → chosen and hidden).
+  const [places, setPlaces] = useState<PickCandidate[] | null>(null);
+  const [, startPlaces] = useTransition();
+  const onLot = (v: string | null, c: PickCandidate | null) => {
+    if (!v) return setPlaces(null);
+    if (c?.places) return setPlaces(c.places);
+    startPlaces(async () => {
+      const r = await resolvePickAction("lot", v);
+      setPlaces(r.ok ? (r.candidate.places ?? []) : []);
+    });
+  };
   const [state, dispatch] = useActionState<ActionState, FormData>(async (p, fd) => {
     const r = await issueHeldStockAction(p, fd);
     if (r?.ok) setKey(crypto.randomUUID());
@@ -101,16 +105,27 @@ export function HeldIssueForm({ locations, lots }: { locations: { id: string; co
       <input type="hidden" name="idempotencyKey" value={key} />
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-3 sm:col-span-2">
-          <LotPicker lots={lots} fe={fe} />
+          <LotPicker lots={lots} fe={fe} onChange={onLot} />
         </div>
-        <Field label="From which place?" htmlFor="fromLocationId" error={fe.fromLocationId}>
-          <Select id="fromLocationId" name="fromLocationId" required defaultValue="">
-            <option value="" disabled>Choose…</option>
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>{l.name} · {l.code}</option>
-            ))}
-          </Select>
-        </Field>
+        <div className="sm:col-span-2">
+          {places === null ? (
+            <p className="text-[13px] text-muted">Choose the lot first; then its places show here.</p>
+          ) : places.length === 0 ? (
+            <p className="text-[13px] text-[var(--warn-fg)]">This lot has no stock on any place at this site.</p>
+          ) : (
+            <ScanOrPick
+              kind="location"
+              name="fromLocationId"
+              label="From which place?"
+              candidates={places.filter((p) => locations.some((l) => l.id === p.value))}
+              hideWhenSingle
+              onlyCandidates
+              search={false}
+              required
+              error={fe.fromLocationId}
+            />
+          )}
+        </div>
         <Field label="How much (g or pieces)" htmlFor="qty" error={fe.qty}>
           <Input id="qty" name="qty" required inputMode="decimal" autoComplete="off" />
         </Field>

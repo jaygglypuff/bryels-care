@@ -2,6 +2,7 @@
 import { Field, Input, Select, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { MoreDetails } from "@/ui/guide";
+import { ScanOrPick, type PickCandidate } from "@/ui/scan-or-pick";
 import {
   addLineAction,
   approveReturnAction,
@@ -69,15 +70,26 @@ export function NewReturnForm({ shipments, preselect, complaint, reasons, locati
   );
 }
 
-export function ScanLineForm({ returnId, locations, defaultLocationId }: { returnId: string; locations: Loc[]; defaultLocationId: string }) {
+export function ScanLineForm({ returnId, locations, defaultLocationId, candidates = [] }: { returnId: string; locations: Loc[]; defaultLocationId: string; candidates?: PickCandidate[] }) {
   return (
     <ActionForm action={addLineAction} hidden={{ returnId }} submit="Add to the return" pending="Adding…" variant="cta" size="lg">
       {(fe) => (
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Field label="Scan the box or lot label" htmlFor="code" error={fe.code} hint="Or type the number on the label.">
-              <Input id="code" name="code" required autoFocus autoComplete="off" inputMode="text" className="min-h-[52px] text-[17px]" />
-            </Field>
+            <ScanOrPick
+              kind="container"
+              alsoAccept={["lot"]}
+              name="code"
+              viaName="codeVia"
+              id="return-code"
+              label="Which box or lot came back?"
+              hint="Scan its label, or tap it in the list of what left on this delivery (a tap is saved as entered by hand)."
+              candidates={candidates}
+              candidatesLabel="What left on this delivery"
+              onlyCandidates={candidates.length > 0}
+              required
+              error={fe.code}
+            />
           </div>
           <Field label="How many came back" htmlFor="qty" error={fe.qty} hint="Not more than was sent on this delivery.">
             <Input id="qty" name="qty" inputMode="decimal" autoComplete="off" />
@@ -104,9 +116,6 @@ export function ScanLineForm({ returnId, locations, defaultLocationId }: { retur
               <Field label="Note (optional)" htmlFor="note" error={fe.note}>
                 <Input id="note" name="note" maxLength={500} />
               </Field>
-              <label className="flex min-h-[44px] items-center gap-2 text-[14px]">
-                <input type="checkbox" name="manualEntry" value="yes" className="size-5" /> The label cannot be read: I typed the number
-              </label>
             </MoreDetails>
           </div>
         </div>

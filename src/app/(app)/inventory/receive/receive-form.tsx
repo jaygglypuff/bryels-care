@@ -173,6 +173,9 @@ export function ReceiveForm({
 }) {
   const [state, action] = useActionState<ActionState, FormData>(saveReceiptAction, null);
   const matOf = (id: string) => materials.find((m) => m.id === id);
+  // Data-migration reasons (opening balance, expiry unknown at migration) belong to the import tools, not to a delivery at the dock.
+  const MIGRATION_ONLY = ["opening_balance", "expiry_unknown"];
+  const receiptReasons = reasonCodes.filter((r) => !MIGRATION_ONLY.includes(r.code) || r.code === initial?.unplannedReasonCode);
   const blank = (key: number, materialId = ""): Line => {
     const mat = matOf(materialId);
     return {
@@ -284,20 +287,20 @@ export function ReceiveForm({
           <Field label="Number on the supplier's paper" htmlFor="supplierDocumentNumber" error={fe.supplierDocumentNumber} hint="The delivery receipt or invoice number.">
             <Input id="supplierDocumentNumber" name="supplierDocumentNumber" required autoComplete="off" defaultValue={initial?.supplierDocumentNumber} />
           </Field>
+        </div>
+        <details className="group mt-3" open={!!fe.notes || !!initial?.notes || !!fe.unplannedReasonCode}>
+          <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-1.5 text-[14px] font-medium text-primary-text">
+            <ChevronDown size={16} className="transition-transform group-open:rotate-180" /> More details
+          </summary>
           {!po && (
-            <Field label="Why no purchase order?" htmlFor="unplannedReasonCode" error={fe.unplannedReasonCode} hint="Purchasing can make the PO later from the receipt.">
-              <Select id="unplannedReasonCode" name="unplannedReasonCode" defaultValue={initial?.unplannedReasonCode || reasonCodes[0]?.code}>
-                {reasonCodes.map((r) => (
+            <Field label="Why no purchase order?" htmlFor="unplannedReasonCode" error={fe.unplannedReasonCode} hint="Purchasing can make the order later from this delivery.">
+              <Select id="unplannedReasonCode" name="unplannedReasonCode" defaultValue={initial?.unplannedReasonCode || receiptReasons[0]?.code}>
+                {receiptReasons.map((r) => (
                   <option key={r.code} value={r.code}>{r.label}</option>
                 ))}
               </Select>
             </Field>
           )}
-        </div>
-        <details className="group mt-3" open={!!fe.notes || !!initial?.notes}>
-          <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-1.5 text-[14px] font-medium text-primary-text">
-            <ChevronDown size={16} className="transition-transform group-open:rotate-180" /> More details
-          </summary>
           <Field label="Notes (optional)" htmlFor="notes" error={fe.notes}>
             <Textarea id="notes" name="notes" maxLength={1000} placeholder="Condition of the delivery, seals, temperature…" defaultValue={initial?.notes} />
           </Field>
@@ -386,14 +389,11 @@ export function ReceiveForm({
                       </div>
                     )}
                   </Field>
-                  <Field label="Supplier's code on the sack" htmlFor={id("slot")} error={err("supplierLotNumber")} hint="The lot number on the supplier's label (sack, drum or box).">
+                  <Field label="Supplier's lot number" htmlFor={id("slot")} error={err("supplierLotNumber")} hint="Printed on the supplier's label, often after “Lot” or “Batch”. Copy it as written: QA traces with it.">
                     <Input id={id("slot")} autoComplete="off" value={l.supplierLotNumber} onChange={(e) => update(l.key, { supplierLotNumber: e.target.value })} required />
                   </Field>
                   <Field label="Expiry date" htmlFor={id("exp")} error={err("expiresOn")} hint={mat?.shelfLifeDays && !l.expiryTouched ? `Filled in from the ${mat.shelfLifeDays}-day shelf life. Change it to the date on the label.` : "The date on the supplier's label."}>
                     <Input id={id("exp")} type="date" value={l.expiresOn} onChange={(e) => update(l.key, { expiresOn: e.target.value, expiryTouched: true })} required className="min-w-0" />
-                  </Field>
-                  <Field label="Brand" htmlFor={id("brand")} error={err("brand")} hint={mat?.brand ? `Usual brand: ${mat.brand}. Change it if another brand came.` : "As printed on the container (optional)."}>
-                    <Input id={id("brand")} autoComplete="off" value={l.brand ?? ""} placeholder={mat?.brand ?? ""} onChange={(e) => update(l.key, { brand: e.target.value })} />
                   </Field>
                 </div>
 
@@ -423,17 +423,20 @@ export function ReceiveForm({
 
                 {mat && (
                   <p className="mt-3 text-[13px] text-muted" data-testid={`receipt-line-${pos + 1}-place`}>
-                    Goes to <strong className="text-fg">{place ? `${place.code} · ${sectionName(place.section)}` : "—"}</strong>
-                    {mat.section && place?.section !== mat.section ? ` · then store in ${sectionName(mat.section)}${storeIn.length ? ` (${storeIn.join(", ")})` : ""}` : ""}
+                    Goes to <strong className="text-fg">{place ? place.name : "—"}</strong>
+                    {mat.section && place?.section !== mat.section ? ` until QA says OK, then to ${sectionName(mat.section)}${storeIn.length ? ` (${storeIn.map((c) => locations.find((x) => x.code === c)?.name ?? c).join(", ")})` : ""}` : ""}
                   </p>
                 )}
 
                 <details className="group mt-2" open={moreErrors || !!l.discrepancyKind || expired}>
                   <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-1.5 text-[14px] font-medium text-primary-text">
                     <ChevronDown size={16} className="transition-transform group-open:rotate-180" /> More details
-                    <span className="text-[12px] font-normal text-muted">(dates, containers, place, problems)</span>
+                    <span className="text-[12px] font-normal text-muted">(brand, dates, containers, shelf, problems)</span>
                   </summary>
                   <div className="mt-2 grid grid-cols-1 gap-4 @md:grid-cols-2 @4xl:grid-cols-3">
+                    <Field label="Brand" htmlFor={id("brand")} error={err("brand")} hint={mat?.brand ? `Usual brand: ${mat.brand}. Change it if another brand came.` : "As printed on the container (optional)."}>
+                      <Input id={id("brand")} autoComplete="off" value={l.brand ?? ""} placeholder={mat?.brand ?? ""} onChange={(e) => update(l.key, { brand: e.target.value })} />
+                    </Field>
                     <Field label="Made on (optional)" htmlFor={id("mfg")} error={err("manufacturedOn")}>
                       <Input id={id("mfg")} type="date" value={l.manufacturedOn} onChange={(e) => update(l.key, { manufacturedOn: e.target.value })} className="min-w-0" />
                     </Field>

@@ -4,12 +4,13 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { getSupplierReturn, returnableLots } from "@/modules/procurement";
-import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, PageHeader, Select, Textarea } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, PageHeader, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { RecordNo } from "@/ui/plain-list";
 import { Banner, StatusChip } from "@/ui/status";
+import { ScanOrPick } from "@/ui/scan-or-pick";
 import { Forbidden } from "../../../forbidden";
 import { addReturnLineAction, cancelReturnAction, decideReturnAction, postReturnAction, removeReturnLineAction, submitReturnAction } from "../../actions";
 import { Amount, History, SrChip, Steps, SubNav, approverWords, fmtBase, money } from "../../_ui";
@@ -136,18 +137,17 @@ export default async function SupplierReturnPage({ params }: { params: Promise<{
                 <ActionForm action={addReturnLineAction} hidden={{ returnId: sr.id }} submit="Add this lot" variant="secondary">
                   {(fe) => (
                     <>
-                      <Field label="Which lot" htmlFor="lotLocation" error={fe.lotId ?? fe.lotLocation}>
-                        <Select id="lotLocation" name="lotLocation" required defaultValue={lots.length === 1 ? `${lots[0].lotId}|${lots[0].locationId}` : ""}>
-                          <option value="" disabled>
-                            Pick a lot…
-                          </option>
-                          {lots.map((l) => (
-                            <option key={`${l.lotId}|${l.locationId}`} value={`${l.lotId}|${l.locationId}`}>
-                              {l.materialName} · {fmtBase(l.qty, l.baseUom)} at {l.locationCode} · {l.lotNumber}
-                            </option>
-                          ))}
-                        </Select>
-                      </Field>
+                      <ScanOrPick
+                        kind="lot"
+                        name="lotLocation"
+                        label="Which lot?"
+                        hint="Tap it, or scan its lot label."
+                        candidates={lots.map((l) => ({ value: `${l.lotId}|${l.locationId}`, title: l.materialName, detail: `${fmtBase(l.qty, l.baseUom)} on ${l.locationCode} · lot ${l.lotNumber}`, code: l.lotNumber, codes: [l.lotNumber] }))}
+                        defaultValue={lots.length === 1 ? `${lots[0].lotId}|${lots[0].locationId}` : null}
+                        onlyCandidates
+                        required
+                        error={fe.lotId ?? fe.lotLocation}
+                      />
                       <Field label="How much goes back" htmlFor="qty" error={fe.qty} hint="In the lot's unit (for example 25000 g), or type it with the unit: 25 kg.">
                         <Input id="qty" name="qty" inputMode="decimal" required />
                       </Field>

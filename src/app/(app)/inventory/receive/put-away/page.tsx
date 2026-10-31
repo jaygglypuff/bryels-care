@@ -2,16 +2,18 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { D, fmtDate } from "@/lib/qty";
-import { lotsToPutAway, type PutAwayTask } from "@/modules/inventory/put-away-queue";
+import { D } from "@/lib/qty";
+import { lotsToPutAway } from "@/modules/inventory/put-away-queue";
 import { putAwayOptions } from "@/modules/inventory/receiving-putaway";
 import { keywordMatches, type KeywordMatch } from "@/modules/scan";
-import { Card, CardTitle, EmptyState, Field, Input, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, PageHeader } from "@/ui/core";
 import { Banner } from "@/ui/status";
 import { PageIntro } from "@/ui/guide";
 import { LotStatusChip } from "@/ui/inventory/bits";
 import { Forbidden } from "../../../forbidden";
 import { PutAwayForm } from "./put-away-form";
+import { PutAwayLotFinder } from "./lot-finder";
+import type { PickCandidate } from "@/ui/scan-or-pick";
 import { Help } from "@/ui/help/help";
 
 export const metadata = { title: "Put away" };
@@ -25,42 +27,6 @@ function lotIdOf(m: KeywordMatch) {
   return UUID.test(id) ? id : null;
 }
 
-function TaskCard({ t }: { t: PutAwayTask }) {
-  const allBoxed = Number(t.qtyBase) === 0;
-  const href = allBoxed
-    ? `/inventory/move?lot=${t.lotId}${t.suggested ? `&to=${t.suggested.id}` : ""}`
-    : `/inventory/receive/put-away?lot=${t.lotId}&from=${t.fromLocationId}${t.suggested ? `&to=${t.suggested.id}` : ""}`;
-  return (
-    <li>
-      <Link
-        href={href}
-        className="flex min-h-[64px] items-center gap-3 rounded-[16px] border border-line bg-surface px-4 py-3 hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2"
-        data-testid="putaway-task"
-      >
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-semibold">{t.itemName || t.itemCode}</p>
-          <p className="text-[13px] text-fg-2">
-            Lot <span className="font-mono">{t.lotNumber}</span>
-            {t.supplierLotNumber ? ` · supplier's code ${t.supplierLotNumber}` : ""} · QA OK {fmtDate(t.releasedAt)}
-          </p>
-          <p className="mt-1 text-[14px]">
-            <b>{allBoxed ? t.boxedQtyText : t.qtyText}</b>
-            {!allBoxed && t.boxedQtyText ? <span className="text-muted"> (+ {t.boxedQtyText} in boxes)</span> : null} · from {t.fromCode}
-            {" → "}
-            {t.suggested ? (
-              <b>{t.suggested.code}</b>
-            ) : (
-              <span className="text-muted">no free shelf in {t.sectionLabel}</span>
-            )}
-            {t.suggested ? <span className="text-muted"> ({t.sectionLabel})</span> : null}
-          </p>
-          {allBoxed && <p className="text-[13px] text-muted">It is in boxes: tap to move the boxes (scan each box).</p>}
-        </div>
-        <ArrowRight size={20} className="shrink-0 text-muted" aria-hidden />
-      </Link>
-    </li>
-  );
-}
 
 /**
  * W01-08 put-away. Top: "To put away" (lots QA released that still sit in quarantine, hold or receiving,
@@ -94,38 +60,35 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
   const from = (fromParam && opts?.balances.find((b) => b.locationId === fromParam)) || opts?.balances.find((b) => b.kind === "receiving") || opts?.balances.find((b) => Number(b.looseQtyBase) > 0) || opts?.balances[0];
   const suggestedDest = opts ? (toParam ? opts.destinations.find((d) => d.id === toParam || d.code === toParam.toUpperCase()) : undefined) ?? opts.destinations.find((d) => d.kind === "storage" && d.section === opts!.suggestedSection) : undefined;
   const taskLot = opts ? tasks.find((t) => t.lotId === opts!.lot.id) : undefined;
-  const finder = (
-    <Card>
-      <form method="get" className="flex flex-wrap items-end gap-3">
-        <div className="min-w-[220px] flex-1">
-          <Field label={opts ? "Another lot" : "Or scan the lot label"} htmlFor="lot" hint="Scan the label, or type the item name (for example coconut oil).">
-            <Input id="lot" name="lot" defaultValue={opts ? "" : lotRef} placeholder="Scan, or type the item name" autoComplete="off" autoFocus={!opts && tasks.length === 0} required />
-          </Field>
-        </div>
-        <button type="submit" className="min-h-[44px] rounded-full bg-primary px-5 text-[14px] font-medium text-white">Find lot</button>
-      </form>
-    </Card>
-  );
+  // The lots waiting to be put away are the only candidates (tap, scan or find by name among them).
+  const taskCandidates: PickCandidate[] = tasks
+    .filter((t) => !opts || t.lotId !== opts.lot.id)
+    .map((t) => {
+      const allBoxed = Number(t.qtyBase) === 0;
+      return {
+        value: allBoxed
+          ? `/inventory/move?lot=${t.lotId}${t.suggested ? `&to=${t.suggested.id}` : ""}`
+          : `/inventory/receive/put-away?lot=${t.lotId}&from=${t.fromLocationId}${t.suggested ? `&to=${t.suggested.id}` : ""}`,
+        title: t.itemName || t.itemCode,
+        detail: `${allBoxed ? `${t.boxedQtyText} in boxes` : t.qtyText} at ${t.fromCode} → ${t.suggested ? `${t.suggested.code} (${t.sectionLabel})` : `no free shelf in ${t.sectionLabel}`} · lot ${t.lotNumber}`,
+        code: t.lotNumber,
+        codes: [t.lotNumber, ...(t.supplierLotNumber ? [t.supplierLotNumber.toUpperCase()] : [])],
+      };
+    });
+  const finder =
+    taskCandidates.length > 0 ? (
+      <Card data-testid="putaway-tasks">
+        <PutAwayLotFinder label={opts ? "Another lot?" : `To put away (${tasks.length})`} candidates={taskCandidates} />
+      </Card>
+    ) : null;
 
   const searching = !!lotRef?.trim() && !opts;
-  const taskList = (
-    <section aria-labelledby="todo-title" className="space-y-2">
-      <h2 id="todo-title" className="text-[17px] font-semibold">
-        To put away ({tasks.length})
-      </h2>
-      {tasks.length === 0 ? (
-        <Card>
-          <EmptyState title="Nothing to put away">Lots show here when QA says OK while they are still in the QA area or at the dock. Nothing to do now.</EmptyState>
-        </Card>
-      ) : (
-        <ul className="space-y-2" data-testid="putaway-tasks">
-          {tasks.map((t) => (
-            <TaskCard key={`${t.lotId}:${t.fromLocationId}`} t={t} />
-          ))}
-        </ul>
-      )}
-    </section>
-  );
+  const taskList =
+    tasks.length === 0 ? (
+      <Card>
+        <EmptyState title="Nothing to put away">Lots show here when QA says OK while they are still in the QA area or at the dock. Nothing to do now.</EmptyState>
+      </Card>
+    ) : null;
   const results = (
     <>
       {error && matches.length === 0 && <Banner tone="bad" title="Lot not found">{error} Check the number on the label, or type part of it.</Banner>}
@@ -156,10 +119,9 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
       <PageIntro>This screen is for taking lots that QA said OK out of the QA area to their shelf. Tap a lot in the list; the shelf is suggested, you only confirm.</PageIntro>
       {moved && <Banner tone="ok" title="Put away">{moved}</Banner>}
 
-      {searching && finder}
       {searching && results}
       {!opts && taskList}
-      {!opts && !searching && finder}
+      {!opts && finder}
 
       {opts && (
         <Card>
@@ -185,7 +147,7 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
               balances={opts.balances.map((b) => ({ locationId: b.locationId, code: b.code, name: b.name, qtyText: b.qtyText, looseQtyText: b.looseQtyText, boxed: D(b.looseQtyBase).lt(b.qtyBase) }))}
               destinations={opts.destinations.map((d) => ({ id: d.id, code: d.code, name: d.name, kind: d.kind, sectionLabel: d.sectionLabel, suggested: d.section === opts!.suggestedSection }))}
               defaultFrom={from?.locationId ?? ""}
-              defaultTo={suggestedDest?.code ?? ""}
+              defaultTo={suggestedDest?.id ?? ""}
               uom={opts.lot.baseUom}
               fromTask={!!taskLot}
             />

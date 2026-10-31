@@ -20,6 +20,14 @@ function manilaDate(offsetDays = 0) {
   const t = new Date(Date.now() + offsetDays * 86400000);
   return t.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
 }
+/** A handheld (keyboard-wedge) scanner: a fast key burst ending in Enter with nothing focused (ScanOrPick). */
+async function scanBurst(page, text) {
+  await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
+  await page.evaluate(() => document.activeElement && document.activeElement.blur && document.activeElement.blur());
+  await page.keyboard.type(text, { delay: 4 });
+  await page.keyboard.press('Enter');
+}
+
 function assert(cond, msg) {
   if (!cond) throw new Error('ASSERTION FAILED: ' + msg);
 }
@@ -599,12 +607,11 @@ async function kpiValue(page, caption) {
     const rows = await page.getByTestId('pick-row').evaluateAll((els) => els.map((e) => ({ lot: e.dataset.lot, box: e.dataset.box, qty: e.dataset.qty })));
     for (const r of rows) {
       if (r.box) {
-        await page.fill('#scan-input', 'BC:BOX:' + r.box);
+        await scanBurst(page, 'BC:BOX:' + r.box);
       } else {
         await page.fill('#scan-qty', r.qty);
-        await page.fill('#scan-input', 'BC:LOT:' + r.lot);
+        await scanBurst(page, 'BC:LOT:' + r.lot);
       }
-      await page.press('#scan-input', 'Enter');
       await page.getByTestId('scan-result').getByText(new RegExp('Picked .*' + (r.box || r.lot))).waitFor({ timeout: 30000 });
     }
     await shot(page, 'pick-scanned');
@@ -620,12 +627,11 @@ async function kpiValue(page, caption) {
     const picked = await page.getByTestId('picked-row').evaluateAll((els) => els.map((e) => ({ lot: e.dataset.lot, box: e.dataset.box, qty: e.dataset.qty })));
     for (const r of picked) {
       if (r.box) {
-        await page.fill('#scan-input', 'BC:BOX:' + r.box);
+        await scanBurst(page, 'BC:BOX:' + r.box);
       } else {
         await page.fill('#scan-qty', r.qty);
-        await page.fill('#scan-input', 'BC:LOT:' + r.lot);
+        await scanBurst(page, 'BC:LOT:' + r.lot);
       }
-      await page.press('#scan-input', 'Enter');
       await page.getByTestId('scan-result').getByText(r.box ? new RegExp('Box ' + r.box + ' verified') : new RegExp('Verified .*' + r.lot)).waitFor({ timeout: 30000 });
     }
     await shot(page, 'pack-verified');
@@ -672,7 +678,7 @@ async function kpiValue(page, caption) {
     const { context, page } = await asUser('sales@bryels-care.test');
     await page.goto(BASE + '/quality/complaints/new');
     await page.selectOption('#customerId', { label: 'Sari Glow Online (CUS-005)' });
-    await page.fill('#code', 'BC:LOT:' + facts.fgLot);
+    await scanBurst(page, 'BC:LOT:' + facts.fgLot); // ScanOrPick: scanned, never typed
     await page.selectOption('#category', 'packaging');
     await page.fill('#description', 'Two bars arrived with torn wrappers.');
     await page.getByText('More details (you can skip this)').click();
@@ -696,7 +702,7 @@ async function kpiValue(page, caption) {
     await page.waitForURL(/\/sales\/returns\/[0-9a-f-]{36}/, { timeout: 30000 });
     facts.returnId = page.url().split('/').pop().split('?')[0];
     facts.returnNumber = (await page.getByTestId('record-number').first().innerText()).trim();
-    await page.fill('#code', 'BC:LOT:' + facts.fgLot);
+    await scanBurst(page, 'BC:LOT:' + facts.fgLot); // ScanOrPick: scanned, never typed
     await page.fill('#qty', '2');
     await page.selectOption('#condition', 'damaged');
     await page.getByRole('button', { name: 'Add to the return' }).click();

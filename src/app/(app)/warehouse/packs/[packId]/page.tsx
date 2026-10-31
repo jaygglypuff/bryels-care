@@ -10,6 +10,7 @@ import { NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { RecordNo } from "@/ui/plain-list";
 import { LotStatusChip } from "@/ui/inventory/bits";
+import { ScanOrPick } from "@/ui/scan-or-pick";
 import { Forbidden } from "../../../forbidden";
 import { addBoxAction, approvePackAction, boxingNoteAction, cancelPackAction, packCheckScanAction, packLabelsAction, removeBoxAction, submitPackAction } from "../../../sales/fulfilment-actions";
 import { Cmd, ReasonCmd, ScanPanel } from "../../../sales/fulfilment-forms";
@@ -98,7 +99,7 @@ export default async function PackPage({ params, searchParams }: { params: Promi
             <Card id="add-box">
               <CardTitle>Add a box</CardTitle>
               <Cmd action={addBoxAction} fields={{ packId: p.id }} label="Pack box and print label" pending="Packing…" variant="cta" size="lg">
-                <Field label="Scan the lot label" htmlFor="lotPayload" hint={`It must be lot ${v.lotNumber} (this checks you box the right lot).`}><Input id="lotPayload" name="lotPayload" placeholder="Scan the lot label" autoComplete="off" /></Field>
+                {v.lotNumber && <ScanOrPick kind="lot" name="lotPayload" submit="code" label="Which lot are you boxing?" hint="Tap it or scan its label: this checks you box the right lot." candidates={[{ value: v.lotNumber, title: v.productName, detail: `lot ${v.lotNumber}${v.locationCode ? ` · on ${v.locationCode}` : ""}`, code: v.lotNumber, codes: [v.lotNumber] }]} onlyCandidates search={false} />}
                 <Field label="How many in this box?" htmlFor="qty" hint={`A full box has ${p.unitsPerBox}; fewer prints PARTIAL on the label.`}><Input id="qty" name="qty" inputMode="numeric" defaultValue={String(Math.min(p.unitsPerBox, diff > 0 ? diff : p.unitsPerBox))} /></Field>
               </Cmd>
             </Card>

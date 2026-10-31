@@ -25,6 +25,7 @@ import { activeAssignment } from "@/lib/auth/assignments";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
+import { isValidScanValue } from "@/lib/scan/payload";
 import { nextNumber } from "@/lib/numbering";
 import { reasonCodeOptions } from "@/modules/masterdata";
 import { baseOfUnit, parseQtyText } from "@/lib/units";
@@ -833,14 +834,17 @@ export type CountDetail = Awaited<ReturnType<typeof getCount>>;
 export async function findLotForCount(ctx: AuthContext, countId: string, raw: string) {
   ctx.require("inventory.stock_count.submit");
   const c = await getCount(ctx, countId);
-  const code = raw.replace(/[\u0000-\u001f\u007f]/g, "").trim().toUpperCase().replace(/^BC:LOT:/, "");
-  if (!code) return null;
+  // A tapped candidate id, a BC:LOT label or the lot number; never the placeholder or words (ScanOrPick).
+  const v = raw.replace(/[\u0000-\u001f\u007f]/g, "").trim();
+  const byId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+  const code = v.toUpperCase().replace(/^BC:LOT:/, "");
+  if (!code || (!byId && !isValidScanValue(code))) return null;
   const [lot] = await db
     .select({ id: inventoryLots.id, lotNumber: inventoryLots.lotNumber, baseUom: inventoryLots.baseUom, itemName: sql<string>`coalesce(${materials.name}, ${products.name})` })
     .from(inventoryLots)
     .leftJoin(materials, eq(materials.id, inventoryLots.materialId))
     .leftJoin(products, eq(products.id, inventoryLots.productId))
-    .where(and(eq(inventoryLots.organizationId, ctx.organizationId), eq(inventoryLots.siteId, c.siteId), eq(inventoryLots.lotNumber, code)))
+    .where(and(eq(inventoryLots.organizationId, ctx.organizationId), eq(inventoryLots.siteId, c.siteId), byId ? eq(inventoryLots.id, v) : eq(inventoryLots.lotNumber, code)))
     .limit(1);
   return lot ?? null;
 }

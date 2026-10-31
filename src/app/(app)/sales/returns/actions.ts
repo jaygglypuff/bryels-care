@@ -68,7 +68,8 @@ export async function addLineAction(_p: ActionState, fd: FormData): Promise<Acti
       condition: str(fd, "condition"),
       toLocationId: opt(fd, "toLocationId"),
       note: opt(fd, "note"),
-      manualEntry: fd.get("manualEntry") === "yes",
+      // A box or lot tapped in the list (not scanned) is recorded as entered by hand.
+      manualEntry: fd.get("manualEntry") === "yes" || fd.get("codeVia") === "tap",
     });
     return `Line ${r.lineNo}: ${r.qty} ${r.uom} of lot ${r.lotNumber}${r.boxNumber ? ` (box ${r.boxNumber})` : ""}.`;
   });

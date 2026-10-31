@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Field, Input, Select, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { MoreDetails } from "@/ui/guide";
+import { ScanOrPick } from "@/ui/scan-or-pick";
 import { PRIORITY_OPTIONS } from "./_ui";
 import {
   assignWorkOrderAction,
@@ -321,18 +322,20 @@ export function IssuePartForm({ workOrderId, stock }: { workOrderId: string; sto
     <ActionForm action={issuePartAction} hidden={{ workOrderId }} submit="Take the part">
       {(fe) => (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Which part?" htmlFor="ip-stock" error={fe.lotId ?? fe.fromLocationId}>
-            <Select id="ip-stock" name="stock" required defaultValue="">
-              <option value="" disabled>
-                Choose…
-              </option>
-              {stock.map((s) => (
-                <option key={`${s.lotId}|${s.locationId}`} value={`${s.lotId}|${s.locationId}`}>
-                  {s.materialName} · {Number(s.qty)} {s.uom} at {s.locationCode} · lot {s.lotNumber}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <div className="sm:col-span-2">
+            <ScanOrPick
+              kind="lot"
+              name="stock"
+              id="ip-stock"
+              label="Which part?"
+              hint="Tap the part, or scan the label on its box or bag."
+              candidates={stock.map((s) => ({ value: `${s.lotId}|${s.locationId}`, title: s.materialName, detail: `${Number(s.qty)} ${s.uom} on ${s.locationCode} · lot ${s.lotNumber}`, code: s.lotNumber, codes: [s.lotNumber, s.materialCode] }))}
+              candidatesLabel="Spare parts OK to use at this site"
+              onlyCandidates
+              required
+              error={fe.lotId ?? fe.fromLocationId ?? fe.stock}
+            />
+          </div>
           <Field label="How many?" htmlFor="ip-qty" error={fe.qty}>
             <Input id="ip-qty" name="qty" inputMode="decimal" required defaultValue="1" />
           </Field>

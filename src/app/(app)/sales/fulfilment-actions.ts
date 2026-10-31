@@ -420,7 +420,8 @@ export async function repackAction(_: ActionState, fd: FormData): Promise<Action
   let id: string;
   try {
     const ctx = await requireContext();
-    const codes = str(fd, "boxes").split(/[\s,]+/).filter(Boolean);
+    // One hidden input per box chosen in ScanOrPick (tapped, scanned or found); older clients sent one text.
+    const codes = fd.getAll("boxes").map(String).join(" ").split(/[\s,]+/).filter(Boolean);
     if (codes.length === 0) return { ok: false, message: "Scan the boxes to repack.", fieldErrors: { boxes: "Scan at least one box." } };
     const ids: string[] = [];
     for (const c of codes) {
