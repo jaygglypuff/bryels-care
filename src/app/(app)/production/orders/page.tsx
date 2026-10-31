@@ -7,6 +7,7 @@ import { Help } from "@/ui/help/help";
 import { Forbidden } from "../../forbidden";
 import { TaskCards } from "../task-cards";
 import { ActionButton, NeededBy, OrderStatusChip, OrderWarning } from "./parts";
+import { PageIntro } from "@/ui/guide";
 
 export const metadata: Metadata = { title: "Production orders" };
 export const dynamic = "force-dynamic";
@@ -109,6 +110,7 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
           </>
         }
       />
+      <PageIntro>{operator ? "The batches you make: open one to see the next step." : "Every production order, from draft to done. Open one to see what happens next."}</PageIntro>
       {board ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           {columns.map((c) => (

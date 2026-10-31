@@ -26,7 +26,7 @@ export const labelDataSchema = z.object({
     dpi: z.number().int(),
     fields: z.array(z.enum(LABEL_FIELD_KEYS)),
   }),
-  copies: z.number().int().min(1).max(99),
+  copies: z.number().int().min(1).max(999),
   entity: z.object({
     payloadType: z.enum(["LOT", "LOC", "BOX", "EQP"]),
     value: z.string().regex(SCAN_VALUE_RE),

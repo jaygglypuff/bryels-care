@@ -23,7 +23,7 @@ function Card({ c, onMove, busy, columns, onDragStart }: { c: BoardCard; onMove:
       }}
       className="rounded-[14px] border border-line bg-surface p-3 shadow-sm"
       data-testid="board-card"
-      aria-label={`${c.kind === "work_order" ? "Work order" : "Batch"} ${c.number}`}
+      aria-label={`${c.kind === "work_order" ? "Production order" : "Batch"} ${c.number}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-1.5">
         <Link href={c.href} className="whitespace-nowrap font-mono text-[13px] font-semibold text-primary-text hover:underline">
@@ -174,7 +174,7 @@ export function BoardView({ board }: { board: ProductionBoard }) {
         ))}
       </div>
       <p className="mt-1 text-[12px] text-muted">
-        Allowed moves: plan a draft work order, release a planned one (reserves materials), start a batch whose materials are staged. Staging is done by scan; QA decides release.
+        You can move a card: plan a draft production order, approve a planned one (its materials are set aside), or start a batch whose materials are ready. QA decides when a batch may be sold.
       </p>
     </div>
   );

@@ -12,6 +12,7 @@ import {
   endEarlyAction,
   stepDoneAction,
 } from "../../flow-actions";
+import { PackagingBox } from "./packaging-box";
 
 /** Second check of a step on this tablet: pick a name, then a confirm addressed to the checker (2 taps, ADR-078). */
 function StepCheck(p: Props) {
@@ -79,7 +80,17 @@ type Props = {
   nextLabel: string | null;
   weighHref: string;
   fullRecordHref: string;
+  /** Packaging step (ADR-088 §3): the wrappers taken at Get materials and the label button. */
+  packaging?: StepCardView["packaging"];
 };
+
+/** Plain question under a configured field name (the step's own names are configuration, ADR-088). */
+function fieldQuestion(code: string, name: string): string | null {
+  if (/destroy|damag|spoil/i.test(code) || /destroy|damag|spoil/i.test(name)) return "How many were spoiled?";
+  if (/left|return/i.test(code)) return "How many are left over?";
+  if (/used/i.test(code) || /used/i.test(name)) return "How many did you use?";
+  return null;
+}
 
 /**
  * The generic Step card (S5): one instruction, at most three fields, one button. Variants: check
@@ -126,7 +137,8 @@ export function StepCard(p: Props) {
           </p>
         )}
       </section>
-      <div className="min-w-0">
+      <div className="grid min-w-0 content-start gap-4">
+        {p.packaging && <PackagingBox batchId={p.batchId} stepNo={step.stepNo} packaging={p.packaging} canPerform={p.canPerform} done={step.status === "completed"} />}
         {step.status === "completed" ? (
           p.nextHref && p.nextLabel ? (
             <Link
@@ -520,7 +532,7 @@ function FieldsCard(p: Props) {
               {f.valueKind === "numeric" ? (
                 <KeypadField
                   id={`f-${f.id}`}
-                  label={f.name}
+                  label={fieldQuestion(f.code, f.name) ? `${fieldQuestion(f.code, f.name)} (${f.name})` : f.name}
                   unit={f.uom}
                   value={values[f.id] ?? ""}
                   active={active === f.id}

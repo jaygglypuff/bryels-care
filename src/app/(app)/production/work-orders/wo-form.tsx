@@ -87,7 +87,7 @@ export function WorkOrderForm({ mode, options, initial }: { mode: "create" | "ed
             </Select>
             {mode === "edit" && <input type="hidden" name="productId" value={productId} />}
           </Field>
-          <Field label="Formula" htmlFor="formulaId" error={fe.formulaId} hint={f?.effectiveRevision ? `Approved ${f.effectiveRevision}; revisions are resolved again when the work order is planned.` : "No approved revision yet: planning will be refused (V-REV)."}>
+          <Field label="Formula" htmlFor="formulaId" error={fe.formulaId} hint={f?.effectiveRevision ? `Approved ${f.effectiveRevision}; revisions are resolved again when the production order is planned.` : "No approved revision yet: planning will be refused (V-REV)."}>
             <Select id="formulaId" name="formulaId" value={f?.formulaId ?? ""} onChange={(e) => setFormulaId(e.target.value)}>
               {fs.map((x) => (
                 <option key={x.formulaId} value={x.formulaId}>{x.formulaCode} · {x.formulaName}</option>
@@ -139,7 +139,7 @@ export function WorkOrderForm({ mode, options, initial }: { mode: "create" | "ed
         {preview && <p className="rounded-[12px] border border-line bg-surface-2/60 px-3.5 py-2.5 text-[13px]">{preview}</p>}
         <FormMessage state={state} />
         <SubmitButton size="lg" variant="cta" pendingText="Saving…">
-          {mode === "create" ? "Create work order" : "Save changes"}
+          {mode === "create" ? "Create production order" : "Save changes"}
         </SubmitButton>
       </form>
     </Card>

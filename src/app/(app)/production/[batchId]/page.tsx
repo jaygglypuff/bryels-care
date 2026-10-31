@@ -49,6 +49,7 @@ import {
 import { registerAppHooks } from "@/modules/wiring";
 import { Help } from "@/ui/help/help";
 import { whoCanDo } from "@/modules/identity";
+import { Explain, PageIntro } from "@/ui/guide";
 
 // Execution ↔ QA hooks (idempotent; also registered at server start in src/instrumentation.ts).
 registerAppHooks();
@@ -87,7 +88,7 @@ function stepChip(s: ExecStep, currentNo: number | null, running: boolean): { la
   if (running && currentNo !== null && s.stepNo === currentNo + 1) return { label: "Next", tone: "neu" };
   return { label: "Later", tone: "neu" };
 }
-const LINE_STATUS: Record<string, string> = { pending: "Pending", partial: "Part weighed", dispensed: "Dispensed", exception: "Exception" };
+const LINE_STATUS: Record<string, string> = { pending: "Pending", partial: "Part weighed", dispensed: "Weighed", exception: "Exception" };
 
 function auditLine(a: BatchRecord["audits"][number]): string {
   const after = (a.after ?? {}) as Record<string, unknown>;
@@ -99,13 +100,13 @@ function auditLine(a: BatchRecord["audits"][number]): string {
       return "Batch in process";
     case "production.dispense_record.created":
     case "production.dispense_record.recorded":
-      return `Weighed ${s("materialName") || s("material")} ${fmtQty(s("actualQtyG"), "g", 1)} from lot ${s("lot")}${after.withinTolerance === false ? " (outside tolerance, exception)" : ""}${after.partial ? " (part)" : ""}`;
+      return `Weighed ${s("materialName") || s("material")} ${fmtQty(s("actualQtyG"), "g", 1)} from lot ${s("lot")}${after.withinTolerance === false ? " (outside allowed difference, exception)" : ""}${after.partial ? " (part)" : ""}`;
     case "production.dispense_record.checked":
       return `Weighing of ${s("material")} checked`;
     case "production.dispense_record.voided":
       return "Weighing voided";
     case "production.dispense_record.over_tolerance_approved":
-      return `Out-of-tolerance weight of ${s("material")} approved (CX-TOL)`;
+      return `Weight of ${s("material")} outside the allowed difference approved (CX-TOL)`;
     case "production.process_step.completed":
     case "production.process_step_record.completed":
       return `Step ${s("stepNo")} ${s("status") === "awaiting_check" ? "done, waiting for checker" : "completed"}: ${s("name")}`;
@@ -136,19 +137,23 @@ function auditLine(a: BatchRecord["audits"][number]): string {
       return `Exception approved on step ${s("stepNo")} (deviation opened)`;
     case "production.process_step_reading.recorded":
     case "production.process_step_reading.corrected":
-      return `Reading ${s("parameter")} = ${s("value")}${s("uom") ? ` ${s("uom")}` : ""}${after.isWithinLimits === false ? " (outside limits)" : ""}`;
+      return `Value ${s("parameter")} = ${s("value")}${s("uom") ? ` ${s("uom")}` : ""}${after.isWithinLimits === false ? " (outside limits)" : ""}`;
     case "production.equipment_use.created":
       return `Equipment ${s("equipment")} used on step ${s("stepNo")}`;
     case "production.yield_record.recorded":
     case "production.yield_record.corrected":
-      return `Yield recorded: ${s("actualUnits")} pcs, ${fmtQty(s("yieldPct"), "%", 2)}`;
+      return `Pieces made recorded: ${s("actualUnits")} pcs, ${fmtQty(s("yieldPct"), "%", 2)} of expected`;
     case "production.batch.submitted":
     case "production.batch.completed":
-      return `Posted to quarantine: ${s("actualUnits")} pcs, yield ${s("yieldPct") ? fmtQty(s("yieldPct"), "%", 2) : "—"}, output lot ${s("outputLot")} at ${s("location")}`;
+      return `Posted to the hold area: ${s("actualUnits")} pcs, ${s("yieldPct") ? fmtQty(s("yieldPct"), "%", 2) : "—"}, output lot ${s("outputLot")} at ${s("location")}`;
     case "quality.disposition.released":
       return "QA released the batch";
     case "quality.disposition.rejected":
       return "QA rejected the batch";
+    case "production.batch.finished":
+      return "Batch finished";
+    case "production.batch.label_lot_fixed":
+      return `Product labels: lot ${s("lotNumber")}, expiry ${s("expiresOn")}`;
     default:
       return a.action;
   }
@@ -334,7 +339,7 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
                 </summary>
                 <div className="absolute right-0 z-20 mt-1.5 flex w-[min(280px,calc(100vw-2rem))] flex-col gap-1.5 rounded-[14px] border border-line bg-surface p-2 shadow-[0_8px_24px_rgba(28,27,24,.14)]">
                   <Help screen="production.weighing" label="Help: weighing" text="Help: weighing" />
-                  <Help screen="production.line_clearance" label="Help: line clearance" text="Help: line clearance" />
+                  <Help screen="production.line_clearance" label="Help: clean-area check" text="Help: clean-area check" />
                   <LinkButton href={`/print/bmr/${batch.id}`} variant="secondary" target="_blank">
                     Print batch record
                   </LinkButton>
@@ -345,13 +350,17 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
               </details>
               {batch.status === "planned" && !batch.workOrderId && ctx.can("production.batch.edit") && <StartBatchForm batchId={batch.id} />}
               {batch.status === "planned" && batch.workOrderId && (
-                <LinkButton href={`/production/staging/${batch.id}`} variant="cta">
-                  Stage materials
+                <LinkButton href={`/production/orders/${batch.workOrderId}/materials?batch=${batch.id}`} variant="cta">
+                  Get materials
                 </LinkButton>
               )}
             </>
           }
         />
+        <PageIntro>Everything recorded for this batch: weighing, steps, counts and checks. It becomes the batch record (BMR).</PageIntro>
+        <div className="-mt-2 mb-3">
+          <Explain term="batch_record" />
+        </div>
       </div>
 
       {batch.status === "planned" && (
@@ -359,11 +368,11 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
           {batch.workOrderId
             ? "The warehouse stages the reserved lots by scan; the batch is ready when every ingredient is at the staging location."
             : ctx.can("production.batch.edit")
-              ? "Confirm the materials when they are at the weighing area, then sign the line clearance."
+              ? "Confirm the materials when they are at the weighing area, then sign the clean-area check."
               : "An operator confirms the materials when they are at the weighing area."}
         </Banner>
       )}
-      {batch.status === "materials_staged" && <Banner tone="info" title="Materials ready">Sign the weighing-area line clearance (step 1) to start the batch.</Banner>}
+      {batch.status === "materials_staged" && <Banner tone="info" title="Materials ready">Sign the weighing-area clean-area check (step 1) to start the batch.</Banner>}
       {batch.status === "awaiting_qc" && (
         <Banner tone="appr" title="Waiting for quality approval">
           Output lot {rec.outputLot?.lotNumber} ({fmtQty(batch.actualUnits, "pcs", 0)}) is in the hold area. Quality reviews the record and approves or rejects the batch.
@@ -580,12 +589,12 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
 
           {(ex.readyForTransfer || ex.yieldRecord || ex.outputs.length > 0) && (
             <Card data-testid="yield-transfer">
-              <CardTitle>Yield and move to the hold area</CardTitle>
+              <CardTitle>Pieces made and move to the hold area</CardTitle>
               {ex.yieldRecord && (
                 <div className={cx("mb-3 rounded-[12px] border p-3 text-[13px]", ex.yieldRecord.isWithinLimits ? "border-line" : "border-[var(--warn-bd)] bg-[var(--warn-bg)]")}>
                   <p className="tabular">
-                    <b>{fmtQty(ex.yieldRecord.actualUnits, "pcs", 0)}</b> · {fmtMass(ex.yieldRecord.actualBase)} of {fmtMass(ex.yieldRecord.theoreticalBase)} theoretical · yield{" "}
-                    <b>{fmtQty(ex.yieldRecord.yieldPct, "%", 2)}</b> (range {D(ex.yieldRecord.minPct).toString()}–{D(ex.yieldRecord.maxPct).toString()} %)
+                    <b>{fmtQty(ex.yieldRecord.actualUnits, "pcs", 0)}</b> · {fmtMass(ex.yieldRecord.actualBase)} of {fmtMass(ex.yieldRecord.theoreticalBase)} expected ·{" "}
+                    <b>{fmtQty(ex.yieldRecord.yieldPct, "%", 2)}</b> of the expected amount (OK {D(ex.yieldRecord.minPct).toString()}–{D(ex.yieldRecord.maxPct).toString()} %)
                   </p>
                   <p className="text-fg-2">Recorded by {ex.yieldRecord.recordedByName} · {fmtDateTime(ex.yieldRecord.recordedAt)}</p>
                   {!ex.yieldRecord.isWithinLimits &&
@@ -602,7 +611,7 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
                 <YieldForm batchId={batch.id} unitNetMassG={product.unitNetMassG} theoreticalG={batch.theoreticalYieldG ?? "0"} range={ex.yieldLimits} hasCurrent={!!ex.yieldRecord} idem={key()} />
               )}
               <div className="mt-4 flex flex-col gap-3">
-                <p className="text-[13px] font-semibold">Scrap and rework</p>
+                <p className="text-[13px] font-semibold">Rejects</p>
                 {ex.scrap.length === 0 ? (
                   <p className="text-[13px] text-muted">None recorded.</p>
                 ) : (
@@ -704,8 +713,8 @@ export default async function BatchWorkspace({ params, searchParams }: Params) {
 
       {rec.ingredients.some((i) => i.records.length) && (
         <Card className="hidden md:block">
-          <CardTitle>Dispense records</CardTitle>
-          <Table head={["Ingredient", "Lot", "Expiry", "Location", "Theoretical (g)", "Actual (g)", "Tolerance", "Operator", "Checker", "Scale", "Time"]}>
+          <CardTitle>Weigh out records</CardTitle>
+          <Table head={["Ingredient", "Lot", "Expiry", "Location", "Expected (g)", "Actual (g)", "Allowed difference", "Operator", "Checker", "Scale", "Time"]}>
             {rec.ingredients.flatMap((i) =>
               i.records.map((r) => (
                 <tr key={r.id}>

@@ -39,7 +39,14 @@ export type FormulaSnapshot = {
     phaseCode?: string | null;
     targetQtyG?: string;
     requiresChecker?: boolean;
+    /** Material kind at snapshot time (ADR-088 §3; absent on older batches = ingredient). */
+    materialKind?: string;
   }[];
+  /**
+   * ADR-088 §3: the packaging lines of the batch (wrappers, labels, boxes): the recipe's packaging lines
+   * (`recipe`) or, when the recipe has none, the per-piece setup (`per_piece`). Absent on older batches.
+   */
+  packaging?: { lineNo: number; materialId: string; materialCode: string; materialName: string; qty: string; baseUom: string; source: "recipe" | "per_piece"; perPiece?: string; extraPct?: string; pieces?: string }[];
   steps: {
     routingStepId: string;
     stepNo: number;

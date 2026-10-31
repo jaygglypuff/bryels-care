@@ -269,7 +269,7 @@ async function kpiValue(page, caption) {
   {
     const { context, page } = await asUser('planner.nfd@bryels-care.test');
     await page.goto(BASE + '/production/work-orders/new');
-    await expectText(page, 'New work order');
+    await expectText(page, 'New production order');
     const prodOpt = await page.locator('#productId option', { hasText: 'ACS-135' }).first().innerText();
     await page.selectOption('#productId', { label: prodOpt });
     await page.fill('#batchSizeKg', '17.6');
@@ -277,7 +277,7 @@ async function kpiValue(page, caption) {
     await page.fill('#plannedStart', manilaDate(0));
     await page.fill('#plannedEnd', manilaDate(2));
     await shot(page, 'work-order-form');
-    await page.getByRole('button', { name: 'Create work order' }).click();
+    await page.getByRole('button', { name: 'Create production order' }).click();
     await page.waitForURL(/\/production\/work-orders\/[0-9a-f-]{36}/, { timeout: 30000 });
     facts.workOrderId = page.url().split('/').pop().split('?')[0];
     await page.getByRole('button', { name: 'Plan (resolve revisions)' }).click();

@@ -166,14 +166,17 @@ export const printStationInput = z.object({
 const uuid = z.string().uuid();
 export const idempotencyKey = z.string().uuid("The form is missing its submission key. Reload the page and try again.");
 
-export const createLabelJobInput = z.object({
-  labelTemplateId: uuid,
-  entityType: z.enum(["inventory_lot", "location", "container"]),
-  entityId: uuid,
-  copies: z.coerce.number().int().min(1, "At least 1 copy.").max(99, "At most 99 copies per job."),
-  printStationId: uuid.optional().nullable(),
-  idempotencyKey: z.string().min(8).max(200),
-});
+export const createLabelJobInput = z
+  .object({
+    labelTemplateId: uuid,
+    entityType: z.enum(["inventory_lot", "location", "container", "batch"]),
+    entityId: uuid,
+    // ADR-088 §3: a batch's product labels are one per piece (up to 999 in one job); other labels at most 99.
+    copies: z.coerce.number().int().min(1, "At least 1 copy.").max(999, "At most 999 labels per job."),
+    printStationId: uuid.optional().nullable(),
+    idempotencyKey: z.string().min(8).max(200),
+  })
+  .refine((v) => v.entityType === "batch" || v.copies <= 99, { message: "At most 99 copies per job.", path: ["copies"] });
 export type CreateLabelJobInput = z.input<typeof createLabelJobInput>;
 
 export const reprintInput = z.object({

@@ -5,7 +5,7 @@ import { coSign } from "@/lib/auth/co-sign";
 import { type ActionState, DomainError, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
 import type { Permission } from "@/lib/permissions";
-import { approveStepException, batchSiteId, checkDispense, checkStep, confirmPicked, recordDispense, stepDone, submitChecklist } from "@/modules/production";
+import { approveStepException, batchSiteId, checkDispense, checkStep, confirmPicked, issuePackaging, printBatchLabels, recordDispense, stepDone, submitChecklist } from "@/modules/production";
 import { registerAppHooks } from "@/modules/wiring";
 
 // Execution ↔ QA hooks (deviations for early ends and out-of-range values); idempotent.
@@ -169,6 +169,37 @@ export async function checkStepAction(_: ActionState, fd: FormData): Promise<Act
     const r = await checkStep(checker, { batchId, stepNo, idempotencyKey: opt(fd, "idempotencyKey") });
     refreshCurrentPage();
     return { ok: true, message: `${r.name}: checked by ${checker.displayName}.` };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+export type LabelActionState = (NonNullable<ActionState> & { jobId?: string; alreadyPrinted?: boolean }) | null;
+
+/** "Print labels for this batch (N labels)" (ADR-088 §3): one label job of N copies; the page then opens its print view. */
+export async function printBatchLabelsAction(_: LabelActionState, fd: FormData): Promise<LabelActionState> {
+  try {
+    const ctx = await requireContext();
+    const r = await printBatchLabels(ctx, { batchId: uuid.parse(str(fd, "batchId")), copies: str(fd, "copies") ?? "", idempotencyKey: opt(fd, "idempotencyKey") ?? "" });
+    refreshCurrentPage();
+    return {
+      ok: true,
+      jobId: r.jobId,
+      alreadyPrinted: r.alreadyPrinted,
+      message: r.alreadyPrinted ? `These labels (lot ${r.lotNumber}) were already made. Open them, or reprint with a reason.` : `${r.copies} labels ready: lot ${r.lotNumber}, expiry ${r.expiresOn}.`,
+    };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** Packaging step without wrappers on the materials list: the operator scans or types the lot used (fallback). */
+export async function packagingLotAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const r = await issuePackaging(ctx, { batchId: uuid.parse(str(fd, "batchId")), stepNo: stepNoOf(fd), lotRef: str(fd, "lotRef") ?? "", qty: str(fd, "qty") ?? "", locationRef: opt(fd, "locationRef"), idempotencyKey: opt(fd, "idempotencyKey") });
+    refreshCurrentPage();
+    return { ok: true, message: `${r.materialName} lot ${r.lotNumber} recorded.` };
   } catch (e) {
     return toActionState(e);
   }

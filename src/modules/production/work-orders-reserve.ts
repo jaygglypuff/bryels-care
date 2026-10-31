@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import type { DbOrTx, Tx } from "@/db/client";
-import { batchMaterialStagings, batchMaterials, batches, bomLines, formulaRevisions, inventoryLots, locations, materials, stockReservations, workOrders } from "@/db/schema";
+import { batchMaterialStagings, batchMaterials, batches, bomLines, formulaRevisions, formulas, inventoryLots, locations, materials, products, stockReservations, workOrders } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { nextNumber } from "@/lib/numbering";
@@ -11,6 +11,7 @@ import { candidatesFor, lockLots, resolveAllocationStrategy } from "@/modules/in
 
 type Candidate = Awaited<ReturnType<typeof candidatesFor>>[number];
 import { addDays, manilaToday } from "./shared";
+import { expectedPieces, isPackagingKind, perPieceQty, perPieceSetup } from "./packaging-lines";
 
 /**
  * Material requirement and FEFO reservation for work orders (US-3-05 AC1, W05-04, A-PROC-09).
@@ -34,7 +35,7 @@ export type MaterialRequirement = {
   required: Decimal;
 };
 
-export async function workOrderRequirements(q: DbOrTx, wo: Pick<WoForReserve, "formulaRevisionId" | "batchCount" | "batchSizeBase">): Promise<MaterialRequirement[]> {
+export async function workOrderRequirements(q: DbOrTx, wo: Pick<WoForReserve, "formulaRevisionId" | "batchCount" | "batchSizeBase"> & { siteId?: string | null }): Promise<MaterialRequirement[]> {
   if (!wo.formulaRevisionId) return [];
   const [rev] = await q.select().from(formulaRevisions).where(eq(formulaRevisions.id, wo.formulaRevisionId)).limit(1);
   if (!rev) return [];
@@ -52,6 +53,21 @@ export async function workOrderRequirements(q: DbOrTx, wo: Pick<WoForReserve, "f
     const r = out.get(material.id);
     if (r) r.required = r.required.plus(qty);
     else out.set(material.id, { materialId: material.id, materialCode: material.code, materialName: material.name, materialKind: material.materialKind, baseUom: material.baseUom, required: qty });
+  }
+  // ADR-088 §3: a recipe without packaging lines takes them from the product's per-piece setup (same
+  // arithmetic as insertBatch, per batch, so what is set aside is what each batch's list shows).
+  if (!lines.some(({ material }) => isPackagingKind(material.materialKind))) {
+    const [fp] = await q.select({ organizationId: formulas.organizationId, sku: products.skuCode, unitNetMassG: products.unitNetMassG }).from(formulas).innerJoin(products, eq(products.id, formulas.productId)).where(eq(formulas.id, rev.formulaId)).limit(1);
+    if (fp) {
+      const pieces = expectedPieces(wo.batchSizeBase, rev.theoreticalYieldPct, fp.unitNetMassG);
+      for (const p of await perPieceSetup(q, fp.organizationId, wo.siteId ?? null, fp.sku)) {
+        const qty = perPieceQty(pieces, p.perPiece, p.extraPct).mul(wo.batchCount);
+        if (qty.lte(0)) continue;
+        const r = out.get(p.materialId);
+        if (r) r.required = r.required.plus(qty);
+        else out.set(p.materialId, { materialId: p.materialId, materialCode: p.materialCode, materialName: p.materialName, materialKind: p.materialKind, baseUom: p.baseUom, required: qty });
+      }
+    }
   }
   return [...out.values()];
 }

@@ -104,7 +104,7 @@ export async function closureChecks(q: DbOrTx, ctx: AuthContext, b: typeof batch
         .where(and(eq(dispositions.subjectType, "batch"), eq(dispositions.subjectId, b.id), eq(dispositions.toStatus, b.status)))
         .limit(1)
     : [];
-  checks.push({ code: "disposition", label: "Disposition recorded", ok: !!disp, blocking: true, detail: disp ? "QA disposition is on record." : "No QA disposition matching the batch state is on record." });
+  checks.push({ code: "disposition", label: "QA decision on record", ok: !!disp, blocking: true, detail: disp ? "The QA decision is on record." : "No QA decision matching the batch is on record." });
 
   if (b.status === "released") {
     const pending = await q.select({ id: batchMaterials.id }).from(batchMaterials).where(and(eq(batchMaterials.batchId, b.id), eq(batchMaterials.status, "pending")));
@@ -112,14 +112,14 @@ export async function closureChecks(q: DbOrTx, ctx: AuthContext, b: typeof batch
     const snap = b.formulaSnapshot as FormulaSnapshot;
     const done = new Set((await q.select({ n: processStepRecords.stepNo }).from(processStepRecords).where(eq(processStepRecords.batchId, b.id))).map((r) => r.n));
     const open = snap.steps.filter((s) => !done.has(s.stepNo));
-    checks.push({ code: "steps", label: "Every routing step recorded", ok: open.length === 0, blocking: true, detail: open.length ? `Not recorded: ${open.map((s) => `${s.stepNo}. ${s.name}`).join(", ")}.` : `${snap.steps.length} of ${snap.steps.length} steps recorded.` });
-    checks.push({ code: "output", label: "Output posted", ok: !!b.outputLotId && !!b.actualOutputG, blocking: true, detail: b.outputLotId ? "Output lot and actual yield recorded." : "No output lot / actual yield recorded." });
+    checks.push({ code: "steps", label: "Every step recorded", ok: open.length === 0, blocking: true, detail: open.length ? `Not recorded: ${open.map((s) => `${s.stepNo}. ${s.name}`).join(", ")}.` : `${snap.steps.length} of ${snap.steps.length} steps recorded.` });
+    checks.push({ code: "output", label: "Finished lot posted", ok: !!b.outputLotId && !!b.actualOutputG, blocking: true, detail: b.outputLotId ? "Finished lot and pieces made recorded." : "No output lot / actual yield recorded." });
   }
 
   const openDevs = await openDeviationNumbers(q, b.id);
   checks.push({
     code: "deviations",
-    label: "Deviations closed",
+    label: "Problem reports closed",
     ok: openDevs === null || openDevs.length === 0,
     blocking: true,
     detail: openDevs === null ? "Deviations are not tracked electronically in this version (check the paper deviation log)." : openDevs.length ? `Open: ${openDevs.join(", ")}.` : "No open deviations.",
@@ -133,7 +133,7 @@ export async function closureChecks(q: DbOrTx, ctx: AuthContext, b: typeof batch
   // itself) has no yield record to check; the BMR prints its actual yield from the batch.
   const [posted] = await q.select({ id: batchOutputs.id }).from(batchOutputs).where(eq(batchOutputs.batchId, b.id)).limit(1);
   if (y.available && b.status === "released" && !posted && !y.rows.length) {
-    checks.push({ code: "yield_record", label: "Yield reconciliation checked", ok: true, blocking: false, detail: "Recorded before electronic execution records; the BMR prints the actual yield from the batch." });
+    checks.push({ code: "yield_record", label: "Pieces made checked", ok: true, blocking: false, detail: "Recorded before electronic execution records; the BMR prints the actual yield from the batch." });
   } else if (y.available && b.status === "released") {
     const rec = y.rows[0];
     // ADR-080 §6/§8: with no checker at Finish, QA's "batch record reviewed" tick on the pass is the
@@ -148,17 +148,17 @@ export async function closureChecks(q: DbOrTx, ctx: AuthContext, b: typeof batch
       : [];
     checks.push({
       code: "yield_record",
-      label: "Yield reconciliation checked",
+      label: "Pieces made checked",
       ok: !!rec?.checkedBy || !!reviewed,
       blocking: true,
       detail: !rec ? "No yield record." : rec.checkedBy ? `Checked by ${rec.checkedBy} (co-signed the transfer to quarantine).` : reviewed ? `Reviewed by ${reviewed.name} at the quality check (batch record reviewed).` : "The yield record has not been checked by a second person.",
     });
   } else {
-    checks.push({ code: "yield_record", label: "Yield reconciliation checked", ok: true, blocking: false, detail: y.available ? "Not required for a rejected batch." : "Yield reconciliation records are not captured electronically in this version; the BMR prints the actual yield." });
+    checks.push({ code: "yield_record", label: "Pieces made checked", ok: true, blocking: false, detail: y.available ? "Not required for a rejected batch." : "Yield reconciliation records are not captured electronically in this version; the BMR prints the actual yield." });
   }
 
   const tpl = await bmrTemplateFor(q, ctx, { id: b.id, siteId: b.siteId, createdAt: b.createdAt });
-  checks.push({ code: "bmr_template", label: "Approved BMR template", ok: !!tpl, blocking: true, detail: tpl ? `${tpl.template.code} v${tpl.version.versionNo}` : "No approved BMR template is available; QA must approve one first." });
+  checks.push({ code: "bmr_template", label: "Approved batch record (BMR) layout", ok: !!tpl, blocking: true, detail: tpl ? `${tpl.template.code} v${tpl.version.versionNo}` : "No approved BMR template is available; QA must approve one first." });
   return checks;
 }
 

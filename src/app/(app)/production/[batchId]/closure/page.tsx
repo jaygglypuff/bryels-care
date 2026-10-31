@@ -9,6 +9,7 @@ import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { AmendmentForm, AttachPaperForm, CloseBatchForm, DecideReopenForm, IssuePaperForm, ReopenRequestForm, ReviewPaperForm, VoidPaperForm, WithdrawReopenForm } from "./forms";
 import { Help } from "@/ui/help/help";
+import { PageIntro } from "@/ui/guide";
 
 export const metadata = { title: "Batch closure and records" };
 export const dynamic = "force-dynamic";
@@ -53,6 +54,7 @@ export default async function ClosurePage({ params }: { params: Promise<{ batchI
           </>
         }
       />
+      <PageIntro>Last check after QA: every record is complete, then the batch is closed for good.</PageIntro>
 
       {v.activeReopenNo && (
         <Banner tone="warn" title={`Reopened for amendment (rev ${v.activeReopenNo})`}>

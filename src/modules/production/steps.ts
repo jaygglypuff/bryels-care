@@ -1,4 +1,5 @@
 import "server-only";
+import { issueTakenPackagingLocked } from "./packaging-flow";
 import { type DbOrTx, db } from "@/db/client";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -71,6 +72,8 @@ export async function completeStep(ctx: AuthContext, input: CompleteStepInput, s
       }
       if (signers.checker) assertCheckerFor(signers.checker, ctx.userId, step.stepKind, batch.siteId);
       const rec = await openStep(tx, ctx, batch, step);
+      // ADR-088 §3: wrappers and labels taken at Get materials are recorded on the packaging step (no scan).
+      await issueTakenPackagingLocked(tx, ctx, batch, step, rec);
       const blockers = await stepBlockers(tx, ctx, batch, step, rec);
       if (blockers.length) {
         throw new DomainError("state", `${stepLabel(step).replace(/^s/, "S")} cannot be completed yet: ${blockers.map((b) => b.message).join(" ")}`, {

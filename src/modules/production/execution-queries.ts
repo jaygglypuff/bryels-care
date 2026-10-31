@@ -180,7 +180,8 @@ export async function getBatchExecution(ctx: AuthContext, batchId: string) {
     });
   }
 
-  const ingredients = lines.map(({ bm, m }) => ({
+  // ADR-088 §3: packaging lines are not weighed; they are issued at the packaging step.
+  const ingredients = lines.filter(({ m }) => m.materialKind !== "packaging").map(({ bm, m }) => ({
     id: bm.id,
     lineNo: bm.lineNo,
     materialCode: m.code,

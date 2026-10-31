@@ -137,7 +137,8 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
   const { batch, product, siteCode } = await visibleBatch(q, ctx, batchId);
   const snap = batch.formulaSnapshot as FormulaSnapshot;
 
-  const mats = await q.select().from(batchMaterials).where(eq(batchMaterials.batchId, batch.id)).orderBy(asc(batchMaterials.lineNo));
+  // ADR-088 §3: packaging lines (status `packaging`) are not weighed; they appear in the packaging section.
+  const mats = (await q.select().from(batchMaterials).where(eq(batchMaterials.batchId, batch.id)).orderBy(asc(batchMaterials.lineNo))).filter((m) => m.status !== "packaging");
   const disp = mats.length
     ? await q
         .select({ r: dispenseRecords, lotNumber: inventoryLots.lotNumber, supplierLot: inventoryLots.supplierLotNumber, expiresOn: inventoryLots.expiresOn })

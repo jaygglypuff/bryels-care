@@ -167,7 +167,7 @@ export async function getMaterialsList(ctx: AuthContext, batchId: string) {
       at: c && state !== "open" ? c.pickedAt : null,
       reason: c?.reason ?? null,
       weighingOpen: l.bm.status === "pending" || l.bm.status === "partial",
-      needsCheck: snap.lines.find((x) => x.bomLineId === l.bm.bomLineId)?.requiresChecker !== false,
+      needsCheck: l.material.materialKind !== "packaging" && snap.lines.find((x) => x.bomLineId === l.bm.bomLineId)?.requiresChecker !== false,
     });
   }
   const moveStock = await getSetting(db, ctx.organizationId, "production.prepare.move_stock", b.siteId);

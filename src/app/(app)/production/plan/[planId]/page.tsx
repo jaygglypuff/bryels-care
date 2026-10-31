@@ -10,6 +10,7 @@ import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { planCommandAction } from "../../work-orders/actions";
 import { CommandForm } from "../../work-orders/command-form";
+import { PageIntro } from "@/ui/guide";
 
 export const metadata: Metadata = { title: "Production plan" };
 export const dynamic = "force-dynamic";
@@ -41,18 +42,19 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ pla
         }
         actions={<LinkButton href="/production/plan" variant="secondary">All plans</LinkButton>}
       />
+      <PageIntro>One plan: what to make for each product. Turn a line into a production order when it is right.</PageIntro>
       {d.approvalRequired && p.status === "draft" && (
         <div className="mb-4">
-          <Banner tone="info" title="Approval required">Lines become work orders after a site manager approves this plan (another person than its author).</Banner>
+          <Banner tone="info" title="Approval required">Lines become production orders after a site manager approves this plan (another person than its author).</Banner>
         </div>
       )}
       <div className="mb-4 flex flex-wrap gap-3">
         {d.actions.canApprove && <CommandForm action={planCommandAction} fields={{ planId: p.id, command: "approve" }} label="Approve plan" variant="cta" />}
-        {d.actions.canClose && <CommandForm action={planCommandAction} fields={{ planId: p.id, command: "close" }} label="Close plan" variant="secondary" confirm="Close this plan? Its lines can no longer become work orders." />}
+        {d.actions.canClose && <CommandForm action={planCommandAction} fields={{ planId: p.id, command: "close" }} label="Close plan" variant="secondary" confirm="Close this plan? Its lines can no longer become production orders." />}
       </div>
       {d.lines.length === 0 ? (
         <Card>
-          <p className="text-[14px]">Nothing to make: demand in this period is covered by available stock and open work orders.</p>
+          <p className="text-[14px]">Nothing to make: demand in this period is covered by available stock and open production orders.</p>
         </Card>
       ) : (
         <div className="space-y-3">
@@ -116,7 +118,7 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ pla
                     <StatusChip status={l.workOrder.status} />
                   </p>
                 ) : d.actions.canConvert ? (
-                  <CommandForm action={planCommandAction} fields={{ planId: p.id, command: "convert", planLineId: l.id }} label="Create work order" variant="secondary" size="sm">
+                  <CommandForm action={planCommandAction} fields={{ planId: p.id, command: "convert", planLineId: l.id }} label="Create production order" variant="secondary" size="sm">
                     <Field label="Planned start" htmlFor={`start-${l.id}`}>
                       <Input id={`start-${l.id}`} name="plannedStart" type="date" defaultValue={addDays(manilaToday(), 1)} />
                     </Field>

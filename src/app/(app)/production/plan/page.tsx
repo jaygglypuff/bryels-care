@@ -8,6 +8,7 @@ import { StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { buildPlanAction, minStockAction } from "../work-orders/actions";
 import { CommandForm } from "../work-orders/command-form";
+import { PageIntro } from "@/ui/guide";
 
 export const metadata: Metadata = { title: "Production plan" };
 export const dynamic = "force-dynamic";
@@ -22,7 +23,8 @@ export default async function PlanPage() {
   const [plans, overview] = await Promise.all([listProductionPlans(ctx), planningOverview(ctx, end)]);
   return (
     <div>
-      <PageHeader title="Production plan" subtitle={`${ctx.currentSite.code} · demand from confirmed orders and minimum stock → work orders`} />
+      <PageHeader title="Production plan" subtitle={`${ctx.currentSite.code} · demand from confirmed orders and minimum stock → production orders`} />
+      <PageIntro>What customers ordered and what stock is low, so you can decide what to make.</PageIntro>
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="min-w-0 space-y-4">
           <Card>
@@ -54,7 +56,7 @@ export default async function PlanPage() {
             {plans.length === 0 ? (
               <EmptyState title="No plans yet">Build the first plan from the demand above.</EmptyState>
             ) : (
-              <Table head={["Plan", "Period", "Lines", "Work orders", "Status", "By"]}>
+              <Table head={["Plan", "Period", "Lines", "Production orders", "Status", "By"]}>
                 {plans.map((p) => (
                   <tr key={p.p.id}>
                     <Td>

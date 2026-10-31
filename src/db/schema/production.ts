@@ -38,6 +38,14 @@ export const batches = pgTable(
     theoreticalYieldG: numeric("theoretical_yield_g", QTY),
     yieldPct: numeric("yield_pct", QTY),
     outputLotId: uuid("output_lot_id"),
+    /**
+     * ADR-088 §3: the finished lot number and dates frozen when the batch's product labels are first
+     * printed (packaging step), so the labels on the bars and the lot posted at Finish always agree.
+     * Null until labels are printed; Finish then allocates and computes them as before.
+     */
+    outputLotNumber: text("output_lot_number"),
+    outputManufacturedOn: text("output_manufactured_on"),
+    outputExpiresOn: text("output_expires_on"),
     remarks: text("remarks"),
     /** Work order the batch executes (W2A, US-3-06). Null only for MVP-era and seed batches created before work orders. */
     workOrderId: uuid("work_order_id").references((): AnyPgColumn => workOrders.id),
@@ -61,7 +69,8 @@ export const batchStateTransitions = pgTable("batch_state_transitions", {
 export const batchMaterials = pgTable("batch_materials", {
   id: id(),
   batchId: uuid("batch_id").notNull().references(() => batches.id),
-  bomLineId: uuid("bom_line_id").notNull().references(() => bomLines.id),
+  /** Null for a packaging line added from the per-piece packaging setup (ADR-088 §3; formula has no packaging line). */
+  bomLineId: uuid("bom_line_id").references(() => bomLines.id),
   lineNo: integer("line_no").notNull(),
   materialId: uuid("material_id").notNull().references(() => materials.id),
   theoreticalQtyG: numeric("theoretical_qty_g", QTY).notNull(),

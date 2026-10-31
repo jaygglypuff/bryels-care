@@ -206,7 +206,13 @@ export async function packagingBlockers(q: DbOrTx, batch: BatchRow, step: Snapsh
   if (!(RECONCILED_STEP_KINDS as readonly string[]).includes(step.stepKind)) return [];
   const rows = rec ? (await currentPackaging(q, batch.id)).filter((x) => x.r.processStepRecordId === rec.id) : [];
   const out: { message: string; exceptionable: boolean }[] = [];
-  if (!rows.length) out.push({ message: "Issue the packaging and label lots used (scan each lot).", exceptionable: false });
+  if (!rows.length) {
+    // ADR-088 §3: wrappers taken at Get materials (set aside for the order) are recorded by "Step done"
+    // itself; only when nothing is waiting to be recorded must the lot be scanned or typed.
+    const { packagingLinesOf } = await import("./packaging-flow");
+    const line = (await packagingLinesOf(q, batch)).some((l) => l.plan.length > 0);
+    if (!line) out.push({ message: "No wrappers or labels are recorded for this batch. Scan or type the lot you used.", exceptionable: false });
+  }
   for (const { r, materialName, lotNumber } of rows) {
     if (!r.countedAt) continue;
     if (!r.isWithinTolerance && !rec?.deviationId) {

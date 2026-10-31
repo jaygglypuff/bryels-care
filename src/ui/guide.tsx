@@ -13,7 +13,7 @@ import { cx } from "./core";
  */
 
 export function PageIntro({ children }: { children: ReactNode }) {
-  return <p className="-mt-3 mb-4 max-w-[70ch] text-[15px] leading-snug text-fg-2">{children}</p>;
+  return <div className="-mt-3 mb-4 max-w-[70ch] text-[15px] leading-snug text-fg-2">{children}</div>;
 }
 
 export function NextStep({

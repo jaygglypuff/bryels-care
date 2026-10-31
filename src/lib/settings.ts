@@ -147,6 +147,32 @@ export const SETTINGS = {
     default: { defaultQty: 0 } as { defaultQty: number; byMaterialCode?: Record<string, number> },
     assumption: "A-PROC-19", group: "Production", label: "Packaging reconciliation tolerance", requiresApproval: true,
   },
+  /**
+   * ADR-088 §3 (A-G5-01): packaging per piece of a product, used only when the batch's recipe lists no
+   * packaging line (material kind `packaging`). Keyed by product SKU code; each entry adds a packaging
+   * line to the batch (expected pieces × perPiece, plus extraPct spare, rounded up) that is set aside at
+   * approval and taken at "Get materials" like an ingredient. Empty = no fallback.
+   */
+  "production.packaging.per_piece": {
+    scopes: ["organization", "site"],
+    schema: z.record(z.string(), z.array(z.object({ materialCode: z.string().min(1), perPiece: z.number().positive().max(1000), extraPct: z.number().min(0).max(100).optional() })).max(10)),
+    default: {} as Record<string, { materialCode: string; perPiece: number; extraPct?: number }[]>,
+    assumption: "A-G5-01",
+    group: "Production",
+    label: "Packaging per piece (when the recipe has none)",
+    description: "For each product code: the wrappers, labels or boxes one piece needs. Used only when the recipe lists no packaging. They are set aside with the ingredients and taken at Get materials.",
+    requiresApproval: true,
+  },
+  /** ADR-088 §3: the packaging step card offers "Print labels for this batch"; label template code for the batch labels (empty = the first approved finished-goods template of the site). */
+  "production.packaging.batch_label_template": {
+    scopes: ["organization", "site"],
+    schema: z.string().max(64),
+    default: "" as string,
+    assumption: "A-G5-02",
+    group: "Production",
+    label: "Label for the batch's products",
+    description: "Code of the approved label template printed from the packaging step (one per piece). Empty: the first approved finished-goods label of the site.",
+  },
   /** Scrap or rework above this % of the theoretical unit count needs approval (production.scrap_rework_record.approve). */
   "production.scrap.approval_threshold_pct": { scopes: ["organization", "site"], schema: z.number().min(0).max(100), default: 2, assumption: "A-W2B-04", group: "Production", label: "Scrap or rework needs approval above (%)", requiresApproval: true },
   // Scrap and rework reasons moved to the shared reason codes (categories scrap / rework, US-1-24).

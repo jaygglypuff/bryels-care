@@ -25,6 +25,8 @@ export { recordDispense, checkDispense, voidDispense, toleranceRange, toBaseQty,
 export { recordReading, selectEquipment, approveStepException, evaluateReading, limitsLabel } from "./process";
 export { startStep, completeStep, type CompleteStepInput } from "./steps";
 export { issuePackaging, countPackaging } from "./packaging";
+export { printBatchLabels, packagingLinesOf, type PackagingLineView } from "./packaging-flow";
+export { isPackagingKind, perPieceSetup, expectedPieces, perPieceQty } from "./packaging-lines";
 // ADR-080 G3: Finish batch (one transaction over the yield, rejects, packaging and hold-area bodies).
 export { finishBatch, getFinishView, defaultHoldLocation, type FinishBatchInput, type FinishReject, type FinishPackaging, type FinishView } from "./finish";
 export { recordYield, approveYield, recordScrapRework, decideScrapRework } from "./yield";

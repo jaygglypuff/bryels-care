@@ -7,31 +7,33 @@ import { Card, EmptyState, LinkButton, PageHeader, Select, Table, Td } from "@/u
 import { Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { Help } from "@/ui/help/help";
+import { PageIntro } from "@/ui/guide";
 
-export const metadata: Metadata = { title: "Work orders" };
+export const metadata: Metadata = { title: "Production orders" };
 export const dynamic = "force-dynamic";
 
 const WORD: Record<string, string> = { in_progress: "In progress", completed: "Completed", released: "Released" };
 
 export default async function WorkOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("production.work_order.view")) return <Forbidden what="work orders" />;
+  if (!ctx.can("production.work_order.view")) return <Forbidden what="production orders" />;
   const sp = await searchParams;
   const status = sp.status ?? "open";
   const rows = await listWorkOrders(ctx, { status, q: sp.q });
   return (
     <div>
       <PageHeader
-        title="Work orders"
+        title="Production orders"
         subtitle={`${ctx.currentSite.code} · ${ctx.currentSite.name} · plan, release with material reservation, then create batches`}
         actions={
           <>
             <Help screen="production.work_order" />
             <LinkButton href="/production/board" variant="secondary">Board</LinkButton>
-            {ctx.can("production.work_order.create") && <LinkButton href="/production/work-orders/new" variant="cta">New work order</LinkButton>}
+            {ctx.can("production.work_order.create") && <LinkButton href="/production/work-orders/new" variant="cta">New production order</LinkButton>}
           </>
         }
       />
+      <PageIntro>Older production order screen. Use Production orders for daily work.</PageIntro>
       <form className="mb-4 flex flex-wrap items-end gap-2" method="get">
         <label className="flex min-w-[160px] flex-col gap-1 text-[13px] font-medium">
           Status
@@ -50,8 +52,8 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
         <button className="min-h-[44px] rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" type="submit">Filter</button>
       </form>
       {rows.length === 0 ? (
-        <EmptyState title="No work orders match" action={ctx.can("production.work_order.create") ? <LinkButton href="/production/work-orders/new">Create a work order</LinkButton> : undefined}>
-          A work order says what to make, how much, when and on which line. Batches are created from it once it is planned.
+        <EmptyState title="No production orders match" action={ctx.can("production.work_order.create") ? <LinkButton href="/production/work-orders/new">Create a production order</LinkButton> : undefined}>
+          A production order says what to make, how much, when and on which line. Batches are created from it once it is planned.
         </EmptyState>
       ) : (
         <>
@@ -71,7 +73,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
             ))}
           </div>
           <Card className="hidden p-0 sm:p-0 md:block">
-            <Table head={["Work order", "Product", "Batches", "Quantity", "Line", "Planned", "Status"]}>
+            <Table head={["Production order", "Product", "Batches", "Quantity", "Line", "Planned", "Status"]}>
               {rows.map((r) => (
                 <tr key={r.id} className="hover:bg-surface-2/60">
                   <Td>

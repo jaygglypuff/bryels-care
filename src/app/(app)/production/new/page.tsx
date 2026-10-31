@@ -8,6 +8,7 @@ import { StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { workOrderCommandAction } from "../work-orders/actions";
 import { CommandForm } from "../work-orders/command-form";
+import { PageIntro } from "@/ui/guide";
 
 export const metadata: Metadata = { title: "New batch" };
 export const dynamic = "force-dynamic";
@@ -22,10 +23,11 @@ export default async function NewBatchPage() {
   const rows = ctx.can("production.work_order.view") ? (await listWorkOrders(ctx, { status: "open" })).filter((w) => ["planned", "released", "in_progress"].includes(w.status) && w.batchesTotal < w.batchCount) : [];
   return (
     <div className="mx-auto max-w-2xl">
-      <PageHeader title="New batch" subtitle={`${ctx.currentSite.code} · batches are created from a planned or released work order`} />
+      <PageHeader title="New batch" subtitle={`${ctx.currentSite.code} · batches are created from a planned or released production order`} />
+      <PageIntro>Make a batch from an approved production order. The system numbers it.</PageIntro>
       {rows.length === 0 ? (
-        <EmptyState title="No work order is waiting for batches" action={ctx.can("production.work_order.create") ? <LinkButton href="/production/work-orders/new">New work order</LinkButton> : <LinkButton href="/production/work-orders" variant="secondary">Work orders</LinkButton>}>
-          Plan a work order first: planning resolves the approved formula and routing revisions that every batch then freezes.
+        <EmptyState title="No production order is waiting for batches" action={ctx.can("production.work_order.create") ? <LinkButton href="/production/work-orders/new">New production order</LinkButton> : <LinkButton href="/production/work-orders" variant="secondary">Production orders</LinkButton>}>
+          Plan a production order first: planning resolves the approved formula and routing revisions that every batch then freezes.
         </EmptyState>
       ) : (
         <div className="grid gap-3">

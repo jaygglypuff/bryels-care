@@ -16,6 +16,7 @@ import { generateSheetAction, substitutionAction } from "../../work-orders/actio
 import { CommandForm } from "../../work-orders/command-form";
 import { StageFlow, StageLotButton } from "./stage-flow";
 import Decimal from "decimal.js";
+import { PageIntro } from "@/ui/guide";
 
 export const metadata: Metadata = { title: "Stage materials" };
 export const dynamic = "force-dynamic";
@@ -47,16 +48,17 @@ export default async function StageBatchPage({ params }: { params: Promise<{ bat
             </span>
           </span>
         }
-        actions={<><Help screen="production.staging" />{v.workOrder ? <LinkButton href={`/production/work-orders/${v.workOrder.id}?tab=materials`} variant="secondary">Work order</LinkButton> : undefined}</>}
+        actions={<><Help screen="production.staging" />{v.workOrder ? <LinkButton href={`/production/work-orders/${v.workOrder.id}?tab=materials`} variant="secondary">Production order</LinkButton> : undefined}</>}
       />
-      {!v.workOrder && <Banner tone="info" title="No work order">This batch was created without a work order, so no lots are reserved for it. Staging by scan applies to work-order batches.</Banner>}
+      <PageIntro>Scan each set-aside lot and the making area to move it there. Most sites use Get materials instead.</PageIntro>
+      {!v.workOrder && <Banner tone="info" title="No production order">This batch was created without a production order, so no lots are reserved for it. Staging by scan applies to work-order batches.</Banner>}
       {v.workOrder && !["released", "in_progress"].includes(v.workOrder.status) && (
-        <Banner tone="warn" title={`Work order ${v.workOrder.status.replace(/_/g, " ")}`}>Materials are reserved when the work order is released. Ask the site manager to release it.</Banner>
+        <Banner tone="warn" title={`Production order ${v.workOrder.status.replace(/_/g, " ")}`}>Materials are reserved when the production order is released. Ask the site manager to release it.</Banner>
       )}
       {b.status !== "planned" && (
         <div className="mb-4">
           <Banner tone={v.allStaged ? "ok" : "info"} title={v.allStaged ? "All ingredients staged" : `Batch is ${b.status.replace(/_/g, " ")}`}>
-            {b.status === "materials_staged" ? "The batch is ready for the weighing-area line clearance." : <Link className="underline" href={`/production/${b.id}`}>Open the batch workspace</Link>}
+            {b.status === "materials_staged" ? "The batch is ready for the weighing-area clean-area check." : <Link className="underline" href={`/production/${b.id}`}>Open the batch workspace</Link>}
           </Banner>
           {b.status === "materials_staged" && ctx.can("production.batch.view") && (
             <div className="mt-3">
@@ -159,7 +161,7 @@ export default async function StageBatchPage({ params }: { params: Promise<{ bat
         <CardTitle>Documents</CardTitle>
         {canPrint ? (
           <div className="flex flex-wrap gap-3">
-            <CommandForm action={generateSheetAction} fields={{ batchId: b.id, kind: "dispensing_sheet" }} label="Print dispensing sheet" variant="secondary" pendingText="Generating…" />
+            <CommandForm action={generateSheetAction} fields={{ batchId: b.id, kind: "dispensing_sheet" }} label="Print weighing sheet" variant="secondary" pendingText="Generating…" />
             <CommandForm action={generateSheetAction} fields={{ batchId: b.id, kind: "traveler" }} label="Print traveler" variant="secondary" pendingText="Generating…" />
           </div>
         ) : (

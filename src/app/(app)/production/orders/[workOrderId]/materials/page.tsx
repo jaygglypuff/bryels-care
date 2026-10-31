@@ -4,6 +4,7 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { canTickMaterials, getMaterialsList, nextBatchScreen, type MaterialsListView } from "@/modules/production";
 import { LinkButton } from "@/ui/core";
+import { Explain, PageIntro } from "@/ui/guide";
 import { Help } from "@/ui/help/help";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../../forbidden";
@@ -40,13 +41,16 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
   return (
     <div className="mx-auto max-w-5xl pb-28 text-[16px]">
       <FlowHeader
-        title="Materials list"
+        title="Get materials"
         batchNumber={v.batch.batchNumber}
         orderHref={orderHref}
         progress={<span data-testid="pick-progress">{v.ready ? "Materials ready" : `${done} of ${v.progress.lines} taken`}</span>}
         actions={<Help screen="production.materials_list" />}
       />
-      <p className="mb-4 text-[15px] text-muted">{v.productName}. Bring each item to the mixing area and tap Taken. You confirm the lot again when you weigh.</p>
+      <PageIntro>{v.productName}: take each item from its shelf, also the wrappers and labels, bring it to the making area and tap Taken.</PageIntro>
+      <div className="-mt-2 mb-3">
+        <Explain term="lot" />
+      </div>
       {v.ready && (
         <div className="mb-4">
           <Banner tone="ok" title="Materials ready" action={next.href ? <LinkButton href={next.href} variant="cta" size="lg">{next.label}</LinkButton> : undefined}>
@@ -81,6 +85,7 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
             state: l.state,
             by: l.by,
             reason: l.reason,
+            packaging: l.materialKind === "packaging",
             lots: l.lots.map((x) => ({ lotNumber: x.lotNumber, place: x.locationName || x.locationCode, section: x.sectionLabel, expiresOn: x.expiresOn, problem: x.problem })),
           }))}
         />

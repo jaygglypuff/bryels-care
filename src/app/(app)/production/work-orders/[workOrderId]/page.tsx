@@ -13,8 +13,9 @@ import { CommandForm } from "../command-form";
 import { WorkOrderForm } from "../wo-form";
 import { NextStep, type NextStepProps } from "../next-step";
 import { Help } from "@/ui/help/help";
+import { PageIntro } from "@/ui/guide";
 
-export const metadata: Metadata = { title: "Work order" };
+export const metadata: Metadata = { title: "Production order" };
 export const dynamic = "force-dynamic";
 
 const TABS = ["overview", "batches", "materials", "history"] as const;
@@ -31,7 +32,7 @@ function nextStep(d: WorkOrderDetail): NextStepProps {
   const base = { workOrderId: id, command: null, label: null } as const;
   if (a.canPlan) return { workOrderId: id, command: "plan", label: "Plan (resolve revisions)", pendingText: "Planning…" };
   if (status === "planned" && a.canRelease) {
-    if (a.releaseBlockedBySod) return { ...base, blocked: { title: "Release by another person", body: "You planned this work order; separation of duties needs another person with release permission." }, who: { permission: "production.work_order.approve", siteId: d.workOrder.siteId } };
+    if (a.releaseBlockedBySod) return { ...base, blocked: { title: "Release by another person", body: "You planned this production order; separation of duties needs another person with release permission." }, who: { permission: "production.work_order.approve", siteId: d.workOrder.siteId } };
     return { workOrderId: id, command: "release", label: "Release and reserve materials", pendingText: "Reserving…", withNote: true };
   }
   if (a.canCreateBatch) return { workOrderId: id, command: "create_batch", label: `Create batch ${d.batches.length + 1} of ${d.workOrder.batchCount}`, pendingText: "Creating…" };
@@ -46,7 +47,7 @@ function nextStep(d: WorkOrderDetail): NextStepProps {
 
 export default async function WorkOrderPage({ params, searchParams }: { params: Promise<{ workOrderId: string }>; searchParams: Promise<{ tab?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("production.work_order.view")) return <Forbidden what="work orders" />;
+  if (!ctx.can("production.work_order.view")) return <Forbidden what="production orders" />;
   const { workOrderId } = await params;
   const sp = await searchParams;
   const tab = (TABS as readonly string[]).includes(sp.tab ?? "") ? (sp.tab as (typeof TABS)[number]) : "overview";
@@ -73,6 +74,7 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
         }
         actions={<LinkButton href="/production/board" variant="secondary">Board</LinkButton>}
       />
+      <PageIntro>Older view of one production order: the set-aside materials and its batches.</PageIntro>
       {d.newerRevision && (
         <div className="mb-4">
           <Banner tone="info" title="Revision in use">
@@ -90,7 +92,7 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
       )}
 
       <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_320px]">
-        <nav className="flex gap-1 overflow-x-auto rounded-full border border-line bg-surface p-1" aria-label="Work order sections">
+        <nav className="flex gap-1 overflow-x-auto rounded-full border border-line bg-surface p-1" aria-label="Production order sections">
           {TABS.map((t) => (
             <Link key={t} href={`?tab=${t}`} aria-current={t === tab ? "page" : undefined} className={cx("whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-medium capitalize", t === tab ? "bg-primary text-white" : "text-fg hover:bg-surface-2")}>
               {t}
@@ -152,7 +154,7 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
 
           {tab === "batches" &&
             (d.batches.length === 0 ? (
-              <EmptyState title="No batches yet">{["planned", "released", "in_progress"].includes(wo.status) ? "Create the first batch with the button on the right." : "Batches are created once the work order is planned."}</EmptyState>
+              <EmptyState title="No batches yet">{["planned", "released", "in_progress"].includes(wo.status) ? "Create the first batch with the button on the right." : "Batches are created once the production order is planned."}</EmptyState>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 {d.batches.map((b) => (
@@ -238,8 +240,8 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
           </Card>
           {d.actions.canCancel && (
             <Card>
-              <CardTitle>Cancel work order</CardTitle>
-              <CommandForm action={cancelWorkOrderAction} fields={{ workOrderId: wo.id }} label="Cancel work order" variant="danger" size="sm" confirm="Cancel this work order? Its reservations end and unstarted batches are abandoned.">
+              <CardTitle>Cancel production order</CardTitle>
+              <CommandForm action={cancelWorkOrderAction} fields={{ workOrderId: wo.id }} label="Cancel production order" variant="danger" size="sm" confirm="Cancel this production order? Its reservations end and unstarted batches are abandoned.">
                 <Field label="Reason" htmlFor="reason">
                   <Textarea id="reason" name="reason" required minLength={5} maxLength={500} className="min-h-[56px]" />
                 </Field>
