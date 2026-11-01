@@ -2021,3 +2021,28 @@ Migration 0034; assumptions A-FD-03, A-FD-05, A-FD-06 (QA and regulatory review)
 `tests/unit/production-batch-and-box-plan.test.ts`, `tests/integration/production/adr104-box-labels-batch-plan.test.ts`.
 Open: live carton templates need QA to add "Made"; litre capacities ignored (no density); odd batch sizes give weigh
 targets with many decimals (fix in the weighing work).
+
+## ADR-104 §1, §3, §5 and ADR-106 §1–3 as built (2026-11-01)
+
+Status: Accepted; open for QA: A-FD-01, A-FD-02, A-FD-04, A-PL-02.
+
+- **Pick list per lot** (`pickPlan`): Get materials lists, per ingredient, the lots to take in use-first order with
+  how much from each, including what stays in an opened container; the weigh card proposes the same lots.
+- **Another lot:** other released, in-date lots of the same ingredient appear only under "Use another lot"; a lot that
+  is not the one to use first, or not the one taken, needs a one-tap reason; the set-aside moves in the same
+  transaction and a `batch_material_substitutions` `floor_lot` row is written, shown on Check quality and the batch record.
+- **Another ingredient:** the recipe's approved alternative (`bom_line_alternatives`, changeable only while the recipe
+  revision is a draft) or a request `approval.material_substitution`. Only a QA person decides, by their own roles
+  (`ctx.canGenuinelyAt`), never the requester; owner override and ADR-091 self-approval do not apply. Approval swaps
+  the line for this batch only.
+- **QA results** are append-only: before the decision superseded directly; after it, a second QA person approves a
+  `qa_result_corrections` request, which reverses the decision's stock moves, returns the lot to quarantine and the
+  batch to `quarantined` (a closed batch through a reopen record), re-opens the test list and writes the superseding
+  result; refused once stock has moved on.
+- **Several days:** "Stop for today" (`batch_pauses`), "Continue … started yesterday", "day 2" on the TV, "Packed over n
+  days" at Finish.
+- **Weighing resolution:** weigh windows rounded to 3 decimals the same way on screen and server (`weigh-window.ts`).
+
+Consequences: migrations 0035 (tables) and 0036 (append-only and decide-once triggers, `src/db/sql/adr104.sql`); no new
+permission; tests `tests/unit/{floor-decisions,weigh-window}.test.ts`,
+`tests/integration/production/floor-decisions.test.ts`, `tests/integration/quality/result-corrections.test.ts`.
