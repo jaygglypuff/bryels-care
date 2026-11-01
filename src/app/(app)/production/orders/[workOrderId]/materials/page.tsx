@@ -96,6 +96,7 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
             reason: l.reason,
             packaging: l.materialKind === "packaging",
             lots: l.lots.map((x) => ({ lotNumber: x.lotNumber, place: x.locationName || x.locationCode, section: x.sectionLabel, expiresOn: x.expiresOn, problem: x.problem })),
+            plan: { sentence: l.plan.sentence, steps: l.plan.steps.map((st) => ({ lotNumber: st.lotNumber, text: st.text })) },
           }))}
         />
       )}

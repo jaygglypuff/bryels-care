@@ -8,7 +8,8 @@ import { FormMessage, SubmitButton } from "@/ui/form";
 import { saveFormulaDraftAction } from "../../../../_eng/actions";
 
 type Material = { id: string; code: string; name: string; baseUom: string; kind?: string };
-type Row = { key: number; materialId: string; quantityG: string; tolMode: "pct" | "abs"; tol: string; phaseCode: string; scaling: "proportional" | "fixed"; isCritical: boolean; requiresChecker: boolean };
+type Alt = { materialId: string; ratio: string };
+type Row = { key: number; materialId: string; quantityG: string; tolMode: "pct" | "abs"; tol: string; phaseCode: string; scaling: "proportional" | "fixed"; isCritical: boolean; requiresChecker: boolean; alts: Alt[] };
 export type EditorInit = {
   revisionId: string;
   referenceBatchSizeG: string;
@@ -16,7 +17,7 @@ export type EditorInit = {
   effectiveFrom: string | null;
   changeSummary: string | null;
   notes: string | null;
-  lines: { materialId: string; quantityG: string; tolerancePct: string | null; toleranceAbsG: string | null; phaseCode: string | null; scaling: string; isCritical?: boolean; requiresChecker?: boolean }[];
+  lines: { materialId: string; quantityG: string; tolerancePct: string | null; toleranceAbsG: string | null; phaseCode: string | null; scaling: string; isCritical?: boolean; requiresChecker?: boolean; alternatives?: { materialId: string; ratio: string }[] }[];
 };
 
 const strip = (v: string) => (v.includes(".") ? v.replace(/0+$/, "").replace(/\.$/, "") : v);
@@ -57,6 +58,7 @@ export function FormulaLineEditor({ init, materials, today }: { init: EditorInit
       // Kept as stored: before this, every save reset both flags to the schema defaults (true).
       isCritical: l.isCritical ?? true,
       requiresChecker: l.requiresChecker ?? false,
+      alts: (l.alternatives ?? []).map((a) => ({ materialId: a.materialId, ratio: strip(a.ratio) })),
     })),
   );
   const [nextKey, setNextKey] = useState(init.lines.length + 1);
@@ -99,6 +101,8 @@ export function FormulaLineEditor({ init, materials, today }: { init: EditorInit
       scaling: r.scaling,
       isCritical: r.isCritical,
       requiresChecker: r.requiresChecker,
+      // ADR-104 §1b: approved with the recipe; offered at weighing as "Use the approved alternative".
+      alternatives: isPack(r) ? [] : r.alts.filter((a) => a.materialId).map((a) => ({ materialId: a.materialId, ratio: a.ratio.trim() || "1", notes: null })),
     })),
   });
 
@@ -174,6 +178,35 @@ export function FormulaLineEditor({ init, materials, today }: { init: EditorInit
                 <input type="checkbox" className="h-5 w-5" checked={r.requiresChecker} onChange={(e) => update(r.key, { requiresChecker: e.target.checked })} />
                 Needs a second person to check the weighing
               </label>
+              {!isPack(r) && (
+                <details className="mt-1 text-[13px]" open={r.alts.length > 0} data-testid={`alternatives-${i + 1}`}>
+                  <summary className="min-h-[44px] cursor-pointer py-2 text-primary-text">Allowed alternatives (optional){r.alts.length ? ` · ${r.alts.length}` : ""}</summary>
+                  <p className="text-[12px] text-muted">Another ingredient the operator may use instead, without asking QA each time. QA approves it with this recipe.</p>
+                  {r.alts.map((a, j) => (
+                    <div key={j} className="mt-2 grid grid-cols-[minmax(0,1fr)_110px_44px] items-end gap-2">
+                      <Field label="Instead, use" htmlFor={`alt-${r.key}-${j}`} error={err(`alternatives.${j}.materialId`)}>
+                        <Select id={`alt-${r.key}-${j}`} value={a.materialId} onChange={(e) => update(r.key, { alts: r.alts.map((x, k) => (k === j ? { ...x, materialId: e.target.value } : x)) })}>
+                          <option value="">Choose…</option>
+                          {materials.filter((m) => m.kind !== "packaging" && m.id !== r.materialId).map((m) => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </Select>
+                      </Field>
+                      <Field label="Amount × " htmlFor={`altr-${r.key}-${j}`} error={err(`alternatives.${j}.ratio`)} hint="1 = same">
+                        <Input id={`altr-${r.key}-${j}`} inputMode="decimal" value={a.ratio} onChange={(e) => update(r.key, { alts: r.alts.map((x, k) => (k === j ? { ...x, ratio: e.target.value } : x)) })} />
+                      </Field>
+                      <button type="button" aria-label="Remove this alternative" onClick={() => update(r.key, { alts: r.alts.filter((_, k) => k !== j) })} className="inline-flex size-11 items-center justify-center rounded-full text-[var(--bad-fg)] hover:bg-surface-2">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                  {r.alts.length < 5 && (
+                    <button type="button" onClick={() => update(r.key, { alts: [...r.alts, { materialId: "", ratio: "1" }] })} className="mt-2 inline-flex min-h-[44px] items-center gap-2 rounded-full border border-line px-3 text-[13px]">
+                      <Plus size={14} /> Add an alternative
+                    </button>
+                  )}
+                </details>
+              )}
               <div className="mt-2 flex gap-1">
                 <button type="button" aria-label={`Move ingredient ${i + 1} up`} onClick={() => move(i, -1)} className="inline-flex size-11 items-center justify-center rounded-full hover:bg-surface-2">
                   <ArrowUp size={16} />
@@ -191,7 +224,7 @@ export function FormulaLineEditor({ init, materials, today }: { init: EditorInit
         <button
           type="button"
           onClick={() => {
-            setRows((rs) => [...rs, { key: nextKey, materialId: "", quantityG: "", tolMode: "pct", tol: "", phaseCode: "", scaling: "proportional", isCritical: true, requiresChecker: false }]);
+            setRows((rs) => [...rs, { key: nextKey, materialId: "", quantityG: "", tolMode: "pct", tol: "", phaseCode: "", scaling: "proportional", isCritical: true, requiresChecker: false, alts: [] }]);
             setNextKey((k) => k + 1);
           }}
           className="inline-flex min-h-[44px] items-center justify-center gap-2 self-start rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2"

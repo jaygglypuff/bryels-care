@@ -35,3 +35,4 @@ export * from "./portal"; // Wave 4 W4E
 export * from "./offline"; // Wave 4 W4D
 export * from "./retention"; // Wave 4 W4F
 export * from "./production-log"; // ADR-074 (S2): production order daily log
+export * from "./floor-decisions"; // ADR-104 floor decisions (migration 0035)

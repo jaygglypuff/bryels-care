@@ -10,6 +10,7 @@ import { batchFlowFacts, shortDay, waitLabel } from "./flow-facts";
 import { isLate, pieceWord, productionOrderStatus } from "./production-order-status";
 import { loadBatchFacts, piecesOf } from "./production-orders";
 import { addDays, manilaToday } from "./shared";
+import { dayNumber } from "./batch-days-words";
 
 /**
  * Floor screen (ADR-084, docs/FLOOR_DISPLAY.md): the read model of the production TV. Read-only, from
@@ -49,6 +50,8 @@ export type FloorMakingCard = {
   startedAt: string | null;
   /** Current step is a wait (curing / resting) that has started. */
   wait: { until: string; daysLeft: number; over: boolean; label: string } | null;
+  /** ADR-104 §5: "day 2" when the batch started on an earlier plant day; null on its first day. */
+  dayLabel: string | null;
   /** One line in plain words with its tone: never colour alone (the screen adds an icon and this word). */
   note: string;
   tone: FloorTone;
@@ -191,6 +194,7 @@ export async function getFloorDisplay(ctx: AuthContext, opts: { siteId?: string 
       percent,
       assignee: firstName(b.assigneeName),
       startedAt: b.startedAt ? b.startedAt.toISOString() : null,
+      dayLabel: b.startedAt && dayNumber(b.startedAt, now) > 1 ? `day ${dayNumber(b.startedAt, now)}` : null,
       wait,
       note,
       tone,

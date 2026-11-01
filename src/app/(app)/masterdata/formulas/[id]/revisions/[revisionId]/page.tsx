@@ -135,7 +135,7 @@ export default async function FormulaRevisionPage({ params }: { params: Promise<
               effectiveFrom: r.effectiveFrom,
               changeSummary: r.changeSummary,
               notes: r.notes,
-              lines: v.lines.map((l) => ({ materialId: l.materialId, quantityG: l.quantityG, tolerancePct: l.tolerancePct, toleranceAbsG: l.toleranceAbsG, phaseCode: l.phaseCode, scaling: l.scaling, isCritical: l.isCritical, requiresChecker: l.requiresChecker })),
+              lines: v.lines.map((l) => ({ materialId: l.materialId, quantityG: l.quantityG, tolerancePct: l.tolerancePct, toleranceAbsG: l.toleranceAbsG, phaseCode: l.phaseCode, scaling: l.scaling, isCritical: l.isCritical, requiresChecker: l.requiresChecker, alternatives: l.alternatives.map((a) => ({ materialId: a.materialId, ratio: a.ratio })) })),
             }}
           />
         </Card>
@@ -160,6 +160,11 @@ export default async function FormulaRevisionPage({ params }: { params: Promise<
                     {l.phaseCode ? ` · part ${l.phaseCode}` : ""}
                     {l.requiresChecker ? " · a second person checks the weighing" : ""}
                   </p>
+                  {l.alternatives.length > 0 && (
+                    <p className="text-[13px] text-fg-2" data-testid={`alternatives-of-${l.lineNo}`}>
+                      Allowed alternatives: {l.alternatives.map((a) => `${a.materialName}${a.ratio && Number(a.ratio) !== 1 ? ` (× ${Number(a.ratio)})` : ""}`).join(", ")}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>

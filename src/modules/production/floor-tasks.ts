@@ -10,6 +10,7 @@ import { firstStepNo, flowHref } from "./flow-paths";
 import { plainWords } from "./plain-words";
 import { batchStatusView, type BatchFact } from "./production-order-status";
 import { type FormulaSnapshot, isWeighingStep } from "./shared";
+import { continueTitle, dayNumber, lastPauses, startedWords } from "./batch-days";
 
 /**
  * The operator's task list (UX review "Your tasks today"): ONE task per batch at the
@@ -66,6 +67,10 @@ export type FloorTask = {
   /** One plain sentence under the title (why it waits, or what to do). */
   hint: string;
   assignedToMe: boolean;
+  /** ADR-104 §5: day of making (1 = the day it started); null before it started. */
+  dayNo: number | null;
+  /** The last "Stop for today" note ("Stopped yesterday by Rhea: Step 4 · Mixing — oils melted, not mixed"). */
+  pauseNote: string | null;
 };
 
 const RUNNING = ["materials_staged", "in_process", "rework_approved"];
@@ -148,6 +153,7 @@ export async function myFloorTasks(ctx: AuthContext, now: Date = new Date()): Pr
     .from(dispenseRecords)
     .innerJoin(batchMaterials, eq(batchMaterials.id, dispenseRecords.batchMaterialId))
     .where(and(inArray(batchMaterials.batchId, rows.map((r) => r.id)), isNull(dispenseRecords.checkerId), isNull(dispenseRecords.voidedAt)));
+  const pauses = await lastPauses(db, rows.map((r) => r.id));
   const can = { can: (p: string) => ctx.can(p as never) && ctx.canAt(p as never, siteId), userId: ctx.userId };
   const whoCache = new Map<string, Promise<string>>();
   const waitingFor = (permission: string) => {
@@ -186,7 +192,14 @@ export async function myFloorTasks(ctx: AuthContext, now: Date = new Date()): Pr
     // Waiting (curing, a check by someone else, no permission): the same flow screen, which shows why.
     const ref = { batchId: r.id, workOrderId: r.workOrderId };
     const href = toCheck > 0 ? flowHref(ref, "weigh") : action.kind === "link" ? action.href : r.status === "planned" ? flowHref(ref, "materials") : flowHref(ref, `step/${cur?.stepNo ?? firstStepNo(planned)}`);
+    // ADR-104 §5: a batch started on an earlier day reads "Continue <product> <batch> · step 4 · started yesterday".
+    const cont = (t.kind === "step" || t.kind === "weigh") && r.status === "in_process" ? continueTitle(r.productName, r.batchNumber, index, r.startedAt, now) : null;
+    if (cont) t.title = cont;
+    const pause = pauses.get(r.id);
+    const pauseNote = pause ? `Stopped ${startedWords(pause.at, now)} by ${pause.by.split(/\s+/)[0]}: ${pause.whereStopped}${pause.note ? ` — ${pause.note}` : ""}` : null;
     tasks.push({
+      dayNo: r.startedAt ? dayNumber(r.startedAt, now) : null,
+      pauseNote,
       batchId: r.id,
       batchNumber: r.batchNumber,
       workOrderId: r.workOrderId,
@@ -202,7 +215,7 @@ export async function myFloorTasks(ctx: AuthContext, now: Date = new Date()): Pr
       buttonLabel: t.kind === "check" ? "Check" : r.status === "planned" || r.status === "materials_staged" ? "Start" : canDo ? "Continue" : "Open",
       canDo,
       waitingFor: toCheck === 0 && action.kind === "wait" && action.who ? await waitingFor(action.who.permission) : null,
-      hint: toCheck > 0 ? `Batch ${r.batchNumber}: ${toCheck === 1 ? "a weighing waits" : `${toCheck} weighings wait`} for your check. Look at the container and the scale, then confirm.` : action.hint,
+      hint: pauseNote && toCheck === 0 ? pauseNote : toCheck > 0 ? `Batch ${r.batchNumber}: ${toCheck === 1 ? "a weighing waits" : `${toCheck} weighings wait`} for your check. Look at the container and the scale, then confirm.` : action.hint,
       assignedToMe: !!r.assignedOperatorId && r.assignedOperatorId === ctx.userId,
     });
   }

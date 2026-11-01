@@ -1020,6 +1020,17 @@ release, Check quality, conditional release, QA hold lift, inspection review, di
 output / pack checks, equipment overrides, batch reopen, settings, numbering, tax, period unlock,
 retention, import approval. An owner who also holds `qa_qc` is still refused on these.
 
+ADR-104 (2026-11-01), no new permission string; two QA-only decisions where neither the top-role self-approval nor
+the ADR-073 owner override applies (checked with `ctx.canGenuinelyAt`, i.e. the permission from the person's own roles):
+
+| Decision | Asks | Decides | Action-centre kind |
+|---|---|---|---|
+| Another ingredient for one batch line ("Ask to use something else") | `production.dispense_record.create` at the batch site | `quality.disposition.approve` or the `qa_qc` role at the site, never the requester | `approval.material_substitution` (visible with `production.material_substitution.approve`) |
+| Correction of a decided QA test result (re-opens the decision) | `quality.test_result.create`: the person who entered the result or a QA person | a second person with `quality.disposition.approve` at the site, never the requester | `approval.result_correction` (`quality.disposition.approve`) |
+
+Using another released lot of the same ingredient, the recipe's approved alternative and "Stop for today" need the
+step's perform permission at the batch site (`production.dispense_record.create` for weighing).
+
 Implementation: services call `ctx.sodBlocksAt(conflict, rule, siteId)` / `ctx.assertSeparationAt` /
 `ctx.sodConflictAt` (screens) and `ctx.actsAsAnyRoleAt(roles, siteId, requesterIds)` for the owner's
 role stand-in; quality services keep `ctx.sodBlocks`. Each pass is recorded by `audit()` as

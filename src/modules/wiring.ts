@@ -1,7 +1,7 @@
 import "server-only";
 import type { Tx } from "@/db/client";
 import type { AuthContext } from "@/lib/auth/context";
-import { type DeviationKind, type OpenDeviationInput, autoCloseReleasedBatch, productionOrderApprovalVerdicts, registerExecutionHooks } from "@/modules/production";
+import { type DeviationKind, type OpenDeviationInput, autoCloseReleasedBatch, materialSubstitutionApprovalVerdicts, materialSubstitutionCandidates, productionOrderApprovalVerdicts, registerExecutionHooks } from "@/modules/production";
 import {
   type DeviationSource,
   changeControlApprovalCandidates,
@@ -14,6 +14,8 @@ import {
   overdueCapaActionCandidates,
   recallCaseCandidates,
   registerQualityReleaseHooks,
+  resultCorrectionApprovalVerdicts,
+  resultCorrectionCandidates,
 } from "@/modules/quality";
 import { pmDueCandidates, usageAvailabilityReasons } from "@/modules/maintenance";
 import { registerEquipmentAvailabilityProvider } from "@/modules/masterdata";
@@ -187,4 +189,10 @@ export function registerAppHooks() {
   // ADR-088 §2: stock adjustments and count variances, so a top role sees (and the badge counts) their own.
   registerApprovalGate("approval.stock_adjustment", adjustmentApprovalVerdicts);
   registerApprovalGate("approval.stock_count", countApprovalVerdicts);
+  // ADR-104 §1b: another ingredient asked on the floor, decided by a QA person only (never the owner/site manager alone).
+  registerActionItemSource({ kind: "approval.material_substitution", detect: (org) => materialSubstitutionCandidates(org) });
+  registerApprovalGate("approval.material_substitution", materialSubstitutionApprovalVerdicts);
+  // ADR-104 §3: a decided QA result corrected; a second QA person approves on Check quality.
+  registerActionItemSource({ kind: "approval.result_correction", detect: (org) => resultCorrectionCandidates(org) });
+  registerApprovalGate("approval.result_correction", resultCorrectionApprovalVerdicts);
 }

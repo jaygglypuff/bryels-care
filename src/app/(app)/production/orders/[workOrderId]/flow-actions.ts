@@ -7,7 +7,7 @@ import { refreshCurrentPage } from "@/lib/in-place";
 import type { Permission } from "@/lib/permissions";
 import { markLabelJobPrinted } from "@/modules/documents";
 import type { PrintLabelsState } from "@/ui/labels/actions";
-import { approveStepException, batchSiteId, checkDispense, checkStep, confirmPicked, issuePackaging, planBatchBoxes, printBatchLabels, returnLeftOverWrappers, recordDispense, returnDispense, returnStep, selectEquipment, stepDone, submitChecklist } from "@/modules/production";
+import { approveStepException, batchSiteId, requestMaterialSubstitution, stopForToday, useApprovedAlternative, withdrawMaterialSubstitution, checkDispense, checkStep, confirmPicked, issuePackaging, planBatchBoxes, printBatchLabels, returnLeftOverWrappers, recordDispense, returnDispense, returnStep, selectEquipment, stepDone, submitChecklist } from "@/modules/production";
 import { registerAppHooks } from "@/modules/wiring";
 
 // Execution ↔ QA hooks (deviations for early ends and out-of-range values); idempotent.
@@ -78,6 +78,9 @@ export async function weighAction(_: FlowActionState, fd: FormData): Promise<Flo
       qty: opt(fd, "qty"),
       uom: "g",
       equipmentRef: opt(fd, "equipmentRef"),
+      // ADR-106 §3: weighing from a lot that was not taken at Get materials (one-tap reason; QA sees a note).
+      offPlanReasonCode: opt(fd, "offPlanReasonCode"),
+      offPlanNote: opt(fd, "offPlanNote"),
       idempotencyKey: opt(fd, "idempotencyKey"),
     });
     refreshCurrentPage();
@@ -327,6 +330,60 @@ export async function returnWrappersAction(_: ActionState, fd: FormData): Promis
     const r = await returnLeftOverWrappers(ctx, { batchId: uuid.parse(str(fd, "batchId")) });
     refreshCurrentPage();
     return { ok: true, message: r.moved.length ? `Back on the shelf: ${r.moved.map((m) => `${Number(m.qty)} ${m.materialName} to ${m.toCode}`).join(", ")}.` : "Nothing to carry back: they are already on the shelf." };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** ADR-104 §1b "Use the approved alternative" (the recipe lists it for this line). */
+export async function takeAlternativeAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const r = await useApprovedAlternative(ctx, { batchId: uuid.parse(str(fd, "batchId")), batchMaterialId: uuid.parse(str(fd, "batchMaterialId")), alternativeId: uuid.parse(str(fd, "alternativeId")), idempotencyKey: opt(fd, "idempotencyKey") });
+    refreshCurrentPage();
+    return { ok: true, message: `Use ${r.materialName} instead of ${r.replaced} for this batch.${r.shortage ? ` ${r.shortage}` : ""}` };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** ADR-104 §1b "Ask to use something else": a request QA decides. */
+export async function askOtherMaterialAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const r = await requestMaterialSubstitution(ctx, {
+      batchId: uuid.parse(str(fd, "batchId")),
+      batchMaterialId: uuid.parse(str(fd, "batchMaterialId")),
+      substituteMaterialId: str(fd, "substituteMaterialId") ?? "",
+      qty: opt(fd, "qty"),
+      reason: str(fd, "reason") ?? "",
+      idempotencyKey: opt(fd, "idempotencyKey"),
+    });
+    refreshCurrentPage();
+    return { ok: true, message: `Asked QA to use ${r.substituteName} instead of ${r.materialName}. Weigh the other ingredients meanwhile.` };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+export async function withdrawAskAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    await withdrawMaterialSubstitution(ctx, { requestId: uuid.parse(str(fd, "requestId")), reason: opt(fd, "reason") });
+    refreshCurrentPage();
+    return { ok: true, message: "Request taken back." };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** ADR-104 §5 "Stop for today": where we stopped and a short note. */
+export async function stopForTodayAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const r = await stopForToday(ctx, { batchId: uuid.parse(str(fd, "batchId")), stepNo: stepNoOf(fd), whereStopped: opt(fd, "whereStopped"), note: opt(fd, "note"), idempotencyKey: opt(fd, "idempotencyKey") });
+    refreshCurrentPage();
+    return { ok: true, message: `Stopped for today: ${r.whereStopped}. Tomorrow the task says where to continue.` };
   } catch (e) {
     return toActionState(e);
   }

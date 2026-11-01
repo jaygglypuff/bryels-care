@@ -585,3 +585,62 @@ export async function getClosureView(ctx: AuthContext, batchId: string) {
   };
 }
 export type ClosureView = Awaited<ReturnType<typeof getClosureView>>;
+
+/* ------------------------------------------------------------------ ADR-104 §3: QA result correction re-opens the decision */
+
+/**
+ * Controlled transitions used only when a second QA person approves the correction of a decided test result
+ * (ADR-104 §3, A-FD-04; quality's decideResultCorrection). Not in BATCH_TRANSITIONS: no other caller may move a
+ * decided batch back. The batch goes back to the quality check (`quarantined`, the "waiting for the QA decision" state
+ * Check quality decides). A closed batch is re-opened as a CX-REOPEN record (status `reopened`, reopen n) so the next
+ * closure prints "AMENDED rev n" exactly like the closure page's reopen.
+ */
+export const QA_CORRECTION_REOPEN_FROM = ["released", "rejected", "closed"] as const;
+
+export async function reopenBatchForQaCorrection(tx: Tx, ctx: AuthContext, batchId: string, input: { reason: string; requestedBy: string; correctionId: string }) {
+  const b = await lockBatch(tx, ctx, batchId);
+  if (!(QA_CORRECTION_REOPEN_FROM as readonly string[]).includes(b.status)) {
+    throw new DomainError("state", `Batch ${b.batchNumber} is ${b.status.replace(/_/g, " ")}; only a decided batch is re-opened by a result correction.`);
+  }
+  const from = b.status;
+  const reason = `QA result corrected (second QA approval): ${input.reason}`;
+  let reopenNo: number | null = null;
+  if (from === "closed") {
+    const { lastClosure, reopenCount } = await closureCounters(tx, b.id);
+    reopenNo = reopenCount + 1;
+    const transitionId = await reopenTransition(tx, ctx, b, "quarantined", `Reopen ${reopenNo}: ${reason}`);
+    const now = new Date();
+    await tx.insert(batchReopenRequests).values({
+      organizationId: ctx.organizationId,
+      siteId: b.siteId,
+      batchId: b.id,
+      closureNo: lastClosure?.closureNo ?? 0,
+      status: "reopened",
+      targetState: "quarantined",
+      reason,
+      amendmentScope: "QC test result corrected",
+      requestedBy: input.requestedBy,
+      decidedAt: now,
+      decisionNote: `Approved by ${ctx.displayName} (QA result correction)`,
+      reopenNo,
+      reopenedAt: now,
+      batchStateTransitionId: transitionId,
+      idempotencyKey: `qa-correction:${input.correctionId}`,
+    });
+  } else {
+    await tx.update(batches).set({ status: "quarantined" }).where(eq(batches.id, b.id));
+    await tx.insert(batchStateTransitions).values({ batchId: b.id, fromState: from, toState: "quarantined", actorId: ctx.userId, reason });
+    b.status = "quarantined";
+  }
+  await audit(tx, ctx, {
+    action: "production.batch.reopened_for_qa_correction",
+    entityType: "batch",
+    entityId: b.id,
+    entityNumber: b.batchNumber,
+    siteId: b.siteId,
+    reason,
+    before: { status: from },
+    after: { status: "quarantined", reopenNo, correctionId: input.correctionId },
+  });
+  return { batchNumber: b.batchNumber, from, to: "quarantined" as const, reopenNo, workOrderId: b.workOrderId, outputLotId: b.outputLotId, siteId: b.siteId };
+}

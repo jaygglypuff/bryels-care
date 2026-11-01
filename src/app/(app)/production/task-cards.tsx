@@ -20,7 +20,7 @@ export function TaskCard({ t, first = true }: { t: FloorTask; first?: boolean })
       </div>
       <div>
         <p className="flex items-center justify-between gap-2 text-[13px] text-fg-2">
-          <span>{t.stepLabel}</span>
+          <span>{t.stepLabel}{t.dayNo && t.dayNo > 1 ? ` · day ${t.dayNo}` : ""}</span>
           <span className="tabular text-muted">{t.percent}%</span>
         </p>
         <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={t.percent} aria-label={`${t.batchNumber} progress`}>

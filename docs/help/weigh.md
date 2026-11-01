@@ -1,8 +1,8 @@
 ---
 key: production.weigh
 title: Weigh the ingredients (Weigh screen)
-version: 2
-updated_at: 2026-10-31
+version: 3
+updated_at: 2026-11-01
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -10,7 +10,7 @@ The Weigh screen shows one card per ingredient, in formula order. The card shows
 
 ## Weigh one ingredient
 
-1. Check the lot number on the card. Take that container.
+1. The card says which lots you took at Get materials, in the same order: "from LM-…-0005: 50 kg, then LM-…-0013: 50 kg". Take that container.
 2. Tap **Scan the lot label** and point the camera (or the scanner) at the label on the container. The card says **Label scanned: lot …**. If the label is damaged, tap **Label damaged? Type the last 4 characters instead**.
 3. Weigh. Type the weight in grams on the keypad.
 4. The card shows **OK**, or "Too much by …" / "Too little by …".
@@ -19,9 +19,25 @@ The Weigh screen shows one card per ingredient, in formula order. The card shows
 
 ## Wrong lot
 
-1. If the label does not match, the card says so and shows the right lot. Take the right container. Scanning the label of another set-aside lot of the same ingredient switches the card to that lot.
-2. A lot that was not set aside for this order is refused.
-3. To use another lot, ask QA.
+1. If the label is for another ingredient, the card says so. Take the right container.
+2. Expired lots, stopped lots and lots waiting for QA are never taken.
+
+## Use another lot (same ingredient)
+
+1. The lot you took is used up, damaged or you can't reach it? Tap **Use another lot**. The other lots of the same ingredient show up. The one to use first is on top.
+2. Scan the label of the lot you take.
+3. The card says: "This is not the lot you took at Get materials. You can continue — QA will see a note."
+4. Tap why: **The first lot is used up**, **The first lot is damaged**, **I can't reach it** or **Other** (write a few words).
+5. Weigh and tap **Save**. The lot change and your reason go on the batch record.
+
+## Use another ingredient
+
+1. No coconut oil at all? Look under **No … ? Use another ingredient**.
+2. If the recipe allows another one, tap **Use the approved alternative**. It is for this batch only.
+3. If not, tap **Ask to use something else**. Choose it by name, check the amount, write why, tap **Ask QA**.
+4. The card says **Waiting for QA (Nina) to say yes**. Weigh the other ingredients meanwhile.
+5. When QA says yes, the card shows the new ingredient. Weigh it like any other. If QA says no, the card tells you why.
+6. You can never decide this alone. The owner and the site manager cannot say yes either: only QA.
 
 ## Too much or too little
 

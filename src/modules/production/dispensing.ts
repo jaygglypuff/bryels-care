@@ -16,16 +16,12 @@ import { assertStockCovers, postBatchMovement, postDispenseConsumption } from ".
 import { useEquipment } from "./process";
 import { convertReservations, expectedLots } from "./staging";
 import { type FormulaSnapshot, WEIGHING_STEP_KINDS, idempotent, lockBatch } from "./shared";
+import { changeLotInTx, lineForLotChange } from "./material-swaps";
+import { offPlanWarning } from "./pick-plan";
 
-/**
- * Tolerance window for a theoretical quantity. An absolute tolerance (g) from the BOM line takes
- * precedence over the percentage (tolerances are process-owner configuration, A-PROC-03).
- */
-export function toleranceRange(theoreticalQtyG: Decimal.Value, tolerancePct: Decimal.Value, toleranceAbsG?: Decimal.Value | null) {
-  const theo = new Decimal(theoreticalQtyG);
-  const band = toleranceAbsG !== null && toleranceAbsG !== undefined ? new Decimal(toleranceAbsG) : theo.mul(tolerancePct).div(100);
-  return { min: theo.minus(band), max: theo.plus(band) };
-}
+/** Tolerance window at the typed resolution (shared with the weigh card, weigh-window.ts). */
+export { toleranceRange } from "./weigh-window";
+import { toleranceRange } from "./weigh-window";
 
 /** Physical unit factors to the base unit (not business configuration; ADR-010). */
 const TO_BASE: Record<string, Record<string, string>> = { g: { g: "1", kg: "1000", mg: "0.001" }, mL: { mL: "1", L: "1000" }, pcs: { pcs: "1" } };
@@ -75,6 +71,9 @@ export type DispenseInput = {
    */
   lotPreselected?: boolean;
   lotConfirm?: string | null;
+  /** ADR-106 §3: one-tap reason for weighing from a lot that was not taken at Get materials (and a note for "other"). */
+  offPlanReasonCode?: string | null;
+  offPlanNote?: string | null;
   idempotencyKey?: string | null;
 };
 
@@ -210,16 +209,24 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
         const [other] = lot.materialId ? await tx.select({ name: materials.name }).from(materials).where(eq(materials.id, lot.materialId)).limit(1) : [];
         throw new DomainError("blocked_lot", `This is ${other?.name ?? "a finished product"}, not ${material.name}. Lot ${lot.lotNumber} cannot be used on this line.`, { rule: "V-MAT", field: "lot" });
       }
-      const reserved = await reservedLotsFor(tx, batch.id, bm.materialId);
-      if (reserved.length && !reserved.some((r) => r.lotId === lot.id)) {
-        throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} is not the lot reserved for this batch. Expected: ${reserved.map((r) => r.lotNumber).join(", ")}.`, { rule: "V-MAT", field: "lot" });
-      }
+      let reserved = await reservedLotsFor(tx, batch.id, bm.materialId);
       // ADR-080 §2: a batch that got its materials by the Materials list (no staging move) weighs from the
-      // lots set aside for its order; another lot is refused with the expected lot shown.
-      const woReserved = !reserved.length && batch.workOrderId ? await expectedLots(tx, batch.workOrderId, bm.materialId) : [];
-      if (woReserved.length && !woReserved.some((r) => r.r.lotId === lot.id)) {
-        const exp = [...new Set(woReserved.map((r) => r.lotNumber))];
-        throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} is not the lot set aside for this order. Use lot ${exp.join(" or ")}.`, { rule: "V-MAT", field: "lot", expected: exp });
+      // lots set aside for its order.
+      let woReserved = !reserved.length && batch.workOrderId ? await expectedLots(tx, batch.workOrderId, bm.materialId) : [];
+      const offPlan = (reserved.length && !reserved.some((r) => r.lotId === lot.id)) || (woReserved.length && !woReserved.some((r) => r.r.lotId === lot.id));
+      if (offPlan) {
+        // ADR-106 §3: another allowed lot of the same ingredient than the one taken at Get materials. The operator may
+        // continue with a one-tap reason: the set-aside moves to this lot and QA sees the note (batch_material_substitutions
+        // floor_lot, "Not the lot taken at Get materials"). Without the reason: refused with the plain warning.
+        const taken = [...new Set([...reserved.map((r) => r.lotNumber), ...woReserved.map((r) => r.lotNumber)])];
+        assertLotUsable(lot); // expired, stopped or waiting-for-QA lots are never accepted
+        if (!input.offPlanReasonCode?.trim()) {
+          throw new DomainError("blocked_lot", offPlanWarning(taken), { rule: "V-MAT", field: "lot", expected: taken, offPlan: true, fieldErrors: { offPlanReasonCode: "Tap a reason to continue." } });
+        }
+        const line = await lineForLotChange(tx, batch, bm.id);
+        await changeLotInTx(tx, ctx, batch, line, { lotId: lot.id, locationId: input.locationRef && /^[0-9a-f-]{36}$/i.test(input.locationRef) ? input.locationRef : null, reasonCode: input.offPlanReasonCode, note: input.offPlanNote, offPlan: true, atLeast: net });
+        reserved = await reservedLotsFor(tx, batch.id, bm.materialId);
+        woReserved = !reserved.length && batch.workOrderId ? await expectedLots(tx, batch.workOrderId, bm.materialId) : [];
       }
       assertLotUsable(lot);
       const lotConfirmMode = await getSetting(tx, ctx.organizationId, "production.weighing.lot_confirm", batch.siteId);

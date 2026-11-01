@@ -56,3 +56,12 @@ Each step has its own screen: what to do, up to 3 things to write down, and one 
 ## See what happened
 
 **See the full batch record** (bottom of each step) shows every step, who did and checked it, the numbers, materials, wrappers and labels. It is read-only: the work is always done on these step screens.
+
+## Stop for today
+
+1. The shift ends and the batch is not done? Tap **Stop for today** on the step.
+2. **Where did you stop?** is filled in for you (for example "Step 4 · Mixing"). Change it if needed.
+3. Write a short note, for example "oils melted, lye not added yet". Tap **Save and stop for today**.
+4. The batch stays "Being made". Tomorrow your task says "Continue Calamansi Soap B-26-0006 · step 4 · started yesterday" with your note. The TV shows "day 2".
+5. Curing waits by itself: the card says "Curing until Sat 8 Nov".
+6. Write the pieces you packed each day in **Today's count**. Finish adds them up: "Packed over 3 days: 400 + 350 + 250 = 1,000".

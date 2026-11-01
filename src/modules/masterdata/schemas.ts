@@ -68,9 +68,18 @@ export const BomLineInput = z
     scaling: z.enum(["proportional", "fixed"]).default("proportional"),
     isCritical: z.boolean().default(true),
     requiresChecker: z.boolean().default(true),
+    /** ADR-104 §1b: approved alternatives for this line ("Allowed alternatives (optional)"), approved with the recipe. */
+    alternatives: z
+      .array(z.object({ materialId: uuid, ratio: optDec("the amount factor"), notes: optText(200) }).strict())
+      .max(5, "At most 5 alternatives per ingredient.")
+      .default([]),
   })
   .strict()
   .superRefine((l, ctx) => {
+    for (const [i, a] of (l.alternatives ?? []).entries()) {
+      if (a.materialId === l.materialId) ctx.addIssue({ code: "custom", path: ["alternatives", i, "materialId"], message: "An alternative must be another ingredient." });
+      if (a.ratio !== null && a.ratio !== undefined && (Number(a.ratio) <= 0 || Number(a.ratio) > 10)) ctx.addIssue({ code: "custom", path: ["alternatives", i, "ratio"], message: "The amount factor must be more than 0 and at most 10 (1 = the same amount)." });
+    }
     if ((l.tolerancePct === null) === (l.toleranceAbsG === null)) {
       ctx.addIssue({ code: "custom", path: ["tolerancePct"], message: "Enter exactly one tolerance per line: a percentage or an absolute amount in grams." });
     }

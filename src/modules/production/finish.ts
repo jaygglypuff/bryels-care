@@ -1,4 +1,5 @@
 import "server-only";
+import { packedOverDays } from "./batch-days-words";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { type DbOrTx, type Tx, db } from "@/db/client";
@@ -211,7 +212,7 @@ export async function getFinishView(ctx: AuthContext, batchId: string) {
     expectedUnits: expectedUnits(batch, product.unitNetMassG)?.toString() ?? null,
     limits,
     blockers,
-    log: { entries: log.entries, days: log.days, good: log.good.toString(), rejects: log.rejects.map((r) => ({ type: r.type, qty: r.qty.toString() })) },
+    log: { entries: log.entries, days: log.days, good: log.good.toString(), rejects: log.rejects.map((r) => ({ type: r.type, qty: r.qty.toString() })), byDay: log.byDay.map((d) => ({ date: d.date, good: d.good.toString() })), packedSentence: packedOverDays(log.byDay) },
     existing: {
       yieldUnits: y?.actualUnits ? new Decimal(y.actualUnits).toString() : null,
       scrap: scrap.map((r) => ({ kind: r.recordKind, reasonCode: r.reasonCode, qty: new Decimal(r.qty).toString(), note: r.note })),

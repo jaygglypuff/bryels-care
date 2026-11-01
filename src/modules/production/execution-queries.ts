@@ -184,12 +184,17 @@ export async function getBatchExecution(ctx: AuthContext, batchId: string) {
   const ingredients = lines.filter(({ m }) => m.materialKind !== "packaging").map(({ bm, m }) => ({
     id: bm.id,
     lineNo: bm.lineNo,
+    /** ADR-104: the line's own material (a swapped line differs from the frozen formula line). */
+    materialId: m.id,
+    bomLineId: bm.bomLineId,
     materialCode: m.code,
     materialName: m.name,
     baseUom: m.baseUom,
     status: bm.status,
     dispensedQtyG: bm.dispensedQtyG,
     theoreticalQtyG: bm.theoreticalQtyG,
+    tolerancePct: bm.tolerancePct,
+    toleranceAbsG: bm.toleranceAbsG,
     weighings: disp
       .filter((d) => d.d.batchMaterialId === bm.id)
       .map((d) => ({

@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { type DbOrTx, db } from "@/db/client";
-import { bomLines, formulaRevisions, formulas, materials, products, users } from "@/db/schema";
+import { bomLineAlternatives, bomLines, formulaRevisions, formulas, materials, products, users } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { approverLabel } from "@/lib/auth/self-approval";
 import { audit } from "@/lib/audit";
@@ -137,9 +137,15 @@ export async function createFormulaRevision(ctx: AuthContext, input: { formulaId
     if (base) {
       const lines = await tx.select().from(bomLines).where(eq(bomLines.formulaRevisionId, base.id)).orderBy(asc(bomLines.lineNo));
       if (lines.length) {
-        await tx.insert(bomLines).values(
-          lines.map(({ id: _id, formulaRevisionId: _r, ...l }) => ({ ...l, formulaRevisionId: rev.id })),
-        );
+        const made = await tx
+          .insert(bomLines)
+          .values(lines.map(({ id: _id, formulaRevisionId: _r, ...l }) => ({ ...l, formulaRevisionId: rev.id })))
+          .returning({ id: bomLines.id, lineNo: bomLines.lineNo });
+        // ADR-104 §1b: the approved alternatives travel with their line into the new draft.
+        const alts = await tx.select().from(bomLineAlternatives).where(inArray(bomLineAlternatives.bomLineId, lines.map((l) => l.id)));
+        const byNo = new Map(made.map((m) => [m.lineNo, m.id]));
+        const copy = alts.map((a) => ({ bomLineId: byNo.get(lines.find((l) => l.id === a.bomLineId)!.lineNo)!, materialId: a.materialId, ratio: a.ratio, notes: a.notes }));
+        if (copy.length) await tx.insert(bomLineAlternatives).values(copy);
       }
     }
     await audit(tx, ctx, {
@@ -173,7 +179,7 @@ export async function saveFormulaRevisionDraft(ctx: AuthContext, raw: unknown) {
     const before = await tx.select().from(bomLines).where(eq(bomLines.formulaRevisionId, rev.id));
     await tx.delete(bomLines).where(eq(bomLines.formulaRevisionId, rev.id));
     if (input.lines.length) {
-      await tx.insert(bomLines).values(
+      const made = await tx.insert(bomLines).values(
         input.lines.map((l, i) => ({
           formulaRevisionId: rev.id,
           lineNo: i + 1,
@@ -186,7 +192,15 @@ export async function saveFormulaRevisionDraft(ctx: AuthContext, raw: unknown) {
           isCritical: l.isCritical,
           requiresChecker: l.requiresChecker,
         })),
-      );
+      ).returning({ id: bomLines.id, lineNo: bomLines.lineNo });
+      // ADR-104 §1b: "Allowed alternatives (optional)" of each line (the old rows went with the replaced lines).
+      const alts = input.lines.flatMap((l, i) => (l.alternatives ?? []).map((a) => ({ bomLineId: made.find((m) => m.lineNo === i + 1)!.id, materialId: a.materialId, ratio: a.ratio ?? "1", notes: a.notes ?? null })));
+      if (alts.length) {
+        const ids = [...new Set(alts.map((a) => a.materialId))];
+        const ok = await tx.select({ id: materials.id }).from(materials).where(and(inArray(materials.id, ids), eq(materials.organizationId, ctx.organizationId)));
+        if (ok.length !== ids.length) throw new DomainError("validation", "One of the alternatives does not exist.", { fieldErrors: { lines: "Choose alternatives from the list." } });
+        await tx.insert(bomLineAlternatives).values(alts);
+      }
     }
     await tx
       .update(formulaRevisions)
@@ -531,6 +545,15 @@ export async function getFormulaRevision(ctx: AuthContext, revisionId: string) {
   const ref = new Decimal(rev.referenceBatchSizeG);
   // Packaging lines (material kind packaging, ADR-094) hold pieces, not grams: they are outside the gram total.
   const { sumG: total, packaging } = formulaTotals(lines.map(({ line, material }) => ({ quantityG: line.quantityG, materialKind: material.materialKind, materialName: material.name })));
+  const altList = lines.length
+    ? await db
+        .select({ bomLineId: bomLineAlternatives.bomLineId, materialId: bomLineAlternatives.materialId, ratio: bomLineAlternatives.ratio, notes: bomLineAlternatives.notes, name: materials.name })
+        .from(bomLineAlternatives)
+        .innerJoin(materials, eq(materials.id, bomLineAlternatives.materialId))
+        .where(inArray(bomLineAlternatives.bomLineId, lines.map((l) => l.line.id)))
+    : [];
+  const altRows = new Map<string, typeof altList>();
+  for (const a of altList) altRows.set(a.bomLineId, [...(altRows.get(a.bomLineId) ?? []), a]);
   const dtoLines = lines.map(({ line, material }) => {
     const q = new Decimal(line.quantityG);
     const band = line.toleranceAbsG !== null ? new Decimal(line.toleranceAbsG) : q.mul(line.tolerancePct ?? 0).div(100);
@@ -553,6 +576,7 @@ export async function getFormulaRevision(ctx: AuthContext, revisionId: string) {
       scaling: line.scaling,
       isCritical: line.isCritical,
       requiresChecker: line.requiresChecker,
+      alternatives: (altRows.get(line.id) ?? []).map((a) => ({ materialId: a.materialId, materialName: a.name, ratio: a.ratio, notes: a.notes })),
       ...(showPct ? { percentOfBatch: ref.gt(0) ? q.div(ref).mul(100).toDecimalPlaces(4).toString() : null } : {}),
     };
   });

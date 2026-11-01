@@ -1,3 +1,4 @@
+import { StopForToday } from "./stop-for-today";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
@@ -131,6 +132,13 @@ export default async function StepPage({ params, searchParams }: { params: Promi
         viewer={v.viewer}
         equipment={v.equipment}
       />
+      {v.canStopForToday ? (
+        <StopForToday batchId={b.id} stepNo={v.step.stepNo} prefill={v.stopPrefill} last={v.pause.last?.words ?? null} dayNo={v.pause.dayNo} />
+      ) : v.pause.last ? (
+        <p className="mt-4 text-[15px] text-fg-2" data-testid="last-pause">
+          {v.pause.last.words}
+        </p>
+      ) : null}
       <p className="mt-6 text-[15px]">
         <Link href={batchRecordHref(b.id)} className="inline-flex min-h-[44px] items-center text-primary-text underline">
           See the full batch record

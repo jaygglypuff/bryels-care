@@ -4,7 +4,9 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { pieceWord } from "@/modules/production";
-import { getQualityCheck, QUALITY_CHECK_LABEL, type QualityCheckView } from "@/modules/quality";
+import { correctionRequestsOf, getQualityCheck, QUALITY_CHECK_LABEL, resultHistory, type QualityCheckView } from "@/modules/quality";
+import { db } from "@/db/client";
+import { ResultCorrections } from "../corrections";
 import { Card, CardTitle, LinkButton, PageHeader } from "@/ui/core";
 import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
@@ -44,6 +46,11 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
   const sellable = good !== null ? good - Number(v.counts.samples) : null;
   const decided = !v.decidable;
   const rejectTotal = v.counts.rejects.reduce((t, r) => t + Number(r.qty), 0);
+  // ADR-104 §3: results with their corrections (struck through) and corrections waiting for a second QA person.
+  const history = await resultHistory(db, v.batch.id);
+  const pending = (await correctionRequestsOf(db, v.batch.id)).filter((c) => c.c.status === "pending");
+  const isQa = ctx.canGenuinelyAt("quality.disposition.approve", v.batch.siteId) || ctx.roleCodes.includes("qa_qc");
+  const canCorrect = ctx.canAt("quality.test_result.create", v.batch.siteId);
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -216,6 +223,18 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
         </div>
 
         <div className="space-y-5">
+          {history.length > 0 && (
+            <Card>
+              <CardTitle>Test results and corrections</CardTitle>
+              <ResultCorrections
+                batchId={v.batch.id}
+                decided={["released", "rejected", "closed"].includes(v.batch.status)}
+                canCorrect={canCorrect}
+                rows={history.map((r) => ({ id: r.id, testName: r.testName, result: r.result, passed: r.passed, by: r.by, at: fmtDateTime(r.at), correctionReason: r.correctionReason, live: r.live, free: !v.planDriven }))}
+                pending={pending.map((c) => ({ id: c.c.id, test: c.test, oldResult: c.oldResult, value: c.c.value, reason: c.c.reason, by: c.by, at: fmtDateTime(c.c.requestedAt), canDecide: isQa && ctx.canGenuinelyAt("quality.disposition.approve", v.batch.siteId) && c.c.requestedBy !== ctx.userId, mine: c.c.requestedBy === ctx.userId }))}
+              />
+            </Card>
+          )}
           {!decided && (
             <Card>
               <CardTitle>Decision</CardTitle>

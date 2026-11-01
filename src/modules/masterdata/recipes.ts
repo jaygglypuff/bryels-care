@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { bomLines, formulaRevisions, formulas, materials, products, routingRevisions, routings, skus, uoms } from "@/db/schema";
+import { bomLineAlternatives, bomLines, formulaRevisions, formulas, materials, products, routingRevisions, routings, skus, uoms } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
@@ -81,6 +81,7 @@ const LineSchema = z
     phaseCode: str(40).nullable(),
     scaling: z.enum(["proportional", "fixed"]),
     isCritical: z.boolean(),
+    alternatives: z.array(z.object({ materialId: uuid, ratio: str(30), notes: str(200).nullable() }).strict()).max(5).optional(),
   })
   .strict();
 
@@ -757,6 +758,11 @@ export async function getRecipe(ctx: AuthContext, formulaId: string) {
   const ingredientRows = lines.filter((l) => kindOf.get(l.materialId) !== "packaging");
   const packagingRows = lines.filter((l) => kindOf.get(l.materialId) === "packaging");
   const pieceG = await productPieceG(ctx.organizationId, f.product);
+  // ADR-104 §1b: the lines' approved alternatives travel through the wizard unchanged.
+  const altsOf = new Map<string, { materialId: string; ratio: string; notes: string | null }[]>();
+  if (ingredientRows.length) {
+    for (const a of await db.select().from(bomLineAlternatives).where(inArray(bomLineAlternatives.bomLineId, ingredientRows.map((l) => l.id)))) altsOf.set(a.bomLineId, [...(altsOf.get(a.bomLineId) ?? []), { materialId: a.materialId, ratio: a.ratio, notes: a.notes }]);
+  }
   // ADR-088 §4: a batch size that is exactly "N pieces" is shown back as N pieces.
   const shownPieces = fCur ? detectPieces(fCur.referenceBatchSizeG, plain(fCur.theoreticalYieldPct), pieceG) : null;
   const batchPieces = fCur ? piecesFromBatch(fCur.referenceBatchSizeG, fCur.theoreticalYieldPct, pieceG) : "0";
@@ -770,7 +776,7 @@ export async function getRecipe(ctx: AuthContext, formulaId: string) {
     batchKg: fCur ? gramsToKg(fCur.referenceBatchSizeG) : "",
     expectedPct: fCur ? plain(fCur.theoreticalYieldPct) : "100",
     view: "g",
-    lines: fromBomLines(ingredientRows),
+    lines: fromBomLines(ingredientRows.map((l) => ({ ...l, alternatives: altsOf.get(l.id) ?? [] }))),
     packaging: fromPackagingLines(packagingRows, batchPieces),
     steps: fromRoutingSteps(steps),
     changeSummary: f.open?.status === "draft" ? (f.open.changeSummary ?? "") : r?.open?.status === "draft" ? (r.open.changeSummary ?? "") : "",

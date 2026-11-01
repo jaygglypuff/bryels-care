@@ -136,3 +136,16 @@ export {
 } from "./check-quality";
 export { registerQualityReleaseHooks, resetQualityReleaseHooks, type QualityReleaseHooks, type AutoCloseResult } from "./release-hooks";
 export { changeControlApprovalVerdicts, recallCaseApprovalVerdicts } from "./approval-gates"; // ADR-075 "To approve"
+// ADR-104 §3: correcting a QA test result (before the decision directly; after it with a second QA person).
+export {
+  RESULT_CORRECTION_APPROVAL_KIND,
+  correctTestResult,
+  correctionRequestsOf,
+  decideResultCorrection,
+  reopenBlocker,
+  requestResultCorrection,
+  resultCorrectionApprovalVerdicts,
+  resultCorrectionCandidates,
+  resultHistory,
+  type ResultHistoryRow,
+} from "./result-corrections";

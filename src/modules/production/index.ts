@@ -174,6 +174,34 @@ export { getFloorDisplay, FLOOR_MAX_MAKING, FLOOR_MAX_NEXT, type FloorDisplay, t
 export { plainWords } from "./plain-words";
 export { auditSentence, batchStateWord, orderStateWord, ownerOverrideDoing, ownerOverrideSentence, plainReason, wordsFromKey, type RecordLabels } from "./record-words";
 export { materialsSummary, type MaterialsSummary } from "./materials-summary";
+// ADR-104 §1: another lot / another ingredient at weighing (material-swaps.ts).
+export {
+  LOT_CHANGE_REASONS,
+  LOT_CHANGE_REASON_CODES,
+  MATERIAL_SUBSTITUTION_APPROVAL_KIND,
+  alternativesForLine,
+  batchMaterialChanges,
+  decideMaterialSubstitution,
+  isQaApproverAt,
+  materialChangeSentence,
+  materialSubstitutionApprovalVerdicts,
+  materialSubstitutionCandidates,
+  otherLotOptions,
+  requestMaterialSubstitution,
+  substituteMaterialOptions,
+  substitutionRequestsOf,
+  useAnotherLot,
+  useApprovedAlternative,
+  withdrawMaterialSubstitution,
+  type BatchMaterialChange,
+  type LotChangeReason,
+  type OtherLotOption,
+} from "./material-swaps";
+export { QA_CORRECTION_REOPEN_FROM, reopenBatchForQaCorrection } from "./closure";
+export { amountWords, offPlanWarning, pickPlan, weighProposal, type PickLot, type PickPlan, type PickStep } from "./pick-plan";
+// ADR-104 §5: batches over several days.
+export { stopForToday, lastPauses, pauseOfBatch, continueTitle, dayNumber, packedOverDays, startedWords, type LastPause, type StopForTodayInput } from "./batch-days";
+export { changeLotInTx } from "./material-swaps";
 // ADR-104 §2 and §4: box labels and the batch plan.
 export { largestBatchFor, largestBatchesForForm, MIXING_EQUIPMENT_KINDS, type LargestBatch } from "./batch-plan-facts";
 export { plannedBatchSizesG } from "./work-orders";

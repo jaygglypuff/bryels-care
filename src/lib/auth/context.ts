@@ -133,6 +133,17 @@ export class AuthContext {
     return false;
   }
 
+  /**
+   * ADR-104 (GMP independence): the permission at the site granted by this person's own roles, never by the
+   * owner override (ADR-073) and never by the top-role self-approval (ADR-091). For QA decisions where neither
+   * may stand in: approving another ingredient, approving a correction of a decided QA result.
+   */
+  canGenuinelyAt(p: Permission, siteId: string): boolean {
+    if (!this.canAt(p, siteId)) return false;
+    const o = this.options.ownerOverride;
+    return !o || o.basePermissions.has(p);
+  }
+
   /** For screens (records nothing): whether `userId` is this person for a same-person rule (ADR-073). */
   sodConflict(userId: string | null | undefined): boolean {
     return !this.ownerOverride && !!userId && userId === this.userId;
