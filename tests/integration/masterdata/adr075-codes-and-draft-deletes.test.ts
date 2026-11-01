@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { auditEvents, customers, formulaRevisions, formulas, materials, products, purchaseRequests, salesOrders, stockAdjustments, suppliers, warehouses } from "@/db/schema";
+import { auditEvents, customers, formulaRevisions, formulas, inventoryLots, materials, products, purchaseRequests, salesOrders, stockAdjustments, suppliers, warehouses } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { createAdjustment, deleteDraftAdjustment, submitAdjustment } from "@/modules/inventory";
 import {
@@ -123,7 +123,9 @@ describe("ADR-075 deleting drafts", () => {
   });
 
   it("material: one that is used (lots) or blocked is never deleted", async () => {
-    const [used] = await db.select().from(materials).where(eq(materials.code, "MAT-0012"));
+    // A material that has stock lots (not a fixed code: seed order may change which code that is).
+    const [withLots] = await db.select({ id: inventoryLots.materialId }).from(inventoryLots).where(eq(inventoryLots.itemKind, "material")).limit(1);
+    const [used] = await db.select().from(materials).where(eq(materials.id, withLots.id!));
     const e = await expectCode(deleteMaterial(planner, used.id), "state");
     expect(e.message).toMatch(/already used by .*lots/);
     const b = await createMaterialMaster(planner, mat("Blocked (fictional)"));
