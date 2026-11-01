@@ -6,6 +6,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { type FormulaSnapshot, addDays, isWeighingStep, manilaToday } from "./shared";
 import { finishHref, firstStepNo, flowHref, qualityCheckHref } from "./flow-paths";
+import { plainWords } from "./plain-words";
 
 /**
  * Production flow v2 (ADR-080, stage G2): the facts of a batch that the simple status read model
@@ -87,7 +88,8 @@ export function currentStepOf(snapshot: Snap, recs: Pick<StepRec, "stepNo" | "st
     const waiting = !!readyAt && r?.status === "in_progress" && readyAt.getTime() > now.getTime();
     return {
       stepNo: s.stepNo,
-      name: s.name,
+      // Plain words on every screen and button (re-audit 2026-11-01 item 3); the setup keeps its exact words.
+      name: plainWords(s.name),
       kind: s.stepKind,
       status: (r?.status as "in_progress" | "awaiting_check" | undefined) ?? "pending",
       index: i + 1,

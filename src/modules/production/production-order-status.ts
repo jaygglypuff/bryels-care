@@ -36,6 +36,8 @@
  *
  * No server-only import: client components and unit tests use it.
  */
+import { plainWords } from "./plain-words";
+
 export const PRODUCTION_ORDER_STATUSES = ["draft", "approved", "in_progress", "quality_check", "done", "failed", "cancelled"] as const;
 export type ProductionOrderStatus = (typeof PRODUCTION_ORDER_STATUSES)[number];
 
@@ -145,8 +147,9 @@ const DONE_STEP = ["completed", "skipped"];
 
 /** The simple status of one batch (the building block of the order status). */
 export function batchStatusView(b: BatchFact, now: Date = new Date()): BatchStatusView {
-  const planned = [...(b.plannedSteps ?? [])].sort((x, y) => x.stepNo - y.stepNo);
-  const records = b.stepRecords ?? [];
+  // Plain step names (re-audit 2026-11-01 item 3): "Packaging area clean-area check", never "line clearance".
+  const planned = [...(b.plannedSteps ?? [])].map((p) => ({ ...p, name: plainWords(p.name) })).sort((x, y) => x.stepNo - y.stepNo);
+  const records = (b.stepRecords ?? []).map((r) => ({ ...r, name: plainWords(r.name) }));
   const stepsTotal = planned.length || records.length;
   const base = { batchStatus: b.status, subtitle: null, warn: false, step: null, stepsTotal, waitUntil: null, waitOver: false };
   switch (b.status) {
@@ -258,7 +261,18 @@ export function productionOrderStatus(workOrderStatus: string, batchFacts: Batch
     return make("done", { warning: failed > 0 ? `${failed} of ${views.length} batches failed` : null });
   }
   // Least advanced first; ties keep batch order (stable sort).
-  const lead = [...undecided].sort((a, b) => RANK[a.stage] - RANK[b.stage])[0];
+  let lead = [...undecided].sort((a, b) => RANK[a.stage] - RANK[b.stage])[0];
+  // Re-audit N6 (ADR-105): an order whose next batch still waits but another batch is being made (or already went to
+  // QA or was decided) is "In progress", never "Approved · 0 of 2 done". The step shown is the batch being made that
+  // is furthest along, so list, order page and Home all say "In progress · step 6 of 7".
+  if (lead.stage === "approved" && views.some((v) => RANK[v.stage] > 0)) {
+    const making = undecided.filter((v) => v.stage === "in_progress").sort((a, b) => (b.step?.stepNo ?? Number.MAX_SAFE_INTEGER) - (a.step?.stepNo ?? Number.MAX_SAFE_INTEGER))[0];
+    if (making) lead = making;
+    else {
+      const next = lead;
+      return make("in_progress", { subtitle: next.subtitle ? `Next batch: ${next.subtitle}` : "Next batch waits to start", leadBatchId: next.id, stepNote: next.subtitle ? `Next batch: ${next.subtitle}` : "Next batch waits to start" });
+    }
+  }
   const stepNote = lead.stage === "in_progress" && lead.step && lead.stepsTotal > 0 ? `Step ${lead.step.stepNo} of ${lead.stepsTotal}${lead.subtitle ? ` · ${lead.subtitle}` : ""}` : lead.stage === "in_progress" ? lead.subtitle : null;
   return make(lead.status, { subtitle: lead.subtitle, warn: lead.warn, leadBatchId: lead.id, stepNote });
 }
@@ -276,7 +290,7 @@ export function workOrderStatusesFor(s: ProductionOrderStatus | "open"): string[
     open: ["draft", "planned", "released", "in_progress", "completed"],
     draft: ["draft", "planned"],
     approved: ["released", "in_progress"],
-    in_progress: ["released", "in_progress"],
+    in_progress: ["released", "in_progress", "completed"],
     quality_check: ["in_progress", "completed"],
     done: ["in_progress", "completed", "closed"],
     failed: ["in_progress", "completed", "closed"],

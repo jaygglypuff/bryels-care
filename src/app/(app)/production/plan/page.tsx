@@ -23,7 +23,7 @@ export default async function PlanPage() {
   const [plans, overview] = await Promise.all([listProductionPlans(ctx), planningOverview(ctx, end)]);
   return (
     <div>
-      <PageHeader title="Production plan" subtitle={`${ctx.currentSite.code} · demand from confirmed orders and minimum stock → production orders`} />
+      <PageHeader title="Production plan" subtitle={ctx.currentSite.name} />
       <PageIntro>What customers ordered and what stock is low, so you can decide what to make.</PageIntro>
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="min-w-0 space-y-4">
@@ -32,7 +32,7 @@ export default async function PlanPage() {
             {overview.demand.length === 0 ? (
               <EmptyState title="No open demand">No confirmed orders due and no minimum stock set for this site.</EmptyState>
             ) : (
-              <Table head={["SKU", "Orders (open)", "Min stock", "Available", "Open WOs", "Net to make"]}>
+              <Table head={["Product", "Customers ordered", "Keep at least", "Ready to sell", "Already being made", "Still to make"]}>
                 {overview.demand.map((d) => (
                   <tr key={d.productId}>
                     <Td>
@@ -49,7 +49,7 @@ export default async function PlanPage() {
                 ))}
               </Table>
             )}
-            <p className="mt-2 text-[12px] text-muted">Units (pcs). Available = released, in-date finished goods minus reservations and allocations. Forecasts are added once demand forecasting is scheduled (FR-analytics-08).</p>
+            <p className="mt-2 text-[12px] text-muted">In pieces. Ready to sell = finished goods that passed the quality check and are not expired, minus what is already set aside for customers. Still to make = customers ordered + keep at least − ready to sell − already being made.</p>
           </Card>
           <Card>
             <CardTitle>Plans</CardTitle>
@@ -92,15 +92,15 @@ export default async function PlanPage() {
           )}
           {ctx.can("production.production_plan.edit") && overview.products.length > 0 && (
             <Card>
-              <CardTitle>Minimum stock</CardTitle>
+              <CardTitle>Keep at least (minimum stock)</CardTitle>
               <p className="mb-2 text-[12px] text-muted">
-                Current: {overview.products.map((p) => `${p.sku} ${p.minStockUnits ? fmtQty(p.minStockUnits, "", 0) : "—"}`).join(" · ")}
+                Now: {overview.products.map((p) => `${p.name} ${p.minStockUnits ? fmtQty(p.minStockUnits, "", 0) : "—"}`).join(" · ")}
               </p>
               <CommandForm action={minStockAction} fields={{}} label="Save minimum" variant="secondary" size="sm">
-                <Field label="SKU" htmlFor="productId">
+                <Field label="Product" htmlFor="productId">
                   <Select id="productId" name="productId">
                     {overview.products.map((p) => (
-                      <option key={p.id} value={p.id}>{p.sku} · {p.name}</option>
+                      <option key={p.id} value={p.id}>{p.name} · {p.sku}</option>
                     ))}
                   </Select>
                 </Field>

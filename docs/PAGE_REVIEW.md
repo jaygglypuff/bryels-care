@@ -247,14 +247,14 @@ Total screens: 250.
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/production/[batchId]/closure` | ☑ 2026-10-31 | Intro; check names in plain words (QA decision, problem reports, pieces made, batch record); button "Close the batch and make the final batch record". |
+| `/production/[batchId]/closure` | ☑ 2026-11-01 | Intro; check names in plain words (QA decision, problem reports, pieces made, batch record); button "Close the batch and make the final batch record". Re-audit: site manager, production admin and QA only (page and `getClosureView`; operators by URL get "You don't have access"). |
 | `/production/[batchId]/finish` | ☑ 2026-10-31 | Intro; rejects folded under "Any rejects?" (good pieces, samples, left-over wrappers visible); wrappers reconcile; "Open this batch's labels" (ADR-088 §3). |
 | `/production/[batchId]` | ☑ 2026-10-31 | Batch record (read-only, one path 2026-10-31): steps with who did/checked, readings, equipment, weighings, packaging, output, quality, timeline; NextStep "Continue this batch → <screen>" when the viewer can act; no step/packaging/yield/transfer forms (only legacy yield/reject approvals). Closure link only for approvers. |
-| `/production/board` | ☑ 2026-10-31 | Board: product name first, number grey; status words are the production-order words (Draft, Approved, In progress, Quality check, Done); move labels "Get ready for approval", "Approve and set materials aside"; cards open "continue". Phone height still long (open). |
+| `/production/board` | ☑ 2026-11-01 | Board: product name first, number grey; column titles and chips in the production-order words; move labels "Ready for approval (still Draft)", "Approve (sets the materials aside)"; reasons without permission strings; order cards open the order page; phones (< 640 px) get one list with status chips instead of tall columns. |
 | `/production/defects` | ☑ 2026-10-31 | Rejects: intro; subtitle shortened. |
 | `/production/new` | ☑ 2026-10-31 | Superseded: server redirect to /production/orders/new (one path 2026-10-31). |
 | `/production/orders/[workOrderId]/materials` | ☑ 2026-10-31 | Get materials: title and intro; wrappers/labels listed; "no wrappers on this list" note when the product has no packaging per piece; also serves batches without an order (`without-order`). |
-| `/production/orders/[workOrderId]` | ☑ 2026-10-31 | Order hub: one green button (per-batch buttons and "Save to daily log" secondary); Batches tab opens "Continue this batch" or the batch record; progress strip labels no longer break on a phone. |
+| `/production/orders/[workOrderId]` | ☑ 2026-11-01 | Order hub: one green button (per-batch buttons and "Save to daily log" secondary); Batches tab opens "Continue this batch" or the batch record; progress strip labels no longer break on a phone. Re-audit: "Plan the batch" planned here (no old order view), "Set aside new stock" in Materials, More details holds versions, people, "Change this draft" and the order history in words; status "In progress · step n of N" once any batch is being made; plain step names; tabs 44 px. |
 | `/production/orders/[workOrderId]/step/[n]` | ☑ 2026-10-31 | Step card (one path 2026-10-31): plain title/instruction (exact setup words folded); "Not yet" shows no form; own-phone check (Yes, I checked it / send it back); equipment choice; extra fields under More details; packaging: taken lot or tap-to-choose cards + Scan with camera; label preview; print only from the packaging step. |
 | `/production/orders/[workOrderId]/weigh` | ☑ 2026-10-31 | Weigh: lot label scanned with the camera (last 4 only for a damaged label); own-phone weighing check; "Other ways to weigh" link per ingredient; wrappers never on this screen. |
 | `/production/orders/new` | ☑ 2026-10-31 | New production order: intro; 3 fields + product, the rest under More details; system numbers the order. |
@@ -267,7 +267,7 @@ Total screens: 250.
 | `/production/orders/[workOrderId]/weigh/more` | ☑ 2026-10-31 | "Other ways to weigh" one ingredient: container weight, second lot, out-of-range approval (CX-TOL), undo with reason, own-session check (from the old workspace). |
 | `/production/orders/[workOrderId]/continue` | ☑ 2026-10-31 | No screen: server redirect to the batch's next flow screen (board, scan, bookmarks). |
 | `/production/today` | ☑ 2026-10-31 | Today's count: intro; subtitle shortened. |
-| `/production/work-orders/[workOrderId]` | ☑ 2026-10-31 | Advanced full order record (plan batch, top-up, dispensing sheet); batch links use "continue" to the flow screens. |
+| `/production/work-orders/[workOrderId]` | ☑ 2026-11-01 | Server redirect to `/production/orders/[id]` (re-audit, ADR-105); its capabilities moved to the order page first. |
 | `/production/work-orders/new` | ☑ 2026-10-31 | Superseded: server redirect to /production/orders/new. |
 | `/production/work-orders` | ☑ 2026-10-31 | Superseded: server redirect to /production/orders. |
 
@@ -296,7 +296,7 @@ Total screens: 250.
 | `/quality/holds/new` | ☑ 2026-10-31 | "Stop a lot": lot picked by name (scan folded), 4 fields. |
 | `/quality/holds` | ☑ 2026-10-31 | "Stopped by QA" list; exception screen in ⋯ More. |
 | `/quality/inspections/[inspectionId]` | ☑ 2026-10-31 | "Quality check: <item>": next step by state; samples list; Is it OK?; second-person check kept; cancel in ⋯ More. |
-| `/quality/inspections` | ☑ 2026-10-31 | "Quality checks (tests)"; item first; plain states. |
+| `/quality/inspections` | ☑ 2026-11-01 | "Quality checks (tests)"; item first; plain states. Re-audit: "Batches waiting for their tests to start" lists only finished batches (waiting for the quality check), never one still being made. |
 | `/quality/label-verification` | ☑ 2026-10-31 | "Check the labels in an area": next step, 44 px area chips, scan field. |
 | `/quality/lots/[lotId]` | ☑ 2026-10-31 | Item first; next step "decide"; only fitting choices; OK to use / Stop / Not OK; history as list. |
 | `/quality` | ☑ 2026-10-31 | QA queue: next step to the oldest batch/lot; name-first lists; older decisions folded; other screens in ⋯ More. |

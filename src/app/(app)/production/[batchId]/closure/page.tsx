@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
-import { type ClosureView, getClosureView, listPaperRecords, paperScanDownloadUrl } from "@/modules/production";
+import { type ClosureView, canOpenClosure, getClosureView, listPaperRecords, paperScanDownloadUrl } from "@/modules/production";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -22,6 +22,8 @@ export const dynamic = "force-dynamic";
 export default async function ClosurePage({ params }: { params: Promise<{ batchId: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("production.batch.view")) return <Forbidden what="batch records" permission="production.batch.view" />;
+  // Re-audit fix 8 (ADR-105): closing and reopening a batch is for the site manager or QA, also by URL.
+  if (!canOpenClosure(ctx)) return <Forbidden what="closing a batch (the site manager or QA does this)" permission="production.batch.approve" />;
   const { batchId } = await params;
   let v: ClosureView;
   try {

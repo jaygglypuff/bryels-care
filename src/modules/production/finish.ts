@@ -19,6 +19,7 @@ import { batchLabelInfo } from "./packaging-flow";
 import { currentReadings } from "./process";
 import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
 import { currentYield, recordScrapReworkLocked, recordYieldLocked, yieldLimits } from "./yield";
+import { plainWords } from "./plain-words";
 
 /**
  * Finish batch (ADR-080 §6, slice V2-6). ONE transaction that does what the five old commands did one
@@ -178,7 +179,7 @@ export async function getFinishView(ctx: AuthContext, batchId: string) {
   const blockers: string[] = [];
   if (batch.status !== "in_process") blockers.push(batch.status === "awaiting_qc" || batch.status === "quarantined" ? "This batch is already finished. It is waiting for the quality check." : `This batch is ${batch.status.replace(/_/g, " ")}.`);
   else {
-    if (openSteps.length) blockers.push(`Finish step ${openSteps[0].stepNo} (${openSteps[0].name}) first.`);
+    if (openSteps.length) blockers.push(`Finish step ${openSteps[0].stepNo} (${plainWords(openSteps[0].name)}) first.`);
     blockers.push(...(await dispensingBlockers(db, batch)));
   }
   const log = await batchLogCounts(db, batch);

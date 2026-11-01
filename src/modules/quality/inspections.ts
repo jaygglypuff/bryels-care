@@ -832,10 +832,11 @@ export async function inspectionCandidates(ctx: AuthContext) {
     .where(
       and(
         eq(batches.siteId, siteId),
-        inArray(batches.status, ["awaiting_qc", "in_process"]),
+        // Re-audit 2026-11-01 (ADR-105): the finished-product tests wait only for batches that were finished (sent to
+        // QA); a batch still being made (weighing, mixing, packaging) is not "waiting for its tests" yet. In-process
+        // checks of a running step are the step rows below.
+        eq(batches.status, "awaiting_qc"),
         sql`not exists (select 1 from ${inspections} i where i.batch_id = ${batches.id} and i.inspection_plan_id = ${batches.inspectionPlanId} and i.process_step_record_id is null and i.status <> 'cancelled')`,
-        // UX audit 2026-10-31 item 10: a batch still being weighed is not waiting for its tests yet.
-        sql`(${batches.status} <> 'in_process' or not exists (select 1 from batch_materials bm where bm.batch_id = ${batches.id} and bm.status in ('pending', 'partial')))`,
       ),
     )
     .orderBy(asc(batches.batchNumber));

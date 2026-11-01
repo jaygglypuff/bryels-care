@@ -213,3 +213,39 @@ describe("labels only from the packaging step (A-ONE-02) and plain step words", 
     expect(plainWords("Wrappers destroyed")).toBe("Wrappers spoiled");
   });
 });
+
+/* ------------------------------------------------------------------ re-audit 2026-11-01 (ADR-105) */
+
+describe("grep: no module or page links to the old order view /production/work-orders/…", () => {
+  const files = [...walk(path.join(ROOT, "src/modules")), ...walk(path.join(ROOT, "src/app")), ...walk(path.join(ROOT, "src/ui"))];
+  // A link is an href, a redirect or a template/string literal that starts with the old route. The redirect pages
+  // themselves and code comments are allowed (stored links are rewritten by src/lib/record-links.ts).
+  const LINK = /["'`]\/production\/work-orders(\/|["'`?])/;
+  const ALLOWED = ["src/app/(app)/production/work-orders/page.tsx", "src/app/(app)/production/work-orders/[workOrderId]/page.tsx"];
+  it("every link opens /production/orders/<id>", () => {
+    const hits: string[] = [];
+    for (const f of files) {
+      const rel = path.relative(ROOT, f);
+      if (ALLOWED.includes(rel)) continue;
+      readFileSync(f, "utf8")
+        .split("\n")
+        .forEach((l, i) => {
+          const code = l.replace(/\/\/.*$/, "").replace(/^\s*\*.*$/, "");
+          if (LINK.test(code)) hits.push(`${rel}:${i + 1}: ${l.trim()}`);
+        });
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it("the old order view is a server redirect to the production order page (no screen of its own)", () => {
+    const src = readFileSync(path.join(ROOT, "src/app/(app)/production/work-orders/[workOrderId]/page.tsx"), "utf8");
+    expect(src).toMatch(/redirect\(`\/production\/orders\/\$\{/);
+    expect(src).not.toMatch(/<PageHeader|<Card|getWorkOrder\(/);
+  });
+
+  it("the production order page plans the batch itself (no link out for 'Plan the batch')", () => {
+    const src = readFileSync(path.join(ROOT, "src/app/(app)/production/orders/[workOrderId]/page.tsx"), "utf8");
+    expect(src).toContain("<PlanBatchButton");
+    expect(src).not.toContain("full order record");
+  });
+});

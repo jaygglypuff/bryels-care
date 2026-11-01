@@ -109,6 +109,44 @@ function boardWord(kind: string, status: string): string {
   return (kind === "work_order" ? wo[status] : batch[status]) ?? status.replace(/_/g, " ");
 }
 
+/**
+ * Phones (< 640 px, re-audit 2026-11-01 item 10): one short list instead of tall columns: each row is the product, its
+ * number and step, and a chip with the column (status) word. Tapping opens the order or the batch's next screen.
+ * Moving cards stays on wider screens (drag or "Move to…").
+ */
+function PhoneList({ board }: { board: ProductionBoard }) {
+  const rows = board.columns.flatMap((col) => col.cards.map((c) => ({ c, word: c.kind === "batch" ? boardWord("batch", c.status) : col.title })));
+  const finished = (r: (typeof rows)[number]) => ["released", "closed", "rejected", "cancelled"].includes(r.c.status) && r.c.kind === "batch";
+  const open = rows.filter((r) => !finished(r));
+  const done = rows.filter(finished);
+  const row = ({ c, word }: (typeof rows)[number]) => (
+    <li key={`${c.kind}:${c.id}`}>
+      <Link href={c.href} className="flex min-h-[56px] items-center gap-3 px-3.5 py-2.5 hover:bg-surface-2">
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[15px] font-medium text-fg">{c.productName}</span>
+          <span className="block truncate text-[12px] text-muted">
+            {c.kind === "work_order" ? `Order · ${c.batchCount} batch${c.batchCount === 1 ? "" : "es"}` : c.progress && c.status === "in_process" ? `Batch · step ${Math.min(c.progress.done + 1, c.progress.total)} of ${c.progress.total}` : "Batch"} · {c.number}
+          </span>
+        </span>
+        <Chip tone={c.risks.some((r) => r.tone === "bad") ? "warn" : "neu"}>{word}</Chip>
+      </Link>
+    </li>
+  );
+  return (
+    <div className="flex flex-col gap-3 sm:hidden" data-testid="board-phone-list">
+      <ul className="flex flex-col divide-y divide-line rounded-[16px] border border-line bg-surface" aria-label="Production board">
+        {open.length ? open.map(row) : <li className="px-3.5 py-4 text-[14px] text-muted">Nothing is waiting or being made.</li>}
+      </ul>
+      {done.length > 0 && (
+        <details className="rounded-[16px] border border-line bg-surface">
+          <summary className="min-h-[48px] cursor-pointer px-3.5 py-3 text-[14px] font-medium text-fg-2">Finished batches ({done.length})</summary>
+          <ul className="flex flex-col divide-y divide-line border-t border-line">{done.map(row)}</ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
 export function BoardView({ board }: { board: ProductionBoard }) {
   const dragged = useRef<BoardCard | null>(null);
   const [over, setOver] = useState<string | null>(null);
@@ -149,7 +187,8 @@ export function BoardView({ board }: { board: ProductionBoard }) {
         </div>
       )}
       {pending && <p role="status" className="mb-2 text-[13px] text-muted">Moving…</p>}
-      <div className="flex max-w-full snap-x snap-mandatory gap-3 overflow-x-auto pb-3" aria-label="Production board columns">
+      <PhoneList board={board} />
+      <div className="hidden max-w-full snap-x snap-mandatory gap-3 overflow-x-auto pb-3 sm:flex" aria-label="Production board columns">
         {board.columns.map((col) => (
           <section
             key={col.key}
@@ -184,7 +223,7 @@ export function BoardView({ board }: { board: ProductionBoard }) {
           </section>
         ))}
       </div>
-      <p className="mt-1 text-[12px] text-muted">
+      <p className="mt-1 hidden text-[12px] text-muted sm:block">
         You can move a card: plan a draft production order, approve a planned one (its materials are set aside), or start a batch whose materials are ready. QA decides when a batch may be sold.
       </p>
     </div>
