@@ -6,6 +6,7 @@ import { inventoryBalances, inventoryLots, locations, stockMovements } from "@/d
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
+import { plainDate } from "@/lib/plain-date";
 import { getSetting } from "@/lib/settings";
 import { assertLocationsOpen, checkEnteredQuantity } from "@/modules/masterdata";
 import { assertLocationsNotFrozen } from "./freeze";
@@ -269,6 +270,6 @@ export function assertLotUsable(lot: { lotNumber: string; qualityStatus: string;
     throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} is ${words[lot.qualityStatus] ?? lot.qualityStatus} and cannot be used until QA releases it.`);
   }
   if (lot.expiresOn && new Date(lot.expiresOn + "T23:59:59+08:00") < today) {
-    throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} expired on ${lot.expiresOn} and cannot be used.`);
+    throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} expired on ${plainDate(lot.expiresOn)} and cannot be used.`);
   }
 }

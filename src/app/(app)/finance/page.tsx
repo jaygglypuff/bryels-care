@@ -1,3 +1,4 @@
+import { plural, waits } from "@/lib/plural";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
@@ -37,9 +38,9 @@ export default async function FinancePage() {
     toInvoice && ctx.can("finance.invoice.create")
       ? { text: `Next: ${toInvoice === 1 ? "1 delivery" : `${toInvoice} deliveries`} went out without an invoice.`, action: { label: "Make the invoices", href: "/finance/invoices" } }
       : invToApprove && ctx.can("finance.invoice.approve")
-        ? { text: `Next: ${invToApprove} invoice(s) wait for approval.`, action: { label: "Open them", href: "/finance/invoices?status=submitted" } }
+        ? { text: `Next: ${plural(invToApprove, "invoice")} ${waits(invToApprove)} for approval.`, action: { label: "Open them", href: "/finance/invoices?status=submitted" } }
         : toApprove
-          ? { text: `Next: ${toApprove} expense claim(s) wait for your approval.`, action: { label: "Open them", href: "/finance/expenses?status=to_approve" } }
+          ? { text: `Next: ${plural(toApprove, "expense claim")} ${waits(toApprove)} for your approval.`, action: { label: "Open them", href: "/finance/expenses?status=to_approve" } }
           : rec && Number(rec.overdue) > 0
             ? { text: `Customers are late paying ${fmtMoney(rec.overdue)}.`, action: { label: "See who is late", href: "/finance/statements" } }
             : null;
@@ -58,7 +59,7 @@ export default async function FinancePage() {
       )}
       {pay && (
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Kpi label="Money we owe suppliers" value={fmtMoney(pay.outstanding)} hint={`${pay.openCount} supplier bill(s) to pay`} href="/finance/bills?status=posted" />
+          <Kpi label="Money we owe suppliers" value={fmtMoney(pay.outstanding)} hint={`${plural(pay.openCount, "supplier bill")} to pay`} href="/finance/bills?status=posted" />
           <Kpi label="Of that, we are late" value={fmtMoney(pay.overdue)} tone={Number(pay.overdue) > 0 ? "warn" : "good"} href="/finance/bills" />
           <Kpi label="Supplier bills that do not match" value={pay.disputed} tone={pay.disputed ? "warn" : "good"} hint="Bill differs from the order or the delivery" href="/finance/bills?status=disputed" />
         </div>

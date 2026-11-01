@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import Link from "next/link";
 import { fmtDateTime } from "@/lib/qty";
 import { Card, CardTitle } from "./core";
@@ -41,7 +42,7 @@ export function SyncDiagnosticsCard({ d }: { d: SyncDiagnostics }) {
       <p className="mt-3 text-[12px] text-muted">
         {d.oldestOpenConflictAt ? `Oldest open conflict ${fmtDateTime(d.oldestOpenConflictAt)}. ` : ""}
         {d.devices.maxClockSkewSeconds > 600 ? `A device clock was off by up to ${Math.round(d.devices.maxClockSkewSeconds / 60)} min. ` : ""}
-        {d.devices.suspended ? `${d.devices.suspended} device(s) suspended.` : ""}
+        {d.devices.suspended ? `${plural(d.devices.suspended, "device")} suspended.` : ""}
       </p>
     </Card>
   );

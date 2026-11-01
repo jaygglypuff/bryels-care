@@ -28,7 +28,7 @@ export async function saveRecipeAction(payload: unknown) {
       const r = await saveRecipe(ctx, payload);
       return { data: r, message: r.message };
     },
-    ["/masterdata/formulas", "/masterdata/routings", "/masterdata/products", "/approvals"],
+    ["/masterdata/recipes", "/masterdata/formulas", "/masterdata/routings", "/masterdata/products", "/approvals"],
   );
 }
 

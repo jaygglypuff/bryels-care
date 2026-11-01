@@ -90,8 +90,9 @@ export async function refreshActionItems(organizationId: string, now: Date = new
       const rule = ruleFor(rules, c.kind, c.siteId);
       const severity = (rule?.severity ?? kind.severity) as Severity;
       if (existing) {
-        if (existing.title !== c.title || existing.detail !== c.detail || existing.severity !== severity) {
-          await tx.update(actionItems).set({ title: c.title, detail: c.detail, severity }).where(eq(actionItems.id, existing.id));
+        // Round 4: the button word follows the catalogue too (rows opened before a rename said "Open CAPA").
+        if (existing.title !== c.title || existing.detail !== c.detail || existing.severity !== severity || existing.actionLabel !== kind.actionLabel) {
+          await tx.update(actionItems).set({ title: c.title, detail: c.detail, severity, actionLabel: kind.actionLabel }).where(eq(actionItems.id, existing.id));
         }
         continue;
       }

@@ -34,7 +34,7 @@ export default async function RecipePage({ params, searchParams }: { params: Pro
   const ctx = await requireContext();
   if (!ctx.can("masterdata.formula.view") || !ctx.can("masterdata.routing.view")) return <Forbidden what="recipes" permission="masterdata.formula.view" />;
   const r = await getRecipe(ctx, formulaId);
-  if (!r) return <EmptyState title="Recipe not found" action={<LinkButton href="/masterdata/formulas" variant="secondary">All recipes</LinkButton>} />;
+  if (!r) return <EmptyState title="Recipe not found" action={<LinkButton href="/masterdata/recipes" variant="secondary">All recipes</LinkButton>} />;
 
   const wantsEdit = sp.edit === "1" && r.mode === "draft" && r.can.edit;
   const wantsNew = sp.new === "1" && r.mode === "approved" && r.can.newVersion && r.can.edit;
@@ -77,7 +77,7 @@ function RecipeOverview({ r, saved, waiting }: { r: RecipeView; saved?: string; 
   const rShown = ro ? (ro.open ?? ro.current) : null;
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4">
-      <Link href="/masterdata/formulas" className="inline-flex min-h-[44px] items-center text-[13px] text-primary-text hover:underline">
+      <Link href="/masterdata/recipes" className="inline-flex min-h-[44px] items-center text-[13px] text-primary-text hover:underline">
         ← All recipes
       </Link>
       <PageHeader

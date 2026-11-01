@@ -28,4 +28,18 @@ describe("activitySentence (Home recent activity in plain words, names before co
     const s = activitySentence({ action: "maintenance.work_request.escalated_twice", entityType: "work_request", entityNumber: null, actorName: null });
     expect(s).toEqual({ who: "The system", text: "escalated twice the work request", number: null });
   });
+
+  it("problems and alerts carry their own sentence (round 4, re-audit C N1), the record number apart", () => {
+    expect(activitySentence({ action: "platform.action_item.escalated", entityType: "action_item", entityNumber: "SO-26-00012", actorName: null, entityName: "Order for Mabuhay Pharmacy Group is not sent out yet; they wanted it on 30 Oct 2026" })).toEqual({
+      who: "The system",
+      text: "raised a problem: Order for Mabuhay Pharmacy Group is not sent out yet; they wanted it on 30 Oct 2026",
+      number: "SO-26-00012",
+    });
+    expect(activitySentence({ action: "platform.action_item.resolved", entityType: "action_item", entityNumber: "L-1", actorName: null, entityName: "Coconut Oil goes out of date in 3 days" }).text).toBe("closed the problem: Coconut Oil goes out of date in 3 days");
+    expect(activitySentence({ action: "platform.action_item.acknowledged", entityType: "action_item", entityNumber: null, actorName: "Dino Reyes", entityName: "Stock check found 1 difference" }).text).toBe("is dealing with the problem: Stock check found 1 difference");
+    // Without a title (an old item): still words, never "escalated the problem".
+    const bare = activitySentence({ action: "platform.action_item.escalated", entityType: "action_item", entityNumber: "SO-1", actorName: null });
+    expect(bare.text).toBe("raised a problem");
+    expect(bare.text).not.toMatch(/escalat/);
+  });
 });

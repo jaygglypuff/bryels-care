@@ -78,9 +78,7 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
           ) : undefined
         }
       />
-      <div className="-mt-2">
-        <PageIntro>{homeIntro(ctx.roleCodes)}</PageIntro>
-      </div>
+      <PageIntro>{homeIntro(ctx.roleCodes)}</PageIntro>
       {/* UX audit C #1/#2: one "What to do next" line (the most urgent item); the rest stay in "Needs your attention". */}
       {items.length > 0 ? (
         <NextStep text={`Next: ${items[0].text}.`} action={{ label: NEXT_LABEL[items[0].key] ?? "Open it", href: items[0].href }} />

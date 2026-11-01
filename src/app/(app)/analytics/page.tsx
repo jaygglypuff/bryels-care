@@ -160,7 +160,7 @@ async function load(ctx: Awaited<ReturnType<typeof requireContext>>, all: boolea
 
 function Pill({ href, active, children }: { href: string; active: boolean; children: ReactNode }) {
   return (
-    <Link href={href} aria-current={active ? "page" : undefined} className={cx("flex min-h-[40px] items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium", active ? "bg-cta text-white" : "text-fg-2 hover:bg-surface-2")}>
+    <Link href={href} aria-current={active ? "page" : undefined} className={cx("flex min-h-[44px] items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium", active ? "bg-cta text-white" : "text-fg-2 hover:bg-surface-2")}>
       {children}
     </Link>
   );

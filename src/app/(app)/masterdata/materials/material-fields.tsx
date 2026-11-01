@@ -99,8 +99,11 @@ export function MaterialFields({ options, d = {}, locked = false, creating = fal
       ) : (
         <ChoiceField name="baseUom" label="How do you buy and count it?" options={COUNT} value={base} onChange={setBase} />
       )}
-      <fieldset className="rounded-[14px] border border-line p-3">
-        <legend className="px-1 text-[15px] font-semibold">Usual supplier and pack size (optional)</legend>
+      {/* Round 4 (UX re-audit C #7): three questions on screen; the optional supplier and pack size are folded. */}
+      <details className="rounded-[14px] border border-line px-3" open={!!(d.standardPackQty || d.standardPackUom)}>
+        <summary className="flex min-h-[48px] cursor-pointer items-center text-[15px] font-semibold">Usual supplier and pack size (optional)</summary>
+      <fieldset className="pb-3">
+        <legend className="sr-only">Usual supplier and pack size (optional)</legend>
         <p className="mb-3 text-[13px] text-muted">Filled in for you when ordering and receiving. You can still change them on each delivery.</p>
         <Grid>
           {creating && options.suppliers && options.suppliers.length > 0 && (
@@ -112,6 +115,7 @@ export function MaterialFields({ options, d = {}, locked = false, creating = fal
           </div>
         </Grid>
       </fieldset>
+      </details>
       <MoreDetails>
         <Grid>
           <div>

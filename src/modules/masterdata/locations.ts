@@ -26,7 +26,7 @@ export const LOCATION_KIND_LABELS: Record<LocationKind, string> = {
   receiving: "Receiving",
   staging: "Staging",
   storage: "Storage (zone, rack or bin)",
-  quarantine: "Quarantine",
+  quarantine: "Waiting for the QA check",
   hold: "QA hold",
   rejected: "Rejected",
   recall: "Recall",

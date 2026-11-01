@@ -1,3 +1,4 @@
+import { isAre, plural } from "@/lib/plural";
 import "server-only";
 import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -85,7 +86,7 @@ export async function bootstrapFirstAdmin(raw: BootstrapInput, now: Date = new D
       .from(users)
       .where(and(eq(users.organizationId, org.id), inArray(users.status, ["active", "locked"])));
     if (people.length > 0) {
-      throw new DomainError("conflict", `Refusing to bootstrap: ${people.length} account(s) are already active or locked. Use the Users page to invite more administrators.`);
+      throw new DomainError("conflict", `Refusing to bootstrap: ${plural(people.length, "account")} ${isAre(people.length)} already active or locked. Use the Users page to invite more administrators.`);
     }
     const roleSync = await syncSystemRoles(tx, org.id);
     // Reference master data (units, SI conversions, reason codes) the operational modules need (ADR-040, idempotent).

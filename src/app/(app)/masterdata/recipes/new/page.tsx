@@ -37,7 +37,7 @@ export default async function NewRecipePage({ searchParams }: { searchParams: Pr
   return (
     <div className="flex flex-col gap-3">
       <div className="mx-auto flex w-full max-w-3xl flex-wrap justify-between gap-2 text-[13px]">
-        <Link href="/masterdata/formulas" className="inline-flex min-h-[44px] items-center text-primary-text hover:underline">
+        <Link href="/masterdata/recipes" className="inline-flex min-h-[44px] items-center text-primary-text hover:underline">
           ← All recipes
         </Link>
       </div>

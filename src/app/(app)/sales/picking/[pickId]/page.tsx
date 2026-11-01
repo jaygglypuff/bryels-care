@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
@@ -86,7 +87,7 @@ export default async function PickPage({ params }: { params: Promise<{ pickId: s
               )}
               {canFinish && short.length > 0 && (
                 <Cmd action={completePickAction} fields={finishFields} label="Finish with items missing" pending="Finishing…" variant="secondary">
-                  <p className="text-[13px] text-fg-2">{short.length} place(s) not fully taken. They stay set aside for later.</p>
+                  <p className="text-[13px] text-fg-2">{plural(short.length, "place")} not fully taken. They stay set aside for later.</p>
                   <Field label="Why is something missing?" htmlFor="shortPickReason">
                     <Input id="shortPickReason" name="shortPickReason" maxLength={300} required placeholder="e.g. Box damaged on the shelf" />
                   </Field>

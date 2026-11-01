@@ -1,3 +1,4 @@
+import { isAre, plural } from "@/lib/plural";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { getPeriodChecklist, listPeriods } from "@/modules/finance";
@@ -49,7 +50,7 @@ export default async function PeriodsPage() {
                   {p.lockReason ? ` · ${p.lockReason}` : ""}
                 </p>
               )}
-              {p.status === "open" && checklists.has(p.periodCode) && <p className="text-[14px] text-fg-2">{checklists.get(p.periodCode) ? `${checklists.get(p.periodCode)} paper(s) dated this month are not finished.` : "All papers dated this month are finished."}</p>}
+              {p.status === "open" && checklists.has(p.periodCode) && <p className="text-[14px] text-fg-2">{checklists.get(p.periodCode) ? `${plural(checklists.get(p.periodCode) ?? 0, "paper")} dated this month ${isAre(checklists.get(p.periodCode) ?? 0)} not finished.` : "All papers dated this month are finished."}</p>}
               {p.pendingUnlock && (
                 <p className="text-[14px]">
                   {p.pendingUnlock.requestedByName} asks to open it again ({fmtDateTime(p.pendingUnlock.requestedAt)}): {p.pendingUnlock.reason}
@@ -77,11 +78,11 @@ export default async function PeriodsPage() {
       ) : toClose ? (
         <NextStep text={`Next: close ${monthName(toClose.periodCode)} when the accountant is done.`} action={{ label: "Close it", href: `#m-${toClose.periodCode}` }} />
       ) : pending.length > 0 ? (
-        <NextStep text={`${pending.length} request(s) to open a month again.`} waitingFor="Waiting for the owner to approve." />
+        <NextStep text={`${plural(pending.length, "request")} to open a month again.`} waitingFor="Waiting for the owner to approve." />
       ) : null}
       {pending.length > 0 && !canUnlock && (
         <div className="mb-4">
-          <Banner tone="warn" title={`${pending.length} request(s) to open a month again`}>The owner approves them.</Banner>
+          <Banner tone="warn" title={`${plural(pending.length, "request")} to open a month again`}>The owner approves them.</Banner>
         </div>
       )}
       {periods.length === 0 ? (

@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import "server-only";
 import { and, asc, desc, eq, inArray, isNull, isNotNull, ne, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
@@ -433,7 +434,7 @@ export async function completePacking(ctx: AuthContext, shipmentId: string, inpu
       const boxes = await tx.select({ id: containers.id, n: containers.containerNumber }).from(containers).where(inArray(containers.id, missing.map((m) => m.containerId).filter((x): x is string => !!x).concat(["00000000-0000-0000-0000-000000000000"])));
       const lots = await tx.select({ id: inventoryLots.id, n: inventoryLots.lotNumber }).from(inventoryLots).where(inArray(inventoryLots.id, missing.map((m) => m.lotId)));
       const names = missing.map((m) => (m.containerId ? `box ${boxes.find((b) => b.id === m.containerId)?.n}` : `loose lot ${lots.find((l) => l.id === m.lotId)?.n}`));
-      throw new DomainError("conflict", `${missing.length} picked item(s) not verified yet: ${names.slice(0, 8).join(", ")}${names.length > 8 ? "…" : ""}. Scan them, or take them out of the pick.`, { code: "VERIFICATION_INCOMPLETE" });
+      throw new DomainError("conflict", `${plural(missing.length, "picked item")} not checked yet: ${names.slice(0, 8).join(", ")}${names.length > 8 ? "…" : ""}. Scan them, or take them out of the pick.`, { code: "VERIFICATION_INCOMPLETE" });
     }
     // Partial shipment check (A-PROC-15): shipped before + this shipment vs ordered, per line.
     const orderLines = await tx.select({ id: salesOrderLines.id, productId: salesOrderLines.productId, qty: salesOrderLines.qtyUnits, sku: products.skuCode, minRemainingShelfLifeDays: salesOrderLines.minRemainingShelfLifeDays, requirementSnapshot: salesOrderLines.requirementSnapshot }).from(salesOrderLines).innerJoin(products, eq(products.id, salesOrderLines.productId)).where(eq(salesOrderLines.salesOrderId, o.id));

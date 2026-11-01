@@ -27,8 +27,13 @@ function Picker({ catalogue, codes, grain, span, comparison, scopeKey, sites, ca
   return (
     <Card>
       <form method="get" action="/analytics/trends" className="flex flex-col gap-4">
-        <fieldset>
-          <legend className="mb-2 text-[14px] font-medium text-fg">Numbers to show (up to {TREND_MAX_SERIES})</legend>
+        {/* Round 4 (UX re-audit C #7): the long list of numbers is folded; the picked ones are named in the summary. */}
+        <details className="rounded-[14px] border border-line bg-surface-2/40 px-3.5" data-testid="trend-numbers">
+          <summary className="flex min-h-[48px] cursor-pointer items-center text-[14px] font-medium text-fg">
+            Numbers shown: {codes.length ? catalogue.filter((k) => codes.includes(k.code)).map((k) => plainKpi(k.code, k.name)).join(", ") : "none yet"} · change (up to {TREND_MAX_SERIES})
+          </summary>
+        <fieldset className="pb-3">
+          <legend className="sr-only">Numbers to show (up to {TREND_MAX_SERIES})</legend>
           <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2 xl:grid-cols-3">
             {catalogue.map((k) => (
               <label key={k.code} className="flex min-h-[44px] items-center gap-2 text-[14px]">
@@ -40,6 +45,7 @@ function Picker({ catalogue, codes, grain, span, comparison, scopeKey, sites, ca
             ))}
           </div>
         </fieldset>
+        </details>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="flex flex-col gap-1 text-[13px] font-medium">
             Grain
@@ -203,8 +209,8 @@ export default async function TrendsPage({ searchParams }: { searchParams: Promi
   const codes = requested.filter((c) => catalogue.some((k) => k.code === c));
   let trends: Trends | null = null;
   let error: string | null = null;
-  if (requested.length > TREND_MAX_SERIES) error = `Pick at most ${TREND_MAX_SERIES} KPIs; ${requested.length} are selected.`;
-  else if (codes.length === 0) error = "Pick at least one KPI.";
+  if (requested.length > TREND_MAX_SERIES) error = `Pick at most ${TREND_MAX_SERIES} numbers; ${requested.length} are picked.`;
+  else if (codes.length === 0) error = "Pick at least one number.";
   else {
     try {
       trends = await getTrends(ctx, { codes, grain, span, comparison, scope: scope.key });

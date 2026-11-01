@@ -46,7 +46,7 @@ export function ChartFrame({
               type="button"
               aria-pressed={view === v}
               onClick={() => setView(v)}
-              className={cx("min-h-[34px] rounded-full px-3 text-[12.5px] font-medium", view === v ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}
+              className={cx("min-h-[44px] min-w-[44px] rounded-full px-3.5 text-[13px] font-medium", view === v ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}
             >
               {v === "chart" ? "Chart" : "Table"}
             </button>

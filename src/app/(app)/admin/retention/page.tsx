@@ -73,7 +73,7 @@ export default async function RetentionPage() {
                   <div className="text-[12px] text-muted">{p.description}</div>
                   {(canEdit || (canConfirm && !p.isConfirmed)) && (
                     <details className="mt-1">
-                      <summary className="cursor-pointer text-[13px] text-primary-text">{canEdit ? "Change or confirm" : "Confirm"}</summary>
+                      <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-[13px] font-medium text-primary-text">{canEdit ? "Change or confirm" : "Confirm"}</summary>
                       {canEdit && (
                         <PolicyEditForm
                           dataClass={p.dataClass}
@@ -152,7 +152,7 @@ export default async function RetentionPage() {
           )}
           {canPlace && (
             <details className="mt-3">
-              <summary className="cursor-pointer text-[13px] text-primary-text">Place a legal hold</summary>
+              <summary className="flex min-h-[44px] cursor-pointer items-center text-[13px] text-primary-text">Place a legal hold</summary>
               <div className="mt-2">
                 <PlaceHoldForm kinds={LEGAL_HOLD_KINDS} entityTypes={LEGAL_HOLD_ENTITY_TYPES.map((t) => ({ value: t, label: ENTITY_LABELS[t] }))} />
               </div>
@@ -188,7 +188,7 @@ export default async function RetentionPage() {
           )}
           {latestRun && latestRun.targets.length > 0 && (
             <details className="mt-3">
-              <summary className="cursor-pointer text-[13px] text-primary-text">Report of the latest run ({fmtDateTime(latestRun.startedAt)})</summary>
+              <summary className="flex min-h-[44px] cursor-pointer items-center text-[13px] text-primary-text">Report of the latest run ({fmtDateTime(latestRun.startedAt)})</summary>
               <Table head={["Target", "Outcome", "Past period", "Held", "Deleted", "Note"]}>
                 {latestRun.targets.map((t) => (
                   <tr key={t.key} className="align-top">
@@ -207,7 +207,7 @@ export default async function RetentionPage() {
           )}
           {canPurge && (
             <details className="mt-3">
-              <summary className="cursor-pointer text-[13px] text-primary-text">Run a purge now</summary>
+              <summary className="flex min-h-[44px] cursor-pointer items-center text-[13px] text-primary-text">Run a purge now</summary>
               <div className="mt-2">
                 <ExecutePurgeForm />
               </div>

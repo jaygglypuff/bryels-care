@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import Link from "next/link";
 import type { AuthContext } from "@/lib/auth/context";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
@@ -47,7 +48,7 @@ export async function LotMigrationSection({ ctx, lotId }: { ctx: AuthContext; lo
                 <Td className="tabular">
                   {o.qtyEntered} {o.uomEntered}
                   {o.uomEntered !== o.baseUom ? <span className="text-[12px] text-muted"> = {o.qtyBase} {o.baseUom}</span> : null}
-                  {o.containerCount ? <p className="text-[12px] text-muted">{o.containerCount} container(s)</p> : null}
+                  {o.containerCount ? <p className="text-[12px] text-muted">{plural(o.containerCount, "box", "boxes and sacks")}</p> : null}
                 </Td>
                 <Td className="font-mono text-[13px]">{o.countSheetRef}</Td>
                 <Td className="text-[13px]">

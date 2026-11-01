@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { listSupplierBills } from "@/modules/finance";
@@ -32,7 +33,7 @@ export default async function BillsPage({ searchParams }: { searchParams: Promis
     <>
       <PageHeader title="Supplier bills" actions={canCreate ? <LinkButton href="/finance/bills/new" variant="cta">Enter a supplier bill</LinkButton> : undefined} />
       <PageIntro>This screen is for the money we owe suppliers. Type in each supplier bill; the system checks the bill against the order and the delivery before anyone approves it.</PageIntro>
-      {disputed.length > 0 && <NextStep text={`Next: ${disputed.length} supplier bill(s) do not match the order or the delivery. Check them.`} action={{ label: "Show them", href: "/finance/bills?status=disputed" }} />}
+      {disputed.length > 0 && <NextStep text={`Next: ${plural(disputed.length, "supplier bill")} ${disputed.length === 1 ? "does" : "do"} not match the order or the delivery. Check them.`} action={{ label: "Show them", href: "/finance/bills?status=disputed" }} />}
       <StatusTabs base="/finance/bills" current={status} tabs={TABS} />
       {rows.length === 0 ? (
         <EmptyState title={status ? "No supplier bills here" : "No supplier bills yet"} action={canCreate ? <LinkButton href="/finance/bills/new" variant="secondary">Enter a supplier bill</LinkButton> : undefined}>

@@ -1,6 +1,7 @@
 import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
+import { plainDate } from "@/lib/plain-date";
 import { getSetting } from "@/lib/settings";
 import { actionKind } from "./kinds";
 
@@ -131,7 +132,7 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
       select w.id, w.site_id, w.work_order_number, w.status, w.planned_end::text as pe, (${today}::date - w.planned_end) as days, p.name from work_orders w join products p on p.id = w.product_id
       where w.organization_id = ${org}::uuid and w.status in ('planned','released','in_progress') and w.planned_end < (${today}::date - ${grace}::int)`)).map((r) => ({
       kind: "late_work_order", siteId: String(r.site_id), entityType: "work_order", entityId: String(r.id), recordNumber: String(r.work_order_number),
-      title: `Production order for ${r.name} is ${days(r.days)} late`, detail: `Planned to finish on ${r.pe}`, link: `/production/orders/${r.id}`,
+      title: `Production order for ${r.name} is ${days(r.days)} late`, detail: `Planned to finish on ${plainDate(String(r.pe))}`, link: `/production/orders/${r.id}`,
       openedAt: new Date(`${r.pe}T16:00:00Z`),
     }));
   },
@@ -158,7 +159,7 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
         and lot.expires_on >= ${today}::date and lot.expires_on <= (${today}::date + ${horizon}::int)
         and exists (select 1 from inventory_balances b where b.lot_id = lot.id and b.qty_base > 0)`)).map((r) => ({
       kind: "expiring_lot", siteId: String(r.site_id), entityType: "inventory_lot", entityId: String(r.id), recordNumber: String(r.lot_number),
-      title: `${r.name ?? "A lot"} goes out of date in ${days(r.days)}`, detail: `Expires on ${r.exp}`, link: `/inventory/${r.id}`, openedAt: new Date(Date.parse(`${r.exp}T00:00:00Z`) - horizon * 86_400_000),
+      title: `${r.name ?? "A lot"} goes out of date in ${days(r.days)}`, detail: `Expires on ${plainDate(String(r.exp))}`, link: `/inventory/${r.id}`, openedAt: new Date(Date.parse(`${r.exp}T00:00:00Z`) - horizon * 86_400_000),
     }));
   },
   expired_stock: async (org, _now, today) =>
@@ -168,7 +169,7 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
       where lot.organization_id = ${org}::uuid and lot.expires_on is not null and lot.expires_on < ${today}::date and lot.quality_status not in ('rejected','recalled')
         and exists (select 1 from inventory_balances b where b.lot_id = lot.id and b.qty_base > 0)`)).map((r) => ({
       kind: "expired_stock", siteId: String(r.site_id), entityType: "inventory_lot", entityId: String(r.id), recordNumber: String(r.lot_number),
-      title: `${r.name ?? "A lot"} went out of date on ${r.exp} and is still in stock`, detail: "Do not use it. Ask QA whether to throw it away.", link: `/inventory/${r.id}`, openedAt: new Date(`${r.exp}T16:00:00Z`),
+      title: `${r.name ?? "A lot"} went out of date on ${plainDate(String(r.exp))} and is still in stock`, detail: "Do not use it. Ask QA whether to throw it away.", link: `/inventory/${r.id}`, openedAt: new Date(`${r.exp}T16:00:00Z`),
     })),
   failed_job: async (org) =>
     (await run(sql`select id, site_id, job_kind, finished_at as at, left(coalesce(error_message, ''), 200) as err from background_jobs where organization_id = ${org}::uuid and status = 'failed' and job_kind not like '%import%'`)).map((r) => ({
@@ -225,7 +226,7 @@ const BUILT_IN: Record<string, (org: string, now: Date, today: string) => Promis
       where so.organization_id = ${org}::uuid and so.status in ('confirmed','allocated','picking','packed','partially_shipped')
         and (case when so.requested_delivery_on ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then so.requested_delivery_on::date end) < (${today}::date - ${grace}::int)`)).map((r) => ({
       kind: "unshipped_order", siteId: String(r.site_id), entityType: "sales_order", entityId: String(r.id), recordNumber: String(r.order_number),
-      title: `Order for ${r.name} is not sent out yet; they wanted it on ${r.req}`, detail: ORDER_STEP_WORDS[String(r.status)] ?? null, link: `/sales/${r.id}`, openedAt: new Date(`${r.req}T16:00:00Z`),
+      title: `Order for ${r.name} is not sent out yet; they wanted it on ${plainDate(String(r.req))}`, detail: ORDER_STEP_WORDS[String(r.status)] ?? null, link: `/sales/${r.id}`, openedAt: new Date(`${r.req}T16:00:00Z`),
     }));
   },
   // W3D: commercial approvals and credit holds.

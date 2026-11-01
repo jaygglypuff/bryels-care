@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import { inflateRawSync } from "node:zlib";
 import Decimal from "decimal.js";
 import { ParseError, finishSheet, type ParseLimits, type ParsedSheet } from "./types";
@@ -211,7 +212,7 @@ export function parseXlsx(bytes: Uint8Array, limits: ParseLimits): ParsedSheet {
     if (grid.length > limits.maxRows + 1000) throw new ParseError(`The sheet has more than ${limits.maxRows.toLocaleString("en-PH")} data rows. Split it into smaller files.`, "too_large");
   }
   const notes: string[] = [];
-  if (formulaCells > 0) notes.push(`${formulaCells} cell(s) contain formulas; their last calculated values were used, the formulas were ignored.`);
+  if (formulaCells > 0) notes.push(`${plural(formulaCells, "cell")} ${formulaCells === 1 ? "contains" : "contain"} formulas; their last calculated values were used, the formulas were ignored.`);
   if (/<sheet\b[^>]*>[\s\S]*<sheet\b/.test(workbook)) notes.push("Only the first worksheet was read.");
   return finishSheet("xlsx", grid, limits, formulaCells, notes);
 }

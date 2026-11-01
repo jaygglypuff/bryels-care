@@ -53,7 +53,7 @@ function DocList({ docs, receiptId, canVoid }: { docs: (Doc & { href: string | n
           </span>
           {canVoid && (
             <details>
-              <summary className="cursor-pointer text-[12px] text-muted">Remove</summary>
+              <summary className="flex min-h-[44px] cursor-pointer items-center text-[12px] text-muted">Remove</summary>
               <ActionForm action={voidFileAction} hidden={{ receiptId, attachmentId: d.id }} submit="Remove file" variant="danger" className="mt-2 space-y-2">
                 <ReasonField id={`void-${d.id}`} placeholder="e.g. wrong supplier's certificate" />
               </ActionForm>

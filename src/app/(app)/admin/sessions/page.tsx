@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
@@ -19,7 +20,7 @@ export default async function SessionsPage() {
   const canVoid = ctx.can("identity.session.void");
   return (
     <>
-      <PageHeader title="Who is signed in" subtitle={`${sessions.length} device(s)`} />
+      <PageHeader title="Who is signed in" subtitle={plural(sessions.length, "device")} />
       <PageIntro>This screen is for the IT person: every phone, tablet and computer where someone is signed in. If a phone is lost, press “Sign out” on it; it is signed out the next time it is used.</PageIntro>
       <Card>
         

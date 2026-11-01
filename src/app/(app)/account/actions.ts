@@ -1,4 +1,5 @@
 "use server";
+import { plural } from "@/lib/plural";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireContext } from "@/lib/auth/context";
@@ -32,7 +33,7 @@ export async function changePassword(_: ActionState, formData: FormData): Promis
     if (input.newPassword !== input.confirm) return { ok: false, message: "The two new passwords differ.", fieldErrors: { confirm: "Type the same password twice." } };
     const r = await changeOwnPassword(ctx, { currentPassword: input.currentPassword, newPassword: input.newPassword });
     revalidatePath("/account");
-    return { ok: true, message: `Password changed. ${r.revokedSessions} other device(s) were signed out.` };
+    return { ok: true, message: `Password changed. Signed out on ${plural(r.revokedSessions, "other device")}.` };
   } catch (e) {
     const s = toActionState(e);
     if (s?.fieldErrors?.password) s.fieldErrors.newPassword = s.fieldErrors.password;

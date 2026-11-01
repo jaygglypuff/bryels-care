@@ -61,7 +61,16 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
       <PageIntro>A location is a place where stock sits at {site.name}: a room, rack, shelf or bin. Tap Edit to rename one.</PageIntro>
       <LocationHelp canSeeSites={ctx.can("masterdata.site.view")} />
       <Card>
+        {/* Round 4 (UX re-audit C #7): the search is on screen; the other filters fold (open while one is set). */}
         <form method="get" className="flex flex-wrap items-end gap-3">
+          <label className="flex min-w-[160px] flex-1 flex-col gap-1 text-[13px]">
+            Search
+            <Input name="q" defaultValue={sp.q} placeholder="Name or number" />
+          </label>
+          <button type="submit" className="min-h-[44px] rounded-full bg-primary px-5 text-[14px] font-medium text-white">Filter</button>
+          <details className="w-full" open={!!(sp.warehouse || sp.kind || sp.all === "1" || (sp.site && sp.site !== ctx.currentSiteId))}>
+            <summary className="flex min-h-[44px] cursor-pointer items-center text-[13px] font-medium text-primary-text">More filters</summary>
+            <div className="flex flex-wrap items-end gap-3 pt-1">
           {ctx.allowedSites.length > 1 && (
             <label className="flex flex-col gap-1 text-[13px]">
               Site
@@ -90,14 +99,11 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
               ))}
             </Select>
           </label>
-          <label className="flex min-w-[160px] flex-1 flex-col gap-1 text-[13px]">
-            Search
-            <Input name="q" defaultValue={sp.q} placeholder="Name or number" />
+          <label className="flex min-h-[44px] items-center gap-2 text-[13px]">
+            <input type="checkbox" name="all" value="1" defaultChecked={sp.all === "1"} /> Switched-off too
           </label>
-          <label className="flex items-center gap-2 pb-3 text-[13px]">
-            <input type="checkbox" name="all" value="1" defaultChecked={sp.all === "1"} className="size-4" /> Switched-off too
-          </label>
-          <button type="submit" className="min-h-[44px] rounded-full bg-primary px-5 text-[14px] font-medium text-white">Filter</button>
+            </div>
+          </details>
         </form>
       </Card>
       {rows.length === 0 ? (
@@ -113,7 +119,7 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
                 <li key={l.id} style={{ marginLeft: `${Math.min(depth, 3) * 16}px` }}>
                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-line p-3">
                     <div className="min-w-0">
-                      <Link href={`/masterdata/locations/${l.id}`} className="font-medium text-primary-text hover:underline">{l.name}</Link>
+                      <Link href={`/masterdata/locations/${l.id}`} className="inline-flex min-h-[44px] items-center font-medium text-primary-text hover:underline">{l.name}</Link>
                       <span className="ml-2 font-mono text-[11px] text-muted">{l.code}</span>
                       <p className="text-[12px] text-muted">
                         {isSection(l.effectiveSection) ? SECTION_LABELS[l.effectiveSection] : "Other areas"} · {LOCATION_KIND_LABELS[l.kind as LocationKind] ?? l.kind} ·{" "}
@@ -148,11 +154,11 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
               ) : (
                 <input type="hidden" name="warehouseId" value={opts.warehouses[0].id} />
               )}
-              <SelectField name="kind" label="Type of place" defaultValue="storage" options={LOCATION_KINDS.map((k) => ({ value: k, label: LOCATION_KIND_LABELS[k] }))} hint="Most places are storage. Delivery, QA waiting, rejected and recall places are special." />
-              <SelectField name="parentLocationId" label="Inside a bigger place? (optional)" emptyLabel="No" options={opts.locations.map((l) => ({ value: l.id, label: l.name }))} hint="For example shelf 3 inside rack A." />
             </Grid>
-            <MoreDetails>
+            <MoreDetails title="Type, place and code (you can skip this: it is storage)">
               <Grid>
+                <SelectField name="kind" label="Type of place" defaultValue="storage" options={LOCATION_KINDS.map((k) => ({ value: k, label: LOCATION_KIND_LABELS[k] }))} hint="Most places are storage. Delivery, QA waiting, rejected and recall places are special." />
+                <SelectField name="parentLocationId" label="Inside a bigger place? (optional)" emptyLabel="No" options={opts.locations.map((l) => ({ value: l.id, label: l.name }))} hint="For example shelf 3 inside rack A." />
                 <TextField name="code" label="Your own code (optional)" placeholder="The system gives one, e.g. LOC-0001" mono hint="Printed on the shelf label." />
                 <SelectField name="section" label="Warehouse section" defaultValue={""} emptyLabel="Work it out from the type" options={LOCATION_SECTIONS.map((x) => ({ value: x, label: SECTION_LABELS[x] }))} hint="Groups stock on the warehouse screens. Does not change any stock rule." />
               </Grid>

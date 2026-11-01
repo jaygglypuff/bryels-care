@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import "server-only";
 import { createHash } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
@@ -127,7 +128,7 @@ export async function runReconciliation(run: Pick<JobRunContext, "ctx" | "job" |
         kind: "reconciliation_difference",
         severity: "critical" as const,
         title: `Stock check: ${diffs.length} stock total${diffs.length === 1 ? "" : "s"} do not match the history`,
-        body: `The ${payload.trigger === "schedule" ? "nightly" : "on-demand"} stock check found ${diffs.length} lot/shelf total(s) that do not match the stock history. Nothing was changed. Review the report and decide on a rebuild (runbook §9).`,
+        body: `The ${payload.trigger === "schedule" ? "nightly" : "on-demand"} stock check found ${plural(diffs.length, "lot/shelf total")} that ${diffs.length === 1 ? "does" : "do"} not match the stock history. Nothing was changed. Review the report and decide on a rebuild (runbook §9).`,
         entityType: "reconciliation_run",
         entityId: runRow.id,
         link: `/admin/diagnostics?run=${runRow.id}#reconciliation`,

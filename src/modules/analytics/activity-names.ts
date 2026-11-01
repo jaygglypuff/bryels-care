@@ -5,7 +5,7 @@ import { db } from "@/db/client";
 /**
  * The name a person knows a record by, for the activity feed (UX audit C #6, round 2 part 2): the customer of an
  * order, invoice, offer or delivery; the supplier of a receipt or purchase order; the product or material of a
- * batch, production order or lot; the kind of a paper ("delivery receipt"). One small query per entity type for
+ * batch, production order or lot; the kind of a paper ("delivery receipt"); the title of a problem or alert. One small query per entity type for
  * the ids shown (≤ 50), always inside the caller's organization. Unknown types get no name (the noun is enough).
  */
 /** `($1::uuid, $2::uuid)`: drizzle expands a JS array inside sql`` into a parameter list, never into one array. */
@@ -27,6 +27,8 @@ const QUERIES: Record<string, (org: string, ids: string[]) => ReturnType<typeof 
   batch: (org, ids) => sql`select b.id::text as id, p.name from batches b join products p on p.id = b.product_id where b.organization_id = ${org}::uuid and b.id in ${list(ids)}`,
   work_order: (org, ids) => sql`select w.id::text as id, p.name from work_orders w join products p on p.id = w.product_id where w.organization_id = ${org}::uuid and w.id in ${list(ids)}`,
   inventory_lot: (org, ids) => sql`select l.id::text as id, coalesce(m.name, p.name) as name from inventory_lots l left join materials m on m.id = l.material_id left join products p on p.id = l.product_id where l.organization_id = ${org}::uuid and l.id in ${list(ids)}`,
+  // A problem or alert (Home "Recent activity", round 4): its own sentence ("Order for Mabuhay Pharmacy Group is late").
+  action_item: (org, ids) => sql`select id::text as id, title as name from action_items where organization_id = ${org}::uuid and id in ${list(ids)}`,
   generated_document: (org, ids) => sql`select id::text as id, replace(document_kind, '_', ' ') as name from generated_documents where organization_id = ${org}::uuid and id in ${list(ids)}`,
 };
 QUERIES.lot = QUERIES.inventory_lot;

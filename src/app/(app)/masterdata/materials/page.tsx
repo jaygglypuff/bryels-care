@@ -105,7 +105,7 @@ export default async function MaterialsPage({ searchParams }: { searchParams: Pr
               <li key={m.id}>
                 <Card>
                   <div className="flex items-start justify-between gap-2">
-                    <Link href={`/masterdata/materials/${m.id}`} className="min-w-0 break-words text-[16px] font-semibold text-primary-text">
+                    <Link href={`/masterdata/materials/${m.id}`} className="inline-flex min-h-[44px] min-w-0 items-center break-words text-[16px] font-semibold text-primary-text">
                       {m.name}
                     </Link>
                     {m.status !== "active" && <StateChip status={m.status} />}
@@ -126,7 +126,7 @@ export default async function MaterialsPage({ searchParams }: { searchParams: Pr
               {rows.map((m) => (
                 <tr key={m.id} className="hover:bg-surface-2">
                   <Td>
-                    <Link className="font-medium text-primary-text hover:underline" href={`/masterdata/materials/${m.id}`}>{m.name}</Link>
+                    <Link className="inline-flex min-h-[44px] items-center font-medium text-primary-text hover:underline" href={`/masterdata/materials/${m.id}`}>{m.name}</Link>
                     <div className="text-[12px] text-muted">
                       <span className="font-mono">{m.code}</span>
                       {m.category ? ` · ${categories.get(m.category) ?? m.category}` : ""}

@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import "server-only";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -109,7 +110,7 @@ export async function runKpiReconciliation(run: JobRunContext, p: KpiJobPayload)
             organizationId: ctx.organizationId,
             kind: "kpi_reconciliation_mismatch",
             severity: "critical",
-            title: `Number check: ${res.mismatches.length} report number(s) differ from the records (${org.businessDate})`,
+            title: `Number check: ${plural(res.mismatches.length, "report number")} ${res.mismatches.length === 1 ? "differs" : "differ"} from the records (${org.businessDate})`,
             body: `The nightly check recomputed the KPIs of ${org.businessDate} from the saved records and found differences in ${codes.join(", ")}. First: ${res.mismatches[0].kpiCode} ${res.mismatches[0].scopeKey} ${res.mismatches[0].grain} from ${res.mismatches[0].periodStart}: ${res.mismatches[0].detail}. Nothing was changed; the dashboards show the recomputed figures, the snapshots keep what was reported.`.slice(0, 2000),
             entityType: "kpi_refresh_log",
             entityId: log.id,

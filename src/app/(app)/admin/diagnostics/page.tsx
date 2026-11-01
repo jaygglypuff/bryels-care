@@ -107,7 +107,7 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
                   </p>
                   {j.errorMessage && <p className="mt-1 break-words text-[13px] text-[var(--bad-fg)]">Last error: {j.errorMessage}</p>}
                   <details className="mt-1 text-[12px]">
-                    <summary className="cursor-pointer text-muted">Payload summary</summary>
+                    <summary className="flex min-h-[44px] cursor-pointer items-center text-muted">Payload summary</summary>
                     <pre className="mt-1 max-w-full overflow-x-auto rounded-[10px] bg-surface-2 p-2">{JSON.stringify(j.payloadSummary, null, 2)}</pre>
                   </details>
                   {canAdmin && (j.status === "failed" || j.status === "cancelled" || j.status === "queued") && (

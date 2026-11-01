@@ -11,7 +11,7 @@ export function DeviceForms({ device, workflows }: { device: Device; workflows: 
   return (
     <div className="mt-2 flex flex-wrap gap-4">
       <details className="w-full sm:w-auto" open={device.status === "pending"}>
-        <summary className="cursor-pointer text-[13px] font-medium text-primary-text">{approve}</summary>
+        <summary className="flex min-h-[44px] cursor-pointer items-center text-[13px] font-medium text-primary-text">{approve}</summary>
         <div className="mt-2 sm:w-80">
           <ActionForm action={activateDeviceAction} hidden={{ deviceId: device.id }} submit={approve}>
             <fieldset className="space-y-1.5">
@@ -41,7 +41,7 @@ export function DeviceForms({ device, workflows }: { device: Device; workflows: 
       </details>
       {device.status === "active" && (
         <details className="w-full sm:w-auto">
-          <summary className="cursor-pointer text-[13px] font-medium text-primary-text">Suspend</summary>
+          <summary className="flex min-h-[44px] cursor-pointer items-center text-[13px] font-medium text-primary-text">Suspend</summary>
           <div className="mt-2 sm:w-72">
             <ActionForm action={changeDeviceStatusAction} hidden={{ deviceId: device.id, to: "suspended" }} submit="Suspend device" variant="secondary">
               {(fe) => (
@@ -54,7 +54,7 @@ export function DeviceForms({ device, workflows }: { device: Device; workflows: 
         </details>
       )}
       <details className="w-full sm:w-auto">
-        <summary className="cursor-pointer text-[13px] font-medium text-[var(--bad-fg)]">Remove</summary>
+        <summary className="flex min-h-[44px] cursor-pointer items-center text-[13px] font-medium text-[var(--bad-fg)]">Remove</summary>
         <div className="mt-2 sm:w-72">
           <ActionForm action={changeDeviceStatusAction} hidden={{ deviceId: device.id, to: "removed" }} submit="Remove device" variant="danger" confirm={`Remove ${device.label}? Its offline data is cleared the next time it opens, and it must be registered again.`}>
             {(fe) => (
