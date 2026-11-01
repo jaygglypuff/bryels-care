@@ -34,11 +34,16 @@ export default async function WeighPage({ params, searchParams }: { params: Prom
     throw e;
   }
   const b = v.batch;
+  // Re-audit N9: the checker opening this screen sees "Check Jun's weighing", not "Weigh" (Home said "Check 2 weighings").
+  const canCheck = ctx.can("production.dispense_record.approve") && ctx.canAt("production.dispense_record.approve", b.siteId);
+  const toCheck = canCheck ? v.cards.flatMap((c) => c.waitingForCheck).filter((w) => w.operatorId !== ctx.userId) : [];
+  const weighers = [...new Set(toCheck.map((w) => (w.operator ?? "the operator").split(/\s+/)[0]))];
+  const title = toCheck.length === 0 ? "Weigh" : weighers.length === 1 ? `Check ${weighers[0]}'s ${toCheck.length === 1 ? "weighing" : "weighings"}` : "Check the weighings";
   const stepHref = (n: number) => `/production/orders/${workOrderId}/step/${n}?batch=${b.id}`;
   return (
     <div className="mx-auto max-w-6xl pb-24 text-[16px]">
       <FlowHeader
-        title="Weigh"
+        title={title}
         batchNumber={b.batchNumber}
         orderHref={orderHref}
         progress={<span data-testid="weigh-progress">{v.weighedCount} of {v.cards.length} weighed{v.step ? ` · Step ${v.step.index} of ${v.step.total}` : ""}</span>}

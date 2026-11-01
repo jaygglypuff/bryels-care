@@ -19,6 +19,11 @@ import {
   type FormulaSnapshot,
   approveProductionOrder,
   checkStep,
+  createBatchFromWorkOrder,
+  getProductionOrder,
+  planWorkOrder,
+  releaseWorkOrder,
+  reserveWorkOrderShortages,
   completeStep,
   confirmPicked,
   createProductionOrder,
@@ -185,5 +190,34 @@ describe("a batch without a production order uses the flow screens", () => {
     expect(n.href).toMatch(/^\/production\/orders\/without-order\/(materials|weigh|step\/\d+)\?batch=|\/finish$/);
     expect(isOldWorkspaceHref(n.href!)).toBe(false);
     await expectCode(getBatchFlowFacts(operatorRvs, db, b.id), "not_found");
+  });
+});
+
+describe("re-audit N2 (ADR-105): an approved order with no batch is planned on the order page, not the old order view", () => {
+  it("the manager sees 'Plan the batch' and plans it; the operator, a role without the permission and another site cannot", async () => {
+    // An order approved the older way (plan, then release) has no batch yet.
+    const r = await createProductionOrder(w.planner, { productId: await productId("ACS-135"), plannedStart: day(1), idempotencyKey: key() });
+    await planWorkOrder(w.planner, r.workOrderId);
+    await releaseWorkOrder(w.manager, r.workOrderId, { idempotencyKey: key() });
+    const before = await getProductionOrder(w.manager, r.workOrderId);
+    expect(before).toMatchObject({ noBatchPlanned: true, canPlanBatch: true });
+    expect((await getProductionOrder(w.operator, r.workOrderId)).canPlanBatch).toBe(false);
+    // Server refusals (the action is thin; the service decides).
+    await expectCode(createBatchFromWorkOrder(w.operator, { workOrderId: r.workOrderId, idempotencyKey: key() }), "forbidden");
+    await expectCode(createBatchFromWorkOrder(w.warehouse, { workOrderId: r.workOrderId, idempotencyKey: key() }), "forbidden");
+    await expectCode(createBatchFromWorkOrder(w.plannerRvs, { workOrderId: r.workOrderId, idempotencyKey: key() }), "not_found"); // another site
+    const k = key();
+    const b = await createBatchFromWorkOrder(w.manager, { workOrderId: r.workOrderId, idempotencyKey: k });
+    // A double click replays the same command.
+    expect((await createBatchFromWorkOrder(w.manager, { workOrderId: r.workOrderId, idempotencyKey: k })).batchId).toBe(b.batchId);
+    const after = await getProductionOrder(w.manager, r.workOrderId);
+    expect(after.noBatchPlanned).toBe(false);
+    expect(after.batches.map((x) => x.id)).toEqual([b.batchId]);
+    expect(after.nextAction).toMatchObject({ kind: "link", label: "Get materials" });
+    // The order is full: no further batch beyond the ordered count.
+    await expectCode(createBatchFromWorkOrder(w.manager, { workOrderId: r.workOrderId, idempotencyKey: key() }), "state");
+    // "Set aside new stock" (was "Reserve again") stays a manager action.
+    await expectCode(reserveWorkOrderShortages(w.operator, r.workOrderId), "forbidden");
+    await reserveWorkOrderShortages(w.manager, r.workOrderId);
   });
 });

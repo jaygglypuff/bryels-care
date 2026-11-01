@@ -16,6 +16,7 @@ import {
   ensureBatchInspection,
   genealogyExport,
   getBatchRelease,
+  inspectionCandidates,
   getInspection,
   getLotDisposition,
   openDeviation,
@@ -28,6 +29,8 @@ import {
   traceGenealogy,
 } from "@/modules/quality";
 import { liftHold } from "@/modules/inventory";
+import { completeStep, createBatch, startBatch } from "@/modules/production";
+import { acapulcoRevisionId, allowDirectBatches, cleanEquipment, manilaDay, signChecklist, snapshotOf, weighAllAtTarget } from "../../support/w2b";
 import { resetTestDatabase } from "../../support/db";
 import { asUser, expectCode, loadKit, loc, makeLot, seedLot, type Kit } from "../../support/kit";
 import { awaitingQcBatch } from "./w2c-fixtures";
@@ -325,5 +328,28 @@ describe("US-3-16 genealogy to finished lot", () => {
     expect(ev).toHaveLength(1);
     const ex = await db.select().from(auditEvents).where(and(eq(auditEvents.action, "platform.export.created"), eq(auditEvents.entityNumber, "quality.genealogy")));
     expect(ex).toHaveLength(1);
+  });
+});
+
+describe("re-audit 2026-11-01: /quality/inspections lists only finished batches as waiting for their tests", () => {
+  it("a batch still being made (every weighing done, mixing next) is not listed; a finished one is", async () => {
+    const checker = await asUser(kit, "checker.nfd@bryels-care.test", "production_operator", [kit.nfd]);
+    await allowDirectBatches(kit);
+    const { batchId } = await createBatch(manager, { formulaRevisionId: await acapulcoRevisionId(), plannedSizeKg: "8.8", plannedStartOn: manilaDay(0) });
+    await startBatch(operator, batchId);
+    await cleanEquipment(operator, "SC-01");
+    const [row] = await db.select().from(batches).where(eq(batches.id, batchId));
+    const steps = [...snapshotOf(row!).steps].sort((x, y) => x.stepNo - y.stepNo);
+    await signChecklist(operator, checker, batchId, steps.find((x) => x.stepKind === "line_clearance")!);
+    await weighAllAtTarget(operator, checker, batchId);
+    await completeStep(operator, { batchId, stepNo: steps.find((x) => x.stepKind === "dispensing")!.stepNo }, { checker });
+    expect((await db.select({ s: batches.status }).from(batches).where(eq(batches.id, batchId)))[0].s).toBe("in_process");
+    const finished = await awaitingQcBatch(kit, manager);
+    const c = await inspectionCandidates(qa);
+    expect(c.batches.map((x) => x.id)).not.toContain(batchId);
+    expect(c.batches.map((x) => x.id)).toContain(finished.batchId);
+    // Negatives: a role without quality.inspection.view, and QA of another site sees nothing of this site.
+    await expectCode(inspectionCandidates(sales), "forbidden");
+    expect((await inspectionCandidates(qaRvsOnly)).batches.map((x) => x.id)).not.toContain(finished.batchId);
   });
 });

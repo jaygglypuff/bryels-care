@@ -4,13 +4,14 @@ import { notFound, redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
-import { assigneeChoices, batchRecordHref, continueHref, defectTypes, getProductionOrder, NO_ORDER_SEGMENT, type DailyLogRow, type ProductionOrderView } from "@/modules/production";
+import { assigneeChoices, auditSentence, batchRecordHref, continueHref, defectTypes, getProductionOrder, NO_ORDER_SEGMENT, orderStateWord, plainReason, workOrderFormOptions, type DailyLogRow, type ProductionOrderView } from "@/modules/production";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { Help } from "@/ui/help/help";
 import { WhoCanHelp } from "@/ui/who-can-help";
 import { Forbidden } from "../../../forbidden";
-import { AssignForm, ApproveButton, CancelOrderForm, DailyLogForm } from "../forms";
+import { AssignForm, ApproveButton, CancelOrderForm, DailyLogForm, PlanBatchButton, SetAsideAgainButton } from "../forms";
+import { WorkOrderForm } from "../../work-orders/wo-form";
 import { ActionButton, DefectTables, NeededBy, OrderStatusChip, OrderWarning, ProgressStrip } from "../parts";
 import { PageIntro } from "@/ui/guide";
 
@@ -28,7 +29,7 @@ type Tab = (typeof TABS)[number][0];
 const qty = (v: string, uom: string) => (uom === "g" ? fmtMass(v) : fmtQty(v, uom, 1));
 const pcs = (v: string) => fmtQty(v, "", D(v).isInteger() ? 0 : 1);
 
-function NextActionCard({ v }: { v: ProductionOrderView }) {
+function NextActionCard({ v, planKey }: { v: ProductionOrderView; planKey: string }) {
   const a = v.nextAction;
   // UX review: an approved order without a batch says why nothing can be done, and whom to ask.
   if (v.noBatchPlanned)
@@ -41,9 +42,8 @@ function NextActionCard({ v }: { v: ProductionOrderView }) {
             {v.canPlanBatch ? "You can plan it." : v.planner ? `Ask ${v.planner.name} to plan it.` : "Ask your supervisor to plan it."}
           </p>
           {v.canPlanBatch ? (
-            <LinkButton href={`/production/work-orders/${v.detail.workOrder.id}`} variant="cta" size="lg" className="w-full justify-center sm:w-auto">
-              Plan the batch
-            </LinkButton>
+            // Re-audit N2 (ADR-105): planned here, never on the old order view. The batch uses the versions fixed at approval.
+            <PlanBatchButton workOrderId={v.detail.workOrder.id} idempotencyKey={planKey} />
           ) : (
             <WhoCanHelp permission="production.batch.create" siteId={v.detail.workOrder.siteId} hideEmails lead="Who can plan it: " />
           )}
@@ -156,6 +156,15 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
   const todays = v.logs?.filter((l) => l.logDate === v.today && !l.replacedById) ?? [];
   const missing = d.materials.filter((m) => D(m.short).gt(0));
   const batchOptions = v.batches.map((b) => ({ id: b.id, batchNumber: b.batchNumber }));
+  // One key per page view: a double click on "Plan the batch" replays the same command, a new view is a new command.
+  const planKey = crypto.randomUUID();
+  const editOpts = d.actions.canEdit ? await workOrderFormOptions(ctx) : null;
+  // "Plan another batch": fewer live batches than ordered (one was stopped before it started) while others exist.
+  const canPlanAnother = d.actions.canCreateBatch && !v.noBatchPlanned && v.batches.length < wo.batchCount;
+  const history = [
+    ...d.audits.map((a) => ({ at: a.occurredAt, who: a.actor ?? a.actorLabel ?? "System", text: auditSentence(a), reason: plainReason(a.reason) })),
+    ...d.transitions.map((t) => ({ at: t.occurredAt, who: t.actor ?? "System", text: `${t.fromState ? `${orderStateWord(t.fromState)} → ` : ""}${orderStateWord(t.toState)}`, reason: null as string | null })),
+  ].sort((a, z) => new Date(z.at).getTime() - new Date(a.at).getTime());
 
   return (
     <div>
@@ -218,14 +227,14 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
       )}
 
       <div className="mb-4 lg:hidden">
-        <NextActionCard v={v} />
+        <NextActionCard v={v} planKey={planKey} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="min-w-0 space-y-4">
           <nav className="flex gap-1 overflow-x-auto rounded-full border border-line bg-surface p-1" aria-label="Production order sections">
             {TABS.map(([k, label]) => (
-              <Link key={k} href={`?tab=${k}`} aria-current={k === tab ? "page" : undefined} className={cx("min-h-[40px] whitespace-nowrap rounded-full px-4 py-2 text-[14px] font-medium", k === tab ? "bg-primary text-white" : "text-fg hover:bg-surface-2")}>
+              <Link key={k} href={`?tab=${k}`} aria-current={k === tab ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center whitespace-nowrap rounded-full px-4 text-[14px] font-medium", k === tab ? "bg-primary text-white" : "text-fg hover:bg-surface-2")}>
                 {label}
               </Link>
             ))}
@@ -289,6 +298,14 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
                 {missing.length > 0 && ["released", "in_progress"].includes(wo.status) && (
                   <Banner tone="warn" title="Some materials are missing">
                     {missing.map((m) => `${m.materialName}: ${qty(m.short, m.baseUom)}`).join(" · ")}
+                    {d.actions.canTopUp && (
+                      <span className="mt-2 block">
+                        When new stock has arrived, set it aside for this order:
+                        <span className="mt-2 block">
+                          <SetAsideAgainButton workOrderId={wo.id} />
+                        </span>
+                      </span>
+                    )}
                   </Banner>
                 )}
                 {d.materials.map((m) => (
@@ -311,10 +328,12 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
                         </div>
                       ))}
                     </dl>
-                    {m.reservations.length > 0 && (
+                    {(m.reservations.length > 0 || m.recommended.length > 0 || m.blocked.length > 0) && (
                       <details className="mt-2 text-[13px]">
                         <summary className="min-h-[44px] cursor-pointer py-2.5 font-medium">More details</summary>
-                        <p className="text-fg-2">Lots set aside: {m.reservations.map((r) => `${r.lotNumber} at ${r.locationCode} (${qty(r.qty, m.baseUom)})`).join(" · ")}</p>
+                        {m.reservations.length > 0 && <p className="text-fg-2">Lots set aside: {m.reservations.map((r) => `${r.lotNumber} at ${r.locationCode} (${qty(r.qty, m.baseUom)})`).join(" · ")}</p>}
+                        {m.recommended.length > 0 && <p className="mt-1 text-fg-2">Use first (earliest expiry): {m.recommended.map((r) => `${r.lotNumber} at ${r.locationCode}, expires ${fmtDate(r.expiresOn)}, ${qty(r.available, m.baseUom)} free`).join(" · ")}</p>}
+                        {m.blocked.length > 0 && <p className="mt-1 text-muted">Not usable: {m.blocked.map((b) => `${b.lotNumber} (${b.reason})`).join(" · ")}</p>}
                       </details>
                     )}
                   </Card>
@@ -351,7 +370,7 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
 
         <aside className="space-y-4">
           <div className="hidden lg:block">
-            <NextActionCard v={v} />
+            <NextActionCard v={v} planKey={planKey} />
           </div>
           {v.canAssign && (
             <div className="rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)]">
@@ -382,10 +401,89 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
                   {wo.plannedEnd !== wo.plannedStart ? ` – ${fmtDate(wo.plannedEnd)}` : ""}
                 </dd>
               </div>
+              <div>
+                <dt className="text-[12px] text-muted">Recipe and steps</dt>
+                <dd>
+                  {d.formulaRevision ? `${d.formulaRevision.label}` : "Chosen when the order is approved"}
+                  {d.routingRevision ? ` · ${d.routingRevision.label}` : ""}
+                </dd>
+              </div>
+              {d.newerRevision && (
+                <div>
+                  <dt className="text-[12px] text-muted">Newer recipe</dt>
+                  <dd>{d.newerRevision} is in use from today. This order and its batches keep the version they were approved with.</dd>
+                </div>
+              )}
+              {d.line && (
+                <div>
+                  <dt className="text-[12px] text-muted">Line</dt>
+                  <dd>{d.line.name}</dd>
+                </div>
+              )}
+              {(d.people.planner || d.people.supervisor || d.people.approvedBy) && (
+                <div>
+                  <dt className="text-[12px] text-muted">People</dt>
+                  <dd>
+                    {[d.people.planner && `Planned by ${d.people.planner}`, d.people.supervisor && `Supervisor ${d.people.supervisor}`, d.people.approvedBy && `Approved by ${d.people.approvedBy} · ${fmtDateTime(wo.approvedAt)}`].filter(Boolean).join(" · ")}
+                  </dd>
+                </div>
+              )}
+              {wo.notes && (
+                <div>
+                  <dt className="text-[12px] text-muted">Notes</dt>
+                  <dd className="whitespace-pre-line">{wo.notes}</dd>
+                </div>
+              )}
             </dl>
-            <p className="mt-3 text-[13px] text-muted">
-              Advanced: <Link href={`/production/work-orders/${wo.id}`} className="underline">full order record {wo.workOrderNumber}</Link>
-            </p>
+            {canPlanAnother && (
+              <div className="mt-3">
+                <p className="mb-2 text-[13px] text-fg-2">
+                  This order has {v.batches.length} of {wo.batchCount} batches. Plan the missing one:
+                </p>
+                <PlanBatchButton workOrderId={wo.id} idempotencyKey={planKey} label={`Plan batch ${v.batches.length + 1} of ${wo.batchCount}`} secondary />
+              </div>
+            )}
+            {editOpts && (
+              <details className="mt-3">
+                <summary className="min-h-[44px] cursor-pointer py-2.5 text-[14px] font-medium">Change this draft</summary>
+                <div className="mt-2">
+                  <WorkOrderForm
+                    mode="edit"
+                    options={editOpts}
+                    initial={{
+                      workOrderId: wo.id,
+                      productId: wo.productId,
+                      formulaId: wo.formulaId,
+                      batchSizeKg: D(wo.batchSizeBase).div(1000).toString(),
+                      batchCount: wo.batchCount,
+                      plannedStart: wo.plannedStart,
+                      plannedEnd: wo.plannedEnd,
+                      productionLineId: wo.productionLineId,
+                      priority: wo.priority,
+                      assignedSupervisorId: wo.assignedSupervisorId,
+                      targetUnits: wo.targetUnits ? D(wo.targetUnits).toFixed(0) : null,
+                      notes: wo.notes,
+                    }}
+                  />
+                </div>
+              </details>
+            )}
+            {history.length > 0 && (
+              <details className="mt-3" data-testid="order-history">
+                <summary className="min-h-[44px] cursor-pointer py-2.5 text-[14px] font-medium">What happened to this order</summary>
+                <ol className="mt-2 flex max-h-[360px] flex-col gap-2 overflow-y-auto text-[13px]">
+                  {history.map((h, i) => (
+                    <li key={i} className="border-l-2 border-line pl-3">
+                      <p className="text-fg">{h.text}</p>
+                      <p className="text-[12px] text-muted">
+                        {h.who} · {fmtDateTime(h.at)}
+                      </p>
+                      {h.reason && <p className="text-[12px] text-fg-2">Reason: {h.reason}</p>}
+                    </li>
+                  ))}
+                </ol>
+              </details>
+            )}
           </details>
         </aside>
       </div>

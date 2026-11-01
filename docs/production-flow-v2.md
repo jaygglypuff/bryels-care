@@ -278,7 +278,7 @@ Owner complaint: on "Step 6 of 7 Packaging and labeling" the operator landed on 
 | Start check (clean area) and Start | `/production/orders/<order>/step/<first step>?batch=<b>` | `production.line_clearance.create` |
 | Second check of the Start check / any step | same step screen: name pick on the doer's tablet, or **Yes, I checked it** / **send it back** on the checker's own phone (`checkStep` / `returnStep` own session) | check permission of the step kind, never the doer |
 | Weigh | `/production/orders/<order>/weigh?batch=<b>` (lot label scanned; last 4 typed only for a damaged label) | `production.dispense_record.create` |
-| Check a weighing | Weigh screen: name pick, or **Yes, I checked it** on the checker's own phone; Home task "Check a weighing" | `production.dispense_record.approve`, never the weigher |
+| Check a weighing | Weigh screen (titled "Check Jun's weighing" for the checker): name pick, or **Yes, I checked it** / **No, send it back** (reason; `returnDispense` voids the weighing, audited `production.dispense_record.returned`, the line is weighed again) on the checker's own phone; Home task "Check a weighing" | `production.dispense_record.approve`, never the weigher |
 | Container weight, two lots, out-of-range approval, undo a weighing | `/production/orders/<order>/weigh/more?batch=<b>&line=<line>` ("Other ways to weigh") | as before (`recordDispense`, `voidDispense`, CX-TOL approver) |
 | A step: fields, extra fields, equipment, ask for approval | `/production/orders/<order>/step/<n>?batch=<b>` | step perform permission; equipment `production.equipment_use.create` |
 | Curing / resting finished, end early | same step screen | `production.process_step_record.create`; approver for early end |
@@ -291,7 +291,24 @@ Owner complaint: on "Step 6 of 7 Packaging and labeling" the operator landed on 
 
 A batch made **without a production order** uses the same screens with the order segment `without-order` (e.g. `/production/orders/without-order/step/6?batch=<b>`); "back" goes to its batch record. This needed no new routes, no migration and no data change (least invasive; A-ONE-01).
 
-Superseded screens (server redirects, URLs kept): `/production/new` and `/production/work-orders/new` → `/production/orders/new`; `/production/work-orders` → `/production/orders`; `/production/staging` → `/production/orders`. `/production/staging/<b>` is now "Lots and sheets" (set-aside lots, QA substitution, printed sheets; no scan-to-stage). `/production` is "Batch records" (read-only list). `/production/work-orders/<id>` stays as the advanced full order record (plan batch, top-up, dispensing sheet); its batch links use "continue".
+Superseded screens (server redirects, URLs kept): `/production/new` and `/production/work-orders/new` → `/production/orders/new`; `/production/work-orders` → `/production/orders`; `/production/staging` → `/production/orders`; **`/production/work-orders/<id>` → `/production/orders/<id>`** (re-audit 2026-11-01, ADR-105; `?tab=materials` and `?tab=batches` keep their tab). `/production/staging/<b>` is now "Lots and sheets" (set-aside lots, QA substitution, printed sheets; no scan-to-stage). `/production` is "Batch records" (read-only list).
+
+### 4.4.1 Re-audit fixes (2026-11-01, ADR-105)
+
+| What | Where now | Rule / server check |
+|---|---|---|
+| Plan the batch (approved order with no live batch) | Order page, "What to do next": green **Plan the batch** (`planBatchAction` → `createBatchFromWorkOrder`, idempotency key per page view); "Plan batch n of N" under More details when one of several batches was stopped before it started | `production.batch.create` at the order's site; the order must accept a batch (`assertWorkOrderAcceptsBatch`); the batch uses the recipe and steps versions fixed when the order was approved ("resolve revisions" happens in Approve) |
+| Set aside new stock (was "Reserve again") | Order page, Materials tab, inside the "Some materials are missing" banner | `production.work_order.approve` (`reserveWorkOrderShortages`) |
+| Change a draft, versions, people, use-first lots, order history | Order page, More details (history in words via `record-words.ts`) | `production.work_order.edit` for the draft form |
+| Order status follows its batches | `productionOrderStatus`: if the least advanced batch is only Approved but another batch is being made, in QA or decided, the order is **In progress** and shows the furthest batch being made ("Step 6 of 7 · …"); list, order page and Home use the same read model | pure read model, `tests/unit/production-order-status.test.ts` |
+| Plain step names everywhere | `plainWords()` applied in the status read model, flow facts, "Not yet: Finish … first" (step card, weigh card, label blocker, Finish), the batch record step list and instructions, step 4 how-to ("See how to do it") | configured words unchanged (printed batch record, "Exact words of the step setup") |
+| Batch record timeline in words | `auditSentence()` / `plainReason()` (`src/modules/production/record-words.ts`): readings use the routing's labels ("Oil temperature: 30 °C"), machines their names, owner override "The owner finished step 4 (…) for the operator (owner override)"; Check quality says "Ana Villanueva (owner) finished step 4 … for the operator." | stored audit keys and values unchanged |
+| Get materials summary | `materialsSummary()`: "Every line is taken" only when every line is ticked; a batch past the list without ticks says so and its lines read "Not ticked" | pure, `tests/unit/record-words.test.ts` |
+| One green button | Get materials: per-line Taken is outline, only **All taken** is green; Weigh: one Save (keypad has no ✓ Save) with the reason above it when it is pale ("Scan the lot label first"); step cards: no keypad "Step done" | — |
+| Product labels after a first job | The label panel keeps "How many?" when a job is waiting; a different count replaces the unprinted job (`printBatchLabels` cancels it via `cancelLabelJob`, audited) | printed labels: reprint with reason (ADR-099 unchanged) |
+| Batch closure page | `/production/<b>/closure` and `getClosureView` refuse people without `production.batch.approve`, `production.batch.admin` or `quality.disposition.approve` (operators get "You don't have access") | paper-page and amendment services keep their own checks |
+| Board | Default column titles in order words ("Approved · get materials", "Quality check"); move labels "Ready for approval (still Draft)", "Approve (sets the materials aside)"; reasons without permission strings; phones (< 640 px) get one list with status chips, moving stays on wider screens | `boardMove` re-checked on the server as before |
+| Stale batch links | `src/app/(app)/production/not-found.tsx`: "This batch was removed or the demo was reset. Go to Production orders." inside the app frame | — |
 
 ## 5. Day to day
 

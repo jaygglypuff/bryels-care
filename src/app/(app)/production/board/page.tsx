@@ -25,11 +25,11 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
     <div>
       <PageHeader
         title="Production board"
-        subtitle={`${site.code} · ${site.name} · ${board.total} card${board.total === 1 ? "" : "s"} · drag a card to move it when your role allows`}
+        subtitle={`${site.name} · ${board.total} ${board.total === 1 ? "order or batch" : "orders and batches"}`}
         actions={
           <>
-            <LinkButton href="/production/work-orders" variant="secondary">Production orders</LinkButton>
-            {ctx.can("production.work_order.create") && <LinkButton href="/production/work-orders/new" variant="cta">New production order</LinkButton>}
+            <LinkButton href="/production/orders" variant="secondary">Production orders</LinkButton>
+            {ctx.can("production.work_order.create") && <LinkButton href="/production/orders/new" variant="cta">New production order</LinkButton>}
           </>
         }
       />
@@ -61,7 +61,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
           <Select name="productId" defaultValue={sp.productId ?? ""} className={field}>
             <option value="">All products</option>
             {products.map((p) => (
-              <option key={p.id} value={p.id}>{p.skuCode}</option>
+              <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </Select>
         </label>
@@ -86,7 +86,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
       </form>
       </details>
       {board.total === 0 ? (
-        <EmptyState title="Nothing on the board" action={ctx.can("production.work_order.create") ? <LinkButton href="/production/work-orders/new">Create a production order</LinkButton> : undefined}>
+        <EmptyState title="Nothing on the board" action={ctx.can("production.work_order.create") ? <LinkButton href="/production/orders/new">Create a production order</LinkButton> : undefined}>
           Production orders and batches of this site appear here by state. Clear the filters or plan the next production order.
         </EmptyState>
       ) : (

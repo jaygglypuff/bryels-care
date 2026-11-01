@@ -5,6 +5,7 @@ import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getMaintenanceWorkOrder, issuablePartStock } from "@/modules/maintenance";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { NextStepBox } from "@/ui/next-step-box";
 import { MoreMenu } from "@/ui/more-menu";
 import { RecordNo } from "@/ui/plain-list";
 import { WhoCanHelp } from "@/ui/who-can-help";
@@ -62,10 +63,15 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
         }
       />
       <PageIntro>This screen is for the technician: start the job, take spare parts if needed, and say when it is done.</PageIntro>
+      {/* ADR-103 / re-audit 2026-11-01: the form sits inside "What to do next", so the page has one green button. */}
       {v.can.start ? (
-        <NextStep text={w.status === "on_hold" ? "Next: go on with the job." : "Next: start the job when you begin the work."} action={{ label: w.status === "on_hold" ? "Go on" : "Start", href: "#work" }} />
+        <NextStepBox text={w.status === "on_hold" ? "Next: go on with the job." : "Next: start the job when you begin the work."}>
+          <TransitionForm workOrderId={w.id} to="in_progress" label={w.status === "on_hold" ? "Go on with the job" : "Start the job"} />
+        </NextStepBox>
       ) : v.can.complete ? (
-        <NextStep text="Next: when the machine is fixed, write what you did." action={{ label: "The job is done", href: "#work" }} />
+        <NextStepBox text="Next: when the machine is fixed, write what you did.">
+          <CompleteForm workOrderId={w.id} kind={w.kind} />
+        </NextStepBox>
       ) : ["open", "in_progress", "on_hold"].includes(w.status) ? (
         <>
           <NextStep text="The job is not done yet." waitingFor={w.assigneeName ? `Waiting for ${w.assigneeName} (technician).` : "Waiting for a technician."} />
@@ -110,23 +116,15 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
           </p>
         </Card>
 
-        {(v.can.start || v.can.complete || v.can.assign) && (
+        {(v.can.assign || (w.status === "in_progress" && !v.can.complete)) && (
           <Card>
             <span id="work" className="block scroll-mt-24" />
-            <CardTitle>Do the job</CardTitle>
-            {v.can.start && <TransitionForm workOrderId={w.id} to="in_progress" label={w.status === "on_hold" ? "Go on with the job" : "Start the job"} />}
-            {v.can.complete && (
-              <div className={v.can.start ? "mt-4 border-t border-line pt-4" : ""}>
-                <CompleteForm workOrderId={w.id} kind={w.kind} />
-              </div>
-            )}
-            {w.status === "in_progress" && !v.can.complete && <p className="mt-3 text-[13px] text-muted">Only a technician can say the job is done.</p>}
+            <CardTitle>Who does it</CardTitle>
+            {w.status === "in_progress" && !v.can.complete && <p className="text-[13px] text-muted">Only a technician can say the job is done.</p>}
             {v.can.assign && (
-              <div className="mt-4 border-t border-line pt-4">
-                <MoreDetails title="Change who does it, by when, how urgent">
-                  <AssignForm workOrderId={w.id} technicians={v.technicians} current={w} />
-                </MoreDetails>
-              </div>
+              <MoreDetails title="Change who does it, by when, how urgent">
+                <AssignForm workOrderId={w.id} technicians={v.technicians} current={w} />
+              </MoreDetails>
             )}
           </Card>
         )}

@@ -14,10 +14,15 @@ export default async function NewDeviationPage({ searchParams }: { searchParams:
   const sp = await searchParams;
   const f = await deviationFormContext(ctx, { batchId: sp.batchId, lotId: sp.lotId });
   if (!f.batch && !f.lot) {
+    // Re-audit: the screen keeps its title and intro even when it only says where to start.
     return (
-      <EmptyState title="Start from the batch or the lot" action={<LinkButton href="/production" variant="secondary">Batches</LinkButton>}>
-        Open the batch or lot the problem is about and use ⋯ More → Report a problem there; the system fills in the rest.
-      </EmptyState>
+      <>
+        <PageHeader title="Report a problem" />
+        <PageIntro>This screen is for anyone who saw something go wrong in a batch or with a lot. QA is told at once and looks into it.</PageIntro>
+        <EmptyState title="Start from the batch or the lot" action={<LinkButton href="/production" variant="secondary">Batches</LinkButton>}>
+          Open the batch or lot the problem is about and use ⋯ More → Report a problem there; the system fills in the rest.
+        </EmptyState>
+      </>
     );
   }
   return (

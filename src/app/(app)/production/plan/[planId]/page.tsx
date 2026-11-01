@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtMass, fmtQty } from "@/lib/qty";
-import { addDays, getProductionPlan, manilaToday, type ProductionPlanDetail } from "@/modules/production";
+import { addDays, getProductionPlan, manilaToday, orderStateWord, type ProductionPlanDetail } from "@/modules/production";
 import { Card, Field, Input, LinkButton, PageHeader } from "@/ui/core";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -15,7 +15,7 @@ import { PageIntro } from "@/ui/guide";
 export const metadata: Metadata = { title: "Production plan" };
 export const dynamic = "force-dynamic";
 
-const SOURCE: Record<string, string> = { sales_order: "Sales orders", min_stock: "Minimum stock", manual: "Manual" };
+const SOURCE: Record<string, string> = { sales_order: "For customer orders", min_stock: "To keep at least the minimum stock", manual: "Added by hand" };
 
 export default async function PlanDetailPage({ params }: { params: Promise<{ planId: string }> }) {
   const ctx = await requireContext();
@@ -63,7 +63,7 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ pla
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-medium">
-                    {l.lineNo}. {l.productName} <span className="text-[12px] text-muted">({l.productSku})</span>
+                    {l.lineNo}. {l.productName} <span className="text-[12px] text-muted">{l.productSku}</span>
                   </p>
                   <p className="text-[12px] text-muted">
                     {SOURCE[l.source]}
@@ -76,7 +76,7 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ pla
                 </div>
               </div>
               <dl className="mt-3 grid grid-cols-2 gap-2 text-[13px] sm:grid-cols-5">
-                {[["Orders (open)", l.demandUnits], ["Min stock", l.minStockUnits], ["On hand", l.onHandUnits], ["Available", l.availableUnits], ["Open WOs", l.openWorkOrderUnits]].map(([k, v]) => (
+                {[["Customers ordered", l.demandUnits], ["Keep at least", l.minStockUnits], ["In stock", l.onHandUnits], ["Ready to sell", l.availableUnits], ["Already being made", l.openWorkOrderUnits]].map(([k, v]) => (
                   <div key={k}>
                     <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted">{k}</dt>
                     <dd className="tabular">{u(v)}</dd>
@@ -105,17 +105,16 @@ export default async function PlanDetailPage({ params }: { params: Promise<{ pla
                       ))}
                     </tbody>
                   </table>
-                  <p className="mt-1 text-[11px] text-muted">Free = released, in-date stock not reserved or allocated, counted cumulatively down the plan. Shortages link to purchasing once procurement is live (W04).</p>
+                  <p className="mt-1 text-[11px] text-muted">Free = stock that passed the quality check, is not expired and is not set aside for something else, counted down the plan line by line. Ask purchasing to buy what is short.</p>
                 </div>
               )}
               <div className="mt-3">
                 {l.workOrder ? (
-                  <p className="text-[13px]">
-                    Work order{" "}
-                    <Link className="font-mono font-semibold text-primary-text underline" href={`/production/work-orders/${l.workOrder.id}`}>
-                      {l.workOrder.number}
-                    </Link>{" "}
-                    <StatusChip status={l.workOrder.status} />
+                  <p className="flex flex-wrap items-center gap-2 text-[13px]">
+                    <Link className="inline-flex min-h-[44px] items-center font-semibold text-primary-text underline" href={`/production/orders/${l.workOrder.id}`}>
+                      Production order {l.workOrder.number}
+                    </Link>
+                    <StatusChip status={l.workOrder.status} label={orderStateWord(l.workOrder.status)} />
                   </p>
                 ) : d.actions.canConvert ? (
                   <CommandForm action={planCommandAction} fields={{ planId: p.id, command: "convert", planLineId: l.id }} label="Create production order" variant="secondary" size="sm">

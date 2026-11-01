@@ -10,6 +10,7 @@ import { usableLotsForBatch } from "./queries";
 import { CHECKER_PERMISSION, type FormulaSnapshot, WEIGHING_STEP_KINDS } from "./shared";
 import { expectedLots } from "./staging";
 import { stepRecords } from "./execution";
+import { plainWords } from "./plain-words";
 
 /**
  * Production flow v2, slice V2-4 (ADR-080 §3–4, UX review S4): the Weigh screen. One card per
@@ -76,7 +77,7 @@ export async function getWeighView(ctx: AuthContext, batchId: string) {
           : step.status === "completed"
             ? null
             : current && current.stepNo < step.stepNo
-              ? `Finish "${current.name}" first.`
+              ? `Finish "${plainWords(current.name)}" first.`
               : null;
   return {
     batch: b,

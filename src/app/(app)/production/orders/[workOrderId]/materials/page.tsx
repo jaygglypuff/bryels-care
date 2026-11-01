@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { canTickMaterials, getMaterialsList, nextBatchScreen, type MaterialsListView } from "@/modules/production";
+import { canTickMaterials, getMaterialsList, materialsSummary, nextBatchScreen, type MaterialsListView } from "@/modules/production";
 import { LinkButton } from "@/ui/core";
 import { Explain, PageIntro } from "@/ui/guide";
 import { Help } from "@/ui/help/help";
@@ -39,23 +39,25 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
   }
   const next = nextBatchScreen(picked.batch);
   const done = v.progress.taken + v.progress.notNeeded;
+  // Re-audit N1: "Every line is taken" only when it is true; a batch past this list without ticks says so.
+  const summary = materialsSummary(v.batch.status, v.progress);
   return (
     <div className="mx-auto max-w-5xl pb-28 text-[16px]">
       <FlowHeader
         title="Get materials"
         batchNumber={v.batch.batchNumber}
         orderHref={orderHref}
-        progress={<span data-testid="pick-progress">{v.ready ? "Materials ready" : `${done} of ${v.progress.lines} taken`}</span>}
+        progress={<span data-testid="pick-progress">{summary.kind === "all_taken" ? "Materials ready" : summary.kind === "past_without_list" ? "Done" : `${done} of ${v.progress.lines} taken`}</span>}
         actions={<Help screen="production.materials_list" />}
       />
       <PageIntro>{v.productName}: take each item from its shelf, also the wrappers and labels, bring it to the making area and tap Taken.</PageIntro>
       <div className="-mt-2 mb-3">
         <Explain term="lot" />
       </div>
-      {v.ready && (
-        <div className="mb-4">
-          <Banner tone="ok" title="Materials ready" action={next.href ? <LinkButton href={next.href} variant="cta" size="lg">{next.label}</LinkButton> : undefined}>
-            Every line is taken. Next: {next.label}.
+      {summary.kind !== "open" && (
+        <div className="mb-4" data-testid="materials-summary">
+          <Banner tone={summary.kind === "all_taken" ? "ok" : "info"} title={summary.title} action={next.href ? <LinkButton href={next.href} variant="cta" size="lg">{next.label}</LinkButton> : undefined}>
+            {summary.text} Next: {next.label}.
           </Banner>
         </div>
       )}
@@ -69,7 +71,7 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
           <Banner tone="neu" title="View only">{v.tickDeniedReason}</Banner>
         </div>
       )}
-      {v.lines.length > 0 && !v.lines.some((l) => l.materialKind === "packaging") && (
+      {v.lines.length > 0 && summary.kind !== "past_without_list" && !v.lines.some((l) => l.materialKind === "packaging") && (
         <p className="mb-3 rounded-[14px] border border-line bg-surface-2/60 p-3 text-[15px] text-fg-2" data-testid="no-packaging-lines">
           No wrappers or labels are on this list (this product has no packaging set up per piece). Take the wrappers or labels you need; on the packaging step you tap the one you took.
         </p>
@@ -83,6 +85,7 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
           scanLots={v.settings.scanLots}
           moveStock={v.settings.moveStock}
           allDone={v.progress.complete || v.ready}
+          notDoneWord={summary.lineWord}
           lines={v.lines.map((l) => ({
             id: l.batchMaterialId,
             name: l.materialName,

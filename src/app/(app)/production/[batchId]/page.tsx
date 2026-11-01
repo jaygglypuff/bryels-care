@@ -20,6 +20,11 @@ import {
   performPermission,
   progressLabel,
   waitingWords,
+  auditSentence,
+  batchStateWord,
+  plainReason,
+  plainWords,
+  type RecordLabels,
 } from "@/modules/production";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td, cx } from "@/ui/core";
 import { Banner, Chip, StatusChip } from "@/ui/status";
@@ -36,18 +41,6 @@ export const metadata: Metadata = { title: "Batch record" };
 
 type Params = { params: Promise<{ batchId: string }>; searchParams: Promise<{ step?: string }> };
 
-const STATE_LABEL: Record<string, string> = {
-  draft: "Draft",
-  planned: "Planned",
-  materials_staged: "Materials ready",
-  in_process: "In process",
-  awaiting_qc: "Waiting for quality approval",
-  quarantined: "On hold until quality approves",
-  released: "Approved by quality",
-  rejected: "Rejected by quality",
-  rework_approved: "Rework approved",
-  closed: "Closed",
-};
 type StepTone = "ok" | "info" | "warn" | "neu" | "appr";
 const STEP_STATUS: Record<string, { label: string; tone: StepTone }> = {
   awaiting_check: { label: "Needs checker", tone: "appr" },
@@ -67,73 +60,17 @@ function stepChip(s: ExecStep, currentNo: number | null, running: boolean): { la
   return { label: "Later", tone: "neu" };
 }
 
-function auditLine(a: BatchRecord["audits"][number]): string {
-  const after = (a.after ?? {}) as Record<string, unknown>;
-  const s = (k: string) => (after[k] == null ? "" : String(after[k]));
-  switch (a.action) {
-    case "production.batch.created":
-      return s("formula") ? `Batch created from ${s("formula")}, planned ${fmtMass(s("plannedSizeG"))}` : "Batch created";
-    case "production.batch.started":
-      return "Batch in process";
-    case "production.dispense_record.created":
-    case "production.dispense_record.recorded":
-      return `Weighed ${s("materialName") || s("material")} ${fmtQty(s("actualQtyG"), "g", 1)} from lot ${s("lot")}${after.withinTolerance === false ? " (outside allowed difference, exception)" : ""}${after.partial ? " (part)" : ""}`;
-    case "production.dispense_record.checked":
-      return `Weighing of ${s("material")} checked`;
-    case "production.dispense_record.voided":
-      return "Weighing voided";
-    case "production.dispense_record.over_tolerance_approved":
-      return `Weight of ${s("material")} outside the allowed difference approved (CX-TOL)`;
-    case "production.process_step.completed":
-    case "production.process_step_record.completed":
-      return `Step ${s("stepNo")} ${s("status") === "awaiting_check" ? "done, waiting for checker" : "completed"}: ${s("name")}`;
-    case "production.process_step_record.checked":
-      return `Step ${s("stepNo")} checked: ${s("name")}`;
-    case "production.line_clearance.answered":
-      return `Checklist answered on step ${s("stepNo")}`;
-    case "production.packaging_component.issued":
-      return `Packaging lot ${s("lot")} issued: ${s("issued")} ${s("uom")}`;
-    case "production.packaging_reconciliation.counted":
-    case "production.packaging_reconciliation.recounted":
-      return `Packaging ${s("material")} counted: variance ${s("variance")}${after.within === false ? " (mismatch)" : ""}`;
-    case "production.equipment_use.ended":
-      return `Equipment ${s("equipment")} released`;
-    case "production.yield_record.approved":
-      return "Yield outside range approved (deviation opened)";
-    case "production.scrap_rework_record.recorded":
-      return `${s("kind") === "rework" ? "Rework" : "Scrap"} recorded: ${s("qty")} ${s("uom")}`;
-    case "production.production_posting.consumption_posted":
-      return `Consumption posted (${s("postings")} movements)`;
-    case "production.production_posting.output_posted":
-      return `Output posted: lot ${s("lot")}, ${s("qty")} ${s("uom")} to ${s("location")}`;
-    case "production.process_step_record.started":
-      return `Step ${s("stepNo")} started: ${s("name")}`;
-    case "production.process_step_record.returned":
-      return `Step ${s("stepNo")} returned by the checker`;
-    case "production.process_step_record.exception_approved":
-      return `Exception approved on step ${s("stepNo")} (deviation opened)`;
-    case "production.process_step_reading.recorded":
-    case "production.process_step_reading.corrected":
-      return `Value ${s("parameter")} = ${s("value")}${s("uom") ? ` ${s("uom")}` : ""}${after.isWithinLimits === false ? " (outside limits)" : ""}`;
-    case "production.equipment_use.created":
-      return `Equipment ${s("equipment")} used on step ${s("stepNo")}`;
-    case "production.yield_record.recorded":
-    case "production.yield_record.corrected":
-      return `Pieces made recorded: ${s("actualUnits")} pcs, ${fmtQty(s("yieldPct"), "%", 2)} of expected`;
-    case "production.batch.submitted":
-    case "production.batch.completed":
-      return `Posted to the hold area: ${s("actualUnits")} pcs, ${s("yieldPct") ? fmtQty(s("yieldPct"), "%", 2) : "—"}, output lot ${s("outputLot")} at ${s("location")}`;
-    case "quality.disposition.released":
-      return "QA released the batch";
-    case "quality.disposition.rejected":
-      return "QA rejected the batch";
-    case "production.batch.finished":
-      return "Batch finished";
-    case "production.batch.label_lot_fixed":
-      return `Product labels: lot ${s("lotNumber")}, expiry ${s("expiresOn")}`;
-    default:
-      return a.action;
+/** Labels from the batch's frozen steps setup for the timeline (readings, machines, step names): ADR-105. */
+function recordLabels(ex: BatchExecution): RecordLabels {
+  const parameters: Record<string, string> = {};
+  const equipment: Record<string, string> = {};
+  const steps: Record<string, string> = {};
+  for (const s of ex.steps) {
+    steps[String(s.stepNo)] = plainWords(s.name);
+    for (const p of s.parameters) parameters[p.code] = p.name;
+    for (const u of s.equipmentUses) equipment[u.code] = u.name;
   }
+  return { parameters, equipment, steps };
 }
 
 function SignLine({ step }: { step: ExecStep }) {
@@ -250,7 +187,7 @@ export default async function BatchRecordPage({ params }: Params) {
   if (!ctx.can("production.batch.view")) return <Forbidden what="production batches" permission="production.batch.view" />;
   const notFound = (
     <EmptyState title="Batch not found" action={<LinkButton href="/production" variant="secondary">Back to batch records</LinkButton>}>
-      It does not exist or belongs to a site you are not assigned to.
+      It was removed, the demo was reset, or it belongs to a site you are not assigned to.
     </EmptyState>
   );
   if (!/^[0-9a-f-]{36}$/i.test(batchId)) return notFound;
@@ -273,15 +210,23 @@ export default async function BatchRecordPage({ params }: Params) {
   const whoActs = next.href && !canAct && perms[0] ? waitingWords(await whoCanDo(ctx, perms[0], batch.siteId)) : null;
   const beingMade = ["planned", "materials_staged", "in_process", "rework_approved"].includes(batch.status);
 
+  const labels = recordLabels(ex);
+  // An owner override names what it let through: the event with the same correlation id and the overridden action.
+  const overrideDetail = (a: BatchRecord["audits"][number]) => {
+    if (a.action !== "governance.owner_override.used") return null;
+    const forAction = ((a.after ?? {}) as { forAction?: string }).forAction;
+    const sib = rec.audits.find((x) => x.id !== a.id && x.action === forAction && !!a.correlationId && x.correlationId === a.correlationId);
+    return (sib?.after ?? null) as Record<string, unknown> | null;
+  };
   const timeline = [
     ...rec.transitions.map((t) => ({
       at: t.at,
       who: t.actor,
-      text: t.fromState ? `Status ${STATE_LABEL[t.fromState] ?? t.fromState} → ${STATE_LABEL[t.toState] ?? t.toState}` : `Status set to ${STATE_LABEL[t.toState] ?? t.toState}`,
-      reason: t.reason,
+      text: t.fromState ? `${batchStateWord(t.fromState)} → ${batchStateWord(t.toState)}` : batchStateWord(t.toState),
+      reason: plainReason(t.reason),
       kind: "state" as const,
     })),
-    ...rec.audits.map((a) => ({ at: a.occurredAt, who: a.actor, text: auditLine(a), reason: a.reason, kind: "audit" as const })),
+    ...rec.audits.map((a) => ({ at: a.occurredAt, who: a.actor, text: auditSentence(a, labels, { mass: fmtMass, qty: fmtQty }, overrideDetail(a)), reason: plainReason(a.reason), kind: "audit" as const })),
   ].sort((a, z) => new Date(z.at).getTime() - new Date(a.at).getTime());
   const lastDisposition = rec.dispositions.at(-1);
   const pendingYield = ex.yieldRecord && !ex.yieldRecord.isWithinLimits && !ex.yieldRecord.approvedBy ? ex.yieldRecord : null;
@@ -294,11 +239,11 @@ export default async function BatchRecordPage({ params }: Params) {
           ← Batch records
         </Link>
         <PageHeader
-          title={`Batch record ${batch.batchNumber}`}
+          title={`Batch record: ${product.name}`}
           subtitle={
             <span className="flex flex-wrap items-center gap-2">
-              <StatusChip status={batch.status} label={STATE_LABEL[batch.status]} />
-              <span>{[product.name, site?.name, progressLabel(batch.status, ex.stepsCompleted, total)].filter(Boolean).join(" · ")}</span>
+              <StatusChip status={batch.status} label={batchStateWord(batch.status)} />
+              <span>{[`Batch ${batch.batchNumber}`, site?.name, progressLabel(batch.status, ex.stepsCompleted, total)].filter(Boolean).join(" · ")}</span>
             </span>
           }
           actions={
@@ -358,11 +303,11 @@ export default async function BatchRecordPage({ params }: Params) {
                 <details key={s.stepNo} className="rounded-[16px] border border-line bg-surface px-4 py-1" open={s.isCurrent && beingMade ? true : undefined} data-testid={`record-step-${s.stepNo}`}>
                   <summary className="flex min-h-[52px] cursor-pointer list-none items-center gap-2 py-2 text-[15px] [&::-webkit-details-marker]:hidden">
                     <span className="tabular text-muted">{s.stepNo}</span>
-                    <span className="min-w-0 flex-1 break-words font-medium text-fg">{s.name}</span>
+                    <span className="min-w-0 flex-1 break-words font-medium text-fg">{plainWords(s.name)}</span>
                     <Chip tone={st.tone}>{st.label}</Chip>
                   </summary>
                   <div className="flex flex-col gap-3 pb-3">
-                    {s.instruction && <p className="text-[14px] text-fg-2">{s.instruction}</p>}
+                    {s.instruction && <p className="text-[14px] text-fg-2">{plainWords(s.instruction)}</p>}
                     {s.workInstruction && (
                       <details className="text-[13px]">
                         <summary className="cursor-pointer text-primary-text">

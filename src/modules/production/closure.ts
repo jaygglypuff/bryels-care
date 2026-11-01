@@ -520,8 +520,17 @@ export async function recordAmendment(ctx: AuthContext, raw: AmendmentInput) {
 
 /* ------------------------------------------------------------------ view */
 
-/** Everything the closure page shows, scoped to the caller. */
+/**
+ * Who may open the batch closure page (re-audit 2026-11-01 fix 8, ADR-105): the people who close, reopen or decide a
+ * batch: site manager (production.batch.approve), production admin (production.batch.admin) or QA
+ * (quality.disposition.approve). Operators see the batch record; the actions behind the page keep their own checks.
+ */
+export const CLOSURE_PAGE_PERMISSIONS = ["production.batch.approve", "production.batch.admin", "quality.disposition.approve"] as const satisfies readonly Permission[];
+export const canOpenClosure = (ctx: AuthContext) => CLOSURE_PAGE_PERMISSIONS.some((p) => ctx.can(p));
+
+/** Everything the closure page shows, scoped to the caller. Refused (403) for people outside CLOSURE_PAGE_PERMISSIONS. */
 export async function getClosureView(ctx: AuthContext, batchId: string) {
+  if (!canOpenClosure(ctx)) ctx.require(CLOSURE_PAGE_PERMISSIONS[0]);
   const { batch, product, siteCode } = await visibleBatch(db, ctx, batchId);
   const checks = await closureChecks(db, ctx, batch);
   const { closures, reopens, reopenCount } = await closureCounters(db, batch.id);

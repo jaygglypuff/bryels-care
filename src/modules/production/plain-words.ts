@@ -19,6 +19,12 @@ const RULES: [RegExp, string][] = [
   [/\bstaging\b/gi, "getting materials"],
   [/\btolerance\b/gi, "allowed difference"],
   [/\bBMR\b/g, "batch record"],
+  // Soap words (re-audit 2026-11-01): "trace" is when the mix thickens like pudding.
+  [/\bmix to trace\b/gi, "mix until it thickens (trace)"],
+  [/\btime to trace\b/gi, "time until it thickens"],
+  [/\bmould id\b/gi, "mould used"],
+  [/\bagainst the formula\b/gi, "as the recipe says"],
+  [/\bformula\b/gi, "recipe"],
 ];
 
 export function plainWords(text: string | null | undefined): string {

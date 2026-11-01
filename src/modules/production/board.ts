@@ -33,33 +33,53 @@ export function boardMove(card: CardRef, column: BoardColumn, can: (p: Permissio
   if ((targets as string[]).includes(card.status)) return { allowed: false, reason: "The card is already in this column." };
   if (card.kind === "work_order") {
     if (card.status === "draft" && (targets as string[]).includes("planned")) {
-      return can("production.work_order.submit") ? { allowed: true, action: "plan_work_order", label: "Get ready for approval (stays Draft)" } : { allowed: false, reason: "Planning a work order needs the planner permission (production.work_order.submit)." };
+      return can("production.work_order.submit") ? { allowed: true, action: "plan_work_order", label: "Ready for approval (still Draft)" } : { allowed: false, reason: "Only the planner marks a draft as ready for approval." };
     }
     if (card.status === "planned" && (targets as string[]).includes("released")) {
       return can("production.work_order.approve")
-        ? { allowed: true, action: "release_work_order", label: "Approve and set materials aside" }
-        : { allowed: false, reason: "Releasing a work order needs release permission (production.work_order.approve), held by the site manager." };
+        ? { allowed: true, action: "release_work_order", label: "Approve (sets the materials aside)" }
+        : { allowed: false, reason: "Only the site manager approves a production order." };
     }
-    if (column.workOrderStatuses.length === 0) return { allowed: false, reason: "This column shows batches. Work orders move on by creating and running their batches." };
-    return { allowed: false, reason: "Work orders move one step at a time: draft → planned → released. In progress and completed follow the batches." };
+    if (column.workOrderStatuses.length === 0) return { allowed: false, reason: "This column shows batches. A production order moves on when its batches are made." };
+    return { allowed: false, reason: "A production order moves one step at a time: Draft → Approved. In progress, Quality check and Done follow its batches." };
   }
   if (card.status === "materials_staged" && (targets as string[]).includes("in_process")) {
-    return { allowed: false, reason: "A staged batch starts when its weighing-area line clearance is signed (checker co-signs) in the batch workspace." };
+    return { allowed: false, reason: "A batch with its materials ready starts when the operator does the start check (clean-area check) on the step screen, and a second person checks it." };
   }
   if (card.status === "planned" && (targets as string[]).includes("materials_staged")) {
-    return { allowed: false, reason: card.hasWorkOrder ? "A batch is staged by scanning its reserved lots to the staging location. Open Stage materials." : "This batch has no work order, so no materials are reserved for it." };
+    return { allowed: false, reason: card.hasWorkOrder ? "A batch gets its materials on the Get materials screen: open the card and tick each line as taken." : "This batch has no production order, so no materials are set aside for it. Open the card to get its materials." };
   }
   if ((targets as string[]).includes("in_process")) {
     return {
       allowed: false,
       reason: ["draft", "planned"].includes(card.status)
-        ? "Stage the materials first (scan the reserved lots to the staging location); a staged batch can then be started."
-        : "A batch does not move back to In process from here; rework is decided by QA and reopening needs a controlled approval.",
+        ? "Get the materials first (Get materials screen); then the batch can start."
+        : "A batch does not go back to being made from here. QA decides a redo, and reopening a batch record needs an approval.",
     };
   }
-  if ((targets as string[]).some((s) => ["awaiting_qc"].includes(s))) return { allowed: false, reason: "A batch reaches Awaiting QC when its steps are complete and output is posted in the batch workspace." };
-  if ((targets as string[]).some((s) => ["quarantined", "released", "rejected", "rework_approved"].includes(s))) return { allowed: false, reason: "Only QA decides release, rejection or rework, in the QA queue." };
+  if ((targets as string[]).some((s) => ["awaiting_qc"].includes(s))) return { allowed: false, reason: "A batch goes to the quality check when every step is done and someone presses Finish." };
+  if ((targets as string[]).some((s) => ["quarantined", "released", "rejected", "rework_approved"].includes(s))) return { allowed: false, reason: "Only QA decides OK to use, not OK or a redo, on the Check quality screen." };
   return { allowed: false, reason: "This move is not a step of the batch process." };
+}
+
+/**
+ * Plain words for the default board column titles (re-audit 2026-11-01 item 10; ADR-080 §1 order words). A column the
+ * company renamed in the setting keeps its configured title.
+ */
+const PLAIN_COLUMN: Record<string, string> = {
+  "To plan": "Draft",
+  Planned: "Draft · ready to approve",
+  "Released · to stage": "Approved · get materials",
+  "Materials staged": "Materials ready",
+  "In process": "In progress",
+  "Awaiting QC": "Quality check",
+  Quarantined: "Quality check · in the hold area",
+  Released: "Done · OK to sell",
+  Rejected: "Failed",
+  Closed: "Done · closed",
+};
+export function plainColumnTitle(title: string): string {
+  return PLAIN_COLUMN[title] ?? title;
 }
 
 export type BoardFilter = { siteId?: string; lineId?: string; productId?: string; from?: string; to?: string; assigneeId?: string };
@@ -182,7 +202,7 @@ export async function getProductionBoard(ctx: AuthContext, f: BoardFilter = {}) 
       assignees: [person(x.wo.assignedPlannerId), person(x.wo.assignedSupervisorId)].filter((p, i, a): p is NonNullable<typeof p> => !!p && a.findIndex((q) => q?.id === p.id) === i),
       progress: null,
       risks,
-      href: `/production/work-orders/${x.wo.id}`,
+      href: `/production/orders/${x.wo.id}`,
       moves: verdicts(ref),
     });
   }
@@ -221,7 +241,7 @@ export async function getProductionBoard(ctx: AuthContext, f: BoardFilter = {}) 
     siteId,
     columns: columns.map((c) => ({
       key: c.key,
-      title: c.title,
+      title: plainColumnTitle(c.title),
       cards: filtered.filter((card) => (card.kind === "work_order" ? (c.workOrderStatuses as string[]) : (c.batchStatuses as string[])).includes(card.status)).sort(byStart),
     })),
     assigneeOptions: people.map((p) => ({ id: p.id, name: p.name })).sort((a, z) => a.name.localeCompare(z.name)),
@@ -261,11 +281,11 @@ export async function moveBoardCard(ctx: AuthContext, input: { kind: "work_order
   if (!v.allowed) throw new DomainError("state", v.reason, { board: true });
   if (v.action === "plan_work_order") {
     const r = await planWorkOrder(ctx, input.id);
-    return { message: `Work order ${r.workOrderNumber} planned with ${r.formulaRevision} and ${r.routingRevision}.` };
+    return { message: `Production order ${r.workOrderNumber} is ready for approval (still Draft). Recipe ${r.formulaRevision} and steps ${r.routingRevision} are chosen.` };
   }
   if (v.action === "release_work_order") {
     const r = await releaseWorkOrder(ctx, input.id, { idempotencyKey: input.idempotencyKey });
-    return { message: `Work order ${r.workOrderNumber} released; ${r.reservations.length} reservation${r.reservations.length === 1 ? "" : "s"} made${r.shortages.length ? `, ${r.shortages.length} material${r.shortages.length === 1 ? "" : "s"} short` : ""}.` };
+    return { message: `Production order ${r.workOrderNumber} approved; ${r.reservations.length} ${r.reservations.length === 1 ? "lot" : "lots"} set aside${r.shortages.length ? `, ${r.shortages.length} material${r.shortages.length === 1 ? "" : "s"} missing` : ""}.` };
   }
   throw new DomainError("state", "This move is not a step of the batch process.");
 }

@@ -183,6 +183,14 @@ describe("Release independence (B1) and tester rule (B2)", () => {
     expect(row.overrideReason).toBe(reason);
     const used = await db.select().from(auditEvents).where(and(eq(auditEvents.action, "governance.owner_override.used"), eq(auditEvents.actorId, o.id)));
     expect(used.length).toBeGreaterThan(0);
+    // Owner's screenshots 2026-11-01: the override reads as a sentence, never "(production process_step_record completed)".
+    const after = await getQualityCheck(qaLead, b.batchId);
+    const ov = after.exceptions.filter((x) => x.kind === "owner_override");
+    expect(ov.length).toBeGreaterThan(0);
+    for (const x of ov) {
+      expect(x.text).toMatch(/\(owner\) .+\.$/);
+      expect(x.text).not.toMatch(/process_step_record|production |quality_check|Owner override used/);
+    }
     const passed = await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, b.batchId), eq(auditEvents.action, "quality.quality_check.passed")));
     expect((passed[0].after as { overrideReason: string }).overrideReason).toBe(reason);
     const docs = await db.select().from(generatedDocuments).where(and(eq(generatedDocuments.sourceEntityId, b.batchId), eq(generatedDocuments.documentKind, "bmr")));

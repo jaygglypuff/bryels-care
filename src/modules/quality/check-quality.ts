@@ -32,6 +32,7 @@ import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
 import { notifyUsers } from "@/modules/platform";
+import { ownerOverrideSentence } from "@/modules/production";
 import { batchFacts, decideBatchInTx } from "./dispositions";
 import { deviationsFor } from "./deviations";
 import { batchInspectionFacts, getInspection, reviewInspectionForPass } from "./inspections";
@@ -161,7 +162,7 @@ export async function batchExceptions(q: DbOrTx, batch: typeof batches.$inferSel
   const ys = await q.select().from(yieldRecords).where(eq(yieldRecords.batchId, batch.id)).orderBy(asc(yieldRecords.recordedAt));
   const y = ys.find((x) => x.isCurrent);
   if (y && !y.isWithinLimits) {
-    out.push({ kind: "yield_out_of_range", text: `Made ${new Decimal(y.yieldPct).toString()} % of the expected amount (OK from ${new Decimal(y.minPct).toString()} to ${new Decimal(y.maxPct).toString()} %). ${y.notes ? `Reason: ${y.notes}` : ""}`.trim() });
+    out.push({ kind: "yield_out_of_range", text: `Made ${new Decimal(y.yieldPct).toDecimalPlaces(1).toString()} % of the expected amount (OK from ${new Decimal(y.minPct).toString()} to ${new Decimal(y.maxPct).toString()} %). ${y.notes ? `Reason: ${y.notes}` : ""}`.trim() });
   }
   for (const c of ys.filter((x) => x.correctionReason)) out.push({ kind: "count_corrected", text: `Good pieces corrected. Reason: ${c.correctionReason}` });
   for (const s of await q.select().from(scrapReworkRecords).where(and(eq(scrapReworkRecords.batchId, batch.id), isNull(scrapReworkRecords.voidedAt)))) {
@@ -177,13 +178,19 @@ export async function batchExceptions(q: DbOrTx, batch: typeof batches.$inferSel
     else out.push({ kind: "problem_report", text: `Problem report ${d.number} (closed): ${d.description}` });
   }
   const overrides = await q
-    .select({ after: auditEvents.after, at: auditEvents.occurredAt, name: users.displayName })
+    .select({ after: auditEvents.after, at: auditEvents.occurredAt, name: users.displayName, correlationId: auditEvents.correlationId })
     .from(auditEvents)
     .leftJoin(users, eq(users.id, auditEvents.actorId))
     .where(and(eq(auditEvents.organizationId, batch.organizationId), eq(auditEvents.action, "governance.owner_override.used"), or(eq(auditEvents.entityId, batch.id), eq(auditEvents.entityNumber, batch.batchNumber))));
+  // In words (owner's screenshots 2026-11-01): "Ana Villanueva (owner) finished step 4 (Mixing) for the operator."
+  const corr = overrides.map((o) => o.correlationId).filter((c): c is string => !!c);
+  const siblings = corr.length
+    ? await q.select({ action: auditEvents.action, after: auditEvents.after, correlationId: auditEvents.correlationId }).from(auditEvents).where(and(eq(auditEvents.organizationId, batch.organizationId), inArray(auditEvents.correlationId, corr), ne(auditEvents.action, "governance.owner_override.used")))
+    : [];
   for (const o of overrides) {
     const a = (o.after ?? {}) as { forAction?: string };
-    out.push({ kind: "owner_override", text: `Owner override used by ${o.name ?? "the owner"} (${(a.forAction ?? "").replace(/\./g, " ")}).` });
+    const sib = siblings.find((x) => x.correlationId === o.correlationId && x.action === a.forAction);
+    out.push({ kind: "owner_override", text: ownerOverrideSentence(o.name, a.forAction, (sib?.after ?? null) as Record<string, unknown> | null) });
   }
   return out;
 }
@@ -248,7 +255,7 @@ export async function getQualityCheck(ctx: AuthContext, batchId: string) {
       good: y?.actualUnits ? new Decimal(y.actualUnits).toString() : batch.actualUnits ? new Decimal(batch.actualUnits).toString() : null,
       samples: new Decimal(samples?.q ?? 0).toString(),
       expected,
-      yieldPct: y ? new Decimal(y.yieldPct).toString() : null,
+      yieldPct: y ? new Decimal(y.yieldPct).toDecimalPlaces(1).toString() : null, // one decimal on screen (re-audit N8); the record keeps the exact value
       range: y ? `${new Decimal(y.minPct).toString()}–${new Decimal(y.maxPct).toString()} %` : null,
       withinRange: y ? y.isWithinLimits : null,
       rejects: rejects.map((r) => ({ what: r.note?.replace(/^Reject: /, "") ?? r.reasonCode, qty: new Decimal(r.qty).toString(), kind: r.recordKind })),
@@ -261,7 +268,7 @@ export async function getQualityCheck(ctx: AuthContext, batchId: string) {
           status: inspection.inspection.status,
           tests: inspection.tests.map((t) => {
             const r = inspection.results.find((x) => x.live && x.inspectionPlanTestId === t.id);
-            return { id: t.id, name: t.name, valueKind: t.valueKind, uom: t.uom, spec: t.spec, isRequired: t.isRequired, result: r ? { text: r.result, passed: r.passed, by: r.testerName } : null };
+            return { id: t.id, name: t.name, valueKind: t.valueKind, uom: t.uom, spec: t.spec ? t.spec.replace(/^\s*PLACEHOLDER:\s*/i, "") : t.spec, isRequired: t.isRequired, result: r ? { text: r.result, passed: r.passed, by: r.testerName } : null };
           }),
           canRecord: inspection.can.record,
         }

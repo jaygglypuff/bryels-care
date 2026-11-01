@@ -444,6 +444,35 @@ export async function voidDispense(ctx: AuthContext, input: { dispenseRecordId: 
   ctx.require("production.dispense_record.void");
   const reason = input.reason?.trim() ?? "";
   if (reason.length < 5) throw new DomainError("validation", "Give the reason for voiding (at least 5 characters).", { field: "reason" });
+  return voidDispenseCore(ctx, input.dispenseRecordId, reason, "production.dispense_record.voided");
+}
+
+/**
+ * "No, send it back" on the second-person check of a weighing (re-audit 2026-11-01 N9, ADR-100 "confirm or send back
+ * with a reason"; ADR-105). The checker (production.dispense_record.approve, never the person who weighed) refuses an
+ * unchecked weighing with a reason: the weighing is voided exactly like voidDispense (append-only, a posted
+ * consumption is reversed, the line is weighed again) and audited as `production.dispense_record.returned`.
+ */
+export async function returnDispense(checker: AuthContext, input: { dispenseRecordId: string; reason: string }) {
+  checker.require("production.dispense_record.approve");
+  const reason = input.reason?.trim() ?? "";
+  if (reason.length < 5) throw new DomainError("validation", "Say what was wrong (at least 5 characters).", { field: "reason", fieldErrors: { reason: "Say what was wrong." } });
+  return voidDispenseCore(checker, input.dispenseRecordId, `Sent back by the second person: ${reason}`, "production.dispense_record.returned", (rec) => {
+    if (rec.checkerId) throw new DomainError("state", "This weighing is already checked.");
+    if (checker.sodBlocks(rec.operatorId === checker.userId, "You weighed this ingredient; another person must check it.")) {
+      throw new DomainError("separation_of_duties", "You weighed this ingredient; another person must check it.", { ...checker.refusalDetails(), rule: "V-SOD" });
+    }
+  });
+}
+
+async function voidDispenseCore(
+  ctx: AuthContext,
+  dispenseRecordId: string,
+  reason: string,
+  action: "production.dispense_record.voided" | "production.dispense_record.returned",
+  assertRec?: (rec: typeof dispenseRecords.$inferSelect) => void,
+) {
+  const input = { dispenseRecordId };
   return db.transaction(async (tx) => {
     const [r] = await tx
       .select({ rec: dispenseRecords, bm: batchMaterials, materialName: materials.name })
@@ -460,6 +489,7 @@ export async function voidDispense(ctx: AuthContext, input: { dispenseRecordId: 
     if (stepRec && stepRec.status !== "in_progress") throw new DomainError("state", "The weighing step is already signed off. A correction now needs a deviation through QA.");
     const [rec] = await tx.select().from(dispenseRecords).where(eq(dispenseRecords.id, r.rec.id)).for("update").limit(1);
     if (rec.voidedAt) throw new DomainError("state", "This weighing is already voided.");
+    assertRec?.(rec);
     const now = new Date();
     await tx.update(dispenseRecords).set({ voidedAt: now, voidedBy: ctx.userId, voidReason: reason }).where(eq(dispenseRecords.id, rec.id));
     if (rec.productionPostingId) {
@@ -484,7 +514,7 @@ export async function voidDispense(ctx: AuthContext, input: { dispenseRecordId: 
     const status = rest.length === 0 ? "pending" : "partial";
     await tx.update(batchMaterials).set({ dispensedQtyG: total.toString(), status }).where(eq(batchMaterials.id, rec.batchMaterialId));
     await audit(tx, ctx, {
-      action: "production.dispense_record.voided",
+      action,
       entityType: "dispense_record",
       entityId: rec.id,
       entityNumber: batch.batchNumber,

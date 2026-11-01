@@ -40,6 +40,7 @@ import {
   startBatch,
   submitChecklist,
   transitionBatch,
+  returnDispense,
   voidDispense,
 } from "@/modules/production";
 import { resetTestDatabase } from "../../support/db";
@@ -230,6 +231,8 @@ describe("dispensing and weighing (US-3-10)", () => {
     await expectCode(checkDispense(warehouse, { dispenseRecordId: row.id }), "forbidden");
     await checkDispense(checker, { dispenseRecordId: row.id });
     await expectCode(checkDispense(checker, { dispenseRecordId: row.id }), "state");
+    // A checked weighing cannot be sent back any more.
+    await expectCode(returnDispense(checker, { dispenseRecordId: row.id, reason: "Changed my mind" }), "state");
   });
 
   it("splits a line over two lots (partial then final) and sums the line total", async () => {
@@ -459,5 +462,31 @@ describe("support helper for other streams", () => {
     await cleanEquipment(operator, "SC-01");
     const r = await runSoapBatchToQuarantine(kit, { manager, operator, checker });
     expect((await batchRow(r.batchId)).status).toBe("awaiting_qc");
+  });
+});
+
+describe("re-audit N9: the second person sends a weighing back with a reason", () => {
+  it("voids it (append-only, line weighed again, audited); the weigher, other roles and other sites cannot", async () => {
+    const { batchId } = await newStartedBatch();
+    const s = await steps(batchId);
+    await cleanEquipment(operator, "SC-01");
+    await signChecklist(operator, checker, batchId, s[0]);
+    const [coconut] = await lines(batchId);
+    const r = await recordDispense(operator, { batchId, batchMaterialId: coconut.id, lotRef: await lotRef("LOS-24871"), qty: new Decimal(coconut.theoreticalQtyG).toString(), equipmentRef: "SC-01" });
+    const id = r.dispenseRecordId;
+    await expectCode(returnDispense(operator, { dispenseRecordId: id, reason: "Wrong lot taken" }), "separation_of_duties");
+    await expectCode(returnDispense(warehouse, { dispenseRecordId: id, reason: "Wrong lot taken" }), "forbidden");
+    await expectCode(returnDispense(checkerRvsOnly, { dispenseRecordId: id, reason: "Wrong lot taken" }), "not_found");
+    await expectCode(returnDispense(checker, { dispenseRecordId: id, reason: "no" }), "validation");
+    await returnDispense(checker, { dispenseRecordId: id, reason: "Scale was not zeroed" });
+    const [row] = await db.select().from(dispenseRecords).where(eq(dispenseRecords.id, id));
+    expect(row.voidedAt).not.toBeNull();
+    expect(row.voidReason).toBe("Sent back by the second person: Scale was not zeroed");
+    expect((await lines(batchId))[0].status).toBe("pending");
+    const ev = await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, id), eq(auditEvents.action, "production.dispense_record.returned")));
+    expect(ev).toHaveLength(1);
+    expect(ev[0].actorId).toBe(checker.userId);
+    await expectCode(checkDispense(checker, { dispenseRecordId: id }), "state");
+    await expectCode(returnDispense(checker, { dispenseRecordId: id, reason: "Again please" }), "state");
   });
 });

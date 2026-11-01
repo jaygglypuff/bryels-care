@@ -13,6 +13,7 @@ import { Chip } from "@/ui/status";
 import {
   checkWeighingAction,
   checkWeighingOwnAction,
+  returnWeighingAction,
   stepDoneAction,
   weighAction,
   type FlowActionState,
@@ -200,7 +201,20 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
     lotOk &&
     tol?.kind === "ok" &&
     (!p.requiresScale || !!scale);
-  const save = () => form.current?.requestSubmit();
+  // Owner's screenshots 2026-11-01: a pale, disabled Save says why, right above it (one reason, the first missing thing).
+  const whyNot = !p.canWeigh
+    ? "Your role cannot weigh. Ask an operator."
+    : !lot
+      ? null
+      : !lotOk
+        ? p.lotConfirm === "last4" && typeLast4
+          ? "Type the last 4 characters of the lot first."
+          : "Scan the lot label first."
+        : !entered
+          ? "Type the weight first."
+          : p.requiresScale && !scale
+            ? "Choose the scale under More details first."
+            : null;
   return (
     <section
       className="rounded-[20px] border border-line bg-surface p-4 sm:p-5"
@@ -229,7 +243,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
           · {lot.locationName || lot.locationCode} ·{" "}
           {lotIdx === 0 ? "use first" : "another lot"}
           {lot.expiresOn ? ` · expires ${fmtDate(lot.expiresOn)}` : ""}
-          {card.lots.length > 1 && (
+          {card.lots.length > 1 && p.lotConfirm === "none" && (
             <label className="mt-2 block text-[14px] text-muted">
               Use another lot
               <Select
@@ -239,7 +253,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
               >
                 {card.lots.map((l, i) => (
                   <option key={`${l.lotId}-${l.locationId}`} value={i}>
-                    {l.lotNumber} · {fmtMass(l.qty)} at {l.locationCode}
+                    {l.locationName || l.locationCode} · {fmtMass(l.qty)} · lot {l.lotNumber}
                   </option>
                 ))}
               </Select>
@@ -362,15 +376,22 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
               </Link>
             </div>
           ) : (
-            <SubmitButton
-              variant="cta"
-              size="lg"
-              disabled={!canSave}
-              pendingText="Saving…"
-              className="w-full"
-            >
-              Save
-            </SubmitButton>
+            <div className="grid gap-1.5">
+              {!canSave && whyNot && (
+                <p className="text-[15px] font-medium text-fg-2" role="status" data-testid="save-why">
+                  {whyNot}
+                </p>
+              )}
+              <SubmitButton
+                variant="cta"
+                size="lg"
+                disabled={!canSave}
+                pendingText="Saving…"
+                className="w-full"
+              >
+                Save
+              </SubmitButton>
+            </div>
           )}
           <FormMessage state={state} />
           <details className="text-[14px]">
@@ -415,18 +436,44 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
           decimal={active === "qty"}
           letters={active === "lot"}
           maxLength={active === "lot" ? 6 : 10}
-          onSubmit={
-            active === "lot" && p.lotConfirm === "last4" && !entered
-              ? () => setActive("qty")
-              : save
-          }
-          submitLabel={active === "lot" && !entered ? "Next" : "Save"}
-          submitDisabled={
-            active === "lot" && !entered ? lotCode.length < 4 : !canSave
-          }
+          // One Save button (owner's screenshots 2026-11-01): the keypad has no ✓ Save; the Save above is the only one.
         />
       </form>
     </section>
+  );
+}
+
+const firstName = (name: string | null | undefined) => (name ?? "the operator").split(/\s+/)[0];
+
+/** "No, send it back" (re-audit N9): visible, secondary, asks what was wrong; the weighing is voided and weighed again. */
+function SendBack({ dispenseRecordId, batchId }: { dispenseRecordId: string; batchId: string }) {
+  const [state, action] = useInPlaceAction(returnWeighingAction);
+  const [open, setOpen] = useState(false);
+  if (!open)
+    return (
+      <Button type="button" variant="secondary" size="lg" onClick={() => setOpen(true)} data-testid="send-back">
+        No, send it back
+      </Button>
+    );
+  return (
+    <form action={action} className="grid gap-2 rounded-[14px] border border-line p-3" data-testid="send-back-form">
+      <input type="hidden" name="batchId" value={batchId} />
+      <input type="hidden" name="dispenseRecordId" value={dispenseRecordId} />
+      <label className="flex flex-col gap-1 text-[15px] font-medium">
+        What was wrong?
+        <Input name="reason" required minLength={5} maxLength={300} className="min-h-[52px] text-[16px]" placeholder="For example: wrong lot, scale not zeroed" />
+      </label>
+      {state?.fieldErrors?.reason && <p className="text-[14px] text-[var(--bad-fg)]">{state.fieldErrors.reason}</p>}
+      <div className="flex flex-wrap gap-2">
+        <SubmitButton variant="secondary" size="lg" pendingText="Sending back…">
+          Send it back
+        </SubmitButton>
+        <Button type="button" variant="secondary" size="lg" onClick={() => setOpen(false)}>
+          Back
+        </Button>
+      </div>
+      <FormMessage state={state} />
+    </form>
   );
 }
 
@@ -450,21 +497,26 @@ function SecondCheck({
   const [ownState, ownAction] = useInPlaceAction(checkWeighingOwnAction);
   const [who, setWho] = useState<Person | null>(null);
   const others = checkers.filter((c) => c.id !== weighing.operatorId);
-  // The checker opened this screen on their own phone: one tap in their own name (own session).
+  // The checker opened this screen on their own phone: one tap in their own name (own session), or
+  // "No, send it back" with a reason (re-audit N9; ADR-100 "confirm or send back with a reason").
   if (viewer.canCheck && viewer.userId !== weighing.operatorId)
     return (
-      <form action={ownAction} className="grid gap-3 rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" data-testid="own-weigh-check">
-        <input type="hidden" name="batchId" value={batchId} />
-        <input type="hidden" name="dispenseRecordId" value={weighing.id} />
-        <h2 className="text-[22px] font-semibold text-fg">
+      <section className="grid gap-3 rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" data-testid="own-weigh-check" aria-label={`Check ${firstName(weighing.operator)}'s weighing`}>
+        <h2 className="text-[22px] font-semibold text-fg">Check {firstName(weighing.operator)}&apos;s weighing</h2>
+        <p className="text-[17px] text-fg">
           {viewer.displayName}, did you watch {weighing.operator} weigh {g(weighing.qtyG)} of {card.materialName}, lot {weighing.lotNumber}?
-        </h2>
+        </p>
         <p className="text-[15px] text-muted">You sign with your own account.</p>
-        <SubmitButton variant="cta" size="lg" pendingText="Saving…">
-          <UserCheck size={20} aria-hidden /> Yes, I checked it
-        </SubmitButton>
-        <FormMessage state={ownState} />
-      </form>
+        <form action={ownAction} className="grid gap-2">
+          <input type="hidden" name="batchId" value={batchId} />
+          <input type="hidden" name="dispenseRecordId" value={weighing.id} />
+          <SubmitButton variant="cta" size="lg" pendingText="Saving…">
+            <UserCheck size={20} aria-hidden /> Yes, I checked it
+          </SubmitButton>
+          <FormMessage state={ownState} />
+        </form>
+        <SendBack dispenseRecordId={weighing.id} batchId={batchId} />
+      </section>
     );
   return (
     <section

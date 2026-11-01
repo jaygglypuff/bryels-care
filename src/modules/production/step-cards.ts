@@ -15,6 +15,7 @@ import { batchLabelInfo, issueTakenPackagingLocked, packagingLinesOf } from "./p
 import { currentReadings, recordReadingInTx } from "./process";
 import { type FormulaSnapshot, idempotent, isWeighingStep, lockBatch } from "./shared";
 import { stepBlockers } from "./steps";
+import { plainWords } from "./plain-words";
 
 /**
  * Production flow v2, slice V2-5 (ADR-080 §11, UX review S5): the generic Step screen. One step per
@@ -53,7 +54,7 @@ export async function getStepCard(ctx: AuthContext, batchId: string, stepNo: num
           ? `Do the Start check first.`
           : `Batch ${b.batchNumber} is past this step.`
         : earlier
-          ? `Finish "${earlier.name}" first.`
+          ? `Finish "${plainWords(earlier.name)}" first.`
           : null;
   const canPerform = ctx.can(performPermission(step.stepKind)) && ctx.canAt(performPermission(step.stepKind), b.siteId);
   // The person looking at the screen (own phone): may they sign the second-person check of this step?
@@ -69,7 +70,7 @@ export async function getStepCard(ctx: AuthContext, batchId: string, stepNo: num
   const equipment = needsEquipment
     ? {
         kind: step.equipmentKind ?? null,
-        uses: step.equipmentUses.map((u) => ({ code: u.code, reasons: u.reasons, override: !!u.override })),
+        uses: step.equipmentUses.map((u) => ({ code: u.code, name: u.name, reasons: u.reasons, override: !!u.override })),
         options: (await equipmentOptions(ctx, b.siteId, step.equipmentKind ?? null)).map((o) => ({ id: o.id, code: o.code, name: o.name, usable: o.usable, reasons: o.reasons, blocking: o.blocking })),
         canChoose: ctx.can("production.equipment_use.create"),
       }
