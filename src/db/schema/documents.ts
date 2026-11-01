@@ -221,7 +221,7 @@ export const generatedDocuments = pgTable(
 );
 
 export const LABEL_JOB_STATUSES = ["queued", "rendering", "ready", "printed", "failed", "cancelled"] as const;
-export const LABEL_JOB_ENTITY_TYPES = ["inventory_lot", "container", "location", "batch", "inspection_sample", "equipment"] as const;
+export const LABEL_JOB_ENTITY_TYPES = ["inventory_lot", "container", "location", "batch", "batch_box", "inspection_sample", "equipment"] as const;
 
 /** A print request for 1..n copies of a label for one entity; reprints are audited. */
 export const labelJobs = pgTable(

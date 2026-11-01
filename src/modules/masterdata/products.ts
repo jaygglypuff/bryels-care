@@ -34,6 +34,9 @@ const optDec = (label: string) =>
     .transform((v) => (v === null || v === undefined ? "" : String(v).trim()))
     .refine((v) => v === "" || (/^\d{1,12}(\.\d{1,6})?$/.test(v) && Number(v) > 0), `Enter ${label} as a positive number (at most 6 decimals).`)
     .transform((v) => (v ? v : null));
+/** ADR-104 §2: how a product is labelled (products.labelling). */
+export const PRODUCT_LABELLING = ["per_box", "per_piece"] as const;
+export type ProductLabelling = (typeof PRODUCT_LABELLING)[number];
 
 const ProductInput = z
   .object({
@@ -46,6 +49,11 @@ const ProductInput = z
     shelfLifeDays: optInt("Shelf life", 1, 3650),
     shelfLifeMonths: optInt("Good for (months)", 1, 120).optional(),
     storageConditions: optText(300),
+    /** ADR-104 §2 "How do you label it?"; left out = per_box on create, unchanged on edit. */
+    labelling: z
+      .union([z.enum(PRODUCT_LABELLING), z.literal(""), z.null(), z.undefined()])
+      .transform((v) => (v ? v : undefined))
+      .optional(),
   })
   .strict();
 export type ProductInput = z.input<typeof ProductInput>;
@@ -171,10 +179,10 @@ export async function createProduct(ctx: AuthContext, raw: unknown, opts?: InTx)
     await assertProductCodeFree(tx, ctx, code);
     const [p] = await tx
       .insert(products)
-      .values({ organizationId: ctx.organizationId, skuCode: code, name: v.name, family, unitNetMassG: v.unitNetMassG, unitsPerBox: v.unitsPerBox!, shelfLifeDays, storageConditions: v.storageConditions, status: "draft" })
+      .values({ organizationId: ctx.organizationId, skuCode: code, name: v.name, family, unitNetMassG: v.unitNetMassG, unitsPerBox: v.unitsPerBox!, labelling: v.labelling ?? "per_box", shelfLifeDays, storageConditions: v.storageConditions, status: "draft" })
       .returning()
       .catch((e) => uniqueConflict(e, `Product code ${code} is already in use.`));
-    await audit(tx, ctx, { action: "masterdata.product.created", entityType: "product", entityId: p.id, entityNumber: p.skuCode, siteId: null, after: { ...v, shelfLifeDays, code, codeAssigned: !v.code, family, status: "draft" } });
+    await audit(tx, ctx, { action: "masterdata.product.created", entityType: "product", entityId: p.id, entityNumber: p.skuCode, siteId: null, after: { ...v, labelling: v.labelling ?? "per_box", shelfLifeDays, code, codeAssigned: !v.code, family, status: "draft" } });
     return { ...p, code: p.skuCode };
   });
 }
@@ -225,11 +233,11 @@ export async function updateProduct(ctx: AuthContext, productId: string, raw: un
     }
     const [after] = await tx
       .update(products)
-      .set({ skuCode: v.code, name: v.name, family, unitNetMassG: v.unitNetMassG, unitsPerBox: v.unitsPerBox!, shelfLifeDays, storageConditions: v.storageConditions })
+      .set({ skuCode: v.code, name: v.name, family, unitNetMassG: v.unitNetMassG, unitsPerBox: v.unitsPerBox!, labelling: v.labelling ?? before.labelling, shelfLifeDays, storageConditions: v.storageConditions })
       .where(eq(products.id, before.id))
       .returning()
       .catch((e) => uniqueConflict(e, `Product code ${v.code} is already in use.`));
-    const d = diff(before, after, ["skuCode", "name", "family", "unitNetMassG", "unitsPerBox", "shelfLifeDays", "storageConditions"]);
+    const d = diff(before, after, ["skuCode", "name", "family", "unitNetMassG", "unitsPerBox", "labelling", "shelfLifeDays", "storageConditions"]);
     if (d.changed.length) await audit(tx, ctx, { action: "masterdata.product.updated", entityType: "product", entityId: after.id, entityNumber: after.skuCode, siteId: null, before: d.before, after: d.after });
     return { ...after, code: after.skuCode };
   });

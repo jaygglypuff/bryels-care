@@ -232,6 +232,13 @@
       "when": 1793445531017,
       "tag": "0032_label_product_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793513367361,
+      "tag": "0034_adr104_box_labels_batch_plan",
+      "breakpoints": true
     }
   ]
 }

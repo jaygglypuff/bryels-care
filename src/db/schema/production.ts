@@ -55,6 +55,49 @@ export const batches = pgTable(
   (t) => [index("batches_site_status_idx").on(t.siteId, t.status), index("batches_work_order_idx").on(t.workOrderId)],
 );
 
+export const BATCH_BOX_STATUSES = ["planned", "boxed", "replaced"] as const;
+
+/**
+ * ADR-104 §2 box labels: one row per box of a batch, planned on the packaging step from "How many pieces did
+ * you pack?" and the product's pieces per box ("12 boxes of 24 and 1 box of 9"). The box number (rule BOX) is
+ * taken when the label is printed, so the label's BC:BOX code is final; Finish creates the container with
+ * that number and the pieces in the hold area (status boxed). A new count replaces the plan: the old rows
+ * become `replaced` (with reason, who, when) and their labels are cancelled or voided. plan_no counts plans.
+ */
+export const batchBoxes = pgTable(
+  "batch_boxes",
+  {
+    id: id(),
+    organizationId: uuid("organization_id").notNull().references(() => organizations.id),
+    siteId: uuid("site_id").notNull().references(() => sites.id),
+    batchId: uuid("batch_id").notNull().references(() => batches.id),
+    planNo: integer("plan_no").notNull(),
+    boxNo: integer("box_no").notNull(),
+    boxCount: integer("box_count").notNull(),
+    pieces: integer("pieces").notNull(),
+    unitsPerBox: integer("units_per_box").notNull(),
+    containerNumber: text("container_number").notNull(),
+    /** Set at Finish: the box (containers row) with this number. */
+    containerId: uuid("container_id"),
+    status: text("status").notNull().default("planned"),
+    labelJobId: uuid("label_job_id"),
+    createdBy: uuid("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    replacedBy: uuid("replaced_by").references(() => users.id),
+    replacedAt: timestamp("replaced_at", { withTimezone: true }),
+    replacedReason: text("replaced_reason"),
+  },
+  (t) => [
+    uniqueIndex("batch_boxes_org_number_uq").on(t.organizationId, t.containerNumber),
+    uniqueIndex("batch_boxes_plan_box_uq").on(t.batchId, t.planNo, t.boxNo),
+    index("batch_boxes_batch_status_idx").on(t.batchId, t.status),
+    check("batch_boxes_status_ck", sql`${t.status} in ('planned', 'boxed', 'replaced')`),
+    check("batch_boxes_numbers_ck", sql`${t.pieces} > 0 and ${t.unitsPerBox} > 0 and ${t.pieces} <= ${t.unitsPerBox} and ${t.boxNo} between 1 and ${t.boxCount}`),
+    check("batch_boxes_replaced_ck", sql`${t.status} <> 'replaced' or (${t.replacedBy} is not null and ${t.replacedAt} is not null and ${t.replacedReason} is not null)`),
+    check("batch_boxes_boxed_ck", sql`${t.status} <> 'boxed' or ${t.containerId} is not null`),
+  ],
+);
+
 export const batchStateTransitions = pgTable("batch_state_transitions", {
   id: id(),
   batchId: uuid("batch_id").notNull().references(() => batches.id),

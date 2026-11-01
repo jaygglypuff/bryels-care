@@ -35,7 +35,7 @@ export type MaterialRequirement = {
   required: Decimal;
 };
 
-export async function workOrderRequirements(q: DbOrTx, wo: Pick<WoForReserve, "formulaRevisionId" | "batchCount" | "batchSizeBase"> & { siteId?: string | null }): Promise<MaterialRequirement[]> {
+export async function workOrderRequirements(q: DbOrTx, wo: Pick<WoForReserve, "formulaRevisionId" | "batchCount" | "batchSizeBase"> & { siteId?: string | null; batchPlan?: WoForReserve["batchPlan"] }): Promise<MaterialRequirement[]> {
   if (!wo.formulaRevisionId) return [];
   const [rev] = await q.select().from(formulaRevisions).where(eq(formulaRevisions.id, wo.formulaRevisionId)).limit(1);
   if (!rev) return [];
@@ -45,11 +45,12 @@ export async function workOrderRequirements(q: DbOrTx, wo: Pick<WoForReserve, "f
     .innerJoin(materials, eq(materials.id, bomLines.materialId))
     .where(eq(bomLines.formulaRevisionId, rev.id))
     .orderBy(bomLines.lineNo);
-  const factor = new Decimal(wo.batchSizeBase).div(rev.referenceBatchSizeG);
+  // ADR-104 §4: with a batch plan every batch scales from its own size (sum over the batches).
+  const sizes = wo.batchPlan?.sizesG?.length ? wo.batchPlan.sizesG.map((g) => new Decimal(g)) : Array.from({ length: wo.batchCount }, () => new Decimal(wo.batchSizeBase));
+  const totalFactor = sizes.reduce((t, g) => t.plus(g.div(rev.referenceBatchSizeG)), new Decimal(0));
   const out = new Map<string, MaterialRequirement>();
   for (const { line, material } of lines) {
-    const perBatch = line.scaling === "fixed" ? new Decimal(line.quantityG) : new Decimal(line.quantityG).mul(factor);
-    const qty = perBatch.mul(wo.batchCount).toDecimalPlaces(6);
+    const qty = (line.scaling === "fixed" ? new Decimal(line.quantityG).mul(sizes.length) : new Decimal(line.quantityG).mul(totalFactor)).toDecimalPlaces(6);
     const r = out.get(material.id);
     if (r) r.required = r.required.plus(qty);
     else out.set(material.id, { materialId: material.id, materialCode: material.code, materialName: material.name, materialKind: material.materialKind, baseUom: material.baseUom, required: qty });
@@ -59,9 +60,9 @@ export async function workOrderRequirements(q: DbOrTx, wo: Pick<WoForReserve, "f
   if (!lines.some(({ material }) => isPackagingKind(material.materialKind))) {
     const [fp] = await q.select({ organizationId: formulas.organizationId, sku: products.skuCode, unitNetMassG: products.unitNetMassG }).from(formulas).innerJoin(products, eq(products.id, formulas.productId)).where(eq(formulas.id, rev.formulaId)).limit(1);
     if (fp) {
-      const pieces = expectedPieces(wo.batchSizeBase, rev.theoreticalYieldPct, fp.unitNetMassG);
-      for (const p of await perPieceSetup(q, fp.organizationId, wo.siteId ?? null, fp.sku)) {
-        const qty = perPieceQty(pieces, p.perPiece, p.extraPct).mul(wo.batchCount);
+      const setup = await perPieceSetup(q, fp.organizationId, wo.siteId ?? null, fp.sku);
+      for (const p of setup) {
+        const qty = sizes.reduce((t, g) => t.plus(perPieceQty(expectedPieces(g, rev.theoreticalYieldPct, fp.unitNetMassG), p.perPiece, p.extraPct)), new Decimal(0));
         if (qty.lte(0)) continue;
         const r = out.get(p.materialId);
         if (r) r.required = r.required.plus(qty);

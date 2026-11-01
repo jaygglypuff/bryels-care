@@ -28,7 +28,10 @@ import {
   type ProductionOrderStatusView,
 } from "./production-order-status";
 import { idempotent, manilaToday } from "./shared";
-import { createWorkOrder, lockWorkOrder, planLockedWorkOrder, releaseLockedWorkOrder } from "./work-orders";
+import { createWorkOrder, lockWorkOrder, planLockedWorkOrder, releaseLockedWorkOrder, remainingBatchSizesG } from "./work-orders";
+import { batchPlanText, checkBatchSizes, gramsForPieces, proposeBatches } from "./batch-plan";
+import { largestBatchFor } from "./batch-plan-facts";
+import type { BatchPlanStored } from "@/db/schema";
 import { getWorkOrder, type WorkOrderDetail } from "./work-orders-queries";
 import { batchesOfWorkOrder, type Shortage } from "./work-orders-reserve";
 
@@ -64,6 +67,13 @@ export type ProductionOrderInput = {
   productionLineId?: string | null;
   notes?: string | null;
   idempotencyKey?: string | null;
+  /**
+   * ADR-104 §4, with "How many pieces?": split (default) = the proposed N batches; one = one batch of all the
+   * pieces (only up to the largest batch); custom = `batchSizes` pieces per batch (each ≤ largest, sum = pieces).
+   * Ignored when a batch size or count is typed under More details (the kg path).
+   */
+  batchMode?: "split" | "one" | "custom" | string | null;
+  batchSizes?: (string | number)[] | null;
 };
 
 /** Finished pieces from a bulk mass: mass × expected yield % ÷ unit mass, rounded down. */
@@ -109,19 +119,35 @@ export async function createProductionOrder(ctx: AuthContext, input: ProductionO
     neededBy ??= so.requestedDeliveryOn ?? null;
   }
   let count: number | string = input.batchCount === null || input.batchCount === undefined || input.batchCount === "" ? 1 : input.batchCount;
-  if (units !== null && (input.batchCount === null || input.batchCount === undefined || input.batchCount === "")) {
+  const typedCount = !(input.batchCount === null || input.batchCount === undefined || input.batchCount === "");
+  const typedSize = !!input.batchSizeKg?.trim();
+  let batchPlan: BatchPlanStored | null = null;
+  if (units !== null && !typedCount) {
     const [product] = await db.select().from(products).where(and(eq(products.id, input.productId), eq(products.organizationId, ctx.organizationId))).limit(1);
     const eff = product && DATE.test(input.plannedStart) ? await getEffectiveFormulaRevision(ctx, product.id, input.plannedStart).catch(() => null) : null;
-    if (product && eff) {
+    const plan = product && eff && !typedSize ? await planBatches(ctx, product, eff.rev, input.plannedStart, Number(units), input.batchMode ?? null, input.batchSizes ?? null) : null;
+    if (plan) {
+      batchPlan = plan;
+      count = plan.sizesG.length;
+    } else if (product && eff) {
       const sizeG = input.batchSizeKg && /^\d{1,9}(\.\d{1,3})?$/.test(input.batchSizeKg) ? new Decimal(input.batchSizeKg).mul(1000) : new Decimal(eff.rev.referenceBatchSizeG);
       const n = batchesFor(units, sizeG, eff.rev.theoreticalYieldPct, product.unitNetMassG);
       if (n === null) throw new DomainError("validation", "One batch makes less than one piece. Check the batch size.", { field: "batchSizeKg" });
       count = n;
     }
   }
+  // ADR-104 §4: a batch size typed under More details may not be bigger than the mixer's recorded capacity.
+  if (typedSize && /^\d{1,9}(\.\d{1,3})?$/.test(input.batchSizeKg!.trim()) && UUID.test(input.productId) && DATE.test(input.plannedStart)) {
+    const largest = await largestBatchFor(db, ctx.organizationId, input.productId, ctx.currentSiteId, input.plannedStart);
+    const sizeG = new Decimal(input.batchSizeKg!.trim()).mul(1000);
+    if (largest.grams && sizeG.gt(largest.grams)) {
+      const msg = `A batch of ${fmtMass(sizeG.toString())} is more than the largest batch (${fmtMass(largest.grams)}, ${largest.from}). Use a smaller batch size or more batches.`;
+      throw new DomainError("validation", msg, { field: "batchSizeKg", fieldErrors: { batchSizeKg: msg }, rule: "A-FD-05" });
+    }
+  }
   return createWorkOrder(ctx, {
     productId: input.productId,
-    batchSizeKg: input.batchSizeKg || null,
+    batchSizeKg: batchPlan ? new Decimal(batchPlan.sizesG[0]).div(1000).toString() : input.batchSizeKg || null,
     batchCount: count as number,
     plannedStart: input.plannedStart,
     plannedEnd: input.plannedEnd || input.plannedStart,
@@ -131,7 +157,62 @@ export async function createProductionOrder(ctx: AuthContext, input: ProductionO
     productionLineId: input.productionLineId || null,
     notes: input.notes || null,
     idempotencyKey: input.idempotencyKey ?? null,
-  });
+  }, { batchPlan });
+}
+
+const BATCH_MODES = ["split", "one", "custom"] as const;
+
+/**
+ * ADR-104 §4: the batch plan for "How many pieces?" (server side of the New order choice). Proposal from the
+ * recipe's batch size and the largest batch (largestBatchFor; the recipe's batch size when no capacity is
+ * known, A-FD-05); "one" is refused above the largest with the reason and the split offered; "custom" sizes
+ * are checked (> 0, ≤ largest, sum). Batch grams = grams for the pieces (ADR-094 rounding). Null when the
+ * product cannot be planned by pieces (no piece weight or expected %): the old whole-batch path applies.
+ */
+async function planBatches(
+  ctx: AuthContext,
+  product: typeof products.$inferSelect,
+  rev: { referenceBatchSizeG: string; theoreticalYieldPct: string | null },
+  plannedStart: string,
+  pieces: number,
+  modeIn: string | null,
+  sizesIn: (string | number)[] | null,
+): Promise<BatchPlanStored | null> {
+  const mode = (modeIn?.trim() || "split") as (typeof BATCH_MODES)[number];
+  if (!(BATCH_MODES as readonly string[]).includes(mode)) throw new DomainError("validation", "Choose how to make it: split into batches, one batch, or choose sizes.", { field: "batchMode", fieldErrors: { batchMode: "Choose one." } });
+  const yieldPct = rev.theoreticalYieldPct ?? "100";
+  const largest = await largestBatchFor(db, ctx.organizationId, product.id, ctx.currentSiteId, plannedStart);
+  const word = pieceWordOf(product.family);
+  const p = proposeBatches({ pieces, refBatchG: rev.referenceBatchSizeG, yieldPct, pieceG: product.unitNetMassG, largestG: largest.grams, largestFrom: largest.from, word });
+  if (!p) return null;
+  let sizes: number[];
+  if (mode === "one") {
+    if (!p.one.allowed) throw new DomainError("validation", p.one.reason!, { field: "batchMode", fieldErrors: { batchMode: p.one.reason! }, rule: "A-FD-05", split: p.split, maxPieces: p.maxPieces });
+    sizes = [pieces];
+  } else if (mode === "custom") {
+    const c = checkBatchSizes(sizesIn ?? [], pieces, p.maxPieces, word);
+    if (!c.ok) throw new DomainError("validation", c.message, { field: "batchSizes", fieldErrors: { batchSizes: c.message }, index: c.index, maxPieces: p.maxPieces });
+    sizes = c.sizes;
+  } else sizes = p.split.sizes;
+  if (sizes.length > 200) throw new DomainError("validation", "At most 200 batches in one order.", { field: "quantityUnits" });
+  return {
+    mode,
+    sizesG: sizes.map((n) => gramsForPieces(n, product.unitNetMassG, yieldPct).toString()),
+    pieces: sizes.map(String),
+    largestG: largest.grams ?? p.largestG,
+    largestFrom: largest.from ?? "recipe",
+  };
+}
+
+/** "bars" for soap, else "pieces" (as the New order screen). */
+function pieceWordOf(family: string | null | undefined) {
+  return (family ?? "").toLowerCase().includes("soap") ? "bars" : "pieces";
+}
+
+/** "2 batches of 1,000 bars" for a stored batch plan (order page and lists). */
+export function batchPlanWords(plan: BatchPlanStored | null | undefined, family: string | null | undefined): string | null {
+  if (!plan?.pieces?.length) return null;
+  return batchPlanText(plan.pieces.map(Number), pieceWordOf(family));
 }
 
 /** "Coconut Oil: need 88 kg, only 40 kg can be used — 48 kg short." per material. */
@@ -180,8 +261,10 @@ export async function approveProductionOrder(ctx: AuthContext, workOrderId: stri
         const released = await releaseLockedWorkOrder(tx, ctx, wo, opts.note);
         const existing = (await batchesOfWorkOrder(tx, wo.id)).filter((b) => b.status !== "rejected" || b.startedAt !== null);
         const made: { batchId: string; batchNumber: string }[] = [];
+        // ADR-104 §4: each batch gets its planned size (the batch plan), so ingredient targets scale from it.
+        const sizes = remainingBatchSizesG(wo, existing.map((b) => b.plannedSizeG));
         for (let i = existing.length; i < wo.batchCount; i++) {
-          made.push(await insertBatch(tx, ctx, wo.siteId, { formulaRevisionId: wo.formulaRevisionId!, plannedSizeG: new Decimal(wo.batchSizeBase), plannedStartOn: wo.plannedStart, workOrderId: wo.id }));
+          made.push(await insertBatch(tx, ctx, wo.siteId, { formulaRevisionId: wo.formulaRevisionId!, plannedSizeG: sizes[i - existing.length] ?? new Decimal(wo.batchSizeBase), plannedStartOn: wo.plannedStart, workOrderId: wo.id }));
         }
         const shortages = shortageLines(released.shortages);
         await audit(tx, ctx, {
