@@ -1875,3 +1875,46 @@ Consequences: tests `tests/integration/procurement/r2p2-purchasing-access.test.t
 code-last,sales-day-line}.test.ts`, extended `no-jargon-messages`, `recipe-wizard`, `fulfilment`, `owner-home`; no
 migration. Open: batch closure page reachable by operators; label layouts awaiting QA; ~30 "(s)" plurals; help "?" in
 the frame; name pickers still search box + dropdown.
+
+## ADR-104 Floor decisions: other material at weighing, box labels, correcting QA results, one or more batches, batches over several days (owner request 2026-11-01)
+
+Status: Accepted (owner delegated the decision). GMP points flagged for QA review: A-FD-01..05.
+
+1. **Another material at weighing.** Two different cases, two different paths:
+   - *Same ingredient, another lot* (e.g. the suggested coconut oil lot is finished or damaged): on the weigh card
+     "Use another lot" lists the other released lots of the same ingredient at the site (use-first on top, expired and
+     stopped lots never offered); the operator taps or scans one. Choosing a lot that is not the first to expire asks
+     for a one-tap reason ("first lot is used up / damaged / not reachable"). The set-aside moves with it; the batch
+     record shows "Lot changed from … to … — reason, by, time" (`batch_material_substitutions`).
+   - *A different ingredient* (e.g. palm oil instead of coconut oil): never decided on the floor alone. If the recipe
+     lists an approved alternative for that line, it appears under "Use the approved alternative". Otherwise the
+     operator taps "Ask to use something else" (what, why); QA and the site manager get it in To approve; when QA
+     approves (QA approval required, GMP), the line is swapped for this batch only and the batch record shows the
+     change. The owner/site manager self-approval rule (ADR-091) does not replace the QA approval here.
+2. **Labels: box labels by default, piece labels when the product needs them.** Per product, "How do you label it?":
+   *A label on each box (default)* or *A label on each piece (bar/bottle)*. Packaging step for "each box": "How many
+   pieces did you pack?" → the screen works out the boxes from "pieces per box" ("12 boxes of 24 and 1 box of 9") and
+   prints one box label per box (product, batch/lot, pieces in this box, made, expiry, box 3 of 13, QR). Each box is a
+   traceable box (container) in the hold area, so warehouse and sales scan boxes, not pieces. "Each piece" products
+   additionally print piece labels with "How many?" defaulting to the pieces packed; the piece count is not
+   reconciled label-by-label. Several boxes and a part box are normal.
+3. **Correcting a QA test result.** A saved result is never edited in place (GMP). Before the QA decision, the person
+   who entered it (or another QA person) taps "Correct this result" → new value + reason; the old value stays visible
+   struck through with who/when. After the decision (OK / not OK), a correction needs a second QA person's approval
+   and re-opens the decision; the owner override does not apply to QA results.
+4. **One batch or several.** New production order: "How many pieces?" → the screen proposes the batches from the
+   recipe's batch size and the mixer's capacity ("2 batches of 1,000 bars"), with a choice: *Split into N batches*
+   (default) or *Make it one batch* — one bigger batch is allowed up to the largest batch the recipe / equipment
+   allows (equipment capacity, or the recipe's "largest batch" set by QA); beyond that the button explains why and
+   offers the split. Batches may also be sized individually ("1 batch of 1,500 and 1 of 500"). All ingredient targets
+   are calculated from the batch size (never typed); a different amount at weighing stays inside the allowed
+   difference, or needs the existing out-of-range approval with a reason.
+5. **Batches over several days.** A batch stays "Being made" across days. Each step records who and when; at the end
+   of a shift the step card offers "Stop for today" (where we stopped, a short note), and the next morning the task
+   reads "Continue Calamansi Soap B-26-0006 · step 4 · started yesterday". Curing is a timed wait step ("Curing until
+   Sat 8 Nov"). Pieces packed per day go into Today's count; Finish adds them up and checks the total. The floor TV
+   shows "day 2" on the batch card.
+
+Consequences: implementation per topic with tests (unit + integration, cross-site and role negatives); assumptions
+A-FD-01 (reasons for another lot), A-FD-02 (QA approval for another ingredient), A-FD-03 (box label default and
+content), A-FD-04 (correction rules), A-FD-05 (largest batch) in docs/PRD.md.
