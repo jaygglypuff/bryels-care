@@ -1,4 +1,5 @@
 import { Help } from "@/ui/help/help";
+import { PlaceName, placeWords } from "@/ui/inventory/place-name";
 import { notFound } from "next/navigation";
 import { randomUUID } from "node:crypto";
 import Decimal from "decimal.js";
@@ -51,7 +52,7 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
   }
   const canCount = ctx.can("inventory.stock_count.submit") && (c.counters.length === 0 || c.isCounter);
   const canApprove = c.canApproveVariances;
-  const label = (l: CountDetail["lines"][number]) => (l.isUnlabelled ? `No label on ${l.locationCode}: ${l.description}` : `${l.itemName} on ${l.locationCode} · ${l.lotNumber}`);
+  const label = (l: CountDetail["lines"][number]) => (l.isUnlabelled ? `No label on ${placeWords(l.locationName, l.locationCode)}: ${l.description}` : `${l.itemName} on ${placeWords(l.locationName, l.locationCode)} · ${l.lotNumber}`);
   const variant = c.lines.filter((l) => !l.isUnlabelled && l.variance !== null && !new Decimal(l.variance).isZero());
   const recountLines = c.lines.filter((l) => l.lineStatus === "recount_required");
   const firstStepDone = c.status === "pending_approval";
@@ -187,10 +188,10 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
                   <summary className="flex min-h-[52px] cursor-pointer list-none flex-wrap items-center justify-between gap-2">
                     <span className="min-w-0">
                       <span className="block text-[17px] font-semibold">
-                        {i + 1}. Shelf {s.code}: scan each sack and type how much
+                        {i + 1}. {s.name}: scan each sack and type how much
                       </span>
                       <span className="block text-[13px] text-muted">
-                        {s.name} · {lines.filter((l) => l.counted).length} of {lines.length} counted
+                        <span className="font-mono text-[12px]">{s.code}</span> · {lines.filter((l) => l.counted).length} of {lines.length} counted
                       </span>
                     </span>
                     {done ? <Chip tone="ok"><CheckCircle2 size={13} /> Done</Chip> : <span className="text-[13px] font-medium text-primary-text group-open:hidden">Open</span>}
@@ -288,7 +289,7 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
                       {l.adjustmentMovementId && <Chip tone="ok"><CheckCircle2 size={13} aria-hidden /> Saved to stock</Chip>}
                     </p>
                     <p className="mt-0.5 text-[13px] text-fg-2">
-                      On {l.locationCode}
+                      On <PlaceName name={l.locationName} code={l.locationCode} />
                       {!l.isUnlabelled && <span className="ml-1 font-mono text-[12px] text-muted">· {l.lotNumber}</span>}
                     </p>
                     {c.reveal && (

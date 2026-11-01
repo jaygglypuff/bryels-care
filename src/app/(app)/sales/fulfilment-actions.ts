@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError, type ActionState, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
+import { plural } from "@/lib/plural";
 import {
   acknowledgeDeliveryReceipt,
   addBox,
@@ -83,7 +84,7 @@ export async function releaseAllocationsAction(_: ActionState, fd: FormData): Pr
     const ctx = await requireContext();
     const r = await releaseAllocations(ctx, uuid.parse(str(fd, "orderId")), { reason: str(fd, "reason") });
     refreshCurrentPage();
-    return { ok: true, message: `${r.released} set-aside place(s) let go.` };
+    return { ok: true, message: `${plural(r.released, "set-aside place")} let go.` };
   } catch (e) {
     return toActionState(e);
   }
@@ -259,7 +260,7 @@ export async function reverseShipmentAction(_: ActionState, fd: FormData): Promi
     const ctx = await requireContext();
     const r = await reverseShipment(ctx, uuid.parse(str(fd, "shipmentId")), { reason: str(fd, "reason"), idempotencyKey: idem(fd) });
     refreshCurrentPage();
-    return { ok: true, message: `Sending out undone: the stock is back on its shelves (${r.movements} movement(s)).` };
+    return { ok: true, message: `Sending out undone: the stock is back on its shelves (${plural(r.movements, "movement")}).` };
   } catch (e) {
     return toActionState(e);
   }
@@ -316,24 +317,33 @@ export async function startPackAction(_: ActionState, fd: FormData): Promise<Act
 }
 
 export async function addBoxAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  let target: string | null = null;
   try {
     const ctx = await requireContext();
     const packId = uuid.parse(str(fd, "packId"));
     const r = await addBox(ctx, packId, { lotPayload: str(fd, "lotPayload") || null, qty: str(fd, "qty") || null, idempotencyKey: idem(fd) });
+    const packed = `Box ${r.boxNo}${r.partial ? " (part box)" : ""} packed and sealed.`;
     let label = "";
     if (ctx.can("inventory.label_job.create")) {
+      // ADR-099 (re-audit B N9): the label is printed here, now: open the print page of this boxing's labels.
       try {
         const jobs = await printPackLabels(ctx, packId, { keyBase: `box-label:${r.containerId}` });
-        label = jobs.some((j) => j.jobId) ? " Label sent to the print station." : jobs.find((j) => j.error)?.error ? ` Label not queued: ${jobs.find((j) => j.error)!.error}` : "";
+        const bad = jobs.find((j) => j.error);
+        if (jobs.some((j) => j.jobId)) target = `/print/labels/pack/${packId}?auto=1`;
+        else if (bad) label = ` Its label could not be made: ${bad.error}`;
       } catch (e) {
-        label = ` Label not queued: ${toActionState(e)?.message ?? ""}`;
+        label = ` Its label could not be made: ${toActionState(e)?.message ?? ""}`;
       }
     }
-    refreshCurrentPage();
-    return { ok: true, message: `Box ${r.boxNo} · ${r.containerNumber}${r.partial ? " (PARTIAL)" : ""} packed and sealed.${label}` };
+    if (!target) {
+      refreshCurrentPage();
+      return { ok: true, message: `${packed}${label}` };
+    }
   } catch (e) {
     return toActionState(e);
   }
+  revalidatePath("/labels");
+  redirect(target);
 }
 
 export async function removeBoxAction(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -347,18 +357,20 @@ export async function removeBoxAction(_: ActionState, fd: FormData): Promise<Act
   }
 }
 
+/** Box labels card: makes the missing box labels (one per box, recorded label jobs) and opens their print page (ADR-099). */
 export async function packLabelsAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  let packId: string;
   try {
     const ctx = await requireContext();
-    const r = await printPackLabels(ctx, uuid.parse(str(fd, "packId")), { keyBase: idem(fd), printStationId: str(fd, "printStationId") || null });
-    refreshCurrentPage();
-    const ok = r.filter((j) => j.jobId).length;
+    packId = uuid.parse(str(fd, "packId"));
+    const r = await printPackLabels(ctx, packId, { keyBase: idem(fd) });
     const bad = r.filter((j) => j.error);
-    if (r.length === 0) return { ok: true, message: "Every box already has a label. Reprint a label from its label job (reason required)." };
-    return { ok: bad.length === 0, message: `${ok} label(s) sent to the print station.${bad.length ? ` Not queued: ${bad.map((b) => `${b.boxNumber}: ${b.error}`).join("; ")}` : ""}` };
+    if (bad.length && !r.some((j) => j.jobId)) return { ok: false, message: `The box labels could not be made: ${bad.map((b) => `${b.boxNumber}: ${b.error}`).join("; ")}` };
   } catch (e) {
     return toActionState(e);
   }
+  revalidatePath("/labels");
+  redirect(`/print/labels/pack/${packId}?auto=1`);
 }
 
 export async function submitPackAction(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -366,7 +378,7 @@ export async function submitPackAction(_: ActionState, fd: FormData): Promise<Ac
     const ctx = await requireContext();
     const r = await submitPack(ctx, uuid.parse(str(fd, "packId")));
     refreshCurrentPage();
-    return { ok: true, message: r.verificationMode === "all" ? `Submitted. First pack of this SKU: the checker scans all ${r.sampleSize} boxes.` : `Submitted. The checker scans a sample of ${r.sampleSize} box(es).` };
+    return { ok: true, message: r.verificationMode === "all" ? `Submitted. First pack of this SKU: the checker scans all ${r.sampleSize} boxes.` : `Submitted. The checker scans a sample of ${plural(r.sampleSize, "box", "boxes")}.` };
   } catch (e) {
     return toActionState(e);
   }

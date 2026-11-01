@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { AuthContext } from "@/lib/auth/context";
 import { allocationRules, customers, inventoryLots, products, salesOrderLines, salesOrders, stockAllocations, stockReservations } from "@/db/schema";
-import { compareCandidates, createReservation, expireReservations, recommendLots, releaseReservation } from "@/modules/inventory/reservations";
+import { compareCandidates, createReservation, expireReservations, listReservations, recommendLots, releaseReservation } from "@/modules/inventory/reservations";
 import { allocateOrder } from "@/modules/sales/allocation";
 import { resetTestDatabase } from "../../support/db";
 import { expectDomain, future, key, loadWorld, loc, makeLot, type World } from "./w1c-fixtures";
@@ -99,6 +99,16 @@ describe("recommendation and reservations", () => {
     const [so] = await db.insert(salesOrders).values({ organizationId: w.orgId, siteId: w.nfd.id, orderNumber: `SO-T2-${Date.now()}`, customerId: cust.id, status: "confirmed", createdBy: w.sales.userId }).returning();
     const [line] = await db.insert(salesOrderLines).values({ salesOrderId: so.id, lineNo: 1, productId: acs.id, qtyUnits: "12", unitPrice: "70" }).returning();
     const r = await createReservation(w.sales, { lotId: lot.id, locationId: fg.id, qty: "12", demandType: "sales_order_line", demandId: line.id, idempotencyKey: key() });
+    // Re-audit B #10: the list says what it is for in words (the customer's order) and on which shelf, codes after.
+    const row = (await listReservations(w.manager)).find((x) => x.id === r.id)!;
+    expect(row.demandName).toBe(`${cust.name}'s order`);
+    expect(row.locationName).toBe("Finished goods bay");
+    expect(row.demandReference).toMatch(/^SO-T2-/);
+    // Cross-site: an RVS-only manager does not list NFD reservations; role negative: no reservation.view, no list.
+    const m = w.manager;
+    const rvsOnly = new AuthContext(m.userId, m.organizationId, m.displayName, m.email, m.roleCodes, m.permissions, [w.rvs], w.rvs.id);
+    expect((await listReservations(rvsOnly)).some((x) => x.id === r.id)).toBe(false);
+    if (!w.auditor.can("inventory.reservation.view")) await expectDomain(listReservations(w.auditor), "forbidden");
     await allocateOrder(w.wh, so.id);
     const [res] = await db.select().from(stockReservations).where(eq(stockReservations.id, r.id));
     expect(res.status).toBe("converted");

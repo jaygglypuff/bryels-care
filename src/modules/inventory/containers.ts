@@ -543,7 +543,7 @@ export function boxAllowedActions(
     if (box.status === "open" && !empty) out.push({ key: "seal", label: "Close the box", href: `/inventory/containers/${box.id}?op=seal`, allowed: true });
     if (box.status === "sealed") out.push({ key: "reopen", label: "Open the box again", href: `/inventory/containers/${box.id}?op=reopen`, allowed: true });
   }
-  if (ctx.can("inventory.label_job.create")) out.push({ key: "label", label: "Print box label", href: `/print/box-label/${box.id}`, allowed: box.status !== "void", reason: box.status === "void" ? "The box is cancelled." : undefined });
+  if (ctx.can("inventory.label_job.create")) out.push({ key: "label", label: "Print box label", href: `/labels/new?entityType=container&entityId=${box.id}`, allowed: box.status !== "void", reason: box.status === "void" ? "The box is cancelled." : undefined });
   return out;
 }
 
@@ -572,11 +572,15 @@ export async function listContainers(ctx: AuthContext, f: ContainerFilter = {}) 
   if (f.locationId && isUuid(f.locationId)) conds.push(eq(containers.currentLocationId, f.locationId));
   const q = f.q?.trim();
   if (q) {
-    const like = `%${q.replace(/[%_\\]/g, (c) => "\\" + c)}%`;
+    // Re-audit B #7: a scanned label (BC:BOX:/BC:LOT:), a box or lot number, or words: what is inside or the shelf name.
+    const text = q.replace(/^BC:(BOX|LOT):/i, "");
+    const like = `%${text.replace(/[%_\\]/g, (c) => "\\" + c)}%`;
     conds.push(
       or(
         ilike(containers.containerNumber, like),
-        sql`exists (select 1 from ${containerContents} cc join ${inventoryLots} l on l.id = cc.lot_id where cc.container_id = ${containers.id} and l.lot_number ilike ${like})`,
+        sql`exists (select 1 from ${containerContents} cc join ${inventoryLots} l on l.id = cc.lot_id left join materials m on m.id = l.material_id left join products p on p.id = l.product_id
+          where cc.container_id = ${containers.id} and (l.lot_number ilike ${like} or coalesce(m.name, '') ilike ${like} or coalesce(p.name, '') ilike ${like}))`,
+        sql`exists (select 1 from locations cl where cl.id = ${containers.currentLocationId} and cl.name ilike ${like})`,
       )!,
     );
   }

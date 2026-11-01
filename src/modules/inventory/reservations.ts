@@ -491,6 +491,13 @@ export async function listReservations(ctx: AuthContext, f: { status?: string; l
       baseUom: stockReservations.baseUom,
       demandType: stockReservations.demandType,
       demandReference: stockReservations.demandReference,
+      // Re-audit B #10: what it is set aside for, in words ("Aloe Calamansi Soap production order", "Isla Spa Supplies' order").
+      demandName: sql<string | null>`case ${stockReservations.demandType}
+        when 'work_order' then (select p.name || ' production order' from work_orders w join products p on p.id = w.product_id where w.id = ${stockReservations.demandId} and w.organization_id = ${ctx.organizationId}::uuid)
+        when 'batch' then (select p.name || ' batch' from batches b join products p on p.id = b.product_id where b.id = ${stockReservations.demandId} and b.organization_id = ${ctx.organizationId}::uuid)
+        when 'sales_order_line' then (select c.name || '''s order' from sales_order_lines l join sales_orders o on o.id = l.sales_order_id join customers c on c.id = o.customer_id where l.id = ${stockReservations.demandId} and o.organization_id = ${ctx.organizationId}::uuid)
+        else null end`,
+      locationName: locations.name,
       expiresAt: stockReservations.expiresAt,
       createdAt: stockReservations.createdAt,
       createdBy: users.displayName,

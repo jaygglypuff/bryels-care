@@ -33,6 +33,7 @@ import {
   assertReceiptTransition,
   receiptLocationKinds,
   type DiscrepancyKind,
+  supplierLotRequired,
 } from "./receiving-state";
 
 // Read side lives in receiving-queries.ts; re-exported here for existing callers (receipt and label pages).
@@ -47,7 +48,8 @@ export type ReceiptLineInput = {
   qty: string;
   /** Unit as entered; defaults to the material's base unit (V-UOM). */
   uom?: string | null;
-  supplierLotNumber: string;
+  /** Required for ingredients only (`supplierLotRequired`); optional for packaging and supplies. */
+  supplierLotNumber?: string | null;
   /** ADR-076: brand on the delivered containers (optional; copied to the lot at posting). */
   brand?: string | null;
   manufacturedOn?: string | null;
@@ -136,6 +138,8 @@ async function resolveSupplier(tx: Tx, ctx: AuthContext, input: Pick<ReceiptHead
 type MaterialRow = typeof materials.$inferSelect;
 type LocationRow = typeof locations.$inferSelect;
 
+export { SUPPLIER_LOT_REQUIRED_KINDS, supplierLotRequired } from "./receiving-state";
+
 export type NormalizedLine = {
   index: number;
   lineId: string | null;
@@ -144,7 +148,7 @@ export type NormalizedLine = {
   qtyEntered: Decimal;
   uomEntered: string;
   qtyBase: Decimal;
-  supplierLotNumber: string;
+  supplierLotNumber: string | null;
   brand: string | null;
   manufacturedOn: string | null;
   expiresOn: string;
@@ -203,9 +207,11 @@ async function normalizeLines(tx: Tx, ctx: AuthContext, siteId: string, lines: R
     const qtyBase = new Decimal(pair.base.qty);
     if (mat.baseUom === "pcs" && !qtyBase.isInteger()) throw new DomainError("validation", `Line ${n}: ${mat.name} is counted in pieces; enter a whole number.`, { field: f("qty") });
     if (qtyBase.decimalPlaces() > 6) throw new DomainError("validation", `Line ${n}: the quantity is finer than 0.000001 ${mat.baseUom}.`, { field: f("qty") });
-    const supplierLotNumber = (l.supplierLotNumber ?? "").trim();
-    if (!supplierLotNumber) throw new DomainError("validation", `Line ${n}: enter the supplier's lot number from the container label.`, { field: f("supplierLotNumber") });
-    if (supplierLotNumber.length > 80) throw new DomainError("validation", `Line ${n}: supplier lot number is too long (max 80).`, { field: f("supplierLotNumber") });
+    // A-SCAN-14 (owner decision pending): typed from the supplier's label; required for ingredients only,
+    // optional for packaging and supplies (cartons and wrappers often carry no lot number).
+    const supplierLotNumber = (l.supplierLotNumber ?? "").trim() || null;
+    if (!supplierLotNumber && supplierLotRequired(mat.materialKind)) throw new DomainError("validation", `Line ${n}: enter the supplier's lot number from the supplier's label.`, { field: f("supplierLotNumber") });
+    if (supplierLotNumber && supplierLotNumber.length > 80) throw new DomainError("validation", `Line ${n}: supplier lot number is too long (max 80).`, { field: f("supplierLotNumber") });
     const brand = cleanText(l.brand, 80, f("brand"), `Line ${n} brand`);
     const manufacturedOn = optDate(l.manufacturedOn, f("manufacturedOn"), `Line ${n} manufacture date`);
     const expiresOn = optDate(l.expiresOn, f("expiresOn"), `Line ${n} expiry date`);

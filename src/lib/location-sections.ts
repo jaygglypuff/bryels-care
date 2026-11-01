@@ -1,7 +1,7 @@
 /**
  * Warehouse sections (S6, ADR-077). A section is the part of the warehouse an operator walks to:
  * raw materials, packaging, finished goods, the QA area, returns, production, or another area
- * (receiving dock, dispatch bay). It is a display and suggestion attribute of a location only:
+ * (receiving dock, sending-out bay). It is a display and suggestion attribute of a location only:
  * movement and status rules still come from the location class (`kind`) and the lot status.
  *
  * `locations.section` is set in Master data; when it is empty the section is derived from the
@@ -29,7 +29,7 @@ export const SECTION_HINTS: Record<LocationSection, string> = {
   qa_hold: "New deliveries waiting for QA, and stock on hold",
   returns: "Goods sent back by customers or going back to suppliers",
   production: "Stock at the production rooms",
-  other: "Receiving dock, dispatch bay and other places",
+  other: "Receiving dock, sending-out bay and other places",
 };
 
 const QA_KINDS = ["quarantine", "hold", "rejected", "recall"];

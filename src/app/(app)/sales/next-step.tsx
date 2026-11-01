@@ -4,6 +4,7 @@ import { ArrowRight, Hourglass } from "lucide-react";
 import type { AuthContext } from "@/lib/auth/context";
 import { whoCanDo } from "@/modules/identity";
 import { NextStep } from "@/ui/guide";
+import { TEAM_OF_PERMISSION, whoWords } from "./who-words";
 
 /**
  * "What to do next" on sales records (ADR-088). Same look as `NextStep` (src/ui/guide.tsx); when the next
@@ -40,10 +41,6 @@ export function DoNext({ text, waitingFor, action, children }: { text: ReactNode
  */
 export async function whoDoes(ctx: AuthContext, permission: string, siteId: string | null, fallback: string): Promise<string> {
   const w = await whoCanDo(ctx, permission, siteId).catch(() => ({ roles: [] as string[], people: [] as { name: string; role: string }[] }));
-  if (w.people.length > 0) {
-    const shown = w.people.slice(0, 2).map((p) => `${p.name} (${p.role})`);
-    return w.people.length > 2 ? `${shown.join(", ")} or another ${w.people[2].role.toLowerCase()}` : shown.join(" or ");
-  }
-  if (w.roles.length > 0) return `the ${w.roles.slice(0, 2).join(" or ")}`;
-  return fallback;
+  // Re-audit B N5: warehouse steps name the warehouse people first and never say "another production operator".
+  return whoWords(w.people, w.roles, fallback, TEAM_OF_PERMISSION[permission] ?? null);
 }

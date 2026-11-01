@@ -242,6 +242,24 @@ describe("receipt authorization (authz.cross_site.*, authz.role_escalation.*)", 
     expect(rvsList.some((x) => x.id === d.receiptId)).toBe(false);
   });
 
+  it("A-SCAN-14: the supplier's lot number is required for ingredients, optional for packaging and supplies", async () => {
+    // Ingredient without it: refused on the line's field.
+    const e = await expectDomain(draft([await line({ supplierLotNumber: "" })]), "validation");
+    expect(e.details?.field).toBe("lines.0.supplierLotNumber");
+    expect(e.message).toMatch(/supplier's label/);
+    // Packaging (cartons, wrappers) without it: saved and posted; the lot has no supplier lot number.
+    const pkg = await line({ materialId: (await mat("PKG-0101")).id, qty: "200", uom: "pcs", supplierLotNumber: "   ", locationId: (await loc(nfd.id, "QUA-01")).id });
+    const d = await draft([pkg]);
+    await postReceipt(wh, { receiptId: d.receiptId });
+    const [l] = await linesOf(d.receiptId);
+    expect(l.supplierLotNumber).toBeNull();
+    const [lot] = await db.select().from(inventoryLots).where(eq(inventoryLots.id, l.lotId!));
+    expect(lot.supplierLotNumber).toBeNull();
+    // Cross-site and role negatives still apply to the optional case.
+    await expectDomain(createReceiptDraft(whRvs, { idempotencyKey: randomUUID(), supplierId: lagunaId, supplierDocumentNumber: "X", lines: [pkg] }), "validation");
+    await expectDomain(createReceiptDraft(auditor, { idempotencyKey: randomUUID(), supplierId: lagunaId, supplierDocumentNumber: "A", lines: [pkg] }), "forbidden");
+  });
+
   it("roles without the permission are refused", async () => {
     await expectDomain(createReceiptDraft(auditor, { idempotencyKey: randomUUID(), supplierId: lagunaId, supplierDocumentNumber: "A", lines: [await line()] }), "forbidden");
     const d = await draft();

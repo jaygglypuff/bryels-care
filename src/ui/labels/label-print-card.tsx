@@ -6,7 +6,7 @@ import type { FormAction } from "../form";
 import type { PrintLabelsState } from "./actions";
 import { LabelPreview } from "./label-preview";
 import { PrintLabelsButton } from "./print-labels-button";
-import { LABEL_KIND_WORDS, plainPrinter } from "./words";
+import { isOldLayout, LABEL_KIND_WORDS, OLD_LAYOUT_NOTE, plainPrinter } from "./words";
 
 /**
  * Preview + "How many?" + "Print N labels" in one card (ADR-099). When QA approved more than one label size
@@ -41,6 +41,11 @@ export function LabelPrintCard({
       {opt && preview.printer && !preview.blocked && (
         <p className="text-[15px] text-fg-2" data-testid="label-printer">
           Printer: <strong className="text-fg">{plainPrinter(preview.printer.printerName)}</strong> · label {opt.media}. In the print window choose this printer and <strong>Actual size</strong>.
+        </p>
+      )}
+      {opt && isOldLayout(opt.rendererVersion) && (
+        <p className="text-[14px] text-fg-2" data-testid="old-layout-note">
+          {OLD_LAYOUT_NOTE}
         </p>
       )}
       {preview.options.length > 1 && (

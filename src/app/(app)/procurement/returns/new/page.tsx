@@ -7,7 +7,9 @@ import { ActionForm } from "@/ui/form";
 import { MoreDetails, PageIntro } from "@/ui/guide";
 import { PlainList, PlainRow } from "@/ui/plain-list";
 import { StatusChip } from "@/ui/status";
-import { Forbidden } from "../../../forbidden";
+import { forbiddenAskLine } from "../../../forbidden-words";
+import { whoCanDo } from "@/modules/identity";
+import { PURCHASING_TEAM, teamFirst } from "../../../sales/who-words";
 import { createReturnAction } from "../../actions";
 import { SubNav, fmtBase } from "../../_ui";
 
@@ -17,7 +19,17 @@ export const metadata = { title: "Send something back" };
 /** New supplier return (W04-09): pick the supplier by name, see its lots here, say why; the number is made by the server. */
 export default async function NewSupplierReturnPage({ searchParams }: { searchParams: Promise<{ supplier?: string; q?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.supplier_return.create")) return <Forbidden what="sending goods back to suppliers" permission="procurement.supplier_return.create" />;
+  if (!ctx.can("procurement.supplier_return.create")) {
+    // Re-audit B N11: name purchasing first (Tess Navarro (Procurement)), like the purchase order refusal; the
+    // warehouse and QA people who may also do it follow.
+    const who = await whoCanDo(ctx, "procurement.supplier_return.create", ctx.currentSiteId).catch(() => ({ roles: [] as string[], people: [] as { name: string; role: string }[] }));
+    const people = teamFirst(who.people, PURCHASING_TEAM);
+    return (
+      <EmptyState title="You don't have access" action={<LinkButton href="/dashboard" variant="secondary">Back to overview</LinkButton>}>
+        Your role does not include access to sending goods back to suppliers. {forbiddenAskLine(ctx.roleCodes, people)}
+      </EmptyState>
+    );
+  }
   const { supplier, q } = await searchParams;
   const sups = await supplierOptions(ctx);
   const chosen = sups.find((s) => s.id === supplier) ?? null;

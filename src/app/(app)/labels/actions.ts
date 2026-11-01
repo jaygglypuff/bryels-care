@@ -126,3 +126,17 @@ export async function markReceiptJobsPrintedAction(_prev: ActionState, f: FormDa
   revalidatePath("/labels");
   return { ok: true, message: "Recorded as printed. Stick one label on every sack now." };
 }
+
+/** Several label jobs printed in one go (the box labels of one boxing, ADR-099): each job is checked by the service. */
+export async function markJobsPrintedAction(_prev: ActionState, f: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const ids = str(f, "jobIds").split(",").filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 100);
+    if (ids.length === 0) return { ok: false, message: "No labels to record. Go back and press Print again." };
+    for (const id of ids) await markLabelJobPrinted(ctx, id);
+  } catch (e) {
+    return withField(e);
+  }
+  revalidatePath("/labels");
+  return { ok: true, message: "Recorded as printed." };
+}

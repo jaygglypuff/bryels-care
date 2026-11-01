@@ -39,7 +39,7 @@ export default async function ContainersPage({ searchParams }: { searchParams: P
         {status && <input type="hidden" name="status" value={status} />}
         <div className="relative min-w-0 flex-1 basis-[220px] sm:max-w-[420px]">
           <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
-          <Input id="q" name="q" type="search" defaultValue={q} placeholder="Box or lot number from the label" aria-label="Search boxes" className="pl-10" />
+          <Input id="q" name="q" type="search" defaultValue={q} placeholder="Scan the label, or type what is inside (e.g. coconut oil)" aria-label="Find boxes and sacks by scanning or by name" className="pl-10" />
         </div>
         <button type="submit" className={buttonClass("secondary")}>Search</button>
         {q && <Link href={status ? `/inventory/containers?status=${status}` : "/inventory/containers"} className={buttonClass("ghost")}>Clear</Link>}

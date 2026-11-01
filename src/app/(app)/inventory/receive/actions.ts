@@ -22,7 +22,8 @@ const LineSchema = z
     materialId: z.uuid({ message: "Choose a material." }),
     qty: z.string().trim().regex(QTY_RE, { message: "Enter a quantity like 25000 or 12.5." }),
     uom: z.string().trim().max(8).optional(),
-    supplierLotNumber: z.string().trim().min(1, { message: "Enter the supplier's code from the sack or container label." }).max(80),
+    // Required for ingredients only: the service decides from the material kind (A-SCAN-14, supplierLotRequired).
+    supplierLotNumber: z.string().trim().max(80, { message: "Supplier's lot number: use at most 80 characters." }).optional(),
     brand: z.string().trim().max(80, { message: "Brand: use at most 80 characters." }).optional(),
     manufacturedOn: optDate,
     expiresOn: z.string().regex(DATE_RE, { message: "Enter the expiry date." }),

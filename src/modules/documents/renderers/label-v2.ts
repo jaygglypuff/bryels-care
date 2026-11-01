@@ -18,7 +18,24 @@ import type { FrozenDataset, Renderer } from "./types";
 const PAD = 1.5;
 const FOOT = 2.2;
 
-type Geometry = { w: number; h: number; small: boolean; qr: number; status: number; c128bar: number; nameSize: number; idSize: number; rowSize: number; nameLines: number; rows: number };
+type Geometry = { w: number; h: number; small: boolean; qr: number; status: number; c128bar: number; nameSize: number; idSize: number; rowSize: number; nameLines: number; rows: number; top: number };
+
+/** Height of the test page's ruler row (2.5 mm bar + 5 pt caption + gap); taller than the status bar it replaces. */
+export const RULER_ROW_MM = 2.5 + 5 * 1.2 * 0.3528 + 0.3;
+
+/**
+ * Detail rows that fit on a TEST page (T-01), where the ruler row replaces the status bar (re-audit B #12: on
+ * 50 × 30 the "Qty" row ran under the ruler). Counts the caption, two name lines, the id/expiry line(s) (two on
+ * small labels, where they wrap) and the margins, with 10 % to spare. Real labels keep `rows` unchanged, so
+ * labels printed with v2 re-render to the same checksum.
+ */
+export function testPageRows(g: Geometry): number {
+  const pt = 0.3528;
+  const top = g.top - Math.max(0, RULER_ROW_MM - g.status);
+  const used = (g.small ? 4.5 : 5.5) * 1.1 * pt + g.nameSize * 1.1 * pt * g.nameLines + g.idSize * 1.15 * pt * (g.small ? 2 : 1) + 1.2;
+  const fit = Math.floor((top - used * 1.1 - 0.5) / (g.rowSize * 1.18 * pt));
+  return Math.max(0, Math.min(g.rows, fit));
+}
 
 export function labelGeometry(w: number, h: number): Geometry {
   const small = h < 40 || w < 60;
@@ -32,7 +49,7 @@ export function labelGeometry(w: number, h: number): Geometry {
   const pt = 0.3528; // mm per point
   const used = 1.15 * pt * (nameSize * (small ? 2 : 2) + idSize * 2) + 1;
   const rows = Math.max(0, Math.floor((top - used) / (rowSize * 1.18 * pt)));
-  return { w, h, small, qr, status, c128bar: Math.min(12, Math.max(8, top * 0.4)), nameSize, idSize, rowSize, nameLines: 2, rows };
+  return { w, h, small, qr, status, c128bar: Math.min(12, Math.max(8, top * 0.4)), nameSize, idSize, rowSize, nameLines: 2, rows, top };
 }
 
 export function labelV2CssParts(w: number, h: number): { page: string; face: string; print: string } {
@@ -101,7 +118,7 @@ function oneLabel(d: LabelData, f: FrozenDataset["meta"], copyNo: number): SafeH
   const expiry = show.has("expiry") && e.expiresOn ? e.expiresOn : null;
   const ruler = d.testPage ? (d.label.mediaWidthMm >= 54 ? 50 : 40) : 0;
   const rows = ROWS.filter(([k, , get]) => show.has(k) && get(e))
-    .slice(0, g.rows)
+    .slice(0, d.testPage ? testPageRows(g) : g.rows)
     .map(([, label, get]) => html`<dt>${label}</dt><dd>${get(e)}</dd>`);
   const status = show.has("status_word") && e.statusWord ? e.statusWord : null;
   const kindWord = show.has("location_kind") && e.locationKindWord ? e.locationKindWord : null;

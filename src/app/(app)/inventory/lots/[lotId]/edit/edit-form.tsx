@@ -15,7 +15,7 @@ export function EditLotForm({ lotId, v }: { lotId: string; v: { manufacturedOn: 
         <Field label="Expiry date" htmlFor="expiresOn" error={fe.expiresOn}>
           <Input id="expiresOn" name="expiresOn" type="date" defaultValue={v.expiresOn ?? ""} />
         </Field>
-        <Field label="Supplier's code on the sack" htmlFor="supplierLotNumber" hint="As printed on the supplier's label.">
+        <Field label="Supplier's code on the sack" htmlFor="supplierLotNumber" hint="From the supplier's label (leave empty if it has none).">
           <Input id="supplierLotNumber" name="supplierLotNumber" maxLength={100} defaultValue={v.supplierLotNumber ?? ""} />
         </Field>
       </div>

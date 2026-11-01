@@ -56,3 +56,13 @@ export const DEFAULT_UNPLANNED_REASON = "no_purchase_order";
 export function receiptLocationKinds(initialStatus: "quarantine" | "released"): string[] {
   return initialStatus === "released" ? ["receiving", "quarantine", "storage"] : ["receiving", "quarantine", "hold"];
 }
+
+/**
+ * Material kinds whose deliveries need the supplier's lot number (A-SCAN-14, re-audit B #13): ingredients and
+ * in-house intermediates go into the product, so QA traces them by the supplier's lot. Packaging and supplies
+ * (cartons, wrappers, spare parts) may be received without one. Flagged for owner and QA approval in docs/PRD.md.
+ */
+export const SUPPLIER_LOT_REQUIRED_KINDS: readonly string[] = ["raw_material", "intermediate"];
+export function supplierLotRequired(materialKind: string | null | undefined): boolean {
+  return SUPPLIER_LOT_REQUIRED_KINDS.includes(materialKind ?? "raw_material");
+}

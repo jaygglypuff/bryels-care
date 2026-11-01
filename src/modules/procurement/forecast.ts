@@ -9,6 +9,7 @@ import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
 import { type ForecastResult, forecastSeries } from "./forecast-math";
 import { businessDate, isUuid, parseDecimal, requireReason } from "./shared";
+import { plural } from "@/lib/plural";
 
 /**
  * Forecast assumptions and overrides (US-6-20, FR-analytics-08, docs/analytics-kpis.md §6). Level:
@@ -122,7 +123,7 @@ export async function submitForecastOverride(ctx: AuthContext, input: { siteId: 
   const today = businessDate(input.now);
   const horizon = await getSetting(db, ctx.organizationId, "analytics.forecast.horizon_months");
   const first = monthStart(today);
-  if (input.periodStart < first || input.periodStart >= addMonths(first, horizon)) throw new DomainError("validation", `Overrides are for the next ${horizon} month(s) only.`, { field: "periodStart" });
+  if (input.periodStart < first || input.periodStart >= addMonths(first, horizon)) throw new DomainError("validation", `Changes are for the next ${plural(horizon, "month")} only.`, { field: "periodStart" });
   if (!isUuid(input.productId)) throw new DomainError("validation", "Choose a product.", { field: "productId" });
   const [p] = await db.select().from(products).where(and(eq(products.id, input.productId), eq(products.organizationId, ctx.organizationId))).limit(1);
   if (!p) throw new DomainError("validation", "Choose a product.", { field: "productId" });

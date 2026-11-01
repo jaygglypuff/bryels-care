@@ -88,4 +88,23 @@ describe("keyword look-up", () => {
       if (lot.expiresOn && lot.expiresOn < today) expect(x.detail, lot.lotNumber).toMatch(/EXPIRED – do not use/);
     }
   });
+
+  it("re-audit B N8: usable lots first, then waiting for QA, then expired/stopped/rejected (marked), each with its shelf", async () => {
+    const m = matchesOf(await resolveScanCard(whNfd, "coconut"));
+    expect(m.length).toBeGreaterThan(1);
+    const rows = await db.select().from(inventoryLots).where(eq(inventoryLots.siteId, kit.nfd.id));
+    const today = new Date().toISOString().slice(0, 10);
+    const rankOf = (href: string, detail: string) => {
+      if (/none left/.test(detail)) return 3;
+      const lot = rows.find((r) => href.endsWith(r.id))!;
+      if (["rejected", "recalled", "expired", "on_hold"].includes(lot.qualityStatus) || (lot.expiresOn && lot.expiresOn < today)) return 2;
+      return lot.qualityStatus === "quarantine" ? 1 : 0;
+    };
+    const ranks = m.map((x) => rankOf(x.href, x.detail));
+    expect([...ranks].sort((a, b) => a - b)).toEqual(ranks);
+    for (const [i, x] of m.entries()) {
+      if (ranks[i] === 2) expect(x.detail, x.title).toMatch(/do not use/);
+      if (ranks[i] < 3) expect(x.detail, x.title).toMatch(/ on [A-Z]/); // "16.3 kg on Oils rack A-01"
+    }
+  });
 });

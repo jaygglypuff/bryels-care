@@ -14,6 +14,8 @@ export {
   recordLineDiscrepancy,
   approveLineDiscrepancy,
   linkReceiptSupplier,
+  supplierLotRequired,
+  SUPPLIER_LOT_REQUIRED_KINDS,
   type ReceiptDraftInput,
   type ReceiptLineInput,
 } from "./receiving";

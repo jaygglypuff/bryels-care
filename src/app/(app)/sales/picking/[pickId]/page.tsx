@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { PlaceName, placeWords } from "@/ui/inventory/place-name";
+import { plural } from "@/lib/plural";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -45,7 +47,7 @@ export default async function PickPage({ params }: { params: Promise<{ pickId: s
   const next = !open ? (
     <DoNext
       text={v.pick.status === "cancelled" ? "Stopped. Nothing more to do here." : "Got everything. Next: a colleague checks the box a second time, then it is sent out."}
-      action={{ label: "Open the shipment", href: `/sales/shipments/${v.pick.shipmentId}` }}
+      action={{ label: "Open the delivery", href: `/sales/shipments/${v.pick.shipmentId}` }}
     />
   ) : short.length === 0 && canFinish ? (
     <DoNext text="Everything is scanned. Next: finish, so a colleague can check the box a second time.">
@@ -55,7 +57,7 @@ export default async function PickPage({ params }: { params: Promise<{ pickId: s
     <DoNext
       text={
         <>
-          Next: go to shelf <span className="font-mono">{nextRow.locationCode}</span> and take {nextRow.boxNumber ? <>box <span className="font-mono">{nextRow.boxNumber}</span></> : `${q(String(Number(nextRow.qty) - Number(nextRow.picked)), nextRow.baseUom)} loose`} of {nextRow.productName}. Then scan it below.
+          Next: go to <PlaceName name={nextRow.locationName} code={nextRow.locationCode} /> and take {nextRow.boxNumber ? <>box <span className="font-mono">{nextRow.boxNumber}</span></> : `${q(String(Number(nextRow.qty) - Number(nextRow.picked)), nextRow.baseUom)} loose`} of {nextRow.productName}. Then scan it below.
         </>
       }
     />
@@ -86,7 +88,7 @@ export default async function PickPage({ params }: { params: Promise<{ pickId: s
               )}
               {canFinish && short.length > 0 && (
                 <Cmd action={completePickAction} fields={finishFields} label="Finish with items missing" pending="Finishing…" variant="secondary">
-                  <p className="text-[13px] text-fg-2">{short.length} place(s) not fully taken. They stay set aside for later.</p>
+                  <p className="text-[13px] text-fg-2">{plural(short.length, "place")} not fully taken. They stay set aside for later.</p>
                   <Field label="Why is something missing?" htmlFor="shortPickReason">
                     <Input id="shortPickReason" name="shortPickReason" maxLength={300} required placeholder="e.g. Box damaged on the shelf" />
                   </Field>
@@ -105,7 +107,7 @@ export default async function PickPage({ params }: { params: Promise<{ pickId: s
         {canScan && short.length > 0 && (
           <Card>
             <CardTitle>Scan the box</CardTitle>
-            <ScanPanel scan={pickScanAction.bind(null, v.pick.id)} label="Scan the box label (or the lot label for loose pieces)" hint="A box that is not on this list is refused. Scanning the same box twice counts once." withQty allowManual candidates={short.filter((r) => !r.blocked).map((r) => ({ value: r.boxNumber ? `BC:BOX:${r.boxNumber}` : `BC:LOT:${r.lotNumber}`, title: r.productName, detail: `shelf ${r.locationCode} · ${r.boxNumber ? `box ${r.boxNumber}` : `${q(String(Number(r.qty) - Number(r.picked)), r.baseUom)} loose`} · lot ${r.lotNumber}`, codes: [r.boxNumber ?? r.lotNumber] }))} />
+            <ScanPanel scan={pickScanAction.bind(null, v.pick.id)} label="Scan the box label (or the lot label for loose pieces)" hint="A box that is not on this list is refused. Scanning the same box twice counts once." withQty allowManual candidates={short.filter((r) => !r.blocked).map((r) => ({ value: r.boxNumber ? `BC:BOX:${r.boxNumber}` : `BC:LOT:${r.lotNumber}`, title: r.productName, detail: `${placeWords(r.locationName, r.locationCode)} · ${r.boxNumber ? `box ${r.boxNumber}` : `${q(String(Number(r.qty) - Number(r.picked)), r.baseUom)} loose`} · lot ${r.lotNumber}`, codes: [r.boxNumber ?? r.lotNumber] }))} />
           </Card>
         )}
 
@@ -131,7 +133,7 @@ export default async function PickPage({ params }: { params: Promise<{ pickId: s
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-[16px] font-semibold">
-                      Shelf <span className="font-mono">{r.locationCode}</span>
+                      <PlaceName name={r.locationName} code={r.locationCode} />
                     </span>
                     <span className="text-[17px] font-semibold tabular">
                       {q(r.picked, r.baseUom)} / {q(r.qty, r.baseUom)} {r.done ? "✓" : ""}

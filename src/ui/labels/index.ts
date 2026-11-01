@@ -11,5 +11,5 @@ export { PrintLabelsButton, printPageHref } from "./print-labels-button";
 export { LabelPrintCard } from "./label-print-card";
 export { LabelGuide } from "./label-guide";
 // PrintLabelsPanel is a server component: import it from "@/ui/labels/print-labels-panel" (keeps this barrel client-safe).
-export { LABEL_KIND_WORDS, labelCountWords, plainPrinter, SCAN_SENTENCE } from "./words";
+export { LABEL_KIND_WORDS, labelCountWords, plainPrinter, SCAN_SENTENCE, OLD_LAYOUT_NOTE, isOldLayout } from "./words";
 export type { PrintLabelsState } from "./actions";

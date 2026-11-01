@@ -26,7 +26,8 @@ export type LabelEntityType = "inventory_lot" | "location" | "container" | "batc
 /** What the label is stuck on, for the one-sentence hint ("Stick one on each sack"). */
 export type LabelKind = "sack" | "tub" | "bar" | "product_box" | "box" | "shelf";
 
-export type LabelOption = { templateId: string; name: string; media: string; widthMm: number; heightMm: number; face: LabelFaceData };
+/** `rendererVersion` 1 = the old label layout (re-audit B #12: the screen says QA can approve the new one). */
+export type LabelOption = { templateId: string; name: string; media: string; widthMm: number; heightMm: number; face: LabelFaceData; rendererVersion: number | null };
 
 export type LabelPreview = {
   entity: { type: LabelEntityType; id: string; number: string; name: string | null; appliesTo: string; siteId: string; state: string | null };
@@ -101,7 +102,8 @@ export async function labelPreview(
       entity: e.entity,
     };
     const out = renderFrozen(version.definition, "label", { meta: previewMeta(layout.code, layout.name, version.versionNo, version.definitionChecksum, e, siteCode), data });
-    options.push({ templateId: t.id, name: t.name, media: `${Number(t.mediaWidthMm)} × ${Number(t.mediaHeightMm)} mm`, widthMm: Number(t.mediaWidthMm), heightMm: Number(t.mediaHeightMm), face: labelFace(data, out.body.value, out.css) });
+    const rendererVersion = (version.definition as { renderer?: { version?: number } } | null)?.renderer?.version ?? null;
+    options.push({ templateId: t.id, name: t.name, media: `${Number(t.mediaWidthMm)} × ${Number(t.mediaHeightMm)} mm`, widthMm: Number(t.mediaWidthMm), heightMm: Number(t.mediaHeightMm), face: labelFace(data, out.body.value, out.css), rendererVersion });
   }
 
   const existing = history

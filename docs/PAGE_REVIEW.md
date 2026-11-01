@@ -390,3 +390,17 @@ exactly one green button; "Waiting for <name> (role)" comes from the who-can-do 
 | `/quality` | "Check again on" date on batches. |
 | `/sales/returns` | "1 item, 6 pcs". |
 | Forbidden screens (all) | "Ask <name> (role)" from who-can-do; never tells a site manager to ask the site manager. |
+
+### Re-audit B fixes (2026-11-01)
+
+| Route | Note |
+|---|---|
+| `/inventory/receive`, `/inventory/receive/[grId]` | Places "QA waiting cage (QUA-01)"; supplier by name only; problems "waiting for <name> (Procurement) to accept it"; supplier lot optional for packaging |
+| `/inventory/counts/[id]`, `/sheet` | Shelf name first; sheet titled by shelves |
+| `/inventory/lots/reservations` | "for Isla Spa Supplies' order", shelf name; codes grey after |
+| `/inventory/locations/[id]` | ⋯ More › Print a label |
+| `/warehouse/packs`, `/warehouse/packs/[packId]` | "12 pcs" once; Box labels card = preview + Print N labels (`/print/labels/pack/[packId]`); shelf by name; label size instead of layout code |
+| `/sales/[orderId]`, `/sales/shipments/[id]`, `/sales/picking/[id]`, `/sales/packing/[id]` | Shelf names first; "Open the delivery"; "price changed by hand"; waiting delivery shows what was taken off the shelf; "Sent before: … · Still to send: …"; warehouse people named first |
+| `/sales/new`, `/sales/quotations/new`, `/sales/price-lists/new` | One name picker: type, tap a big row; "Change" when chosen |
+| `/procurement`, `/procurement/suppliers`, `/procurement/forecast`, `/procurement/performance` | No "(s)"; "0 %", "1 / 10" |
+| `/procurement/returns/new` (refused) | Names Tess Navarro (Procurement) first |

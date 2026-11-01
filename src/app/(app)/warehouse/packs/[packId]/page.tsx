@@ -10,6 +10,10 @@ import { NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { RecordNo } from "@/ui/plain-list";
 import { LotStatusChip } from "@/ui/inventory/bits";
+import { LABEL_KIND_WORDS, labelCountWords, LabelPreview } from "@/ui/labels";
+import { labelPreviewOrNull } from "@/modules/documents";
+import { plural } from "@/lib/plural";
+import { PlaceName } from "@/ui/inventory/place-name";
 import { ScanOrPick } from "@/ui/scan-or-pick";
 import { Forbidden } from "../../../forbidden";
 import { addBoxAction, approvePackAction, boxingNoteAction, cancelPackAction, packCheckScanAction, packLabelsAction, removeBoxAction, submitPackAction } from "../../../sales/fulfilment-actions";
@@ -41,6 +45,12 @@ export default async function PackPage({ params, searchParams }: { params: Promi
   const note = v.documents.find((d) => d.documentKind === "boxing_note" && d.status === "ready");
   const canCancel = p.status === "open" && live.length === 0 && ctx.can("inventory.pack.create");
   const canNote = ctx.can("documents.generated_document.create") && p.status !== "cancelled";
+  // ADR-099 (re-audit B N9): box labels are printed here. Boxes without a label, or with one made but not printed.
+  const needLabel = live.filter((b) => b.labelStatus !== "printed");
+  const labelsToPrint = needLabel.length;
+  const firstBox = needLabel[0] ?? live[0];
+  const previewData = v.labelTemplate && firstBox ? await labelPreviewOrNull(ctx, { entityType: "container", entityId: firstBox.containerId, labelTemplateId: v.labelTemplate.id }) : null;
+  const preview = previewData?.options[0] ?? null;
   const next = boxing && ctx.can("inventory.pack.create") ? (
     <NextStep text={diff > 0 ? `Scan the lot and pack the next box (${qty(String(diff))} still to box).` : "All units are boxed. Send the boxes for checking."} action={diff > 0 ? { label: "Pack a box", href: "#add-box" } : ctx.can("inventory.pack.submit") ? { label: "Submit for checking", href: "#submit" } : undefined} />
   ) : checking && ctx.can("inventory.pack.approve") && !v.isPacker ? (
@@ -87,10 +97,10 @@ export default async function PackPage({ params, searchParams }: { params: Promi
                 ["Lot", v.lotNumber ? <span key="lot">{v.lotNumber} <LotStatusChip status={v.lotStatus ?? "released"} expiresOn={v.expiresOn} /> · expires {fmtDate(v.expiresOn)}</span> : "Several lots"],
                 ["Units per box", String(p.unitsPerBox)],
                 ["Boxed", `${qty(p.packedUnitsBase)}${p.expectedUnitsBase ? ` of ${qty(p.expectedUnitsBase)} (lot stock after samples)` : ""}`],
-                ["Shelf", v.locationCode ?? "—"],
+                ["Shelf", v.locationCode ? <PlaceName key="shelf" name={v.locationName} code={v.locationCode} /> : "—"],
                 ["Packer · checker", `${v.packer}${v.checkerName ? ` · ${v.checkerName}` : ""}`],
                 ["Shipping marks", cfg.shippingMarks ?? "—"],
-                ["Label layout", v.labelTemplate?.code ?? "Not set up"],
+                ["Box label", v.labelTemplate ? `${v.labelTemplate.widthMm} × ${v.labelTemplate.heightMm} mm` : "Not set up yet"],
               ]}
             />
             {p.expectedUnitsBase && diff !== 0 && p.status === "open" && <p className="mt-3 text-[13px] text-[var(--warn-fg)]">{diff > 0 ? `${diff} units still to box` : `${-diff} units over the output`}: it cannot be checked until boxes × units equal what was made (after samples).</p>}
@@ -99,8 +109,8 @@ export default async function PackPage({ params, searchParams }: { params: Promi
             <Card id="add-box">
               <CardTitle>Add a box</CardTitle>
               <Cmd action={addBoxAction} fields={{ packId: p.id }} label="Pack box and print label" pending="Packing…" variant="cta" size="lg">
-                {v.lotNumber && <ScanOrPick kind="lot" name="lotPayload" submit="code" label="Which lot are you boxing?" hint="Tap it or scan its label: this checks you box the right lot." candidates={[{ value: v.lotNumber, title: v.productName, detail: `lot ${v.lotNumber}${v.locationCode ? ` · on ${v.locationCode}` : ""}`, code: v.lotNumber, codes: [v.lotNumber] }]} onlyCandidates search={false} />}
-                <Field label="How many in this box?" htmlFor="qty" hint={`A full box has ${p.unitsPerBox}; fewer prints PARTIAL on the label.`}><Input id="qty" name="qty" inputMode="numeric" defaultValue={String(Math.min(p.unitsPerBox, diff > 0 ? diff : p.unitsPerBox))} /></Field>
+                {v.lotNumber && <ScanOrPick kind="lot" name="lotPayload" submit="code" label="Which lot are you boxing?" hint="Tap it or scan its label: this checks you box the right lot." candidates={[{ value: v.lotNumber, title: v.productName, detail: `${v.locationName ? `on ${v.locationName} · ` : ""}lot ${v.lotNumber}`, code: v.lotNumber, codes: [v.lotNumber] }]} onlyCandidates search={false} />}
+                <Field label="How many in this box?" htmlFor="qty" hint={`A full box has ${p.unitsPerBox}; fewer makes a part box (the label says so).`}><Input id="qty" name="qty" inputMode="numeric" defaultValue={String(Math.min(p.unitsPerBox, diff > 0 ? diff : p.unitsPerBox))} /></Field>
               </Cmd>
             </Card>
           )}
@@ -120,7 +130,7 @@ export default async function PackPage({ params, searchParams }: { params: Promi
                 {v.boxes.map((b) => (
                   <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                     <span className={b.status !== "packed" ? "text-muted line-through" : ""}>
-                      #{b.boxNo} · <Link href={`/inventory/containers/${b.containerId}`} className="font-mono hover:underline">{b.number}</Link> · {qty(b.qtyBase)} {b.isPartial && <Chip tone="warn">PARTIAL</Chip>} · label {b.labelStatus ?? "none"} {b.checked && "· checked ✓"} {b.status !== "packed" && `· ${b.status}`}
+                      #{b.boxNo} · <Link href={`/inventory/containers/${b.containerId}`} className="font-mono hover:underline">{b.number}</Link> · {qty(b.qtyBase)} {b.isPartial && <Chip tone="warn">PARTIAL</Chip>} · {b.labelStatus === "printed" ? "label printed" : b.labelStatus ? "label not printed yet" : "no label yet"} {b.checked && "· checked ✓"} {b.status !== "packed" && `· ${b.status}`}
                     </span>
                     {boxing && b.status === "packed" && <ReasonCmd action={removeBoxAction} fields={{ packId: p.id, containerId: b.containerId }} label="Remove" placeholder="e.g. Carton torn" />}
                   </li>
@@ -130,17 +140,27 @@ export default async function PackPage({ params, searchParams }: { params: Promi
           </Card>
         </div>
         <div className="flex flex-col gap-4">
-          {p.status !== "cancelled" && ctx.can("inventory.label_job.create") && live.length > 0 && (
-            <Card>
+          {p.status !== "cancelled" && ctx.can("inventory.label_job.view") && live.length > 0 && (
+            <Card id="box-labels">
               <CardTitle>Box labels</CardTitle>
               {v.labelTemplate ? (
-                <Cmd action={packLabelsAction} fields={{ packId: p.id }} label="Make the missing box labels" variant="secondary">
-                  <p className="text-[13px] text-fg-2">One label per box: BC:BOX, SKU, lot, expiry, units, packed date, packer initials, box n of N.</p>
-                </Cmd>
+                <div className="flex flex-col gap-3" data-testid="box-labels">
+                  {preview && <LabelPreview kind="box" data={preview.face} sentence={`${LABEL_KIND_WORDS.box.stick} Each box gets its own label: product, lot, use-by date, pieces in the box, box 3 of ${live.length} and the square code.`} />}
+                  {labelsToPrint > 0 ? (
+                    ctx.can("inventory.label_job.create") ? (
+                      <Cmd action={packLabelsAction} fields={{ packId: p.id }} label={`Print ${labelCountWords(labelsToPrint)}`} pending="Making the labels…" variant={boxing ? "secondary" : "cta"} size="lg">
+                        <p className="text-[15px] text-fg-2">{labelsToPrint === live.length ? `None of the ${plural(live.length, "box", "boxes")} has a printed label yet.` : `${plural(labelsToPrint, "box", "boxes")} of ${live.length} still ${labelsToPrint === 1 ? "needs its" : "need their"} label.`}</p>
+                      </Cmd>
+                    ) : (
+                      <p className="text-[15px] text-fg-2">{plural(labelsToPrint, "box", "boxes")} still {labelsToPrint === 1 ? "needs a label" : "need labels"}. Your job cannot print labels: ask the warehouse lead.</p>
+                    )
+                  ) : (
+                    <p className="text-[15px] text-fg-2" data-testid="box-labels-done">Every box has its label. Lost or damaged one? Open the box and print it again with a reason.</p>
+                  )}
+                </div>
               ) : (
                 <Banner tone="warn" title="Box labels are not set up">Ask the system administrator to approve a box label layout (Management › Rules and settings › Labels and printouts).</Banner>
               )}
-              <LinkButton href="/labels?show=not_printed" variant="ghost" className="mt-2">Print the box labels (not printed yet)</LinkButton>
             </Card>
           )}
           {boxing && ctx.can("inventory.pack.submit") && live.length > 0 && (

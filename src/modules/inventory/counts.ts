@@ -74,6 +74,7 @@ export const countMachine = stateMachine<CountStatus>(
 const QTY_RE = /^\d{1,12}(\.\d{1,6})?$/;
 
 import { activeCountsForLocations, assertLocationsNotFrozen } from "./freeze";
+import { plural } from "@/lib/plural";
 
 export { assertLocationsNotFrozen, activeCountsForLocations };
 
@@ -374,8 +375,8 @@ export async function submitCount(ctx: AuthContext, countId: string) {
     const entries = await tx.select().from(stockCountEntries).where(eq(stockCountEntries.stockCountId, c.id)).orderBy(asc(stockCountEntries.countedAt));
     const missing = lines.filter((l) => !entries.some((e) => e.stockCountLineId === l.id));
     if (missing.length) {
-      const locs = await tx.select({ id: locations.id, code: locations.code }).from(locations).where(inArray(locations.id, [...new Set(missing.map((m) => m.locationId))]));
-      throw new DomainError("validation", `${missing.length} expected line(s) are not counted yet (locations ${locs.map((l) => l.code).join(", ")}). Enter 0 for items that are not there.`, {
+      const locs = await tx.select({ id: locations.id, code: locations.code, name: locations.name }).from(locations).where(inArray(locations.id, [...new Set(missing.map((m) => m.locationId))]));
+      throw new DomainError("validation", `${plural(missing.length, "expected line")} ${missing.length === 1 ? "is" : "are"} not counted yet (${locs.map((l) => l.name).join(", ")}). Enter 0 for items that are not there.`, {
         missingLineIds: missing.map((m) => m.id),
       });
     }
@@ -751,6 +752,7 @@ export async function getCount(ctx: AuthContext, countId: string) {
       id: stockCountLines.id,
       locationId: stockCountLines.locationId,
       locationCode: locations.code,
+      locationName: locations.name,
       lotId: stockCountLines.lotId,
       lotNumber: inventoryLots.lotNumber,
       qualityStatus: inventoryLots.qualityStatus,

@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import type { Candidate } from "@/modules/action-centre";
 import { getSetting } from "@/lib/settings";
+import { plural } from "@/lib/plural";
 
 /**
  * Action-centre sources of the procurement module (US-5-06 plug-in, registered in src/modules/wiring.ts):
@@ -71,6 +72,6 @@ export async function overDeliveryCandidates(org: string): Promise<Candidate[]> 
      group by g.id, g.site_id, g.supplier_name`)
   ).map((r) => ({
     kind: "over_delivery", siteId: String(r.site_id), entityType: "goods_receipt", entityId: String(r.id), recordNumber: null,
-    title: `Delivery from ${r.supplier_name} has ${r.n} item(s) more than ordered or not on the purchase order`, detail: "Approve the difference, or fix the delivery before it is saved to stock.", link: `/inventory/receive/${r.id}`, openedAt: d(r.at ?? new Date()),
+    title: `Delivery from ${r.supplier_name} has ${plural(Number(r.n), "item")} more than ordered or not on the purchase order`, detail: "Approve the difference, or fix the delivery before it is saved to stock.", link: `/inventory/receive/${r.id}`, openedAt: d(r.at ?? new Date()),
   }));
 }

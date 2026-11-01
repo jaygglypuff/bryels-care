@@ -40,6 +40,12 @@ export default async function LocationPage({ params }: { params: Promise<{ id: s
             <div className="flex flex-col gap-2">
               <LinkButton href="/inventory/locations" variant="secondary">All shelves</LinkButton>
               <LinkButton href={`/inventory?loc=${d.id}`} variant="secondary">This shelf in the stock list</LinkButton>
+              {/* Re-audit B N2: the label guide sends people here ("On the shelf: ⋯ More › Print a label"). */}
+              {ctx.can("inventory.label_job.view") && d.isActive && (
+                <LinkButton href={`/labels/new?entityType=location&entityId=${d.id}`} variant="secondary" data-testid="shelf-print-label">
+                  Print a label
+                </LinkButton>
+              )}
             </div>
           </MoreMenu>
         }

@@ -8,6 +8,7 @@ import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { decideOverrideAction, submitOverrideAction } from "../actions";
 import { SubNav } from "../_ui";
+import { plural } from "@/lib/plural";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Sales guess" };
@@ -36,11 +37,11 @@ export default async function ForecastPage() {
     <>
       <PageHeader title="Sales guess" />
       <PageIntro>This screen is for a guess of how much of each product we may sell next month, from past customer orders. It is only a guess: nothing is ordered from it. If you know better, change the number; a second person approves it.</PageIntro>
-      {toDecide.length > 0 && <NextStep text={`Next: ${toDecide.length} changed guess(es) wait for your approval.`} action={{ label: "Open the list", href: "#guesses" }} />}
+      {toDecide.length > 0 && <NextStep text={`Next: ${plural(toDecide.length, "changed guess", "changed guesses")} ${toDecide.length === 1 ? "waits" : "wait"} for your approval.`} action={{ label: "Open the list", href: "#guesses" }} />}
       <SubNav />
       <div className="flex flex-col gap-5">
         <Banner tone="warn" title={f.banner}>
-          Based on confirmed customer orders by month ({f.historyMonths} months back, {f.horizonMonths} month(s) ahead). <span className="text-[13px]">We try several ways and show the one that would have guessed best over the last 3 months.</span>
+          Based on confirmed customer orders by month ({f.historyMonths} months back, {plural(f.horizonMonths, "month")} ahead). <span className="text-[13px]">We try several ways and show the one that would have guessed best over the last 3 months.</span>
         </Banner>
         <Card>
           <span id="guesses" className="block scroll-mt-24" />

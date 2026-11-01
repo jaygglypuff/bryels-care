@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PlaceName } from "@/ui/inventory/place-name";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -192,9 +193,10 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
         <Card>
           <CardTitle>
             In this delivery · {deliveryContents(v.totals.boxes, v.totals.units)}
+            {v.totals.from === "picked" ? " taken off the shelf" : ""}
           </CardTitle>
           {v.lines.length === 0 ? (
-            <EmptyState title="Nothing checked yet">{s.status === "draft" ? "The items are being taken off the shelf." : "Boxes show here as they are checked."}</EmptyState>
+            <EmptyState title="Nothing checked yet">{s.status === "draft" ? "The items are being taken off the shelf." : v.totals.from === "picked" ? "Taken off the shelf and waiting for the second check: the boxes show here as they are checked." : "Boxes show here as they are checked."}</EmptyState>
           ) : (
             <ul className="flex flex-col divide-y divide-line">
               {v.lines.map((l) => (
@@ -205,7 +207,7 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
                       {l.isOverShipment ? <span className="ml-1 text-[12px] text-[var(--warn-fg)]">more than ordered</span> : null}
                     </p>
                     <p className="text-[13px] text-fg-2">
-                      Expires {fmtDate(l.expiresOn)} · from shelf {l.locationCode}
+                      Expires {fmtDate(l.expiresOn)} · from <PlaceName name={l.locationName} code={l.locationCode} />
                     </p>
                     <p className="font-mono text-[12px] text-muted">
                       {l.sku} · lot {l.lotNumber}

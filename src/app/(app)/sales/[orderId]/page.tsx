@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PlaceName } from "@/ui/inventory/place-name";
 import { notFound } from "next/navigation";
 import Decimal from "decimal.js";
 import { requireContext } from "@/lib/auth/context";
@@ -256,7 +257,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                     <p className="font-medium">{l.productName}</p>
                     <p className="text-[13px] tabular text-fg-2">
                       {fmtQty(l.qtyUnits, "pcs", 0)} × <Money value={l.unitPrice} />
-                      {l.priceSource && l.priceSource !== "price_list" ? (l.priceSource === "quote" ? " (quoted price)" : " (price typed by hand)") : ""}
+                      {l.priceSource && l.priceSource !== "price_list" ? (l.priceSource === "quote" ? " (quoted price)" : " (price changed by hand)") : ""}
                       {showAlloc && (status === "shipped" ? ` · sent ${fmtQty(l.qtyUnits, "", 0)}` : ` · set aside ${fmtQty(l.allocated, "", 0)} of ${fmtQty(l.qtyUnits, "", 0)}`)}
                     </p>
                     <p className="font-mono text-[12px] text-muted">
@@ -317,7 +318,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                     <li key={a.id} className="flex items-start justify-between gap-3 py-2.5">
                       <div className="min-w-0 text-[14px]">
                         <p className="font-medium">
-                          Shelf {a.locationCode} <span className="font-normal text-fg-2">· {a.locationName}</span>
+                          <PlaceName name={a.locationName} code={a.locationCode} />
                         </p>
                         <p className="text-[13px] text-fg-2">
                           Expires {fmtDate(a.expiresOn)}

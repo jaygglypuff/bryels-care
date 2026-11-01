@@ -5,6 +5,7 @@ import type { ActionState } from "@/lib/errors";
 import { SECTION_LABELS, isSection } from "@/lib/location-sections";
 import { fmtFriendly, friendlyUnit, normalizeUnit, toBaseQty, unusualAmount } from "@/lib/units";
 import { Button, Card, Field, Input, Select, Textarea } from "@/ui/core";
+import { placeWords } from "@/ui/inventory/place-name";
 import { FormMessage, SubmitButton } from "@/ui/form";
 import { saveReceiptAction } from "./actions";
 
@@ -35,6 +36,8 @@ type Material = {
   pastQtyBase?: string[];
   /** raw_material | packaging | consumable | intermediate: groups the item list (spare parts apart). */
   materialKind?: string;
+  /** A-SCAN-14: the supplier's lot number is required for ingredients only (server rule `supplierLotRequired`). */
+  supplierLotRequired?: boolean;
 };
 
 /** Item list groups for a delivery without a purchase order (UX audit B #3): ingredients and packaging first, spare parts apart. */
@@ -284,7 +287,7 @@ export function ReceiveForm({
               label="Supplier"
               htmlFor="supplierName"
               error={fe.supplierName ?? fe.supplierId}
-              hint={supplier ? `${supplier.code}${supplier.qualityStatus === "suspended" ? " · STOPPED: this delivery cannot be posted" : ""}` : supplierName.trim().length > 1 ? "Not in the supplier list yet. Purchasing links it later." : "Type or pick from the list."}
+              hint={supplier ? (supplier.qualityStatus === "suspended" ? `STOPPED: this delivery cannot be posted (${supplier.code})` : `In the supplier list · ${supplier.code}`) : supplierName.trim().length > 1 ? "Not in the supplier list yet. Purchasing links it later." : "Type or pick from the list."}
             >
               <Input id="supplierName" name="supplierName" required autoComplete="off" list="supplier-options" placeholder="e.g. Laguna Oleo Supply" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} />
               <datalist id="supplier-options">
@@ -410,8 +413,13 @@ export function ReceiveForm({
                       </div>
                     )}
                   </Field>
-                  <Field label="Supplier's lot number" htmlFor={id("slot")} error={err("supplierLotNumber")} hint="Printed on the supplier's label, often after “Lot” or “Batch”. Copy it as written: QA traces with it.">
-                    <Input id={id("slot")} autoComplete="off" value={l.supplierLotNumber} onChange={(e) => update(l.key, { supplierLotNumber: e.target.value })} required />
+                  <Field
+                    label={mat && mat.supplierLotRequired === false ? "Supplier's lot number (if there is one)" : "Supplier's lot number"}
+                    htmlFor={id("slot")}
+                    error={err("supplierLotNumber")}
+                    hint={mat && mat.supplierLotRequired === false ? "From the supplier's label, often after “Lot” or “Batch”. Cartons and wrappers often have none: leave it empty." : "From the supplier's label, often after “Lot” or “Batch”. Copy it as written: QA traces with it."}
+                  >
+                    <Input id={id("slot")} autoComplete="off" value={l.supplierLotNumber} onChange={(e) => update(l.key, { supplierLotNumber: e.target.value })} required={!mat || mat.supplierLotRequired !== false} />
                   </Field>
                   {!po && mat?.shelfLifeDays && l.expiresOn && !l.expiryTouched && !l.showExpiry && !err("expiresOn") ? (
                     // No purchase order: a use-by date filled in from the shelf life is shown as words with one "Change" tap (≤5 fields, UX audit B #3).
@@ -489,7 +497,7 @@ export function ReceiveForm({
                             {locs
                               .filter((x) => (x.section ?? "other") === s)
                               .map((x) => (
-                                <option key={x.id} value={x.id}>{x.name}</option>
+                                <option key={x.id} value={x.id}>{placeWords(x.name, x.code)}</option>
                               ))}
                           </optgroup>
                         ))}

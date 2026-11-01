@@ -33,6 +33,7 @@ import { notifyRoles } from "@/modules/platform";
 import { RETURN_CONDITION_LABEL, RETURN_STATUS_LABEL, canMoveReturn, type CustomerReturnStatus, type ReturnLineCondition } from "./returns-rules";
 import { LEFT_SITE_SHIPMENT_STATUSES, applyShipmentReturned, lotsOfBox, returnedQtyByLot, shipmentInScope, shipmentBoxes, shipmentReturnState, shipmentsOfBox, shippedLotsOf } from "./returns-shipments";
 import { fmtFriendly } from "@/lib/units";
+import { plural } from "@/lib/plural";
 
 /**
  * Customer returns received by scan into quarantine (US-4-16, process maps W09-11 and W07-09).
@@ -488,7 +489,7 @@ export async function postCustomerReturn(ctx: AuthContext, input: { returnId: st
           kind: "sales.customer_return.posted",
           severity: "warning",
           title: `Returned goods to check (${r.returnNumber})`,
-          body: `${posted.length} returned lot(s) from ${s.customerName} wait for the QA check: ${posted.map((p) => p.returnLotNumber).join(", ")}.`,
+          body: `${plural(posted.length, "returned lot")} from ${s.customerName} ${posted.length === 1 ? "waits" : "wait"} for the QA check: ${posted.map((p) => p.returnLotNumber).join(", ")}.`,
           entityType: "customer_return",
           entityId: r.id,
           link: `/sales/returns/${r.id}`,
@@ -513,7 +514,7 @@ export async function markReturnInspected(ctx: AuthContext, input: { returnId: s
       .where(eq(customerReturnLines.customerReturnId, r.id));
     if (r.status === "received") {
       const waiting = lines.filter((l) => l.status === "quarantine");
-      if (waiting.length || !lines.length) throw new DomainError("state", `QA has not decided returned lot(s) ${waiting.map((l) => l.lotNumber).join(", ")} yet.`);
+      if (waiting.length || !lines.length) throw new DomainError("state", `QA has not decided the returned ${waiting.length === 1 ? "lot" : "lots"} ${waiting.map((l) => l.lotNumber).join(", ")} yet.`);
     }
     await move(tx, ctx, r, "inspected", null, { inspectedBy: ctx.userId, inspectedAt: new Date() });
     await audit(tx, ctx, { action: "sales.customer_return.inspected", entityType: "customer_return", entityId: r.id, entityNumber: r.returnNumber, siteId: r.siteId, after: { lots: lines } });

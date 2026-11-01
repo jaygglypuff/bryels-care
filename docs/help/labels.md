@@ -12,7 +12,7 @@ You print a label where you do the work. There is no label desk to go to.
 
 - **Sack label**: print it on the delivery (**Print labels**). Stick one on each sack, drum or tub that came in. It is scanned at put-away and when you take the sack for a batch.
 - **Product label**: print it on the batch's packaging step. Stick one on each bar or jar. It is scanned at boxing or on the Scan screen.
-- **Box label**: print it on the box (**Print box label**). Stick it on the side of the box. It is scanned when you move, pick or ship the box.
+- **Box label**: printed at boxing. **Pack box and print label** opens the label at once; **Print N labels** on the boxing screen prints the boxes that have none yet. A lost one: open the box, **Print box label**, say why. Stick it on the side of the box. It is scanned when you move, pick or ship the box.
 - **Shelf label**: print it on the shelf (**⋯ More › Print a label**). Stick it on the front edge of the shelf. It is scanned at put-away to say where the stock goes.
 - **Lot label again**: print it on the lot (**⋯ More › Print a label**) when a label is lost, or when the QA status changed.
 
@@ -50,3 +50,7 @@ To keep a copy as a file, pick **Save as PDF** in the print window. The PDF look
 - "Label printing is not set up": ask the administrator (**Settings › Labels and printouts**).
 - "No label is approved for this yet": ask QA. QA must say OK to a label before it can print.
 - The label is cut off or too small: in the print window choose **Actual size** and the label paper size.
+
+## Old label layout
+
+If the print screen says **Old label layout — QA can approve the new one in Management › Rules and settings › Labels and printouts**, the label still uses the first layout. It prints and scans as before; QA can approve a new version of the label with the new layout (name biggest, everything inside the label).

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PlaceName } from "@/ui/inventory/place-name";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -76,7 +77,7 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
         actions={
           <MoreMenu>
             <div className="flex flex-col gap-2">
-              <LinkButton href={`/sales/shipments/${s.id}`} variant="secondary">Open the shipment</LinkButton>
+              <LinkButton href={`/sales/shipments/${s.id}`} variant="secondary">Open the delivery</LinkButton>
               <Help screen="sales.fulfilment" />
             </div>
           </MoreMenu>
@@ -125,7 +126,7 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
                   <span className="min-w-0">
                     <span className="block text-[15px] font-semibold">{p.boxNumber ? <>Box <span className="font-mono">{p.boxNumber}</span></> : <>Loose pieces, lot <span className="font-mono">{p.lotNumber}</span></>}</span>
                     <span className="block text-[12px] text-muted">
-                      shelf {p.locationCode} · taken by {p.pickedByName}
+                      <PlaceName name={p.locationName} code={p.locationCode} /> · taken by {p.pickedByName}
                     </span>
                   </span>
                   <span className={p.verified ? "text-[15px] font-semibold text-[var(--ok-fg)]" : "text-[15px] text-fg-2"}>
@@ -151,7 +152,7 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
                   </span>
                 </div>
                 <p className="text-[13px] text-fg-2">
-                  Taken off the shelf {q(l.picked)} · sent before {q(l.shippedBefore)} · still to send after this {q(l.remaining)} <span className="font-mono text-[12px] text-muted">· {l.sku}</span>
+                  Taken off the shelf: {q(l.picked)} · Sent before: {q(l.shippedBefore)} · Still to send: {q(l.remaining)} <span className="font-mono text-[12px] text-muted">· {l.sku}</span>
                 </p>
               </li>
             ))}
@@ -235,7 +236,7 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
           </Card>
         )}
 
-        <MoreDetails title={`Boxes on this shipment and scans (${v.lines.length})`}>
+        <MoreDetails title={`Boxes on this delivery and scans (${v.lines.length})`}>
           {v.lines.length === 0 ? (
             <p className="text-[13px] text-muted">No checked boxes yet.</p>
           ) : (

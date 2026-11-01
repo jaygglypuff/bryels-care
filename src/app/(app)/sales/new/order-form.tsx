@@ -197,7 +197,7 @@ export function NewOrderForm({
                 required
                 placeholder="Choose the customer…"
                 searchLabel="Type part of the customer's name"
-                options={customers.map((c) => ({ value: c.id, label: c.name, also: `${c.code} ${c.shipToAddress}` }))}
+                options={customers.map((c) => ({ value: c.id, label: c.name, also: `${c.code} ${c.shipToAddress ?? ""}`, detail: c.shipToAddress ?? undefined }))}
                 onChange={(v) => {
                   setCustomerId(v);
                   setShipToId("");

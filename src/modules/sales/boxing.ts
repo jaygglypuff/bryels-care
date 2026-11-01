@@ -52,6 +52,7 @@ import {
 import { approvedLabelTemplatesFor, createLabelJob, generateForSource, resolveTemplateVersion, voidLabelsForEntityInTx, type BoxingNoteData } from "@/modules/documents";
 import { customerFulfilmentRequirements } from "./fulfilment-requirements";
 import { isUuid, packMachine } from "./fulfilment-state";
+import { plural } from "@/lib/plural";
 
 /**
  * Boxing (US-4-07, W08) and customer repack (US-4-08, W08-07). A pack is one boxing session:
@@ -410,10 +411,10 @@ export async function approvePack(ctx: AuthContext, packId: string) {
     for (const s of scans) if (s.containerId && s.result !== "duplicate") last.set(s.containerId, s.result);
     const okBoxes = boxes.filter((b) => last.get(b.containerId) === "ok");
     const mismatch = boxes.filter((b) => last.get(b.containerId) === "label_mismatch");
-    if (mismatch.length) throw new DomainError("conflict", `${mismatch.length} box label(s) were marked wrong. Reprint them and scan those boxes again.`, { code: "LABEL_MISMATCH" });
+    if (mismatch.length) throw new DomainError("conflict", `${plural(mismatch.length, "box label")} ${mismatch.length === 1 ? "was" : "were"} marked wrong. Reprint them and scan those boxes again.`, { code: "LABEL_MISMATCH" });
     const required = p.verificationMode === "all" ? boxes.length : Math.min(p.verificationSampleSize ?? 1, boxes.length);
     if (okBoxes.length < required) {
-      throw new DomainError("conflict", `Scan ${required - okBoxes.length} more box(es): ${p.verificationMode === "all" ? "every box is checked for the first pack of this SKU" : `the sample is ${required} box(es)`} (A-PROC-38).`, { code: "SAMPLE_INCOMPLETE" });
+      throw new DomainError("conflict", `Scan ${plural(required - okBoxes.length, "more box", "more boxes")}: ${p.verificationMode === "all" ? "every box is checked the first time this product is boxed" : `the sample is ${plural(required, "box", "boxes")}`}.`, { code: "SAMPLE_INCOMPLETE" });
     }
     packMachine.assert(p.status, "verified", `Pack ${p.packNumber}`);
     await tx.update(packs).set({ status: "verified", checkedBy: ctx.userId, verifiedAt: new Date(), updatedAt: new Date() }).where(eq(packs.id, p.id));
@@ -442,7 +443,7 @@ export async function cancelPack(ctx: AuthContext, packId: string, reason: strin
     const p = await lockPack(tx, ctx, packId);
     packMachine.assert(p.status, "cancelled", `Pack ${p.packNumber}`);
     const [left] = await tx.select({ n: sql<number>`count(*)::int` }).from(packBoxes).where(and(eq(packBoxes.packId, p.id), eq(packBoxes.status, "packed")));
-    if (p.sourceKind !== "sales_order" && left.n > 0) throw new DomainError("state", `Pack ${p.packNumber} still has ${left.n} box(es). Remove them first.`);
+    if (p.sourceKind !== "sales_order" && left.n > 0) throw new DomainError("state", `Pack ${p.packNumber} still has ${plural(left.n, "box", "boxes")}. Remove them first.`);
     await tx.update(packs).set({ status: "cancelled", cancelledAt: new Date(), cancelledBy: ctx.userId, cancelReason: r, updatedAt: new Date() }).where(eq(packs.id, p.id));
     await audit(tx, ctx, { action: "inventory.pack.cancelled", entityType: "pack", entityId: p.id, entityNumber: p.packNumber, siteId: p.siteId, reason: r });
     return { ok: true };
@@ -827,7 +828,7 @@ export async function getPack(ctx: AuthContext, packId: string) {
   ctx.require("inventory.pack.view");
   const p = await getPackRow(ctx, packId);
   const [info] = await db
-    .select({ packer: users.displayName, sku: products.skuCode, productName: products.name, lotNumber: inventoryLots.lotNumber, lotStatus: inventoryLots.qualityStatus, expiresOn: inventoryLots.expiresOn, baseUom: inventoryLots.baseUom, locationCode: locations.code })
+    .select({ packer: users.displayName, sku: products.skuCode, productName: products.name, lotNumber: inventoryLots.lotNumber, lotStatus: inventoryLots.qualityStatus, expiresOn: inventoryLots.expiresOn, baseUom: inventoryLots.baseUom, locationCode: locations.code, locationName: locations.name })
     .from(packs)
     .innerJoin(users, eq(users.id, packs.packedBy))
     .innerJoin(products, eq(products.id, packs.productId))
@@ -862,7 +863,7 @@ export async function getPack(ctx: AuthContext, packId: string) {
     documents: docs,
     checkedCount: boxes.filter((b) => b.b.status === "packed" && okIds.has(b.b.containerId)).length,
     required: p.verificationMode === "all" ? boxes.filter((b) => b.b.status === "packed").length : Math.min(p.verificationSampleSize ?? 1, boxes.filter((b) => b.b.status === "packed").length),
-    labelTemplate: tpl ? { id: tpl.id, code: tpl.code } : null,
+    labelTemplate: tpl ? { id: tpl.id, code: tpl.code, name: tpl.name, widthMm: Number(tpl.mediaWidthMm), heightMm: Number(tpl.mediaHeightMm) } : null,
     isPacker: ctx.sodConflict(p.packedBy),
   };
 }

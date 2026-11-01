@@ -36,6 +36,7 @@ import { approvalProgress, canDecide, decisionsOf, recordDecision } from "./appr
 import { assertAslApproved, moqShortfall, priceFor } from "./asl";
 import { PO_STATUS_LABEL, type PoStatus, logCreation, transitionPo, transitionPr } from "./state";
 import { addDaysIso, assertInScope, businessDate, canSeePrices, cleanText, idempotent, isUuid, money4, optDate, optDecimal, parseDecimal, requireReason, toBase } from "./shared";
+import { plural } from "@/lib/plural";
 
 /**
  * Purchase orders (US-6-02, US-6-03; docs/data-model.md §6.4, W04-04..09).
@@ -290,7 +291,7 @@ export async function submitPurchaseOrder(ctx: AuthContext, input: { purchaseOrd
     await audit(tx, ctx, { action: "procurement.purchase_order.submitted", entityType: "purchase_order", entityId: po.id, entityNumber: po.poNumber, siteId: po.siteId, after: { status: "submitted", total: po.totalAmount } });
     const progress = await approvalProgress(tx, ctx.organizationId, { recordType: "purchase_order", recordId: po.id, siteId: po.siteId, basis: basisOf(po) });
     const roles = progress.next?.roleCodes.length ? progress.next.roleCodes : ["site_manager"];
-    await notifyRoles(tx, { roleCodes: roles, siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_submitted", severity: "info", title: `Purchase order ${po.poNumber} waits for approval`, body: `${progress.steps.length} approval step(s) to go.`, entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
+    await notifyRoles(tx, { roleCodes: roles, siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_submitted", severity: "info", title: `Purchase order ${po.poNumber} waits for approval`, body: `${plural(progress.steps.length, "approval step")} to go.`, entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
     return { purchaseOrderId: po.id, status: "submitted" as const, steps: progress.steps.length };
   });
 }

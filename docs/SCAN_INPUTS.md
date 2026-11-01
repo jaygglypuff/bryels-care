@@ -47,7 +47,7 @@ candidates on the phone; **one → hidden** = a single candidate is chosen and s
 | `/inventory/containers` | Search | filter | Search box "Box or lot number" | unchanged: list filter, not a field that identifies one thing | n/a |
 | `/inventory/availability`, stock search | Search | filter | Words or number | unchanged: list filter | n/a |
 | `/inventory/scan` (Scan or search) | Scanner | anything | "Scan a label or type a number"; camera fallback "Type the lot number" | the universal look-up page: "Scan the label, or type what it is" (e.g. coconut oil); camera fallback offers the handheld scanner or a name; help says where each label is stuck | ✓ |
-| `/inventory/receive` | Supplier's lot number, receiving place | supplier's own code (external) | Text from the supplier's label; destination shown as codes | supplier's lot stays typed (it exists only on their label; QA traces with it, A-SCAN-14); destination and "put it in" shown by shelf name | n/a |
+| `/inventory/receive` | Supplier's lot number, receiving place | supplier's own code (external) | Text from the supplier's label; destination shown as codes | supplier's lot stays typed (it exists only on their label; QA traces with it, A-SCAN-14); required for ingredients only, optional for packaging and supplies, hint "From the supplier's label" (re-audit B); destination and "put it in" shown by shelf name, code after | n/a |
 | `/inventory/movements/[id]` reverse | Replacement from/to | shelf | Drop-downs (manager correction) | unchanged (rare manager form, pick list by name) | n/a |
 | `/warehouse/packs/[packId]` Add a box | Which lot are you boxing? | the pack's lot (check) | Text box "Scan the lot label" | tap or scan the one expected lot (V-MAT check kept on the server) | ✓ |
 | `/warehouse/packs/[packId]` Checker | Scan each box label | box (verification) | Scanner with typing | scan only (camera + handheld); no typing, no tap: the scan is the check | ✓ |
@@ -131,3 +131,12 @@ Server: `findPickCandidates(ctx, kind, text)` and `resolvePickRef(ctx, kind, raw
 (through `src/app/(app)/scan-pick-actions.ts`). Pure rules: `src/lib/scan/pick.ts` (`classifyPickInput`,
 `matchCandidate`, `filterCandidates`, `isScannerBurst`, messages). Lot candidates carry `places` (the shelves that
 hold the lot at the current site) and `uom`, so a "which shelf?" field can follow without another call.
+
+## Re-audit B (2026-11-01)
+
+| Screen | Change |
+|---|---|
+| Scan › typed words | Lots in the finder order (`lotUseOrder` in `src/modules/scan/pick.ts`): with stock, usable, then waiting for QA, then expired / stopped / rejected / recalled marked "do not use"; each says its shelf by name |
+| Boxes and sacks list | Search takes a scanned label (`BC:BOX:` / `BC:LOT:`), the item name or the shelf name ("Scan the label, or type what is inside"); no typed code needed |
+| Shelf page | ⋯ More › Print a label (the label guide pointed there) |
+| Boxing | Pack box and print label opens `/print/labels/pack/<id>` (print in place); no "print station" |
