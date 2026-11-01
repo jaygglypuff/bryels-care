@@ -5,6 +5,7 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import type { Permission } from "@/lib/permissions";
 import { D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
+import { batchMaterialChanges, lastPauses } from "@/modules/production";
 import {
   type BatchExecution,
   type BatchFlowFacts,
@@ -202,6 +203,9 @@ export default async function BatchRecordPage({ params }: Params) {
     throw e;
   }
   const { batch, product, snapshot } = rec;
+  // ADR-104 §1 / ADR-106 §3: lot changes and ingredient swaps in words; ADR-104 §5 the last "Stop for today".
+  const materialChanges = await batchMaterialChanges(db, batch.id);
+  const pause = (await lastPauses(db, [batch.id])).get(batch.id) ?? null;
   const total = ex.steps.length;
   const site = ctx.allowedSites.find((s) => s.id === batch.siteId);
   const next = nextBatchScreen(facts, new Date(), ex.steps);
@@ -447,6 +451,23 @@ export default async function BatchRecordPage({ params }: Params) {
         </div>
       </div>
 
+      {(materialChanges.length > 0 || pause) && (
+        <Card>
+          <CardTitle>Changes to what was used</CardTitle>
+          <ul className="grid gap-2 text-[15px]" data-testid="material-changes">
+            {materialChanges.map((c) => (
+              <li key={c.id}>{c.sentence}</li>
+            ))}
+            {pause && (
+              <li data-testid="batch-pause">
+                Stopped for the day at {pause.whereStopped}
+                {pause.note ? ` — ${pause.note}` : ""}, by {pause.by}, {fmtDateTime(pause.at)}
+              </li>
+            )}
+          </ul>
+        </Card>
+      )}
+
       {rec.ingredients.some((i) => i.records.length) && (
         <Card className="hidden md:block">
           <CardTitle>Weigh out records</CardTitle>
@@ -483,7 +504,11 @@ function WeighingList({ ex }: { ex: BatchExecution }) {
       {ex.ingredients.map((ing) => (
         <li key={ing.id} className="rounded-[12px] border border-line bg-surface-2/40 p-3 text-[13px]" data-testid={`ingredient-${ing.lineNo}`}>
           <p className="font-medium text-fg">
-            {ing.materialName} <span className="text-muted">· target {fmtQty(ing.theoreticalQtyG, "g", 1)} · {D(ing.dispensedQtyG).gt(0) ? `weighed ${fmtQty(ing.dispensedQtyG, "g", 1)}` : "not weighed yet"}</span>
+            <span className={ing.status === "substituted" ? "text-muted line-through" : undefined}>{ing.materialName}</span>{" "}
+            <span className="text-muted">
+              · target {fmtQty(ing.theoreticalQtyG, "g", 1)} ·{" "}
+              {ing.status === "substituted" ? "replaced for this batch (see Changes to what was used)" : D(ing.dispensedQtyG).gt(0) ? `weighed ${fmtQty(ing.dispensedQtyG, "g", 1)}` : "not weighed yet"}
+            </span>
           </p>
           {ing.weighings.map((w) => (
             <p key={w.id} className={w.voided ? "text-muted line-through" : "text-fg-2"}>

@@ -24,7 +24,7 @@ export type FinishFormProps = {
   unitNetMassG: string;
   theoreticalYieldG: string | null;
   limits: { min: number; max: number };
-  log: { entries: number; days: number; good: string; rejects: { type: string; qty: string }[] };
+  log: { entries: number; days: number; good: string; rejects: { type: string; qty: string }[]; packedSentence?: string | null };
   existingScrap: { qty: string; note: string | null }[];
   defectTypes: string[];
   samples: number;
@@ -140,6 +140,12 @@ export function FinishForm(p: FinishFormProps) {
         <h2 id="fin-counts" className="text-[16px] font-semibold">
           What was made
         </h2>
+        {p.log.packedSentence && p.log.days > 1 && (
+          // ADR-104 §5: pieces packed per day add up before the final count.
+          <p className="mt-2 text-[16px] font-semibold tabular" data-testid="packed-over-days">
+            {p.log.packedSentence}
+          </p>
+        )}
         {fromLog && !change ? (
           <ul className="mt-2 space-y-1 text-[15px]">
             <li>

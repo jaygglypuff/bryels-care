@@ -28,6 +28,9 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   { kind: "approval.batch_disposition", tab: "approvals", label: "Batch waiting for the QA check", severity: "warning", permission: "quality.disposition.approve", actionLabel: "Check the batch" },
   { kind: "approval.inspection_review", tab: "approvals", label: "Quality check to confirm", severity: "warning", permission: "quality.inspection.approve", actionLabel: "Open the quality check" },
   { kind: "approval.conditional_release", tab: "approvals", label: "“OK with conditions” to confirm", severity: "warning", permission: "quality.conditional_release.approve", actionLabel: "Open the batch" },
+  // ADR-104 §1b / §3: QA-only decisions (no owner override, no self-approval; gates in wiring.ts).
+  { kind: "approval.material_substitution", tab: "approvals", label: "Another ingredient to approve (QA)", severity: "warning", permission: "production.material_substitution.approve", actionLabel: "Decide" },
+  { kind: "approval.result_correction", tab: "approvals", label: "Corrected QA result to approve", severity: "warning", permission: "quality.disposition.approve", actionLabel: "Open the quality check" },
   { kind: "approval.batch_reopen", tab: "approvals", label: "Reopening a batch to approve", severity: "warning", permission: "quality.disposition.approve", actionLabel: "Open the batch" },
   { kind: "approval.equipment_override", tab: "approvals", label: "Machine use to approve", severity: "warning", permission: "production.equipment_override.approve", actionLabel: "Open the machine" },
   { kind: "approval.setting_change", tab: "approvals", label: "Setting change to approve", severity: "info", permission: "platform.settings.approve", actionLabel: "Open the setting" },

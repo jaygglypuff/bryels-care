@@ -221,10 +221,18 @@ export const workOrderStateTransitions = pgTable(
 );
 
 /**
- * Controlled exception CX-MAT (docs/permissions-matrix.md §5.3): qa_qc lets staging use another
- * released lot of the SAME material instead of the reserved one. Records both lots and the reason;
- * a different material is never allowed. Append-only.
+ * Changes of what a batch line uses (append-only, src/db/sql/adr104.sql):
+ * - `qa_lot` (CX-MAT, docs/permissions-matrix.md §5.3): qa_qc lets staging use another released lot of the
+ *   SAME material instead of the reserved one;
+ * - `floor_lot` (ADR-104 §1a): the operator takes another released lot of the same ingredient at the weigh
+ *   card, with a one-tap reason when it is not the first to expire (`reason_code`);
+ * - `alternative` (ADR-104 §1b): the recipe's approved alternative for the line (bom_line_alternatives);
+ * - `approved_other` (ADR-104 §1b): another ingredient asked for on the floor and approved by QA
+ *   (material_substitution_requests). The line is swapped for this batch only (`new_batch_material_id`).
+ * `approved_by` is the person who made the change (operator for floor_lot/alternative, QA otherwise).
  */
+export const BATCH_MATERIAL_SUBSTITUTION_KINDS = ["qa_lot", "floor_lot", "alternative", "approved_other"] as const;
+export type BatchMaterialSubstitutionKind = (typeof BATCH_MATERIAL_SUBSTITUTION_KINDS)[number];
 export const batchMaterialSubstitutions = pgTable(
   "batch_material_substitutions",
   {
@@ -233,19 +241,35 @@ export const batchMaterialSubstitutions = pgTable(
     siteId: uuid("site_id").notNull().references(() => sites.id),
     batchId: uuid("batch_id").notNull().references((): AnyPgColumn => batches.id),
     batchMaterialId: uuid("batch_material_id").notNull().references((): AnyPgColumn => batchMaterials.id),
-    workOrderId: uuid("work_order_id").notNull().references(() => workOrders.id),
+    /** Null for a batch made without a production order (ADR-104). */
+    workOrderId: uuid("work_order_id").references(() => workOrders.id),
     materialId: uuid("material_id").notNull().references(() => materials.id),
     expectedLotId: uuid("expected_lot_id").references(() => inventoryLots.id),
-    substituteLotId: uuid("substitute_lot_id").notNull().references(() => inventoryLots.id),
-    substituteLocationId: uuid("substitute_location_id").notNull().references(() => locations.id),
+    /** Required for lot changes; for an ingredient swap the lot set aside for the new ingredient, if any. */
+    substituteLotId: uuid("substitute_lot_id").references(() => inventoryLots.id),
+    substituteLocationId: uuid("substitute_location_id").references(() => locations.id),
     qtyBase: numeric("qty_base", QTY).notNull(),
     reason: text("reason").notNull(),
     newReservationId: uuid("new_reservation_id").references(() => stockReservations.id),
     approvedBy: uuid("approved_by").notNull().references(() => users.id),
     approvedAt: timestamp("approved_at", { withTimezone: true }).notNull().defaultNow(),
+    // ADR-104 §1
+    kind: text("kind").notNull().default("qa_lot"),
+    /** floor_lot: used_up | damaged | cant_reach | other | first_to_expire (A-FD-01, configuration for QA review). */
+    reasonCode: text("reason_code"),
+    /** alternative / approved_other: the ingredient used instead, and the new batch line. */
+    substituteMaterialId: uuid("substitute_material_id").references(() => materials.id),
+    newBatchMaterialId: uuid("new_batch_material_id").references((): AnyPgColumn => batchMaterials.id),
+    requestId: uuid("request_id"),
+    requestedBy: uuid("requested_by").references(() => users.id),
+    idempotencyKey: text("idempotency_key"),
   },
   (t) => [
     index("batch_material_substitutions_batch_idx").on(t.batchId),
+    uniqueIndex("batch_material_substitutions_idem_uq").on(t.organizationId, t.idempotencyKey).where(sql`${t.idempotencyKey} is not null`),
+    check("ck_batch_material_substitutions_kind", sql`${t.kind} in (${inList(BATCH_MATERIAL_SUBSTITUTION_KINDS)})`),
+    check("ck_batch_material_substitutions_lot_kinds", sql`${t.kind} not in ('qa_lot', 'floor_lot') or (${t.substituteLotId} is not null and ${t.substituteLocationId} is not null)`),
+    check("ck_batch_material_substitutions_swap", sql`${t.kind} not in ('alternative', 'approved_other') or (${t.substituteMaterialId} is not null and ${t.newBatchMaterialId} is not null)`),
     check("ck_batch_material_substitutions_qty", sql`${t.qtyBase} > 0`),
     check("ck_batch_material_substitutions_lots", sql`${t.expectedLotId} is null or ${t.expectedLotId} <> ${t.substituteLotId}`),
     check("ck_batch_material_substitutions_reason", sql`length(btrim(${t.reason})) >= 5`),

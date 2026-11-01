@@ -108,6 +108,7 @@ function MakingCard({ c, wide }: { c: FloorMakingCard; wide: boolean }) {
     <article className={`flex min-h-0 flex-col justify-between overflow-hidden rounded-[0.8vw] border-[0.2vw] px-[1vw] py-[0.7vw] ${t.box}`}>
       <div className="flex items-baseline justify-between gap-[0.8vw]">
         <h3 className="truncate font-display text-[2.3vw] font-bold leading-tight">{c.productName}</h3>
+        {c.dayLabel && <span className="shrink-0 rounded-full bg-[var(--surface-3)] px-[0.6vw] text-[1.2vw] font-semibold text-[var(--fg)]" data-testid="floor-day">{c.dayLabel}</span>}
         {wide && batch}
       </div>
       {c.wait ? (

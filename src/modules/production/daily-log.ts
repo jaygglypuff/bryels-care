@@ -407,7 +407,7 @@ export type DefectSummary = Awaited<ReturnType<typeof defectSummary>>;
  * callers (Finish view and command) already checked access to the batch.
  */
 export async function batchLogCounts(q: Tx | typeof db, batch: { id: string; workOrderId: string | null }) {
-  const empty = { entries: 0, days: 0, good: new Decimal(0), rejects: [] as { type: string; qty: Decimal }[] };
+  const empty = { entries: 0, days: 0, good: new Decimal(0), rejects: [] as { type: string; qty: Decimal }[], byDay: [] as { date: string; good: Decimal }[] };
   if (!batch.workOrderId) return empty;
   const live = await q
     .select({ id: batches.id })
@@ -432,7 +432,11 @@ export async function batchLogCounts(q: Tx | typeof db, batch: { id: string; wor
     .where(inArray(productionDefectEntries.dailyLogId, rows.map((r) => r.id)));
   const byType = new Map<string, Decimal>();
   for (const d of defects) byType.set(d.type, (byType.get(d.type) ?? new Decimal(0)).plus(d.qty));
+  // ADR-104 §5: pieces packed per day (oldest first), for "Packed over 3 days: 400 + 350 + 250 = 1,000" at Finish.
+  const perDay = new Map<string, Decimal>();
+  for (const r of rows) perDay.set(r.logDate, (perDay.get(r.logDate) ?? new Decimal(0)).plus(r.good));
   return {
+    byDay: [...perDay.entries()].sort(([a], [z]) => a.localeCompare(z)).map(([date, good]) => ({ date, good })),
     entries: rows.length,
     days: new Set(rows.map((r) => r.logDate)).size,
     good: rows.reduce((s, r) => s.plus(r.good), new Decimal(0)),

@@ -70,6 +70,8 @@ export type RecipeLineDraft = {
   phaseCode: string | null;
   scaling: "proportional" | "fixed";
   isCritical: boolean;
+  /** ADR-104 §1b: approved alternatives of the line, kept as they were (edited in the advanced line editor). */
+  alternatives?: { materialId: string; ratio: string; notes: string | null }[];
 };
 
 /** Grams of one line for a batch size (exact). Empty or invalid amounts count as 0. */
@@ -133,12 +135,13 @@ export function toBomLineInputs(batchG: Num, lines: RecipeLineDraft[]) {
     scaling: l.scaling,
     isCritical: l.isCritical,
     requiresChecker: l.needsCheck,
+    ...(l.alternatives?.length ? { alternatives: l.alternatives.map((a) => ({ materialId: a.materialId, ratio: a.ratio, notes: a.notes })) } : {}),
   }));
 }
 
 /** Stored bom lines → wizard lines, typed in grams. */
 export function fromBomLines(
-  rows: { materialId: string; quantityG: string; tolerancePct: string | null; toleranceAbsG: string | null; phaseCode: string | null; scaling: string; isCritical: boolean; requiresChecker: boolean }[],
+  rows: { materialId: string; quantityG: string; tolerancePct: string | null; toleranceAbsG: string | null; phaseCode: string | null; scaling: string; isCritical: boolean; requiresChecker: boolean; alternatives?: { materialId: string; ratio: string; notes: string | null }[] }[],
 ): RecipeLineDraft[] {
   return rows.map((r) => ({
     materialId: r.materialId,
@@ -150,6 +153,7 @@ export function fromBomLines(
     phaseCode: r.phaseCode,
     scaling: r.scaling === "fixed" ? "fixed" : "proportional",
     isCritical: r.isCritical,
+    ...(r.alternatives?.length ? { alternatives: r.alternatives.map((a) => ({ materialId: a.materialId, ratio: plain(a.ratio), notes: a.notes })) } : {}),
   }));
 }
 

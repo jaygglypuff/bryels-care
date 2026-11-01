@@ -11,6 +11,9 @@ import { Keypad, KeypadField } from "@/ui/keypad";
 import { ScanOrPick } from "@/ui/scan-or-pick";
 import { Chip } from "@/ui/status";
 import {
+  askOtherMaterialAction,
+  takeAlternativeAction,
+  withdrawAskAction,
   checkWeighingAction,
   checkWeighingOwnAction,
   returnWeighingAction,
@@ -55,6 +58,9 @@ export function WeighFlow(p: {
   moreHref: string;
   /** The signed-in person: may they confirm a weighing in their own name (own phone)? */
   viewer: { userId: string; displayName: string; canCheck: boolean };
+  /** ADR-104/106: one-tap reasons for another lot, and the ingredients that may be asked for by name. */
+  reasons: { code: string; label: string }[];
+  substitutes: { id: string; name: string; baseUom: string }[];
 }) {
   const firstOpen = Math.max(
     0,
@@ -141,8 +147,13 @@ export function WeighFlow(p: {
               />
               {card.materialName}: {g(card.weighed)} weighed.
             </p>
+          ) : card.waitingForQa ? (
+            <WaitingForQa batchId={p.batchId} card={card} />
           ) : (
-            <WeighCard key={card.batchMaterialId} {...p} card={card} />
+            <>
+              <WeighCard key={card.batchMaterialId} {...p} card={card} />
+              <OtherIngredient key={`other-${card.batchMaterialId}`} batchId={p.batchId} card={card} substitutes={p.substitutes} />
+            </>
           )
         ) : null}
       </div>
@@ -162,23 +173,35 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
   const [typeLast4, setTypeLast4] = useState(false);
   const [scanNote, setScanNote] = useState<string | null>(null);
   const [active, setActive] = useState<"lot" | "qty">("qty");
+  // ADR-106 §3 one way to pick: the lots taken at Get materials first; other allowed lots only under "Use another lot".
+  const [showOthers, setShowOthers] = useState(false);
+  const [reason, setReason] = useState("");
+  const [reasonNote, setReasonNote] = useState("");
+  const pickable = [
+    ...card.lots.map((l) => ({ lotId: l.lotId, lotNumber: l.lotNumber, locationId: l.locationId, place: l.locationName || l.locationCode, expiresOn: l.expiresOn, qty: l.qty, offPlan: false })),
+    ...card.otherLots.map((o) => ({ lotId: o.lotId, lotNumber: o.lotNumber, locationId: o.locationId, place: o.locationName || o.locationCode, expiresOn: o.expiresOn, qty: o.free, offPlan: true, useFirst: o.useFirst })),
+  ];
+  const takenNumbers = [...new Set(card.lots.map((l) => l.lotNumber))];
   const onScan = (raw: string) => {
     const code = raw.trim().toUpperCase().replace(/^BC:LOT:/, "");
     const alnum = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
-    const i = card.lots.findIndex((l) => alnum(l.lotNumber) === alnum(code));
+    const i = pickable.findIndex((l) => alnum(l.lotNumber) === alnum(code));
     if (i >= 0) {
       setLotIdx(i);
-      setLotCode(`BC:LOT:${card.lots[i].lotNumber}`);
+      setLotCode(`BC:LOT:${pickable[i].lotNumber}`);
       setScanNote(null);
+      if (pickable[i].offPlan) setShowOthers(true);
     } else {
       setLotCode("");
-      setScanNote(`This label says ${code}. Take a lot from the list for ${card.materialName}.`);
+      setScanNote(`This label says ${code}. It is not a lot of ${card.materialName} you may use (expired, stopped, waiting for QA or another ingredient). For another ingredient use "Ask to use something else".`);
     }
   };
   const [scale, setScale] = useState(
     p.scales.find((s) => s.usable)?.code ?? "",
   );
-  const lot = card.lots[lotIdx];
+  const lot = pickable[lotIdx];
+  const offPlan = !!lot?.offPlan;
+  const reasonOk = !offPlan || (!!reason && (reason !== "other" || reasonNote.trim().length >= 3));
   const fe = state?.fieldErrors ?? {};
   const entered = /^\d+(\.\d{1,3})?$/.test(qty) ? new Decimal(qty) : null;
   const total = entered ? entered.plus(card.weighed) : null;
@@ -200,6 +223,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
     !!entered &&
     lotOk &&
     tol?.kind === "ok" &&
+    reasonOk &&
     (!p.requiresScale || !!scale);
   // Owner's screenshots 2026-11-01: a pale, disabled Save says why, right above it (one reason, the first missing thing).
   const whyNot = !p.canWeigh
@@ -210,7 +234,9 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
         ? p.lotConfirm === "last4" && typeLast4
           ? "Type the last 4 characters of the lot first."
           : "Scan the lot label first."
-        : !entered
+        : !reasonOk
+          ? "Tap why you use another lot first."
+          : !entered
           ? "Type the weight first."
           : p.requiresScale && !scale
             ? "Choose the scale under More details first."
@@ -231,33 +257,41 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
         {g(card.target)}
       </p>
       <p className="mt-1 text-[16px] text-muted">
-        OK from {g(card.min)} to {g(card.max)}
+        OK from {g(card.minShown)} to {g(card.maxShown)}
         {new Decimal(card.weighed).gt(0) ? ` · already ${g(card.weighed)}` : ""}
       </p>
+      {card.insteadOf && (
+        <p className="mt-2 rounded-[12px] bg-[var(--info-bg,#eef4ff)] p-2 text-[14px]" data-testid="instead-of">Instead of {card.insteadOf.materialName} (for this batch only).</p>
+      )}
+      {card.proposal && (
+        <p className="mt-2 text-[15px] text-fg-2" data-testid="weigh-proposal">
+          As taken at Get materials: weigh {card.proposal}.
+        </p>
+      )}
       {lot ? (
-        <div className="mt-3 rounded-[14px] bg-surface-2 p-3 text-[16px]">
+        <div className={cx("mt-3 rounded-[14px] p-3 text-[16px]", offPlan ? "border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)]" : "bg-surface-2")} data-testid="weigh-lot">
           Lot{" "}
           <span className="font-mono text-[20px] font-bold">
             {lot.lotNumber}
           </span>{" "}
-          · {lot.locationName || lot.locationCode} ·{" "}
-          {lotIdx === 0 ? "use first" : "another lot"}
+          · {lot.place} · {offPlan ? "another lot" : lotIdx === 0 ? "use first" : "also taken"}
           {lot.expiresOn ? ` · expires ${fmtDate(lot.expiresOn)}` : ""}
-          {card.lots.length > 1 && p.lotConfirm === "none" && (
-            <label className="mt-2 block text-[14px] text-muted">
-              Use another lot
-              <Select
-                value={String(lotIdx)}
-                onChange={(e) => setLotIdx(Number(e.target.value))}
-                className="mt-1 min-h-[48px]"
-              >
-                {card.lots.map((l, i) => (
-                  <option key={`${l.lotId}-${l.locationId}`} value={i}>
-                    {l.locationName || l.locationCode} · {fmtMass(l.qty)} · lot {l.lotNumber}
-                  </option>
+          {offPlan && (
+            <div className="mt-2 grid gap-2" data-testid="off-plan">
+              <p className="text-[15px] font-semibold text-[var(--warn-fg)]">
+                This is not the lot you took at Get materials{takenNumbers.length ? ` (${takenNumbers.join(", ")})` : ""}. You can continue — QA will see a note.
+              </p>
+              <p className="text-[14px]">Why?</p>
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Why another lot">
+                {p.reasons.map((r) => (
+                  <button key={r.code} type="button" role="radio" aria-checked={reason === r.code} onClick={() => setReason(r.code)} className={cx("min-h-[48px] rounded-full border px-4 text-[15px]", reason === r.code ? "border-ring bg-primary-soft font-semibold" : "border-line bg-surface")}>
+                    {r.label}
+                  </button>
                 ))}
-              </Select>
-            </label>
+              </div>
+              {reason === "other" && <Input aria-label="Write the reason" value={reasonNote} onChange={(e) => setReasonNote(e.target.value)} placeholder="A few words" className="min-h-[48px]" />}
+              {fe.offPlanReasonCode && <p className="text-[14px] text-[var(--bad-fg)]">{fe.offPlanReasonCode}</p>}
+            </div>
           )}
         </div>
       ) : (
@@ -265,6 +299,13 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
           <AlertTriangle size={18} className="mr-1 inline" aria-hidden />
           No usable lot of {card.materialName} here. Ask QA or the storekeeper.
         </p>
+      )}
+      {card.lotChanges.length > 0 && (
+        <ul className="mt-2 grid gap-1 text-[13px] text-fg-2" data-testid="lot-changes">
+          {card.lotChanges.map((t) => (
+            <li key={t}>{t}</li>
+          ))}
+        </ul>
       )}
       <form
         ref={form}
@@ -278,6 +319,8 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
           value={card.batchMaterialId}
         />
         <input type="hidden" name="lotId" value={lot?.lotId ?? ""} />
+        {offPlan && <input type="hidden" name="offPlanReasonCode" value={reason} />}
+        {offPlan && reason === "other" && <input type="hidden" name="offPlanNote" value={reasonNote} />}
         <input type="hidden" name="locationId" value={lot?.locationId ?? ""} />
         <input type="hidden" name="qty" value={qty} />
         <input
@@ -290,7 +333,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
         )}
         <div className="grid gap-3">
           {p.lotConfirm === "last4" && <input type="hidden" name="lotConfirm" value={lotCode} />}
-          {p.lotConfirm !== "none" && (
+          {(
             <div className="grid gap-2" data-testid="lot-scan">
               {lotCode.startsWith("BC:LOT:") ? (
                 <p className="inline-flex items-center gap-2 text-[16px] font-semibold text-[var(--ok-fg)]">
@@ -299,19 +342,28 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
               ) : (
                 // ADR-098 ScanOrPick: the set-aside lots are listed, but the confirmation is a SCAN of the
                 // container's label (A-SCAN-11 "a tap is not a scan"; ADR-080 §3 lot confirmation).
-                <ScanOrPick
-                  key={`scan-${card.batchMaterialId}`}
-                  kind="lot"
-                  mode="emit"
-                  label="Scan the lot label on the container"
-                  hint="Camera or handheld scanner. The lot must be one set aside for this ingredient."
-                  candidatesLabel="Lots you may use"
-                  candidates={card.lots.map((l) => ({ value: l.lotId, title: card.materialName, detail: `lot ${l.lotNumber} · ${l.locationName || l.locationCode}`, code: l.lotNumber, codes: [l.lotNumber] }))}
-                  allowTap={false}
-                  onlyCandidates
-                  search={false}
-                  onEmit={(value, c) => onScan(c?.code ?? value)}
-                />
+                <>
+                  <ScanOrPick
+                    key={`scan-${card.batchMaterialId}-${showOthers ? "all" : "taken"}`}
+                    kind="lot"
+                    mode="emit"
+                    label="Scan the lot label on the container"
+                    hint="Camera or handheld scanner."
+                    candidatesLabel={showOthers ? "Taken at Get materials first, then other lots" : "Taken at Get materials"}
+                    candidates={pickable
+                      .filter((l) => showOthers || !l.offPlan)
+                      .map((l) => ({ value: l.lotId, title: card.materialName, detail: `lot ${l.lotNumber} · ${l.place}${l.expiresOn ? ` · expires ${fmtDate(l.expiresOn)}` : ""}`, code: l.lotNumber, codes: [l.lotNumber], badge: l.offPlan ? ("useFirst" in l && l.useFirst ? "another lot · use first" : "another lot") : "taken", badgeTone: l.offPlan ? ("warn" as const) : ("ok" as const) }))}
+                    allowTap={p.lotConfirm === "none"}
+                    onlyCandidates
+                    search={false}
+                    onEmit={(value, c) => onScan(c?.code ?? value)}
+                  />
+                  {!showOthers && card.otherLots.length > 0 && (
+                    <button type="button" className="min-h-[44px] text-left text-[15px] text-primary-text underline" onClick={() => setShowOthers(true)} data-testid="use-another-lot">
+                      Use another lot
+                    </button>
+                  )}
+                </>
               )}
               {scanNote && <p className="text-[14px] text-[var(--bad-fg)]">{scanNote}</p>}
               {fe.lotConfirm && <p className="text-[14px] text-[var(--bad-fg)]">{fe.lotConfirm}</p>}
@@ -643,6 +695,113 @@ function WeighSummary(p: Parameters<typeof WeighFlow>[0]) {
           <FormMessage state={state} />
         </form>
       ) : null}
+    </section>
+  );
+}
+
+/** ADR-104 §1b: the line waits for QA's yes to another ingredient ("Waiting for QA (Nina) to say yes"). */
+function WaitingForQa({ batchId, card }: { batchId: string; card: Card }) {
+  const w = card.waitingForQa!;
+  const [state, action] = useInPlaceAction(withdrawAskAction);
+  return (
+    <section className="rounded-[20px] border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)] p-4 sm:p-5" data-testid="waiting-for-qa">
+      <h2 className="text-[22px] font-semibold text-fg">{card.materialName}</h2>
+      <p className="mt-2 text-[18px] font-semibold">Waiting for QA{w.qaNames ? ` (${w.qaNames})` : ""} to say yes</p>
+      <p className="mt-1 text-[16px]">
+        {w.mine ? "You" : w.by} asked to use {fmtQty(w.qty, w.uom, 1)} of {w.substituteName} instead. Why: {w.reason}
+      </p>
+      <p className="mt-1 text-[15px] text-fg-2">Weigh the other ingredients meanwhile. This card opens again when QA decides.</p>
+      {w.mine && (
+        <form action={action} className="mt-3">
+          <input type="hidden" name="batchId" value={batchId} />
+          <input type="hidden" name="requestId" value={w.requestId} />
+          <SubmitButton variant="secondary" size="lg" pendingText="Taking back…">
+            Take the request back
+          </SubmitButton>
+          <FormMessage state={state} />
+        </form>
+      )}
+    </section>
+  );
+}
+
+const formKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now()));
+
+/** ADR-104 §1b: another ingredient — the recipe's approved alternative, or ask QA (never decided on the floor alone). */
+function OtherIngredient({ batchId, card, substitutes }: { batchId: string; card: Card; substitutes: { id: string; name: string; baseUom: string }[] }) {
+  const [altState, altAction] = useInPlaceAction(takeAlternativeAction);
+  const [askState, askAction] = useInPlaceAction(askOtherMaterialAction);
+  const [open, setOpen] = useState(false);
+  const [key] = useState(formKey);
+  if (!card.alternatives.length && !card.canAskOther && !card.refusedByQa) return null;
+  const fe = askState?.fieldErrors ?? {};
+  return (
+    <section className="mt-3 rounded-[20px] border border-line bg-surface p-4" data-testid="other-ingredient">
+      <h3 className="text-[17px] font-semibold">No {card.materialName}? Use another ingredient</h3>
+      {card.refusedByQa && (
+        <p className="mt-1 text-[14px] text-[var(--bad-fg)]">
+          QA said no to {card.refusedByQa.substituteName}
+          {card.refusedByQa.note ? `: ${card.refusedByQa.note}` : "."}
+        </p>
+      )}
+      {card.alternatives.length > 0 && (
+        <div className="mt-2 grid gap-2">
+          <p className="text-[14px] text-fg-2">The recipe allows:</p>
+          {card.alternatives.map((a) => (
+            <form key={a.id} action={altAction}>
+              <input type="hidden" name="batchId" value={batchId} />
+              <input type="hidden" name="batchMaterialId" value={card.batchMaterialId} />
+              <input type="hidden" name="alternativeId" value={a.id} />
+              <input type="hidden" name="idempotencyKey" value={`${key}-${a.id}`} />
+              <SubmitButton variant="secondary" size="lg" pendingText="Changing…" className="w-full justify-start">
+                Use the approved alternative: {a.materialName} ({fmtQty(a.qty, a.baseUom, 1)})
+              </SubmitButton>
+            </form>
+          ))}
+          <FormMessage state={altState} />
+        </div>
+      )}
+      {card.canAskOther && !open && (
+        <Button type="button" variant="secondary" size="lg" className="mt-2" onClick={() => setOpen(true)} data-testid="ask-other">
+          Ask to use something else
+        </Button>
+      )}
+      {card.canAskOther && open && (
+        <form action={askAction} className="mt-2 grid gap-2" data-testid="ask-other-form">
+          <input type="hidden" name="batchId" value={batchId} />
+          <input type="hidden" name="batchMaterialId" value={card.batchMaterialId} />
+          <input type="hidden" name="idempotencyKey" value={`${key}-ask`} />
+          <p className="text-[14px] text-fg-2">QA must say yes first. It is for this batch only.</p>
+          <label className="grid gap-1 text-[15px]">
+            What do you want to use?
+            <Select name="substituteMaterialId" defaultValue="" className="min-h-[48px]">
+              <option value="">Choose by name…</option>
+              {substitutes
+                .filter((m) => m.name !== card.materialName)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+            </Select>
+            {fe.substituteMaterialId && <span className="text-[13px] text-[var(--bad-fg)]">{fe.substituteMaterialId}</span>}
+          </label>
+          <label className="grid gap-1 text-[15px]">
+            How much ({card.baseUom})
+            <Input name="qty" inputMode="decimal" defaultValue={card.target} className="min-h-[48px]" />
+            {fe.qty && <span className="text-[13px] text-[var(--bad-fg)]">{fe.qty}</span>}
+          </label>
+          <label className="grid gap-1 text-[15px]">
+            Why
+            <Input name="reason" placeholder="For example: no coconut oil left at the site" className="min-h-[48px]" />
+            {fe.reason && <span className="text-[13px] text-[var(--bad-fg)]">{fe.reason}</span>}
+          </label>
+          <SubmitButton variant="cta" size="lg" pendingText="Sending…">
+            Ask QA
+          </SubmitButton>
+          <FormMessage state={askState} />
+        </form>
+      )}
     </section>
   );
 }

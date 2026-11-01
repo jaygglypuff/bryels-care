@@ -2,7 +2,7 @@
 import { requireContext } from "@/lib/auth/context";
 import { toActionState, type ActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
-import { decideQualityCheck, recordInspectionResults, type QualityCheckDecision } from "@/modules/quality";
+import { correctTestResult, decideQualityCheck, decideResultCorrection, recordInspectionResults, requestResultCorrection, type QualityCheckDecision } from "@/modules/quality";
 import { registerAppHooks } from "@/modules/wiring";
 
 // Quality ↔ production hooks (idempotent; also registered at server start): the pass closes the batch through them.
@@ -63,6 +63,38 @@ export async function saveTestResultsAction(_: ActionState, fd: FormData): Promi
     refreshCurrentPage();
     const n = r.saved.length;
     return { ok: true, message: `${n} ${n === 1 ? "result" : "results"} saved.${r.failed.length ? ` Not OK: ${r.failed.join(", ")}.` : ""}` };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** ADR-104 §3 "Correct this result": at once before the decision; a request for a second QA person after it. */
+export async function correctResultAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const c = str(fd, "conforms");
+    const input = { resultId: str(fd, "resultId"), value: str(fd, "value"), conforms: c === "yes" ? true : c === "no" ? false : null, reason: str(fd, "reason"), idempotencyKey: str(fd, "idempotencyKey") || null };
+    if (str(fd, "decided") === "1") {
+      const r = await requestResultCorrection(ctx, input);
+      refreshCurrentPage();
+      return { ok: true, message: `Asked a second QA person to approve the correction (batch ${r.batchNumber}).` };
+    }
+    await correctTestResult(ctx, input);
+    refreshCurrentPage();
+    return { ok: true, message: "Result corrected. The old value stays, struck through." };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** The second QA person says yes (the decision opens again) or no (with a reason). */
+export async function decideCorrectionAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const decision = str(fd, "decision") === "approve" ? "approve" : "refuse";
+    const r = await decideResultCorrection(ctx, { requestId: str(fd, "requestId"), decision, note: str(fd, "note") || null, idempotencyKey: str(fd, "idempotencyKey") || null });
+    refreshCurrentPage();
+    return { ok: true, message: r.status === "approved" ? `Corrected. Batch ${r.batchNumber} is back for the quality check.` : "Correction refused." };
   } catch (e) {
     return toActionState(e);
   }

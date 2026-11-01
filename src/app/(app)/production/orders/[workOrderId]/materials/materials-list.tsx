@@ -24,6 +24,8 @@ type Line = {
     expiresOn: string | null;
     problem: string | null;
   }[];
+  /** ADR-106 §1–2: what to bring, lot by lot, in use-first order ("take all 1 kg of lot … + bring lot … (50 kg in it) …"). */
+  plan?: { sentence: string; steps: { lotNumber: string; text: string }[] };
 };
 
 const amount = (qty: string, uom: string) =>
@@ -137,7 +139,15 @@ function PickRow({
             {amount(line.qty, line.uom)}
             {line.packaging ? <span className="text-[14px] text-muted"> · for wrapping (not weighed)</span> : null}
           </p>
-          {lot ? (
+          {line.plan && line.plan.steps.length > 0 ? (
+            <ol className="mt-0.5 grid gap-0.5 text-[15px] text-fg" data-testid="pick-plan">
+              {line.plan.steps.map((st, i) => (
+                <li key={`${st.lotNumber}-${i}`}>
+                  <span className="text-muted">{i + 1}.</span> {st.text.charAt(0).toUpperCase() + st.text.slice(1)}.
+                </li>
+              ))}
+            </ol>
+          ) : lot ? (
             <p className="text-[14px] text-muted">
               Lot{" "}
               <span className="font-mono font-semibold text-fg">

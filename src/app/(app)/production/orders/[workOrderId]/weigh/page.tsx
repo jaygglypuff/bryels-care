@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { batchRecordHref, getWeighView, type WeighView } from "@/modules/production";
+import { batchRecordHref, getWeighView, substituteMaterialOptions, type WeighView } from "@/modules/production";
 import { LinkButton } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
 import { Help } from "@/ui/help/help";
@@ -39,6 +39,7 @@ export default async function WeighPage({ params, searchParams }: { params: Prom
   const toCheck = canCheck ? v.cards.flatMap((c) => c.waitingForCheck).filter((w) => w.operatorId !== ctx.userId) : [];
   const weighers = [...new Set(toCheck.map((w) => (w.operator ?? "the operator").split(/\s+/)[0]))];
   const title = toCheck.length === 0 ? "Weigh" : weighers.length === 1 ? `Check ${weighers[0]}'s ${toCheck.length === 1 ? "weighing" : "weighings"}` : "Check the weighings";
+  const substitutes = v.cards.some((c) => c.canAskOther) ? (await substituteMaterialOptions(ctx)).map((m) => ({ id: m.id, name: m.name, baseUom: m.baseUom })) : [];
   const stepHref = (n: number) => `/production/orders/${workOrderId}/step/${n}?batch=${b.id}`;
   return (
     <div className="mx-auto max-w-6xl pb-24 text-[16px]">
@@ -79,6 +80,8 @@ export default async function WeighPage({ params, searchParams }: { params: Prom
         nextHref={v.step ? stepHref(v.step.stepNo + 1) : null}
         moreHref={`/production/orders/${workOrderId}/weigh/more?batch=${b.id}`}
         viewer={{ userId: ctx.userId, displayName: ctx.displayName, canCheck: ctx.can("production.dispense_record.approve") && ctx.canAt("production.dispense_record.approve", b.siteId) }}
+        reasons={v.lotChangeReasons}
+        substitutes={substitutes}
       />
       <p className="mt-6 text-[15px]">
         <Link href={batchRecordHref(b.id)} className="inline-flex min-h-[44px] items-center text-primary-text underline">

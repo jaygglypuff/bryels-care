@@ -3,7 +3,7 @@ import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import type { AuthContext } from "@/lib/auth/context";
 import { getSetting } from "@/lib/settings";
-import { toleranceRange } from "./dispensing";
+import { shownRange, toleranceRange } from "./weigh-window";
 import { equipmentOptions, getBatchExecution, signerOptions } from "./execution-queries";
 import { currentStepOf } from "./flow-facts";
 import { usableLotsForBatch } from "./queries";
@@ -11,6 +11,9 @@ import { CHECKER_PERMISSION, type FormulaSnapshot, WEIGHING_STEP_KINDS } from ".
 import { expectedLots } from "./staging";
 import { stepRecords } from "./execution";
 import { plainWords } from "./plain-words";
+import { pickPlanForLine } from "./materials-list";
+import { weighProposal } from "./pick-plan";
+import { LOT_CHANGE_REASONS, alternativesForLine, batchMaterialChanges, otherLotOptions, qaDeciderNames, substitutionRequestsOf } from "./material-swaps";
 
 /**
  * Production flow v2, slice V2-4 (ADR-080 §3–4, UX review S4): the Weigh screen. One card per
@@ -32,17 +35,35 @@ export async function getWeighView(ctx: AuthContext, batchId: string) {
   const recs = await stepRecords(db, b.id);
   const current = currentStepOf(snap, recs);
 
+  // ADR-104 §1: lot changes, swapped lines and requests to QA shown on the card.
+  const changes = await batchMaterialChanges(db, b.id);
+  const requests = await substitutionRequestsOf(db, b.id);
+  const qaNames = requests.some((r) => r.r.status === "pending") ? await qaDeciderNames(db, ctx.organizationId, b.siteId, ctx.userId) : null;
+  const canChange = ctx.can("production.dispense_record.create") && ctx.canAt("production.dispense_record.create", b.siteId) && ["planned", "materials_staged", "in_process"].includes(b.status);
+
   const cards = [];
   for (const ing of ex.ingredients) {
+    if (ing.status === "substituted") continue; // replaced for this batch (its history stays on the batch record)
     const bm = ing;
-    const snapLine = snap.lines.find((x) => x.lineNo === ing.lineNo);
-    const tol = snapLine ? toleranceRange(ing.theoreticalQtyG, snapLine.tolerancePct, snapLine.toleranceAbsG ?? null) : toleranceRange(ing.theoreticalQtyG, 0, null);
-    const materialId = snapLine?.materialId ?? null;
+    const snapLine = snap.lines.find((x) => (ing.bomLineId ? x.bomLineId === ing.bomLineId : x.lineNo === ing.lineNo)) ?? snap.lines.find((x) => x.lineNo === ing.lineNo);
+    // Tolerance: the line's own (a swapped line keeps the recipe line's percentage, absolute band scaled).
+    const tol = toleranceRange(ing.theoreticalQtyG, bm.tolerancePct ?? snapLine?.tolerancePct ?? 0, bm.toleranceAbsG ?? null);
+    const materialId = ing.materialId;
     const setAside = b.workOrderId && materialId ? await expectedLots(db, b.workOrderId, materialId) : [];
     const options = (materialId ? usable[materialId] : undefined) ?? [];
     const isSetAside = (o: { lotId: string; locationId: string }) => setAside.some((r) => r.r.lotId === o.lotId && r.r.locationId === o.locationId);
     // Lots set aside for the order come first; when there are any, only those can be used (dispensing rule).
-    const lots = setAside.length ? options.filter(isSetAside) : options;
+    const allowed = setAside.length ? options.filter(isSetAside) : options;
+    // The lot chosen with "Use another lot" (latest change of this line) is the one to weigh now.
+    const lastLot = [...changes].reverse().find((c) => c.batchMaterialId === bm.id && (c.kind === "floor_lot" || c.kind === "qa_lot"));
+    const lastLotNumber = lastLot?.toLot ?? null;
+    const lots = lastLotNumber ? [...allowed.filter((l) => l.lotNumber === lastLotNumber), ...allowed.filter((l) => l.lotNumber !== lastLotNumber)] : allowed;
+    const open = !(ing.status === "dispensed" || ing.status === "exception");
+    const pending = requests.find((r) => r.r.batchMaterialId === bm.id && r.r.status === "pending") ?? null;
+    const refused = requests.find((r) => r.r.batchMaterialId === bm.id && r.r.status === "refused") ?? null;
+    const swappedFrom = changes.find((c) => c.newBatchMaterialId === bm.id) ?? null;
+    const nothingWeighed = new Decimal(ing.dispensedQtyG).eq(0);
+    const plan = open && b.workOrderId ? await pickPlanForLine(db, b, { materialId: ing.materialId, theoreticalQtyG: ing.theoreticalQtyG, dispensedQtyG: ing.dispensedQtyG }, ing.baseUom) : null;
     const live = ing.weighings.filter((w) => !w.voided);
     const unchecked = live.filter((w) => !w.checker);
     const needsCheck = snapLine?.requiresChecker !== false;
@@ -52,9 +73,13 @@ export async function getWeighView(ctx: AuthContext, batchId: string) {
       materialCode: ing.materialCode,
       materialName: ing.materialName,
       baseUom: ing.baseUom,
-      target: new Decimal(ing.theoreticalQtyG).toString(),
-      min: tol.min.toDecimalPlaces(3).toString(),
-      max: tol.max.toDecimalPlaces(3).toString(),
+      // Rounded to the typed resolution (3 decimals) the same way the weigh service checks (weigh-window.ts).
+      target: tol.target.toString(),
+      min: tol.min.toString(),
+      max: tol.max.toString(),
+      /** "OK from … to …" at 0.1 g, never wider than what the server accepts. */
+      minShown: shownRange(tol.min, tol.max).lo.toString(),
+      maxShown: shownRange(tol.min, tol.max).hi.toString(),
       weighed: new Decimal(ing.dispensedQtyG).toString(),
       status: ing.status,
       done: ing.status === "dispensed" || ing.status === "exception",
@@ -63,6 +88,20 @@ export async function getWeighView(ctx: AuthContext, batchId: string) {
       /** Saved weighings that still wait for the second check (the 2-tap confirm). */
       waitingForCheck: needsCheck ? unchecked.map((w) => ({ id: w.id, qtyG: w.qtyG, lotNumber: w.lotNumber, operatorId: w.operatorId, operator: w.operator })) : [],
       weighings: live.map((w) => ({ id: w.id, qtyG: w.qtyG, lotNumber: w.lotNumber, operator: w.operator, checker: w.checker, within: w.within, partial: w.partial })),
+      /** ADR-106 §3: the lots taken at Get materials, in the same order, with how much from each. */
+      plan: plan ? plan.steps.map((x) => ({ lotId: x.lotId, lotNumber: x.lotNumber, take: x.take, place: x.place })) : [],
+      proposal: plan ? weighProposal(plan, ing.baseUom) : null,
+      /** ADR-104 §1a: other released lots of this ingredient ("Use another lot"), use-first on top. */
+      otherLots: open && canChange && !pending ? (await otherLotOptions(ctx, b, bm.id)).filter((o) => !o.setAsideNow) : [],
+      /** ADR-104 §1b: the recipe's approved alternatives (only while nothing is weighed on the line). */
+      alternatives: open && canChange && nothingWeighed && !pending && !swappedFrom ? (await alternativesForLine(db, { bomLineId: ing.bomLineId, theoreticalQtyG: ing.theoreticalQtyG })).filter((a) => a.active) : [],
+      canAskOther: open && canChange && nothingWeighed && !pending && !swappedFrom,
+      /** A request to QA that still waits: "Waiting for QA (Nina) to say yes". */
+      waitingForQa: pending ? { requestId: pending.r.id, substituteName: pending.substituteName, qty: pending.r.qtyBase, uom: pending.uom, reason: pending.r.reason, by: pending.by, mine: pending.r.requestedBy === ctx.userId, qaNames } : null,
+      refusedByQa: !pending && refused && !swappedFrom ? { substituteName: refused.substituteName, note: refused.r.decisionNote } : null,
+      /** This line replaced the recipe's ingredient for this batch ("Instead of Coconut Oil"). */
+      insteadOf: swappedFrom ? { materialName: swappedFrom.materialName, sentence: swappedFrom.sentence } : null,
+      lotChanges: changes.filter((c) => c.batchMaterialId === bm.id && (c.kind === "floor_lot" || c.kind === "qa_lot")).map((c) => c.sentence),
     });
   }
   const weighedCount = cards.filter((c) => c.done).length;
@@ -94,6 +133,8 @@ export async function getWeighView(ctx: AuthContext, batchId: string) {
     blockedReason,
     canWeigh: ctx.can("production.dispense_record.create") && b.status === "in_process" && !!step && step.status !== "completed" && !blockedReason,
     passwordRequired: await getSetting(db, ctx.organizationId, "production.sign_off.require_password"),
+    lotChangeReasons: Object.entries(LOT_CHANGE_REASONS).map(([code, label]) => ({ code, label })),
+    changes: changes.map((c) => c.sentence),
   };
 }
 export type WeighView = Awaited<ReturnType<typeof getWeighView>>;

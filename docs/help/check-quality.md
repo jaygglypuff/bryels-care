@@ -1,8 +1,8 @@
 ---
 key: quality.check
 title: Check quality of a finished batch
-version: 3
-updated_at: 2026-10-31
+version: 4
+updated_at: 2026-11-01
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -44,3 +44,17 @@ QA checks every finished batch before it can be sold. Everything is on one page.
 
 - **“OK to use” is not possible yet**: the page lists why, for example a missing test or an open problem report. Fix that first.
 - **The batch stays open after OK**: a closing check failed (for example a paper page not reviewed). Open the batch record page and close it there.
+
+## Correct a test result
+
+A saved result is never changed. A correction is a new result; the old one stays, struck through, with who and when.
+
+1. Before you decide the batch: under **Test results and corrections** tap **Correct this result**. Type the new value, OK or not OK, and why. Tap **Save the correction**. You can correct your own result, or another QA person can.
+2. After the batch is decided (OK or not OK): tap **Ask to correct this result**. Type the new value and why. Tap **Ask a second QA person**.
+3. A second QA person sees it on this page and in **To approve**. They tap **Yes, correct it** or **No** (with a reason). You can never say yes to your own request. The owner cannot either.
+4. Yes opens the decision again: the lot goes back to the hold area, the batch is back for the quality check, and you decide it again.
+5. If some of the lot was already sent out, moved or set aside for a customer, the page says so and the decision cannot be opened here. Open a problem report with QA.
+
+## Notes from the floor
+
+**Things that did not go as planned** also lists a lot taken that was not the one from Get materials, and an ingredient used instead of the recipe's one, with the reason, who and when.

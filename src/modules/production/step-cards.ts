@@ -16,6 +16,7 @@ import { currentReadings, recordReadingInTx } from "./process";
 import { type FormulaSnapshot, idempotent, isWeighingStep, lockBatch } from "./shared";
 import { stepBlockers } from "./steps";
 import { plainWords } from "./plain-words";
+import { pauseOfBatch } from "./batch-days";
 
 /**
  * Production flow v2, slice V2-5 (ADR-080 §11, UX review S5): the generic Step screen. One step per
@@ -123,6 +124,10 @@ export async function getStepCard(ctx: AuthContext, batchId: string, stepNo: num
     checkers: checkers.map((c) => ({ id: c.id, displayName: c.displayName })),
     approvers: approvers.map((c) => ({ id: c.id, displayName: c.displayName })),
     passwordRequired: await getSetting(db, ctx.organizationId, "production.sign_off.require_password"),
+    /** ADR-104 §5: "Stop for today" (prefilled where we stopped) and the last pause, plus the day of making. */
+    pause: await pauseOfBatch(ctx, b, now),
+    canStopForToday: canPerform && (b.status === "in_process" || b.status === "materials_staged") && step.status !== "completed",
+    stopPrefill: `Step ${idx + 1} · ${plainWords(step.name)}`,
   };
 }
 export type StepCardView = Awaited<ReturnType<typeof getStepCard>>;

@@ -310,6 +310,50 @@ Superseded screens (server redirects, URLs kept): `/production/new` and `/produc
 | Board | Default column titles in order words ("Approved · get materials", "Quality check"); move labels "Ready for approval (still Draft)", "Approve (sets the materials aside)"; reasons without permission strings; phones (< 640 px) get one list with status chips, moving stays on wider screens | `boardMove` re-checked on the server as before |
 | Stale batch links | `src/app/(app)/production/not-found.tsx`: "This batch was removed or the demo was reset. Go to Production orders." inside the app frame | — |
 
+## 4.5 Floor decisions: other material, the pick list per lot, correcting QA results, several days (2026-11-01, ADR-104 §1, §3, §5 and ADR-106 §1–3)
+
+Migrations 0035 (`bom_line_alternatives`, `material_substitution_requests`, `qa_result_corrections`, `batch_pauses`; `batch_material_substitutions` gains `kind`, `reason_code`, `substitute_material_id`, `new_batch_material_id`, `request_id`, `requested_by`, `idempotency_key`; `work_order_id` and the substitute lot/place nullable) and 0036 (`src/db/sql/adr104.sql`: append-only triggers, requests decided once, alternatives change only while the recipe revision is draft). No new permission; two new approval kinds.
+
+### 4.5.1 Get materials and weighing per lot (ADR-106 §1–3)
+
+| What the operator sees | Rule / where |
+|---|---|
+| Get materials, per ingredient: "1. Take all 1 kg of lot A (A-01, expires 1 Mar 2027). 2. Bring lot B (50 kg in it, A-01). Weigh out 1.6 kg. 48.4 kg stays for the next batch." | `pickPlan()` (`src/modules/production/pick-plan.ts`, pure) over the set-aside lots of the line in use-first order, for what the line still needs; `onHand` per place shows what stays in an opened container. Only the batch's need is set aside |
+| Weigh card: "As taken at Get materials: weigh from A: 1 kg, then B: 1.6 kg." The scan list shows the taken lots first; other allowed lots only after **Use another lot** (one way to pick; the old "Use another lot" drop-down is gone) | `getWeighView` → `card.plan`, `card.proposal`, `card.otherLots` |
+| Another allowed lot scanned: "This is not the lot you took at Get materials (A, B). You can continue — QA will see a note." + one-tap reason | `recordDispense` refuses (`blocked_lot`, `offPlan: true`) until `offPlanReasonCode` is given; then `changeLotInTx` moves the set-aside to the scanned lot and records `batch_material_substitutions` kind `floor_lot` with "Not the lot taken at Get materials (…): reason", then weighs. Expired, stopped, waiting-for-QA lots and other sites' lots are refused |
+| Weigh targets of a batch not at the recipe size (e.g. ≈ 333.33 bars) | `weigh-window.ts`: target half-up to 3 decimals of the unit, OK-from rounded up and OK-to rounded down to 3 decimals (the server's tolerance check uses the same numbers), the card shows the window at 0.1 g never wider than that; packaging on Get materials says "Count out", ingredients "Weigh out" |
+| QA sees the note | Check quality "Things that did not go as planned" (`lot_not_taken`, `lot_changed`, `ingredient_swapped`); batch record "Changes to what was used" |
+
+### 4.5.2 Another material at weighing (ADR-104 §1)
+
+| Case | Screen | Who | Service (one transaction, audited, idempotent) |
+|---|---|---|---|
+| Same ingredient, another lot | Weigh card → Use another lot → scan → one-tap reason when it is not the lot to use first (A-FD-01) | operator (`production.dispense_record.create` at the site) | `useAnotherLot` / weighing path above: set-aside released from the old lot, reserved on the new lot; `floor_lot` row; `production.batch_material.lot_changed` |
+| The recipe's approved alternative | Weigh card → "No coconut oil? Use another ingredient" → **Use the approved alternative: Palm Oil (2.6 kg)** | operator | `useApprovedAlternative` → `swapLineInTx`: new batch line (same line number, recipe line, tolerance %; amount × factor), old line `substituted`, set-aside moved first-to-expire-first; kind `alternative`; `production.batch_material.ingredient_swapped` |
+| Something else | **Ask to use something else** (by name, amount, why) → card "Waiting for QA (Nina) to say yes" | operator asks; QA decides (`quality.disposition.approve` or the QA role by own roles; never the requester; owner override and ADR-091 self-approval never apply, A-FD-02) | `requestMaterialSubstitution` → `approval.material_substitution` in To approve (inline Yes / Say no) → `decideMaterialSubstitution` swaps like an alternative (kind `approved_other`) and tells the operator |
+| Recipe setup | Advanced line editor: **Allowed alternatives (optional)** per ingredient (ingredient + amount factor); the wizard shows them read-only and keeps them on save | recipe editors; approved with the recipe revision | `saveFormulaRevisionDraft`, `createFormulaRevision` copies them; DB trigger: only while draft |
+
+### 4.5.3 Correcting a QA test result (ADR-104 §3, A-FD-04)
+
+| When | Screen | Who | What happens |
+|---|---|---|---|
+| Before the decision | Check quality → Test results and corrections → **Correct this result** (new value, OK/not OK, why) | the person who entered it or another QA person | `correctTestResult`: superseding `test_results` row; the old one struck through with who/when; a reviewed test list is opened again (`reopenInspectionForCorrectionTx`) |
+| After the decision (OK, not OK, closed) | **Ask to correct this result** → a second QA person sees it on the page and in To approve (`approval.result_correction`) | asks: QA; decides: a second QA person by own roles (never the requester, no owner override) | `decideResultCorrection`: decision stock moves reversed (`reversal` movements of the `disposition` transfers), lot → quarantine (`dispositions` decision `reopened`), batch → `quarantined` (`reopenBatchForQaCorrection`; a closed batch through a `batch_reopen_requests` row `reopened`, reopen n → next batch record "AMENDED rev n"), test list opened, superseding row written; the batch is decided again on Check quality |
+| Stock already moved | the request is refused with the reason ("Some of lot … was already sent out / moved / used after the decision …", or "set aside for a customer order") | — | `reopenBlocker`; needs a problem report or a recall |
+
+The production order is not re-opened (known gap; a re-passed batch closes again and the order stays Done).
+
+### 4.5.4 Batches over several days (ADR-104 §5)
+
+| What | Where | Rule |
+|---|---|---|
+| **Stop for today** (where we stopped, prefilled "Step n · name"; short note) | step card | step perform permission at the site; `batch_pauses` (append-only), audit `production.batch.paused`; idempotent |
+| "Continue Calamansi Soap B-26-0006 · step 4 · started yesterday" + "Stopped yesterday by Rhea: … — note" | Home / My work task | from the next Manila plant day; `continueTitle`, `lastPauses` |
+| "day 2" | floor TV card, task progress line | `dayNumber(startedAt)` |
+| "Curing until Sat 8 Nov" | step card, TV, task | unchanged (`waitLabel`) |
+| "Packed over 3 days: 400 + 350 + 250 = 1,000" | Finish, above the counts | `batchLogCounts().byDay` → `packedOverDays` |
+
+Tests: `tests/unit/floor-decisions.test.ts`, `tests/integration/production/floor-decisions.test.ts`, `tests/integration/quality/result-corrections.test.ts`.
 ### 4.4.2 Floor decisions: box labels and one batch or several (2026-11-01, ADR-104 §2 and §4; ADR-106 §4)
 
 **One batch or several (New order).** "How many bars?" → the screen (pure `batch-plan.ts`, same code on the server) proposes the batches:

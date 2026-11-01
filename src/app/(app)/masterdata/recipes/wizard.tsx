@@ -924,6 +924,11 @@ function IngredientsScreen({
               </button>
             )}
             <ErrorText text={err("materialId")} />
+            {(l.alternatives ?? []).length > 0 && (
+              <p className="text-[13px] text-fg-2" data-testid={`wizard-alternatives-${i + 1}`}>
+                Allowed alternatives (optional): {(l.alternatives ?? []).map((a) => matName(a.materialId)).join(", ")}. Change them in the advanced recipe editor.
+              </p>
+            )}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <label htmlFor={`amt-${i}`} className="text-[14px] font-semibold">

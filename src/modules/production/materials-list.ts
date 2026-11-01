@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db, type Tx } from "@/db/client";
-import { batchMaterialPicks, batchMaterials, batches, inventoryLots, locations, materials, products, users, warehouses, workOrders, type BatchMaterialPickAction } from "@/db/schema";
+import { batchMaterialPicks, batchMaterials, batches, inventoryBalances, inventoryLots, locations, materials, products, users, warehouses, workOrders, type BatchMaterialPickAction } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -13,6 +13,7 @@ import { assertLotUsable, lockLots } from "@/modules/inventory";
 import { heldLocations } from "@/modules/inventory/holds";
 import { currentPicks, pickProgress, type PickProgress } from "./flow-facts";
 import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
+import { type PickPlan, pickPlan } from "./pick-plan";
 import { expectedLots, stageInTx } from "./staging";
 import { transitionBatch } from "./state";
 import { stagingKinds } from "./work-orders-reserve";
@@ -50,6 +51,8 @@ export type MaterialsListLot = {
   section: LocationSection;
   sectionLabel: string;
   qtySetAside: string;
+  /** What is physically at that place (an opened container may hold more than is set aside, ADR-106 §2). */
+  onHand: string;
   usable: boolean;
   /** Plain words: "On QA hold", "Expired 3 Mar 2027", "Place blocked by QA hold H-0003". */
   problem: string | null;
@@ -70,6 +73,8 @@ export type MaterialsListLine = {
   by: string | null;
   at: Date | null;
   reason: string | null;
+  /** ADR-106 §1–2: what to bring, lot by lot in use-first order, with how much from each and what stays behind. */
+  plan: PickPlan;
   /** The weighing still has to be done (always true until weighed; "Not needed" never changes it). */
   weighingOpen: boolean;
   /** Formula line marked "needs a check" at weighing (snapshot). */
@@ -98,7 +103,19 @@ async function lotsFor(q: Tx | typeof db, b: typeof batches.$inferSelect, workOr
     .from(locations)
     .innerJoin(warehouses, eq(warehouses.id, locations.warehouseId))
     .where(inArray(locations.id, locIds));
-  return exp.map((x) => {
+  const bal = await q
+    .select({ lotId: inventoryBalances.lotId, locationId: inventoryBalances.locationId, qty: inventoryBalances.qtyBase })
+    .from(inventoryBalances)
+    .where(inArray(inventoryBalances.lotId, lotIds));
+  // One row per lot and place (a lot may have several set-aside rows at one place).
+  const merged = new Map<string, (typeof exp)[number] & { qty: Decimal }>();
+  for (const x of exp) {
+    const k = `${x.r.lotId}:${x.r.locationId}`;
+    const m = merged.get(k);
+    if (m) m.qty = m.qty.plus(x.r.qtyBase);
+    else merged.set(k, { ...x, qty: new Decimal(x.r.qtyBase) });
+  }
+  return [...merged.values()].map((x) => {
     const lot = lots.find((l) => l.id === x.r.lotId)!;
     const loc = locs.find((l) => l.id === x.r.locationId)!;
     let problem: string | null = null;
@@ -119,11 +136,29 @@ async function lotsFor(q: Tx | typeof db, b: typeof batches.$inferSelect, workOr
       locationName: loc.name,
       section,
       sectionLabel: SECTION_LABELS[section],
-      qtySetAside: new Decimal(x.r.qtyBase).toString(),
+      qtySetAside: x.qty.toString(),
+      onHand: new Decimal(bal.find((b) => b.lotId === x.r.lotId && b.locationId === x.r.locationId)?.qty ?? 0).toString(),
       usable: !problem,
       problem,
     };
   });
+}
+
+/** ADR-106: the pick plan of one line from its set-aside lots (usable ones only), for what is still to weigh. */
+function planOf(bm: { theoreticalQtyG: string; dispensedQtyG: string; status?: string }, uom: string, lots: MaterialsListLot[]) {
+  const need = Decimal.max(new Decimal(bm.theoreticalQtyG).minus(bm.dispensedQtyG), 0);
+  return pickPlan(
+    need,
+    uom,
+    lots.filter((l) => l.usable).map((l) => ({ lotId: l.lotId, lotNumber: l.lotNumber, place: l.locationName || l.locationCode, expiresOn: l.expiresOn, setAside: l.qtySetAside, onHand: l.onHand })),
+    { counted: bm.status === "packaging" || uom === "pcs" },
+  );
+}
+
+/** The pick plan of one batch line (weigh card: "from LM-…-0005: 50 kg, then …"), same as Get materials shows. */
+export async function pickPlanForLine(q: Tx | typeof db, b: typeof batches.$inferSelect, bm: { materialId: string; theoreticalQtyG: string; dispensedQtyG: string }, uom: string) {
+  const held = heldMap(await heldLocations(q, b.siteId));
+  return planOf(bm, uom, await lotsFor(q, b, b.workOrderId, bm.materialId, held));
 }
 
 /** The Materials list of a batch (S3). Readable by production and warehouse people at the batch's site. */
@@ -152,6 +187,7 @@ export async function getMaterialsList(ctx: AuthContext, batchId: string) {
   for (const l of lines) {
     const c = current.get(l.bm.id);
     const state = !c || c.action === "untaken" ? "open" : (c.action as BatchMaterialPickAction);
+    const lineLots = await lotsFor(db, b, wo?.id ?? null, l.material.id, held);
     out.push({
       batchMaterialId: l.bm.id,
       lineNo: l.bm.lineNo,
@@ -161,7 +197,8 @@ export async function getMaterialsList(ctx: AuthContext, batchId: string) {
       materialKind: l.material.materialKind,
       qty: l.bm.theoreticalQtyG,
       baseUom: l.material.baseUom,
-      lots: await lotsFor(db, b, wo?.id ?? null, l.material.id, held),
+      lots: lineLots,
+      plan: planOf(l.bm, l.material.baseUom, lineLots),
       state,
       by: c && state !== "open" ? c.by : null,
       at: c && state !== "open" ? c.pickedAt : null,

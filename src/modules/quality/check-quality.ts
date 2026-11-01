@@ -32,7 +32,7 @@ import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
 import { notifyUsers } from "@/modules/platform";
-import { ownerOverrideSentence } from "@/modules/production";
+import { batchMaterialChanges, ownerOverrideSentence } from "@/modules/production";
 import { batchFacts, decideBatchInTx } from "./dispositions";
 import { deviationsFor } from "./deviations";
 import { batchInspectionFacts, getInspection, reviewInspectionForPass } from "./inspections";
@@ -141,6 +141,19 @@ export async function batchExceptions(q: DbOrTx, batch: typeof batches.$inferSel
   for (const { r, name } of weigh) {
     if (r.voidedAt) out.push({ kind: "weighing_voided", text: `Weighing of ${name} was cancelled and done again. Reason: ${r.voidReason ?? "—"}` });
     else if (!r.isWithinTolerance) out.push({ kind: "weighing_out_of_range", text: `${name} weighed ${new Decimal(r.actualQtyG).toString()} g, outside the allowed range. Reason: ${r.exceptionReason ?? "—"}` });
+  }
+  // ADR-104 §3: corrected test results (old → new, reason) and decisions re-opened by a correction.
+  const results = await q.select().from(testResults).where(eq(testResults.batchId, batch.id));
+  for (const r of results.filter((x) => x.supersedesId)) {
+    const old = results.find((x) => x.id === r.supersedesId);
+    out.push({ kind: "result_corrected", text: `${r.testName} corrected from ${old?.result ?? "—"} to ${r.result}. Reason: ${r.correctionReason ?? "—"}` });
+  }
+  for (const d of await q.select().from(dispositions).where(and(eq(dispositions.subjectType, "batch"), eq(dispositions.subjectId, batch.id), eq(dispositions.decision, "reopened")))) {
+    out.push({ kind: "decision_reopened", text: `The QA decision was opened again after a corrected result (approved by a second QA person). ${d.reason ?? ""}`.trim() });
+  }
+  // ADR-104 §1 / ADR-106 §3: another lot or another ingredient than planned (with the reason, who and when).
+  for (const c of await batchMaterialChanges(q, batch.id)) {
+    out.push({ kind: c.kind === "floor_lot" || c.kind === "qa_lot" ? (c.reason.startsWith("Not the lot taken at Get materials") ? "lot_not_taken" : "lot_changed") : "ingredient_swapped", text: c.sentence });
   }
   const recs = await q.select().from(processStepRecords).where(eq(processStepRecords.batchId, batch.id)).orderBy(asc(processStepRecords.stepNo));
   if (recs.length) {

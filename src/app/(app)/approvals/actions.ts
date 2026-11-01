@@ -7,7 +7,7 @@ import { decideExpenseClaim, approveInvoice, returnInvoice } from "@/modules/fin
 import { approveImport, rejectImport } from "@/modules/imports";
 import { approveAdjustment, rejectAdjustment } from "@/modules/inventory";
 import { decidePurchaseOrder, decidePurchaseRequest, decideSupplierReturn } from "@/modules/procurement";
-import { approveProductionOrder, type ApproveResult } from "@/modules/production";
+import { approveProductionOrder, decideMaterialSubstitution, type ApproveResult } from "@/modules/production";
 import { decideChangeControl } from "@/modules/quality";
 import { approveCustomerReturn, approveOrder, approvePriceList, approveQuote, approveRequirement, rejectPriceList, rejectRequirement, returnOrderToDraft, returnQuoteToDraft } from "@/modules/sales";
 import { INLINE_DECISIONS } from "./inline";
@@ -36,6 +36,8 @@ const APPROVE: Record<string, Decide> = {
   "approval.import_job": (ctx, id, note) => approveImport(ctx, id, note),
   // Approve = plan + release + reserve + create the batches (one transaction, idempotent per form).
   "approval.production_order": (ctx, id, note, key) => approveProductionOrder(ctx, id, { note, idempotencyKey: key ? `to-approve:${key}` : null }),
+  // ADR-104 §1b: QA says yes; the line is swapped for this batch only.
+  "approval.material_substitution": (ctx, id, note, key) => decideMaterialSubstitution(ctx, { requestId: id, decision: "approve", note, idempotencyKey: key ? `to-approve:${key}` : null }),
 };
 
 /** Plain result for kinds whose approval does more than change a status. */
@@ -44,6 +46,10 @@ function approvedMessage(kind: string, result: unknown): string {
     const r = result as ApproveResult;
     const made = r.batches.length ? ` Batch${r.batches.length === 1 ? "" : "es"} ${r.batches.map((b) => b.batchNumber).join(", ")} ready to make.` : "";
     return `Production order ${r.workOrderNumber} approved.${made}${r.shortages.length ? ` Short: ${r.shortages.join(" ")}` : ""}`;
+  }
+  if (kind === "approval.material_substitution" && result && typeof result === "object" && "batchNumber" in result) {
+    const r = result as { batchNumber: string; shortage: string | null };
+    return `Yes: batch ${r.batchNumber} uses the other ingredient. The operator can weigh it now.${r.shortage ? ` ${r.shortage}` : ""}`;
   }
   return "Approved.";
 }
@@ -61,6 +67,7 @@ const REJECT: Record<string, Decide> = {
   "approval.expense_claim": (ctx, id, reason) => decideExpenseClaim(ctx, id, { decision: "rejected", note: reason }),
   "approval.change_control": (ctx, id, reason) => decideChangeControl(ctx, { changeControlId: id, decision: "rejected", note: reason }),
   "approval.import_job": (ctx, id, reason) => rejectImport(ctx, id, reason ?? ""),
+  "approval.material_substitution": (ctx, id, reason, key) => decideMaterialSubstitution(ctx, { requestId: id, decision: "refuse", note: reason, idempotencyKey: key ? `to-refuse:${key}` : null }),
 };
 
 export async function decideApprovalAction(_prev: ActionState, fd: FormData): Promise<ActionState> {

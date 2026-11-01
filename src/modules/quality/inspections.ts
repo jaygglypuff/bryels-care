@@ -508,53 +508,7 @@ export async function correctInspectionResult(ctx: AuthContext, input: CorrectRe
     if (!(INSPECTION_OPEN_STATUSES as readonly string[]).includes(ins.status)) {
       throw new DomainError("state", `Inspection ${ins.inspectionNumber} is ${INSPECTION_STATUS_LABEL[ins.status].toLowerCase()}; its results can no longer be corrected. Raise a deviation instead.`);
     }
-    const [already] = await tx.select({ id: testResults.id }).from(testResults).where(eq(testResults.supersedesId, orig.id)).limit(1);
-    if (already) throw new DomainError("conflict", "This result was already corrected. Correct the newest entry instead.");
-    const tests = await planTests(tx, ins.inspectionPlanId);
-    const t = tests.find((x) => x.id === orig.inspectionPlanTestId);
-    if (!t) throw new DomainError("state", "The plan test of this result no longer exists.");
-    const ev = evaluateResult(t, input);
-    const instrument = await checkInstrument(tx, ctx, ins, input.instrumentEquipmentId ?? orig.instrumentEquipmentId);
-    let row: typeof testResults.$inferSelect;
-    try {
-      [row] = await tx
-        .insert(testResults)
-        .values({
-          batchId: ins.batchId,
-          testName: t.name,
-          specification: specLabel(t),
-          result: ev.resultText,
-          passed: ev.passed,
-          testedBy: ctx.userId,
-          inspectionId: ins.id,
-          inspectionPlanTestId: t.id,
-          testCode: t.testCode,
-          valueNumeric: ev.valueNumeric,
-          valueText: ev.valueText,
-          valuePass: ev.valuePass,
-          uom: ev.uom,
-          instrumentEquipmentId: instrument,
-          supersedesId: orig.id,
-          correctionReason: reason,
-        })
-        .returning();
-    } catch (e) {
-      if (String((e as { code?: string })?.code) === "23505") throw new DomainError("conflict", "This result was already corrected. Correct the newest entry instead.");
-      throw e;
-    }
-    if (!ins.performedBy) await tx.update(inspections).set({ performedBy: ctx.userId }).where(eq(inspections.id, ins.id));
-    await maybeAdvance(tx, ctx, ins);
-    await audit(tx, ctx, {
-      action: "quality.test_result.corrected",
-      entityType: "test_result",
-      entityId: row.id,
-      entityNumber: ins.inspectionNumber,
-      siteId: ins.siteId,
-      reason,
-      before: { resultId: orig.id, result: orig.result, passed: orig.passed },
-      after: { resultId: row.id, result: row.result, passed: row.passed, supersedes: orig.id },
-    });
-    return { resultId: row.id, passed: row.passed, result: row.result };
+    return appendInspectionCorrectionTx(tx, ctx, ins, orig, input, reason);
   });
 }
 
@@ -975,4 +929,79 @@ export async function inspectionsFor(q: DbOrTx, subject: { batchId?: string; lot
     .from(inspections)
     .where(cond)
     .orderBy(desc(inspections.createdAt));
+}
+
+/**
+ * The superseding row of a correction (caller holds the inspection lock and checked who may correct and when). Shared
+ * by correctInspectionResult and the ADR-104 §3 corrections on Check quality (before and after the decision).
+ */
+export async function appendInspectionCorrectionTx(tx: Tx, ctx: AuthContext, ins: InspectionRow, orig: typeof testResults.$inferSelect, input: Omit<CorrectResultInput, "resultId" | "reason">, reason: string) {
+  const [already] = await tx.select({ id: testResults.id }).from(testResults).where(eq(testResults.supersedesId, orig.id)).limit(1);
+  if (already) throw new DomainError("conflict", "This result was already corrected. Correct the newest entry instead.");
+  const tests = await planTests(tx, ins.inspectionPlanId);
+  const t = tests.find((x) => x.id === orig.inspectionPlanTestId);
+  if (!t) throw new DomainError("state", "The plan test of this result no longer exists.");
+  const ev = evaluateResult(t, input);
+  const instrument = await checkInstrument(tx, ctx, ins, input.instrumentEquipmentId ?? orig.instrumentEquipmentId);
+  let row: typeof testResults.$inferSelect;
+  try {
+    [row] = await tx
+      .insert(testResults)
+      .values({
+        batchId: ins.batchId,
+        testName: t.name,
+        specification: specLabel(t),
+        result: ev.resultText,
+        passed: ev.passed,
+        testedBy: ctx.userId,
+        inspectionId: ins.id,
+        inspectionPlanTestId: t.id,
+        testCode: t.testCode,
+        valueNumeric: ev.valueNumeric,
+        valueText: ev.valueText,
+        valuePass: ev.valuePass,
+        uom: ev.uom,
+        instrumentEquipmentId: instrument,
+        supersedesId: orig.id,
+        correctionReason: reason,
+      })
+      .returning();
+  } catch (e) {
+    if (String((e as { code?: string })?.code) === "23505") throw new DomainError("conflict", "This result was already corrected. Correct the newest entry instead.");
+    throw e;
+  }
+  if (!ins.performedBy) await tx.update(inspections).set({ performedBy: ctx.userId }).where(eq(inspections.id, ins.id));
+  await maybeAdvance(tx, ctx, ins);
+  await audit(tx, ctx, {
+    action: "quality.test_result.corrected",
+    entityType: "test_result",
+    entityId: row.id,
+    entityNumber: ins.inspectionNumber,
+    siteId: ins.siteId,
+    reason,
+    before: { resultId: orig.id, result: orig.result, passed: orig.passed },
+    after: { resultId: row.id, result: row.result, passed: row.passed, supersedes: orig.id },
+  });
+  return { resultId: row.id, passed: row.passed, result: row.result };
+}
+
+/**
+ * ADR-104 §3: a correction approved after the decision re-opens the reviewed inspection (approved/rejected → in
+ * progress), outside the normal table and only from decideResultCorrection. The review columns are cleared (the
+ * transition row and the audit keep who reviewed and when); the next pass on Check quality reviews it again.
+ */
+export async function reopenInspectionForCorrectionTx(tx: Tx, ctx: AuthContext, inspectionId: string, reason: string) {
+  const ins = await lockInspection(tx, ctx, inspectionId);
+  if (ins.status !== "approved" && ins.status !== "rejected") return ins;
+  const from = ins.status;
+  await tx.update(inspections).set({ status: "in_progress", reviewedBy: null, reviewedAt: null, outcome: null, statusChangedAt: new Date(), statusChangedBy: ctx.userId }).where(eq(inspections.id, ins.id));
+  await writeTransition(tx, ctx, ins, from, "in_progress", reason);
+  await audit(tx, ctx, { action: "quality.inspection.reopened", entityType: "inspection", entityId: ins.id, entityNumber: ins.inspectionNumber, siteId: ins.siteId, reason, before: { status: from, reviewedBy: ins.reviewedBy, outcome: ins.outcome }, after: { status: "in_progress" } });
+  ins.status = "in_progress";
+  return ins;
+}
+
+/** The inspection row (locked) for a correction; site scope checked. */
+export async function lockInspectionForCorrection(tx: Tx, ctx: AuthContext, inspectionId: string) {
+  return lockInspection(tx, ctx, inspectionId);
 }
