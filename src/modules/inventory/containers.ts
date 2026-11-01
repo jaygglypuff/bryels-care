@@ -84,8 +84,9 @@ export async function takeContent(tx: Tx, containerId: string, lotId: string, qt
     .where(and(eq(containerContents.containerId, containerId), eq(containerContents.lotId, lotId)));
 }
 
-export async function newBox(tx: Tx, ctx: AuthContext, v: { siteId: string; locationId: string | null; kind: string; isPartial?: boolean; notes?: string | null }) {
-  const number = await nextNumber(tx, ctx.organizationId, "BOX");
+export async function newBox(tx: Tx, ctx: AuthContext, v: { siteId: string; locationId: string | null; kind: string; isPartial?: boolean; notes?: string | null; containerNumber?: string | null }) {
+  // ADR-104 §2: a batch box keeps the BOX number taken when its label was printed (the label's QR then opens this box).
+  const number = v.containerNumber ?? (await nextNumber(tx, ctx.organizationId, "BOX"));
   const [box] = await tx
     .insert(containers)
     .values({

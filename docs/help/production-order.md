@@ -1,8 +1,8 @@
 ---
 key: production.production_order
 title: Make a product with a production order
-version: 2
-updated_at: 2026-10-30
+version: 3
+updated_at: 2026-11-01
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -29,10 +29,15 @@ A production order says what to make, how many and by when. You follow it on one
 ## Create the order
 
 1. Press **New order**.
-2. Choose **What to make**. Type **How many (pieces)**. The order gets enough whole batches for that number.
-3. Choose **Needed by** if the products are needed by a date, and the **Start date**.
-4. Only if you need them, open **More details**: batch size, number of batches, finish date, production line, notes.
-5. Press **Create order**. It is now a **Draft**.
+2. Choose **What to make**. Type **How many bars?** (or pieces).
+3. The screen says how many one batch makes and the largest batch the mixer takes. Then it offers:
+   - **Split into 2 batches** (the usual), for example "2 batches of 1,000 bars".
+   - **Make it one batch**. Only if it fits in the largest batch. If not, the button is grey and says why.
+   - **Choose sizes**, for example 1,500 and 500. Each one must fit in the largest batch, and together they must make the number you typed.
+4. You never type the ingredient amounts. They are worked out from the size of each batch.
+5. Choose **Needed by** if the products are needed by a date, and the **Start date**.
+6. Only if you need them, open **More details**: batch size in kg, number of batches (these replace the choice above), finish date, production line, notes.
+7. Press **Create order**. It is now a **Draft**.
 
 ## Make for a customer order
 

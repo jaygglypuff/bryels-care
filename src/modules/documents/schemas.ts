@@ -114,7 +114,8 @@ export const DEFAULT_LABEL_FIELDS: Record<(typeof LABEL_APPLIES_TO)[number], Lab
   wip: ["item_name", "batch", "manufactured", "expiry", "quantity", "storage", "status_word", "scan_to_verify"],
   finished_good: ["item_name", "batch", "manufactured", "expiry", "quantity", "storage", "status_word", "scan_to_verify"],
   product: ["item_name", "batch", "manufactured", "expiry", "storage"],
-  carton: ["item_name", "batch", "expiry", "quantity", "packed", "packer", "customer_marks", "box_of", "status_word", "scan_to_verify"],
+  // ADR-104 §2: "manufactured" so the batch box label shows the made date (A-FD-03; existing templates: QA adds it).
+  carton: ["item_name", "batch", "manufactured", "expiry", "quantity", "packed", "packer", "customer_marks", "box_of", "status_word", "scan_to_verify"],
   pallet: ["item_name", "quantity"],
   location: ["location_name", "warehouse", "location_kind", "allowed_statuses"],
   equipment: ["item_name"],
@@ -170,7 +171,7 @@ export const idempotencyKey = z.string().uuid("The form is missing its submissio
 export const createLabelJobInput = z
   .object({
     labelTemplateId: uuid,
-    entityType: z.enum(["inventory_lot", "location", "container", "batch"]),
+    entityType: z.enum(["inventory_lot", "location", "container", "batch", "batch_box"]),
     entityId: uuid,
     // ADR-088 §3: a batch's product labels are one per piece (up to 999 in one job); other labels at most 99.
     copies: z.coerce.number().int().min(1, "At least 1 copy.").max(999, "At most 999 labels per job."),

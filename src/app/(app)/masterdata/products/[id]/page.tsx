@@ -15,7 +15,7 @@ import { productStatusAction, saveProductAction, saveSkuAction } from "../../_or
 import { ReadOnlyNote } from "../../_org/ui";
 import { PlainItemChip, SELLABLE_ITEM_TEXT, WhatIs, NEXT_WRAP } from "../../_eng/plain";
 import { ProductFields } from "../product-fields";
-import { shelfText } from "../words";
+import { labellingText, shelfText } from "../words";
 import { SkuFields } from "./sku-fields";
 
 export const metadata = { title: "Product" };
@@ -55,7 +55,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
         title={p.name}
         subtitle={
           <>
-            {familyLabel} · {fmtQty(p.unitNetMassG, "g", 0)} a piece · {shelfText(p.shelfLifeDays)} · <RecordNo>{p.code}</RecordNo> <PlainItemChip status={p.status} />
+            {familyLabel} · {fmtQty(p.unitNetMassG, "g", 0)} a piece · {shelfText(p.shelfLifeDays)} · {p.unitsPerBox} in a box, {labellingText(p.labelling)} · <RecordNo>{p.code}</RecordNo> <PlainItemChip status={p.status} />
           </>
         }
         actions={

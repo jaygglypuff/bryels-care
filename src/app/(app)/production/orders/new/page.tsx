@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { makeForSalesLine, workOrderFormOptions, type MakeForLine } from "@/modules/production";
+import { largestBatchesForForm, makeForSalesLine, workOrderFormOptions, type MakeForLine } from "@/modules/production";
 import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -18,6 +18,8 @@ export default async function NewProductionOrderPage({ searchParams }: { searchP
   const sp = await searchParams;
   const opts = await workOrderFormOptions(ctx);
   const formulas = opts.formulas.filter((f) => f.effectiveRevision);
+  // ADR-104 §4: the largest batch per product (mixer capacity on the routing; null = the recipe's batch size).
+  const largest = await largestBatchesForForm(ctx, formulas.map((f) => f.productId), opts.today);
   let prefill: MakeForLine | null = null;
   let prefillError: string | null = null;
   if (sp.salesOrderLine) {
@@ -37,7 +39,7 @@ export default async function NewProductionOrderPage({ searchParams }: { searchP
   return (
     <div className="mx-auto max-w-2xl">
       <PageHeader title="New production order" subtitle={ctx.currentSite.name} />
-      <PageIntro>Choose what to make and how many pieces. The system numbers the order; a manager approves it.</PageIntro>
+      <PageIntro>Choose what to make and how many pieces. The screen works out the batches; you can make it one batch or choose the sizes. A manager approves it.</PageIntro>
       {prefillError && (
         <div className="mb-4">
           <Banner tone="warn" title="Can't fill in from the customer order">{prefillError}</Banner>
@@ -50,7 +52,7 @@ export default async function NewProductionOrderPage({ searchParams }: { searchP
       ) : (
         <Card>
           <ProductionOrderForm
-            formulas={formulas}
+            formulas={formulas.map((f) => ({ ...f, largestG: largest[f.productId]?.grams ?? null, largestFrom: largest[f.productId]?.from ?? null, family: f.family ?? null }))}
             lines={opts.lines}
             today={opts.today}
             prefill={usable ? { salesOrderId: usable.salesOrderId, salesOrderNumber: usable.salesOrderNumber, lineNo: usable.lineNo, productId: usable.productId, missing: usable.missing, neededBy: usable.neededBy } : null}

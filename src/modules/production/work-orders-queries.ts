@@ -209,7 +209,7 @@ export async function workOrderFormOptions(ctx: AuthContext) {
   const siteId = ctx.currentSiteId;
   const today = manilaToday();
   const fs = await db
-    .select({ formulaId: formulas.id, formulaCode: formulas.code, formulaName: formulas.name, productId: products.id, productName: products.name, productSku: products.skuCode, unitNetMassG: products.unitNetMassG })
+    .select({ formulaId: formulas.id, formulaCode: formulas.code, formulaName: formulas.name, productId: products.id, productName: products.name, productSku: products.skuCode, unitNetMassG: products.unitNetMassG, family: products.family })
     .from(formulas)
     .innerJoin(products, eq(products.id, formulas.productId))
     .where(eq(formulas.organizationId, ctx.organizationId))

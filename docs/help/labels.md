@@ -1,8 +1,8 @@
 ---
 key: inventory.labels
 title: Print and scan labels
-version: 1
-updated_at: 2026-10-31
+version: 2
+updated_at: 2026-11-01
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -11,8 +11,9 @@ You print a label where you do the work. There is no label desk to go to.
 ## Which label goes where
 
 - **Sack label**: print it on the delivery (**Print labels**). Stick one on each sack, drum or tub that came in. It is scanned at put-away and when you take the sack for a batch.
-- **Product label**: print it on the batch's packaging step. Stick one on each bar or jar. It is scanned at boxing or on the Scan screen.
-- **Box label**: printed at boxing. **Pack box and print label** opens the label at once; **Print N labels** on the boxing screen prints the boxes that have none yet. A lost one: open the box, **Print box label**, say why. Stick it on the side of the box. It is scanned when you move, pick or ship the box.
+- **Box label of a customer order**: printed at boxing. **Pack box and print label** opens the label at once; **Print N labels** on the boxing screen prints the boxes that have none yet. A lost one: open the box, **Print box label**, say why. Stick it on the side of the box. It is scanned when you move, pick or ship the box.
+- **Box labels of a batch** (the usual label for what we make): on the packaging step type how many pieces you packed, then **Print N box labels**. Stick one on each box. Each one shows the pieces in that box and "box 2 of 3". Its code opens the box (after Finish) or the batch (before Finish).
+- **Product label**: only for products set up with "a label on each piece". Print it on the batch's packaging step. Stick one on each bar or bottle. It is scanned on the Scan screen.
 - **Shelf label**: print it on the shelf (**⋯ More › Print a label**). Stick it on the front edge of the shelf. It is scanned at put-away to say where the stock goes.
 - **Lot label again**: print it on the lot (**⋯ More › Print a label**) when a label is lost, or when the QA status changed.
 

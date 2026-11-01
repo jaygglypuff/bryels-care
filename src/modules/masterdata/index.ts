@@ -176,6 +176,8 @@ export {
   type ProductFilter,
   type ProductInput,
   type SkuInput,
+  PRODUCT_LABELLING,
+  type ProductLabelling,
 } from "./products";
 export { expiryFor, expiryBaseDate, isValidGtin, daysToWholeMonths, PRODUCT_STATUSES, PRODUCT_TRANSITIONS, type ExpiryBasis, type ProductStatus } from "./products-shelf-life";
 export {

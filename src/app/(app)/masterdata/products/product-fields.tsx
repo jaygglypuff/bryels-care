@@ -16,7 +16,14 @@ type Defaults = Partial<{
   unitsPerBox: number;
   shelfLifeDays: number;
   storageConditions: string | null;
+  labelling: string;
 }>;
+
+/** ADR-104 §2 "How do you label it?" (products.labelling). */
+const LABELLING_OPTIONS = [
+  { value: "per_box", label: "A label on each box (usual)" },
+  { value: "per_piece", label: "A label on each piece (bar or bottle) and each box" },
+];
 
 /** "135.000000" → "135". */
 const plain = (v: string | undefined) => (v ? v.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") : "");
@@ -31,6 +38,7 @@ export function ProductFields({ families, d = {}, months, locked = false }: { fa
         <SelectField name="family" label="What kind of product?" defaultValue={d.family ?? families[0]?.value} options={families} hint="To add a kind, go to Management › Master data › Choice lists." />
         <TextField name="unitNetMassG" label="Size of one piece (grams)" defaultValue={plain(d.unitNetMassG)} inputMode="decimal" placeholder="e.g. 135" hint="What one bar or bottle holds." />
         <TextField name="unitsPerBox" label="How many go in one box?" defaultValue={d.unitsPerBox} inputMode="numeric" placeholder="e.g. 48" />
+        <SelectField name="labelling" label="How do you label it?" defaultValue={d.labelling ?? "per_box"} options={LABELLING_OPTIONS} hint="Box labels are the usual. QA and the label adviser check what a label must show." />
         {inDays ? (
           <TextField name="shelfLifeDays" label="Good for (days)" defaultValue={d.shelfLifeDays} inputMode="numeric" hint="QA confirms how long it stays good." />
         ) : (

@@ -1,8 +1,8 @@
 ---
 key: production.step
 title: Do a step (Start check, Mix, Curing, Cut, Wrap)
-version: 3
-updated_at: 2026-10-31
+version: 4
+updated_at: 2026-11-01
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -37,9 +37,15 @@ Each step has its own screen: what to do, up to 3 things to write down, and one 
 
 ## Wrap and label
 
-1. The screen shows the wrappers (and labels or boxes) you took at **Get materials**: for example "Soap wrapper 135 g from lot L-2610-00019, taken", the shelf and how many. You do not scan them.
-2. Look at the label on the screen: this is the **product label**, the one that goes on each bar (product name, lot number, made date, expiry, storage, and a square code). It has no QA status bar. Tap **Print N labels**, pick the label printer and **Actual size** in the print window, then tap **Yes, they printed**. Stick one label on each bar. Need more later? Print them again and say why. See [Labels](labels.md). Labels can only be printed from this step on, because printing fixes the lot number and the expiry.
-3. Wrap the bars. Type **How many did you use?** and **How many were spoiled?** on the keypad.
+1. The screen shows the wrappers you took at **Get materials**: for example "Soap wrapper 135 g from lot L-2610-00019, taken", the shelf and how many. You do not scan them.
+2. Wrap the bars and put them in boxes.
+3. **Box labels.** Type **How many bars did you pack?** The screen says how many boxes that makes, for example "That makes 2 boxes of 48 and 1 box of 4". The last box may be a part box. That is fine.
+4. Tap **Print 3 box labels**. Then tap **Open the box labels and print**. Pick the label printer and **Actual size**, print, and tap **Yes, they printed**.
+5. Stick one label on each box. Each label shows the product, batch, lot, how many pieces are in that box, made date, expiry, "box 1 of 3" and a square code. The code opens that box when someone scans it.
+6. Wrong number? Type the right number and print again. The old box labels stop working: throw them away.
+7. Some products also need a **label on each piece** (bottles, for example). Only then the screen shows **Label for each piece** too. How many? starts at the pieces you packed. See [Labels](labels.md).
+8. Labels can only be printed from this step on, because printing fixes the lot number and the expiry.
+9. Type **How many wrappers did you use?** and **How many were spoiled?** on the keypad.
 4. Tap **Step done**. The system records the wrapper lot for this batch. Left-over wrappers are counted at Finish.
 5. If no wrappers were on the list (older products), the screen shows the wrappers and labels that are ready to use at your site as big cards: name, lot, shelf and how many. **Tap the one you took** (check the lot number on its box or roll), or tap **Scan** and point the camera (or the handheld scanner) at its label, or **Find by name**. Say how many you took and tap **I took these**. You never type a code.
 

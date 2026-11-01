@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "@/db/client";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { labelEntityFor, type BatchLabelValues, type LabelEntity } from "./datasets";
+import { labelEntityFor, type BatchBoxPreview, type BatchLabelValues, type LabelEntity } from "./datasets";
 import { reprintReasonOptions } from "./generated";
 import { labelFace, type LabelFaceData } from "./label-face";
 import { labelHistory } from "./label-jobs";
@@ -21,7 +21,7 @@ import { activeStationsAt } from "./stations";
  * which is the job's own reference and exists only once the job is made (the preview shows "NEW").
  */
 
-export type LabelEntityType = "inventory_lot" | "location" | "container" | "batch";
+export type LabelEntityType = "inventory_lot" | "location" | "container" | "batch" | "batch_box";
 
 /** What the label is stuck on, for the one-sentence hint ("Stick one on each sack"). */
 export type LabelKind = "sack" | "tub" | "bar" | "product_box" | "box" | "shelf";
@@ -77,10 +77,10 @@ function previewMeta(code: string, name: string, versionNo: number, definitionCh
 
 export async function labelPreview(
   ctx: AuthContext,
-  input: { entityType: LabelEntityType; entityId: string; copies?: number | null; labelTemplateId?: string | null; batchValues?: BatchLabelValues | null },
+  input: { entityType: LabelEntityType; entityId: string; copies?: number | null; labelTemplateId?: string | null; batchValues?: BatchLabelValues | null; boxPreview?: BatchBoxPreview | null },
 ): Promise<LabelPreview> {
   ctx.require("inventory.label_job.view");
-  const e = await labelEntityFor(ctx, input.entityType, input.entityId, input.batchValues);
+  const e = await labelEntityFor(ctx, input.entityType, input.entityId, input.batchValues, input.boxPreview);
   const siteCode = ctx.allowedSites.find((s) => s.id === e.siteId)?.code ?? null;
   const [templates, stations, history, reasons] = await Promise.all([
     labelTemplatesForKind(db, ctx.organizationId, e.siteId, e.appliesTo),

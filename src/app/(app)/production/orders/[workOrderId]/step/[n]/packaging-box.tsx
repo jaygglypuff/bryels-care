@@ -133,7 +133,10 @@ function ChooseLot({ batchId, stepNo, choices, defaultCount }: { batchId: string
           {lot && (
             <label className="flex flex-col gap-1 text-[15px] font-medium" key={`q-${lot.value}`}>
               How many did you take?
-              <Input name="qty" inputMode="numeric" defaultValue={String(Math.min(defaultCount, firstQty || defaultCount))} className="min-h-[56px] text-[18px]" required />
+              {/* ADR-106 §4 bug fix: the default is what the batch needs, never the stock on the first shelf (a shelf
+                  with 1 wrapper left made "taken 1" for a 123-bar batch). */}
+              <Input name="qty" inputMode="numeric" defaultValue={String(defaultCount)} className="min-h-[56px] text-[18px]" required />
+              {firstQty > 0 && firstQty < defaultCount && <span className="text-[14px] text-[var(--warn-fg)]">Only {firstQty} on this shelf. Take the rest from another shelf or lot and record it too.</span>}
               {fe.qty && <span className="text-[14px] text-[var(--bad-fg)]">{fe.qty}</span>}
             </label>
           )}

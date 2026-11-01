@@ -115,6 +115,18 @@ export const productMinStock = pgTable(
 
 export const WORK_ORDER_STATUSES = ["draft", "planned", "released", "in_progress", "completed", "closed", "cancelled"] as const;
 
+/** ADR-104 §4: the stored batch plan of a production order (work_orders.batch_plan). */
+export type BatchPlanStored = {
+  mode: "split" | "one" | "custom";
+  /** Planned size of each batch in grams, in batch order. */
+  sizesG: string[];
+  /** Pieces each batch is planned to make. */
+  pieces: string[];
+  /** Largest batch (grams) the plan was checked against, and where it came from (equipment code or "recipe"). */
+  largestG: string | null;
+  largestFrom: string | null;
+};
+
 /**
  * Planning record that batches execute (docs/data-model.md §3.5 `work_orders`, §6.3). Release
  * (`production.work_order.approve`, planned → released) is the approval and fills the approval
@@ -141,6 +153,12 @@ export const workOrders = pgTable(
     baseUom: text("base_uom").notNull().default("g"),
     batchCount: integer("batch_count").notNull(),
     batchSizeBase: numeric("batch_size_base", QTY).notNull(),
+    /**
+     * ADR-104 §4 batch plan: how the pieces were split into batches (split | one | custom), each batch's
+     * planned size in grams (`sizesG`, one per batch, sum = qty_planned_base) and pieces, and the largest
+     * batch used to check it. Null = every batch is batch_size_base (older orders, the kg path).
+     */
+    batchPlan: jsonb("batch_plan").$type<BatchPlanStored>(),
     /** Finished units the planner aims for (informational; from a plan line or typed). */
     targetUnits: numeric("target_units", QTY),
     plannedStart: date("planned_start").notNull(),
@@ -175,6 +193,7 @@ export const workOrders = pgTable(
     index("work_orders_plan_line_idx").on(t.productionPlanLineId),
     check("ck_work_orders_status", sql`${t.status} in (${inList(WORK_ORDER_STATUSES)})`),
     check("ck_work_orders_qty", sql`${t.qtyPlannedBase} > 0 and ${t.batchSizeBase} > 0 and ${t.batchCount} > 0`),
+    check("ck_work_orders_batch_plan", sql`${t.batchPlan} is null or jsonb_array_length(${t.batchPlan}->'sizesG') = ${t.batchCount}`),
     check("ck_work_orders_dates", sql`${t.plannedEnd} >= ${t.plannedStart}`),
     check("ck_work_orders_priority", sql`${t.priority} between 1 and 9`),
     check("ck_work_orders_revisions", sql`${t.status} in ('draft','cancelled') or (${t.formulaRevisionId} is not null and ${t.routingRevisionId} is not null)`),

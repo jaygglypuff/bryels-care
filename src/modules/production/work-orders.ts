@@ -3,7 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { z } from "zod";
 import { db, type Tx } from "@/db/client";
-import { batches, formulaRevisions, formulas, productionLines, productionPlanLines, products, salesOrders, users, workOrderStateTransitions, workOrders } from "@/db/schema";
+import { type BatchPlanStored, batches, formulaRevisions, formulas, productionLines, productionPlanLines, products, salesOrders, users, workOrderStateTransitions, workOrders } from "@/db/schema";
 import { uuidv7 } from "uuidv7";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
@@ -143,12 +143,18 @@ async function resolveFields(tx: Tx, ctx: AuthContext, siteId: string, input: Re
  * Inserts a draft work order in the caller's transaction (used by createWorkOrder and by plan
  * line conversion, so both write the same record and audit).
  */
-export async function insertWorkOrder(tx: Tx, ctx: AuthContext, raw: unknown, links: { productionPlanLineId?: string | null } = {}) {
+export async function insertWorkOrder(tx: Tx, ctx: AuthContext, raw: unknown, links: { productionPlanLineId?: string | null } = {}, batchPlan: BatchPlanStored | null = null) {
   ctx.require("production.work_order.create");
   const siteId = ctx.currentSiteId;
   ctx.requireSite(siteId);
   const input = parseInput(raw);
   const { product, formula, sizeG } = await resolveFields(tx, ctx, siteId, input);
+  // ADR-104 §4: a batch plan (built and checked by createProductionOrder, never taken from a form) sets each
+  // batch's size; the total is their sum.
+  if (batchPlan && (batchPlan.sizesG.length !== input.batchCount || batchPlan.sizesG.some((g) => !new Decimal(g).gt(0)))) {
+    throw new DomainError("validation", "The batch plan does not match the number of batches.", { field: "batchCount" });
+  }
+  const totalG = batchPlan ? batchPlan.sizesG.reduce((t, g) => t.plus(g), new Decimal(0)) : sizeG.mul(input.batchCount);
   const number = await nextNumber(tx, ctx.organizationId, "WO");
   const [wo] = await tx
     .insert(workOrders)
@@ -162,10 +168,11 @@ export async function insertWorkOrder(tx: Tx, ctx: AuthContext, raw: unknown, li
       productionLineId: input.productionLineId ?? null,
       productionPlanLineId: links.productionPlanLineId ?? null,
       salesOrderId: input.salesOrderId ?? null,
-      qtyPlannedBase: sizeG.mul(input.batchCount).toString(),
+      qtyPlannedBase: totalG.toString(),
       baseUom: "g",
       batchCount: input.batchCount,
       batchSizeBase: sizeG.toString(),
+      batchPlan,
       targetUnits: input.targetUnits ?? null,
       plannedStart: input.plannedStart,
       plannedEnd: input.plannedEnd,
@@ -191,6 +198,7 @@ export async function insertWorkOrder(tx: Tx, ctx: AuthContext, raw: unknown, li
       formula: formula.code,
       batchCount: input.batchCount,
       batchSizeG: sizeG.toString(),
+      batchPlan: batchPlan ? { mode: batchPlan.mode, pieces: batchPlan.pieces, sizesG: batchPlan.sizesG, largestG: batchPlan.largestG, largestFrom: batchPlan.largestFrom } : null,
       qtyPlannedG: wo.qtyPlannedBase,
       plannedStart: input.plannedStart,
       plannedEnd: input.plannedEnd,
@@ -217,12 +225,12 @@ async function transitionlessCreate(tx: Tx, ctx: AuthContext, wo: typeof workOrd
 }
 
 /** Creates a draft work order at the current site (W05-02). */
-export async function createWorkOrder(ctx: AuthContext, raw: WorkOrderInput & { idempotencyKey?: string | null }) {
+export async function createWorkOrder(ctx: AuthContext, raw: WorkOrderInput & { idempotencyKey?: string | null }, opts: { batchPlan?: BatchPlanStored | null } = {}) {
   ctx.require("production.work_order.create");
   const { idempotencyKey, ...rest } = raw;
   return db.transaction(async (tx) => {
     const { result } = await idempotent(tx, ctx, idempotencyKey, "production.work_order.create", async () => {
-      const wo = await insertWorkOrder(tx, ctx, rest);
+      const wo = await insertWorkOrder(tx, ctx, rest, {}, opts.batchPlan ?? null);
       // Consultant review 2026-10-30 (flow B): the approvers hear about the new order at once (no silent hand-off).
       await notifyProductionOrderApprovers(tx, ctx, wo);
       return { workOrderId: wo.id, workOrderNumber: wo.workOrderNumber };
@@ -240,13 +248,17 @@ export async function editWorkOrder(ctx: AuthContext, workOrderId: string, raw: 
     if (wo.status !== "draft") throw new DomainError("state", `Work order ${wo.workOrderNumber} is ${wo.status.replace(/_/g, " ")}; only a draft can be edited.`);
     if (input.productId !== wo.productId) throw new DomainError("validation", "The product of a work order cannot change; cancel it and create a new one.", { field: "productId" });
     const { formula, sizeG } = await resolveFields(tx, ctx, wo.siteId, input);
+    // ADR-104 §4: the batch plan stays while the number of batches and the size are unchanged; a new count or
+    // size makes every batch that size again (the plan is cleared).
+    const keepPlan = !!wo.batchPlan && input.batchCount === wo.batchCount && sizeG.eq(wo.batchSizeBase);
     const after = {
       formulaId: formula.id,
       productionLineId: input.productionLineId ?? null,
       salesOrderId: input.salesOrderId ?? null,
-      qtyPlannedBase: sizeG.mul(input.batchCount).toString(),
+      qtyPlannedBase: keepPlan ? wo.qtyPlannedBase : sizeG.mul(input.batchCount).toString(),
       batchCount: input.batchCount,
       batchSizeBase: sizeG.toString(),
+      batchPlan: keepPlan ? wo.batchPlan : null,
       targetUnits: input.targetUnits ?? null,
       plannedStart: input.plannedStart,
       plannedEnd: input.plannedEnd,
@@ -497,13 +509,17 @@ export async function assertWorkOrderAcceptsBatch(
   if (wo.routingRevisionId !== b.routingRevisionId) {
     throw new DomainError("state", `Another routing revision is effective on ${b.plannedStartOn} than the one frozen on work order ${wo.workOrderNumber}. Plan a new work order for that date (V-REV).`, { rule: "V-REV" });
   }
-  if (!b.plannedSizeG.eq(wo.batchSizeBase)) throw new DomainError("validation", `Batches of ${wo.workOrderNumber} are ${new Decimal(wo.batchSizeBase).div(1000).toString()} kg.`);
+  const live = (await batchesOfWorkOrder(tx, wo.id)).filter((x) => x.status !== "rejected" || x.startedAt !== null);
+  if (live.length >= wo.batchCount) {
+    throw new DomainError("state", `Work order ${wo.workOrderNumber} already has its ${wo.batchCount} batch${wo.batchCount === 1 ? "" : "es"}.`);
+  }
+  const sizes = remainingBatchSizesG(wo, live.map((x) => x.plannedSizeG));
+  if (!sizes.some((g) => g.eq(b.plannedSizeG))) {
+    const words = [...new Set(sizes.map((g) => g.div(1000).toString()))].join(" or ") || new Decimal(wo.batchSizeBase).div(1000).toString();
+    throw new DomainError("validation", `Batches of ${wo.workOrderNumber} are ${words} kg.`);
+  }
   if (b.plannedStartOn < wo.plannedStart || b.plannedStartOn > wo.plannedEnd) {
     throw new DomainError("validation", `Choose a start date between ${wo.plannedStart} and ${wo.plannedEnd} (the work order's dates).`, { fieldErrors: { plannedStartOn: "Outside the work order's dates." } });
-  }
-  const existing = (await batchesOfWorkOrder(tx, wo.id)).filter((x) => x.status !== "rejected" || x.startedAt !== null);
-  if (existing.length >= wo.batchCount) {
-    throw new DomainError("state", `Work order ${wo.workOrderNumber} already has its ${wo.batchCount} batch${wo.batchCount === 1 ? "" : "es"}.`);
   }
   return wo;
 }
@@ -519,13 +535,38 @@ export async function createBatchFromWorkOrder(ctx: AuthContext, input: { workOr
   if (!wo.formulaRevisionId) throw new DomainError("state", `Plan work order ${wo.workOrderNumber} first; batches use the revisions frozen at planning.`);
   if (wo.siteId !== ctx.currentSiteId) throw new DomainError("validation", "Switch to the work order's site to create its batches.");
   const { createBatch } = await import("./batches");
+  const existing = (await batchesOfWorkOrder(db, wo.id)).filter((x) => x.status !== "rejected" || x.startedAt !== null);
   return createBatch(ctx, {
     formulaRevisionId: wo.formulaRevisionId,
-    plannedSizeKg: new Decimal(wo.batchSizeBase).div(1000).toString(),
+    plannedSizeKg: nextBatchSizeG(wo, existing.map((x) => x.plannedSizeG)).div(1000).toString(),
     plannedStartOn: input.plannedStartOn || wo.plannedStart,
     workOrderId: wo.id,
     idempotencyKey: input.idempotencyKey,
   });
+}
+
+/**
+ * ADR-104 §4: the planned size of every batch of a work order (the batch plan, else batch_count × batch_size).
+ */
+export function plannedBatchSizesG(wo: Pick<typeof workOrders.$inferSelect, "batchPlan" | "batchCount" | "batchSizeBase">): Decimal[] {
+  if (wo.batchPlan?.sizesG?.length) return wo.batchPlan.sizesG.map((g) => new Decimal(g));
+  return Array.from({ length: wo.batchCount }, () => new Decimal(wo.batchSizeBase));
+}
+
+/** Sizes of the plan not yet used by an existing batch (each existing batch takes one matching size). */
+export function remainingBatchSizesG(wo: Pick<typeof workOrders.$inferSelect, "batchPlan" | "batchCount" | "batchSizeBase">, existingSizesG: Decimal.Value[]): Decimal[] {
+  const left = plannedBatchSizesG(wo);
+  for (const s of existingSizesG) {
+    const i = left.findIndex((g) => g.eq(s));
+    if (i >= 0) left.splice(i, 1);
+    else left.pop(); // an older batch of another size still counts as one of the batches
+  }
+  return left;
+}
+
+/** The size of the next batch to create (first unused size of the plan; batch_size_base when none is left). */
+export function nextBatchSizeG(wo: Pick<typeof workOrders.$inferSelect, "batchPlan" | "batchCount" | "batchSizeBase">, existingSizesG: Decimal.Value[]): Decimal {
+  return remainingBatchSizesG(wo, existingSizesG)[0] ?? new Decimal(wo.batchSizeBase);
 }
 
 /** Plan line link used by planning.ts (kept here so the work order row and its audit stay in one place). */

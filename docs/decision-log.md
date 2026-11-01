@@ -2001,3 +2001,23 @@ Plain plurals through one helper (`src/lib/plural.ts`, merged from rounds B and 
 Consequences: tests `tests/unit/reaudit-b.test.ts` and extended integration tests (keyword-lookup, goods-receipt-
 document, reservations-fefo, containers, fulfilment, boxing, label-preview); no migration. Open: the "QUARANTINE"
 word on raw-material labels (QA labelling decision); live data needs a demo reset for shelf names.
+
+## ADR-104 as built: items 2 and 4, and ADR-106 §4 (2026-11-01)
+
+Products carry "How do you label it?" (`products.labelling`, default `per_box`). On the packaging step and at Finish,
+"How many pieces did you pack?" splits the pieces into boxes of the product's pieces per box, with one part box for the
+rest; "Print N box labels" fixes the lot number and dates, takes a box number per box (`batch_boxes`) and makes one
+label job per box (entity `batch_box`, template kind `carton`: product, batch, lot, pieces, made, expiry, "box n of N",
+QR `BC:BOX:<number>`). A new count replaces the plan (old labels cancelled or voided, rows kept as replaced). Before
+Finish the code opens the batch; Finish refuses more boxed pieces than good minus samples and, in the output
+transaction, creates each box as a sealed container in the hold area. `per_piece` products also print piece labels.
+New production orders propose batches from the recipe batch and the largest batch (smallest per-kind maximum of
+in-service mixing equipment capacity on the routing, else the recipe batch): Split into N (default, even sizes), One
+batch (up to the largest, else refused with the reason) or Choose sizes (each > 0 and ≤ largest, sum = pieces), stored
+in `work_orders.batch_plan`; batches are created at their planned size and targets scale from it. Finish shows
+wrappers as a sentence; too many is refused, missing wrappers may be explained through a problem report, left-over
+wrappers return to their shelf in one tap; "taken" counts every staging transfer of the line (fixes "taken 1").
+Migration 0034; assumptions A-FD-03, A-FD-05, A-FD-06 (QA and regulatory review); tests
+`tests/unit/production-batch-and-box-plan.test.ts`, `tests/integration/production/adr104-box-labels-batch-plan.test.ts`.
+Open: live carton templates need QA to add "Made"; litre capacities ignored (no density); odd batch sizes give weigh
+targets with many decimals (fix in the weighing work).

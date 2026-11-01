@@ -191,6 +191,9 @@ export function assertSourceVisible(ctx: AuthContext, d: { sourceEntityType: str
     case "document_template_version":
       if (!ctx.can("documents.template.view")) throw hidden();
       break;
+    case "batch_box": // ADR-104 §2: box labels of a batch follow the batch
+      if (!ctx.can("production.batch.view")) throw hidden();
+      break;
     case "batch":
       // Wave 2 W2D: BMR and paper pages follow the batch's permission and site. W2A: the staging sheets
       // (dispensing sheet, traveler) are also visible to the stager (inventory.movement.post).

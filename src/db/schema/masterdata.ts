@@ -122,12 +122,21 @@ export const products = pgTable(
     /** Net mass per unit in grams, used to convert batch mass to units. */
     unitNetMassG: numeric("unit_net_mass_g", QTY).notNull(),
     unitsPerBox: integer("units_per_box").notNull().default(24),
+    /**
+     * ADR-104 §2 "How do you label it?": `per_box` (default) = one label on each box and every box is a
+     * traceable container; `per_piece` = box labels plus a label on each bar/bottle (A-FD-03, regulatory review).
+     */
+    labelling: text("labelling").notNull().default("per_box"),
     shelfLifeDays: integer("shelf_life_days").notNull().default(730),
     status: text("status").notNull().default("active"),
     storageConditions: text("storage_conditions"),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("products_org_sku_uq").on(t.organizationId, t.skuCode), check("products_status_ck", sql`${t.status} in ('draft', 'active', 'discontinued')`)],
+  (t) => [
+    uniqueIndex("products_org_sku_uq").on(t.organizationId, t.skuCode),
+    check("products_status_ck", sql`${t.status} in ('draft', 'active', 'discontinued')`),
+    check("products_labelling_ck", sql`${t.labelling} in ('per_box', 'per_piece')`),
+  ],
 );
 
 export const formulas = pgTable(

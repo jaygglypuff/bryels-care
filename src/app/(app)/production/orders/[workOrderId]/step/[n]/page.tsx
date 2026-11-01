@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import Link from "next/link";
-import { batchRecordHref, finishHref, getStepCard, nextBatchScreen, type StepCardView } from "@/modules/production";
+import { batchBoxInfoFor, batchRecordHref, finishHref, getStepCard, nextBatchScreen, type BatchBoxInfo, type StepCardView } from "@/modules/production";
 import { LinkButton } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
 import { Help } from "@/ui/help/help";
@@ -14,16 +14,21 @@ import { plainWords } from "@/modules/production/plain-words";
 import { PrintLabelsPanel } from "@/ui/labels/print-labels-panel";
 import { printBatchLabelsPanelAction } from "../../flow-actions";
 import { StepCard } from "./step-card";
+import { BoxLabels } from "./box-labels";
 
 export const metadata: Metadata = { title: "Step" };
 export const dynamic = "force-dynamic";
 
 /** S5 Step (ADR-080, UX review S5): Start check, Mix, Wait (curing / resting), Cut, Wrap. One step per screen. */
 /** One plain sentence per kind of step; the step's own name comes from the approved steps (configuration). */
-function plainStep(kind: string, isCheck: boolean, isWait: boolean) {
+function plainStep(kind: string, isCheck: boolean, isWait: boolean, perPiece = false) {
   if (isCheck) return "Look at each point and answer Yes or No. All OK when everything is fine.";
   if (isWait) return "The batch rests here. Come back on the ready day.";
-  if (kind === "packaging" || kind === "filling") return "Wrap or fill the pieces and stick one label on each. Then say how many wrappers you used and how many were spoiled.";
+  // ADR-104 §2: box labels by default; a label on each piece only for products set up that way.
+  if (kind === "packaging" || kind === "filling")
+    return perPiece
+      ? "Wrap or fill the pieces, stick a label on each piece, pack them in boxes and stick one label on each box."
+      : "Wrap or fill the pieces, pack them in boxes and stick one label on each box.";
   if (kind === "dispensing" || kind === "weighing") return "Weigh out each ingredient on the Weigh screen.";
   if (kind === "transfer") return "Count the pieces and put the batch in the hold area on the Finish screen.";
   return "Do this step, write the numbers it asks for, then tap Step done.";
@@ -39,6 +44,7 @@ export default async function StepPage({ params, searchParams }: { params: Promi
   let orderHref = orderHrefOf(workOrderId);
   let v: StepCardView;
   let facts;
+  let boxes: BatchBoxInfo | null = null;
   try {
     const picked = await pickBatch(ctx, workOrderId, batchParam, (f) => f.currentStep?.stepNo === stepNo);
     const batch = picked.batch;
@@ -46,6 +52,7 @@ export default async function StepPage({ params, searchParams }: { params: Promi
     orderHref = picked.backHref;
     facts = batch;
     v = await getStepCard(ctx, batch.batchId, stepNo);
+    if (v.packaging) boxes = await batchBoxInfoFor(ctx, batch.batchId);
   } catch (e) {
     if (e instanceof DomainError && e.code === "not_found") notFound();
     throw e;
@@ -63,7 +70,7 @@ export default async function StepPage({ params, searchParams }: { params: Promi
         progress={<span>Step {v.step.index} of {v.step.total}</span>}
         actions={<Help screen="production.step" />}
       />
-      <PageIntro>{plainStep(v.step.kind, v.step.isCheck, v.step.isWait)}</PageIntro>
+      <PageIntro>{plainStep(v.step.kind, v.step.isCheck, v.step.isWait, boxes?.labelling === "per_piece")}</PageIntro>
       {v.blockedReason && v.step.status !== "completed" && (
         <div className="mb-4">
           <Banner tone="warn" title="Not yet" action={next.href && next.stepNo !== stepNo ? <LinkButton href={next.href} variant="secondary" size="lg">{next.label}</LinkButton> : undefined}>
@@ -91,17 +98,34 @@ export default async function StepPage({ params, searchParams }: { params: Promi
         packaging={v.packaging}
         blocked={!!v.blockedReason}
         labelsPanel={
-          v.packaging?.labels.allowed && v.packaging.labels.values ? (
-            <PrintLabelsPanel
-              ctx={ctx}
-              entityType="batch"
-              entityId={b.id}
-              kind="bar"
-              copies={v.packaging.labels.defaultCount}
-              sentence="Stick one label on each bar."
-              action={printBatchLabelsPanelAction}
-              batchValues={v.packaging.labels.values}
-            />
+          boxes ? (
+            <div className="grid gap-3">
+              <BoxLabels
+                batchId={b.id}
+                unitsPerBox={boxes.unitsPerBox}
+                defaultPieces={boxes.defaultPieces}
+                pieceWord={boxes.pieceWord}
+                face={boxes.preview?.options[0]?.face ?? null}
+                plan={boxes.plan}
+                canPrint={boxes.canPrint}
+                why={boxes.why}
+                printHref={boxes.printHref}
+              />
+              {/* per_piece products also label each piece (ADR-099 panel); piece labels are not counted one by one. */}
+              {boxes.labelling === "per_piece" && v.packaging?.labels.allowed && v.packaging.labels.values ? (
+                <PrintLabelsPanel
+                  ctx={ctx}
+                  entityType="batch"
+                  entityId={b.id}
+                  kind="bar"
+                  copies={boxes.plan?.pieces ?? v.packaging.labels.defaultCount}
+                  title="Label for each piece"
+                  sentence="Stick one label on each piece."
+                  action={printBatchLabelsPanelAction}
+                  batchValues={v.packaging.labels.values}
+                />
+              ) : null}
+            </div>
           ) : undefined
         }
         viewer={v.viewer}

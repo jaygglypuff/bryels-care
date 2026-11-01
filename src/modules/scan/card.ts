@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { batches, containers, equipment, inventoryBalances, inventoryLots, locations, materials, products, sites, warehouses } from "@/db/schema";
+import { batchBoxes, batches, containers, equipment, inventoryBalances, inventoryLots, locations, materials, products, sites, warehouses } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { daysUntil, D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
@@ -285,6 +285,38 @@ async function batchLabelCard(ctx: AuthContext, lotNumber: string, payload: stri
   };
 }
 
+/**
+ * ADR-104 §2: a box label is printed on the packaging step with the box's own BOX number; Finish makes the box
+ * with that number. Until then the scan opens the batch ("Box 3 of 13 of batch B-…, made at Finish").
+ */
+async function batchBoxLabelCard(ctx: AuthContext, number: string, payload: string): Promise<ScanCard | null> {
+  if (!ctx.can("production.batch.view")) return null;
+  const [row] = await db
+    .select({ bx: batchBoxes, batchNumber: batches.batchNumber, batchId: batches.id, lot: batches.outputLotNumber, expires: batches.outputExpiresOn, product: products.name })
+    .from(batchBoxes)
+    .innerJoin(batches, eq(batches.id, batchBoxes.batchId))
+    .innerJoin(products, eq(products.id, batches.productId))
+    .where(and(eq(batchBoxes.organizationId, ctx.organizationId), eq(batchBoxes.containerNumber, number), inArray(batchBoxes.siteId, ctx.allowedSiteIds)))
+    .limit(1);
+  if (!row) return null;
+  const site = ctx.allowedSites.find((s) => s.id === row.bx.siteId);
+  const replaced = row.bx.status === "replaced";
+  return {
+    outcome: "found",
+    payload,
+    entity: "record",
+    caption: replaced ? "Old box label" : "Box (batch being made)",
+    identifier: number,
+    title: row.product,
+    subtitle: replaced ? `This label was replaced (${row.bx.replacedReason ?? "new count"}). Destroy it and use the new box label.` : `Box ${row.bx.boxNo} of ${row.bx.boxCount} of batch ${row.batchNumber}, ${row.bx.pieces} pieces. The box is made when the batch is finished.`,
+    siteCode: site?.code ?? null,
+    status: { code: replaced ? "cancelled" : "quarantine", label: replaced ? "Replaced label" : "Waiting for Finish" },
+    expiry: row.expires ? { date: row.expires, daysLeft: daysUntil(row.expires) } : null,
+    facts: [["Batch", row.batchNumber], ["Box", `${row.bx.boxNo} of ${row.bx.boxCount}`], ["Pieces", String(row.bx.pieces)], ...(row.lot ? ([["Lot on the label", row.lot]] as ScanFact[]) : [])],
+    actions: [{ key: "open", label: "Open batch", href: `/production/${row.batchId}`, allowed: true, primary: true }],
+  };
+}
+
 async function locationCard(ctx: AuthContext, value: string, payload: string): Promise<ScanCard> {
   if (!ctx.can("masterdata.location.view")) return { outcome: "forbidden", payload, message: "Your role cannot look up locations." };
   const rows = await db
@@ -365,7 +397,7 @@ async function locationCard(ctx: AuthContext, value: string, payload: string): P
 async function boxCard(ctx: AuthContext, value: string, payload: string): Promise<ScanCard> {
   if (!ctx.can("inventory.container.view")) return { outcome: "forbidden", payload, message: "Your role cannot look up boxes." };
   const c = await describeBoxForScan(ctx, value);
-  if (!c) return notFound(payload, "box", ctx);
+  if (!c) return (await batchBoxLabelCard(ctx, value, payload)) ?? notFound(payload, "box", ctx);
   const box = await getContainer(ctx, c.id);
   const site = ctx.allowedSites.find((s) => s.id === box.siteId);
   const here = box.siteId === ctx.currentSiteId;

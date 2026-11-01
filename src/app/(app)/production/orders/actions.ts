@@ -35,6 +35,8 @@ export async function createProductionOrderAction(_: ActionState, fd: FormData):
       productionLineId: str(fd, "productionLineId") || null,
       notes: str(fd, "notes") || null,
       idempotencyKey: str(fd, "idempotencyKey") || null,
+      batchMode: str(fd, "batchMode") || null,
+      batchSizes: fd.getAll("batchSizes").map(String),
     }));
   } catch (e) {
     return toActionState(e);

@@ -10,5 +10,6 @@ export function recordHref(entityType: string, entityId: string): string {
   if (entityType === "location") return `/inventory/locations/${entityId}`;
   if (entityType === "container") return `/inventory/containers/${entityId}`;
   if (entityType === "batch") return `/production/${entityId}`;
+  if (entityType === "batch_box") return "/labels";
   return "/labels";
 }

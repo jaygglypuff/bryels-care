@@ -119,6 +119,7 @@ export {
   makeForSalesLine,
   productionOrdersForSalesOrder,
   MAKE_FOR_SALES_STATUSES,
+  batchPlanWords,
   type ProductionOrderInput,
   type ProductionOrderView,
   type ProductionOrderRow,
@@ -173,3 +174,7 @@ export { getFloorDisplay, FLOOR_MAX_MAKING, FLOOR_MAX_NEXT, type FloorDisplay, t
 export { plainWords } from "./plain-words";
 export { auditSentence, batchStateWord, orderStateWord, ownerOverrideDoing, ownerOverrideSentence, plainReason, wordsFromKey, type RecordLabels } from "./record-words";
 export { materialsSummary, type MaterialsSummary } from "./materials-summary";
+// ADR-104 §2 and §4: box labels and the batch plan.
+export { largestBatchFor, largestBatchesForForm, MIXING_EQUIPMENT_KINDS, type LargestBatch } from "./batch-plan-facts";
+export { plannedBatchSizesG } from "./work-orders";
+export { batchBoxInfo, batchBoxInfoFor, planBatchBoxes, batchBoxPrintJobs, currentBoxPlan, leftOverWrappers, returnLeftOverWrappers, BOX_LABEL_KIND, type BatchBoxInfo, type PlanBoxesResult, type LeftOverWrapper } from "./batch-boxes";
