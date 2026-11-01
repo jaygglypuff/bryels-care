@@ -92,7 +92,7 @@ export async function seedW4c(db: Db) {
     ]);
     await db.insert(s.capaActions).values([
       { organizationId: O, siteId: nfd.id, capaId: c.id, actionNo: 1, actionKind: "corrective", description: "Fit a UPS (fictional supplier quote Q-118) to the soap mixer control panel.", ownerId: manager.id, dueDate: day(14), verificationMethod: "QA checks the installation and a switch-over test with mains off.", createdBy: manager.id, createdAt: at(1) },
-      { organizationId: O, siteId: nfd.id, capaId: c.id, actionNo: 2, actionKind: "preventive", description: "Draft the routing change: log temperature every 2 minutes during any mixer stop.", ownerId: qa.id, dueDate: day(-2), verificationMethod: "Change control approved and the routing revision effective.", createdBy: qa.id, createdAt: at(1) },
+      { organizationId: O, siteId: nfd.id, capaId: c.id, actionNo: 2, actionKind: "preventive", description: "Write the change to the soap steps: write down the temperature every 2 minutes whenever the mixer stops.", ownerId: qa.id, dueDate: day(-2), verificationMethod: "The change request is approved and the new steps are in use.", createdBy: qa.id, createdAt: at(1) },
     ]);
   }
 

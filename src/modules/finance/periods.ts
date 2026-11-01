@@ -1,3 +1,4 @@
+import { isAre, plural } from "@/lib/plural";
 import "server-only";
 import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db, type Tx } from "@/db/client";
@@ -128,7 +129,7 @@ export async function lockPeriod(ctx: AuthContext, periodCode: string, input: { 
     let acknowledgements: unknown = null;
     if (items.length) {
       if (!input.acknowledge) {
-        throw new DomainError("conflict", `PRELOCK_OPEN_ITEMS: ${items.length} document(s) dated in ${periodCode} are still open. Finish them, or acknowledge them with a reason to lock anyway.`, { code: "PRELOCK_OPEN_ITEMS", items });
+        throw new DomainError("conflict", `PRELOCK_OPEN_ITEMS: ${plural(items.length, "paper")} dated in ${periodCode} ${isAre(items.length)} still open. Finish them, or acknowledge them with a reason to lock anyway.`, { code: "PRELOCK_OPEN_ITEMS", items });
       }
       acknowledgements = { note: requireReason(input.acknowledgementNote, "acknowledgementNote"), items };
     }

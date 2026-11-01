@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import { and, desc, eq, gte, isNotNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
@@ -85,7 +86,7 @@ export async function evaluateAlerts(organizationId: string, now: Date): Promise
     .select({ n: sql<number>`count(*)::int` })
     .from(backgroundJobs)
     .where(and(eq(backgroundJobs.organizationId, organizationId), isNotNull(backgroundJobs.deadLetteredAt), gte(backgroundJobs.deadLetteredAt, new Date(now.getTime() - windowMin * 60_000))));
-  if (Number(dl?.n ?? 0) > 0) findings.push({ code: "failed_jobs", severity: "critical", title: "Automatic tasks failed for good", body: `${dl.n} job(s) failed for good in the last ${windowMin} minutes. Open the Jobs card to retry or cancel. Runbook §6.`, link: "/admin/diagnostics?status=failed#jobs" });
+  if (Number(dl?.n ?? 0) > 0) findings.push({ code: "failed_jobs", severity: "critical", title: "Automatic tasks failed for good", body: `${plural(Number(dl.n), "automatic task")} failed for good in the last ${windowMin} minutes. Open the Jobs card to retry or cancel. Runbook §6.`, link: "/admin/diagnostics?status=failed#jobs" });
   if (process.env.BACKUP_STATUS_SOURCE?.trim() === "table") {
     const maxAge = await getSetting(db, organizationId, "alerts.backup_max_age_hours");
     const [b] = await db.select({ at: backupRuns.finishedAt, offsite: backupRuns.offsiteBucketKey }).from(backupRuns).where(and(eq(backupRuns.organizationId, organizationId), eq(backupRuns.status, "succeeded"))).orderBy(desc(backupRuns.finishedAt)).limit(1);

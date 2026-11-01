@@ -303,7 +303,7 @@ describe("routings (US-3-02)", () => {
     await expectCode(decideRoutingRevision(planner, { id: open.id, decision: "approved" }), "forbidden");
     const d = await decideRoutingRevision(manager, { id: open.id, decision: "approved", effectiveFrom: in20 });
     expect(d.status).toBe("approved");
-    expect((await getEffectiveRouting(planner, (await db.select().from(routings).where(eq(routings.id, gbsRoutingId)))[0].productId, in20))?.steps[4].name).toBe("Packaging and labeling");
+    expect((await getEffectiveRouting(planner, (await db.select().from(routings).where(eq(routings.id, gbsRoutingId)))[0].productId, in20))?.steps[4].name).toBe("Wrap and label");
   });
 
   it("a quality-relevant change needs QA first, and the submitter cannot approve", async () => {

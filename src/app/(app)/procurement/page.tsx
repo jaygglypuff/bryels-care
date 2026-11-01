@@ -1,3 +1,4 @@
+import { plural, waits } from "@/lib/plural";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { expectedReceipts, listAslQueue, listPurchaseOrders, listPurchaseRequests, listReorderSuggestions, listSupplierReturns } from "@/modules/procurement";
@@ -39,13 +40,13 @@ export default async function ProcurementHome() {
   const canOrder = ctx.can("procurement.purchase_order.create");
   const next =
     poToApprove && ctx.can("procurement.purchase_order.approve")
-      ? { text: `Next: ${poToApprove} purchase order(s) wait for your approval.`, action: { label: "Open them", href: "/procurement/orders?status=submitted" } }
+      ? { text: `Next: ${plural(poToApprove, "purchase order")} ${waits(poToApprove)} for your approval.`, action: { label: "Open them", href: "/procurement/orders?status=submitted" } }
       : prToApprove && ctx.can("procurement.purchase_request.approve")
-        ? { text: `Next: ${prToApprove} request(s) to buy wait for your approval.`, action: { label: "Open them", href: "/procurement/requests?status=submitted" } }
+        ? { text: `Next: ${plural(prToApprove, "request")} to buy ${waits(prToApprove)} for your approval.`, action: { label: "Open them", href: "/procurement/requests?status=submitted" } }
         : poToSend && ctx.can("procurement.purchase_order.post")
-          ? { text: `Next: send ${poToSend} approved purchase order(s) to the supplier.`, action: { label: "Open them", href: "/procurement/orders?status=approved" } }
+          ? { text: `Next: send ${plural(poToSend, "approved purchase order")} to the supplier.`, action: { label: "Open them", href: "/procurement/orders?status=approved" } }
           : prApproved && canOrder
-            ? { text: `Next: ${prApproved} approved request(s) to buy can become a purchase order.`, action: { label: "Make a purchase order", href: "/procurement/orders/new" } }
+            ? { text: `Next: ${plural(prApproved, "approved request")} to buy can become a purchase order.`, action: { label: "Make a purchase order", href: "/procurement/orders/new" } }
             : sug.length && canOrder
               ? { text: `${sug.length === 1 ? "1 item is" : `${sug.length} items are`} running low.`, action: { label: "See what to buy", href: "/procurement/reorder" } }
               : null;

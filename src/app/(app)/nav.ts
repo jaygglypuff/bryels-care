@@ -29,6 +29,11 @@ export type NavItem = {
   advanced?: boolean;
   /** UX audit R2: only these roles see the entry (the IT and system menu: system admin and owner). */
   roles?: readonly string[];
+  /**
+   * Round 4 (UX re-audit C #6): folded under "Advanced" for everyone EXCEPT these roles, who use it every day
+   * (the QA lead's recall screens, the warehouse's repacking). Keeps the owner's menu short without hiding work.
+   */
+  foldUnless?: readonly string[];
 };
 export type NavGroup = { label: string; icon: string; /** One line under the label in the top bar (mockup board). */ description: string; items: NavItem[] };
 export type QuickAction = { label: string; href: string; icon: string; permission?: Permission };
@@ -40,7 +45,16 @@ export type NavBadges = Partial<Record<string, number>>;
 export const ADVANCED = "Planning tools";
 /** UX audit R2: rarely used admin and IT screens, one sub-menu, for the system admin and the owner only. */
 export const IT_SYSTEM = "IT and system";
+/** Round 4: "People & access" and "Rules and settings" merged into one sub-menu. */
+export const PEOPLE_SETTINGS = "People, rules and settings";
 const IT_ROLES: readonly string[] = ["system_admin", "owner_director"];
+/** Round 4: roles that work on the floor and use the floor screens daily (they keep them unfolded). */
+const FLOOR_ROLES: readonly string[] = ["production_operator", "warehouse_operator", "qa_qc"];
+const QA: readonly string[] = ["qa_qc"];
+const WAREHOUSE: readonly string[] = ["warehouse_operator"];
+const MONEY: readonly string[] = ["finance"];
+const BUYERS: readonly string[] = ["procurement"];
+const ADMIN: readonly string[] = ["system_admin"];
 /** Sections shown after all the others, in this order. */
 const LAST_SECTIONS = [ADVANCED, IT_SYSTEM];
 
@@ -57,10 +71,10 @@ export const QUICK_ACTIONS: QuickAction[] = [
 
 /** Product, step and instruction setup: Management → Production setup (owner and engineering). */
 const SETUP_ITEMS: NavItem[] = [
-  // ADR-089: the guided recipe wizard (ingredients and steps in five screens).
-  { label: "New recipe", href: "/masterdata/recipes/new", permission: "masterdata.formula.create" },
+  // Round 4 (UX re-audit C #5): the plain recipe list (one row per product; "New recipe" and the wizard open from it).
+  { label: "Recipes", href: "/masterdata/recipes", permission: "masterdata.formula.view" },
   { label: "How-to sheets", href: "/masterdata/work-instructions", permission: "masterdata.work_instruction.view" },
-  { label: "Quality checks for each item", href: "/masterdata/inspection-plans", permission: "quality.inspection_plan.view" },
+  { label: "Quality checks for each item", href: "/masterdata/inspection-plans", permission: "quality.inspection_plan.view", foldUnless: QA },
   { label: "Equipment", href: "/masterdata/equipment", permission: "masterdata.equipment.view" },
   // UX audit R2: the engineers' editing screens, folded under "Advanced" at the end (the wizard is the way in).
   { label: "Recipes (advanced)", href: "/masterdata/formulas", permission: "masterdata.formula.view", advanced: true },
@@ -96,7 +110,7 @@ export const NAV: NavGroup[] = [
       ...inSection("Help & my account", [
         { label: "Help", href: "/help" },
         { label: "My account", href: "/account" },
-        { label: "Working without signal", href: "/sync" },
+        { label: "Working without signal", href: "/sync", foldUnless: FLOOR_ROLES },
         // One entry for your own claims and the ones you approve (same screen; approvals also wait in To approve).
         { label: "Expense claims", href: "/finance/expenses", permission: ["finance.expense_claim.create", "finance.expense_claim.approve"] },
       ]),
@@ -127,18 +141,18 @@ export const NAV: NavGroup[] = [
         { label: "Quality tests", href: "/quality/inspections", permission: "quality.inspection.view" },
         { label: "Problem reports", href: "/quality/deviations", permission: "quality.deviation.view" },
         { label: "Stopped by QA", href: "/quality/holds", permission: "quality.hold.view" },
-        { label: "Decide many lots at once", href: "/quality/bulk", permission: "quality.disposition.approve" },
+        { label: "Decide many lots at once", href: "/quality/bulk", permission: "quality.disposition.approve", foldUnless: QA },
         { label: "Where it came from and where it went", href: "/quality/trace", permission: "quality.genealogy.view" },
         { label: "Customer complaints", href: "/quality/complaints", permission: "quality.complaint.view" },
-        { label: "Who received it (recall check)", href: "/quality/recall", permission: "quality.genealogy.view" },
-        { label: "Product recalls", href: "/quality/recalls", permission: "quality.recall_case.view" },
+        { label: "Who received it (recall check)", href: "/quality/recall", permission: "quality.genealogy.view", foldUnless: QA },
+        { label: "Product recalls", href: "/quality/recalls", permission: "quality.recall_case.view", foldUnless: QA },
         { label: "Fix-and-prevent plans", href: "/quality/capa", permission: "quality.capa.view" },
-        { label: "Change requests", href: "/quality/changes", permission: "quality.change_control.view" },
+        { label: "Change requests", href: "/quality/changes", permission: "quality.change_control.view", foldUnless: QA },
       ]),
       ...inSection("Packing & dispatch", [
         { label: "Boxing", href: "/warehouse/packs", permission: "inventory.pack.view" },
-        { label: "Repack for a customer", href: "/warehouse/repack", permission: "inventory.container.edit" },
-        { label: "Check the labels in an area", href: "/quality/label-verification", permission: "inventory.container.edit" },
+        { label: "Repack for a customer", href: "/warehouse/repack", permission: "inventory.container.edit", foldUnless: WAREHOUSE },
+        { label: "Check the labels in an area", href: "/quality/label-verification", permission: "inventory.container.edit", foldUnless: WAREHOUSE },
         { label: "To get from shelf", href: "/sales/picking", permission: "sales.pick.view" },
         { label: "Send out", href: "/sales/dispatch", permission: "sales.shipment.view" },
         { label: "Deliveries", href: "/sales/shipments", permission: "sales.shipment.view" },
@@ -147,7 +161,7 @@ export const NAV: NavGroup[] = [
         { label: "Maintenance", href: "/maintenance", permission: "maintenance.work_order.view" },
         { label: "Regular maintenance", href: "/maintenance/plans", permission: "maintenance.plan.view" },
         { label: "Repair jobs", href: "/maintenance/work-orders", permission: "maintenance.work_order.view" },
-        { label: "Spare parts", href: "/maintenance/spare-parts", permission: "maintenance.spare_part.view" },
+        { label: "Spare parts", href: "/maintenance/spare-parts", permission: "maintenance.spare_part.view", advanced: true },
       ]),
     ],
   },
@@ -162,12 +176,12 @@ export const NAV: NavGroup[] = [
       { label: "Move stock", href: "/inventory/move", permission: "inventory.movement.post" },
       { label: "Warehouse sections", href: "/warehouse", permission: "inventory.lot.view" }, // S6 (ADR-077)
       ...inSection("More stock lists", [
-        { label: "Shelves", href: "/inventory/locations", permission: "masterdata.location.view" },
-        { label: "Boxes and sacks", href: "/inventory/containers", permission: "inventory.container.view" },
+        { label: "Shelves", href: "/inventory/locations", permission: "masterdata.location.view", foldUnless: WAREHOUSE },
+        { label: "Boxes and sacks", href: "/inventory/containers", permission: "inventory.container.view", foldUnless: WAREHOUSE },
         { label: "Can we deliver?", href: "/inventory/availability", permission: "inventory.balance.view" },
         { label: "Expiring soon", href: "/inventory/lots/expiry", permission: "inventory.lot.view" },
-        { label: "Which one to use first / set aside", href: "/inventory/lots/reservations", permission: "inventory.lot.view" },
-        { label: "Stock changes", href: "/inventory/movements", permission: "inventory.movement.view" },
+        { label: "Which one to use first / set aside", href: "/inventory/lots/reservations", permission: "inventory.lot.view", foldUnless: WAREHOUSE },
+        { label: "Stock changes", href: "/inventory/movements", permission: "inventory.movement.view", foldUnless: WAREHOUSE },
       ]),
       ...inSection("Counts & labels", [
         { label: "Stock counts", href: "/inventory/counts", permission: "inventory.stock_count.view" },
@@ -193,8 +207,8 @@ export const NAV: NavGroup[] = [
       ...inSection("Billing & payments", [
         { label: "Invoices", href: "/finance/invoices", permission: "finance.invoice.view" },
         { label: "Payments", href: "/finance/payments", permission: "finance.payment_record.view" },
-        { label: "Customer statements", href: "/finance/statements", permission: "finance.invoice.view" },
-        { label: "Credits (money back)", href: "/finance/credit-notes", permission: "finance.credit_note.view" },
+        { label: "Customer statements", href: "/finance/statements", permission: "finance.invoice.view", foldUnless: MONEY },
+        { label: "Credits (money back)", href: "/finance/credit-notes", permission: "finance.credit_note.view", foldUnless: MONEY },
       ]),
     ],
   },
@@ -208,7 +222,7 @@ export const NAV: NavGroup[] = [
       ...inSection("Reports & analytics", [
         { label: "Business overview", href: "/analytics/overview", permission: "analytics.dashboard.view" },
         { label: "Reports", href: "/analytics", permission: "analytics.dashboard.view" },
-        { label: "Compare over time", href: "/analytics/trends", permission: "analytics.dashboard.view" },
+        { label: "Compare over time", href: "/analytics/trends", permission: "analytics.dashboard.view", advanced: true },
         { label: "Lists to download or print", href: "/reports", permission: "analytics.report.view" },
         { label: "Lists sent by email", href: "/reports/schedules", permission: "analytics.scheduled_report.view", advanced: true },
         { label: "What each number means", href: "/analytics/definitions", permission: "analytics.kpi_definition.view", advanced: true },
@@ -217,7 +231,7 @@ export const NAV: NavGroup[] = [
         { label: "Purchasing", href: "/procurement", permission: "procurement.purchase_request.view" },
         { label: "Requests to buy", href: "/procurement/requests", permission: "procurement.purchase_request.view" },
         { label: "Purchase orders", href: "/procurement/orders", permission: "procurement.purchase_order.view" },
-        { label: "Send back to supplier", href: "/procurement/returns", permission: "procurement.supplier_return.view" },
+        { label: "Send back to supplier", href: "/procurement/returns", permission: "procurement.supplier_return.view", foldUnless: BUYERS },
         { label: "Suppliers we may buy from", href: "/procurement/suppliers", permission: "masterdata.supplier.view" },
         { label: "Running low", href: "/procurement/reorder", permission: "procurement.reorder_suggestion.view" },
         { label: "How suppliers do", href: "/procurement/performance", permission: "procurement.supplier_performance.view", advanced: true },
@@ -226,7 +240,7 @@ export const NAV: NavGroup[] = [
       ...inSection("Finance", [
         { label: "Money", href: "/finance", permission: "finance.invoice.view" },
         { label: "Supplier bills", href: "/finance/bills", permission: "finance.supplier_bill.view" },
-        { label: "Close the month", href: "/finance/periods", permission: "finance.period_lock.view" },
+        { label: "Close the month", href: "/finance/periods", permission: "finance.period_lock.view", foldUnless: MONEY },
         { label: "Tax rates", href: "/finance/tax", permission: "finance.tax_config.view", advanced: true },
       ]),
       ...inSection("Production setup", SETUP_ITEMS),
@@ -235,37 +249,36 @@ export const NAV: NavGroup[] = [
         { label: "Materials", href: "/masterdata/materials", permission: "masterdata.material.view" },
         { label: "Products", href: "/masterdata/products", permission: "masterdata.product.view" },
         { label: "Locations", href: "/masterdata/locations", permission: "masterdata.location.view" },
-        { label: "Sites", href: "/masterdata/sites", permission: "masterdata.site.view" },
-        { label: "Warehouses", href: "/masterdata/warehouses", permission: "masterdata.warehouse.view" },
-        { label: "Making areas / lines", href: "/masterdata/lines", permission: "masterdata.production_line.view" },
+        { label: "Sites", href: "/masterdata/sites", permission: "masterdata.site.view", foldUnless: ADMIN },
+        { label: "Warehouses", href: "/masterdata/warehouses", permission: "masterdata.warehouse.view", foldUnless: ADMIN },
+        { label: "Making areas / lines", href: "/masterdata/lines", permission: "masterdata.production_line.view", foldUnless: ADMIN },
         { label: "Units", href: "/masterdata/uom", permission: "masterdata.uom.view", advanced: true },
         { label: "Choice lists", href: "/masterdata/lists", permission: "masterdata.lookup_value.view", advanced: true },
         { label: "Reasons", href: "/masterdata/reason-codes", permission: "masterdata.reason_code.view", advanced: true },
       ]),
-      ...inSection("People & access", [
+      // Round 4: people, rules and settings in one sub-menu (two small ones before); the rare ones fold for the owner.
+      ...inSection(PEOPLE_SETTINGS, [
         { label: "People who use the app", href: "/admin/users", permission: "identity.user.view" },
         { label: "Roles (what each job may do)", href: "/admin/roles", permission: "identity.role.view" },
-      ]),
-      ...inSection("Rules and settings", [
         { label: "Settings", href: "/admin/settings", permission: "platform.settings.view" },
         { label: "Who says OK to what", href: "/admin/approval-rules", permission: "platform.approval_rule.view" },
-        { label: "Who gets which message", href: "/admin/notification-rules", permission: "platform.notification_rule.view" },
-        { label: "Labels and printouts", href: "/admin/templates", permission: "masterdata.label_template.view" },
-        { label: "How record numbers look", href: "/admin/numbering", permission: "platform.numbering_rule.view" },
         { label: "History of changes", href: "/admin/audit", permission: "platform.audit.view" },
+        { label: "Who gets which message", href: "/admin/notification-rules", permission: "platform.notification_rule.view", foldUnless: ADMIN },
+        { label: "Labels and printouts", href: "/admin/templates", permission: "masterdata.label_template.view", foldUnless: ADMIN },
+        { label: "How record numbers look", href: "/admin/numbering", permission: "platform.numbering_rule.view", foldUnless: ADMIN },
       ]),
       // UX audit R2: rarely used IT screens in one sub-menu, last, for the system admin and the owner only.
       ...inSection(
         IT_SYSTEM,
         [
-          { label: "Who is signed in", href: "/admin/sessions", permission: "identity.session.view" },
-          { label: "Sign-in safety", href: "/admin/security", permission: "identity.user.admin" },
-          { label: "Phones and tablets", href: "/admin/devices", permission: "platform.device.view" },
-          { label: "Phone changes to check", href: "/sync/conflicts", permission: "platform.sync_conflict.view" },
           { label: "Health of the system", href: "/admin/diagnostics", permission: "platform.job.view" },
-          { label: "Keeping and deleting old records", href: "/admin/retention", permission: "platform.retention_policy.view" },
           { label: "Load data from a spreadsheet", href: "/admin/imports", permission: "platform.import_job.view" },
-          { label: "Old paper documents", href: "/admin/imports/legacy-documents", permission: "documents.legacy_document.view" },
+          { label: "Who is signed in", href: "/admin/sessions", permission: "identity.session.view", foldUnless: ADMIN },
+          { label: "Sign-in safety", href: "/admin/security", permission: "identity.user.admin", foldUnless: ADMIN },
+          { label: "Phones and tablets", href: "/admin/devices", permission: "platform.device.view", foldUnless: ADMIN },
+          { label: "Phone changes to check", href: "/sync/conflicts", permission: "platform.sync_conflict.view", foldUnless: ADMIN },
+          { label: "Keeping and deleting old records", href: "/admin/retention", permission: "platform.retention_policy.view", foldUnless: ADMIN },
+          { label: "Old paper documents", href: "/admin/imports/legacy-documents", permission: "documents.legacy_document.view", foldUnless: ADMIN },
         ].map((i): NavItem => ({ ...i, permission: i.permission as Permission, roles: IT_ROLES })),
       ),
     ],
@@ -369,7 +382,36 @@ export function buildNav(can: Can, roles: readonly string[], opts: { approver?: 
   })
     .map((g) => ({ ...g, items: g.items.filter((i) => (i.planned || canSee(can, i.permission)) && (approver || !i.approverOnly) && (!i.roles || i.roles.some((r) => roles.includes(r)))) }))
     .filter((g) => g.items.some((i) => !i.planned && !i.hub) || g.label === "Home");
-  return trimForFloor(groups, persona);
+  return trimForFloor(groups, persona).map((g) => tidySections(foldForRole(g, roles)));
+}
+
+/** Round 4: `foldUnless` entries become "Advanced" for everyone but the listed roles. */
+function foldForRole(g: NavGroup, roles: readonly string[]): NavGroup {
+  return { ...g, items: g.items.map((i) => (i.foldUnless && !i.advanced ? { ...i, advanced: !i.foldUnless.some((r) => roles.includes(r)) } : i)) };
+}
+
+/**
+ * Round 4 (UX re-audit C #6, N2): no sub-menu that opens only "Advanced", and no sub-menu with one entry.
+ * A section whose entries are all folded joins the section before it (still folded); a section with one entry
+ * joins its neighbour (before it, else after it). The special last sections (Planning tools, IT and system) and
+ * the floor roles' kept sections stay as they are. With nothing to join, the section stays.
+ */
+export function tidySections(g: NavGroup): NavGroup {
+  let items = g.items;
+  const names = () => groupSections({ ...g, items }).sections.map((x) => x.name).filter((n) => !LAST_SECTIONS.includes(n));
+  for (let guard = 0; guard < 20; guard++) {
+    const order = names();
+    const victim = order.find((n) => {
+      const its = items.filter((i) => i.section === n);
+      return its.every((i) => i.advanced) || its.length === 1;
+    });
+    if (!victim) break;
+    const at = order.indexOf(victim);
+    const into = order[at - 1] ?? order[at + 1];
+    if (!into) break;
+    items = items.map((i) => (i.section === victim ? { ...i, section: into } : i));
+  }
+  return { ...g, items };
 }
 
 /** The landing page of a destination: its hub, else its first live item. */

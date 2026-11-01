@@ -14,6 +14,7 @@ import { SyncConflictSummary } from "../sync/conflict-summary"; // W4D (US-7-05)
 registerAppHooks(); // Wave 3 cross-module registrations (src/modules/wiring.ts); cheap and idempotent
 
 import { codeLast } from "@/lib/code-last";
+import { plainDatesIn } from "@/lib/plain-date";
 
 export const metadata = { title: "Problems & alerts" };
 export const dynamic = "force-dynamic";
@@ -26,9 +27,28 @@ function age(minutes: number) {
   return `${Math.round(minutes / 1440)} d`;
 }
 
+/** Filter chips by kind: real links, 44 px tall (UX re-audit C #2). */
+function KindChips({ kinds, kind, qs }: { kinds: { kind: string; label: string }[]; kind?: string; qs: (x: Record<string, string | undefined>) => string }) {
+  const chip = (on: boolean) => cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[13px]", on ? "border-primary bg-primary-soft font-semibold" : "border-line hover:bg-surface-2");
+  return (
+    <nav aria-label="Show one kind" className="mt-2 flex flex-wrap gap-2 sm:mt-0" data-testid="kind-chips">
+      <Link href={qs({ kind: undefined })} aria-current={!kind ? "page" : undefined} className={chip(!kind)}>All kinds</Link>
+      {kinds.map((k) => (
+        <Link key={k.kind} href={qs({ kind: k.kind })} aria-current={kind === k.kind ? "page" : undefined} className={chip(kind === k.kind)}>
+          {k.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
 type SP = { tab?: string; kind?: string; group?: string; acked?: string };
 
+/** The button word from the current catalogue: items opened before a rename keep their stored word ("Open CAPA"). */
+const buttonWord = (i: ActionItemView) => ACTION_KINDS.find((k) => k.kind === i.kind)?.actionLabel ?? i.actionLabel;
+
 function ItemRow({ i }: { i: ActionItemView }) {
+  const title = codeLast(plainDatesIn(i.title));
   const sev = SEV[i.severity as keyof typeof SEV] ?? SEV.info;
   return (
     <li className="flex flex-col gap-2 py-3 lg:flex-row lg:items-start lg:justify-between">
@@ -40,14 +60,14 @@ function ItemRow({ i }: { i: ActionItemView }) {
           <span className="text-[12px] text-muted">{i.kindLabel} · {i.siteCode ?? "whole company"} · waiting {age(i.ageMinutes)}</span>
         </div>
         <p className="mt-1 text-[15px] font-medium text-fg">
-          {codeLast(i.title).text}
-          {(i.recordNumber || codeLast(i.title).codes.length > 0) && <span className="ml-1 font-mono text-[12px] text-muted">{i.recordNumber ?? codeLast(i.title).codes.join(" · ")}</span>}
+          {title.text}
+          {(i.recordNumber || title.codes.length > 0) && <span className="ml-1 font-mono text-[12px] text-muted">{i.recordNumber ?? title.codes.join(" · ")}</span>}
         </p>
-        {i.detail && <p className="mt-0.5 break-words text-[13px] text-muted">{i.detail}</p>}
+        {i.detail && <p className="mt-0.5 break-words text-[13px] text-muted">{plainDatesIn(i.detail)}</p>}
         {i.acknowledgementNote && <p className="mt-0.5 text-[12px] text-muted">Note: {i.acknowledgementNote}</p>}
       </div>
       <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-start">
-        <LinkButton href={isInternalPath(i.link) ? currentHref(i.link) : (recordHref(i.entityType, i.entityId) ?? "/action-centre")} size="sm">{i.actionLabel}</LinkButton>
+        <LinkButton href={isInternalPath(i.link) ? currentHref(i.link) : (recordHref(i.entityType, i.entityId) ?? "/action-centre")} size="sm">{buttonWord(i)}</LinkButton>
         {!i.acknowledgedAt && <AcknowledgeForm id={i.id} />}
       </div>
     </li>
@@ -129,17 +149,21 @@ export default async function ActionCentrePage({ searchParams }: { searchParams:
         <SyncConflictSummary ctx={ctx} />
       ) : (
         <Card>
+          {/* Round 4 (UX re-audit C #2): 44 px chips, folded on phones so they do not fill the first screen. */}
+          <details className="mb-3 sm:hidden" open={!!kind}>
+            <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-2 rounded-full border border-line px-4 text-[14px] font-medium [&::-webkit-details-marker]:hidden">
+              Show one kind only{kind ? `: ${ACTION_KINDS.find((k) => k.kind === kind)?.label ?? ""}` : ""}
+            </summary>
+            <KindChips kinds={kindsHere} kind={kind} qs={qs} />
+          </details>
+          <div className="mb-3 hidden sm:block">
+            <KindChips kinds={kindsHere} kind={kind} qs={qs} />
+          </div>
           <div className="mb-3 flex flex-wrap items-center gap-2 text-[13px]">
-            <Link href={qs({ kind: undefined })} className={cx("rounded-full border px-3 py-1", !kind ? "border-primary bg-primary-soft font-semibold" : "border-line")}>All kinds</Link>
-            {kindsHere.map((k) => (
-              <Link key={k.kind} href={qs({ kind: k.kind })} className={cx("rounded-full border px-3 py-1", kind === k.kind ? "border-primary bg-primary-soft font-semibold" : "border-line")}>
-                {k.label}
-              </Link>
-            ))}
             {ctx.allowedSites.length > 1 && (
-              <Link href={qs({ group: bySite ? undefined : "site" })} className="ml-auto text-primary-text hover:underline">{bySite ? "Do not group" : "Group by site"}</Link>
+              <Link href={qs({ group: bySite ? undefined : "site" })} className="inline-flex min-h-[44px] items-center rounded-full px-3 text-primary-text hover:bg-primary-soft">{bySite ? "Do not group" : "Group by site"}</Link>
             )}
-            <Link href={qs({ acked: sp.acked === "0" ? undefined : "0" })} className="text-primary-text hover:underline">{sp.acked === "0" ? "Show the ones someone is on" : "Hide the ones someone is on"}</Link>
+            <Link href={qs({ acked: sp.acked === "0" ? undefined : "0" })} className="inline-flex min-h-[44px] items-center rounded-full px-3 text-primary-text hover:bg-primary-soft">{sp.acked === "0" ? "Show the ones someone is on" : "Hide the ones someone is on"}</Link>
           </div>
           {items.length === 0 ? (
             <EmptyState title="No problems right now">

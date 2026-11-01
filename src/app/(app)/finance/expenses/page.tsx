@@ -1,3 +1,4 @@
+import { plural, waits } from "@/lib/plural";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { EXPENSE_STATUS_LABEL, listExpenseClaims } from "@/modules/finance";
@@ -26,7 +27,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title="Expense claims" actions={canOwn ? <LinkButton href="/finance/expenses/new" variant="cta">Claim money I spent</LinkButton> : undefined} />
       <PageIntro>This screen is for getting back money you spent for the company. Add the receipt photo; the manager approves, and finance too for bigger amounts (the limits are settings the owner checks). Nobody approves their own claim.</PageIntro>
-      {scope === "to_approve" && rows.length > 0 && <NextStep text={`Next: ${rows.length} claim(s) wait for your approval.`} action={{ label: "Open the first", href: `/finance/expenses/${rows[0].id}` }} />}
+      {scope === "to_approve" && rows.length > 0 && <NextStep text={`Next: ${plural(rows.length, "claim")} ${waits(rows.length)} for your approval.`} action={{ label: "Open the first", href: `/finance/expenses/${rows[0].id}` }} />}
       <StatusTabs base="/finance/expenses" current={status} tabs={tabs} />
       {rows.length === 0 ? (
         <EmptyState title={scope === "to_approve" ? "Nothing waiting for your approval" : "No claims here"} action={canOwn ? <LinkButton href="/finance/expenses/new" variant="secondary">Claim money I spent</LinkButton> : undefined}>

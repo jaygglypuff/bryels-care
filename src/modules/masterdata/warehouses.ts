@@ -27,7 +27,7 @@ export type SpecialRole = (typeof SPECIAL_LOCATION_ROLES)[number];
 export const SPECIAL_ROLE_LABELS: Record<SpecialRole, string> = {
   receiving: "Receiving",
   staging: "Staging",
-  quarantine: "Quarantine",
+  quarantine: "Waiting for the QA check",
   hold: "QA hold",
   rejected: "Rejected",
   recall: "Recall",

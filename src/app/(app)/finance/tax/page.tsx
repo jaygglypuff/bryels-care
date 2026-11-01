@@ -1,3 +1,4 @@
+import { plural, waits } from "@/lib/plural";
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
@@ -28,7 +29,7 @@ export default async function TaxPage() {
     <>
       <PageHeader title="Tax rates" />
       <PageIntro>This screen is for the tax rates the accountant gave us. The system only adds tax with rates checked by a second person; it does not decide which tax applies or file tax returns.</PageIntro>
-      {toCheck.length > 0 && <NextStep text={`Next: ${toCheck.length} rate(s) wait for your check.`} action={{ label: "Check them", href: `#t-${toCheck[0].id}` }} />}
+      {toCheck.length > 0 && <NextStep text={`Next: ${plural(toCheck.length, "rate")} ${waits(toCheck.length)} for your check.`} action={{ label: "Check them", href: `#t-${toCheck[0].id}` }} />}
       <div className="mb-4">
         <Banner tone="info" title={`Used on sales: ${defaults.sales ?? "no tax"} · on buying: ${defaults.purchases ?? "no tax"}`}>
           Which rate is used by default is a setting{ctx.can("platform.settings.view") ? <> (<Link className="underline" href="/admin/settings">Management › Rules and settings › Settings</Link>, needs a second approver)</> : null}. Rates marked “Made up” are demo examples, not real rates.

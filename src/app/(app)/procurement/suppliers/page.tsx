@@ -1,3 +1,4 @@
+import { plural, waits } from "@/lib/plural";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { listSuppliers } from "@/modules/masterdata";
@@ -48,7 +49,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
         }
       />
       <PageIntro>This screen is for which items we may buy from which supplier. Purchasing suggests a supplier for an item; QA says yes or no. Only “yes” items can go on a purchase order.</PageIntro>
-      {canDecide && mine.length > 0 && <NextStep text={`Next: ${mine.length} suggestion(s) wait for a QA decision.`} action={{ label: "Open the first", href: `/procurement/suppliers/${mine[0].supplierId}` }} />}
+      {canDecide && mine.length > 0 && <NextStep text={`Next: ${plural(mine.length, "suggestion")} ${waits(mine.length)} for a QA decision.`} action={{ label: "Open the first", href: `/procurement/suppliers/${mine[0].supplierId}` }} />}
       <SubNav />
       {deleted && <Banner tone="ok" title="Supplier deleted" />}
       <div className="flex flex-col gap-5">

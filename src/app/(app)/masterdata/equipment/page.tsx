@@ -51,7 +51,7 @@ export default async function EquipmentPage() {
               {rows.map((e) => (
                 <tr key={e.id} className="hover:bg-surface-2/60">
                   <Td>
-                    <Link href={`/masterdata/equipment/${e.id}`} className="font-medium text-primary-text hover:underline">
+                    <Link href={`/masterdata/equipment/${e.id}`} className="inline-flex min-h-[44px] items-center font-medium text-primary-text hover:underline">
                       {e.name}
                     </Link>
                     <div className="font-mono text-[12px] text-muted">{e.code}</div>

@@ -1,4 +1,5 @@
 "use server";
+import { plural } from "@/lib/plural";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
@@ -247,7 +248,7 @@ export async function submitOrderAction(_p: ActionState, fd: FormData): Promise<
   return inPlace(async () => {
     const ctx = await requireContext();
     const r = await submitPurchaseOrder(ctx, { purchaseOrderId: str(fd, "purchaseOrderId") });
-    return `Submitted: ${r.steps} approval step(s).`;
+    return `Sent for approval: ${plural(r.steps, "approval step")}.`;
   });
 }
 
@@ -402,7 +403,7 @@ export async function postReturnAction(_p: ActionState, fd: FormData): Promise<A
   return inPlace(async () => {
     const ctx = await requireContext();
     const r = await postSupplierReturn(ctx, { returnId: str(fd, "returnId"), idempotencyKey: str(fd, "idempotencyKey") });
-    return `Posted: ${r.movements} stock issue(s) recorded.`;
+    return `Saved: ${plural(r.movements, "stock move")} recorded.`;
   });
 }
 
@@ -421,7 +422,7 @@ export async function recomputeReorderAction(_p: ActionState): Promise<ActionSta
     const ctx = await requireContext();
     ctx.require("procurement.reorder_suggestion.approve");
     const r = await computeReorderSuggestions(ctx, { siteId: ctx.currentSiteId });
-    return `${r.created} suggestion(s) from ${r.policies} polic${r.policies === 1 ? "y" : "ies"}.`;
+    return `${plural(r.created, "suggestion")} from ${plural(r.policies, "rule")}.`;
   });
 }
 

@@ -1,4 +1,5 @@
 "use server";
+import { plural } from "@/lib/plural";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
@@ -43,7 +44,7 @@ export async function deactivateRoleAction(_: ActionState, fd: FormData): Promis
   try {
     const n = await deactivateCustomRole(ctx, id, String(fd.get("reason") ?? ""));
     revalidatePath(`/admin/roles/${id}`);
-    return { ok: true, message: `Role deactivated; ${n} assignment(s) ended.` };
+    return { ok: true, message: `Role turned off; ${plural(n, "person", "people")} no longer ${n === 1 ? "has" : "have"} it.` };
   } catch (e) {
     return toActionState(e);
   }

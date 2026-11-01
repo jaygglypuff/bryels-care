@@ -71,6 +71,24 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
 @layer base {
   input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--brand-600); }
   label:has(> input[type="checkbox"]), label:has(> input[type="radio"]) { min-height: 44px; cursor: pointer; }
+  /* Round 4 (UX re-audit C #2): also a label that holds the box deeper inside, an inline label (min-height does
+     nothing on an inline box, so it becomes an inline flex row), and a label written right after its box. */
+  label:has(input[type="checkbox"]), label:has(input[type="radio"]) { min-height: 44px; cursor: pointer; }
+  label:has(input[type="checkbox"]):not([class*="flex"]):not([class*="grid"]):not([class*="block"]),
+  label:has(input[type="radio"]):not([class*="flex"]):not([class*="grid"]):not([class*="block"]) { display: inline-flex; align-items: center; gap: 0.5rem; }
+  input[type="checkbox"] + label, input[type="radio"] + label { display: inline-flex; min-height: 44px; align-items: center; cursor: pointer; }
+}
+/* Round 4 (UX re-audit C #9): on phones the line "This screen is for…" comes right under the title, before the
+   header buttons (PageHeader in src/ui/core.tsx, PageIntro in src/ui/guide.tsx). Only when the header has buttons
+   and a PageIntro follows it: the page column becomes a flex column, the header's two parts take part in it, and
+   `order` puts title → intro → buttons; anything above the header (a back link) stays above. */
+@media (max-width: 639.98px) {
+  :is(div, main, section):has(> .page-header--actions + .page-intro) { display: flex; flex-direction: column; }
+  .page-header--actions:has(+ .page-intro) { display: contents; }
+  .page-header--actions:has(+ .page-intro) > .page-title { order: -3; }
+  .page-header--actions + .page-intro { order: -2; margin-top: 0.25rem; }
+  .page-header--actions:has(+ .page-intro) > .page-actions { order: -1; margin-bottom: 1.25rem; }
+  :is(div, main, section) > *:has(~ .page-header--actions + .page-intro) { order: -4; }
 }
 /* Navigation feedback (src/ui/navigation-progress.tsx, ADR-043): a bar along the top edge after
    150 ms, the previous page held at 60 % opacity after 300 ms; no skeleton, no layout jump. */

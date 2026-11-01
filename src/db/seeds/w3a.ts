@@ -336,6 +336,8 @@ export async function seedW3a(db: Db, opts: W3aSeedOptions = {}) {
         plannedEnd: date,
         approvedBy: ok(releasedAt) ? manager : null,
         approvedAt: ok(releasedAt) ? releasedAt : null,
+        // Round 4 (UX re-audit C): released orders name the person who makes them, so My work and the floor TV show a first name.
+        assignedOperatorId: ok(releasedAt) ? operator : null,
         statusChangedAt: createdAt,
         statusChangedBy: manager,
         createdBy: manager,
@@ -649,6 +651,55 @@ export async function seedW3a(db: Db, opts: W3aSeedOptions = {}) {
       snapshots += r.written;
     }
     await db.update(s.kpiRefreshLog).set({ status: "succeeded", snapshotsWritten: snapshots, finishedAt: now }).where(eq(s.kpiRefreshLog.id, log.id));
+  }
+
+  // Round 4 (UX re-audit C): the base seed's running batch has no production order, so the floor TV said "Anyone".
+  // In the demo only (backfill) it gets an in-progress production order assigned to the (fictional) operator.
+  if (opts.backfill) {
+    const running = await db.select().from(s.batches).where(and(eq(s.batches.siteId, NFD.id), eq(s.batches.status, "in_process"), sql`${s.batches.workOrderId} is null`));
+    for (const b of running) {
+      const fr = await db.select({ formulaId: s.formulaRevisions.formulaId }).from(s.formulaRevisions).where(eq(s.formulaRevisions.id, b.formulaRevisionId)).limit(1);
+      if (!fr[0] || !b.routingRevisionId) continue;
+      const startAt = b.startedAt ?? now;
+      const day = localDate(startAt, TZ);
+      const [wo] = await db
+        .insert(s.workOrders)
+        .values({
+          organizationId: O,
+          siteId: NFD.id,
+          workOrderNumber: num("WOM"),
+          status: "in_progress",
+          productId: b.productId,
+          formulaId: fr[0].formulaId,
+          formulaRevisionId: b.formulaRevisionId,
+          routingRevisionId: b.routingRevisionId,
+          productionLineId: soapLine?.id ?? null,
+          qtyPlannedBase: b.plannedSizeG,
+          baseUom: "g",
+          batchCount: 1,
+          batchSizeBase: b.plannedSizeG,
+          plannedStart: day,
+          plannedEnd: day,
+          assignedOperatorId: operator,
+          approvedBy: manager,
+          approvedAt: new Date(startAt.getTime() - 60 * 60_000),
+          statusChangedAt: startAt,
+          statusChangedBy: manager,
+          createdBy: manager,
+          createdAt: new Date(startAt.getTime() - 2 * 60 * 60_000),
+          updatedBy: manager,
+          updatedAt: startAt,
+        })
+        .returning();
+      const tr = [
+        { fromState: null, toState: "draft" },
+        { fromState: "draft", toState: "planned" },
+        { fromState: "planned", toState: "released" },
+        { fromState: "released", toState: "in_progress" },
+      ];
+      await db.insert(s.workOrderStateTransitions).values(tr.map((t, k) => ({ organizationId: O, siteId: NFD.id, workOrderId: wo.id, fromState: t.fromState, toState: t.toState, actorId: manager, occurredAt: new Date(startAt.getTime() - (3 - k) * 30 * 60_000), correlationId: wo.id })));
+      await db.update(s.batches).set({ workOrderId: wo.id }).where(eq(s.batches.id, b.id));
+    }
   }
 
   return { skipped: false, startDate, endDate, batches: executed.length, deviations: deviationRows.length, snapshots };

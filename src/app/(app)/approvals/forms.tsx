@@ -11,7 +11,7 @@ const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? 
  * page (no browser popup): the first shows "Approve ₱350.00 expense claim from Tess?" with
  * [Yes, approve] and [Cancel]. The server re-checks permission, site, step and same-person rules.
  */
-export function InlineDecision({ kind, entityId, what, rejectLabel }: { kind: string; entityId: string; what: string; rejectLabel: string }) {
+export function InlineDecision({ kind, entityId, what, rejectLabel, primary = true }: { kind: string; entityId: string; what: string; rejectLabel: string; /** Round 4: only the first row's Approve is green (one next step). */ primary?: boolean }) {
   const [asking, setAsking] = useState(false);
   const [state, dispatch] = useInPlaceAction(decideApprovalAction);
   // One key per row: a double tap or a retry of "Yes, approve" returns the first result (production orders).
@@ -19,7 +19,7 @@ export function InlineDecision({ kind, entityId, what, rejectLabel }: { kind: st
   return (
     <div className="flex w-full flex-col gap-2 md:w-72">
       {!asking ? (
-        <Button type="button" variant="primary" className="w-full" onClick={() => setAsking(true)}>
+        <Button type="button" variant={primary ? "primary" : "secondary"} className="w-full" onClick={() => setAsking(true)} data-testid="approve-button">
           Approve
         </Button>
       ) : (

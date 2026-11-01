@@ -346,7 +346,7 @@ export function Scanner({
       </form>}
 
       {!cameraOnly && <details className="text-[13px]">
-        <summary className="cursor-pointer text-muted">Scanner settings</summary>
+        <summary className="flex min-h-[44px] cursor-pointer items-center text-muted">Scanner settings</summary>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <label htmlFor="scan-terminator" className="text-fg-2">My scanner ends a scan with</label>
           <select

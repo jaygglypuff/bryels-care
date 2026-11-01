@@ -53,9 +53,9 @@ describe("superseded screens redirect to the current one", () => {
     expect(await landing("@/app/(app)/quality/check/page")).toBe("/quality");
   });
 
-  it("older aliases still redirect: /inventory/lots, /masterdata/recipes, /procurement/expected/[poId], /admin", async () => {
+  // Round 4 (UX re-audit C #5): /masterdata/recipes is the plain recipe list now, no longer an alias of the advanced list.
+  it("older aliases still redirect: /inventory/lots, /procurement/expected/[poId], /admin", async () => {
     expect(await landing("@/app/(app)/inventory/lots/page")).toBe("/inventory");
-    expect(await landing("@/app/(app)/masterdata/recipes/page")).toBe("/masterdata/formulas");
     expect(await landing("@/app/(app)/procurement/expected/[poId]/page", { params: { poId: ID } })).toBe(`/inventory/receive?po=${ID}`);
     expect(await landing("@/app/(app)/admin/page")).toBe("/admin/users");
   });

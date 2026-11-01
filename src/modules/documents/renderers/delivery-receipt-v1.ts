@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import { z } from "zod";
 import { html, type SafeHtml } from "../html";
 import type { TemplateDefinition } from "../schemas";
@@ -107,7 +108,7 @@ function copyPage(def: TemplateDefinition, m: FrozenDataset["meta"], d: Delivery
       <td class="num">${l.remainingText}</td>
     </tr>`,
     )}
-    <tr class="group"><td colspan="4">Total</td><td>${d.totals.boxes} box(es)</td><td class="num">${d.totals.unitsText}</td><td colspan="2"></td></tr></tbody>
+    <tr class="group"><td colspan="4">Total</td><td>${plural(d.totals.boxes, "box")}</td><td class="num">${d.totals.unitsText}</td><td colspan="2"></td></tr></tbody>
   </table>
   ${d.remarks ? html`<p class="note"><strong>Remarks:</strong> ${d.remarks}</p>` : ""}
   ${d.statutoryText ? html`<p class="note" data-testid="statutory">${d.statutoryText}</p>` : ""}

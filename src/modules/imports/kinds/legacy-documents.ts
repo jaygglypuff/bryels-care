@@ -96,7 +96,7 @@ export const legacyDocumentsKind: ImportKindHandler<LegacyValues> = {
       ["disposition", v.disposition],
       ["QA name", v.qaName],
     ].filter(([, x]) => !x);
-    if (v.legacyKind === "bmr" && blank.length) r.warn(`Blank header field(s) on the record: ${blank.map(([n]) => n).join(", ")} (F-04). Index what the paper shows.`);
+    if (v.legacyKind === "bmr" && blank.length) r.warn(`Blank header ${blank.length === 1 ? "field" : "fields"} on the record: ${blank.map(([n]) => n).join(", ")} (F-04). Index what the paper shows.`);
     if (!legacyKind || !legacyNumber || !fileName) return null;
     return { values: v, tier1Key: `${v.legacyKind}:${v.legacyNumber.toUpperCase()}` };
   },

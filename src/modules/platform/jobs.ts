@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import "server-only";
 import { and, desc, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
@@ -119,7 +120,7 @@ async function finalizeFailure(job: BackgroundJobRow, message: string, now: Date
         kind: "failed_job",
         severity: "critical",
         title: `Automatic task failed: ${job.jobKind}`,
-        body: `The task stopped after ${job.attempts} try(s) and needs IT to look at it. Last error: ${message.slice(0, 300)} (correlation ${job.correlationId}).`,
+        body: `The task stopped after ${plural(job.attempts, "try", "tries")} and needs IT to look at it. Last error: ${message.slice(0, 300)} (correlation ${job.correlationId}).`,
         entityType: "background_job",
         entityId: job.id,
         link: `/admin/diagnostics?job=${job.id}#jobs`,

@@ -1,3 +1,4 @@
+import { isAre, plural } from "@/lib/plural";
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
@@ -65,7 +66,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {forMe.length > 0 && <NextStep text={`${forMe.length} settings ${forMe.length === 1 ? "change waits" : "changes wait"} for your OK.`} action={{ label: "Decide now", href: "#pending" }} />}
       <StepUpGate ctx={ctx} purpose="change settings that need the owner's OK" />
       {orphans.length > 0 && (
-        <MoreDetails title={`${orphans.length} old saved value(s) are not used any more (for the IT person)`}>
+        <MoreDetails title={`${plural(orphans.length, "old saved value")} ${isAre(orphans.length)} not used any more (for the IT person)`}>
           <p className="break-words text-[13px] text-muted">{orphans.map((o) => o.key).join(", ")}. They do nothing; the IT person can remove them with a database change.</p>
         </MoreDetails>
       )}

@@ -1,4 +1,5 @@
 "use client";
+import { plural } from "@/lib/plural";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { syncAgent } from "@/lib/offline/agent";
@@ -74,7 +75,7 @@ export function SyncPanel({ userId, sites, currentSiteId }: { userId: string; si
       )}
       {s.handedOver > 0 && (
         <Banner tone="info" title="Changes from the previous person were sent for review">
-          {s.handedOver} unsent change(s) recorded by the person signed in before you were sent to the supervisor&apos;s review queue. Nothing of theirs is shown here.
+          {plural(s.handedOver, "unsent change")} recorded by the person signed in before you were sent to the supervisor&apos;s review queue. Nothing of theirs is shown here.
         </Banner>
       )}
       {warnings.length > 0 && (

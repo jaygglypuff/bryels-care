@@ -133,7 +133,7 @@ class SyncAgent {
       }
       const left = await unsentCommands(db);
       await wipe(db);
-      await log(db, "reset", `signed-in person changed; ${unsent.length - left.length} unsent change(s) sent for review`);
+      await log(db, "reset", `signed-in person changed; ${unsent.length - left.length} unsent changes sent for review`);
       this.set({ handedOver: unsent.length - left.length, snapshot: null, referenceAt: {} });
     }
   }

@@ -12,6 +12,7 @@ import { Logo, LogoMark } from "@/ui/brand";
 import { NavigationProgress } from "@/ui/navigation-progress";
 import { DemoBanner } from "@/ui/demo-banner";
 import { SignOutButton, SyncChip, useSync } from "@/ui/sync-status";
+import { FrameHelp, type FrameHelpResult } from "@/ui/help/frame-help";
 import type { SyncState } from "@/lib/offline/agent";
 
 const ICONS: Record<string, React.ReactNode> = {
@@ -44,6 +45,8 @@ type Props = {
   showApprovals?: boolean;
   switchSite: (fd: FormData) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Round 4: the frame's Help "?" loads the guide of the current screen (server action). Without it, no button. */
+  loadHelp?: (pathname: string) => Promise<FrameHelpResult>;
   /** Demo mode (ADR-055): the strip above the top bar; `canReset` adds the owner's reset link. Null outside the demo. */
   demo?: { canReset: boolean; sandbox?: boolean } | null;
   children: React.ReactNode;
@@ -124,7 +127,7 @@ function DrawerSync({ userId }: { userId: string }) {
   );
 }
 
-export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCount, approvalCount = 0, showApprovals = true, switchSite, signOut, demo = null, children }: Props) {
+export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCount, approvalCount = 0, showApprovals = true, switchSite, signOut, loadHelp, demo = null, children }: Props) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   useEffect(() => setDrawer(false), [pathname]);
@@ -170,10 +173,15 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
     const m = t.href ? matchLen(pathname, t.href) : -1;
     return m > best.m ? { href: t.href, m } : best;
   }, { href: null, m: -1 }).href;
+  // Round 4 (UX re-audit C #9): words beside Scan, To approve and Messages at 1280–1535 px where they fit. With the
+  // site selector in the bar (people with more than one site) they do not (measured at 1440: 110 px short), so
+  // To approve and Messages stay icons with tooltips there; Scan keeps its short word.
+  const tightTopBar = sites.length > 1;
   const withCount = (label: string, href: string) => (badges[href] ? `${label}, ${badges[href]} open` : label);
 
-  const siteSwitcher = (
-    <form action={switchSite} className="flex items-center">
+  // Round 4 (UX re-audit C N4): the site's NAME, never cut ("North Fields Plant"); the code is in the tooltip only.
+  const siteSwitcher = (wide: boolean) => (
+    <form action={switchSite} className={cx("flex items-center", wide && "w-full")}>
       <input type="hidden" name="returnTo" value={pathname} />
       <label htmlFor="site-switch" className="sr-only">Site</label>
       <select
@@ -181,10 +189,12 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
         name="siteId"
         defaultValue={currentSiteId}
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
-        className="h-11 max-w-[150px] cursor-pointer rounded-full border border-line bg-surface pl-3 pr-8 text-[13px] font-medium text-fg shadow-[var(--shadow-card)]"
+        title={site ? `${site.name} (${site.code})` : undefined}
+        data-testid="site-switch"
+        className={cx("h-11 cursor-pointer rounded-full border border-line bg-surface pl-3 pr-8 text-[13px] font-medium text-fg shadow-[var(--shadow-card)]", wide ? "w-full" : "w-auto")}
       >
         {sites.map((s) => (
-          <option key={s.id} value={s.id}>{s.code} · {s.name}</option>
+          <option key={s.id} value={s.id}>{s.name}</option>
         ))}
       </select>
     </form>
@@ -249,7 +259,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
             </ul>
           </nav>
           <div className="ml-auto flex shrink-0 items-center gap-2 xl:ml-0">
-            {sites.length > 1 && <div className="hidden xl:block">{siteSwitcher}</div>}
+            {sites.length > 1 && <div className="hidden shrink-0 xl:block">{siteSwitcher(false)}</div>}
             {/* Scan for every role at every width (brief: camera scan entry on mobile). */}
             <Link
               href="/inventory/scan"
@@ -258,7 +268,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
               title="Scan or search"
             >
               <ScanLine size={18} aria-hidden />
-              <span className="md:hidden">Scan</span>
+              <span className="md:hidden xl:inline 2xl:hidden">Scan</span>
               <span className="hidden md:inline xl:hidden 2xl:inline">Scan or search</span>
             </Link>
             <div className="hidden sm:block">
@@ -273,7 +283,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
                 title="To approve"
               >
                 <ListChecks size={18} aria-hidden />
-                <span className="hidden whitespace-nowrap md:inline xl:hidden 2xl:inline">To approve</span>
+                <span className={cx("hidden whitespace-nowrap md:inline", tightTopBar && "xl:hidden 2xl:inline")}>To approve</span>
                 {approvalCount > 0 && (
                   <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full bg-[#c62828] px-1 text-[10px] font-semibold leading-[18px] text-white">{approvalCount > 99 ? "99+" : approvalCount}</span>
                 )}
@@ -281,11 +291,12 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
             )}
             <Link href="/notifications" className={cx("relative flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium text-fg-2 shadow-[var(--shadow-card)] hover:text-fg", pathname.startsWith("/notifications") && "text-primary-text")} aria-label={`Messages, ${unreadCount} unread`} title="Messages">
               <Bell size={18} aria-hidden />
-              <span className="hidden md:inline xl:hidden 2xl:inline">Messages</span>
+              <span className={cx("hidden md:inline", tightTopBar && "xl:hidden 2xl:inline")}>Messages</span>
               {unreadCount > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full bg-[#c62828] px-1 text-[10px] font-semibold leading-[18px] text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>
               )}
             </Link>
+            {loadHelp && <FrameHelp load={loadHelp} />}
             <details className="relative shrink-0">
               <summary className="grid size-11 cursor-pointer list-none place-items-center rounded-full text-[13px] font-semibold ring-2 ring-white [&::-webkit-details-marker]:hidden" style={{ background: "var(--lime-200)", color: "var(--brand-800)" }} aria-label="Account">
                 {initials}
@@ -293,7 +304,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
               <div className="absolute right-0 top-12 z-40 w-64 max-w-[calc(100vw-32px)] rounded-[18px] border border-line bg-surface p-4 shadow-[var(--shadow-pop)]">
                 <p className="font-semibold text-fg">{user.name}</p>
                 <p className="text-[12px] text-muted">{user.roles}</p>
-                <p className="mt-2 text-[12px] text-muted">Site: {site?.code} · {site?.name}</p>
+                <p className="mt-2 text-[12px] text-muted">Site: {site?.name}</p>
                 <Link href="/account" className="mt-2 flex min-h-[44px] items-center text-[13px] font-medium text-primary-text hover:underline">My account and devices</Link>
                 {demo?.canReset && <Link href="/admin/demo" className="flex min-h-[44px] items-center text-[13px] font-medium text-primary-text hover:underline">Reset demo data</Link>}
                 <div className="mt-2 border-t border-line pt-1">
@@ -328,7 +339,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
           return (
             <div className="mx-auto hidden max-w-[1480px] px-4 pb-3 sm:px-6 xl:block">
               <ul className="flex flex-wrap items-center gap-1.5">
-                <li className="mr-1 hidden text-[13px] text-muted xl:block">
+                <li className="mr-1 hidden text-[13px] text-muted 2xl:block">
                   {activeGroup.description}
                 </li>
                 {main.map(pill)}
@@ -456,7 +467,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
               <Logo className="h-8 w-auto" />
               <button className="grid size-11 place-items-center rounded-full bg-surface-2" onClick={() => setDrawer(false)} aria-label="Close menu"><X size={18} /></button>
             </div>
-            {sites.length > 1 && <div className="mb-3">{siteSwitcher}</div>}
+            {sites.length > 1 && <div className="mb-3">{siteSwitcher(true)}</div>}
             <div className="mb-4">
               <DrawerSync userId={user.id} />
             </div>

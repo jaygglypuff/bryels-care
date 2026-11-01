@@ -390,3 +390,17 @@ exactly one green button; "Waiting for <name> (role)" comes from the who-can-do 
 | `/quality` | "Check again on" date on batches. |
 | `/sales/returns` | "1 item, 6 pcs". |
 | Forbidden screens (all) | "Ask <name> (role)" from who-can-do; never tells a site manager to ask the site manager. |
+
+## Round 4 notes (live re-audit C, 2026-11-01)
+
+| Screen | Change | Check |
+|---|---|---|
+| Home (`/dashboard`) | Recent activity names problems and alerts by their title; the record number stays grey after | `tests/unit/activity-sentence.test.ts`, `tests/integration/analytics/owner-home.test.ts` |
+| Problems & alerts (`/action-centre`) | 44 px kind chips, folded on phones ("Show one kind only"); one "Add a note" button per row instead of an open note box; button words and dates from the catalogue and in words | `tests/unit/round4-ux.test.ts`, live 390/1440 |
+| To approve (`/approvals`) | Only the oldest row's Approve is green; the others are secondary | `tests/unit/round4-ux.test.ts` |
+| Recipes (`/masterdata/recipes`) | New plain list: product, version status, one button ("Edit recipe" / "Make a new version" / "Open"); "← All recipes" opens it | `tests/unit/round4-ux.test.ts`, `tests/unit/nav-per-role.test.ts` |
+| Operations Center | Stage strip connected by arrows (3 a row on tablets, 5 from 1280 px), two-column list on phones, 44 px warnings | live 390/820/1440 |
+| Compare over time, New material, Supplier bill, Locations, Site detail | Long lists and optional fields folded (≤ 5 visible fields) | live 390 |
+| Every page with header buttons and a PageIntro | Phones: title → intro → buttons (CSS in `globals.css`, classes from `PageHeader`/`PageIntro`) | live 390 |
+| Frame | Site name only, never cut; Help "?" on every screen; Scan/To approve/Messages words where they fit at 1440 | live 390/820/1440 |
+

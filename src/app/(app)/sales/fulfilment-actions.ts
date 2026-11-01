@@ -1,4 +1,5 @@
 "use server";
+import { plural } from "@/lib/plural";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -83,7 +84,7 @@ export async function releaseAllocationsAction(_: ActionState, fd: FormData): Pr
     const ctx = await requireContext();
     const r = await releaseAllocations(ctx, uuid.parse(str(fd, "orderId")), { reason: str(fd, "reason") });
     refreshCurrentPage();
-    return { ok: true, message: `${r.released} set-aside place(s) let go.` };
+    return { ok: true, message: `${plural(r.released, "set-aside place")} let go.` };
   } catch (e) {
     return toActionState(e);
   }
@@ -259,7 +260,7 @@ export async function reverseShipmentAction(_: ActionState, fd: FormData): Promi
     const ctx = await requireContext();
     const r = await reverseShipment(ctx, uuid.parse(str(fd, "shipmentId")), { reason: str(fd, "reason"), idempotencyKey: idem(fd) });
     refreshCurrentPage();
-    return { ok: true, message: `Sending out undone: the stock is back on its shelves (${r.movements} movement(s)).` };
+    return { ok: true, message: `Sending out undone: the stock is back on its shelves (${plural(r.movements, "stock move")}).` };
   } catch (e) {
     return toActionState(e);
   }
@@ -355,7 +356,7 @@ export async function packLabelsAction(_: ActionState, fd: FormData): Promise<Ac
     const ok = r.filter((j) => j.jobId).length;
     const bad = r.filter((j) => j.error);
     if (r.length === 0) return { ok: true, message: "Every box already has a label. Reprint a label from its label job (reason required)." };
-    return { ok: bad.length === 0, message: `${ok} label(s) sent to the print station.${bad.length ? ` Not queued: ${bad.map((b) => `${b.boxNumber}: ${b.error}`).join("; ")}` : ""}` };
+    return { ok: bad.length === 0, message: `${plural(ok, "label")} sent to the print station.${bad.length ? ` Not queued: ${bad.map((b) => `${b.boxNumber}: ${b.error}`).join("; ")}` : ""}` };
   } catch (e) {
     return toActionState(e);
   }
@@ -366,7 +367,7 @@ export async function submitPackAction(_: ActionState, fd: FormData): Promise<Ac
     const ctx = await requireContext();
     const r = await submitPack(ctx, uuid.parse(str(fd, "packId")));
     refreshCurrentPage();
-    return { ok: true, message: r.verificationMode === "all" ? `Submitted. First pack of this SKU: the checker scans all ${r.sampleSize} boxes.` : `Submitted. The checker scans a sample of ${r.sampleSize} box(es).` };
+    return { ok: true, message: r.verificationMode === "all" ? `Submitted. First pack of this SKU: the checker scans all ${r.sampleSize} boxes.` : `Submitted. The checker scans a sample of ${plural(r.sampleSize, "box")}.` };
   } catch (e) {
     return toActionState(e);
   }

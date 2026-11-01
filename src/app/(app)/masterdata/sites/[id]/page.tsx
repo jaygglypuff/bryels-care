@@ -74,7 +74,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
               <ul className="space-y-2 text-[14px]">
                 {whs.map((w) => (
                   <li key={w.id} className="flex flex-wrap items-center justify-between gap-2">
-                    <Link className="font-medium text-primary-text hover:underline" href={`/masterdata/warehouses/${w.id}`}>{w.name}</Link>
+                    <Link className="inline-flex min-h-[44px] items-center font-medium text-primary-text hover:underline" href={`/masterdata/warehouses/${w.id}`}>{w.name}</Link>
                     <ActiveChip active={w.isActive} />
                   </li>
                 ))}
@@ -89,7 +89,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
               <ul className="space-y-2 text-[14px]">
                 {lines.map((l) => (
                   <li key={l.id} className="flex flex-wrap items-center justify-between gap-2">
-                    <Link className="font-medium text-primary-text hover:underline" href={`/masterdata/lines/${l.id}`}>{l.name}</Link>
+                    <Link className="inline-flex min-h-[44px] items-center font-medium text-primary-text hover:underline" href={`/masterdata/lines/${l.id}`}>{l.name}</Link>
                     <StateChip status={l.status} />
                   </li>
                 ))}
@@ -106,13 +106,20 @@ export default async function SitePage({ params, searchParams }: { params: Promi
             {depts.map((d) => (
               <li key={d.id} className="rounded-[14px] border border-line p-3">
                 {canDept ? (
-                  <ActionForm action={saveDepartmentAction} submitLabel="Save" variant="secondary" hidden={{ _id: d.id }}>
-                    <TextField name="name" label="Team name" defaultValue={d.name} />
-                    <CheckField name="isActive" label="In use" defaultChecked={d.isActive} hint="A team used by a making area that is in use cannot be switched off." />
-                    <MoreDetails>
-                      <TextField name="code" label="Your own code (optional)" defaultValue={d.code} mono />
-                    </MoreDetails>
-                  </ActionForm>
+                  // Round 4 (UX re-audit C #7): one row per team; its form opens with "Change" (was one open form per team).
+                  <details>
+                    <summary className="flex min-h-[44px] cursor-pointer list-none flex-wrap items-center gap-2 text-[14px] [&::-webkit-details-marker]:hidden">
+                      <span className="font-medium">{d.name}</span> <ActiveChip active={d.isActive} />
+                      <span className="ml-auto text-[13px] font-medium text-primary-text">Change</span>
+                    </summary>
+                    <ActionForm action={saveDepartmentAction} submitLabel="Save" variant="secondary" hidden={{ _id: d.id }}>
+                      <TextField name="name" label="Team name" defaultValue={d.name} />
+                      <CheckField name="isActive" label="In use" defaultChecked={d.isActive} hint="A team used by a making area that is in use cannot be switched off." />
+                      <MoreDetails>
+                        <TextField name="code" label="Your own code (optional)" defaultValue={d.code} mono />
+                      </MoreDetails>
+                    </ActionForm>
+                  </details>
                 ) : (
                   <p className="flex flex-wrap items-center gap-2 text-[14px]">
                     {d.name} <span className="font-mono text-[11px] text-muted">{d.code}</span> <ActiveChip active={d.isActive} />
@@ -122,11 +129,12 @@ export default async function SitePage({ params, searchParams }: { params: Promi
             ))}
           </ul>
           {canDept && (
-            <div className="mt-4 border-t border-line pt-4">
+            <details className="mt-4 border-t border-line pt-2">
+              <summary className="flex min-h-[44px] cursor-pointer items-center text-[14px] font-medium text-primary-text">Add a team</summary>
               <ActionForm action={saveDepartmentAction} submitLabel="Add team" variant="secondary" hidden={{ siteId: site.id }}>
                 <TextField name="name" label="New team or department" placeholder="e.g. Maintenance" />
               </ActionForm>
-            </div>
+            </details>
           )}
         </Card>
       )}

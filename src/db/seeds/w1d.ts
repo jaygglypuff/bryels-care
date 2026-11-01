@@ -47,13 +47,13 @@ const CLEARANCE_ITEMS = [
 ];
 
 export const SOAP_ROUTING: SeedStep[] = [
-  { name: "Weighing area line clearance", kind: "line_clearance", area: "weighing", instruction: "Confirm the weighing area is clean and free of previous materials, labels and documents.", checklist: CLEARANCE_ITEMS },
-  { name: "Weighing", kind: "dispensing", instruction: "Dispense each ingredient against the formula; operator weighs, a second person checks.", equipmentKind: "scale" },
-  { name: "Production area line clearance", kind: "line_clearance", area: "production", instruction: "Confirm the production room and equipment are clean and labelled for this batch.", checklist: CLEARANCE_ITEMS },
+  { name: "Check the weighing area is clean", kind: "line_clearance", area: "weighing", instruction: "Make sure the weighing area is clean and nothing from the last batch is left: no materials, labels or papers.", checklist: CLEARANCE_ITEMS },
+  { name: "Weigh the ingredients", kind: "dispensing", instruction: "Weigh each ingredient of the recipe. One person weighs, a second person checks.", equipmentKind: "scale" },
+  { name: "Check the making area is clean", kind: "line_clearance", area: "production", instruction: "Make sure the making room and the machines are clean and labelled for this batch.", checklist: CLEARANCE_ITEMS },
   {
-    name: "Mixing and cutting",
+    name: "Heat and mix, pour, cure and cut",
     kind: "process",
-    instruction: "Combine oils and lye solution, mix to trace, add extract and colour, pour, cure and cut. Record temperature and time.",
+    instruction: "Heat the oils, mix in the lye solution until it thickens, add the extract and colour, pour into moulds, let it cure, then cut. Write down the temperature and the time.",
     equipmentKind: "mixer",
     wi: "WI-SOAP-MIX",
     parameters: [
@@ -62,35 +62,35 @@ export const SOAP_ROUTING: SeedStep[] = [
       { code: "mould_id", name: "Mould used", valueKind: "text" },
     ],
   },
-  { name: "Packaging area line clearance", kind: "line_clearance", area: "packaging", instruction: "Confirm the packaging line is clear before wrapping (second clearance on the paper BMR).", checklist: CLEARANCE_ITEMS },
+  { name: "Check the packing area is clean", kind: "line_clearance", area: "packaging", instruction: "Make sure the packing table is clear before wrapping (the second check on the paper batch record).", checklist: CLEARANCE_ITEMS },
   {
-    name: "Packaging and labeling",
+    name: "Wrap and label",
     kind: "packaging",
-    instruction: "Wrap bars, print lot and expiry, reconcile wrappers used and destroyed.",
+    instruction: "Wrap the bars, print the lot number and the expiry date, and count the wrappers used and thrown away.",
     parameters: [
       { code: "wrappers_used", name: "Wrappers used", valueKind: "numeric", uom: "pcs" },
       { code: "wrappers_destroyed", name: "Wrappers destroyed", valueKind: "numeric", uom: "pcs" },
     ],
   },
-  { name: "Transfer to quarantine storage area", kind: "transfer", instruction: "Move finished goods to quarantine until QA disposition." },
+  { name: "Move to the hold area", kind: "transfer", instruction: "Move the finished goods to the hold area. Nobody uses them until QA says OK." },
 ];
 
 export const LOTION_ROUTING: SeedStep[] = [
-  { name: "Weighing area line clearance", kind: "line_clearance", area: "weighing", instruction: "Confirm the weighing area is clean.", checklist: CLEARANCE_ITEMS },
-  { name: "Weighing", kind: "dispensing", instruction: "Dispense each phase ingredient; operator weighs, a second person checks.", equipmentKind: "scale" },
-  { name: "Production area line clearance", kind: "line_clearance", area: "production", instruction: "Confirm the kettle and filler are clean.", checklist: CLEARANCE_ITEMS },
+  { name: "Check the weighing area is clean", kind: "line_clearance", area: "weighing", instruction: "Make sure the weighing area is clean.", checklist: CLEARANCE_ITEMS },
+  { name: "Weigh the ingredients", kind: "dispensing", instruction: "Weigh each ingredient. One person weighs, a second person checks.", equipmentKind: "scale" },
+  { name: "Check the making area is clean", kind: "line_clearance", area: "production", instruction: "Make sure the kettle and the filling machine are clean.", checklist: CLEARANCE_ITEMS },
   {
-    name: "Heating and emulsification",
+    name: "Heat and mix",
     kind: "process",
-    instruction: "Heat water and oil phases separately, combine and homogenise. Record temperatures.",
+    instruction: "Heat the water part and the oil part separately, then mix them until smooth. Write down the temperatures.",
     parameters: [
       { code: "water_phase_temp", name: "Water phase temperature", valueKind: "numeric", uom: "°C" },
       { code: "oil_phase_temp", name: "Oil phase temperature", valueKind: "numeric", uom: "°C" },
     ],
   },
-  { name: "Cooling and in-process check", kind: "in_process_qc", instruction: "Cool, add aloe below the set temperature, check appearance and pH.", parameters: [{ code: "appearance_ok", name: "Appearance conforms", valueKind: "boolean" }] },
-  { name: "Filling and labeling", kind: "filling", instruction: "Fill bottles, cap, label with lot and expiry." },
-  { name: "Transfer to quarantine storage area", kind: "transfer", instruction: "Move finished goods to quarantine until QA disposition." },
+  { name: "Cool and check", kind: "in_process_qc", instruction: "Let it cool, add the aloe when it is cool enough, then check how it looks and its pH.", parameters: [{ code: "appearance_ok", name: "Appearance conforms", valueKind: "boolean" }] },
+  { name: "Fill and label", kind: "filling", instruction: "Fill the bottles, close them and label them with the lot number and the expiry date." },
+  { name: "Move to the hold area", kind: "transfer", instruction: "Move the finished goods to the hold area. Nobody uses them until QA says OK." },
 ];
 
 /* ------------------------------------------------------------------ work instructions */
@@ -286,20 +286,20 @@ export async function seedW1D(db: Db, ctx: { O: string; U: Users; sites: Record<
   type T = { testCode: string; name: string; method?: string; valueKind: string; uom?: string; specMin?: string; specMax?: string; specText?: string };
   const soapTests: T[] = [
     { testCode: "PH", name: "pH (10% solution)", method: "Placeholder method; QA to define", valueKind: "numeric", uom: "pH", specMin: "9.0", specMax: "10.5" },
-    { testCode: "APPEAR", name: "Appearance", method: "Visual", valueKind: "text", specText: "PLACEHOLDER: smooth bar, no cracks (QA to confirm)" },
+    { testCode: "APPEAR", name: "Appearance", method: "Visual", valueKind: "text", specText: "Example only: smooth bar, no cracks (QA to confirm)" },
     { testCode: "NETWT", name: "Net weight (n=10)", method: "Balance", valueKind: "numeric", uom: "g", specMin: "135" },
   ];
   const planDefs: { code: string; name: string; kind: string; productId?: string; materialId?: string; tests: T[] }[] = [
-    { code: "IP-ACS-FP", name: "Acapulco Soap finished product (PLACEHOLDER)", kind: "finished_product", productId: P("ACS-135").id, tests: soapTests },
-    { code: "IP-GBS-FP", name: "Guava Bar Soap finished product (PLACEHOLDER)", kind: "finished_product", productId: P("GBS-135").id, tests: soapTests },
+    { code: "IP-ACS-FP", name: "Acapulco Soap finished product", kind: "finished_product", productId: P("ACS-135").id, tests: soapTests },
+    { code: "IP-GBS-FP", name: "Guava Bar Soap finished product", kind: "finished_product", productId: P("GBS-135").id, tests: soapTests },
     {
       code: "IP-MAT-0012-IN",
-      name: "Coconut oil incoming inspection (PLACEHOLDER)",
+      name: "Coconut oil check on delivery",
       kind: "incoming",
       materialId: coconut.id,
       tests: [
         { testCode: "COA", name: "Certificate of analysis present and matches the lot", valueKind: "pass_fail", specText: "CoA present, supplier lot matches" },
-        { testCode: "APPEAR", name: "Appearance and odour", method: "Visual / olfactory", valueKind: "text", specText: "PLACEHOLDER: conforms to supplier specification (QA to confirm)" },
+        { testCode: "APPEAR", name: "Appearance and odour", method: "Visual / olfactory", valueKind: "text", specText: "Example only: conforms to supplier specification (QA to confirm)" },
       ],
     },
   ];
@@ -313,7 +313,7 @@ export async function seedW1D(db: Db, ctx: { O: string; U: Users; sites: Record<
         planKind: d.kind,
         productId: d.productId ?? null,
         materialId: d.materialId ?? null,
-        samplingInstructions: "PLACEHOLDER sampling plan for the demo. QA must define sample size and frequency before production use.",
+        samplingInstructions: "Example sampling plan for the demo only. QA must set the sample size and frequency before production use.",
         isPlaceholder: true,
         revisionNo: 1,
         status: "draft",

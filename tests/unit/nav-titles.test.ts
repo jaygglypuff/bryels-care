@@ -21,7 +21,6 @@ const DYNAMIC_TITLES: Record<string, string> = {
   "/dashboard": "a greeting with the person's name (\"Good evening, Ana\"); the menu word is Overview",
   "/floor": "the company and site name on the production TV; the menu word says what the screen is",
   "/inventory": "the open stock tab (Raw materials, Work in progress, Finished goods, All stock); the menu word is Stock",
-  "/masterdata/recipes/new": "the wizard's step question (\"1. Which product?\"); the browser title is New recipe",
   "/production/orders": "My work for operators, Production orders for everyone else (same screen, filtered per role)",
 };
 

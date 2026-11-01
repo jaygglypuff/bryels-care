@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import "server-only";
 import { createHash } from "node:crypto";
 import { and, eq, inArray, isNotNull, isNull, lt, lte } from "drizzle-orm";
@@ -196,7 +197,7 @@ export async function deliverReport(input: DeliveryInput): Promise<DeliveryResul
       organizationId: input.organizationId,
       kind: "report_recipient_skipped",
       severity: "warning",
-      title: `${skipped.length} recipient(s) skipped: ${def.title}`,
+      title: `${plural(skipped.length, "recipient")} skipped: ${def.title}`,
       body: `Not delivered to ${skipped.map((s) => `${s.name} (${s.reason})`).join("; ")}. Update the recipients or their access.`.slice(0, 2000),
       entityType: "report_run",
       entityId: run.id,

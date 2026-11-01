@@ -1,4 +1,5 @@
 "use client";
+import { isAre, plural } from "@/lib/plural";
 import { useState } from "react";
 import { Button, Field, Input } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
@@ -35,7 +36,7 @@ export function PeriodCommand({ command, periodCode, requestId, label, openItems
           {command === "lock" && openItems > 0 && (
             <>
               <label className="flex min-h-[44px] items-center gap-2 text-[14px]">
-                <input type="checkbox" name="acknowledge" className="h-5 w-5" /> Close it anyway: I know {openItems} paper(s) dated this month are not finished
+                <input type="checkbox" name="acknowledge" className="h-5 w-5" /> Close it anyway: I know {plural(openItems, "paper")} dated this month {isAre(openItems)} not finished
               </label>
               <Field label="Why they can stay unfinished" htmlFor={`${f}-a`} error={fe.acknowledgementNote}>
                 <Input id={`${f}-a`} name="acknowledgementNote" maxLength={500} />
