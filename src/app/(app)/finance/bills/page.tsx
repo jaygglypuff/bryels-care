@@ -23,7 +23,7 @@ const TABS = [
 /** US-6-11: supplier bills (money we owe), checked against the order and the delivery. Supplier first, amount right. */
 export default async function BillsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("finance.supplier_bill.view")) return <Forbidden what="supplier bills" />;
+  if (!ctx.can("finance.supplier_bill.view")) return <Forbidden what="supplier bills" permission="finance.supplier_bill.view" />;
   const { status = "" } = await searchParams;
   const rows = await listSupplierBills(ctx, { status: status || undefined });
   const canCreate = ctx.can("finance.supplier_bill.create");

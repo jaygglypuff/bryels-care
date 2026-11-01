@@ -21,7 +21,7 @@ export const metadata = { title: "To get from shelf" };
  */
 export default async function PickingPage() {
   const ctx = await requireContext();
-  if (!ctx.can("sales.pick.view")) return <Forbidden what="getting orders from the shelf" />;
+  if (!ctx.can("sales.pick.view")) return <Forbidden what="getting orders from the shelf" permission="sales.pick.view" />;
   const q = await pickQueue(ctx);
   const canStart = ctx.can("sales.pick.create");
   const waiting = q.ready.filter((o) => !q.open.some((p) => p.orderNumber === o.orderNumber));

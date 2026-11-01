@@ -15,7 +15,7 @@ export const metadata = { title: "Fix lot details" };
 /** Fix a lot's dates or the supplier's code (grade-5, ADR-088). The old and new values go to the audit trail. */
 export default async function EditLotPage({ params }: { params: Promise<{ lotId: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.lot.edit")) return <Forbidden what="fixing lot details" />;
+  if (!ctx.can("inventory.lot.edit")) return <Forbidden what="fixing lot details" permission="inventory.lot.edit" />;
   const { lotId } = await params;
   let lot: LotDetail;
   try {

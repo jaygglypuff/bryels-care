@@ -7,7 +7,8 @@ import { equipmentMaintenanceSummary } from "@/modules/maintenance";
 import { businessToday, getEquipment } from "@/modules/masterdata";
 import { Banner, Chip } from "@/ui/status";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
-import { PageIntro } from "@/ui/guide";
+import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { waitingFor } from "../../../waiting-for";
 import { EQUIPMENT_KIND_WORDS } from "../words";
 import { Forbidden } from "../../../forbidden";
 import { decideOverrideAction, reviewServiceAction } from "../../_eng/actions";
@@ -20,7 +21,7 @@ export const metadata: Metadata = { title: "Equipment" };
 export default async function EquipmentDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.equipment.view")) return <Forbidden what="the equipment register" />;
+  if (!ctx.can("masterdata.equipment.view")) return <Forbidden what="the equipment register" permission="masterdata.equipment.view" />;
   const v = /^[0-9a-f-]{36}$/i.test(id) ? await getEquipment(ctx, id) : null;
   if (!v) return <EmptyState title="Equipment not found" action={<LinkButton href="/masterdata/equipment" variant="secondary">Back to equipment</LinkButton>}>It does not exist or belongs to a site you are not assigned to.</EmptyState>;
   const e = v.equipment;
@@ -39,8 +40,15 @@ export default async function EquipmentDetail({ params }: { params: Promise<{ id
       {!a.selectable && (
         <Banner tone={a.usable ? "appr" : "bad"} title={a.usable ? "Blocked, but an approved override is active" : "Cannot be used in production"}>
           {a.blockingReasons.map((r) => r.detail).join("; ")}.
-          {a.override ? ` Override valid until ${fmtDateTime(a.override.validUntil)}.` : " Record the missing service, or request a controlled override (site manager + QA)."}
+          {a.override ? ` Override valid until ${fmtDateTime(a.override.validUntil)}.` : " Record the missing service, or ask to use it anyway (site manager and QA say OK)."}
         </Banner>
+      )}
+      {!a.selectable && v.can.service ? (
+        <NextStep text="Next: record the missing check, cleaning or repair. Then the machine may be used again." action={{ label: "Record service", href: "#service" }} />
+      ) : !a.selectable ? (
+        <NextStep text="This machine cannot be used now." waitingFor={await waitingFor(ctx, "masterdata.equipment.edit", e.siteId, "to record the missing service", "maintenance")} />
+      ) : (
+        <NextStep text={`Ready to use.${e.calibrationDueDate ? ` Next check due ${fmtDate(e.calibrationDueDate)}.` : e.maintenanceDueDate ? ` Next maintenance due ${fmtDate(e.maintenanceDueDate)}.` : ""} Record each check or cleaning here when it is done.`} />
       )}
       {a.selectable && a.warnings.length > 0 && <Banner tone="warn" title="Usable with a warning">{a.warnings.map((r) => r.detail).join("; ")}. The warning is recorded on every use.</Banner>}
 
@@ -85,25 +93,22 @@ export default async function EquipmentDetail({ params }: { params: Promise<{ id
 
       <div className="grid gap-5 lg:grid-cols-2">
         {v.can.service && (
-          <Card>
+          <Card id="service">
             <CardTitle>Record service</CardTitle>
             <ServiceRecordForm equipmentId={e.id} idempotencyKey={uuidv7()} today={today} />
           </Card>
         )}
-        <div className="flex flex-col gap-5">
-          {v.can.changeStatus && v.nextStatuses.length > 0 && (
-            <Card>
-              <CardTitle>Status</CardTitle>
-              <StatusForm equipmentId={e.id} next={v.nextStatuses} />
-            </Card>
-          )}
-          {v.can.requestOverride && (
-            <Card>
-              <CardTitle>Controlled override (CX-CAL)</CardTitle>
-              <OverrideRequestForm equipmentId={e.id} />
-            </Card>
-          )}
-        </div>
+        {((v.can.changeStatus && v.nextStatuses.length > 0) || v.can.requestOverride) && (
+          <MoreDetails title="Change its status, or ask to use it anyway">
+            {v.can.changeStatus && v.nextStatuses.length > 0 && <StatusForm equipmentId={e.id} next={v.nextStatuses} />}
+            {v.can.requestOverride && (
+              <div className="border-t border-line pt-3">
+                <p className="mb-2 text-[14px] font-medium">Use it anyway for a short time (site manager and QA must say OK)</p>
+                <OverrideRequestForm equipmentId={e.id} />
+              </div>
+            )}
+          </MoreDetails>
+        )}
       </div>
 
       {v.overrides.length > 0 && (
@@ -153,7 +158,7 @@ export default async function EquipmentDetail({ params }: { params: Promise<{ id
                 {r.reviewNote && <p className="mt-1 text-[12px]">QA: {r.reviewNote}</p>}
                 {r.canReview && (
                   <div className="mt-2">
-                    <CommandForm action={reviewServiceAction} hidden={{ id: r.id }} label="QA review" reasonLabel="Review conclusion (impact on batches, actions)" reasonName="note" variant="cta" />
+                    <CommandForm action={reviewServiceAction} hidden={{ id: r.id }} label="QA review" reasonLabel="What QA found (effect on batches, what to do)" reasonName="note" variant="secondary" />
                   </div>
                 )}
               </li>

@@ -70,20 +70,20 @@ async function main() {
   const [whR] = await db.insert(s.warehouses).values({ siteId: rvs.id, code: "WH1", name: "Distribution warehouse" }).returning();
   const locDefs: [string, string, string, string, string][] = [
     [nfd.id, whN.id, "RCV", "Receiving dock", "receiving"],
-    [nfd.id, whN.id, "QUA-01", "Quarantine cage", "quarantine"],
+    [nfd.id, whN.id, "QUA-01", "QA hold cage", "quarantine"],
     [nfd.id, whN.id, "A-01", "Oils rack A-01", "storage"],
     [nfd.id, whN.id, "A-02", "Oils rack A-02", "storage"],
     [nfd.id, whN.id, "B-01", "Actives shelf B-01", "storage"],
     [nfd.id, whN.id, "PKG-01", "Packaging shelf", "storage"],
     [nfd.id, whN.id, "PRD-01", "Production room 1 (soap line)", "production"],
     [nfd.id, whN.id, "FG-01", "Finished goods bay", "storage"],
-    [nfd.id, whN.id, "SHP", "Dispatch bay", "shipping"],
+    [nfd.id, whN.id, "SHP", "Sending-out bay", "shipping"],
     [nfd.id, whN.id, "REJ", "Rejected goods cage", "rejected"],
     [nfd.id, whN.id, "HLD-01", "QA hold cage", "hold"],
     [rvs.id, whR.id, "RCV", "Receiving dock", "receiving"],
-    [rvs.id, whR.id, "QUA-01", "Quarantine cage", "quarantine"],
+    [rvs.id, whR.id, "QUA-01", "QA hold cage", "quarantine"],
     [rvs.id, whR.id, "FG-01", "Finished goods racks", "storage"],
-    [rvs.id, whR.id, "SHP", "Dispatch bay", "shipping"],
+    [rvs.id, whR.id, "SHP", "Sending-out bay", "shipping"],
     [rvs.id, whR.id, "REJ", "Rejected goods cage", "rejected"],
   ];
   // S6 (ADR-077): the warehouse section of each place (receiving and dispatch stay "Other areas").
@@ -476,6 +476,8 @@ async function main() {
   // W3A: a month of fictional activity plus its nightly KPI snapshots (skipped inside vitest: tests seed their own fixed month).
   if (!process.env.VITEST) await (await import("./seeds/w3a")).seedW3a(db, { backfill: true });
   await (await import("./seeds/w4b")).seedW4b(db, { passwordHash: pw, documents: !process.env.VITEST }); // W4B: finance2 account, FICTIONAL tax placeholders, finance documents (demo)
+  // UX audit R2 part 2: delivery lines for the older seeded deliveries, and one order at each send-out step (through the services).
+  if (!process.env.VITEST) for (const note of await (await import("./seeds/r2p2")).seedR2P2(db)) console.log(`R2P2 seed: ${note}`);
 
   // Completeness marker read by `pnpm db:demo auto` (src/db/demo.ts): written last, so its absence means an interrupted load.
   await db.insert(s.auditEvents).values({ organizationId: O, actorLabel: "system:demo.seed", action: "platform.demo.seeded", entityType: "organization", entityId: O, entityNumber: org.name, after: { fictional: true } });

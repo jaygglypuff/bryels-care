@@ -17,7 +17,7 @@ const u = (v: string | null) => (v === null ? "—" : fmtQty(v, "", 0));
 
 export default async function PlanPage() {
   const ctx = await requireContext();
-  if (!ctx.can("production.production_plan.view")) return <Forbidden what="production planning" />;
+  if (!ctx.can("production.production_plan.view")) return <Forbidden what="production planning" permission="production.production_plan.view" />;
   const today = manilaToday();
   const end = addDays(today, 14);
   const [plans, overview] = await Promise.all([listProductionPlans(ctx), planningOverview(ctx, end)]);

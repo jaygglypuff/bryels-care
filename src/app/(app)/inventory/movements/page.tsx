@@ -16,7 +16,7 @@ export const metadata = { title: "Stock changes" };
  */
 export default async function MovementsPage({ searchParams }: { searchParams: Promise<{ type?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.movement.view")) return <Forbidden what="stock changes" />;
+  if (!ctx.can("inventory.movement.view")) return <Forbidden what="stock changes" permission="inventory.movement.view" />;
   const { type } = await searchParams;
   const active = type && (MOVEMENT_TYPES as string[]).includes(type) ? type : undefined;
   const rows = await listMovements(ctx, { type: active });

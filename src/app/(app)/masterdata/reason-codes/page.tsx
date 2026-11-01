@@ -15,7 +15,7 @@ export const metadata = { title: "Reasons" };
 
 export default async function ReasonCodesPage({ searchParams }: { searchParams: Promise<{ category?: string; all?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.reason_code.view")) return <Forbidden what="reasons" />;
+  if (!ctx.can("masterdata.reason_code.view")) return <Forbidden what="reasons" permission="masterdata.reason_code.view" />;
   const sp = await searchParams;
   const rows = await listReasonCodes(ctx, { category: sp.category, includeInactive: sp.all === "1" });
   const canAdmin = ctx.can("masterdata.reason_code.admin");

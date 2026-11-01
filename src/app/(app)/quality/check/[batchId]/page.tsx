@@ -30,7 +30,7 @@ const manilaToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "As
  */
 export default async function CheckQualityPage({ params }: { params: Promise<{ batchId: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.disposition.view")) return <Forbidden what="the quality check" />;
+  if (!ctx.can("quality.disposition.view")) return <Forbidden what="the quality check" permission="quality.disposition.view" />;
   const { batchId } = await params;
   let v: QualityCheckView;
   try {

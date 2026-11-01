@@ -419,7 +419,7 @@ export async function postImport(ctx: AuthContext, jobId: string, opts: { inline
     assertAvailable(handler);
     for (const p of handler.entityPermissions) ctx.requireAt(p, job.siteId);
     assertImportTransition(job.status, "posting", job.importNumber);
-    if (!job.approvedAt) throw new DomainError("state", `Import ${job.importNumber} needs approval before posting.`);
+    if (!job.approvedAt) throw new DomainError("state", `Import ${job.importNumber} needs approval before it is saved.`);
     const env: GuardEnv = opts.env ?? { APP_ENV: process.env.APP_ENV, MIGRATION_WINDOW_OPEN: process.env.MIGRATION_WINDOW_OPEN };
     const g = wizardPostGuard(env, !!handler.requiresMigrationWindow);
     if (!g.ok) throw new DomainError("forbidden", g.reason, { code: "MIGRATION_WINDOW_CLOSED" });

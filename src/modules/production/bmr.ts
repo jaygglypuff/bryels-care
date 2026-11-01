@@ -534,7 +534,7 @@ export async function bmrTemplateFor(q: DbOrTx, ctx: AuthContext, b: { id: strin
 }
 
 function setupMissing(code: string) {
-  return new DomainError("setup_required", `No approved BMR template (${code}) is available. Ask QA to approve one under Management → System → Templates & labels.`);
+  return new DomainError("setup_required", `No approved BMR template (${code}) is available. Ask QA to approve one under Management › Rules and settings › Labels and printouts.`);
 }
 
 /**

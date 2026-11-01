@@ -1,5 +1,6 @@
 import { requireContext } from "@/lib/auth/context";
-import { fmtDateTime, fmtQty } from "@/lib/qty";
+import { fmtDateTime } from "@/lib/qty";
+import { deliveryContents } from "../delivery-words";
 import { listShipments, shipmentCounts } from "@/modules/sales";
 import { Button, EmptyState, Field, Input, PageHeader, Select } from "@/ui/core";
 import { MoreDetails, PageIntro } from "@/ui/guide";
@@ -21,7 +22,7 @@ const TABS = [
 /** Deliveries (shipments) of the current site by state, and the accountant export (US-4-14). */
 export default async function ShipmentsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.shipment.view")) return <Forbidden what="deliveries" />;
+  if (!ctx.can("sales.shipment.view")) return <Forbidden what="deliveries" permission="sales.shipment.view" />;
   const { status = "open" } = await searchParams;
   const tab = TABS.some(([t]) => t === status) ? status : "open";
   const [rows, counts] = await Promise.all([listShipments(ctx, { status: tab }), shipmentCounts(ctx)]);
@@ -45,7 +46,7 @@ export default async function ShipmentsPage({ searchParams }: { searchParams: Pr
               status={<ShipChip status={s.status} />}
               facts={
                 <>
-                  {s.boxes} box(es) · {fmtQty(s.units, "pcs", 0)}
+                  {deliveryContents(s.boxes, s.units)}{s.unitsFrom === "picked" ? " taken off the shelf" : ""}
                   {s.dispatchedAt ? ` · sent ${fmtDateTime(s.dispatchedAt)}` : ""}
                 </>
               }

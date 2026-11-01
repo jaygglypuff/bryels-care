@@ -19,7 +19,7 @@ const STATUS_TEXT: Record<string, string> = { invited: "Not signed in yet", acti
 /** Users (US-1-16): list with search and status filter, invite, export. */
 export default async function UsersPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("identity.user.view")) return <Forbidden what="user administration" />;
+  if (!ctx.can("identity.user.view")) return <Forbidden what="user administration" permission="identity.user.view" />;
   const sp = await searchParams;
   const status = STATUSES.includes(sp.status ?? "") ? sp.status : undefined;
   const q = (sp.q ?? "").trim().slice(0, 80) || undefined;

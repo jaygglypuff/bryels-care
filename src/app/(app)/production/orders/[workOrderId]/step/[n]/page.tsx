@@ -31,7 +31,7 @@ function plainStep(kind: string, isCheck: boolean, isWait: boolean) {
 
 export default async function StepPage({ params, searchParams }: { params: Promise<{ workOrderId: string; n: string }>; searchParams: Promise<{ batch?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("production.batch.view")) return <Forbidden what="production steps" />;
+  if (!ctx.can("production.batch.view")) return <Forbidden what="production steps" permission="production.batch.view" />;
   const { workOrderId, n } = await params;
   const stepNo = Number(n);
   if (!Number.isInteger(stepNo) || stepNo < 1 || stepNo > 999) notFound();

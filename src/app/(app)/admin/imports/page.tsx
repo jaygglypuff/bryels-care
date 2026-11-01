@@ -23,7 +23,7 @@ export const metadata = { title: "Imports" };
  */
 export default async function ImportsPage({ searchParams }: { searchParams: Promise<{ status?: string; kind?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("platform.import_job.view")) return <Forbidden what="imports" />;
+  if (!ctx.can("platform.import_job.view")) return <Forbidden what="imports" permission="platform.import_job.view" />;
   const f = await searchParams;
   const [jobs, kinds, profiles] = await Promise.all([listImportJobs(ctx, { status: f.status, kind: f.kind }), Promise.resolve(importKindCatalogue(ctx)), listMappingProfiles(ctx)]);
   const label = Object.fromEntries(kinds.map((k) => [k.kind, k.label]));

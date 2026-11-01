@@ -29,7 +29,7 @@ export const metadata = { title: "Stock fix" };
  */
 export default async function AdjustmentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ sent?: string; saved?: string; notSent?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.adjustment.view")) return <Forbidden what="stock fixes" />;
+  if (!ctx.can("inventory.adjustment.view")) return <Forbidden what="stock fixes" permission="inventory.adjustment.view" />;
   const { id } = await params;
   const sp = await searchParams;
   let a: AdjustmentDetail;

@@ -22,7 +22,7 @@ const TABS = [
 /** US-6-12: money in and money out. The system never moves money; a record is the evidence. Name first, amount right. */
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("finance.payment_record.view")) return <Forbidden what="payments" />;
+  if (!ctx.can("finance.payment_record.view")) return <Forbidden what="payments" permission="finance.payment_record.view" />;
   const { status = "" } = await searchParams;
   const rows = await listPayments(ctx, { status: status || undefined });
   const canCreate = ctx.can("finance.payment_record.create");

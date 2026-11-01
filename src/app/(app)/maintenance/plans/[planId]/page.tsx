@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 /** PM plan detail: due state, the live work order, history of completed PM, edit, pause / retire. */
 export default async function PlanPage({ params, searchParams }: { params: Promise<{ planId: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("maintenance.plan.view")) return <Forbidden what="regular maintenance" />;
+  if (!ctx.can("maintenance.plan.view")) return <Forbidden what="regular maintenance" permission="maintenance.plan.view" />;
   const { planId } = await params;
   const sp = await searchParams;
   let v: Awaited<ReturnType<typeof getMaintenancePlan>>;

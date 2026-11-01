@@ -119,7 +119,7 @@ export function MaterialFields({ options, d = {}, locked = false, creating = fal
             <Explain term="inci" />
           </div>
           <TextField name="commonName" label="Other name people use" defaultValue={d.commonName} />
-          <SelectField name="category" label="Category (optional)" defaultValue={d.category} options={options.categories} emptyLabel="No category" hint="To add a category, go to Setup → Choice lists." />
+          <SelectField name="category" label="Category (optional)" defaultValue={d.category} options={options.categories} emptyLabel="No category" hint="To add a category, go to Management › Master data › Choice lists." />
           <TextField name="brand" label="Usual brand" defaultValue={d.brand} placeholder="e.g. Golden Palm" hint="Each delivery records the brand that arrived." />
           <TextField name="shelfLifeDays" label="Good for (days)" defaultValue={d.shelfLifeDays} inputMode="numeric" hint="Sets the expiry date when it arrives; QA confirms." />
           <TextField name="retestDays" label="Check again after (days)" defaultValue={d.retestDays} inputMode="numeric" />

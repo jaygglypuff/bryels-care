@@ -15,7 +15,7 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/;
 /** Owner view (ADR-074, ADR-080 words): good pieces vs rejects per product and day, and reject % by type, from the daily logs. The table keeps its name (production_defect_entries). */
 export default async function DefectsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; productId?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("production.daily_log.view")) return <Forbidden what="the rejects summary" />;
+  if (!ctx.can("production.daily_log.view")) return <Forbidden what="the rejects summary" permission="production.daily_log.view" />;
   const sp = await searchParams;
   const to = sp.to && ISO.test(sp.to) ? sp.to : manilaToday();
   const from = sp.from && ISO.test(sp.from) ? sp.from : addDays(to, -29);

@@ -3,7 +3,9 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { getRecipe, recipeWizardOptions, type RecipeView } from "@/modules/masterdata";
 import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { NextStep, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
+import { waitingFor } from "../../../waiting-for";
 import { approvalSentence } from "../../_eng/ui";
 import { RecipeSummary } from "../recipe-summary";
 import { RecipeWizard } from "../wizard";
@@ -30,7 +32,7 @@ export default async function RecipePage({ params, searchParams }: { params: Pro
   const { formulaId } = await params;
   const sp = await searchParams;
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.formula.view") || !ctx.can("masterdata.routing.view")) return <Forbidden what="recipes" />;
+  if (!ctx.can("masterdata.formula.view") || !ctx.can("masterdata.routing.view")) return <Forbidden what="recipes" permission="masterdata.formula.view" />;
   const r = await getRecipe(ctx, formulaId);
   if (!r) return <EmptyState title="Recipe not found" action={<LinkButton href="/masterdata/formulas" variant="secondary">All recipes</LinkButton>} />;
 
@@ -64,52 +66,42 @@ export default async function RecipePage({ params, searchParams }: { params: Pro
       </div>
     );
   }
-  return <RecipeOverview r={r} saved={sp.saved} />;
+  const waiting = r.mode === "waiting" ? await waitingFor(ctx, "masterdata.formula.approve", null, "to approve it", "the approvers") : null;
+  return <RecipeOverview r={r} saved={sp.saved} waiting={waiting} />;
 }
 
-function RecipeOverview({ r, saved }: { r: RecipeView; saved?: string }) {
+function RecipeOverview({ r, saved, waiting }: { r: RecipeView; saved?: string; waiting: string | null }) {
   const f = r.versions.formula;
   const ro = r.versions.routing;
   const fShown = f.open ?? f.current;
   const rShown = ro ? (ro.open ?? ro.current) : null;
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4">
-      <Link href="/masterdata/formulas" className="text-[13px] text-primary-text hover:underline">
+      <Link href="/masterdata/formulas" className="inline-flex min-h-[44px] items-center text-[13px] text-primary-text hover:underline">
         ← All recipes
       </Link>
       <PageHeader
         title={`Recipe: ${r.product.name}`}
         subtitle={`${r.formula.code} · ingredients ${word(fShown)} · steps ${ro ? word(rShown) : "none yet"}`}
-        actions={
-          <>
-            {r.mode === "draft" && r.can.edit && (
-              <LinkButton href={`/masterdata/recipes/${r.formula.id}?edit=1`} variant="cta" size="lg">
-                Edit recipe
-              </LinkButton>
-            )}
-            {r.mode === "approved" && r.can.newVersion && r.can.edit && (
-              <LinkButton href={`/masterdata/recipes/${r.formula.id}?new=1`} variant="cta" size="lg">
-                Make a new version
-              </LinkButton>
-            )}
-          </>
-        }
       />
+      <PageIntro>This screen is for one product&apos;s recipe: what goes in, the steps, and which version is in use.</PageIntro>
+      {r.mode === "draft" && r.can.edit ? (
+        <NextStep text="Next: finish the recipe and send it for approval." action={{ label: "Edit recipe", href: `/masterdata/recipes/${r.formula.id}?edit=1` }} />
+      ) : r.mode === "draft" ? (
+        <NextStep text="This recipe is a draft." waitingFor="Waiting for the person who makes recipes to finish it and send it for approval." />
+      ) : r.mode === "waiting" ? (
+        <NextStep text="Sent for approval. It can't be changed while it waits." waitingFor={waiting ?? undefined} />
+      ) : r.mode === "approved" && r.can.newVersion && r.can.edit ? (
+        <NextStep text="In use. To change it, make a new version; batches keep this one until the new one is approved." action={{ label: "Make a new version", href: `/masterdata/recipes/${r.formula.id}?new=1` }} />
+      ) : (
+        <NextStep text="In use. Nothing to do here." />
+      )}
       {saved && (
         <div role="status" className="rounded-[12px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-3 py-2 text-[14px] text-[var(--ok-fg)]">
           {saved === "sent" ? "Sent for approval. The approvers see it under “To approve”." : "Saved as a draft. Nobody can use it until it is sent and approved."}
         </div>
       )}
-      {r.mode === "waiting" && (
-        <p className="rounded-[12px] bg-[var(--appr-bg)] px-3 py-2 text-[14px] text-[var(--appr-fg)]">
-          Waiting for approval. {approvalSentence(r.approvalPolicy, "recipe")} It can&apos;t be changed while it waits.
-        </p>
-      )}
-      {r.mode === "approved" && (
-        <p className="rounded-[12px] bg-[var(--info-bg)] px-3 py-2 text-[14px] text-[var(--info-fg)]">
-          Approved recipes can&apos;t be changed. To change it, press “Make a new version”: the new version is a draft until it is approved, and batches keep using this one until then.
-        </p>
-      )}
+      {r.mode === "waiting" && <p className="text-[14px] text-fg-2">{approvalSentence(r.approvalPolicy, "recipe")}</p>}
       <Card>
         <RecipeSummary
           productName={r.product.name}

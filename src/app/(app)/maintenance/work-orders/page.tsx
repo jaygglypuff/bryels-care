@@ -20,7 +20,7 @@ const FILTERS = [
 /** Maintenance work orders (US-6-19): corrective, inspection and preventive work, newest first. */
 export default async function WorkOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("maintenance.work_order.view")) return <Forbidden what="repair jobs" />;
+  if (!ctx.can("maintenance.work_order.view")) return <Forbidden what="repair jobs" permission="maintenance.work_order.view" />;
   const { status = "live" } = await searchParams;
   const rows = await listMaintenanceWorkOrders(ctx, status === "mine" ? { status: "live", mine: true } : { status });
   return (

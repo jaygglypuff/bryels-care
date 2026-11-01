@@ -16,8 +16,8 @@ export type ReasonCodeSeed = { code: string; name: string; appliesTo: ReasonCate
 
 export const DEFAULT_REASON_CODES: readonly ReasonCodeSeed[] = [
   // Unplanned receipt (W1B)
-  { code: "no_purchase_order", name: "No purchase order in the system (purchasing not yet live)", appliesTo: ["receipt"], sortOrder: 10 },
-  { code: "urgent_purchase", name: "Urgent purchase, PO to follow", appliesTo: ["receipt"], sortOrder: 11 },
+  { code: "no_purchase_order", name: "No purchase order in the system yet", appliesTo: ["receipt"], sortOrder: 10 },
+  { code: "urgent_purchase", name: "Urgent buy: the purchase order is made later", appliesTo: ["receipt"], sortOrder: 11 },
   { code: "replacement_delivery", name: "Replacement for a rejected delivery", appliesTo: ["receipt"], sortOrder: 12 },
   { code: "sample_or_free_goods", name: "Sample or free goods", appliesTo: ["receipt"], sortOrder: 13 },
   // Holds (W1B)

@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 /** New schedule for one report (?report=CODE, filters prefilled from the report page). */
 export default async function NewSchedulePage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const ctx = await requireContext();
-  if (!ctx.can("analytics.scheduled_report.create")) return <Forbidden what="creating scheduled reports" />;
+  if (!ctx.can("analytics.scheduled_report.create")) return <Forbidden what="creating scheduled reports" permission="analytics.scheduled_report.create" />;
   const sp = await searchParams;
   const def = sp.report ? reportByCode(sp.report) : undefined;
   if (!def || !def.schedulable || !canSeeReport(ctx, def)) {

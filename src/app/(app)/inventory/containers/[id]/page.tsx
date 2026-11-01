@@ -29,7 +29,7 @@ const OP_WORDS: Record<string, string> = { split: "split", merge: "put together"
  */
 export default async function BoxPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ op?: string; created?: string; merged?: string; repacked?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.container.view")) return <Forbidden what="boxes and sacks" />;
+  if (!ctx.can("inventory.container.view")) return <Forbidden what="boxes and sacks" permission="inventory.container.view" />;
   const { id } = await params;
   const sp = await searchParams;
   let box: ContainerDetail;

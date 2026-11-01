@@ -3,7 +3,8 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { LOCATION_KIND_LABELS, SPECIAL_ROLE_KIND, SPECIAL_ROLE_LABELS, WAREHOUSE_KINDS, WAREHOUSE_KIND_LABELS, getWarehouse, type LocationKind, type SpecialRole } from "@/modules/masterdata";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
-import { MoreDetails, PageIntro } from "@/ui/guide";
+import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { waitingFor } from "../../../waiting-for";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { ActionForm, Grid, SelectField, TextField } from "../../_org/form";
@@ -16,7 +17,7 @@ const ROLES = Object.keys(SPECIAL_ROLE_LABELS) as SpecialRole[];
 
 export default async function WarehousePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.warehouse.view")) return <Forbidden what="warehouses" />;
+  if (!ctx.can("masterdata.warehouse.view")) return <Forbidden what="warehouses" permission="masterdata.warehouse.view" />;
   const { id } = await params;
   const { created } = await searchParams;
   let w;
@@ -34,13 +35,11 @@ export default async function WarehousePage({ params, searchParams }: { params: 
       <PageIntro>The places inside this warehouse, and which place is used for deliveries, QA checks, rejected stock and recalls.</PageIntro>
       {created === "1" && <Banner tone="ok" title="Warehouse added">Next: add its places (shelves, rooms), then choose the special places below.</Banner>}
       {w.missing.length > 0 ? (
-        <Banner tone="warn" title={`Still to set: ${w.missing.map((r) => SPECIAL_ROLE_LABELS[r]).join(", ")}`}>
-          Deliveries, QA checks, rejected stock and recalls each need their own place. Add a place of that type, then choose it here.
-        </Banner>
+        <NextStep text={`Next: choose the special places still missing: ${w.missing.map((r) => SPECIAL_ROLE_LABELS[r]).join(", ")}. Deliveries, QA checks, rejected stock and recalls each need their own place.`} action={canDesignate ? { label: "Choose them", href: "#special" } : undefined} waitingFor={canDesignate ? undefined : await waitingFor(ctx, "masterdata.location.admin", w.siteId, "to choose them", "the site manager")} />
       ) : (
-        <Banner tone="ok" title="Every special place is set" />
+        <NextStep text="Every special place is set. Nothing to do now." />
       )}
-      <Card>
+      <Card id="special">
         <CardTitle>Special places</CardTitle>
         <ul className="space-y-3">
           {ROLES.map((role) => {
@@ -56,7 +55,7 @@ export default async function WarehousePage({ params, searchParams }: { params: 
                 {canDesignate &&
                   (options.length ? (
                     <div className="mt-2">
-                      <ActionForm action={designateAction} submitLabel={current ? "Change" : "Use this place"} hidden={{ warehouseId: w.id, role }}>
+                      <ActionForm action={designateAction} submitLabel={current ? "Change" : "Use this place"} variant="secondary" hidden={{ warehouseId: w.id, role }}>
                         <SelectField name="locationId" label={`${LOCATION_KIND_LABELS[kind as LocationKind]} location`} defaultValue={current?.locationId ?? options[0].id} options={options.map((l) => ({ value: l.id, label: l.name }))} />
                       </ActionForm>
                     </div>

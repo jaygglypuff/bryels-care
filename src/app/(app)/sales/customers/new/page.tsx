@@ -9,7 +9,7 @@ export const metadata = { title: "New customer" };
 
 export default async function NewCustomerPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.customer.create")) return <Forbidden what="adding customers" />;
+  if (!ctx.can("masterdata.customer.create")) return <Forbidden what="adding customers" permission="masterdata.customer.create" />;
   return (
     <>
       <PageHeader title="New customer" actions={<LinkButton href="/sales/customers" variant="ghost">Back to customers</LinkButton>} />

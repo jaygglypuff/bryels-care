@@ -5,9 +5,22 @@ import { getOperationsCenter, getOwnerHome } from "@/modules/analytics";
 import { myApprovalCount } from "@/modules/action-centre";
 import { notInvoicedShipments } from "@/modules/finance";
 import { EmptyState, PageHeader, cx } from "@/ui/core";
-import { PageIntro } from "@/ui/guide";
+import { NextStep, PageIntro } from "@/ui/guide";
 import { homeIntro } from "@/ui/role-names";
 import { HomeCards, NeedsAttention, ProductionByStage, RecentActivity, SalesWeek, attentionItems } from "./simple-home";
+
+/** The one button of the "What to do next" line, by the attention item it comes from. */
+const NEXT_LABEL: Record<string, string> = {
+  approve: "Open To approve",
+  dispatch: "See the late orders",
+  production: "See the late batches",
+  low: "See what is low",
+  expected: "See the late deliveries",
+  qc: "See the batches",
+  hold: "See what QA stopped",
+  expiring: "See what expires",
+  invoice: "Make the invoices",
+};
 
 /**
  * Owner / manager Home (ADR-083 §4, mockup panel 1 "Owner Dashboard"), in the mockup's order:
@@ -43,7 +56,7 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
   const stockHref = `/dashboard/details/stock${qs}`;
   const items = attentionItems(oc, approvals, home.stock, stockHref, notBilled);
   const pill = (href: string, active: boolean, label: string) => (
-    <Link key={label} href={href} aria-current={active ? "page" : undefined} className={cx("flex min-h-[40px] items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium", active ? "bg-cta text-white" : "text-fg-2 hover:bg-surface-2")}>
+    <Link key={label} href={href} aria-current={active ? "page" : undefined} className={cx("flex min-h-[44px] items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium", active ? "bg-cta text-white" : "text-fg-2 hover:bg-surface-2")}>
       {label}
     </Link>
   );
@@ -68,8 +81,14 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
       <div className="-mt-2">
         <PageIntro>{homeIntro(ctx.roleCodes)}</PageIntro>
       </div>
+      {/* UX audit C #1/#2: one "What to do next" line (the most urgent item); the rest stay in "Needs your attention". */}
+      {items.length > 0 ? (
+        <NextStep text={`Next: ${items[0].text}.`} action={{ label: NEXT_LABEL[items[0].key] ?? "Open it", href: items[0].href }} />
+      ) : (
+        <NextStep text="Nothing needs you right now. The numbers below are for today." />
+      )}
       <HomeCards home={home} approvals={approvals} stockHref={stockHref} batchesHref={`/dashboard/details/batches${qs}`} />
-      <NeedsAttention items={items} />
+      {items.length > 1 && <NeedsAttention items={items.slice(1)} />}
       {(home.salesWeek || oc.stages.length > 0) && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
           {home.salesWeek && <SalesWeek week={home.salesWeek} scopeLabel={home.scope.label} generatedAt={home.generatedAt} />}

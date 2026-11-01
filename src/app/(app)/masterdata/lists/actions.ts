@@ -4,7 +4,7 @@ import { toActionState, type ActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
 import { addLookupValue, deleteLookupValue, moveLookupValue, renameLookupValue, setLookupValueActive } from "@/modules/masterdata";
 
-/** Master data → Lists (ADR-076): thin in-place adapters (ADR-043); the service validates and authorizes. */
+/** Master data › Choice lists (ADR-076): thin in-place adapters (ADR-043); the service validates and authorizes. */
 type A = (prev: ActionState, fd: FormData) => Promise<ActionState>;
 const f = (fd: FormData, k: string) => String(fd.get(k) ?? "");
 

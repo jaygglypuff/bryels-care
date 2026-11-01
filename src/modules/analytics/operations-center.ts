@@ -42,6 +42,10 @@ export type ActiveBatch = {
   stepsDone: number;
   stepsTotal: number;
   plannedStartOn: string | null;
+  /** When its production order is due to be finished (mockup: "current step + due"). */
+  dueOn: string | null;
+  /** The step the batch is at now, in the recipe's words; null when all steps are done or none are set. */
+  currentStep: string | null;
   orderNumber: string | null;
   /** Planned start passed and the batch has not started yet. */
   late: boolean;
@@ -260,6 +264,8 @@ async function activeBatches(siteIds: string[], today: string, siteCode: Map<str
       productName: products.name,
       workOrderId: batches.workOrderId,
       orderNumber: workOrders.workOrderNumber,
+      dueOn: workOrders.plannedEnd,
+      currentStep: sql<string | null>`${batches.formulaSnapshot}->'steps'->(${stepsDone})->>'name'`,
       stepsDone,
       stepsTotal,
     })
@@ -278,6 +284,8 @@ async function activeBatches(siteIds: string[], today: string, siteCode: Map<str
     stepsDone: Math.min(Number(r.stepsDone), Number(r.stepsTotal)),
     stepsTotal: Number(r.stepsTotal),
     plannedStartOn: r.plannedStartOn,
+    dueOn: r.dueOn ?? null,
+    currentStep: r.currentStep ?? null,
     orderNumber: r.orderNumber,
     late: r.status === "planned" && !!r.plannedStartOn && r.plannedStartOn < today,
     // ADR-080: production orders are the hub; a batch without an order opens its full record.

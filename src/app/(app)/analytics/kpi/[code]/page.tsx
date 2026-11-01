@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { plainNote } from "@/lib/plain-note";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { type KpiRecords, RECORD_LIMIT, canSeeCrossSite, getKpiRecords } from "@/modules/analytics";
@@ -77,7 +78,7 @@ export default async function KpiRecordsPage({ params, searchParams }: { params:
             <p className="tabular font-display text-[30px] font-semibold text-fg">{totalLine(r)}</p>
             <ValueLabelChip label={r.def.label} />
           </div>
-          <p className="mt-1 text-[13px] text-fg-2">{r.def.definition}</p>
+          <p className="mt-1 text-[13px] text-fg-2">{plainNote(r.def.definition)}</p>
           <div className="mt-4">
             <MoreDetails title="How this number is worked out (for checking)">
             <Dl

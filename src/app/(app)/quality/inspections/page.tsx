@@ -23,7 +23,7 @@ const FILTERS = [
 
 export default async function InspectionsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.inspection.view")) return <Forbidden what="inspections" />;
+  if (!ctx.can("quality.inspection.view")) return <Forbidden what="inspections" permission="quality.inspection.view" />;
   const { status = "open" } = await searchParams;
   const [rows, candidates] = await Promise.all([listInspections(ctx, { status }), inspectionCandidates(ctx)]);
   const canStart = ctx.can("quality.inspection.create");

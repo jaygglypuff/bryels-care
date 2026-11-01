@@ -20,7 +20,7 @@ export const metadata = { title: "Pack" };
 /** Boxing screen (W08-02..05): add boxes, print labels, submit, checker scans and verifies, boxing note. */
 export default async function PackPage({ params, searchParams }: { params: Promise<{ packId: string }>; searchParams: Promise<{ done?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.pack.view")) return <Forbidden what="boxing" />;
+  if (!ctx.can("inventory.pack.view")) return <Forbidden what="boxing" permission="inventory.pack.view" />;
   const { packId } = await params;
   const { done } = await searchParams;
   let v: Awaited<ReturnType<typeof getPack>>;
@@ -138,7 +138,7 @@ export default async function PackPage({ params, searchParams }: { params: Promi
                   <p className="text-[13px] text-fg-2">One label per box: BC:BOX, SKU, lot, expiry, units, packed date, packer initials, box n of N.</p>
                 </Cmd>
               ) : (
-                <Banner tone="warn" title="Box labels are not set up">Ask the system administrator to approve a box label layout (Settings → Labels and printouts).</Banner>
+                <Banner tone="warn" title="Box labels are not set up">Ask the system administrator to approve a box label layout (Management › Rules and settings › Labels and printouts).</Banner>
               )}
               <LinkButton href="/labels?show=not_printed" variant="ghost" className="mt-2">Print the box labels (not printed yet)</LinkButton>
             </Card>

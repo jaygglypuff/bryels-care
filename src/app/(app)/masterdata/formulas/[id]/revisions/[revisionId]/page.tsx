@@ -24,7 +24,7 @@ const allowed = (l: { tolerancePct: string | null; toleranceAbsG: string | null 
 export default async function FormulaRevisionPage({ params }: { params: Promise<{ id: string; revisionId: string }> }) {
   const { id, revisionId } = await params;
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.formula.view")) return <Forbidden what="recipes" />;
+  if (!ctx.can("masterdata.formula.view")) return <Forbidden what="recipes" permission="masterdata.formula.view" />;
   const v = /^[0-9a-f-]{36}$/i.test(revisionId) ? await getFormulaRevision(ctx, revisionId) : null;
   if (!v || v.formula.id !== id) {
     return (

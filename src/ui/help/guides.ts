@@ -52,7 +52,7 @@ export const GUIDE_FILES: Record<string, string> = {
   "sales.return": "return.md",
   "platform.import": "import.md",
   "analytics.reports": "run-a-report.md",
-  // ADR-076: Master data → Lists
+  // ADR-076: Master data › Choice lists
   "masterdata.lists": "lists.md",
 };
 

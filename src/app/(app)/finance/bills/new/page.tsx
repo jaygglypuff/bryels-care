@@ -11,7 +11,7 @@ export const metadata = { title: "Enter a supplier bill" };
 /** Supplier bill entry (US-6-11): our bill number is made by the server; the supplier's own number is copied from their paper. */
 export default async function NewBillPage() {
   const ctx = await requireContext();
-  if (!ctx.can("finance.supplier_bill.create")) return <Forbidden what="entering supplier bills" />;
+  if (!ctx.can("finance.supplier_bill.create")) return <Forbidden what="entering supplier bills" permission="finance.supplier_bill.create" />;
   const o = await billFormOptions(ctx);
   return (
     <>

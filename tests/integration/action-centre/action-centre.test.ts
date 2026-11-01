@@ -99,7 +99,7 @@ describe("action centre queue (US-5-06)", () => {
     const [job] = await db.insert(backgroundJobs).values({ organizationId: kit.orgId, jobKind: "inventory.reconcile", status: "failed", payload: {}, idempotencyKey: `t:${randomUUID()}`, correlationId: "c", errorMessage: "boom", finishedAt: new Date(), deadLetteredAt: new Date() }).returning();
     await refreshActionItems(kit.orgId);
     const mgr = await listActionItems(manager);
-    expect(mgr.find((i) => i.kind === "late_work_order" && i.entityId === wo.id)?.title).toMatch(/day\(s\) late/);
+    expect(mgr.find((i) => i.kind === "late_work_order" && i.entityId === wo.id)?.title).toMatch(/days? late/);
     expect(mgr.find((i) => i.kind === "approval.production_order" && i.entityId === wo.id)).toBeTruthy();
     expect((await listActionItems(admin)).some((i) => i.kind === "failed_job" && i.entityId === job.id)).toBe(true);
     expect((await listActionItems(sales)).some((i) => i.kind === "failed_job")).toBe(false);

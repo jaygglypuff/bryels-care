@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /** Raise sheet pre-filled from the page the user came from (batch, lot, inspection result). */
 export default async function NewDeviationPage({ searchParams }: { searchParams: Promise<{ batchId?: string; lotId?: string; inspectionId?: string; testResultId?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.deviation.create")) return <Forbidden what="raising deviations" />;
+  if (!ctx.can("quality.deviation.create")) return <Forbidden what="raising deviations" permission="quality.deviation.create" />;
   const sp = await searchParams;
   const f = await deviationFormContext(ctx, { batchId: sp.batchId, lotId: sp.lotId });
   if (!f.batch && !f.lot) {

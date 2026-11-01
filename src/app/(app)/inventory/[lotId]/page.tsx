@@ -57,7 +57,7 @@ function RiskBanner({ lot, qaHref }: { lot: LotDetail; qaHref: string | null }) 
 
 export default async function LotPage({ params, searchParams }: { params: Promise<{ lotId: string }>; searchParams: Promise<{ moved?: string; edited?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.lot.view")) return <Forbidden what="lots and stock" />;
+  if (!ctx.can("inventory.lot.view")) return <Forbidden what="lots and stock" permission="inventory.lot.view" />;
   const { lotId } = await params;
   const { moved, edited } = await searchParams;
   let lot: LotDetail;

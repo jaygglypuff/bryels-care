@@ -12,7 +12,7 @@ export const metadata = { title: "Prices" };
 
 export default async function PriceListsPage() {
   const ctx = await requireContext();
-  if (!ctx.can("sales.price_list.view")) return <Forbidden what="prices" />;
+  if (!ctx.can("sales.price_list.view")) return <Forbidden what="prices" permission="sales.price_list.view" />;
   const rows = await listPriceLists(ctx);
   const pending = rows.filter((r) => r.status === "pending_approval");
   const canEdit = ctx.can("sales.price_list.edit");

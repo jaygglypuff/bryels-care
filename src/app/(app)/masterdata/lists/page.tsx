@@ -12,13 +12,13 @@ import { addLookupValueAction, deleteLookupValueAction, moveLookupValueAction, r
 export const metadata = { title: "Choice lists" };
 
 /**
- * Master data → Lists (ADR-076): every dropdown list the owner may change, in one place. Options are
+ * Master data › Choice lists (ADR-076): every dropdown list the owner may change, in one place. Options are
  * added, renamed, moved and turned off here; an option in use is never deleted. Lists that drive how
  * the program works (statuses, location kinds, material class) are fixed and not shown.
  */
 export default async function ListsPage({ searchParams }: { searchParams: Promise<{ list?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.lookup_value.view")) return <Forbidden what="choice lists" />;
+  if (!ctx.can("masterdata.lookup_value.view")) return <Forbidden what="choice lists" permission="masterdata.lookup_value.view" />;
   const sp = await searchParams;
   const lists = await listLookupLists(ctx);
   const canAdmin = ctx.can("masterdata.lookup_value.admin");

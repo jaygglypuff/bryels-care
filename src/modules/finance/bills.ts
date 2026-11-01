@@ -119,7 +119,7 @@ async function buildLines(tx: Tx, ctx: AuthContext, input: CreateBillInput, gr: 
     let uom: string | null = null;
     if (l.goodsReceiptLineId) {
       const g = grLines.find((x) => x.l.id === l.goodsReceiptLineId);
-      if (!g) throw new DomainError("validation", "The receipt line is not on the chosen goods receipt.", { field: `${field}.goodsReceiptLineId` });
+      if (!g) throw new DomainError("validation", "That item is not on the chosen delivery.", { field: `${field}.goodsReceiptLineId` });
       materialId = g.l.materialId;
       description ||= `${g.code} · ${g.name}`;
       uom = g.uom;
@@ -157,10 +157,10 @@ export async function createSupplierBill(ctx: AuthContext, input: CreateBillInpu
     let gr: typeof goodsReceipts.$inferSelect | null = null;
     let siteId = ctx.currentSiteId;
     if (input.goodsReceiptId) {
-      if (!isUuid(input.goodsReceiptId)) throw new DomainError("validation", "Choose a goods receipt.", { field: "goodsReceiptId" });
+      if (!isUuid(input.goodsReceiptId)) throw new DomainError("validation", "Choose the delivery.", { field: "goodsReceiptId" });
       const [g] = await tx.select().from(goodsReceipts).where(and(eq(goodsReceipts.id, input.goodsReceiptId), eq(goodsReceipts.organizationId, ctx.organizationId), inArray(goodsReceipts.siteId, ctx.allowedSiteIds))).limit(1);
-      if (!g) throw new DomainError("not_found", "Goods receipt not found in your sites.");
-      if (g.status !== "posted") throw new DomainError("validation", `SOURCE_NOT_POSTABLE: receipt ${g.receiptNumber ?? ""} is ${g.status}; bills match posted receipts only.`, { code: "SOURCE_NOT_POSTABLE", field: "goodsReceiptId" });
+      if (!g) throw new DomainError("not_found", "Delivery not found at your sites.");
+      if (g.status !== "posted") throw new DomainError("validation", `SOURCE_NOT_POSTABLE: receipt ${g.receiptNumber ?? ""} is ${g.status}; a bill can only be matched to a delivery that is saved to stock.`, { code: "SOURCE_NOT_POSTABLE", field: "goodsReceiptId" });
       if (g.supplierId && g.supplierId !== supplier.id) throw new DomainError("validation", "The receipt is from another supplier.", { field: "goodsReceiptId" });
       gr = g;
       siteId = g.siteId;
@@ -170,7 +170,7 @@ export async function createSupplierBill(ctx: AuthContext, input: CreateBillInpu
     if (!gr && !input.purchaseOrderId && kind !== "credit") {
       const allowed = await getSetting(tx, ctx.organizationId, "finance.bill.no_po_categories");
       if (!categoryCode || !allowed.includes(categoryCode)) {
-        throw new DomainError("validation", `A bill without a goods receipt or PO is allowed only for these categories: ${allowed.join(", ")} (A-FIN-09).`, { field: "categoryCode" });
+        throw new DomainError("validation", `A bill without a delivery or a purchase order is allowed only for: ${allowed.join(", ")}.`, { field: "categoryCode" });
       }
     } else if (gr) categoryCode = null;
     let creditFor: string | null = null;
@@ -447,7 +447,7 @@ export async function cancelSupplierBill(ctx: AuthContext, id: string, reason: s
   return db.transaction(async (tx) => {
     const b = await lockBill(tx, ctx, id);
     ctx.requireAt("finance.supplier_bill.create", b.siteId);
-    if (!["draft", "submitted", "disputed", "approved"].includes(b.status)) throw new DomainError("state", `${label(b)} is ${BILL_STATUS_LABEL[b.status].toLowerCase()}; a posted bill is voided, not cancelled.`);
+    if (!["draft", "submitted", "disputed", "approved"].includes(b.status)) throw new DomainError("state", `${label(b)} is ${BILL_STATUS_LABEL[b.status].toLowerCase()}; a bill already in the books is cancelled (kept on record), not deleted.`);
     await tx.update(supplierBills).set({ status: "cancelled", cancelReason: why, updatedAt: new Date() }).where(eq(supplierBills.id, b.id));
     await logTransition(tx, ctx, doc(b), b.status, "cancelled", why);
     await audit(tx, ctx, { action: "finance.supplier_bill.cancelled", entityType: "supplier_bill", entityId: b.id, entityNumber: b.billNumber, siteId: b.siteId, reason: why });
@@ -466,7 +466,7 @@ export async function postSupplierBill(ctx: AuthContext, id: string, input: { pa
     }
     const b = await lockBill(tx, ctx, id);
     ctx.requireAt("finance.supplier_bill.post", b.siteId);
-    if (b.status !== "approved") throw new DomainError("state", `${label(b)} is ${BILL_STATUS_LABEL[b.status].toLowerCase()}; only an approved bill can be posted.`);
+    if (b.status !== "approved") throw new DomainError("state", `${label(b)} is ${BILL_STATUS_LABEL[b.status].toLowerCase()}; only an approved bill can be saved to the books.`);
     await assertPosterAllowed(tx, ctx, { recordType: "supplier_bill", recordId: b.id, siteId: b.siteId, basis: { amount: b.totalAmount } });
     let target: SupplierBillRow | null = null;
     if (b.billKind === "credit" && b.creditForBillId) {
@@ -502,8 +502,8 @@ export async function voidSupplierBill(ctx: AuthContext, id: string, input: { re
   return db.transaction(async (tx) => {
     const b = await lockBill(tx, ctx, id);
     ctx.requireAt("finance.supplier_bill.void", b.siteId);
-    if (b.billKind === "credit") throw new DomainError("conflict", "A posted supplier credit cannot be reversed here; enter a new bill for the difference.");
-    if (b.status !== "posted" || D(b.paidAmount).gt(0)) throw new DomainError("state", "Only a posted bill with nothing paid or credited can be reversed; void its payments first.");
+    if (b.billKind === "credit") throw new DomainError("conflict", "A supplier credit already in the books can't be undone here; enter a new bill for the difference.");
+    if (b.status !== "posted" || D(b.paidAmount).gt(0)) throw new DomainError("state", "Only a bill in the books with nothing paid or credited can be undone; cancel its payments first.");
     await reverseDocumentPosting(tx, ctx, "supplier_bill", b.id, reason);
     const now = new Date();
     await tx.update(supplierBills).set({ status: "voided", voidedBy: ctx.userId, voidedAt: now, voidReason: reason, updatedAt: now }).where(eq(supplierBills.id, b.id));

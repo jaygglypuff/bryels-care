@@ -40,7 +40,7 @@ function plainReason(r: string | null): string | null {
  */
 export default async function ReservationsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.lot.view")) return <Forbidden what="which stock to use first" />;
+  if (!ctx.can("inventory.lot.view")) return <Forbidden what="which stock to use first" permission="inventory.lot.view" />;
   const sp = await searchParams;
   const items = await recommendableItems(ctx);
   // ?lot=<id> (from the lot page) preselects the lot's item.

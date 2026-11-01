@@ -22,7 +22,7 @@ const FILTERS = [
 /** Recall cases (US-6-18, ux-system §9.14): recalls, withdrawals and mock recall drills. */
 export default async function RecallCasesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.recall_case.view")) return <Forbidden what="product recalls" />;
+  if (!ctx.can("quality.recall_case.view")) return <Forbidden what="product recalls" permission="quality.recall_case.view" />;
   const { status = "active" } = await searchParams;
   const rows = await listRecallCases(ctx, { status });
   return (

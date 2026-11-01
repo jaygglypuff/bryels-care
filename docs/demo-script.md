@@ -39,6 +39,8 @@ up at which customer.
 | `checker.nfd@bryels-care.test` | Jun Dela Cruz | Second operator who checks weighings (chosen from a list; you never sign in as him) |
 | `sales@bryels-care.test` | Mara Santos | Sales and customer service |
 | `warehouse.rvs@bryels-care.test` | Carlo Bautista | Warehouse at the second site, Riverside (RVS): used to show site security |
+| `procurement@bryels-care.test` | Tess Navarro | Purchasing: makes and sends purchase orders and supplier returns (the site manager approves them) |
+| `finance@bryels-care.test` | Rosa Lim | Finance: invoices, payments, supplier bills, closing the month (scene 14) |
 
 **Switching people:** use **Sign out** at the bottom of the left menu, then sign in as the next
 person (about 10 seconds). If you prefer, prepare one Chrome profile per person beforehand.
@@ -269,6 +271,12 @@ that opens this batch."
 is applied automatically when the warehouse sets the stock aside."
 
 ### Scene 10: Pick, pack and ship (2 min). Sign in as `warehouse.nfd@`
+
+> Ready-made for practice (UX audit round 2 part 2): the seed also leaves one order at each step, so the path can be
+> walked without making orders first. **To get from shelf**: Isla Spa Supplies (12 bars, stock set aside).
+> **Send out → Waiting for the second check of the box**: Luntian Wellness Stores (got from the shelf by Lito; the
+> second check is done by someone else, e.g. `manager.nfd@`). **Send out → Ready to send out**: Mabuhay Pharmacy Group
+> (checked; type driver and plate, then Send out now). Shelves read "QA hold cage" and "Sending-out bay".
 
 1. **Menu → Sales & Customers → Customer orders**. Two orders are confirmed: yesterday's Isla Spa Supplies
    order (**SO-26-00002**) and the new Mabuhay order.

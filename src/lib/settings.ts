@@ -126,7 +126,7 @@ export const SETTINGS = {
   "inventory.container.allow_mixed_lots": { scopes: ["organization"], schema: z.boolean(), default: false, assumption: "A-PROC-22", group: "Inventory", label: "Allow mixed lots in one box" },
   /** Near-expiry buckets in days: Expiry alerts page and `expiring_lot` notifications (US-2-16). */
   // Wave 2 W2G: master data administration
-  // Product families moved to the editable list `product_family` (Master data → Lists, ADR-076; src/db/sql/s4.sql copies a stored value).
+  // Product families moved to the editable list `product_family` (Master data › Choice lists, ADR-076; src/db/sql/s4.sql copies a stored value).
 
   // Wave 2 W2B: batch execution (US-3-09..13). Defaults are fictional placeholders for the process owner and QA to confirm.
   /** A-PROC-31: post ingredient consumption at each dispense (and packaging consumption at packaging) instead of at transfer to quarantine (W05-17). */
@@ -695,7 +695,7 @@ export const SETTINGS = {
   "finance.currency": { scopes: ["organization"], schema: z.string().regex(/^[A-Z]{3}$/), default: "PHP", assumption: "A-FIN-26", group: "Finance", label: "Document currency", description: "Single currency of invoices, bills and payments (ISO code). Multi-currency documents are out of scope.", requiresApproval: true },
   "finance.tax.default_sales_code": {
     scopes: ["organization"], schema: z.string().regex(/^[A-Z0-9_-]{1,20}$/).nullable(), default: null as string | null, assumption: "A-W4B-02", group: "Finance", label: "Tax code for sales (quotes, orders, invoice lines)",
-    description: "A code of the reviewed tax configuration (Management → Finance → Tax configuration). Empty = no tax line. The system does not decide which tax applies; the accountant does.", requiresApproval: true, restricted: true,
+    description: "A code of the reviewed tax configuration (Management › Finance › Tax rates). Empty = no tax line. The system does not decide which tax applies; the accountant does.", requiresApproval: true, restricted: true,
   },
   "finance.tax.default_purchase_code": {
     scopes: ["organization"], schema: z.string().regex(/^[A-Z0-9_-]{1,20}$/).nullable(), default: null as string | null, assumption: "A-W4B-02", group: "Finance", label: "Tax code for supplier bill lines",

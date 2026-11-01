@@ -58,7 +58,7 @@ function Entity({ r }: { r: AuditRow }) {
 
 export default async function AuditPage({ searchParams }: { searchParams: Promise<SP> }) {
   const ctx = await requireContext();
-  if (!ctx.can("platform.audit.view")) return <Forbidden what="the audit log" />;
+  if (!ctx.can("platform.audit.view")) return <Forbidden what="the audit log" permission="platform.audit.view" />;
   const sp = await searchParams;
   const filter = { module: sp.module || undefined, q: sp.q?.trim() || undefined, before: sp.before || undefined };
 

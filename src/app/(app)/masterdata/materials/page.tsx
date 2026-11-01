@@ -14,7 +14,7 @@ export const metadata = { title: "Materials" };
 
 export default async function MaterialsPage({ searchParams }: { searchParams: Promise<{ created?: string; q?: string; kind?: string; status?: string; category?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.material.view")) return <Forbidden what="materials" />;
+  if (!ctx.can("masterdata.material.view")) return <Forbidden what="materials" permission="masterdata.material.view" />;
   const sp = await searchParams;
   const rows = await listMaterialMaster(ctx, { q: sp.q, materialKind: sp.kind, status: sp.status, category: sp.category });
   const categories = await lookupLabels(db, ctx.organizationId, "material_category");

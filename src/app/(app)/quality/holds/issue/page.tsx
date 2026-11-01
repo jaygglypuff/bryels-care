@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 /** CX-LOT: issue quarantined or on-hold stock for sampling, rework or destruction (qa_qc, reason mandatory). */
 export default async function HeldIssuePage() {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.held_stock_issue.approve")) return <Forbidden what="the held-stock exception" />;
+  if (!ctx.can("inventory.held_stock_issue.approve")) return <Forbidden what="the held-stock exception" permission="inventory.held_stock_issue.approve" />;
   const locs = await heldIssueFormData(ctx);
   const lots = ctx.can("inventory.lot.view") ? (await listLots(ctx)).filter((l) => ["quarantine", "on_hold"].includes(l.qualityStatus)).map((l) => ({ lotNumber: l.lotNumber, itemName: l.itemName, onHand: fmtLotQty(l.onHand, l.baseUom) })) : [];
   return (

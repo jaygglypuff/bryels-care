@@ -38,7 +38,7 @@ function queryString(q: RecallQuery, mode?: RecallMode) {
 /** Read-only recall explorer (US-4-17, ux-system §9.14): who received what, from a lot, box, batch, supplier lot or complaint. */
 export default async function RecallPage({ searchParams }: { searchParams: Promise<{ code?: string; supplierLot?: string; complaintId?: string; mode?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.genealogy.view")) return <Forbidden what="the recall explorer" />;
+  if (!ctx.can("quality.genealogy.view")) return <Forbidden what="the recall explorer" permission="quality.genealogy.view" />;
   const sp = await searchParams;
   const mode = sp.mode === "forward" || sp.mode === "reverse" ? sp.mode : null;
   const complaintId = sp.complaintId && /^[0-9a-f-]{36}$/i.test(sp.complaintId) && ctx.can("quality.complaint.view") ? sp.complaintId : undefined;

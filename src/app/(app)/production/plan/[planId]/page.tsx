@@ -19,7 +19,7 @@ const SOURCE: Record<string, string> = { sales_order: "Sales orders", min_stock:
 
 export default async function PlanDetailPage({ params }: { params: Promise<{ planId: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("production.production_plan.view")) return <Forbidden what="production planning" />;
+  if (!ctx.can("production.production_plan.view")) return <Forbidden what="production planning" permission="production.production_plan.view" />;
   const { planId } = await params;
   let d: ProductionPlanDetail;
   try {

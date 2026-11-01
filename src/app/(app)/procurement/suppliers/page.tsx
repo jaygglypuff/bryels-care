@@ -22,7 +22,7 @@ export const metadata = { title: "Suppliers we may buy from" };
  */
 export default async function SuppliersPage({ searchParams }: { searchParams: Promise<{ q?: string; all?: string; deleted?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.supplier.view")) return <Forbidden what="suppliers" />;
+  if (!ctx.can("masterdata.supplier.view")) return <Forbidden what="suppliers" permission="masterdata.supplier.view" />;
   const { q, all, deleted } = await searchParams;
   const showAll = all === "1";
   const [queue, sups] = await Promise.all([listAslQueue(ctx), listSuppliers(ctx, { includeInactive: showAll })]);
@@ -93,7 +93,7 @@ export default async function SuppliersPage({ searchParams }: { searchParams: Pr
                   title={s.name}
                   code={s.code}
                   status={<SupplierChip status={s.qualityStatus} />}
-                  facts={`${s.defaultLeadTimeDays !== null ? `Takes about ${s.defaultLeadTimeDays} day(s) to deliver` : "Delivery time not set"} · ${s.receipts} deliver${s.receipts === 1 ? "y" : "ies"}`}
+                  facts={`${s.defaultLeadTimeDays !== null ? `Takes about ${s.defaultLeadTimeDays === 1 ? "1 day" : `${s.defaultLeadTimeDays} days`} to deliver` : "Delivery time not set"} · ${s.receipts} deliver${s.receipts === 1 ? "y" : "ies"}`}
                 />
               ))}
             </PlainList>

@@ -22,7 +22,7 @@ const PACK_WORDS: Record<string, string> = { open: "Boxing now", verified: "Chec
  */
 export default async function PacksPage() {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.pack.view")) return <Forbidden what="boxing" />;
+  if (!ctx.can("inventory.pack.view")) return <Forbidden what="boxing" permission="inventory.pack.view" />;
   const [outputs, list] = await Promise.all([boxableOutputs(ctx), listPacks(ctx)]);
   const canStart = ctx.can("inventory.pack.create") && ctx.can("inventory.container.create");
   const units = (v: string, uom: string) => fmtQty(v, uom, uom === "pcs" ? 0 : 3);

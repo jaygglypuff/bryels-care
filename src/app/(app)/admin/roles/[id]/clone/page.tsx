@@ -19,7 +19,7 @@ export const metadata = { title: "Copy a job" };
 /** US-1-29: clone a role; strings the creator does not hold are left out and listed. */
 export default async function CloneRolePage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("identity.role.admin")) return <Forbidden what="role administration" />;
+  if (!ctx.can("identity.role.admin")) return <Forbidden what="role administration" permission="identity.role.admin" />;
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   let d: RoleDetail;
@@ -40,11 +40,11 @@ export default async function CloneRolePage({ params }: { params: Promise<{ id: 
         </Link>
       </p>
       <PageHeader title={`New job, copied from ${plainRole(d.role.code, d.role.name)}`} />
-      <PageIntro>This screen is for making your own job (role): give it a name, untick what this job should not do, and press the button at the bottom.</PageIntro>
+      <PageIntro>This screen is for making your own job (role) from this one: type its name and press the button. What it may do is copied.</PageIntro>
       <StepUpGate ctx={ctx} purpose="create a role" />
       {dropped.length > 0 && (
         <div className="mb-4">
-          <Banner tone="warn" title={`${dropped.length} thing(s) left out`}>
+          <Banner tone="warn" title={`${dropped.length} ${dropped.length === 1 ? "right" : "rights"} left out`}>
             A new job cannot do more than you may do yourself. Left out: {permissionSummary(dropped).map((r) => `${r.label} (${r.actions.join(", ")})`).join("; ")}. Ask the owner to make the job if it needs them.
           </Banner>
         </div>

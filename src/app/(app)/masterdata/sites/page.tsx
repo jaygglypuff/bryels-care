@@ -11,7 +11,7 @@ export const metadata = { title: "Sites" };
 
 export default async function SitesPage({ searchParams }: { searchParams: Promise<{ all?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.site.view")) return <Forbidden what="sites" />;
+  if (!ctx.can("masterdata.site.view")) return <Forbidden what="sites" permission="masterdata.site.view" />;
   const { all } = await searchParams;
   const rows = await listSites(ctx, { includeInactive: all === "1" });
   const canAdmin = ctx.can("masterdata.site.admin");

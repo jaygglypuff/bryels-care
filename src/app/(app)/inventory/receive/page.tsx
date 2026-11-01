@@ -29,10 +29,10 @@ type SP = { po?: string; nopo?: string };
  */
 export default async function ReceivePage({ searchParams }: { searchParams: Promise<SP> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.goods_receipt.create")) return <Forbidden what="receiving materials" />;
+  if (!ctx.can("procurement.goods_receipt.create")) return <Forbidden what="receiving materials" permission="procurement.goods_receipt.create" />;
   const sp = await searchParams;
   const data = await receivingFormData(ctx);
-  const { materials, locations, suppliers, reasonCodes, storageBySection } = data;
+  const { materials, locations, suppliers, reasonCodes, storageNamesBySection: storageBySection } = data;
   const defaultLocation = locations.find((l) => l.kind === "quarantine") ?? locations.find((l) => l.kind !== "storage") ?? locations[0];
   const canSeePos = ctx.can("procurement.purchase_order.view");
   const header = (subtitle: string) => (
@@ -58,7 +58,7 @@ export default async function ReceivePage({ searchParams }: { searchParams: Prom
       <div className="mx-auto max-w-4xl">
         {header("not set up yet")}
         <EmptyState title="Receiving is not set up for this site">
-          {materials.length === 0 ? "No materials exist yet. Ask the person who sets up materials (Setup) to add them first." : "This site has no receiving or QA area yet. Ask the system administrator to add one (Setup → Shelves)."}
+          {materials.length === 0 ? "No materials exist yet. Ask the person who sets up materials (Management › Master data › Materials) to add them first." : "This site has no receiving or QA area yet. Ask the system administrator to add one (Management › Master data › Locations)."}
         </EmptyState>
       </div>
     );

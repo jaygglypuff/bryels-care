@@ -20,7 +20,7 @@ export const metadata: Metadata = { title: "How-to sheet" };
 export default async function WorkInstructionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.work_instruction.view")) return <Forbidden what="how-to sheets" />;
+  if (!ctx.can("masterdata.work_instruction.view")) return <Forbidden what="how-to sheets" permission="masterdata.work_instruction.view" />;
   const w = /^[0-9a-f-]{36}$/i.test(id) ? await getWorkInstruction(ctx, id) : null;
   if (!w)
     return (

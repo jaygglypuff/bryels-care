@@ -4,7 +4,7 @@ import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { getSchedule, recipientOptions, reportByCode } from "@/modules/reports";
 import { Card, CardTitle, Dl, EmptyState, PageHeader } from "@/ui/core";
-import { MoreDetails, PageIntro } from "@/ui/guide";
+import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { PlainList, PlainRow } from "@/ui/plain-list";
 import { plainReport } from "../../plain";
@@ -45,6 +45,7 @@ export default async function SchedulePage({ params, searchParams }: { params: P
         }
       />
       <PageIntro>This screen is for checking an email list: what is sent, when, to whom, and whether the last ones arrived.</PageIntro>
+      <NextStep text={s.isActive ? `It is sent by itself${s.nextRunAt ? `; the next one goes out ${fmtDateTime(s.nextRunAt)}` : ""}. Nothing to do.` : "Stopped for now: nothing is sent. Start it again under ⋯ More."} />
       {sp.ok === "created" && <Banner tone="ok" title="Done – it will be sent by itself">The first one goes out {s.nextRunAt ? fmtDateTime(s.nextRunAt) : "when you start it again"}.</Banner>}
       <Card>
         <Dl
@@ -82,22 +83,21 @@ export default async function SchedulePage({ params, searchParams }: { params: P
                 href={`/reports/runs/${r.id}`}
                 title={r.finishedAt ? fmtDateTime(r.finishedAt) : "Sending now"}
                 status={<Chip tone={RUN_TONE[r.status as keyof typeof RUN_TONE] ?? "neu"}>{RUN_TEXT[r.status] ?? r.status}</Chip>}
-                facts={`sent to ${r.recipientsSent} · skipped ${r.recipientsSkipped} · ${r.filesCount} file(s)`}
+                facts={`sent to ${r.recipientsSent} · skipped ${r.recipientsSkipped} · ${r.filesCount === 1 ? "1 file" : `${r.filesCount} files`}`}
               />
             ))}
           </PlainList>
         )}
       </Card>
       {s.canEdit && def && (
-        <Card>
-          <CardTitle>Change it</CardTitle>
+        <MoreDetails title="Change it (what, when, who gets it)">
           <ScheduleForm
             value={{ id: s.id, version: s.version, name: s.name, reportCode: s.reportCode, siteId: s.siteId, cadence: s.cadence, runAtTime: s.runAtTime, weekday: s.weekday, monthDay: s.monthDay, format: s.format, parameters: s.parameters as Record<string, string>, recipientUserIds: s.recipients.map((r) => r.id) }}
             params={formParams(def)}
             sites={ctx.allowedSites.filter((x) => ctx.canAt(def.viewPermission, x.id))}
             people={people}
           />
-        </Card>
+        </MoreDetails>
       )}
     </div>
   );

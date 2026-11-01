@@ -24,7 +24,7 @@ const TABS = [
 /** US-6-10: invoices (money customers owe us) and the deliveries still to invoice. Customer first, amount right. */
 export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("finance.invoice.view")) return <Forbidden what="invoices" />;
+  if (!ctx.can("finance.invoice.view")) return <Forbidden what="invoices" permission="finance.invoice.view" />;
   const { status = "" } = await searchParams;
   const rows = await listInvoices(ctx, status === "overdue" ? { overdue: true } : { status: status || undefined });
   const awaiting = await shipmentsAwaitingInvoice(ctx);
@@ -44,7 +44,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title="Invoices" actions={<LinkButton href="/finance/statements" variant="secondary">Customer statements</LinkButton>} />
       <PageIntro>This screen is for the money customers owe us: one invoice for each delivery. A mistake on a sent invoice is fixed with a credit (money back), never by changing it.</PageIntro>
-      {awaiting.length > 0 && canCreate && <NextStep text={`Next: ${awaiting.length} delivery(ies) went out without an invoice. Make the invoice for each.`} action={{ label: "Show them", href: "#to-invoice" }} />}
+      {awaiting.length > 0 && canCreate && <NextStep text={`Next: ${awaiting.length === 1 ? "1 delivery" : `${awaiting.length} deliveries`} went out without an invoice. Make the invoice for each.`} action={{ label: "Show them", href: "#to-invoice" }} />}
       {awaiting.length > 0 && (
         <Card className="mb-4">
           <span id="to-invoice" className="block scroll-mt-24" />

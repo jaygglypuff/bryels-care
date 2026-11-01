@@ -26,7 +26,7 @@ const UNDO_ELSEWHERE: Record<string, string> = {
 
 export default async function MovementPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ reversed?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.movement.view")) return <Forbidden what="stock changes" />;
+  if (!ctx.can("inventory.movement.view")) return <Forbidden what="stock changes" permission="inventory.movement.view" />;
   const { id } = await params;
   const { reversed } = await searchParams;
   let d: Awaited<ReturnType<typeof getMovementDetail>>;

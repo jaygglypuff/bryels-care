@@ -13,7 +13,7 @@ export const metadata = { title: "New customer return" };
 /** Start a customer return against the delivery the goods left on (W09-11). */
 export default async function NewReturnPage({ searchParams }: { searchParams: Promise<{ shipmentId?: string; complaintId?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.customer_return.create")) return <Forbidden what="customer returns" />;
+  if (!ctx.can("sales.customer_return.create")) return <Forbidden what="customer returns" permission="sales.customer_return.create" />;
   const sp = await searchParams;
   const f = await returnFormContext(ctx, { shipmentId: sp.shipmentId, complaintId: sp.complaintId });
   return (

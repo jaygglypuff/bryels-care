@@ -36,7 +36,7 @@ function tree(rows: Row[]): { row: Row; depth: number }[] {
 
 export default async function LocationsPage({ searchParams }: { searchParams: Promise<{ site?: string; warehouse?: string; kind?: string; q?: string; all?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.location.view")) return <Forbidden what="locations" />;
+  if (!ctx.can("masterdata.location.view")) return <Forbidden what="locations" permission="masterdata.location.view" />;
   const sp = await searchParams;
   const siteId = sp.site && ctx.allowedSiteIds.includes(sp.site) ? sp.site : ctx.currentSiteId;
   const rows = await listLocations(ctx, { siteId, warehouseId: sp.warehouse, kind: sp.kind, q: sp.q, includeInactive: sp.all === "1" });
@@ -102,7 +102,7 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
       </Card>
       {rows.length === 0 ? (
         <EmptyState title={filtered ? "No locations match" : "No locations at this site"} action={filtered ? <LinkButton href="/masterdata/locations" variant="secondary">Clear filters</LinkButton> : undefined}>
-          {filtered ? "Try another filter." : canCreate ? (opts.warehouses.length ? "Add the first place below: type its name and press Add location." : "First add a warehouse under Setup → Warehouses.") : "Ask the site manager or the system administrator to add locations."}
+          {filtered ? "Try another filter." : canCreate ? (opts.warehouses.length ? "Add the first place below: type its name and press Add location." : "First add a warehouse under Management › Master data › Warehouses.") : "Ask the site manager or the system administrator to add locations."}
         </EmptyState>
       ) : (
         [...groups.entries()].map(([wid, g]) => (

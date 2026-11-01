@@ -157,7 +157,7 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
   const setStep = (i: number, patch: Partial<RecipeStepDraft>) => setD((x) => ({ ...x, steps: x.steps.map((s, j) => (j === i ? { ...s, ...patch } : s)) }));
 
   /** Light checks before moving on (the server checks everything again when saving). */
-  function check(n: number): Errors {
+  function check(n: number, draft = false): Errors {
     const e: Errors = {};
     if (n === 1 && !d.productId) e.productId = "Choose the product, or make a new one.";
     if (n === 2) {
@@ -167,6 +167,9 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
         if (!pieceG) e.pieceG = options.can.editProduct ? "Type how heavy one piece is, in grams, like 135." : "This product has no weight per piece yet. Choose “By weight (kg)”, or ask someone who can edit products to add its size.";
       } else if (!isDecimalText(d.batchKg, 3) || Number(d.batchKg) <= 0) e.batchKg = "Type how many kilograms one batch makes, like 17.6.";
     }
+    // UX audit C #9: screens 3 and 4 never tick when empty; only "Save as draft" may keep an unfinished recipe.
+    if (n === 3 && !start.locks.ingredients && !draft && d.lines.length === 0) e.lines = "Add at least one ingredient.";
+    if (n === 4 && !start.locks.steps && !draft && d.steps.length === 0) e.steps = "Add at least one step.";
     if (n === 3 && !start.locks.ingredients) {
       d.lines.forEach((l, i) => {
         if (!l.materialId) e[`lines.${i}.materialId`] = "Choose the ingredient.";
@@ -209,7 +212,7 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
 
   function save(submit: boolean) {
     for (const k of [1, 2, 3, 4]) {
-      const e = check(k);
+      const e = check(k, !submit);
       if (Object.keys(e).length) {
         setErrors(e);
         setBanner({ ok: false, text: `${Object.values(e)[0]} (screen ${k}: ${TITLES[k - 1]})` });
@@ -448,7 +451,7 @@ function ProductScreen({
   const shown = products.filter((p) => !q.trim() || `${p.name} ${p.code}`.toLowerCase().includes(q.trim().toLowerCase()));
   return (
     <Card className="flex flex-col gap-4">
-      <p className="text-[15px]">Pick the product this recipe makes. Every recipe belongs to one product.</p>
+      <p className="text-[15px]">Pick the product this recipe makes. Every product has one recipe: a product that already has one is marked; open it to change it.</p>
       <div className="relative">
         <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
         <Input aria-label="Search products" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} className="pl-10" />
@@ -457,29 +460,37 @@ function ProductScreen({
       <ul className="flex max-h-[50vh] flex-col gap-2 overflow-y-auto" role="radiogroup" aria-label="Products">
         {shown.map((p) => {
           const chosen = p.id === value;
+          if (p.formulaId)
+            // A product has one recipe (ADR-089): not offered again; open it to make a new version (UX audit C #9).
+            return (
+              <li key={p.id}>
+                <div className="flex min-h-[56px] w-full flex-wrap items-center justify-between gap-3 rounded-[14px] border border-dashed border-line bg-surface-2/50 px-4 py-2" data-testid="product-has-recipe">
+                  <span className="min-w-0">
+                    <span className="block text-[15px] font-semibold text-fg-2">{p.name}</span>
+                    <span className="block text-[13px] text-muted">Already has a recipe</span>
+                  </span>
+                  <a href={`/masterdata/recipes/${p.formulaId}`} className="inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-line bg-surface px-4 text-[14px] font-medium text-primary-text hover:bg-surface-2">
+                    Open it
+                  </a>
+                </div>
+              </li>
+            );
           return (
             <li key={p.id}>
               <button
                 type="button"
                 role="radio"
                 aria-checked={chosen}
-                disabled={!!p.formulaId}
                 onClick={() => onPick(p.id)}
-                className={cx("flex min-h-[56px] w-full items-center justify-between gap-3 rounded-[14px] border px-4 py-2 text-left", chosen ? "border-primary bg-primary-soft" : "border-line bg-surface hover:bg-surface-2", p.formulaId && "opacity-70")}
+                className={cx("flex min-h-[56px] w-full items-center justify-between gap-3 rounded-[14px] border px-4 py-2 text-left", chosen ? "border-primary bg-primary-soft" : "border-line bg-surface hover:bg-surface-2")}
               >
                 <span className="min-w-0">
                   <span className="block text-[15px] font-semibold">{p.name}</span>
                   <span className="block text-[12px] text-muted">
-                    {p.code} · {p.family} · {fmt(p.unitNetMassG, 3)} g{p.status === "draft" ? " · draft" : ""}
+                    {p.family} · {fmt(p.unitNetMassG, 3)} g{p.status === "draft" ? " · draft" : ""} · {p.code}
                   </span>
                 </span>
-                {p.formulaId ? (
-                  <a href={`/masterdata/recipes/${p.formulaId}`} className="shrink-0 text-[13px] font-medium text-primary-text underline" onClick={(e) => e.stopPropagation()}>
-                    Has a recipe · open it
-                  </a>
-                ) : chosen ? (
-                  <Check size={22} className="shrink-0 text-primary-text" aria-hidden />
-                ) : null}
+                {chosen ? <Check size={22} className="shrink-0 text-primary-text" aria-hidden /> : null}
               </button>
             </li>
           );

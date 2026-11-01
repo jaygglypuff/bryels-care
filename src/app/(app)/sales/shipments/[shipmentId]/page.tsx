@@ -15,6 +15,8 @@ import { acknowledgeAction, cancelShipmentAction, dispatchShipmentAction, draftD
 import { AcknowledgeForm, Cmd, ReasonCmd } from "../../fulfilment-forms";
 import { shipWord } from "../../orders/sales-ui";
 import { DoNext, whoDoes } from "../../next-step";
+import { deliveryContents } from "../../delivery-words";
+import { NextStepBox } from "@/ui/next-step-box";
 import { Help } from "@/ui/help/help";
 
 export const metadata = { title: "Delivery" };
@@ -34,7 +36,7 @@ function manilaNowLocal(): string {
 /** Delivery (shipment, US-4-11..13), phone first: what is in it, the one next step, the delivery receipt and what happened. */
 export default async function ShipmentPage({ params, searchParams }: { params: Promise<{ shipmentId: string }>; searchParams: Promise<{ done?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.shipment.view")) return <Forbidden what="deliveries" />;
+  if (!ctx.can("sales.shipment.view")) return <Forbidden what="deliveries" permission="sales.shipment.view" />;
   const { shipmentId } = await params;
   const { done } = await searchParams;
   let v: Awaited<ReturnType<typeof getShipment>>;
@@ -65,13 +67,28 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
       )
     ) : s.status === "packed" ? (
       canSend ? (
-        <DoNext text="Next: send it out. Type the driver and the plate number." action={{ label: "Send out", href: "#send" }} />
+        // UX audit round 2 part 2: the send-out form is inside the one "What to do next" box (no second green button).
+        <NextStepBox text="Next: send it out. Type the driver and the plate number.">
+          <Cmd action={dispatchShipmentAction} fields={{ shipmentId: s.id }} label="Send out now" pending="Sending out…" variant="cta" size="lg" confirm="Stock leaves the shelf now. It can only be undone if the truck never left. Send out?">
+            <Field label="Driver" htmlFor="driverName">
+              <Input id="driverName" name="driverName" required maxLength={80} autoComplete="off" />
+            </Field>
+            <Field label="Plate number" htmlFor="vehiclePlate">
+              <Input id="vehiclePlate" name="vehiclePlate" required maxLength={20} autoCapitalize="characters" autoComplete="off" />
+            </Field>
+            <Field label="Who delivers" htmlFor="carrierName">
+              <Input id="carrierName" name="carrierName" defaultValue={s.carrier ?? "Own truck"} maxLength={80} />
+            </Field>
+          </Cmd>
+        </NextStepBox>
       ) : (
         <DoNext text="The box is checked and ready." waitingFor={`Waiting for ${await whoDoes(ctx, "sales.shipment.post", s.siteId, "the warehouse")} to send it out.`} />
       )
     ) : s.status === "dispatched" ? (
       canPod ? (
-        <DoNext text="Next: when the driver is back with the signed delivery receipt, save the proof of delivery." action={{ label: "Save proof of delivery", href: "#pod" }} />
+        <NextStepBox text="Next: when the driver is back with the signed delivery receipt, save the proof of delivery.">
+          <AcknowledgeForm action={acknowledgeAction} shipmentId={s.id} now={manilaNowLocal()} />
+        </NextStepBox>
       ) : (
         <DoNext text="Sent out." waitingFor="Waiting for the proof of delivery (signed delivery receipt)." />
       )
@@ -153,30 +170,6 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
       )}
 
       <div className="flex flex-col gap-4">
-        {canSend && (
-          <Card>
-            <span id="send" className="block scroll-mt-24" />
-            <CardTitle>Send out</CardTitle>
-            <Cmd action={dispatchShipmentAction} fields={{ shipmentId: s.id }} label="Send out now" pending="Sending out…" variant="cta" size="lg" confirm="Stock leaves the shelf now. It can only be undone if the truck never left. Send out?">
-              <Field label="Driver" htmlFor="driverName">
-                <Input id="driverName" name="driverName" required maxLength={80} autoComplete="off" />
-              </Field>
-              <Field label="Plate number" htmlFor="vehiclePlate">
-                <Input id="vehiclePlate" name="vehiclePlate" required maxLength={20} autoCapitalize="characters" autoComplete="off" />
-              </Field>
-              <Field label="Who delivers" htmlFor="carrierName">
-                <Input id="carrierName" name="carrierName" defaultValue={s.carrier ?? "Own truck"} maxLength={80} />
-              </Field>
-            </Cmd>
-          </Card>
-        )}
-        {canPod && (
-          <Card>
-            <span id="pod" className="block scroll-mt-24" />
-            <CardTitle>Proof of delivery</CardTitle>
-            <AcknowledgeForm action={acknowledgeAction} shipmentId={s.id} now={manilaNowLocal()} />
-          </Card>
-        )}
         {v.deliveryReceipt?.status === "acknowledged" && (
           <Card>
             <CardTitle>Proof of delivery</CardTitle>
@@ -191,14 +184,14 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
           <Card>
             <CardTitle>Delivery receipt</CardTitle>
             <Cmd action={generateDeliveryReceiptAction} fields={{ shipmentId: s.id }} label="Make the delivery receipt" variant="secondary">
-              <Banner tone="warn" title="No delivery receipt paper yet">The number is given; the paper needs an approved template (Management → System → Templates & labels).</Banner>
+              <Banner tone="warn" title="No delivery receipt paper yet">The number is given; the paper needs an approved template (Management › Rules and settings › Labels and printouts).</Banner>
             </Cmd>
           </Card>
         )}
 
         <Card>
           <CardTitle>
-            In this delivery · {v.totals.boxes} box(es) · {fmtQty(v.totals.units, "pcs", 0)}
+            In this delivery · {deliveryContents(v.totals.boxes, v.totals.units)}
           </CardTitle>
           {v.lines.length === 0 ? (
             <EmptyState title="Nothing checked yet">{s.status === "draft" ? "The items are being taken off the shelf." : "Boxes show here as they are checked."}</EmptyState>

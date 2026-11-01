@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 /** User detail (US-1-16): profile, status actions, assignments (US-1-18, US-2-29), sessions (US-1-12), MFA (US-1-28), audit. */
 export default async function UserDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("identity.user.view")) return <Forbidden what="user administration" />;
+  if (!ctx.can("identity.user.view")) return <Forbidden what="user administration" permission="identity.user.view" />;
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   let d: UserDetail;
@@ -58,6 +58,10 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
       )}
       {!self && u.status === "locked" && canAdmin && (
         <NextStep text="This account is locked. Unlock it only after you checked it is really them (for example by phone)." action={{ label: "Unlock", href: "#account-actions" }} />
+      )}
+      {/* UX audit C #10: every state has one "What to do next" line. */}
+      {!self && !(u.status === "invited") && !(u.status === "active" && d.assignments.length === 0 && canAssign) && !(u.status === "locked" && canAdmin) && (
+        <NextStep text={u.status === "active" ? `${u.displayName} can use the app with the jobs below. Nothing to do unless their work changes.` : u.status === "locked" ? "This account is locked." : `${u.displayName} can no longer sign in. Kept on record.`} />
       )}
       {self && (
         <div className="mb-4">

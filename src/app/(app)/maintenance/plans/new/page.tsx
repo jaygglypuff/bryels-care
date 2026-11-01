@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /** New PM plan (W13-01 "preventive maintenance plan"), optionally for one piece of equipment (?equipmentId=). */
 export default async function NewPlanPage({ searchParams }: { searchParams: Promise<{ equipmentId?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("maintenance.plan.create")) return <Forbidden what="planning regular maintenance" />;
+  if (!ctx.can("maintenance.plan.create")) return <Forbidden what="planning regular maintenance" permission="maintenance.plan.create" />;
   const sp = await searchParams;
   const v = await maintenancePlanFormContext(ctx, { equipmentId: sp.equipmentId });
   return (

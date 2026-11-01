@@ -6,19 +6,22 @@ import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { PAYMENT_METHOD_LABEL, getPayment } from "@/modules/finance";
 import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { NextStepBox } from "@/ui/next-step-box";
+import { waitingFor } from "../../../waiting-for";
+import { approvalWaiting } from "../../approval-waiting";
 import { MoreMenu } from "@/ui/more-menu";
 import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { FinanceCommand } from "../../commands";
-import { ApprovalCard, DoNow, FinanceStatus, HistoryCard, Money, PostingsCard, waitingText } from "../../finance-ui";
+import { ApprovalCard, FinanceStatus, HistoryCard, Money, PostingsCard } from "../../finance-ui";
 
 export const metadata = { title: "Payment" };
 
 /** One payment: who, how much, what it pays; next step by state; cancel and "cancel (kept on record)" in ⋯ More. */
 export default async function PaymentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("finance.payment_record.view")) return <Forbidden what="payments" />;
+  if (!ctx.can("finance.payment_record.view")) return <Forbidden what="payments" permission="finance.payment_record.view" />;
   const { id } = await params;
   const { created } = await searchParams;
   let d: Awaited<ReturnType<typeof getPayment>>;
@@ -37,6 +40,19 @@ export default async function PaymentPage({ params, searchParams }: { params: Pr
   const canCancel = ["draft", "submitted", "approved"].includes(p.status) && ctx.can("finance.payment_record.create");
   const canVoid = p.status === "recorded" && ctx.can("finance.payment_record.void");
   const done = p.status === "recorded" || p.status === "voided";
+  // UX audit round 2 part 2: the form for the next step sits inside the one "What to do next" box.
+  const doNow = (
+    <>
+        {canSubmit && <FinanceCommand entity="payment" id={p.id} command="submit" label="Send for approval" variant="cta" />}
+        {canDecide && (
+          <>
+            <FinanceCommand entity="payment" id={p.id} command="approve" label="Approve" note variant="cta" />
+            <FinanceCommand entity="payment" id={p.id} command="return" label="Send back to change" reason />
+          </>
+        )}
+        {canRecord && <FinanceCommand entity="payment" id={p.id} command="record" label="Save to the books" password variant="cta" hint="After this it cannot be changed. The day the money moved must be in a month that is not closed." />}
+    </>
+  );
   return (
     <>
       <PageHeader
@@ -75,31 +91,21 @@ export default async function PaymentPage({ params, searchParams }: { params: Pr
         </div>
       )}
       {canSubmit ? (
-        <NextStep text="Next: send this payment for approval." action={{ label: "Send for approval", href: "#do" }} />
+        <NextStepBox text="Next: send this payment for approval.">{doNow}</NextStepBox>
       ) : p.status === "draft" ? (
-        <NextStep text="This payment is a draft." waitingFor="Waiting for finance to send it for approval." />
+        <NextStep text="This payment is a draft." waitingFor={await waitingFor(ctx, "finance.payment_record.create", null, "to send it for approval", "finance")} />
       ) : canDecide ? (
-        <NextStep text="Next: approve this payment, or send it back with what to change." action={{ label: "Approve or send back", href: "#do" }} />
+        <NextStepBox text="Next: approve this payment, or send it back with what to change.">{doNow}</NextStepBox>
       ) : p.status === "submitted" ? (
-        <NextStep text="This payment waits for approval." waitingFor={`${waitingText(d.progress)} The person who typed it cannot approve it.`} />
+        <NextStep text="This payment waits for approval." waitingFor={`${(await approvalWaiting(ctx, "finance.payment_record.approve", d.progress))} The person who typed it cannot approve it.`} />
       ) : canRecord ? (
-        <NextStep text="Next: save it to the books. Then the invoices or bills it pays are marked paid." action={{ label: "Save to the books", href: "#do" }} />
+        <NextStepBox text="Next: save it to the books. Then the invoices or bills it pays are marked paid.">{doNow}</NextStepBox>
       ) : p.status === "approved" ? (
-        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You approved it, so another finance person saves it to the books (above the set amount)." : "Waiting for finance to save it to the books."} />
-      ) : null}
+        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You approved it, so another finance person saves it to the books (above the set amount)." : await waitingFor(ctx, "finance.payment_record.post", null, "to save it to the books", "finance")} />
+      ) : (
+        <NextStep text={p.status === "recorded" ? "Saved to the books. Nothing more to do." : p.status === "voided" ? "Cancelled (kept on record). The invoices or bills it paid are open again." : "Cancelled before it was saved to the books. Nothing more to do."} />
+      )}
       <div className="flex flex-col gap-4">
-        {(canSubmit || canDecide || canRecord) && (
-          <DoNow>
-            {canSubmit && <FinanceCommand entity="payment" id={p.id} command="submit" label="Send for approval" variant="cta" />}
-            {canDecide && (
-              <>
-                <FinanceCommand entity="payment" id={p.id} command="approve" label="Approve" note variant="cta" />
-                <FinanceCommand entity="payment" id={p.id} command="return" label="Send back to change" reason />
-              </>
-            )}
-            {canRecord && <FinanceCommand entity="payment" id={p.id} command="record" label="Save to the books" password variant="cta" hint="After this it cannot be changed. The day the money moved must be in a month that is not closed." />}
-          </DoNow>
-        )}
         <Card>
           <CardTitle action={<Money value={p.amount} className="text-[20px] font-semibold" />}>{done ? "What it paid" : "What it will pay"}</CardTitle>
           <p className="mb-2 text-[14px] text-fg-2">

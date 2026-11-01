@@ -20,7 +20,7 @@ const FILTERS = [
 /** PM plans (US-6-19): time- or usage-based, most urgent first. */
 export default async function PlansPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("maintenance.plan.view")) return <Forbidden what="regular maintenance" />;
+  if (!ctx.can("maintenance.plan.view")) return <Forbidden what="regular maintenance" permission="maintenance.plan.view" />;
   const { status = "live" } = await searchParams;
   const rows = await listMaintenancePlans(ctx, { status });
   return (

@@ -66,14 +66,14 @@ export function purchaseOrderSteps(status: string, opts: { afterTheFact?: boolea
  * draft → posted → reversed; draft → cancelled. Labels, put-away and QA release are separate records
  * and are not inferred from the receipt status. */
 const GR_STAGES: readonly Stage[] = [
-  { label: "Draft", statuses: ["draft"] },
-  { label: "Posted", statuses: ["posted"] },
+  { label: "Not finished", statuses: ["draft"] },
+  { label: "Saved to stock", statuses: ["posted"] },
 ];
 
 export function goodsReceiptSteps(status: string): RecordStep[] {
   // Only drafts can be cancelled, so "Draft" is the one certain stage.
   if (status === "cancelled") return stoppedAfter(GR_STAGES, 0, "Cancelled");
-  if (status === "reversed") return stoppedAfter(GR_STAGES, 1, "Reversed");
+  if (status === "reversed") return stoppedAfter(GR_STAGES, 1, "Undone (kept on record)");
   return strip(GR_STAGES, status);
 }
 

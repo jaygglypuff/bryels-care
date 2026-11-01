@@ -23,7 +23,7 @@ const DECISION_WORD: Record<string, string> = { release: "OK to sell again", rel
 
 export default async function ReturnPage({ params }: { params: Promise<{ returnId: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.customer_return.view")) return <Forbidden what="customer returns" />;
+  if (!ctx.can("sales.customer_return.view")) return <Forbidden what="customer returns" permission="sales.customer_return.view" />;
   const { returnId } = await params;
   let v: Awaited<ReturnType<typeof getCustomerReturn>>;
   try {

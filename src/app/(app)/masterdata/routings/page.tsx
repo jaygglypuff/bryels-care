@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: "Steps (advanced)" };
 
 export default async function RoutingsPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.routing.view")) return <Forbidden what="steps for each product" />;
+  if (!ctx.can("masterdata.routing.view")) return <Forbidden what="steps for each product" permission="masterdata.routing.view" />;
   const rows = await listRoutings(ctx);
   const canWizard = ctx.can("masterdata.formula.create") && ctx.can("masterdata.routing.create");
   const canCreate = ctx.can("masterdata.routing.create");

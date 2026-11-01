@@ -361,3 +361,32 @@ Total screens: 250.
   expiry); spare parts are still in the item list (next step: group them).
 - Scan screen: "Scan the label, or type what it is", the camera fallback offers the handheld scanner or a name, and
   "Where is the label?" replaces "What can I scan or type?" (A-SCAN-13 needs the warehouse lead).
+
+## UX audit round 2, part 2 (2026-11-01): re-checked screens
+
+Fixes from `docs/ux-audit/{A,B,C}-*.md` (status table in `docs/ux-audit/README.md`). One "What to do next" per record; when the
+next step is a form on the page it sits inside the box (`src/ui/next-step-box.tsx`, sales `DoNext` children), so there is
+exactly one green button; "Waiting for <name> (role)" comes from the who-can-do directory (`src/app/(app)/waiting-for.ts`).
+
+| Screen | Note |
+|---|---|
+| `/procurement/orders/[id]`, `/procurement/requests/[id]`, `/procurement/returns/[id]` | Send / decide / post form inside "What to do next" (no "Do it now" card); waiting lines name the purchasing person or approver; return lots show the shelf name. |
+| `/sales/quotations/[id]` | Approve discount and "Make it an order" inside the box (one green). |
+| `/finance/{invoices,payments,credit-notes,expenses,bills}/[id]` | Same pattern; every state has a line (paid, cancelled, in the books); names in "Waiting for". |
+| `/inventory/receive/[grId]` | States "Not finished / Saved to stock"; "Make the purchase order" is secondary; plain flags. |
+| `/inventory/receive?nopo=1` | Fields after the item is chosen; unit from the item; shelf-life expiry shown as words + Change; items grouped, spare parts last; shelf names, not codes. |
+| `/sales/shipments/[id]`, `/sales/dispatch`, `/sales/shipments`, `/sales/packing/[id]` | Send-out and proof forms inside the box; "1 box · 12 pcs", "12 pcs taken off the shelf"; a sent-out delivery's check page shows no contradicting counts. |
+| Setup records: `/masterdata/{materials,locations,lines,equipment,warehouses,sites,reason-codes,inspection-plans,suppliers}/[id]`, `/masterdata/recipes/[formulaId]`, `/masterdata/products/[id]/skus/[skuId]`, `/admin/{roles,users,templates,templates/labels}/[id]`, `/documents/[id]`, `/reports/schedules/[id]` | Each has one "What to do next" or "Nothing to do"; extra forms folded; secondary buttons not green. |
+| `/admin/roles/[id]/clone` | Name only; the permission list folded (everything copied). |
+| `/masterdata/routings/[id]/revisions/[revisionId]` | One step open at a time; plain step-kind words. |
+| `/admin/templates/labels/new`, `/[id]` | Printed fields folded (usual set). |
+| `/masterdata/reason-codes/[id]` | No raw code under the title; "where offered" folded, plain category words. |
+| `/masterdata/recipes/new` | Intro; products with a recipe marked "Already has a recipe · Open it"; screens 3/4 need an ingredient/step before Next and before sending. |
+| `/dashboard` (owner/manager) | One "What to do next" line; "Sales today" never shows a red drop on a day not yet over; activity in sentences with names (code grey after). |
+| `/dashboard` (operator), `/production/orders` | Only the first task card has the green Continue. |
+| `/operations` | Product first, step now, due date; recent activity. |
+| `/notifications`, `/action-centre` | Names first, record numbers grey after. |
+| `/analytics/**` | Footnotes without ADR/KPI design references; 44 px period chips. |
+| `/quality` | "Check again on" date on batches. |
+| `/sales/returns` | "1 item, 6 pcs". |
+| Forbidden screens (all) | "Ask <name> (role)" from who-can-do; never tells a site manager to ask the site manager. |

@@ -40,7 +40,7 @@ const amt = (v: string | null | undefined, uom: string | null, signed = false) =
  */
 export default async function CountPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.stock_count.view")) return <Forbidden what="stock counts" />;
+  if (!ctx.can("inventory.stock_count.view")) return <Forbidden what="stock counts" permission="inventory.stock_count.view" />;
   const { id } = await params;
   let c: CountDetail;
   try {

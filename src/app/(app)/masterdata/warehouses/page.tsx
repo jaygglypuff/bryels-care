@@ -12,7 +12,7 @@ export const metadata = { title: "Warehouses" };
 
 export default async function WarehousesPage({ searchParams }: { searchParams: Promise<{ site?: string; all?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.warehouse.view")) return <Forbidden what="warehouses" />;
+  if (!ctx.can("masterdata.warehouse.view")) return <Forbidden what="warehouses" permission="masterdata.warehouse.view" />;
   const sp = await searchParams;
   const rows = await listWarehouses(ctx, { siteId: sp.site, includeInactive: sp.all === "1" });
   const canAdmin = ctx.can("masterdata.warehouse.admin");

@@ -18,7 +18,7 @@ const TABS = [
 
 export default async function HoldsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.hold.view")) return <Forbidden what="QA holds" />;
+  if (!ctx.can("quality.hold.view")) return <Forbidden what="QA holds" permission="quality.hold.view" />;
   const { status = "active" } = await searchParams;
   const rows = await listHolds(ctx, { status: status || undefined });
   return (

@@ -52,6 +52,7 @@ import {
   dispatchShipment,
   generateDraftDeliveryReceipt,
   getPick,
+  listShipments,
   manilaToday,
   remindUnacknowledged,
   reverseShipment,
@@ -219,6 +220,13 @@ describe("US-4-10 pick list and pick scans", () => {
     expect(r.short).toHaveLength(1);
     expect((await shipmentRow(shipmentId)).status).toBe("picked");
     expect(await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, pickId), eq(auditEvents.action, "sales.pick.scanned")))).toHaveLength(3);
+    // UX audit round 2 part 2: before the second check the delivery list shows what was taken off the shelf, not "0 pcs".
+    const row = (await listShipments(wh, { status: "picked" })).find((x) => x.id === shipmentId)!;
+    expect(row.unitsFrom).toBe("picked");
+    expect(Number(row.units)).toBeGreaterThan(0);
+    expect(row.boxes).toBeGreaterThan(0);
+    // another site's warehouse does not see it
+    expect((await listShipments(whRvs, { status: "picked" })).some((x) => x.id === shipmentId)).toBe(false);
   });
 
   it("US-4-11: the picker cannot verify; over-shipment is 409 until a site manager (not the order creator) approves it", async () => {

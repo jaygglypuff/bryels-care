@@ -152,9 +152,12 @@ async function kpiValue(page, caption) {
     await page.fill('#line-1-qty', '25');
     await page.fill('#line-1-slot', 'LOS-25190');
     facts.coconutExpiry = manilaDate(365);
+    // UX audit R2 part 2: without a purchase order a use-by date filled in from the shelf life shows as words + "Change".
+    const expiryText = page.getByTestId('receipt-line-1-expiry-text');
+    if (await expiryText.isVisible().catch(() => false)) await expiryText.getByRole('button', { name: 'Change' }).click();
     await page.fill('#line-1-exp', facts.coconutExpiry);
     const locLabel = await page.locator('#line-1-loc option:checked').textContent();
-    assert(/QUA-01/.test(locLabel), 'default receiving location is quarantine, got ' + locLabel);
+    assert(/QA hold cage|Quarantine/i.test(locLabel), 'default receiving location is the QA hold cage, got ' + locLabel);
     await shot(page, 'receive-form');
     // Consultant review flow A + usability test 2026-10-30: one button saves and opens the label print preview
     // (or, when the label size or printer must be chosen, the receipt's label page first).

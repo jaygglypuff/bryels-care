@@ -9,7 +9,7 @@ export const metadata = { title: "New page layout" };
 
 export default async function NewTemplatePage() {
   const ctx = await requireContext();
-  if (!ctx.can("documents.template.create")) return <Forbidden what="creating templates" />;
+  if (!ctx.can("documents.template.create")) return <Forbidden what="creating templates" permission="documents.template.create" />;
   const kinds = supportedKinds().map((k) => ({ value: k, label: k === "test_page" ? "Printer test page (A4)" : k === "label" ? "Label layout" : k.replace(/_/g, " "), datasets: k === "label" ? [...LABEL_DATASETS] : [] }));
   return (
     <div className="mx-auto max-w-2xl space-y-5">

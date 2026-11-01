@@ -18,7 +18,7 @@ export const metadata: Metadata = { title: "Recipe (advanced)" };
 export default async function FormulaDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.formula.view")) return <Forbidden what="recipes" />;
+  if (!ctx.can("masterdata.formula.view")) return <Forbidden what="recipes" permission="masterdata.formula.view" />;
   const f = /^[0-9a-f-]{36}$/i.test(id) ? await getFormula(ctx, id) : null;
   if (!f) {
     return (

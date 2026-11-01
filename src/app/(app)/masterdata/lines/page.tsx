@@ -11,7 +11,7 @@ export const metadata = { title: "Making areas / lines" };
 
 export default async function LinesPage({ searchParams }: { searchParams: Promise<{ all?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.production_line.view")) return <Forbidden what="production lines" />;
+  if (!ctx.can("masterdata.production_line.view")) return <Forbidden what="production lines" permission="masterdata.production_line.view" />;
   const { all } = await searchParams;
   const rows = await listLines(ctx, { includeInactive: all === "1" });
   const canAdmin = ctx.can("masterdata.production_line.admin");

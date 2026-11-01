@@ -22,7 +22,7 @@ const TABS = [
 /** Fix stock (stock adjustments), grade-5 (ADR-088): what was fixed first, why in plain words, the number grey. */
 export default async function AdjustmentsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.adjustment.view")) return <Forbidden what="stock fixes" />;
+  if (!ctx.can("inventory.adjustment.view")) return <Forbidden what="stock fixes" permission="inventory.adjustment.view" />;
   const sp = await searchParams;
   const status = TABS.some(([k]) => k && k === sp.status) ? sp.status : undefined;
   const all = await listAdjustments(ctx);

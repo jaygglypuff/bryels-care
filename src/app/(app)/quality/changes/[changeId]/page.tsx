@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 /** Change control detail: proposal, impact assessment, approval card, implementation and closure. */
 export default async function ChangePage({ params, searchParams }: { params: Promise<{ changeId: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.change_control.view")) return <Forbidden what="change requests" />;
+  if (!ctx.can("quality.change_control.view")) return <Forbidden what="change requests" permission="quality.change_control.view" />;
   const { changeId } = await params;
   const sp = await searchParams;
   let v: Awaited<ReturnType<typeof getChangeControl>>;

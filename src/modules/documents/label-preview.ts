@@ -114,9 +114,9 @@ export async function labelPreview(
     : e.siteId !== ctx.currentSiteId
       ? `This is at ${place}. Switch site in the top bar to print its label.`
       : stations.length === 0
-        ? `Label printing is not set up for ${place} yet. Ask the administrator (Settings › Labels and printouts).`
+        ? `Label printing is not set up for ${place} yet. Ask the administrator (Management › Rules and settings › Labels and printouts).`
         : options.length === 0
-          ? "No label is approved for this yet. Ask QA (Settings › Labels and printouts)."
+          ? "No label is approved for this yet. Ask QA (Management › Rules and settings › Labels and printouts)."
           : null;
 
   return {

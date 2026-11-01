@@ -16,7 +16,7 @@ const pct = (v: string | null) => (v === null ? "no data yet" : `${v} %`);
 /** Supplier performance (US-6-04, W04-10): on time, everything there, QA not OK, problems, days, returns — one row per supplier. */
 export default async function PerformancePage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.supplier_performance.view")) return <Forbidden what="supplier results" />;
+  if (!ctx.can("procurement.supplier_performance.view")) return <Forbidden what="supplier results" permission="procurement.supplier_performance.view" />;
   const sp = await searchParams;
   let data: Awaited<ReturnType<typeof supplierPerformance>> | null = null;
   let error: string | null = null;

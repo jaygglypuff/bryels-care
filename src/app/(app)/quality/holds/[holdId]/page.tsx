@@ -18,7 +18,7 @@ export const metadata = { title: "Stopped by QA" };
 
 export default async function HoldPage({ params, searchParams }: { params: Promise<{ holdId: string }>; searchParams: Promise<{ placed?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.hold.view")) return <Forbidden what="QA holds" />;
+  if (!ctx.can("quality.hold.view")) return <Forbidden what="QA holds" permission="quality.hold.view" />;
   const { holdId } = await params;
   const { placed } = await searchParams;
   let h: Awaited<ReturnType<typeof getHold>>;

@@ -10,12 +10,12 @@ export const metadata = { title: "New label" };
 
 export default async function NewLabelTemplatePage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.label_template.create")) return <Forbidden what="creating label templates" />;
+  if (!ctx.can("masterdata.label_template.create")) return <Forbidden what="creating label templates" permission="masterdata.label_template.create" />;
   const layouts = await labelLayoutTemplates(ctx);
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <PageHeader title="New label" actions={<LinkButton href="/admin/templates" variant="secondary">Back</LinkButton>} />
-      <PageIntro>This screen is for making a new label: give it a name, say what it is for and its size, tick what is printed, and press “Make the label”. QA must OK it before it prints.</PageIntro>
+      <PageIntro>This screen is for making a new label: give it a name, say what it is for and its size, and press “Make the label”. What is printed starts from the usual set. QA must OK it before it prints.</PageIntro>
       {layouts.length === 0 ? (
         <Banner tone="info" title="No label layout yet">First make a page layout for labels (Labels and printouts → ⋯ More → New page layout).</Banner>
       ) : (

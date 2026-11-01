@@ -9,6 +9,7 @@ import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { RecordNo } from "@/ui/plain-list";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
+import { waitingFor } from "../../../waiting-for";
 import { decideChangeAction, packAction, proposeChangeAction, proposePairAction, termsAction, withdrawChangeAction } from "../../actions";
 import { SubNav, SupplierChip, money } from "../../_ui";
 
@@ -22,7 +23,7 @@ const summaryCls = "inline-flex min-h-[44px] cursor-pointer items-center text-[1
  */
 export default async function SupplierAslPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.supplier.view")) return <Forbidden what="suppliers" />;
+  if (!ctx.can("masterdata.supplier.view")) return <Forbidden what="suppliers" permission="masterdata.supplier.view" />;
   const { id } = await params;
   const { created } = await searchParams;
   let s: Awaited<ReturnType<typeof getSupplier>>;
@@ -59,12 +60,20 @@ export default async function SupplierAslPage({ params, searchParams }: { params
       />
       <PageIntro>This screen is for one supplier: which items we may buy from them, their prices and delivery times, and QA&apos;s yes or no on new items.</PageIntro>
       {toDecide.length > 0 ? (
-        <NextStep text={`Next: ${toDecide.length} suggestion(s) wait for your yes or no.`} action={{ label: "Decide", href: `#item-${toDecide[0].id}` }} />
+        <NextStep text={`Next: ${toDecide.length} ${toDecide.length === 1 ? "suggestion waits" : "suggestions wait"} for your yes or no.`} action={{ label: "Decide", href: `#item-${toDecide[0].id}` }} />
       ) : canOrder ? (
-        <NextStep text={`You may buy ${approved.length} item(s) from ${s.name}.`} action={{ label: "Order from this supplier", href: `/procurement/orders/new?supplier=${s.id}` }} />
+        <NextStep text={`You may buy ${approved.length} ${approved.length === 1 ? "item" : "items"} from ${s.name}.`} action={{ label: "Order from this supplier", href: `/procurement/orders/new?supplier=${s.id}` }} />
       ) : canPropose && approved.length === 0 ? (
         <NextStep text="Nothing may be bought from this supplier yet." action={{ label: "Suggest an item", href: "#suggest" }} />
-      ) : null}
+      ) : s.qualityStatus === "suspended" ? (
+        <NextStep text="Stopped: do not buy from this supplier." waitingFor={await waitingFor(ctx, "masterdata.supplier.approve", null, "to decide if we may buy from them again", "QA")} />
+      ) : rows.some((r) => r.pending) ? (
+        <NextStep text="New items for this supplier wait for QA." waitingFor={await waitingFor(ctx, "masterdata.supplier.approve", null, "to say yes or no", "QA")} />
+      ) : s.qualityStatus === "new" ? (
+        <NextStep text="This supplier is new." waitingFor={await waitingFor(ctx, "masterdata.supplier.approve", null, "to check the supplier", "QA")} />
+      ) : (
+        <NextStep text={approved.length ? `We may buy ${approved.length} ${approved.length === 1 ? "item" : "items"} from ${s.name}.` : "Nothing may be bought from this supplier yet."} waitingFor={approved.length ? await waitingFor(ctx, "procurement.purchase_order.create", null, "to order from them", "purchasing") : undefined} />
+      )}
       <SubNav />
       <div className="flex flex-col gap-5">
         {created && <Banner tone="ok" title="Supplier added">Next: suggest the items we may buy from them; QA says yes or no.</Banner>}
@@ -91,7 +100,7 @@ export default async function SupplierAslPage({ params, searchParams }: { params
                     {seePrices && r.unitPrice ? `${money(r.unitPrice, r.currency ?? "PHP")} per ${r.priceUom} · ` : ""}
                     {r.packQty ? `comes in ${Number(r.packQty).toLocaleString("en-PH", { maximumFractionDigits: 6 })} ${r.packUom} packs · ` : ""}
                     {r.moqQty ? `order at least ${Number(r.moqQty).toLocaleString("en-PH")} ${r.moqUom} · ` : ""}
-                    {r.leadTimeDays !== null ? `takes ${r.leadTimeDays} day(s)` : "delivery time not set"}
+                    {r.leadTimeDays !== null ? `takes ${r.leadTimeDays === 1 ? "1 day" : `${r.leadTimeDays} days`}` : "delivery time not set"}
                     {r.brand ? ` · brand ${r.brand}` : ""}
                   </p>
                   {(r.approvedAt || r.auditDate || r.suspendedReason || r.supplierPartNumber || r.priceEffectiveFrom) && (

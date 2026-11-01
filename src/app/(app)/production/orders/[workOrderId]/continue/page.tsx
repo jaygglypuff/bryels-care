@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function ContinuePage({ params, searchParams }: { params: Promise<{ workOrderId: string }>; searchParams: Promise<{ batch?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("production.batch.view")) return <Forbidden what="production batches" />;
+  if (!ctx.can("production.batch.view")) return <Forbidden what="production batches" permission="production.batch.view" />;
   const { workOrderId } = await params;
   const { batch: batchParam } = await searchParams;
   let target: string;

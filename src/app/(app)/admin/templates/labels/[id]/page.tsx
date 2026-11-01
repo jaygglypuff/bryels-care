@@ -8,6 +8,7 @@ import { Banner, Chip } from "@/ui/status";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { RecordNo } from "@/ui/plain-list";
 import { Forbidden } from "../../../../forbidden";
+import { waitingFor } from "../../../../waiting-for";
 import { LabelStatusOp, LabelTemplateForm } from "../../forms";
 import { APPLIES_TEXT } from "../../words";
 
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 export default async function LabelTemplatePage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.label_template.view")) return <Forbidden what="label templates" />;
+  if (!ctx.can("masterdata.label_template.view")) return <Forbidden what="label templates" permission="masterdata.label_template.view" />;
   const { id } = await params;
   let t: Awaited<ReturnType<typeof getLabelTemplate>>;
   try {
@@ -40,8 +41,9 @@ export default async function LabelTemplatePage({ params }: { params: Promise<{ 
         }
       />
       <PageIntro>This screen is for QA and the IT person: one label – what it is for, its size and what is printed on it. It prints only after QA said OK.</PageIntro>
-      {t.status === "draft" && ctx.can("masterdata.label_template.approve") && t.updatedBy !== ctx.userId && <NextStep text="This label waits for your OK. Print a test label first and check it." action={{ label: "Decide", href: "#decide" }} />}
-      {t.status === "draft" && !(ctx.can("masterdata.label_template.approve") && t.updatedBy !== ctx.userId) && <NextStep text="This label cannot print yet." waitingFor={`QA must say OK (someone other than ${t.editorName}, who made the last change).`} />}
+      {t.status === "draft" && ctx.can("masterdata.label_template.approve") && t.updatedBy !== ctx.userId && <NextStep text="This label waits for your OK. Print a test label first and check it, then press “OK for printing” below." />}
+      {t.status === "draft" && !(ctx.can("masterdata.label_template.approve") && t.updatedBy !== ctx.userId) && <NextStep text="This label cannot print yet." waitingFor={(await waitingFor(ctx, "masterdata.label_template.approve", null, `to say OK (not ${t.editorName}, who made the last change)`, "QA"))} />}
+      {t.status !== "draft" && <NextStep text={t.status === "approved" ? "OK for printing: this label is used when people print it. To change it, save a change and QA says OK again." : "Not used any more. Kept on record."} />}
       {!t.layoutVersion && <Banner tone="warn" title="Its page layout has no OK'd version">The layout needs a version QA said OK to before labels can print.</Banner>}
       <Card id="decide">
         <div className="mb-3 flex items-center gap-2">

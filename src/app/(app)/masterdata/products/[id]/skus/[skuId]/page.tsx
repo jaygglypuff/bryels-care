@@ -19,7 +19,7 @@ export const metadata = { title: "Sellable item" };
 
 export default async function SkuPage({ params, searchParams }: { params: Promise<{ id: string; skuId: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.sku.view")) return <Forbidden what="sellable items" />;
+  if (!ctx.can("masterdata.sku.view")) return <Forbidden what="sellable items" permission="masterdata.sku.view" />;
   const { id, skuId } = await params;
   const { created } = await searchParams;
   let s;
@@ -79,9 +79,9 @@ export default async function SkuPage({ params, searchParams }: { params: Promis
           <NextStep className={NEXT_WRAP} text="The product itself is still a draft." waitingFor="Make the product ready to use first, then this sellable item." action={{ label: "Open the product", href: back }} />
         )
       ) : s.status === "active" ? (
-        <NextStep className={NEXT_WRAP} text="This sellable item is ready to sell." action={{ label: "Back to the product", href: back }} />
+        <NextStep className={NEXT_WRAP} text="Ready to sell: it can go on price lists and customer orders. Nothing to do here." />
       ) : s.status === "discontinued" ? (
-        <NextStep className={NEXT_WRAP} text="This sellable item is no longer sold." action={{ label: "Back to the product", href: back }} />
+        <NextStep className={NEXT_WRAP} text="This sellable item is no longer sold. Kept on record." />
       ) : (
         <NextStep className={NEXT_WRAP} text="This sellable item is a draft." waitingFor="The planner makes it ready to sell." />
       )}

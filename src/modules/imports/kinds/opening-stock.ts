@@ -352,7 +352,7 @@ async function postOpeningRow(k: CreateContext, v: OpeningValues) {
   const [loc] = await tx.select().from(locations).where(and(eq(locations.siteId, job.siteId), eq(locations.code, v.locationCode))).limit(1);
   if (!loc) throw new DomainError("validation", `Location ${v.locationCode} does not exist at site ${site.code}.`, { field: "location_code" });
   if (loc.status !== "active") throw new DomainError("validation", `Location ${loc.code} is ${loc.status}.`, { field: "location_code" });
-  if (NOT_FOR_OPENING.includes(loc.kind)) throw new DomainError("validation", `Location ${loc.code} is a ${loc.kind} location; opening stock is counted into storage, receiving, quarantine or hold locations.`, { field: "location_code" });
+  if (NOT_FOR_OPENING.includes(loc.kind)) throw new DomainError("validation", `Location ${loc.code} is a ${loc.kind} location; opening stock is counted into storage, receiving, QA-waiting or hold places.`, { field: "location_code" });
   const [wh] = await tx.select({ id: warehouses.id, code: warehouses.code }).from(warehouses).where(eq(warehouses.id, loc.warehouseId)).limit(1);
   if (v.warehouseCode && v.warehouseCode !== wh.code) throw new DomainError("validation", `Location ${loc.code} is in warehouse ${wh.code}, not ${v.warehouseCode}.`, { field: "warehouse_code" });
 

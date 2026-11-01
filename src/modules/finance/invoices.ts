@@ -433,7 +433,7 @@ export async function voidInvoice(ctx: AuthContext, id: string, input: { reason:
   return db.transaction(async (tx) => {
     const inv = await lockInvoice(tx, ctx, id);
     ctx.requireAt("finance.invoice.void", inv.siteId);
-    if (inv.status !== "issued") throw new DomainError("state", `${label(inv)} is ${INVOICE_STATUS_LABEL[inv.status].toLowerCase()}; only an issued invoice with nothing applied can be voided by reversal.`);
+    if (inv.status !== "issued") throw new DomainError("state", `${label(inv)} is ${INVOICE_STATUS_LABEL[inv.status].toLowerCase()}; only an invoice in the books with nothing paid or credited can be cancelled (kept on record).`);
     if (D(inv.paidAmount).gt(0) || D(inv.creditedAmount).gt(0)) throw new DomainError("conflict", "Payments or credits are applied to this invoice. Void those first, or credit the open amount with a credit note.");
     await reverseDocumentPosting(tx, ctx, "invoice", inv.id, reason, input.now);
     const now = new Date();

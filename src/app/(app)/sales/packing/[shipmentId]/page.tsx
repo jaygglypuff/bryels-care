@@ -28,7 +28,7 @@ const q = (v: string, uom = "pcs") => fmtQty(v, uom, uom === "pcs" ? 0 : 3);
  */
 export default async function PackingPage({ params }: { params: Promise<{ shipmentId: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.shipment.view")) return <Forbidden what="shipments" />;
+  if (!ctx.can("sales.shipment.view")) return <Forbidden what="shipments" permission="sales.shipment.view" />;
   const { shipmentId } = await params;
   let v: Awaited<ReturnType<typeof getPackingView>>;
   try {
@@ -42,10 +42,16 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
   const unverified = v.picked.filter((p) => !p.verified);
   const lastFailure = v.scans.find((x) => x.result === "not_in_pack" && /Over-shipment/.test(x.note ?? ""));
   const checking = canVerify && !v.isPicker;
+  // UX audit B #10: a delivery that already left shows no "0 of 0 checked" or "still to send" (it contradicted "done").
+  const gone = ["dispatched", "delivered", "cancelled", "reversed"].includes(s.status);
 
   const next =
-    s.status !== "picked" ? (
-      <DoNext text={s.status === "draft" ? "The items are still being taken off the shelf." : "The second check is done."} action={{ label: "Open the shipment", href: `/sales/shipments/${s.id}` }} />
+    gone ? (
+      <DoNext text={s.status === "cancelled" ? "This delivery was cancelled. Nothing to check." : `Already sent out${s.dispatchedAt ? ` on ${fmtDateTime(s.dispatchedAt)}` : ""}. The second check was done before it left.`} action={{ label: "Open the delivery", href: `/sales/shipments/${s.id}` }} />
+    ) : s.status === "packed" ? (
+      <DoNext text="The second check is done. Next: send it out." action={{ label: "Send it out", href: `/sales/shipments/${s.id}` }} />
+    ) : s.status !== "picked" ? (
+      <DoNext text="The items are still being taken off the shelf." waitingFor={`Waiting for ${await whoDoes(ctx, "sales.pick.create", s.siteId, "the warehouse")} to finish getting them from the shelf.`} />
     ) : v.isPicker ? (
       <DoNext text="You took these off the shelf, so someone else does the second check." waitingFor={`Waiting for ${await whoDoes(ctx, "inventory.pack.approve", s.siteId, "a checker")}.`} />
     ) : !canVerify ? (
@@ -53,7 +59,7 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
     ) : unverified.length > 0 ? (
       <DoNext text={`Next: scan each box (${unverified.length} left). A box that is not on the order is refused.`} />
     ) : (
-      <DoNext text="Every box is checked. Next: say how many boxes go on the truck and finish." action={{ label: "Finish the check", href: "#finish" }} />
+      <DoNext text="Every box is checked. Next: say how many boxes go on the truck and press “Finish the check” below." />
     );
 
   return (
@@ -97,6 +103,7 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
           </Card>
         )}
 
+        {!gone && (
         <Card>
           <CardTitle>
             Boxes · {v.picked.length - unverified.length} of {v.picked.length} checked
@@ -129,7 +136,9 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
             </ul>
           )}
         </Card>
+        )}
 
+        {!gone && (
         <Card>
           <CardTitle>What the customer ordered</CardTitle>
           <ul className="flex flex-col gap-2">
@@ -148,6 +157,7 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
             ))}
           </ul>
         </Card>
+        )}
 
         {s.status === "picked" && checking && (
           <Card>
@@ -155,10 +165,10 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
             <CardTitle>Finish the check</CardTitle>
             {unverified.length > 0 && (
               <div className="mb-3">
-                <Banner tone="warn" title={`${unverified.length} box(es) not checked yet`}>Scan them first.</Banner>
+                <Banner tone="warn" title={`${unverified.length === 1 ? "1 box is" : `${unverified.length} boxes are`} not checked yet`}>Scan them first.</Banner>
               </div>
             )}
-            <Cmd action={completePackingAction} fields={{ shipmentId: s.id }} label="Finish the check" pending="Finishing…" variant="cta" size="lg">
+            <Cmd action={completePackingAction} fields={{ shipmentId: s.id }} label="Finish the check" pending="Finishing…" variant={unverified.length > 0 ? "secondary" : "cta"} size="lg">
               <Field label="Boxes on the truck" htmlFor="packageCount">
                 <Input id="packageCount" name="packageCount" inputMode="numeric" defaultValue={String(Math.max(new Set(v.lines.map((l) => l.containerId).filter(Boolean)).size, 1))} />
               </Field>

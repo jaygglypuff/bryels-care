@@ -324,7 +324,7 @@ export async function getSupplierReturn(ctx: AuthContext, returnId: string) {
   const [gr] = sr.goodsReceiptId ? await db.select({ id: goodsReceipts.id, receiptNumber: goodsReceipts.receiptNumber }).from(goodsReceipts).where(eq(goodsReceipts.id, sr.goodsReceiptId)) : [];
   const [po] = sr.purchaseOrderId ? await db.select({ id: purchaseOrders.id, poNumber: purchaseOrders.poNumber }).from(purchaseOrders).where(eq(purchaseOrders.id, sr.purchaseOrderId)) : [];
   const lines = await db
-    .select({ l: supplierReturnLines, lotNumber: inventoryLots.lotNumber, lotStatus: inventoryLots.qualityStatus, supplierLot: inventoryLots.supplierLotNumber, materialCode: materials.code, materialName: materials.name, locationCode: locations.code })
+    .select({ l: supplierReturnLines, lotNumber: inventoryLots.lotNumber, lotStatus: inventoryLots.qualityStatus, supplierLot: inventoryLots.supplierLotNumber, materialCode: materials.code, materialName: materials.name, locationCode: locations.code, locationName: locations.name })
     .from(supplierReturnLines)
     .innerJoin(inventoryLots, eq(inventoryLots.id, supplierReturnLines.lotId))
     .innerJoin(locations, eq(locations.id, supplierReturnLines.fromLocationId))
@@ -345,7 +345,7 @@ export async function getSupplierReturn(ctx: AuthContext, returnId: string) {
     site,
     receipt: gr ?? null,
     po: po ?? null,
-    lines: lines.map((r) => ({ ...r.l, creditExpectedAmount: prices ? r.l.creditExpectedAmount : null, lotNumber: r.lotNumber, lotStatus: r.lotStatus, supplierLot: r.supplierLot, materialCode: r.materialCode, materialName: r.materialName, locationCode: r.locationCode })),
+    lines: lines.map((r) => ({ ...r.l, creditExpectedAmount: prices ? r.l.creditExpectedAmount : null, lotNumber: r.lotNumber, lotStatus: r.lotStatus, supplierLot: r.supplierLot, materialCode: r.materialCode, materialName: r.materialName, locationCode: r.locationCode, locationName: r.locationName })),
     transitions: transitions.map((t) => ({ ...t.t, actorName: t.actorName })),
     progress,
     decisions,

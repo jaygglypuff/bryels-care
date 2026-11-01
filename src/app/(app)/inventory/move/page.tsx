@@ -22,7 +22,7 @@ const UUID = /^[0-9a-f-]{36}$/i;
 /** Move stock (scan to move, US-2-14), grade-5 (ADR-088): scan or find by name, how much, scan or choose the shelf, confirm. */
 export default async function MovePage({ searchParams }: { searchParams: Promise<{ box?: string; lot?: string; to?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.movement.post")) return <Forbidden what="moving stock" />;
+  if (!ctx.can("inventory.movement.post")) return <Forbidden what="moving stock" permission="inventory.movement.post" />;
   const sp = await searchParams;
   const locations = ctx.can("masterdata.location.view") ? await listSiteLocations(ctx) : [];
   let initialSource: SourceInfo | null = null;

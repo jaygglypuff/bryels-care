@@ -20,7 +20,7 @@ export const metadata = { title: "Prices" };
 
 export default async function PriceListPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.price_list.view")) return <Forbidden what="prices" />;
+  if (!ctx.can("sales.price_list.view")) return <Forbidden what="prices" permission="sales.price_list.view" />;
   const { id } = await params;
   const { saved } = await searchParams;
   let d: Awaited<ReturnType<typeof getPriceList>>;

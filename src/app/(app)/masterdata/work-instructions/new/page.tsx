@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "New how-to sheet" };
 /** New how-to sheet: a name and the text; the system gives the number (WI-nnnn, ADR-093). */
 export default async function NewWorkInstructionPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.work_instruction.create")) return <Forbidden what="writing how-to sheets" />;
+  if (!ctx.can("masterdata.work_instruction.create")) return <Forbidden what="writing how-to sheets" permission="masterdata.work_instruction.create" />;
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <PageHeader title="New how-to sheet" />

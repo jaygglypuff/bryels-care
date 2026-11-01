@@ -20,7 +20,7 @@ const TABS = [
 /** US-7-05: the site's queue of offline changes the server could not accept. */
 export default async function ConflictsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("platform.sync_conflict.view")) return <Forbidden what="the sync conflict queue (your own conflicts are on the Sync page)" />;
+  if (!ctx.can("platform.sync_conflict.view")) return <Forbidden what="the sync conflict queue (your own conflicts are on the Sync page)" permission="platform.sync_conflict.view" />;
   const { status: raw } = await searchParams;
   const status = TABS.some((t) => t.key === raw) ? (raw as (typeof TABS)[number]["key"]) : "open";
   const rows = await listConflicts(ctx, { status });

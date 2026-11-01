@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 /** Maintenance work order: state machine actions, equipment availability, spare parts issued, history. */
 export default async function WorkOrderPage({ params, searchParams }: { params: Promise<{ workOrderId: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("maintenance.work_order.view")) return <Forbidden what="repair jobs" />;
+  if (!ctx.can("maintenance.work_order.view")) return <Forbidden what="repair jobs" permission="maintenance.work_order.view" />;
   const { workOrderId } = await params;
   const sp = await searchParams;
   let v: Awaited<ReturnType<typeof getMaintenanceWorkOrder>>;

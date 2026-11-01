@@ -13,7 +13,7 @@ export const metadata = { title: "Give a credit (money back)" };
 /** New credit note on one sent invoice: why and how much; the credit number is made when it is saved to the books. */
 export default async function NewCreditNotePage({ searchParams }: { searchParams: Promise<{ invoiceId?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("finance.credit_note.create")) return <Forbidden what="credits (money back)" />;
+  if (!ctx.can("finance.credit_note.create")) return <Forbidden what="credits (money back)" permission="finance.credit_note.create" />;
   const { invoiceId } = await searchParams;
   if (!invoiceId) {
     return (

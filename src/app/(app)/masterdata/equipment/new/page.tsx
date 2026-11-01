@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Register equipment" };
 /** Register a machine (ADR-088): name, kind and where it is; the number EQP-nnnn and the rules have defaults. */
 export default async function NewEquipmentPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.equipment.admin")) return <Forbidden what="registering equipment" />;
+  if (!ctx.can("masterdata.equipment.admin")) return <Forbidden what="registering equipment" permission="masterdata.equipment.admin" />;
   return (
     <div className="mx-auto max-w-2xl">
       <PageHeader title="Register equipment" />

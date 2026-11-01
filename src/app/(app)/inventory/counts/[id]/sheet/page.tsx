@@ -13,7 +13,7 @@ export const metadata = { title: "Count sheet" };
 /** Paper count sheet (US-2-17; grade-5 ADR-088): shelves and items without amounts, a blank column to write in. */
 export default async function CountSheetPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.stock_count.view")) return <Forbidden what="stock counts" />;
+  if (!ctx.can("inventory.stock_count.view")) return <Forbidden what="stock counts" permission="inventory.stock_count.view" />;
   const { id } = await params;
   let c: CountDetail;
   try {

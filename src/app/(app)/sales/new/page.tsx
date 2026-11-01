@@ -10,7 +10,7 @@ export const metadata = { title: "New customer order" };
 
 export default async function NewOrderPage({ searchParams }: { searchParams: Promise<{ customer?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.sales_order.create")) return <Forbidden what="entering customer orders" />;
+  if (!ctx.can("sales.sales_order.create")) return <Forbidden what="entering customer orders" permission="sales.sales_order.create" />;
   const { customer } = await searchParams;
   const [customers, products] = await Promise.all([customerOptions(ctx), productAvailability(ctx)]);
   const prices = canSeePrices(ctx);

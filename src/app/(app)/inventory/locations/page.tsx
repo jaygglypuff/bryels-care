@@ -17,7 +17,7 @@ export const metadata = { title: "Shelves" };
  */
 export default async function LocationsStockPage({ searchParams }: { searchParams: Promise<{ kind?: string; section?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.location.view")) return <Forbidden what="shelves" />;
+  if (!ctx.can("masterdata.location.view")) return <Forbidden what="shelves" permission="masterdata.location.view" />;
   const sp = await searchParams;
   const all = (await listLocationsWithStock(ctx)).map((r) => ({ ...r, section: (isSection(r.section) ? r.section : "other") as LocationSection }));
   const section = isSection(sp.section) ? sp.section : undefined;

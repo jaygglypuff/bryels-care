@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Printer } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { getGeneratedDocument, pdfSetupMessage, reprintReasonOptions, type GeneratedDocumentDetail } from "@/modules/documents";
-import { PageIntro } from "@/ui/guide";
-import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { NextStep, PageIntro } from "@/ui/guide";
+import { Card, CardTitle, Dl, PageHeader } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { DocReprintForm, DocVoidForm, DownloadPdfForm } from "../forms";
@@ -24,7 +23,7 @@ export default async function DocumentPage({ params, searchParams }: { params: P
   const ctx = await requireContext();
   const reprintReasons = await reprintReasonOptions(ctx);
   const reprintReason = (code: string) => reprintReasons.find((r) => r.code === code) ?? null;
-  if (!ctx.can("documents.generated_document.view")) return <Forbidden what="documents" />;
+  if (!ctx.can("documents.generated_document.view")) return <Forbidden what="documents" permission="documents.generated_document.view" />;
   const { id } = await params;
   const { reprinted } = await searchParams;
   let d: GeneratedDocumentDetail;
@@ -41,17 +40,20 @@ export default async function DocumentPage({ params, searchParams }: { params: P
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <PageHeader
-        title={`${d.documentKind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())} ${d.documentNumber}`}
-        subtitle={`Layout version ${d.template.versionNo} · record change ${d.recordRevisionNo}`}
-        actions={
-          d.status === "ready" ? (
-            <LinkButton href={isLabel && labelJobId ? `/print/labels/${labelJobId}` : `/print/documents/${d.id}`} target="_blank" variant="cta">
-              <Printer size={16} /> Print preview
-            </LinkButton>
-          ) : undefined
+        title={d.documentKind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())}
+        subtitle={
+          <>
+            Layout version {d.template.versionNo} · record change {d.recordRevisionNo} · <span className="font-mono text-[12px] text-muted">{d.documentNumber}</span>
+          </>
         }
       />
       <PageIntro>This screen is for one printed page made by the system (for example a batch record or delivery paper): which record it belongs to, every printed copy, the PDF, and printing it again with a reason.</PageIntro>
+      {/* UX audit C #10: one next step; printing is the green button only while the paper may be used. */}
+      {d.status === "ready" ? (
+        <NextStep text="Ready. Open the print preview to print it or save it as a PDF." action={{ label: "Print preview", href: isLabel && labelJobId ? `/print/labels/${labelJobId}` : `/print/documents/${d.id}` }} />
+      ) : (
+        <NextStep text={d.status === "failed" ? "It could not be made. Tell the IT person (the reason is below)." : "Do not use printed copies of this one. Nothing to do here."} />
+      )}
       {reprinted && <Banner tone="ok" title={`Reprint ${d.reprintNo} created`}>It is marked REPRINT {d.reprintNo} and logged with your reason.</Banner>}
       {d.status === "void" && <Banner tone="bad" title="Cancelled – do not use">{d.voidReason}</Banner>}
       {d.status === "superseded" && <Banner tone="warn" title="Replaced by a newer one">Do not use printed copies of this one.</Banner>}

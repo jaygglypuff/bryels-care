@@ -82,7 +82,7 @@ describe("record progress strip", () => {
       { label: "Created", state: "done" },
       { label: "Cancelled", state: "blocked" },
     ]);
-    expect(goodsReceiptSteps("reversed").map((s) => s.label)).toEqual(["Draft", "Posted", "Reversed"]);
+    expect(goodsReceiptSteps("reversed").map((s) => s.label)).toEqual(["Not finished", "Saved to stock", "Undone (kept on record)"]);
     expect(shipmentSteps("returned").at(-1)).toEqual({ label: "Came back", state: "blocked" });
     expect(shipmentSteps("reversed").map((s) => s.label)).toEqual(["Get from shelf", "Second check of the box", "Ready to send out", "Sent out", "Sending undone"]);
   });

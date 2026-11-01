@@ -220,7 +220,7 @@ export async function submitFormulaRevision(ctx: AuthContext, revisionId: string
     const lines = await tx.select().from(bomLines).where(eq(bomLines.formulaRevisionId, rev.id));
     if (!lines.length) throw new DomainError("validation", "Add at least one ingredient line before submitting.");
     const missing = lines.filter((l) => (l.tolerancePct === null) === (l.toleranceAbsG === null));
-    if (missing.length) throw new DomainError("validation", `Line ${missing[0].lineNo} needs exactly one tolerance (percentage or grams).`);
+    if (missing.length) throw new DomainError("validation", `Line ${missing[0].lineNo} needs exactly one allowed difference (percent or grams).`);
     if (rev.revisionNo > 1 && !rev.changeSummary?.trim()) {
       throw new DomainError("validation", "Describe what changes and why (change summary) before submitting.", { fieldErrors: { changeSummary: "Required for revision 2 onwards." } });
     }

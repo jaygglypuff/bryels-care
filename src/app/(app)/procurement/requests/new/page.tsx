@@ -14,7 +14,7 @@ const plusDays = (d: string, n: number) => new Date(Date.parse(d + "T00:00:00Z")
 /** New purchase request (W04-02) as "Ask to buy something": item by name, how much, needed by, why (ADR-088). */
 export default async function NewRequestPage() {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.purchase_request.create")) return <Forbidden what="asking to buy" />;
+  if (!ctx.can("procurement.purchase_request.create")) return <Forbidden what="asking to buy" permission="procurement.purchase_request.create" />;
   const { materials, suppliers } = await requestFormOptions(ctx);
   const prices = ctx.can("masterdata.supplier_price.view");
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });

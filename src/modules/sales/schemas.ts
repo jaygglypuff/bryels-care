@@ -121,7 +121,7 @@ export const AddressSchema = z.object({
   phone: optionalText(40),
 });
 
-/** Customer type: a code of the editable list `customer_segment` (Master data → Lists, ADR-076); the service checks it. */
+/** Customer type: a code of the editable list `customer_segment` (Master data › Choice lists, ADR-076); the service checks it. */
 
 /** Structured customer form (US-4-01). */
 export const CustomerCreateSchema = z.object({

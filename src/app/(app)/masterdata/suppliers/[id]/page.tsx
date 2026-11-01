@@ -6,10 +6,11 @@ import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getSupplier, lookupOptions } from "@/modules/masterdata";
 import { Card, CardTitle, Dl, EmptyState, PageHeader, Table, Td } from "@/ui/core";
-import { PageIntro } from "@/ui/guide";
+import { NextStep, PageIntro } from "@/ui/guide";
 import { ReceiptStatusChip, SupplierStatusChip } from "@/ui/receiving";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
+import { waitingFor } from "../../../waiting-for";
 import { SupplierForm } from "../supplier-form";
 import { DeleteDraftCard } from "../../../delete-draft-button";
 
@@ -17,7 +18,7 @@ export const metadata = { title: "Supplier" };
 
 export default async function SupplierPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.supplier.view")) return <Forbidden what="suppliers" />;
+  if (!ctx.can("masterdata.supplier.view")) return <Forbidden what="suppliers" permission="masterdata.supplier.view" />;
   const { id } = await params;
   const { saved } = await searchParams;
   let s: Awaited<ReturnType<typeof getSupplier>>;
@@ -36,14 +37,15 @@ export default async function SupplierPage({ params, searchParams }: { params: P
             <Link href="/procurement/suppliers" className="text-primary-text hover:underline">Suppliers</Link> · <span className="font-mono text-[12px] text-muted">{s.code}</span> · <SupplierStatusChip status={s.qualityStatus} />
           </>
         }
-        actions={
-          // Wave 4 W4A: approved-material list, prices, MOQ and lead times live on the procurement screen.
-          <Link href={`/procurement/suppliers/${s.id}`} className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2">
-            What we buy here and prices
-          </Link>
-        }
       />
       <PageIntro>A company you buy from: who to call, and which materials QA has approved from them.</PageIntro>
+      {s.qualityStatus === "new" ? (
+        <NextStep text="This supplier is new: QA checks it before we buy." waitingFor={await waitingFor(ctx, "masterdata.supplier.approve", null, "to check the supplier", "QA")} />
+      ) : s.qualityStatus === "suspended" ? (
+        <NextStep text="Stopped: do not buy from this supplier." waitingFor={await waitingFor(ctx, "masterdata.supplier.approve", null, "to decide if we may buy from them again", "QA")} />
+      ) : (
+        <NextStep text="To buy, see what we may order from this supplier and the prices." action={{ label: "What we buy here and prices", href: `/procurement/suppliers/${s.id}` }} />
+      )}
       {saved && <Banner tone="ok" title="Supplier saved" />}
       {s.qualityStatus === "suspended" && <Banner tone="bad" title="Suspended: deliveries from this supplier cannot be received">{s.qualityStatusReason}</Banner>}
       <Card>

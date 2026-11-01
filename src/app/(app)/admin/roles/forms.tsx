@@ -104,8 +104,12 @@ export function CloneForm({ sourceRoleId, sourceName, catalogue, selected }: { s
       <Field label="Name of the new job" htmlFor="name" error={state?.fieldErrors?.name}>
         <Input id="name" name="name" required minLength={3} maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
-      <PermissionPicker catalogue={catalogue} selected={selected} />
-      <MoreDetails open={!!state?.fieldErrors?.code}>
+      <p className="text-[14px] text-fg-2">Everything {sourceName} may do is copied ({selected.length} {selected.length === 1 ? "right" : "rights"}). Only type a name and press the button.</p>
+      {/* UX audit C #11: the permission list is folded; unopened, every ticked right is still sent and copied. */}
+      <MoreDetails title="Change what this job may do (you can skip this)">
+        <PermissionPicker catalogue={catalogue} selected={selected} />
+      </MoreDetails>
+      <MoreDetails title="Description and technical name (you can skip this)" open={!!state?.fieldErrors?.code}>
         <Field label="What this job is for (optional)" htmlFor="description">
           <Textarea id="description" name="description" maxLength={500} />
         </Field>

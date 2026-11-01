@@ -30,7 +30,7 @@ const FILTERS = [
  */
 export default async function ReorderPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.reorder_suggestion.view")) return <Forbidden what="running-low suggestions" />;
+  if (!ctx.can("procurement.reorder_suggestion.view")) return <Forbidden what="running-low suggestions" permission="procurement.reorder_suggestion.view" />;
   const { status = "open" } = await searchParams;
   const canDecide = ctx.can("procurement.reorder_suggestion.approve");
   // The nightly job may not have run (demo without a worker, missed night): compute now when stale (owner QA 2026-10-30).
@@ -56,7 +56,7 @@ export default async function ReorderPage({ searchParams }: { searchParams: Prom
         }
       />
       <PageIntro>This screen is for items that are running low at {ctx.currentSite.name}. You decide: ask to buy them, or hide the suggestion with a reason. Nothing is ordered by itself.</PageIntro>
-      {open && rows.length > 0 && <NextStep text={`Next: ${rows.length} item(s) are running low. Ask to buy them.`} action={{ label: "Start with the first", href: `#s-${rows[0].id}` }} />}
+      {open && rows.length > 0 && <NextStep text={`Next: ${rows.length === 1 ? "1 item is" : `${rows.length} items are`} running low. Ask to buy them.`} action={{ label: "Start with the first", href: `#s-${rows[0].id}` }} />}
       <SubNav />
       <div className="flex flex-col gap-5">
         <Card>
@@ -90,7 +90,7 @@ export default async function ReorderPage({ searchParams }: { searchParams: Prom
                   <details className="mt-1">
                     <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-[14px] text-primary-text">Why this amount</summary>
                     <p className="text-[13px] text-fg-2">
-                      Set aside {fmtBase(r.reservedBase, r.baseUom)} · expires before a delivery {fmtBase(r.expiryRiskQtyBase, r.baseUom)} · safety extra {fmtBase(r.safetyStockBase, r.baseUom)} · supplier needs {r.leadTimeDays ?? "—"} day(s) · {r.siteCode}
+                      Set aside {fmtBase(r.reservedBase, r.baseUom)} · expires before a delivery {fmtBase(r.expiryRiskQtyBase, r.baseUom)} · safety extra {fmtBase(r.safetyStockBase, r.baseUom)} · supplier needs {r.leadTimeDays == null ? "—" : r.leadTimeDays === 1 ? "1 day" : `${r.leadTimeDays} days`} · {r.siteCode}
                     </p>
                     <p className="text-[13px] text-muted">{r.explanation}</p>
                   </details>

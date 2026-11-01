@@ -47,7 +47,7 @@ export default async function ProcurementHome() {
           : prApproved && canOrder
             ? { text: `Next: ${prApproved} approved request(s) to buy can become a purchase order.`, action: { label: "Make a purchase order", href: "/procurement/orders/new" } }
             : sug.length && canOrder
-              ? { text: `${sug.length} item(s) are running low.`, action: { label: "See what to buy", href: "/procurement/reorder" } }
+              ? { text: `${sug.length === 1 ? "1 item is" : `${sug.length} items are`} running low.`, action: { label: "See what to buy", href: "/procurement/reorder" } }
               : null;
   return (
     <>

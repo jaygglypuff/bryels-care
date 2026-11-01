@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { plainNote } from "@/lib/plain-note";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { type Comparison, type Grain, type Trends, COMPARISONS, TREND_MAX_SERIES, TREND_SPANS, canSeeCrossSite, getTrends, listTrendViews, resolveKpiScope, trendCatalogue } from "@/modules/analytics";
@@ -126,7 +127,7 @@ function TrendCharts({ t }: { t: Trends }) {
               ]}
             />
           )}
-          <p className="mt-1 text-[12px] text-muted">{s.definition}</p>
+          <p className="mt-1 text-[12px] text-muted">{plainNote(s.definition)}</p>
         </figure>
       ))}
     </div>

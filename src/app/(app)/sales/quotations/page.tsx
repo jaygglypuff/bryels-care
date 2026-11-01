@@ -21,7 +21,7 @@ const TABS = [
 
 export default async function QuotationsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.quote.view")) return <Forbidden what="price offers" />;
+  if (!ctx.can("sales.quote.view")) return <Forbidden what="price offers" permission="sales.quote.view" />;
   const { status = "" } = await searchParams;
   const rows = await listQuotes(ctx, { status: status || undefined });
   const canCreate = ctx.can("sales.quote.create");

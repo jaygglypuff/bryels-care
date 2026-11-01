@@ -25,6 +25,7 @@ import { D } from "@/lib/qty";
 import { lotsToPutAway } from "@/modules/inventory";
 import { expectedReceipts } from "@/modules/procurement";
 import { qaQueueCount } from "@/modules/quality";
+import { activityEntityNames } from "./activity-names";
 
 /**
  * Owner overview and operator home read models (docs/analytics-kpis.md §2.1, §3).
@@ -137,6 +138,8 @@ export type ActivityRow = {
   actorName: string | null;
   occurredAt: Date;
   siteCode: string | null;
+  /** The name people know the record by (customer, supplier, product), for "names before codes". */
+  entityName?: string | null;
 };
 
 export type OwnerDashboard = {
@@ -465,11 +468,14 @@ async function recentActivity(ctx: AuthContext, scope: DashboardScope, siteCode:
         sql`${auditEvents.action} not like '%.viewed'`,
         sql`${auditEvents.action} not like 'analytics.saved_view.%'`,
         sql`${auditEvents.action} not like 'identity.session.%'`,
+        // Rule checks the system makes by itself ("approval rule evaluated") are not activity a person did.
+        sql`${auditEvents.action} not like '%.evaluated'`,
       ),
     )
     .orderBy(desc(auditEvents.occurredAt), desc(auditEvents.id))
     .limit(Math.min(Math.max(1, limit), 50));
-  return rows.map((r) => ({ ...r, siteCode: r.siteId ? (siteCode.get(r.siteId) ?? null) : null }));
+  const names = await activityEntityNames(ctx.organizationId, rows);
+  return rows.map((r) => ({ ...r, siteCode: r.siteId ? (siteCode.get(r.siteId) ?? null) : null, entityName: r.entityId ? (names.get(`${r.entityType}:${r.entityId}`) ?? null) : null }));
 }
 
 // ---------- operator home ----------

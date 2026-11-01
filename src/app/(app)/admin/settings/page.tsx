@@ -48,7 +48,7 @@ const slug = (g: string) => g.toLowerCase().replace(/[^a-z0-9]+/g, "-");
  */
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ group?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("platform.settings.view")) return <Forbidden what="system settings" />;
+  if (!ctx.can("platform.settings.view")) return <Forbidden what="system settings" permission="platform.settings.view" />;
   const canAdmin = ctx.can("platform.settings.admin");
   const canApprove = ctx.can("platform.settings.approve");
   const [{ rows, orphans }, pending, history] = await Promise.all([listSettingsForAdmin(ctx), listSettingChangeRequests(ctx, { status: "submitted" }), listSettingChangeRequests(ctx, { limit: 25 })]);

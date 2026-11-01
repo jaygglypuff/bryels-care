@@ -15,7 +15,7 @@ type SP = { warehouseId?: string; itemKind?: string; materialKind?: string; stat
 /** US-2-23: QA bulk disposition of opening (migrated) lots, one decision per lot through the normal path. */
 export default async function BulkDispositionPage({ searchParams }: { searchParams: Promise<SP> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.disposition.approve")) return <Forbidden what="bulk disposition (QA only)" />;
+  if (!ctx.can("quality.disposition.approve")) return <Forbidden what="bulk disposition (QA only)" permission="quality.disposition.approve" />;
   const sp = await searchParams;
   const filter: BulkFilter = {
     warehouseId: sp.warehouseId || null,

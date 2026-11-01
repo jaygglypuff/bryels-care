@@ -144,7 +144,7 @@ export async function submitExpenseClaim(ctx: AuthContext, id: string) {
     if (D(c.amount).gt(limit) && !c.receiptAttachmentId) throw new DomainError("validation", `Attach the receipt: claims above ${money(limit)} need one.`, { field: "receipt" });
     const ev = await evaluateAtSubmit(tx, ctx, { recordType: "expense_claim", recordId: c.id, recordNumber: c.claimNumber, siteId: c.siteId, basis: { amount: c.amount } });
     const now = new Date();
-    if (!ev.steps.length) throw new DomainError("setup_required", "No approval rule applies to expense claims; ask the owner to configure one (Management → System → Approval rules).");
+    if (!ev.steps.length) throw new DomainError("setup_required", "No approval rule applies to expense claims; ask the owner to configure one (Management › Rules and settings › Who says OK to what).");
     await tx.update(expenseClaims).set({ status: "submitted", submittedAt: now, updatedAt: now }).where(eq(expenseClaims.id, c.id));
     await logTransition(tx, ctx, doc(c), "draft", "submitted");
     await notifyNextStep(tx, ctx, ev.steps[0], { siteId: c.siteId, kind: "finance.expense_claim.approval", title: `Expense claim ${c.claimNumber} to approve`, body: `${ctx.displayName} claims ${money(c.amount)} ${c.currency}.`, entityType: "expense_claim", entityId: c.id, link: `/finance/expenses/${c.id}` });
@@ -215,7 +215,7 @@ export async function postExpenseClaim(ctx: AuthContext, id: string, input: { pa
     }
     const c = await lockClaim(tx, ctx, id);
     ctx.requireAt("finance.expense_claim.post", c.siteId);
-    if (c.status !== "approved") throw new DomainError("state", `${label(c)} is ${EXPENSE_STATUS_LABEL[c.status].toLowerCase()}; only an approved claim can be posted.`);
+    if (c.status !== "approved") throw new DomainError("state", `${label(c)} is ${EXPENSE_STATUS_LABEL[c.status].toLowerCase()}; only an approved claim can be saved to the books.`);
     ctx.assertSeparation(c.claimantUserId === ctx.userId, "You cannot post your own expense claim.", { code: "SEPARATION_OF_DUTIES" });
     await assertPosterAllowed(tx, ctx, { recordType: "expense_claim", recordId: c.id, siteId: c.siteId, basis: { amount: c.amount } });
     const postingDate = businessDate(c.approvedAt ?? new Date());
@@ -238,7 +238,7 @@ export async function voidExpenseClaim(ctx: AuthContext, id: string, input: { re
   return db.transaction(async (tx) => {
     const c = await lockClaim(tx, ctx, id);
     ctx.requireAt("finance.expense_claim.void", c.siteId);
-    if (c.status !== "posted" || D(c.paidAmount).gt(0)) throw new DomainError("state", "Only a posted claim that is not paid can be reversed; void its payment first.");
+    if (c.status !== "posted" || D(c.paidAmount).gt(0)) throw new DomainError("state", "Only a claim in the books that is not paid back can be undone; cancel its payment first.");
     await reverseDocumentPosting(tx, ctx, "expense_claim", c.id, reason);
     const now = new Date();
     await tx.update(expenseClaims).set({ status: "voided", voidedBy: ctx.userId, voidedAt: now, voidReason: reason, updatedAt: now }).where(eq(expenseClaims.id, c.id));

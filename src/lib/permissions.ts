@@ -167,7 +167,7 @@ export const PERMISSIONS = [
   "masterdata.material.export",
   "masterdata.reason_code.view",
   "masterdata.reason_code.admin",
-  // ADR-076: editable dropdown lists (Master data → Lists)
+  // ADR-076: editable dropdown lists (Master data › Choice lists)
   "masterdata.lookup_value.view",
   "masterdata.lookup_value.admin",
   // Wave 2 W2B: batch execution (US-3-09..13; docs/permissions-matrix.md §2.5, §3.5)

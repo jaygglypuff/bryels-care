@@ -21,7 +21,7 @@ const TABS = [
 /** Credit notes as "Credits (money back)": customer first, amount right, number small and grey. */
 export default async function CreditNotesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("finance.credit_note.view")) return <Forbidden what="credits (money back)" />;
+  if (!ctx.can("finance.credit_note.view")) return <Forbidden what="credits (money back)" permission="finance.credit_note.view" />;
   const { status = "" } = await searchParams;
   const rows = await listCreditNotes(ctx, { status: status || undefined });
   return (

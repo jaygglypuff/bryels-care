@@ -12,7 +12,7 @@ export const metadata = { title: "Old paper documents" };
 /** Search of the scanned paper records by the number staff know (US-2-26, R-17). One card per document (phone-friendly). */
 export default async function LegacyDocumentsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("documents.legacy_document.view")) return <Forbidden what="old paper documents" />;
+  if (!ctx.can("documents.legacy_document.view")) return <Forbidden what="old paper documents" permission="documents.legacy_document.view" />;
   const { q } = await searchParams;
   const docs = await searchLegacyDocuments(ctx, { q });
   const links = new Map<string, string>();

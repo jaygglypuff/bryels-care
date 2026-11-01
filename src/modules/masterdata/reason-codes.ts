@@ -19,23 +19,24 @@ import { runInTx, type InTx } from "@/lib/tx";
  */
 
 export const REASON_CATEGORY_LABELS: Record<ReasonCategory, string> = {
-  adjustment: "Stock adjustment",
-  transfer: "Transfer",
-  receipt: "Unplanned receipt",
-  disposition: "QA disposition",
-  sample: "Sample",
-  scrap: "Scrap",
-  rework: "Rework",
-  return: "Return",
-  count_variance: "Count variance",
-  hold: "QA hold",
-  reprint: "Label / document reprint",
-  deviation: "Deviation",
-  reversal: "Reversal",
-  exception: "Controlled exception",
-  cancel: "Cancellation",
-  downtime: "Downtime",
-  audit: "Audited action",
+  // Plain words (UX audit C #11, round 2 part 2); the stored category codes are unchanged.
+  adjustment: "Fixing stock amounts",
+  transfer: "Moving stock to another site",
+  receipt: "Receiving without a purchase order",
+  disposition: "QA says OK or not OK",
+  sample: "Taking a sample",
+  scrap: "Throwing away",
+  rework: "Making a batch again",
+  return: "Sending back",
+  count_variance: "Count does not match",
+  hold: "QA stops a lot",
+  reprint: "Printing a label or paper again",
+  deviation: "Reporting a problem",
+  reversal: "Undoing a saved record",
+  exception: "Allowing something out of the normal rule",
+  cancel: "Cancelling",
+  downtime: "Machine stopped",
+  audit: "Changes kept in the history",
 };
 
 const appliesTo = z

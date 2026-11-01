@@ -33,7 +33,17 @@ type Material = {
   standardPackUom?: string | null;
   /** Last posted receipts of this material, base unit (for the "is this amount right?" question). */
   pastQtyBase?: string[];
+  /** raw_material | packaging | consumable | intermediate: groups the item list (spare parts apart). */
+  materialKind?: string;
 };
+
+/** Item list groups for a delivery without a purchase order (UX audit B #3): ingredients and packaging first, spare parts apart. */
+const ITEM_GROUPS: [string, string][] = [
+  ["raw_material", "Ingredients"],
+  ["packaging", "Packaging (wrappers, labels, boxes)"],
+  ["intermediate", "Made here, used again"],
+  ["consumable", "Spare parts and supplies"],
+];
 type Location = { id: string; code: string; name: string; kind: string; section?: string };
 type Supplier = { id: string; code: string; name: string; qualityStatus: string };
 type ReasonCode = { code: string; label: string };
@@ -68,7 +78,7 @@ export type ReceiptFormInitial = {
   lines: ReceiptFormLine[];
 };
 
-type Line = ReceiptFormLine & { key: number; expiryTouched: boolean; purchaseOrderLineId?: string; po?: PoFormLine; skip?: boolean; notOnPo?: boolean; amountOk?: boolean };
+type Line = ReceiptFormLine & { key: number; expiryTouched: boolean; showExpiry?: boolean; purchaseOrderLineId?: string; po?: PoFormLine; skip?: boolean; notOnPo?: boolean; amountOk?: boolean };
 
 /**
  * The unit a receive line starts in (usability test 2026-10-30: Palm Oil started in g and "50" saved
@@ -226,7 +236,7 @@ export function ReceiveForm({
   // Lines are sent in screen order (skipped PO lines left out); field errors come back as lines.<index>.<field>.
   const indexOf = new Map(sent.map((l, i) => [l.key, i]));
   const payload = JSON.stringify(
-    sent.map(({ key: _k, expiryTouched: _e, po: _p, skip: _s, amountOk: _a, notOnPo, lineId, purchaseOrderLineId, ...rest }) => ({
+    sent.map(({ key: _k, expiryTouched: _e, showExpiry: _x, po: _p, skip: _s, amountOk: _a, notOnPo, lineId, purchaseOrderLineId, ...rest }) => ({
       ...rest,
       brand: rest.brand?.trim() || matOf(rest.materialId)?.brand || "",
       lineId: lineId ?? "",
@@ -354,14 +364,25 @@ export function ReceiveForm({
                     <Field label="Item" htmlFor={id("material")} error={err("materialId")} hint={mat?.requiresCoa ? "Needs the supplier's certificate (CoA): attach it on the receipt page." : undefined}>
                       <Select id={id("material")} value={l.materialId} onChange={(e) => update(l.key, { materialId: e.target.value })} required>
                         <option value="" disabled>Choose the item…</option>
-                        {materials.map((m) => (
-                          <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
+                        {ITEM_GROUPS.map(([kind, label]) => {
+                          const group = materials.filter((m) => (m.materialKind ?? "raw_material") === kind || (kind === "consumable" && !!m.materialKind && !ITEM_GROUPS.some(([k]) => k === m.materialKind)));
+                          return group.length ? (
+                            <optgroup key={kind} label={label}>
+                              {[...group].sort((a, b) => a.name.localeCompare(b.name)).map((m) => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                              ))}
+                            </optgroup>
+                          ) : null;
+                        })}
                       </Select>
                     </Field>
                   </div>
                 )}
 
+                {!mat && !l.po ? (
+                  <p className="text-[14px] text-fg-2">Choose the item first. Then type how much came; the unit is filled in from the item.</p>
+                ) : (
+                <>
                 {/* Main fields: 1 column on a phone, 2 on a portrait tablet card, 3–4 on a wide card. */}
                 <div className="grid grid-cols-1 gap-4 @md:grid-cols-2 @4xl:grid-cols-4">
                   <Field label="How much came?" htmlFor={id("qty")} error={err("qty") ?? err("uom")} hint={mat ? (pack ? `Usually ${fmtFriendly(pack, mat.baseUom)} per ${mat.baseUom === "g" ? "sack" : mat.baseUom === "mL" ? "container" : "pack"}. Check the unit.` : `Check the unit: ${mat.units.join(", ")}.`) : undefined}>
@@ -392,9 +413,24 @@ export function ReceiveForm({
                   <Field label="Supplier's lot number" htmlFor={id("slot")} error={err("supplierLotNumber")} hint="Printed on the supplier's label, often after “Lot” or “Batch”. Copy it as written: QA traces with it.">
                     <Input id={id("slot")} autoComplete="off" value={l.supplierLotNumber} onChange={(e) => update(l.key, { supplierLotNumber: e.target.value })} required />
                   </Field>
-                  <Field label="Expiry date" htmlFor={id("exp")} error={err("expiresOn")} hint={mat?.shelfLifeDays && !l.expiryTouched ? `Filled in from the ${mat.shelfLifeDays}-day shelf life. Change it to the date on the label.` : "The date on the supplier's label."}>
-                    <Input id={id("exp")} type="date" value={l.expiresOn} onChange={(e) => update(l.key, { expiresOn: e.target.value, expiryTouched: true })} required className="min-w-0" />
-                  </Field>
+                  {!po && mat?.shelfLifeDays && l.expiresOn && !l.expiryTouched && !l.showExpiry && !err("expiresOn") ? (
+                    // No purchase order: a use-by date filled in from the shelf life is shown as words with one "Change" tap (≤5 fields, UX audit B #3).
+                    <div className="flex min-w-0 flex-col gap-1.5" data-testid={`receipt-line-${pos + 1}-expiry-text`}>
+                      <span className="text-[13px] font-medium">Expiry date</span>
+                      <p className="flex min-h-[44px] flex-wrap items-center gap-2 text-[14px]">
+                        <span>
+                          {l.expiresOn} <span className="text-muted">(from the {mat.shelfLifeDays}-day shelf life)</span>
+                        </span>
+                        <Button type="button" variant="secondary" size="sm" onClick={() => update(l.key, { showExpiry: true })}>
+                          Change
+                        </Button>
+                      </p>
+                    </div>
+                  ) : (
+                    <Field label="Expiry date" htmlFor={id("exp")} error={err("expiresOn")} hint={mat?.shelfLifeDays && !l.expiryTouched ? `Filled in from the ${mat.shelfLifeDays}-day shelf life. Change it to the date on the label.` : "The date on the supplier's label."}>
+                      <Input id={id("exp")} type="date" value={l.expiresOn} onChange={(e) => update(l.key, { expiresOn: e.target.value, expiryTouched: true })} required className="min-w-0" />
+                    </Field>
+                  )}
                 </div>
 
                 {mat?.storageConditions && (
@@ -424,7 +460,7 @@ export function ReceiveForm({
                 {mat && (
                   <p className="mt-3 text-[13px] text-muted" data-testid={`receipt-line-${pos + 1}-place`}>
                     Goes to <strong className="text-fg">{place ? place.name : "—"}</strong>
-                    {mat.section && place?.section !== mat.section ? ` until QA says OK, then to ${sectionName(mat.section)}${storeIn.length ? ` (${storeIn.map((c) => locations.find((x) => x.code === c)?.name ?? c).join(", ")})` : ""}` : ""}
+                    {mat.section && place?.section !== mat.section ? ` until QA says OK, then to ${sectionName(mat.section)}${storeIn.length ? ` (${storeIn.join(", ")})` : ""}` : ""}
                   </p>
                 )}
 
@@ -453,7 +489,7 @@ export function ReceiveForm({
                             {locs
                               .filter((x) => (x.section ?? "other") === s)
                               .map((x) => (
-                                <option key={x.id} value={x.id}>{x.name} ({x.code})</option>
+                                <option key={x.id} value={x.id}>{x.name}</option>
                               ))}
                           </optgroup>
                         ))}
@@ -475,6 +511,8 @@ export function ReceiveForm({
                     )}
                   </div>
                 </details>
+                </>
+                )}
               </>
             )}
           </Card>

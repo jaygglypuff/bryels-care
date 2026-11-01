@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 import { useState } from "react";
 import { Check, Plus, Trash2 } from "lucide-react";
 import { fmtFriendly, toBaseQty, unitChoices } from "@/lib/units";
+import { belowMinimum, startingOrderQty } from "@/lib/po-amount";
 import { Button, Card, CardTitle, Field, Input, Select, Textarea, cx } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { MoreDetails } from "@/ui/guide";
@@ -60,10 +61,10 @@ function defaultUnit(m: Mat | undefined): string {
   if (m.priceUom && c.includes(m.priceUom)) return m.priceUom;
   return c[0];
 }
+/** Starts at the larger of the supplier's minimum order and one pack (UX audit B #13), in the line's starting unit. */
 function defaultQty(m: Mat | undefined): string {
-  if (!m?.packQty) return "";
-  if (m.packUom && unitChoices(m.baseUom).includes(m.packUom)) return String(Number(m.packQty));
-  return "";
+  if (!m) return "";
+  return startingOrderQty(m, defaultUnit(m));
 }
 
 /** About how much one row costs, from the supplier price (kg/g, L/mL, pcs only); null when it cannot be worked out here. */
@@ -191,7 +192,7 @@ export function NewOrderWizard({
                     <p className="mt-1 text-[13px] text-fg-2">
                       {m.packQty && m.packUom ? `Comes in ${Number(m.packQty).toLocaleString("en-PH")} ${m.packUom} packs. ` : ""}
                       {m.moqQty ? `Order at least ${Number(m.moqQty).toLocaleString("en-PH")} ${m.moqUom ?? ""}. ` : ""}
-                      {m.leadTimeDays !== null ? `Takes about ${m.leadTimeDays} day(s) to arrive. ` : ""}
+                      {m.leadTimeDays !== null ? `Takes about ${m.leadTimeDays === 1 ? "1 day" : `${m.leadTimeDays} days`} to arrive. ` : ""}
                       {prices && m.unitPrice && m.priceUom ? `Supplier price ${peso(new Decimal(m.unitPrice))} per ${m.priceUom}.` : ""}
                       {r.requestNumber ? ` From request to buy ${r.requestNumber}.` : ""}
                       <span className="ml-1 font-mono text-[12px] text-muted">{m.code}</span>
@@ -235,7 +236,7 @@ export function NewOrderWizard({
         {/* Step 3: when */}
         <section hidden={step !== 3} aria-label="When">
           <CardTitle>3. When should it arrive?</CardTitle>
-          <Field label="Arrives on" htmlFor="arrive" hint={lead ? `Suggested: today + ${lead} day(s), the longest time the supplier needs for these items.` : "Suggested: today."}>
+          <Field label="Arrives on" htmlFor="arrive" hint={lead ? `Suggested: today + ${lead === 1 ? "1 day" : `${lead} days`}, the longest time the supplier needs for these items.` : "Suggested: today."}>
             <Input id="arrive" type="date" min={today} value={arriveOn} onChange={(e) => setArrive(e.target.value || null)} />
           </Field>
           <div className="mt-4">
@@ -279,11 +280,17 @@ export function NewOrderWizard({
               const m = byId.get(r.materialId)!;
               const q = toBaseQty(r.qty, r.unit, m.baseUom);
               const est = estimate(r, m);
+              const low = belowMinimum(m, r.qty, r.unit);
               return (
                 <li key={r.key} className="flex items-center justify-between gap-3 px-3 py-2.5">
                   <span className="min-w-0">
                     <span className="block font-medium">{m.name}</span>
                     <span className="text-[13px] text-fg-2">{q.ok ? fmtFriendly(q.qtyBase, m.baseUom) : r.qty}</span>
+                    {low && (
+                      <span role="status" className="mt-1 block rounded-[8px] bg-[var(--warn-bg)] px-2 py-1 text-[13px] text-[var(--warn-fg)]" data-testid="below-minimum">
+                        Less than the supplier&apos;s minimum order ({Number(m.moqQty).toLocaleString("en-PH")} {m.moqUom ?? m.baseUom}). They may refuse it or charge more. Go back to change it, or ask them first.
+                      </span>
+                    )}
                   </span>
                   {prices && <span className="shrink-0 text-right font-semibold tabular-nums">{est ? peso(est) : "price on save"}</span>}
                 </li>

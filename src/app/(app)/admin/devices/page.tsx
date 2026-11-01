@@ -26,7 +26,7 @@ const CLASS_LABEL: Record<string, string> = { floor_shared: "Shared floor device
 /** US-7-06: device registrations per site; approve with offline workflows, suspend or remove with a reason. */
 export default async function DevicesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("platform.device.view")) return <Forbidden what="device registrations" />;
+  if (!ctx.can("platform.device.view")) return <Forbidden what="device registrations" permission="platform.device.view" />;
   const { status = "" } = await searchParams;
   const rows = await listDevices(ctx, { status: status || null });
   const now = Date.now();

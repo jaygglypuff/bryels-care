@@ -20,7 +20,7 @@ import { businessDate, isUuid, parseDecimal, requireReason } from "./shared";
  * `approvals.sod.forecast_override`, default on); the original forecast stays visible.
  */
 
-export const FORECAST_BANNER = "Forecasts are estimates, not actuals.";
+export const FORECAST_BANNER = "A sales guess is an estimate, not what really sold.";
 
 const monthStart = (d: string) => `${d.slice(0, 7)}-01`;
 function addMonths(month: string, k: number) {

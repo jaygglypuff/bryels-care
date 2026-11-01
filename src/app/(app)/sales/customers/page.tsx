@@ -22,7 +22,7 @@ type SP = { q?: string; status?: string; segment?: string; c?: string; tab?: str
  */
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<SP> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.customer.view")) return <Forbidden what="customers" />;
+  if (!ctx.can("masterdata.customer.view")) return <Forbidden what="customers" permission="masterdata.customer.view" />;
   const f = await searchParams;
   const [rows, segLabels] = await Promise.all([listCustomers(ctx, { q: f.q, status: f.status, segment: f.segment, sort: "name" }), customerSegmentLabels(ctx)]);
   const selectedId = f.c && /^[0-9a-f-]{36}$/i.test(f.c) ? f.c : null;

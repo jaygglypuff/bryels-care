@@ -12,7 +12,7 @@ export function OpsCards({ health, backups, variables }: { health: HealthCard; b
     <>
       <Card id="health">
         <CardTitle>Health</CardTitle>
-        {health.readOnlyMode && <Banner tone="warn" title="Read-only maintenance mode is on">Only allow-listed roles can change data. Turn it off in Settings → Maintenance.</Banner>}
+        {health.readOnlyMode && <Banner tone="warn" title="Read-only maintenance mode is on">Only allow-listed roles can change data. Turn it off in Management › Rules and settings › Settings (the setting “read only” under platform maintenance).</Banner>}
         <ul className="space-y-2 text-[13px]">
           <li className="flex flex-wrap items-center gap-2">
             <Chip tone={health.web.ready ? "ok" : "bad"}>{health.web.ready ? "Web ready" : "Web not ready"}</Chip>

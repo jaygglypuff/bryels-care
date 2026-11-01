@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /** Report a problem / raise a corrective or inspection work order (W13), optionally for one piece of equipment. */
 export default async function NewWorkOrderPage({ searchParams }: { searchParams: Promise<{ equipmentId?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("maintenance.work_order.create")) return <Forbidden what="reporting broken machines" />;
+  if (!ctx.can("maintenance.work_order.create")) return <Forbidden what="reporting broken machines" permission="maintenance.work_order.create" />;
   const sp = await searchParams;
   const v = await maintenanceFormContext(ctx, { equipmentId: sp.equipmentId });
   return (

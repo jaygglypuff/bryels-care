@@ -4,7 +4,8 @@ import { requireContext } from "@/lib/auth/context";
 import { D } from "@/lib/qty";
 import { businessToday, getInspectionPlanDetail } from "@/modules/masterdata";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
-import { Explain, PageIntro } from "@/ui/guide";
+import { Explain, NextStep, PageIntro } from "@/ui/guide";
+import { waitingForApprover } from "../../_eng/waiting";
 import { Forbidden } from "../../../forbidden";
 import { decideInspectionPlanAction, newInspectionPlanRevisionAction, submitInspectionPlanAction } from "../../_eng/actions";
 import { CommandForm, DecisionForm } from "../../_eng/forms";
@@ -24,11 +25,26 @@ const spec = (t: { valueKind: string; uom: string | null; specMin: string | null
 export default async function InspectionPlanPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await requireContext();
-  if (!ctx.can("quality.inspection_plan.view")) return <Forbidden what="inspection plans" />;
+  if (!ctx.can("quality.inspection_plan.view")) return <Forbidden what="inspection plans" permission="quality.inspection_plan.view" />;
   const v = /^[0-9a-f-]{36}$/i.test(id) ? await getInspectionPlanDetail(ctx, id) : null;
   if (!v) return <EmptyState title="Quality checks not found" action={<LinkButton href="/masterdata/inspection-plans" variant="secondary">Back</LinkButton>}>Go back to the list and pick the item by name.</EmptyState>;
   const p = v.plan;
   const today = businessToday();
+  const nextPolicy = v.approval.nextStep ? v.approval.policy.find((x) => x.step === v.approval.nextStep!.step) : null;
+  const waiting = p.status === "pending_approval" && !v.approval.canDecide ? await waitingForApprover(ctx, "quality.inspection_plan.approve", nextPolicy, v.approval.policy.length) : null;
+  // UX audit C #10: one "What to do next" per state; the one green button is the form further down.
+  const next =
+    p.status === "draft" && v.can.edit ? (
+      <NextStep text="Next: check the tests below, press Save, then send the checks for approval (button at the bottom). A second QA person approves them." />
+    ) : p.status === "draft" ? (
+      <NextStep text="This version is being written." waitingFor={await waitingForApprover(ctx, "quality.inspection_plan.edit", { step: 1, label: "QA", roles: ["qa_qc"] }, 1).then((w) => w.replace("to check it", "to finish it and send it for approval"))} />
+    ) : p.status === "pending_approval" && v.approval.canDecide ? (
+      <NextStep text="Next: read the tests, then approve them or send them back (below)." />
+    ) : p.status === "pending_approval" ? (
+      <NextStep text="Sent for approval." waitingFor={waiting ?? "Waiting for approval."} />
+    ) : (
+      <NextStep text={p.status === "approved" ? `In use: QA uses these checks ${p.planKind === "incoming" ? "when a delivery arrives" : p.planKind === "in_process" ? "while a batch is made" : "when a batch is finished"}. To change them, start a new version.` : "Not in use any more. Kept on record."} />
+    );
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -36,7 +52,7 @@ export default async function InspectionPlanPage({ params }: { params: Promise<{
           ← Quality checks
         </Link>
         <PageHeader
-          title={p.name}
+          title={p.name.replace(/\s*\(PLACEHOLDER\)\s*/i, " ").trim()}
           subtitle={<>{v.appliesTo} · version {p.revisionNo} · <span className="font-mono text-[12px] text-muted">{p.code}</span></>}
           actions={
             <>
@@ -49,6 +65,7 @@ export default async function InspectionPlanPage({ params }: { params: Promise<{
       <PageIntro>
         The checks QA does on this item before it may be used or sold, and the limits for each. The system stores them; QA decides them. <Explain term="version" />
       </PageIntro>
+      {next}
       <VerifyBanner placeholder={p.isPlaceholder} />
       <Card>
         <Dl

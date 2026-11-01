@@ -17,7 +17,7 @@ export const metadata = { title: "Expiring soon" };
  */
 export default async function ExpiryPage() {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.lot.view")) return <Forbidden what="expiry dates" />;
+  if (!ctx.can("inventory.lot.view")) return <Forbidden what="expiry dates" permission="inventory.lot.view" />;
   const { buckets, rows } = await expiryAlerts(ctx);
   const groups = ["expired", ...buckets.map((b) => `≤ ${b} days`)];
   const title = (g: string) => (g === "expired" ? "Already expired, still in stock" : `Expires within ${g.replace("≤ ", "")}`);

@@ -79,7 +79,7 @@ export async function issueImportFileUrl(ctx: AuthContext, attachmentId: string)
 export async function redeemImportFile(ctx: AuthContext, attachmentId: string, params: { exp?: string | null; sig?: string | null }) {
   if (!verifyDownloadSignature(attachmentId, ctx.userId, params)) throw new DomainError("forbidden", "This download link has expired or was issued to someone else. Open the page again to get a new link.");
   const { a, siteId, number } = await loadImportFile(ctx, attachmentId);
-  if (a.virusScanStatus === "blocked") throw new DomainError("forbidden", "This file is quarantined and cannot be downloaded.");
+  if (a.virusScanStatus === "blocked") throw new DomainError("forbidden", "This file was held back by the safety check and cannot be downloaded.");
   const storage = storageFor(a.storageDriver);
   await audit(db, ctx, { action: "documents.file_attachment.downloaded", entityType: "file_attachment", entityId: a.id, entityNumber: number, siteId, after: { fileName: a.fileName, parent: a.entityType, parentId: a.entityId } });
   if (storage.presignDownload) return { kind: "redirect" as const, url: storage.presignDownload(a.bucketKey, { fileName: a.fileName, contentType: a.contentType, expiresIn: 60 }) };

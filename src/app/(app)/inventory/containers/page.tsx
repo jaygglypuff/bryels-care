@@ -20,7 +20,7 @@ const STATUSES = ["open", "sealed", "in_transit", "empty", "void", "shipped"];
  */
 export default async function ContainersPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.container.view")) return <Forbidden what="boxes and sacks" />;
+  if (!ctx.can("inventory.container.view")) return <Forbidden what="boxes and sacks" permission="inventory.container.view" />;
   const sp = await searchParams;
   const status = STATUSES.includes(sp.status ?? "") ? sp.status : undefined;
   const q = sp.q?.trim() ?? "";

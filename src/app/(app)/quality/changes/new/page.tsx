@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /** Propose a change (US-6-18); may come from a CAPA (?capaId=) or a revision page (?entityType=&entityId=). */
 export default async function NewChangePage({ searchParams }: { searchParams: Promise<{ capaId?: string; entityType?: string; entityId?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.change_control.create")) return <Forbidden what="asking for changes" />;
+  if (!ctx.can("quality.change_control.create")) return <Forbidden what="asking for changes" permission="quality.change_control.create" />;
   const sp = await searchParams;
   const v = await changeControlFormContext(ctx, sp);
   return (

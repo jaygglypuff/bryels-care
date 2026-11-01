@@ -36,7 +36,7 @@ function lotIdOf(m: KeywordMatch) {
  */
 export default async function PutAwayPage({ searchParams }: { searchParams: Promise<{ lot?: string; from?: string; to?: string; moved?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.movement.post")) return <Forbidden what="put-away" />;
+  if (!ctx.can("inventory.movement.post")) return <Forbidden what="put-away" permission="inventory.movement.post" />;
   const { lot: lotRef, from: fromParam, to: toParam, moved } = await searchParams;
   const tasks = ctx.can("inventory.lot.view") ? await lotsToPutAway(ctx) : [];
   let opts: Awaited<ReturnType<typeof putAwayOptions>> | null = null;

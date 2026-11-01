@@ -12,7 +12,7 @@ export const metadata = { title: "New material" };
 /** New material in three questions (ADR-088); the system gives the code. */
 export default async function NewMaterialPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.material.create")) return <Forbidden what="adding materials" />;
+  if (!ctx.can("masterdata.material.create")) return <Forbidden what="adding materials" permission="masterdata.material.create" />;
   const options = await materialFormOptions(ctx);
   const suppliers = ctx.can("masterdata.supplier.edit") && ctx.can("masterdata.supplier.view") ? (await supplierOptions(ctx)).map((s) => ({ id: s.id, name: s.name })) : undefined;
   return (

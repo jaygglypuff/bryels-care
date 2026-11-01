@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DeviationPage({ params, searchParams }: { params: Promise<{ deviationId: string }>; searchParams: Promise<{ opened?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.deviation.view")) return <Forbidden what="deviations" />;
+  if (!ctx.can("quality.deviation.view")) return <Forbidden what="deviations" permission="quality.deviation.view" />;
   const { deviationId } = await params;
   const sp = await searchParams;
   let v: Awaited<ReturnType<typeof getDeviation>>;

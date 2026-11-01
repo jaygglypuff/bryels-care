@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 /** US-2-24: scan every newly labelled box or loose lot in a zone and watch the remaining list shrink (MC-06). */
 export default async function LabelVerificationPage({ searchParams }: { searchParams: Promise<{ locationId?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.label_job.view")) return <Forbidden what="label verification" />;
+  if (!ctx.can("inventory.label_job.view")) return <Forbidden what="label verification" permission="inventory.label_job.view" />;
   const { locationId } = await searchParams;
   const zones = await labelVerificationLocations(ctx);
   let zone: Awaited<ReturnType<typeof labelVerificationZone>> | null = null;
@@ -45,7 +45,7 @@ export default async function LabelVerificationPage({ searchParams }: { searchPa
             <nav className="flex flex-wrap gap-2" aria-label="Choose an area">
               {zones.map((z) => (
                 <Link key={z.id} href={`/quality/label-verification?locationId=${z.id}`} className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[14px]", z.id === locationId ? "border-ring bg-primary-soft font-medium" : "border-line hover:bg-surface-2")}>
-                  {z.code}
+                  {z.name} <span className="ml-1 font-mono text-[12px] text-muted">{z.code}</span>
                   {z.boxes > 0 && <span className="ml-1 text-muted">({z.verifiedBoxes} of {z.boxes} boxes done)</span>}
                 </Link>
               ))}
@@ -57,10 +57,10 @@ export default async function LabelVerificationPage({ searchParams }: { searchPa
           <>
             <Card>
               <CardTitle action={<Chip tone={zone.targetMet ? "ok" : "warn"}>{zone.verifiedPct} % checked · goal {zone.targetPct} %</Chip>}>
-                {zone.location.code} · {zone.location.name}
+                {zone.location.name} <span className="font-mono text-[12px] font-normal text-muted">{zone.location.code}</span>
               </CardTitle>
               <p className="mb-3 text-[13px] text-muted">
-                {zone.verified} of {zone.total} label(s) checked, {zone.remaining.length} still to scan.
+                {zone.verified} of {zone.total} {zone.total === 1 ? "label" : "labels"} checked, {zone.remaining.length} still to scan.
               </p>
               {zone.canScan ? <VerifyScanForm locationId={zone.location.id} /> : <Banner tone="info" title="You can look but not scan">Warehouse people scan the labels here.</Banner>}
             </Card>

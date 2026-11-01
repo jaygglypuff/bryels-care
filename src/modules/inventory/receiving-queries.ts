@@ -28,9 +28,9 @@ type Q = Tx | typeof db;
 
 const canViewReceipts = (ctx: AuthContext) => ctx.can("procurement.goods_receipt.view") || ctx.can("inventory.lot.view");
 
-async function storageCodesBySection(siteId: string): Promise<Record<string, string[]>> {
+async function storageCodesBySection(siteId: string, field: "code" | "name" = "code"): Promise<Record<string, string[]>> {
   const rows = await db
-    .select({ code: locations.code, section: sql<string>`${sectionSql("locations", "warehouses")}` })
+    .select({ code: field === "name" ? locations.name : locations.code, section: sql<string>`${sectionSql("locations", "warehouses")}` })
     .from(locations)
     .innerJoin(warehouses, eq(warehouses.id, locations.warehouseId))
     .where(and(eq(locations.siteId, siteId), eq(locations.isActive, true), eq(locations.kind, "storage")))
@@ -99,6 +99,8 @@ export async function receivingFormData(ctx: AuthContext) {
     locations: locs,
     // Storage places per section, to tell the operator where the stock goes after the QA check.
     storageBySection: await storageCodesBySection(ctx.currentSiteId),
+    // Shelf names for "Goes to the QA cage, then to Oils rack A-01" (UX audit B #3: names, not codes).
+    storageNamesBySection: await storageCodesBySection(ctx.currentSiteId, "name"),
     suppliers: sups,
     reasonCodes: (await reasonCodeOptions(db, ctx.organizationId, "receipt")).map((r) => ({ code: r.code, label: r.label })),
   };
@@ -238,10 +240,10 @@ export async function getReceiptDocument(ctx: AuthContext, receiptId: string) {
     const docs = files.filter((f) => f.entityType === "goods_receipt_line" && f.entityId === l.id);
     const hasCoa = docs.some((d) => d.documentKind === "coa");
     const flags: string[] = [];
-    if (l.expiresOn && l.expiresOn <= today) flags.push(l.discrepancyKind ? "Expired or expiring today: reject candidate for QA." : "Expired or expiring today: record a discrepancy before posting.");
-    if (r.requiresCoa && !hasCoa) flags.push(gr.status === "draft" ? "CoA required: attach it before posting, or the lot will be flagged and cannot be released." : "CoA missing: QA cannot release this lot until it is attached.");
-    if (r.storageConditions && !l.storageConditionsConfirmed) flags.push(`Storage conditions not confirmed (${r.storageConditions}).`);
-    if (l.discrepancyKind && !l.discrepancyApprovedBy) flags.push(`${DISCREPANCY_LABELS[l.discrepancyKind as DiscrepancyKind]} awaiting procurement approval.`);
+    if (l.expiresOn && l.expiresOn <= today) flags.push(l.discrepancyKind ? "Out of date (or goes out of date today): QA will likely say not OK." : "Out of date (or goes out of date today): write down the problem before saving.");
+    if (r.requiresCoa && !hasCoa) flags.push(gr.status === "draft" ? "The supplier's test paper (CoA) is needed: add it before saving, or QA cannot say OK to this lot." : "The supplier's test paper (CoA) is missing: QA cannot say OK to this lot until it is added.");
+    if (r.storageConditions && !l.storageConditionsConfirmed) flags.push(`Storage needs not ticked as checked (${r.storageConditions}).`);
+    if (l.discrepancyKind && !l.discrepancyApprovedBy) flags.push(`${DISCREPANCY_LABELS[l.discrepancyKind as DiscrepancyKind]}: waiting for purchasing to accept it.`);
     return {
       ...l,
       materialCode: r.materialCode,

@@ -77,7 +77,7 @@ function FilterWrap({ operator, open, children }: { operator: boolean; open: boo
 /** Production orders (ADR-074, ADR-080): one card per order with status v2, pieces, needed-by and one next-action button. iPad-first: cards, no wide table. */
 export default async function ProductionOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; view?: string; mine?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("production.work_order.view")) return <Forbidden what="production orders" />;
+  if (!ctx.can("production.work_order.view")) return <Forbidden what="production orders" permission="production.work_order.view" />;
   const sp = await searchParams;
   const status = sp.status ?? "open";
   const canCreate = ctx.can("production.work_order.create");

@@ -29,7 +29,7 @@ export type LabelJobRow = typeof labelJobs.$inferSelect;
 const LIVE = ["queued", "rendering", "ready", "printed"] as const;
 
 function setupRequired(siteCode: string) {
-  return new DomainError("state", `Label printing isn't set up for ${siteCode} yet. Ask the administrator to add a label printer (Settings › Labels and printouts).`, { setup: "print_station" });
+  return new DomainError("state", `Label printing isn't set up for ${siteCode} yet. Ask the administrator to add a label printer (Management › Rules and settings › Labels and printouts).`, { setup: "print_station" });
 }
 
 async function siteCodeOf(tx: DbOrTx, siteId: string) {
@@ -117,7 +117,7 @@ export async function createLabelJob(ctx: AuthContext, raw: unknown) {
         "conflict",
         same.j.status === "printed"
           ? `A ${template.code} label for ${e.number} was already printed with the same content. Use Reprint and give a reason.`
-          : `A ${template.code} label for ${e.number} is already waiting at the print station. Print that one, or cancel it first.`,
+          : `A ${template.code} label for ${e.number} is already waiting to be printed. Print that one, or cancel it first.`,
         { existingJobId: same.j.id },
       );
     }
@@ -444,9 +444,9 @@ export type LabelJobView = ReturnType<typeof flat>;
 /** The station queue: jobs to print (ready/failed/rendering) plus the last 24 h of printed ones. */
 export async function stationQueue(ctx: AuthContext, stationId: string) {
   ctx.require("inventory.label_job.view");
-  if (!isUuid(stationId)) throw new DomainError("not_found", "Print station not found in your sites.");
+  if (!isUuid(stationId)) throw new DomainError("not_found", "Label printer not found at your sites.");
   const [st] = await db.select().from(printStations).where(and(eq(printStations.id, stationId), eq(printStations.organizationId, ctx.organizationId))).limit(1);
-  if (!st || !ctx.allowedSiteIds.includes(st.siteId)) throw new DomainError("not_found", "Print station not found in your sites.");
+  if (!st || !ctx.allowedSiteIds.includes(st.siteId)) throw new DomainError("not_found", "Label printer not found at your sites.");
   const rows = await jobsQuery()
     .where(
       and(

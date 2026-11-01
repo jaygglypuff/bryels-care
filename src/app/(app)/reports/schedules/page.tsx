@@ -13,7 +13,7 @@ export const metadata = { title: "Lists sent by email" };
 /** Scheduled reports (US-5-05): own schedules and those the user receives; administrators see all in their sites. */
 export default async function SchedulesPage() {
   const ctx = await requireContext();
-  if (!ctx.can("analytics.scheduled_report.view")) return <Forbidden what="lists sent by email" />;
+  if (!ctx.can("analytics.scheduled_report.view")) return <Forbidden what="lists sent by email" permission="analytics.scheduled_report.view" />;
   const rows = await listSchedules(ctx);
   return (
     <div className="space-y-5">

@@ -9,7 +9,7 @@ export const metadata = { title: "Set new prices" };
 
 export default async function NewPriceListPage({ searchParams }: { searchParams: Promise<{ customer?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.price_list.edit")) return <Forbidden what="changing prices" />;
+  if (!ctx.can("sales.price_list.edit")) return <Forbidden what="changing prices" permission="sales.price_list.edit" />;
   const { customer } = await searchParams;
   const opts = await priceListFormOptions(ctx);
   return (

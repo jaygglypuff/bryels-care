@@ -22,7 +22,7 @@ const FILTERS = [
 /** CAPA register (US-6-18, ux-system §9.14): source, owner, due date (overdue in danger), state. */
 export default async function CapaListPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.capa.view")) return <Forbidden what="fix-and-prevent plans" />;
+  if (!ctx.can("quality.capa.view")) return <Forbidden what="fix-and-prevent plans" permission="quality.capa.view" />;
   const { status = "active" } = await searchParams;
   const rows = await listCapas(ctx, status === "mine" ? { status: "active", mine: true } : { status });
   const exportStatus = status === "mine" ? "active" : status;

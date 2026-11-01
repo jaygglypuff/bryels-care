@@ -28,7 +28,7 @@ const LIST_LIMIT = 200;
 
 export default async function SalesOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.sales_order.view")) return <Forbidden what="customer orders" />;
+  if (!ctx.can("sales.sales_order.view")) return <Forbidden what="customer orders" permission="sales.sales_order.view" />;
   const { status = "", q = "" } = await searchParams;
   const active = TABS.some((t) => t.key === status) ? status : "";
   const query = q.trim().slice(0, 200);

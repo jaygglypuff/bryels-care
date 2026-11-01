@@ -18,7 +18,7 @@ const plus = (d: string, n: number) => {
 
 export default async function NewQuotePage({ searchParams }: { searchParams: Promise<{ customer?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.quote.create")) return <Forbidden what="making price offers" />;
+  if (!ctx.can("sales.quote.create")) return <Forbidden what="making price offers" permission="sales.quote.create" />;
   if (!canSeePrices(ctx)) return <Forbidden what="price offers (they show prices)" />;
   const { customer } = await searchParams;
   const [customers, products, days] = await Promise.all([customerOptions(ctx), quoteProductOptions(ctx), getSetting(db, ctx.organizationId, "sales.quote.validity_days")]);

@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function LabelsPrintedPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.label_job.view")) return <Forbidden what="labels" />;
+  if (!ctx.can("inventory.label_job.view")) return <Forbidden what="labels" permission="inventory.label_job.view" />;
   const { show } = await searchParams;
   const which = show === "not_printed" ? "not_printed" : "all";
   const jobs = await siteLabelList(ctx, { show: which });
@@ -62,7 +62,7 @@ export default async function LabelsPrintedPage({ searchParams }: { searchParams
       <LabelGuide />
       <MoreDetails title="Label sizes and printers">
         <p className="text-[14px] text-fg-2">
-          The administrator and QA set these up in <Link href="/admin/templates" className="font-medium text-primary-text underline">Settings › Labels and printouts</Link>.
+          The administrator and QA set these up in <Link href="/admin/templates" className="font-medium text-primary-text underline">Management › Rules and settings › Labels and printouts</Link>.
         </p>
       </MoreDetails>
     </div>

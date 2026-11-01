@@ -7,6 +7,8 @@ import { Card, EmptyState, LinkButton, PageHeader, buttonClass, cx } from "@/ui/
 import { Chip } from "@/ui/status";
 import { acknowledgeAction, markAllReadAction, markReadAction } from "./actions";
 
+import { codeLast } from "@/lib/code-last";
+
 export const metadata = { title: "Messages" };
 
 const SEVERITY = { critical: { tone: "bad", label: "Critical" }, warning: { tone: "warn", label: "Warning" }, info: { tone: "info", label: "Info" } } as const;
@@ -59,7 +61,8 @@ export default async function NotificationsPage({ searchParams }: { searchParams
                     </div>
                     {/* ADR-075: every notification opens its record (plain <a>: opening marks it read, so no prefetch). */}
                     <p className="mt-1 text-[14px] text-fg">
-                      <a href={`/notifications/open/${n.id}`} className="text-primary-text hover:underline">{n.title}</a>
+                      <a href={`/notifications/open/${n.id}`} className="text-primary-text hover:underline">{codeLast(n.title).text}</a>
+                      {codeLast(n.title).codes.length > 0 && <span className="ml-1 font-mono text-[12px] font-normal text-muted">{codeLast(n.title).codes.join(" · ")}</span>}
                     </p>
                     <p className="mt-0.5 break-words text-[13px] font-normal text-muted">{n.body}</p>
                     {n.acknowledgedAt && <p className="mt-0.5 text-[12px] text-muted">You said you&apos;re on it · {fmtDateTime(n.acknowledgedAt)}</p>}

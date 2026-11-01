@@ -17,7 +17,7 @@ export const metadata = { title: "Stock alerts" };
  */
 export default async function StockAlertsPage({ searchParams }: { searchParams: Promise<{ scope?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("analytics.dashboard.view")) return <Forbidden what="stock alerts" />;
+  if (!ctx.can("analytics.dashboard.view")) return <Forbidden what="stock alerts" permission="analytics.dashboard.view" />;
   const { scope } = await searchParams;
   const all = scope === "all" && ctx.allowedSites.length > 1 && ctx.can("analytics.owner_dashboard.view");
   let a;

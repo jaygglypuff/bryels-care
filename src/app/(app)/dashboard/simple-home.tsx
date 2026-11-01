@@ -6,11 +6,12 @@ import type { ActivityRow, OperationsCenter, OwnerHome, StockAlertCounts } from 
 import { fmtDateTime } from "@/lib/qty";
 import { ColumnChart } from "@/ui/charts/charts";
 import { ChartFrame } from "@/ui/charts/chart-frame";
-import { axisFmt, deltaOf, fmtKpi, hhmm, shortDate } from "@/ui/charts/format";
+import { axisFmt, fmtKpi, hhmm, shortDate } from "@/ui/charts/format";
 import { VIZ, slotColor } from "@/ui/charts/palette";
 import { EmptyState, cx } from "@/ui/core";
 import { entityHref } from "../admin/audit/format";
 import { activitySentence } from "./activity-sentence";
+import { salesDayLine } from "./sales-day-line";
 
 /**
  * Owner Home parts (ADR-083 §4, mockup panel 1). Every number comes from `getOwnerHome` and opens the
@@ -128,7 +129,7 @@ export function HomeCards({ home, approvals, stockHref, batchesHref }: { home: O
   const s = home.salesToday;
   const p = home.production;
   const k = home.stock;
-  const delta = s && !s.masked ? deltaOf("money", "up", s.value, s.yesterday, "yesterday") : null;
+  const delta = s && !s.masked ? salesDayLine(s.value, s.yesterday, (v) => peso(v)) : null;
   const orderDelta = s ? s.orders - s.ordersYesterday : 0;
   return (
     <section aria-label="Today at a glance" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -146,7 +147,7 @@ export function HomeCards({ home, approvals, stockHref, batchesHref }: { home: O
           ) : (
             <>
               {plural(s.orders, "order", "orders")} confirmed
-              {delta && <span className={cx("block", delta.tone === "good" ? "text-[var(--ok-fg)]" : delta.tone === "bad" ? "text-[var(--bad-fg)]" : "text-fg-2")}>{delta.text}</span>}
+              {delta && <span className={cx("block", delta.tone === "good" ? "text-[var(--ok-fg)]" : "text-fg-2")}>{delta.text}</span>}
             </>
           )}
         </HomeCard>
@@ -319,22 +320,19 @@ export function RecentActivity({ rows, showSite }: { rows: ActivityRow[]; showSi
             return (
               <li key={r.id} className="py-2.5">
                 <p className="text-[14px] text-fg">
-                  <span className="font-medium">{s.who}</span> {s.text}
-                  {s.number &&
-                    (href ? (
-                      <>
-                        {" "}
-                        <Link href={href} className="font-medium text-primary-text hover:underline">
-                          {s.number}
-                        </Link>
-                      </>
-                    ) : (
-                      <span className="font-medium"> {s.number}</span>
-                    ))}
+                  <span className="font-medium">{s.who}</span>{" "}
+                  {href ? (
+                    <Link href={href} className="text-fg hover:text-primary-text hover:underline">
+                      {s.text}
+                    </Link>
+                  ) : (
+                    s.text
+                  )}
                 </p>
                 <p className="text-[12px] text-muted">
                   {fmtDateTime(r.occurredAt)}
                   {showSite && r.siteCode && ` · ${r.siteCode}`}
+                  {s.number && <span className="font-mono"> · {s.number}</span>}
                 </p>
               </li>
             );

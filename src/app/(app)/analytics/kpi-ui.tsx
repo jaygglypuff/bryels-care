@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { plainNote } from "@/lib/plain-note";
 import type { ReactNode } from "react";
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Clock, Info, Lock, Minus } from "lucide-react";
 import type { Freshness, KpiScope, KpiTile, ListRow, PeriodDto } from "@/modules/analytics";
@@ -163,7 +164,7 @@ export function KpiCard({
           <>
             <p className="mt-auto pt-1 text-[12px] leading-4 text-muted" title={`${tile.formula}. Time basis: ${tile.timeBasis}. Sources: ${tile.sources.join(", ")}.`}>
               <Info size={12} className="mr-1 inline align-[-1px]" aria-hidden />
-              {tile.definition}
+              {plainNote(tile.definition)}
             </p>
             <p className="text-[11.5px] text-muted">
               Updated {hhmm(updated)} · {scopeText(scope)} · {asOf}
@@ -196,7 +197,7 @@ export function UnavailableCard({ title, reason, phase }: { title: string; reaso
       <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-fg-2">
         <Clock size={15} aria-hidden /> Not available yet · {phase}
       </span>
-      <span className="text-[12px] text-muted">{reason}</span>
+      <span className="text-[12px] text-muted">{plainNote(reason)}</span>
     </Card>
   );
 }
@@ -230,7 +231,7 @@ export function ScopePeriodBar({ basePath, scope, period, sites, canAll, extra =
     <div className="flex flex-wrap items-center gap-2">
       <nav aria-label="Period" className="flex flex-wrap gap-1 rounded-[20px] border border-line-strong bg-surface p-0.5">
         {PERIOD_KEYS.map((k) => (
-          <Link key={k} href={href({ period: k })} aria-current={period.key === k ? "page" : undefined} className={cx("inline-flex min-h-[36px] items-center rounded-full px-3 text-[12.5px] font-medium", period.key === k ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}>
+          <Link key={k} href={href({ period: k })} aria-current={period.key === k ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-3 text-[12.5px] font-medium", period.key === k ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}>
             {PERIOD_LABELS[k]}
           </Link>
         ))}
@@ -238,12 +239,12 @@ export function ScopePeriodBar({ basePath, scope, period, sites, canAll, extra =
       {(sites.length > 1 || canAll) && (
         <nav aria-label="Sites" className="flex flex-wrap gap-1 rounded-[20px] border border-line-strong bg-surface p-0.5">
           {canAll && (
-            <Link href={href({ scope: "all" })} aria-current={scope.all ? "page" : undefined} className={cx("inline-flex min-h-[36px] items-center rounded-full px-3 text-[12.5px] font-medium", scope.all ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}>
+            <Link href={href({ scope: "all" })} aria-current={scope.all ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-3 text-[12.5px] font-medium", scope.all ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}>
               All sites
             </Link>
           )}
           {sites.map((s) => (
-            <Link key={s.id} href={href({ scope: s.id })} aria-current={!scope.all && scope.siteIds[0] === s.id ? "page" : undefined} className={cx("inline-flex min-h-[36px] items-center rounded-full px-3 text-[12.5px] font-medium", !scope.all && scope.siteIds[0] === s.id ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}>
+            <Link key={s.id} href={href({ scope: s.id })} aria-current={!scope.all && scope.siteIds[0] === s.id ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-3 text-[12.5px] font-medium", !scope.all && scope.siteIds[0] === s.id ? "bg-primary-soft text-primary-text" : "text-fg-2 hover:bg-surface-2")}>
               {s.code}
             </Link>
           ))}

@@ -47,7 +47,7 @@ function nextStep(d: WorkOrderDetail): NextStepProps {
 
 export default async function WorkOrderPage({ params, searchParams }: { params: Promise<{ workOrderId: string }>; searchParams: Promise<{ tab?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("production.work_order.view")) return <Forbidden what="production orders" />;
+  if (!ctx.can("production.work_order.view")) return <Forbidden what="production orders" permission="production.work_order.view" />;
   const { workOrderId } = await params;
   const sp = await searchParams;
   const tab = (TABS as readonly string[]).includes(sp.tab ?? "") ? (sp.tab as (typeof TABS)[number]) : "overview";

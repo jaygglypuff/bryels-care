@@ -16,7 +16,7 @@ export const metadata = { title: "Shelf" };
 /** One shelf or area (grade-5, ADR-088): what is on it, item first, amounts in friendly units; boxes and sacks below. */
 export default async function LocationPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.location.view")) return <Forbidden what="shelves" />;
+  if (!ctx.can("masterdata.location.view")) return <Forbidden what="shelves" permission="masterdata.location.view" />;
   const { id } = await params;
   let d: Awaited<ReturnType<typeof getLocationDetail>>;
   try {

@@ -17,7 +17,7 @@ const SENS = { N: "neu", S: "warn", R: "bad" } as const;
 /** Roles and the permission catalogue (US-1-17); custom roles by cloning (US-1-29). */
 export default async function RolesPage({ searchParams }: { searchParams: Promise<{ q?: string; deleted?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("identity.role.view")) return <Forbidden what="roles" />;
+  if (!ctx.can("identity.role.view")) return <Forbidden what="roles" permission="identity.role.view" />;
   const sp = await searchParams;
   const q = (sp.q ?? "").trim().toLowerCase().slice(0, 80);
   const [roles, matrix] = await Promise.all([listRoles(ctx), roleMatrix(ctx)]);

@@ -7,12 +7,14 @@ import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, PageHeader, 
 import { ActionForm } from "@/ui/form";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
+import { NextStepBox } from "@/ui/next-step-box";
 import { RecordNo } from "@/ui/plain-list";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { cancelOrderAction, closeOrderAction, confirmOrderAction, decideOrderAction, regenerateDocumentAction, sendOrderAction, shortCloseLineAction, submitOrderAction } from "../../actions";
 import { Amount, History, PoChip, Steps, SubNav, approverWords, fmtBase, money } from "../../_ui";
 import { DeleteDraftCard } from "../../../delete-draft-button";
+import { waitingFor } from "../../../waiting-for";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +24,7 @@ const RECEIPT_WORD: Record<string, string> = { draft: "Not saved yet", posted: "
 /** One purchase order: supplier first, the next step by state, items as phone rows, rare actions in ⋯ More. */
 export default async function OrderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ sent?: string; saved?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.purchase_order.view")) return <Forbidden what="purchase orders" />;
+  if (!ctx.can("procurement.purchase_order.view")) return <Forbidden what="purchase orders" permission="procurement.purchase_order.view" />;
   const { id } = await params;
   const sp = await searchParams;
   let v: Awaited<ReturnType<typeof getPurchaseOrder>>;
@@ -108,17 +110,37 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       {can.receive ? (
         <NextStep text="Next: the delivery is coming. When it arrives, receive it here." action={{ label: "Receive the delivery", href: `/inventory/receive?po=${po.id}` }} />
       ) : can.submit ? (
-        <NextStep text="Next: send this order for approval." action={{ label: "Send for approval", href: "#do" }} />
+        <NextStepBox text="Next: send this order for approval.">
+          <ActionForm action={submitOrderAction} hidden={{ purchaseOrderId: po.id }} submit="Send for approval" variant="cta">
+            <p className="text-[14px] text-fg-2">The manager is told and approves it. To change the items of a draft, cancel it (⋯ More) and make a new order.</p>
+          </ActionForm>
+        </NextStepBox>
       ) : can.decide ? (
-        <NextStep text="Next: approve this order, or send it back with what to change." action={{ label: "Approve or send back", href: "#do" }} />
+        <NextStepBox text="Next: approve this order, or send it back with what to change.">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <ActionForm action={decideOrderAction} hidden={{ purchaseOrderId: po.id, decision: "approve" }} submit={v.progress.steps.length > 1 ? `Approve (step ${v.progress.next?.step ?? 1})` : "Approve"} variant="cta">
+              <Input name="note" placeholder="Note (you can skip this)" aria-label="Approval note" />
+            </ActionForm>
+            <ActionForm action={decideOrderAction} hidden={{ purchaseOrderId: po.id, decision: "return" }} submit="Send back to change" variant="secondary">
+              <Input name="note" placeholder="What must change?" aria-label="What must change" required />
+            </ActionForm>
+          </div>
+        </NextStepBox>
       ) : can.send ? (
-        <NextStep text="Next: send this order to the supplier." action={{ label: "Send to the supplier", href: "#do" }} />
+        <NextStepBox text="Next: send this order to the supplier.">
+          <ActionForm action={sendOrderAction} hidden={{ purchaseOrderId: po.id }} submit="Send to the supplier" pending="Sending…" variant="cta">
+            <label className="flex min-h-[44px] items-center gap-2 text-[15px]">
+              <input type="checkbox" name="email" value="yes" className="h-5 w-5" defaultChecked={!!v.supplier.email} disabled={!v.supplier.email} />
+              {v.supplier.email ? `Email the order to ${v.supplier.email}` : "The supplier has no email address: print the order (⋯ More) and send it by hand"}
+            </label>
+          </ActionForm>
+        </NextStepBox>
       ) : po.status === "draft" ? (
-        <NextStep text="This order is a draft." waitingFor="Waiting for purchasing to send it for approval." />
+        <NextStep text="This order is a draft." waitingFor={await waitingFor(ctx, "procurement.purchase_order.submit", po.siteId, "to send it for approval", "purchasing")} />
       ) : po.status === "submitted" ? (
-        <NextStep text="This order waits for approval." waitingFor={waiting} />
+        <NextStep text="This order waits for approval." waitingFor={await waitingFor(ctx, "procurement.purchase_order.approve", po.siteId, `to approve it${v.progress.steps.length > 1 && v.progress.next ? ` (step ${v.progress.next.step} of ${v.progress.steps.length})` : ""}`, approverWords(v.progress.next))} />
       ) : po.status === "approved" ? (
-        <NextStep text="Approved." waitingFor="Waiting for purchasing to send it to the supplier." />
+        <NextStep text="Approved." waitingFor={await waitingFor(ctx, "procurement.purchase_order.post", po.siteId, "to send it to the supplier", "purchasing")} />
       ) : po.status === "sent" || po.status === "partially_received" ? (
         <NextStep text={po.status === "sent" ? "Sent to the supplier." : "Part of it has arrived."} waitingFor={`Waiting for the delivery${po.expectedDate ? ` (expected ${fmtDate(po.expectedDate)})` : ""}. The warehouse receives it.`} />
       ) : null}
@@ -136,38 +158,6 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             )}
             . Everything on it is already here, so nothing more is expected. {po.status === "draft" ? "Check the prices, then send it for approval." : po.status === "submitted" ? "It becomes “All delivered” when approved." : ""}
           </Banner>
-        )}
-
-        {(can.submit || can.decide || can.send) && (
-          <Card>
-            <span id="do" className="block scroll-mt-24" />
-            <CardTitle>Do it now</CardTitle>
-            <div className="flex flex-col gap-4">
-              {can.submit && (
-                <ActionForm action={submitOrderAction} hidden={{ purchaseOrderId: po.id }} submit="Send for approval" variant="cta">
-                  <p className="text-[14px] text-fg-2">The manager is told and approves it. To change the items of a draft, cancel it (⋯ More) and make a new order.</p>
-                </ActionForm>
-              )}
-              {can.decide && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <ActionForm action={decideOrderAction} hidden={{ purchaseOrderId: po.id, decision: "approve" }} submit={v.progress.steps.length > 1 ? `Approve (step ${v.progress.next?.step ?? 1})` : "Approve"} variant="cta">
-                    <Input name="note" placeholder="Note (you can skip this)" aria-label="Approval note" />
-                  </ActionForm>
-                  <ActionForm action={decideOrderAction} hidden={{ purchaseOrderId: po.id, decision: "return" }} submit="Send back to change" variant="secondary">
-                    <Input name="note" placeholder="What must change?" aria-label="What must change" required />
-                  </ActionForm>
-                </div>
-              )}
-              {can.send && (
-                <ActionForm action={sendOrderAction} hidden={{ purchaseOrderId: po.id }} submit="Send to the supplier" pending="Sending…" variant="cta">
-                  <label className="flex min-h-[44px] items-center gap-2 text-[15px]">
-                    <input type="checkbox" name="email" value="yes" className="h-5 w-5" defaultChecked={!!v.supplier.email} disabled={!v.supplier.email} />
-                    {v.supplier.email ? `Email the order to ${v.supplier.email}` : "The supplier has no email address: print the order (⋯ More) and send it by hand"}
-                  </label>
-                </ActionForm>
-              )}
-            </div>
-          </Card>
         )}
 
         <Card>

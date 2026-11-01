@@ -30,7 +30,7 @@ const limits = (p: { minValue: string | null; targetValue: string | null; maxVal
 export default async function RoutingRevisionPage({ params }: { params: Promise<{ id: string; revisionId: string }> }) {
   const { id, revisionId } = await params;
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.routing.view")) return <Forbidden what="routings" />;
+  if (!ctx.can("masterdata.routing.view")) return <Forbidden what="routings" permission="masterdata.routing.view" />;
   const v = /^[0-9a-f-]{36}$/i.test(revisionId) ? await getRoutingRevision(ctx, revisionId) : null;
   if (!v || v.routing.id !== id)
     return (

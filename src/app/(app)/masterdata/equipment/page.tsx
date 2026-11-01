@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Equipment" };
 
 export default async function EquipmentPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.equipment.view")) return <Forbidden what="the equipment register" />;
+  if (!ctx.can("masterdata.equipment.view")) return <Forbidden what="the equipment register" permission="masterdata.equipment.view" />;
   const rows = await listEquipment(ctx, { siteId: ctx.currentSiteId });
   const blocked = rows.filter((r) => !r.availability.selectable).length;
   return (

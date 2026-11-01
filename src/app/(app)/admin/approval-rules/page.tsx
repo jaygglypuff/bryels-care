@@ -28,7 +28,7 @@ function condition(r: Pick<ApprovalRuleSpec, "minValue" | "maxValue" | "currency
 /** Approval rules (US-1-14 AC2–AC3): the owner edits; system admins, site managers and auditors read. */
 export default async function ApprovalRulesPage() {
   const ctx = await requireContext();
-  if (!ctx.can("platform.approval_rule.view")) return <Forbidden what="approval rules" />;
+  if (!ctx.can("platform.approval_rule.view")) return <Forbidden what="approval rules" permission="platform.approval_rule.view" />;
   const canAdmin = ctx.can("platform.approval_rule.admin");
   const { rules, defaults } = await listApprovalRules(ctx);
   const active = rules.filter((r) => !r.deletedAt);

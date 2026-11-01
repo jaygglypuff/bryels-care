@@ -137,7 +137,7 @@ export async function getProduct(ctx: AuthContext, productId: string) {
   return { ...p, code: p.skuCode, skus: skuRows };
 }
 
-/** Product families a form offers (editable list `product_family`, Master data → Lists; ADR-076). */
+/** Product families a form offers (editable list `product_family`, Master data › Choice lists; ADR-076). */
 export async function productFamilies(q: DbOrTx, organizationId: string, opts: { keep?: string | null } = {}) {
   return lookupOptions(q, organizationId, "product_family", opts);
 }
@@ -150,7 +150,7 @@ async function normaliseFamily(q: DbOrTx, organizationId: string, family: string
 /** BC:SKU scans resolve product codes: a product code must not be another product's SKU code. */
 async function assertProductCodeFree(q: DbOrTx, ctx: AuthContext, code: string, productId?: string) {
   const [s] = await q.select({ productId: skus.productId }).from(skus).where(and(eq(skus.organizationId, ctx.organizationId), eq(skus.code, code))).limit(1);
-  if (s && s.productId !== productId) throw new DomainError("conflict", `${code} is already an SKU code of another product.`, { field: "code" });
+  if (s && s.productId !== productId) throw new DomainError("conflict", `${code} is already the code of another product's sellable item.`, { field: "code" });
 }
 
 /** `opts.tx`: run inside a caller's transaction (savepoint), e.g. an import chunk (W3C, src/lib/tx.ts). */
@@ -193,7 +193,7 @@ export async function deleteProduct(ctx: AuthContext, productId: string) {
     const own = await tx.select().from(skus).where(eq(skus.productId, p.id));
     for (const s of own) {
       const ref = await isReferenced(tx, "skus", s.id);
-      if (ref.referenced) throw new DomainError("state", `SKU ${s.code} of product ${p.skuCode} is already used, so the product cannot be deleted.`, { code: "IN_USE" });
+      if (ref.referenced) throw new DomainError("state", `The sellable item ${s.code} of product ${p.skuCode} is already used, so the product cannot be deleted.`, { code: "IN_USE" });
     }
     await hardDeleteDraft(tx, ctx, {
       table: "products",
@@ -309,7 +309,7 @@ export async function getSku(ctx: AuthContext, skuId: string) {
   ctx.require("masterdata.sku.view");
   assertUuid(skuId, "SKU");
   const [s] = await db.select().from(skus).where(and(eq(skus.id, skuId), eq(skus.organizationId, ctx.organizationId))).limit(1);
-  if (!s) throw new DomainError("not_found", "SKU not found.");
+  if (!s) throw new DomainError("not_found", "Sellable item not found.");
   return s;
 }
 
@@ -326,7 +326,7 @@ async function assertSkuRefs(q: DbOrTx, ctx: AuthContext, v: z.output<typeof Sku
   if (v.netContentUomId && !units.some((u) => u.id === v.netContentUomId && u.isActive)) throw new DomainError("validation", "Choose an active unit for the net content.", { field: "netContentUomId" });
   if (v.code) {
     const [clash] = await q.select({ id: products.id }).from(products).where(and(eq(products.organizationId, ctx.organizationId), eq(products.skuCode, v.code), ne(products.id, p.id))).limit(1);
-    if (clash) throw new DomainError("conflict", `${v.code} is another product's code; choose a different SKU code.`, { field: "code" });
+    if (clash) throw new DomainError("conflict", `${v.code} is another product's code; choose a different code for the sellable item.`, { field: "code" });
   }
   void skuId;
   return p;
@@ -372,14 +372,14 @@ export async function updateSku(ctx: AuthContext, skuId: string, raw: unknown) {
   const parsed = parseInput(SkuInput, raw);
   return db.transaction(async (tx) => {
     const [before] = await tx.select().from(skus).where(and(eq(skus.id, skuId), eq(skus.organizationId, ctx.organizationId))).for("update").limit(1);
-    if (!before) throw new DomainError("not_found", "SKU not found.");
+    if (!before) throw new DomainError("not_found", "Sellable item not found.");
     // ADR-093: a blank code keeps the sellable item's code.
     const v = { ...parsed, code: parsed.code ?? before.code };
-    if (before.status === "discontinued") throw new DomainError("state", "A discontinued SKU can no longer be edited.");
-    if (v.productId !== before.productId) throw new DomainError("validation", "An SKU cannot move to another product; create a new SKU.", { field: "productId" });
+    if (before.status === "discontinued") throw new DomainError("state", "A sellable item that is no longer sold can't be changed.");
+    if (v.productId !== before.productId) throw new DomainError("validation", "A sellable item can't move to another product; make a new sellable item.", { field: "productId" });
     await assertSkuRefs(tx, ctx, v, before.id);
     const ref = v.code !== before.code || v.uomBaseId !== before.uomBaseId ? await isReferenced(tx, "skus", before.id) : { referenced: false, by: [] };
-    if (ref.referenced) throw new DomainError("state", `SKU ${before.code} is in use; its code and stock unit can no longer change.`, { field: v.code !== before.code ? "code" : "uomBaseId" });
+    if (ref.referenced) throw new DomainError("state", `The sellable item ${before.code} is in use; its code and stock unit can no longer change.`, { field: v.code !== before.code ? "code" : "uomBaseId" });
     const [after] = await tx
       .update(skus)
       .set({ ...v, updatedAt: new Date(), updatedBy: ctx.userId })
@@ -397,12 +397,12 @@ export async function changeSkuStatus(ctx: AuthContext, raw: unknown) {
   const v = parseInput(StatusInput, raw);
   return db.transaction(async (tx) => {
     const [before] = await tx.select().from(skus).where(and(eq(skus.id, v.id), eq(skus.organizationId, ctx.organizationId))).for("update").limit(1);
-    if (!before) throw new DomainError("not_found", "SKU not found.");
+    if (!before) throw new DomainError("not_found", "Sellable item not found.");
     if (before.status === v.status) return before;
     assertTransition(PRODUCT_TRANSITIONS, before.status as ProductStatus, v.status, `SKU ${before.code}`);
     if (v.status === "active") {
       const [p] = await tx.select({ status: products.status, code: products.skuCode }).from(products).where(eq(products.id, before.productId));
-      if (p.status !== "active") throw new DomainError("state", `Activate product ${p.code} first; an SKU can be active only under an active product.`);
+      if (p.status !== "active") throw new DomainError("state", `Activate product ${p.code} first; a sellable item can be in use only under a product that is in use.`);
     }
     if (v.status === "discontinued" && !v.reason) throw new DomainError("validation", "Give the reason for discontinuing.", { field: "reason" });
     const [after] = await tx.update(skus).set({ status: v.status, updatedAt: new Date(), updatedBy: ctx.userId }).where(eq(skus.id, before.id)).returning();

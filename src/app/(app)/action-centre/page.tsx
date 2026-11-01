@@ -13,6 +13,8 @@ import { SyncConflictSummary } from "../sync/conflict-summary"; // W4D (US-7-05)
 
 registerAppHooks(); // Wave 3 cross-module registrations (src/modules/wiring.ts); cheap and idempotent
 
+import { codeLast } from "@/lib/code-last";
+
 export const metadata = { title: "Problems & alerts" };
 export const dynamic = "force-dynamic";
 
@@ -38,8 +40,8 @@ function ItemRow({ i }: { i: ActionItemView }) {
           <span className="text-[12px] text-muted">{i.kindLabel} · {i.siteCode ?? "whole company"} · waiting {age(i.ageMinutes)}</span>
         </div>
         <p className="mt-1 text-[15px] font-medium text-fg">
-          {i.title}
-          {i.recordNumber && <span className="ml-1 font-mono text-[12px] text-muted">{i.recordNumber}</span>}
+          {codeLast(i.title).text}
+          {(i.recordNumber || codeLast(i.title).codes.length > 0) && <span className="ml-1 font-mono text-[12px] text-muted">{i.recordNumber ?? codeLast(i.title).codes.join(" · ")}</span>}
         </p>
         {i.detail && <p className="mt-0.5 break-words text-[13px] text-muted">{i.detail}</p>}
         {i.acknowledgementNote && <p className="mt-0.5 text-[12px] text-muted">Note: {i.acknowledgementNote}</p>}

@@ -8,7 +8,7 @@ import { LinkButton, cx } from "@/ui/core";
  * progress bar and ONE big green button. A task the user cannot do says who does it (first name or
  * role, never an e-mail address) and offers no button that would only be refused.
  */
-export function TaskCard({ t }: { t: FloorTask }) {
+export function TaskCard({ t, first = true }: { t: FloorTask; first?: boolean }) {
   return (
     <article className="flex min-w-0 flex-col gap-2.5 rounded-[18px] border border-line bg-surface p-4 sm:p-5" data-testid="floor-task" aria-label={`${t.title}: ${t.productName}, batch ${t.batchNumber}`}>
       <div className="min-w-0">
@@ -28,7 +28,8 @@ export function TaskCard({ t }: { t: FloorTask }) {
         </div>
       </div>
       {t.canDo ? (
-        <LinkButton href={t.href} variant="cta" size="lg" className="mt-1 w-full justify-center text-[17px]">
+        // UX audit C (operator workspace): only the first task the person can do has the green button; the others are quiet.
+        <LinkButton href={t.href} variant={first ? "cta" : "secondary"} size="lg" className="mt-1 w-full justify-center text-[17px]">
           {t.buttonLabel}
         </LinkButton>
       ) : (
@@ -48,11 +49,12 @@ export function TaskCard({ t }: { t: FloorTask }) {
 
 export function TaskCards({ tasks, empty }: { tasks: FloorTask[]; empty?: React.ReactNode }) {
   if (tasks.length === 0) return <>{empty ?? null}</>;
+  const firstDoable = tasks.find((t) => t.canDo)?.batchId;
   return (
     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {tasks.map((t) => (
         <li key={t.batchId} className="min-w-0">
-          <TaskCard t={t} />
+          <TaskCard t={t} first={t.batchId === firstDoable} />
         </li>
       ))}
     </ul>

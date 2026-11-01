@@ -136,7 +136,7 @@ function LogEntry({ e, v, types, canCorrect }: { e: DailyLogRow; v: ProductionOr
 
 export default async function ProductionOrderPage({ params, searchParams }: { params: Promise<{ workOrderId: string }>; searchParams: Promise<{ tab?: string; finished?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("production.work_order.view")) return <Forbidden what="production orders" />;
+  if (!ctx.can("production.work_order.view")) return <Forbidden what="production orders" permission="production.work_order.view" />;
   const { workOrderId } = await params;
   // Flow screens of a batch without an order live under /production/orders/without-order/…; it has no hub.
   if (workOrderId === NO_ORDER_SEGMENT) redirect("/production/orders");

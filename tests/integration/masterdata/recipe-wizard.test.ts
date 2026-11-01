@@ -461,3 +461,25 @@ describe("approval is still required before a batch can use it", () => {
     expect(view!.versions.formula.next).toBe(2);
   });
 });
+
+describe("no empty recipe and no second recipe (UX audit C #9, round 2 part 2)", () => {
+  it("refuses to send a recipe without ingredients or without steps, and writes nothing", async () => {
+    const pid = await newProduct("Wizard Soap Empty");
+    const noLines = await expectCode(saveRecipe(planner, input(pid, { lines: [], submit: true })), "validation");
+    expect(noLines.details?.fieldErrors).toHaveProperty("lines");
+    const noSteps = await expectCode(saveRecipe(planner, input(pid, { steps: [], submit: true })), "validation");
+    expect(noSteps.details?.fieldErrors).toHaveProperty("steps");
+    expect(await db.select().from(formulas).where(eq(formulas.productId, pid))).toHaveLength(0);
+    expect(await db.select().from(routings).where(eq(routings.productId, pid))).toHaveLength(0);
+  });
+
+  it("the product list marks products that already have a recipe, and a second recipe is refused", async () => {
+    const pid = await newProduct("Wizard Soap Only One");
+    const r = await saveRecipe(planner, input(pid));
+    const opts = await recipeWizardOptions(planner);
+    expect(opts.products.find((p) => p.id === pid)?.formulaId).toBe(r.formulaId);
+    const e = await expectCode(saveRecipe(planner, input(pid)), "conflict");
+    expect(e.details?.fieldErrors).toHaveProperty("productId");
+    expect(await db.select().from(formulas).where(eq(formulas.productId, pid))).toHaveLength(1);
+  });
+});

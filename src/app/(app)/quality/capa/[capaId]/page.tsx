@@ -28,7 +28,7 @@ const plusDays = (d: string, n: number) => {
 /** CAPA detail (ux-system §9.14): record, actions with owners and due dates, verification, effectiveness, closure. */
 export default async function CapaPage({ params, searchParams }: { params: Promise<{ capaId: string }>; searchParams: Promise<{ opened?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.capa.view")) return <Forbidden what="fix-and-prevent plans" />;
+  if (!ctx.can("quality.capa.view")) return <Forbidden what="fix-and-prevent plans" permission="quality.capa.view" />;
   const { capaId } = await params;
   const sp = await searchParams;
   let v: Awaited<ReturnType<typeof getCapa>>;

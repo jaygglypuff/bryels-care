@@ -19,7 +19,7 @@ export const metadata = { title: "Being made" };
  */
 export default async function WipPage() {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.lot.view")) return <Forbidden what="stock" />;
+  if (!ctx.can("inventory.lot.view")) return <Forbidden what="stock" permission="inventory.lot.view" />;
   const seesBatches = ctx.can("production.batch.view") || ctx.can("production.work_order.view");
   const oc = seesBatches ? await getOperationsCenter(ctx) : null;
   const rows = (oc?.batches ?? []).filter((b) => b.status !== "planned");

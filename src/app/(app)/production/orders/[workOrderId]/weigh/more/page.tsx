@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function WeighMorePage({ params, searchParams }: { params: Promise<{ workOrderId: string }>; searchParams: Promise<{ batch?: string; line?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("production.batch.view")) return <Forbidden what="weighing" />;
+  if (!ctx.can("production.batch.view")) return <Forbidden what="weighing" permission="production.batch.view" />;
   const { workOrderId } = await params;
   const { batch: batchParam, line } = await searchParams;
   let backHref = orderHrefOf(workOrderId);

@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "New recipe (advanced)" };
 /** New recipe header (advanced editing, ADR-089): three questions; the system gives the number (F-nnnn, ADR-093). */
 export default async function NewFormulaPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.formula.create")) return <Forbidden what="making recipes" />;
+  if (!ctx.can("masterdata.formula.create")) return <Forbidden what="making recipes" permission="masterdata.formula.create" />;
   const { products } = await formulaFormOptions(ctx);
   const canWizard = ctx.can("masterdata.routing.create");
   return (

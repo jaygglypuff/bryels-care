@@ -34,7 +34,7 @@ const KIND_WORD: Record<string, string> = { recall: "Product recall", withdrawal
 /** Recall case (ux-system §9.14): approval card, scope, Mark recalled, customer notification list, reconciliation, closure. */
 export default async function RecallCasePage({ params, searchParams }: { params: Promise<{ recallId: string }>; searchParams: Promise<{ opened?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.recall_case.view")) return <Forbidden what="product recalls" />;
+  if (!ctx.can("quality.recall_case.view")) return <Forbidden what="product recalls" permission="quality.recall_case.view" />;
   const { recallId } = await params;
   const sp = await searchParams;
   let v: Awaited<ReturnType<typeof getRecallCase>>;

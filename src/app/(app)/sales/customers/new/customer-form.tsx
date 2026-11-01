@@ -73,7 +73,7 @@ export function CustomerForm({ segments, canSetTerms = false }: { segments: { va
             <Input {...bind("paymentTermsDays")} inputMode="numeric" />
           </Field>
         )}
-        <Field label="Kind of customer" htmlFor="segment" error={fe.segment} hint="To add a kind, go to Master data → Lists.">
+        <Field label="Kind of customer" htmlFor="segment" error={fe.segment} hint="To add a kind, go to Master data › Choice lists.">
           <Select {...bind("segment")}>
             {([["", "Choose…"], ...segments.map((o) => [o.value, o.label])] as [string, string][]).map(([val, label]) => (
               <option key={val} value={val}>

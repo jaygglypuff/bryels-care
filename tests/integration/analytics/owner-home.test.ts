@@ -11,6 +11,7 @@ import { db } from "@/db/client";
 import { batches, locations } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { getKpiRecords, getOwnerHome, listStockAlerts, listWeekBatches, stockAlertCounts } from "@/modules/analytics";
+import { activityEntityNames } from "@/modules/analytics/activity-names";
 import { lotKpis } from "@/modules/inventory/lots";
 import { createOrder, manilaToday, submitOrder } from "@/modules/sales";
 import { resetTestDatabase } from "../../support/db";
@@ -192,5 +193,17 @@ describe("permissions", () => {
     const a = await getOwnerHome(ownerRvs);
     expect(a.activity!.length).toBeLessThanOrEqual(8);
     expect(a.activity!.every((r) => r.siteCode === "RVS")).toBe(true);
+  });
+
+  it("recent activity carries the record's name (customer, product) for 'names before codes' (UX audit C #6)", async () => {
+    const home = await getOwnerHome(ownerNfd);
+    const order = home.activity!.find((r) => r.entityType === "sales_order");
+    expect(order).toBeDefined();
+    expect(order!.entityName).toBeTruthy();
+    expect(order!.entityName).not.toMatch(/^SO-/);
+    const names = await activityEntityNames(kit.orgId, [{ entityType: "product", entityId: await productId("ACS-135") }]);
+    expect([...names.values()]).toEqual(["Acapulco Soap 135 g"]);
+    // another organization's id finds nothing
+    expect((await activityEntityNames("00000000-0000-0000-0000-000000000000", [{ entityType: "product", entityId: await productId("ACS-135") }])).size).toBe(0);
   });
 });

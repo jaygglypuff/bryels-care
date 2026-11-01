@@ -23,7 +23,7 @@ const FILTERS = [
 /** Requests to buy (purchase requests): what is wanted first, who asked, estimate on the right, number small and grey. */
 export default async function RequestsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.purchase_request.view")) return <Forbidden what="requests to buy" />;
+  if (!ctx.can("procurement.purchase_request.view")) return <Forbidden what="requests to buy" permission="procurement.purchase_request.view" />;
   const { status = "open" } = await searchParams;
   const rows = await listPurchaseRequests(ctx, { status });
   const prices = ctx.can("masterdata.supplier_price.view");

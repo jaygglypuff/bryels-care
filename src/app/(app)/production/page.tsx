@@ -57,7 +57,7 @@ function BatchCard({ b }: { b: BatchListRow }) {
  */
 export default async function BatchesPage() {
   const ctx = await requireContext();
-  if (!ctx.can("production.batch.view")) return <Forbidden what="production batches" />;
+  if (!ctx.can("production.batch.view")) return <Forbidden what="production batches" permission="production.batch.view" />;
   const rows = await listBatches(ctx);
   const closedOrRejected = rows.filter((r) => r.status === "rejected" || r.status === "closed");
 

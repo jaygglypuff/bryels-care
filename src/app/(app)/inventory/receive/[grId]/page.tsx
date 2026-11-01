@@ -65,9 +65,12 @@ function DocList({ docs, receiptId, canVoid }: { docs: (Doc & { href: string | n
   );
 }
 
+/** Receipt states in plain words (UX audit B #6): never "Draft" or "Posted" on the screen. */
+const RECEIPT_STATUS_WORD: Record<string, string> = { draft: "Not finished", posted: "Saved to stock", reversed: "Undone (kept on record)", cancelled: "Cancelled" };
+
 export default async function ReceiptPage({ params, searchParams }: { params: Promise<{ grId: string }>; searchParams: Promise<{ posted?: string; saved?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.goods_receipt.view")) return <Forbidden what="goods receipts" />;
+  if (!ctx.can("procurement.goods_receipt.view")) return <Forbidden what="goods receipts" permission="procurement.goods_receipt.view" />;
   const { grId } = await params;
   const { posted, saved } = await searchParams;
   let gr: ReceiptDocument;
@@ -113,6 +116,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
         title={gr.supplierName}
         siteCode={ctx.allowedSites.find((x) => x.id === gr.siteId)?.code}
         status={gr.status}
+        statusLabel={RECEIPT_STATUS_WORD[gr.status]}
         meta={[
           ["Received", fmtDateTime(gr.receivedAt)],
           ["Number on the supplier's paper", gr.supplierDocumentNumber],
@@ -194,8 +198,8 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
           <CardTitle>No purchase order yet</CardTitle>
           <p className="mb-3 text-[13px] text-muted">This was an urgent buy. Make the purchase order now from what was received: the items and quantities are filled in, you enter the prices. It goes for approval as usual and nothing more is expected from the supplier.</p>
           <details className="group">
-            <summary className="inline-flex min-h-[44px] cursor-pointer list-none items-center rounded-full bg-cta px-5 text-[14px] font-medium text-white">Create PO from this receipt</summary>
-            <ActionForm action={createPoFromReceiptAction} hidden={{ ...hidden, idempotencyKey: randomUUID() }} submit="Create purchase order" variant="cta" pendingText="Creating…" className="mt-4 space-y-4">
+            <summary className="inline-flex min-h-[44px] cursor-pointer list-none items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium text-fg hover:bg-surface-2">Make the purchase order</summary>
+            <ActionForm action={createPoFromReceiptAction} hidden={{ ...hidden, idempotencyKey: randomUUID() }} submit="Make the purchase order" variant="primary" pendingText="Making it…" className="mt-4 space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Supplier" htmlFor="atf-supplier">
                   <Select id="atf-supplier" name="supplierId" required defaultValue={atf.supplierId ?? ""}>

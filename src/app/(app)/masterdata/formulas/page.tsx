@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Recipes (advanced)" };
 
 export default async function FormulasPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.formula.view")) return <Forbidden what="recipes" />;
+  if (!ctx.can("masterdata.formula.view")) return <Forbidden what="recipes" permission="masterdata.formula.view" />;
   const rows = await listFormulas(ctx);
   const pending = rows.filter((r) => r.open?.status === "pending_approval").length;
   // ADR-089: the step-by-step recipe wizard needs both the formula and the routing rights.

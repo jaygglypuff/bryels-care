@@ -31,7 +31,7 @@ const numTypeText = (t: string) => NUM_TYPE[t] ?? t.replace(/_/g, " ");
 /** Numbering rules (US-1-19 AC1–AC2): patterns per document type; changes are versions approved by a second administrator. */
 export default async function NumberingPage() {
   const ctx = await requireContext();
-  if (!ctx.can("platform.numbering_rule.view")) return <Forbidden what="numbering rules" />;
+  if (!ctx.can("platform.numbering_rule.view")) return <Forbidden what="numbering rules" permission="platform.numbering_rule.view" />;
   const canAdmin = ctx.can("platform.numbering_rule.admin");
   const rows = await listNumberingAdmin(ctx);
   const today = numberingBusinessDate();

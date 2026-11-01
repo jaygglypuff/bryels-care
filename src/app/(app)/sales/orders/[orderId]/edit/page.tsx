@@ -14,7 +14,7 @@ export const metadata = { title: "Change draft order" };
 
 export default async function EditOrderPage({ params }: { params: Promise<{ orderId: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.sales_order.edit")) return <Forbidden what="changing customer orders" />;
+  if (!ctx.can("sales.sales_order.edit")) return <Forbidden what="changing customer orders" permission="sales.sales_order.edit" />;
   const { orderId } = await params;
   let data: Awaited<ReturnType<typeof getOrder>>;
   try {

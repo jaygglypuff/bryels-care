@@ -17,7 +17,7 @@ export const metadata = { title: "Send something back" };
 /** New supplier return (W04-09): pick the supplier by name, see its lots here, say why; the number is made by the server. */
 export default async function NewSupplierReturnPage({ searchParams }: { searchParams: Promise<{ supplier?: string; q?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.supplier_return.create")) return <Forbidden what="sending goods back to suppliers" />;
+  if (!ctx.can("procurement.supplier_return.create")) return <Forbidden what="sending goods back to suppliers" permission="procurement.supplier_return.create" />;
   const { supplier, q } = await searchParams;
   const sups = await supplierOptions(ctx);
   const chosen = sups.find((s) => s.id === supplier) ?? null;

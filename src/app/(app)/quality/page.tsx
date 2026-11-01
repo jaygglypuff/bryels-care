@@ -53,7 +53,7 @@ function OtherWork({ can }: { can: (p: string) => boolean }) {
 
 export default async function QaQueuePage() {
   const ctx = await requireContext();
-  if (!ctx.can("quality.disposition.view")) return <Forbidden what="the QA queue" />;
+  if (!ctx.can("quality.disposition.view")) return <Forbidden what="the QA queue" permission="quality.disposition.view" />;
   const q = await getQaQueue(ctx);
   const waiting = q.lots.filter((l) => l.qualityStatus === "quarantine");
   const stopped = q.lots.filter((l) => l.qualityStatus === "on_hold");
@@ -113,14 +113,15 @@ export default async function QaQueuePage() {
                   status={
                     <>
                       <QaStatusChip status={b.status} />
-                      {b.failedCount > 0 && <WordChip tone="bad" icon="bad">{b.failedCount} test(s) not OK</WordChip>}
-                      {b.openDeviations > 0 && <WordChip tone="bad" icon="new">{b.openDeviations} open problem report(s)</WordChip>}
+                      {b.failedCount > 0 && <WordChip tone="bad" icon="bad">{b.failedCount === 1 ? "1 test not OK" : `${b.failedCount} tests not OK`}</WordChip>}
+                      {b.openDeviations > 0 && <WordChip tone="bad" icon="new">{b.openDeviations === 1 ? "1 open problem report" : `${b.openDeviations} open problem reports`}</WordChip>}
                     </>
                   }
                   facts={
                     <>
                       {b.actualUnits ? `${fmtQty(b.actualUnits, "pcs", 0)} made` : "Amount not recorded"}
                       {b.completedAt ? ` · finished ${fmtDateTime(b.completedAt)}` : ""}
+                      {b.checkAgainOn ? ` · check again on ${fmtDate(b.checkAgainOn)}` : ""}
                     </>
                   }
                 />

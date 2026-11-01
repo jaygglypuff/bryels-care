@@ -11,7 +11,7 @@ import { reqText } from "./org-common";
 import { parseInput } from "./schemas";
 
 /**
- * ADR-076: editable dropdown lists ("Master data → Lists"). The list definitions live here (title, where
+ * ADR-076: editable dropdown lists ("Master data › Choice lists"). The list definitions live here (title, where
  * the list is used, shipped default options, how use is counted); the options live in `lookup_values`.
  *
  * - The code of an option is what records store; it never changes. Renaming changes only the label.
@@ -176,7 +176,7 @@ export async function assertLookupValue(q: DbOrTx, organizationId: string, key: 
     if (still) return match.code;
   }
   const active = rows.filter((r) => r.isActive).map((r) => r.label);
-  const msg = match && !match.isActive ? `"${match.label}" is no longer used. Choose another option.` : `Choose one of the ${def.title.toLowerCase()}${active.length ? `: ${active.join(", ")}` : ""}. An admin can add options under Management → Master data → Lists.`;
+  const msg = match && !match.isActive ? `"${match.label}" is no longer used. Choose another option.` : `Choose one of the ${def.title.toLowerCase()}${active.length ? `: ${active.join(", ")}` : ""}. An admin can add options under Management › Master data › Choice lists.`;
   throw new DomainError("validation", msg, { field: opts.field });
 }
 
@@ -190,7 +190,7 @@ export type LookupListView = {
   values: (LookupOption & { inUse: number })[];
 };
 
-/** Every editable list with its options and how many records use each option (Master data → Lists). */
+/** Every editable list with its options and how many records use each option (Master data › Choice lists). */
 export async function listLookupLists(ctx: AuthContext): Promise<LookupListView[]> {
   ctx.require("masterdata.lookup_value.view");
   const out: LookupListView[] = [];

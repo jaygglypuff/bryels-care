@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Quality checks for an item" };
 /** Quality checks for one item (ADR-088): which item and when; the name and number QCP-nnnn have defaults. */
 export default async function NewInspectionPlanPage() {
   const ctx = await requireContext();
-  if (!ctx.can("quality.inspection_plan.create")) return <Forbidden what="adding quality checks" />;
+  if (!ctx.can("quality.inspection_plan.create")) return <Forbidden what="adding quality checks" permission="quality.inspection_plan.create" />;
   const { products, materials } = await inspectionPlanFormOptions(ctx);
   return (
     <div className="mx-auto max-w-2xl">

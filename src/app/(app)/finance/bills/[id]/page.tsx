@@ -6,12 +6,15 @@ import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { getSupplierBill } from "@/modules/finance";
 import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { NextStepBox } from "@/ui/next-step-box";
+import { waitingFor } from "../../../waiting-for";
+import { approvalWaiting } from "../../approval-waiting";
 import { MoreMenu } from "@/ui/more-menu";
 import { RecordNo } from "@/ui/plain-list";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { FinanceCommand } from "../../commands";
-import { ApprovalCard, DoNow, FinanceStatus, HistoryCard, Money, PostingsCard, waitingText } from "../../finance-ui";
+import { ApprovalCard, FinanceStatus, HistoryCard, Money, PostingsCard } from "../../finance-ui";
 
 export const metadata = { title: "Supplier bill" };
 
@@ -22,7 +25,7 @@ const MATCH_WORD: Record<string, string> = { matched: "Matches order and deliver
 /** One supplier bill (money we owe): supplier first, the check against order and delivery, next step by state; posting rules unchanged. */
 export default async function BillPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("finance.supplier_bill.view")) return <Forbidden what="supplier bills" />;
+  if (!ctx.can("finance.supplier_bill.view")) return <Forbidden what="supplier bills" permission="finance.supplier_bill.view" />;
   const { id } = await params;
   const { created } = await searchParams;
   let d: Awaited<ReturnType<typeof getSupplierBill>>;
@@ -42,6 +45,29 @@ export default async function BillPage({ params, searchParams }: { params: Promi
   const canCancel = ["draft", "submitted", "disputed", "approved"].includes(b.status) && ctx.can("finance.supplier_bill.create");
   const canVoid = b.status === "posted" && Number(b.paidAmount) === 0 && !isCredit && ctx.can("finance.supplier_bill.void");
   const payHref = `/finance/payments/new?counterparty=supplier:${d.supplier.id}`;
+  // UX audit round 2 part 2: the form for the next step sits inside the one "What to do next" box.
+  const doNow = (
+    <>
+        {canSubmit && <FinanceCommand entity="bill" id={b.id} command="submit" label="Check against order and delivery, then send" variant="cta" />}
+        {b.status === "disputed" && (
+          <>
+            {ctx.can("finance.supplier_bill.submit") && <FinanceCommand entity="bill" id={b.id} command="rematch" label="Check again" />}
+            {d.canApproveVariance ? (
+              <FinanceCommand entity="bill" id={b.id} command="approve_variance" label="Accept the difference" reason variant="cta" />
+            ) : (
+              <p className="text-[14px] text-fg-2">Another finance person (not the one who typed or sent this bill) can accept the difference.</p>
+            )}
+          </>
+        )}
+        {canDecide && (
+          <>
+            <FinanceCommand entity="bill" id={b.id} command="approve" label="Approve" note variant="cta" />
+            <FinanceCommand entity="bill" id={b.id} command="return" label="Send back to change" reason />
+          </>
+        )}
+        {canPost && <FinanceCommand entity="bill" id={b.id} command="post" label="Save to the books" password variant="cta" hint="After this it cannot be changed. It is dated on the bill date and the day to pay comes from the supplier's terms." />}
+    </>
+  );
   return (
     <>
       <PageHeader
@@ -85,26 +111,29 @@ export default async function BillPage({ params, searchParams }: { params: Promi
         </div>
       )}
       {canSubmit ? (
-        <NextStep text="Next: send it for approval. The system first checks it against the order and the delivery." action={{ label: "Check and send", href: "#do" }} />
+        <NextStepBox text="Next: send it for approval. The system first checks it against the order and the delivery.">{doNow}</NextStepBox>
       ) : b.status === "draft" ? (
-        <NextStep text="This supplier bill is a draft." waitingFor="Waiting for finance to send it for approval." />
+        <NextStep text="This supplier bill is a draft." waitingFor={await waitingFor(ctx, "finance.supplier_bill.submit", null, "to send it for approval", "finance")} />
       ) : b.status === "disputed" ? (
-        <NextStep
+        <NextStepBox
           text="This bill does not match the order or the delivery (see below). Ask the supplier for money back, check again, or accept the difference with a reason."
-          action={d.canApproveVariance || ctx.can("finance.supplier_bill.submit") ? { label: "Fix it", href: "#do" } : undefined}
-          waitingFor={d.canApproveVariance ? undefined : "Another finance person (not the one who typed or sent it) can accept the difference."}
-        />
+          waitingFor={d.canApproveVariance ? undefined : await waitingFor(ctx, "finance.supplier_bill.approve", null, "to accept the difference (not the one who typed or sent it)", "another finance person")}
+        >
+          {doNow}
+        </NextStepBox>
       ) : canDecide ? (
-        <NextStep text="Next: approve this supplier bill, or send it back with what to change." action={{ label: "Approve or send back", href: "#do" }} />
+        <NextStepBox text="Next: approve this supplier bill, or send it back with what to change.">{doNow}</NextStepBox>
       ) : b.status === "submitted" ? (
-        <NextStep text="This supplier bill waits for approval." waitingFor={`${waitingText(d.progress)}${!b.goodsReceiptId ? " Bills not for a delivery are approved by finance." : ""}`} />
+        <NextStep text="This supplier bill waits for approval." waitingFor={`${(await approvalWaiting(ctx, "finance.supplier_bill.approve", d.progress))}${!b.goodsReceiptId ? " Bills not for a delivery are approved by finance." : ""}`} />
       ) : canPost ? (
-        <NextStep text="Next: save it to the books. The day to pay is set from the supplier's terms." action={{ label: "Save to the books", href: "#do" }} />
+        <NextStepBox text="Next: save it to the books. The day to pay is set from the supplier's terms.">{doNow}</NextStepBox>
       ) : b.status === "approved" ? (
-        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You approved it, so another finance person saves it to the books (above the set amount)." : "Waiting for finance to save it to the books."} />
+        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You approved it, so another finance person saves it to the books (above the set amount)." : await waitingFor(ctx, "finance.supplier_bill.post", null, "to save it to the books", "finance")} />
       ) : canPay ? (
         <NextStep text={`Next: pay ${d.supplier.name}${b.dueDate ? ` by ${fmtDate(b.dueDate)}` : ""}, then save the payment.`} action={{ label: "Record a payment", href: payHref }} />
-      ) : null}
+      ) : (
+        <NextStep text={b.status === "paid" || b.status === "closed" ? "Paid. Nothing more to do." : ["posted", "partially_paid"].includes(b.status) ? "Saved to the books. Finance pays it by the day to pay." : "Cancelled. Nothing more to do."} />
+      )}
 
       <div className="flex flex-col gap-4">
         {b.status === "disputed" && d.expectedSupplierCredits.length > 0 && (
@@ -120,28 +149,6 @@ export default async function BillPage({ params, searchParams }: { params: Promi
             ))}
             .
           </Banner>
-        )}
-        {(canSubmit || canDecide || canPost || b.status === "disputed") && (
-          <DoNow>
-            {canSubmit && <FinanceCommand entity="bill" id={b.id} command="submit" label="Check against order and delivery, then send" variant="cta" />}
-            {b.status === "disputed" && (
-              <>
-                {ctx.can("finance.supplier_bill.submit") && <FinanceCommand entity="bill" id={b.id} command="rematch" label="Check again" />}
-                {d.canApproveVariance ? (
-                  <FinanceCommand entity="bill" id={b.id} command="approve_variance" label="Accept the difference" reason variant="cta" />
-                ) : (
-                  <p className="text-[14px] text-fg-2">Another finance person (not the one who typed or sent this bill) can accept the difference.</p>
-                )}
-              </>
-            )}
-            {canDecide && (
-              <>
-                <FinanceCommand entity="bill" id={b.id} command="approve" label="Approve" note variant="cta" />
-                <FinanceCommand entity="bill" id={b.id} command="return" label="Send back to change" reason />
-              </>
-            )}
-            {canPost && <FinanceCommand entity="bill" id={b.id} command="post" label="Save to the books" password variant="cta" hint="After this it cannot be changed. It is dated on the bill date and the day to pay comes from the supplier's terms." />}
-          </DoNow>
         )}
 
         <Card>

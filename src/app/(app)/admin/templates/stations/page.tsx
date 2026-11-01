@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function StationsPage() {
   const ctx = await requireContext();
-  if (!ctx.can("documents.print_station.admin")) return <Forbidden what="print station settings" />;
+  if (!ctx.can("documents.print_station.admin")) return <Forbidden what="print station settings" permission="documents.print_station.admin" />;
   const stations = (await listStations(ctx, { includeInactive: true })).filter((s) => ctx.allowedSiteIds.includes(s.siteId));
   const here = stations.filter((s) => s.siteId === ctx.currentSiteId);
   const others = stations.filter((s) => s.siteId !== ctx.currentSiteId);

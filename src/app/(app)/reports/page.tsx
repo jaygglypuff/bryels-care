@@ -14,7 +14,7 @@ export const metadata = { title: "Lists to download or print" };
 /** Report library (US-5-04): the reports this user may run, by area, in plain names; planned reports are listed folded, never faked. */
 export default async function ReportLibraryPage() {
   const ctx = await requireContext();
-  if (!ctx.can("analytics.report.view")) return <Forbidden what="reports" />;
+  if (!ctx.can("analytics.report.view")) return <Forbidden what="reports" permission="analytics.report.view" />;
   const entries = await listReportLibrary(ctx);
   return (
     <div className="space-y-5">

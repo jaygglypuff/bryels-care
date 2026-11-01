@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /** Open a CAPA (W07-04), pre-filled from the deviation or complaint it comes from. */
 export default async function NewCapaPage({ searchParams }: { searchParams: Promise<{ deviationId?: string; complaintId?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.capa.create")) return <Forbidden what="starting fix-and-prevent plans" />;
+  if (!ctx.can("quality.capa.create")) return <Forbidden what="starting fix-and-prevent plans" permission="quality.capa.create" />;
   const sp = await searchParams;
   const v = await capaFormContext(ctx, { deviationId: sp.deviationId, complaintId: sp.complaintId });
   return (

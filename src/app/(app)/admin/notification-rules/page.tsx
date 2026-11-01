@@ -17,7 +17,7 @@ export const metadata = { title: "Who gets which message" };
  */
 export default async function NotificationRulesPage() {
   const ctx = await requireContext();
-  if (!ctx.can("platform.notification_rule.view")) return <Forbidden what="notification rules" />;
+  if (!ctx.can("platform.notification_rule.view")) return <Forbidden what="notification rules" permission="platform.notification_rule.view" />;
   const [rules, roles] = await Promise.all([listNotificationRules(ctx), ruleRoleOptions(ctx)]);
   const admin = ctx.can("platform.notification_rule.admin");
   const opts = { kinds: ACTION_KINDS.map((k) => ({ kind: k.kind, label: `${k.tab === "approvals" ? "Waits for OK" : "Problem"}: ${k.label}` })), roles, sites: ctx.allowedSites.map((s) => ({ id: s.id, code: s.code })) };

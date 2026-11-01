@@ -247,7 +247,7 @@ function permissionFor(next: NextScreen, step: BatchFlowFacts["currentStep"]): P
 export default async function BatchRecordPage({ params }: Params) {
   const { batchId } = await params;
   const ctx = await requireContext();
-  if (!ctx.can("production.batch.view")) return <Forbidden what="production batches" />;
+  if (!ctx.can("production.batch.view")) return <Forbidden what="production batches" permission="production.batch.view" />;
   const notFound = (
     <EmptyState title="Batch not found" action={<LinkButton href="/production" variant="secondary">Back to batch records</LinkButton>}>
       It does not exist or belongs to a site you are not assigned to.

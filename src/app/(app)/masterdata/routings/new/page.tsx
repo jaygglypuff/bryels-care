@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "New steps (advanced)" };
 /** New steps for a product (advanced editing): one question; the system gives the number (R-nnnn, ADR-093) and the name. */
 export default async function NewRoutingPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.routing.create")) return <Forbidden what="making steps" />;
+  if (!ctx.can("masterdata.routing.create")) return <Forbidden what="making steps" permission="masterdata.routing.create" />;
   const products = await routingFormOptions(ctx);
   const canWizard = ctx.can("masterdata.formula.create");
   return (

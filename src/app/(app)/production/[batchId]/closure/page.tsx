@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function ClosurePage({ params }: { params: Promise<{ batchId: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("production.batch.view")) return <Forbidden what="batch records" />;
+  if (!ctx.can("production.batch.view")) return <Forbidden what="batch records" permission="production.batch.view" />;
   const { batchId } = await params;
   let v: ClosureView;
   try {

@@ -92,7 +92,7 @@ function Tree({ nodes }: { nodes: TraceNode[] }) {
 
 export default async function TracePage({ searchParams }: { searchParams: Promise<{ lot?: string; batch?: string; q?: string; supplierLot?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.genealogy.view")) return <Forbidden what="traceability" />;
+  if (!ctx.can("quality.genealogy.view")) return <Forbidden what="traceability" permission="quality.genealogy.view" />;
   const sp = await searchParams;
   const q = (sp.q ?? "").trim();
   // A typed code: B-… is a batch number, anything else is looked up as a lot number. BC:LOT: scan payloads are accepted.

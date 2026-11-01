@@ -8,6 +8,7 @@ import { Banner, Chip } from "@/ui/status";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { RecordNo } from "@/ui/plain-list";
 import { Forbidden } from "../../../forbidden";
+import { waitingFor } from "../../../waiting-for";
 import { DefinitionEditor, TestPageButton, VersionOp, VersionReasonOp } from "../forms";
 
 export const metadata = { title: "Layout" };
@@ -19,7 +20,7 @@ const STATUS_TEXT: Record<string, string> = { approved: "OK for printing", draft
 
 export default async function TemplatePage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("documents.template.view")) return <Forbidden what="templates" />;
+  if (!ctx.can("documents.template.view")) return <Forbidden what="templates" permission="documents.template.view" />;
   const { id } = await params;
   let t: TemplateDetail;
   try {
@@ -45,6 +46,8 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
       <PageIntro>This screen is for QA and the IT person: the versions of one printed page layout. Only the version QA said OK to is used for printing; a new version starts as a draft.</PageIntro>
       {open && open.status === "pending_approval" && ctx.can("documents.template.approve") && open.submittedBy !== ctx.userId && <NextStep text={`Version ${open.versionNo} waits for your OK.`} action={{ label: "Look at it", href: `#v-${open.id}` }} />}
       {open && open.status === "draft" && ctx.can("documents.template.submit") && <NextStep text={`Version ${open.versionNo} is a draft. When it is ready, send it to QA.`} action={{ label: "Open the draft", href: `#v-${open.id}` }} />}
+      {open && open.status === "pending_approval" && !(ctx.can("documents.template.approve") && open.submittedBy !== ctx.userId) && <NextStep text={`Version ${open.versionNo} was sent to QA.`} waitingFor={await waitingFor(ctx, "documents.template.approve", null, "to say OK (not the person who sent it)", "QA")} />}
+      {!open && <NextStep text={effective ? `Version ${effective.versionNo} is used for printing. To change the layout, start a new version.` : "No version is OK'd yet: nothing prints with this layout."} />}
       {!effective && <Banner tone="warn" title="No version is OK'd yet">Nothing prints with this layout until QA says OK to a version.</Banner>}
 
       {t.versions.map((v) => (

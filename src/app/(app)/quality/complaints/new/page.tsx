@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 /** Log a complaint (W07-06): customer, the label's lot or box, what is reported. */
 export default async function NewComplaintPage({ searchParams }: { searchParams: Promise<{ customerId?: string; code?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.complaint.create")) return <Forbidden what="logging complaints" />;
+  if (!ctx.can("quality.complaint.create")) return <Forbidden what="logging complaints" permission="quality.complaint.create" />;
   const sp = await searchParams;
   const f = await complaintFormContext(ctx);
   if (!f.customers.length) {

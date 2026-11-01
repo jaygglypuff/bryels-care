@@ -14,7 +14,7 @@ export const metadata = { title: "Sessions" };
 /** Signed-in devices of the people in the caller's scope (US-1-12, identity.session.view / .void). */
 export default async function SessionsPage() {
   const ctx = await requireContext();
-  if (!ctx.can("identity.session.view")) return <Forbidden what="sessions" />;
+  if (!ctx.can("identity.session.view")) return <Forbidden what="sessions" permission="identity.session.view" />;
   const sessions = await listActiveSessions(ctx);
   const canVoid = ctx.can("identity.session.void");
   return (

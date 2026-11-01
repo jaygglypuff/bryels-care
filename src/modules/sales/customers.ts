@@ -23,7 +23,7 @@ import { assertMayDeleteDraft, assertNeverSubmittedDraft, creatorOf, hardDeleteD
  */
 
 export type CustomerStatus = (typeof CUSTOMER_STATUSES)[number];
-/** Code of an option of the editable list `customer_segment` ("Customer types", Master data → Lists; ADR-076). */
+/** Code of an option of the editable list `customer_segment` ("Customer types", Master data › Choice lists; ADR-076). */
 export type CustomerSegment = string;
 
 /** Customer status machine. Placing or lifting a credit hold is a finance decision. */

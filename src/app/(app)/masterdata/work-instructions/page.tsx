@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "How-to sheets" };
 
 export default async function WorkInstructionsPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.work_instruction.view")) return <Forbidden what="how-to sheets" />;
+  if (!ctx.can("masterdata.work_instruction.view")) return <Forbidden what="how-to sheets" permission="masterdata.work_instruction.view" />;
   const rows = await listWorkInstructions(ctx);
   const canCreate = ctx.can("masterdata.work_instruction.create");
   return (

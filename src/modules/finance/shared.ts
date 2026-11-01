@@ -234,7 +234,7 @@ export async function openPeriodForPosting(tx: Tx, organizationId: string, date:
     .for("share")
     .limit(1);
   if (p.status !== "open") {
-    throw new DomainError("conflict", `PERIOD_LOCKED: the accounting period ${p.periodCode} is locked, so nothing can be posted or reversed into it. Ask finance to unlock it (two approvals) or use a date in an open period.`, {
+    throw new DomainError("conflict", `PERIOD_LOCKED: the accounting period ${p.periodCode} is closed, so nothing can be saved to it or undone in it. Ask finance to unlock it (two approvals) or use a date in an open period.`, {
       code: "PERIOD_LOCKED",
       period: p.periodCode,
     });
@@ -302,7 +302,7 @@ export async function reverseDocumentPosting(tx: Tx, ctx: AuthContext, documentT
     .where(and(eq(financialPostings.organizationId, ctx.organizationId), eq(financialPostings.documentType, documentType), eq(financialPostings.documentId, documentId)));
   const reversedIds = new Set(rows.filter((r) => r.reversalOfId).map((r) => r.reversalOfId));
   const live = rows.filter((r) => r.postingType !== "reversal" && !reversedIds.has(r.id));
-  if (live.length !== 1) throw new DomainError("state", "This document has no posting that can be reversed.");
+  if (live.length !== 1) throw new DomainError("state", "This record has nothing in the books that can be undone.");
   const original = live[0];
   const date = businessDate(now);
   const period = await openPeriodForPosting(tx, ctx.organizationId, date);

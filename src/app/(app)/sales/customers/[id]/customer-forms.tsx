@@ -43,7 +43,7 @@ export function ProfileForm({ c, segments }: { c: { id: string; name: string; se
             <Field label="Name" htmlFor="p-name" error={fe.name}>
               <Input id="p-name" name="name" defaultValue={c.name} required maxLength={120} />
             </Field>
-            <Field label="Kind of customer" htmlFor="p-segment" error={fe.segment} hint="To add a type, go to Master data → Lists.">
+            <Field label="Kind of customer" htmlFor="p-segment" error={fe.segment} hint="To add a type, go to Master data › Choice lists.">
               <Select id="p-segment" name="segment" defaultValue={c.segment ?? ""}>
                 {([["", "—"], ...segments.map((o) => [o.value, o.label])] as [string, string][]).map(([v, l]) => (
                   <option key={v} value={v}>

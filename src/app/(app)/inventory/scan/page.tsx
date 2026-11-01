@@ -8,7 +8,7 @@ export const metadata = { title: "Scan or search" };
 
 export default async function ScanPage() {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.lot.view")) return <Forbidden what="scanning and look-up" />;
+  if (!ctx.can("inventory.lot.view")) return <Forbidden what="scanning and look-up" permission="inventory.lot.view" />;
   return (
     <div className="mx-auto max-w-2xl">
       <PageHeader title="Scan or search" subtitle={ctx.currentSite.name} />

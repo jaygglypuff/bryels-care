@@ -53,9 +53,9 @@ export default async function ReceiptLabelsPage({ params, searchParams }: { para
       {gr.siteId !== ctx.currentSiteId ? (
         <Banner tone="info" title={`This delivery is at ${site?.name ?? site?.code}`}>Switch site in the top bar to print its labels.</Banner>
       ) : stations.length === 0 ? (
-        <Banner tone="info" title={`Label printing is not set up for ${site?.name ?? site?.code} yet`}>Ask the administrator to add a label printer (Settings › Labels and printouts).</Banner>
+        <Banner tone="info" title={`Label printing is not set up for ${site?.name ?? site?.code} yet`}>Ask the administrator to add a label printer (Management › Rules and settings › Labels and printouts).</Banner>
       ) : templates.length === 0 ? (
-        <Banner tone="info" title="No label is approved yet">QA must approve a raw material label first (Settings › Labels and printouts).</Banner>
+        <Banner tone="info" title="No label is approved yet">QA must approve a raw material label first (Management › Rules and settings › Labels and printouts).</Banner>
       ) : (
         <>
           {preview?.options[0] && <LabelPreview kind="sack" data={preview.options[0].face} sentence={`This is the label. ${preview.options.length > 1 ? "Other sizes are below. " : ""}Stick one on each sack or drum.`} />}

@@ -6,19 +6,22 @@ import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getCreditNote } from "@/modules/finance";
 import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { NextStepBox } from "@/ui/next-step-box";
+import { waitingFor } from "../../../waiting-for";
+import { approvalWaiting } from "../../approval-waiting";
 import { MoreMenu } from "@/ui/more-menu";
 import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { FinanceCommand } from "../../commands";
-import { ApprovalCard, DoNow, FinanceStatus, HistoryCard, Money, PostingsCard, waitingText } from "../../finance-ui";
+import { ApprovalCard, FinanceStatus, HistoryCard, Money, PostingsCard } from "../../finance-ui";
 
 export const metadata = { title: "Credit (money back)" };
 
 /** One credit (money back) on an invoice: next step by state; cancel and "cancel (kept on record)" in ⋯ More. Posting rules unchanged. */
 export default async function CreditNotePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("finance.credit_note.view")) return <Forbidden what="credits (money back)" />;
+  if (!ctx.can("finance.credit_note.view")) return <Forbidden what="credits (money back)" permission="finance.credit_note.view" />;
   const { id } = await params;
   const { created } = await searchParams;
   let d: Awaited<ReturnType<typeof getCreditNote>>;
@@ -35,6 +38,19 @@ export default async function CreditNotePage({ params, searchParams }: { params:
   const canIssue = c.status === "approved" && ctx.can("finance.credit_note.post") && !d.posterBlocked;
   const canCancel = ["draft", "submitted", "approved"].includes(c.status) && ctx.can("finance.credit_note.create");
   const canVoid = ["issued", "applied"].includes(c.status) && !c.voidsInvoice && ctx.can("finance.credit_note.void");
+  // UX audit round 2 part 2: the form for the next step sits inside the one "What to do next" box.
+  const doNow = (
+    <>
+        {canSubmit && <FinanceCommand entity="credit_note" id={c.id} command="submit" label="Send for approval" variant="cta" />}
+        {canDecide && (
+          <>
+            <FinanceCommand entity="credit_note" id={c.id} command="approve" label="Approve" note variant="cta" />
+            <FinanceCommand entity="credit_note" id={c.id} command="return" label="Send back to change" reason />
+          </>
+        )}
+        {canIssue && <FinanceCommand entity="credit_note" id={c.id} command="issue" label="Save to the books" password variant="cta" hint="This numbers the credit and takes it off the invoice. After this it cannot be changed." />}
+    </>
+  );
   return (
     <>
       <PageHeader
@@ -78,31 +94,21 @@ export default async function CreditNotePage({ params, searchParams }: { params:
         </div>
       )}
       {canSubmit ? (
-        <NextStep text="Next: send this credit for approval." action={{ label: "Send for approval", href: "#do" }} />
+        <NextStepBox text="Next: send this credit for approval.">{doNow}</NextStepBox>
       ) : c.status === "draft" ? (
-        <NextStep text="This credit is a draft." waitingFor="Waiting for finance to send it for approval." />
+        <NextStep text="This credit is a draft." waitingFor={await waitingFor(ctx, "finance.credit_note.submit", null, "to send it for approval", "finance")} />
       ) : canDecide ? (
-        <NextStep text="Next: approve this credit, or send it back with what to change." action={{ label: "Approve or send back", href: "#do" }} />
+        <NextStepBox text="Next: approve this credit, or send it back with what to change.">{doNow}</NextStepBox>
       ) : c.status === "submitted" ? (
-        <NextStep text="This credit waits for approval." waitingFor={waitingText(d.progress)} />
+        <NextStep text="This credit waits for approval." waitingFor={(await approvalWaiting(ctx, "finance.credit_note.approve", d.progress))} />
       ) : canIssue ? (
-        <NextStep text="Next: save it to the books. It gets its number and is taken off the invoice." action={{ label: "Save to the books", href: "#do" }} />
+        <NextStepBox text="Next: save it to the books. It gets its number and is taken off the invoice.">{doNow}</NextStepBox>
       ) : c.status === "approved" ? (
-        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You approved it, so another finance person saves it to the books (above the set amount)." : "Waiting for finance to save it to the books."} />
-      ) : null}
+        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You approved it, so another finance person saves it to the books (above the set amount)." : await waitingFor(ctx, "finance.credit_note.post", null, "to save it to the books", "finance")} />
+      ) : (
+        <NextStep text={c.status === "issued" || c.status === "applied" ? "Saved to the books and taken off the invoice. Nothing more to do." : c.status === "voided" ? "Cancelled (kept on record). Nothing more to do." : "Cancelled before it was saved to the books. Nothing more to do."} />
+      )}
       <div className="flex flex-col gap-4">
-        {(canSubmit || canDecide || canIssue) && (
-          <DoNow>
-            {canSubmit && <FinanceCommand entity="credit_note" id={c.id} command="submit" label="Send for approval" variant="cta" />}
-            {canDecide && (
-              <>
-                <FinanceCommand entity="credit_note" id={c.id} command="approve" label="Approve" note variant="cta" />
-                <FinanceCommand entity="credit_note" id={c.id} command="return" label="Send back to change" reason />
-              </>
-            )}
-            {canIssue && <FinanceCommand entity="credit_note" id={c.id} command="issue" label="Save to the books" password variant="cta" hint="This numbers the credit and takes it off the invoice. After this it cannot be changed." />}
-          </DoNow>
-        )}
         <Card>
           <CardTitle action={<Money value={c.amount} className="text-[20px] font-semibold" />}>Money back</CardTitle>
           <Dl

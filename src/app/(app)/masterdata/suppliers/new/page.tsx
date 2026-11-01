@@ -10,7 +10,7 @@ export const metadata = { title: "New supplier" };
 
 export default async function NewSupplierPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.supplier.create")) return <Forbidden what="creating suppliers" />;
+  if (!ctx.can("masterdata.supplier.create")) return <Forbidden what="creating suppliers" permission="masterdata.supplier.create" />;
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader title="New supplier" />

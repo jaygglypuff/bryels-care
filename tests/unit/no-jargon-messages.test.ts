@@ -182,3 +182,80 @@ describe("plain words in messages, approvals and alerts", () => {
     expect("quality.disposition.approve is needed".replace(/\b[\w-]+(?:\.[\w-]+)+\b/g, " ")).not.toMatch(/disposition/);
   });
 });
+
+/** Every `new DomainError("code", "message")` literal in a module, with its line. */
+function domainErrors(dir: string): { file: string; line: number; text: string }[] {
+  const out: { file: string; line: number; text: string }[] = [];
+  const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : f.endsWith(".ts") ? [join(d, f)] : []));
+  for (const file of walk(dir)) {
+    if (file.endsWith("loader.ts")) continue; // command-line tool for IT (imports/loader.ts), not a screen message
+    const src = readFileSync(file, "utf8");
+    const re = /new DomainError\(\s*"[a-z_]+"\s*,\s*(?=["'`])/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src))) {
+      const { texts, end } = readLiteral(src, m.index + m[0].length);
+      re.lastIndex = end + 1;
+      out.push({ file: relative(ROOT, file), line: src.slice(0, m.index).split("\n").length, text: texts.join(" ") });
+    }
+  }
+  return out;
+}
+
+/** UX audit round 2 part 2: the service errors people read most (set-up, money, spreadsheet loads) in plain words. */
+describe("plain words in service errors (masterdata, finance, imports)", () => {
+  const WORDS: [RegExp, string][] = BANNED.filter(([b]) => ["SKU", "post", "revers", "quarantin", "goods receipt", "PO", "toleran", "UoM", "disposition"].some((w) => b.source.includes(w)));
+
+  it("finds the error messages (sanity)", () => {
+    expect(domainErrors(join(MODULES, "finance")).length).toBeGreaterThan(50);
+    expect(WORDS.length).toBeGreaterThanOrEqual(8);
+  });
+
+  for (const mod of ["masterdata", "finance", "imports"]) {
+    it(`${mod}: no SKU, posting, reversal, quarantine, goods receipt or PO in what people read`, () => {
+      const bad: string[] = [];
+      for (const e of domainErrors(join(MODULES, mod))) {
+        // Error tags ("PERIOD_LOCKED:"), technical names and snake_case codes are stripped by userMessage() or are not words.
+        const text = e.text.replace(/^[A-Z_]+:\s*/, "").replace(/\b[\w-]+(?:\.[\w-]+)+\b/g, " ").replace(/\b[a-z0-9]+(?:_[a-z0-9]+)+\b/g, " ");
+        for (const [b, plain] of WORDS) {
+          const w = text.match(b);
+          if (w) bad.push(`${e.file}:${e.line} "${e.text.slice(0, 100)}" uses "${w[0]}" (say: ${plain})`);
+        }
+      }
+      expect(bad).toEqual([]);
+    });
+  }
+});
+
+/** Old menu paths in help, hints and errors (UX audit round 2 part 2): "Management → System → Templates & labels" is gone. */
+describe("menu paths in messages follow the current menu", () => {
+  const OLD = [/Management → System\b/, /Templates & labels/, /\bSetup → /, /Settings › Labels/, /Settings → (Security|Maintenance|Labels)/, /Tax configuration\)/, /Reorder suggestions\)/, /Master data → Lists/, /Products and formulas\)/];
+  it("no screen, hint or error names a menu path that no longer exists", () => {
+    const walk = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : /\.tsx?$/.test(f) ? [join(d, f)] : []));
+    const bad: string[] = [];
+    for (const file of walk(join(ROOT, "src"))) {
+      const src = readFileSync(file, "utf8");
+      for (const re of OLD) {
+        const m = src.match(re);
+        if (m) bad.push(`${relative(ROOT, file)}: "${m[0]}"`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+});
+
+/** Receiving and purchasing words the audit found on screens (UX audit B #6, #9; round 2 part 2). */
+describe("receiving and purchasing words", () => {
+  it("the receipt read model and the sales guess speak plain words", () => {
+    const rq = readFileSync(join(MODULES, "inventory", "receiving-queries.ts"), "utf8");
+    expect(rq).not.toMatch(/awaiting procurement approval/);
+    const fm = readFileSync(join(MODULES, "procurement", "forecast-math.ts"), "utf8");
+    expect(fm).not.toMatch(/Insufficient history/);
+    const fc = readFileSync(join(MODULES, "procurement", "forecast.ts"), "utf8");
+    expect(fc).not.toMatch(/not actuals/);
+    const page = readFileSync(join(ROOT, "src", "app", "(app)", "inventory", "receive", "[grId]", "page.tsx"), "utf8");
+    expect(page).not.toMatch(/Create PO from this receipt/);
+    expect(readFileSync(join(ROOT, "src", "ui", "record-steps.ts"), "utf8")).not.toMatch(/label: "Posted"/);
+    const seed = readFileSync(join(ROOT, "src", "db", "seed.ts"), "utf8");
+    expect(seed).not.toMatch(/Quarantine cage|Dispatch bay/);
+  });
+});

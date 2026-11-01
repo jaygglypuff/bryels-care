@@ -402,14 +402,20 @@ export async function listShipments(ctx: AuthContext, f: { status?: string } = {
   const conds = [eq(shipments.siteId, ctx.currentSiteId)];
   if (f.status && f.status !== "all") conds.push(f.status === "open" ? inArray(shipments.status, ["draft", "picked", "packed"]) : eq(shipments.status, f.status));
   const rows = await db
-    .select({ s: shipments, orderNumber: salesOrders.orderNumber, customerName: customers.name, orderId: salesOrders.id, units: sql<string>`(select coalesce(sum(qty_base), 0)::text from ${shipmentLines} where shipment_id = ${shipments.id})`, boxes: sql<number>`(select count(distinct container_id)::int from ${shipmentLines} where shipment_id = ${shipments.id})` })
+    .select({ s: shipments, orderNumber: salesOrders.orderNumber, customerName: customers.name, orderId: salesOrders.id, units: sql<string>`(select coalesce(sum(qty_base), 0)::text from ${shipmentLines} where shipment_id = ${shipments.id})`, boxes: sql<number>`(select count(distinct container_id)::int from ${shipmentLines} where shipment_id = ${shipments.id})`,
+      // Before the second check a delivery has no lines yet: what was taken off the shelf (UX audit B #5/#10, not "nothing on it").
+      pickedUnits: sql<string>`(select coalesce(sum(pl.qty_base), 0)::text from pick_lines pl join picks p on p.id = pl.pick_id where p.shipment_id = "shipments"."id" and p.status <> 'cancelled' and pl.voided_at is null)`,
+      pickedBoxes: sql<number>`(select count(distinct pl.container_id)::int from pick_lines pl join picks p on p.id = pl.pick_id where p.shipment_id = "shipments"."id" and p.status <> 'cancelled' and pl.voided_at is null)` })
     .from(shipments)
     .innerJoin(salesOrders, eq(salesOrders.id, shipments.salesOrderId))
     .innerJoin(customers, eq(customers.id, salesOrders.customerId))
     .where(and(...conds))
     .orderBy(desc(shipments.createdAt), desc(shipments.dispatchedAt))
     .limit(200);
-  return rows.map((r) => ({ ...r.s, orderNumber: r.orderNumber, customerName: r.customerName, orderId: r.orderId, units: r.units, boxes: r.boxes }));
+  return rows.map((r) => {
+    const unchecked = Number(r.units) === 0 && Number(r.pickedUnits) > 0;
+    return { ...r.s, orderNumber: r.orderNumber, customerName: r.customerName, orderId: r.orderId, units: unchecked ? r.pickedUnits : r.units, boxes: unchecked ? Number(r.pickedBoxes) : r.boxes, unitsFrom: (unchecked ? "picked" : "lines") as "picked" | "lines" };
+  });
 }
 
 export async function shipmentCounts(ctx: AuthContext) {

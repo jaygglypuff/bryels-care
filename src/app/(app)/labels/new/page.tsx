@@ -26,7 +26,7 @@ const BACK: Record<string, (id: string) => string> = {
  */
 export default async function NewLabelPage({ searchParams }: { searchParams: Promise<{ entityType?: string; entityId?: string; copies?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.label_job.view")) return <Forbidden what="labels" />;
+  if (!ctx.can("inventory.label_job.view")) return <Forbidden what="labels" permission="inventory.label_job.view" />;
   const { entityType = "", entityId = "", copies } = await searchParams;
   if (!TYPES.includes(entityType as LabelEntityType) || !entityId) {
     // Opened without a record (old bookmark, menu): say where labels are printed instead of a bare 404.

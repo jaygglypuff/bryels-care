@@ -22,7 +22,7 @@ export const metadata = { title: "Item" };
  */
 export default async function ItemPage({ params, searchParams }: { params: Promise<{ kind: string; id: string }>; searchParams: Promise<{ all?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.lot.view")) return <Forbidden what="stock" />;
+  if (!ctx.can("inventory.lot.view")) return <Forbidden what="stock" permission="inventory.lot.view" />;
   const { kind, id } = await params;
   const sp = await searchParams;
   let r: ItemStock;

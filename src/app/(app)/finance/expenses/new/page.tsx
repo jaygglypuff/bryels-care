@@ -10,7 +10,7 @@ export const metadata = { title: "Claim money I spent" };
 /** New expense claim (US-6-12): four fields; the receipt photo is added on the next screen. */
 export default async function NewExpensePage() {
   const ctx = await requireContext();
-  if (!ctx.can("finance.expense_claim.create")) return <Forbidden what="expense claims" />;
+  if (!ctx.can("finance.expense_claim.create")) return <Forbidden what="expense claims" permission="finance.expense_claim.create" />;
   const cats = await expenseCategories(ctx.organizationId);
   const sites = ctx.allowedSites.filter((s) => ctx.canAt("finance.expense_claim.create", s.id));
   return (

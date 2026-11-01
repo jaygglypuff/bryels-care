@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 /** New order (ADR-080 V2-2). `?salesOrderLine=<id>` = "Make for this order": product, missing pieces and needed-by are prefilled. */
 export default async function NewProductionOrderPage({ searchParams }: { searchParams: Promise<{ salesOrderLine?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("production.work_order.create")) return <Forbidden what="creating production orders" />;
+  if (!ctx.can("production.work_order.create")) return <Forbidden what="creating production orders" permission="production.work_order.create" />;
   const sp = await searchParams;
   const opts = await workOrderFormOptions(ctx);
   const formulas = opts.formulas.filter((f) => f.effectiveRevision);

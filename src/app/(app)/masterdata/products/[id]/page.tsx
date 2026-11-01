@@ -22,7 +22,7 @@ export const metadata = { title: "Product" };
 
 export default async function ProductPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.product.view")) return <Forbidden what="products" />;
+  if (!ctx.can("masterdata.product.view")) return <Forbidden what="products" permission="masterdata.product.view" />;
   const { id } = await params;
   const { created } = await searchParams;
   let p;

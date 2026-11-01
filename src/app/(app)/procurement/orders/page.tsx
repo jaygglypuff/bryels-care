@@ -25,7 +25,7 @@ const FILTERS = [
 /** Purchase orders: supplier first, total on the right, order number small and grey (ADR-088). */
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.purchase_order.view")) return <Forbidden what="purchase orders" />;
+  if (!ctx.can("procurement.purchase_order.view")) return <Forbidden what="purchase orders" permission="procurement.purchase_order.view" />;
   const { status = "open", q } = await searchParams;
   const rows = await listPurchaseOrders(ctx, { status, q });
   const prices = ctx.can("masterdata.supplier_price.view");
@@ -78,7 +78,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                     {r.urgent && <Chip tone="bad">Urgent</Chip>}
                   </>
                 }
-                facts={`${r.lines} item(s) · ordered ${fmtDate(r.orderDate)}${r.expectedDate ? ` · comes ${fmtDate(r.expectedDate)}` : ""} · ${r.siteCode}`}
+                facts={`${r.lines === 1 ? "1 item" : `${r.lines} items`} · ordered ${fmtDate(r.orderDate)}${r.expectedDate ? ` · comes ${fmtDate(r.expectedDate)}` : ""} · ${r.siteCode}`}
                 aside={prices ? <Amount>{money(r.totalAmount, r.currency)}</Amount> : undefined}
               />
             ))}

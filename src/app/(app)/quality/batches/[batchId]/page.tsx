@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 
 export default async function BatchReleasePage({ params }: { params: Promise<{ batchId: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.disposition.view")) return <Forbidden what="QA batch release" />;
+  if (!ctx.can("quality.disposition.view")) return <Forbidden what="QA batch release" permission="quality.disposition.view" />;
   const { batchId } = await params;
 
   let v: Awaited<ReturnType<typeof getBatchRelease>>;

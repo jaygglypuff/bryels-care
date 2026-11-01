@@ -9,7 +9,7 @@ export const metadata = { title: "Orders as a board" };
 
 export default async function OrderBoardPage() {
   const ctx = await requireContext();
-  if (!ctx.can("sales.sales_order.view")) return <Forbidden what="customer orders" />;
+  if (!ctx.can("sales.sales_order.view")) return <Forbidden what="customer orders" permission="sales.sales_order.view" />;
   const board = await orderBoard(ctx);
   const total = board.columns.reduce((n, c) => n + c.cards.length, 0);
   return (

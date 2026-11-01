@@ -17,7 +17,7 @@ export const metadata = { title: "Deliveries coming" };
  */
 export default async function ExpectedPage() {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.purchase_order.view")) return <Forbidden what="deliveries coming" />;
+  if (!ctx.can("procurement.purchase_order.view")) return <Forbidden what="deliveries coming" permission="procurement.purchase_order.view" />;
   const rows = await expectedReceipts(ctx);
   const canReceive = ctx.can("procurement.goods_receipt.create");
   const late = rows.filter((r) => r.late);
@@ -26,7 +26,7 @@ export default async function ExpectedPage() {
     <>
       <PageHeader title="Deliveries coming" actions={canReceive ? <LinkButton href="/inventory/receive" variant="secondary">Receive something not ordered</LinkButton> : undefined} />
       <PageIntro>This screen is for the deliveries we are waiting for. When a truck arrives, tap its row to receive it against the order, so we know what is still to come.</PageIntro>
-      {late.length > 0 && <NextStep text={`${late.length} item(s) are late.`} waitingFor="Call the supplier to ask when it comes. Their phone is on the supplier's page (Suppliers we may buy from)." />}
+      {late.length > 0 && <NextStep text={`${late.length === 1 ? "1 item is" : `${late.length} items are`} late.`} waitingFor="Call the supplier to ask when it comes. Their phone is on the supplier's page (Suppliers we may buy from)." />}
       {!late.length && first && <NextStep text={`Next delivery: ${first.supplierName}${first.expectedDate ? `, ${fmtDate(first.expectedDate)}` : ""}.`} action={{ label: "Receive it", href: `/inventory/receive?po=${first.purchaseOrderId}` }} />}
       <SubNav />
       <Card>

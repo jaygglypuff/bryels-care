@@ -26,7 +26,7 @@ const OVERRIDE_WORD: Record<string, string> = { submitted: "waiting for a second
  */
 export default async function ForecastPage() {
   const ctx = await requireContext();
-  if (!ctx.can("analytics.forecast.view")) return <Forbidden what="sales guesses" />;
+  if (!ctx.can("analytics.forecast.view")) return <Forbidden what="sales guesses" permission="analytics.forecast.view" />;
   const f = await forecastRows(ctx);
   const canEdit = ctx.allowedSiteIds.some((s) => ctx.canAt("analytics.forecast.edit", s));
   const canApprove = ctx.allowedSiteIds.some((s) => ctx.canAt("analytics.forecast.approve", s));

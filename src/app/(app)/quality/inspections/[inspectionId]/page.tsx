@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 export default async function InspectionPage({ params }: { params: Promise<{ inspectionId: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.inspection.view")) return <Forbidden what="inspections" />;
+  if (!ctx.can("quality.inspection.view")) return <Forbidden what="inspections" permission="quality.inspection.view" />;
   const { inspectionId } = await params;
   let v: Awaited<ReturnType<typeof getInspection>>;
   try {

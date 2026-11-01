@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowRight, CalendarDays, ClipboardCheck, Plus } from "lucide-react";
+import { activitySentence } from "./activity-sentence";
 import type { ActivityRow, BoardCard, NearExpiryLot, OwnerDashboard, OwnerOverview as OwnerKpis } from "@/modules/analytics";
 import { BOARD_LIMIT, NEAR_EXPIRY_WINDOW_DAYS } from "@/modules/analytics";
 import { Card, EmptyState, Table, Td, cx } from "@/ui/core";
@@ -10,7 +11,7 @@ import { Donut } from "@/ui/charts/charts";
 import { ChartFrame } from "@/ui/charts/chart-frame";
 import { fmtKpi, hhmm } from "@/ui/charts/format";
 import { VIZ } from "@/ui/charts/palette";
-import { actionLabel, actionModule, entityHref, moduleLabel } from "../admin/audit/format";
+import { actionModule, entityHref, moduleLabel } from "../admin/audit/format";
 import { CategoryChip, KpiCard, LockedCard, RecordRef, StaleNotice, UnavailableCard, periodText, plainKpi, scopeText } from "../analytics/kpi-ui";
 
 /**
@@ -231,22 +232,19 @@ function Activity({ rows, showSite }: { rows: ActivityRow[]; showSite: boolean }
             <span className="mt-0.5 w-[88px] shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-center text-[11px] font-semibold text-fg-2">{moduleLabel(actionModule(r.action))}</span>
             <div className="min-w-0 flex-1">
               <p className="text-[13px] text-fg">
-                {actionLabel(r.action)}
-                {r.entityNumber &&
-                  (href ? (
-                    <>
-                      {" "}
-                      <Link href={href} className="font-mono text-primary-text hover:underline">
-                        {r.entityNumber}
-                      </Link>
-                    </>
-                  ) : (
-                    <span className="font-mono"> {r.entityNumber}</span>
-                  ))}
+                <span className="font-medium">{activitySentence(r).who}</span>{" "}
+                {href ? (
+                  <Link href={href} className="hover:text-primary-text hover:underline">
+                    {activitySentence(r).text}
+                  </Link>
+                ) : (
+                  activitySentence(r).text
+                )}
               </p>
               <p className="text-[12px] text-muted">
-                {r.actorName ?? "System"} · {fmtDateTime(r.occurredAt)}
+                {fmtDateTime(r.occurredAt)}
                 {showSite && r.siteCode && ` · ${r.siteCode}`}
+                {r.entityNumber && <span className="font-mono"> · {r.entityNumber}</span>}
               </p>
             </div>
           </li>

@@ -23,7 +23,7 @@ const DIM_WORD: Record<string, string> = Object.fromEntries(DIMENSIONS.map((d) =
 
 export default async function UomPage() {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.uom.view")) return <Forbidden what="units" />;
+  if (!ctx.can("masterdata.uom.view")) return <Forbidden what="units" permission="masterdata.uom.view" />;
   const units = await listUoms(ctx, { includeInactive: true });
   const conv = ctx.can("masterdata.uom_conversion.view") ? await listConversions(ctx) : [];
   const canUom = ctx.can("masterdata.uom.admin");

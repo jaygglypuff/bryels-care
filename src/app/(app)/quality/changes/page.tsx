@@ -20,7 +20,7 @@ const FILTERS = [
 /** Change control register (US-6-18): proposals to change formula, routing, inspection-plan or work-instruction revisions. */
 export default async function ChangesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.change_control.view")) return <Forbidden what="change requests" />;
+  if (!ctx.can("quality.change_control.view")) return <Forbidden what="change requests" permission="quality.change_control.view" />;
   const { status = "active" } = await searchParams;
   const rows = await listChangeControls(ctx, { status });
   return (

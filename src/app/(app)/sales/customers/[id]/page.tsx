@@ -36,7 +36,7 @@ export const metadata = { title: "Customer" };
 /** Customer page (US-4-01, US-4-02, US-4-06; docs/ux-system.md §9.8): every part shows only what the role may see. */
 export default async function CustomerDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.customer.view")) return <Forbidden what="customers" />;
+  if (!ctx.can("masterdata.customer.view")) return <Forbidden what="customers" permission="masterdata.customer.view" />;
   const { id } = await params;
   const { created } = await searchParams;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();

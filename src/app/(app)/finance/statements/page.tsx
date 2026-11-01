@@ -11,7 +11,7 @@ export const metadata = { title: "Customer statements" };
 /** R-05: pick a customer for a statement of what they still owe, with how late each invoice is. */
 export default async function StatementsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("finance.invoice.view")) return <Forbidden what="customer statements" />;
+  if (!ctx.can("finance.invoice.view")) return <Forbidden what="customer statements" permission="finance.invoice.view" />;
   const { q } = await searchParams;
   const rows = await statementCustomers(ctx);
   const needle = (q ?? "").trim().toLowerCase();

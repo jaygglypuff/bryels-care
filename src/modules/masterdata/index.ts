@@ -202,7 +202,7 @@ export { REASON_CATEGORY_LABELS, listReasonCodes, getReasonCode, reasonCodeOptio
 export { DEFAULT_REASON_CODES, REASON_NOTE_MAX, reasonCodesFor } from "./reason-codes-defaults";
 export { installReferenceData } from "./org-reference";
 export { installSoapExample } from "./templates";
-// ADR-076: editable dropdown lists (Master data → Lists)
+// ADR-076: editable dropdown lists (Master data › Choice lists)
 export {
   LOOKUP_LISTS,
   LOOKUP_LIST_KEYS,

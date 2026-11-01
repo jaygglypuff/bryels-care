@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 /** S4 Weigh (ADR-080 §3–4, UX review S4): one card per ingredient, lot confirm, keypad, second check. */
 export default async function WeighPage({ params, searchParams }: { params: Promise<{ workOrderId: string }>; searchParams: Promise<{ batch?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("production.batch.view")) return <Forbidden what="weighing" />;
+  if (!ctx.can("production.batch.view")) return <Forbidden what="weighing" permission="production.batch.view" />;
   const { workOrderId } = await params;
   const { batch: batchParam } = await searchParams;
   let orderHref = orderHrefOf(workOrderId);

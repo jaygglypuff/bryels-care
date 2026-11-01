@@ -8,10 +8,12 @@ import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, PageHeader, 
 import { ActionForm } from "@/ui/form";
 import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
+import { NextStepBox } from "@/ui/next-step-box";
 import { RecordNo } from "@/ui/plain-list";
 import { Banner, StatusChip } from "@/ui/status";
 import { ScanOrPick } from "@/ui/scan-or-pick";
 import { Forbidden } from "../../../forbidden";
+import { waitingFor } from "../../../waiting-for";
 import { addReturnLineAction, cancelReturnAction, decideReturnAction, postReturnAction, removeReturnLineAction, submitReturnAction } from "../../actions";
 import { Amount, History, SrChip, Steps, SubNav, approverWords, fmtBase, money } from "../../_ui";
 
@@ -20,7 +22,7 @@ export const dynamic = "force-dynamic";
 /** One return to a supplier: lots going back, the next step by state (add lots, approve, send back), cancel in ⋯ More. */
 export default async function SupplierReturnPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.supplier_return.view")) return <Forbidden what="returns to suppliers" />;
+  if (!ctx.can("procurement.supplier_return.view")) return <Forbidden what="returns to suppliers" permission="procurement.supplier_return.view" />;
   const { id } = await params;
   let v: Awaited<ReturnType<typeof getSupplierReturn>>;
   try {
@@ -37,7 +39,6 @@ export default async function SupplierReturnPage({ params }: { params: Promise<{
   }
   const { sr, can } = v;
   const lots = can.edit ? (await returnableLots(ctx, v.supplier.id)).filter((l) => l.returnable) : [];
-  const waiting = `Waiting for ${approverWords(v.progress.next)} to approve.`;
   return (
     <>
       <PageHeader
@@ -64,41 +65,34 @@ export default async function SupplierReturnPage({ params }: { params: Promise<{
       {can.edit && v.lines.length === 0 ? (
         <NextStep text="Next: add the lots that go back." action={{ label: "Add a lot", href: "#add" }} />
       ) : can.submit ? (
-        <NextStep text="Next: all lots added? Send the return for approval." action={{ label: "Send for approval", href: "#do" }} />
+        <NextStepBox text="Next: all lots added? Send the return for approval.">
+          <ActionForm action={submitReturnAction} hidden={{ returnId: sr.id }} submit="Send for approval" variant="cta" />
+        </NextStepBox>
       ) : can.decide ? (
-        <NextStep text="Next: approve this return, or send it back with what to change." action={{ label: "Approve or send back", href: "#do" }} />
+        <NextStepBox text="Next: approve this return, or send it back with what to change.">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <ActionForm action={decideReturnAction} hidden={{ returnId: sr.id, decision: "approve" }} submit="Approve" variant="cta">
+              <Input name="note" placeholder="Note (you can skip this)" aria-label="Note" />
+            </ActionForm>
+            <ActionForm action={decideReturnAction} hidden={{ returnId: sr.id, decision: "return" }} submit="Send back to change" variant="secondary">
+              <Input name="note" placeholder="What must change?" aria-label="What must change" required />
+            </ActionForm>
+          </div>
+        </NextStepBox>
       ) : can.post ? (
-        <NextStep text="Next: when the goods leave, save it — the stock goes down." action={{ label: "The goods left", href: "#do" }} />
+        <NextStepBox text="Next: when the goods leave, save it. The stock goes down.">
+          <ActionForm action={postReturnAction} hidden={{ returnId: sr.id, idempotencyKey: randomUUID() }} submit="The goods left: take them out of stock" variant="cta" confirm="Take every lot on this return out of stock now? This is saved and cannot be edited later." />
+        </NextStepBox>
       ) : sr.status === "submitted" ? (
-        <NextStep text="This return waits for approval." waitingFor={waiting} />
+        <NextStep text="This return waits for approval." waitingFor={await waitingFor(ctx, "procurement.supplier_return.approve", sr.siteId, "to approve it", approverWords(v.progress.next))} />
       ) : sr.status === "approved" ? (
-        <NextStep text="Approved." waitingFor="Waiting for the warehouse or purchasing (not the approver) to send the goods and save it." />
+        <NextStep text="Approved." waitingFor={await waitingFor(ctx, "procurement.supplier_return.post", sr.siteId, "to send the goods and save it (not the approver)", "the warehouse or purchasing")} />
       ) : sr.status === "draft" ? (
-        <NextStep text="This return is a draft." waitingFor="Waiting for purchasing to add the lots and send it for approval." />
+        <NextStep text="This return is a draft." waitingFor={await waitingFor(ctx, "procurement.supplier_return.create", sr.siteId, "to add the lots and send it for approval", "purchasing")} />
       ) : null}
       <SubNav />
       <div className="flex flex-col gap-5">
         {sr.status === "posted" && <Banner tone="ok" title="Sent back">The stock went down for every lot. The money back from the supplier is followed up on their supplier bill.</Banner>}
-        {(can.submit || can.decide || can.post) && (
-          <Card>
-            <span id="do" className="block scroll-mt-24" />
-            <CardTitle>Do it now</CardTitle>
-            <div className="flex flex-col gap-4">
-              {can.submit && <ActionForm action={submitReturnAction} hidden={{ returnId: sr.id }} submit="Send for approval" variant="cta" />}
-              {can.decide && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <ActionForm action={decideReturnAction} hidden={{ returnId: sr.id, decision: "approve" }} submit="Approve" variant="cta">
-                    <Input name="note" placeholder="Note (you can skip this)" aria-label="Note" />
-                  </ActionForm>
-                  <ActionForm action={decideReturnAction} hidden={{ returnId: sr.id, decision: "return" }} submit="Send back to change" variant="secondary">
-                    <Input name="note" placeholder="What must change?" aria-label="What must change" required />
-                  </ActionForm>
-                </div>
-              )}
-              {can.post && <ActionForm action={postReturnAction} hidden={{ returnId: sr.id, idempotencyKey: randomUUID() }} submit="The goods left: take them out of stock" variant="cta" confirm="Take every lot on this return out of stock now? This is saved and cannot be edited later." />}
-            </div>
-          </Card>
-        )}
         <Card>
           <CardTitle action={can.seePrices && sr.creditExpectedAmount ? <Amount>{money(sr.creditExpectedAmount, sr.currency)} back</Amount> : undefined}>Lots going back</CardTitle>
           {v.lines.length === 0 ? (
@@ -112,7 +106,7 @@ export default async function SupplierReturnPage({ params }: { params: Promise<{
                       <span className="font-semibold">{l.materialName}</span> <StatusChip status={l.lotStatus} />
                     </p>
                     <p className="text-[14px] text-fg-2">
-                      {fmtBase(l.qtyBase, l.baseUom)} from {l.locationCode}
+                      {fmtBase(l.qtyBase, l.baseUom)} from {l.locationName ?? l.locationCode}
                       {l.stockMovementId ? " · out of stock" : ""}
                       <span className="ml-1 font-mono text-[12px] text-muted">
                         · {l.lotNumber}

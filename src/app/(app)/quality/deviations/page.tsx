@@ -19,7 +19,7 @@ const FILTERS = [
 
 export default async function DeviationsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.deviation.view")) return <Forbidden what="deviations" />;
+  if (!ctx.can("quality.deviation.view")) return <Forbidden what="deviations" permission="quality.deviation.view" />;
   const { status = "active" } = await searchParams;
   const rows = await listDeviations(ctx, { status });
   const exportStatus = status === "active" ? "active" : status;

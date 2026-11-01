@@ -20,7 +20,7 @@ const FILTERS = [
 
 export default async function ComplaintsPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.complaint.view")) return <Forbidden what="complaints" />;
+  if (!ctx.can("quality.complaint.view")) return <Forbidden what="complaints" permission="quality.complaint.view" />;
   const { status = "active", q = "" } = await searchParams;
   const rows = await listComplaints(ctx, { status, q });
   return (

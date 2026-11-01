@@ -1,5 +1,5 @@
 import { requireContext } from "@/lib/auth/context";
-import { fmtDateTime } from "@/lib/qty";
+import { fmtDateTime, fmtQty } from "@/lib/qty";
 import { listCustomerReturns } from "@/modules/sales";
 import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
@@ -20,7 +20,7 @@ const FILTERS = [
 
 export default async function ReturnsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.customer_return.view")) return <Forbidden what="customer returns" />;
+  if (!ctx.can("sales.customer_return.view")) return <Forbidden what="customer returns" permission="sales.customer_return.view" />;
   const { status = "active" } = await searchParams;
   const rows = await listCustomerReturns(ctx, { status });
   const canCreate = ctx.can("sales.customer_return.create");
@@ -52,7 +52,7 @@ export default async function ReturnsPage({ searchParams }: { searchParams: Prom
               status={<ReturnStatusChip status={r.status} />}
               facts={
                 <>
-                  {r.lineCount} item(s), {r.totalQty} · started {fmtDateTime(r.createdAt)}
+                  {r.lineCount === 1 ? "1 item" : `${r.lineCount} items`}, {fmtQty(r.totalQty, "pcs", 0)} · started {fmtDateTime(r.createdAt)}
                   {r.receivedAt ? ` · back in ${fmtDateTime(r.receivedAt)}` : ""} · {r.siteCode}
                 </>
               }

@@ -18,7 +18,7 @@ export const metadata = { title: "Stock counts" };
 /** Stock counts (grade-5, ADR-088): what is being counted first, the count number small and grey. */
 export default async function CountsPage({ searchParams }: { searchParams: Promise<{ new?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.stock_count.view")) return <Forbidden what="stock counts" />;
+  if (!ctx.can("inventory.stock_count.view")) return <Forbidden what="stock counts" permission="inventory.stock_count.view" />;
   const sp = await searchParams;
   const counts = await listCounts(ctx);
   const canPlan = ctx.can("inventory.stock_count.create") && ctx.can("masterdata.location.view");

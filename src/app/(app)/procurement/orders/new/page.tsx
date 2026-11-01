@@ -21,7 +21,7 @@ const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Man
  */
 export default async function NewOrderPage({ searchParams }: { searchParams: Promise<{ supplier?: string; q?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.purchase_order.create")) return <Forbidden what="making purchase orders" />;
+  if (!ctx.can("procurement.purchase_order.create")) return <Forbidden what="making purchase orders" permission="procurement.purchase_order.create" />;
   const { supplier, q } = await searchParams;
   const opts = await poFormOptions(ctx);
   const chosen = opts.suppliers.find((s) => s.id === supplier) ?? null;

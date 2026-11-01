@@ -22,7 +22,7 @@ const FILTERS = [
 /** Supplier returns (W04-09) as "Send back to supplier": supplier first, money back expected on the right. */
 export default async function SupplierReturnsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.supplier_return.view")) return <Forbidden what="returns to suppliers" />;
+  if (!ctx.can("procurement.supplier_return.view")) return <Forbidden what="returns to suppliers" permission="procurement.supplier_return.view" />;
   const { status = "open" } = await searchParams;
   const rows = await listSupplierReturns(ctx, { status });
   const prices = ctx.can("masterdata.supplier_price.view");
@@ -50,7 +50,7 @@ export default async function SupplierReturnsPage({ searchParams }: { searchPara
                 title={r.supplierName}
                 code={r.number}
                 status={<SrChip status={r.status} />}
-                facts={`${r.lines} lot(s) · started ${fmtDate(r.createdAt)}${r.postedAt ? ` · sent back ${fmtDate(r.postedAt)}` : ""} · ${r.siteCode}`}
+                facts={`${r.lines === 1 ? "1 lot" : `${r.lines} lots`} · started ${fmtDate(r.createdAt)}${r.postedAt ? ` · sent back ${fmtDate(r.postedAt)}` : ""} · ${r.siteCode}`}
                 aside={prices && r.credit ? <Amount>{money(r.credit)} back</Amount> : undefined}
               />
             ))}

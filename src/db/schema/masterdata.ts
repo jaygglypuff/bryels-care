@@ -255,7 +255,7 @@ export const customers = pgTable(
 );
 
 /**
- * ADR-076: editable dropdown lists ("Master data → Lists"). One row per option of a list. The lists
+ * ADR-076: editable dropdown lists ("Master data › Choice lists"). One row per option of a list. The lists
  * themselves (keys, titles, default options, where they are used) are defined in code
  * (src/modules/masterdata/lookups.ts, LOOKUP_LISTS); lists that drive program logic (statuses, state
  * machines, location kinds, material class) are never stored here. `code` is the stored value and never

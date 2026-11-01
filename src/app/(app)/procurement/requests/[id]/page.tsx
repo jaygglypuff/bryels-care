@@ -6,9 +6,11 @@ import { Card, CardTitle, Dl, EmptyState, Input, LinkButton, PageHeader, Textare
 import { ActionForm } from "@/ui/form";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
+import { NextStepBox } from "@/ui/next-step-box";
 import { RecordNo } from "@/ui/plain-list";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
+import { waitingFor } from "../../../waiting-for";
 import { cancelRequestAction, decideRequestAction, submitRequestAction } from "../../actions";
 import { Amount, History, PrChip, Steps, SubNav, approverWords, money } from "../../_ui";
 import { DeleteDraftCard } from "../../../delete-draft-button";
@@ -18,7 +20,7 @@ export const dynamic = "force-dynamic";
 /** One request to buy: what is wanted, the next step by state, approve / send back / say no, cancel in ⋯ More. */
 export default async function RequestPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.purchase_request.view")) return <Forbidden what="requests to buy" />;
+  if (!ctx.can("procurement.purchase_request.view")) return <Forbidden what="requests to buy" permission="procurement.purchase_request.view" />;
   const { id } = await params;
   let v: Awaited<ReturnType<typeof getPurchaseRequest>>;
   try {
@@ -35,7 +37,6 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
   }
   const r = v.request;
   const title = v.lines.length ? v.lines.map((l) => l.materialName).slice(0, 3).join(", ") + (v.lines.length > 3 ? ` and ${v.lines.length - 3} more` : "") : "Request to buy";
-  const waiting = `Waiting for ${approverWords(v.progress.next)} to approve${v.progress.steps.length > 1 && v.progress.next ? ` (step ${v.progress.next.step} of ${v.progress.steps.length})` : ""}.`;
   return (
     <>
       <PageHeader
@@ -58,40 +59,34 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
       />
       <PageIntro>This screen is for one request to buy: what is needed, who approves it, and when it becomes a purchase order.</PageIntro>
       {v.can.submit ? (
-        <NextStep text="Next: send this request for approval." action={{ label: "Send for approval", href: "#do" }} />
+        <NextStepBox text="Next: send this request for approval.">
+          <ActionForm action={submitRequestAction} hidden={{ requestId: r.id }} submit="Send for approval" variant="cta" />
+        </NextStepBox>
       ) : v.can.decide ? (
-        <NextStep text="Next: approve this request, send it back, or say no." action={{ label: "Decide", href: "#do" }} />
+        <NextStepBox text="Next: approve this request, send it back, or say no.">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <ActionForm action={decideRequestAction} hidden={{ requestId: r.id, decision: "approve" }} submit="Approve" variant="cta">
+              <Input name="note" placeholder="Note (you can skip this)" aria-label="Note" />
+            </ActionForm>
+            <ActionForm action={decideRequestAction} hidden={{ requestId: r.id, decision: "return" }} submit="Send back to change" variant="secondary">
+              <Input name="note" placeholder="What must change?" aria-label="What must change" required />
+            </ActionForm>
+            <ActionForm action={decideRequestAction} hidden={{ requestId: r.id, decision: "reject" }} submit="Say no" variant="danger" confirm="Say no to this request? It cannot be ordered after this.">
+              <Input name="note" placeholder="Why not?" aria-label="Why not" required />
+            </ActionForm>
+          </div>
+        </NextStepBox>
       ) : v.can.convert ? (
         <NextStep text="Next: approved. Make a purchase order for it." action={{ label: "Make a purchase order", href: "/procurement/orders/new" }} />
       ) : r.status === "draft" ? (
         <NextStep text="This request is a draft." waitingFor={`Waiting for ${v.requestedByName} to send it for approval.`} />
       ) : r.status === "submitted" ? (
-        <NextStep text="This request waits for approval." waitingFor={waiting} />
+        <NextStep text="This request waits for approval." waitingFor={await waitingFor(ctx, "procurement.purchase_request.approve", r.siteId, `to approve it${v.progress.steps.length > 1 && v.progress.next ? ` (step ${v.progress.next.step} of ${v.progress.steps.length})` : ""}`, approverWords(v.progress.next))} />
       ) : r.status === "approved" ? (
-        <NextStep text="Approved." waitingFor="Waiting for purchasing to order it from a supplier." />
+        <NextStep text="Approved." waitingFor={await waitingFor(ctx, "procurement.purchase_order.create", r.siteId, "to order it from a supplier", "purchasing")} />
       ) : null}
       <SubNav />
       <div className="flex flex-col gap-5">
-        {(v.can.submit || v.can.decide) && (
-          <Card>
-            <span id="do" className="block scroll-mt-24" />
-            <CardTitle>Do it now</CardTitle>
-            {v.can.submit && <ActionForm action={submitRequestAction} hidden={{ requestId: r.id }} submit="Send for approval" variant="cta" />}
-            {v.can.decide && (
-              <div className="grid gap-4 sm:grid-cols-3">
-                <ActionForm action={decideRequestAction} hidden={{ requestId: r.id, decision: "approve" }} submit="Approve" variant="cta">
-                  <Input name="note" placeholder="Note (you can skip this)" aria-label="Note" />
-                </ActionForm>
-                <ActionForm action={decideRequestAction} hidden={{ requestId: r.id, decision: "return" }} submit="Send back to change" variant="secondary">
-                  <Input name="note" placeholder="What must change?" aria-label="What must change" required />
-                </ActionForm>
-                <ActionForm action={decideRequestAction} hidden={{ requestId: r.id, decision: "reject" }} submit="Say no" variant="danger" confirm="Say no to this request? It cannot be ordered after this.">
-                  <Input name="note" placeholder="Why not?" aria-label="Why not" required />
-                </ActionForm>
-              </div>
-            )}
-          </Card>
-        )}
         <Card>
           <CardTitle action={v.can.seePrices && r.estimatedTotalAmount ? <Amount>about {money(r.estimatedTotalAmount, r.currency)}</Amount> : undefined}>What is needed</CardTitle>
           <ul className="flex flex-col divide-y divide-line rounded-[14px] border border-line">

@@ -22,7 +22,7 @@ const monthName = (code: string) => {
  */
 export default async function PeriodsPage() {
   const ctx = await requireContext();
-  if (!ctx.can("finance.period_lock.view")) return <Forbidden what="closing the month" />;
+  if (!ctx.can("finance.period_lock.view")) return <Forbidden what="closing the month" permission="finance.period_lock.view" />;
   const periods = await listPeriods(ctx);
   const canLock = ctx.can("finance.period_lock.post");
   const canUnlock = ctx.can("finance.period_lock.void");

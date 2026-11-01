@@ -3,7 +3,9 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { MATERIAL_KIND_DEFAULTS, MATERIAL_TRANSITIONS, getMaterial, lookupLabels, materialFormOptions, type MaterialStatus } from "@/modules/masterdata";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
-import { MoreDetails, PageIntro } from "@/ui/guide";
+import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { NextStepBox } from "@/ui/next-step-box";
+import { waitingFor } from "../../../waiting-for";
 import { Banner } from "@/ui/status";
 import { DeleteDraftCard } from "../../../delete-draft-button";
 import { Forbidden } from "../../../forbidden";
@@ -19,7 +21,7 @@ const VERB: Record<MaterialStatus, string> = { draft: "Back to draft", active: "
 
 export default async function MaterialPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.material.view")) return <Forbidden what="materials" />;
+  if (!ctx.can("masterdata.material.view")) return <Forbidden what="materials" permission="masterdata.material.view" />;
   const { id } = await params;
   const { created } = await searchParams;
   let m;
@@ -49,13 +51,27 @@ export default async function MaterialPage({ params, searchParams }: { params: P
         }
         actions={
           <>
-            {canSeeStock && <LinkButton href={`/inventory/items/material/${m.id}`} variant="cta">See stock</LinkButton>}
             <LinkButton href="/masterdata/materials" variant="secondary">All materials</LinkButton>
           </>
         }
       />
       <PageIntro>Everything the system knows about this material. Change a box and press Save.</PageIntro>
       {created === "1" && <Banner tone="ok" title={`${m.name} added as ${m.code}`}>You can now order it, receive it and use it in recipes.</Banner>}
+      {m.status === "draft" && moves.includes("active") ? (
+        <NextStepBox text="Next: when the details are right, mark it ready to use. Then it can be ordered, received and used in recipes.">
+          <ActionForm action={materialStatusAction} submitLabel="Ready to use" variant="cta" hidden={{ _id: m.id, status: "active" }}>
+            <TextField name="reason" label="Note (optional)" />
+          </ActionForm>
+        </NextStepBox>
+      ) : m.status === "draft" ? (
+        <NextStep text="This material is not ready to use yet." waitingFor={await waitingFor(ctx, "masterdata.material.edit", null, "to mark it ready to use", "the person who sets up materials")} />
+      ) : m.status === "active" && canSeeStock ? (
+        <NextStep text="Ready to use. See how much we have and where." action={{ label: "See stock", href: `/inventory/items/material/${m.id}` }} />
+      ) : m.status === "active" ? (
+        <NextStep text="Ready to use. Nothing to do here." />
+      ) : (
+        <NextStep text={m.status === "blocked" ? "Stopped for now: it cannot be received or used." : "No longer used. Kept on record."} />
+      )}
       {m.warnings.map((w) => (
         <Banner key={w} tone="warn" title="Please check">{w}</Banner>
       ))}
@@ -73,7 +89,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
         <MoreDetails title="Stop using it, or use it again">
           <p className="text-[13px] text-muted">Stopping needs a reason. &quot;No longer used&quot; is final; materials that were used are never deleted.</p>
           <div className="grid gap-4 sm:grid-cols-2">
-            {moves.map((s) => (
+            {moves.filter((s) => !(m.status === "draft" && s === "active")).map((s) => (
               <ActionForm key={s} action={materialStatusAction} submitLabel={VERB[s]} variant={s === "active" ? "primary" : "danger"} hidden={{ _id: m.id, status: s }}>
                 <TextField name="reason" label={s === "active" ? "Note (optional)" : "Why?"} />
               </ActionForm>

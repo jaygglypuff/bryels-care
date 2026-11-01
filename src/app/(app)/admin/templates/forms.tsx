@@ -198,6 +198,8 @@ export function LabelTemplateForm({
         </Field>
       </div>
       </MoreDetails>
+      {/* UX audit C #11: the printed things are folded; they start from the usual set for this kind of label. */}
+      <MoreDetails title={`What is printed (${fields.length} ${fields.length === 1 ? "thing" : "things"}, the usual set; you can skip this)`} open={!!fe.fields}>
       <fieldset>
         <legend className="mb-2 text-[14px] font-medium">What is printed on the label</legend>
         <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
@@ -210,6 +212,7 @@ export function LabelTemplateForm({
         </div>
         <p className="mt-1 text-[13px] text-muted">Words such as allergen or storage text must be checked by QA.</p>
       </fieldset>
+      </MoreDetails>
       <FormMessage state={state} />
       <SubmitButton variant="cta" pendingText="Saving…">{editing ? "Save (QA must OK it again)" : "Make the label"}</SubmitButton>
     </form>

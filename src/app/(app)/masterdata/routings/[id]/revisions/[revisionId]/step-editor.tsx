@@ -29,17 +29,17 @@ export type StepDraft = {
 };
 
 const KIND_LABEL: Record<string, string> = {
-  line_clearance: "Line clearance",
-  dispensing: "Dispensing / weighing",
-  process: "Process",
-  in_process_qc: "In-process QC",
+  line_clearance: "Clean-area check",
+  dispensing: "Weighing",
+  process: "Making (mixing, heating)",
+  in_process_qc: "Quality check during making",
   filling: "Filling",
   cutting: "Cutting",
-  curing: "Curing",
-  hold: "Hold (minimum duration)",
-  packaging: "Packaging",
-  reconciliation: "Reconciliation",
-  transfer: "Transfer",
+  curing: "Curing (waiting to dry)",
+  hold: "Resting (wait a minimum time)",
+  packaging: "Packing and labels",
+  reconciliation: "Counting what was used",
+  transfer: "Moving to the hold area",
   checklist: "Checklist",
 };
 
@@ -105,9 +105,13 @@ export function RoutingStepEditor({
       return { ...s, waitAmount: s.waitAmount ?? w.amount, waitUnit: s.waitUnit ?? w.unit };
     }),
   );
+  // UX audit C #11: one step open at a time (the others are one-line summaries), so the page shows a few fields, not 100.
+  const [openStep, setOpenStep] = useState<number | null>(null);
   const [eff, setEff] = useState(effectiveFrom ?? "");
   const [chg, setChg] = useState(changeSummary ?? "");
   const fe = state?.fieldErrors ?? {};
+  const stepWithError = Object.keys(fe).map((k) => /^steps\.(\d+)\./.exec(k)?.[1]).find((x) => x !== undefined);
+  const shown = stepWithError !== undefined ? Number(stepWithError) : openStep;
   const set = (i: number, patch: Partial<StepDraft>) => setSteps((ss) => ss.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   const setParam = (i: number, k: number, patch: Partial<ParamDraft>) => set(i, { parameters: steps[i].parameters.map((p, j) => (j === k ? { ...p, ...patch } : p)) });
   const move = (i: number, d: number) =>
@@ -159,6 +163,24 @@ export function RoutingStepEditor({
       {steps.map((s, i) => {
         const err = (k: string) => fe[`steps.${i}.${k}`];
         const pid = `st-${i}`;
+        if (shown !== i)
+          return (
+            <div key={i} className="flex min-h-[56px] flex-wrap items-center justify-between gap-2 rounded-[16px] border border-line px-3 py-2" data-testid={`step-summary-${i + 1}`}>
+              <p className="min-w-0 text-[15px]">
+                <span className="font-semibold">
+                  {i + 1}. {s.name || "New step"}
+                </span>{" "}
+                <span className="text-[13px] text-fg-2">
+                  · {KIND_LABEL[s.stepKind] ?? s.stepKind}
+                  {s.requiresChecker ? " · second person checks" : ""}
+                  {s.parameters.length ? ` · ${s.parameters.length} ${s.parameters.length === 1 ? "reading" : "readings"}` : ""}
+                </span>
+              </p>
+              <button type="button" onClick={() => setOpenStep(i)} className="inline-flex min-h-[44px] items-center rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2" aria-label={`Change step ${i + 1}`}>
+                Change
+              </button>
+            </div>
+          );
         return (
           <fieldset key={i} className="rounded-[16px] border border-line p-3" data-testid={`edit-step-${i + 1}`}>
             <legend className="px-1 text-[12px] font-semibold text-muted">Step {i + 1}</legend>
@@ -305,7 +327,7 @@ export function RoutingStepEditor({
               <button
                 type="button"
                 onClick={() => set(i, { parameters: [...s.parameters, { code: "", name: "", valueKind: "numeric", uom: "", minValue: "", targetValue: "", maxValue: "", isRequired: true }] })}
-                className="mt-2 inline-flex min-h-[40px] items-center gap-1 rounded-full border border-line px-3 text-[13px] hover:bg-surface-2"
+                className="mt-2 inline-flex min-h-[44px] items-center gap-1 rounded-full border border-line px-3 text-[13px] hover:bg-surface-2"
               >
                 <Plus size={14} /> Add a reading (parameter)
               </button>
@@ -318,7 +340,10 @@ export function RoutingStepEditor({
               </Field>
             </div>
 
-            <div className="mt-2 flex gap-1">
+            <div className="mt-2 flex flex-wrap gap-1">
+              <button type="button" onClick={() => setOpenStep(null)} className="mr-auto inline-flex min-h-[44px] items-center rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2">
+                Done with this step
+              </button>
               <button type="button" aria-label={`Move step ${i + 1} up`} onClick={() => move(i, -1)} className="inline-flex size-11 items-center justify-center rounded-full hover:bg-surface-2">
                 <ArrowUp size={16} />
               </button>
@@ -332,7 +357,13 @@ export function RoutingStepEditor({
           </fieldset>
         );
       })}
-      <button type="button" onClick={() => setSteps((ss) => [...ss, emptyStep()])} className="inline-flex min-h-[44px] items-center gap-2 self-start rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2">
+      <button
+        type="button"
+        onClick={() => {
+          setSteps((ss) => [...ss, emptyStep()]);
+          setOpenStep(steps.length);
+        }}         className="inline-flex min-h-[44px] items-center gap-2 self-start rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2"
+      >
         <Plus size={16} /> Add step
       </button>
       {fe.steps && <p className="text-[12px] text-[var(--bad-fg)]">{fe.steps}</p>}

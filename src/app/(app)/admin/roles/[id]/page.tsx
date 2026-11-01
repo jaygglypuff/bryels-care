@@ -7,7 +7,7 @@ import type { Permission } from "@/lib/permissions";
 import { type RoleDetail, getRole, permissionCatalogue } from "@/modules/identity";
 import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
-import { MoreDetails, PageIntro } from "@/ui/guide";
+import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { permissionSummary, plainModule } from "@/ui/permission-words";
 import { plainRole, plainRoleName } from "@/ui/role-names";
 import { Forbidden } from "../../../forbidden";
@@ -35,7 +35,7 @@ function PlainSummary({ codes }: { codes: string[] }) {
 
 export default async function RoleDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("identity.role.view")) return <Forbidden what="roles" />;
+  if (!ctx.can("identity.role.view")) return <Forbidden what="roles" permission="identity.role.view" />;
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   let d: RoleDetail;
@@ -73,6 +73,13 @@ export default async function RoleDetailPage({ params, searchParams }: { params:
         }
       />
       <PageIntro>This screen is for the owner and the IT person: what people with this job may do. Give the job to a person on their page under People.</PageIntro>
+      {role.status === "inactive" ? (
+        <NextStep text="This job is not used any more. Nobody can be given it." />
+      ) : ctx.can("identity.user.view") ? (
+        <NextStep text={role.isSystem ? "Standard job: it cannot be changed. To give it to someone, open their page under People." : "To give this job to someone, open their page under People."} action={{ label: "Open People", href: "/admin/users" }} />
+      ) : (
+        <NextStep text="Nothing to do here." />
+      )}
       {(await searchParams).created === "1" && (
         <div className="mb-4" role="status">
           <Banner tone="ok" title="New job made">Give it to a person on their page under People. Every change to it is kept in the history of changes.</Banner>

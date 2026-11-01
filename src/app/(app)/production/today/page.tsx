@@ -21,7 +21,7 @@ const pcs = (v: string) => fmtQty(v, "", D(v).isInteger() ? 0 : 1);
  */
 export default async function TodayPage() {
   const ctx = await requireContext();
-  if (!ctx.can("production.daily_log.view")) return <Forbidden what="the daily log" />;
+  if (!ctx.can("production.daily_log.view")) return <Forbidden what="the daily log" permission="production.daily_log.view" />;
   const t = await listSiteDailyLogs(ctx, { date: manilaToday() });
   const counted = t.entries.filter((e) => !e.replacedById);
   const good = counted.reduce((a, e) => a.plus(e.goodQty), D(0));

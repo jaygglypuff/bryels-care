@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function NewHoldPage({ searchParams }: { searchParams: Promise<{ lot?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.hold.create")) return <Forbidden what="placing holds" />;
+  if (!ctx.can("quality.hold.create")) return <Forbidden what="placing holds" permission="quality.hold.create" />;
   const { lot } = await searchParams;
   const data = await holdFormData(ctx);
   const lots = ctx.can("inventory.lot.view") ? (await listLots(ctx)).filter((l) => ["released", "quarantine"].includes(l.qualityStatus)).map((l) => ({ lotNumber: l.lotNumber, itemName: l.itemName, onHand: fmtLotQty(l.onHand, l.baseUom) })) : [];

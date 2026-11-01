@@ -4,7 +4,7 @@ import { DomainError } from "@/lib/errors";
 import { LOCATION_KINDS, LOCATION_KIND_LABELS, LOCATION_TRANSITIONS, SPECIAL_ROLE_LABELS, getLocation, locationFormOptions, type LocationKind, type LocationStatus, type SpecialRole } from "@/modules/masterdata";
 import { LOCATION_SECTIONS, SECTION_LABELS, isSection } from "@/lib/location-sections";
 import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
-import { MoreDetails, PageIntro } from "@/ui/guide";
+import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { ActionForm, CheckField, Grid, SelectField, TextField } from "../../_org/form";
@@ -18,7 +18,7 @@ const VERB: Record<LocationStatus, string> = { active: "Turn on (in use)", block
 
 export default async function LocationPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.location.view")) return <Forbidden what="locations" />;
+  if (!ctx.can("masterdata.location.view")) return <Forbidden what="locations" permission="masterdata.location.view" />;
   const { id } = await params;
   const { created } = await searchParams;
   let l;
@@ -35,10 +35,15 @@ export default async function LocationPage({ params, searchParams }: { params: P
   const moves = (LOCATION_TRANSITIONS[l.status as LocationStatus] ?? []).filter((s) => (s === "inactive" || l.status === "inactive" ? canAdmin : canEdit));
   return (
     <div className="space-y-5">
-      <PageHeader title={l.name} subtitle={<><span className="font-mono text-[12px] text-muted">{l.code}</span> · {l.warehouse.name} · {LOCATION_KIND_LABELS[l.kind as LocationKind] ?? l.kind} · <StateChip status={l.status} /></>} actions={<>{canEdit && <LinkButton href="#edit" variant="cta">Edit location</LinkButton>}<LinkButton href={`/masterdata/locations?warehouse=${l.warehouseId}`} variant="secondary">All locations</LinkButton></>} />
+      <PageHeader title={l.name} subtitle={<><span className="font-mono text-[12px] text-muted">{l.code}</span> · {l.warehouse.name} · {LOCATION_KIND_LABELS[l.kind as LocationKind] ?? l.kind} · <StateChip status={l.status} /></>} actions={<>{canEdit && <LinkButton href="#edit" variant="secondary">Edit location</LinkButton>}<LinkButton href={`/masterdata/locations?warehouse=${l.warehouseId}`} variant="secondary">All locations</LinkButton></>} />
       <PageIntro>One place where stock sits. Rename it, move it inside a bigger place, or switch it off.</PageIntro>
+      {l.status === "active" ? (
+        <NextStep text={l.lotsInStock > 0 ? `In use: ${l.lotsInStock} ${l.lotsInStock === 1 ? "lot is" : "lots are"} here. See what is on it.` : "In use and empty. Stock can be moved here."} action={ctx.can("inventory.lot.view") ? { label: "See this shelf", href: `/inventory/locations/${l.id}` } : undefined} />
+      ) : (
+        <NextStep text={l.status === "blocked" ? "Blocked: no stock goes in or out. Turn it on again below when it may be used." : "Switched off: no longer used. Kept on record."} />
+      )}
       <LocationHelp canSeeSites={ctx.can("masterdata.site.view")} />
-      {created === "1" && <Banner tone="ok" title="Location added">It can receive stock now. Print its label from the label station when needed.</Banner>}
+      {created === "1" && <Banner tone="ok" title="Location added">It can receive stock now. Print its shelf label from the shelf's page (Inventory › Shelves).</Banner>}
       <Card>
         <Dl
           items={[

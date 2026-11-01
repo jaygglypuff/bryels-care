@@ -40,7 +40,7 @@ function byItem(rows: AvailabilityRow[]) {
  */
 export default async function AvailabilityPage({ searchParams }: { searchParams: Promise<Search> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.balance.view")) return <Forbidden what="what we can deliver" />;
+  if (!ctx.can("inventory.balance.view")) return <Forbidden what="what we can deliver" permission="inventory.balance.view" />;
   const sp = await searchParams;
   const asOf = sp.asOf && /^\d{4}-\d{2}-\d{2}$/.test(sp.asOf) ? sp.asOf : manilaToday();
   const itemKind = sp.itemKind === "material" || sp.itemKind === "product" ? sp.itemKind : undefined;

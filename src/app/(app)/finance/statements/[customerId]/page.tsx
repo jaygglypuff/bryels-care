@@ -17,7 +17,7 @@ export const metadata = { title: "Customer statement" };
 /** One customer's statement: what they still owe, how late each invoice is, recent payments and credits. */
 export default async function StatementPage({ params, searchParams }: { params: Promise<{ customerId: string }>; searchParams: Promise<{ asOf?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("finance.invoice.view")) return <Forbidden what="customer statements" />;
+  if (!ctx.can("finance.invoice.view")) return <Forbidden what="customer statements" permission="finance.invoice.view" />;
   const { customerId } = await params;
   const { asOf } = await searchParams;
   let st: Awaited<ReturnType<typeof customerStatement>>;

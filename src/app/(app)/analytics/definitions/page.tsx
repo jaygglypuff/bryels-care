@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { plainNote } from "@/lib/plain-note";
 import { requireContext } from "@/lib/auth/context";
 import { listKpiDefinitions } from "@/modules/analytics";
 import { Card, EmptyState, PageHeader, Table, Td } from "@/ui/core";
@@ -68,7 +69,7 @@ export default async function DefinitionsPage({ searchParams }: { searchParams: 
                   <div className="text-[11.5px] text-muted">{AREA_TEXT[e.area]}</div>
                   <div className="font-mono text-[11px] text-muted">technical name {e.code}</div>
                 </Td>
-                <Td className="max-w-[260px] text-[12.5px]">{e.definition}</Td>
+                <Td className="max-w-[260px] text-[12.5px]">{plainNote(e.definition)}</Td>
                 <Td className="max-w-[240px] text-[12px] text-fg-2">
                   {e.formula}
                   <div className="mt-1 text-muted">Sources: {e.sources.join(", ")}</div>
@@ -91,7 +92,7 @@ export default async function DefinitionsPage({ searchParams }: { searchParams: 
                 <span className="font-medium">{e.name}</span>
                 <Chip tone={e.label === "actual" ? "neu" : "warn"}>{LABEL_TEXT[e.label]}</Chip>
               </div>
-              <p className="mt-1 text-[12.5px]">{e.definition}</p>
+              <p className="mt-1 text-[12.5px]">{plainNote(e.definition)}</p>
               <p className="mt-1 text-[12px] text-muted">Counted by: {e.timeBasis}</p>
               <p className="mt-1 break-words font-mono text-[11.5px] text-muted">Technical name: {e.code}</p>
             </li>
@@ -102,7 +103,7 @@ export default async function DefinitionsPage({ searchParams }: { searchParams: 
           <ul className="grid gap-1.5 text-[13px]">
             {d.unavailable.map((u) => (
               <li key={u.code}>
-                <span className="font-medium">{u.name}</span> · {u.reason}
+                <span className="font-medium">{u.name}</span> · {plainNote(u.reason)}
               </li>
             ))}
           </ul>

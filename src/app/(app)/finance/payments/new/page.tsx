@@ -10,7 +10,7 @@ export const metadata = { title: "Record a payment" };
 /** Record a payment (US-6-12): who, how much, when, how; the payment number is made by the server. The system never moves money. */
 export default async function NewPaymentPage({ searchParams }: { searchParams: Promise<{ counterparty?: string; invoice?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("finance.payment_record.create")) return <Forbidden what="recording payments" />;
+  if (!ctx.can("finance.payment_record.create")) return <Forbidden what="recording payments" permission="finance.payment_record.create" />;
   const { counterparty, invoice } = await searchParams;
   const opts = await paymentFormOptions(ctx);
   const parties = [

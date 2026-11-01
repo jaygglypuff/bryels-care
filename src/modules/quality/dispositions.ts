@@ -162,6 +162,8 @@ export async function getQaQueue(ctx: AuthContext) {
       failedCount: sql<number>`(select count(*)::int from ${testResults} r where r.batch_id = ${batches.id} and not r.passed and not exists (select 1 from ${testResults} s where s.supersedes_id = r.id))`,
       inspectionStatus: sql<string | null>`(select i.status from inspections i where i.batch_id = ${batches.id} and i.status <> 'cancelled' order by i.created_at desc limit 1)`,
       openDeviations: sql<number>`(select count(*)::int from deviations d where (d.batch_id = ${batches.id} or d.lot_id = ${batches.outputLotId}) and d.status <> 'closed')`,
+      // UX audit round 2 part 2: the "check again on" day of the last "Not yet" (the old batches list showed it).
+      checkAgainOn: sql<string | null>`(select c.check_again_on::text from batch_quality_checks c where c.batch_id = ${batches.id} order by c.decided_at desc limit 1)`,
     })
     .from(batches)
     .innerJoin(products, eq(products.id, batches.productId))

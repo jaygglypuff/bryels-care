@@ -20,7 +20,7 @@ const SCOPE_WORDS: Record<string, string> = { sequencing_only: "only the order o
 export default async function RoutingDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.routing.view")) return <Forbidden what="steps for each product" />;
+  if (!ctx.can("masterdata.routing.view")) return <Forbidden what="steps for each product" permission="masterdata.routing.view" />;
   const r = /^[0-9a-f-]{36}$/i.test(id) ? await getRouting(ctx, id) : null;
   if (!r)
     return (

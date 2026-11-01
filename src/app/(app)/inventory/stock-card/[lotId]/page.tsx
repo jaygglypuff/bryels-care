@@ -31,7 +31,7 @@ function daysAgo(n: number) {
  */
 export default async function StockCardPage({ params, searchParams }: { params: Promise<{ lotId: string }>; searchParams: Promise<Search> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.movement.view")) return <Forbidden what="the history of lots" />;
+  if (!ctx.can("inventory.movement.view")) return <Forbidden what="the history of lots" permission="inventory.movement.view" />;
   const { lotId } = await params;
   const sp = await searchParams;
   const from = sp.from && DATE_RE.test(sp.from) ? sp.from : daysAgo(90);

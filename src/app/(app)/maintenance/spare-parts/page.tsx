@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 /** Spare-parts list (US-6-19): materials kept as spares per site, released stock on hand, below-minimum flag. */
 export default async function SparePartsPage() {
   const ctx = await requireContext();
-  if (!ctx.can("maintenance.spare_part.view")) return <Forbidden what="spare parts" />;
+  if (!ctx.can("maintenance.spare_part.view")) return <Forbidden what="spare parts" permission="maintenance.spare_part.view" />;
   const rows = await listSpareParts(ctx);
   const canEdit = ctx.can("maintenance.spare_part.edit");
   const sites = ctx.allowedSites.filter((s) => ctx.canAt("maintenance.spare_part.edit", s.id));

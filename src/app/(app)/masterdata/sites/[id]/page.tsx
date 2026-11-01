@@ -3,7 +3,7 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getSite, listDepartments, listLines, listWarehouses } from "@/modules/masterdata";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
-import { MoreDetails, PageIntro } from "@/ui/guide";
+import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
 import { ActionForm, CheckField, Grid, TextField } from "../../_org/form";
 import { saveDepartmentAction, saveSiteAction, siteActiveAction } from "../../_org/actions";
@@ -13,7 +13,7 @@ export const metadata = { title: "Site" };
 
 export default async function SitePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.site.view")) return <Forbidden what="sites" />;
+  if (!ctx.can("masterdata.site.view")) return <Forbidden what="sites" permission="masterdata.site.view" />;
   const { id } = await params;
   const { saved } = await searchParams;
   let site;
@@ -34,8 +34,16 @@ export default async function SitePage({ params, searchParams }: { params: Promi
       <PageHeader title={site.name} subtitle={<><span className="font-mono text-[12px] text-muted">{site.code}</span> · <ActiveChip active={site.isActive} /></>} actions={<LinkButton href="/masterdata/sites" variant="secondary">All sites</LinkButton>} />
       <PageIntro>One address where you work or keep stock, with its warehouses, making areas and teams.</PageIntro>
       <Saved show={saved === "1"} title="Site added">Next: add its warehouse (store room), then its making areas.</Saved>
-      <Card>
-        <CardTitle>Details</CardTitle>
+      {!site.isActive ? (
+        <NextStep text="Switched off: this site is no longer used. Kept on record." />
+      ) : inScope && whs.length === 0 && ctx.can("masterdata.warehouse.view") ? (
+        <NextStep text="Next: add the store room (warehouse) of this site." action={{ label: "Add a warehouse", href: `/masterdata/warehouses?site=${site.id}` }} />
+      ) : inScope && lines.length === 0 && ctx.can("masterdata.production_line.view") ? (
+        <NextStep text="Next: add the making areas (lines) of this site." action={{ label: "Add a making area", href: "/masterdata/lines" }} />
+      ) : (
+        <NextStep text="This site is set up. Nothing to do now." />
+      )}
+      <MoreDetails title="Change the name or address">
         {canAdmin ? (
           <ActionForm action={saveSiteAction} submitLabel="Save" hidden={{ _id: site.id }}>
             <TextField name="name" label="Name of the place" defaultValue={site.name} />
@@ -55,13 +63,13 @@ export default async function SitePage({ params, searchParams }: { params: Promi
         ) : (
           <ReadOnlyNote what="this site" />
         )}
-      </Card>
+      </MoreDetails>
       {inScope && (
         <div className="grid gap-5 lg:grid-cols-2">
           <Card>
             <CardTitle action={ctx.can("masterdata.warehouse.view") ? <LinkButton size="sm" variant="secondary" href={`/masterdata/warehouses?site=${site.id}`}>Warehouses</LinkButton> : undefined}>Warehouses</CardTitle>
             {whs.length === 0 ? (
-              <p className="text-[13px] text-muted">None yet. Add one under Setup → Warehouses.</p>
+              <p className="text-[13px] text-muted">None yet. Add one under Management › Master data › Warehouses.</p>
             ) : (
               <ul className="space-y-2 text-[14px]">
                 {whs.map((w) => (
@@ -76,7 +84,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
           <Card>
             <CardTitle>Making areas / lines</CardTitle>
             {lines.length === 0 ? (
-              <p className="text-[13px] text-muted">None yet. Add one under Setup → Making areas.</p>
+              <p className="text-[13px] text-muted">None yet. Add one under Management › Master data › Making areas / lines.</p>
             ) : (
               <ul className="space-y-2 text-[14px]">
                 {lines.map((l) => (
@@ -98,7 +106,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
             {depts.map((d) => (
               <li key={d.id} className="rounded-[14px] border border-line p-3">
                 {canDept ? (
-                  <ActionForm action={saveDepartmentAction} submitLabel="Save" hidden={{ _id: d.id }}>
+                  <ActionForm action={saveDepartmentAction} submitLabel="Save" variant="secondary" hidden={{ _id: d.id }}>
                     <TextField name="name" label="Team name" defaultValue={d.name} />
                     <CheckField name="isActive" label="In use" defaultChecked={d.isActive} hint="A team used by a making area that is in use cannot be switched off." />
                     <MoreDetails>
@@ -115,7 +123,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
           </ul>
           {canDept && (
             <div className="mt-4 border-t border-line pt-4">
-              <ActionForm action={saveDepartmentAction} submitLabel="Add team" hidden={{ siteId: site.id }}>
+              <ActionForm action={saveDepartmentAction} submitLabel="Add team" variant="secondary" hidden={{ siteId: site.id }}>
                 <TextField name="name" label="New team or department" placeholder="e.g. Maintenance" />
               </ActionForm>
             </div>
@@ -123,15 +131,14 @@ export default async function SitePage({ params, searchParams }: { params: Promi
         </Card>
       )}
       {canAdmin && (
-        <Card>
-          <CardTitle>{site.isActive ? "Switch this site off" : "Switch this site on again"}</CardTitle>
+        <MoreDetails title={site.isActive ? "Switch this site off" : "Switch this site on again"}>
           <p className="mb-3 text-[13px] text-muted">
             {site.isActive ? "Sites are never deleted. A site that still holds stock, or the last active site, cannot be deactivated." : "Reactivating makes the site selectable again for assignments and documents."}
           </p>
           <ActionForm action={siteActiveAction} submitLabel={site.isActive ? "Switch off" : "Switch on"} variant={site.isActive ? "danger" : "primary"} hidden={{ _id: site.id, _active: site.isActive ? "false" : "true" }}>
             <TextField name="reason" label="Why?" />
           </ActionForm>
-        </Card>
+        </MoreDetails>
       )}
     </div>
   );

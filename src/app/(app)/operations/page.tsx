@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import { ClipboardList, FlaskConical, GitBranch, PackagePlus, ScanLine, ShoppingCart } from "lucide-react";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
-import { ACTIVE_BATCH_LIMIT, getOperationsCenter } from "@/modules/analytics";
+import { ACTIVE_BATCH_LIMIT, getOperationsCenter, listRecentActivity } from "@/modules/analytics";
+import { RecentActivity } from "../dashboard/simple-home";
 import { Card, EmptyState, PageHeader, Table, Td, cx } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
 import { PipelineStrip } from "@/ui/pipeline";
@@ -39,6 +40,8 @@ export default async function OperationsCenterPage({ searchParams }: { searchPar
   const oc = await getOperationsCenter(ctx, { all: sp.scope === "all" });
   const quick = QUICK_ACTIONS.filter((q) => !q.permission || ctx.can(q.permission));
   const multi = ctx.allowedSites.length > 1;
+  // Mockup panel "Operations Center": recent activity under the batches (people who may read the history only).
+  const activity = ctx.can("platform.audit.view") ? await listRecentActivity(ctx, oc.scope, 6).catch(() => null) : null;
 
   return (
     <div className="space-y-6">
@@ -48,10 +51,10 @@ export default async function OperationsCenterPage({ searchParams }: { searchPar
         actions={
           multi ? (
             <div className="flex rounded-full border border-line bg-surface p-1 text-[13px]" role="group" aria-label="Sites shown">
-              <Link href="/operations" aria-current={!oc.scope.all ? "page" : undefined} className={cx("inline-flex min-h-[40px] items-center rounded-full px-3.5", !oc.scope.all ? "bg-cta text-white" : "text-fg-2")}>
+              <Link href="/operations" aria-current={!oc.scope.all ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-3.5", !oc.scope.all ? "bg-cta text-white" : "text-fg-2")}>
                 This site
               </Link>
-              <Link href="/operations?scope=all" aria-current={oc.scope.all ? "page" : undefined} className={cx("inline-flex min-h-[40px] items-center rounded-full px-3.5", oc.scope.all ? "bg-cta text-white" : "text-fg-2")}>
+              <Link href="/operations?scope=all" aria-current={oc.scope.all ? "page" : undefined} className={cx("inline-flex min-h-[44px] items-center rounded-full px-3.5", oc.scope.all ? "bg-cta text-white" : "text-fg-2")}>
                 All my sites
               </Link>
             </div>
@@ -90,24 +93,32 @@ export default async function OperationsCenterPage({ searchParams }: { searchPar
                         <p className="min-w-0 font-medium text-fg">{b.productName}</p>
                         <StatusChip status={b.status} />
                       </div>
-                      <span className="font-mono text-[12px] text-muted">{b.batchNumber}{oc.scope.all && ` · ${b.siteCode}`}</span>
+                      <p className="text-[13px] text-fg-2">
+                        {b.currentStep ? `Now: ${b.currentStep}` : b.stepsTotal ? "All steps done" : ""}
+                        {b.dueOn ? ` · due ${fmtDate(b.dueOn)}` : ""}
+                      </p>
                       <div className="mt-2 flex items-center justify-between text-[12px] text-muted">
                         <Progress done={b.stepsDone} total={b.stepsTotal} />
                         <span className={cx(b.late && "font-medium text-[var(--warn-fg)]")}>{b.plannedStartOn ? `${b.late ? "Late · " : ""}Start ${fmtDate(b.plannedStartOn)}` : ""}</span>
                       </div>
+                      <span className="font-mono text-[12px] text-muted">{b.batchNumber}{oc.scope.all && ` · ${b.siteCode}`}</span>
                     </Link>
                   </li>
                 ))}
               </ul>
-              <Table className="hidden md:block" head={["Batch", "Product", "Order", ...(oc.scope.all ? ["Site"] : []), "Steps", "Status", "Planned start"]}>
+              {/* UX audit C #6: product first, the batch number small and grey after it; current step and due date as in the mockup. */}
+              <Table className="hidden md:block" head={["Product", ...(oc.scope.all ? ["Site"] : []), "Step now", "Steps", "Status", "Due", "Planned start"]}>
                 {oc.batches.map((b) => (
                   <tr key={b.id} className="border-t border-line">
-                    <Td><Link href={b.href} className="font-mono font-medium text-primary-text hover:underline">{b.batchNumber}</Link></Td>
-                    <Td>{b.productName}</Td>
-                    <Td className="font-mono text-[12px]">{b.orderNumber ?? "—"}</Td>
+                    <Td>
+                      <Link href={b.href} className="font-medium text-primary-text hover:underline">{b.productName}</Link>
+                      <span className="block font-mono text-[12px] text-muted">{b.batchNumber}{b.orderNumber ? ` · ${b.orderNumber}` : ""}</span>
+                    </Td>
                     {oc.scope.all && <Td>{b.siteCode}</Td>}
+                    <Td>{b.currentStep ?? (b.stepsTotal ? "All done" : "—")}</Td>
                     <Td><Progress done={b.stepsDone} total={b.stepsTotal} /></Td>
                     <Td><StatusChip status={b.status} /></Td>
+                    <Td>{b.dueOn ? fmtDate(b.dueOn) : "—"}</Td>
                     <Td className={cx(b.late && "font-medium text-[var(--warn-fg)]")}>{b.plannedStartOn ? `${fmtDate(b.plannedStartOn)}${b.late ? " · late" : ""}` : "—"}</Td>
                   </tr>
                 ))}
@@ -117,6 +128,8 @@ export default async function OperationsCenterPage({ searchParams }: { searchPar
           )}
         </section>
       )}
+
+      {activity && <RecentActivity rows={activity} showSite={oc.scope.all} />}
 
       {quick.length > 0 && (
         <Card aria-labelledby="quick-h">

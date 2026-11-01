@@ -684,7 +684,9 @@ export async function recipeWizardOptions(ctx: AuthContext) {
         unitNetMassG: products.unitNetMassG,
         pieceG: sql<string | null>`case when "products"."unit_net_mass_g" > 0 then "products"."unit_net_mass_g"::text else (select s.net_content_qty::text from ${skus} s join ${uoms} u on u.id = s.net_content_uom_id where s.product_id = "products"."id" and u.code = 'g' and s.net_content_qty > 0 order by (s.code = "products"."sku_code") desc, s.code limit 1) end`,
         status: products.status,
-        formulaId: sql<string | null>`(select f.id from ${formulas} f where f.product_id = ${products.id} order by f.code limit 1)`,
+        // Spelled out: inside this sub-select drizzle renders the products.id column as a bare "id", which is the
+        // recipe's own id (never equal), so products with a recipe looked free (UX audit C #9).
+        formulaId: sql<string | null>`(select f.id from ${formulas} f where f.product_id = "products"."id" order by f.code limit 1)`,
       })
       .from(products)
       .where(and(eq(products.organizationId, O), sql`${products.status} <> 'discontinued'`))

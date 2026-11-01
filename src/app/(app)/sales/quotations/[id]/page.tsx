@@ -19,7 +19,7 @@ export const metadata = { title: "Price offer" };
 
 export default async function QuotePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.quote.view")) return <Forbidden what="price offers" />;
+  if (!ctx.can("sales.quote.view")) return <Forbidden what="price offers" permission="sales.quote.view" />;
   const { id } = await params;
   const { saved } = await searchParams;
   let d: Awaited<ReturnType<typeof getQuote>>;
@@ -45,11 +45,16 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
           <QuoteCommand quoteId={q.id} command="submit" label="Send the price offer" variant="cta" />
         </DoNext>
       ) : (
-        <DoNext text="This price offer is a draft." waitingFor="Waiting for sales to send it." />
+        <DoNext text="This price offer is a draft." waitingFor={`Waiting for ${await whoDoes(ctx, "sales.quote.submit", q.siteId, "sales")} to send it.`} />
       )
     ) : q.status === "pending_approval" ? (
       d.approval?.canApprove ? (
-        <DoNext text={mine ? "Next: approve your own discount (recorded as your own request), or send it back." : "Next: approve the discount, or send it back."} action={{ label: "Approve now", href: "#approve" }} />
+        <DoNext text={mine ? "Next: approve your own discount (recorded as your own request), or send it back." : "Next: approve the discount, or send it back."}>
+          <div className="flex flex-col gap-2">
+            <QuoteCommand quoteId={q.id} command="approve" label="Approve discount" note variant="cta" />
+            <QuoteCommand quoteId={q.id} command="return" label="Send back to draft" reason />
+          </div>
+        </DoNext>
       ) : (
         <DoNext
           text={mine ? "You made this offer, so someone else approves the discount." : "The discount needs approval."}
@@ -57,7 +62,9 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
         />
       )
     ) : (q.status === "sent" || q.status === "accepted") && canConvert && (q.status === "accepted" || canEdit) ? (
-      <DoNext text="Next: when the customer says yes, make it an order." action={{ label: "Make it an order", href: "#convert" }} />
+      <DoNext text="Next: when the customer says yes, make it an order.">
+        <ConvertQuoteForm quoteId={q.id} today={today} />
+      </DoNext>
     ) : q.status === "sent" || q.status === "accepted" ? (
       <DoNext text={d.expiredByDate ? `This offer was good until ${fmtDate(q.validUntil)}. Make a new one.` : "Sent to the customer."} waitingFor={d.expiredByDate ? undefined : "Waiting for the customer's answer."} />
     ) : q.status === "converted" && d.order ? (
@@ -121,22 +128,11 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
                 {d.approval?.next ? `Step ${d.approval.next.step}: ${d.approval.next.label}.` : "Waiting for the approver."}
               </Banner>
               {d.approval?.canApprove ? (
-                <>
-                  <QuoteCommand quoteId={q.id} command="approve" label="Approve discount" note variant="cta" />
-                  <QuoteCommand quoteId={q.id} command="return" label="Send back to draft" reason />
-                </>
+                <p className="text-[13px] text-muted">Decide in the “What to do next” box above.</p>
               ) : (
                 <p className="text-[13px] text-muted">{mine ? "You made this offer, so another person approves it." : "Only the approver of this step can decide."}</p>
               )}
             </div>
-          </Card>
-        )}
-
-        {(q.status === "sent" || q.status === "accepted") && canConvert && (q.status === "accepted" || canEdit) && (
-          <Card>
-            <span id="convert" className="block scroll-mt-24" />
-            <CardTitle>Make it an order</CardTitle>
-            <ConvertQuoteForm quoteId={q.id} today={today} />
           </Card>
         )}
 

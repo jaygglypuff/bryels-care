@@ -15,7 +15,7 @@ const KIND: Record<string, string> = { incoming: "When a delivery arrives", in_p
 
 export default async function InspectionPlansPage() {
   const ctx = await requireContext();
-  if (!ctx.can("quality.inspection_plan.view")) return <Forbidden what="inspection plans" />;
+  if (!ctx.can("quality.inspection_plan.view")) return <Forbidden what="inspection plans" permission="quality.inspection_plan.view" />;
   const rows = await listInspectionPlans(ctx);
   return (
     <div>

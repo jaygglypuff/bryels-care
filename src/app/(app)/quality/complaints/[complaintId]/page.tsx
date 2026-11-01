@@ -20,7 +20,7 @@ const RETURN_WORD: Record<string, string> = { draft: "Draft", submitted: "Waitin
 
 export default async function ComplaintPage({ params, searchParams }: { params: Promise<{ complaintId: string }>; searchParams: Promise<{ logged?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.complaint.view")) return <Forbidden what="complaints" />;
+  if (!ctx.can("quality.complaint.view")) return <Forbidden what="complaints" permission="quality.complaint.view" />;
   const { complaintId } = await params;
   const sp = await searchParams;
   let v: Awaited<ReturnType<typeof getComplaint>>;

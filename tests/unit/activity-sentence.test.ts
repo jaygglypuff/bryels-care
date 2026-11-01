@@ -1,23 +1,31 @@
 import { describe, expect, it } from "vitest";
 import { activitySentence } from "@/app/(app)/dashboard/activity-sentence";
 
-describe("activitySentence (Home recent activity in plain words)", () => {
-  it("names who did what to which record", () => {
-    expect(activitySentence({ action: "quality.disposition.released", entityType: "batch", entityNumber: "B-26-0004", actorName: "Ana Villanueva" })).toEqual({
+describe("activitySentence (Home recent activity in plain words, names before codes)", () => {
+  it("names who did what to which record, with the record's name in the sentence and the number apart", () => {
+    expect(activitySentence({ action: "quality.disposition.released", entityType: "batch", entityNumber: "B-26-0004", actorName: "Ana Villanueva", entityName: "Acapulco Soap 135 g" })).toEqual({
       who: "Ana Villanueva",
-      text: "released batch",
+      text: "said OK to the batch of Acapulco Soap 135 g",
       number: "B-26-0004",
     });
-    expect(activitySentence({ action: "sales.sales_order.created", entityType: "sales_order", entityNumber: "SO-26-00012", actorName: "Lia" }).text).toBe("created customer order");
+    expect(activitySentence({ action: "sales.sales_order.created", entityType: "sales_order", entityNumber: "SO-26-00012", actorName: "Lia", entityName: "Isla Spa Supplies" }).text).toBe("made the customer order for Isla Spa Supplies");
   });
 
   it("uses plain verbs for receipts and credit changes", () => {
-    expect(activitySentence({ action: "inventory.goods_receipt.posted", entityType: "goods_receipt", entityNumber: "GR-1", actorName: "Ben" }).text).toBe("received delivery");
-    expect(activitySentence({ action: "sales.customer.credit_terms_changed", entityType: "customer", entityNumber: "CUS-001", actorName: "Fe" }).text).toBe("changed the credit terms of customer");
+    expect(activitySentence({ action: "inventory.goods_receipt.posted", entityType: "goods_receipt", entityNumber: "GR-1", actorName: "Ben", entityName: "Laguna Oleo Supply" }).text).toBe("received the delivery from Laguna Oleo Supply");
+    expect(activitySentence({ action: "sales.customer.credit_terms_changed", entityType: "customer", entityNumber: "CUS-001", actorName: "Fe", entityName: "Sari Glow" }).text).toBe("changed the days to pay of the customer Sari Glow");
+  });
+
+  it("never says 'generated generated document': a paper is called by its kind", () => {
+    const s = activitySentence({ action: "documents.generated_document.generated", entityType: "generated_document", entityNumber: "DOC-26-0000004", actorName: "Ana Villanueva", entityName: "delivery receipt" });
+    expect(s.text).toBe("made the delivery receipt");
+    expect(s.text).not.toMatch(/generated/);
+    expect(activitySentence({ action: "documents.generated_document.generated", entityType: "generated_document", entityNumber: "DOC-1", actorName: "Ana" }).text).toBe("made the paper");
+    expect(activitySentence({ action: "quality.disposition.expired", entityType: "inventory_lot", entityNumber: "LM-2610-0008", actorName: null, entityName: "Coconut Oil" })).toEqual({ who: "The system", text: "marked out of date the lot of Coconut Oil", number: "LM-2610-0008" });
   });
 
   it("falls back to the event words and to 'The system' (never a code)", () => {
     const s = activitySentence({ action: "maintenance.work_request.escalated_twice", entityType: "work_request", entityNumber: null, actorName: null });
-    expect(s).toEqual({ who: "The system", text: "escalated twice work request", number: null });
+    expect(s).toEqual({ who: "The system", text: "escalated twice the work request", number: null });
   });
 });

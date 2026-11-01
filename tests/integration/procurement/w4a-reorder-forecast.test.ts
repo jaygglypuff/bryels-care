@@ -124,7 +124,7 @@ describe("US-6-20 forecast assumptions and overrides", () => {
   it("documented methods: insufficient history shows text and no number; method, metrics and band follow the sufficiency rules", () => {
     const short = forecastSeries(D([5, 6, 7]), 0.3);
     expect(short.sufficient).toBe(false);
-    if (!short.sufficient) expect(short.text).toMatch(/^Insufficient history \(3 of 6 months needed\)$/);
+    if (!short.sufficient) expect(short.text).toMatch(/^Not enough sales history yet \(3 of 6 months needed\)$/);
     const eight = forecastSeries(D([100, 110, 90, 105, 95, 100, 102, 98]), 0.3);
     expect(eight.sufficient).toBe(true);
     if (eight.sufficient) {
@@ -147,7 +147,7 @@ describe("US-6-20 forecast assumptions and overrides", () => {
   it("the page data carries the estimate banner; a SKU without enough history has no number", async () => {
     const f = await forecastRows(u.planner);
     expect(f.banner).toBe(FORECAST_BANNER);
-    expect(FORECAST_BANNER).toBe("Forecasts are estimates, not actuals.");
+    expect(FORECAST_BANNER).toBe("A sales guess is an estimate, not what really sold.");
     for (const r of f.rows) if (!r.forecast.sufficient) expect("next" in r.forecast).toBe(false);
     await expectCode(forecastRows(u.qa), "forbidden");
     await expectCode(forecastRows(u.admin), "forbidden");

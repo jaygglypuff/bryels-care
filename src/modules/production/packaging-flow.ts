@@ -217,9 +217,9 @@ export async function batchLabelInfo(ctx: AuthContext, batch: BatchRow) {
       : stepGate
         ? stepGate
       : !template
-        ? "No approved product label is set up for this site. Ask the site manager (Settings › Labels)."
+        ? "No approved product label is set up for this site. Ask the site manager (Management › Rules and settings › Labels and printouts)."
         : !stations.length
-          ? "No label printer is set up for this site. Ask the administrator (Settings › Labels and printouts)."
+          ? "No label printer is set up for this site. Ask the administrator (Management › Rules and settings › Labels and printouts)."
           : null;
   return {
     defaultCount: Math.max(1, Math.min(999, pieces.toNumber() || 1)),

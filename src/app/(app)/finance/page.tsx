@@ -35,7 +35,7 @@ export default async function FinancePage() {
   const invToApprove = rec?.counts.submitted ?? 0;
   const next =
     toInvoice && ctx.can("finance.invoice.create")
-      ? { text: `Next: ${toInvoice} delivery(ies) went out without an invoice.`, action: { label: "Make the invoices", href: "/finance/invoices" } }
+      ? { text: `Next: ${toInvoice === 1 ? "1 delivery" : `${toInvoice} deliveries`} went out without an invoice.`, action: { label: "Make the invoices", href: "/finance/invoices" } }
       : invToApprove && ctx.can("finance.invoice.approve")
         ? { text: `Next: ${invToApprove} invoice(s) wait for approval.`, action: { label: "Open them", href: "/finance/invoices?status=submitted" } }
         : toApprove

@@ -24,7 +24,7 @@ const TABS = [
 /** Deliveries received (goods receipts), grade-5 (ADR-088): supplier first, receipt number small and grey. */
 export default async function ReceiptsPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; open?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("procurement.goods_receipt.view")) return <Forbidden what="deliveries received" />;
+  if (!ctx.can("procurement.goods_receipt.view")) return <Forbidden what="deliveries received" permission="procurement.goods_receipt.view" />;
   const sp = await searchParams;
   const status = TABS.some(([k]) => k && k === sp.status) ? sp.status : undefined;
   const q = sp.q?.trim() ?? "";

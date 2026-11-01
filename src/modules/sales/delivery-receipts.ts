@@ -138,7 +138,7 @@ export async function deliveryReceiptData(q: DbOrTx, shipmentId: string, opts: {
 async function renderDr(tx: Tx, ctx: AuthContext, s: ShipmentRow, data: DeliveryReceiptData, watermark: string | null, idempotencyKey?: string | null) {
   const code = await getSetting(tx, ctx.organizationId, "documents.delivery_receipt.template_code", s.siteId);
   const resolved = await resolveTemplateVersion(tx, ctx.organizationId, { templateCode: code, siteId: s.siteId });
-  if (!resolved) throw new DomainError("setup_required", `No approved delivery receipt template (${code}) exists. Ask QA or an administrator to approve one under Management → System → Templates & labels.`);
+  if (!resolved) throw new DomainError("setup_required", `No approved delivery receipt template (${code}) exists. Ask QA or an administrator to approve one under Management › Rules and settings › Labels and printouts.`);
   return generateForSource(tx, ctx, {
     resolved,
     documentKind: "delivery_receipt",
@@ -417,8 +417,8 @@ export async function remindUnacknowledged(run: JobRunContext) {
           siteId: r.siteId,
           kind: "sales.delivery_receipt.unacknowledged",
           severity: "warning",
-          title: `Delivery ${r.drNumber ?? r.shipmentNumber} has no signed receipt after ${r.days} days`,
-          body: `${r.customerName} · order ${r.orderNumber}. Capture the receiver's name and signature or a photo of the signed copy.`,
+          title: `Delivery to ${r.customerName} has no signed receipt after ${r.days} days`,
+          body: `${r.drNumber ?? r.shipmentNumber} · order ${r.orderNumber}. Write down who received it and their signature, or add a photo of the signed copy.`,
           entityType: "shipment",
           entityId: r.shipmentId,
           link: `/sales/shipments/${r.shipmentId}`,

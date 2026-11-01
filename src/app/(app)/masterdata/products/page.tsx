@@ -20,7 +20,7 @@ const STATUS_WORDS: Record<string, string> = { draft: "Draft", active: "Ready to
 
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; family?: string; new?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("masterdata.product.view")) return <Forbidden what="products" />;
+  if (!ctx.can("masterdata.product.view")) return <Forbidden what="products" permission="masterdata.product.view" />;
   const sp = await searchParams;
   const rows = await listProducts(ctx, { q: sp.q, status: sp.status, family: sp.family });
   const families = await productFamilies(db, ctx.organizationId);

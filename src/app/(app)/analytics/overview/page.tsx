@@ -18,7 +18,7 @@ export const metadata = { title: "Business overview" };
  */
 export default async function BusinessOverviewPage({ searchParams }: { searchParams: Promise<{ scope?: string; period?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("analytics.dashboard.view")) return <Forbidden what="the business overview" />;
+  if (!ctx.can("analytics.dashboard.view")) return <Forbidden what="the business overview" permission="analytics.dashboard.view" />;
   const sp = await searchParams;
   let kpi;
   try {

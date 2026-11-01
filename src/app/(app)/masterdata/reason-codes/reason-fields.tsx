@@ -12,7 +12,13 @@ export function ReasonFields({ categories, d, editing = false }: { categories: {
   return (
     <>
       <TextField name="name" label="The reason, in plain words" defaultValue={d?.name} placeholder="e.g. Pest found" />
-      <MultiCheckField name="appliesTo" label="Offer it when…" options={categories} defaultValues={d?.appliesTo ?? []} />
+      {editing ? (
+        <MoreDetails title={`Where it is offered (${(d?.appliesTo ?? []).length} ${(d?.appliesTo ?? []).length === 1 ? "place" : "places"})`}>
+          <MultiCheckField name="appliesTo" label="Offer it when…" options={categories} defaultValues={d?.appliesTo ?? []} />
+        </MoreDetails>
+      ) : (
+        <MultiCheckField name="appliesTo" label="Offer it when…" options={categories} defaultValues={d?.appliesTo ?? []} />
+      )}
       <CheckField name="requiresNote" label="People must also write a short note" defaultChecked={d?.requiresNote ?? false} />
       {editing && <CheckField name="isActive" label="Offer it on new records" defaultChecked={d?.isActive ?? true} hint="Old records keep it either way." />}
       <MoreDetails>

@@ -39,7 +39,7 @@ const DONE: Record<string, string> = {
 
 export default async function OrderDetailPage({ params, searchParams }: { params: Promise<{ orderId: string }>; searchParams: Promise<{ done?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.sales_order.view")) return <Forbidden what="customer orders" />;
+  if (!ctx.can("sales.sales_order.view")) return <Forbidden what="customer orders" permission="sales.sales_order.view" />;
   const { orderId } = await params;
   const { done } = await searchParams;
   if (!/^[0-9a-f-]{36}$/i.test(orderId)) notFound();

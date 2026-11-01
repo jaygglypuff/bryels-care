@@ -64,7 +64,7 @@ function NextStepFor({ d, canApprove, canSubmit, canPost, editable, isPreparer }
 /** One import (US-5-08 steps 2–4 and posting): mapping, validation results, duplicate decisions, approval, posting, void. */
 export default async function ImportPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ result?: string; page?: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("platform.import_job.view")) return <Forbidden what="imports" />;
+  if (!ctx.can("platform.import_job.view")) return <Forbidden what="imports" permission="platform.import_job.view" />;
   const { id } = await params;
   const sp = await searchParams;
   let d: ImportJobDetail;

@@ -49,7 +49,7 @@ const PEOPLE: [email: string, name: string, role: string, orgWide: boolean][] = 
 /** Basic locations of the sandbox warehouse: [code, name, kind, special role or null]. */
 const LOCATIONS: [string, string, string, string | null][] = [
   ["RCV", "Receiving dock", "receiving", "receiving"],
-  ["QUA-01", "Quarantine cage", "quarantine", "quarantine"],
+  ["QUA-01", "QA hold cage", "quarantine", "quarantine"],
   ["HLD-01", "QA hold cage", "hold", "hold"],
   ["REJ", "Rejected goods cage", "rejected", "rejected"],
   ["RCL", "Recall cage", "recall", "recall"],
@@ -58,7 +58,7 @@ const LOCATIONS: [string, string, string, string | null][] = [
   ["STG-01", "Production staging", "staging", "staging"],
   ["PRD-01", "Production room", "production", null],
   ["FG-01", "Finished goods bay", "storage", null],
-  ["SHP", "Dispatch bay", "shipping", null],
+  ["SHP", "Sending-out bay", "shipping", null],
   ["RET-01", "Customer returns cage", "quarantine", null],
 ];
 
@@ -154,7 +154,7 @@ async function main(): Promise<number> {
           join document_templates nt on nt.organization_id = ${O} and nt.code = dt.code
           where lt.organization_id = ${demoOrg.id} and lt.site_id is null and lt.status = 'approved' and lt.is_active`);
       } else {
-        say("No demo company found to copy print templates from; create them under Management → System → Templates & labels.");
+        say("No demo company found to copy print templates from; create them under Management › Rules and settings › Labels and printouts.");
       }
       await tx.insert(s.printStations).values({ organizationId: O, siteId: site.id, code: "SBX-DESK", name: "Warehouse desk printer", printerName: "Browser print (any printer)", createdBy: admin });
 

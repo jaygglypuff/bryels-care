@@ -13,7 +13,7 @@ export const metadata = { title: "Change draft prices" };
 
 export default async function EditPriceListPage({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.price_list.edit")) return <Forbidden what="changing prices" />;
+  if (!ctx.can("sales.price_list.edit")) return <Forbidden what="changing prices" permission="sales.price_list.edit" />;
   const { id } = await params;
   let d: Awaited<ReturnType<typeof getPriceList>>;
   try {

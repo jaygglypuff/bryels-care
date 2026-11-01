@@ -16,7 +16,7 @@ export const metadata = { title: "Warehouse sections" };
  */
 export default async function WarehouseHomePage() {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.lot.view")) return <Forbidden what="the warehouse" />;
+  if (!ctx.can("inventory.lot.view")) return <Forbidden what="the warehouse" permission="inventory.lot.view" />;
   const tiles = await sectionSummary(ctx);
   const shown = tiles.filter((t) => t.lots > 0 || t.locations > 0);
   return (
@@ -26,7 +26,7 @@ export default async function WarehouseHomePage() {
       <Card>
         <CardTitle action={<LinkButton href="/inventory" variant="ghost">All stock</LinkButton>}>Parts of the warehouse</CardTitle>
         {shown.length === 0 ? (
-          <EmptyState title="No places set up yet">Ask the site manager to add the shelves and say which part of the warehouse each is in (Setup → Shelves).</EmptyState>
+          <EmptyState title="No places set up yet">Ask the site manager to add the shelves and say which part of the warehouse each is in (Management › Master data › Locations).</EmptyState>
         ) : (
           <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Warehouse sections">
             {shown.map((t) => (

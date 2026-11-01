@@ -19,7 +19,7 @@ const USED_ON: Record<string, string> = { sales: "sales", purchases: "buying", e
  */
 export default async function TaxPage() {
   const ctx = await requireContext();
-  if (!ctx.can("finance.tax_config.view")) return <Forbidden what="tax rates" />;
+  if (!ctx.can("finance.tax_config.view")) return <Forbidden what="tax rates" permission="finance.tax_config.view" />;
   const { rows, defaults, today } = await listTaxConfigurations(ctx);
   const admin = ctx.can("finance.tax_config.admin");
   const toCheck = admin ? rows.filter((r) => r.status === "proposed" && r.proposedBy !== ctx.userId) : [];
@@ -31,7 +31,7 @@ export default async function TaxPage() {
       {toCheck.length > 0 && <NextStep text={`Next: ${toCheck.length} rate(s) wait for your check.`} action={{ label: "Check them", href: `#t-${toCheck[0].id}` }} />}
       <div className="mb-4">
         <Banner tone="info" title={`Used on sales: ${defaults.sales ?? "no tax"} · on buying: ${defaults.purchases ?? "no tax"}`}>
-          Which rate is used by default is a setting{ctx.can("platform.settings.view") ? <> (<Link className="underline" href="/admin/settings">Management → System → Settings</Link>, needs a second approver)</> : null}. Rates marked “Made up” are demo examples, not real rates.
+          Which rate is used by default is a setting{ctx.can("platform.settings.view") ? <> (<Link className="underline" href="/admin/settings">Management › Rules and settings › Settings</Link>, needs a second approver)</> : null}. Rates marked “Made up” are demo examples, not real rates.
         </Banner>
       </div>
       <div className={admin ? "grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_440px]" : ""}>

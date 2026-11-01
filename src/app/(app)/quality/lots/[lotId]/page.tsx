@@ -37,7 +37,7 @@ const HINT: Record<string, string> = {
 
 export default async function LotDispositionPage({ params }: { params: Promise<{ lotId: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.disposition.view")) return <Forbidden what="QA lot decisions" />;
+  if (!ctx.can("quality.disposition.view")) return <Forbidden what="QA lot decisions" permission="quality.disposition.view" />;
   const { lotId } = await params;
 
   let v: Awaited<ReturnType<typeof getLotDisposition>>;

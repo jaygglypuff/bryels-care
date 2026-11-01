@@ -5,12 +5,15 @@ import { fmtDate, fmtDateTime, fmtMoney } from "@/lib/qty";
 import { EXPENSE_STATUS_LABEL, getExpenseClaim } from "@/modules/finance";
 import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
+import { NextStepBox } from "@/ui/next-step-box";
+import { waitingFor } from "../../../waiting-for";
+import { approvalWaiting } from "../../approval-waiting";
 import { MoreMenu } from "@/ui/more-menu";
 import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { FinanceCommand } from "../../commands";
-import { ApprovalCard, CLAIM_WORD, DoNow, FinanceStatus, HistoryCard, Money, PostingsCard, waitingText } from "../../finance-ui";
+import { ApprovalCard, CLAIM_WORD, FinanceStatus, HistoryCard, Money, PostingsCard } from "../../finance-ui";
 import { ReceiptForm } from "./receipt-form";
 
 export const metadata = { title: "Expense claim" };
@@ -39,6 +42,21 @@ export default async function ExpensePage({ params, searchParams }: { params: Pr
   const canWithdraw = ["draft", "submitted", "approved"].includes(c.status) && d.isClaimant;
   const canVoid = c.status === "posted" && Number(c.paidAmount) === 0 && ctx.can("finance.expense_claim.void");
   const payHref = `/finance/payments/new?counterparty=claimant:${c.claimantUserId}`;
+  // UX audit round 2 part 2: the form for the next step sits inside the one "What to do next" box.
+  const doNow = (
+    <>
+        {canSubmit && !d.receipt && <ReceiptForm id={c.id} storageReady={d.storageReady} />}
+        {canSubmit && <FinanceCommand entity="expense" id={c.id} command="submit" label="Send for approval" variant={needsReceipt ? "secondary" : "cta"} />}
+        {canDecide && (
+          <>
+            <FinanceCommand entity="expense" id={c.id} command="approve" label="Approve" note variant="cta" />
+            <FinanceCommand entity="expense" id={c.id} command="return" label="Send back to change" reason />
+            <FinanceCommand entity="expense" id={c.id} command="reject" label="Say no" reason variant="danger" />
+          </>
+        )}
+        {canPost && <FinanceCommand entity="expense" id={c.id} command="post" label="Save to the books" password variant="cta" hint="It is dated on the approval day and the person can then be paid back. After this it cannot be changed." />}
+    </>
+  );
   return (
     <>
       <PageHeader
@@ -82,37 +100,25 @@ export default async function ExpensePage({ params, searchParams }: { params: Pr
         </div>
       )}
       {needsReceipt ? (
-        <NextStep text={d.receiptRequired ? "Next: add a photo of the receipt (needed for this amount), then send it." : "Next: add a photo of the receipt if you have one, then send it for approval."} action={{ label: "Add the receipt", href: "#do" }} />
+        <NextStepBox text={d.receiptRequired ? "Next: add a photo of the receipt (needed for this amount), then send it." : "Next: add a photo of the receipt if you have one, then send it for approval."}>{doNow}</NextStepBox>
       ) : canSubmit ? (
-        <NextStep text="Next: send your claim for approval." action={{ label: "Send for approval", href: "#do" }} />
+        <NextStepBox text="Next: send your claim for approval.">{doNow}</NextStepBox>
       ) : canDecide ? (
-        <NextStep text="Next: approve this claim, send it back, or say no." action={{ label: "Decide", href: "#do" }} />
+        <NextStepBox text="Next: approve this claim, send it back, or say no.">{doNow}</NextStepBox>
       ) : c.status === "submitted" ? (
-        <NextStep text="This claim waits for approval." waitingFor={d.isClaimant ? `${waitingText(d.progress)} You cannot approve your own claim.` : waitingText(d.progress)} />
+        <NextStep text="This claim waits for approval." waitingFor={d.isClaimant ? `${(await approvalWaiting(ctx, "finance.expense_claim.approve", d.progress))} You cannot approve your own claim.` : (await approvalWaiting(ctx, "finance.expense_claim.approve", d.progress))} />
       ) : canPost ? (
-        <NextStep text="Next: save it to the books. Then the person can be paid back." action={{ label: "Save to the books", href: "#do" }} />
+        <NextStepBox text="Next: save it to the books. Then the person can be paid back.">{doNow}</NextStepBox>
       ) : c.status === "approved" ? (
-        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You claimed or approved it, so another finance person saves it to the books." : "Waiting for finance to save it to the books."} />
+        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You claimed or approved it, so another finance person saves it to the books." : await waitingFor(ctx, "finance.expense_claim.post", null, "to save it to the books", "finance")} />
       ) : canPay ? (
         <NextStep text={`Next: pay ${claimant} back, then save the payment.`} action={{ label: "Pay back", href: payHref }} />
       ) : c.status === "posted" ? (
-        <NextStep text="In the books." waitingFor="Waiting for finance to pay it back." />
-      ) : null}
+        <NextStep text="In the books." waitingFor={await waitingFor(ctx, "finance.payment_record.create", null, "to pay it back", "finance")} />
+      ) : (
+        <NextStep text={c.status === "paid" ? "Paid back. Nothing more to do." : c.status === "rejected" ? "Not approved. Nothing more to do; make a new claim if something was missing." : "Cancelled. Nothing more to do."} />
+      )}
       <div className="flex flex-col gap-4">
-        {(canSubmit || canDecide || canPost) && (
-          <DoNow>
-            {canSubmit && !d.receipt && <ReceiptForm id={c.id} storageReady={d.storageReady} />}
-            {canSubmit && <FinanceCommand entity="expense" id={c.id} command="submit" label="Send for approval" variant={needsReceipt ? "secondary" : "cta"} />}
-            {canDecide && (
-              <>
-                <FinanceCommand entity="expense" id={c.id} command="approve" label="Approve" note variant="cta" />
-                <FinanceCommand entity="expense" id={c.id} command="return" label="Send back to change" reason />
-                <FinanceCommand entity="expense" id={c.id} command="reject" label="Say no" reason variant="danger" />
-              </>
-            )}
-            {canPost && <FinanceCommand entity="expense" id={c.id} command="post" label="Save to the books" password variant="cta" hint="It is dated on the approval day and the person can then be paid back. After this it cannot be changed." />}
-          </DoNow>
-        )}
         <Card>
           <CardTitle action={<Money value={c.amount} className="text-[20px] font-semibold" />}>What was spent</CardTitle>
           <p className="mb-3 text-[15px]">{c.description}</p>

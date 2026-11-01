@@ -98,14 +98,14 @@ export type ForecastResult =
  */
 export function forecastSeries(history: Decimal[], alpha: number): ForecastResult {
   const n = history.length;
-  if (n < 6) return { sufficient: false, historyMonths: n, text: `Insufficient history (${n} of 6 months needed)` };
+  if (n < 6) return { sufficient: false, historyMonths: n, text: `Not enough sales history yet (${n} of 6 months needed)` };
   const zeros = history.filter((x) => x.isZero()).length;
   const intermittent = zeros / n > 0.5;
   const candidates: MethodId[] = intermittent ? ["ma3", "ma6"] : ["ma3", "ma6"];
   if (!intermittent && n >= 12) candidates.push("ses");
   if (!intermittent && n >= 24 && (autocorrelation(history, 12) ?? 0) >= 0.3) candidates.push("seasonal_naive");
   const tests = candidates.map((m) => backtest(m, history, alpha)).filter((b): b is Backtest => !!b);
-  if (!tests.length) return { sufficient: false, historyMonths: n, text: `Insufficient history (${n} of 6 months needed)` };
+  if (!tests.length) return { sufficient: false, historyMonths: n, text: `Not enough sales history yet (${n} of 6 months needed)` };
   const w = (b: Backtest) => (b.wape === null ? Number.POSITIVE_INFINITY : Number(b.wape));
   const best = [...tests].sort((a, b) => w(a) - w(b) || Number(a.mae) - Number(b.mae))[0];
   const next = forecastNext(best.method, history, alpha)!;

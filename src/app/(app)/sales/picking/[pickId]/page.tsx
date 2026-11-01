@@ -26,7 +26,7 @@ const q = (v: string, uom: string) => fmtQty(v, uom, uom === "pcs" ? 0 : 3);
  */
 export default async function PickPage({ params }: { params: Promise<{ pickId: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("sales.pick.view")) return <Forbidden what="getting orders from the shelf" />;
+  if (!ctx.can("sales.pick.view")) return <Forbidden what="getting orders from the shelf" permission="sales.pick.view" />;
   const { pickId } = await params;
   let v: Awaited<ReturnType<typeof getPick>>;
   try {

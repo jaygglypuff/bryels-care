@@ -327,7 +327,7 @@ export async function reprintDocument(ctx: AuthContext, id: string, raw: unknown
     const [replay] = await tx.select().from(generatedDocuments).where(and(eq(generatedDocuments.organizationId, ctx.organizationId), eq(generatedDocuments.idempotencyKey, key))).limit(1);
     if (replay) return { id: replay.id, documentNumber: replay.documentNumber, replayed: true };
     const d = await loadVisible(tx, ctx, id, true);
-    if (d.documentKind === "label") throw new DomainError("validation", "Labels are reprinted from their label job so the print station gets the job.");
+    if (d.documentKind === "label") throw new DomainError("validation", "Labels are printed again from the label itself (Print again, with a reason).");
     const root = d.reprintOfId ? await loadVisible(tx, ctx, d.reprintOfId, true) : d;
     if (root.status !== "ready") throw new DomainError("state", `Document ${root.documentNumber} is ${root.status}; only a current document can be reprinted. Generate a new one instead.`);
     const [v] = await tx.select().from(documentTemplateVersions).where(eq(documentTemplateVersions.id, root.documentTemplateVersionId)).limit(1);

@@ -626,6 +626,15 @@ differences) is held by `system_admin` and `site_manager` (A-PM-19).
 | reorder_suggestion | v* | – | v | v | – | – | – | v a | – | – | – | v* | – |
 | supplier_performance | v* | – | v | – | – | – | v | v | – | v | – | v* | – |
 
+### 3.4.0 Site manager and purchasing (UX audit round 2 part 2, 2026-11-01)
+
+The audit found the site manager refused on "New purchase order" / "Send back to supplier" and told to "ask your site
+manager". Decision: **the matrix stands** (SM = view + approve on purchase_order and supplier_return; procurement
+raises them; owner approves): money going out keeps maker ≠ approver. The refused screens now name the people who hold
+the right at the site ("Ask Tess Navarro (Procurement)"), and "Waiting for …" lines name them too. No permission string
+changed. Tests: `tests/integration/procurement/r2p2-purchasing-access.test.ts` (role-escalation and cross-site
+negatives). Owner sign-off still welcome if the site manager should raise purchases (would need an ADR).
+
 ### 3.4.1 As built: Wave 4 W4A procurement grants (`src/lib/permissions.ts`, block "Wave 4 W4A")
 
 The §3.2 supplier / supplier_price rows, the §3.4 rows and the §3.11 forecast row are implemented as

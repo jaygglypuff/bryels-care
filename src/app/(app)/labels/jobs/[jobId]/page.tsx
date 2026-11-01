@@ -25,7 +25,7 @@ export default async function LabelJobPage({ params, }: { params: Promise<{ jobI
   const ctx = await requireContext();
   const reprintReasons = await reprintReasonOptions(ctx);
   const reprintReason = (code: string) => reprintReasons.find((r) => r.code === code) ?? null;
-  if (!ctx.can("inventory.label_job.view")) return <Forbidden what="labels" />;
+  if (!ctx.can("inventory.label_job.view")) return <Forbidden what="labels" permission="inventory.label_job.view" />;
   const { jobId } = await params;
   let j: LabelJobView;
   try {

@@ -30,7 +30,7 @@ const NOUN: Record<Kind, string> = { material: "Material", product: "Product", a
  */
 export default async function StockPage({ searchParams }: { searchParams: Promise<SP> }) {
   const ctx = await requireContext();
-  if (!ctx.can("inventory.lot.view")) return <Forbidden what="lots and stock" />;
+  if (!ctx.can("inventory.lot.view")) return <Forbidden what="lots and stock" permission="inventory.lot.view" />;
   const sp = await searchParams;
   const q = (sp.q ?? "").trim();
   const status = normaliseStockStatus(sp.status);
