@@ -1854,3 +1854,24 @@ list. Stored codes, permissions, exports and printed GMP records are unchanged.
 
 Consequences: tests `tests/unit/legacy-redirects.test.ts`, `tests/unit/no-jargon-messages.test.ts`. Open: about 25
 service error messages still use old words; the QA queue lacks the "check again on" date.
+
+## ADR-103 One next step per record, names before codes, purchasing stays with purchasing (UX audit round 2, part 2, 2026-11-01)
+
+Status: Accepted; A-R2P2-01 needs the owner (and QA for the receiving expiry).
+
+Decision: every record page shows exactly one "What to do next"; when the next step is a form it sits inside the box
+(`src/ui/next-step-box.tsx`, sales `DoNext`), so there is one green button; when someone else must act the line names
+them from the who-can-do directory (`waiting-for.ts`, finance `approvalWaiting`). Refused screens name who can do it.
+The permissions matrix is unchanged: the site manager approves but does not raise purchase orders or supplier returns
+(separation of raising and approving; ADR-091 lets top roles approve their own records, it does not grant creation).
+Feeds lead with names: activity sentences carry the record's name, message and alert titles move record numbers to
+the end (`codeLast`), report footnotes drop design references. Big forms fold (copy a job, steps version, label
+fields, reason detail, receiving without a purchase order). The recipe wizard needs ingredients and steps before
+sending and marks products that already have a recipe. Drizzle renders a column inside an `sql` sub-select of a
+single-table query without its table name, so such sub-selects spell out `"table"."column"` (fixed in recipes and
+production order batches). The demo seed walks one order to each send-out step through the services.
+
+Consequences: tests `tests/integration/procurement/r2p2-purchasing-access.test.ts`, `tests/unit/{r2p2-helpers,
+code-last,sales-day-line}.test.ts`, extended `no-jargon-messages`, `recipe-wizard`, `fulfilment`, `owner-home`; no
+migration. Open: batch closure page reachable by operators; label layouts awaiting QA; ~30 "(s)" plurals; help "?" in
+the frame; name pickers still search box + dropdown.

@@ -105,7 +105,7 @@ export async function getWorkOrder(ctx: AuthContext, workOrderId: string) {
   const bs = await db
     .select({
       b: batches,
-      stepsDone: sql<number>`(select count(*)::int from ${processStepRecords} where ${processStepRecords.batchId} = ${batches.id})`,
+      stepsDone: sql<number>`(select count(*)::int from ${processStepRecords} where ${processStepRecords.batchId} = "batches"."id")`, // spelled out: drizzle drops the table name in a single-table sub-select (ADR-103)
     })
     .from(batches)
     .where(eq(batches.workOrderId, wo.id))
