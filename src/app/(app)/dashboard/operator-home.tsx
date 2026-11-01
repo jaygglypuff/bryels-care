@@ -52,7 +52,7 @@ export function OperatorHome({ tiles, siteLabel, updated }: { tiles: OperatorTil
         ))}
       </ul>
       <p className="mt-4 text-center text-[12px] text-muted">
-        Counts for {siteLabel} · updated {updated} · all figures from posted transactions
+        Numbers for {siteLabel} · updated {updated}
       </p>
     </>
   );

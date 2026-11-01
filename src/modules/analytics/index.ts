@@ -3,6 +3,7 @@ export {
   FULFILMENT_STATUSES,
   NEAR_EXPIRY_WINDOW_DAYS,
   getOperatorHome,
+  getPlannerNext,
   getOwnerDashboard,
   isOrganizationWide,
   listRecentActivity,

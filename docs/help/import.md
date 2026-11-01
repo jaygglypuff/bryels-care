@@ -10,7 +10,7 @@ Load master data, opening stock or scanned records in five steps: upload, map, v
 
 ## 1 Upload
 
-1. Open **Imports**. Choose **What are you importing?** and the **Site** if it asks.
+1. Open **Management → IT settings → Load data from a spreadsheet**. Choose **What are you importing?** and the **Site** if it asks.
 2. Choose the **File (CSV UTF-8 or .xlsx, up to 20 MB)**. If you load the same file from the same source again, enter its **Saved mapping profile**.
 3. Press **Upload and map columns**.
 

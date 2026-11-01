@@ -2,7 +2,7 @@ import { NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
-import { isInternalPath, recordHref } from "@/lib/record-links";
+import { currentHref, isInternalPath, recordHref } from "@/lib/record-links";
 import { type ApprovalRow, myApprovalInbox, refreshActionItems } from "@/modules/action-centre";
 import { registerAppHooks } from "@/modules/wiring";
 import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
@@ -28,7 +28,7 @@ function waited(minutes: number) {
 }
 
 function Row({ a, decidable }: { a: ApprovalRow; decidable: boolean }) {
-  const href = isInternalPath(a.link) ? a.link : (recordHref(a.entityType, a.entityId) ?? "/action-centre");
+  const href = isInternalPath(a.link) ? currentHref(a.link) : (recordHref(a.entityType, a.entityId) ?? "/action-centre");
   const inline = INLINE_DECISIONS[a.kind];
   const showInline = decidable && !!inline;
   return (
@@ -96,7 +96,7 @@ export default async function ApprovalsPage() {
       {decidable.length > 0 && (
         <NextStep
           text={<>Decide the oldest one: {decidable[0].displayTitle}</>}
-          action={{ label: "Open it", href: isInternalPath(decidable[0].link) ? decidable[0].link : (recordHref(decidable[0].entityType, decidable[0].entityId) ?? "/approvals") }}
+          action={{ label: "Open it", href: isInternalPath(decidable[0].link) ? currentHref(decidable[0].link) : (recordHref(decidable[0].entityType, decidable[0].entityId) ?? "/approvals") }}
           waitingFor={decidable.length > 1 ? `${decidable.length - 1} more after this one.` : undefined}
         />
       )}

@@ -19,7 +19,7 @@ Total screens: 250.
 | Screen | Status | Notes |
 |---|---|---|
 | `/account` | ☑ 2026-10-31 | Intro; “needs the owner's OK” wording; password, phone code and sign-ins unchanged. |
-| `/action-centre` | ☑ 2026-10-31 | “Problems & alerts”: plain tabs (To decide, Problems, Alerts for you, Phone changes to check), 44 px tabs, title first/number grey, “I'm on it”; message rules in ⋯ More. |
+| `/action-centre` | ☑ 2026-10-31 | “Problems & alerts”: Problems and (for IT) Phone changes to check; the To decide and Alerts tabs redirect to To approve and Messages (docs/LEGACY_SCREENS.md); “I'm on it”; message rules in ⋯ More. |
 | `/approvals` | ☑ 2026-10-31 | Next step opens the oldest decision; title first, number grey; Problems & alerts in ⋯ More; owner banner in plain words. |
 | `/dashboard/details/batches` | ☑ 2026-10-31 | Intro (“Done” = QA OK); back to Home. |
 | `/dashboard/details/stock` | ☑ 2026-10-31 | “Stock to look at”: running low / use first / stopped by QA. |
@@ -114,7 +114,7 @@ Total screens: 250.
 
 | Screen | Status | Notes |
 |---|---|---|
-| `/inventory/[lotId]/move` | ☑ 2026-10-31 | “Move <item>”: 4 fields (from shelf, to shelf, how much, why), shelves by name, only allowed places; “Move it”. |
+| `/inventory/[lotId]/move` | ☑ 2026-10-31 | Redirect to Move stock (/inventory/move?lot=) (docs/LEGACY_SCREENS.md). |
 | `/inventory/[lotId]` | ☑ 2026-10-31 | Item name title, lot number grey + plain status chip; next step by state (move / waiting for QA / do not use); 8 secondary actions in ⋯ More; history as stock-change rows; details folded. |
 | `/inventory/adjustments/[id]` | ☑ 2026-10-31 | “Fix stock: <item>”; next step or “Waiting for a site manager (not the person who made it)” / owner second OK (ADR-091 kept); cancel/delete in ⋯ More; lines as rows with Add/Take away. |
 | `/inventory/adjustments/new` | ☑ 2026-10-31 | Intro; lot by scan or item name (keywordMatches); cost per unit folded. |
@@ -155,7 +155,7 @@ Total screens: 250.
 | `/print/box-label/[containerId]`, `/print/lot-label/[lotId]` | ☑ 2026-10-31 | Redirect to “Print a label” for the box / lot (every label is a recorded label job). |
 | `/warehouse/packs/[packId]` | ☑ 2026-10-31 | “Boxing: <product>”; next step (pack a box / check / waiting for a checker ≠ packer); cancel and boxing note in ⋯ More. |
 | `/warehouse/packs` | ☑ 2026-10-31 | Product first, plain states, number grey; repack in ⋯ More. |
-| `/warehouse` | ☑ 2026-10-31 | Intro; “Scan a label”; parts of the warehouse tiles kept. |
+| `/warehouse` | ☑ 2026-10-31 | “Warehouse sections”: intro; parts of the warehouse tiles; the copy of the day's tasks removed (they are on the warehouse Home). |
 | `/warehouse/repack` | ☑ 2026-10-31 | Scan boxes, customer by name, why; units per box folded. |
 
 ## Maintenance (8)
@@ -206,7 +206,7 @@ Total screens: 250.
 | `/masterdata/sites` | ☑ | add = name (+ address, city); site code made from the name's initials |
 | `/masterdata/suppliers/[id]` | ☑ | name first, plain labels (pay within, order to delivery, QA status), materials by name |
 | `/masterdata/suppliers/new` | ☑ | 4 visible fields (name, contact, phone, email); SUP- number; rest under More details |
-| `/masterdata/suppliers` | ☑ | name first, code grey, plain columns, empty state says what to do |
+| `/masterdata/suppliers` | ☑ 2026-10-31 | Redirect to Suppliers we may buy from (/procurement/suppliers), which gained Add a supplier, CSV and stopped-using suppliers (docs/LEGACY_SCREENS.md). |
 | `/masterdata/uom` | ☑ | renamed Units; add = name + what it measures; short name made from the name |
 | `/masterdata/warehouses/[id]` | ☑ | name first, special places by name, code under More details |
 | `/masterdata/warehouses` | ☑ | add = name + what is kept (site only if >1); WH- number |
@@ -284,7 +284,7 @@ Total screens: 250.
 | `/quality/changes/new` | ☑ 2026-10-31 | 4 visible fields (short name, what changes, what, why); version link, site, date folded. |
 | `/quality/changes` | ☑ 2026-10-31 | "Change requests"; title first; plain status chips with icons. |
 | `/quality/check/[batchId]` | ☑ 2026-10-31 | Product first; next step; OK to use / Not yet / Not OK – don't use; note folded; maker/tester rules kept. |
-| `/quality/check` | ☑ 2026-10-31 | "Batches waiting for QA check"; next step to the oldest; batch number grey. |
+| `/quality/check` | ☑ 2026-10-31 | Redirect to the QA queue (/quality), which lists the same batches plus deliveries and stopped lots (docs/LEGACY_SCREENS.md). |
 | `/quality/complaints/[complaintId]` | ☑ 2026-10-31 | "Complaint from <customer>": next step by state; trace, letter, plan, return in ⋯ More. |
 | `/quality/complaints/new` | ☑ 2026-10-31 | 5 visible fields (customer, kind, product, label number optional, what they say); rest folded. |
 | `/quality/complaints` | ☑ 2026-10-31 | Customer + problem first; plain status ("New – QA to look", "Answered – to close"). |

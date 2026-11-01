@@ -46,7 +46,7 @@ export default async function ItemPage({ params, searchParams }: { params: Promi
   const actions = [
     isMat && ctx.can("procurement.goods_receipt.create") ? { href: "/inventory/receive", label: "Receive more", icon: <PackagePlus size={18} aria-hidden />, main: true } : null,
     isMat && ctx.can("procurement.reorder_suggestion.view") ? { href: "/procurement/reorder", label: "Order more", icon: <ShoppingCart size={18} aria-hidden />, main: false } : null,
-    !isMat && ctx.can("production.work_order.view") ? { href: "/production/plan", label: "Plan more", icon: <Factory size={18} aria-hidden />, main: false } : null,
+    !isMat && ctx.can("production.work_order.create") ? { href: "/production/orders/new", label: "Make more", icon: <Factory size={18} aria-hidden />, main: false } : null,
     ctx.can("inventory.movement.post") && !nothing ? { href: firstUsable && !r.scope.all ? `/inventory/move?lot=${firstUsable.lotId}` : "/inventory/move", label: "Move stock", icon: <ScanLine size={18} aria-hidden />, main: false } : null,
   ].filter((a): a is NonNullable<typeof a> => a !== null);
 

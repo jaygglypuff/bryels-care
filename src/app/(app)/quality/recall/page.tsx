@@ -267,7 +267,7 @@ export default async function RecallPage({ searchParams }: { searchParams: Promi
                   <ul className="flex flex-col gap-1.5 text-[14px]">
                     {r.batches.map((b) => (
                       <li key={b.id} className="flex flex-wrap items-center gap-2">
-                        <Link className="font-medium text-primary-text hover:underline" href={`/quality/batches/${b.id}`}>
+                        <Link className="font-medium text-primary-text hover:underline" href={`/quality/check/${b.id}`}>
                           {b.number}
                         </Link>
                         <span className="text-fg-2">{b.productName}</span>

@@ -215,7 +215,7 @@ export async function submitSupplierReturn(ctx: AuthContext, input: { returnId: 
     await transitionSr(tx, ctx, sr, "submitted", { set: { submittedBy: ctx.userId, submittedAt: new Date() } });
     await audit(tx, ctx, { action: "procurement.supplier_return.submitted", entityType: "supplier_return", entityId: sr.id, entityNumber: sr.returnNumber, siteId: sr.siteId, after: { lines: lines.length, credit: sr.creditExpectedAmount } });
     const progress = await approvalProgress(tx, ctx.organizationId, { recordType: "supplier_return", recordId: sr.id, siteId: sr.siteId, basis: basisOf(sr) });
-    await notifyRoles(tx, { roleCodes: progress.next?.roleCodes.length ? progress.next.roleCodes : ["site_manager"], siteId: sr.siteId }, { organizationId: ctx.organizationId, siteId: sr.siteId, kind: "supplier_return_submitted", severity: "info", title: `Supplier return ${sr.returnNumber} waits for approval`, body: `${lines.length} lot line(s).`, entityType: "supplier_return", entityId: sr.id, link: `/procurement/returns/${sr.id}` });
+    await notifyRoles(tx, { roleCodes: progress.next?.roleCodes.length ? progress.next.roleCodes : ["site_manager"], siteId: sr.siteId }, { organizationId: ctx.organizationId, siteId: sr.siteId, kind: "supplier_return_submitted", severity: "info", title: `Return to supplier ${sr.returnNumber} waits for approval`, body: `${lines.length} lot(s) to send back.`, entityType: "supplier_return", entityId: sr.id, link: `/procurement/returns/${sr.id}` });
     return { returnId: sr.id, status: "submitted" as const };
   });
 }
@@ -230,7 +230,7 @@ export async function decideSupplierReturn(ctx: AuthContext, input: { returnId: 
     const r = await recordDecision(tx, ctx, { recordType: "supplier_return", recordId: sr.id, recordNumber: sr.returnNumber, siteId: sr.siteId, basis: basisOf(sr), pendingSince: sr.submittedAt, excludedUserIds: [sr.createdBy, sr.submittedBy], decision, note: input.note });
     if (decision === "approved" && r.final) {
       await transitionSr(tx, ctx, sr, "approved", { set: { approvedBy: ctx.userId, approvedAt: new Date(), approvalNote: input.note?.trim() || null } });
-      await notifyRoles(tx, { roleCodes: ["warehouse_operator", "procurement"], siteId: sr.siteId }, { organizationId: ctx.organizationId, siteId: sr.siteId, kind: "supplier_return_approved", severity: "info", title: `Supplier return ${sr.returnNumber} approved`, body: "Post it when the goods leave.", entityType: "supplier_return", entityId: sr.id, link: `/procurement/returns/${sr.id}` });
+      await notifyRoles(tx, { roleCodes: ["warehouse_operator", "procurement"], siteId: sr.siteId }, { organizationId: ctx.organizationId, siteId: sr.siteId, kind: "supplier_return_approved", severity: "info", title: `Return to supplier ${sr.returnNumber} approved`, body: "Mark it as sent when the goods leave.", entityType: "supplier_return", entityId: sr.id, link: `/procurement/returns/${sr.id}` });
     } else if (decision === "returned") {
       await transitionSr(tx, ctx, sr, "draft", { reason: input.note });
     }

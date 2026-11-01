@@ -66,7 +66,7 @@ export async function startPick(ctx: AuthContext, orderId: string, input: { idem
     const [open] = await tx.select({ n: picks.pickNumber }).from(picks).where(and(eq(picks.salesOrderId, o.id), inArray(picks.status, ["draft", "in_progress"]))).limit(1);
     if (open) throw new DomainError("conflict", `Pick ${open.n} is already open for this order.`);
     const allocs = await openAllocationsForOrder(tx, o.id);
-    if (allocs.length === 0) throw new DomainError("state", `Nothing is allocated to ${o.orderNumber} for picking. Allocate stock first.`);
+    if (allocs.length === 0) throw new DomainError("state", `No stock is set aside for ${o.orderNumber} yet. Set the stock aside first.`);
     const [cust] = await tx.select().from(customers).where(eq(customers.id, o.customerId)).limit(1);
     // Numbers last (data-model §5.4 lock order).
     const shipmentNumber = await nextNumber(tx, ctx.organizationId, "SH");
@@ -163,7 +163,7 @@ export async function scanPick(ctx: AuthContext, pickId: string, input: PickScan
       try {
         assertLotUsable(lot);
       } catch (e) {
-        if (e instanceof DomainError) throw new DomainError("blocked_lot", `BLOCKED – ${e.message} Do not pick it; ask the office to re-allocate the order.`, { rule: "V-HOLD" });
+        if (e instanceof DomainError) throw new DomainError("blocked_lot", `STOP – ${e.message} Do not take it; ask the office to set other stock aside for the order.`, { rule: "V-HOLD" });
         throw e;
       }
       await assertLocationsNotFrozen(tx, [v.allocation.locationId]);
@@ -224,7 +224,7 @@ export async function scanPick(ctx: AuthContext, pickId: string, input: PickScan
           });
         }
         if (box.currentLocationId !== alloc.locationId || !["open", "sealed"].includes(box.status)) {
-          throw new DomainError("state", `Box ${box.containerNumber} is ${box.status} and not at ${alloc.locationCode}; it cannot be picked for this allocation.`);
+          throw new DomainError("state", `Box ${box.containerNumber} is ${box.status} and not at ${alloc.locationCode}; it cannot be taken for this order.`);
         }
         const qty = left(alloc);
         await insertLine({ allocation: alloc, qty, containerId: box.id, substitutedFor });
@@ -246,7 +246,7 @@ export async function scanPick(ctx: AuthContext, pickId: string, input: PickScan
       if (!QTY_RE.test(raw) || D(raw).lte(0)) throw new DomainError("validation", `Enter how many units of lot ${lot.lotNumber} you picked (up to ${remaining.toString()}).`, { field: "qty" });
       let qty = D(raw);
       if (lot.baseUom === "pcs" && !qty.isInteger()) throw new DomainError("validation", "Whole pieces only.", { field: "qty" });
-      if (qty.gt(remaining)) throw new DomainError("conflict", `Only ${remaining.toString()} ${lot.baseUom} of lot ${lot.lotNumber} are allocated loose to this order; ${qty.toString()} is more than allocated.`, { code: "OVER_PICK" });
+      if (qty.gt(remaining)) throw new DomainError("conflict", `Only ${remaining.toString()} ${lot.baseUom} of lot ${lot.lotNumber} are set aside loose for this order; ${qty.toString()} is more than that.`, { code: "OVER_PICK" });
       for (const a of loose) {
         if (qty.lte(0)) break;
         const take = Decimal.min(left(a), qty);

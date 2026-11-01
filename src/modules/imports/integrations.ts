@@ -35,11 +35,11 @@ export async function failedImportCandidates(organizationId: string): Promise<Im
   return [
     ...jobs.map((r) => ({
       kind: "failed_import" as const, siteId: r.site_id ? String(r.site_id) : null, entityType: "import_job", entityId: String(r.id), recordNumber: String(r.import_number),
-      title: `Import ${r.import_number} (${String(r.import_kind).replace(/_/g, " ")}) failed`, detail: String(r.err) || null, link: `/admin/imports/${r.id}`, openedAt: at(r.at),
+      title: `Spreadsheet ${r.import_number} (${String(r.import_kind).replace(/_/g, " ")}) could not be loaded`, detail: String(r.err) || null, link: `/admin/imports/${r.id}`, openedAt: at(r.at),
     })),
     ...bg.map((r) => ({
       kind: "failed_import" as const, siteId: r.site_id ? String(r.site_id) : null, entityType: "background_job", entityId: String(r.id), recordNumber: String(r.job_kind),
-      title: `Import job ${r.job_kind} failed`, detail: String(r.err) || null, link: `/admin/diagnostics?job=${r.id}#jobs`, openedAt: at(r.at ?? new Date()),
+      title: `Spreadsheet load ${r.job_kind} failed`, detail: String(r.err) || null, link: `/admin/diagnostics?job=${r.id}#jobs`, openedAt: at(r.at ?? new Date()),
     })),
   ];
 }
@@ -51,7 +51,7 @@ export async function importApprovalCandidates(organizationId: string): Promise<
     from import_jobs where organization_id = ${organizationId}::uuid and status = 'submitted'`);
   return rows.map((r) => ({
     kind: "approval.import_job" as const, siteId: r.site_id ? String(r.site_id) : null, entityType: "import_job", entityId: String(r.id), recordNumber: String(r.import_number),
-    title: `Import ${r.import_number} (${String(r.import_kind).replace(/_/g, " ")}) waits for approval`, detail: `${r.rows_total} row(s)`, link: `/admin/imports/${r.id}`, openedAt: at(r.at),
+    title: `Spreadsheet ${r.import_number} (${String(r.import_kind).replace(/_/g, " ")}) waits for approval`, detail: `${r.rows_total} row(s)`, link: `/admin/imports/${r.id}`, openedAt: at(r.at),
   }));
 }
 

@@ -624,13 +624,13 @@ export async function seedW3a(db: Db, opts: W3aSeedOptions = {}) {
   // ---------------------------------------------------------------- open action-centre items
   const alertAt = at(addDays(endDate, -2), 7);
   if (ok(alertAt)) {
-    const alerts: { siteId: string | null; kind: string; severity: string; title: string; body: string; to: string[]; key: string }[] = [
-      { siteId: NFD.id, kind: "expiry_alert", severity: "warning", title: "Palm oil lot expires within 14 days", body: "A released lot at North Fields expires soon; use it first (FEFO).", to: [owner, manager], key: `w3a:${series}:expiry` },
-      { siteId: NFD.id, kind: "deviation_overdue", severity: "critical", title: "Deviation open for more than 7 days", body: "An out-of-specification deviation on a soap batch is still under investigation.", to: [owner, qa], key: `w3a:${series}:deviation` },
-      { siteId: RVS.id, kind: "order_overdue", severity: "warning", title: "Order past its requested delivery date", body: "A Riverside order has not been dispatched yet.", to: [owner, salesUser], key: `w3a:${series}:order` },
+    const alerts: { siteId: string | null; kind: string; severity: string; title: string; body: string; link: string; to: string[]; key: string }[] = [
+      { siteId: NFD.id, kind: "expiry_alert", severity: "warning", title: "Palm oil lot expires within 14 days", body: "A lot that is ready to use at North Fields expires soon; use it first.", link: "/inventory/lots/expiry", to: [owner, manager], key: `w3a:${series}:expiry` },
+      { siteId: NFD.id, kind: "deviation_overdue", severity: "critical", title: "Problem report open for more than 7 days", body: "A problem report on a soap batch (a test result outside its limits) is still being looked into.", link: "/quality/deviations", to: [owner, qa], key: `w3a:${series}:deviation` },
+      { siteId: RVS.id, kind: "order_overdue", severity: "warning", title: "Order past its requested delivery date", body: "A Riverside order has not been sent out yet.", link: "/sales", to: [owner, salesUser], key: `w3a:${series}:order` },
     ];
     for (const a of alerts)
-      await db.insert(s.notifications).values(a.to.map((u) => ({ organizationId: O, siteId: a.siteId, recipientUserId: u, kind: a.kind, severity: a.severity, title: a.title, body: a.body, channel: "in_app", deliveredAt: alertAt, dedupeKey: a.key, createdAt: alertAt }))).onConflictDoNothing();
+      await db.insert(s.notifications).values(a.to.map((u) => ({ organizationId: O, siteId: a.siteId, recipientUserId: u, kind: a.kind, severity: a.severity, title: a.title, body: a.body, link: a.link, channel: "in_app", deliveredAt: alertAt, dedupeKey: a.key, createdAt: alertAt }))).onConflictDoNothing();
   }
 
   // ---------------------------------------------------------------- KPI snapshots for every day of the window

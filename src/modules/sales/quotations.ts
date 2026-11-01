@@ -338,7 +338,7 @@ export async function submitQuote(ctx: AuthContext, id: string, opts: { idempote
       const progress = await approvalProgress(tx, ctx.organizationId, { recordType: "quote", recordId: q.id, siteId: q.siteId, basis });
       const roles = stepRoles(progress.next);
       if (roles.length) {
-        await notifyRoles(tx, { roleCodes: roles, siteId: q.siteId }, { organizationId: ctx.organizationId, siteId: q.siteId, kind: "approval_requested", severity: "info", title: `Quotation ${q.quoteNumber} needs approval`, body: `Discount of ${new Decimal(q.maxDiscountPct).toDecimalPlaces(1)} % below the price list.`, entityType: "quote", entityId: q.id, link: `/sales/quotations/${q.id}` });
+        await notifyRoles(tx, { roleCodes: roles, siteId: q.siteId }, { organizationId: ctx.organizationId, siteId: q.siteId, kind: "approval_requested", severity: "info", title: `Price offer ${q.quoteNumber} needs approval`, body: `Discount of ${new Decimal(q.maxDiscountPct).toDecimalPlaces(1)} % below the usual prices.`, entityType: "quote", entityId: q.id, link: `/sales/quotations/${q.id}` });
       }
       return { quoteNumber: q.quoteNumber, status: "pending_approval" as const };
     });
@@ -358,13 +358,13 @@ export async function approveQuote(ctx: AuthContext, id: string, note?: string |
     if (!r.final) {
       const progress = await approvalProgress(tx, ctx.organizationId, { recordType: "quote", recordId: q.id, siteId: q.siteId, basis: { discount_pct: q.maxDiscountPct } });
       const roles = stepRoles(progress.next);
-      if (roles.length) await notifyRoles(tx, { roleCodes: roles, siteId: q.siteId }, { organizationId: ctx.organizationId, siteId: q.siteId, kind: "approval_requested", severity: "info", title: `Quotation ${q.quoteNumber} needs the next approval`, body: `Step ${r.step?.step ?? 1} approved by ${ctx.displayName}.`, entityType: "quote", entityId: q.id, link: `/sales/quotations/${q.id}` });
+      if (roles.length) await notifyRoles(tx, { roleCodes: roles, siteId: q.siteId }, { organizationId: ctx.organizationId, siteId: q.siteId, kind: "approval_requested", severity: "info", title: `Price offer ${q.quoteNumber} needs the next approval`, body: `Step ${r.step?.step ?? 1} approved by ${ctx.displayName}.`, entityType: "quote", entityId: q.id, link: `/sales/quotations/${q.id}` });
       return { sent: false };
     }
     const now = new Date();
     await setQuoteStatus(tx, ctx, q, "sent", { approvedBy: ctx.userId, approvedAt: now, approvalNote: note?.trim() || null, sentAt: now });
     await audit(tx, ctx, { action: "sales.quote.sent", entityType: "quote", entityId: q.id, entityNumber: q.quoteNumber, siteId: q.siteId, before: { status: "pending_approval" }, after: { status: "sent" } });
-    if (q.submittedBy) await notifyUsers(tx, [q.submittedBy], { organizationId: ctx.organizationId, siteId: q.siteId, kind: "quote_approved", severity: "info", title: `Quotation ${q.quoteNumber} approved`, body: "It can be sent to the customer.", entityType: "quote", entityId: q.id, link: `/sales/quotations/${q.id}` });
+    if (q.submittedBy) await notifyUsers(tx, [q.submittedBy], { organizationId: ctx.organizationId, siteId: q.siteId, kind: "quote_approved", severity: "info", title: `Price offer ${q.quoteNumber} approved`, body: "It can be sent to the customer.", entityType: "quote", entityId: q.id, link: `/sales/quotations/${q.id}` });
     return { sent: true };
   });
 }

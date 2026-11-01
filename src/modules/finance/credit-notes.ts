@@ -179,7 +179,7 @@ export async function submitCreditNote(ctx: AuthContext, id: string) {
     await tx.update(creditNotes).set({ status: to, submittedBy: ctx.userId, submittedAt: now, ...(to === "approved" ? { approvedAt: now } : {}), updatedAt: now }).where(eq(creditNotes.id, cn.id));
     await logTransition(tx, ctx, doc(cn), "draft", "submitted");
     if (to === "approved") await logTransition(tx, ctx, doc(cn), "submitted", "approved", "No approval rule applies");
-    else await notifyNextStep(tx, ctx, ev.steps[0] ?? null, { siteId: cn.siteId, kind: "finance.credit_note.approval", title: "Credit note waiting for approval", body: `A credit of ${money(cn.amount)} ${cn.currency} waits for approval.`, entityType: "credit_note", entityId: cn.id, link: `/finance/credit-notes/${cn.id}` });
+    else await notifyNextStep(tx, ctx, ev.steps[0] ?? null, { siteId: cn.siteId, kind: "finance.credit_note.approval", title: "Credit (money back) waiting for approval", body: `A credit of ${money(cn.amount)} ${cn.currency} waits for approval.`, entityType: "credit_note", entityId: cn.id, link: `/finance/credit-notes/${cn.id}` });
     await audit(tx, ctx, { action: "finance.credit_note.submitted", entityType: "credit_note", entityId: cn.id, siteId: cn.siteId, after: { status: to } });
     return { status: to };
   });

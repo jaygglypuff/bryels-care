@@ -1838,3 +1838,19 @@ entries fold under "Advanced" in their section; IT screens sit in "IT and system
 44 px on touch screens, 34 px with a mouse; checkbox/radio labels are ≥44 px rows. Phones get Scan in the top bar for
 every role; record headers give the title the full width; destination descriptions are tooltips. No schema or
 permission change.
+
+## ADR-102 Superseded screens redirect and links follow (UX audit round 1, 2026-10-31)
+
+Status: Accepted; A-LEG-01 (QA-status filter dropped from the supplier list) needs QA.
+
+Decision: `docs/LEGACY_SCREENS.md` lists every route (current, advanced-kept, redirect). Superseded screens redirect on
+the server and keep their URL alive: `/inventory/[lotId]/move` → `/inventory/move?lot=`, `/masterdata/suppliers` →
+`/procurement/suppliers` (which gained Add a supplier, CSV and "suppliers we stopped using"), `/quality/check` list →
+`/quality`; Problems & alerts keeps only problems (`?tab=approvals` → To approve, `?tab=alerts` → Messages).
+`currentHref()` in `src/lib/record-links.ts` rewrites links already stored in messages and queue rows. Record, search,
+scan and report links open the current screens. Message titles, queue rows and the most-read service errors use the
+screen words; `userMessage()` strips internal error tags. The QA badge uses `qaQueueCount`, the same rule as the QA
+list. Stored codes, permissions, exports and printed GMP records are unchanged.
+
+Consequences: tests `tests/unit/legacy-redirects.test.ts`, `tests/unit/no-jargon-messages.test.ts`. Open: about 25
+service error messages still use old words; the QA queue lacks the "check again on" date.

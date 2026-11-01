@@ -160,7 +160,7 @@ export const NAV: NavGroup[] = [
       { label: "Stock", href: "/inventory", permission: "inventory.lot.view" },
       { label: "Scan or search", href: "/inventory/scan", permission: "inventory.lot.view" },
       { label: "Move stock", href: "/inventory/move", permission: "inventory.movement.post" },
-      { label: "Warehouse", href: "/warehouse", permission: "inventory.lot.view" }, // S6 (ADR-077)
+      { label: "Warehouse sections", href: "/warehouse", permission: "inventory.lot.view" }, // S6 (ADR-077)
       ...inSection("More stock lists", [
         { label: "Shelves", href: "/inventory/locations", permission: "masterdata.location.view" },
         { label: "Boxes and sacks", href: "/inventory/containers", permission: "inventory.container.view" },

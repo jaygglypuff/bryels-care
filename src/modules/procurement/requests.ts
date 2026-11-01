@@ -162,7 +162,7 @@ export async function submitPurchaseRequest(ctx: AuthContext, input: { requestId
     await audit(tx, ctx, { action: "procurement.purchase_request.submitted", entityType: "purchase_request", entityId: pr.id, entityNumber: pr.requestNumber, siteId: pr.siteId, after: { status: "submitted", estimatedTotalAmount: pr.estimatedTotalAmount } });
     const progress = await approvalProgress(tx, ctx.organizationId, { recordType: "purchase_request", recordId: pr.id, siteId: pr.siteId, basis: basisOf(pr) });
     const roles = progress.next?.roleCodes.length ? progress.next.roleCodes : ["site_manager"];
-    await notifyRoles(tx, { roleCodes: roles, siteId: pr.siteId }, { organizationId: ctx.organizationId, siteId: pr.siteId, kind: "purchase_request_submitted", severity: "info", title: `Purchase request ${pr.requestNumber} waits for approval`, body: "Review the materials and quantities.", entityType: "purchase_request", entityId: pr.id, link: `/procurement/requests/${pr.id}` });
+    await notifyRoles(tx, { roleCodes: roles, siteId: pr.siteId }, { organizationId: ctx.organizationId, siteId: pr.siteId, kind: "purchase_request_submitted", severity: "info", title: `Request to buy ${pr.requestNumber} waits for approval`, body: "Check the items and amounts.", entityType: "purchase_request", entityId: pr.id, link: `/procurement/requests/${pr.id}` });
     return { requestId: pr.id, status: "submitted" as const };
   });
 }
@@ -192,7 +192,7 @@ export async function decidePurchaseRequest(ctx: AuthContext, input: { requestId
     const now = new Date();
     if (decision === "approved" && r.final) {
       await transitionPr(tx, ctx, pr, "approved", { set: { approvedBy: ctx.userId, approvedAt: now, approvalNote: input.note?.trim() || null } });
-      await notifyRoles(tx, { roleCodes: ["procurement"], siteId: pr.siteId }, { organizationId: ctx.organizationId, siteId: pr.siteId, kind: "purchase_request_approved", severity: "info", title: `Purchase request ${pr.requestNumber} approved`, body: "Convert it into a purchase order.", entityType: "purchase_request", entityId: pr.id, link: `/procurement/requests/${pr.id}` });
+      await notifyRoles(tx, { roleCodes: ["procurement"], siteId: pr.siteId }, { organizationId: ctx.organizationId, siteId: pr.siteId, kind: "purchase_request_approved", severity: "info", title: `Request to buy ${pr.requestNumber} approved`, body: "Make a purchase order from it.", entityType: "purchase_request", entityId: pr.id, link: `/procurement/requests/${pr.id}` });
     } else if (decision === "rejected") {
       await transitionPr(tx, ctx, pr, "rejected", { reason: input.note, set: { rejectReason: input.note?.trim() ?? null } });
     } else if (decision === "returned") {

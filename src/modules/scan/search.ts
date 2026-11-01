@@ -182,7 +182,7 @@ async function suppliers(ctx: AuthContext, words: string[]): Promise<SearchHit[]
      where s.organization_id = ${ctx.organizationId}::uuid and ${allWords(words, [sql`s.name`, sql`s.code`, sql`s.legacy_number`, sql`s.contact_name`])}
      order by s.name asc
      limit ${GROUP_LIMIT}`)) as unknown as { id: string; code: string; name: string; contact_name: string | null }[];
-  return rows.map((r) => ({ title: r.name, detail: [r.contact_name ? `contact ${r.contact_name}` : null, r.code].filter(Boolean).join(" · "), href: `/masterdata/suppliers/${r.id}` }));
+  return rows.map((r) => ({ title: r.name, detail: [r.contact_name ? `contact ${r.contact_name}` : null, r.code].filter(Boolean).join(" · "), href: `/procurement/suppliers/${r.id}` }));
 }
 
 /**

@@ -330,7 +330,7 @@ export async function createReservation(ctx: AuthContext, input: CreateReservati
     if (!c) throw new DomainError("insufficient_stock", `Lot ${lot.lotNumber} has no stock at ${loc.code}.`);
     if (!c.eligible && c.reason !== "Fully reserved or allocated") throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} at ${loc.code} cannot be reserved: ${c.reason}.`);
     if (new Decimal(c.available).lt(qty)) {
-      throw new DomainError("insufficient_stock", `Only ${c.available} ${lot.baseUom} of lot ${lot.lotNumber} at ${loc.code} is available (on hand ${c.onHand}, reserved ${c.reserved}, allocated ${c.allocated}).`);
+      throw new DomainError("insufficient_stock", `Only ${c.available} ${lot.baseUom} of lot ${lot.lotNumber} at ${loc.code} is available (in stock ${c.onHand}, set aside ${c.reserved}, promised to orders ${c.allocated}).`);
     }
     const ttl = input.ttlHours ?? (await getInventorySetting(tx, ctx.organizationId, lot.siteId, "inventory.reservation.ttl_hours"));
     const number = await nextNumber(tx, ctx.organizationId, "RSV");

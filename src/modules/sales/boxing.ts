@@ -514,14 +514,14 @@ export async function repackForCustomer(ctx: AuthContext, input: RepackInput) {
     if (new Set(sources.map((b) => b.siteId)).size > 1 || new Set(sources.map((b) => b.currentLocationId)).size > 1) throw new DomainError("validation", "Repack boxes at one location. Move them together first.");
     for (const b of sources) if (!["open", "sealed"].includes(b.status) || !b.currentLocationId) throw new DomainError("state", `Box ${b.containerNumber} is ${b.status}; only open or sealed boxes can be repacked.`);
     const allocated = await tx.select({ c: stockAllocations.containerId }).from(stockAllocations).where(and(inArray(stockAllocations.containerId, ids), eq(stockAllocations.status, "open"))).limit(1);
-    if (allocated.length) throw new DomainError("conflict", "A box is allocated to an order. Release the allocation (or pick it) before repacking.");
+    if (allocated.length) throw new DomainError("conflict", "A box is set aside for an order. Let the stock go (or get it from the shelf) before repacking.");
     const contents = (await Promise.all(sources.map(async (b) => (await contentsOf(tx, b.id)).map((c) => ({ ...c, box: b }))))).flat();
     if (contents.length === 0) throw new DomainError("state", "These boxes are empty.");
     const lots = await lockLots(tx, contents.map((c) => c.lotId));
     for (const l of lots) {
       if (l.qualityStatus !== "released" || isPastExpiry(l.expiresOn)) throw new DomainError("blocked_lot", `Lot ${l.lotNumber} is ${isPastExpiry(l.expiresOn) ? "expired" : l.qualityStatus.replace(/_/g, " ")}; only released lots are repacked for a customer.`);
     }
-    if (new Set(lots.map((l) => l.productId)).size !== 1 || !lots[0].productId) throw new DomainError("validation", "V-MAT: repack boxes of one SKU at a time.", { rule: "V-MAT" });
+    if (new Set(lots.map((l) => l.productId)).size !== 1 || !lots[0].productId) throw new DomainError("validation", "Repack boxes of one product at a time.", { rule: "V-MAT" });
     await assertLocationsNotFrozen(tx, [sources[0].currentLocationId!]);
     const [prod] = await tx.select().from(products).where(eq(products.id, lots[0].productId!)).limit(1);
     let req = null;

@@ -12,7 +12,7 @@ Sign in on the sign-in page with **Start from scratch** and pick **Sandbox Owner
 
 One rule for every record: many new records start as a **Draft**. Open the record and use the buttons at the top (for example **Submit**, **Approve** or **Activate**) until its status reads **Active** or **Approved**. Only active or approved records can be used in the next steps.
 
-Shortcut: on **Management → Production setup → Products and formulas** press **Use the Acapulco soap example**. It adds the soap materials (coconut oil, palm oil, lye solution, extract, colour, wrapper), the product **Acapulco Soap 135 g**, a draft formula and a draft soap routing in one tap. Then skip steps 2, 4 and 5 except for checking, sending and approving the drafts (open the recipe from the recipe list and press **Edit recipe**). The quantities are examples from the fictional demo company: check them before you rely on them.
+Shortcut: on **Management → Production setup → Recipes (advanced)** open **⋯ More** and press **Add the Acapulco soap example**. It adds the soap materials (coconut oil, palm oil, lye solution, extract, colour, wrapper), the product **Acapulco Soap 135 g**, a draft formula and a draft soap routing in one tap. Then skip steps 2, 4 and 5 except for checking, sending and approving the drafts (open the recipe from the recipe list and press **Edit recipe**). The quantities are examples from the fictional demo company: check them before you rely on them.
 
 Tip: when a button is missing or a step says it needs someone else, the message names the role and the people who can do it.
 
@@ -30,8 +30,8 @@ Tip: when a button is missing or a step says it needs someone else, the message 
 
 ## 3. Create a supplier and approve it
 
-1. Open **Management → Master data → Suppliers** and press **New supplier**. Use a made-up name.
-2. Open **Management → Purchasing → Approved suppliers** and add the supplier for each material it may deliver. Approve the entry. Receiving refuses a material from a supplier that is not approved for it.
+1. Open **Management → Purchasing → Suppliers we may buy from** and press **Add a supplier**. Use a made-up name.
+2. On the supplier's page, under **Suggest an item**, add each material it may deliver; QA says yes or no. Receiving refuses a material from a supplier that is not approved for it.
 
 ## 4. Create what you sell (product)
 
@@ -65,8 +65,8 @@ The detailed pages (**Products and formulas** and **Steps for each product**, "a
 ## 7. Buy and receive the materials
 
 1. Optional but realistic: **Management → Purchasing → Purchase orders**, create a purchase order to your supplier, submit and approve it.
-2. Open **Operations → Receiving → Receive materials**. Choose the supplier and the material, type the supplier lot, the quantity and the expiry date, and post the receipt. Print the labels when asked.
-3. The received lot sits in quarantine. It cannot be used until QA releases it.
+2. Open **Operations → Receiving → Receive materials**. Choose the supplier and the material, type the supplier lot, the amount and the expiry date, and save it to stock. Print the labels when asked.
+3. The received lot waits for the QA check. Nobody can use it until QA says OK.
 
 ## 8. QA releases the materials
 
@@ -109,7 +109,7 @@ The detailed pages (**Products and formulas** and **Steps for each product**, "a
 
 ## 14. See it all together
 
-1. **Home → Overview** and **Management → Reports & analytics → Dashboards** now show your stock, the batch and the order.
+1. **Home → Overview** and **Management → Reports & analytics → Business overview** now show your stock, the batch and the order.
 2. **Operations → Quality → Where it came from and went**: search the batch number to see which material lots went into it and which customer received it.
 3. **Reports** lists the standard reports; each one exports to a spreadsheet.
 

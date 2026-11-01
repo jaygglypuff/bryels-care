@@ -87,7 +87,7 @@ describe("W3E: delivery receipts and unshipped orders", () => {
     await allocateOrder(w.warehouse, o.id);
     await db.update(salesOrders).set({ status: "picking", requestedDeliveryOn: "2026-01-05" }).where(eq(salesOrders.id, o.id));
     await refreshActionItems(w.orgId);
-    expect(await open("unshipped_order", o.id)).toMatchObject({ detail: "Status picking" });
+    expect(await open("unshipped_order", o.id)).toMatchObject({ detail: "Now: getting it from the shelf" });
   });
 });
 

@@ -10,7 +10,7 @@ Reports read posted records live, limited to your sites and role. Each report sh
 
 ## Run
 
-1. Open **Reports**. The library lists only the reports your role may see.
+1. Open **Management → Reports & analytics → Lists to download or print**. It lists only the lists your role may see.
 2. Press **Run** on a report. Choose the **Site** and the period, or custom dates with **From** and **To**.
 3. **No rows match these filters**: widen the dates or check the site.
 

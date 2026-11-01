@@ -167,7 +167,7 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
             ) : (
               <Dl
                 items={[
-                  ["Batch", v.sourceBatch ? <Link key="b" className="text-primary-text hover:underline" href={`/quality/batches/${v.sourceBatch.id}`}>{v.sourceBatch.number}</Link> : "—"],
+                  ["Batch", v.sourceBatch ? <Link key="b" className="text-primary-text hover:underline" href={`/quality/check/${v.sourceBatch.id}`}>{v.sourceBatch.number}</Link> : "—"],
                   ["Batch status", v.sourceBatch ? <QaStatusChip key="bs" status={v.sourceBatch.status} /> : "—"],
                   ["Supplier", lot.supplierName ?? "—"],
                   ["Supplier lot", lot.supplierLotNumber ?? "—"],

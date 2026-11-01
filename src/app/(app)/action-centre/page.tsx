@@ -3,11 +3,9 @@ import { redirect } from "next/navigation";
 import { PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { requireContext } from "@/lib/auth/context";
-import { fmtDateTime } from "@/lib/qty";
-import { ACTION_KINDS, ACTION_TABS, type ActionItemView, listActionItems, myApprovalCount, refreshActionItems } from "@/modules/action-centre";
-import { listMyNotifications } from "@/modules/platform";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader, buttonClass, cx } from "@/ui/core";
-import { isInternalPath, recordHref } from "@/lib/record-links";
+import { ACTION_KINDS, type ActionItemView, listActionItems, refreshActionItems } from "@/modules/action-centre";
+import { Card, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
+import { currentHref, isInternalPath, recordHref } from "@/lib/record-links";
 import { Banner, Chip } from "@/ui/status";
 import { AcknowledgeForm } from "./forms";
 import { registerAppHooks } from "@/modules/wiring";
@@ -15,7 +13,7 @@ import { SyncConflictSummary } from "../sync/conflict-summary"; // W4D (US-7-05)
 
 registerAppHooks(); // Wave 3 cross-module registrations (src/modules/wiring.ts); cheap and idempotent
 
-export const metadata = { title: "Action centre" };
+export const metadata = { title: "Problems & alerts" };
 export const dynamic = "force-dynamic";
 
 const SEV = { critical: { tone: "bad", label: "Critical" }, warning: { tone: "warn", label: "Warning" }, info: { tone: "info", label: "Info" } } as const;
@@ -47,7 +45,7 @@ function ItemRow({ i }: { i: ActionItemView }) {
         {i.acknowledgementNote && <p className="mt-0.5 text-[12px] text-muted">Note: {i.acknowledgementNote}</p>}
       </div>
       <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-start">
-        <LinkButton href={isInternalPath(i.link) ? i.link : (recordHref(i.entityType, i.entityId) ?? "/action-centre")} size="sm">{i.actionLabel}</LinkButton>
+        <LinkButton href={isInternalPath(i.link) ? currentHref(i.link) : (recordHref(i.entityType, i.entityId) ?? "/action-centre")} size="sm">{i.actionLabel}</LinkButton>
         {!i.acknowledgedAt && <AcknowledgeForm id={i.id} />}
       </div>
     </li>
@@ -55,25 +53,32 @@ function ItemRow({ i }: { i: ActionItemView }) {
 }
 
 /**
- * Action centre (US-5-06, docs/ux-system.md 5.5 and §9.15): one queue with tabs Approvals, Exceptions,
- * Alerts and Sync. Items come from the underlying records and clear when those resolve; the queue is
- * refreshed on open and every 5 minutes. Owners can group exceptions per site.
+ * Problems & alerts (US-5-06, ADR-082 §4, docs/LEGACY_SCREENS.md): exceptions only. Decisions live in
+ * "To approve" (/approvals) and messages in "Messages" (/notifications); the former "To decide" and
+ * "Alerts for you" tabs duplicated them, so their old addresses (?tab=approvals, ?tab=alerts) redirect
+ * there. Items come from the underlying records and clear when those resolve; the queue is refreshed on
+ * open and every 5 minutes. Owners can group problems per site.
  */
-/** Plain tab names (ADR-088). UX audit R2: decisions live only in To approve; that tab is a link there, not a list. */
-const TAB_TEXT: Record<string, string> = { approvals: "To approve", exceptions: "Problems", alerts: "Alerts for you", sync: "Phone changes to check" };
+const TABS = [
+  { tab: "exceptions", label: "Problems" },
+  { tab: "sync", label: "Phone changes to check" },
+] as const;
 
 export default async function ActionCentrePage({ searchParams }: { searchParams: Promise<SP> }) {
   const ctx = await requireContext();
   const sp = await searchParams;
-  // UX audit R2 (one door per job): the old "To decide" list repeated To approve; old links land there.
+  // Superseded tabs keep their old links alive (notifications, bookmarks, e-mails).
   if (sp.tab === "approvals") redirect("/approvals");
-  const tab = (["exceptions", "alerts", "sync"] as const).find((t) => t === sp.tab) ?? "exceptions";
+  if (sp.tab === "alerts") redirect("/notifications");
+  const canSync = ctx.can("platform.sync_conflict.view");
+  const tabs = TABS.filter((t) => t.tab !== "sync" || canSync);
+  const tab = tabs.find((t) => t.tab === sp.tab)?.tab ?? "exceptions";
   const refresh = await refreshActionItems(ctx.organizationId).catch(() => null);
   // Acknowledged items stay listed (after the others) until their record resolves; "Hide acknowledged" filters them.
   const all = (await listActionItems(ctx, { includeAcknowledged: sp.acked !== "0" })).sort((a, b) => Number(!!a.acknowledgedAt) - Number(!!b.acknowledgedAt));
-  // The To approve count is the same number as the top-bar badge (what you can decide now, ADR-083 §8).
-  const counts = { approvals: await myApprovalCount(ctx).catch(() => 0), exceptions: all.filter((i) => i.tab === "exceptions" && !i.acknowledgedAt).length };
-  const alerts = tab === "alerts" ? (await listMyNotifications(ctx, { show: "open" })).filter((n) => !n.resolvedAt) : [];
+  const problems = all.filter((i) => i.tab === "exceptions" && !i.acknowledgedAt).length;
+  // An old link filtered on a decision kind (e.g. ?kind=approval.stock_adjustment): decisions are in To approve.
+  if (sp.kind && ACTION_KINDS.some((k) => k.kind === sp.kind && k.tab === "approvals")) redirect("/approvals");
   const kind = sp.kind && ACTION_KINDS.some((k) => k.kind === sp.kind) ? sp.kind : undefined;
   const items = all.filter((i) => i.tab === tab && (!kind || i.kind === kind));
   const kindsHere = ACTION_KINDS.filter((k) => k.tab === tab && all.some((i) => i.kind === k.kind));
@@ -101,64 +106,42 @@ export default async function ActionCentrePage({ searchParams }: { searchParams:
       />
       <PageIntro>This screen is for managers and QA: things that went wrong or wait too long at your sites. Tap the button on a row to fix it; press “I&apos;m on it” so others know. A row goes away by itself when it is fixed.</PageIntro>
       {!refresh && <Banner tone="warn" title="This list may be a few minutes old">It could not be updated just now. Open the page again in a minute.</Banner>}
-      <nav aria-label="Action centre tabs" className="flex flex-wrap gap-2">
-        {/* Problems first; "To approve" last, as a link to the one inbox for decisions. */}
-        {[...ACTION_TABS.filter((t) => t.tab !== "approvals"), ...ACTION_TABS.filter((t) => t.tab === "approvals")].map((t) => (
+      <p className="text-[13px] text-fg-2">
+        Decisions waiting for you are under <Link href="/approvals" className="font-medium text-primary-text underline-offset-2 hover:underline">To approve</Link>; messages for you are under <Link href="/notifications" className="font-medium text-primary-text underline-offset-2 hover:underline">Messages</Link>.
+      </p>
+      <nav aria-label="Problems and alerts tabs" className="flex flex-wrap gap-2">
+        {tabs.map((t) => (
           <Link
             key={t.tab}
-            href={t.tab === "approvals" ? "/approvals" : `/action-centre?tab=${t.tab}`}
+            href={`/action-centre?tab=${t.tab}`}
             aria-current={tab === t.tab ? "page" : undefined}
             className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4 text-[14px]", tab === t.tab ? "border-primary bg-primary-soft font-semibold" : "border-line")}
           >
-            {TAB_TEXT[t.tab] ?? t.label}
-            {t.tab === "approvals" || t.tab === "exceptions" ? ` · ${counts[t.tab]}` : ""}
-            {t.tab === "approvals" && <span aria-hidden>&nbsp;→</span>}
+            {t.label}
+            {t.tab === "exceptions" ? ` · ${problems}` : ""}
           </Link>
         ))}
       </nav>
 
       {tab === "sync" ? (
         <SyncConflictSummary ctx={ctx} />
-      ) : tab === "alerts" ? (
-        <Card>
-          <CardTitle action={<LinkButton href="/notifications" variant="ghost" size="sm">All messages</LinkButton>}>Alerts for you</CardTitle>
-          {alerts.length === 0 ? (
-            <EmptyState title="No alerts for you">When something fails or waits too long and you should know, it appears here.</EmptyState>
-          ) : (
-            <ul className="divide-y divide-line">
-              {alerts.map((n) => (
-                <li key={n.id} className="py-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Chip tone={(SEV[n.severity as keyof typeof SEV] ?? SEV.info).tone}>{(SEV[n.severity as keyof typeof SEV] ?? SEV.info).label}</Chip>
-                    <span className="text-[12px] text-muted">{fmtDateTime(n.createdAt)}</span>
-                  </div>
-                  <p className="mt-1 text-[14px]">
-                    <a href={`/notifications/open/${n.id}`} className="text-primary-text hover:underline">{n.title}</a>
-                  </p>
-                  <p className="text-[13px] text-muted">{n.body}</p>
-                  <a href={`/notifications/open/${n.id}`} className={cx(buttonClass("primary", "sm"), "mt-2")} aria-label={`Open: ${n.title}`}>Open</a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
       ) : (
         <Card>
           <div className="mb-3 flex flex-wrap items-center gap-2 text-[13px]">
-            <Link href={qs({ kind: undefined })} className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4", !kind ? "border-primary bg-primary-soft font-semibold" : "border-line")}>All kinds</Link>
+            <Link href={qs({ kind: undefined })} className={cx("rounded-full border px-3 py-1", !kind ? "border-primary bg-primary-soft font-semibold" : "border-line")}>All kinds</Link>
             {kindsHere.map((k) => (
-              <Link key={k.kind} href={qs({ kind: k.kind })} className={cx("inline-flex min-h-[44px] items-center rounded-full border px-4", kind === k.kind ? "border-primary bg-primary-soft font-semibold" : "border-line")}>
+              <Link key={k.kind} href={qs({ kind: k.kind })} className={cx("rounded-full border px-3 py-1", kind === k.kind ? "border-primary bg-primary-soft font-semibold" : "border-line")}>
                 {k.label}
               </Link>
             ))}
             {ctx.allowedSites.length > 1 && (
-              <Link href={qs({ group: bySite ? undefined : "site" })} className="ml-auto inline-flex min-h-[44px] items-center text-primary-text hover:underline">{bySite ? "Do not group" : "Group by site"}</Link>
+              <Link href={qs({ group: bySite ? undefined : "site" })} className="ml-auto text-primary-text hover:underline">{bySite ? "Do not group" : "Group by site"}</Link>
             )}
-            <Link href={qs({ acked: sp.acked === "0" ? undefined : "0" })} className="inline-flex min-h-[44px] items-center text-primary-text hover:underline">{sp.acked === "0" ? "Show the ones someone is on" : "Hide the ones someone is on"}</Link>
+            <Link href={qs({ acked: sp.acked === "0" ? undefined : "0" })} className="text-primary-text hover:underline">{sp.acked === "0" ? "Show the ones someone is on" : "Hide the ones someone is on"}</Link>
           </div>
           {items.length === 0 ? (
             <EmptyState title="No problems right now">
-              Late production orders, low stock, things about to expire, failed jobs and imports, holds, problem reports, delivery receipts nobody confirmed and late orders at your sites appear here.
+              Late production orders, products running low, lots about to expire, stock stopped by QA, problem reports, deliveries without a signed receipt and late customer orders at your sites appear here. Nothing to do.
             </EmptyState>
           ) : (
             groups.map(([label, list]) => (

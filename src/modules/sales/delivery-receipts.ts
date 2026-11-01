@@ -417,7 +417,7 @@ export async function remindUnacknowledged(run: JobRunContext) {
           siteId: r.siteId,
           kind: "sales.delivery_receipt.unacknowledged",
           severity: "warning",
-          title: `DR ${r.drNumber ?? r.shipmentNumber} not acknowledged after ${r.days} days`,
+          title: `Delivery ${r.drNumber ?? r.shipmentNumber} has no signed receipt after ${r.days} days`,
           body: `${r.customerName} · order ${r.orderNumber}. Capture the receiver's name and signature or a photo of the signed copy.`,
           entityType: "shipment",
           entityId: r.shipmentId,

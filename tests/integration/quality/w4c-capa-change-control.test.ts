@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { approvalDecisions, auditEvents, capaActions, capaStateTransitions, capas, changeControls, complaints, deviations, formulaRevisions, formulas, notifications, users } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
@@ -64,7 +64,7 @@ beforeAll(async () => {
   operator = await asUser(kit, "operator.nfd@bryels-care.test", "production_operator", [kit.nfd]);
   warehouse = await asUser(kit, "warehouse.nfd@bryels-care.test", "warehouse_operator", [kit.nfd]);
   owner = await asUser(kit, "owner@bryels-care.test", "owner_director", [kit.nfd, kit.rvs]);
-  const [d] = await db.select().from(deviations).where(and(eq(deviations.siteId, kit.nfd.id), eq(deviations.status, "open"))).limit(1);
+  const [d] = await db.select().from(deviations).where(and(eq(deviations.siteId, kit.nfd.id), ne(deviations.status, "closed"))).limit(1);
   deviationId = d.id;
 });
 

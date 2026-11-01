@@ -227,7 +227,7 @@ export async function pmDueCandidates(organizationId: string, now: Date = new Da
       entityType: "maintenance_plan",
       entityId: p.id,
       recordNumber: p.planNumber,
-      title: `${state === "overdue" ? "Overdue" : DUE_STATE_LABEL[state]}: PM ${p.planNumber} on ${equipmentCode} (${when})`,
+      title: `${state === "overdue" ? "Overdue" : DUE_STATE_LABEL[state]}: regular maintenance ${p.planNumber} on ${equipmentCode} (${when})`,
       detail: `${equipmentName}: ${p.title}`,
       link: `/maintenance/plans/${p.id}`,
       openedAt: p.triggerKind === "time" && p.nextDueOn ? new Date(addDays(p.nextDueOn, state === "overdue" ? 1 : -lead) + "T00:00:00+08:00") : p.usageSince,

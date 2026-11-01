@@ -130,7 +130,7 @@ export async function assertHoldAllowsMove(
   await assertLocationNotHeld(q, to);
   const heldFrom = (await heldLocations(q, from.siteId)).find((h) => h.locationId === from.id);
   if (heldFrom && !(HELD_STOCK_DESTINATION_KINDS as readonly string[]).includes(to.kind)) {
-    throw new DomainError("blocked_lot", `Stock in ${from.code} is under QA hold ${heldFrom.holdNumber} and can only move to a quarantine, hold or rejected location.`, {
+    throw new DomainError("blocked_lot", `Stock in ${from.code} is under QA hold ${heldFrom.holdNumber} and can only move to a waiting-for-check, stopped-by-QA or rejected place.`, {
       rule: "V-LOC",
       holdNumber: heldFrom.holdNumber,
     });

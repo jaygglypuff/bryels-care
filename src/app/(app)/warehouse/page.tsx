@@ -6,35 +6,23 @@ import { PageIntro } from "@/ui/guide";
 import { Forbidden } from "../forbidden";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Warehouse" };
+export const metadata = { title: "Warehouse sections" };
 
 /**
- * Warehouse home (S6, ADR-077): one tile per warehouse section ("Raw materials — 12 lots") so the operator
- * sees where things are; a tap opens the stock of that section. Common tasks are one tap away.
+ * Warehouse sections (S6, ADR-077): one tile per warehouse section ("Raw materials — 12 lots") so the operator
+ * sees where things are; a tap opens the stock of that section. The day's tasks (receive, put away, move, count,
+ * fix stock, find) are on the warehouse Home (ADR-090); the copy of them that made this page a second home was
+ * removed (docs/LEGACY_SCREENS.md).
  */
 export default async function WarehouseHomePage() {
   const ctx = await requireContext();
   if (!ctx.can("inventory.lot.view")) return <Forbidden what="the warehouse" />;
   const tiles = await sectionSummary(ctx);
   const shown = tiles.filter((t) => t.lots > 0 || t.locations > 0);
-  const tasks = [
-    ctx.can("procurement.goods_receipt.create") && { href: "/inventory/receive", label: "Receive a delivery", cta: true },
-    ctx.can("inventory.movement.post") && { href: "/inventory/receive/put-away", label: "Put away" },
-    ctx.can("inventory.movement.post") && { href: "/inventory/move", label: "Move stock" },
-    { href: "/inventory/scan", label: "Scan a label" },
-    ctx.can("inventory.stock_count.view") && { href: "/inventory/counts", label: "Stock counts" },
-  ].filter(Boolean) as { href: string; label: string; cta?: boolean }[];
   return (
     <div className="space-y-5">
-      <PageHeader title="Warehouse" subtitle={ctx.currentSite.name} />
-      <PageIntro>This screen is for the warehouse: the jobs of the day are one tap away, and each part of the warehouse shows how many lots are there.</PageIntro>
-      <div className="flex flex-wrap gap-2">
-        {tasks.map((t) => (
-          <LinkButton key={t.href} href={t.href} variant={t.cta ? "cta" : "secondary"} size="lg">
-            {t.label}
-          </LinkButton>
-        ))}
-      </div>
+      <PageHeader title="Warehouse sections" subtitle={ctx.currentSite.name} />
+      <PageIntro>This screen is for seeing each part of the warehouse and how many lots are there. Tap a part to see its stock. The jobs of the day are on Home.</PageIntro>
       <Card>
         <CardTitle action={<LinkButton href="/inventory" variant="ghost">All stock</LinkButton>}>Parts of the warehouse</CardTitle>
         {shown.length === 0 ? (

@@ -49,6 +49,7 @@ export function homeIntro(roleCodes: readonly string[]): string {
   if (has("qa_qc")) return "This screen is for QA: what waits for your check or your decision, and stock you stopped. Start with “Needs your attention”.";
   if (has("sales_cs")) return "This screen is for sales: today's orders, orders that are late, and what waits for you. Tap a number to see the orders.";
   if (has("finance")) return "This screen is for finance: shipments not billed yet, what waits for your OK, and sales this week.";
+  if (has("production_planner")) return "This screen is for the planner: production orders to make or approve, orders approved but not started, and what QA is checking.";
   if (has("production_operator")) return "This screen is for the machine operator: the batches you can work on now. Press the green button on the top card to start.";
   if (has("warehouse_operator")) return "This screen is for the warehouse: deliveries to receive, stock to put away, and orders to pack and send.";
   if (has("system_admin")) return "This screen is for the IT person: what needs attention today. Settings, users and imports are under Management.";

@@ -291,7 +291,7 @@ async function overShipmentBox(
   const [taken] = await tx.select({ id: stockAllocations.id }).from(stockAllocations).where(and(eq(stockAllocations.containerId, box.id), eq(stockAllocations.status, "open"))).limit(1);
   if (taken) {
     fail("Allocated to another order.");
-    throw new DomainError("conflict", `Box ${box.containerNumber} is allocated to another order.`, { code: "NOT_FOR_THIS_ORDER" });
+    throw new DomainError("conflict", `Box ${box.containerNumber} is set aside for another order.`, { code: "NOT_FOR_THIS_ORDER" });
   }
   await tx.insert(shipmentLines).values({
     organizationId: ctx.organizationId,

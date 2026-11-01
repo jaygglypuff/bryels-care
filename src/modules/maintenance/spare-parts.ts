@@ -95,9 +95,9 @@ export async function listSpareParts(ctx: AuthContext, f: { siteId?: string; equ
 /** Released lots and locations of the spare parts that can be issued to a work order (picker). */
 export async function issuablePartStock(ctx: AuthContext, workOrderId: string) {
   ctx.require("maintenance.work_order.post");
-  if (!/^[0-9a-f-]{36}$/i.test(workOrderId)) throw new DomainError("not_found", "Maintenance work order not found in your sites.");
+  if (!/^[0-9a-f-]{36}$/i.test(workOrderId)) throw new DomainError("not_found", "Repair job not found at your sites.");
   const [w] = await db.select().from(maintenanceWorkOrders).where(and(eq(maintenanceWorkOrders.id, workOrderId), eq(maintenanceWorkOrders.organizationId, ctx.organizationId))).limit(1);
-  if (!w || !ctx.allowedSiteIds.includes(w.siteId)) throw new DomainError("not_found", "Maintenance work order not found in your sites.");
+  if (!w || !ctx.allowedSiteIds.includes(w.siteId)) throw new DomainError("not_found", "Repair job not found at your sites.");
   const parts = await db
     .select({ materialId: maintenanceSpareParts.materialId })
     .from(maintenanceSpareParts)
@@ -124,10 +124,10 @@ export async function issueSparePart(ctx: AuthContext, raw: unknown) {
   if (qty.lte(0)) throw new DomainError("validation", "Enter a quantity greater than zero.", { field: "qty", fieldErrors: { qty: "More than 0." } });
   return db.transaction(async (tx) => {
     const [w] = await tx.select().from(maintenanceWorkOrders).where(and(eq(maintenanceWorkOrders.id, input.workOrderId), eq(maintenanceWorkOrders.organizationId, ctx.organizationId))).for("update").limit(1);
-    if (!w || !ctx.allowedSiteIds.includes(w.siteId)) throw new DomainError("not_found", "Maintenance work order not found in your sites.");
+    if (!w || !ctx.allowedSiteIds.includes(w.siteId)) throw new DomainError("not_found", "Repair job not found at your sites.");
     ctx.requireAt("maintenance.work_order.post", w.siteId);
     const [lot] = await tx.select().from(inventoryLots).where(and(eq(inventoryLots.id, input.lotId), eq(inventoryLots.organizationId, ctx.organizationId))).for("update").limit(1);
-    if (!lot || lot.siteId !== w.siteId) throw new DomainError("validation", "Choose a lot at the work order's site.", { field: "lotId", fieldErrors: { lotId: "Not at this site." } });
+    if (!lot || lot.siteId !== w.siteId) throw new DomainError("validation", "Choose a lot at the repair job's site.", { field: "lotId", fieldErrors: { lotId: "Not at this site." } });
     if (lot.itemKind !== "material" || !lot.materialId) throw new DomainError("validation", "Spare parts are material lots.", { field: "lotId" });
     const { movement, replayed } = await (async () => {
       if (!["in_progress", "on_hold"].includes(w.status)) {

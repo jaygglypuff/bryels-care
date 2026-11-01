@@ -50,6 +50,15 @@ export const HTTP_STATUS: Record<ErrorCode, number> = {
 /** `needs`: the permission a refused step needs, so the form can name who can do it (ADR-073 "who can do this"). */
 export type ActionState = { ok: boolean; message?: string; fieldErrors?: Record<string, string>; needs?: { permission: string; siteId: string | null } } | null;
 
+/**
+ * The words a person reads: a leading machine tag such as "SEPARATION_OF_DUTIES: " (kept in the thrown
+ * message for logs and API clients) is dropped, and the sentence starts with a capital (plain words, ADR-088).
+ */
+export function userMessage(message: string): string {
+  const m = message.replace(/^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+:\s*/, "");
+  return m ? m[0].toUpperCase() + m.slice(1) : message;
+}
+
 /** Converts thrown errors into a form-friendly state for server actions. */
 export function toActionState(e: unknown): ActionState {
   if (e instanceof DomainError) {
@@ -65,7 +74,7 @@ export function toActionState(e: unknown): ActionState {
       (e.code === "forbidden" || e.code === "separation_of_duties") && typeof e.details?.permission === "string"
         ? { permission: e.details.permission, siteId: typeof e.details.siteId === "string" ? e.details.siteId : null }
         : null;
-    return { ok: false, message: issues.length > 1 ? "Check the highlighted fields." : e.message, ...(Object.keys(fieldErrors).length ? { fieldErrors } : {}), ...(needs ? { needs } : {}) };
+    return { ok: false, message: issues.length > 1 ? "Check the highlighted fields." : userMessage(e.message), ...(Object.keys(fieldErrors).length ? { fieldErrors } : {}), ...(needs ? { needs } : {}) };
   }
   if (e && typeof e === "object" && "issues" in e) {
     const issues = (e as { issues: { path: (string | number)[]; message: string }[] }).issues;

@@ -33,7 +33,7 @@ export default async function SupplierPage({ params, searchParams }: { params: P
         title={s.name}
         subtitle={
           <>
-            <Link href="/masterdata/suppliers" className="text-primary-text hover:underline">Suppliers</Link> · <span className="font-mono text-[12px] text-muted">{s.code}</span> · <SupplierStatusChip status={s.qualityStatus} />
+            <Link href="/procurement/suppliers" className="text-primary-text hover:underline">Suppliers</Link> · <span className="font-mono text-[12px] text-muted">{s.code}</span> · <SupplierStatusChip status={s.qualityStatus} />
           </>
         }
         actions={

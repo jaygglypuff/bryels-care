@@ -224,7 +224,18 @@ async function main() {
 
   // Material receipts
   type LotSpec = { mat: string; qty: string; supplier: string; sLot: string; daysAgo: number; expiresIn: number; status: string; loc: string };
-  const receive = async (site: string, specs: LotSpec[], supplier: string) => {
+  // One receipt per supplier (UX audit 2026-10-31: a lot must show the same supplier on the QA queue and on its
+  // lot page, so lots of different suppliers never share a receipt). The `supplier` argument is kept for readability.
+  const receive = async (site: string, specs: LotSpec[], _supplier: string) => {
+    const out: Record<string, typeof s.inventoryLots.$inferSelect> = {};
+    const suppliersInOrder = [...new Set(specs.map((x) => x.supplier))];
+    for (const supplier of suppliersInOrder) {
+      const group = specs.filter((x) => x.supplier === supplier);
+      Object.assign(out, await receiveFrom(site, group, supplier));
+    }
+    return out;
+  };
+  const receiveFrom = async (site: string, specs: LotSpec[], supplier: string) => {
     const daysAgo = Math.max(...specs.map((x) => x.daysAgo));
     const grNo = next("GR");
     const [gr] = await db.insert(s.goodsReceipts).values({ organizationId: O, siteId: site, receiptNumber: grNo, supplierName: supplier, supplierDocumentNumber: `DR-${1000 + counters.GR}`, receivedBy: U["warehouse.nfd"], receivedAt: at(-daysAgo, 8) }).returning();

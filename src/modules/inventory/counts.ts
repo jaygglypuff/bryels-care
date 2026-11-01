@@ -515,8 +515,8 @@ export async function approveCount(ctx: AuthContext, countId: string, input: App
     const c = await lockCount(tx, ctx, countId);
     if (c.status !== "counted" && c.status !== "pending_approval") throw new DomainError("state", `Count ${c.countNumber} is ${c.status.replace("_", " ")}; there is nothing to approve.`);
     const counters = await countersOf(tx, c.id);
-    if (ctx.sodBlocksAt(counters.has(ctx.userId), "SEPARATION_OF_DUTIES: you counted or are assigned to this count, so you cannot approve its variances.", c.siteId)) {
-      throw new DomainError("separation_of_duties", "SEPARATION_OF_DUTIES: you counted or are assigned to this count, so you cannot approve its variances.", { ...ctx.refusalDetails(), rule: "sod.count.approver_not_counter" });
+    if (ctx.sodBlocksAt(counters.has(ctx.userId), "You counted or are assigned to this count, so another person must approve its differences.", c.siteId)) {
+      throw new DomainError("separation_of_duties", "You counted or are assigned to this count, so another person must approve its differences.", { ...ctx.refusalDetails(), rule: "sod.count.approver_not_counter" });
     }
     const lines = await tx.select().from(stockCountLines).where(eq(stockCountLines.stockCountId, c.id));
     if (c.status === "counted") {
@@ -530,7 +530,7 @@ export async function approveCount(ctx: AuthContext, countId: string, input: App
         if (!r || !opt) fieldErrors[`reason_${l.id}`] = "Choose a reason code for this variance.";
         else if (opt.requiresNote && !r.note?.trim()) fieldErrors[`reason_${l.id}`] = `Add a note: "${opt.label}" needs an explanation.`;
       }
-      if (Object.keys(fieldErrors).length) throw new DomainError("validation", "Every variance needs a reason code before approval.", { fieldErrors });
+      if (Object.keys(fieldErrors).length) throw new DomainError("validation", "Every difference needs a reason before approval.", { fieldErrors });
       for (const l of lines) {
         const r = input.lines?.[l.id];
         if (r && !l.isUnlabelled && !new Decimal(l.varianceQtyBase ?? 0).isZero()) {
@@ -538,7 +538,7 @@ export async function approveCount(ctx: AuthContext, countId: string, input: App
         }
       }
       const ev = await evaluateApprovalRulesAudited(tx, ctx, { documentType: "stock_count_variance", siteId: c.siteId, recordId: c.id, recordNumber: c.countNumber, basis: countVarianceBasis(lines) });
-      if (ev.steps.length > 2) throw new DomainError("setup_required", "The approval rules for count variances define more than two steps; counts support two. Ask the owner to adjust the rules.");
+      if (ev.steps.length > 2) throw new DomainError("setup_required", "The approval rules for count differences define more than two steps; counts support two. Ask the owner to adjust the rules.");
       const firstStep = ev.steps[0];
       if (firstStep && !canDecideEvaluatedStep(ctx, firstStep, c.updatedAt)) throw new DomainError("forbidden", `This approval needs the ${firstStep.roleCodes.map((r) => r.replace(/_/g, " ")).join(" or ")} role.`);
       const needsSecond = ev.steps.length > 1;

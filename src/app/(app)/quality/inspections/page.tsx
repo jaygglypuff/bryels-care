@@ -43,7 +43,7 @@ export default async function InspectionsPage({ searchParams }: { searchParams: 
               {candidates.batches.map((b) => (
                 <li key={b.id} className="flex flex-wrap items-center justify-between gap-3 py-2">
                   <div className="min-w-0">
-                    <Link className="font-medium text-primary-text hover:underline" href={`/quality/batches/${b.id}`}>
+                    <Link className="font-medium text-primary-text hover:underline" href={`/quality/check/${b.id}`}>
                       {b.productName}
                     </Link>
                     <p className="font-mono text-[12px] text-muted">{b.number}</p>

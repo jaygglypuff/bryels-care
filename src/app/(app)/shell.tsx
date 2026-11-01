@@ -164,7 +164,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
   }
   const initials = user.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
   const site = sites.find((s) => s.id === currentSiteId);
-  const badges: NavBadges = { ...(qaCount ? { "/quality/check": qaCount, "/quality": qaCount } : {}), ...(approvalCount ? { "/approvals": approvalCount } : {}) };
+  const badges: NavBadges = { ...(qaCount ? { "/quality": qaCount } : {}), ...(approvalCount ? { "/approvals": approvalCount } : {}) };
   // Only the closest tab lights up (/inventory/receive must not also light up /inventory).
   const activeTab = tabs.reduce<{ href: string | null; m: number }>((best, t) => {
     const m = t.href ? matchLen(pathname, t.href) : -1;

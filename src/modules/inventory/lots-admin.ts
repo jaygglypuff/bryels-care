@@ -23,7 +23,7 @@ export type LotAttributesInput = Partial<Record<(typeof EDITABLE)[number], strin
 export async function editLotAttributes(ctx: AuthContext, lotId: string, input: LotAttributesInput & Record<string, unknown>) {
   ctx.require("inventory.lot.edit");
   if ("qualityStatus" in input || "status" in input || "quality_status" in input) {
-    throw new DomainError("validation", "Quality status cannot be edited here; only a QA disposition changes it.", { rule: "inventory.lot_edit_cannot_change_status" });
+    throw new DomainError("validation", "Quality status cannot be edited here; only a QA decision changes it.", { rule: "inventory.lot_edit_cannot_change_status" });
   }
   const unknown = Object.keys(input).filter((k) => k !== "reason" && !(EDITABLE as readonly string[]).includes(k));
   if (unknown.length) throw new DomainError("validation", `These fields cannot be edited: ${unknown.join(", ")}.`);
