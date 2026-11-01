@@ -1938,3 +1938,30 @@ Consequences: no migration or permission change; tests `tests/unit/record-words.
 `production-order-status`, `production-one-path`, integration `one-path`, `packaging-flow`, `bmr-closure`,
 `batch-execution`, `board-and-plans`, `w2c-inspections-release`, `check-quality`. Open: step 6 can show Print labels and
 Step done both green until labels are printed.
+
+## ADR-106 Get materials is a pick list per lot; weighing follows it; plain wrapper count; one guided path from purchase to boxing (owner 2026-11-01)
+
+Status: Accepted (owner delegated). A-PL-01..03 flagged for QA review.
+
+1. **Get materials = what to get, lot by lot, use-first order.** The list shows, per ingredient, the exact lots to
+   bring in use-first (FEFO) order with how much from each and where it is: "Coconut Oil 100 kg: take all 50 kg of lot
+   LM-2611-0005 (A-01, expires 7 Nov 2027) + 50 kg from lot LM-2611-0013 (A-01)". The set-aside already splits across
+   lots; the screen shows the split.
+2. **Partial containers.** A lot in one 180 kg drum and a batch needing 50 kg: "Bring drum LM-… (180 kg in it). Weigh
+   out 50 kg. 130 kg stays in the drum for the next batch." Only the 50 kg is set aside; the rest stays available. The
+   next batch's list again starts with the opened drum (it expires first), then the next lot.
+3. **Weighing follows Get materials.** The weigh card proposes the lot(s) taken at Get materials, in the same order,
+   with how much from each ("from LM-…-0005: 50 kg, then LM-…-0013: 50 kg"). If the operator scans another allowed lot
+   of the same ingredient: "This is not the lot you took at Get materials (LM-…-0005). You can continue — QA will see a
+   note." One-tap reason; the note shows on the batch record and on QA's check page. Expired or stopped lots are never
+   accepted. A different ingredient follows ADR-104 §1b (QA approval).
+4. **Wrappers count in plain words.** Finish asks: "We took 123 wrappers. You wrapped 120 bars. How many wrappers are
+   left over? How many were damaged?" and shows the sum as a sentence ("123 taken = 120 wrapped + 2 damaged + 1 left
+   over ✓"); a difference says what to do ("3 wrappers are missing — count the left-over ones again, or write what
+   happened"). Left-over wrappers go back to stock in one tap. The taken amount comes from the packaging issue; a
+   wrong issue amount (e.g. 1 instead of 123) is a bug to fix, not a count for the operator.
+5. **One guided path from purchase to boxing.** A "How work flows" page (Operations) shows the chain Buy → Receive →
+   QA check → Put away → Make (order → get materials → weigh → steps → pack → finish) → QA OK → Customer order → Get from
+   shelf → Second check → Send out → Invoice, with today's count at each stage and one button to the screen for that
+   stage. Every screen in the chain ends with "Next: …" to the following stage. Any screen in the chain that is not on
+   this path is removed or redirected (docs/LEGACY_SCREENS.md).
