@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
@@ -51,7 +52,7 @@ export async function importApprovalCandidates(organizationId: string): Promise<
     from import_jobs where organization_id = ${organizationId}::uuid and status = 'submitted'`);
   return rows.map((r) => ({
     kind: "approval.import_job" as const, siteId: r.site_id ? String(r.site_id) : null, entityType: "import_job", entityId: String(r.id), recordNumber: String(r.import_number),
-    title: `Spreadsheet ${r.import_number} (${String(r.import_kind).replace(/_/g, " ")}) waits for approval`, detail: `${r.rows_total} row(s)`, link: `/admin/imports/${r.id}`, openedAt: at(r.at),
+    title: `Spreadsheet ${r.import_number} (${String(r.import_kind).replace(/_/g, " ")}) waits for approval`, detail: plural(Number(r.rows_total), "row"), link: `/admin/imports/${r.id}`, openedAt: at(r.at),
   }));
 }
 

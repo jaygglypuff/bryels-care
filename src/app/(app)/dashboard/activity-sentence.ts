@@ -126,6 +126,14 @@ const VERB: Record<string, string> = {
   scanned: "scanned",
 };
 
+/** What happened to a problem or alert ("escalated" is the system telling the managers; people never see the word). */
+const PROBLEM_VERB: Record<string, string> = {
+  escalated: "raised a problem",
+  resolved: "closed the problem",
+  acknowledged: "is dealing with the problem",
+  created: "raised a problem",
+};
+
 export type ActivityInput = { action: string; entityType: string; entityNumber: string | null; actorName: string | null; entityName?: string | null };
 
 /**
@@ -133,6 +141,15 @@ export type ActivityInput = { action: string; entityType: string; entityNumber: 
  * small and grey after the sentence (and links it). A paper ("generated document") is called by its kind.
  */
 export function activitySentence(r: ActivityInput): { who: string; text: string; number: string | null } {
+  const who = r.actorName ?? "The system";
+  // Problems and alerts (round 4, UX re-audit C N1): their title is the sentence people need, so it follows a
+  // colon ("The system raised a problem: Order for Mabuhay Pharmacy Group is late"); the record number stays grey after.
+  if (r.entityType === "action_item") {
+    const event = r.action.split(".").pop() ?? "";
+    const verb = PROBLEM_VERB[event] ?? `${VERB[event] ?? event.replace(/_/g, " ")} the problem`;
+    const title = r.entityName?.trim();
+    return { who, text: title ? `${verb}: ${title}` : verb, number: r.entityNumber };
+  }
   const parts = r.action.split(".");
   const event = parts[parts.length - 1] ?? "";
   const verb = EXACT[r.action] ?? VERB[event] ?? event.replace(/_/g, " ");
@@ -142,5 +159,5 @@ export function activitySentence(r: ActivityInput): { who: string; text: string;
   if (r.entityType === "generated_document" && name) noun = name;
   else if (name && ["customer", "supplier", "material", "product", "user", "role", "price_list"].includes(r.entityType)) noun = `${noun} ${name}`;
   else if (name) tail = ` ${JOIN[r.entityType] ?? "·"} ${name}`;
-  return { who: r.actorName ?? "The system", text: `${verb} the ${noun}${tail}`.replace(/\s+/g, " ").trim(), number: r.entityNumber };
+  return { who, text: `${verb} the ${noun}${tail}`.replace(/\s+/g, " ").trim(), number: r.entityNumber };
 }

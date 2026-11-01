@@ -119,6 +119,9 @@ export function BillForm({
               <Field label="Bill number on their paper" htmlFor="b-ref" error={fe.supplierReference} hint="Copy it from the supplier's bill, so the same bill is not entered twice.">
                 <Input id="b-ref" name="supplierReference" required maxLength={60} />
               </Field>
+            </div>
+            {/* Round 4 (UX re-audit C #7): the date (today unless changed) and the spending kind are folded; open by itself on an error. */}
+            <MoreDetails title="Date and kind (you can skip this)" open={!!(fe.billDate || fe.categoryCode)}>
               <Field label="Date on the bill" htmlFor="b-date" error={fe.billDate} hint="Its month must not be closed.">
                 <Input id="b-date" name="billDate" type="date" defaultValue={today} required />
               </Field>
@@ -133,8 +136,6 @@ export function BillForm({
                   </Select>
                 </Field>
               )}
-            </div>
-            <MoreDetails>
               <Field label="Kind of paper" htmlFor="b-kind">
                 <Select id="b-kind" value={kind} onChange={(e) => setKind(e.target.value as "bill" | "credit")}>
                   <option value="bill">A bill (we owe them money)</option>
@@ -160,18 +161,26 @@ export function BillForm({
                       <Input id={`bl-d-${l.key}`} value={l.description} onChange={(e) => set(l.key, { description: e.target.value })} placeholder="For example: delivery fee" />
                     </Field>
                   )}
-                  <div className="grid grid-cols-2 gap-2">
-                    <Field label={l.uom ? `How many (${l.uom})` : "How many"} htmlFor={`bl-q-${l.key}`}>
-                      <Input id={`bl-q-${l.key}`} inputMode="decimal" value={l.qty} onChange={(e) => set(l.key, { qty: e.target.value })} />
-                    </Field>
-                    <Field label={l.uom ? `Price per ${l.uom} (₱)` : "Price each (₱)"} htmlFor={`bl-p-${l.key}`}>
+                  {/* Round 4: a charge that is not from a delivery is usually one of something; its "How many" is folded with kind and tax. */}
+                  <div className={l.goodsReceiptLineId ? "grid grid-cols-2 gap-2" : "grid grid-cols-1 gap-2"}>
+                    {l.goodsReceiptLineId && (
+                      <Field label={l.uom ? `How many (${l.uom})` : "How many"} htmlFor={`bl-q-${l.key}`}>
+                        <Input id={`bl-q-${l.key}`} inputMode="decimal" value={l.qty} onChange={(e) => set(l.key, { qty: e.target.value })} />
+                      </Field>
+                    )}
+                    <Field label={l.uom ? `Price per ${l.uom} (₱)` : l.goodsReceiptLineId ? "Price each (₱)" : "Amount (₱)"} htmlFor={`bl-p-${l.key}`}>
                       <Input id={`bl-p-${l.key}`} inputMode="decimal" value={l.unitAmount} onChange={(e) => set(l.key, { unitAmount: e.target.value })} placeholder="0.00" />
                     </Field>
                   </div>
                   <p className="text-right text-[14px] tabular-nums text-fg-2">{fmtMoney(num(l.qty).times(num(l.unitAmount)))}</p>
                   <details>
-                    <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-[14px] text-primary-text">Kind and tax (you can skip this)</summary>
+                    <summary className="inline-flex min-h-[44px] cursor-pointer items-center text-[14px] text-primary-text">{l.goodsReceiptLineId ? "Kind and tax (you can skip this)" : "How many, kind and tax (you can skip this)"}</summary>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {!l.goodsReceiptLineId && (
+                        <Field label="How many" htmlFor={`bl-q-${l.key}`}>
+                          <Input id={`bl-q-${l.key}`} inputMode="decimal" value={l.qty} onChange={(e) => set(l.key, { qty: e.target.value })} />
+                        </Field>
+                      )}
                       <Field label="Kind" htmlFor={`bl-k-${l.key}`}>
                         <Select id={`bl-k-${l.key}`} value={l.chargeKind} onChange={(e) => set(l.key, { chargeKind: e.target.value })} disabled={!!l.goodsReceiptLineId}>
                           {KINDS.map(([v, t]) => (

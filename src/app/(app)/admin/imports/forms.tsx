@@ -1,4 +1,5 @@
 "use client";
+import { plural } from "@/lib/plural";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import type { ActionState } from "@/lib/errors";
@@ -116,7 +117,7 @@ export function ScanUploadForm({ jobId }: { jobId: string }) {
         return;
       }
       form.reset();
-      setMsg({ ok: true, message: `${body.uploaded} scan(s) uploaded. Validate the file to match them to its rows.` });
+      setMsg({ ok: true, message: `${plural(body.uploaded ?? 0, "scan")} uploaded. Validate the file to match them to its rows.` });
       router.refresh();
     } catch {
       setMsg({ ok: false, message: "The upload failed (connection). Nothing was saved; try again." });

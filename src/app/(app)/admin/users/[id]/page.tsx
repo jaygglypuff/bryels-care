@@ -1,3 +1,4 @@
+import { isAre, plural } from "@/lib/plural";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
@@ -120,7 +121,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
                 ["Status", <UserStatusChip key="s" status={u.status} />],
                 ["Last sign-in", u.lastLoginAt ? fmtDateTime(u.lastLoginAt) : "Never"],
                 ["Two-step sign-in", d.mfaEnrolled ? "On" : "Off"],
-                ["Signed in on", `${d.liveSessions} device(s)`],
+                ["Signed in on", plural(d.liveSessions, "device")],
                 ["Password set", u.passwordChangedAt ? fmtDateTime(u.passwordChangedAt) : "—"],
                 ["Created", fmtDateTime(u.createdAt)],
               ]}
@@ -228,7 +229,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ id:
                 })}
               </ul>
             )}
-            {d.hiddenAssignments > 0 && <p className="mt-2 text-[12px] text-muted">{d.hiddenAssignments} job(s) at other sites are not shown to you.</p>}
+            {d.hiddenAssignments > 0 && <p className="mt-2 text-[12px] text-muted">{plural(d.hiddenAssignments, "job")} at other sites {isAre(d.hiddenAssignments)} not shown to you.</p>}
             {canAssign && u.status !== "deactivated" && (
               <details id="grant" className="mt-3 border-t border-line pt-3" open={d.assignments.length === 0}>
                 <summary className="flex min-h-[44px] cursor-pointer items-center text-[15px] font-semibold text-primary-text">Give a job (role)</summary>

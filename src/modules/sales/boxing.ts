@@ -1,4 +1,6 @@
+import { plural, wasWere } from "@/lib/plural";
 import "server-only";
+import { plainDate } from "@/lib/plain-date";
 import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { randomUUID } from "node:crypto";
@@ -163,7 +165,7 @@ export async function startPack(ctx: AuthContext, input: StartPackInput) {
     if (!lot || !ctx.allowedSiteIds.includes(lot.siteId) || lot.itemKind !== "product" || !lot.productId) throw new DomainError("not_found", "Finished-goods lot not found in your sites.");
     ctx.requireAt("inventory.pack.create", lot.siteId);
     if (!PACKABLE_STATUSES.includes(lot.qualityStatus)) throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} is ${lot.qualityStatus.replace(/_/g, " ")}; it cannot be boxed (V-HOLD / V-REC).`);
-    if (isPastExpiry(lot.expiresOn)) throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} expired on ${lot.expiresOn}; it cannot be boxed (V-EXP).`);
+    if (isPastExpiry(lot.expiresOn)) throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} expired on ${plainDate(lot.expiresOn)}; it cannot be boxed (V-EXP).`);
     if (input.sourceKind === "sales_order" && lot.qualityStatus !== "released") throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} is not released; a packaging order for a customer boxes released stock only.`);
     if (salesOrderId) {
       const onOrder = await tx.select({ id: salesOrderLines.id }).from(salesOrderLines).where(and(eq(salesOrderLines.salesOrderId, salesOrderId), eq(salesOrderLines.productId, lot.productId))).limit(1);
@@ -410,10 +412,10 @@ export async function approvePack(ctx: AuthContext, packId: string) {
     for (const s of scans) if (s.containerId && s.result !== "duplicate") last.set(s.containerId, s.result);
     const okBoxes = boxes.filter((b) => last.get(b.containerId) === "ok");
     const mismatch = boxes.filter((b) => last.get(b.containerId) === "label_mismatch");
-    if (mismatch.length) throw new DomainError("conflict", `${mismatch.length} box label(s) were marked wrong. Reprint them and scan those boxes again.`, { code: "LABEL_MISMATCH" });
+    if (mismatch.length) throw new DomainError("conflict", `${plural(mismatch.length, "box label")} ${wasWere(mismatch.length)} marked wrong. Reprint them and scan those boxes again.`, { code: "LABEL_MISMATCH" });
     const required = p.verificationMode === "all" ? boxes.length : Math.min(p.verificationSampleSize ?? 1, boxes.length);
     if (okBoxes.length < required) {
-      throw new DomainError("conflict", `Scan ${required - okBoxes.length} more box(es): ${p.verificationMode === "all" ? "every box is checked for the first pack of this SKU" : `the sample is ${required} box(es)`} (A-PROC-38).`, { code: "SAMPLE_INCOMPLETE" });
+      throw new DomainError("conflict", `Scan ${plural(required - okBoxes.length, "more box", "more boxes")}: ${p.verificationMode === "all" ? "every box is checked for the first pack of this SKU" : `the sample is ${plural(required, "box")}`} (A-PROC-38).`, { code: "SAMPLE_INCOMPLETE" });
     }
     packMachine.assert(p.status, "verified", `Pack ${p.packNumber}`);
     await tx.update(packs).set({ status: "verified", checkedBy: ctx.userId, verifiedAt: new Date(), updatedAt: new Date() }).where(eq(packs.id, p.id));
@@ -442,7 +444,7 @@ export async function cancelPack(ctx: AuthContext, packId: string, reason: strin
     const p = await lockPack(tx, ctx, packId);
     packMachine.assert(p.status, "cancelled", `Pack ${p.packNumber}`);
     const [left] = await tx.select({ n: sql<number>`count(*)::int` }).from(packBoxes).where(and(eq(packBoxes.packId, p.id), eq(packBoxes.status, "packed")));
-    if (p.sourceKind !== "sales_order" && left.n > 0) throw new DomainError("state", `Pack ${p.packNumber} still has ${left.n} box(es). Remove them first.`);
+    if (p.sourceKind !== "sales_order" && left.n > 0) throw new DomainError("state", `Pack ${p.packNumber} still has ${plural(left.n, "box")}. Remove them first.`);
     await tx.update(packs).set({ status: "cancelled", cancelledAt: new Date(), cancelledBy: ctx.userId, cancelReason: r, updatedAt: new Date() }).where(eq(packs.id, p.id));
     await audit(tx, ctx, { action: "inventory.pack.cancelled", entityType: "pack", entityId: p.id, entityNumber: p.packNumber, siteId: p.siteId, reason: r });
     return { ok: true };

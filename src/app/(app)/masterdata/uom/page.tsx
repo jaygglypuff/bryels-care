@@ -55,7 +55,7 @@ export default async function UomPage() {
                 <p className="text-[13px] text-fg-2">{DIM_WORD[u.dimension] ?? u.dimension}{u.isBase ? " · stock is counted in this" : ""}</p>
                 {canUom && !u.isBase && (
                   <details className="mt-2">
-                    <summary className="cursor-pointer text-[13px] text-primary-text">Edit</summary>
+                    <summary className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center px-2 text-[13px] font-medium text-primary-text">Edit</summary>
                     <div className="mt-2">
                       <ActionForm action={saveUomAction} submitLabel="Save" hidden={{ _id: u.id }}>
                         <TextField name="name" label="Name" defaultValue={u.name} />

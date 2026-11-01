@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
@@ -162,7 +163,7 @@ export default async function ImportPage({ params, searchParams }: { params: Pro
       {d.handler.needsScans && (
         <Card>
           <CardTitle>Scans</CardTitle>
-          {d.scans.length === 0 ? <p className="text-[13px] text-muted">No scans uploaded yet.</p> : <p className="text-[13px] text-muted">{d.scans.length} scan(s): {d.scans.map((x) => x.fileName).join(", ")}</p>}
+          {d.scans.length === 0 ? <p className="text-[13px] text-muted">No scans uploaded yet.</p> : <p className="text-[13px] text-muted">{plural(d.scans.length, "scan")}: {d.scans.map((x) => x.fileName).join(", ")}</p>}
           {editable && ctx.canAt("documents.file_attachment.create", j.siteId) && (
             <div className="mt-3">
               <ScanUploadForm jobId={j.id} />

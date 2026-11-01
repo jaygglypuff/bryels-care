@@ -433,10 +433,10 @@ export function describeShortfall(r: AllocationResult, prefix: string): string {
   const parts = r.shortfalls.map((s) => `${s.sku}: ${fmtQty(s.short, "pcs", 0)} short of ${fmtQty(s.ordered, "pcs", 0)} ordered`);
   let msg = `${prefix} Not enough released stock — ${parts.join("; ")}. The order stays confirmed; allocate again when more stock is released.`;
   if (r.skippedForShelfLife.length) {
-    msg += ` Skipped lot(s) below the customer's minimum shelf life of ${r.minShelfLifeDays} days: ${r.skippedForShelfLife.map((s) => `${s.lotNumber} (${s.daysLeft} days left)`).join(", ")}.`;
+    msg += ` Lots skipped because they are below the customer's minimum shelf life of ${r.minShelfLifeDays} days: ${r.skippedForShelfLife.map((s) => `${s.lotNumber} (${s.daysLeft} days left)`).join(", ")}.`;
   }
   if (r.skippedForLotAge.length) {
-    msg += ` Skipped lot(s) older than the customer's maximum lot age of ${r.maxLotAgeDays} days: ${r.skippedForLotAge.map((s) => `${s.lotNumber} (${s.ageDays} days old)`).join(", ")}.`;
+    msg += ` Lots skipped because they are older than the customer's maximum lot age of ${r.maxLotAgeDays} days: ${r.skippedForLotAge.map((s) => `${s.lotNumber} (${s.ageDays} days old)`).join(", ")}.`;
   }
   return msg;
 }

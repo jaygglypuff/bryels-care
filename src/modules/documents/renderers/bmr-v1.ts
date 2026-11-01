@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import { qrSvg } from "../barcode";
 import { canonicalJson, sha256Hex } from "../checksum";
 import { html, type SafeHtml } from "../html";
@@ -141,7 +142,7 @@ function batchSummary(d: BmrData): SafeHtml {
   <td><span class="lbl">Steps</span>${s.stepsDone} of ${s.stepsTotal} recorded</td>
   <td><span class="lbl">Open deviations</span>${s.openDeviations === null ? html`<span class="na">not tracked in this version</span>` : String(s.openDeviations)}</td>
   <td><span class="lbl">Holds</span>${s.holds.length ? s.holds.join("; ") : "None"}</td>
-  <td><span class="lbl">Reopened</span>${d.batch.reopenCount ? `${d.batch.reopenCount} time(s)` : "Never"}</td>
+  <td><span class="lbl">Reopened</span>${d.batch.reopenCount ? plural(d.batch.reopenCount, "time") : "Never"}</td>
 </tr></tbody></table>`;
 }
 

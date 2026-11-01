@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import "server-only";
 import Decimal from "decimal.js";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
@@ -215,7 +216,7 @@ export async function submitSupplierReturn(ctx: AuthContext, input: { returnId: 
     await transitionSr(tx, ctx, sr, "submitted", { set: { submittedBy: ctx.userId, submittedAt: new Date() } });
     await audit(tx, ctx, { action: "procurement.supplier_return.submitted", entityType: "supplier_return", entityId: sr.id, entityNumber: sr.returnNumber, siteId: sr.siteId, after: { lines: lines.length, credit: sr.creditExpectedAmount } });
     const progress = await approvalProgress(tx, ctx.organizationId, { recordType: "supplier_return", recordId: sr.id, siteId: sr.siteId, basis: basisOf(sr) });
-    await notifyRoles(tx, { roleCodes: progress.next?.roleCodes.length ? progress.next.roleCodes : ["site_manager"], siteId: sr.siteId }, { organizationId: ctx.organizationId, siteId: sr.siteId, kind: "supplier_return_submitted", severity: "info", title: `Return to supplier ${sr.returnNumber} waits for approval`, body: `${lines.length} lot(s) to send back.`, entityType: "supplier_return", entityId: sr.id, link: `/procurement/returns/${sr.id}` });
+    await notifyRoles(tx, { roleCodes: progress.next?.roleCodes.length ? progress.next.roleCodes : ["site_manager"], siteId: sr.siteId }, { organizationId: ctx.organizationId, siteId: sr.siteId, kind: "supplier_return_submitted", severity: "info", title: `Return to supplier ${sr.returnNumber} waits for approval`, body: `${plural(lines.length, "lot")} to send back.`, entityType: "supplier_return", entityId: sr.id, link: `/procurement/returns/${sr.id}` });
     return { returnId: sr.id, status: "submitted" as const };
   });
 }

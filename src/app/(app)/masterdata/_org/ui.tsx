@@ -31,7 +31,7 @@ export function AddCard({ title, children }: { title: string; children: ReactNod
   return (
     <Card>
       <details>
-        <summary className="cursor-pointer select-none font-display text-[17px] font-semibold text-fg">{title}</summary>
+        <summary className="flex min-h-[44px] cursor-pointer items-center select-none font-display text-[17px] font-semibold text-fg">{title}</summary>
         <div className="mt-4">{children}</div>
       </details>
     </Card>

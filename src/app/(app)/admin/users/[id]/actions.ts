@@ -1,4 +1,5 @@
 "use server";
+import { plural } from "@/lib/plural";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireContext } from "@/lib/auth/context";
@@ -80,7 +81,7 @@ export async function userCommand(_: UserActionState, fd: FormData): Promise<Use
       }
       case "sign_out_all": {
         const n = await revokeAllUserSessions(ctx, userId, reason);
-        message = `${n} session(s) signed out.`;
+        message = `Signed out on ${plural(n, "device")}.`;
         break;
       }
       case "reset_mfa":

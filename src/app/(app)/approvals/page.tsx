@@ -27,7 +27,7 @@ function waited(minutes: number) {
   return `${d} days`;
 }
 
-function Row({ a, decidable }: { a: ApprovalRow; decidable: boolean }) {
+function Row({ a, decidable, first = false }: { a: ApprovalRow; decidable: boolean; /** Round 4 (UX re-audit C #8): only the oldest row gets the green button. */ first?: boolean }) {
   const href = isInternalPath(a.link) ? currentHref(a.link) : (recordHref(a.entityType, a.entityId) ?? "/action-centre");
   const inline = INLINE_DECISIONS[a.kind];
   const showInline = decidable && !!inline;
@@ -62,8 +62,8 @@ function Row({ a, decidable }: { a: ApprovalRow; decidable: boolean }) {
         {decidable && !inline && <p className="mt-1 text-[13px] text-muted">Open the record to decide (it needs more details than a tap).</p>}
       </div>
       <div className="flex w-full shrink-0 flex-col gap-2 md:w-72 md:items-stretch">
-        {showInline && <InlineDecision kind={a.kind} entityId={a.entityId} what={a.what} rejectLabel={inline.reject} />}
-        <LinkButton href={href} variant={decidable && !inline ? "primary" : "secondary"} className="w-full">
+        {showInline && <InlineDecision kind={a.kind} entityId={a.entityId} what={a.what} rejectLabel={inline.reject} primary={first} />}
+        <LinkButton href={href} variant={first && decidable && !inline ? "primary" : "secondary"} className="w-full">
           Open
         </LinkButton>
       </div>
@@ -111,8 +111,8 @@ export default async function ApprovalsPage() {
           </EmptyState>
         ) : (
           <ul className="divide-y divide-line">
-            {decidable.map((a) => (
-              <Row key={a.id} a={a} decidable />
+            {decidable.map((a, n) => (
+              <Row key={a.id} a={a} decidable first={n === 0} />
             ))}
           </ul>
         )}

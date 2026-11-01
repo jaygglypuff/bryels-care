@@ -22,14 +22,19 @@ export function CardTitle({ children, action }: { children: ReactNode; action?: 
   );
 }
 
+/**
+ * Page title, one line under it and the header buttons. Round 4 (UX re-audit C #9): on phones, when a PageIntro
+ * follows, the order is title → intro → buttons (globals.css "page-header"), so "This screen is for…" is read
+ * before "Export CSV · New material". Wider screens keep the buttons on the right of the title.
+ */
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-      <div className="min-w-0 max-w-full">
+    <div className={cx("page-header mb-5 flex flex-wrap items-end justify-between gap-3", actions ? "page-header--actions" : null)}>
+      <div className="page-title min-w-0 max-w-full">
         <h1 className="break-words font-display text-[26px] font-semibold tracking-tight text-fg sm:text-[32px]">{title}</h1>
         {subtitle && <p className="mt-1 text-[13px] text-muted">{subtitle}</p>}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions && <div className="page-actions flex flex-wrap gap-2">{actions}</div>}
     </div>
   );
 }

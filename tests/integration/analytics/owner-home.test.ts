@@ -8,7 +8,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { batches, locations } from "@/db/schema";
+import { actionItems, batches, locations } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { getKpiRecords, getOwnerHome, listStockAlerts, listWeekBatches, stockAlertCounts } from "@/modules/analytics";
 import { activityEntityNames } from "@/modules/analytics/activity-names";
@@ -205,5 +205,16 @@ describe("permissions", () => {
     expect([...names.values()]).toEqual(["Acapulco Soap 135 g"]);
     // another organization's id finds nothing
     expect((await activityEntityNames("00000000-0000-0000-0000-000000000000", [{ entityType: "product", entityId: await productId("ACS-135") }])).size).toBe(0);
+  });
+
+  it("a problem or alert in the activity feed is named by its title, only inside the organization (round 4, re-audit C N1)", async () => {
+    const [item] = await db
+      .insert(actionItems)
+      .values({ organizationId: kit.orgId, siteId: kit.nfd.id, tab: "exceptions", kind: "order_late", entityType: "sales_order", entityId: kit.nfd.id, recordNumber: "SO-TEST-1", title: "Order for Mabuhay Pharmacy Group is not sent out yet", severity: "warning", viewPermission: "sales.sales_order.view", link: "/sales", actionLabel: "Open", openedAt: new Date() })
+      .returning();
+    const names = await activityEntityNames(kit.orgId, [{ entityType: "action_item", entityId: item.id }]);
+    expect(names.get(`action_item:${item.id}`)).toBe("Order for Mabuhay Pharmacy Group is not sent out yet");
+    expect((await activityEntityNames("00000000-0000-0000-0000-000000000000", [{ entityType: "action_item", entityId: item.id }])).size).toBe(0);
+    await db.delete(actionItems).where(eq(actionItems.id, item.id));
   });
 });

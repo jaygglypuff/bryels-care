@@ -287,6 +287,21 @@ Design starts at 360 px and adds, never subtracts. Nothing core needs more than 
 > the title the full width on phones (buttons wrap below); `NextStep` puts its button under the sentence
 > below 480 px.
 
+> **Frame and page rules after the live re-audit C, round 4 (2026-11-01).** (1) The site selector shows the
+> site's **name** only and is never cut (code in the tooltip). (2) A **Help "?"** (44 px) sits in the top bar on
+> every screen and opens the quick guide for that screen in a sheet (`src/ui/help/frame-help.tsx`, mapping in
+> `src/ui/help/screen-guides.ts`, the role guide otherwise); the guide is loaded when pressed. (3) At 1280–1535 px
+> Scan shows "Scan"; To approve and Messages show their words when the bar has room (one site) and stay icons with
+> tooltips next to the site selector. (4) **Phones: title → "This screen is for…" → header buttons** for every
+> `PageHeader` with buttons followed by a `PageIntro` (`.page-header--actions` + `.page-intro` in `globals.css`;
+> note `:has()` cannot be nested). (5) **In-page targets are 44 px** too: filter chips, Chart/Table, disclosure
+> summaries, list links, and every checkbox/radio label row however the label is written. (6) **Counts in words**
+> with `plural(n, "word")` (`src/lib/plural.ts`), never "(s)"; **dates in words** ("30 Oct 2026",
+> `src/lib/plain-date.ts`) in alerts and messages. (7) **One green button per list**: To approve colours only the
+> oldest row's Approve. (8) **Note boxes on demand** ("Add a note") instead of one open box per row. (9) The
+> Operations Center stages are a connected strip on wide screens (arrows between stages of one row) and a
+> two-column list on phones; no sideways scrolling.
+
 > **Amended by ADR-024 (2026-10-23).** As built, desktop uses the reference layout instead of
 > the 240 px left navigation of §3.1: a top bar (logo, module pills with the active module as a
 > solid `--cta` pill, site selector, scan, QA bell, account menu), a second pill row for the

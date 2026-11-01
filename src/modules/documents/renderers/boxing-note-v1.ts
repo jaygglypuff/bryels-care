@@ -103,7 +103,7 @@ export const boxingNoteRendererV1: Renderer = {
           [d.variant === "order" ? "Order / shipment" : d.variant === "batch" ? "Batch" : "Source", p.sourceText],
           ["Customer", p.customerText],
           ["SKU", p.productText],
-          ["Lot(s)", p.lotText],
+          ["Lots", p.lotText],
           ["Packed", `${p.packedOn} · ${p.packedBy}`],
           ["Checked", p.checkedBy ? `${p.checkedAt ?? ""} · ${p.checkedBy}` : "Not yet verified"],
           ["Configuration", `${p.configText}${p.defaultConfigUsed ? " (default config used)" : ""}`],

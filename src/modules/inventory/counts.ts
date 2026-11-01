@@ -1,3 +1,4 @@
+import { isAre, plural } from "@/lib/plural";
 import "server-only";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
@@ -375,7 +376,7 @@ export async function submitCount(ctx: AuthContext, countId: string) {
     const missing = lines.filter((l) => !entries.some((e) => e.stockCountLineId === l.id));
     if (missing.length) {
       const locs = await tx.select({ id: locations.id, code: locations.code }).from(locations).where(inArray(locations.id, [...new Set(missing.map((m) => m.locationId))]));
-      throw new DomainError("validation", `${missing.length} expected line(s) are not counted yet (locations ${locs.map((l) => l.code).join(", ")}). Enter 0 for items that are not there.`, {
+      throw new DomainError("validation", `${plural(missing.length, "expected line")} ${isAre(missing.length)} not counted yet (locations ${locs.map((l) => l.code).join(", ")}). Enter 0 for items that are not there.`, {
         missingLineIds: missing.map((m) => m.id),
       });
     }

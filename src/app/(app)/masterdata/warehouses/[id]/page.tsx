@@ -77,7 +77,7 @@ export default async function WarehousePage({ params, searchParams }: { params: 
           <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {w.locations.map((l) => (
               <li key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-line p-2.5 text-[13px]">
-                <Link href={`/masterdata/locations/${l.id}`} className="font-medium text-primary-text hover:underline">{l.name}</Link>
+                <Link href={`/masterdata/locations/${l.id}`} className="inline-flex min-h-[44px] items-center font-medium text-primary-text hover:underline">{l.name}</Link>
                 <span className="text-muted">{LOCATION_KIND_LABELS[l.kind as LocationKind] ?? l.kind}</span>
                 <StateChip status={l.status} />
               </li>

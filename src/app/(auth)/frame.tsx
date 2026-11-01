@@ -21,9 +21,9 @@ export function AuthFrame({ children, below }: { children: ReactNode; below?: Re
         <div className="relative mt-auto max-w-[460px]">
           <p className="font-display text-[34px] font-semibold leading-tight">From raw material to the customer&apos;s shelf, every lot accounted for.</p>
           <ul className="mt-6 grid gap-2 text-[14px] text-white/85">
-            <li>• Receive, label and release materials with QA control</li>
-            <li>• Digital Batch Manufacturing Records with checked weighing</li>
-            <li>• FEFO picking, dispatch and full lot traceability</li>
+            <li>• Receive deliveries, print labels and let QA say OK</li>
+            <li>• Make each batch step by step, with a second person checking the weighing</li>
+            <li>• Use the stock that expires first, send out orders and trace every lot</li>
           </ul>
         </div>
         <p className="relative mt-10 text-[12px] text-white/60">Bryel&apos;s Care Corporation · Manufacturing ERP + CRM</p>

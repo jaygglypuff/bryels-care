@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageIntro } from "@/ui/guide";
+import { plainDatesIn } from "@/lib/plain-date";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { listMyNotifications } from "@/modules/platform";
@@ -39,7 +40,7 @@ export default async function NotificationsPage({ searchParams }: { searchParams
       <PageIntro>This screen is for everyone: messages the system sent you. Tap Open to go to the thing it is about. Press “I&apos;m on it” when you are dealing with it.</PageIntro>
       {ctx.can("quality.disposition.view") && (
         <p className="text-[13px] text-muted">
-          QA decisions waiting are listed in the <Link className="text-primary-text hover:underline" href="/quality">Check a batch or delivery</Link>.
+          Batches and deliveries waiting for a QA decision are on <Link className="text-primary-text hover:underline" href="/quality">Check a batch or delivery</Link>.
         </p>
       )}
       <Card>
@@ -61,10 +62,10 @@ export default async function NotificationsPage({ searchParams }: { searchParams
                     </div>
                     {/* ADR-075: every notification opens its record (plain <a>: opening marks it read, so no prefetch). */}
                     <p className="mt-1 text-[14px] text-fg">
-                      <a href={`/notifications/open/${n.id}`} className="text-primary-text hover:underline">{codeLast(n.title).text}</a>
+                      <a href={`/notifications/open/${n.id}`} className="text-primary-text hover:underline">{codeLast(plainDatesIn(n.title)).text}</a>
                       {codeLast(n.title).codes.length > 0 && <span className="ml-1 font-mono text-[12px] font-normal text-muted">{codeLast(n.title).codes.join(" · ")}</span>}
                     </p>
-                    <p className="mt-0.5 break-words text-[13px] font-normal text-muted">{n.body}</p>
+                    <p className="mt-0.5 break-words text-[13px] font-normal text-muted">{plainDatesIn(n.body)}</p>
                     {n.acknowledgedAt && <p className="mt-0.5 text-[12px] text-muted">You said you&apos;re on it · {fmtDateTime(n.acknowledgedAt)}</p>}
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">

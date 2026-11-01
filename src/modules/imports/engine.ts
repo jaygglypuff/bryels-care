@@ -1,3 +1,4 @@
+import { plural } from "@/lib/plural";
 import "server-only";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db, type Tx } from "@/db/client";
@@ -394,7 +395,7 @@ export async function runPosting(ctx: AuthContext, importJobId: string, runNo: n
     const [locked] = await tx.select().from(importJobs).where(eq(importJobs.id, job.id)).for("update");
     if (locked.status !== "posting" || locked.runNo !== runNo) return;
     const now = new Date();
-    await tx.update(importJobs).set({ ...counterColumns(c), status: "posted", postedAt: now, postedBy: ctx.userId, errorFileAttachmentId: fileId, failureMessage: c.failed ? `${c.failed} row(s) failed at posting; see the results file.` : null, updatedAt: now }).where(eq(importJobs.id, job.id));
+    await tx.update(importJobs).set({ ...counterColumns(c), status: "posted", postedAt: now, postedBy: ctx.userId, errorFileAttachmentId: fileId, failureMessage: c.failed ? `${plural(c.failed, "row")} failed at posting; see the results file.` : null, updatedAt: now }).where(eq(importJobs.id, job.id));
     await audit(tx, ctx, {
       action: "platform.import_job.posted",
       entityType: "import_job",

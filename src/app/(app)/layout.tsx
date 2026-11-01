@@ -9,7 +9,7 @@ import { MaintenanceBanner } from "@/ui/maintenance-banner";
 import { isDemoMode, isSandboxEmail } from "@/lib/demo";
 import { buildNav, isApprover, tabsFor } from "./nav";
 import { Shell } from "./shell";
-import { signOut, switchSite } from "./actions";
+import { helpForScreen, signOut, switchSite } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +35,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       approvalCount={approvalCount}
       showApprovals={approver}
       switchSite={switchSite}
+      loadHelp={helpForScreen}
       signOut={signOut}
       demo={isDemoMode() ? { canReset: ctx.roleCodes.includes("owner_director"), sandbox: isSandboxEmail(ctx.email) } : null}
     >

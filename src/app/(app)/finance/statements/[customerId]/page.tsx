@@ -1,3 +1,4 @@
+import { isAre, plural } from "@/lib/plural";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
@@ -55,7 +56,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
       />
       <PageIntro>This screen is for one customer: what they still owe us, which invoices are late, and what they paid lately.</PageIntro>
       {canPrint && Number(st.balanceDue) > 0 ? (
-        <NextStep text={late.length ? `${late.length} invoice(s) are late. Print the statement and send it to ${st.customer.name}.` : `Print the statement and send it to ${st.customer.name}.`} action={{ label: "Print the statement", href: `/print/statement/${st.customer.id}?asOf=${st.asOf}` }} />
+        <NextStep text={late.length ? `${plural(late.length, "invoice")} ${isAre(late.length)} late. Print the statement and send it to ${st.customer.name}.` : `Print the statement and send it to ${st.customer.name}.`} action={{ label: "Print the statement", href: `/print/statement/${st.customer.id}?asOf=${st.asOf}` }} />
       ) : null}
       <Card className="mb-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -94,7 +95,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
                 title={`Due ${fmtDate(i.dueDate)}`}
                 code={i.invoiceNumber}
                 tone={i.daysOverdue > 30 ? "bad" : i.daysOverdue > 0 ? "warn" : undefined}
-                status={i.daysOverdue > 0 ? <Chip tone={i.daysOverdue > 30 ? "bad" : "warn"}>{i.daysOverdue} day(s) late</Chip> : undefined}
+                status={i.daysOverdue > 0 ? <Chip tone={i.daysOverdue > 30 ? "bad" : "warn"}>{plural(i.daysOverdue, "day")} late</Chip> : undefined}
                 facts={
                   <>
                     Invoice <Money value={i.total} /> · paid <Money value={i.paid} />

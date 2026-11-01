@@ -62,9 +62,7 @@ export default async function OperationsCenterPage({ searchParams }: { searchPar
         }
       />
 
-      <div className="-mt-4">
-        <PageIntro>This screen is for everyone who runs the plant: every step from a supplier delivery to sending the customer order, with how many things are at each step right now. Tap a step to see them; red means late or stopped.</PageIntro>
-      </div>
+      <PageIntro>This screen is for everyone who runs the plant: every step from a supplier delivery to sending the customer order, with how many things are at each step right now. Tap a step to see them; red means late or stopped.</PageIntro>
       {oc.stages.length === 0 ? (
         <EmptyState title="Nothing to show for your role">Your role does not give access to receiving, stock, production or customer orders at this site. Ask your site manager if you need it.</EmptyState>
       ) : (

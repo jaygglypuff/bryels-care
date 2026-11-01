@@ -5,6 +5,7 @@ import { db, type Tx } from "@/db/client";
 import { dispositions, inventoryBalances, inventoryLots, materials, products } from "@/db/schema";
 import { audit } from "@/lib/audit";
 import { systemContext } from "@/lib/auth/system";
+import { plainDate } from "@/lib/plain-date";
 import { getSetting } from "@/lib/settings";
 // Direct import (not the platform index): the platform runtime imports the job registry, which imports this module.
 import { notifyUsers, usersWithRoles } from "@/modules/platform/notifications";
@@ -132,7 +133,7 @@ async function notifyExpiringLots(tx: Tx, organizationId: string, asOf: string, 
         kind: "expiring_lot",
         severity: bucket <= buckets[0] ? "warning" : "info",
         title: `Lot ${lot.lotNumber} expires in ${lot.daysLeft} day${lot.daysLeft === 1 ? "" : "s"}`,
-        body: `${lot.itemName ?? "Item"} lot ${lot.lotNumber} expires on ${lot.expiresOn} (within ${bucket} days). Use it first, or ask QA what to do with it.`,
+        body: `${lot.itemName ?? "Item"} lot ${lot.lotNumber} expires on ${plainDate(lot.expiresOn)} (within ${bucket} days). Use it first, or ask QA what to do with it.`,
         entityType: "inventory_lot",
         entityId: lot.id,
         link: "/inventory/lots/expiry",

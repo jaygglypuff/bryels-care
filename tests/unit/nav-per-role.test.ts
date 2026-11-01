@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { ROLE_BUNDLES, type Permission } from "@/lib/permissions";
-import { ADVANCED, IT_SYSTEM, NAV, buildNav, canSee, groupSections, homeHref, isApprover, productionPersona, tabsFor } from "@/app/(app)/nav";
+import { ADVANCED, IT_SYSTEM, NAV, PEOPLE_SETTINGS, buildNav, canSee, groupSections, homeHref, isApprover, productionPersona, tabsFor } from "@/app/(app)/nav";
 
 const canFor = (role: string) => {
   const set = new Set<string>(ROLE_BUNDLES[role].permissions);
@@ -164,10 +164,13 @@ describe("production tabs per role (ADR-080 §11)", () => {
   });
 
   it("Production setup sits in Management, not in Operations", () => {
-    expect(section("owner_director", "Management", "Production setup")).toEqual(["New recipe", "How-to sheets", "Quality checks for each item", "Equipment", "Recipes (advanced)", "Steps (advanced)"]);
+    expect(section("owner_director", "Management", "Production setup")).toEqual(["Recipes", "How-to sheets", "Quality checks for each item", "Equipment", "Recipes (advanced)", "Steps (advanced)"]);
     // UX audit R2: the engineers' editing screens are folded under "Advanced" at the end of Production setup.
     const setup = groupSections(group("owner_director", "Management")!).sections.find((s) => s.name === "Production setup")!.items;
-    expect(setup.filter((i) => i.advanced).map((i) => i.label)).toEqual(["Recipes (advanced)", "Steps (advanced)"]);
+    // Round 4: "Quality checks for each item" folds for everyone but QA.
+    expect(setup.filter((i) => i.advanced).map((i) => i.label)).toEqual(["Quality checks for each item", "Recipes (advanced)", "Steps (advanced)"]);
+    expect(section("qa_qc", "Management", "Production setup")).toContain("Quality checks for each item");
+    expect(groupSections(group("qa_qc", "Management")!).sections.find((s) => s.name === "Production setup")!.items.find((i) => i.label === "Quality checks for each item")!.advanced).toBe(false);
     const opsHrefs = group("owner_director", "Operations")!.items.map((i) => i.href);
     expect(opsHrefs.some((h) => h.startsWith("/masterdata"))).toBe(false);
   });
@@ -265,5 +268,60 @@ describe("Floor screen (ADR-084)", () => {
     expect(homeHref(["floor_display"])).toBe("/floor");
     expect(homeHref(["floor_display", "site_manager"])).toBe("/dashboard");
     expect(homeHref([])).toBe("/dashboard");
+  });
+});
+
+describe("a smaller owner menu (round 4, UX re-audit C #6)", () => {
+  const visible = (r: string) => navOf(r).flatMap((g) => g.items).filter((i) => !i.advanced);
+
+  it("the owner sees at most 80 entries without opening an Advanced fold (113 unfolded at the re-audit: 103)", () => {
+    expect(visible("owner_director").length).toBeLessThanOrEqual(80);
+    expect(navOf("owner_director").flatMap((g) => g.items).length).toBeLessThanOrEqual(113); // nothing removed: folded
+  });
+
+  it("no role has a sub-menu that only opens Advanced, or a sub-menu with one entry (Planning tools and IT and system excepted)", () => {
+    for (const r of Object.keys(ROLE_BUNDLES))
+      for (const g of navOf(r))
+        for (const sec of groupSections(g).sections) {
+          if (sec.name === ADVANCED || sec.name === IT_SYSTEM) continue;
+          const daily = sec.items.filter((i) => !i.advanced).length;
+          // A destination with a single section has nothing to merge it into.
+          if (groupSections(g).sections.filter((x) => x.name !== ADVANCED && x.name !== IT_SYSTEM).length === 1) continue;
+          expect(daily, `${r} ${g.label} › ${sec.name}`).toBeGreaterThan(0);
+          expect(sec.items.length, `${r} ${g.label} › ${sec.name}`).toBeGreaterThan(1);
+        }
+  });
+
+  it("sales no longer sees an empty Purchasing sub-menu; the sales guess is still reachable (folded)", () => {
+    const names = groupSections(group("sales_cs", "Management")!).sections.map((s) => s.name);
+    expect(names).not.toContain("Purchasing");
+    const guess = group("sales_cs", "Management")!.items.find((i) => i.href === "/procurement/forecast");
+    expect(guess?.advanced).toBe(true);
+  });
+
+  it("the rare entries fold for the owner but stay daily for the people who use them", () => {
+    const item = (r: string, href: string) => navOf(r).flatMap((g) => g.items).find((i) => i.href === href);
+    expect(item("owner_director", "/quality/recalls")?.advanced).toBe(true);
+    expect(item("qa_qc", "/quality/recalls")?.advanced).toBe(false);
+    expect(item("owner_director", "/warehouse/repack")?.advanced).toBe(true);
+    expect(item("warehouse_operator", "/warehouse/repack")?.advanced).toBe(false);
+    expect(item("owner_director", "/finance/periods")?.advanced).toBe(true);
+    expect(item("finance", "/finance/periods")?.advanced).toBe(false);
+    expect(item("owner_director", "/admin/sessions")?.advanced).toBe(true);
+    expect(item("system_admin", "/admin/sessions")?.advanced).toBe(false);
+    expect(item("warehouse_operator", "/sync")?.advanced).toBe(false);
+  });
+
+  it("Recipes opens the plain recipe list; the advanced lists stay folded under Advanced", () => {
+    const setup = groupSections(group("owner_director", "Management")!).sections.find((s) => s.name === "Production setup")!.items;
+    expect(setup.find((i) => i.label === "Recipes")?.href).toBe("/masterdata/recipes");
+    expect(setup.find((i) => i.href === "/masterdata/formulas")?.advanced).toBe(true);
+  });
+
+  it("people, rules and settings are one sub-menu", () => {
+    const names = groupSections(group("owner_director", "Management")!).sections.map((s) => s.name);
+    expect(names).toContain(PEOPLE_SETTINGS);
+    expect(names).not.toContain("People & access");
+    expect(names).not.toContain("Rules and settings");
   });
 });
