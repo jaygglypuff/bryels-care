@@ -54,7 +54,7 @@ export default async function ContainersPage({ searchParams }: { searchParams: P
           title={filtered ? "No boxes or sacks match" : "No boxes or sacks here yet"}
           action={filtered ? <LinkButton href="/inventory/containers" variant="secondary">Show all in use</LinkButton> : ctx.can("inventory.container.create") ? <LinkButton href="/inventory/containers/new" variant="cta">Pack into a box</LinkButton> : undefined}
         >
-          {filtered ? "Try another number or state." : "Pack loose stock into a box or sack to find it by its label."}
+          {filtered ? "Try another name, scan the label, or pick another state." : "Pack loose stock into a box or sack to find it by its label."}
         </EmptyState>
       ) : (
         <PlainList label="Boxes and sacks">
