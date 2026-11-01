@@ -29,7 +29,7 @@ import {
 } from "@/modules/quality";
 import { liftHold } from "@/modules/inventory";
 import { resetTestDatabase } from "../../support/db";
-import { asUser, expectCode, loadKit, loc, makeLot, type Kit } from "../../support/kit";
+import { asUser, expectCode, loadKit, loc, makeLot, seedLot, type Kit } from "../../support/kit";
 import { awaitingQcBatch } from "./w2c-fixtures";
 
 let kit: Kit;
@@ -317,8 +317,8 @@ describe("US-3-16 genealogy to finished lot", () => {
   });
 
   it("export needs quality.genealogy.export and is audited", async () => {
-    await expectCode(runExport(warehouse, genealogyExport, { lotNumber: "L-2610-00001" }, "csv"), "forbidden");
-    const f = await runExport(qa, genealogyExport, { lotNumber: "L-2610-00001" }, "csv");
+    await expectCode(runExport(warehouse, genealogyExport, { lotNumber: seedLot("00001") }, "csv"), "forbidden");
+    const f = await runExport(qa, genealogyExport, { lotNumber: seedLot("00001") }, "csv");
     expect(f.rowCount).toBeGreaterThan(3);
     expect(f.body.toString("utf8")).toContain("Luntian Wellness Stores");
     const ev = await db.select().from(auditEvents).where(eq(auditEvents.action, "quality.genealogy.exported"));

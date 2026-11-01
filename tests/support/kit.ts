@@ -80,3 +80,10 @@ export async function expectCode(p: Promise<unknown>, code: string) {
   expect((e as DomainError).code).toBe(code);
   return e as DomainError;
 }
+
+/** Seeded lot numbers carry the month the demo was seeded in (`L-YYMM-NNNNN`, Manila time; see src/db/seed.ts). */
+export function seedLot(seq: string): string {
+  const manila = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }));
+  const yymm = String(manila.getFullYear()).slice(2) + String(manila.getMonth() + 1).padStart(2, "0");
+  return `L-${yymm}-${seq}`;
+}

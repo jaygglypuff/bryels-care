@@ -19,6 +19,7 @@ import { ROLE_BUNDLES } from "@/lib/permissions";
 import { decideBatch, decideLot, getBatchRelease, getLotDisposition, getQaQueue } from "@/modules/quality/dispositions";
 import { recordTestResult } from "@/modules/quality/tests";
 import { resetTestDatabase } from "../../support/db";
+import { seedLot } from "../../support/kit";
 
 let orgId: string;
 let nfd: SiteRef;
@@ -72,39 +73,39 @@ describe("lot disposition", () => {
   it("lists quarantined material lots, held lots and batches awaiting QC in the queue", async () => {
     const q = await getQaQueue(qa);
     const lotNumbers = q.lots.map((l) => l.lotNumber);
-    expect(lotNumbers).toEqual(expect.arrayContaining(["L-2610-00013", "L-2610-00014", "L-2610-00011"]));
-    expect(lotNumbers).not.toContain("L-2610-00017"); // finished lot is decided via its batch
+    expect(lotNumbers).toEqual(expect.arrayContaining([seedLot("00013"), seedLot("00014"), seedLot("00011")]));
+    expect(lotNumbers).not.toContain(seedLot("00017")); // finished lot is decided via its batch
     expect(q.batches.map((b) => b.batchNumber)).toContain("B-26-0003");
     expect(q.batches.find((b) => b.batchNumber === "B-26-0003")!.testCount).toBe(1);
   });
 
   it("refuses a user without quality.disposition.approve", async () => {
-    const l = await lot("L-2610-00013");
+    const l = await lot(seedLot("00013"));
     await expect(decideLot(warehouse, { lotId: l.id, decision: "release", reason: "Looks fine to me" })).rejects.toMatchObject({ code: "forbidden" });
     await expect(getLotDisposition(warehouse, l.id)).rejects.toMatchObject({ code: "forbidden" });
   });
 
   it("fails closed for a lot outside the user's sites", async () => {
-    const l = await lot("L-2610-00013");
+    const l = await lot(seedLot("00013"));
     await expect(decideLot(qaRvsOnly, { lotId: l.id, decision: "release", reason: "CoA reviewed, conforms" })).rejects.toMatchObject({ code: "not_found" });
     await expect(getLotDisposition(qaRvsOnly, l.id)).rejects.toMatchObject({ code: "not_found" });
   });
 
   it("blocks the receiver from releasing the lot they received (separation of duties)", async () => {
-    const l = await lot("L-2610-00013");
+    const l = await lot(seedLot("00013"));
     await expect(decideLot(warehouseWithApprove, { lotId: l.id, decision: "release", reason: "CoA reviewed, conforms" })).rejects.toMatchObject({
       code: "separation_of_duties",
     });
-    expect((await lot("L-2610-00013")).qualityStatus).toBe("quarantine");
+    expect((await lot(seedLot("00013"))).qualityStatus).toBe("quarantine");
   });
 
   it("requires a reason of at least 5 characters", async () => {
-    const l = await lot("L-2610-00013");
+    const l = await lot(seedLot("00013"));
     await expect(decideLot(qa, { lotId: l.id, decision: "release", reason: " ok " })).rejects.toMatchObject({ code: "validation" });
   });
 
   it("releases a quarantined lot exactly once under concurrent submissions", async () => {
-    const l = await lot("L-2610-00013");
+    const l = await lot(seedLot("00013"));
     const results = await Promise.allSettled([
       decideLot(qa, { lotId: l.id, decision: "release", reason: "CoA reviewed, appearance conforms" }),
       decideLot(qa, { lotId: l.id, decision: "release", reason: "CoA reviewed, appearance conforms" }),
@@ -112,7 +113,7 @@ describe("lot disposition", () => {
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     const rejected = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
     expect(rejected.reason).toMatchObject({ code: "state" });
-    expect((await lot("L-2610-00013")).qualityStatus).toBe("released");
+    expect((await lot(seedLot("00013"))).qualityStatus).toBe("released");
     const rows = await db.select().from(dispositions).where(and(eq(dispositions.subjectType, "lot"), eq(dispositions.subjectId, l.id)));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ decision: "release", fromStatus: "quarantine", toStatus: "released", decidedBy: qa.userId });
@@ -122,14 +123,14 @@ describe("lot disposition", () => {
   });
 
   it("never releases an expired lot, but can reject it into the rejected location", async () => {
-    const l = await lot("L-2610-00008");
+    const l = await lot(seedLot("00008"));
     await expect(decideLot(qa, { lotId: l.id, decision: "release", reason: "Trying to release" })).rejects.toMatchObject({ code: "blocked_lot" });
     const b01 = await loc(nfd.id, "B-01");
     const rej = await loc(nfd.id, "REJ");
     const before = await onHand(l.id, b01.id);
     expect(Number(before)).toBeGreaterThan(0);
     await decideLot(qa, { lotId: l.id, decision: "reject", reason: "Expired before use; destroy" });
-    expect((await lot("L-2610-00008")).qualityStatus).toBe("rejected");
+    expect((await lot(seedLot("00008"))).qualityStatus).toBe("rejected");
     expect(await onHand(l.id, b01.id)).toBe("0.000000");
     expect(await onHand(l.id, rej.id)).toBe(before);
     const mv = await db.select().from(stockMovements).where(and(eq(stockMovements.lotId, l.id), eq(stockMovements.toLocationId, rej.id)));
@@ -138,30 +139,30 @@ describe("lot disposition", () => {
   });
 
   it("blocks release of a quarantined lot whose expiry date has passed", async () => {
-    const l = await lot("L-2610-00014");
+    const l = await lot(seedLot("00014"));
     await db.update(inventoryLots).set({ expiresOn: "2026-01-01" }).where(eq(inventoryLots.id, l.id));
     await expect(decideLot(qa, { lotId: l.id, decision: "release", reason: "CoA reviewed, conforms" })).rejects.toMatchObject({ code: "blocked_lot" });
     await db.update(inventoryLots).set({ expiresOn: l.expiresOn }).where(eq(inventoryLots.id, l.id));
   });
 
   it("places a released lot on hold and releases it from hold", async () => {
-    const l = await lot("L-2610-00009");
+    const l = await lot(seedLot("00009"));
     await decideLot(qa, { lotId: l.id, decision: "hold", reason: "Supplier complaint under review" });
-    expect((await lot("L-2610-00009")).qualityStatus).toBe("on_hold");
+    expect((await lot(seedLot("00009"))).qualityStatus).toBe("on_hold");
     await expect(decideLot(qa, { lotId: l.id, decision: "release", reason: "Release attempt" })).rejects.toMatchObject({ code: "state" });
     await decideLot(qa, { lotId: l.id, decision: "release_from_hold", reason: "Supplier confirmed lot is fine" });
-    expect((await lot("L-2610-00009")).qualityStatus).toBe("released");
+    expect((await lot(seedLot("00009"))).qualityStatus).toBe("released");
     const ev = await db.select().from(auditEvents).where(eq(auditEvents.entityId, l.id));
     expect(ev.map((e) => e.action)).toEqual(expect.arrayContaining(["quality.disposition.held", "quality.disposition.released"]));
     // The QA queue lists recent decisions name first (ADR-088): the material's name, the lot number second.
     const recent = (await getQaQueue(qa)).decisions.find((d) => d.subjectId === l.id);
-    expect(recent?.subjectNumber).toBe("L-2610-00009");
+    expect(recent?.subjectNumber).toBe(seedLot("00009"));
     expect(recent?.subjectName).toBeTruthy();
-    expect(recent?.subjectName).not.toBe("L-2610-00009");
+    expect(recent?.subjectName).not.toBe(seedLot("00009"));
   });
 
   it("does not decide a finished-goods lot whose batch is still awaiting QC", async () => {
-    const l = await lot("L-2610-00017");
+    const l = await lot(seedLot("00017"));
     await expect(decideLot(qa, { lotId: l.id, decision: "release", reason: "Lot-level release attempt" })).rejects.toMatchObject({ code: "state" });
   });
 });
@@ -198,12 +199,12 @@ describe("test results and batch release", () => {
 
     const qua = await loc(nfd.id, "QUA-01");
     const fg = await loc(nfd.id, "FG-01");
-    const outLot = await lot("L-2610-00017");
+    const outLot = await lot(seedLot("00017"));
     const qty = await onHand(outLot.id, qua.id);
     await decideBatch(qaLead, { batchId: b.id, decision: "release", reason: "All tests within specification; BMR reviewed" });
 
     expect((await batchByNumber("B-26-0003")).status).toBe("released");
-    expect((await lot("L-2610-00017")).qualityStatus).toBe("released");
+    expect((await lot(seedLot("00017"))).qualityStatus).toBe("released");
     expect(await onHand(outLot.id, qua.id)).toBe("0.000000");
     expect(await onHand(outLot.id, fg.id)).toBe(qty);
     const tr = await db.select().from(batchStateTransitions).where(and(eq(batchStateTransitions.batchId, b.id), eq(batchStateTransitions.toState, "released")));

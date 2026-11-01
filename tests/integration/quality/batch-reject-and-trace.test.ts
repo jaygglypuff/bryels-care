@@ -7,6 +7,7 @@ import { ROLE_BUNDLES } from "@/lib/permissions";
 import { decideBatch } from "@/modules/quality/dispositions";
 import { traceGenealogy, type TraceNode } from "@/modules/quality/genealogy";
 import { resetTestDatabase } from "../../support/db";
+import { seedLot } from "../../support/kit";
 
 let orgId: string;
 let nfd: SiteRef;
@@ -56,24 +57,24 @@ describe("batch reject", () => {
 
 describe("genealogy", () => {
   it("traces a material lot forward to the customers who received it", async () => {
-    const t = await traceGenealogy(qa, { lotNumber: "L-2610-00001" });
+    const t = await traceGenealogy(qa, { lotNumber: seedLot("00001") });
     expect(t.root?.kind).toBe("lot");
     const fwd = flatten(t.forward);
     expect(fwd.filter((n) => n.kind === "batch").map((n) => n.number)).toEqual(expect.arrayContaining(["B-26-0001", "B-26-0002", "B-26-0003"]));
-    expect(fwd.filter((n) => n.kind === "lot").map((n) => n.number)).toEqual(expect.arrayContaining(["L-2610-00015", "L-2610-00016", "L-2610-00017"]));
+    expect(fwd.filter((n) => n.kind === "lot").map((n) => n.number)).toEqual(expect.arrayContaining([seedLot("00015"), seedLot("00016"), seedLot("00017")]));
     expect(t.affectedCustomers.map((c) => c.customerName)).toContain("Luntian Wellness Stores");
     const row = t.affectedCustomers.find((c) => c.drNumber === "DR-26-00001")!;
-    expect(row.lotNumber).toBe("L-2610-00015");
+    expect(row.lotNumber).toBe(seedLot("00015"));
     expect(row.qty).toBe("48.000000");
   });
 
   it("traces a finished lot back to its material lots with supplier lots", async () => {
-    const t = await traceGenealogy(qa, { lotNumber: "L-2610-00015" });
+    const t = await traceGenealogy(qa, { lotNumber: seedLot("00015") });
     const back = flatten(t.reverse);
     expect(back.find((n) => n.kind === "batch")?.number).toBe("B-26-0001");
     const mats = back.filter((n) => n.kind === "lot");
-    expect(mats.map((n) => n.number)).toEqual(expect.arrayContaining(["L-2610-00001", "L-2610-00002", "L-2610-00004", "L-2610-00005", "L-2610-00007"]));
-    expect(mats.find((n) => n.number === "L-2610-00001")?.supplierLot).toBe("LOS-24871");
+    expect(mats.map((n) => n.number)).toEqual(expect.arrayContaining([seedLot("00001"), seedLot("00002"), seedLot("00004"), seedLot("00005"), seedLot("00007")]));
+    expect(mats.find((n) => n.number === seedLot("00001"))?.supplierLot).toBe("LOS-24871");
     expect(t.affectedCustomers).toHaveLength(1);
   });
 
@@ -85,8 +86,8 @@ describe("genealogy", () => {
   });
 
   it("returns nothing for lots outside the user's sites and refuses users without the permission", async () => {
-    const t = await traceGenealogy(qaRvsOnly, { lotNumber: "L-2610-00001" });
+    const t = await traceGenealogy(qaRvsOnly, { lotNumber: seedLot("00001") });
     expect(t.root).toBeNull();
-    await expect(traceGenealogy(warehouse, { lotNumber: "L-2610-00001" })).rejects.toMatchObject({ code: "forbidden" });
+    await expect(traceGenealogy(warehouse, { lotNumber: seedLot("00001") })).rejects.toMatchObject({ code: "forbidden" });
   });
 });
