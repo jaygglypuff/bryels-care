@@ -189,11 +189,12 @@ export function StepCard(p: Props) {
         {step.workInstruction && (
           <details className="mt-3 text-[15px]">
             <summary className="min-h-[44px] cursor-pointer py-2 text-primary-text">
-              See how ({step.workInstruction.code})
+              See how to do it
             </summary>
             <p className="whitespace-pre-line text-muted">
-              {step.workInstruction.bodyMarkdown}
+              {plainWords(step.workInstruction.bodyMarkdown)}
             </p>
+            <p className="mt-1 text-[13px] text-muted">How-to sheet {step.workInstruction.code}</p>
           </details>
         )}
         {step.status === "completed" && (
@@ -262,7 +263,7 @@ function EquipmentBox(p: Props & { equipment: NonNullable<Props["equipment"]> })
       </h2>
       {equipment.uses.length > 0 ? (
         <p className="mt-1 text-[16px] text-fg-2">
-          Using {equipment.uses.map((u) => `${u.code}${u.reasons.length ? ` (warnings: ${u.reasons.join(", ")})` : ""}${u.override ? " (approved)" : ""}`).join(", ")}
+          Using {equipment.uses.map((u) => `${u.name ? `${u.name} (${u.code})` : u.code}${u.reasons.length ? ` (warnings: ${u.reasons.join(", ")})` : ""}${u.override ? " (approved)" : ""}`).join(", ")}
         </p>
       ) : (
         <p className="mt-1 text-[15px] text-muted">Choose what you use before Step done.</p>
@@ -719,14 +720,7 @@ function FieldsCard(p: Props) {
             value={values[activeField.id] ?? ""}
             onChange={(v) => set(activeField.id, v)}
             decimal={activeField.uom !== "pcs"}
-            onSubmit={() =>
-              (
-                document.getElementById(
-                  `done-${step.stepNo}`,
-                ) as HTMLButtonElement | null
-              )?.click()
-            }
-            submitLabel="Step done"
+            // Re-audit N4: no "Step done" on the keypad (it sat next to the spoiled-wrappers field); one Step done below.
           />
         )}
         {step.requiresChecker && (

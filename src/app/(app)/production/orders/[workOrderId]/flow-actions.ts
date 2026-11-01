@@ -6,7 +6,7 @@ import { type ActionState, DomainError, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
 import type { Permission } from "@/lib/permissions";
 import type { PrintLabelsState } from "@/ui/labels/actions";
-import { approveStepException, batchSiteId, checkDispense, checkStep, confirmPicked, issuePackaging, printBatchLabels, recordDispense, returnStep, selectEquipment, stepDone, submitChecklist } from "@/modules/production";
+import { approveStepException, batchSiteId, checkDispense, checkStep, confirmPicked, issuePackaging, printBatchLabels, recordDispense, returnDispense, returnStep, selectEquipment, stepDone, submitChecklist } from "@/modules/production";
 import { registerAppHooks } from "@/modules/wiring";
 
 // Execution ↔ QA hooks (deviations for early ends and out-of-range values); idempotent.
@@ -260,6 +260,18 @@ export async function checkWeighingOwnAction(_: ActionState, fd: FormData): Prom
     const r = await checkDispense(ctx, { dispenseRecordId: uuid.parse(str(fd, "dispenseRecordId")), signedOn: "own_session", idempotencyKey: opt(fd, "idempotencyKey") });
     refreshCurrentPage();
     return { ok: true, message: `${r.materialName}: checked by you (${ctx.displayName}).` };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** "No, send it back" on the checker's own phone (re-audit N9): the weighing is voided with the reason and weighed again. */
+export async function returnWeighingAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    await returnDispense(ctx, { dispenseRecordId: uuid.parse(str(fd, "dispenseRecordId")), reason: str(fd, "reason") ?? "" });
+    refreshCurrentPage();
+    return { ok: true, message: "Sent back. The operator weighs it again." };
   } catch (e) {
     return toActionState(e);
   }

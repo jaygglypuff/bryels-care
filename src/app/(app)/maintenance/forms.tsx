@@ -402,5 +402,5 @@ export function RegisterSparePartForm({ sites, materials, equipment }: { sites: 
 }
 
 export function RemoveSparePartForm({ sparePartId }: { sparePartId: string }) {
-  return <ActionForm action={removeSparePartAction} hidden={{ sparePartId }} submit="Remove" size="sm" variant="secondary" confirm="Take this part off the spare-parts list? Its stock does not change." />;
+  return <ActionForm action={removeSparePartAction} hidden={{ sparePartId }} submit="Remove" size="md" variant="secondary" confirm="Take this part off the spare-parts list? Its stock does not change." />;
 }

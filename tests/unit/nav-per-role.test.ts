@@ -214,9 +214,9 @@ describe("bottom tab bar (phone and iPad portrait) per role", () => {
     }
   });
 
-  it("QA: Home · Quality check · Operations · Scan · Menu (Quality check opens the one QA door)", () => {
-    expect(tabs("qa_qc").map((t) => t.label)).toEqual(["Home", "Quality check", "Operations", "Scan", "Menu"]);
-    expect(tabs("qa_qc").find((t) => t.label === "Quality check")!.href).toBe("/quality");
+  it("QA: Home · Check a batch or delivery · Operations · Scan · Menu (the tab word is the H1 of /quality, re-audit N10)", () => {
+    expect(tabs("qa_qc").map((t) => t.label)).toEqual(["Home", "Check a batch or delivery", "Operations", "Scan", "Menu"]);
+    expect(tabs("qa_qc").find((t) => t.label === "Check a batch or delivery")!.href).toBe("/quality");
   });
 
   it("never 'Batches', never a bare 'Orders', never the old batch list, at most five tabs, always a way to the menu", () => {

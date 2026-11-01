@@ -2,13 +2,13 @@ import "server-only";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { type DbOrTx, type Tx, db } from "@/db/client";
-import { batchMaterialPicks, batchMaterialStagings, batchMaterials, batches, inventoryLots, locations, materials, packagingReconciliations, products, stockReservations } from "@/db/schema";
+import { batchMaterialPicks, batchMaterialStagings, batchMaterials, batches, inventoryLots, labelJobs, locations, materials, packagingReconciliations, products, stockReservations } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { nextNumber, peekNextNumber } from "@/lib/numbering";
 import { getSetting } from "@/lib/settings";
-import { activeStationsAt, createLabelJob, labelTemplatesForKind } from "@/modules/documents";
+import { activeStationsAt, cancelLabelJob, createLabelJob, labelTemplatesForKind } from "@/modules/documents";
 import { lockLots } from "@/modules/inventory";
 import { assertLotUsable } from "@/modules/inventory/ledger";
 import { assertLocationNotHeld } from "@/modules/inventory/holds";
@@ -19,6 +19,7 @@ import { currentPackaging, RECONCILED_STEP_KINDS } from "./packaging";
 import { expectedPieces } from "./packaging-lines";
 import { type FormulaSnapshot, lockBatch } from "./shared";
 import { convertReservations, expectedLots } from "./staging";
+import { plainWords } from "./plain-words";
 
 /**
  * ADR-088 §3, packaging and labels in the flow. The packaging lines of a batch are set aside at approval
@@ -192,7 +193,7 @@ export function labelPrintBlocker(steps: { stepNo: number; stepKind: string; nam
   const before = pk ? ordered.filter((s) => s.stepNo < pk.stepNo) : ordered.filter((s) => s.stepKind !== "transfer");
   const open = before.find((s) => !["completed", "skipped"].includes(recs.find((r) => r.stepNo === s.stepNo)?.status ?? ""));
   if (!open) return null;
-  return pk ? `Labels are printed on the step "${pk.name}". Finish "${open.name}" first.` : `Labels are printed when every making step is done. Finish "${open.name}" first.`;
+  return pk ? `Labels are printed on the step "${plainWords(pk.name)}". Finish "${plainWords(open.name)}" first.` : `Labels are printed when every making step is done. Finish "${plainWords(open.name)}" first.`;
 }
 
 async function batchLabelTemplate(q: DbOrTx, organizationId: string, siteId: string) {
@@ -282,12 +283,22 @@ export async function printBatchLabels(ctx: AuthContext, input: { batchId: strin
   });
   const template = await batchLabelTemplate(db, ctx.organizationId, batch.siteId);
   if (!template) throw new DomainError("state", "No approved product label is set up for this site. Ask the site manager.", { setup: "label_template" });
+  const make = () => createLabelJob(ctx, { labelTemplateId: template.id, entityType: "batch", entityId: batch.id, copies, printStationId: input.printStationId ?? null, idempotencyKey: input.idempotencyKey });
   try {
-    const r = await createLabelJob(ctx, { labelTemplateId: template.id, entityType: "batch", entityId: batch.id, copies, printStationId: input.printStationId ?? null, idempotencyKey: input.idempotencyKey });
-    return { jobId: r.jobId, lotNumber: batch.outputLotNumber!, expiresOn: batch.outputExpiresOn!, copies, alreadyPrinted: false };
+    const r = await make();
+    return { jobId: r.jobId, lotNumber: batch.outputLotNumber!, expiresOn: batch.outputExpiresOn!, copies, alreadyPrinted: false, replacedJobId: null as string | null };
   } catch (e) {
     const existing = e instanceof DomainError && e.code === "conflict" ? (e.details?.existingJobId as string | undefined) : undefined;
-    if (existing) return { jobId: existing, lotNumber: batch.outputLotNumber!, expiresOn: batch.outputExpiresOn!, copies, alreadyPrinted: true };
-    throw e;
+    if (!existing) throw e;
+    // Re-audit N5 (ADR-105): a label job made earlier with another count (e.g. 1 label for a 123-bar batch) and NOT printed
+    // yet is cancelled (audited, its document voided; nothing was printed) and a job with the asked count replaces it.
+    // A printed job is never replaced: more copies of printed labels are a reprint with a reason (ADR-099 unchanged).
+    const [old] = await db.select({ status: labelJobs.status, copies: labelJobs.copies }).from(labelJobs).where(eq(labelJobs.id, existing)).limit(1);
+    if (old && ["queued", "ready", "failed"].includes(old.status) && old.copies !== copies) {
+      await cancelLabelJob(ctx, existing);
+      const r = await make();
+      return { jobId: r.jobId, lotNumber: batch.outputLotNumber!, expiresOn: batch.outputExpiresOn!, copies, alreadyPrinted: false, replacedJobId: existing };
+    }
+    return { jobId: existing, lotNumber: batch.outputLotNumber!, expiresOn: batch.outputExpiresOn!, copies: old?.copies ?? copies, alreadyPrinted: true, replacedJobId: null as string | null };
   }
 }

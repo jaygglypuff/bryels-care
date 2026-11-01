@@ -21,7 +21,7 @@ export { type FormulaSnapshot, manilaToday, addDays, CHECKER_PERMISSION, isWeigh
 export { STEP_STATUSES, STEP_TRANSITIONS, canStepTransition, checkStep, returnStep, eligibleSigners, checkPermission, performPermission, type StepStatus } from "./execution";
 export { registerExecutionHooks, resetExecutionHooks, DEVIATION_UNAVAILABLE, type ExecutionHooks, type OpenDeviationInput, type DeviationKind, type InProcessQcStatus } from "./execution-hooks";
 export { submitChecklist, type ClearanceAnswer, type SubmitChecklistInput } from "./line-clearance";
-export { recordDispense, checkDispense, voidDispense, toleranceRange, toBaseQty, type DispenseInput } from "./dispensing";
+export { recordDispense, checkDispense, voidDispense, returnDispense, toleranceRange, toBaseQty, type DispenseInput } from "./dispensing";
 export { recordReading, selectEquipment, approveStepException, evaluateReading, limitsLabel } from "./process";
 export { startStep, completeStep, type CompleteStepInput } from "./steps";
 export { issuePackaging, countPackaging } from "./packaging";
@@ -43,6 +43,8 @@ export {
   withdrawReopen,
   recordAmendment,
   getClosureView,
+  canOpenClosure,
+  CLOSURE_PAGE_PERMISSIONS,
   BATCH_REOPEN_POLICY,
   REOPEN_TRANSITIONS,
   type ClosureView,
@@ -167,3 +169,7 @@ export { confirmLot } from "./dispensing";
 export { myFloorTasks, floorTaskCounts, waitingWords, type FloorTask, type FloorTaskKind } from "./floor-tasks";
 // ADR-084: the production floor TV ("Floor screen", docs/FLOOR_DISPLAY.md).
 export { getFloorDisplay, FLOOR_MAX_MAKING, FLOOR_MAX_NEXT, type FloorDisplay, type FloorMakingCard, type FloorNextRow, type FloorTone } from "./floor-display";
+// UX re-audit 2026-11-01 (ADR-105): plain step names and the batch record timeline in words.
+export { plainWords } from "./plain-words";
+export { auditSentence, batchStateWord, orderStateWord, ownerOverrideDoing, ownerOverrideSentence, plainReason, wordsFromKey, type RecordLabels } from "./record-words";
+export { materialsSummary, type MaterialsSummary } from "./materials-summary";

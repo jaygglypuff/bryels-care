@@ -162,6 +162,26 @@ describe("the packaging step records the taken lot without a scan", () => {
     expect(await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, batchId), eq(auditEvents.action, "production.batch.label_lot_fixed")))).toHaveLength(1);
   });
 
+  it("re-audit N5: a waiting job with another count (1 label for N bars) is replaced, not the only way forward", async () => {
+    const [first] = await db.select().from(labelJobs).where(and(eq(labelJobs.entityId, batchId), eq(labelJobs.status, "ready")));
+    // Someone made a job of 1 label: it replaces the waiting N-label job (cancelled, audited, nothing was printed).
+    const one = await printBatchLabels(w.operator, { batchId, copies: 1, idempotencyKey: key() });
+    expect(one).toMatchObject({ alreadyPrinted: false, copies: 1, replacedJobId: first.id });
+    expect((await db.select().from(labelJobs).where(eq(labelJobs.id, first.id)))[0].status).toBe("cancelled");
+    // The operator asks "How many? N" again: the 1-label job is replaced by an N-label job; lot and dates stay.
+    const k = key();
+    const all = await printBatchLabels(w.operator, { batchId, copies: pieces.toNumber(), idempotencyKey: k });
+    expect(all).toMatchObject({ alreadyPrinted: false, copies: pieces.toNumber(), replacedJobId: one.jobId, lotNumber: one.lotNumber });
+    const [job] = await db.select().from(labelJobs).where(eq(labelJobs.id, all.jobId));
+    expect(job).toMatchObject({ copies: pieces.toNumber(), status: "ready" });
+    // A double tap replays the same command (no second replacement).
+    expect((await printBatchLabels(w.operator, { batchId, copies: pieces.toNumber(), idempotencyKey: k })).jobId).toBe(all.jobId);
+    expect(await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, one.jobId), eq(auditEvents.action, "documents.label_job.cancelled")))).toHaveLength(1);
+    // Other site and a role without label permission still cannot touch it.
+    await expectCode(printBatchLabels(operatorRvs, { batchId, copies: 2, idempotencyKey: key() }), "not_found");
+    await expectCode(printBatchLabels(w.sales, { batchId, copies: 2, idempotencyKey: key() }), "forbidden");
+  });
+
   it("Step done records the issue against the taken lot (no scan), converts the set-aside wrappers and audits", async () => {
     await expectCode(stepDone(operatorRvs, { batchId, stepNo: pkgStep.stepNo }), "not_found");
     const used = pkgStep.parameters?.find((p) => /used/.test(p.code));

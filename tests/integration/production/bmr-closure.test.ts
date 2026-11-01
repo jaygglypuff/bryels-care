@@ -365,6 +365,16 @@ describe("US-3-19 batch closure and controlled reopen/amend", () => {
     expect(view.closures).toHaveLength(2);
   });
 
+  it("re-audit fix 8: the closure view is for the site manager and QA only, also when the URL is typed", async () => {
+    // Operator (has production.batch.view and .edit) and warehouse: refused on the server, not only hidden in the menu.
+    await expectCode(getClosureView(operator, released1.id), "forbidden");
+    await expectCode(getClosureView(warehouse, released1.id), "forbidden");
+    // Site manager of another site: the batch is not theirs.
+    await expectCode(getClosureView(managerRvs, released1.id), "not_found");
+    expect((await getClosureView(qa, released1.id)).batch.id).toBe(released1.id);
+    expect((await getClosureView(manager, released1.id)).batch.id).toBe(released1.id);
+  });
+
   it("a rejected reopen leaves the batch closed", async () => {
     const r = await requestReopen(manager, { batchId: released1.id, targetState: "quarantined", reason: "QA wants to re-check a result", amendmentScope: "QC results", idempotencyKey: key() });
     await expectCode(decideReopen(qa, { requestId: r.requestId, decision: "rejected" }), "validation");

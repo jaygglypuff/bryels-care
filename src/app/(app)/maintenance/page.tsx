@@ -22,6 +22,8 @@ export default async function MaintenancePage() {
   const wos = canWos ? await listMaintenanceWorkOrders(ctx, { status: "live" }) : [];
   const parts = ctx.can("maintenance.spare_part.view") ? (await listSpareParts(ctx)).filter((p) => p.belowMin) : [];
   const overdue = due.filter((p) => p.dueState === "overdue").length;
+  // Job titles made from a plan start with the plan number ("PM-0002: Cutter wire…"); the sentence names it once, by name.
+  const plain = (t: string) => t.replace(/^[A-Z]{2,4}-\d+:\s*/, "");
   return (
     <>
       <PageHeader
@@ -29,7 +31,8 @@ export default async function MaintenancePage() {
         actions={
           <>
             {ctx.can("maintenance.work_order.create") && (
-              <LinkButton href="/maintenance/work-orders/new" variant="cta">
+              // One green button (re-audit): green only when the box below has nothing to open.
+              <LinkButton href="/maintenance/work-orders/new" variant={due[0] || wos[0] ? "secondary" : "cta"}>
                 Report a broken machine
               </LinkButton>
             )}
@@ -62,9 +65,9 @@ export default async function MaintenancePage() {
       />
       <PageIntro>This screen is for the technician and the supervisor: what maintenance is late or due, and which machines are being repaired.</PageIntro>
       {due[0] ? (
-        <NextStep text={`Next: regular maintenance of ${due[0].equipmentName}${due[0].dueState === "overdue" ? " (late)" : ""}: ${due[0].title}.`} action={{ label: due[0].liveWorkOrder ? "Open the job" : "Open", href: due[0].liveWorkOrder ? `/maintenance/work-orders/${due[0].liveWorkOrder.id}` : `/maintenance/plans/${due[0].id}` }} />
+        <NextStep text={`Next: regular maintenance of ${due[0].equipmentName}${due[0].dueState === "overdue" ? " (late)" : ""}: ${plain(due[0].title)}.`} action={{ label: due[0].liveWorkOrder ? "Open the job" : "Open", href: due[0].liveWorkOrder ? `/maintenance/work-orders/${due[0].liveWorkOrder.id}` : `/maintenance/plans/${due[0].id}` }} />
       ) : wos[0] ? (
-        <NextStep text={`Next: ${wos[0].title} (${wos[0].equipmentName}).`} action={{ label: "Open the job", href: `/maintenance/work-orders/${wos[0].id}` }} />
+        <NextStep text={`Next: ${plain(wos[0].title)} (${wos[0].equipmentName}).`} action={{ label: "Open the job", href: `/maintenance/work-orders/${wos[0].id}` }} />
       ) : (
         <NextStep text="Nothing is late and no machine is being repaired." />
       )}

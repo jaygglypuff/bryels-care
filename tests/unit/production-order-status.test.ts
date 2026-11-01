@@ -123,9 +123,36 @@ describe("status mapping (ADR-080 §1), one row each", () => {
   it("multi-batch: the least advanced undecided batch wins and the order says 1 of 2 done", () => {
     const v = st("in_progress", [batch("closed"), batch("in_process", { stepRecords: [done(1)] })]);
     expect(v).toMatchObject({ status: "in_progress", batchesNote: "1 of 2 done", batchesDone: 1, batchesTotal: 2 });
+    // Re-audit N6: one batch already went to QA while the next waits → the order is In progress, not Approved.
     const w = st("in_progress", [batch("quarantined"), batch("planned")]);
-    expect(w.status).toBe("approved");
+    expect(w.status).toBe("in_progress");
+    expect(w.subtitle).toBe("Next batch waits to start");
     expect(w.batchesNote).toBe("0 of 2 done");
+  });
+
+  it("re-audit N6: a batch at step 6 and one still getting materials → 'In progress · Step 6 of 8', on the order and in its actions", () => {
+    const at6 = batch("in_process", { stepRecords: [1, 2, 3, 4, 5].map(done) });
+    const waiting = batch("planned", { materialsTaken: 1, materialsTotal: 5 });
+    const v = st("released", [waiting, at6]);
+    expect(v.status).toBe("in_progress");
+    expect(v.label).toBe("In progress");
+    expect(v.leadBatchId).toBe(at6.id);
+    expect(v.stepNote).toBe("Step 6 of 8 · Cure");
+    expect(v.batchesNote).toBe("0 of 2 done");
+    // The order's one button is the batch furthest along (same function for the list and the order page).
+    const a = productionOrderActions(v, { siteId: "s1", workOrderId: "wo1" }, { can: () => true, userId: "u1" }, { can: true, sodConflict: false });
+    expect(a.primary).toMatchObject({ kind: "link", batchId: at6.id });
+    // Both batches only approved: still Approved.
+    expect(st("released", [batch("planned"), batch("planned")]).status).toBe("approved");
+  });
+
+  it("plain step names in the status (re-audit item 3): line clearance reads clean-area check", () => {
+    const steps = [
+      { stepNo: 1, name: "Packaging area line clearance", stepKind: "line_clearance" },
+      { stepNo: 2, name: "Finish", stepKind: "transfer" },
+    ];
+    const v = st("released", [batch("in_process", { plannedSteps: steps, stepRecords: [] })]);
+    expect(v.subtitle).toBe("Packaging area clean-area check");
   });
 
   it("rejects unknown states", () => {

@@ -183,7 +183,8 @@ export function AddActionForm({ capaId, owners, minDate }: { capaId: string; own
   );
 }
 
-export function ActionStepForm({ actionId, kind }: { actionId: string; kind: "complete" | "verify" | "reopen" | "cancel" }) {
+/** `lead`: the first thing on the page this person can do; only it is the green button (re-audit: one green per page). */
+export function ActionStepForm({ actionId, kind, lead = false }: { actionId: string; kind: "complete" | "verify" | "reopen" | "cancel"; lead?: boolean }) {
   const cfg = {
     complete: { action: completeCapaActionAction, submit: "Mark as done", label: "What was done?", name: "note" },
     verify: { action: verifyCapaActionAction, submit: "Checked: it is done", label: "What did you check?", name: "note" },
@@ -191,7 +192,7 @@ export function ActionStepForm({ actionId, kind }: { actionId: string; kind: "co
     cancel: { action: reopenCapaActionAction, submit: "Cancel this", label: "Why cancel?", name: "reason" },
   }[kind];
   return (
-    <ActionForm action={cfg.action} hidden={{ actionId, to: kind === "cancel" ? "cancelled" : kind === "reopen" ? "open" : null }} submit={cfg.submit} size="sm" variant={kind === "cancel" ? "secondary" : "primary"} className="flex flex-col gap-2">
+    <ActionForm action={cfg.action} hidden={{ actionId, to: kind === "cancel" ? "cancelled" : kind === "reopen" ? "open" : null }} submit={cfg.submit} size="sm" variant={lead && (kind === "complete" || kind === "verify") ? "primary" : "secondary"} className="flex flex-col gap-2">
       {(fe) => (
         <Field label={cfg.label} htmlFor={`${kind}-${actionId}`} error={fe[cfg.name]}>
           <Input id={`${kind}-${actionId}`} name={cfg.name} required minLength={5} maxLength={2000} />

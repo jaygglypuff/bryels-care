@@ -455,7 +455,7 @@ export function tabsFor(can: Can, roles: readonly string[]): Tab[] {
       : persona === "warehouse"
         ? [home, { label: "Receive", href: "/inventory/receive", icon: "receive", permission: "procurement.goods_receipt.create" }, scan, inventory, menu]
         : persona === "qa"
-          ? [home, { label: "Quality check", href: "/quality", icon: "shield", permission: "quality.disposition.view" }, operations, scan, menu]
+          ? [home, { label: "Check a batch or delivery", href: "/quality", icon: "shield", permission: "quality.disposition.view" }, operations, scan, menu]
           : [home, operations, inventory, sales, menu];
   return tabs.filter((t) => !t.permission || can(t.permission));
 }

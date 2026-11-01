@@ -101,7 +101,14 @@ export default async function ComplaintPage({ params, searchParams }: { params: 
           <p className="mb-4 whitespace-pre-wrap text-[14px]">{c.description}</p>
           <Dl
             items={[
-              ["Customer", `${c.customerName} (${c.customerCode})${c.customerReference ? ` · their ref. ${c.customerReference}` : ""}`],
+              // Names before codes (re-audit): the customer code follows the name, small and grey.
+              [
+                "Customer",
+                <span key="cu">
+                  {c.customerName} <span className="text-[12px] text-muted">{c.customerCode}</span>
+                  {c.customerReference ? ` · their ref. ${c.customerReference}` : ""}
+                </span>,
+              ],
               ["Received", `${fmtDateTime(c.receivedAt)} · ${c.channelLabel} · written down by ${c.receivedByName}`],
               ["Number on the label", c.reportedCode ?? "—"],
               ["Did we send it to them?", <span key="m" className="inline-flex flex-wrap items-center gap-2"><TraceMatchChip match={c.traceMatch} /><span className="text-[13px] text-muted">{c.traceMatchLabel}</span></span>],

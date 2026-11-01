@@ -41,6 +41,7 @@ export function MaterialsList({
   scanLots,
   moveStock,
   allDone,
+  notDoneWord = "Not yet",
 }: {
   batchId: string;
   lines: Line[];
@@ -48,10 +49,12 @@ export function MaterialsList({
   scanLots: boolean;
   moveStock: boolean;
   allDone: boolean;
+  /** "Not ticked" once the batch is past this list (re-audit N1): nothing left to do, so never "Not yet". */
+  notDoneWord?: string;
 }) {
   const groups = new Map<string, Line[]>();
   for (const l of lines) {
-    const g = l.lots[0]?.section ?? "Not set aside";
+    const g = l.lots[0]?.section ?? "Not set aside for this batch";
     groups.set(g, [...(groups.get(g) ?? []), l]);
   }
   const open = lines.filter(
@@ -79,6 +82,7 @@ export function MaterialsList({
                   line={l}
                   canTick={canTick}
                   scanLots={scanLots}
+                  notDoneWord={notDoneWord}
                 />
               ))}
             </ul>
@@ -102,11 +106,13 @@ function PickRow({
   line,
   canTick,
   scanLots,
+  notDoneWord,
 }: {
   batchId: string;
   line: Line;
   canTick: boolean;
   scanLots: boolean;
+  notDoneWord: string;
 }) {
   const [state, action] = useInPlaceAction(pickAction);
   const [more, setMore] = useState(false);
@@ -166,7 +172,7 @@ function PickRow({
           <button
             type="button"
             onClick={() => setMore(true)}
-            className="inline-flex min-h-[52px] min-w-[120px] items-center justify-center gap-2 rounded-full border border-transparent bg-primary px-6 text-[16px] font-medium text-white"
+            className="inline-flex min-h-[52px] min-w-[120px] items-center justify-center gap-2 rounded-full border border-line-strong bg-surface px-6 text-[16px] font-medium text-fg"
             disabled={!!risk}
           >
             <Circle size={20} aria-hidden /> Scan
@@ -181,7 +187,7 @@ function PickRow({
               value={taken ? "untaken" : "taken"}
             />
             <SubmitButton
-              variant={taken ? "secondary" : "primary"}
+              variant="secondary"
               size="lg"
               pendingText="…"
               className="min-w-[120px]"
@@ -213,7 +219,7 @@ function PickRow({
             ) : (
               <Circle size={18} aria-hidden />
             )}{" "}
-            {taken ? "Taken" : "Not yet"}
+            {taken ? "Taken" : notDoneWord}
           </span>
         )}
       </div>

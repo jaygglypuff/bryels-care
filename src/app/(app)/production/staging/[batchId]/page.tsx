@@ -54,7 +54,7 @@ export default async function StageBatchPage({ params }: { params: Promise<{ bat
             </span>
           </span>
         }
-        actions={<><Help screen="production.staging" />{v.workOrder ? <LinkButton href={`/production/work-orders/${v.workOrder.id}?tab=materials`} variant="secondary">Production order</LinkButton> : undefined}</>}
+        actions={<><Help screen="production.staging" />{v.workOrder ? <LinkButton href={`/production/orders/${v.workOrder.id}?tab=materials`} variant="secondary">Production order</LinkButton> : undefined}</>}
       />
       <PageIntro>Which lots are set aside for this batch, a QA lot change, and the printed weighing sheet. To get the materials, use the Materials list.</PageIntro>
       {b.status === "planned" ? (

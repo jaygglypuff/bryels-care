@@ -97,6 +97,32 @@ export function PrintLabelsButton({
   }
 
   // Made but not printed yet: open it (the count is already set on that label job).
+  if (existing?.status === "ready" && action) {
+    // Re-audit N5 (ADR-105): a waiting job made with another count (1 label for a 123-bar batch) must not be the only
+    // way forward. "How many?" stays; a different number replaces the waiting job on the server (printBatchLabels
+    // cancels the unprinted job, audited). Only callers whose action does that (production's batch labels) get this.
+    const n = Math.min(copies, max);
+    return (
+      <form action={run} className="grid gap-3" data-testid="print-labels">
+        <input type="hidden" name="entityType" value={entityType} />
+        <input type="hidden" name="entityId" value={entityId} />
+        <input type="hidden" name="labelTemplateId" value={labelTemplateId} />
+        {Object.entries(extraFields ?? {}).map(([k, v]) => (
+          <input key={k} type="hidden" name={k} value={v} />
+        ))}
+        <p className="text-[15px] text-fg-2" data-testid="print-labels-waiting">
+          {labelCountWords(existing.copies)} {existing.copies === 1 ? "is" : "are"} waiting to be printed.
+          {existing.copies !== suggested ? ` You need ${labelCountWords(suggested)} (one for each ${words.one}).` : ""}
+        </p>
+        <HowMany id={`copies-${entityId}`} value={n} onChange={setCopies} max={max} unit={words.one} />
+        <SubmitButton variant="cta" size="lg" pendingText="Making the labels…" className="w-full sm:w-auto" data-testid="print-labels-submit">
+          <Printer size={20} aria-hidden /> Print {labelCountWords(n)}
+        </SubmitButton>
+        <FormMessage state={state} />
+      </form>
+    );
+  }
+
   if (existing?.status === "ready") {
     return (
       <div className="grid gap-2" data-testid="print-labels">

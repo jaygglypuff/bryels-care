@@ -28,7 +28,7 @@ export function LogComplaintForm({ customers, products, categories, channels, de
               </option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} ({c.code})
+                  {c.name} · {c.code}
                 </option>
               ))}
             </Select>
