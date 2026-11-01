@@ -38,12 +38,17 @@ describe("board move rules (pure)", () => {
     expect(boardMove({ kind: "work_order", status: "draft", hasWorkOrder: true }, col("ready"), all).allowed).toBe(false);
     // A staged batch starts by its signed line clearance in the workspace, not by a drag (data-model §6.2).
     const start = boardMove({ kind: "batch", status: "materials_staged", hasWorkOrder: true }, col("in_process"), all);
-    expect(!start.allowed && start.reason).toMatch(/line clearance/);
+    expect(!start.allowed && start.reason).toMatch(/start check \(clean-area check\)/);
+    // Plain words (re-audit 2026-11-01 item 10): no permission strings or "work order" in what people read.
+    for (const v of [boardMove({ kind: "work_order", status: "draft", hasWorkOrder: true }, col("planned"), none), boardMove({ kind: "work_order", status: "planned", hasWorkOrder: true }, col("ready"), none)]) {
+      expect(!v.allowed && v.reason).not.toMatch(/production\.|work order|released/i);
+    }
+    expect(boardMove({ kind: "work_order", status: "planned", hasWorkOrder: true }, col("ready"), all)).toMatchObject({ label: "Approve (sets the materials aside)" });
   });
   it("explains moves that happen in another flow", () => {
     const staged = boardMove({ kind: "batch", status: "planned", hasWorkOrder: true }, col("staged"), all);
     expect(staged.allowed).toBe(false);
-    expect(!staged.allowed && staged.reason).toMatch(/scanning/);
+    expect(!staged.allowed && staged.reason).toMatch(/Get materials/);
     const qa = boardMove({ kind: "batch", status: "awaiting_qc", hasWorkOrder: false }, col("released"), all);
     expect(!qa.allowed && qa.reason).toMatch(/QA/);
   });
@@ -53,6 +58,11 @@ describe("production board (US-3-07)", () => {
   it("shows work orders and batches of the site by state, with progress and assignees", async () => {
     const board = await getProductionBoard(w.manager);
     const keys = (k: string) => board.columns.find((c) => c.key === k)!.cards;
+    // Default column titles read in the order words (configured titles that differ would stay as configured).
+    expect(board.columns.find((c) => c.key === "ready")!.title).toBe("Approved · get materials");
+    expect(board.columns.find((c) => c.key === "awaiting_qc")!.title).toBe("Quality check");
+    // Order cards open the production order page, never the old order view.
+    expect(keys("to_plan").every((c) => c.href.startsWith("/production/orders/"))).toBe(true);
     expect(keys("to_plan").some((c) => c.kind === "work_order" && c.status === "draft")).toBe(true);
     expect(keys("planned").some((c) => c.kind === "work_order" && c.status === "planned")).toBe(true);
     expect(keys("in_process").some((c) => c.kind === "batch")).toBe(true);
@@ -77,7 +87,7 @@ describe("production board (US-3-07)", () => {
     expect((await db.select().from(workOrders).where(eq(workOrders.id, planned.id)))[0].status).toBe("planned");
     // Site manager releases by drag (reserves materials).
     const r = await moveBoardCard(w.manager, { kind: "work_order", id: planned.id, toColumn: "ready" });
-    expect(r.message).toMatch(/released/);
+    expect(r.message).toMatch(/approved/);
     // A batch cannot be dragged to Released (QA decides).
     const inProc = board.columns.find((c) => c.key === "in_process")!.cards.find((c) => c.kind === "batch")!;
     await expectCode(moveBoardCard(w.manager, { kind: "batch", id: inProc.id, toColumn: "released" }), "state");

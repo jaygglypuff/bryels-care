@@ -3,7 +3,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { D, fmtQty } from "@/lib/qty";
 import { Field, Input, Select, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
-import { addDailyLogAction, approveProductionOrderAction, assignProductionOrderAction, cancelProductionOrderAction, correctDailyLogAction, createProductionOrderAction } from "./actions";
+import { addDailyLogAction, approveProductionOrderAction, assignProductionOrderAction, cancelProductionOrderAction, correctDailyLogAction, createProductionOrderAction, planBatchAction, setAsideAgainAction } from "./actions";
 
 /**
  * Client forms of the production order screens (ADR-074). Few fields visible; the rest under
@@ -115,6 +115,16 @@ export function ProductionOrderForm({ formulas, lines, today, prefill }: { formu
 
 export function ApproveButton({ workOrderId }: { workOrderId: string }) {
   return <ActionForm action={approveProductionOrderAction} hidden={{ workOrderId }} submit="Approve" pending="Approving…" variant="cta" size="lg" messageBelow className="flex flex-col gap-2" />;
+}
+
+/** "Plan the batch" (re-audit N2): the next batch of an approved order, on this page. `secondary` for "plan another batch". */
+export function PlanBatchButton({ workOrderId, idempotencyKey, label = "Plan the batch", secondary = false }: { workOrderId: string; idempotencyKey: string; label?: string; secondary?: boolean }) {
+  return <ActionForm action={planBatchAction} hidden={{ workOrderId, idempotencyKey }} submit={label} pending="Planning…" variant={secondary ? "secondary" : "cta"} size={secondary ? "md" : "lg"} messageBelow className="flex flex-col gap-2" />;
+}
+
+/** Set aside newly received stock for what is still missing (was "Reserve again" on the old order view). */
+export function SetAsideAgainButton({ workOrderId }: { workOrderId: string }) {
+  return <ActionForm action={setAsideAgainAction} hidden={{ workOrderId }} submit="Set aside new stock" pending="Setting aside…" variant="secondary" size="md" messageBelow className="flex flex-col gap-2" />;
 }
 
 /** ADR-082: who makes this order. Only people who record production at the site are offered. */

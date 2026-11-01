@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { requireContext } from "@/lib/auth/context";
 import { addDays, defectSummary, listProducts, manilaToday } from "@/modules/production";
-import { Card, PageHeader, Select } from "@/ui/core";
+import { Card, EmptyState, LinkButton, PageHeader, Select } from "@/ui/core";
 import { Help } from "@/ui/help/help";
 import { Forbidden } from "../../forbidden";
 import { DefectTables } from "../orders/parts";
@@ -47,10 +47,19 @@ export default async function DefectsPage({ searchParams }: { searchParams: Prom
         )}
         <button className="min-h-[44px] rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" type="submit">Show</button>
       </form>
-      <Card>
-        <DefectTables summary={summary} />
-      </Card>
-      <p className="mt-4 text-[13px] text-muted">Reject rate = rejects ÷ (good + rejects). A corrected entry counts once, with the corrected numbers.</p>
+      {summary.rows.length === 0 ? (
+        // Re-audit: the empty state says who writes rejects and where (not only "Nothing recorded yet").
+        <EmptyState title="No rejects written in these dates" action={<LinkButton href="/production/orders" variant="secondary">Production orders</LinkButton>}>
+          The person making a batch writes the good pieces and the rejects each day on the production order, tab &quot;Daily log&quot; (&quot;What happened today?&quot;). They show here the next time you open this page. Try other dates if you expected some.
+        </EmptyState>
+      ) : (
+        <>
+          <Card>
+            <DefectTables summary={summary} />
+          </Card>
+          <p className="mt-4 text-[13px] text-muted">Reject share = rejects out of all pieces made (good + rejects). A corrected entry counts once, with the corrected numbers.</p>
+        </>
+      )}
     </div>
   );
 }

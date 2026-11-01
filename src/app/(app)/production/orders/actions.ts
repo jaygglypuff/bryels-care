@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireContext } from "@/lib/auth/context";
 import { type ActionState, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
-import { addDailyLog, approveProductionOrder, assignProductionOrder, cancelWorkOrder, correctDailyLog, createProductionOrder } from "@/modules/production";
+import { addDailyLog, approveProductionOrder, assignProductionOrder, cancelWorkOrder, correctDailyLog, createBatchFromWorkOrder, createProductionOrder, reserveWorkOrderShortages } from "@/modules/production";
 
 /**
  * Server actions of the production order screens (ADR-074). Thin adapters: read the form, call the
@@ -113,6 +113,37 @@ export async function assignProductionOrderAction(_: ActionState, fd: FormData):
     const r = await assignProductionOrder(ctx, uuid.parse(str(fd, "workOrderId")), { assigneeId });
     refreshCurrentPage();
     return { ok: true, message: !r.changed ? "No change." : assigneeId ? "Assigned. They get a notification and see it first in My work." : "Anyone at the site can take this order now." };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/**
+ * "Plan the batch" on the order page (re-audit N2, ADR-105): an approved order with no live batch (every batch was
+ * abandoned before it started, or fewer batches than ordered) gets its next batch here instead of on the old order
+ * view. The service checks production.batch.create, the site and the order state (createBatchFromWorkOrder →
+ * createBatch → assertWorkOrderAcceptsBatch); the batch uses the recipe and steps versions frozen when the order was
+ * approved. A double click replays the same idempotency key.
+ */
+export async function planBatchAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const r = await createBatchFromWorkOrder(ctx, { workOrderId: uuid.parse(str(fd, "workOrderId")), idempotencyKey: str(fd, "idempotencyKey") || null });
+    refreshCurrentPage();
+    return { ok: true, message: `Batch ${r.batchNumber} is planned. Next: get its materials.` };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** "Set aside again" (was "Reserve again (new stock)" on the old order view): sets aside newly received stock for what is still missing. */
+export async function setAsideAgainAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const r = await reserveWorkOrderShortages(ctx, uuid.parse(str(fd, "workOrderId")));
+    refreshCurrentPage();
+    const n = r.reservations.length;
+    return { ok: true, message: n ? `${n} more ${n === 1 ? "lot is" : "lots are"} set aside.` : r.shortages.length ? "No new stock to set aside yet." : "Everything is already set aside." };
   } catch (e) {
     return toActionState(e);
   }

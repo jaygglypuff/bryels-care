@@ -46,6 +46,8 @@ export default async function CapaPage({ params, searchParams }: { params: Promi
   }
   const c = v.capa;
   const live = c.status === "open" || c.status === "in_progress";
+  // One green button (re-audit 2026-11-01): only the first action this person can mark done or check is green.
+  const leadActionId = v.actions.find((a) => a.canComplete || a.canVerify)?.id ?? null;
   return (
     <>
       <PageHeader
@@ -178,8 +180,8 @@ export default async function CapaPage({ params, searchParams }: { params: Promi
                   {a.status === "cancelled" && <p className="text-[12px] text-muted">Cancelled: {a.cancelReason}</p>}
                   {(a.canComplete || a.canVerify || a.canReopen || a.canCancel) && (
                     <div className="mt-3 grid gap-3 border-t border-line pt-3 sm:grid-cols-2">
-                      {a.canComplete && <ActionStepForm actionId={a.id} kind="complete" />}
-                      {a.canVerify && <ActionStepForm actionId={a.id} kind="verify" />}
+                      {a.canComplete && <ActionStepForm actionId={a.id} kind="complete" lead={a.id === leadActionId} />}
+                      {a.canVerify && <ActionStepForm actionId={a.id} kind="verify" lead={a.id === leadActionId} />}
                       {a.canReopen && <ActionStepForm actionId={a.id} kind="reopen" />}
                       {a.canCancel && <ActionStepForm actionId={a.id} kind="cancel" />}
                     </div>

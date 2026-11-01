@@ -9,17 +9,12 @@ import {
   approveMaterialSubstitution,
   approveProductionPlan,
   buildProductionPlan,
-  cancelWorkOrder,
   closeProductionPlan,
   convertPlanLine,
-  createBatchFromWorkOrder,
   createWorkOrder,
   editWorkOrder,
   generateBatchSheet,
   moveBoardCard,
-  planWorkOrder,
-  releaseWorkOrder,
-  reserveWorkOrderShortages,
   setMinStock,
   stageMaterial,
 } from "@/modules/production";
@@ -63,8 +58,8 @@ export async function createWorkOrderAction(_: ActionState, fd: FormData): Promi
   } catch (e) {
     return toActionState(e);
   }
-  revalidatePath("/production/work-orders");
-  redirect(`/production/work-orders/${id}`);
+  revalidatePath("/production/orders");
+  redirect(`/production/orders/${id}`);
 }
 
 export async function editWorkOrderAction(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -79,49 +74,8 @@ export async function editWorkOrderAction(_: ActionState, fd: FormData): Promise
   }
 }
 
-/** One action for the state buttons on the work order detail (plan, release, top-up, create batch). */
-export async function workOrderCommandAction(_: ActionState, fd: FormData): Promise<ActionState> {
-  let goTo: string | null = null;
-  try {
-    const ctx = await requireContext();
-    const id = uuid.parse(str(fd, "workOrderId"));
-    const command = z.enum(["plan", "release", "top_up", "create_batch"]).parse(str(fd, "command"));
-    let message: string;
-    if (command === "plan") {
-      const r = await planWorkOrder(ctx, id);
-      message = `Planned with ${r.formulaRevision} and ${r.routingRevision}.`;
-    } else if (command === "release") {
-      const r = await releaseWorkOrder(ctx, id, { note: str(fd, "note") || null, idempotencyKey: str(fd, "idempotencyKey") || null });
-      message = `Released. ${r.reservations.length} reservation${r.reservations.length === 1 ? "" : "s"} made${r.shortages.length ? `; short: ${r.shortages.map((s) => s.materialName).join(", ")}` : ""}.`;
-    } else if (command === "top_up") {
-      const r = await reserveWorkOrderShortages(ctx, id);
-      message = r.reservations.length ? `${r.reservations.length} more reservation${r.reservations.length === 1 ? "" : "s"} made.` : r.shortages.length ? "No more eligible stock to reserve yet." : "Everything is already reserved.";
-    } else {
-      const r = await createBatchFromWorkOrder(ctx, { workOrderId: id, plannedStartOn: str(fd, "plannedStartOn") || null, idempotencyKey: str(fd, "idempotencyKey") || null });
-      message = `Batch ${r.batchNumber} created.`;
-      goTo = `/production/staging/${r.batchId}`;
-    }
-    if (!goTo) {
-      refreshCurrentPage();
-      return { ok: true, message };
-    }
-  } catch (e) {
-    return toActionState(e);
-  }
-  redirect(goTo ?? "/production/work-orders");
-}
-
-export async function cancelWorkOrderAction(_: ActionState, fd: FormData): Promise<ActionState> {
-  try {
-    const ctx = await requireContext();
-    const id = uuid.parse(str(fd, "workOrderId"));
-    const r = await cancelWorkOrder(ctx, id, str(fd, "reason") ?? "");
-    refreshCurrentPage();
-    return { ok: true, message: `Work order ${r.workOrderNumber} cancelled; ${r.reservationsEnded} reservation${r.reservationsEnded === 1 ? "" : "s"} ended.` };
-  } catch (e) {
-    return toActionState(e);
-  }
-}
+// The old order view's commands (plan, release, top-up, create batch, cancel) were removed with the view (ADR-105): the
+// production order page does each of them (Approve, Plan the batch, Set aside new stock, Cancel), see orders/actions.ts.
 
 export type BoardMoveResult = { ok: boolean; message: string };
 
