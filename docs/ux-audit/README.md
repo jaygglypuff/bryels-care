@@ -54,3 +54,19 @@ No screen scrolls sideways; the phone failures are tap targets, covered or squee
 Note: in the audit sandbox the browser received 404 for the JavaScript of pages with an id in the address
 (`…/%5Bid%5D/page-….js`) while curl got 200; the cause is the sandbox's network path (it re-encodes `(app)`). Confirm on
 a real phone that record pages are interactive.
+
+## Round 3 re-audit of the live app (2026-11-01)
+
+| Area | First audit (pass / rows) | Re-audit (pass / rows) |
+|---|---|---|
+| A Production, Quality, Maintenance | 15 / 69 | 35 / 69 |
+| B Inventory & warehouse, Purchasing, Sales | 55 / 112 | 90 / 126 |
+| C Home, Setup, Finance, Reports, Settings | 31 / 130 | 72 / 130 (62 with the stricter "(s)" word check) |
+
+Reports: [round3/A](round3/A-production-quality-maintenance.md) · [round3/B](round3/B-inventory-purchasing-sales.md) ·
+[round3/C](round3/C-home-setup-finance-settings.md). Confirmed fixed: operator tasks open only the new flow, checks on
+the checker's own phone, packaging and print gate, one QA decision screen, weighing lot by scan, bar label without the
+QA bar, no print station, one door per job, menu words = titles, one next step per record, 44 px frame. Round 4 fixes
+the remaining items per area (old order view links, plain step names and timeline, green-button count, order status,
+closure page, board; activity names, in-page tap targets, "(s)" plurals, recipe list, owner menu, site selector, help
+button; shelf names before codes, box labels in place, scan order, customer picker, seed shelf names).
