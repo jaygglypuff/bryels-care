@@ -29,7 +29,7 @@ export function CardTitle({ children, action }: { children: ReactNode; action?: 
  */
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
-    <div className={cx("page-header mb-5 flex flex-wrap items-end justify-between gap-3", actions && "page-header--actions")}>
+    <div className={cx("page-header mb-5 flex flex-wrap items-end justify-between gap-3", actions ? "page-header--actions" : null)}>
       <div className="page-title min-w-0 max-w-full">
         <h1 className="break-words font-display text-[26px] font-semibold tracking-tight text-fg sm:text-[32px]">{title}</h1>
         {subtitle && <p className="mt-1 text-[13px] text-muted">{subtitle}</p>}
