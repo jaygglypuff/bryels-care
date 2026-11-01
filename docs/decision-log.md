@@ -1965,3 +1965,20 @@ Status: Accepted (owner delegated). A-PL-01..03 flagged for QA review.
    shelf → Second check → Send out → Invoice, with today's count at each stage and one button to the screen for that
    stage. Every screen in the chain ends with "Next: …" to the following stage. Any screen in the chain that is not on
    this path is removed or redirected (docs/LEGACY_SCREENS.md).
+
+## ADR-107 Round 4 UX fixes: shorter menus per role, frame-wide help, words not codes (UX re-audit C, 2026-11-01)
+
+Status: Accepted.
+
+Decision: rare menu entries fold under "Advanced" except for the roles that use them daily (`foldUnless`); a sub-menu
+that is all-folded or has one entry merges into its neighbour (`tidySections`; Planning tools and IT and system
+excepted). The owner sees 73 of 112 entries without opening a fold; nothing is removed. A 44 px Help "?" is on every
+screen and opens that screen's guide (`helpForScreen`, `src/ui/help/screen-guides.ts`), or the role guide. The site
+selector shows the site name only. On phones a header with buttons reads title → intro → buttons. Counts use
+`plural()`, never "(s)" (test outside production/quality/maintenance until those files are rewritten); alerts and
+messages show dates in words; lists colour only one primary action (To approve: the oldest). `/masterdata/recipes` is
+the plain recipe list; the advanced editors stay under Advanced. Demo seed: plain step names on the same 7 steps, no
+"(PLACEHOLDER)", and the running demo batch has an assigned operator (demo backfill only).
+
+Consequences: tests `tests/unit/{plural,round4-ux}.test.ts`, extended `nav-per-role`, `no-jargon-messages`,
+`activity-sentence`; the live demo needs a reset to show the new seed text.
