@@ -377,7 +377,7 @@ export async function getPick(ctx: AuthContext, pickId: string) {
   ctx.requireSite(row.pick.siteId);
   const allocs = await openAllocationsForOrder(db, row.pick.salesOrderId);
   const lines = await db
-    .select({ line: pickLines, lotNumber: inventoryLots.lotNumber, boxNumber: containers.containerNumber, locationCode: locations.code, by: users.displayName })
+    .select({ line: pickLines, lotNumber: inventoryLots.lotNumber, boxNumber: containers.containerNumber, locationCode: locations.code, locationName: locations.name, by: users.displayName })
     .from(pickLines)
     .innerJoin(inventoryLots, eq(inventoryLots.id, pickLines.lotId))
     .innerJoin(locations, eq(locations.id, pickLines.fromLocationId))
@@ -399,7 +399,7 @@ export async function getPick(ctx: AuthContext, pickId: string) {
     shipmentNumber: row.shipmentNumber,
     shipmentStatus: row.shipmentStatus,
     rows,
-    lines: lines.map((l) => ({ ...l.line, lotNumber: l.lotNumber, boxNumber: l.boxNumber, locationCode: l.locationCode, pickedByName: l.by })),
+    lines: lines.map((l) => ({ ...l.line, lotNumber: l.lotNumber, boxNumber: l.boxNumber, locationCode: l.locationCode, locationName: l.locationName, pickedByName: l.by })),
     progress: { toPick: toPick.toString(), picked: done.toString(), pct: toPick.gt(0) ? Math.min(100, Math.round(done.div(toPick).times(100).toNumber())) : 0 },
   };
 }

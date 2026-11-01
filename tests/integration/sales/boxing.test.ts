@@ -96,7 +96,17 @@ describe("US-4-07 boxing from a batch output", () => {
     expect(entity).toMatchObject({ payloadType: "BOX", statusWord: "QUARANTINE" });
     expect(entity.boxOfText).toMatch(/ of /);
     expect(entity.packerInitials).toBeTruthy();
+    // Re-audit B N9 (print in place): the boxing read model lists each box's label job as made-not-printed, so the
+    // boxing page and /print/labels/pack/<id> print them there; the shelf has its name; the box label size is known.
+    const ready = v.boxes.filter((b) => b.status === "packed");
+    expect(ready.every((b) => b.labelStatus === "ready" && !!b.labelJobId)).toBe(true);
+    expect(v.locationName).toBeTruthy();
+    expect(v.labelTemplate).toMatchObject({ widthMm: expect.any(Number), heightMm: expect.any(Number) });
+    // Pressing again makes nothing new (one label per box); another site's user cannot read the boxing.
+    expect((await printPackLabels(operator, packId, { keyBase: key() })).filter((j) => j.jobId)).toHaveLength(0);
+    await expectCode(getPack(operatorRvs, packId), "not_found");
     for (const j of jobs) await markLabelJobPrinted(operator, j.jobId!);
+    expect((await getPack(operator, packId)).boxes.filter((b) => b.status === "packed").every((b) => b.labelStatus === "printed")).toBe(true);
   });
 
   it("sod.pack.checker_not_packer: the packer cannot verify; the checker scans every box of the first pack of a SKU", async () => {

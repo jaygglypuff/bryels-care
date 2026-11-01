@@ -52,6 +52,7 @@ import {
   dispatchShipment,
   generateDraftDeliveryReceipt,
   getPick,
+  getShipment,
   listShipments,
   manilaToday,
   remindUnacknowledged,
@@ -227,6 +228,16 @@ describe("US-4-10 pick list and pick scans", () => {
     expect(row.boxes).toBeGreaterThan(0);
     // another site's warehouse does not see it
     expect((await listShipments(whRvs, { status: "picked" })).some((x) => x.id === shipmentId)).toBe(false);
+    // Re-audit B N6: the delivery page agrees (not "Nothing on it yet" while pieces wait for the second check).
+    const detail = await getShipment(wh, shipmentId);
+    expect(detail.lines).toHaveLength(0);
+    expect(detail.totals.from).toBe("picked");
+    expect(Number(detail.totals.units)).toBe(Number(row.units));
+    expect(detail.totals.boxes).toBe(row.boxes);
+    // Shelves come with their names (names before codes on send-out pages).
+    expect((await getPick(wh, pickId)).lines.every((l) => typeof l.locationName === "string" && l.locationName.length > 0)).toBe(true);
+    await expectCode(getShipment(whRvs, shipmentId), "not_found");
+    if (!prodOp.can("sales.shipment.view")) await expectCode(getShipment(prodOp, shipmentId), "forbidden");
   });
 
   it("US-4-11: the picker cannot verify; over-shipment is 409 until a site manager (not the order creator) approves it", async () => {

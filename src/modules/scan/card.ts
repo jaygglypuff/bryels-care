@@ -11,6 +11,7 @@ import { activeStationsAt, approvedLabelTemplatesFor, findDocumentByNumber, labe
 import { activeCountsForLocations, describeBoxForScan, fmtStock, getContainer, getLotDetail, heldLocations, isPastExpiry, resolveScan } from "@/modules/inventory";
 import { equipmentAvailability } from "@/modules/masterdata";
 import { LOT_TRANSITIONS } from "@/modules/quality";
+import { lotUseOrder } from "./pick";
 import { searchEverything, type SearchGroup } from "./search";
 
 /**
@@ -63,12 +64,13 @@ export type ScanCard =
 export type KeywordMatch = { title: string; detail: string; href: string };
 
 const MATCH_LIMIT = 25;
-const KEYWORD_STATUS: Record<string, string> = { quarantine: "waiting for check", on_hold: "on hold", rejected: "rejected", expired: "expired", recalled: "recalled", released: "ready to use" };
+const KEYWORD_STATUS: Record<string, string> = { quarantine: "waiting for QA check", on_hold: "stopped by QA – do not use", rejected: "rejected – do not use", expired: "EXPIRED – do not use", recalled: "recalled – do not use", released: "ready to use" };
 
 /**
  * Keyword look-up (ADR-085, consultant review): lots at the caller's sites whose lot number, supplier lot,
  * paper number, material/product name or code, or supplier name contains EVERY typed word (case does
- * not matter). Lots with stock first, then the earliest expiry. Read-only; site-scoped like every look-up.
+ * not matter). Same order as the finders (`lotUseOrder`): with stock first, usable, then waiting for QA, then
+ * expired / stopped / rejected (marked "do not use"), each with its shelf. Read-only; site-scoped like every look-up.
  */
 export async function keywordMatches(ctx: AuthContext, text: string): Promise<KeywordMatch[]> {
   ctx.require("inventory.lot.view");
@@ -99,14 +101,24 @@ export async function keywordMatches(ctx: AuthContext, text: string): Promise<Ke
     .leftJoin(materials, eq(materials.id, inventoryLots.materialId))
     .leftJoin(products, eq(products.id, inventoryLots.productId))
     .where(and(eq(inventoryLots.organizationId, ctx.organizationId), inArray(inventoryLots.siteId, ctx.allowedSiteIds), ...conds))
-    .orderBy(sql`(${onHand})::numeric > 0 desc`, sql`${inventoryLots.expiresOn} asc nulls last`, inventoryLots.lotNumber)
+    .orderBy(...lotUseOrder(onHand))
     .limit(MATCH_LIMIT);
   const multi = ctx.allowedSites.length > 1;
+  // Re-audit B N8: each lot says which shelf it is on (names, like the Move finder).
+  const shelves = rows.length
+    ? await db
+        .select({ lotId: inventoryBalances.lotId, name: locations.name })
+        .from(inventoryBalances)
+        .innerJoin(locations, eq(locations.id, inventoryBalances.locationId))
+        .where(and(inArray(inventoryBalances.lotId, rows.map((r) => r.id)), gt(inventoryBalances.qtyBase, "0"), inArray(locations.siteId, ctx.allowedSiteIds)))
+        .orderBy(locations.name)
+    : [];
   return rows.map((r) => {
     const qty = D(r.onHand);
     const site = multi ? ctx.allowedSites.find((x) => x.id === r.siteId)?.code : null;
+    const on = [...new Set(shelves.filter((b) => b.lotId === r.id).map((b) => b.name))];
     const parts = [
-      qty.gt(0) ? `${fmtStock(r.onHand, r.baseUom)} in stock` : "none left",
+      qty.gt(0) ? `${fmtStock(r.onHand, r.baseUom)}${on.length ? ` on ${on.join(", ")}` : " in stock"}` : "none left",
       // Grade-5 test: a lot past its expiry date is never "ready to use", whatever its stored status.
       isPastExpiry(r.expiresOn) && !["rejected", "recalled"].includes(r.status) ? "EXPIRED – do not use" : (KEYWORD_STATUS[r.status] ?? r.status.replace(/_/g, " ")),
       r.expiresOn ? `expires ${fmtDate(r.expiresOn)}` : null,

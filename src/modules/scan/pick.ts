@@ -40,6 +40,20 @@ function words(cols: (SQL | AnyColumn)[], text: string): SQL[] {
   });
 }
 
+/**
+ * The one lot order for finders (live audit 2026-10-31, re-audit B N8): lots with stock first; then usable
+ * (released, in date) before waiting for QA before expired / stopped / rejected / recalled; then use-first
+ * (earliest expiry) and the lot number. Shared by `<ScanOrPick>` (Move, Fix stock …) and the Scan look-up.
+ */
+export function lotUseOrder(onHand: SQL): SQL[] {
+  return [
+    sql`(${onHand})::numeric > 0 desc`,
+    sql`case when ${inventoryLots.qualityStatus} in ('rejected','recalled','expired','on_hold') or ${inventoryLots.expiresOn} < (now() at time zone 'Asia/Manila')::date then 2 when ${inventoryLots.qualityStatus} = 'quarantine' then 1 else 0 end`,
+    sql`${inventoryLots.expiresOn} asc nulls last`,
+    sql`${inventoryLots.lotNumber}`,
+  ];
+}
+
 type LotRow = { id: string; lotNumber: string; status: string; expiresOn: string | null; baseUom: string; name: string; supplierLot: string | null };
 
 /** Lot candidates with the places that hold them at the current site. */
@@ -59,13 +73,7 @@ async function lotCandidates(ctx: AuthContext, where: SQL[]): Promise<PickCandid
     .leftJoin(materials, eq(materials.id, inventoryLots.materialId))
     .leftJoin(products, eq(products.id, inventoryLots.productId))
     .where(and(eq(inventoryLots.organizationId, ctx.organizationId), eq(inventoryLots.siteId, ctx.currentSiteId), ...where))
-    // Live audit 2026-10-31: usable stock first (use-first order), waiting for QA next, expired or stopped last.
-    .orderBy(
-      sql`${onHand} > 0 desc`,
-      sql`case when ${inventoryLots.qualityStatus} in ('rejected','recalled','expired','on_hold') or ${inventoryLots.expiresOn} < (now() at time zone 'Asia/Manila')::date then 2 when ${inventoryLots.qualityStatus} = 'quarantine' then 1 else 0 end`,
-      sql`${inventoryLots.expiresOn} asc nulls last`,
-      inventoryLots.lotNumber,
-    )
+    .orderBy(...lotUseOrder(onHand))
     .limit(LIMIT);
   if (!rows.length) return [];
   const bals = await db

@@ -434,7 +434,7 @@ export async function completePacking(ctx: AuthContext, shipmentId: string, inpu
       const boxes = await tx.select({ id: containers.id, n: containers.containerNumber }).from(containers).where(inArray(containers.id, missing.map((m) => m.containerId).filter((x): x is string => !!x).concat(["00000000-0000-0000-0000-000000000000"])));
       const lots = await tx.select({ id: inventoryLots.id, n: inventoryLots.lotNumber }).from(inventoryLots).where(inArray(inventoryLots.id, missing.map((m) => m.lotId)));
       const names = missing.map((m) => (m.containerId ? `box ${boxes.find((b) => b.id === m.containerId)?.n}` : `loose lot ${lots.find((l) => l.id === m.lotId)?.n}`));
-      throw new DomainError("conflict", `${plural(missing.length, "picked item")} not checked yet: ${names.slice(0, 8).join(", ")}${names.length > 8 ? "…" : ""}. Scan them, or take them out of the pick.`, { code: "VERIFICATION_INCOMPLETE" });
+      throw new DomainError("conflict", `${plural(missing.length, "item")} taken off the shelf ${missing.length === 1 ? "is" : "are"} not checked yet: ${names.slice(0, 8).join(", ")}${names.length > 8 ? "…" : ""}. Scan them, or take them out of the pick.`, { code: "VERIFICATION_INCOMPLETE" });
     }
     // Partial shipment check (A-PROC-15): shipped before + this shipment vs ordered, per line.
     const orderLines = await tx.select({ id: salesOrderLines.id, productId: salesOrderLines.productId, qty: salesOrderLines.qtyUnits, sku: products.skuCode, minRemainingShelfLifeDays: salesOrderLines.minRemainingShelfLifeDays, requirementSnapshot: salesOrderLines.requirementSnapshot }).from(salesOrderLines).innerJoin(products, eq(products.id, salesOrderLines.productId)).where(eq(salesOrderLines.salesOrderId, o.id));
@@ -509,7 +509,7 @@ export async function getPackingView(ctx: AuthContext, shipmentId: string) {
   const pick = await pickOf(db, s.id);
   const active = pick
     ? await db
-        .select({ pl: pickLines, lotNumber: inventoryLots.lotNumber, boxNumber: containers.containerNumber, locationCode: locations.code, by: users.displayName })
+        .select({ pl: pickLines, lotNumber: inventoryLots.lotNumber, boxNumber: containers.containerNumber, locationCode: locations.code, locationName: locations.name, by: users.displayName })
         .from(pickLines)
         .innerJoin(inventoryLots, eq(inventoryLots.id, pickLines.lotId))
         .innerJoin(locations, eq(locations.id, pickLines.fromLocationId))
@@ -549,7 +549,7 @@ export async function getPackingView(ctx: AuthContext, shipmentId: string) {
     customerName: order.customerName,
     customerCode: order.customerCode,
     pick,
-    picked: active.map((a) => ({ ...a.pl, lotNumber: a.lotNumber, boxNumber: a.boxNumber, locationCode: a.locationCode, pickedByName: a.by, verified: verifiedPickLines.has(a.pl.id) })),
+    picked: active.map((a) => ({ ...a.pl, lotNumber: a.lotNumber, boxNumber: a.boxNumber, locationCode: a.locationCode, locationName: a.locationName, pickedByName: a.by, verified: verifiedPickLines.has(a.pl.id) })),
     lines: lines.map((l) => ({ ...l.l, lotNumber: l.lotNumber, expiresOn: l.expiresOn, boxNumber: l.boxNumber, sku: l.sku })),
     orderLines: orderLines.map((l) => {
       const here = lines.filter((x) => x.l.salesOrderLineId === l.id).reduce((a, x) => a.plus(x.l.qtyBase), new Decimal(0));

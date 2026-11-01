@@ -49,8 +49,8 @@ const PEOPLE: [email: string, name: string, role: string, orgWide: boolean][] = 
 /** Basic locations of the sandbox warehouse: [code, name, kind, special role or null]. */
 const LOCATIONS: [string, string, string, string | null][] = [
   ["RCV", "Receiving dock", "receiving", "receiving"],
-  ["QUA-01", "QA hold cage", "quarantine", "quarantine"],
-  ["HLD-01", "QA hold cage", "hold", "hold"],
+  ["QUA-01", "QA waiting cage", "quarantine", "quarantine"],
+  ["HLD-01", "Stopped-by-QA cage", "hold", "hold"],
   ["REJ", "Rejected goods cage", "rejected", "rejected"],
   ["RCL", "Recall cage", "recall", "recall"],
   ["RM-01", "Raw materials rack", "storage", null],

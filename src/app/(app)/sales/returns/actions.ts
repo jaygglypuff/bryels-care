@@ -112,7 +112,7 @@ export async function postReturnAction(_p: ActionState, fd: FormData): Promise<A
     const ctx = await requireContext();
     const r = await postCustomerReturn(ctx, { returnId: str(fd, "returnId"), idempotencyKey: str(fd, "idempotencyKey") });
     const lots = r.lines.map((l) => l.returnLotNumber).join(", ");
-    return r.replayed ? `Already received (${lots}).` : `Received and kept apart until QA checks it (${lots}). QA has been told.`;
+    return r.replayed ? `Already received (${lots}).` : `Received and waiting for the QA check (${lots}). QA has been told.`;
   });
 }
 

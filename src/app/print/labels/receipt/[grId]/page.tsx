@@ -6,7 +6,7 @@ import { DomainError } from "@/lib/errors";
 import { labelJobForPrint } from "@/modules/documents";
 import { getReceipt } from "@/modules/inventory";
 import { LinkButton } from "@/ui/core";
-import { LabelFace, LabelSheet, LABEL_KIND_WORDS, labelCountWords } from "@/ui/labels";
+import { isOldLayout, LabelFace, LabelSheet, LABEL_KIND_WORDS, labelCountWords, OLD_LAYOUT_NOTE } from "@/ui/labels";
 import { Banner } from "@/ui/status";
 import { AutoPrint, PrintedCheck, PrintNow } from "../../print-bits";
 
@@ -87,6 +87,7 @@ export default async function ReceiptLabelsPreview({ params, searchParams }: { p
             <p className="text-[14px] text-fg-2">
               In the print window pick the label printer and <strong>Actual size / 100 %</strong>. <strong>Save as PDF</strong> looks exactly like this.
             </p>
+            {toPrint.some((r) => isOldLayout(r.render?.rendererVersion)) && <p className="text-[14px] text-fg-2" data-testid="old-layout-note">{OLD_LAYOUT_NOTE}</p>}
           </div>
         )}
         {shown.length === 0 && !had && <Banner tone="info" title="No labels to print">Go back to the delivery and press Print labels.</Banner>}

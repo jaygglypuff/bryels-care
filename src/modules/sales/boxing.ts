@@ -829,7 +829,7 @@ export async function getPack(ctx: AuthContext, packId: string) {
   ctx.require("inventory.pack.view");
   const p = await getPackRow(ctx, packId);
   const [info] = await db
-    .select({ packer: users.displayName, sku: products.skuCode, productName: products.name, lotNumber: inventoryLots.lotNumber, lotStatus: inventoryLots.qualityStatus, expiresOn: inventoryLots.expiresOn, baseUom: inventoryLots.baseUom, locationCode: locations.code })
+    .select({ packer: users.displayName, sku: products.skuCode, productName: products.name, lotNumber: inventoryLots.lotNumber, lotStatus: inventoryLots.qualityStatus, expiresOn: inventoryLots.expiresOn, baseUom: inventoryLots.baseUom, locationCode: locations.code, locationName: locations.name })
     .from(packs)
     .innerJoin(users, eq(users.id, packs.packedBy))
     .innerJoin(products, eq(products.id, packs.productId))
@@ -864,7 +864,7 @@ export async function getPack(ctx: AuthContext, packId: string) {
     documents: docs,
     checkedCount: boxes.filter((b) => b.b.status === "packed" && okIds.has(b.b.containerId)).length,
     required: p.verificationMode === "all" ? boxes.filter((b) => b.b.status === "packed").length : Math.min(p.verificationSampleSize ?? 1, boxes.filter((b) => b.b.status === "packed").length),
-    labelTemplate: tpl ? { id: tpl.id, code: tpl.code } : null,
+    labelTemplate: tpl ? { id: tpl.id, code: tpl.code, name: tpl.name, widthMm: Number(tpl.mediaWidthMm), heightMm: Number(tpl.mediaHeightMm) } : null,
     isPacker: ctx.sodConflict(p.packedBy),
   };
 }

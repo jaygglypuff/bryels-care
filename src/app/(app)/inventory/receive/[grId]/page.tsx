@@ -21,6 +21,8 @@ import { Forbidden } from "../../../forbidden";
 import { approveDiscrepancyAction, cancelDraftAction, createPoFromReceiptAction, linkSupplierAction, postDraftAction, recordDiscrepancyAction, reverseReceiptAction, voidFileAction } from "./actions";
 import { ActionForm, ReasonField, UploadWidget } from "./forms";
 import { printReceiptLabelsAction } from "../../../labels/actions";
+import { whoDoes } from "../../../sales/next-step";
+import { PlaceName } from "@/ui/inventory/place-name";
 
 export const metadata = { title: "Goods receipt" };
 
@@ -81,7 +83,13 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
     throw e;
   }
   const headerDocs = await withLinks(ctx, gr.headerDocuments);
-  const lines = await Promise.all(gr.lines.map(async (l) => ({ ...l, docs: await withLinks(ctx, l.documents) })));
+  // Re-audit B #5: "waiting for purchasing" names the people who can accept a problem (who-can-do directory).
+  const waitingProblem = gr.lines.some((l) => l.discrepancyKind && !l.discrepancyApprovedBy)
+    ? await whoDoes(ctx, "procurement.receipt_discrepancy.approve", gr.siteId, "purchasing")
+    : "purchasing";
+  const lines = await Promise.all(
+    gr.lines.map(async (l) => ({ ...l, flags: l.flags.map((f) => f.replace("waiting for purchasing to accept it", `waiting for ${waitingProblem} to accept it`)), docs: await withLinks(ctx, l.documents) })),
+  );
   const sups = gr.can.linkSupplier ? await supplierOptions(ctx) : [];
   const storageReady = !!process.env.FILE_STORAGE;
   // S6 (ADR-077): an urgent receipt without a PO can get its purchase order afterwards.
@@ -205,7 +213,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
                   <Select id="atf-supplier" name="supplierId" required defaultValue={atf.supplierId ?? ""}>
                     <option value="" disabled>Choose…</option>
                     {atf.suppliers.map((s) => (
-                      <option key={s.id} value={s.id}>{s.code} · {s.name}</option>
+                      <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
                     ))}
                   </Select>
                 </Field>
@@ -263,11 +271,11 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
                     <p className="text-[13px] text-muted">Item {l.lineNo} · the lot is made when the delivery is saved</p>
                   )}
                   <p className="text-[13px] text-muted">
-                    Supplier&apos;s code on the sack {l.supplierLotNumber ?? "—"}{l.brand ? ` · brand ${l.brand}` : ""}
+                    Supplier&apos;s lot number {l.supplierLotNumber ?? "none"}{l.brand ? ` · brand ${l.brand}` : ""}
                   </p>
                   <p className="text-[12px] text-muted">
                     Expires {fmtDate(l.expiresOn)}
-                    {l.retestOn ? ` · retest ${fmtDate(l.retestOn)}` : ""} · at {l.locationCode} ({l.locationName})
+                    {l.retestOn ? ` · retest ${fmtDate(l.retestOn)}` : ""} · at <PlaceName name={l.locationName} code={l.locationCode} />
                     {l.containerCount ? ` · ${l.containerCount} sacks/containers` : ""}
                   </p>
                 </div>
@@ -293,7 +301,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
                   </p>
                   <p className="text-muted">
                     Recorded by {l.recordedByName ?? "—"} {l.discrepancyRecordedAt ? `on ${fmtDateTime(l.discrepancyRecordedAt)}` : ""}
-                    {l.discrepancyApprovedBy ? ` · approved by ${l.approvedByName} (${l.discrepancyApprovalNote})` : " · waiting for purchasing to accept it"}
+                    {l.discrepancyApprovedBy ? ` · approved by ${l.approvedByName} (${l.discrepancyApprovalNote})` : ` · waiting for ${waitingProblem} to accept it`}
                   </p>
                   {!l.discrepancyApprovedBy && gr.can.approveDiscrepancy && (
                     <div className="mt-2">
@@ -356,7 +364,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
           items={[
             ["Number", gr.receiptNumber ?? "Given when saved"],
             ["Status", <ReceiptStatusChip key="s" status={gr.status} />],
-            ["Supplier", gr.supplier ? <Link key="sup" href={`/procurement/suppliers/${gr.supplier.id}`} className="text-primary-text hover:underline">{gr.supplierName} ({gr.supplier.code})</Link> : `${gr.supplierName} (not in the supplier list)`],
+            ["Supplier", gr.supplier ? <Link key="sup" href={`/procurement/suppliers/${gr.supplier.id}`} className="text-primary-text hover:underline">{gr.supplierName}</Link> : `${gr.supplierName} (not in the supplier list)`],
             ["Number on the supplier's paper", gr.supplierDocumentNumber ?? "—"],
             ["Why no purchase order", gr.reasonLabel ?? "—"],
             ["Received", `${fmtDateTime(gr.receivedAt)} by ${gr.receivedByName}`],
@@ -377,7 +385,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
                 <Select id="link-supplier" name="supplierId" required defaultValue="">
                   <option value="" disabled>Choose…</option>
                   {sups.map((s) => (
-                    <option key={s.id} value={s.id}>{s.code} · {s.name}</option>
+                    <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
                   ))}
                 </Select>
               </Field>

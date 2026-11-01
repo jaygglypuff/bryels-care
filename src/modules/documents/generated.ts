@@ -231,11 +231,13 @@ export async function renderForDisplay(d: GeneratedRow) {
     .innerJoin(documentTemplates, eq(documentTemplates.id, documentTemplateVersions.documentTemplateId))
     .where(eq(documentTemplateVersions.id, d.documentTemplateVersionId))
     .limit(1);
+  // Re-audit B #12: which renderer version drew it, so label screens can say "Old label layout" (v1).
+  const rendererVersion = (v.definition as { renderer?: { version?: number } } | null)?.renderer?.version ?? null;
   try {
     const out = renderFrozen(v.definition, v.kind, d.dataset as FrozenDataset);
-    return { html: out.html, css: out.css, body: out.body.value, integrity: out.checksumSha256 === d.checksumSha256 ? ("ok" as const) : ("mismatch" as const), error: null };
+    return { html: out.html, css: out.css, body: out.body.value, integrity: out.checksumSha256 === d.checksumSha256 ? ("ok" as const) : ("mismatch" as const), error: null, rendererVersion };
   } catch (e) {
-    return { html: null, css: null, body: null, integrity: "error" as const, error: e instanceof Error ? e.message : String(e) };
+    return { html: null, css: null, body: null, integrity: "error" as const, error: e instanceof Error ? e.message : String(e), rendererVersion };
   }
 }
 

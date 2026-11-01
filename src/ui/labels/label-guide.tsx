@@ -5,7 +5,7 @@
 const ROWS: { label: string; print: string; stick: string; scan: string }[] = [
   { label: "Sack label", print: "On the delivery: Print labels", stick: "On each sack, drum or tub that came in", scan: "At put-away, and when you take it for a batch" },
   { label: "Product label", print: "On the batch's packaging step", stick: "On each bar or jar", scan: "At boxing, or on the Scan screen" },
-  { label: "Box label", print: "On the box: Print box label", stick: "On the side of the box", scan: "When you move, pick or ship the box" },
+  { label: "Box label", print: "At boxing: Pack box and print label (again: on the box, Print box label)", stick: "On the side of the box", scan: "When you move, pick or ship the box" },
   { label: "Shelf label", print: "On the shelf: ⋯ More › Print a label", stick: "On the front edge of the shelf", scan: "At put-away, to say where the stock goes" },
   { label: "Lot label (again)", print: "On the lot: ⋯ More › Print a label", stick: "When a label is lost or the status changed", scan: "Like the first label" },
 ];

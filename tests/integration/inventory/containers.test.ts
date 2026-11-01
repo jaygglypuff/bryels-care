@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { containerContents, containerLineage, containers, settings } from "@/db/schema";
-import { containerLineageGraph, createBox, getContainer, mergeBoxes, repackBox, splitBox, setBoxStatus } from "@/modules/inventory/containers";
+import { containerLineageGraph, createBox, getContainer, listContainers, mergeBoxes, repackBox, splitBox, setBoxStatus } from "@/modules/inventory/containers";
 import { describeBoxForScan, describeLocationForScan } from "@/modules/inventory/moves-scan-cards";
 import { resetTestDatabase } from "../../support/db";
 import { auditCount, expectDomain, key, loadWorld, loc, makeLot, type World } from "./w1c-fixtures";
@@ -94,6 +94,19 @@ describe("containers", () => {
     await setBoxStatus(w.wh, box.id, "sealed");
     await expectDomain(setBoxStatus(w.wh, box.id, "void"), "state");
     await setBoxStatus(w.wh, box.id, "open");
+  });
+
+  it("re-audit B #7: boxes are found by a scanned label, by what is inside or by the shelf name (no typed code needed)", async () => {
+    const { lot, box } = await boxOf("7");
+    const ids = async (q: string, ctx = w.wh) => (await listContainers(ctx, { q })).map((b) => b.id);
+    expect(await ids(`BC:BOX:${box.containerNumber}`)).toContain(box.id);
+    expect(await ids(lot.lotNumber)).toContain(box.id);
+    expect(await ids("acapulco")).toContain(box.id); // product name of ACS-135
+    expect(await ids("finished goods")).toContain(box.id); // shelf name "Finished goods bay"
+    expect(await ids("zzz-nothing")).not.toContain(box.id);
+    // Cross-site: the RVS warehouse never finds NFD boxes; role negative: no container rights, refused.
+    expect(await ids("acapulco", w.whRvs)).not.toContain(box.id);
+    if (!w.auditor.can("inventory.container.view")) await expectDomain(listContainers(w.auditor, { q: "acapulco" }), "forbidden");
   });
 
   it("authz: cross-site boxes are not found; roles without container rights are refused", async () => {

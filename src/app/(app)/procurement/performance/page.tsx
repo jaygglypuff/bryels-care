@@ -11,7 +11,10 @@ import { SubNav, SupplierChip } from "../_ui";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "How suppliers do" };
 
-const pct = (v: string | null) => (v === null ? "no data yet" : `${v} %`);
+/** Re-audit B #7: whole numbers without ".0" ("0 %", "100 %", "1 / 10"); a percentage with no deliveries is "no data yet". */
+const trim = (v: string) => v.replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
+const pct = (v: string | null) => (v === null ? "no data yet" : `${trim(v)} %`);
+const days = (v: string | null) => (v === null ? "—" : trim(v));
 
 /** Supplier performance (US-6-04, W04-10): on time, everything there, QA not OK, problems, days, returns — one row per supplier. */
 export default async function PerformancePage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
@@ -79,7 +82,7 @@ export default async function PerformancePage({ searchParams }: { searchParams: 
                     <div>
                       <dt className="text-[12px] text-muted">Days to deliver (real / agreed)</dt>
                       <dd className="font-semibold tabular-nums">
-                        {r.avgLeadDays ?? "—"} / {r.avgAgreedLeadDays ?? "—"}
+                        {days(r.avgLeadDays)} / {days(r.avgAgreedLeadDays)}
                       </dd>
                     </div>
                     <div>

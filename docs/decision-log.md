@@ -1982,3 +1982,22 @@ the plain recipe list; the advanced editors stay under Advanced. Demo seed: plai
 
 Consequences: tests `tests/unit/{plural,round4-ux}.test.ts`, extended `nav-per-role`, `no-jargon-messages`,
 `activity-sentence`; the live demo needs a reset to show the new seed text.
+
+## ADR-108 Names before codes, box labels printed at boxing, one name picker (UX re-audit B, 2026-11-01)
+
+Status: Accepted; A-SCAN-14 (supplier lot optional for packaging and supplies) needs the owner and QA.
+
+Decision: shelves and places show their name first and the code small and grey (`PlaceName` / `placeWords`) on
+receive, counts, reservations and send-out pages; the two demo shelves get distinct names ("QA waiting cage",
+"Stopped-by-QA cage"). Box labels are printed where the boxing happens (`/print/labels/pack/[packId]`); "print
+station" no longer appears. One lot order (`lotUseOrder`) is shared by the finders and the Scan look-up (usable, then
+waiting for QA, then do-not-use, each with its shelf). Customer and product choices use one searchable picker with big
+rows. "Waiting for" lines name the team that does the step (`who-words.ts`); refusals name the people who can. A
+delivery's totals before the second check come from what was taken off the shelf. The supplier's lot number is
+required only for ingredients and intermediates (`SUPPLIER_LOT_REQUIRED_KINDS`). Print screens flag an old (v1) label
+layout. Office sales people find Deliveries under Sales & Customers (`salesDesk`), everyone else under Operations.
+Plain plurals through one helper (`src/lib/plural.ts`, merged from rounds B and C).
+
+Consequences: tests `tests/unit/reaudit-b.test.ts` and extended integration tests (keyword-lookup, goods-receipt-
+document, reservations-fefo, containers, fulfilment, boxing, label-preview); no migration. Open: the "QUARANTINE"
+word on raw-material labels (QA labelling decision); live data needs a demo reset for shelf names.

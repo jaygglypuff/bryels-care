@@ -84,7 +84,7 @@ export default async function PacksPage() {
                 facts={
                   <>
                     {SOURCE[p.sourceKind] ?? p.sourceKind} · {p.boxCount} {p.boxCount === 1 ? "box" : "boxes"} · {fmtQty(p.packedUnits, "pcs", 0)}
-                    {p.expectedUnits ? ` of ${fmtQty(p.expectedUnits, "pcs", 0)}` : ""} pcs · {p.packer} · {fmtDate(p.createdAt)}
+                    {p.expectedUnits ? ` of ${fmtQty(p.expectedUnits, "pcs", 0)}` : ""} · {p.packer} · {fmtDate(p.createdAt)}
                   </>
                 }
                 code={[p.packNumber, p.lotNumber].filter(Boolean).join(" · ")}

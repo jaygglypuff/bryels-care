@@ -14,7 +14,7 @@ export function pluralWord(n: number | string | bigint, one: string, many?: stri
 
 /** "1 invoice" / "3 invoices" (the number, a space, the word in the right form). */
 export function plural(n: number | string | bigint, one: string, many?: string): string {
-  return `${n} ${pluralWord(n, one, many)}`;
+  return `${typeof n === "number" ? n.toLocaleString("en-PH") : n} ${pluralWord(n, one, many)}`;
 }
 
 /** "is" / "are" for a count ("1 invoice is late", "3 invoices are late"). */

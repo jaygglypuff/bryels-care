@@ -19,6 +19,8 @@ export type NavItem = {
   hub?: boolean;
   /** ADR-082: only for people who approve something (or have something waiting for them). */
   approverOnly?: boolean;
+  /** Re-audit B #11: shown only to office sales people (not floor, not managers), so Deliveries opens under Sales for them. */
+  salesDesk?: boolean;
   /**
    * UX audit R2 "one door per job": the top bar has its own button for this screen. "always": the button shows
    * at every width, so the tab rows leave the entry out. "wide": the button shows from 640 px, so the tab
@@ -199,6 +201,7 @@ export const NAV: NavGroup[] = [
       { label: "Customer orders", href: "/sales", permission: "sales.sales_order.view" },
       { label: "Customers", href: "/sales/customers", permission: "masterdata.customer.view" },
       { label: "Orders as a board", href: "/sales/board", permission: "sales.sales_order.view" },
+      { label: "Deliveries", href: "/sales/shipments", permission: "sales.shipment.view", salesDesk: true },
       ...inSection("Quotes, prices & returns", [
         { label: "Price offers", href: "/sales/quotations", permission: "sales.quote.view" },
         { label: "Prices", href: "/sales/price-lists", permission: "sales.price_list.view" },
@@ -374,13 +377,15 @@ export function buildNav(can: Can, roles: readonly string[], opts: { approver?: 
   const persona = productionPersona(can, roles);
   const approver = opts.approver ?? true;
   const displayOnly = roles.length > 0 && roles.every((r) => r === "floor_display"); // ADR-084: the TV account
+  const salesDesk = persona === "viewer" && roles.includes("sales_cs");
   const groups = NAV.filter((g) => !(g.label === "Management" && (FLOOR_PERSONAS.includes(persona) || displayOnly))).map((g) => {
     if (g.label !== "Operations") return g;
     const hub = g.items.filter((i) => i.hub);
-    const rest = g.items.filter((i) => !i.hub && !PRODUCTION_TAB_HREFS.has(i.href));
+    // Re-audit B #11: office sales people find Deliveries under Sales & Customers, not here (one door per job).
+    const rest = g.items.filter((i) => !i.hub && !PRODUCTION_TAB_HREFS.has(i.href) && !(i.href === "/sales/shipments" && salesDesk));
     return { ...g, items: [...hub, ...productionItems(persona), ...rest] };
   })
-    .map((g) => ({ ...g, items: g.items.filter((i) => (i.planned || canSee(can, i.permission)) && (approver || !i.approverOnly) && (!i.roles || i.roles.some((r) => roles.includes(r)))) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => (i.planned || canSee(can, i.permission)) && (!i.salesDesk || salesDesk) && (approver || !i.approverOnly) && (!i.roles || i.roles.some((r) => roles.includes(r)))) }))
     .filter((g) => g.items.some((i) => !i.planned && !i.hub) || g.label === "Home");
   return trimForFloor(groups, persona).map((g) => tidySections(foldForRole(g, roles)));
 }

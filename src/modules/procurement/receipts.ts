@@ -20,7 +20,8 @@ export type PoReceiptLineInput = {
   materialId: string;
   qty: string;
   uom?: string | null;
-  supplierLotNumber: string;
+  /** Required for ingredients only (inventory `supplierLotRequired`, A-SCAN-14). */
+  supplierLotNumber?: string | null;
   /** ADR-076: brand on the delivered containers. */
   brand?: string | null;
   manufacturedOn?: string | null;

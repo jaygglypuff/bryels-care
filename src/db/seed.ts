@@ -70,7 +70,7 @@ async function main() {
   const [whR] = await db.insert(s.warehouses).values({ siteId: rvs.id, code: "WH1", name: "Distribution warehouse" }).returning();
   const locDefs: [string, string, string, string, string][] = [
     [nfd.id, whN.id, "RCV", "Receiving dock", "receiving"],
-    [nfd.id, whN.id, "QUA-01", "QA hold cage", "quarantine"],
+    [nfd.id, whN.id, "QUA-01", "QA waiting cage", "quarantine"],
     [nfd.id, whN.id, "A-01", "Oils rack A-01", "storage"],
     [nfd.id, whN.id, "A-02", "Oils rack A-02", "storage"],
     [nfd.id, whN.id, "B-01", "Actives shelf B-01", "storage"],
@@ -79,9 +79,9 @@ async function main() {
     [nfd.id, whN.id, "FG-01", "Finished goods bay", "storage"],
     [nfd.id, whN.id, "SHP", "Sending-out bay", "shipping"],
     [nfd.id, whN.id, "REJ", "Rejected goods cage", "rejected"],
-    [nfd.id, whN.id, "HLD-01", "QA hold cage", "hold"],
+    [nfd.id, whN.id, "HLD-01", "Stopped-by-QA cage", "hold"],
     [rvs.id, whR.id, "RCV", "Receiving dock", "receiving"],
-    [rvs.id, whR.id, "QUA-01", "QA hold cage", "quarantine"],
+    [rvs.id, whR.id, "QUA-01", "QA waiting cage", "quarantine"],
     [rvs.id, whR.id, "FG-01", "Finished goods racks", "storage"],
     [rvs.id, whR.id, "SHP", "Sending-out bay", "shipping"],
     [rvs.id, whR.id, "REJ", "Rejected goods cage", "rejected"],
@@ -266,7 +266,7 @@ async function main() {
   ], "Laguna Oleo Supply");
   const r2 = await receive(nfd.id, [
     { mat: "MAT-0013", qty: "90000", supplier: "Mindanao Palm Co.", sLot: "MPC-7731", daysAgo: 25, expiresIn: 480, status: "released", loc: "A-02" },
-    { mat: "MAT-0021", qty: "50000", supplier: "In-house (lye room)", sLot: "LYE-1009", daysAgo: 6, expiresIn: 24, status: "released", loc: "B-01" },
+    { mat: "MAT-0021", qty: "50000", supplier: "In-house (lye room)", sLot: "LYE-1009", daysAgo: 20, expiresIn: 24, status: "released", loc: "B-01" },
     { mat: "MAT-0043", qty: "2500", supplier: "Laguna Botanicals", sLot: "LB-7712", daysAgo: 25, expiresIn: 300, status: "released", loc: "B-01" },
     { mat: "MAT-0044", qty: "2500", supplier: "Laguna Botanicals", sLot: "LB-7719", daysAgo: 25, expiresIn: 280, status: "released", loc: "B-01" },
     { mat: "MAT-0051", qty: "800", supplier: "In-house (colour room)", sLot: "GRN-0311", daysAgo: 20, expiresIn: 150, status: "released", loc: "B-01" },

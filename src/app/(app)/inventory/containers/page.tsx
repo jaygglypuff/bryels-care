@@ -39,7 +39,7 @@ export default async function ContainersPage({ searchParams }: { searchParams: P
         {status && <input type="hidden" name="status" value={status} />}
         <div className="relative min-w-0 flex-1 basis-[220px] sm:max-w-[420px]">
           <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
-          <Input id="q" name="q" type="search" defaultValue={q} placeholder="Box or lot number from the label" aria-label="Search boxes" className="pl-10" />
+          <Input id="q" name="q" type="search" defaultValue={q} placeholder="Scan the label, or type what is inside (e.g. coconut oil)" aria-label="Find boxes and sacks by scanning or by name" className="pl-10" />
         </div>
         <button type="submit" className={buttonClass("secondary")}>Search</button>
         {q && <Link href={status ? `/inventory/containers?status=${status}` : "/inventory/containers"} className={buttonClass("ghost")}>Clear</Link>}
@@ -54,7 +54,7 @@ export default async function ContainersPage({ searchParams }: { searchParams: P
           title={filtered ? "No boxes or sacks match" : "No boxes or sacks here yet"}
           action={filtered ? <LinkButton href="/inventory/containers" variant="secondary">Show all in use</LinkButton> : ctx.can("inventory.container.create") ? <LinkButton href="/inventory/containers/new" variant="cta">Pack into a box</LinkButton> : undefined}
         >
-          {filtered ? "Try another number or state." : "Pack loose stock into a box or sack to find it by its label."}
+          {filtered ? "Try another name, scan the label, or pick another state." : "Pack loose stock into a box or sack to find it by its label."}
         </EmptyState>
       ) : (
         <PlainList label="Boxes and sacks">

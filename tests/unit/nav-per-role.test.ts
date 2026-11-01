@@ -26,8 +26,17 @@ describe("five destinations", () => {
   });
 
   it("every screen is listed once (no duplicate paths in the menu)", () => {
-    const hrefs = NAV.flatMap((g) => g.items.filter((i) => !i.planned).map((i) => i.href));
+    // The one deliberate exception (re-audit B #11): Deliveries also sits under Sales for office sales people only;
+    // buildNav drops it from Operations for them, so no role sees it twice (checked below).
+    const hrefs = NAV.flatMap((g) => g.items.filter((i) => !i.planned && !i.salesDesk).map((i) => i.href));
     expect(hrefs.length).toBe(new Set(hrefs).size);
+  });
+
+  it("office sales people find Deliveries under Sales & Customers only; others under Operations only", () => {
+    const where = (role: string) => navOf(role).filter((g) => g.items.some((i) => i.href === "/sales/shipments")).map((g) => g.label);
+    expect(where("sales_cs")).toEqual(["Sales & Customers"]);
+    expect(where("owner_director")).toEqual(["Operations"]);
+    expect(where("warehouse_operator")).toEqual(["Operations"]);
   });
 
   it("operators do not see Management or Sales & Customers", () => {

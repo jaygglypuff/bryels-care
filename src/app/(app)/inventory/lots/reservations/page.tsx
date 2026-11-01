@@ -162,11 +162,11 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
                 <li key={r.id} className="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-[15px] font-semibold">
-                      <Link href={`/inventory/${r.lotId}`} className="hover:underline">{r.itemName}</Link> <span className="font-normal text-fg-2">for {r.demandReference}</span>
+                      <Link href={`/inventory/${r.lotId}`} className="hover:underline">{r.itemName}</Link> <span className="font-normal text-fg-2">for {r.demandName ?? r.demandReference}</span>
                     </p>
                     <p className="mt-0.5 text-[13px] text-fg-2">
-                      On {r.locationCode} · by {r.createdBy} · until {fmtDateTime(r.expiresAt)}
-                      <span className="ml-1 font-mono text-[12px] text-muted">· {r.lotNumber} · {r.number}</span>
+                      On {r.locationName ?? r.locationCode} · by {r.createdBy} · until {fmtDateTime(r.expiresAt)}
+                      <span className="ml-1 font-mono text-[12px] text-muted">· {r.demandName ? `${r.demandReference} · ` : ""}{r.lotNumber} · {r.number}</span>
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-2">

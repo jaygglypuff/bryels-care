@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { randomUUID } from "node:crypto";
 import { db, type Tx } from "@/db/client";
@@ -12,6 +12,7 @@ import {
   inventoryLots,
   locations,
   packs,
+  pickLines,
   picks,
   products,
   salesOrderLines,
@@ -444,7 +445,7 @@ export async function getShipment(ctx: AuthContext, shipmentId: string) {
   if (!row) throw new DomainError("not_found", "Shipment not found in your sites.");
   ctx.requireSite(row.s.siteId);
   const lines = await db
-    .select({ l: shipmentLines, lotNumber: inventoryLots.lotNumber, expiresOn: inventoryLots.expiresOn, qualityStatus: inventoryLots.qualityStatus, boxNumber: containers.containerNumber, boxStatus: containers.status, sku: products.skuCode, productName: products.name, locationCode: locations.code })
+    .select({ l: shipmentLines, lotNumber: inventoryLots.lotNumber, expiresOn: inventoryLots.expiresOn, qualityStatus: inventoryLots.qualityStatus, boxNumber: containers.containerNumber, boxStatus: containers.status, sku: products.skuCode, productName: products.name, locationCode: locations.code, locationName: locations.name })
     .from(shipmentLines)
     .innerJoin(inventoryLots, eq(inventoryLots.id, shipmentLines.lotId))
     .innerJoin(salesOrderLines, eq(salesOrderLines.id, shipmentLines.salesOrderLineId))
@@ -462,11 +463,23 @@ export async function getShipment(ctx: AuthContext, shipmentId: string) {
   const exceptions = await db.select({ e: shipmentExceptions, by: users.displayName }).from(shipmentExceptions).innerJoin(users, eq(users.id, shipmentExceptions.approvedBy)).where(eq(shipmentExceptions.shipmentId, row.s.id));
   const history = await db.select({ t: shipmentStateTransitions, by: users.displayName }).from(shipmentStateTransitions).innerJoin(users, eq(users.id, shipmentStateTransitions.actorId)).where(eq(shipmentStateTransitions.shipmentId, row.s.id)).orderBy(asc(shipmentStateTransitions.at));
   const blocked = lines.filter((l) => l.qualityStatus !== "released").map((l) => l.lotNumber);
+  // Re-audit B N6: before the second check a delivery has no lines yet; its totals are what was taken off the
+  // shelf (same rule as listShipments), never "Nothing on it yet" while 12 pcs wait for the check.
+  const lineUnits = lines.reduce((a, l) => a.plus(l.l.qtyBase), new Decimal(0));
+  const lineBoxes = new Set(lines.filter((l) => l.l.containerId).map((l) => l.l.containerId)).size;
+  const [taken] = lineUnits.isZero()
+    ? await db
+        .select({ units: sql<string>`coalesce(sum(${pickLines.qtyBase}), 0)::text`, boxes: sql<number>`count(distinct ${pickLines.containerId})::int` })
+        .from(pickLines)
+        .innerJoin(picks, eq(picks.id, pickLines.pickId))
+        .where(and(eq(picks.shipmentId, row.s.id), ne(picks.status, "cancelled"), isNull(pickLines.voidedAt)))
+    : [];
+  const fromPicked = !!taken && new Decimal(taken.units).gt(0);
   return {
     shipment: row.s,
     order: row.o,
     customer: row.c,
-    lines: lines.map((l) => ({ ...l.l, lotNumber: l.lotNumber, expiresOn: l.expiresOn, qualityStatus: l.qualityStatus, boxNumber: l.boxNumber, boxStatus: l.boxStatus, sku: l.sku, productName: l.productName, locationCode: l.locationCode })),
+    lines: lines.map((l) => ({ ...l.l, lotNumber: l.lotNumber, expiresOn: l.expiresOn, qualityStatus: l.qualityStatus, boxNumber: l.boxNumber, boxStatus: l.boxStatus, sku: l.sku, productName: l.productName, locationCode: l.locationCode, locationName: l.locationName })),
     pick: pick ?? null,
     pack: pack ?? null,
     deliveryReceipt: dr,
@@ -474,7 +487,7 @@ export async function getShipment(ctx: AuthContext, shipmentId: string) {
     exceptions: exceptions.map((e) => ({ ...e.e, approvedByName: e.by })),
     history: history.map((h) => ({ ...h.t, byName: h.by })),
     blockedLots: [...new Set(blocked)],
-    totals: { units: lines.reduce((a, l) => a.plus(l.l.qtyBase), new Decimal(0)).toString(), boxes: new Set(lines.filter((l) => l.l.containerId).map((l) => l.l.containerId)).size },
+    totals: fromPicked ? { units: taken.units, boxes: Number(taken.boxes), from: "picked" as const } : { units: lineUnits.toString(), boxes: lineBoxes, from: "lines" as const },
   };
 }
 

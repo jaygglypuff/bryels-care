@@ -538,10 +538,12 @@ async function kpiValue(page, caption) {
   {
     const { context, page } = await asUser('sales@bryels-care.test');
     await page.goto(BASE + '/sales/quotations/new');
-    await page.selectOption('#q-customer', { label: 'Sari Glow Online' }); // grade-5: picked by name (ADR-088)
+    // grade-5: picked by name (ADR-088); one picker: type part of the name, tap the row (re-audit B #6)
+    await page.fill('#q-customer', 'Sari Glow');
+    await page.getByTestId('name-picker-q-customer').getByRole('option', { name: /Sari Glow Online/ }).first().click();
     await page.fill('#q-valid', manilaDate(14));
-    const opt = await page.locator('#qp-1 option', { hasText: 'Acapulco Soap 135 g' }).first().innerText();
-    await page.selectOption('#qp-1', { label: opt });
+    await page.fill('#qp-1', 'Acapulco Soap 135');
+    await page.getByTestId('name-picker-qp-1').getByRole('option', { name: /Acapulco Soap 135 g/ }).first().click();
     await page.fill('#qq-1', '60');
     await page.fill('#qu-1', '72.50');
     await expectText(page, '4,350.00');

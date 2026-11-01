@@ -28,5 +28,13 @@ export function plainPrinter(name: string | null | undefined): string {
   return (name ?? "").replace(/\s*\([^)]*\)/g, "").trim() || "the label printer";
 }
 
+/** Re-audit B #12: shown on print screens while a label still uses the old (v1) layout. */
+export const OLD_LAYOUT_NOTE = "Old label layout — QA can approve the new one in Management › Rules and settings › Labels and printouts.";
+
+/** True when a label was drawn with the old layout (renderer v1). */
+export function isOldLayout(rendererVersion: number | null | undefined): boolean {
+  return rendererVersion === 1;
+}
+
 /** Fallback sentence about scanning. */
 export const SCAN_SENTENCE = "Scan the square code with the Scan screen to open this record.";

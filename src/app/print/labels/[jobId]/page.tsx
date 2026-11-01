@@ -6,7 +6,7 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { labelJobForPrint, labelKindFor, reprintReasonOptions } from "@/modules/documents";
-import { LabelFace, LabelSheet, LABEL_KIND_WORDS, labelCountWords, plainPrinter, PrintLabelsButton } from "@/ui/labels";
+import { isOldLayout, LabelFace, LabelSheet, LABEL_KIND_WORDS, labelCountWords, OLD_LAYOUT_NOTE, plainPrinter, PrintLabelsButton } from "@/ui/labels";
 import { Banner } from "@/ui/status";
 import { recordHref, safeBack } from "../back";
 import { AutoPrint, PrintedCheck, PrintNow } from "../print-bits";
@@ -77,6 +77,7 @@ export default async function PrintLabelJobPage({ params, searchParams }: { para
             <p className="text-[14px] text-fg-2">
               In the print window pick <strong>{plainPrinter(job.printerName)}</strong> and <strong>Actual size / 100 %</strong>. To keep a file, pick <strong>Save as PDF</strong>: it looks exactly like this.
             </p>
+            {isOldLayout(render?.rendererVersion) && <p className="text-[14px] text-fg-2" data-testid="old-layout-note">{OLD_LAYOUT_NOTE}</p>}
           </div>
         )}
       </div>

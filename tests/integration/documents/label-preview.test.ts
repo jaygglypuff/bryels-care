@@ -89,6 +89,9 @@ describe("label preview on the task screen (ADR-099)", () => {
     expect(printed.face).not.toBeNull();
     expect(printed.face!.css).toBe(opt.face.css);
     expect(printed.face!.body.replace(shortHash(r.jobId), "NEW")).toBe(opt.face.body);
+    // Re-audit B #12: both say which layout drew the label (the demo seeds the v2 layout; v1 shows "Old label layout").
+    expect(opt.rendererVersion).toBe(2);
+    expect(printed.render?.rendererVersion).toBe(2);
   });
 
   it("no station is chosen by the user: the job goes to the site's label printer; a named one must exist", async () => {
