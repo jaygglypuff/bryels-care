@@ -1918,3 +1918,23 @@ Status: Accepted (owner delegated the decision). GMP points flagged for QA revie
 Consequences: implementation per topic with tests (unit + integration, cross-site and role negatives); assumptions
 A-FD-01 (reasons for another lot), A-FD-02 (QA approval for another ingredient), A-FD-03 (box label default and
 content), A-FD-04 (correction rules), A-FD-05 (largest batch) in docs/PRD.md.
+
+## ADR-105 Re-audit fixes: one order page, words not keys, status follows batches (UX re-audit A, 2026-11-01)
+
+Status: Accepted; A-R4-01 (where operators issue paper batch pages now that the closure page is for managers and QA)
+needs the owner and QA.
+
+Decision: `/production/work-orders/[id]` is a server redirect to `/production/orders/[id]`, which gains "Plan the
+batch", "Set aside new stock", "Change this draft" and the order history in words; a unit guard forbids links to the
+old route. The production order status is "In progress · step n of N" as soon as any batch is being made (furthest
+batch). Configured step names reach screens only through `plainWords()`; audit keys and step values only through
+`record-words.ts` (stored keys and the printed batch record are unchanged). An unprinted batch label job with another
+count is cancelled (audited) and replaced; printed labels keep reprint-with-reason. The closure page requires
+`production.batch.approve`, `production.batch.admin` or `quality.disposition.approve`. The second person can send a
+weighing back with a reason (`returnDispense`, append-only void, never by the weigher). The QA tests list shows only
+batches sent to QA. One green button on weigh, Get materials, CAPA and maintenance pages.
+
+Consequences: no migration or permission change; tests `tests/unit/record-words.test.ts`,
+`production-order-status`, `production-one-path`, integration `one-path`, `packaging-flow`, `bmr-closure`,
+`batch-execution`, `board-and-plans`, `w2c-inspections-release`, `check-quality`. Open: step 6 can show Print labels and
+Step done both green until labels are printed.
