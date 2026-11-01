@@ -70,17 +70,24 @@ export async function packagingLinesOf(q: DbOrTx, batch: Pick<BatchRow, "id" | "
     // order's set-aside lots (the taken lot first).
     const cands: Omit<PackagingPlanLot, "qty">[] = [];
     const caps: Decimal[] = [];
-    if (pick?.stagingId) {
-      const [st] = await q
+    // ADR-106 §4 bug fix: a tick can move SEVERAL set-aside lots (one staging row each; the pick keeps only the
+    // last one). Taking only `pick.stagingId` recorded e.g. 1 wrapper taken when 122 + 1 had been moved, so Finish
+    // showed "taken 1". Every staging row of this line counts, oldest first.
+    if (pick && pick.action === "taken") {
+      const sts = await q
         .select({ s: batchMaterialStagings, lotNumber: inventoryLots.lotNumber, code: locations.code })
         .from(batchMaterialStagings)
         .innerJoin(inventoryLots, eq(inventoryLots.id, batchMaterialStagings.lotId))
         .innerJoin(locations, eq(locations.id, batchMaterialStagings.toLocationId))
-        .where(eq(batchMaterialStagings.id, pick.stagingId))
-        .limit(1);
-      if (st) {
-        cands.push({ lotId: st.s.lotId, lotNumber: st.lotNumber, locationId: st.s.toLocationId, locationCode: st.code, reservationIds: [] });
-        caps.push(new Decimal(st.s.qtyBase));
+        .where(and(eq(batchMaterialStagings.batchId, batch.id), eq(batchMaterialStagings.batchMaterialId, bm.id)))
+        .orderBy(asc(batchMaterialStagings.stagedAt), asc(batchMaterialStagings.id));
+      for (const st of sts) {
+        const same = cands.findIndex((c) => c.lotId === st.s.lotId && c.locationId === st.s.toLocationId);
+        if (same >= 0) caps[same] = caps[same].plus(st.s.qtyBase);
+        else {
+          cands.push({ lotId: st.s.lotId, lotNumber: st.lotNumber, locationId: st.s.toLocationId, locationCode: st.code, reservationIds: [] });
+          caps.push(new Decimal(st.s.qtyBase));
+        }
       }
     }
     const exp = batch.workOrderId ? await expectedLots(q, batch.workOrderId, m.id) : [];
@@ -259,28 +266,7 @@ export async function printBatchLabels(ctx: AuthContext, input: { batchId: strin
   ctx.require("inventory.label_job.create");
   const copies = Number(String(input.copies).trim());
   if (!Number.isInteger(copies) || copies < 1 || copies > 999) throw new DomainError("validation", "Enter how many labels: a whole number from 1 to 999.", { field: "copies", fieldErrors: { copies: "1 to 999." } });
-  const batch = await db.transaction(async (tx) => {
-    const b = await lockBatch(tx, ctx, input.batchId);
-    if (!LABEL_STATES.includes(b.status)) throw new DomainError("state", `Batch ${b.batchNumber} is ${b.status.replace(/_/g, " ")}. Labels are printed while the batch is being made or waiting for QA.`);
-    if (b.outputLotNumber) return b;
-    // Printing fixes lot and dates: only from the packaging step on (labelPrintBlocker).
-    const gate = b.status === "in_process" ? labelPrintBlocker(sortedSteps(b.formulaSnapshot as FormulaSnapshot), await stepRecords(tx, b.id)) : null;
-    if (gate) throw new DomainError("state", gate, { rule: "V-STATE" });
-    const [product] = await tx.select().from(products).where(eq(products.id, b.productId)).limit(1);
-    const basis = await getSetting(tx, ctx.organizationId, "production.output.expiry_basis");
-    const dates = batchExpiryDates(b, sortedSteps(b.formulaSnapshot as FormulaSnapshot), await stepRecords(tx, b.id), basis, product.shelfLifeDays);
-    const lotNumber = await nextNumber(tx, ctx.organizationId, "LOT");
-    const [u] = await tx.update(batches).set({ outputLotNumber: lotNumber, outputManufacturedOn: dates.manufacturedOn, outputExpiresOn: dates.expiresOn }).where(eq(batches.id, b.id)).returning();
-    await audit(tx, ctx, {
-      action: "production.batch.label_lot_fixed",
-      entityType: "batch",
-      entityId: b.id,
-      entityNumber: b.batchNumber,
-      siteId: b.siteId,
-      after: { lotNumber, manufacturedOn: dates.manufacturedOn, expiresOn: dates.expiresOn, basis: dates.basis },
-    });
-    return u;
-  });
+  const batch = await db.transaction(async (tx) => fixLabelLotLocked(tx, ctx, await lockBatch(tx, ctx, input.batchId)));
   const template = await batchLabelTemplate(db, ctx.organizationId, batch.siteId);
   if (!template) throw new DomainError("state", "No approved product label is set up for this site. Ask the site manager.", { setup: "label_template" });
   const make = () => createLabelJob(ctx, { labelTemplateId: template.id, entityType: "batch", entityId: batch.id, copies, printStationId: input.printStationId ?? null, idempotencyKey: input.idempotencyKey });
@@ -302,3 +288,33 @@ export async function printBatchLabels(ctx: AuthContext, input: { batchId: strin
     return { jobId: existing, lotNumber: batch.outputLotNumber!, expiresOn: batch.outputExpiresOn!, copies: old?.copies ?? copies, alreadyPrinted: true, replacedJobId: null as string | null };
   }
 }
+
+/**
+ * Freezes the finished lot number, made date and expiry on the locked batch the first time any label of the
+ * batch is printed (piece labels, ADR-092; box labels, ADR-104 §2), audited once. Refused outside the label
+ * states and before the packaging step (labelPrintBlocker). Returns the batch row with the values.
+ */
+export async function fixLabelLotLocked(tx: Tx, ctx: AuthContext, b: BatchRow): Promise<BatchRow> {
+  if (!LABEL_STATES.includes(b.status)) throw new DomainError("state", `Batch ${b.batchNumber} is ${b.status.replace(/_/g, " ")}. Labels are printed while the batch is being made or waiting for QA.`);
+  if (b.outputLotNumber) return b;
+  // Printing fixes lot and dates: only from the packaging step on (labelPrintBlocker).
+  const gate = b.status === "in_process" ? labelPrintBlocker(sortedSteps(b.formulaSnapshot as FormulaSnapshot), await stepRecords(tx, b.id)) : null;
+  if (gate) throw new DomainError("state", gate, { rule: "V-STATE" });
+  const [product] = await tx.select().from(products).where(eq(products.id, b.productId)).limit(1);
+  const basis = await getSetting(tx, ctx.organizationId, "production.output.expiry_basis");
+  const dates = batchExpiryDates(b, sortedSteps(b.formulaSnapshot as FormulaSnapshot), await stepRecords(tx, b.id), basis, product.shelfLifeDays);
+  const lotNumber = await nextNumber(tx, ctx.organizationId, "LOT");
+  const [u] = await tx.update(batches).set({ outputLotNumber: lotNumber, outputManufacturedOn: dates.manufacturedOn, outputExpiresOn: dates.expiresOn }).where(eq(batches.id, b.id)).returning();
+  await audit(tx, ctx, {
+    action: "production.batch.label_lot_fixed",
+    entityType: "batch",
+    entityId: b.id,
+    entityNumber: b.batchNumber,
+    siteId: b.siteId,
+    after: { lotNumber, manufacturedOn: dates.manufacturedOn, expiresOn: dates.expiresOn, basis: dates.basis },
+  });
+  return u;
+}
+
+/** The batch states in which labels may be printed (piece and box labels). */
+export const BATCH_LABEL_STATES = LABEL_STATES;

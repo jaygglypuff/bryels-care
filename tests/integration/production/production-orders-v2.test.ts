@@ -74,13 +74,15 @@ describe("needed-by date, late flag and pieces first", () => {
     expect(wo.neededBy).toBe(day(-2));
   });
 
-  it("pieces first: 247 bars become 2 whole batches (2 × 17.6 kg at 95 % ÷ 135 g = 247) and show as '247 bars · 2 batches'", async () => {
+  // ADR-104 §4: split = pieces ÷ the recipe batch (123 bars per 17.6 kg at 95 %), rounded up: 247 → 3 batches of 83/82/82.
+  it("pieces first: 247 bars become 3 batches sized to the pieces (recipe batch 123 bars) and show as '247 bars · 3 batches'", async () => {
     const r = await createProductionOrder(w.planner, { productId: acs, plannedStart: day(0), quantityUnits: "247" });
     const [wo] = await db.select().from(workOrders).where(eq(workOrders.id, r.workOrderId));
-    expect(wo.batchCount).toBe(2);
+    expect(wo.batchCount).toBe(3);
+    expect(wo.batchPlan?.pieces).toEqual(["83", "82", "82"]);
     expect(wo.targetUnits).toBe("247.000000");
-    expect((await listProductionOrders(w.planner)).find((x) => x.id === r.workOrderId)?.piecesText).toBe("247 bars · 2 batches");
-    expect((await getProductionOrder(w.planner, r.workOrderId)).pieces).toMatchObject({ text: "247 bars · 2 batches", word: "expected" });
+    expect((await listProductionOrders(w.planner)).find((x) => x.id === r.workOrderId)?.piecesText).toBe("247 bars · 3 batches");
+    expect((await getProductionOrder(w.planner, r.workOrderId)).pieces).toMatchObject({ text: "247 bars · 3 batches", word: "expected" });
   });
 
   it("validates pieces and dates", async () => {

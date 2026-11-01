@@ -310,6 +310,37 @@ Superseded screens (server redirects, URLs kept): `/production/new` and `/produc
 | Board | Default column titles in order words ("Approved · get materials", "Quality check"); move labels "Ready for approval (still Draft)", "Approve (sets the materials aside)"; reasons without permission strings; phones (< 640 px) get one list with status chips, moving stays on wider screens | `boardMove` re-checked on the server as before |
 | Stale batch links | `src/app/(app)/production/not-found.tsx`: "This batch was removed or the demo was reset. Go to Production orders." inside the app frame | — |
 
+### 4.4.2 Floor decisions: box labels and one batch or several (2026-11-01, ADR-104 §2 and §4; ADR-106 §4)
+
+**One batch or several (New order).** "How many bars?" → the screen (pure `batch-plan.ts`, same code on the server) proposes the batches:
+
+| Figure | Rule |
+|---|---|
+| Pieces of a batch | floor(batch g × expected % ÷ 100 ÷ g per piece) (ADR-094) |
+| Grams for N pieces | ceil(N × g per piece × 100 ÷ expected %) |
+| Largest batch | `largestBatchFor`: per mixing kind on the routing (mixer, kettle, homogenizer) the biggest `capacity_max` (g/kg) of in-service equipment at the site; the smallest over the kinds; none known = the recipe's batch size (A-FD-05) |
+| Split (default) | N = ceil(pieces ÷ min(recipe batch pieces, largest pieces)), even sizes ("2 batches of 1,000 bars") |
+| Make it one batch | only when pieces ≤ largest; else disabled with the reason and the split |
+| Choose sizes | each a whole number > 0, ≤ largest, sum = pieces; ≤ 200 batches |
+
+Stored as `work_orders.batch_plan` (`mode`, `sizesG[]`, `pieces[]`, `largestG`, `largestFrom`; check `jsonb_array_length(sizesG) = batch_count`; migration 0034). `qty_planned_base` = sum of the sizes. Approve and "Plan the batch" create each batch with its own planned size (`remainingBatchSizesG`); `assertWorkOrderAcceptsBatch` accepts only a size of the plan; requirements and set-aside sum over the batch sizes. A kg size typed under More details is the old path (no plan) but is refused above the recorded mixer capacity. Editing a draft keeps the plan only if count and size are unchanged.
+
+**Box labels (packaging step and Finish).** Product setting `products.labelling` = `per_box` (default) | `per_piece` ("How do you label it?" on the product form and page).
+
+| Step | What happens | Service |
+|---|---|---|
+| How many pieces did you pack? | "That makes 2 boxes of 48 and 1 box of 4" (`box-plan.ts`, pieces per box = `products.units_per_box`) | client + `planBatchBoxes` |
+| Print 3 box labels | freezes lot/made/expiry (as piece labels, `fixLabelLotLocked`), one `batch_boxes` row per box with a BOX number taken now, one label job per box (entity `batch_box`, template kind `carton`, 1 copy); idempotent; same count = same jobs | `planBatchBoxes` (`inventory.label_job.create`) |
+| New count | old rows `replaced` (reason, who, when), their jobs cancelled (not printed) or voided (printed) | same |
+| Print page | `/print/labels/batch-boxes/<batch>`: all box labels, one per page at label size; "Yes, they printed" marks all jobs | `batchBoxPrintJobs` |
+| Scan before Finish | `BC:BOX:<number>` → "Box 2 of 3 of batch …" (opens the batch); a replaced label says so | `scan/card.ts` |
+| Finish | refused when boxed pieces > good − samples (before any posting); after the output posting, in the same transaction, each box becomes a sealed container with that number at the hold location holding its pieces (`inventory.container.created`, `source: finish`) | `assertBoxesFit`, `makeBatchBoxesLocked` |
+| per_piece products | the piece-label panel (ADR-099) is shown too, How many? = pieces packed; piece labels are not reconciled | step and Finish pages |
+
+**Wrappers at Finish (ADR-106 §4).** Card "Wrappers": "We took 123 wrappers. You wrapped 120 bars. How many wrappers are left over? How many were damaged?" and the sum as a sentence (`wrapper-words.ts`). Too many is refused; missing wrappers with "What happened?" open a problem report (A-FD-06). Left-over wrappers in the production area go back to their shelf in one tap (`returnLeftOverWrappers`, `production.batch.post`, idempotent per row). Bug fixed: "taken 1" for a 123-bar batch came from recording only the *last* staging transfer of the wrapper line when Get materials moved two places (`packagingLinesOf` now uses every staging row of the line); the pick-from-list fallback no longer defaults to the stock on the first shelf.
+
+Tests: `tests/unit/production-batch-and-box-plan.test.ts`, `tests/integration/production/adr104-box-labels-batch-plan.test.ts`.
+
 ## 5. Day to day
 
 ### 5.1 Daily log ("What happened today")

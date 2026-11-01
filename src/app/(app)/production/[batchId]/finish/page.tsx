@@ -14,7 +14,8 @@ import { PageIntro } from "@/ui/guide";
 import { LabelPrint } from "../../orders/[workOrderId]/step/[n]/packaging-box";
 import { printBatchLabelsPanelAction } from "../../orders/[workOrderId]/flow-actions";
 import { PrintLabelsPanel } from "@/ui/labels/print-labels-panel";
-import { FinishForm } from "./forms";
+import { FinishForm, ReturnWrappers } from "./forms";
+import { BoxLabels } from "../../orders/[workOrderId]/step/[n]/box-labels";
 
 export const metadata: Metadata = { title: "Finish batch" };
 export const dynamic = "force-dynamic";
@@ -103,11 +104,27 @@ export default async function FinishPage({ params }: { params: Promise<{ batchId
           />
         </Card>
       )}
-      {v.labels.allowed && v.labels.values ? (
-        <PrintLabelsPanel ctx={ctx} entityType="batch" entityId={v.batch.id} kind="bar" copies={v.labels.defaultCount} sentence="Stick one label on each bar." action={printBatchLabelsPanelAction} batchValues={v.labels.values} />
-      ) : v.labels.lotNumber ? (
-        <LabelPrint batchId={v.batch.id} labels={v.labels} />
-      ) : null}
+      {finished && v.leftOver.some((x) => x.toLocationId) && <ReturnWrappers batchId={v.batch.id} items={v.leftOver} canReturn={v.can.finish} />}
+      {/* ADR-104 §2: box labels by default (also offered here); per_piece products also label each piece. */}
+      {(v.boxes.allowed || v.boxes.plan) && (
+        <BoxLabels
+          batchId={v.batch.id}
+          unitsPerBox={v.boxes.unitsPerBox}
+          defaultPieces={v.boxes.defaultPieces}
+          pieceWord={v.boxes.pieceWord}
+          face={v.boxes.preview?.options[0]?.face ?? null}
+          plan={v.boxes.plan}
+          canPrint={v.boxes.canPrint}
+          why={v.boxes.why}
+          printHref={v.boxes.printHref}
+        />
+      )}
+      {v.boxes.labelling === "per_piece" &&
+        (v.labels.allowed && v.labels.values ? (
+          <PrintLabelsPanel ctx={ctx} entityType="batch" entityId={v.batch.id} kind="bar" copies={v.boxes.plan?.pieces ?? v.labels.defaultCount} title="Label for each piece" sentence="Stick one label on each piece." action={printBatchLabelsPanelAction} batchValues={v.labels.values} />
+        ) : v.labels.lotNumber ? (
+          <LabelPrint batchId={v.batch.id} labels={v.labels} />
+        ) : null)}
     </div>
   );
 }

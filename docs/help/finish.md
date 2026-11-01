@@ -1,8 +1,8 @@
 ---
 key: production.finish
 title: Finish a batch
-version: 2
-updated_at: 2026-10-30
+version: 3
+updated_at: 2026-11-01
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -24,12 +24,22 @@ When every step of the batch is done, you finish it. Finishing counts what was m
 
 ## Count the wrappers
 
-1. "Taken" is how many wrappers or labels were given out for this batch. You do not type it.
-2. If the wrapping step already recorded the destroyed wrappers, you see "From step 6: 3 damaged". You do not type them again. Press **Change** only if that number is wrong.
-3. Count and type **Left over** (clean ones you give back). Type **Damaged** (spoiled, torn, wrong print) only when the wrapping step did not record it.
-4. Wrappers used are the good bars plus the samples plus any reject that was already wrapped. Type rejects that were already wrapped under **More details**.
-5. The line under the fields must show a tick, for example "125 taken = 120 used + 2 damaged + 3 left over ✓".
-6. If it says "missing" or "too many", count again. Finish stays off until the numbers add up.
+1. The card **Wrappers** says, for example: "We took 123 wrappers. You wrapped 120 bars." You do not type these.
+2. Count the wrappers you did not use. Type **How many wrappers are left over?**
+3. Type **How many were damaged?** (torn, spoiled, wrong print). If the wrapping step already wrote it, you see "Written at step 6: 2 damaged". Press **Change** only if it is wrong.
+4. The line under the fields shows the sum, for example "123 taken = 120 wrapped + 2 damaged + 1 left over ✓".
+5. "3 wrappers are missing": count the left-over ones again. If they are really gone, write what happened in **What happened?**. A problem report goes to QA.
+6. "2 wrappers too many": count the left-over and damaged ones again. Finish stays off until it is right.
+7. Rejects that were already wrapped used a wrapper too. Type them under **More details**.
+8. Labels are not counted here. Box labels and piece labels are printed in their own card.
+9. After Finish, a card says where the left-over wrappers go, for example "12 Soap wrapper 135 g go back to shelf PKG-01". Press **Put them back on the shelf**. It is done once.
+
+## Boxes
+
+1. If you printed box labels on the wrap step, Finish makes one box for each label, in the hold area, with its pieces.
+2. The good bars minus the samples must be at least the bars in the boxes. If not, Finish says so: count again, or print the box labels again with the right number.
+3. Bars not in a box stay loose in the hold area.
+4. You can also print the box labels here, on the **Box labels** card.
 
 ## Finish the batch
 
@@ -42,5 +52,5 @@ When every step of the batch is done, you finish it. Finishing counts what was m
 ## Something is wrong
 
 - **Finish one step first**: a step of the batch is not done yet. Go back to the order and do it.
-- **The wrappers do not add up**: count again. If they still do not add up, report a problem on the batch page.
+- **The wrappers do not add up**: count again. Missing wrappers: write what happened. Too many: count again.
 - **Pressed twice**: nothing happens twice. The batch is finished only once.

@@ -32,8 +32,9 @@ export function PrintNow({ label }: { label: string }) {
  * After the print window: "Did all N labels come out right?" Yes records the job(s) as printed (audited);
  * No prints again (the job stays the same) or, folded, records that the printer failed.
  */
-export function PrintedCheck({ jobIds, count, stick, back, receiptId }: { jobIds: string[]; count: number; stick: string; back: string | null; receiptId?: string }) {
-  const [state, action] = useActionState<ActionState, FormData>(receiptId ? markReceiptJobsPrintedAction : markPrintedAction, null);
+export function PrintedCheck({ jobIds, count, stick, back, receiptId, jobsAction }: { jobIds: string[]; count: number; stick: string; back: string | null; receiptId?: string; jobsAction?: (s: ActionState, f: FormData) => Promise<ActionState> }) {
+  const [state, action] = useActionState<ActionState, FormData>(jobsAction ?? (receiptId ? markReceiptJobsPrintedAction : markPrintedAction), null);
+  const many = !!receiptId || !!jobsAction;
   const [failing, setFailing] = useState(false);
   if (state?.ok) {
     return (
@@ -53,10 +54,10 @@ export function PrintedCheck({ jobIds, count, stick, back, receiptId }: { jobIds
     <div className="grid gap-3 rounded-[16px] border border-line bg-surface p-4" data-testid="printed-check">
       <p className="text-[16px] font-semibold">{count === 1 ? "Did the label come out right?" : `Did all ${count} labels come out right?`}</p>
       <form action={action} className="flex flex-wrap gap-2">
-        {receiptId ? (
+        {many ? (
           <>
             <input type="hidden" name="jobIds" value={jobIds.join(",")} />
-            <input type="hidden" name="receiptId" value={receiptId} />
+            {receiptId && <input type="hidden" name="receiptId" value={receiptId} />}
           </>
         ) : (
           <input type="hidden" name="jobId" value={jobIds[0]} />
@@ -69,7 +70,7 @@ export function PrintedCheck({ jobIds, count, stick, back, receiptId }: { jobIds
         </Button>
       </form>
       <FormMessage state={state} />
-      {!receiptId && (
+      {!many && (
         <div>
           {failing ? (
             <FailForm jobId={jobIds[0]} />

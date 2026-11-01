@@ -423,6 +423,7 @@ const jobColumns = {
     when 'location' then (select x.name from locations x where x.id = ${labelJobs.entityId})
     when 'batch' then (select p.name from batches b join products p on p.id = b.product_id where b.id = ${labelJobs.entityId})
     when 'container' then (select 'Box ' || c.container_number from containers c where c.id = ${labelJobs.entityId})
+    when 'batch_box' then (select p.name || ' · box ' || x.box_no || ' of ' || x.box_count from batch_boxes x join batches b on b.id = x.batch_id join products p on p.id = b.product_id where x.id = ${labelJobs.entityId})
     else null end`,
 };
 

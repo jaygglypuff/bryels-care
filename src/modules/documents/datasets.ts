@@ -1,7 +1,7 @@
 import "server-only";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { batches, inventoryLots, locations, materials, packBoxes, packs, products, users, warehouses } from "@/db/schema";
+import { batchBoxes, batches, inventoryLots, locations, materials, packBoxes, packs, products, users, warehouses } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtMass, fmtQty } from "@/lib/qty";
@@ -17,7 +17,7 @@ import { isUuid } from "./templates";
  */
 
 export type LabelEntity = {
-  entityType: "inventory_lot" | "location" | "container" | "batch";
+  entityType: "inventory_lot" | "location" | "container" | "batch" | "batch_box";
   entityId: string;
   siteId: string;
   number: string;
@@ -195,6 +195,7 @@ export async function labelEntity(ctx: AuthContext, entityType: string, entityId
   if (entityType === "location") return locationLabelEntity(ctx, entityId);
   if (entityType === "container") return containerLabelEntity(ctx, entityId);
   if (entityType === "batch") return batchLabelEntity(ctx, entityId);
+  if (entityType === "batch_box") return batchBoxLabelEntity(ctx, entityId);
   throw new DomainError("validation", "Labels for this kind of record arrive with its module.");
 }
 
@@ -250,9 +251,77 @@ export async function batchLabelEntity(ctx: AuthContext, batchId: string, values
 /** Values a batch's product label will carry, passed by the production module for a preview before the first print. */
 export type BatchLabelValues = { lotNumber: string; manufacturedOn?: string | null; expiresOn: string };
 
-export async function labelEntityFor(ctx: AuthContext, entityType: string, entityId: string, batchValues?: BatchLabelValues | null): Promise<LabelEntity> {
+export async function labelEntityFor(ctx: AuthContext, entityType: string, entityId: string, batchValues?: BatchLabelValues | null, boxPreview?: BatchBoxPreview | null): Promise<LabelEntity> {
   if (entityType === "batch") return batchLabelEntity(ctx, entityId, batchValues);
+  if (entityType === "batch_box" && boxPreview) return batchBoxPreviewEntity(ctx, entityId, boxPreview);
   return labelEntity(ctx, entityType, entityId);
+}
+
+/** A box label before the boxes exist (packaging step preview): the batch id plus the values the print will use. */
+export type BatchBoxPreview = BatchLabelValues & { boxNo: number; boxCount: number; pieces: number; containerNumber: string };
+
+/**
+ * ADR-104 §2 box label of a batch (one per box, label kind `carton`): product, batch, lot, pieces in this box,
+ * made, expiry, "3 of 13" and the box's own BC:BOX code. The box number is taken when the label is printed and
+ * Finish creates the box (container) with that number, so the QR opens the box; until Finish it opens the batch.
+ * No status word: the box waits for QA in the hold area and its status is always the lot's (scan to check).
+ */
+function boxEntity(b: typeof batches.$inferSelect, p: typeof products.$inferSelect, v: { lotNumber: string; manufacturedOn: string | null; expiresOn: string; boxNo: number; boxCount: number; pieces: number; unitsPerBox: number; containerNumber: string }, id: string): LabelEntity {
+  const part = v.pieces < v.unitsPerBox;
+  return {
+    entityType: "batch_box",
+    entityId: id,
+    siteId: b.siteId,
+    number: v.containerNumber,
+    appliesTo: "carton",
+    // Content identity: same lot, dates, box and pieces = the same label (a second print is a controlled reprint).
+    state: `${v.lotNumber}|${v.manufacturedOn ?? ""}|${v.expiresOn}|${v.boxNo}/${v.boxCount}|${v.pieces}`,
+    revisionAt: new Date(b.createdAt),
+    entity: {
+      payloadType: "BOX",
+      value: v.containerNumber,
+      caption: "BOX",
+      itemCode: p.skuCode,
+      itemName: p.name,
+      batchNumber: b.batchNumber,
+      manufacturedOn: v.manufacturedOn ? fmtDate(v.manufacturedOn) : null,
+      expiresOn: fmtDate(v.expiresOn),
+      expiryLabel: "Expiry",
+      quantityText: `${v.lotNumber} · ${v.pieces} pcs${part ? " · PART BOX" : ""}`,
+      statusWord: null,
+      boxOfText: `${v.boxNo} of ${v.boxCount}`,
+      storageConditions: p.storageConditions ?? null,
+    },
+  };
+}
+
+async function batchAndProduct(ctx: AuthContext, batchId: string) {
+  ctx.require("production.batch.view");
+  if (!isUuid(batchId)) throw new DomainError("not_found", "Batch not found in your sites.");
+  const [row] = await db
+    .select({ b: batches, p: products })
+    .from(batches)
+    .innerJoin(products, eq(products.id, batches.productId))
+    .where(and(eq(batches.id, batchId), eq(batches.organizationId, ctx.organizationId), inArray(batches.siteId, ctx.allowedSiteIds)))
+    .limit(1);
+  if (!row) throw new DomainError("not_found", "Batch not found in your sites.");
+  return row;
+}
+
+export async function batchBoxLabelEntity(ctx: AuthContext, batchBoxId: string): Promise<LabelEntity> {
+  if (!isUuid(batchBoxId)) throw new DomainError("not_found", "Box not found in your sites.");
+  const [bx] = await db.select().from(batchBoxes).where(and(eq(batchBoxes.id, batchBoxId), eq(batchBoxes.organizationId, ctx.organizationId), inArray(batchBoxes.siteId, ctx.allowedSiteIds))).limit(1);
+  if (!bx) throw new DomainError("not_found", "Box not found in your sites.");
+  if (bx.status === "replaced") throw new DomainError("state", `Box label ${bx.containerNumber} was replaced by a new count. Print the new box labels.`);
+  const { b, p } = await batchAndProduct(ctx, bx.batchId);
+  if (!b.outputLotNumber || !b.outputExpiresOn) throw new DomainError("state", `Print the box labels of batch ${b.batchNumber} from its packaging step.`);
+  return boxEntity(b, p, { lotNumber: b.outputLotNumber, manufacturedOn: b.outputManufacturedOn ?? null, expiresOn: b.outputExpiresOn, boxNo: bx.boxNo, boxCount: bx.boxCount, pieces: bx.pieces, unitsPerBox: bx.unitsPerBox, containerNumber: bx.containerNumber }, bx.id);
+}
+
+/** Preview of box 1 before printing (the values the production module will fix). */
+export async function batchBoxPreviewEntity(ctx: AuthContext, batchId: string, v: BatchBoxPreview): Promise<LabelEntity> {
+  const { b, p } = await batchAndProduct(ctx, batchId);
+  return boxEntity(b, p, { lotNumber: v.lotNumber, manufacturedOn: v.manufacturedOn ?? null, expiresOn: v.expiresOn, boxNo: v.boxNo, boxCount: v.boxCount, pieces: v.pieces, unitsPerBox: Math.max(p.unitsPerBox, v.pieces), containerNumber: v.containerNumber }, batchId);
 }
 
 /** Sample data for label test pages (T-01): clearly fictional, never a real lot. */

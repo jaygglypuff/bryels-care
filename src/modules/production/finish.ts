@@ -16,10 +16,12 @@ import { type BatchRow, eligibleSigners, findStepOfKind, sortedSteps, stepRecord
 import { postBatchToQuarantineLocked } from "./output";
 import { countPackagingLocked, currentPackaging } from "./packaging";
 import { batchLabelInfo } from "./packaging-flow";
+import { assertBoxesFit, batchBoxInfo, leftOverWrappers, makeBatchBoxesLocked } from "./batch-boxes";
 import { currentReadings } from "./process";
 import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
 import { currentYield, recordScrapReworkLocked, recordYieldLocked, yieldLimits } from "./yield";
 import { plainWords } from "./plain-words";
+import { wrapperBalanceSentence, wrapperWord } from "./wrapper-words";
 
 /**
  * Finish batch (ADR-080 §6, slice V2-6). ONE transaction that does what the five old commands did one
@@ -233,6 +235,10 @@ export async function getFinishView(ctx: AuthContext, batchId: string) {
     holdOptions,
     /** ADR-088 §3: "Print labels for this batch" is offered on Finish too. */
     labels: await batchLabelInfo(ctx, batch),
+    /** ADR-104 §2: box labels (default) and, after Finish, the boxes made. */
+    boxes: await batchBoxInfo(ctx, batch),
+    /** ADR-106 §4: left-over wrappers that can go back to their shelf in one tap (after Finish). */
+    leftOver: await leftOverWrappers(db, batch.id),
     needsChecker,
     checkers,
     defectTypes,
@@ -299,6 +305,8 @@ async function finishLocked(tx: Tx, ctx: AuthContext, batch: BatchRow, input: Fi
   const sampleSetting = await getSetting(tx, ctx.organizationId, "production.output.retained_samples", batch.siteId);
   const samples = s(input.samplesKept) === "" ? new Decimal(sampleSetting.enabled ? sampleSetting.units : 0) : wholeNumber(input.samplesKept, "Samples kept", "samplesKept");
   if (samples.gte(good)) throw new DomainError("validation", "Samples kept must be fewer than the good pieces.", { field: "samplesKept", fieldErrors: { samplesKept: "Fewer than the good pieces." } });
+  // ADR-104 §2: the boxes whose labels were printed must fit the pieces left to sell.
+  const boxedPieces = await assertBoxesFit(tx, batch, good.minus(samples));
 
   // 4. Yield (recordYield body). An earlier record from the old screen is reused or corrected.
   const prev = await currentYield(tx, batch.id);
@@ -363,6 +371,7 @@ async function finishLocked(tx: Tx, ctx: AuthContext, batch: BatchRow, input: Fi
   // 7. Packaging count (countPackaging body): only damaged and left over are typed.
   const groups = await packagingGroups(tx, batch.id);
   const pkgIn = new Map((input.packaging ?? []).map((p) => [p.materialId, p]));
+  const wrapperProblems: string[] = [];
   const pkgSummary: { material: string; taken: string; used: string; damaged: string; leftOver: string; source: "finish" | "step" }[] = [];
   for (const g of groups) {
     if (g.counted) {
@@ -404,12 +413,28 @@ async function finishLocked(tx: Tx, ctx: AuthContext, batch: BatchRow, input: Fi
     const bad = after.rows.find((x) => x.r.isWithinTolerance === false);
     if (bad) {
       const diff = g.taken.minus(used).minus(damaged).minus(leftOver);
-      const msg = diff.gt(0)
-        ? `${diff.toString()} ${g.materialName} missing: ${g.taken.toString()} taken, ${used.toString()} used, ${damaged.toString()} damaged, ${leftOver.toString()} left over. Count again.`
-        : `${diff.abs().toString()} ${g.materialName} too many: ${g.taken.toString()} taken, but ${used.toString()} used + ${damaged.toString()} damaged + ${leftOver.toString()} left over. Count again.`;
-      throw new DomainError("state", msg, { field, fieldErrors: { [field]: msg }, rule: "V-RECON", difference: diff.toString() });
+      // ADR-106 §4: the sum in plain words; missing wrappers may be explained ("write what happened": a problem
+      // report for QA), too many is always a counting error.
+      const msg = wrapperBalanceSentence({ taken: g.taken.toNumber(), wrapped: used.toNumber(), damaged: damaged.toNumber(), left: leftOver.toNumber(), word: wrapperWord(g.materialName) });
+      const why = (input.problemReason ?? "").trim();
+      if (diff.lte(0) || why.length < 10) throw new DomainError("state", msg, { field, fieldErrors: { [field]: msg }, rule: "V-RECON", difference: diff.toString() });
+      wrapperProblems.push(`${g.materialName}: ${msg.split(" — ")[0]}`);
     }
     pkgSummary.push({ material: g.materialCode, taken: g.taken.toString(), used: used.toString(), damaged: damaged.toString(), leftOver: leftOver.toString(), source: "finish" });
+  }
+
+  // 7b. Missing wrappers explained by the operator: a problem report for QA (QA cannot pass while it is open).
+  if (wrapperProblems.length) {
+    const opener = executionHooks().openDeviation;
+    if (!opener) throw new DomainError("state", DEVIATION_UNAVAILABLE, { rule: "A-PROC-33" });
+    await opener(tx, ctx, {
+      kind: "other",
+      batchId: batch.id,
+      batchNumber: batch.batchNumber,
+      siteId: batch.siteId,
+      description: `Finish of batch ${batch.batchNumber}: wrappers do not add up (${wrapperProblems.join("; ")}). Operator: ${(input.problemReason ?? "").trim()}`,
+      approvedBy: ctx.userId,
+    });
   }
 
   // 8. Hold area: post consumption, the finished lot, the output and the quality check task (postBatchToQuarantine body).
@@ -437,7 +462,12 @@ async function finishLocked(tx: Tx, ctx: AuthContext, batch: BatchRow, input: Fi
     });
   }
 
+  // 10. ADR-104 §2: each box with a printed box label becomes a box (container) in the hold area, same transaction.
+  const boxes = boxedPieces > 0 ? await makeBatchBoxesLocked(tx, ctx, batch, { lotId: posted.lotId, locationId: posted.locationId, lotNumber: posted.lotNumber }) : [];
+
   const result = {
+    boxes: boxes.map((b) => ({ containerId: b.containerId, containerNumber: b.containerNumber, pieces: b.pieces })),
+    loosePieces: good.minus(samples).minus(boxedPieces).toString(),
     batchNumber: batch.batchNumber,
     lotNumber: posted.lotNumber,
     lotId: posted.lotId,

@@ -509,17 +509,17 @@ export async function assertWorkOrderAcceptsBatch(
   if (wo.routingRevisionId !== b.routingRevisionId) {
     throw new DomainError("state", `Another routing revision is effective on ${b.plannedStartOn} than the one frozen on work order ${wo.workOrderNumber}. Plan a new work order for that date (V-REV).`, { rule: "V-REV" });
   }
-  const sizes = remainingBatchSizesG(wo, (await batchesOfWorkOrder(tx, wo.id)).filter((x) => x.status !== "rejected" || x.startedAt !== null).map((x) => x.plannedSizeG));
+  const live = (await batchesOfWorkOrder(tx, wo.id)).filter((x) => x.status !== "rejected" || x.startedAt !== null);
+  if (live.length >= wo.batchCount) {
+    throw new DomainError("state", `Work order ${wo.workOrderNumber} already has its ${wo.batchCount} batch${wo.batchCount === 1 ? "" : "es"}.`);
+  }
+  const sizes = remainingBatchSizesG(wo, live.map((x) => x.plannedSizeG));
   if (!sizes.some((g) => g.eq(b.plannedSizeG))) {
     const words = [...new Set(sizes.map((g) => g.div(1000).toString()))].join(" or ") || new Decimal(wo.batchSizeBase).div(1000).toString();
     throw new DomainError("validation", `Batches of ${wo.workOrderNumber} are ${words} kg.`);
   }
   if (b.plannedStartOn < wo.plannedStart || b.plannedStartOn > wo.plannedEnd) {
     throw new DomainError("validation", `Choose a start date between ${wo.plannedStart} and ${wo.plannedEnd} (the work order's dates).`, { fieldErrors: { plannedStartOn: "Outside the work order's dates." } });
-  }
-  const existing = (await batchesOfWorkOrder(tx, wo.id)).filter((x) => x.status !== "rejected" || x.startedAt !== null);
-  if (existing.length >= wo.batchCount) {
-    throw new DomainError("state", `Work order ${wo.workOrderNumber} already has its ${wo.batchCount} batch${wo.batchCount === 1 ? "" : "es"}.`);
   }
   return wo;
 }

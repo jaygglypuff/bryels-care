@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { wrapperBalanceSentence, wrapperWord } from "@/modules/production/wrapper-words";
 import { Button, Field, Input, Select, Textarea, cx } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { ScanOrPick } from "@/ui/scan-or-pick";
 import { finishBatchAction } from "./actions";
+import { returnWrappersAction } from "../../orders/[workOrderId]/flow-actions";
 
 /**
  * Finish screen (ADR-080 §6, UX review S6). Read-back first: good pieces and rejects from the daily log
@@ -88,7 +90,8 @@ export function FinishForm(p: FinishFormProps) {
     const diff = n(m.taken) - used - n(v.damaged) - n(v.leftOver);
     return { ...m, used, damaged: n(v.damaged), left: n(v.leftOver), diff };
   });
-  const unbalanced = balances.some((b) => b.diff !== 0);
+  const tooMany = balances.some((b) => b.diff < 0);
+  const missingWrappers = balances.some((b) => b.diff > 0 && (b.counted || (goodN > 0 && (pkg[b.materialId]?.leftOver ?? "") !== "")));
   const where = (p.holdOptions.find((l) => l.id === locationRef) ?? p.hold)?.name ?? "the hold area";
   const whereCode = (p.holdOptions.find((l) => l.id === locationRef) ?? p.hold)?.code;
   // Same rule as the server: rejects above the approval limit (or earlier scrap waiting for approval) need a problem report.
@@ -100,8 +103,9 @@ export function FinishForm(p: FinishFormProps) {
     const out: string[] = [];
     if (goodN <= 0) out.push(`Enter the good ${p.pieceWord}.`);
     if (n(samples) >= goodN && goodN > 0) out.push(`Samples kept must be fewer than the good ${p.pieceWord}.`);
-    if (unbalanced) out.push("The wrappers do not add up yet. Count again.");
-    if (needsReport && problemReason.trim().length < 10) out.push("Write what happened (at least 10 characters).");
+    if (tooMany) out.push("More wrappers are counted than were taken. Count the left-over and damaged ones again.");
+    if (balances.some((b) => b.diff > 0 && !b.counted && (pkg[b.materialId]?.leftOver ?? "") === "")) out.push("Count the left-over wrappers.");
+    if ((needsReport || missingWrappers) && problemReason.trim().length < 10) out.push(missingWrappers && !needsReport ? "Some wrappers are missing: count the left-over ones again, or write what happened (at least 10 characters)." : "Write what happened (at least 10 characters).");
     if (p.needsChecker && !checkerId) out.push("Choose who checked.");
     if (p.needsChecker && p.requirePassword && !checkerPassword) out.push("The checker types their password.");
     return out;
@@ -185,10 +189,10 @@ export function FinishForm(p: FinishFormProps) {
             {p.rejectApproval.existingNeedsApproval ? "Rejects recorded earlier are waiting for approval." : `${rejectTotal} rejects is more than the ${Math.floor(n(p.rejectApproval.limit ?? "0"))} allowed without a report.`}
           </p>
         )}
-        {(needsReport || fe.problemReason) && (
+        {(needsReport || missingWrappers || fe.problemReason) && (
           <div className="mt-3">
             <Field label="What happened? (a problem report is opened for QA)" htmlFor="problemReason" error={fe.problemReason} hint="At least 10 characters.">
-              <Textarea id="problemReason" name="problemReason" rows={2} maxLength={1000} required={needsReport} value={problemReason} onChange={(e) => setProblemReason(e.target.value)} />
+              <Textarea id="problemReason" name="problemReason" rows={2} maxLength={1000} required={needsReport || missingWrappers} value={problemReason} onChange={(e) => setProblemReason(e.target.value)} />
             </Field>
           </div>
         )}
@@ -196,59 +200,71 @@ export function FinishForm(p: FinishFormProps) {
 
       {p.packaging.length > 0 && (
         <section className="rounded-[16px] border border-line p-4" aria-labelledby="fin-wrappers">
+          {/* ADR-106 §4: wrappers in plain words; labels are counted in the label panel, not here. */}
           <h2 id="fin-wrappers" className="text-[16px] font-semibold">
-            Wrappers and labels
+            Wrappers
           </h2>
-          {balances.map((b) => (
-            <div key={b.materialId} className="mt-3">
-              <p className="text-[15px] font-medium">
-                {b.materialName}: taken {Number(b.taken)}
-              </p>
-              {b.counted ? (
-                <p className="text-[14px] text-muted">Counted at the wrapping step: {b.used} used, {b.damaged} damaged, {b.left} left over.</p>
-              ) : (
-                <>
-                  {b.step && !editStep[b.materialId] && (b.step.damaged !== null || b.step.leftOver !== null) && (
-                    <p className="mt-1 text-[14px]" data-testid={`step-counts-${b.materialId}`}>
-                      From step {b.step.stepNo}:{b.step.damaged !== null ? ` ${Number(b.step.damaged)} damaged` : ""}
-                      {b.step.leftOver !== null ? `${b.step.damaged !== null ? "," : ""} ${Number(b.step.leftOver)} left over` : ""}.{" "}
-                      <button type="button" className="text-[14px] font-semibold text-primary-text underline" onClick={() => setEditStep({ ...editStep, [b.materialId]: true })}>
-                        Change
-                      </button>
-                      <input type="hidden" name={`pkg-${b.materialId}-damaged`} value={pkg[b.materialId].damaged} />
-                      {b.step.leftOver !== null && <input type="hidden" name={`pkg-${b.materialId}-leftOver`} value={pkg[b.materialId].leftOver} />}
-                    </p>
-                  )}
-                  {(() => {
-                    const fromStep = !!b.step && !editStep[b.materialId];
-                    const showDamaged = !(fromStep && b.step!.damaged !== null);
-                    const showLeft = !(fromStep && b.step!.leftOver !== null);
-                    if (!showDamaged && !showLeft) return null;
-                    return (
-                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                        {showDamaged && <Count id={`pkg-${b.materialId}-damaged`} label="Damaged" value={pkg[b.materialId].damaged} onChange={(v) => setPkg({ ...pkg, [b.materialId]: { ...pkg[b.materialId], damaged: v } })} error={fe[`pkg-${b.materialId}-damaged`]} />}
-                        {showLeft && <Count id={`pkg-${b.materialId}-leftOver`} label="Left over (count them now)" value={pkg[b.materialId].leftOver} onChange={(v) => setPkg({ ...pkg, [b.materialId]: { ...pkg[b.materialId], leftOver: v } })} error={fe[`pkg-${b.materialId}-leftOver`]} />}
-                      </div>
-                    );
-                  })()}
-                  {goodN > 0 && b.step?.used !== null && b.step?.used !== undefined && Number(b.step.used) !== b.used && (
-                    <p className="mt-1 text-[14px] text-muted">Step {b.step.stepNo} says {Number(b.step.used)} used; here used = good {p.pieceWord} + rejects already wrapped = {b.used}. If the step is right, put {Number(b.step.used)} under More details.</p>
-                  )}
-                </>
-              )}
-              {/* Not judged before the counts are in: an empty form is not "69 missing". */}
-              {!b.counted && (goodN <= 0 || pkg[b.materialId].leftOver === "") ? (
-                <p className="mt-2 text-[15px] text-muted" data-testid={`balance-${b.materialId}`} role="status">
-                  {goodN <= 0 ? `Enter the good ${p.pieceWord} and the left-over wrappers; the balance is checked here.` : "Count the left-over wrappers; the balance is checked here."}
+          {balances.map((b) => {
+            const word = wrapperWord(b.materialName);
+            const taken = Number(b.taken);
+            const left = pkg[b.materialId]?.leftOver ?? "";
+            return (
+              <div key={b.materialId} className="mt-3" data-testid={`wrappers-${b.materialId}`}>
+                <p className="text-[16px]">
+                  We took <b>{taken}</b> {word}
+                  {word === "wrappers" ? ` (${b.materialName})` : ""}.{" "}
+                  {goodN > 0 && !b.counted ? (
+                    <>
+                      You wrapped <b>{b.used}</b> {p.pieceWord}.
+                    </>
+                  ) : null}
                 </p>
-              ) : (
-                <p className={cx("mt-2 text-[15px]", b.diff === 0 ? "text-[var(--ok-fg)]" : "font-semibold text-[var(--bad-fg)]")} data-testid={`balance-${b.materialId}`} role="status">
-                  {Number(b.taken)} taken = {b.used} used + {b.damaged} damaged + {b.left} left over {b.diff === 0 ? "✓" : b.diff > 0 ? `· ${b.diff} missing. Count again.` : `· ${-b.diff} too many. Count again.`}
-                </p>
-              )}
-              {fe[`pkg-${b.materialId}`] && <p className="text-[14px] text-[var(--bad-fg)]">{fe[`pkg-${b.materialId}`]}</p>}
-            </div>
-          ))}
+                {b.counted ? (
+                  <p className="text-[15px] text-fg-2">Counted at the wrapping step: {b.used} wrapped, {b.damaged} damaged, {b.left} left over.</p>
+                ) : (
+                  <>
+                    {b.step && !editStep[b.materialId] && (b.step.damaged !== null || b.step.leftOver !== null) && (
+                      <p className="mt-1 text-[14px]" data-testid={`step-counts-${b.materialId}`}>
+                        Written at step {b.step.stepNo}:{b.step.damaged !== null ? ` ${Number(b.step.damaged)} damaged` : ""}
+                        {b.step.leftOver !== null ? `${b.step.damaged !== null ? "," : ""} ${Number(b.step.leftOver)} left over` : ""}.{" "}
+                        <button type="button" className="min-h-[44px] text-[14px] font-semibold text-primary-text underline" onClick={() => setEditStep({ ...editStep, [b.materialId]: true })}>
+                          Change
+                        </button>
+                        <input type="hidden" name={`pkg-${b.materialId}-damaged`} value={pkg[b.materialId].damaged} />
+                        {b.step.leftOver !== null && <input type="hidden" name={`pkg-${b.materialId}-leftOver`} value={pkg[b.materialId].leftOver} />}
+                      </p>
+                    )}
+                    {(() => {
+                      const fromStep = !!b.step && !editStep[b.materialId];
+                      const showDamaged = !(fromStep && b.step!.damaged !== null);
+                      const showLeft = !(fromStep && b.step!.leftOver !== null);
+                      if (!showDamaged && !showLeft) return null;
+                      return (
+                        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                          {showLeft && <Count id={`pkg-${b.materialId}-leftOver`} label={`How many ${word} are left over?`} value={pkg[b.materialId].leftOver} onChange={(v) => setPkg({ ...pkg, [b.materialId]: { ...pkg[b.materialId], leftOver: v } })} error={fe[`pkg-${b.materialId}-leftOver`]} hint="Count them now." />}
+                          {showDamaged && <Count id={`pkg-${b.materialId}-damaged`} label="How many were damaged?" value={pkg[b.materialId].damaged} onChange={(v) => setPkg({ ...pkg, [b.materialId]: { ...pkg[b.materialId], damaged: v } })} error={fe[`pkg-${b.materialId}-damaged`]} hint="0 if none." />}
+                        </div>
+                      );
+                    })()}
+                    {goodN > 0 && b.step?.used !== null && b.step?.used !== undefined && Number(b.step.used) !== b.used && (
+                      <p className="mt-1 text-[14px] text-muted">Step {b.step.stepNo} says {Number(b.step.used)} used; here wrapped = good {p.pieceWord} + rejects already wrapped = {b.used}. If the step is right, put {Number(b.step.used)} under More details.</p>
+                    )}
+                  </>
+                )}
+                {/* Not judged before the counts are in: an empty form is not "69 missing". */}
+                {!b.counted && (goodN <= 0 || left === "") ? (
+                  <p className="mt-2 text-[15px] text-muted" data-testid={`balance-${b.materialId}`} role="status">
+                    {goodN <= 0 ? `Enter the good ${p.pieceWord} first; then count the left-over ${word}.` : `Count the left-over ${word}; we check the sum here.`}
+                  </p>
+                ) : (
+                  <p className={cx("mt-2 text-[15px]", b.diff === 0 ? "text-[var(--ok-fg)]" : "font-semibold text-[var(--bad-fg)]")} data-testid={`balance-${b.materialId}`} role="status">
+                    {wrapperBalanceSentence({ taken, wrapped: b.used, damaged: b.damaged, left: b.left, word, pieceWord: p.pieceWord })}
+                  </p>
+                )}
+                {fe[`pkg-${b.materialId}`] && <p className="text-[14px] text-[var(--bad-fg)]">{fe[`pkg-${b.materialId}`]}</p>}
+              </div>
+            );
+          })}
         </section>
       )}
 
@@ -330,12 +346,44 @@ export function FinishForm(p: FinishFormProps) {
         </div>
       ) : (
         <div>
-          <Button type="button" size="lg" onClick={askToConfirm} disabled={unbalanced || goodN <= 0} data-testid="finish-batch">
-            {needsReport ? "Finish and report the problem" : "Finish batch"}
+          <Button type="button" size="lg" onClick={askToConfirm} disabled={tooMany || goodN <= 0} data-testid="finish-batch">
+            {needsReport || missingWrappers ? "Finish and report the problem" : "Finish batch"}
           </Button>
-          {unbalanced && goodN > 0 && <p className="mt-2 text-[14px] text-muted">The wrappers do not add up yet. Count again; if they still do not add up, use Report a problem on the batch page.</p>}
+          {tooMany && goodN > 0 && <p className="mt-2 text-[14px] text-muted">More wrappers are counted than were taken. Count the left-over and damaged ones again.</p>}
         </div>
       )}
     </form>
+  );
+}
+
+/**
+ * ADR-106 §4: after Finish, the left-over wrappers counted here go back to the shelf they came from in one tap
+ * (a stock move from the production area, recorded and audited by returnLeftOverWrappers).
+ */
+export function ReturnWrappers({ batchId, items, canReturn }: { batchId: string; items: { reconciliationId: string; materialName: string; qty: string; toCode: string | null; toLocationId: string | null; returned: boolean }[]; canReturn: boolean }) {
+  const [state, action] = useInPlaceAction(returnWrappersAction);
+  const open = items.filter((x) => x.toLocationId && !x.returned);
+  return (
+    <section className="grid gap-2 rounded-[16px] border border-line bg-surface p-4" aria-label="Left-over wrappers" data-testid="return-wrappers">
+      <h2 className="text-[16px] font-semibold">Left-over wrappers</h2>
+      {open.length === 0 ? (
+        <p className="text-[15px] text-[var(--ok-fg)]">The left-over wrappers are back on the shelf.</p>
+      ) : (
+        <>
+          <p className="text-[15px]">{open.map((x) => `${Number(x.qty)} ${x.materialName} go back to shelf ${x.toCode}`).join(". ")}.</p>
+          {canReturn ? (
+            <form action={action}>
+              <input type="hidden" name="batchId" value={batchId} />
+              <SubmitButton variant="cta" size="lg" pendingText="Putting them back…" className="w-full sm:w-auto">
+                Put them back on the shelf
+              </SubmitButton>
+            </form>
+          ) : (
+            <p className="text-[14px] text-muted">Someone from production puts them back.</p>
+          )}
+        </>
+      )}
+      <FormMessage state={state} />
+    </section>
   );
 }

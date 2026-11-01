@@ -3,6 +3,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { D, fmtQty } from "@/lib/qty";
 import { Field, Input, Select, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
+import { BatchChoice } from "./batch-choice";
 import { addDailyLogAction, approveProductionOrderAction, assignProductionOrderAction, cancelProductionOrderAction, correctDailyLogAction, createProductionOrderAction, planBatchAction, setAsideAgainAction } from "./actions";
 
 /**
@@ -10,7 +11,7 @@ import { addDailyLogAction, approveProductionOrderAction, assignProductionOrderA
  * "More details". The server validates everything again; these forms only collect input.
  */
 
-type FormulaOption = { formulaId: string; productId: string; productName: string; productSku: string; referenceBatchSizeG: string | null; theoreticalYieldPct?: string | null; unitNetMassG?: string | null };
+type FormulaOption = { formulaId: string; productId: string; productName: string; productSku: string; referenceBatchSizeG: string | null; theoreticalYieldPct?: string | null; unitNetMassG?: string | null; largestG?: string | null; largestFrom?: string | null; family?: string | null };
 
 export type MakeForPrefill = { salesOrderId: string; salesOrderNumber: string; lineNo: number; productId: string; missing: string; neededBy: string | null };
 
@@ -47,6 +48,8 @@ export function ProductionOrderForm({ formulas, lines, today, prefill }: { formu
   const ref = current?.referenceBatchSizeG;
   const [sizeKg, setSizeKg] = useState(ref ? D(ref).div(1000).toString() : "");
   const per = perBatch(current, sizeKg);
+  const [pieces, setPieces] = useState(prefill?.missing ?? "");
+  const word = (current?.family ?? "").toLowerCase().includes("soap") ? "bars" : "pieces";
   return (
     <ActionForm action={createProductionOrderAction} hidden={prefill ? { salesOrderId: prefill.salesOrderId } : undefined} submit="Create order" pending="Creating…" variant="cta" size="lg" className="flex flex-col gap-5">
       {(fe) => (
@@ -75,8 +78,8 @@ export function ProductionOrderForm({ formulas, lines, today, prefill }: { formu
           </Field>
           {prefill && <input type="hidden" name="productId" value={productId} />}
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="How many (pieces)" htmlFor="quantityUnits" error={fe.quantityUnits} hint={per ? `One batch makes about ${per}. Empty = one batch.` : "Empty = one batch."}>
-              <Input id="quantityUnits" name="quantityUnits" inputMode="numeric" pattern="[0-9]*" defaultValue={prefill?.missing ?? ""} placeholder={per ?? ""} />
+            <Field label={`How many ${word}?`} htmlFor="quantityUnits" error={fe.quantityUnits} hint={per ? `One batch makes about ${per}. Empty = one batch.` : "Empty = one batch."}>
+              <Input id="quantityUnits" name="quantityUnits" inputMode="numeric" pattern="[0-9]*" value={pieces} onChange={(e) => setPieces(e.target.value.replace(/[^0-9]/g, ""))} placeholder={per ?? ""} />
             </Field>
             <Field label="Needed by" htmlFor="neededBy" error={fe.neededBy} hint="Optional. The order shows Late after this day.">
               <Input id="neededBy" name="neededBy" type="date" defaultValue={prefill?.neededBy ?? ""} />
@@ -85,9 +88,20 @@ export function ProductionOrderForm({ formulas, lines, today, prefill }: { formu
               <Input id="plannedStart" name="plannedStart" type="date" defaultValue={today} required />
             </Field>
           </div>
+          <BatchChoice
+            key={productId}
+            pieces={pieces}
+            refBatchG={current?.referenceBatchSizeG ?? null}
+            yieldPct={current?.theoreticalYieldPct ?? null}
+            pieceG={current?.unitNetMassG ?? null}
+            largestG={current?.largestG ?? null}
+            largestFrom={current?.largestFrom ?? null}
+            word={word}
+            error={fe.batchMode ?? fe.batchSizes}
+          />
           <MoreDetails>
-            <Field label="Batch size (kg)" htmlFor="batchSizeKg" error={fe.batchSizeKg} hint={ref ? `Usual size ${fmtQty(D(ref).div(1000), "kg", 1)}` : undefined}>
-              <Input id="batchSizeKg" name="batchSizeKg" inputMode="decimal" value={sizeKg} onChange={(e) => setSizeKg(e.target.value)} />
+            <Field label="Batch size (kg)" htmlFor="batchSizeKg" error={fe.batchSizeKg} hint={ref ? `Usual size ${fmtQty(D(ref).div(1000), "kg", 1)}. Leave empty to use "How to make it".` : undefined}>
+              <Input id="batchSizeKg" name="batchSizeKg" inputMode="decimal" value={sizeKg === (ref ? D(ref).div(1000).toString() : "") ? "" : sizeKg} placeholder={ref ? D(ref).div(1000).toString() : ""} onChange={(e) => setSizeKg(e.target.value)} />
             </Field>
             <Field label="Number of batches" htmlFor="batchCount" error={fe.batchCount} hint="Empty = enough batches for How many.">
               <Input id="batchCount" name="batchCount" inputMode="numeric" defaultValue="" />

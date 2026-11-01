@@ -177,3 +177,4 @@ export { materialsSummary, type MaterialsSummary } from "./materials-summary";
 // ADR-104 §2 and §4: box labels and the batch plan.
 export { largestBatchFor, largestBatchesForForm, MIXING_EQUIPMENT_KINDS, type LargestBatch } from "./batch-plan-facts";
 export { plannedBatchSizesG } from "./work-orders";
+export { batchBoxInfo, batchBoxInfoFor, planBatchBoxes, batchBoxPrintJobs, currentBoxPlan, leftOverWrappers, returnLeftOverWrappers, BOX_LABEL_KIND, type BatchBoxInfo, type PlanBoxesResult, type LeftOverWrapper } from "./batch-boxes";

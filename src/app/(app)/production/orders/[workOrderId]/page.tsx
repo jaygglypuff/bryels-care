@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
-import { assigneeChoices, auditSentence, batchRecordHref, continueHref, defectTypes, getProductionOrder, NO_ORDER_SEGMENT, orderStateWord, plainReason, workOrderFormOptions, type DailyLogRow, type ProductionOrderView } from "@/modules/production";
+import { assigneeChoices, auditSentence, batchPlanWords, batchRecordHref, continueHref, defectTypes, getProductionOrder, NO_ORDER_SEGMENT, orderStateWord, plainReason, workOrderFormOptions, type DailyLogRow, type ProductionOrderView } from "@/modules/production";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { Help } from "@/ui/help/help";
@@ -391,7 +391,7 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
               <div>
                 <dt className="text-[12px] text-muted">How much</dt>
                 <dd className="tabular">
-                  {fmtMass(wo.qtyPlannedBase)} ({wo.batchCount} × {fmtMass(wo.batchSizeBase)})
+                  {fmtMass(wo.qtyPlannedBase)} ({batchPlanWords(wo.batchPlan, d.product.family) ?? `${wo.batchCount} × ${fmtMass(wo.batchSizeBase)}`})
                 </dd>
               </div>
               <div>

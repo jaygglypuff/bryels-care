@@ -153,7 +153,7 @@ async function main() {
   // Products and formulas
   const [acs] = await db.insert(s.products).values({ organizationId: O, skuCode: "ACS-135", name: "Acapulco Soap 135 g", family: "Soap", unitNetMassG: "135", unitsPerBox: 48, shelfLifeDays: 730 }).returning();
   const [gbs] = await db.insert(s.products).values({ organizationId: O, skuCode: "GBS-135", name: "Guava Bar Soap 135 g", family: "Soap", unitNetMassG: "135", unitsPerBox: 48, shelfLifeDays: 730 }).returning();
-  const [ahl] = await db.insert(s.products).values({ organizationId: O, skuCode: "AHL-250", name: "Aloe Hand Lotion 250 mL", family: "Lotion", unitNetMassG: "255", unitsPerBox: 24, shelfLifeDays: 540 }).returning();
+  const [ahl] = await db.insert(s.products).values({ organizationId: O, skuCode: "AHL-250", name: "Aloe Hand Lotion 250 mL", family: "Lotion", unitNetMassG: "255", unitsPerBox: 24, labelling: "per_piece", shelfLifeDays: 540 }).returning();
 
   // Formulas and routings: approved revision 1 of each, two approvals (W1D, src/db/seeds/w1d.ts).
   async function makeFormula(product: typeof acs, code: string, name: string, sizeG: string, lines: [string, string][], steps: SeedStep[], yieldPct: string, routingCode: string) {

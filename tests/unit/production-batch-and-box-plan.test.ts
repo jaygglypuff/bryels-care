@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 import { batchPlanText, checkBatchSizes, evenSplit, gramsForPieces, maxPiecesFor, piecesForGrams, proposeBatches } from "@/modules/production/batch-plan";
 import { boxPrintLabel, boxSplit, boxSplitText, parsePieces } from "@/modules/production/box-plan";
+import { wrapperBalanceSentence, wrapperWord } from "@/modules/production/wrapper-words";
 
 describe("box split (pieces packed → boxes)", () => {
   it("12 full boxes of 24 and 1 part box of 9", () => {
@@ -122,5 +123,15 @@ describe("choose sizes (validation)", () => {
     const sum = checkBatchSizes(["1000", "500"], 2000, 1800, "bars");
     expect(!sum.ok && sum.message).toBe("The batches add up to 1,500 bars, but the order is for 2,000. Add 500 more.");
     expect(checkBatchSizes([], 2000, 1800)).toMatchObject({ ok: false });
+  });
+});
+
+describe("wrappers in plain words (ADR-106 §4)", () => {
+  it("adds up with a tick, or says what to do", () => {
+    expect(wrapperWord("Soap wrapper 135 g")).toBe("wrappers");
+    expect(wrapperBalanceSentence({ taken: 123, wrapped: 120, damaged: 2, left: 1, word: "wrappers" })).toBe("123 taken = 120 wrapped + 2 damaged + 1 left over ✓");
+    expect(wrapperBalanceSentence({ taken: 123, wrapped: 120, damaged: 0, left: 0, word: "wrappers" })).toContain("3 wrappers are missing — count the left-over ones again, or write what happened.");
+    expect(wrapperBalanceSentence({ taken: 123, wrapped: 120, damaged: 2, left: 0, word: "wrappers" })).toContain("1 wrapper is missing");
+    expect(wrapperBalanceSentence({ taken: 1, wrapped: 123, damaged: 0, left: 12, word: "wrappers" })).toContain("134 wrappers too many");
   });
 });

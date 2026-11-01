@@ -337,7 +337,8 @@ export async function seedW1D(db: Db, ctx: { O: string; U: Users; sites: Record<
   const eqDefs: E[] = [
     { code: "SC-01", name: "Platform scale 30 kg", kind: "scale", line: "Weighing room", calDays: 90, calDue: 20, capacity: ["0.1", "30000", "g"] },
     { code: "SC-02", name: "Bench scale 3 kg", kind: "scale", line: "Weighing room", calDays: 90, calDue: -3, capacity: ["0.01", "3000", "g"] },
-    { code: "MIX-01", name: "Soap mixer 50 L", kind: "mixer", line: "Soap line 1", pmDays: 180, pmDue: 60 },
+    // ADR-104 §4 (demo, fictional): the largest batch the soap mixer takes, in grams.
+    { code: "MIX-01", name: "Soap mixer 50 L", kind: "mixer", line: "Soap line 1", pmDays: 180, pmDue: 60, capacity: ["1000", "40000", "g"] },
     { code: "MIX-02", name: "Backup soap mixer 25 L", kind: "mixer", line: "Soap line 1", pmDays: 180, pmDue: 40, status: "out_of_service" },
     { code: "MLD-01", name: "Soap mould line (12-bar frames)", kind: "mould", line: "Soap line 1", pmDays: 365, pmDue: 200 },
   ];

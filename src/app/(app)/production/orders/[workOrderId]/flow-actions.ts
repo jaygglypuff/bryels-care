@@ -5,8 +5,9 @@ import { coSign } from "@/lib/auth/co-sign";
 import { type ActionState, DomainError, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
 import type { Permission } from "@/lib/permissions";
+import { markLabelJobPrinted } from "@/modules/documents";
 import type { PrintLabelsState } from "@/ui/labels/actions";
-import { approveStepException, batchSiteId, checkDispense, checkStep, confirmPicked, issuePackaging, printBatchLabels, recordDispense, returnDispense, returnStep, selectEquipment, stepDone, submitChecklist } from "@/modules/production";
+import { approveStepException, batchSiteId, checkDispense, checkStep, confirmPicked, issuePackaging, planBatchBoxes, printBatchLabels, returnLeftOverWrappers, recordDispense, returnDispense, returnStep, selectEquipment, stepDone, submitChecklist } from "@/modules/production";
 import { registerAppHooks } from "@/modules/wiring";
 
 // Execution ↔ QA hooks (deviations for early ends and out-of-range values); idempotent.
@@ -290,5 +291,43 @@ export async function printBatchLabelsPanelAction(_: PrintLabelsState, fd: FormD
   } catch (e) {
     const s = toActionState(e);
     return { ok: false, message: s?.message, fieldErrors: s?.fieldErrors };
+  }
+}
+
+export type BoxLabelsState = (NonNullable<ActionState> & { href?: string; boxes?: number }) | null;
+
+/** ADR-104 §2 "Print 13 box labels": plans the boxes and makes one label per box, then opens the print page. */
+export async function planBatchBoxesAction(_: BoxLabelsState, fd: FormData): Promise<BoxLabelsState> {
+  try {
+    const ctx = await requireContext();
+    const r = await planBatchBoxes(ctx, { batchId: uuid.parse(str(fd, "batchId")), pieces: str(fd, "pieces") ?? "", idempotencyKey: opt(fd, "idempotencyKey") ?? "" });
+    refreshCurrentPage();
+    return { ok: true, href: r.printHref, boxes: r.boxes, message: `${r.boxes} box ${r.boxes === 1 ? "label is" : "labels are"} ready for ${r.pieces} pieces.${r.replacedPlan ? " The old box labels are cancelled: destroy any you printed." : ""}` };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** ADR-104 §2 print page: "Yes, they printed" for every box label of the batch. */
+export async function markBatchBoxJobsPrintedAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const ids = (str(fd, "jobIds") ?? "").split(",").filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 200);
+    for (const id of ids) await markLabelJobPrinted(ctx, id);
+    return { ok: true, message: "Recorded as printed. Stick one label on each box." };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
+
+/** ADR-106 §4: "Put the left-over wrappers back on the shelf" (one tap after Finish). */
+export async function returnWrappersAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const r = await returnLeftOverWrappers(ctx, { batchId: uuid.parse(str(fd, "batchId")) });
+    refreshCurrentPage();
+    return { ok: true, message: r.moved.length ? `Back on the shelf: ${r.moved.map((m) => `${Number(m.qty)} ${m.materialName} to ${m.toCode}`).join(", ")}.` : "Nothing to carry back: they are already on the shelf." };
+  } catch (e) {
+    return toActionState(e);
   }
 }
