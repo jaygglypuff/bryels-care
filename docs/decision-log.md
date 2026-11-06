@@ -2046,3 +2046,21 @@ Status: Accepted; open for QA: A-FD-01, A-FD-02, A-FD-04, A-PL-02.
 Consequences: migrations 0035 (tables) and 0036 (append-only and decide-once triggers, `src/db/sql/adr104.sql`); no new
 permission; tests `tests/unit/{floor-decisions,weigh-window}.test.ts`,
 `tests/integration/production/floor-decisions.test.ts`, `tests/integration/quality/result-corrections.test.ts`.
+
+## ADR-109 Every hand-off names who acts next (owner request 2026-11-01)
+
+Status: Accepted; A-NEXT-01 (first names on shared floor tablets) needs the owner.
+
+Decision: `nextActors(ctx, kind, record)` (`src/modules/governance/next-actors.ts`) is the one rule for "who does the
+next step": people with a current assignment at the record's site whose role holds the deciding permission and, for
+records with approval steps, the open step's roles; an earlier step's approver never decides the next step. Floor
+checks and QA decisions are independent: the weigher, step doer or requester is never listed, owner included (ADR-080
+§8). Operational records follow ADR-091 ("You can approve this yourself because you are the owner/site manager").
+`<NextApprover>` (`src/ui/next-approver.tsx`, words in `src/lib/next-actors-words.ts`: first names, role words, at most
+three names then "or N others") is shown in success messages (`ActionState.next`), on the record's next-step line and
+on the floor weigh and step cards. `notifyNextActors` sends one in-app message per person and dedupe key in the same
+transaction. Floor tasks list a check the user can sign even on an order assigned to someone else. It is a hint only;
+the deciding services re-check everything.
+
+Consequences: `docs/NEXT_APPROVER.md` (inventory and remaining work); tests `tests/unit/next-actors-words.test.ts`,
+`tests/integration/governance/next-actors.test.ts`; no migration.
