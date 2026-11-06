@@ -2187,3 +2187,19 @@ Status: Accepted (amends ADR-112, follows ADR-110); A-COVER-01 (owner, planner) 
    volume ("250 mL a bottle"); place names come before codes.
 Consequences: the lite seed links the lotion orders to the Isla Spa order and prints its box labels through the label
 service; `DEMO_SEED_VERSION` raised; no migration or permission change.
+
+## ADR-114 Live check of the small demo: names, desktop width, role Homes (2026-11-06)
+
+Status: Accepted.
+
+Hand-offs name people everywhere they waited on a role: the QA lot page names the QA people who decide for every
+viewer (`getLotDisposition().deciders`), a viewer who can act reads "So can …" (`othersSentence`); a sent purchase order
+names who receives it and the expected date (`delivery_coming`); "You don't have access" names the people who can do
+the work (`doingPermission`: a `.view` permission is read as the entity's doing permission). Desktop: the tab row holds
+at most 7 entries, the rest under "More ▾" (`desktopRow`); To approve and Messages show their words from 1440 px;
+record steppers use short words for steps that are not current; the recipe wizard (H1, "recipe so far" panel) and To
+approve (list and detail side by side) use up to 1200 px or the full width; Homes balance their columns. "What to do
+next" on Home is only a step the viewer can do (`firstActionable`); the warehouse is told which lot to put away and on
+which shelf; operators lose the warehouse quick actions; recent activity takes its verb from the audit event. How work
+flows stage 3 counts deliveries coming with the nearest date. No migration or permission change. Tests
+`tests/unit/live-check-1106.test.ts`, `tests/integration/governance/live-check-names.test.ts`.
