@@ -1,4 +1,5 @@
 "use server";
+import { salesNextActors } from "@/modules/sales";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -62,10 +63,10 @@ export async function priceListCommandAction(_: ActionState, fd: FormData): Prom
     let message = "";
     if (cmd === "submit") {
       await submitPriceList(ctx, id);
-      message = "Sent for approval. Finance or the owner approves it.";
+      message = "Sent for approval.";
     } else if (cmd === "approve") {
       const r = await approvePriceList(ctx, id, str(fd, "note") || null);
-      message = r.approved ? "Approved: the prices apply from the effective date." : "Your approval is recorded; another step is open.";
+      message = r.approved ? "Approved: the prices apply from the effective date." : "Your approval is recorded.";
     } else if (cmd === "retire") {
       await retirePriceList(ctx, id, reason);
       message = "Retired: no longer used for new quotations and orders.";
@@ -74,7 +75,8 @@ export async function priceListCommandAction(_: ActionState, fd: FormData): Prom
       message = cmd === "return" ? "Returned to draft for changes." : "Rejected.";
     }
     refreshCurrentPage();
-    return { ok: true, message };
+    // Who approves next, by name and role (ADR-109).
+    return { ok: true, message, next: cmd === "submit" || cmd === "approve" ? await salesNextActors(ctx, "price_list", id).catch(() => null) : null };
   } catch (e) {
     return toActionState(e);
   }

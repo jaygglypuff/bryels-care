@@ -32,6 +32,7 @@ import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
 import { notifyUsers } from "@/modules/platform";
+import { notifyNextActors } from "@/modules/governance";
 import { batchMaterialChanges, ownerOverrideSentence } from "@/modules/production";
 import { batchFacts, decideBatchInTx } from "./dispositions";
 import { deviationsFor } from "./deviations";
@@ -480,8 +481,17 @@ async function decideLocked(tx: Tx, ctx: AuthContext, input: QualityCheckInput) 
         link: `/sales/${so.id}`,
         dedupeKey: `stock-available:${batch.id}`,
       });
-      notified = sent.length;
-      await audit(tx, ctx, { action: "sales.order.stock_available", entityType: "sales_order", entityId: so.id, entityNumber: so.number, siteId: batch.siteId, after: { batch: batch.batchNumber, lot: d.lotNumber, notified } });
+      // C9(e) / ADR-109: the warehouse and sales people who set stock aside are told the order can now be set aside.
+      const setAside = await notifyNextActors(tx, ctx, "set_aside", { siteId: batch.siteId, excludeUserIds: [ctx.userId] }, {
+        title: `${so.number} can now be set aside`,
+        body: `Batch ${batch.batchNumber} passed the quality check (lot ${d.lotNumber ?? "—"}). Set the stock aside for the order.`,
+        link: `/sales/${so.id}`,
+        entityType: "sales_order",
+        entityId: so.id,
+        dedupeKey: `handoff.set_aside:${batch.id}`,
+      });
+      notified = sent.length; // the order taker; `setAside` people are counted in the audit below
+      await audit(tx, ctx, { action: "sales.order.stock_available", entityType: "sales_order", entityId: so.id, entityNumber: so.number, siteId: batch.siteId, after: { batch: batch.batchNumber, lot: d.lotNumber, notified, setAsideNotified: setAside.length } });
     }
   }
   await audit(tx, ctx, {

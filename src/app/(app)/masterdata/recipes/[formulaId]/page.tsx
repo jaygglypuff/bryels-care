@@ -66,7 +66,7 @@ export default async function RecipePage({ params, searchParams }: { params: Pro
       </div>
     );
   }
-  const waiting = r.mode === "waiting" ? await waitingFor(ctx, "masterdata.formula.approve", null, "to approve it", "the approvers") : null;
+  const waiting = r.mode === "waiting" ? await waitingFor(ctx, "masterdata.formula.approve", null, "to approve it", "the approvers", { exclude: r.pendingBy }) : null;
   return <RecipeOverview r={r} saved={sp.saved} waiting={waiting} />;
 }
 

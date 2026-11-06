@@ -1,4 +1,6 @@
 "use server";
+import type { NextActors } from "@/lib/next-actors-words";
+import { countNextActors } from "@/modules/inventory";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -55,10 +57,10 @@ export async function planCountAction(_p: ActionState, fd: FormData): Promise<Ac
   redirect(`/inventory/counts/${id}`);
 }
 
-const done = (id: string, message: string): ActionState => {
+const done = (id: string, message: string, next: NextActors | null = null): ActionState => {
   revalidatePath(`/inventory/counts/${id}`);
   revalidatePath("/inventory/counts");
-  return { ok: true, message };
+  return { ok: true, message, next };
 };
 
 export async function releaseCountAction(id: string): Promise<ActionState> {
@@ -130,7 +132,7 @@ export async function submitCountAction(id: string): Promise<ActionState> {
   try {
     const ctx = await requireContext();
     const r = await submitCount(ctx, id);
-    return done(id, r.recounts ? `Count finished. ${r.recounts} ${r.recounts === 1 ? "line needs" : "lines need"} to be counted again by someone else.` : "Count finished. The manager checks the differences next.");
+    return done(id, r.recounts ? `Count finished. ${r.recounts} ${r.recounts === 1 ? "line needs" : "lines need"} to be counted again by someone else.` : "Count finished.", r.recounts ? null : await countNextActors(ctx, id).catch(() => null));
   } catch (e) {
     return actionError(e);
   }
@@ -157,7 +159,7 @@ export async function approveCountAction(id: string, _p: ActionState, fd: FormDa
       }
     }
     const r = await approveCount(ctx, id, { lines, note: str(fd, "note") || null });
-    return done(id, r.status === "pending_approval" ? "Approved (step 1). The differences are large, so a second person must approve too." : "Differences approved. Tap Save to stock to fix the stock.");
+    return done(id, r.status === "pending_approval" ? "Approved (step 1). The differences are large, so a second person must approve too." : "Differences approved.", await countNextActors(ctx, id).catch(() => null));
   } catch (e) {
     return actionError(e);
   }

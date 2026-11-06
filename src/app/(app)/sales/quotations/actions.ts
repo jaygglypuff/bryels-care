@@ -1,4 +1,5 @@
 "use server";
+import { salesNextActors } from "@/modules/sales";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -50,12 +51,12 @@ export async function quoteCommandAction(_: ActionState, fd: FormData): Promise<
     switch (cmd) {
       case "submit": {
         const r = await submitQuote(ctx, id, { idempotencyKey: str(fd, "idempotencyKey") || null });
-        message = r.status === "sent" ? "Quotation issued: print it for the customer." : "The discount needs approval; the approvers have been notified.";
+        message = r.status === "sent" ? "Quotation issued: print it for the customer." : "The discount needs approval.";
         break;
       }
       case "approve": {
         const r = await approveQuote(ctx, id, str(fd, "note") || null);
-        message = r.sent ? "Approved and issued." : "Your approval is recorded; the next step is still open.";
+        message = r.sent ? "Approved and issued." : "Your approval is recorded.";
         break;
       }
       case "return":
@@ -75,7 +76,8 @@ export async function quoteCommandAction(_: ActionState, fd: FormData): Promise<
         message = "Quotation voided.";
     }
     refreshCurrentPage();
-    return { ok: true, message };
+    // Who approves next, by name and role (ADR-109).
+    return { ok: true, message, next: cmd === "submit" || cmd === "approve" ? await salesNextActors(ctx, "quote", id).catch(() => null) : null };
   } catch (e) {
     return toActionState(e);
   }

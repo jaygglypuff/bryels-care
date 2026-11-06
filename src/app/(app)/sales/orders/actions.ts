@@ -1,4 +1,5 @@
 "use server";
+import { salesNextActors } from "@/modules/sales";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -39,7 +40,8 @@ export async function approveOrderAction(_: ActionState, fd: FormData): Promise<
     const ctx = await requireContext();
     const r = await approveOrder(ctx, uuid.parse(str(fd, "orderId")), { note: str(fd, "note") || null, idempotencyKey: key(fd) });
     refreshCurrentPage();
-    return { ok: true, message: r.confirmed ? `Order ${r.orderNumber} approved and confirmed.` : "Your approval is recorded; the next approval step is still open." };
+    const orderId = uuid.parse(str(fd, "orderId"));
+    return r.confirmed ? { ok: true, message: `Order ${r.orderNumber} approved and confirmed.` } : { ok: true, message: "Your approval is recorded.", next: await salesNextActors(ctx, "sales_order", orderId).catch(() => null) };
   } catch (e) {
     return toActionState(e);
   }

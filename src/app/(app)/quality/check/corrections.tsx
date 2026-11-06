@@ -3,6 +3,8 @@ import { useState } from "react";
 import { Button, Input } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { correctResultAction, decideCorrectionAction } from "./actions";
+import { NextApprover } from "@/ui/next-approver";
+import type { NextActors } from "@/lib/next-actors-words";
 
 /**
  * ADR-104 §3 on Check quality: every result with its corrections (old values struck through with who and when), a
@@ -10,7 +12,7 @@ import { correctResultAction, decideCorrectionAction } from "./actions";
  * Before the decision the correction is saved at once; after it, it is a request a second QA person approves.
  */
 export type ResultRow = { id: string; testName: string; result: string; passed: boolean; by: string; at: string; correctionReason: string | null; live: boolean; free: boolean };
-export type PendingCorrection = { id: string; test: string; oldResult: string; value: string; reason: string; by: string; at: string; canDecide: boolean; mine: boolean };
+export type PendingCorrection = { id: string; test: string; oldResult: string; value: string; reason: string; by: string; at: string; canDecide: boolean; mine: boolean; next?: NextActors | null };
 
 const key = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now()));
 
@@ -102,6 +104,7 @@ function PendingBox({ c }: { c: PendingCorrection }) {
         {c.by} asks to correct {c.test}: <span className="line-through">{c.oldResult}</span> → {c.value}
       </p>
       <p className="text-[14px]">Why: {c.reason}</p>
+      {!c.canDecide && <NextApprover next={c.next} className="text-[14px]" />}
       {c.canDecide ? (
         <form action={action} className="mt-2 grid gap-2">
           <input type="hidden" name="requestId" value={c.id} />

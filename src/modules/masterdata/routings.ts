@@ -32,6 +32,7 @@ import {
   recordApprovalDecision,
   requireAny,
   supersedeOverlapping,
+  notifyRevisionApprovers,
 } from "./versioning";
 
 /**
@@ -278,6 +279,7 @@ export async function submitRoutingRevision(ctx: AuthContext, revisionId: string
       before: { status: rev.status, revisionNo: rev.revisionNo },
       after: { status: "pending_approval", revisionNo: rev.revisionNo, changeScope },
     });
+    await notifyRevisionApprovers(tx, ctx, "routing_revision", { recordId: rev.id, name: `Steps ${name}`, link: `/masterdata/routings/${routing.id}/revisions/${rev.id}`, siteId: null, exclude: [rev.createdBy] });
     return { status: "pending_approval" as const, changeScope };
   });
 }
@@ -314,6 +316,7 @@ export async function decideRoutingRevision(ctx: AuthContext, raw: unknown) {
     const d = await recordApprovalDecision(tx, ctx, {
       recordType: "routing_revision",
       recordId: rev.id,
+      recordNumber: `Steps ${lbl(routing.code, rev.revisionNo)}`,
       excludedUserIds: [rev.createdBy, rev.submittedBy],
       decision: input.decision,
       note: input.note,

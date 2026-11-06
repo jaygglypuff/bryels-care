@@ -42,8 +42,8 @@ export default async function AdjustmentPage({ params, searchParams }: { params:
   }
   const items = [...new Set(a.lines.map((l) => l.itemName ?? l.newLotItem).filter(Boolean))].join(", ");
   // Who approves next, by name and role (docs/NEXT_APPROVER.md); the fixed words stay as the fallback.
-  const approvalNext = a.status === "submitted" ? await adjustmentNextActors(ctx, a.id) : null;
-  const waitingFor = approvalNext ? <NextApprover next={approvalNext} inline /> : a.requiresSecondApproval
+  const approvalNext = a.status === "submitted" || a.status === "approved" ? await adjustmentNextActors(ctx, a.id) : null;
+  const waitingFor = approvalNext && a.status === "submitted" ? <NextApprover next={approvalNext} inline /> : a.requiresSecondApproval
     ? a.can.awaitingSecondStep
       ? "Waiting for the owner (a different person from the first approver) to give the second OK."
       : "Waiting for a site manager to approve first, then the owner. The person who made it cannot approve it."
@@ -54,7 +54,7 @@ export default async function AdjustmentPage({ params, searchParams }: { params:
     if (a.status === "submitted" && a.can.approve) return <NextStep text={a.can.awaitingSecondStep ? "Check the lots below, then give the second OK or say why not." : "Check the lots below, then say OK or say why not."} />;
     if (a.status === "submitted") return <NextStep text={a.can.own ? "Sent. You made or sent it, so someone else approves it." : "Sent to the manager."} waitingFor={waitingFor} />;
     if (a.status === "approved" && a.can.post) return <NextStep text="Approved. Save it to stock now (button below)." />;
-    if (a.status === "approved") return <NextStep text="Approved." waitingFor="Waiting for the site manager to save it to stock." />;
+    if (a.status === "approved") return <NextStep text="Approved." waitingFor={approvalNext ? <NextApprover next={approvalNext} inline /> : "Waiting for the site manager to save it to stock."} />;
     if (a.status === "posted") return <NextStep text="Saved to stock. Nothing more to do. If it was wrong, a manager undoes it (kept on record) and you make a new one." />;
     if (a.status === "rejected") return <NextStep text={`Not accepted: ${a.rejectionReason ?? "see the history"}. Make a new fix if the stock is still wrong.`} action={ctx.can("inventory.adjustment.create") ? { label: "Make a new fix", href: "/inventory/adjustments/new" } : undefined} />;
     if (a.status === "cancelled") return <NextStep text="Cancelled. Nothing changed in stock." />;

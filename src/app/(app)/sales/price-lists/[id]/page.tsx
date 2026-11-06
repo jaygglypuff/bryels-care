@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { NextApprover } from "@/ui/next-approver";
+import { salesNextActors } from "@/modules/sales";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { approverLabel } from "@/lib/auth/self-approval";
@@ -53,7 +55,7 @@ export default async function PriceListPage({ params, searchParams }: { params: 
       ) : (
         <DoNext
           text={iEdited ? "You made these prices, so someone else approves them." : "These prices need approval."}
-          waitingFor={`Waiting for ${await whoDoes(ctx, "sales.price_list.approve", null, "finance or the owner")} to approve.`}
+          waitingFor={<NextApprover next={await salesNextActors(ctx, "price_list", pl.id)} inline />}
         />
       )
     ) : pl.status === "approved" ? (

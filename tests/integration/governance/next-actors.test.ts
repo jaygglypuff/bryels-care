@@ -11,7 +11,7 @@ import { batchMaterials, materials, notifications, products, roles, suppliers, u
 import { type AuthContext, buildContextForUser } from "@/lib/auth/context";
 import { nextActorsSentence } from "@/lib/next-actors-words";
 import { nextActors } from "@/modules/governance";
-import { createPurchaseOrder, decidePurchaseOrder, procurementNextActors, submitPurchaseOrder } from "@/modules/procurement";
+import { createPurchaseOrder, decidePurchaseOrder, procurementNextActors, sendPurchaseOrder, submitPurchaseOrder } from "@/modules/procurement";
 import { batchQaNext, createBatch, createWorkOrder, myFloorTasks, productionOrderNext, recordDispense, startBatch, submitChecklist, type FormulaSnapshot } from "@/modules/production";
 import { registerAppHooks } from "@/modules/wiring";
 import { resetTestDatabase } from "../../support/db";
@@ -136,6 +136,16 @@ describe("purchase order steps", () => {
     const asManager = await procurementNextActors(await ctx("manager.nfd@bryels-care.test"), "purchase_order", po.purchaseOrderId);
     expect(asManager?.viewer.can).toBe(false);
     expect(names(asManager)).toEqual(["Ana Villanueva"]);
+
+    // Approved and sent: who sends it, then the warehouse is told the delivery is coming (C9(a)).
+    await decidePurchaseOrder(await ctx("owner@bryels-care.test"), { purchaseOrderId: po.purchaseOrderId, decision: "approve" });
+    expect(nextActorsSentence((await procurementNextActors(await ctx("manager.nfd@bryels-care.test"), "purchase_order", po.purchaseOrderId))!)).toContain("sends it to the supplier");
+    await sendPurchaseOrder(buyer, { purchaseOrderId: po.purchaseOrderId, email: false, idempotencyKey: `t-${Date.now()}` });
+    const coming = await db.select().from(notifications).where(and(eq(notifications.kind, "handoff.delivery_coming"), eq(notifications.entityId, po.purchaseOrderId)));
+    const lito = (await db.select().from(users).where(eq(users.email, "warehouse.nfd@bryels-care.test")))[0].id;
+    expect(coming.map((n) => n.recipientUserId)).toContain(lito);
+    expect(coming.map((n) => n.recipientUserId)).not.toContain(buyer.userId);
+    expect(coming[0].title).toMatch(/^Delivery coming/);
   });
 });
 

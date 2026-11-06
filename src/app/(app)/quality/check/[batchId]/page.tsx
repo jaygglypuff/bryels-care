@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { NextApprover } from "@/ui/next-approver";
+import { nextActors } from "@/modules/governance";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -13,7 +15,6 @@ import { MoreMenu } from "@/ui/more-menu";
 import { RecordNo } from "@/ui/plain-list";
 import { Help } from "@/ui/help/help";
 import { Banner, Chip } from "@/ui/status";
-import { WhoCanHelp } from "@/ui/who-can-help";
 import { Forbidden } from "../../../forbidden";
 import { StartInspectionButton } from "../../w2c-forms";
 import { qaWord } from "../../_ui";
@@ -49,6 +50,8 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
   // ADR-104 §3: results with their corrections (struck through) and corrections waiting for a second QA person.
   const history = await resultHistory(db, v.batch.id);
   const pending = (await correctionRequestsOf(db, v.batch.id)).filter((c) => c.c.status === "pending");
+  // ADR-109: who approves each waiting correction (another QA person, never the one who asked).
+  const correctionNext = new Map(await Promise.all(pending.map(async (c) => [c.c.id, await nextActors(ctx, "qa_result_correction", { siteId: v.batch.siteId, excludeUserIds: [c.c.requestedBy] }).catch(() => null)] as const)));
   const isQa = ctx.canGenuinelyAt("quality.disposition.approve", v.batch.siteId) || ctx.roleCodes.includes("qa_qc");
   const canCorrect = ctx.canAt("quality.test_result.create", v.batch.siteId);
 
@@ -231,7 +234,7 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
                 decided={["released", "rejected", "closed"].includes(v.batch.status)}
                 canCorrect={canCorrect}
                 rows={history.map((r) => ({ id: r.id, testName: r.testName, result: r.result, passed: r.passed, by: r.by, at: fmtDateTime(r.at), correctionReason: r.correctionReason, live: r.live, free: !v.planDriven }))}
-                pending={pending.map((c) => ({ id: c.c.id, test: c.test, oldResult: c.oldResult, value: c.c.value, reason: c.c.reason, by: c.by, at: fmtDateTime(c.c.requestedAt), canDecide: isQa && ctx.canGenuinelyAt("quality.disposition.approve", v.batch.siteId) && c.c.requestedBy !== ctx.userId, mine: c.c.requestedBy === ctx.userId }))}
+                pending={pending.map((c) => ({ id: c.c.id, test: c.test, oldResult: c.oldResult, value: c.c.value, reason: c.c.reason, by: c.by, at: fmtDateTime(c.c.requestedAt), canDecide: isQa && ctx.canGenuinelyAt("quality.disposition.approve", v.batch.siteId) && c.c.requestedBy !== ctx.userId, mine: c.c.requestedBy === ctx.userId, next: correctionNext.get(c.c.id) ?? null }))}
               />
             </Card>
           )}
@@ -241,7 +244,7 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
               {!v.can.decide ? (
                 <div className="space-y-2">
                   <p className="text-[14px] text-fg-2">A QA person decides this batch.</p>
-                  <WhoCanHelp permission="quality.disposition.approve" siteId={v.batch.siteId} hideEmails />
+                  <NextApprover next={await nextActors(ctx, "batch_qa", { siteId: v.batch.siteId }).catch(() => null)} />
                 </div>
               ) : (
                 <div className="space-y-5">

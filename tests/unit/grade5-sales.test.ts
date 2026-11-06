@@ -42,7 +42,8 @@ describe("grade-5 sales screens", () => {
 
   it("names who we are waiting for on records that wait for someone else", () => {
     for (const r of ["/[orderId]/page.tsx", "/quotations/[id]/page.tsx", "/price-lists/[id]/page.tsx", "/packing/[shipmentId]/page.tsx", "/shipments/[shipmentId]/page.tsx", "/returns/[returnId]/page.tsx"]) {
-      expect(readFileSync(join(ROOT, r), "utf8"), r).toMatch(/whoDoes\(ctx, "/);
+      // ADR-109: approvals and the box check name the next people with `nextActors` (<NextApprover>), other waits with whoDoes.
+      expect(readFileSync(join(ROOT, r), "utf8"), r).toMatch(/whoDoes\(ctx, "|<NextApprover /);
     }
   });
 

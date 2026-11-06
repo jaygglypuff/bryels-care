@@ -93,15 +93,15 @@ export default async function PaymentPage({ params, searchParams }: { params: Pr
       {canSubmit ? (
         <NextStepBox text="Next: send this payment for approval.">{doNow}</NextStepBox>
       ) : p.status === "draft" ? (
-        <NextStep text="This payment is a draft." waitingFor={await waitingFor(ctx, "finance.payment_record.create", null, "to send it for approval", "finance")} />
+        <NextStep text="This payment is a draft." waitingFor={await waitingFor(ctx, "finance.payment_record.create", p.siteId, "to send it for approval", "finance")} />
       ) : canDecide ? (
         <NextStepBox text="Next: approve this payment, or send it back with what to change.">{doNow}</NextStepBox>
       ) : p.status === "submitted" ? (
-        <NextStep text="This payment waits for approval." waitingFor={`${(await approvalWaiting(ctx, "finance.payment_record.approve", d.progress))} The person who typed it cannot approve it.`} />
+        <NextStep text="This payment waits for approval." waitingFor={`${(await approvalWaiting(ctx, "finance.payment_record.approve", d.progress, { siteId: p.siteId, exclude: [p.createdBy, p.submittedBy], pendingSince: p.submittedAt }))} The person who typed it cannot approve it.`} />
       ) : canRecord ? (
         <NextStepBox text="Next: save it to the books. Then the invoices or bills it pays are marked paid.">{doNow}</NextStepBox>
       ) : p.status === "approved" ? (
-        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You approved it, so another finance person saves it to the books (above the set amount)." : await waitingFor(ctx, "finance.payment_record.post", null, "to save it to the books", "finance")} />
+        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You approved it, so another finance person saves it to the books (above the set amount)." : await waitingFor(ctx, "finance.payment_record.post", p.siteId, "to save it to the books", "finance", { exclude: [...(d.progress && !d.progress.posterMayEqualApprover ? d.progress.approvers : [])], operational: true })} />
       ) : (
         <NextStep text={p.status === "recorded" ? "Saved to the books. Nothing more to do." : p.status === "voided" ? "Cancelled (kept on record). The invoices or bills it paid are open again." : "Cancelled before it was saved to the books. Nothing more to do."} />
       )}

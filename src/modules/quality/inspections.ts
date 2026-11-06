@@ -31,6 +31,7 @@ import { postMovement } from "@/modules/inventory/ledger";
 import { equipmentAvailability, getInspectionPlan } from "@/modules/masterdata";
 import { paperRecordBlockers, transitionBatch } from "@/modules/production";
 import { openDeviation } from "./deviations";
+import { notifyReviewDone, notifyReviewNeeded } from "./review-handoff";
 import {
   INSPECTION_OPEN_STATUSES,
   INSPECTION_STATUS_LABEL,
@@ -359,7 +360,10 @@ async function maybeAdvance(tx: Tx, ctx: AuthContext, ins: InspectionRow) {
   if (ins.status !== "in_progress") return;
   const tests = await planTests(tx, ins.inspectionPlanId);
   const live = liveResults(await inspectionResults(tx, ins.id));
-  if (live.length > 0 && missingRequiredTests(tests, live).length === 0) await moveInspection(tx, ctx, ins, "awaiting_review", "Every required test has a result");
+  if (live.length > 0 && missingRequiredTests(tests, live).length === 0) {
+    await moveInspection(tx, ctx, ins, "awaiting_review", "Every required test has a result");
+    await notifyReviewNeeded(tx, ctx, ins); // ADR-109: the second QA person is told
+  }
 }
 
 async function checkInstrument(tx: Tx, ctx: AuthContext, ins: InspectionRow, equipmentId: string | null | undefined) {
@@ -525,6 +529,7 @@ export async function submitInspection(ctx: AuthContext, input: { inspectionId: 
     const missing = missingRequiredTests(tests, live);
     if (live.length === 0 || missing.length) throw new DomainError("state", `Enter every required test first${missing.length ? ` (missing: ${missing.map((m) => m.name).join(", ")})` : ""}.`);
     await moveInspection(tx, ctx, ins, "awaiting_review", "Submitted for review");
+    await notifyReviewNeeded(tx, ctx, ins); // ADR-109: the second QA person is told
     await audit(tx, ctx, { action: "quality.inspection.submitted", entityType: "inspection", entityId: ins.id, entityNumber: ins.inspectionNumber, siteId: ins.siteId, after: { status: "awaiting_review" } });
     return { status: ins.status };
   });
@@ -603,6 +608,7 @@ export async function reviewInspection(ctx: AuthContext, input: { inspectionId: 
       reason: note,
       after: { status: ins.status, decision: input.decision, liveResults: live.length, failed: live.filter((r) => !r.passed).length, batchStatus: batchNote },
     });
+    await notifyReviewDone(tx, ctx, ins, input.decision); // C9(c): second QA done → the first QA person
     return { status: ins.status, batchStatus: batchNote };
   });
 }

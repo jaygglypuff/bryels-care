@@ -40,7 +40,7 @@ export default async function FormulaRevisionPage({ params }: { params: Promise<
   const canChange = ctx.can("masterdata.formula.create") && ctx.can("masterdata.formula.edit") && ctx.can("masterdata.routing.create") && ctx.can("masterdata.routing.edit") && ctx.can("masterdata.routing.view");
   const wizardNew = `/masterdata/recipes/${v.formula.id}?new=1`;
   const nextPolicy = v.approval.nextStep ? v.approval.policy.find((p) => p.step === v.approval.nextStep!.step) : null;
-  const waiting = r.status === "pending_approval" && !v.approval.canDecide ? await waitingForApprover(ctx, "masterdata.formula.approve", nextPolicy, v.approval.policy.length) : null;
+  const waiting = r.status === "pending_approval" && !v.approval.canDecide ? await waitingForApprover(ctx, "masterdata.formula.approve", nextPolicy, v.approval.policy.length, { exclude: [r.createdBy, r.submittedBy], prior: v.approval.decisions.map((d) => d.decidedBy) }) : null;
   const ingredients = v.lines.filter((l) => !l.isPackaging);
   const packaging = v.lines.filter((l) => l.isPackaging);
   const hasMore = v.can.withdraw || v.can.retire || (v.can.edit && !r.submittedAt);

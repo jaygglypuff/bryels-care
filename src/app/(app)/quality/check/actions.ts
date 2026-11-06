@@ -4,6 +4,7 @@ import { toActionState, type ActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
 import { correctTestResult, decideQualityCheck, decideResultCorrection, recordInspectionResults, requestResultCorrection, type QualityCheckDecision } from "@/modules/quality";
 import { registerAppHooks } from "@/modules/wiring";
+import { nextActors } from "@/modules/governance";
 
 // Quality ↔ production hooks (idempotent; also registered at server start): the pass closes the batch through them.
 registerAppHooks();
@@ -77,7 +78,9 @@ export async function correctResultAction(_: ActionState, fd: FormData): Promise
     if (str(fd, "decided") === "1") {
       const r = await requestResultCorrection(ctx, input);
       refreshCurrentPage();
-      return { ok: true, message: `Asked a second QA person to approve the correction (batch ${r.batchNumber}).` };
+      // ADR-109: who approves the correction, by name (another QA person, never the one who asked).
+      const next = await nextActors(ctx, "qa_result_correction", { siteId: r.siteId, excludeUserIds: [ctx.userId] }).catch(() => null);
+      return { ok: true, message: `Asked a second QA person to approve the correction (batch ${r.batchNumber}).`, next };
     }
     await correctTestResult(ctx, input);
     refreshCurrentPage();

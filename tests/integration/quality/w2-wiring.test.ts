@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
-import { auditEvents, batchMaterials, batches, deviations, dispenseRecords, inspectionPlanTests, inspectionPlans, inspections, materials, processStepRecords, products, settings } from "@/db/schema";
+import { auditEvents, batchMaterials, batches, deviations, dispenseRecords, inspectionPlanTests, inspectionPlans, inspections, materials, notifications, processStepRecords, products, settings } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { buildBmrDataset, completeStep, createBatch, issuePaperPage, openDeviationNumbers, recordDispense, recordReading, resetExecutionHooks, startBatch, startStep, submitChecklist, voidDispense } from "@/modules/production";
 import { createInspection, getBatchRelease, recordInspectionResult, reviewInspection, traceGenealogy } from "@/modules/quality";
@@ -256,7 +256,14 @@ describe("in-process inspection gates a step", () => {
     const id = await inspect(batchId, recId, true);
     e = await expectCode(completeStep(operator, { batchId, stepNo: 2 }, { checker }), "state");
     expect(e.message).toMatch(/not complete|awaiting review/i);
+    // ADR-109 / C9(c): results complete → the second QA person is told (never the tester); reviewed → the tester is told.
+    const review = await db.select().from(notifications).where(and(eq(notifications.entityId, id), eq(notifications.kind, "handoff.qa_review")));
+    expect(review.map((n) => n.recipientUserId)).toContain(qaLead.userId);
+    expect(review.map((n) => n.recipientUserId)).not.toContain(qa.userId);
     await reviewInspection(qaLead, { inspectionId: id, decision: "approve" });
+    const done = await db.select().from(notifications).where(and(eq(notifications.entityId, id), eq(notifications.kind, "handoff.qa_review_done")));
+    expect(done.map((n) => n.recipientUserId)).toEqual([qa.userId]);
+    expect(done[0].link).toBe(`/quality/check/${batchId}`);
     expect((await db.select().from(batches).where(eq(batches.id, batchId)))[0].status).toBe("in_process");
     expect((await completeStep(operator, { batchId, stepNo: 2 }, { checker })).status).toBe("completed");
   });

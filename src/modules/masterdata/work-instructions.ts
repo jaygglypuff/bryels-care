@@ -9,7 +9,7 @@ import { DomainError } from "@/lib/errors";
 import { assignMasterCode } from "@/lib/numbering";
 import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { CreateWorkInstructionInput, DecisionInput, SaveWorkInstructionDraftInput, parseInput } from "./schemas";
-import { approvalState, assertDraft, assertVersionTransition, businessToday, approvalSodConflict, canDecideStep, effectiveLabel, isIsoDate, recordApprovalDecision, supersedeOverlapping } from "./versioning";
+import { approvalState, assertDraft, assertVersionTransition, businessToday, approvalSodConflict, canDecideStep, effectiveLabel, isIsoDate, notifyRevisionApprovers, recordApprovalDecision, supersedeOverlapping } from "./versioning";
 
 /**
  * Work instructions (US-3-02): controlled step text, versioned like formulas. One approval by a
@@ -100,6 +100,7 @@ export async function submitWorkInstructionRevision(ctx: AuthContext, revisionId
       before: { status: rev.status, revisionNo: rev.revisionNo },
       after: { status: "pending_approval", revisionNo: rev.revisionNo },
     });
+    await notifyRevisionApprovers(tx, ctx, "work_instruction_revision", { recordId: rev.id, name: `How-to sheet ${lbl(wi.code, rev.revisionNo)}`, link: `/masterdata/work-instructions/${wi.id}`, siteId: null, exclude: [rev.createdBy] });
     return { status: "pending_approval" as const };
   });
 }
@@ -114,7 +115,7 @@ export async function decideWorkInstructionRevision(ctx: AuthContext, raw: unkno
     const today = businessToday();
     const effectiveFrom = input.effectiveFrom ?? today;
     if (input.decision === "approved" && (!isIsoDate(effectiveFrom) || effectiveFrom < today)) throw new DomainError("validation", "The effective date cannot be in the past.");
-    const d = await recordApprovalDecision(tx, ctx, { recordType: "work_instruction_revision", recordId: rev.id, excludedUserIds: [rev.createdBy, rev.submittedBy], decision: input.decision, note: input.note });
+    const d = await recordApprovalDecision(tx, ctx, { recordType: "work_instruction_revision", recordId: rev.id, recordNumber: `How-to sheet ${lbl(wi.code, rev.revisionNo)}`, excludedUserIds: [rev.createdBy, rev.submittedBy], decision: input.decision, note: input.note });
     const base = { entityType: "work_instruction_revision", entityId: rev.id, entityNumber: name, siteId: null } as const;
     if (d.rejected) {
       await tx.update(workInstructionRevisions).set({ status: "rejected", approvalNote: input.note }).where(eq(workInstructionRevisions.id, rev.id));

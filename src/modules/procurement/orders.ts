@@ -33,6 +33,7 @@ import { documentsForSourceRead, generateForSource, resolveTemplateVersion, type
 import type { PoReceiptLine, ReceivingPoHooks } from "@/modules/inventory";
 import { toCsv } from "@/modules/masterdata";
 import { notifyRoles } from "@/modules/platform";
+import { notifyNextActors } from "@/modules/governance";
 import { approvalProgress, canDecide, decisionsOf, recordDecision } from "./approvals";
 import { assertAslApproved, moqShortfall, priceFor } from "./asl";
 import { PO_STATUS_LABEL, type PoStatus, logCreation, transitionPo, transitionPr } from "./state";
@@ -431,6 +432,16 @@ export async function sendPurchaseOrder(ctx: AuthContext, input: { purchaseOrder
       const doc = await renderPoDocument(tx, ctx, po, null);
       await tx.update(purchaseOrders).set({ generatedDocumentId: doc.id }).where(eq(purchaseOrders.id, po.id));
       await audit(tx, ctx, { action: "procurement.purchase_order.sent", entityType: "purchase_order", entityId: po.id, entityNumber: po.poNumber, siteId: po.siteId, after: { documentNumber: doc.documentNumber, sentTo: to, total: po.totalAmount } });
+      // C9(a) / ADR-109: the warehouse is told what is coming and when ("Delivery coming on 8 Nov").
+      const due = po.expectedDate ? new Date(`${po.expectedDate}T00:00:00+08:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Manila" }) : null;
+      await notifyNextActors(tx, ctx, "delivery_coming", { siteId: po.siteId, excludeUserIds: [ctx.userId] }, {
+        title: due ? `Delivery coming on ${due}: ${s.name}` : `Delivery coming: ${s.name}`,
+        body: `Purchase order ${po.poNumber} was sent to the supplier. Receive it against this order when it arrives.`,
+        link: `/inventory/receive?po=${po.id}`,
+        entityType: "purchase_order",
+        entityId: po.id,
+        dedupeKey: `handoff.delivery_coming:${po.id}`,
+      });
       const lines = await tx.select({ l: purchaseOrderLines, code: materials.code, name: materials.name }).from(purchaseOrderLines).innerJoin(materials, eq(materials.id, purchaseOrderLines.materialId)).where(eq(purchaseOrderLines.purchaseOrderId, po.id)).orderBy(asc(purchaseOrderLines.lineNo));
       const text = [
         `Purchase order ${po.poNumber}`,

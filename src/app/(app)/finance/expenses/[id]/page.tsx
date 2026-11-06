@@ -106,15 +106,15 @@ export default async function ExpensePage({ params, searchParams }: { params: Pr
       ) : canDecide ? (
         <NextStepBox text="Next: approve this claim, send it back, or say no.">{doNow}</NextStepBox>
       ) : c.status === "submitted" ? (
-        <NextStep text="This claim waits for approval." waitingFor={d.isClaimant ? `${(await approvalWaiting(ctx, "finance.expense_claim.approve", d.progress))} You cannot approve your own claim.` : (await approvalWaiting(ctx, "finance.expense_claim.approve", d.progress))} />
+        <NextStep text="This claim waits for approval." waitingFor={d.isClaimant ? `${(await approvalWaiting(ctx, "finance.expense_claim.approve", d.progress, { siteId: c.siteId, exclude: [c.claimantUserId], pendingSince: c.submittedAt }))} You cannot approve your own claim.` : (await approvalWaiting(ctx, "finance.expense_claim.approve", d.progress, { siteId: c.siteId, exclude: [c.claimantUserId], pendingSince: c.submittedAt }))} />
       ) : canPost ? (
         <NextStepBox text="Next: save it to the books. Then the person can be paid back.">{doNow}</NextStepBox>
       ) : c.status === "approved" ? (
-        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You claimed or approved it, so another finance person saves it to the books." : await waitingFor(ctx, "finance.expense_claim.post", null, "to save it to the books", "finance")} />
+        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You claimed or approved it, so another finance person saves it to the books." : await waitingFor(ctx, "finance.expense_claim.post", c.siteId, "to save it to the books", "finance", { exclude: [...(d.progress && !d.progress.posterMayEqualApprover ? d.progress.approvers : []), c.claimantUserId], operational: true })} />
       ) : canPay ? (
         <NextStep text={`Next: pay ${claimant} back, then save the payment.`} action={{ label: "Pay back", href: payHref }} />
       ) : c.status === "posted" ? (
-        <NextStep text="In the books." waitingFor={await waitingFor(ctx, "finance.payment_record.create", null, "to pay it back", "finance")} />
+        <NextStep text="In the books." waitingFor={await waitingFor(ctx, "finance.payment_record.create", c.siteId, "to pay it back", "finance")} />
       ) : (
         <NextStep text={c.status === "paid" ? "Paid back. Nothing more to do." : c.status === "rejected" ? "Not approved. Nothing more to do; make a new claim if something was missing." : "Cancelled. Nothing more to do."} />
       )}

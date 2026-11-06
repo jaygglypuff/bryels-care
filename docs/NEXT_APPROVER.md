@@ -17,7 +17,7 @@ who is next, by name and role, and what they must do. The next people get a mess
 | `notifyNextActors(tx, ctx, kind, record, msg)` | same file | Sends one in-app message per person and dedupe key, inside the caller's transaction. The actor is never told about their own hand-off. Message kind is `handoff.<kind>`. |
 | Words | `src/lib/next-actors-words.ts` | Client-safe. `nextActorsSentence`, `peopleWords` (first names and a role word, at most 3 names then "or 2 others", full names only when two first names are the same), `waitingForNames`. |
 | UI | `src/ui/next-approver.tsx` `<NextApprover next inline?>` | Used in success messages (`ActionState.next`, shown by `FormMessage`), in the record's "What to do next"/"Waiting for" line (inline), and in the floor weigh and step cards. |
-| Record helpers | `procurementNextActors` (procurement), `adjustmentNextActors` (inventory), `floorCheckNext`, `productionOrderNext`, `batchQaNext` (production) | Read the record, then call `nextActors` with the same steps and excluded people as the module's "To approve" verdict. |
+| Record helpers | `procurementNextActors` (procurement), `adjustmentNextActors`, `countNextActors` (inventory), `floorCheckNext`, `productionOrderNext`, `batchQaNext` (production), `salesNextActors`, `packCheckNext` (sales), `settingChangeNext` (governance), `notifyRevisionApprovers` (master data), `notifyReviewNeeded` / `notifyReviewDone` (quality) | Read the record, then call `nextActors` with the same steps and excluded people as the module's "To approve" verdict or the deciding service. `nextActors` also takes an ad-hoc rule (`AdHocHandoff`), and `roleStandIn: false` keeps the step roles as configured. |
 
 Sentences:
 
@@ -32,50 +32,69 @@ Role words: owner, site manager, operator, warehouse, QA, sales, finance, purcha
 
 ## Inventory of hand-offs
 
-✓ = yes, ✗ = no, ~ = partly. "before → after" means the state before and after this change.
+✓ = yes, ✗ = no, ~ = partly, n/a = there is no hand-off. "first → now" shows the state before ADR-109 and the state
+after the second slice (2026-11-06). Every message is in-app, links to the exact record and is sent once per hand-off
+(dedupe key).
 
-| # | Hand-off | Who can act (rule) | Where they see it | Notified? before → after | Actor's success message names next? before → after | Record names next? before → after |
+| # | Hand-off | Who can act (rule) | Where they see it | Notified? first → now | Actor's success message names next? | Record names next? |
 |---|---|---|---|---|---|---|
-| 1 | Weighing check (second person) | `production.dispense_record.approve` at the batch site; never the weigher (owner included) | Home "Check a weighing" (now also on orders assigned to someone else), Weigh screen | ✗ → ✓ once per batch weighing step | ✗ ("Second check needed") → ✓ | ~ (name buttons only) → ✓ in the Second check panel |
-| 2 | Step check / step sign-off | `production.process_step_record.approve` at the site; never the person who did the step | Home "Check <step>", step screen | ✗ → ✓ each time the step waits | ✗ ("Waiting for the second check") → ✓ | ✗ → ✓ on the step card |
-| 3 | Start check (line clearance) | `production.line_clearance.approve`; never the person who answered | Home, first step screen | ✗ → ✓ | ✗ → ✓ | ✗ → ✓ on the step card |
-| 4 | Out-of-range weighing approval | `production.over_tolerance_dispense.approve`, picks their name on the same tablet | Same tablet (co-sign) | n/a (same device, no waiting) | ~ (approver picker lists names) | ~ unchanged. Kind registered, not wired |
-| 5 | Other material at weighing (QA) | `production.material_substitution.approve` at the site | To approve | ✓ (existing) | ✗ → ✓ | ✗ unchanged on the weigh card |
-| 6 | Production order approval | `production.work_order.approve` at the site; the maker excluded when `approvals.sod.work_order_release` is on; ADR-091 top roles may approve their own | To approve, order page | ✓ (existing) | n/a (redirect to the order page) | ~ (WhoCanHelp by permission, no same-person rule) → ✓ on "Next step" with "You can approve this yourself…" |
-| 7 | Batch QA decision | `quality.disposition.approve` at the site (QA) | Check quality | ✗ → ✓ once per batch, at Finish | ~ ("waiting for the quality check") → ✓ names on the "Batch finished" banner | ✗ unchanged on the batch record |
-| 8 | QA result correction | `quality.disposition.approve`, another QA person | Check quality | ✓ (existing) | ✗ unchanged | ✗ unchanged. Kind registered |
-| 9 | Lot QA release (receipt) | `quality.disposition.approve` | Check quality | ✓ (existing, receiving) | ✗ unchanged | ✗ unchanged. Kind registered |
-| 10 | Stock adjustment (step 1 site manager, step 2 owner) | `inventory.adjustment.approve` and step roles; never the maker or the step-1 approver (ADR-091 top roles excepted) | To approve | ✗ → ✓ at send (step 1) | ✗ unchanged | ~ (fixed role words) → ✓ names |
-| 11 | Count differences | `inventory.stock_count.approve` and step roles | To approve | ✗ unchanged | ✗ unchanged | ~ unchanged. Kind registered |
-| 12 | Purchase request | `procurement.purchase_request.approve` and step roles; never the requester, creator, submitter or an earlier approver (ADR-091) | To approve | ✓ (existing, by role) | ✗ → ✓ (send and step approve) | ~ (everyone holding the permission, any step) → ✓ step roles |
-| 13 | Purchase order (step 1 site manager, step 2 owner); then sending | `procurement.purchase_order.approve` and step roles; then `procurement.purchase_order.post` | To approve, order page | ✓ (existing, by role, both steps) | ✗ ("the next approver is notified") → ✓ names and step | ~ (permission only, owner shown at step 1) → ✓ step roles, also in "Saved and sent for approval" |
-| 14 | Supplier return | `procurement.supplier_return.approve` and step roles | To approve | ✓ (existing) | ✗ → ✓ | ~ → ✓ |
-| 15 | Quotation (price offer) | `sales.quote.approve` and step roles | To approve | ✓ (existing) | ✗ unchanged | ~ unchanged (sales `DoNext`). Kind registered |
-| 16 | Customer order credit/approval | `sales.sales_order.approve` and step roles | To approve | ✓ (existing) | ✗ unchanged | ~ unchanged. Kind registered |
-| 17 | Price list | `sales.price_list.approve` (owner) | To approve | ✓ (existing) | ✗ unchanged | ~ unchanged. Kind registered |
-| 18 | Customer requirement | `masterdata.customer_requirement.approve` | To approve | ✗ unchanged | ✗ unchanged | ~ unchanged. Kind registered |
-| 19 | Expense claim | `finance.expense_claim.approve` and step roles | To approve | ✓ (existing `notifyNextStep`) | ✗ unchanged | ✓ (existing `approvalWaiting`, names by step role, no same-person filter) |
-| 20 | Invoice / bill / payment / credit approvals | `finance.*.approve` and step roles; poster ≠ approver | To approve | ✓ (existing) | ✗ unchanged | ✓ (existing `approvalWaiting` / `waitingFor`) |
-| 21 | Recipe / steps / how-to sheet / check plan revisions (QA, then manager) | `masterdata.formula.approve`, `masterdata.routing.approve`, `masterdata.work_instruction.approve`, `quality.inspection_plan.approve` and step roles | To approve | ✗ unchanged | ✗ unchanged | ✓ (existing `waitingForApprover`, names by step role) |
-| 22 | Settings change requests | `platform.settings.approve` (owner for restricted keys) | To approve | ✗ unchanged | ✗ unchanged | ✗ unchanged. Kind registered |
-| 23 | Reopen requests (month unlock) | second approver role | Finance › Periods | ✓ (existing) | ✗ unchanged | ✗ unchanged |
-| 24 | Label reprint | no approval step in the code today (reprints are audited, not approved) | — | n/a | n/a | n/a |
-| 25 | Second check of a box (packing) | `inventory.pack.approve`, not the packer | Packing | ✗ unchanged | ✗ unchanged | ~ unchanged. Kind registered |
-| 26 | Delivery proof | sales/warehouse, after delivery | Order page | ✓ (existing) | n/a | ~ unchanged |
+| 1 | Weighing check (second person) | `production.dispense_record.approve` at the batch site; never the weigher (owner included) | Home "Check a weighing" (also on orders assigned to someone else), Weigh screen | ✗ → ✓ once per batch weighing step | ✗ → ✓ Second check panel | ~ → ✓ |
+| 2 | Step check / step sign-off | `production.process_step_record.approve`; never the person who did the step | Home "Check <step>", step screen | ✗ → ✓ | ✗ → ✓ | ✗ → ✓ step card |
+| 3 | Start check (line clearance) | `production.line_clearance.approve`; never the person who answered | Home, first step screen | ✗ → ✓ | ✗ → ✓ | ✗ → ✓ step card |
+| 4 | Weight outside the range | `production.over_tolerance_dispense.approve`; never the person weighing; they sign on the same tablet | Same tablet (co-sign) | n/a (same device, no waiting) | ~ → ✓ the approver picker plus a "Next:" line on "Other ways to weigh" | ~ → ✓ "If the weight is outside the range: Next: …" |
+| 5 | Other material at weighing (QA) | `production.material_substitution.approve` at the site (QA) | To approve | ✓ | ✗ → ✓ | ✓ the weigh card names the QA people ("Waiting for QA (Nina) to say yes") |
+| 6 | Production order approval | `production.work_order.approve`; the maker is excluded when `approvals.sod.work_order_release` is on; ADR-091 | To approve, order page | ✓; **new**: the assigned operator is told when the order is approved (C9 h) | n/a (opens the order page) | ~ → ✓ "Next step", with "You can approve this yourself…" |
+| 7 | Batch QA decision | `quality.disposition.approve` at the site (QA) | Check quality | ✗ → ✓ once per batch, at Finish (C9 d) | ~ → ✓ "Batch finished" banner | ✗ → ✓ Check quality "Decision" card. On a QA pass, warehouse and sales get "<order> can now be set aside" (C9 e) |
+| 8 | QA result correction (second QA) | `quality.disposition.approve`, never the QA person who asked | Check quality | ✓ | ✗ → ✓ | ✗ → ✓ on the waiting correction |
+| 8b | Test results → second QA review → back to the tester | `quality.inspection.approve`, never anyone who entered a result | Check quality (batch or lot) | ✗ → ✓ when the results are complete; the tester is told the review outcome (C9 c) | n/a | ✓ (inspection "Review" panel) |
+| 9 | Lot QA release (delivery) | `quality.disposition.approve` at the site (QA) | Check quality, the lot itself | ~ (one message, whole queue) → ✓ one message per lot, opening that lot (C9 b) | n/a (receiving) | ✓ QA lot page lists QA people by name (`WhoCanHelp`, QA-only permission). Its "Next" line belongs to C14 (other engineer) |
+| 10 | Stock fix (step 1 any approver, step 2 owner); then posting | `inventory.adjustment.approve` and step roles as configured (no owner stand-in, as the service); never the maker or the step-1 approver; then `inventory.adjustment.post` | To approve, the fix | ✗ → ✓ at send and after step 1 (step 2 or posting) | ✗ → ✓ send and approve | ~ → ✓ waiting and approved |
+| 11 | Count differences (step 1, owner step 2); then posting | `inventory.stock_count.approve` and step roles; never a counter; then `inventory.stock_count.post` | To approve, the count | ✗ → ✓ at submit and after step 1 | ✗ → ✓ submit and approve | ~ → ✓ |
+| 12 | Purchase request | `procurement.purchase_request.approve` and step roles; never requester/creator/submitter or an earlier approver (ADR-091) | To approve | ✓ | ✗ → ✓ | ~ → ✓ |
+| 13 | Purchase order (step 1 site manager, step 2 owner); sending; delivery coming | approve and step roles; then `procurement.purchase_order.post`; then the warehouse (`procurement.goods_receipt.create`) | To approve, order page, Receiving | ✓; **new**: "Delivery coming on 8 Nov: <supplier>" to the warehouse when sent (C9 a) | ✗ → ✓ | ~ → ✓ |
+| 14 | Supplier return | `procurement.supplier_return.approve` and step roles | To approve | ✓ | ✗ → ✓ | ~ → ✓ |
+| 15 | Quotation (price offer) | `sales.quote.approve` and step roles; creator/submitter excluded when `approvals.sod.quote` is on (ADR-091) | To approve | ✓ | ✗ → ✓ send and approve | ~ → ✓ |
+| 16 | Customer order credit/approval | `sales.sales_order.approve` and step roles; same rule | To approve | ✓ | ✗ → ✓ step approve (send opens the order page, which names them) | ~ → ✓ |
+| 17 | Price list | `sales.price_list.approve` and step roles; never its maker, sender or last editor (ADR-091: the owner may) | To approve | ✓ | ✗ → ✓ | ~ → ✓ |
+| 18 | Customer requirement | `masterdata.customer_requirement.approve`; never the maker or sender (ADR-091 owner excepted) | To approve, customer page | ✗ → ✓ | ✗ → ✓ | ~ → ✓ on each waiting requirement |
+| 19 | Expense claim | `finance.expense_claim.approve` and step roles; never the claimant (ADR-091) | To approve | ✓ | ✗ → ✓ send and approve; then who posts | ✓ → ✓ now with the same-person rule (`approvalNext`) |
+| 20 | Invoice / bill / payment / credit approvals, then posting | `finance.*.approve` and step roles as configured; never creator/submitter or an earlier approver; posting `finance.*.post`, never an approver when the rules forbid it | To approve | ✓ | ✗ → ✓ send, approve, accept difference | ✓ → ✓ now with the same-person rule |
+| 21 | Recipe / steps / how-to sheet / check plan revisions (QA, then manager) | step permission and roles; a QA step is independent; other steps follow ADR-091; never the maker, sender or an earlier approver | To approve, the version | ✗ → ✓ at send and after each step | ~ (page shows the next line after the reload) | ✓ → ✓ now with the same-person rule (`waitingForApprover`) |
+| 22 | Settings change request | `platform.settings.approve` with the rule's roles (owner or a second administrator); owner-only settings: the owner; never the submitter | Management › Settings, "Waiting for OK" | ✗ → ✓ | ✗ → ✓ | ✗ → ✓ on each waiting change |
+| 23 | Month reopen (period unlock) | second approver role (finance rules) | Finance › Periods | ✓ (existing) | ~ unchanged | ~ unchanged: not named in this slice |
+| 24 | Label reprint | no approval step exists (reprints are audited, not approved) | — | n/a | n/a | n/a |
+| 25 | Second check of the boxes (delivery or warehouse pack) | `inventory.pack.approve`; never the picker, a scanner or the packer (independent) | Packing, Home | ✗ → ✓ when the pick is complete (C9 f) or a pack is sent for checking; then the dispatcher is told when checked (C9 g) | n/a | ~ → ✓ packing page, pack page, order page |
+| 26 | Delivery proof | dispatch, after delivery | Order page | ✓ (existing) | n/a | ~ unchanged |
 
-### Still to do (next slice)
+### The older "Waiting for" helpers now use `nextActors`
 
-Wire `nextActors` into rows 4, 5 (record), 7 (batch record), 8, 9, 11, 15 to 18, 22, 25, and the finance and master-data
-success messages. The older helpers (`waitingFor`, `approvalWaiting`, `waitingForApprover`) list names by permission and
-role but do not apply the same-person rule. Move them onto `nextActors` so a requester is never named as their own
-approver (except under ADR-091). Notify on rows 11, 18, 21, 22 and 25.
+| Helper | Used on | Same-person rule now |
+|---|---|---|
+| `waitingFor(ctx, permission, siteId, verb, fallback, { exclude, roleCodes, operational })` (`src/app/(app)/waiting-for.ts`) | drafts, posting steps and setup pages across the app | The viewer is never named. `exclude` leaves out the requester or approver, with ADR-091 when `operational`. Pages that pass no `exclude` (setup and maintenance waits) have no same-person rule. |
+| `approvalNext` / `approvalWaiting` / `financeNext` (`src/app/(app)/finance/approval-waiting.ts`) | finance documents | creator and submitter (claimant on claims), earlier approvers, step roles as configured |
+| `waitingForApprover(..., { exclude, prior })` (`src/app/(app)/masterdata/_eng/waiting.ts`) | recipe, steps, how-to sheet, check plan versions | maker and sender, earlier approvers; a QA step is independent |
+
+### Open
+
+- Row 23 (month reopen) and row 26 (delivery proof) still use their own words.
+- The QA lot page "Next" line (row 9) is owned by C14.
+- The step "end early" approval form names approvers only in its picker.
 
 ## Tests
 
-- `tests/unit/next-actors-words.test.ts`: names, role words, the 3-name limit and "or N others", the step suffix, ADR-091 wording, viewer wording and the "nobody yet" wording.
+- `tests/unit/next-actors-words.test.ts`: names, role words, the 3-name limit, the step suffix, the ADR-091, viewer and "nobody yet" wording.
 - `tests/integration/governance/next-actors.test.ts`:
-  - Weighing check: the weigher and people at the other site are never named. The checker is notified once across two weighings and sees "Check" on Home.
-  - Start check: the checkers are notified, the person who answered is not.
-  - Purchase order: step 1 names the site manager only, step 2 names the owner only, and the step-1 approver cannot decide step 2.
-  - QA decision: only QA people are named.
-  - ADR-091: the site manager's own production order reads "You can approve this yourself because you are the site manager.", and a planner's order names the approvers but not the planner.
+  - Weighing check, with the notification sent once and the checker's Home task.
+  - Start check.
+  - Purchase order: step 1 the site manager, step 2 the owner, then who sends it and "Delivery coming" to the warehouse.
+  - QA decision names QA only.
+  - ADR-091 self-approval.
+- `tests/integration/governance/next-actors-families.test.ts`:
+  - Stock fix: neither the maker nor the other site is named, step 2 is the owner, the step-1 approver is not asked again, each message is sent once, then who saves it.
+  - Count: the counter is never named and is never told.
+  - Expense claim: the claimant is never named; `waitingFor` honours `exclude`.
+  - Customer requirement: the sender is not named and the approvers are told once.
+  - Owner-only setting: only the owner is named and told.
+  - Recipe: QA is told first, never the maker; the QA approver and the maker are not asked at step 2; `waitingForApprover` leaves out the maker.
+- `tests/integration/quality/w2-wiring.test.ts`: complete results tell the second QA person (not the tester); the review tells the tester.
+- `tests/integration/inventory/receipt-qa-notify.test.ts`: one message per lot, opening the lot.

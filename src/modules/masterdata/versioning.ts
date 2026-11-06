@@ -4,7 +4,7 @@ import type { DbOrTx, Tx } from "@/db/client";
 import { approvalDecisions, users } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { evaluateApprovalRulesAudited } from "@/modules/governance";
+import { HANDOFFS, type HandoffKind, evaluateApprovalRulesAudited, notifyNextActors } from "@/modules/governance";
 import { type ApprovalRecordType, type ApprovalRuleType, type ApprovalStepPolicy, loadApprovalPolicy, toStepPolicy } from "./approval-policy";
 
 /**
@@ -142,6 +142,8 @@ export async function recordApprovalDecision(
     decision: "approved" | "rejected";
     note?: string | null;
     policy?: ApprovalStepPolicy[];
+    /** For the next approvers' message ("Recipe F-ACS-135 v3"). */
+    recordNumber?: string;
     /** Rule document type when it differs from the record type (sequencing-only routing change). */
     ruleType?: ApprovalRuleType;
   },
@@ -179,7 +181,10 @@ export async function recordApprovalDecision(
   });
   const lastStep = Math.max(...state.policy.map((p) => p.step));
   const approvedHere = state.decisions.filter((d) => d.decision === "approved" && d.step === step.step).length + 1;
-  return { step, final: args.decision === "approved" && step.step === lastStep && approvedHere >= (step.requiredCount ?? 1), rejected: args.decision === "rejected" };
+  const final = args.decision === "approved" && step.step === lastStep && approvedHere >= (step.requiredCount ?? 1);
+  // Hand-off (ADR-109): a step approved and another one open: tell its approvers (never the requester, never this approver).
+  if (args.decision === "approved" && !final) await notifyRevisionApprovers(tx, ctx, args.recordType, { recordId: args.recordId, name: args.recordNumber ?? "A version", link: "/approvals", siteId: args.siteId ?? null, exclude: args.excludedUserIds, policy: state.policy });
+  return { step, final, rejected: args.decision === "rejected" };
 }
 
 /**
@@ -208,4 +213,37 @@ export async function supersedeOverlapping(
     closed.push({ id: r.id, revisionNo: Number(r.revision_no) });
   }
   return closed;
+}
+
+const REVISION_KIND: Partial<Record<ApprovalRecordType, HandoffKind>> = {
+  formula_revision: "recipe_revision",
+  routing_revision: "routing_revision",
+  work_instruction_revision: "work_instruction_revision",
+  inspection_plan: "inspection_plan_revision",
+};
+
+/**
+ * Tells the people who decide the open approval step of a version (ADR-109, docs/NEXT_APPROVER.md): the step's
+ * permission and roles, never the person who made or sent it (`exclude`) nor an earlier step's approver. A step that
+ * names QA keeps the independent second person; other steps follow ADR-091. Once per step and send.
+ */
+export async function notifyRevisionApprovers(
+  tx: DbOrTx,
+  ctx: AuthContext,
+  recordType: ApprovalRecordType,
+  a: { recordId: string; name: string; link: string; siteId: string | null; exclude: readonly (string | null | undefined)[]; policy?: ApprovalStepPolicy[] },
+): Promise<string[]> {
+  const kind = REVISION_KIND[recordType];
+  if (!kind) return [];
+  const state = await approvalState(tx, ctx.organizationId, recordType, a.recordId, a.policy);
+  const step = state.nextStep;
+  if (!step) return [];
+  const qa = step.roles.includes("qa_qc");
+  return notifyNextActors(
+    tx,
+    ctx,
+    { ...HANDOFFS[kind], kind, independent: qa, operational: !qa },
+    { siteId: a.siteId, roleCodes: step.roles, permission: step.permission, excludeUserIds: [...a.exclude, ctx.userId], priorApproverIds: state.decisions.filter((d) => d.decision === "approved").map((d) => d.decidedBy), stepNo: step.step, stepsTotal: state.policy.length, roleStandIn: false },
+    { title: `${a.name} waits for your OK${state.policy.length > 1 ? ` (step ${step.step} of ${state.policy.length})` : ""}`, body: `${ctx.displayName} asks for ${step.label}.`, link: a.link, entityType: recordType, entityId: a.recordId, dedupeKey: `handoff.${kind}:${a.recordId}:step${step.step}:${Date.now()}` },
+  );
 }

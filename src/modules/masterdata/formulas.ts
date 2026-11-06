@@ -23,6 +23,7 @@ import {
   recordApprovalDecision,
   requireAny,
   supersedeOverlapping,
+  notifyRevisionApprovers,
 } from "./versioning";
 
 type FormulaRevisionRow = typeof formulaRevisions.$inferSelect;
@@ -248,6 +249,7 @@ export async function submitFormulaRevision(ctx: AuthContext, revisionId: string
       before: { status: rev.status, revisionNo: rev.revisionNo },
       after: { status: "pending_approval", revisionNo: rev.revisionNo },
     });
+    await notifyRevisionApprovers(tx, ctx, "formula_revision", { recordId: rev.id, name: `Recipe ${label(formula.code, rev)}`, link: `/masterdata/formulas/${formula.id}/revisions/${rev.id}`, siteId: null, exclude: [rev.createdBy] });
     return { status: "pending_approval" as const };
   });
 }
@@ -296,6 +298,7 @@ export async function decideFormulaRevision(ctx: AuthContext, raw: unknown) {
     const d = await recordApprovalDecision(tx, ctx, {
       recordType: "formula_revision",
       recordId: rev.id,
+      recordNumber: `Recipe ${label(formula.code, rev)}`,
       excludedUserIds: [rev.createdBy, rev.submittedBy],
       decision: input.decision,
       note: input.note,

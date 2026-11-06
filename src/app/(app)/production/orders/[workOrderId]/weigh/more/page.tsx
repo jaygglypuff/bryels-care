@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { NextApprover } from "@/ui/next-approver";
+import { floorCheckNext } from "@/modules/production";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { uuidv7 } from "uuidv7";
@@ -71,6 +73,9 @@ export default async function WeighMorePage({ params, searchParams }: { params: 
             Target {fmtQty(ing.theoreticalQtyG, "g", 1)}
             {r ? ` · OK from ${fmtQty(r.minG, "", 1)} to ${fmtQty(r.maxG, "g", 1)}` : ""} · {D(ing.dispensedQtyG).gt(0) ? `weighed ${fmtQty(ing.dispensedQtyG, "g", 1)}` : "not weighed yet"}
           </p>
+          {/* ADR-109: who approves a weight outside the range (never the person weighing; they sign on this tablet). */}
+          {canWeigh && open && <p className="mt-2 text-[14px] text-fg-2">If the weight is outside the range:</p>}
+          {canWeigh && open && <NextApprover next={await floorCheckNext(ctx, "out_of_range_weighing", b.id, ctx.userId)} className="text-[14px]" />}
         </section>
         {ing.weighings.length > 0 && (
           <section className="mb-4 grid gap-2" aria-label="Weighings of this ingredient">

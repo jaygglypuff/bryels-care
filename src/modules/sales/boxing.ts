@@ -1,5 +1,6 @@
 import { plural, wasWere } from "@/lib/plural";
 import "server-only";
+import { notifyNextActors } from "@/modules/governance";
 import { plainDate } from "@/lib/plain-date";
 import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
@@ -318,6 +319,15 @@ export async function submitPack(ctx: AuthContext, packId: string) {
     const mode = prior ? "sample" : "all";
     await tx.update(packs).set({ submittedAt: new Date(), verificationMode: mode, verificationSampleSize: mode === "all" ? boxes.length : Math.min(sample, boxes.length), updatedAt: new Date() }).where(eq(packs.id, p.id));
     await audit(tx, ctx, { action: "inventory.pack.submitted", entityType: "pack", entityId: p.id, entityNumber: p.packNumber, siteId: p.siteId, after: { boxes: boxes.length, units: p.packedUnitsBase, verificationMode: mode } });
+    // Hand-off (ADR-109): the people who may check the boxes (never the packer), once per send.
+    await notifyNextActors(tx, ctx, "pack_check", { siteId: p.siteId, excludeUserIds: [p.packedBy, ctx.userId] }, {
+      title: `Check the boxes of pack ${p.packNumber}`,
+      body: `${ctx.displayName} boxed it and sent it for checking.`,
+      link: `/warehouse/packs/${p.id}`,
+      entityType: "pack",
+      entityId: p.id,
+      dedupeKey: `handoff.pack_check:${p.id}:${Date.now()}`,
+    });
     return { verificationMode: mode, sampleSize: mode === "all" ? boxes.length : Math.min(sample, boxes.length) };
   });
 }

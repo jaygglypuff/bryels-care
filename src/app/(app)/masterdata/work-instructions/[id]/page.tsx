@@ -34,7 +34,7 @@ export default async function WorkInstructionPage({ params }: { params: Promise<
   const shown = [open, current].filter((r): r is NonNullable<typeof r> => !!r);
   const older = w.revisions.filter((r) => !shown.includes(r));
   const nextPolicy = open?.approval.nextStep ? open.approval.policy.find((p) => p.step === open.approval.nextStep!.step) : null;
-  const waiting = open?.status === "pending_approval" && !open.canDecide ? await waitingForApprover(ctx, "masterdata.work_instruction.approve", nextPolicy, open.approval.policy.length) : null;
+  const waiting = open?.status === "pending_approval" && !open.canDecide ? await waitingForApprover(ctx, "masterdata.work_instruction.approve", nextPolicy, open.approval.policy.length, { exclude: [open.createdBy, open.submittedBy], prior: open.approval.decisions.map((d) => d.decidedBy) }) : null;
 
   const revisionCard = (r: (typeof w.revisions)[number]) => (
     <div key={r.id} className="flex flex-col gap-3">

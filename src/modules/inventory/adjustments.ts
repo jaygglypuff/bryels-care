@@ -275,6 +275,22 @@ export async function approveAdjustment(ctx: AuthContext, id: string, note?: str
       before: { status: a.status },
       after: { status: final ? "approved" : "submitted", step, awaitingSecondStep: !final },
     });
+    // Hand-off (docs/NEXT_APPROVER.md): step 2 approvers (never this approver), or the people who save it to stock.
+    const second = ev.steps[1] ?? null;
+    await notifyNextActors(
+      tx,
+      ctx,
+      final ? "stock_adjustment_post" : "stock_adjustment",
+      final ? { siteId: a.siteId } : { siteId: a.siteId, excludeUserIds: [a.createdBy, a.submittedBy], priorApproverIds: [ctx.userId], roleCodes: second ? rolesAllowedNow(second, new Date()) : [], stepNo: 2, stepsTotal: 2, roleStandIn: false },
+      {
+        title: final ? `Stock fix ${a.adjustmentNumber} approved: save it to stock` : `Stock fix ${a.adjustmentNumber} waits for the second approval`,
+        body: `${ctx.displayName} approved step ${step}.`,
+        link: `/inventory/adjustments/${a.id}`,
+        entityType: "stock_adjustment",
+        entityId: a.id,
+        dedupeKey: `handoff.stock_adjustment:${a.id}:step${step}:${Date.now()}`,
+      },
+    );
     return { status: (final ? "approved" : "submitted") as AdjustmentStatus, step, awaitingSecondStep: !final };
   });
 }
@@ -606,7 +622,10 @@ export async function adjustmentApprovalVerdicts(ctx: AuthContext, ids: string[]
 export async function adjustmentNextActors(ctx: AuthContext, id: string): Promise<NextActors | null> {
   if (!isUuid(id)) return null;
   const [a] = await db.select().from(stockAdjustments).where(and(eq(stockAdjustments.id, id), eq(stockAdjustments.organizationId, ctx.organizationId))).limit(1);
-  if (!a || a.status !== "submitted" || !ctx.allowedSiteIds.includes(a.siteId)) return null;
+  if (!a || !ctx.allowedSiteIds.includes(a.siteId)) return null;
+  // Approved: who saves it to stock (postAdjustment; the same-person rule there is ADR-091 operational).
+  if (a.status === "approved") return nextActors(ctx, "stock_adjustment_post", { siteId: a.siteId });
+  if (a.status !== "submitted") return null;
   const decisions = await db.select().from(approvalDecisions).where(and(eq(approvalDecisions.recordType, "stock_adjustment"), eq(approvalDecisions.recordId, a.id), eq(approvalDecisions.decision, "approved")));
   const step = decisions.some((d) => d.step === 1) ? 2 : 1;
   const unknownNeeds = await getInventorySetting(db, a.organizationId, a.siteId, "inventory.adjustment.unknown_value_requires_second_step");
@@ -620,5 +639,7 @@ export async function adjustmentNextActors(ctx: AuthContext, id: string): Promis
     roleCodes: open ? rolesAllowedNow(open, pendingSince) : [],
     stepNo: step,
     stepsTotal: Math.max(ev.steps.length, step),
+    // approveAdjustment checks the step roles as configured (canDecideEvaluatedStep): no owner stand-in.
+    roleStandIn: false,
   });
 }

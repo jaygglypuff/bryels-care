@@ -45,7 +45,7 @@ export default async function RoutingRevisionPage({ params }: { params: Promise<
   const recipe = ctx.can("masterdata.formula.view") ? ((await listFormulas(ctx)).find((f) => f.productId === v.product.id) ?? null) : null;
   const canChange = ctx.can("masterdata.formula.create") && ctx.can("masterdata.formula.edit") && ctx.can("masterdata.routing.create") && ctx.can("masterdata.routing.edit");
   const nextPolicy = v.approval.nextStep ? v.approval.policy.find((p) => p.step === v.approval.nextStep!.step) : null;
-  const waiting = r.status === "pending_approval" && !v.approval.canDecide ? await waitingForApprover(ctx, "masterdata.routing.approve", nextPolicy, v.approval.policy.length) : null;
+  const waiting = r.status === "pending_approval" && !v.approval.canDecide ? await waitingForApprover(ctx, "masterdata.routing.approve", nextPolicy, v.approval.policy.length, { exclude: [r.createdBy, r.submittedBy], prior: v.approval.decisions.map((d) => d.decidedBy) }) : null;
   const recipeLink = recipe ? (canChange ? { label: "Make a new version (step by step)", href: `/masterdata/recipes/${recipe.formulaId}?new=1` } : { label: "Open the recipe", href: `/masterdata/recipes/${recipe.formulaId}` }) : undefined;
   const hasMore = v.can.withdraw || v.can.retire || (v.can.edit && r.status === "draft" && !r.submittedAt);
   const initial: StepDraft[] = v.steps.map((s) => ({

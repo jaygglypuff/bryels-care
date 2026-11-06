@@ -2,7 +2,8 @@ import { isAre, plural } from "@/lib/plural";
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
-import { listSettingChangeRequests, listSettingsForAdmin } from "@/modules/governance";
+import { listSettingChangeRequests, listSettingsForAdmin, settingChangeNext } from "@/modules/governance";
+import { NextApprover } from "@/ui/next-approver";
 import { Card, CardTitle, EmptyState, PageHeader, cx } from "@/ui/core";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { Banner, Chip } from "@/ui/status";
@@ -57,6 +58,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const group = groups.find((g) => slug(g) === sp.group) ?? groups[0];
   const recent = history.filter((h) => h.status !== "submitted");
+  // Who approves each waiting change, by name and role (ADR-109).
+  const pendingNext = new Map(await Promise.all(pending.map(async (p) => [p.id, await settingChangeNext(ctx, p.id).catch(() => null)] as const)));
   const forMe = pending.filter((p) => canApprove && p.submittedBy !== ctx.userId);
 
   return (
@@ -88,6 +91,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <p className="text-[13px] text-muted">
                   {p.submitterName} · {fmtDateTime(p.submittedAt)} · “{p.reason}”
                 </p>
+                <NextApprover next={pendingNext.get(p.id)} className="text-[13px]" />
                 <RequestDecision id={p.id} canApprove={canApprove} isOwn={p.submittedBy === ctx.userId} />
               </li>
             ))}
