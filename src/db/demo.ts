@@ -2,9 +2,14 @@
  * Demo data lifecycle (ADR-055, docs/railway-for-dummies.md, docs/deployment-railway.md §2.4).
  *
  *   pnpm db:demo auto    start-up (scripts/start.sh): load the fictional demo data when the database
- *                        has no organization yet; otherwise do nothing. Safe on every restart.
+ *                        has no organization yet; wipe and load again when the loaded demo is another
+ *                        profile or another DEMO_SEED_VERSION (a deploy with new demo data) or was
+ *                        interrupted; otherwise do nothing. Safe on every restart.
  *   pnpm db:demo reset   wipe every row of the application tables and load the demo data again
  *                        (the owner's "Reset demo data" screen runs this).
+ *
+ * Profile (env DEMO_PROFILE, src/lib/demo.ts): `lite` (default) loads src/db/seed-demo.ts — one site, two
+ * products and a small storyline made through the services; `full` loads the older large src/db/seed.ts.
  *
  * Both refuse unless demo mode is on (DEMO_MODE=true, or the older ALLOW_DEMO_SEED=true; never with
  * APP_ENV=production) and refuse while any account exists whose email is not a demo address, so a
@@ -20,7 +25,7 @@
 import "dotenv/config";
 import { execFileSync } from "node:child_process";
 import postgres from "postgres";
-import { NON_DEMO_USER_PREDICATE, demoModeState, realAccountsRefusal } from "../lib/demo";
+import { NON_DEMO_USER_PREDICATE, demoAutoDecision, demoModeState, demoProfile, realAccountsRefusal } from "../lib/demo";
 
 const LOCK_KEY = "bc_demo_data";
 const say = (msg: string) => console.log(`[demo] ${msg}`);
@@ -72,6 +77,11 @@ async function main(): Promise<number> {
     say(state.blockedByProduction ? "Refusing to reset: APP_ENV=production. Demo data never runs on a production database." : "Refusing to reset: demo mode is off (set DEMO_MODE=true on a demo database only).");
     return 2;
   }
+  const { profile, error: profileError } = demoProfile(process.env);
+  if (profileError) {
+    say(profileError);
+    return 1;
+  }
   const url = process.env.DATABASE_MIGRATION_URL || process.env.DATABASE_URL;
   if (!url) {
     say("DATABASE_URL is not set.");
@@ -91,21 +101,20 @@ async function main(): Promise<number> {
       return 1;
     }
     const [{ n: orgs }] = await sql<{ n: number }[]>`select count(*)::int as n from organizations`;
-    const [{ ok: seeded }] = await sql<{ ok: boolean }[]>`select exists(select 1 from audit_events where action = 'platform.demo.seeded') as ok`;
+    const [marker] = await sql<{ after: unknown }[]>`select after from audit_events where action = 'platform.demo.seeded' order by occurred_at desc limit 1`;
     if (mode === "auto") {
-      if (orgs > 0 && seeded) {
-        say("Demo data is already loaded; nothing to do (use Reset demo data in the app to start over).");
+      const d = demoAutoDecision({ organizations: orgs, marker: marker ?? null, profile });
+      say(d.reason);
+      if (d.action === "nothing") {
         runSandbox(); // ADR-072: the empty sandbox company is added to databases seeded before it existed
         return 0;
       }
-      if (orgs > 0) say("Found an interrupted demo load; clearing it and loading again.");
-      else say("Empty database: loading the fictional demo data (about a minute)…");
     } else {
-      say("Resetting: clearing every application table…");
+      say(`Resetting: clearing every application table and loading the ${profile} demo…`);
     }
     await wipe(sql);
     try {
-      run("src/db/seed.ts");
+      run(profile === "full" ? "src/db/seed.ts" : "src/db/seed-demo.ts");
       run("scripts/install-reference-data.ts");
       runSandbox();
     } catch (e) {
@@ -114,7 +123,7 @@ async function main(): Promise<number> {
       say("Loading the demo data failed; the database was left empty so the next start tries again.");
       throw e;
     }
-    say(`Demo data loaded in ${Math.round((Date.now() - started) / 1000)} s. Sign in with any demo account (password demo1234).`);
+    say(`Demo data (${profile}) loaded in ${Math.round((Date.now() - started) / 1000)} s. Sign in with any demo account (password demo1234).`);
     return 0;
   } finally {
     await sql`select pg_advisory_unlock(hashtext(${LOCK_KEY}))`.catch(() => undefined);

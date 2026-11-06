@@ -1,8 +1,8 @@
 #!/bin/sh
 # One start command for both Railway services built from this image (ADR-055, docs/railway-for-dummies.md).
 #
-#   web    (default)  self-check → migrations → reference data → demo data if DEMO_MODE=true and the
-#                     database is empty → Next.js on $PORT. Only this service runs migrations.
+#   web    (default)  self-check → migrations → reference data → demo data if DEMO_MODE=true (empty database,
+#                     or a new demo seed version) → Next.js on $PORT. Only this service runs migrations.
 #   worker            self-check → background jobs (it waits until web has applied the migrations).
 #   backup            one logical dump to the bucket and the offsite copy, then exit (Railway cron service).
 #
@@ -43,7 +43,9 @@ pnpm -s self-check web
 pnpm -s db:migrate
 # Reference master data (units, SI conversions, reason codes) for every organization; idempotent (ADR-040).
 pnpm -s db:reference
-# Fictional demo data, only when demo mode is on and the database is empty; never overwrites anything (ADR-055).
+# Fictional demo data, only when demo mode is on (ADR-055): loads an empty database, and wipes and reloads a demo
+# database whose demo data is another profile or an older DEMO_SEED_VERSION (DEMO_PROFILE=lite|full, default lite).
+# Never runs with APP_ENV=production or while any real (non-demo) account exists.
 pnpm -s db:demo auto
 # Going live without a terminal: with BOOTSTRAP_ADMIN_EMAIL set, the first administrator is invited and the
 # one-time link is printed in this deploy log. The command refuses once any account is active, so later

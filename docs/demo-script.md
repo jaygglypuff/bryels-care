@@ -1,369 +1,139 @@
 # Client demo script (presenter's guide)
 
-A 15 to 20 minute walk-through of the Bryel's Care ERP MVP. It follows one bar of soap from the
-coconut oil delivery to the customer's delivery receipt, then traces it back again. Every click
-below was rehearsed end to end against a production build on a freshly reset database
-(QA rehearsal, 23 Oct 2026; script in "For engineers" at the end).
+A short walk-through of the Bryel's Care ERP on the **small demo** (owner request 2026-11-06). The
+demo has one plant, two products and a few records, each stopped at a different step. You pick
+them up and carry them one step further while the audience watches.
 
-**The story in one sentence:** a supplier delivers coconut oil, QA releases it, the plant makes a
-batch of Acapulco Soap with it, QA releases the soap, sales sells 60 bars to Mabuhay Pharmacy
-Group, the warehouse ships them, and in one search QA can show exactly which supplier lot ended
-up at which customer.
+**The story in one sentence:** the plant makes Acapulco Soap and Aloe Hand Lotion; one soap batch
+is done and in boxes, one lotion batch waits for QA, one soap batch is half made, one lotion order
+waits for its materials, a supplier delivery waits on the dock, and a customer waits for soap.
 
 **The four messages to land:**
 
 | Message | Where the audience sees it |
 |---|---|
-| **Traceability**: every gram is linked from supplier lot to customer | Scenes 2, 6, 11 |
-| **Quality control**: nothing moves until QA says so; expired stock cannot be released | Scenes 2 to 4, 7 |
-| **Operator-first**: big buttons, scanning, guided weighing, works on a phone | Scenes 3, 6, 13 |
-| **Multi-site security**: people only see their own site and their own job | Scenes 1, 3, 13 |
+| **Traceability**: every gram is linked from supplier lot to customer | Scenes 3, 5, 7 |
+| **Quality control**: nothing is used or sold until QA says OK | Scenes 2, 4 |
+| **Operator-first**: big buttons, one job per screen, works on a phone | Scenes 3, 5 |
+| **The owner sees it all**: Home says what to do next | Scenes 1, 8 |
 
 ---
 
-## 1. Before the demo (10 minutes, the day before and again 30 minutes before)
+## 1. Before the demo
 
 ### 1.1 Address and accounts
 
-- Open the app in Google Chrome: **http://localhost:3000** (or the hosted address your engineer
-  gives you). Check that **http://localhost:3000/api/ready** shows `"ok":true`.
+- Open the app in Google Chrome (the address your engineer gives you). The green bar at the top says
+  **Demo environment — fictional data**.
 - Every demo account uses the password **demo1234**. All emails end in `@bryels-care.test`.
+  On the sign-in page you can also tap **Try the demo** and pick a person.
 
-| Sign in as | Person (fictional) | Role in the story |
+| Sign in as | Person (fictional) | Job in the story |
 |---|---|---|
-| `owner@bryels-care.test` | Ana Villanueva | Owner/Director: sees every site and the overview |
-| `warehouse.nfd@bryels-care.test` | Lito Pascual | Warehouse operator at the North Fields plant (NFD) |
-| `qa.nfd@bryels-care.test` | Nina Quiambao | QA/QC officer |
-| `manager.nfd@bryels-care.test` | Dino Reyes | Site manager at NFD: plans batches |
-| `operator.nfd@bryels-care.test` | Rhea Mendoza | Production operator |
-| `checker.nfd@bryels-care.test` | Jun Dela Cruz | Second operator who checks weighings (chosen from a list; you never sign in as him) |
-| `sales@bryels-care.test` | Mara Santos | Sales and customer service |
-| `warehouse.rvs@bryels-care.test` | Carlo Bautista | Warehouse at the second site, Riverside (RVS): used to show site security |
-| `procurement@bryels-care.test` | Tess Navarro | Purchasing: makes and sends purchase orders and supplier returns (the site manager approves them) |
-| `finance@bryels-care.test` | Rosa Lim | Finance: invoices, payments, supplier bills, closing the month (scene 14) |
+| `owner@` | Ana Villanueva | Owner: sees everything, Home says what to do next |
+| `manager.nfd@` | Dino Reyes | Site manager: approves production orders and purchase orders |
+| `planner.nfd@` | Cora Villamor | Planner: makes production orders and recipes |
+| `operator.nfd@` | Rhea Mendoza | Operator: makes the batches |
+| `checker.nfd@` | Jun Dela Cruz | Second operator: checks the weighing |
+| `warehouse.nfd@` | Lito Pascual | Warehouse: deliveries, shelves, getting orders from the shelf |
+| `qa.nfd@` | Nina Quiambao | QA: checks materials and batches |
+| `qa.lead@` | Teresa Ocampo | Second QA person (approvals that need two people) |
+| `procurement@` | Joy Navarro | Buying: purchase orders |
+| `sales@` | Mara Santos | Sales: customer orders |
+| `finance@` | Rosa Lim | Finance |
+| `floor.nfd@` | Floor TV North Fields | The TV on the production floor (look only) |
 
-**Switching people:** use **Sign out** at the bottom of the left menu, then sign in as the next
-person (about 10 seconds). If you prefer, prepare one Chrome profile per person beforehand.
-Private windows share one session, so they do not help here.
+The plant is **North Fields Plant**. There is only this one plant in the small demo.
 
-### 1.2 Reset the demo data (always do this before presenting)
+### 1.2 Start fresh (always do this before presenting)
 
-The database must be fresh. Otherwise the numbers in this script will not match, and the
-receipt from the last rehearsal will already be there. Ask your engineer, or run this from the
-project folder:
+Sign in as `owner@`, open **Reset demo data** in the green bar, type `RESET` and confirm. It takes
+about 10 seconds and puts every record back at the step in the table below. Everyone is signed out.
 
-```
-pnpm db:reset
-```
+A new deploy of the app with new demo data does this by itself the first time it starts
+(see `docs/deployment-railway.md` §2.4).
 
-(On the rehearsal machine, with the production server running, the equivalent is
-`pnpm -s tsx src/db/reset.ts && pnpm -s db:migrate && pnpm -s db:seed`. The server does not need a
-restart.) A reset signs everyone out. Then sign in again as the owner and check that the overview
-shows **2 orders this week** and **367 units** of production output.
+### 1.3 What is in the demo
 
-### 1.3 Things that change from day to day
+| What | Where it stopped | Who picks it up |
+|---|---|---|
+| **Acapulco Soap 135 g**, one recipe, one list of steps | approved | — |
+| **Aloe Hand Lotion 250 mL**, one recipe, one list of steps | approved | — |
+| Production order 1, Acapulco Soap | done: QA said OK, 5 boxes (118 bars) on the **Finished goods bay** | — |
+| Production order 2, Aloe Hand Lotion | made, waiting for the **QA check** in the QA waiting area | `qa.nfd@` (scene 2) |
+| Production order 3, Acapulco Soap | in progress: weighed, heated and mixed; next step **Pour into moulds** | `operator.nfd@` (scene 3) |
+| Production order 4, Aloe Hand Lotion | approved, ready for **Get materials** | `operator.nfd@` (scene 5) |
+| Purchase order to Manila Print & Pack (wrappers, bottles) | **sent** to the supplier | — |
+| Purchase order to Laguna Oleo Supply (coconut oil, glycerin) | delivered: the coconut oil is OK and **waits to be put on a shelf**; the glycerin **waits for the QA check** | `warehouse.nfd@` (scene 4), `qa.nfd@` |
+| Customer order from Luntian Wellness Stores (48 soap bars) | 2 boxes set aside: **ready to get from the shelf** | `warehouse.nfd@` (scene 6) |
+| Customer order from Isla Spa Supplies (48 lotion bottles) | confirmed, waiting for lotion that QA said OK | after scene 2 |
 
-- Document numbers include the year and month (for example lot **L-2610-00019** in October 2026).
-  On a fresh reset the new records in this demo will be: receipt **GR-26-00016** (the seed has one receipt per supplier), coconut oil lot
-  **L-2610-00019**, batch **B-26-0006**, finished soap lot **L-2610-00020**, order **SO-26-00004**,
-  delivery receipt **DR-26-00002**. In another month the middle part changes (for example L-2611-…).
-- Dates on screen are Philippine time.
+Stock to show "use first": one **Palm Oil** lot expires in about 20 days (it is used first), one
+**Coconut Oil** drum is already opened (part used by the soap batches), and one **Glycerin** lot waits
+for the QA check.
+
+The scale and the mixer are clean and calibrated (next calibration in about 60 days), so a new batch
+can be weighed at once. Every batch belongs to a production order, and nothing waits in the
+sending-out bay.
+
+Numbers like `WO-26-00003`, `B-26-0003` or `L-2611-00016` contain the year and month of the reset,
+so they change from month to month.
 
 ---
 
 ## 2. The demo, scene by scene
 
-Times are a guide; the whole run takes about 17 minutes without questions.
+### Scene 1: The owner's morning (2 min). Sign in as `owner@`
 
-### Scene 1: The owner's morning view (2 min). Sign in as `owner@`
+1. **Home** opens. The green box **What to do next** says what needs someone today (for example
+   "1 finished batch waits for the QA check").
+2. Point at the cards: sales today, production progress, stock to look at, waiting for approval.
+3. Tap **Operations → Production orders**. Four orders: one done, one at the QA check, one in
+   progress, one approved. Say: "each one is at a different step; we will move them along."
 
-1. Sign in. You land on **Home**: **Needs your attention** (plain sentences, each opens the records),
-   four headline numbers and the live pipeline **Right now** (from delivery to dispatch).
-2. For the detailed cards below, open **Management → Reports & analytics → Business overview**.
+### Scene 2: QA checks the lotion (2 min). Sign in as `qa.nfd@`
 
-![Owner overview](demo/01-owner-overview.png)
+1. Home shows the lotion batch waiting for the check. Open it.
+2. Type the test results (pH between 5.0 and 6.5, "Looks right": Conforms). These test names and
+   limits are **examples only**; the company's QA sets the real ones.
+3. Tick **I reviewed the batch record** and tap **Pass**. The lotion is now OK to sell and moves to
+   the finished goods bay. The Isla Spa order can now get its bottles.
 
-**Say:** "This is what the owner sees first thing in the morning. Every number comes from real
-saved records, and every line is a link to the list behind it. Decisions waiting for me are in
-**To approve**; problems are in **Problems & alerts**; messages are behind the bell."
+### Scene 3: The operator finishes the soap (3 min). Sign in as `operator.nfd@` (phone size is best)
 
-**Point at:**
-- **Orders this week** (2 orders, ₱13,104.00) and **Production output** (367 units, yield 98.8 %).
-- **Batch journey**: one batch planned, one in process, one waiting for QC, one released.
-- **Near-expiry lots**: an Acapulco Extract lot is already **Expired** (red). Remember it for
-  scene 4.
-- Scroll down to **Order fulfilment** (the donut) and **Recent activity**.
-- Top right: **NFD only / All my sites**. The owner can see both plants; most staff see only their
-  own site.
+1. Home shows **Pour into moulds** for the soap batch. Tap it and tap **Step done**.
+2. The next step is **Cure**. The screen shows when the curing is finished (2 days in the demo).
+   Say: "the system will not let anyone cut the soap before it is hard; ending early needs a
+   problem report for QA."
 
-**Audience should notice:** one screen, no spreadsheets, and the numbers will change by the end
-of the demo.
+### Scene 4: Put the delivery away (1 min). Sign in as `warehouse.nfd@`
 
-### Scene 2: A delivery arrives (2 min). Sign in as `warehouse.nfd@`
+1. Home says the coconut oil is ready to put away. Tap **Put away**, scan or pick the **Oils rack**,
+   confirm.
+2. Show that the glycerin of the same delivery still waits for QA: it cannot be put on a shelf or
+   used until QA says OK.
 
-1. Bottom bar: **Receive** (or **Menu → Operations → Receiving → Receive materials**).
-2. Fill in:
-   - **Supplier**: `Laguna Oleo Supply`
-   - **Number on the supplier's paper**: `DR-88213`
-   - **Notes (optional)**: `Seals intact, drums clean and dry.`
-   - **Item**: **Coconut Oil**
-   - **How much came?**: `25 kg`
-   - **Supplier's code on the sack**: `LOS-25190`
-   - **Expiry date: type a date about one year from today** (as if read from the supplier's label).
-     *Important:* do not leave the 2-year default. With a one-year expiry this new drum expires
-     before the older coconut oil in stock, so in scene 6 the system recommends it (first to expire, first
-     out) and the trace in scene 11 leads back to it.
-   - **Put it in**: leave the waiting-for-check cage (**QUA-01**).
-3. Click **Save and print labels** (or **Save receipt**).
+### Scene 5: Get materials for the lotion (2 min). `operator.nfd@`
 
-![Receipt posted](demo/02-receipt-posted.png)
+1. Open production order 4 (Aloe Hand Lotion). Tap **Get materials**.
+2. The list says which lot to take from which shelf and how much, the one that expires first
+   first. Tick them and confirm. The next screen is the start check (**Check the area is clean**).
 
-**Say:** "The new lot gets its own number and is **Waiting for QA check**. Nobody can use it until
-QA says OK."
+### Scene 6: Get the customer's soap from the shelf (2 min). `warehouse.nfd@`
 
-4. Click **Print labels (1)**. With one approved label size and the NFD print station the print
-   preview opens straight away and says "Labels sent to the printer: 1." (with several printers or
-   label sizes the receipt's label page asks first; click **Print labels for 1 lot**).
-5. Click **Print station**. The lot is in **To print**; click **Print**. A new tab shows the
-   100 × 50 mm label with a QR code and "STATUS AT PRINT: QUARANTINE". (Use the browser's print
-   dialog at 100 % on a real label printer.) Click **Printed OK**: the job is recorded as printed
-   by Lito, with the time.
+1. Open the Luntian Wellness Stores order (**Sales → Orders**, or Home). It is ready to get from the
+   shelf: two boxes on the **Finished goods bay**.
+2. Scan the two box labels (or tap them). The order moves on to the second check of the box.
 
-![Lot label with QR code](demo/03-lot-label-qr.png)
+### Scene 7: Where did it come from? (1 min). `qa.nfd@` or `owner@`
 
-**Say:** "One label per container. The QR code is what the operators scan. Every label print is
-recorded, and a reprint needs a reason."
-Close the label tabs.
+1. Open the soap lot of production order 1 (scan a box label or search its lot number).
+2. Show the trace: the coconut oil, palm oil and wrapper lots that went into it, and the customer
+   order it is set aside for.
 
-### Scene 3: Scanning (1 min). Still `warehouse.nfd@`
+### Scene 8: The owner sees what happened (1 min). `owner@`
 
-1. Bottom bar: **Scan** (or the scan icon in the top bar). The page is titled
-   **Scan or search**: you can also type words such as `coconut oil` or a customer name.
-2. Type `BC:LOT:` followed by the new lot number (for example `BC:LOT:L-2610-00019`) and press
-   Enter. A handheld scanner types exactly this, followed by Enter.
-3. The scan card shows the lot with the orange banner **Waiting for check: not usable yet**. Point at
-   the greyed action: *Use in making: blocked while the lot is waiting for check.* **Open lot**
-   opens the full lot page. Box labels (`BC:BOX:…`), location labels (`BC:LOC:…`) and equipment
-   labels (`BC:EQP:…`) answer the same way.
-
-**Say:** "A scanner or a phone camera opens the right record in one step. The system tells the
-operator what is not allowed, and why."
-
-**Optional security moment (30 s):** sign in as `warehouse.rvs@` (Riverside) and scan the same
-code. The answer is *Nothing found for "L-2610-00019" in your sites.* The other site's stock is
-invisible, and the server enforces this, not just the screen.
-
-### Scene 4: QA decides (2 min). Sign in as `qa.nfd@`
-
-1. **Home → Needs your attention** (or **Menu → Operations → Quality → QA queue**). The new coconut
-   oil lot is in the list with the other lots waiting for the QA check and one batch.
-2. Tap the new coconut oil lot. Choose **OK to use**, type a reason such as
-   `CoA LOS-25190 reviewed; appearance, colour and odour conform.`, and confirm.
-3. The banner turns green (**Ready to use**) and the decision appears in **Decision history** with
-   Nina's name, the time and the reason.
-
-**Say:** "Every QA decision needs a reason and is recorded permanently with who and when. It can
-never be edited afterwards."
-
-4. Now the expired lot. Bottom bar: **Inventory** (or **Menu → Inventory → Stock**), type `LB-6620` in the search box. The
-   row **Acapulco Extract** opens by itself in the red **Do not use** group at the bottom; tap the lot
-   (**L-2610-00008**). The banner says it is expired. Open **See the QA decision**.
-
-![Expired lot cannot be released](demo/04-qa-expired-blocked.png)
-
-**Say:** "Release is greyed out with the reason. An expired lot can only be rejected. The rule is
-in the system, not in someone's memory."
-
-(Do not reject it. Leave it for the next demo.)
-
-**Optional (1 min), sign in as `warehouse.nfd@`:** open the coconut oil lot again, click
-**Move stock** (it opens **Inventory → Move stock** with the lot filled in), scan or type `BC:LOC:A-01`
-as the new shelf, reason `Put-away after QA release`, and click **Confirm**. The confirmation offers
-**Undo** for a short time. This shows the released drum leaving the waiting-for-check cage; the lot
-page's stock changes record it. It was done in the rehearsal, and scene 6 then shows the
-lot at **A-01**. If you skip it, scene 6 shows **QUA-01** instead.
-
-### Scene 5: Plan a batch (1 min). Sign in as `manager.nfd@`
-
-1. **Menu → Operations → Production orders → New production order** (the production screens are being
-   consolidated; follow the current production help "Make a product with a production order" if the
-   labels below differ).
-2. Product: **Acapulco Soap 135 g (ACS-135)**. Formula revision **F-ACS-01 · revision 1** is
-   already chosen. Planned batch size: `17.6` (kg). The form shows *Theoretical yield 16.72 kg*.
-3. Click **Create batch**. The batch page opens with status **Planned**.
-
-**Say:** "The batch takes a frozen copy of the approved formula. If R&D changes the formula
-tomorrow, this batch record does not change."
-
-### Scene 6: The operator makes the soap (4 min). Sign in as `operator.nfd@`
-
-1. Bottom bar: **My work**, open the order of the new batch (**B-26-0006**), and click
-   **Start batch**. The status becomes **In process**.
-2. For each of the five ingredients, click **Weigh …**:
-   - The **Material lot** is already set to the **recommended** lot (earliest expiry first). For
-     Coconut Oil this is the lot received in scene 2.
-   - **Actual weight (g)**: type the number shown in grey in the box (3723.2, 8687.4, 4964.2, 190.9,
-     34.4). A green **Within tolerance** chip appears.
-   - **Checker**: choose **Jun Dela Cruz**. Then click **Confirm weight**.
-
-![Weighing within tolerance](demo/05-weigh-within-tolerance.png)
-
-**Say, on the first ingredient:** "The operator does not choose a lot from memory: the system
-recommends the one that expires first. The weight is checked against the formula tolerance live.
-A second person must confirm; you cannot check your own weighing."
-
-**Optional teaching moment:** before typing the right number, type `3800`. The chip turns amber
-(*Outside tolerance … exception reason required*). Then correct it to the grey number.
-
-3. **Checklist**: complete steps 1 to 7 in order. For each, choose checker **Jun Dela Cruz** and
-   click **Complete step N**. For step 4 (Mixing and cutting) type readings such as
-   `Mix temp 48 °C, trace at 22 min`. Step 2 (Weighing) only unlocks once all five ingredients
-   are weighed.
-4. **Complete batch**: Finished units `124`. The preview shows *Yield: 100.12 %*. Click
-   **Complete batch and send to QA**. The status becomes **Awaiting QC** and the finished lot
-   (**L-2610-00020**) waits for the QA check.
-
-**Say:** "This replaces the paper Batch Manufacturing Record: same steps, same signatures, but
-nothing can be skipped, and the stock of every ingredient was deducted the moment it was weighed."
-
-### Scene 7: QA tests and releases the batch (2 min). Sign in as `qa.nfd@`
-
-1. Bottom bar: **Quality check**, then tap **B-26-0006** (oldest first).
-2. Record three results with **Record test result** (Outcome: *Pass*):
-
-| Test name | Specification | Result |
-|---|---|---|
-| `pH (10% solution)` | `9.0 – 10.5` | `9.7` |
-| `Appearance` | `Smooth green bar, no cracks` | `Conforms` |
-| `Net weight (n=10)` | `≥ 135 g each` | `136.0 g avg` |
-
-3. Under **Batch decision** choose **Release batch**, type a reason
-   (`All three tests within specification; BMR reviewed, no exceptions.`), and click
-   **Release batch**.
-
-![Batch released](demo/06-qa-batch-released.png)
-
-**Say:** "The finished soap is now released and was moved automatically from the waiting-for-check area to the
-finished goods bay **FG-01**. Only now can sales ship it."
-
-### Scene 8: The batch record on paper (1 min). Still `qa.nfd@`
-
-1. At the top of the batch page click **Open BMR**. A print-ready Batch Manufacturing Record
-   opens in a new tab, in the layout of the current paper form.
-
-![Batch Manufacturing Record](demo/07-bmr-print.png)
-
-**Say:** "It is built from the electronic record: every lot, weight, person and time, the test
-results and the QA decision. **Print / save as PDF** gives a two-page A4 document with a QR code
-that opens this batch."
-
-### Scene 9: A customer order (1 min). Sign in as `sales@`
-
-1. **Sales & Customers → Customer orders → New customer order** (three steps).
-2. Step 1: type `Mabuhay` and tap **Mabuhay Pharmacy Group**. **Deliver by**: any date in the next few
-   days. Under **More details**, **Customer's order no.**: `MPG-PO-7781`.
-3. Step 2: tap **Acapulco Soap 135 g** (it shows how many are free), **How many (pcs)** `60`,
-   **Price each (₱)** `72.50`. The order value shows **₱4,350.00**.
-4. Step 3: **Check the order**, click **Save the order**, then **Confirm order**. The status becomes
-   **Confirmed**.
-
-**Say:** "Sales sees only stock QA said OK to, not expired, as free. The customer's minimum shelf life
-is applied automatically when the warehouse sets the stock aside."
-
-### Scene 10: Pick, pack and ship (2 min). Sign in as `warehouse.nfd@`
-
-> Ready-made for practice (UX audit round 2 part 2): the seed also leaves one order at each step, so the path can be
-> walked without making orders first. **To get from shelf**: Isla Spa Supplies (12 bars, stock set aside).
-> **Send out → Waiting for the second check of the box**: Luntian Wellness Stores (got from the shelf by Lito; the
-> second check is done by someone else, e.g. `manager.nfd@`). **Send out → Ready to send out**: Mabuhay Pharmacy Group
-> (checked; type driver and plate, then Send out now). Shelves read "QA hold cage" and "Sending-out bay".
-
-1. **Menu → Sales & Customers → Customer orders**. Two orders are confirmed: yesterday's Isla Spa Supplies
-   order (**SO-26-00002**) and the new Mabuhay order.
-2. Work the queue in order: open **SO-26-00002** (Isla Spa) and click **Set aside the stock** (the ones that expire first are taken first).
-3. Open the Mabuhay order (**SO-26-00004**) and click **Set aside the stock**.
-
-![FEFO allocation across two lots](demo/08-order-allocated-fefo.png)
-
-**Say:** "First to expire, first out again: the system first takes the remaining 28 bars of the
-older lot, then 32 bars of today's batch. **To get from shelf** tells the warehouse exactly which lot
-to take from which shelf."
-
-> Why set aside Isla Spa first? Without it, the older lot alone could cover all 60 bars, so none of
-> today's soap would go to Mabuhay, and the trace in scene 11 would show the batch "not shipped
-> yet". That would be correct behaviour, but not the story we want to tell.
-
-4. **Menu → Operations → Packing & dispatch → Send out**: Carrier `Own truck`, Driver `Ramon Aquino`,
-   Vehicle plate `NBC 1234`, boxes on the truck `2`. Click **Send out** and confirm on the page. The
-   status becomes **Sent out**.
-5. Click **Print delivery receipt**.
-
-![Delivery receipt](demo/09-delivery-receipt.png)
-
-**Say:** "The delivery receipt lists every lot and expiry the customer receives. Prices are left
-off on purpose; it is a delivery document, not an invoice."
-
-### Scene 11: Traceability, the recall question (2 min). Sign in as `qa.nfd@`
-
-1. **Menu → Operations → Quality → Where it came from and went**. Choose the finished soap lot
-   (**L-2610-00020**, or scan its label) and click **Trace**.
-
-![Trace of the finished lot](demo/10-trace-finished-lot.png)
-
-**Say:** "Suppose a customer complains about this soap. On the left: which batch made it and
-every ingredient lot with its supplier, including the coconut oil we received in scene 2. On the
-right and at the bottom: which customer received how many bars, on which delivery receipt."
-
-2. Now trace the other way: choose the coconut oil lot (**L-2610-00019**) and click **Trace**.
-   It shows the batch, the soap lot and **Mabuhay Pharmacy Group**.
-
-**Say:** "And if the supplier calls to recall this drum of coconut oil, we know in seconds which
-customers to call. On paper this takes days."
-
-### Scene 12: The owner sees what happened (1 min). Sign in as `owner@`
-
-1. **Home** and **Management → Reports & analytics → Business overview** now show **3 orders**
-   (₱17,454.00) and **491 units** of output; the new batch is done.
-
-![Owner overview after the demo](demo/11-owner-overview-after.png)
-
-2. **Menu → Management → IT settings → History of changes**. Every step of the demo is listed: who, what, when,
-   and on which site, with the before and after values.
-
-**Say:** "Nothing can be changed silently. Stock, batches and deliveries are never edited; mistakes
-are undone with a new record that is itself kept."
-
-### Scene 13: On the shop floor (1 min). Phone or narrow window, `operator.nfd@`
-
-1. Sign in as `operator.nfd@` on a phone (or press F12 in Chrome and choose a phone size such as
-   390 × 844).
-2. The operator home shows only two big tiles: **Scan / look up** and **Weigh batch**. There is no
-   sales or finance menu, because her role does not need one.
-3. Open the in-process batch **B-26-0004** and tap **Weigh Coconut Oil**: the same guided weighing
-   form, with no sideways scrolling. Tap **Cancel** (do not post it).
-
-![Weighing on a phone](demo/12-phone-weigh-form.png)
-
-**Say:** "Operators get a task screen, not an ERP. Each role sees only what it needs, for its own
-site only."
-
-### Scene 14 (optional, Wave 4): Billing and money (3 min). Sign in as `finance@` (Rosa Lim)
-
-1. **Menu → Management → Finance → Money**: money customers owe us and how late, money we owe,
-   and the bills we disagree with (fictional figures from the demo seed).
-2. **Sales & Customers → Billing & payments → Invoices**: deliveries without an invoice are listed first; the seeded invoices
-   show each state (draft, waiting for approval, approved, issued, partly paid, paid). Open the one
-   *waiting for approval* and click **Approve invoice** (Mara from sales submitted it, so Rosa may
-   approve). Then **Issue invoice** (password `demo1234`): it gets its `INV-…` number only now, and
-   the order moves to *Invoiced*. Click **Print invoice**.
-3. **Management → Finance → Supplier bills**, filter *does not match*: the match panel shows the supplier billed more than was received.
-   Rosa can approve the variance with a reason because Ben (`finance2@`) entered the bill.
-4. **Close the month**: two months back is closed; try nothing there. **Tax rates** shows
-   the FICTIONAL placeholder rates; one is *Pending accountant review* and has no effect.
-
-**Say:** "Every saved figure is frozen. A mistake is undone with a reason (kept on record), never edited, and a
-locked month cannot be touched without two people agreeing. Your accountant's system stays the
-books; this is the operational side."
+1. Back to Home. The numbers moved: the lotion passed, the soap order moved on.
 
 ---
 
@@ -371,56 +141,40 @@ books; this is the operational side."
 
 | What you see | What to do |
 |---|---|
-| "Email or password is incorrect." | Check the spelling of the email (`@bryels-care.test`) and the password `demo1234`. |
-| "This account is locked" | Five wrong passwords lock an account. Sign in as `admin@bryels-care.test`, open **Management → People & access → People**, open the person and click **Unlock account**. Or reset the demo data (1.2). |
-| You are suddenly on the sign-in page | The session expired or the data was reset. Sign in again; nothing is lost. |
-| In scene 6, the recommended Coconut Oil lot is not the one from scene 2 | The expiry date in scene 2 was left at the 2-year default. Carry on: the demo still works, but in scene 11 trace the older lot shown on the weighing record instead. Next time, enter a one-year expiry. |
-| Scene 11 shows "Not used in any batch and not shipped yet" for the soap lot | Scene 10, step 2 (allocate Isla Spa first) was skipped, so all 60 bars came from the older lot. Trace the older lot listed on the delivery receipt instead; it shows Mabuhay. |
-| A button shows a red message instead of moving on | Read it aloud. It is the system enforcing a rule (for example "Choose checker", or a lot that is not released yet). Fix the field and click again. This is a good moment to show that rules are enforced. |
-| A number in this script does not match the screen | The data was not reset, or the demo was partly run before. Say "this is live data", or reset (1.2) during a break. |
-| The page is blank or shows an error | Reload the page (F5). If it persists, check http://localhost:3000/api/ready and call your engineer. |
-| Printing opens no preview | Use the **Print** (labels, delivery receipt) or **Print / save as PDF** (BMR) button on the print page itself, or Ctrl+P. The pages are laid out for A4 (labels: 100 × 50 mm). |
+| "Email or password is incorrect." | Check the email ends in `@bryels-care.test` and the password is `demo1234`. |
+| "This account is locked" | Five wrong passwords lock an account. Reset the demo data (1.2). |
+| You are suddenly on the sign-in page | The demo data was reset (by you or by a new deploy). Sign in again. |
+| A record is not at the step in the table | Someone used the demo after the last reset. Reset (1.2) during a break. |
+| A button shows a red message | Read it aloud. It is a rule of the system (for example "the checker must be a different person"). |
+| The page is blank or shows an error | Reload the page. If it stays, call your engineer. |
 
 ---
 
-## 4. What is real and what is not yet built
+## 4. What is real and what is not
 
-**Real today (working against a real database, not mock-ups):** receiving with quarantine and
-labels; scanning; QA release, hold and reject with reasons; expiry blocking; batch planning from
-approved formulas; guided weighing with tolerance checks and a second-person check; the 7-step
-checklist; finished goods output and yield; QC test results and batch release; the printable BMR;
-sales orders, FEFO allocation with customer minimum shelf life, dispatch and delivery receipts;
-forward and backward traceability; the owner dashboard; the audit log; per-site and per-role
-security.
-
-**Be clear with the client about these points:**
-
-- **Planned, not built yet** (shown greyed under *Coming next* in the menu): procurement and
-  purchase orders (Phase 6), HR, attendance and payroll (Phases 5 to 6), finance and accounting
-  export (Phase 6), offline mode for the shop floor (Phase 7), and the customer portal (Phase 8).
-- **All data is fictional.** Company address, people, suppliers, customers, prices and lots are
-  demo values.
-- **Signatures are attestations, not validated e-signatures.** The system records who did what and
-  when, but electronic signatures are not yet validated for regulated use; the paper record stays
-  the official one until QA approves the validation.
-- **Formula quantities, tolerances (±0.5 %) and checklist steps are placeholders** shaped after the
-  current paper BMR. They are pending approval by the process owner and QA; the screen says so
-  next to each tolerance.
-- **Test names and specifications** (pH, appearance, net weight) are typed by QA in the demo. The
-  company's QA team defines the real specifications; the system does not invent them.
-- **Camera scanning** works in Chrome on Android phones. On desktop browsers, use a handheld
-  scanner or type the code.
+- **Everything you click is real**: it runs the same rules, numbers, stock postings and audit trail
+  as real work. The demo records themselves were made with those same commands when the demo was
+  loaded.
+- **All data is fictional**: company, people, suppliers, customers, prices and lots.
+- **Recipes, amounts, the 2-day cure, test names and limits are demo values.** The company's QA and
+  process owner set the real ones. In the demo the materials do not ask for a certificate (CoA) file,
+  because no files are attached; QA turns "needs a certificate" on per material.
+- **Signatures are records of who did what and when**, not validated electronic signatures.
 
 ---
 
 ## 5. For engineers
 
-- The rehearsal is an automated Playwright run of this exact storyline (desktop 1440 × 900 and a
-  390 × 844 phone), with assertions on status chips, numbers and texts. It fails on any error page,
-  console error or failed request. The script used for the 23 Oct 2026 rehearsal lives outside the
-  repository (QA scratchpad `demo/rehearsal.cjs`); moving it under `tests/e2e/` is a follow-up recorded in
-  `docs/testing.md` 9.18.
-- Screenshots in `docs/demo/` come from that run on a fresh seed (23 Oct 2026); they show the screens before the 2026-10-31 plain-words and one-screen-per-job pass (`docs/LEGACY_SCREENS.md`), so some labels differ from the steps above until they are re-shot.
-- The demo depends on the seed in `src/db/seed.ts` (`ALLOW_DEMO_SEED=true`). If the seed's stock
-  quantities change (in particular the 76 released bars left in the oldest Acapulco Soap lot and
-  the coconut oil lot expiring in about 600 days), re-check scenes 2, 6 and 10.
+- Profile: `DEMO_PROFILE=lite` (default) loads `src/db/seed-demo.ts` → `src/db/seeds/lite.ts`; `full`
+  loads the older large seed `src/db/seed.ts` (used unchanged by the integration tests).
+- Every storyline record is made through the services (recipe wizard `saveRecipe`, `receiveAndPost`,
+  `decideLot`, `putAwayLot`, purchase order commands, `createProductionOrder` / `approveProductionOrder`,
+  `confirmPicked`, weighing, `stepDone`, `planBatchBoxes`, `finishBatch`, `decideQualityCheck`,
+  `createOrder` / `submitOrder` / `allocateOrder`). The one shortcut: the finished soap batch's cure
+  step start and "ready at" are moved two days back after the service opened it.
+- `DEMO_SEED_VERSION` (`src/lib/demo.ts`) is written into the completeness marker
+  (`platform.demo.seeded`, `after.profile` / `after.seedVersion`). Raise it whenever `lite.ts`
+  changes so the next deploy reloads the demo.
+- Tests: `tests/integration/platform/demo-lite.test.ts` (storyline, version reload, guards),
+  `tests/unit/demo-profile.test.ts`.
+- Older screenshots in `docs/demo/` show the full demo, not this one.
