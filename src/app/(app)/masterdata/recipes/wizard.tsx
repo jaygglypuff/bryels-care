@@ -256,10 +256,14 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
                   type="button"
                   onClick={() => go(n)}
                   aria-current={here ? "step" : undefined}
-                  className={cx("flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-[12px] border text-[13px] font-semibold", here ? "border-primary bg-primary text-white" : n < screen ? "border-line bg-primary-soft text-primary-text" : "border-line bg-surface text-muted")}
+                  className={cx("flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-[12px] border px-2 text-center text-[13px] font-semibold leading-tight", here ? "border-primary bg-primary text-white" : n < screen ? "border-line bg-primary-soft text-primary-text" : "border-line bg-surface text-muted")}
                 >
-                  {n < screen ? <Check size={16} aria-hidden /> : <span className="tabular">{n}</span>}
-                  <span className="hidden sm:inline">{t}</span>
+                  {n < screen ? <Check size={16} className="shrink-0" aria-hidden /> : null}
+                  {/* Number and title wrap as one centred line (desktop audit 2026-11: "2" sat apart from "How big is one batch?"). */}
+                  <span>
+                    {n < screen ? null : <span className="tabular">{n}</span>}
+                    <span className="hidden sm:inline">{n < screen ? "" : " "}{t}</span>
+                  </span>
                 </button>
               </li>
             );

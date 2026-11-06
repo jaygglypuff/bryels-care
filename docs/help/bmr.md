@@ -2,7 +2,7 @@
 key: production.bmr
 title: Batch record (BMR), closure and paper pages
 version: 1
-updated_at: 2026-10-25
+updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -10,8 +10,10 @@ The batch manufacturing record is built from what was entered during the batch. 
 
 ## Print or view
 
-1. From the batch, press **Print batch record** for the current record. Each page carries the batch number and page identity.
-2. A reprint is recorded. Use it only when a copy is lost or damaged.
+1. From the batch, press **Print batch record** for the current record. If the batch changed since the last copy, press **Generate new BMR revision** first: only a numbered copy prints.
+2. Press **Print / save as PDF**. In Chrome's print window choose **Save as PDF** or your printer, paper **A4**, margins **Default**, scale **100**; under **More settings** turn **Headers and footers off** (the record prints its own header and "Page x of y" on every page) and **Background graphics on**. The PDF file name is the batch number and product.
+3. The record has seven parts: 1 batch identity and recipe version, 2 dispensing and weighing, 3 procedure (every step with who did it, who checked, start and end, readings and machines, then the checklist), 4 packaging and labels, 5 yield, 6 problems and changes, 7 QA decision and sign-offs (on its own page), then the paper pages and the audit trail.
+4. A reprint is recorded. Use it only when a copy is lost or damaged. Copies made before the seven-part layout keep their old layout.
 
 ## Paper pages (hybrid steps)
 

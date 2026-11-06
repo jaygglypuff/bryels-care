@@ -4,11 +4,22 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { renderForDisplay } from "@/modules/documents";
-import { type BmrPrintView, bmrPrintView } from "@/modules/production";
+import { type BmrPrintView, bmrPrintTitle, bmrPrintView } from "@/modules/production";
 import { GenerateBmrForm } from "./generate-form";
+import { RecordedDocument } from "../../recorded-document";
 import { PrintButton } from "./print-button";
 
-export const metadata: Metadata = { title: "Batch Manufacturing Record" };
+/** The tab title is the PDF file name Chrome proposes in "Save as PDF". */
+export async function generateMetadata({ params }: { params: Promise<{ batchId: string }> }): Promise<Metadata> {
+  const { batchId } = await params;
+  try {
+    const ctx = await requireContext();
+    if (ctx.can("production.batch.view")) return { title: { absolute: await bmrPrintTitle(ctx, batchId) } };
+  } catch {
+    // not visible or not signed in: the page itself shows why
+  }
+  return { title: "Batch Manufacturing Record" };
+}
 export const dynamic = "force-dynamic";
 
 /**
@@ -68,6 +79,7 @@ export default async function BmrPrintPage({ params, searchParams }: Props) {
       <style>{`
         @media print {
           .bmr-print-root { background: #fff !important; padding: 0 !important; min-height: 0 !important; }
+          .bmr-doc-scroll { overflow: visible !important; }
           .bmr-preview { display: none !important; }
           .bmr-preview-print-msg { display: block !important; }
         }
@@ -114,6 +126,15 @@ export default async function BmrPrintPage({ params, searchParams }: Props) {
           </div>
         ) : null}
 
+        {ok && shown?.status === "ready" && (
+          <p className="text-[12px] leading-snug text-[#5b5951]">
+            In Chrome&apos;s print window: Destination <b>Save as PDF</b> or your printer · Paper size <b>A4</b> · Margins <b>Default</b> · Scale <b>100</b> · under More settings turn <b>Headers and footers off</b> (this record prints its own on every page) and <b>Background graphics on</b>.
+          </p>
+        )}
+        {ok && render?.rendererVersion === 1 && (
+          <p className="text-[12px] leading-snug text-[#5b5951]">This copy uses the earlier BMR layout (template renderer v1) and is kept exactly as recorded. New batches print the seven-part layout once QA approves a BMR template version that uses it.</p>
+        )}
+
         {view.stale && !requested && (
           <div className="rounded-[12px] border border-line bg-white px-3 py-3 text-[13px]">
             <p className="mb-2">
@@ -147,7 +168,7 @@ export default async function BmrPrintPage({ params, searchParams }: Props) {
         )}
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="bmr-doc-scroll overflow-x-auto">
         {ok && render?.css && render.body ? (
           <div style={{ position: "relative" }}>
             {overlay && (
@@ -155,15 +176,11 @@ export default async function BmrPrintPage({ params, searchParams }: Props) {
                 {overlay}
               </div>
             )}
-            <style>{render.css}</style>
-            <div dangerouslySetInnerHTML={{ __html: render.body }} />
+            <RecordedDocument css={render.css} body={render.body} />
           </div>
         ) : !requested && view.preview ? (
           <>
-            <div className="bmr-preview">
-              <style>{view.preview.css}</style>
-              <div dangerouslySetInnerHTML={{ __html: view.preview.body }} />
-            </div>
+            <RecordedDocument className="bmr-preview" css={view.preview.css} body={view.preview.body} />
             <p className="bmr-preview-print-msg">This is an unrecorded preview. Generate the BMR on the screen before printing.</p>
           </>
         ) : !shown && !view.preview ? (

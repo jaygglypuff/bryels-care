@@ -175,7 +175,8 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
   }, { href: null, m: -1 }).href;
   // Round 4 (UX re-audit C #9): words beside Scan, To approve and Messages at 1280–1535 px where they fit. With the
   // site selector in the bar (people with more than one site) they do not (measured at 1440: 110 px short), so
-  // To approve and Messages stay icons with tooltips there; Scan keeps its short word.
+  // To approve and Messages stay icons with tooltips there; Scan keeps its short word. Chrome audit 2026-11: also at
+  // 1536 px and wider (measured at 1920 for QA: the words pushed "Sales & Customers" out of the menu).
   const tightTopBar = sites.length > 1;
   const withCount = (label: string, href: string) => (badges[href] ? `${label}, ${badges[href]} open` : label);
 
@@ -268,8 +269,9 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
               title="Scan or search"
             >
               <ScanLine size={18} aria-hidden />
-              <span className="md:hidden xl:inline 2xl:hidden">Scan</span>
-              <span className="hidden md:inline xl:hidden 2xl:inline">Scan or search</span>
+              {/* Chrome audit 2026-11: with the site selector the long word did not fit at ≥ 1536 px either (the menu was cut). */}
+              <span className={cx("md:hidden xl:inline", !tightTopBar && "2xl:hidden")}>Scan</span>
+              <span className={cx("hidden md:inline xl:hidden", !tightTopBar && "2xl:inline")}>Scan or search</span>
             </Link>
             <div className="hidden sm:block">
               <SyncChip userId={user.id} />
@@ -283,7 +285,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
                 title="To approve"
               >
                 <ListChecks size={18} aria-hidden />
-                <span className={cx("hidden whitespace-nowrap md:inline", tightTopBar && "xl:hidden 2xl:inline")}>To approve</span>
+                <span className={cx("hidden whitespace-nowrap md:inline", tightTopBar && "xl:hidden")}>To approve</span>
                 {approvalCount > 0 && (
                   <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full bg-[#c62828] px-1 text-[10px] font-semibold leading-[18px] text-white">{approvalCount > 99 ? "99+" : approvalCount}</span>
                 )}
@@ -291,7 +293,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
             )}
             <Link href="/notifications" className={cx("relative flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium text-fg-2 shadow-[var(--shadow-card)] hover:text-fg", pathname.startsWith("/notifications") && "text-primary-text")} aria-label={`Messages, ${unreadCount} unread`} title="Messages">
               <Bell size={18} aria-hidden />
-              <span className={cx("hidden md:inline", tightTopBar && "xl:hidden 2xl:inline")}>Messages</span>
+              <span className={cx("hidden md:inline", tightTopBar && "xl:hidden")}>Messages</span>
               {unreadCount > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full bg-[#c62828] px-1 text-[10px] font-semibold leading-[18px] text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>
               )}

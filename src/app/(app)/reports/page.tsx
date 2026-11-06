@@ -37,7 +37,9 @@ export default async function ReportLibraryPage() {
           <EmptyState title="No lists for your role">Lists appear here for the areas your role can see (stock, production, quality, customers). Ask the owner if you need one.</EmptyState>
         </Card>
       ) : (
-        REPORT_CATEGORIES.map((cat) => {
+        // Desktop (≥ 1280 px): two columns of lists instead of rows stretched across the whole screen.
+        <div className="space-y-5 xl:grid xl:grid-cols-2 xl:items-start xl:gap-x-6 xl:gap-y-5 xl:space-y-0">
+        {REPORT_CATEGORIES.map((cat) => {
           const list = entries.filter((e) => e.def.category === cat);
           if (!list.length) return null;
           return (
@@ -65,7 +67,8 @@ export default async function ReportLibraryPage() {
               </PlainList>
             </section>
           );
-        })
+        })}
+        </div>
       )}
       <MoreDetails title="Lists that are coming later">
         <p className="text-[13px] text-fg-2">These lists need information the system does not keep yet. They appear above when it does.</p>

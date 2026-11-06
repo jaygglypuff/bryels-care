@@ -1,5 +1,5 @@
 /**
- * W2D demo data: the BMR template (paper BMR layout, renderer `bmr` v1) and the hybrid paper page
+ * W2D demo data: the BMR template (paper BMR wording in seven parts, renderer `bmr` v2 since 2026-11) and the hybrid paper page
  * template (renderer `bmr_paper_page` v1), both approved by the demo QA user after submission by
  * the demo site manager. Effective from well before the oldest seeded batch so every seeded batch
  * resolves "the version effective at batch creation". Fictional only; called from src/db/seed.ts.
@@ -8,7 +8,7 @@ import { and, eq } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as s from "../schema";
 import { definitionChecksum } from "../../modules/documents/checksum";
-import { defaultBmrDefinition } from "../../modules/documents/renderers/bmr-v1";
+import { defaultBmrDefinitionV2 } from "../../modules/documents/renderers/bmr-v2";
 import { defaultBmrPaperPageDefinition } from "../../modules/documents/renderers/bmr-paper-page-v1";
 
 type Db = PostgresJsDatabase<typeof s>;
@@ -24,7 +24,7 @@ export async function seedW2d(db: Db) {
   const approvedAt = new Date(Date.now() - 400 * 86_400_000);
 
   const templates = [
-    { code: "BMR-STD", name: "Batch Manufacturing Record (paper BMR layout)", definition: defaultBmrDefinition() },
+    { code: "BMR-STD", name: "Batch Manufacturing Record", definition: defaultBmrDefinitionV2() },
     { code: "BMR-PAPER", name: "BMR hybrid paper page (blank, handwritten steps)", definition: defaultBmrPaperPageDefinition() },
   ];
   for (const t of templates) {
