@@ -2210,3 +2210,26 @@ When an order's stock is fully set aside (`allocateOrder`), the people at that s
 (`sales.pick.create`, hand-off kind `pick`) get one message per order ("Get order … from the shelf"), never the person
 who set it aside. The live check showed "Get from shelf" red on How work flows because nobody was told. Test in
 `tests/integration/sales/fulfilment.test.ts`; demo seed version raised.
+
+## ADR-115 Repository clean-up after the redesign (owner request 2026-11-06)
+
+Status: Accepted (owner delegated); evidence: repository hygiene audit 2026-11-06.
+
+Decisions:
+1. **Old screens.** `/production/board` is retired (server redirect to `/production/orders?view=board`; page, action,
+   service, setting `production.board.columns` and its tests removed). `/production/staging/[batchId]` is retired
+   (redirect to the batch record); its old QA lot-substitution path is replaced by ADR-104 §1 and removed. The paper
+   weighing sheet and batch traveler prints stay (paper backup for the floor) and are linked from the batch record
+   (⋯ More). The help guides for retired screens (work order, staging, weighing) are removed; the others use current
+   menu words.
+2. **Dead code** with zero references is removed (unused files, server actions, components, exports).
+3. **Local demo = live demo.** `pnpm db:reset` and local set-up load the lite demo; the integration tests keep the full
+   seed through `tests/support`. README documents both profiles.
+4. **Maintenance switch.** `MAINTENANCE_MODE=1` (used by the restore runbook) is implemented: every request except health
+   checks gets a plain 503 page. `SESSION_SECRET` is documented as not used.
+5. **Docs.** Superseded planning documents move to `docs/archive/` with a pointer to the ADRs; the old demo screenshots
+   (`docs/demo/*.png`, 23 Oct) are removed; README, LEGACY_SCREENS, PRD (status column for assumptions), training plan,
+   KPI doc, help pages and `.env.example` are brought up to date. Decision-log numbering is cleaned up in place (no
+   ADR text changes meaning).
+6. **Migrations.** File 0033 does not exist (journal idx 33 is `0034_…`); the next generated migration is renamed to
+   `0037_…` so prefixes stay unique; documented in `docs/data-model.md`.
