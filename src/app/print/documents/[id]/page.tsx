@@ -6,6 +6,7 @@ import { getGeneratedDocument, renderForDisplay, type GeneratedDocumentDetail } 
 import { LinkButton } from "@/ui/core";
 import { Banner } from "@/ui/status";
 import { PrintButton } from "../../lot-label/print-button";
+import { RecordedDocument } from "../../recorded-document";
 
 export const metadata = { title: "Print document" };
 export const dynamic = "force-dynamic";
@@ -41,10 +42,7 @@ export default async function PrintDocumentPage({ params }: { params: Promise<{ 
         {render && !ok && <Banner tone="bad" title="This document can't be reproduced exactly">Do not print; ask an administrator. {render.error ?? ""}</Banner>}
       </div>
       {ok && render?.css && render.body && (
-        <>
-          <style>{render.css}</style>
-          <div dangerouslySetInnerHTML={{ __html: render.body }} />
-        </>
+        <RecordedDocument css={render.css} body={render.body} />
       )}
     </main>
   );

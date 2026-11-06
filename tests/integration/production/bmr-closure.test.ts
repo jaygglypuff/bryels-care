@@ -107,7 +107,7 @@ describe("US-3-17 BMR template engine", () => {
     const r = await createTemplate(manager, { code: "BMR-LOTION-T", name: "Lotion BMR (test)", templateKind: "bmr" });
     const [v] = await db.select().from(documentTemplateVersions).where(eq(documentTemplateVersions.id, r.versionId));
     const def = v.definition as ReturnType<typeof defaultBmrDefinition>;
-    expect(def.renderer).toEqual({ id: "bmr", version: 1 });
+    expect(def.renderer).toEqual({ id: "bmr", version: 2 });
     for (const required of ["materials", "checklist", "qc", "disposition_signatures"]) {
       const bad = { ...def, sections: def.sections.map((s) => (s.id === required ? { ...s, enabled: false } : s)) };
       await expectCode(updateDraftDefinition(manager, v.id, JSON.stringify(bad)), "validation");
@@ -134,7 +134,7 @@ describe("US-3-17 BMR template engine", () => {
   });
 
   it("the renderer is pure: no database, ORM or clock access (batch.snapshot.renderer_reads_snapshot_only, static)", () => {
-    for (const f of ["bmr-v1.ts", "bmr-data.ts", "bmr-paper-page-v1.ts", "bmr-logo.ts"]) {
+    for (const f of ["bmr-v1.ts", "bmr-v2.ts", "bmr-data.ts", "bmr-paper-page-v1.ts", "bmr-logo.ts"]) {
       const src = readFileSync(path.join("src/modules/documents/renderers", f), "utf8");
       expect(src, f).not.toMatch(/from "@\/db|drizzle-orm|server-only|new Date\(|Date\.now/);
     }
@@ -185,8 +185,9 @@ describe("US-3-18 BMR generation, watermarks, QR and controlled reprint", () => 
     expect(out.body).toContain("Beauty and Wellness From Nature");
     expect(out.body).toContain("Final Disposition:");
     expect(out.body).toContain("Name and Signature of QA:");
-    expect(out.css).toContain(`Batch ${released1.batchNumber} · page `);
-    expect(out.css).toContain('counter(page) " of " counter(pages)');
+    // Renderer v2 (2026-11): running header "<product> · Batch <no> · Lot <lot>" and "Page x of y" on every page.
+    expect(out.css).toContain(`Batch ${released1.batchNumber}`);
+    expect(out.css).toContain('"Page " counter(page) " of " counter(pages)');
     // A-RPT-22: quantities only; the formula's percentages never print.
     expect(out.body).not.toMatch(/% of formula|percent of batch/i);
     const au = await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, d.id), eq(auditEvents.action, "documents.generated_document.generated")));
@@ -291,6 +292,28 @@ describe("US-3-19 batch closure and controlled reopen/amend", () => {
     const again = await closeBatch(manager, { batchId: released1.id, note: "Record complete", idempotencyKey: k });
     expect(again.documentId).toBe(r.documentId);
     await expectCode(closeBatch(manager, { batchId: released1.id, idempotencyKey: key() }), "state");
+  });
+
+  it("the closed batch's BMR prints all seven parts in order, the appendix, roles and no stored keys (owner 2026-11)", async () => {
+    const view = await bmrPrintView(manager, released1.id);
+    expect(view.stale).toBe(false);
+    const out = await renderForDisplay((await doc(view.current!.id))!);
+    expect(out.integrity).toBe("ok");
+    const body = out.body!;
+    expect(body).toContain('data-renderer="bmr-v2"');
+    const order = ["1</span>Batch identity and recipe version", "2</span>Dispensing and weighing", "3</span>Procedure", "4</span>Packaging and labels", "5</span>Yield", "6</span>Problems and changes", "7</span>QA decision and sign-offs", "Appendix A · Paper record pages", "Appendix B · Audit trail"];
+    const at = order.map((t) => body.indexOf(t));
+    expect(at.every((i) => i >= 0), JSON.stringify(Object.fromEntries(order.map((t, i) => [t, at[i]])))).toBe(true);
+    expect([...at].sort((a, z) => a - z)).toEqual(at);
+    for (const id of ["header_block", "materials", "process_steps", "checklist", "packaging_reconciliation", "output_yield", "deviations", "remarks", "qc", "disposition_signatures", "attachments", "audit_appendix"]) expect(body, id).toContain(`data-section="${id}"`);
+    // QA-approved paper wording is kept.
+    for (const w of ["Product Name:", "Batch Number:", "Batch Formula No.:", "Theoretical Weight/ Volume (g)", "Actual Weigh/ Volume (g)", "Conducted by", "Checked by", "Theoretical Yield:", "Actual Yield:", "Final Disposition:", "Name and Signature of QA:", "Remarks:"]) expect(body, w).toContain(w);
+    // Signatures carry the role; the audit trail speaks in words, never stored keys or state codes.
+    expect(body).toMatch(/Production Operator|Site Manager|QA/);
+    expect(body).not.toMatch(/production\.batch\.|quality\.disposition\.|materials_staged|in_process|awaiting_qc/);
+    expect(out.css).toContain("size: A4 portrait");
+    expect(out.css).toContain("break-inside: avoid");
+    expect(out.css).toContain("table-header-group");
   });
 
   it("closures are append-only in the database", async () => {

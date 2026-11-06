@@ -16,14 +16,17 @@ import {
   dispositions,
   fileAttachments,
   inventoryLots,
+  labelJobs,
   organizations,
   processStepRecords,
   products,
   qualityHoldLots,
   qualityHolds,
+  roles,
   routingSteps,
   sites,
   testResults,
+  userSiteAssignments,
   users,
 } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
@@ -39,7 +42,11 @@ import {
   type SourceTemplate,
 } from "@/modules/documents";
 import { bmrBatchOutputs, bmrDeviations, bmrEquipmentUses, bmrInspections, bmrLineClearanceChecks, bmrPackagingReconciliations, bmrProcessReadings, bmrYieldRecord } from "./bmr-sources";
+import { currentBoxPlan } from "./batch-boxes";
 import { toleranceRange } from "./dispensing";
+import { batchMaterialChanges } from "./material-swaps";
+import { packagingLinesOf } from "./packaging-flow";
+import { auditSentence, batchStateWord, plainReason } from "./record-words";
 import { type FormulaSnapshot, idempotent } from "./shared";
 
 /**
@@ -105,6 +112,34 @@ async function names(q: DbOrTx, ids: (string | null | undefined)[]) {
   if (!list.length) return new Map<string, string>();
   const rows = await q.select({ id: users.id, name: users.displayName }).from(users).where(inArray(users.id, list));
   return new Map(rows.map((r) => [r.id, r.name]));
+}
+
+type RoleSpan = { userId: string; name: string; from: Date; to: Date | null; revokedAt: Date | null };
+
+/**
+ * Roles of the signers at the batch site (or organization-wide), so the printed record says "name, role, time"
+ * (BMR renderer v2). The role valid at the signature time wins; otherwise any role the person held there.
+ */
+async function siteRoles(q: DbOrTx, siteId: string, ids: (string | null | undefined)[]) {
+  const list = [...new Set(ids.filter((x): x is string => !!x))];
+  const rows: RoleSpan[] = list.length
+    ? (
+        await q
+          .select({ userId: userSiteAssignments.userId, name: roles.name, from: userSiteAssignments.validFrom, to: userSiteAssignments.validTo, revokedAt: userSiteAssignments.revokedAt, siteId: userSiteAssignments.siteId, orgWide: userSiteAssignments.isOrganizationWide })
+          .from(userSiteAssignments)
+          .innerJoin(roles, eq(roles.id, userSiteAssignments.roleId))
+          .where(inArray(userSiteAssignments.userId, list))
+      ).filter((r) => r.orgWide || r.siteId === siteId)
+    : [];
+  return (id: string | null | undefined, when?: Date | string | null): string | null => {
+    if (!id) return null;
+    const mine = rows.filter((r) => r.userId === id);
+    if (!mine.length) return null;
+    const t = when ? new Date(when) : null;
+    const valid = t ? mine.filter((r) => r.from <= t && (!r.to || r.to > t) && (!r.revokedAt || r.revokedAt > t)) : [];
+    const pick = valid.length ? valid : mine.filter((r) => !r.revokedAt).length ? mine.filter((r) => !r.revokedAt) : mine;
+    return [...new Set(pick.map((r) => r.name))].sort().join(" / ");
+  };
 }
 
 /** Batch of the caller's organization and sites; not_found otherwise (no existence leak). */
@@ -222,6 +257,32 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
     ...audits.map((a) => a.actorId),
   ]);
   const who = (id: string | null | undefined) => (id ? (nm.get(id) ?? "Unknown user") : null);
+  const roleOf = await siteRoles(q, batch.siteId, [
+    ...disp.flatMap((d) => [d.r.operatorId, d.r.checkerId]),
+    ...stepRecs.flatMap((s) => [s.conductedBy, s.checkedBy]),
+    ...disps.map((d) => d.decidedBy),
+  ]);
+
+  // Renderer v2 extras (optional dataset fields): material changes, packaging taken, boxes, labels printed.
+  const [changes, packagingTaken, boxPlan, labelRows] = await Promise.all([
+    batchMaterialChanges(q, batch.id),
+    packagingLinesOf(q, batch),
+    currentBoxPlan(q, batch.id),
+    q
+      .select({ j: labelJobs, by: users.displayName })
+      .from(labelJobs)
+      .leftJoin(users, eq(users.id, labelJobs.printedBy))
+      .where(
+        and(
+          eq(labelJobs.organizationId, ctx.organizationId),
+          or(
+            and(eq(labelJobs.entityType, "batch"), eq(labelJobs.entityId, batch.id)),
+            and(eq(labelJobs.entityType, "batch_box"), sql`${labelJobs.entityId} in (select id from batch_boxes where batch_id = ${batch.id})`),
+          ),
+        ),
+      )
+      .orderBy(asc(labelJobs.requestedAt)),
+  ]);
 
   // C: materials, grouped by phase in BOM order; names from the snapshot (batch snapshot rule).
   const snapLine = (bm: (typeof mats)[number]) => snap.lines.find((l) => l.bomLineId === bm.bomLineId) ?? snap.lines.find((l) => l.lineNo === bm.lineNo);
@@ -251,6 +312,9 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
           operator: who(d.r.operatorId) ?? "",
           at: fmtDateTime(d.r.recordedAt),
           checker: who(d.r.checkerId),
+          operatorRole: roleOf(d.r.operatorId, d.r.recordedAt),
+          checkerRole: roleOf(d.r.checkerId, d.r.checkedAt ?? d.r.recordedAt),
+          checkedAt: at(d.r.checkedAt),
           exceptionReason: d.r.exceptionReason ?? null,
           // A voided weighing stays on the record, struck through with its reason (W2B voidDispense).
           struck: !!d.r.voidedAt,
@@ -289,8 +353,12 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
         instruction: s.instruction ?? null,
         workInstruction: s.workInstruction ? `${s.workInstruction.code} rev ${s.workInstruction.revisionNo}` : null,
         readings: r?.readings ?? null,
-        conducted: r ? { name: who(r.conductedBy) ?? "", at: at(r.completedAt) } : null,
-        checked: r?.checkedBy ? { name: who(r.checkedBy) ?? "", at: at(r.checkedAt) } : null,
+        conducted: r ? { name: who(r.conductedBy) ?? "", at: at(r.performedAt ?? r.completedAt), role: roleOf(r.conductedBy, r.performedAt ?? r.completedAt ?? r.startedAt) } : null,
+        checked: r?.checkedBy ? { name: who(r.checkedBy) ?? "", at: at(r.checkedAt), role: roleOf(r.checkedBy, r.checkedAt) } : null,
+        startText: at(r?.startedAt),
+        endText: at(r?.completedAt),
+        statusText: r ? (STEP_STATUS_WORD[r.status] ?? r.status.replace(/_/g, " ")) : "Not started",
+        notes: r?.notes ?? null,
       };
     });
 
@@ -303,7 +371,7 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
   const y = yieldRec.rows[0];
   const testers = [...new Set(tests.map((t) => who(t.testedBy)).filter(Boolean))].join(", ");
   const controlledRecord = await getSetting(q, ctx.organizationId, "documents.controlled_record", batch.siteId);
-  const latestDisposition = disposition ? { decidedBy: who(disposition.decidedBy) ?? "", decidedAt: fmtDateTime(disposition.decidedAt) } : null;
+  const latestDisposition = disposition ? { decidedBy: who(disposition.decidedBy) ?? "", decidedAt: fmtDateTime(disposition.decidedAt), role: roleOf(disposition.decidedBy, disposition.decidedAt) } : null;
 
   const data: BmrData = {
     schema: "bmr/v1",
@@ -327,6 +395,8 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
       snapshotTakenText: fmtDateTime(snap.takenAt ?? batch.createdAt),
       reopenCount,
       closedText: batch.status === "closed" && lastClosure ? fmtDateTime(lastClosure.closedAt) : null,
+      lotNumber: outputLot?.lotNumber ?? batch.outputLotNumber ?? null,
+      revisionText: null, // set below, once the revision time is known
     },
     summary: {
       stepsDone: steps.filter((s) => s.conducted).length,
@@ -422,12 +492,34 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
       rows: deviations.rows.map((d) => ({ number: d.number, kind: d.kind.replace(/_/g, " "), severity: d.severity, status: d.status, description: d.description, raisedBy: d.raisedBy, raisedAt: at(d.raisedAt), closedBy: d.closedBy, closedAt: at(d.closedAt) })),
     },
     exceptions,
+    materialChanges: changes.map((c) => c.sentence),
+    packagingLines: packagingTaken.map((p) => ({
+      name: p.materialName,
+      neededText: fmtQty(p.qty, p.uom, 0),
+      takenText: fmtQty(p.issuedQty, p.uom, 0),
+      lots: p.issued.length ? p.issued.map((x) => `${x.lotNumber} (${fmtQty(x.qty, p.uom, 0)})`).join(", ") : null,
+    })),
+    boxes: boxPlan.length
+      ? {
+          summary: `${boxPlan.length} ${boxPlan.length === 1 ? "box" : "boxes"}, ${fmtQty(boxPlan.reduce((t, r) => t + r.pieces, 0), "pcs", 0)} in all`,
+          rows: boxPlan.map((r) => ({ boxNo: r.boxNo, pieces: fmtQty(r.pieces, "pcs", 0), number: r.containerNumber ?? null, status: r.status === "boxed" ? "Packed" : r.status === "planned" ? "Planned" : r.status.replace(/_/g, " ") })),
+        }
+      : undefined,
+    labelsPrinted: labelRows.map(({ j, by }) => ({
+      kind: j.entityType === "batch_box" ? `Box label ${j.entityNumber}` : "Product labels",
+      copies: j.copies,
+      status: j.voidedAt ? `Voided: ${j.voidReason ?? ""}` : (LABEL_STATUS_WORD[j.status] ?? j.status.replace(/_/g, " ")),
+      by: by ?? null,
+      at: at(j.printedAt),
+      reprint: j.reprintNo ? `Reprint ${j.reprintNo}${j.reprintNote ? `: ${j.reprintNote}` : ""}` : null,
+    })),
     disposition: disposition
       ? {
           decision: disposition.decision === "release" ? "release" : disposition.decision === "reject" ? "reject" : "other",
           label: `${disposition.decision === "release" ? "Approved" : disposition.decision === "reject" ? "Disapproved" : disposition.decision.replace(/_/g, " ")} [${disposition.decision}]`,
           decidedBy: latestDisposition!.decidedBy,
           decidedAt: latestDisposition!.decidedAt,
+          decidedByRole: latestDisposition!.role,
           reason: disposition.reason ?? null,
           overrideReason: qcheck?.override_reason ?? null,
           testerReleased: qcheck?.tester_released ?? false,
@@ -472,10 +564,11 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
       reviewedAt: at(p.reviewedAt),
     })),
     audit: [
-      ...transitions.map((t) => ({ when: t.at, row: { at: fmtDateTime(t.at), actor: who(t.actorId) ?? "", event: `State ${t.fromState ?? "—"} → ${t.toState}`, detail: t.reason ?? null } })),
+      // 2026-11 (owner: no raw keys on the printed record): states and events in words (record-words.ts).
+      ...transitions.map((t) => ({ when: t.at, row: { at: fmtDateTime(t.at), actor: who(t.actorId) ?? "", event: `Status: ${t.fromState ? batchStateWord(t.fromState) : "new"} → ${batchStateWord(t.toState)}`, detail: plainReason(t.reason) } })),
       ...audits
         .filter((a) => !a.action.startsWith("documents.generated_document"))
-        .map((a) => ({ when: a.occurredAt, row: { at: fmtDateTime(a.occurredAt), actor: who(a.actorId) ?? a.actorLabel ?? "system", event: a.action, detail: a.reason ?? auditDetail(a.after) } })),
+        .map((a) => ({ when: a.occurredAt, row: { at: fmtDateTime(a.occurredAt), actor: who(a.actorId) ?? a.actorLabel ?? "system", event: auditSentence({ action: a.action, after: a.after, reason: a.reason }), detail: plainReason(a.reason) } })),
     ]
       .sort((x, z) => new Date(x.when).getTime() - new Date(z.when).getTime())
       .map((x) => x.row),
@@ -513,17 +606,12 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
     ...deviations.rows.flatMap((r) => [r.raisedAt, r.closedAt]),
     ...inspections.rows.map((r) => r.reviewedAt),
   ]);
+  data.batch.revisionText = fmtDateTime(revisionAt);
   return { data, revisionAt, status: batch.status, siteId: batch.siteId, siteCode, batchNumber: batch.batchNumber, createdAt: batch.createdAt, reopenCount };
 }
 
-/** Compact, non-sensitive summary of an audit payload for the appendix. */
-function auditDetail(after: unknown): string | null {
-  if (!after || typeof after !== "object") return null;
-  const parts = Object.entries(after as Record<string, unknown>)
-    .filter(([k, v]) => v !== null && v !== undefined && typeof v !== "object" && !/id$/i.test(k))
-    .map(([k, v]) => `${k}: ${String(v)}`);
-  return parts.length ? parts.join("; ").slice(0, 300) : null;
-}
+const STEP_STATUS_WORD: Record<string, string> = { pending: "Not started", in_progress: "Being done", awaiting_check: "Waiting for the second person", completed: "Done", skipped: "Skipped" };
+const LABEL_STATUS_WORD: Record<string, string> = { queued: "Not printed yet", rendering: "Not printed yet", ready: "Ready, not printed yet", printed: "Printed", failed: "Print failed", cancelled: "Cancelled" };
 
 /** Template version of the batch: pinned by its first BMR, else effective at batch creation, else current. */
 export async function bmrTemplateFor(q: DbOrTx, ctx: AuthContext, b: { id: string; siteId: string; createdAt: Date }, kind: typeof BMR_KIND | typeof PAPER_PAGE_KIND = BMR_KIND): Promise<SourceTemplate | null> {
@@ -628,6 +716,15 @@ export async function bmrPrintView(ctx: AuthContext, batchId: string) {
   };
 }
 export type BmrPrintView = Awaited<ReturnType<typeof bmrPrintView>>;
+
+/**
+ * Tab title of the BMR print page. Chrome's "Save as PDF" proposes it as the file name, so the PDF is saved as
+ * "BMR B-26-0001 Acapulco Soap 135 g" instead of "Batch Manufacturing Record". Same visibility as the page.
+ */
+export async function bmrPrintTitle(ctx: AuthContext, batchId: string): Promise<string> {
+  const { batch, product } = await visibleBatch(db, ctx, batchId);
+  return `BMR ${batch.batchNumber} ${product.name}`;
+}
 
 /** Rows of the BMR documents of a batch visible to the caller (for the closure page history). */
 export async function bmrDocuments(ctx: AuthContext, batchId: string) {

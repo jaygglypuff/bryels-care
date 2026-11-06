@@ -100,7 +100,7 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
     );
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-3xl lg:max-w-6xl">
       <RecordHeader
         typeLabel="Delivery"
         reference={s.shipmentNumber ?? s.deliveryReceiptNumber ?? "Delivery"}
@@ -170,7 +170,7 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
         </div>
       )}
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2 lg:items-start">
         {v.deliveryReceipt?.status === "acknowledged" && (
           <Card>
             <CardTitle>Proof of delivery</CardTitle>

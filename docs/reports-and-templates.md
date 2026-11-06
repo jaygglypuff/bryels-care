@@ -296,6 +296,45 @@ Rules: a batch cannot leave `awaiting_qc` while any `paper_then_transcribe` step
 | closed | `CONTROLLED COPY` (first generation at W05-20 by the system), `REPRINT n` afterwards | yes | The closure transaction enqueues the final generation; its `generated_documents` row is linked from the closure audit event |
 | closed → in_process \| quarantined (CX-REOPEN, `production.batch.admin`) → … → closed | `AMENDED rev n` | yes | Each closure after a reopen regenerates; earlier documents become `SUPERSEDED` and stay downloadable |
 
+
+### 2.7 BMR renderer v2: seven parts, Chrome print (owner request 2026-11)
+
+Owner: "BMR print is a mess. They will also use it in a Chrome browser so optimize it also for that." Renderer `bmr`
+v2 (`src/modules/documents/renderers/bmr-v2.ts`) lays out the same `bmr/v1` dataset (plus optional fields, below) as
+an A4 portrait document. v1 stays registered: a BMR printed with v1 re-renders to its recorded checksum; a template
+moves to v2 only when QA approves a new template version with `renderer: { id: "bmr", version: 2 }` (the demo seed
+creates BMR-STD v1 on renderer v2). A batch keeps the template version of its first BMR (§11.1 item 4).
+
+| Part | Content | Template section ids |
+|---|---|---|
+| Title | Logo, BATCH MANUFACTURING RECORD, document number, revision, watermark word, BC:DOC QR | `header_block` |
+| 1 Batch identity and recipe version | Product Name, Batch Number, finished-goods lot, Batch Size, Batch Formula No. (+ when fixed), steps version, inspection plan, Department, Start Date, End Date, status at print, planned by; summary row (steps recorded, open problem reports, holds, reopened) | `header_block`, `batch_summary` |
+| 2 Dispensing and weighing | Ingredient (INCI Name), Batch Number (lot used, supplier lot, expiry), Theoretical Weight/ Volume (g), Actual Weigh/ Volume (g), within range (+ scale, exception reason), Conducted by, Checked by (name, role, time); TOTAL kept with the last ingredient; 3 blank rows only while nothing is weighed | `materials` |
+| 3 Procedure | One block per step: name (exact configured words) and kind, state, instruction, Conducted by / Checked by (name, role, time), Started, Ended, readings (unit, OK range, value, OK?, by), clean-area answers, machines (calibration due, clean at start, used by); then the paper Checklist table | `process_steps`, `line_clearance`, `process_parameters`, `equipment`, `checklist` |
+| 4 Packaging and labels | Wrappers and packaging taken (needed, taken, lots), packaging and label count, boxes, labels printed (copies, status, by) | `packaging_reconciliation` |
+| 5 Yield | Theoretical Yield, Actual Yield (pieces × net mass, yield %), Expiration Date and lot, yield record, what was made | `output_yield` |
+| 6 Problems and changes | Other lot or ingredient used (ADR-104 §1), weighing exceptions, problem reports (deviations), corrections (amendments, nothing erased), reopens | `deviations` |
+| 7 QA decision and sign-offs | Test Results, Test Date / Conducted / Checked By, Final Disposition Approved / Disapproved, Name and Signature of QA (name, role) and Date, handwritten lines while paper is the controlled record, Remarks | `qc`, `disposition_signatures`, `remarks`; `qc.break_before = page` by default (A-RPT-05) |
+| Appendix A, B | Paper record pages (L); audit trail in words (M, new page); earlier documents | `attachments`, `audit_appendix` |
+
+Print rules: every page carries "<company> · Batch Manufacturing Record" (top left), "<product> · Batch <no> · Lot
+<lot>" (top right), document number, revision and template (bottom left), the watermark word (bottom centre) and
+"Page x of y" (bottom right) from `@page` margin boxes (Chrome 131+; other browsers print the first-page title block
+only). Body 10 pt, tables 9 pt, headings 11.5 pt; `thead` repeats; rows, ingredient groups, step blocks and the
+signature block never split. The renderer uses no clock, locale or `Intl` so its output is stable across Node versions.
+
+Optional `bmr/v1` dataset fields (older datasets without them still parse and print): `batch.lotNumber`,
+`batch.revisionText`, signature `role`, dispense `operatorRole` / `checkerRole` / `checkedAt`, step `startText` /
+`endText` / `statusText` / `notes`, `disposition.decidedByRole`, `materialChanges`, `packagingLines`, `boxes`,
+`labelsPrinted`. Since 2026-11 the builder also writes the audit trail in words (`record-words.ts`: "Status: Waiting to
+start → Materials ready", "QA said OK to use") instead of stored keys, and no longer prints the raw `key: value` dump
+of audit payloads (the reason is printed when there is one).
+
+Recorded documents on screen (`src/app/print/recorded-document.tsx`): the app's `.grid` utility also matched the
+renderers' `<table class="grid">` (dispensing sheet, traveler, pick list, packing list, delivery receipt, purchase
+order), so their tables lost their table layout on screen and in Chrome's print preview. The print pages now wrap the
+recorded body in `.recorded-doc`, which restores table display and keeps headings with what follows; the recorded
+markup and its checksum are unchanged.
 ---
 
 ## 3. Weighing / dispensing sheet

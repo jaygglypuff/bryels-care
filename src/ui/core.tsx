@@ -159,14 +159,19 @@ export function Textarea(props: ComponentProps<"textarea">) {
 }
 
 export function Dl({ items }: { items: [string, ReactNode][] }) {
+  // Desktop (≥ 1024 px, Chrome audit 2026-11): in a side panel the three columns squeezed values to one word per
+  // line; the list now takes three columns only when its own box is at least 36rem wide, else two. Phone and
+  // tablet keep 2 / 3 columns as before.
   return (
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-      {items.map(([k, v]) => (
-        <div key={k} className="min-w-0">
-          <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted">{k}</dt>
-          <dd className="mt-0.5 break-words text-[14px] text-fg tabular">{v}</dd>
-        </div>
-      ))}
-    </dl>
+    <div className="lg:@container">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-2 lg:@xl:grid-cols-3">
+        {items.map(([k, v]) => (
+          <div key={k} className="min-w-0">
+            <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted">{k}</dt>
+            <dd className="mt-0.5 break-words text-[14px] text-fg tabular">{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }

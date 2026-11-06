@@ -2,6 +2,7 @@ import { sha256Hex } from "../checksum";
 import { templateDefinitionSchema, type TemplateDefinition } from "../schemas";
 import { bmrPaperPageRendererV1 } from "./bmr-paper-page-v1";
 import { bmrRendererV1 } from "./bmr-v1";
+import { bmrRendererV2 } from "./bmr-v2"; // owner 2026-11: clean A4 BMR
 import { labelRendererV1 } from "./label-v1";
 import { labelRendererV2 } from "./label-v2"; // ADR-099
 import { testPageRendererV1 } from "./test-page-v1";
@@ -21,7 +22,8 @@ const RENDERERS: readonly Renderer[] = [
   labelRendererV2, // first: new label layouts get v2 by default (ADR-099)
   labelRendererV1, // kept: labels printed with v1 re-render to the same checksum
   testPageRendererV1,
-  bmrRendererV1, // W2D (US-3-17)
+  bmrRendererV2, // first: new BMR templates get v2 by default (seven parts, Chrome print)
+  bmrRendererV1, // W2D (US-3-17); kept: BMRs printed with v1 re-render to the same checksum
   bmrPaperPageRendererV1, // W2D (US-3-20)
   dispensingSheetRendererV1, // W2A (US-3-08)
   travelerRendererV1, // W2A (US-3-08)

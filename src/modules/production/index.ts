@@ -33,7 +33,7 @@ export { recordYield, approveYield, recordScrapRework, decideScrapRework } from 
 export { postBatchToQuarantine, quarantineLocations, transferBlockers, type PostToQuarantineInput } from "./output";
 export { getBatchExecution, batchSiteId, equipmentOptions, packagingLotOptions, signerOptions, type BatchExecution, type ExecStep } from "./execution-queries";
 // Wave 2 W2D: BMR documents, closure and controlled reopen/amend, hybrid paper pages (E-3-06).
-export { buildBmrDataset, generateBmr, generateBmrInTx, bmrPrintView, bmrDocuments, bmrWatermark, BMR_KIND, PAPER_PAGE_KIND, type BmrPrintView } from "./bmr";
+export { buildBmrDataset, generateBmr, generateBmrInTx, bmrPrintView, bmrPrintTitle, bmrDocuments, bmrWatermark, BMR_KIND, PAPER_PAGE_KIND, type BmrPrintView } from "./bmr";
 export {
   closeBatch,
   closureChecks,

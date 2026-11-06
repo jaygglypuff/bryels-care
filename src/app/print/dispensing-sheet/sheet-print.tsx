@@ -9,6 +9,7 @@ import { batchSheets, canSeeStaging, type BatchSheetKind } from "@/modules/produ
 import { LinkButton } from "@/ui/core";
 import { Banner } from "@/ui/status";
 import { PrintButton } from "../lot-label/print-button";
+import { RecordedDocument } from "../recorded-document";
 
 /**
  * Print page of a batch's dispensing sheet or traveler (US-3-08): shows the chosen (or latest)
@@ -52,10 +53,7 @@ export async function SheetPrint({ batchId, kind, docId }: { batchId: string; ki
         {render && !ok && <Banner tone="bad" title="This document can't be reproduced exactly">Do not print; ask an administrator. {render.error ?? ""}</Banner>}
       </div>
       {ok && render?.css && render.body && (
-        <>
-          <style>{render.css}</style>
-          <div dangerouslySetInnerHTML={{ __html: render.body }} />
-        </>
+        <RecordedDocument css={render.css} body={render.body} />
       )}
     </main>
   );

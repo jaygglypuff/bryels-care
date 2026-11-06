@@ -15,7 +15,8 @@ import { z } from "zod";
 
 const text = z.string().max(4000);
 const opt = text.nullable();
-const sig = z.object({ name: text, at: opt }).nullable();
+/** `role`: the person's role at the batch site when they signed (renderer v2 prints name + role + time; optional for older datasets). */
+const sig = z.object({ name: text, at: opt, role: opt.optional() }).nullable();
 
 const dispenseRow = z.object({
   lotNumber: text,
@@ -27,6 +28,10 @@ const dispenseRow = z.object({
   operator: text,
   at: text,
   checker: opt,
+  /** Optional (added 2026-11 for renderer v2): roles and the check time. */
+  operatorRole: opt.optional(),
+  checkerRole: opt.optional(),
+  checkedAt: opt.optional(),
   exceptionReason: opt,
   /** Voided or superseded weighing: printed struck through with the reason (append-only). */
   struck: z.boolean(),
@@ -69,6 +74,10 @@ export const bmrDataSchema = z.object({
     snapshotTakenText: text,
     reopenCount: z.number().int().min(0),
     closedText: opt,
+    /** Optional (renderer v2): finished-goods lot number (fixed for labels or made at Finish). */
+    lotNumber: opt.optional(),
+    /** Optional (renderer v2): the source revision time in words (meta keeps the ISO value). */
+    revisionText: opt.optional(),
   }),
   summary: z.object({
     stepsDone: z.number().int(),
@@ -95,6 +104,11 @@ export const bmrDataSchema = z.object({
         readings: opt,
         conducted: sig,
         checked: sig,
+        /** Optional (renderer v2): when the step started and ended, and its state in words. */
+        startText: opt.optional(),
+        endText: opt.optional(),
+        statusText: opt.optional(),
+        notes: opt.optional(),
       }),
     )
     .max(200),
@@ -122,6 +136,14 @@ export const bmrDataSchema = z.object({
   }),
   deviations: section(z.object({ number: text, kind: text, severity: text, status: text, description: text, raisedBy: opt, raisedAt: opt, closedBy: opt, closedAt: opt })),
   exceptions: z.array(text).max(200),
+  /** Optional (renderer v2): other lot or other ingredient used at weighing (ADR-104 §1), one sentence each. */
+  materialChanges: z.array(text).max(200).optional(),
+  /** Optional (renderer v2): wrappers and other packaging taken for the batch (ADR-092). */
+  packagingLines: z.array(z.object({ name: text, neededText: text, takenText: text, lots: opt })).max(100).optional(),
+  /** Optional (renderer v2): boxes of the current box plan (ADR-104 §2). */
+  boxes: z.object({ summary: text, rows: z.array(z.object({ boxNo: z.number().int(), pieces: text, number: opt, status: text })).max(500) }).optional(),
+  /** Optional (renderer v2): label print jobs of the batch and its boxes. */
+  labelsPrinted: z.array(z.object({ kind: text, copies: z.number().int(), status: text, by: opt, at: opt, reprint: opt })).max(500).optional(),
   disposition: z
     .object({
       decision: z.enum(["release", "reject", "other"]),
@@ -129,6 +151,8 @@ export const bmrDataSchema = z.object({
       decidedBy: text,
       decidedAt: text,
       reason: opt,
+      /** Optional (renderer v2): the decider's role at the site. */
+      decidedByRole: opt.optional(),
       /** ADR-080 §8: the releaser worked on the batch; owner override with this typed reason. */
       overrideReason: opt.optional(),
       /** ADR-080 §8: the releaser also entered the test results (quality.release.tester_may_release). */
