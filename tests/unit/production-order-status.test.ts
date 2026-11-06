@@ -260,3 +260,20 @@ describe("next action table (V2-2): one primary button per state", () => {
     expect(label(q.primary)).toBe("Check quality");
   });
 });
+
+describe("ADR-110 C12 (walk P8): a waiting check comes before the next batch", () => {
+  const me: ActionCan = { can: () => true, userId: "u-me" };
+  const act = (bs: BatchFact[]) => productionOrderActions(productionOrderStatus("in_progress", bs, NOW), { siteId: "s1", workOrderId: "wo1" }, me, { can: true, sodConflict: false });
+  const waiting = (by: string) => batch("in_process", { stepRecords: [done(1), { stepNo: 2, name: "Weigh", kind: "dispensing", status: "awaiting_check", earliestCompletionAt: null, conductedBy: by }] });
+
+  it("my own step waits for another person: Next step shows that wait, not batch 2's Get materials", () => {
+    const r = act([waiting("u-me"), batch("planned")]);
+    expect(r.primary).toMatchObject({ kind: "wait", title: "Waiting for a check" });
+    expect(r.perBatch.map((p) => p.action.kind)).toEqual(["wait", "link"]); // batch 2 can still be started from its row
+  });
+
+  it("a check I can sign comes first", () => {
+    const r = act([batch("planned"), waiting("u-other")]);
+    expect(r.primary).toMatchObject({ kind: "link", label: "Check Weigh" });
+  });
+});

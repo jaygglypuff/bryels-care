@@ -547,7 +547,9 @@ export async function getOperatorHome(ctx: AuthContext): Promise<OperatorTile[]>
         description: "Deliveries and batches waiting for the QA check, and lots stopped by QA.",
       })),
     );
-  if (ctx.can("sales.sales_order.view"))
+  // ADR-110 C13: warehouse people get "To get from shelf · To check · To send out · Proof of delivery missing" as their
+  // Home work list instead of this one tile (it said "send out" but opened the pick list).
+  if (ctx.can("sales.sales_order.view") && !(warehouse && ctx.can("sales.pick.view")))
     tiles.push(
       db
         .select({ n: sql<number>`count(*)::int` })

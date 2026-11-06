@@ -108,7 +108,10 @@ describe("US-6-01 approved-supplier list, prices, lead times, MOQ", () => {
     expect(forWh.lines.every((l) => l.unitAmount === null && l.lineAmount === null)).toBe(true);
     expect((await listPurchaseOrders(u.warehouse, {})).every((r) => r.totalAmount === undefined)).toBe(true);
     const forMgr = await getPurchaseOrder(u.manager, po.id);
-    expect(forMgr.po.totalAmount).toBeNull();
+    // ADR-110 C15: an approver sees the total they approve; unit and line prices stay hidden.
+    expect(forMgr.po.totalAmount).not.toBeNull();
+    expect(forMgr.lines.every((l) => l.unitAmount === null && l.lineAmount === null)).toBe(true);
+    expect(forMgr.po.subtotalAmount).toBeNull();
     expect((await getPurchaseOrder(u.proc, po.id)).po.totalAmount).not.toBeNull();
   });
 

@@ -13,6 +13,7 @@ import { DecisionChip, QaStatusChip, WordChip, fmtLotQty } from "./_ui";
 import { Help } from "@/ui/help/help";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Check a batch or delivery" };
 
 function Count({ n }: { n: number }) {
   return (
@@ -91,7 +92,7 @@ export default async function QaQueuePage() {
       )}
 
       <div className="flex flex-col gap-5">
-        <Card>
+        <Card id="batches" className="scroll-mt-24">
           <CardTitle>
             Batches waiting for QA check
             <Count n={q.batches.length} />
@@ -130,7 +131,7 @@ export default async function QaQueuePage() {
           )}
         </Card>
 
-        <Card>
+        <Card id="lots" className="scroll-mt-24">
           <CardTitle>
             Deliveries waiting for QA check, and lots stopped by QA
             <Count n={q.lots.length} />

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { requireContext } from "@/lib/auth/context";
+import { getContext, requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { pieceWord } from "@/modules/production";
@@ -17,6 +17,8 @@ import { WhoCanHelp } from "@/ui/who-can-help";
 import { Forbidden } from "../../../forbidden";
 import { StartInspectionButton } from "../../w2c-forms";
 import { qaWord } from "../../_ui";
+import { ordersReadyForProduct } from "@/modules/analytics";
+import { QaRules } from "../../qa-rules";
 import { FailForm, NotYetForm, PassForm, TestsForm } from "../forms";
 import { TestResultForm } from "../../batches/[batchId]/test-form";
 
@@ -104,6 +106,7 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
           {v.batch.status === "closed" ? " The batch is closed." : ""}
         </Banner>
       )}
+      {decided && (v.batch.status === "released" || v.batch.status === "closed") && <AfterOk v={v} />}
       {!decided && v.onHold && (
         <Banner tone="warn" title="Not yet – stopped by QA">
           {v.lastCheck?.decision === "not_yet" ? `Not yet: ${v.lastCheck.reason ?? ""}. Check again on ${v.lastCheck.checkAgainOn ? fmtDate(v.lastCheck.checkAgainOn) : "—"}.` : "The lot is stopped by QA."}
@@ -165,7 +168,7 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
                         <span>
                           {t.name}: <b>{t.result}</b> <span className="text-muted">· {t.by}</span>
                         </span>
-                        <Chip tone={t.passed ? "ok" : "bad"}>{t.passed ? "Pass" : "Fail"}</Chip>
+                        <Chip tone={t.passed ? "ok" : "bad"}>{t.passed ? "OK" : "Not OK"}</Chip>
                       </li>
                     ))}
                   </ul>
@@ -263,6 +266,8 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
                   {v.isTester && !v.testerMayRelease && !v.independence.ownerOverride && <p className="text-[14px] text-fg-2">You entered the test results; another QA person must say OK (setting).</p>}
                   {v.isTester && v.testerMayRelease && <p className="text-[13px] text-muted">You entered the test results. The batch record will say: tested and OK’d by the same person.</p>}
                   <PassForm batchId={v.batch.id} canPass={v.can.pass && v.blockers.length === 0} maker={v.independence.isMaker ? { what: v.independence.what, ownerOverride: v.independence.ownerOverride } : null} />
+                  {/* ADR-110 C14: the same two rules as on the lot page, from the configuration. */}
+                  <QaRules rules={{ lotTesterMayRelease: false, batchTesterMayRelease: !!v.testerMayRelease }} />
                   <details className="rounded-[16px] border border-line p-3">
                     <summary className="min-h-[44px] cursor-pointer py-2 text-[15px] font-semibold">Not yet (check again later)</summary>
                     <div className="mt-3">
@@ -281,6 +286,34 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * ADR-110 C10: after OK, the customer orders this batch can now fill ("SO-26-00015 can now be set aside"), the order
+ * the production order was made for first, with one button; else where the stock goes next.
+ */
+async function AfterOk({ v }: { v: QualityCheckView }) {
+  const ctx = await getContext();
+  if (!ctx) return null;
+  const ready = await ordersReadyForProduct(ctx, v.product.id, v.order?.salesOrderId ?? null).catch(() => []);
+  if (ready.length > 0) {
+    const first = ready[0];
+    const more = ready.length - 1;
+    return (
+      <div className="mt-4">
+        <NextStep
+          text={`Next: ${first.ref} (${first.label}) can now be set aside${more > 0 ? `, and ${more} more ${more === 1 ? "order" : "orders"}` : ""}.`}
+          action={{ label: `Open ${first.ref}`, href: first.href }}
+          waitingFor="The warehouse or sales sets the stock aside on the order."
+        />
+      </div>
+    );
+  }
+  return (
+    <div className="mt-4">
+      <NextStep text="Next: the stock is ready to sell. The warehouse puts it on its shelf." action={ctx.can("inventory.movement.post") ? { label: "Open Put away", href: "/inventory/receive/put-away" } : undefined} />
     </div>
   );
 }

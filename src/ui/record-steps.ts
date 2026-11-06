@@ -84,20 +84,35 @@ const SO_STAGES: readonly Stage[] = [
   { label: "Draft", statuses: ["draft"] },
   { label: "Approval", statuses: ["submitted", "pending_approval"] },
   { label: "Confirmed", statuses: ["confirmed"] },
-  // Grade-5 words (ADR-088 sales pass): "Set aside" (allocated), "Get from shelf" (picking), "Sent out"
-  // (shipped). The statuses themselves are unchanged.
-  // Plain words (owner mockup review 2026-10-30): "Stock reserved" (allocated), "Packing" (picking and
-  // packed), "Billed" (invoiced), "Done" (closed). The statuses themselves are unchanged.
+  // Grade-5 words (ADR-088 sales pass): "Set aside" (allocated), "Get from shelf" (picking), "Sent out" (shipped).
+  // ADR-110 C0: the order part of the 16 stages of "How work flows" (/operations/flow), so the order shows the same
+  // road: Set aside → Get from shelf → Second check of the box → Send out → Proof of delivery → Invoice. The
+  // statuses themselves are unchanged; "Second check" and "Proof of delivery" come from the delivery (shipment).
   { label: "Set aside", statuses: ["allocated"] },
-  { label: "Get from shelf", statuses: ["picking", "packed"], currentLabel: { picking: "Getting from shelf", packed: "Box checked" } },
-  { label: "Sent out", statuses: ["partially_shipped", "shipped"], currentLabel: { partially_shipped: "Partly sent out" } },
-  { label: "Billed", statuses: ["invoiced"] },
+  { label: "Get from shelf", statuses: ["picking"], currentLabel: { picking: "Getting from shelf" } },
+  { label: "Second check of the box", statuses: ["packed"], currentLabel: { packed: "Box checked" } },
+  { label: "Send out", statuses: ["partially_shipped", "shipped"], currentLabel: { partially_shipped: "Partly sent out", shipped: "Sent out" } },
+  { label: "Proof of delivery", statuses: [] },
+  { label: "Invoice", statuses: ["invoiced"], currentLabel: { invoiced: "Billed" } },
   { label: "Done", statuses: ["closed"] },
 ];
 
-export function salesOrderSteps(status: string): RecordStep[] {
+/**
+ * The order's stepper. `delivery` is the status of the order's latest delivery (shipment), which tells two stages the
+ * order status cannot: a delivery taken from the shelf waits for the second check ("picked"), and a sent delivery
+ * with its proof saved ("delivered") is at Proof of delivery.
+ */
+export function salesOrderSteps(status: string, opts: { delivery?: string | null } = {}): RecordStep[] {
   if (status === "cancelled") return stopped("Cancelled");
-  return strip(SO_STAGES, status);
+  const steps = strip(SO_STAGES, status);
+  const at = (label: string) => SO_STAGES.findIndex((s) => s.label === label);
+  const moveTo = (label: string, current: string): RecordStep[] => {
+    const i = at(label);
+    return SO_STAGES.map((s, k) => ({ label: k === i ? current : s.label, state: k < i ? "done" : k === i ? "current" : "upcoming" }));
+  };
+  if (status === "picking" && opts.delivery === "picked") return moveTo("Second check of the box", "Waiting for the second check");
+  if (status === "shipped" && opts.delivery === "delivered") return moveTo("Proof of delivery", "Delivered");
+  return steps;
 }
 
 /* ── Shipment ─────────────────────────────────────────────────────────────────────────────────

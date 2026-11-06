@@ -19,7 +19,8 @@ export async function putAwayAction(_p: ActionState, fd: FormData): Promise<Acti
       qtyUom: String(fd.get("qtyUom") ?? "") || null,
       idempotencyKey: String(fd.get("idempotencyKey") ?? ""),
     });
-    message = `${r.replayed ? "Already put away" : "Done"}: lot ${r.lotNumber} is ${r.toCode ? `now at ${r.toCode}` : "put away"} · movement ${r.number}.`;
+    // ADR-110 C16: no movement number on the floor (it stays in Stock changes and the audit trail).
+    message = `${r.replayed ? "Already put away" : "Done"}: lot ${r.lotNumber} is ${r.toCode ? `now on ${r.toCode}` : "put away"}. It can be used now.`;
   } catch (e) {
     return toActionState(e);
   }

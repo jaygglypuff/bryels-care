@@ -73,3 +73,8 @@ export type { OwnerHome, SalesDay, StockAlertCounts, StockAlertLot, StockAlerts,
 // ADR-088: Reports landing page (grade-5 business overview), best-selling products
 export { getTopProducts } from "./top-products";
 export type { TopProduct, TopProducts } from "./top-products";
+// ADR-110 C0: "How work flows" — the 16 stages with today's counts (src/modules/analytics/work-flow.ts)
+export { FLOW_ITEM_LIMIT, getWorkFlow, getWorkFlowCounts, getWorkFlowItems, maySeeCount, ordersReadyForProduct } from "./work-flow";
+export type { FlowItem, WorkFlow } from "./work-flow";
+export { FLOW_COUNT_DEFS, FLOW_STAGES, ageWords, countWords, isFlowCountKey, stageRow } from "./work-flow-stages";
+export type { FlowCount, FlowCountKey, FlowStage, FlowStageKey } from "./work-flow-stages";

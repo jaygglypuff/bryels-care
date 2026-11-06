@@ -273,7 +273,8 @@ export async function getPurchaseRequest(ctx: AuthContext, requestId: string) {
   const decisions = await decisionsOf(db, ctx.organizationId, "purchase_request", pr.id);
   const excluded = [pr.createdBy, pr.requestedBy, pr.submittedBy];
   return {
-    request: { ...pr, estimatedTotalAmount: prices ? pr.estimatedTotalAmount : null, status: pr.status as PrStatus },
+    // ADR-110 C15: the approver sees the amount they approve (the estimate), even without supplier prices.
+    request: { ...pr, estimatedTotalAmount: prices || ctx.canAt("procurement.purchase_request.approve", pr.siteId) ? pr.estimatedTotalAmount : null, status: pr.status as PrStatus },
     site,
     requestedByName: requester?.name ?? "",
     lines: lines.map((r) => ({ ...r.l, materialCode: r.code, materialName: r.name, supplierName: r.supplierName, estimatedUnitAmount: prices ? r.l.estimatedUnitAmount : null })),
@@ -287,6 +288,7 @@ export async function getPurchaseRequest(ctx: AuthContext, requestId: string) {
       cancel: ["draft", "submitted", "approved"].includes(pr.status) && (ctx.canAt("procurement.purchase_request.void", pr.siteId) || (pr.status === "draft" && pr.requestedBy === ctx.userId)),
       convert: pr.status === "approved" && ctx.canAt("procurement.purchase_order.create", pr.siteId),
       seePrices: prices,
+      seeTotal: prices || ctx.canAt("procurement.purchase_request.approve", pr.siteId),
     },
   };
 }

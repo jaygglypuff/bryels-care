@@ -153,7 +153,10 @@ export default async function OrderDetailPage({ params, searchParams }: { params
           ["Deliver by", fmtDate(order.requestedDeliveryOn)],
           ["Total", <Money key="t" value={total} />],
         ]}
-        steps={salesOrderSteps(status)}
+        steps={salesOrderSteps(status, {
+          // ADR-110 C0: the delivery tells "waiting for the second check" and "proof of delivery saved".
+          delivery: shipments.some((x) => x.status === "picked") ? "picked" : shipments.length > 0 && shipments.filter((x) => !["cancelled", "reversed"].includes(x.status)).every((x) => x.status === "delivered") ? "delivered" : null,
+        })}
         secondary={
           <>
             {canEditDraft && (

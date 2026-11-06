@@ -32,6 +32,22 @@ type Tab = (typeof TABS)[number][0];
 const qty = (v: string, uom: string) => (uom === "g" ? fmtMass(v) : fmtQty(v, uom, 1));
 const pcs = (v: string) => fmtQty(v, "", D(v).isInteger() ? 0 : 1);
 
+/** "378 bars expected · 4 batches", or once something is made "123 bars made so far · 1 of 4 batches finished". */
+function headerPieces(v: ProductionOrderView): string {
+  const total = v.statusView.batchesTotal || v.detail.workOrder.batchCount;
+  const finished = v.batches.filter((b) => !["planned", "materials_staged", "in_process", "rework_approved", "draft"].includes(b.status) && !(b.status === "rejected" && !b.startedAt)).length;
+  if (v.pieces.word !== "made") return `${v.pieces.text} expected`;
+  const pieces = v.pieces.text.split(" · ")[0];
+  return total > 1 ? `${pieces} made so far · ${finished} of ${total} batches finished` : `${pieces} made`;
+}
+
+/** The body line under the strip, in the same words: finished and decided by QA. */
+function batchesWords(v: ProductionOrderView): string {
+  const total = v.statusView.batchesTotal;
+  const finished = v.batches.filter((b) => !["planned", "materials_staged", "in_process", "rework_approved", "draft"].includes(b.status) && !(b.status === "rejected" && !b.startedAt)).length;
+  return `${finished} of ${total} finished · ${v.statusView.batchesDone} of ${total} decided by QA`;
+}
+
 function NextActionCard({ v, planKey, approvalNext }: { v: ProductionOrderView; planKey: string; approvalNext: NextActors | null }) {
   const a = v.nextAction;
   // UX review: an approved order without a batch says why nothing can be done, and whom to ask.
@@ -185,8 +201,9 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
           <span className="flex flex-wrap items-center gap-2">
             <OrderStatusChip status={v.status} label={v.statusLabel} subtitle={v.statusView.subtitle} warn={v.statusView.warn} />
             <OrderWarning text={v.statusView.warning} />
-            <span className="font-medium text-fg">
-              {v.pieces.text} {v.pieces.word}
+            {/* ADR-110 C19: one story for the header and the body — pieces made so far and batches finished, not "4 batches made". */}
+            <span className="font-medium text-fg" data-testid="order-pieces">
+              {headerPieces(v)}
             </span>
             <span className="font-mono">{wo.workOrderNumber}</span>
             <NeededBy date={v.neededBy} late={v.late} />
@@ -218,7 +235,7 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
         <div className="mb-4">
           {/* ADR-080 G3: back from Finish batch (UX review S6). */}
           <Banner tone="ok" title={`Batch ${sp.finished} finished`}>
-            It is in the hold area, waiting for the quality check.{" "}
+            It waits in the QA hold area for the quality check; when QA says OK it moves to the finished-goods shelf.{" "}
             <NextApprover next={finishedQaNext} inline />
           </Banner>
         </div>
@@ -234,7 +251,7 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
       ) : (
         <Card className="mb-4">
           <ProgressStrip steps={v.progress.steps} note={v.statusView.stepNote} />
-          {v.statusView.batchesNote && <p className="mt-2 text-[13px] text-muted">Batches: {v.statusView.batchesNote}</p>}
+          {v.statusView.batchesTotal > 1 && <p className="mt-2 text-[13px] text-muted">Batches: {batchesWords(v)}</p>}
         </Card>
       )}
 

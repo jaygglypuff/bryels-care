@@ -73,3 +73,12 @@ QA bar, no print station, one door per job, menu words = titles, one next step p
 the remaining items per area (old order view links, plain step names and timeline, green-button count, order status,
 closure page, board; activity names, in-page tap targets, "(s)" plurals, recipe list, owner menu, site selector, help
 button; shelf names before codes, box labels in place, scan order, customer picker, seed shelf names).
+
+## End-to-end walk fixes (ADR-110, 2026-11-06)
+
+"How work flows" (`/operations/flow`, C0) shows the 16 steps from Ask to buy to Invoice with live counts; every chain
+screen ends with "Next: …" and one button (C10); purchasing and warehouse Homes have their work lists (C11, C13); the
+weighing step check is reachable from Weigh and comes first on the order (C12); one approval per purchase (C15); plain
+words, page titles, typed lot counts and the production order header (C14, C16–C19). Status per item:
+[END_TO_END_FLOW.md](../END_TO_END_FLOW.md) section (f).
+

@@ -24,7 +24,9 @@ import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { postMovement } from "@/modules/inventory/ledger";
-import { lotReleaseBlockers } from "@/modules/inventory";
+import { nextActors } from "@/modules/governance";
+import { getSetting } from "@/lib/settings";
+import { lotReleaseBlockers, putAwayHintForLot } from "@/modules/inventory";
 import { deviationBlockerMessages, deviationFacts, deviationsFor } from "./deviations";
 import { batchInspectionFacts, inspectionsFor, lotInspectionFacts } from "./inspections";
 import { liveResults } from "./inspection-rules";
@@ -335,8 +337,21 @@ export async function getLotDisposition(ctx: AuthContext, lotId: string) {
     blocker: lotDecisionBlocker(d, lot, { isReceiver, isTester, pendingBatchNumber: pending?.number ?? null, releaseBlockers })?.message ?? null,
   }));
 
+  // ADR-110 C14: who decides when this person may not say OK (they received the lot or entered its results), by name
+  // (ADR-109 nextActors; the people kept out are never listed), and the configured rules for lots and for batches
+  // shown side by side (values are QA configuration; A-QA-LOTBATCH-01 asks QA whether they should match).
+  const keptOut = [...receivers, ...qf.testers];
+  const quarantined = ["quarantine", "on_hold"].includes(lot.qualityStatus);
+  const nextQa = quarantined && (isReceiver || isTester) ? await nextActors(ctx, "lot_qa", { siteId: lot.siteId, excludeUserIds: keptOut }) : null;
+  const testerMayReleaseBatches = (await getSetting(db, ctx.organizationId, "quality.release.tester_may_release", lot.siteId)) as boolean;
   return {
     lot,
+    /** ADR-110 C14: the viewer entered this lot's test results (the lot rule: someone else says OK). */
+    isTester,
+    nextQa,
+    rules: { lotTesterMayRelease: false, batchTesterMayRelease: testerMayReleaseBatches },
+    /** ADR-110 C10: after OK, where the lot waits and the shelf it goes to (null when nothing waits to be put away). */
+    putAway: lot.qualityStatus === "released" ? await putAwayHintForLot(db, lot.id) : null,
     itemName: row.materialName ?? row.productName ?? "—",
     itemCode: row.materialCode ?? row.productSku ?? "",
     createdByName: row.createdByName,

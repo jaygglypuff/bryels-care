@@ -57,6 +57,18 @@ const WAREHOUSE: readonly string[] = ["warehouse_operator"];
 const MONEY: readonly string[] = ["finance"];
 const BUYERS: readonly string[] = ["procurement"];
 const ADMIN: readonly string[] = ["system_admin"];
+/** "How work flows" (ADR-110 C0) shows a step's count only with that count's permission; any one of these shows the page. */
+const FLOW_VIEW: readonly Permission[] = [
+  "procurement.purchase_request.view",
+  "procurement.purchase_order.view",
+  "quality.disposition.view",
+  "sales.sales_order.view",
+  "production.work_order.view",
+  "sales.shipment.view",
+  "finance.invoice.view",
+];
+/** ADR-110 C11: purchasing is daily work for these roles, so their Purchasing sub-menu sits in Operations, not Management. */
+const PURCHASING_IN_OPERATIONS: readonly string[] = BUYERS;
 /** Sections shown after all the others, in this order. */
 const LAST_SECTIONS = [ADVANCED, IT_SYSTEM];
 
@@ -125,6 +137,8 @@ export const NAV: NavGroup[] = [
     description: "Production and the daily work",
     items: [
       { label: "Operations Center", href: "/operations", hub: true },
+      // ADR-110 C0: the 16 steps from "Ask to buy" to "Invoice", with today's counts (the page shows what the role may see).
+      { label: "How work flows", href: "/operations/flow", permission: FLOW_VIEW },
       { label: "Production orders", href: "/production/orders", permission: "production.work_order.view" },
       { label: "Today", href: "/production/today", permission: "production.daily_log.view" },
       { label: "Rejects", href: "/production/defects", permission: "production.daily_log.view" },
@@ -378,7 +392,7 @@ export function buildNav(can: Can, roles: readonly string[], opts: { approver?: 
   const approver = opts.approver ?? true;
   const displayOnly = roles.length > 0 && roles.every((r) => r === "floor_display"); // ADR-084: the TV account
   const salesDesk = persona === "viewer" && roles.includes("sales_cs");
-  const groups = NAV.filter((g) => !(g.label === "Management" && (FLOOR_PERSONAS.includes(persona) || displayOnly))).map((g) => {
+  const groups = movePurchasing(NAV, roles).filter((g) => !(g.label === "Management" && (FLOOR_PERSONAS.includes(persona) || displayOnly))).map((g) => {
     if (g.label !== "Operations") return g;
     const hub = g.items.filter((i) => i.hub);
     // Re-audit B #11: office sales people find Deliveries under Sales & Customers, not here (one door per job).
@@ -388,6 +402,19 @@ export function buildNav(can: Can, roles: readonly string[], opts: { approver?: 
     .map((g) => ({ ...g, items: g.items.filter((i) => (i.planned || canSee(can, i.permission)) && (!i.salesDesk || salesDesk) && (approver || !i.approverOnly) && (!i.roles || i.roles.some((r) => roles.includes(r)))) }))
     .filter((g) => g.items.some((i) => !i.planned && !i.hub) || g.label === "Home");
   return trimForFloor(groups, persona).map((g) => tidySections(foldForRole(g, roles)));
+}
+
+/**
+ * ADR-110 C11: for buyers the "Purchasing" sub-menu moves from Management to Operations (their daily work, one tap
+ * closer); everyone else keeps it under Management. Same entries, same permissions; only where it is listed changes.
+ */
+function movePurchasing(groups: NavGroup[], roles: readonly string[]): NavGroup[] {
+  if (!roles.some((r) => PURCHASING_IN_OPERATIONS.includes(r))) return groups;
+  const buying = groups.find((g) => g.label === "Management")?.items.filter((i) => i.section === "Purchasing") ?? [];
+  if (!buying.length) return groups;
+  return groups.map((g) =>
+    g.label === "Management" ? { ...g, items: g.items.filter((i) => i.section !== "Purchasing") } : g.label === "Operations" ? { ...g, items: [...g.items.filter((i) => !i.section), ...buying, ...g.items.filter((i) => i.section)] } : g,
+  );
 }
 
 /** Round 4: `foldUnless` entries become "Advanced" for everyone but the listed roles. */

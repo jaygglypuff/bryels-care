@@ -17,6 +17,7 @@ import { Amount, History, PrChip, Steps, SubNav, money } from "../../_ui";
 import { DeleteDraftCard } from "../../../delete-draft-button";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Request to buy" };
 
 /** One request to buy: what is wanted, the next step by state, approve / send back / say no, cancel in ⋯ More. */
 export default async function RequestPage({ params }: { params: Promise<{ id: string }> }) {
@@ -37,6 +38,10 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
     throw e;
   }
   const r = v.request;
+  // ADR-110 C15: the order made from this request keeps its supplier (when the request named one).
+  const open = v.lines.filter((l) => !l.convertedPoLineId);
+  const supplierIds = [...new Set(open.map((l) => l.suggestedSupplierId).filter((x): x is string => !!x))];
+  const oneApproval = supplierIds.length === 1 && open.every((l) => l.suggestedSupplierId && l.estimatedUnitAmount !== null);
   const title = v.lines.length ? v.lines.map((l) => l.materialName).slice(0, 3).join(", ") + (v.lines.length > 3 ? ` and ${v.lines.length - 3} more` : "") : "Request to buy";
   return (
     <>
@@ -78,7 +83,15 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
           </div>
         </NextStepBox>
       ) : v.can.convert ? (
-        <NextStep text="Next: approved. Make a purchase order for it." action={{ label: "Make a purchase order", href: "/procurement/orders/new" }} />
+        <NextStep
+          text={`Next: approved. Make the purchase order${supplierIds.length === 1 ? ` to ${v.lines.find((l) => l.suggestedSupplierId)?.supplierName ?? "the supplier"}` : ""}.`}
+          action={{ label: "Make the purchase order", href: `/procurement/orders/new?request=${r.id}${supplierIds.length === 1 ? `&supplier=${supplierIds[0]}` : ""}` }}
+          waitingFor={
+            oneApproval && r.estimatedTotalAmount
+              ? `It needs no second approval while it stays with this supplier, these items and up to ${money(r.estimatedTotalAmount, r.currency)}.`
+              : "No supplier or price was named on the request, so the order goes to the manager for approval."
+          }
+        />
       ) : r.status === "draft" ? (
         <NextStep text="This request is a draft." waitingFor={`Waiting for ${v.requestedByName} to send it for approval.`} />
       ) : r.status === "submitted" ? (
@@ -89,7 +102,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
       <SubNav />
       <div className="flex flex-col gap-5">
         <Card>
-          <CardTitle action={v.can.seePrices && r.estimatedTotalAmount ? <Amount>about {money(r.estimatedTotalAmount, r.currency)}</Amount> : undefined}>What is needed</CardTitle>
+          <CardTitle action={v.can.seeTotal && r.estimatedTotalAmount ? <Amount>about {money(r.estimatedTotalAmount, r.currency)}</Amount> : undefined}>What is needed</CardTitle>
           <ul className="flex flex-col divide-y divide-line rounded-[14px] border border-line">
             {v.lines.map((l) => (
               <li key={l.id} className="flex flex-wrap items-start justify-between gap-2 px-3 py-3">

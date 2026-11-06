@@ -49,6 +49,10 @@ export function isLotExpired(lot: { qualityStatus: string; expiresOn: string | n
   return new Date(lot.expiresOn + "T23:59:59+08:00") < now;
 }
 
+/** Grade-5 words for lot decisions and lot states in messages (ADR-110 C16). */
+export const LOT_DECISION_WORDS: Record<LotDecision, string> = { release: "OK to use", release_from_hold: "OK to use again", hold: "Stopping it", reject: "Not OK", recall: "Marking it recalled" };
+export const LOT_STATUS_WORDS: Record<string, string> = { quarantine: "waiting for the QA check", released: "already OK to use", on_hold: "stopped by QA", rejected: "already not OK", expired: "past its use-by date", recalled: "recalled" };
+
 /** Why a lot decision is not available (null when it is). Server re-checks inside the transaction. */
 export function lotDecisionBlocker(
   decision: LotDecision,
@@ -64,7 +68,8 @@ export function lotDecisionBlocker(
     return { code: "blocked_lot", message: `Lot ${lot.lotNumber} expired${lot.expiresOn ? ` on ${fmtDate(lot.expiresOn)}` : ""} and cannot be released. Reject it instead.` };
   }
   if (!t.from.includes(lot.qualityStatus)) {
-    return { code: "state", message: `${t.label} is not possible while the lot is ${lot.qualityStatus.replace("_", " ")}.` };
+    // ADR-110 C16: plain words ("This lot is already OK to use"), not "Release is not possible while the lot is released".
+    return { code: "state", message: `${LOT_DECISION_WORDS[decision]} is not possible: this lot is ${LOT_STATUS_WORDS[lot.qualityStatus] ?? lot.qualityStatus.replace("_", " ")}.` };
   }
   if (t.to === "released" && opts.releaseBlockers?.length) {
     // Receiving and hold rules (open discrepancy, missing CoA, unlinked supplier, open QA hold; US-2-07/08/10).
@@ -72,10 +77,10 @@ export function lotDecisionBlocker(
   }
   if (t.to === "released") {
     if (opts.isReceiver) {
-      return { code: "separation_of_duties", message: "You received this lot, so you cannot release it. Another QA user must decide (separation of duties)." };
+      return { code: "separation_of_duties", message: "You received this lot, so another QA person must say OK to use (two different people)." };
     }
     if (opts.isTester) {
-      return { code: "separation_of_duties", message: "You entered test results for this lot, so you cannot release it. Another QA user must decide (separation of duties)." };
+      return { code: "separation_of_duties", message: "You entered the test results for this lot, so another QA person must say OK to use (two different people)." };
     }
   }
   return null;

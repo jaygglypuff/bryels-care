@@ -22,9 +22,9 @@ export default async function DispatchPage() {
   const [packed, picked, dispatched] = await Promise.all([listShipments(ctx, { status: "packed" }), listShipments(ctx, { status: "picked" }), listShipments(ctx, { status: "dispatched" })]);
   const overdue = ctx.can("sales.delivery_receipt.view") ? await unacknowledgedDeliveryReceipts(ctx) : [];
   const groups = [
-    { title: "Ready to send out", rows: packed, empty: "Nothing ready. Deliveries show here after the second check of the box.", action: "Send out" },
-    { title: "Waiting for the second check of the box", rows: picked, empty: "Nothing waiting for the second check.", action: "Check" },
-    { title: "Sent out: waiting for proof of delivery", rows: dispatched, empty: "Nothing on the road.", action: "Proof" },
+    { id: "ready", title: "Ready to send out", rows: packed, empty: "Nothing ready. Deliveries show here after the second check of the box.", action: "Send out" },
+    { id: "check", title: "Waiting for the second check of the box", rows: picked, empty: "Nothing waiting for the second check.", action: "Check" },
+    { id: "proof", title: "Sent out: waiting for proof of delivery", rows: dispatched, empty: "Nothing on the road.", action: "Proof" },
   ];
   return (
     <div className="mx-auto max-w-2xl">
@@ -39,7 +39,7 @@ export default async function DispatchPage() {
       )}
       <div className="flex flex-col gap-5">
         {groups.map((g) => (
-          <section key={g.title} aria-label={g.title}>
+          <section key={g.title} id={g.id} aria-label={g.title} className="scroll-mt-24">
             <h2 className="mb-2 text-[16px] font-semibold">
               {g.title} <span className="text-[13px] font-normal text-muted">({g.rows.length})</span>
             </h2>

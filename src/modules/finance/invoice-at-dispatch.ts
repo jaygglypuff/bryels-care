@@ -11,7 +11,11 @@ import { getSetting } from "@/lib/settings";
 // Direct import (not the platform index), like the other modules that notify from inside a transaction.
 import { notifyUsers, usersHoldingPermissionAt } from "@/modules/platform/notifications";
 import { POSTED_INVOICE_STATUSES, createInvoiceFromShipment } from "./invoices";
-import { logTransition, money } from "./shared";
+import { logTransition } from "./shared";
+import { fmtMoney } from "@/lib/qty";
+
+/** ₱35,000.00 for pesos; other currencies keep their code ("USD 1,200.00"). */
+const moneyWords = (v: string, currency: string) => (currency === "PHP" ? fmtMoney(v) : `${currency} ${fmtMoney(v).slice(1)}`);
 
 /**
  * Invoice draft at dispatch (consultant review 2026-10-30, flow C: "17 shipments never invoiced").
@@ -61,8 +65,9 @@ export async function draftInvoiceAtDispatch(tx: Tx, ctx: AuthContext, shipment:
     const r = await createInvoiceFromShipment(sys, { shipmentId: shipment.shipmentId, idempotencyKey: dispatchDraftKey(shipment.shipmentId) }, { tx });
     const [inv] = await tx.select({ total: invoices.totalAmount, currency: invoices.currency }).from(invoices).where(eq(invoices.id, r.invoiceId)).limit(1);
     await notifyAt("finance.invoice.submit", {
-      title: `Invoice draft ready for ${label.doc}${label.customer ? ` (${label.customer})` : ""}`,
-      body: `Sent out by ${ctx.displayName}. Total ${inv ? `${money(inv.total)} ${inv.currency}` : "—"}. Check it and send it for approval.`,
+      // ADR-110 C16: "Invoice draft ready: Isla Spa Supplies, DR-26-00003" and "₱35,000.00", not "(name)" and "35000.00 PHP".
+      title: `Invoice draft ready: ${label.customer ? `${label.customer}, ` : ""}${label.doc}`,
+      body: `Sent out by ${ctx.displayName}. Total ${inv ? moneyWords(inv.total, inv.currency) : "—"}. Check it and send it for approval.`,
       link: `/finance/invoices/${r.invoiceId}`,
       key: `invoice.draft_at_dispatch:${shipment.shipmentId}`,
       severity: "info",
@@ -141,4 +146,20 @@ export async function notInvoicedShipments(ctx: AuthContext): Promise<{ count: n
       ),
     );
   return { count: Number(r?.count ?? 0), withoutDraft: Number(r?.withoutDraft ?? 0), oldestDispatchedAt: r?.oldest ? new Date(r.oldest) : null };
+}
+
+/**
+ * ADR-110 C10: the invoice of a delivery, for the delivery's "Next: finance bills it" line. The newest invoice that is
+ * not cancelled or voided; null when there is none or the viewer may not see invoices at the delivery's site.
+ */
+export async function invoiceForShipment(ctx: AuthContext, shipmentId: string): Promise<{ id: string; number: string; status: string } | null> {
+  if (!ctx.can("finance.invoice.view")) return null;
+  const [r] = await db
+    .select({ id: invoices.id, number: invoices.invoiceNumber, status: invoices.status, siteId: invoices.siteId })
+    .from(invoices)
+    .where(and(eq(invoices.organizationId, ctx.organizationId), eq(invoices.shipmentId, shipmentId), sql`${invoices.status} not in ('cancelled', 'voided')`))
+    .orderBy(sql`${invoices.createdAt} desc`)
+    .limit(1);
+  if (!r || !ctx.allowedSiteIds.includes(r.siteId) || !ctx.canAt("finance.invoice.view", r.siteId)) return null;
+  return { id: r.id, number: r.number ?? "draft", status: r.status };
 }

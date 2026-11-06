@@ -296,7 +296,9 @@ export function FinishForm(p: FinishFormProps) {
       )}
 
       <p className="text-[15px]">
-        Goes to: <b>{where}{whereCode ? ` (${whereCode})` : ""}</b>
+        Goes to: <b>{where}{whereCode ? ` (${whereCode})` : ""}</b> while QA checks it.
+        {/* ADR-110 C19: say where the stock really ends up — the QA release moves it to the finished-goods shelf (FG). */}
+        <span className="block text-[13px] text-fg-2">When QA says OK, it moves by itself to the finished-goods shelf.</span>
       </p>
 
       <details className="rounded-[16px] border border-line p-4">

@@ -25,6 +25,7 @@ import {
   type BulkState,
   type VerifyState,
 } from "./w2c-actions";
+import { fmtLotQty } from "./_ui";
 
 export function StartInspectionButton({ batchId, lotId, processStepRecordId }: { batchId?: string; lotId?: string; processStepRecordId?: string }) {
   return <ActionForm action={startInspectionAction} hidden={{ batchId, lotId, processStepRecordId }} submit="Start the quality check" pending="Starting…" variant="secondary" />;
@@ -40,7 +41,7 @@ export function SampleForm({ inspectionId, locations, uom }: { inspectionId: str
               kind="location"
               name="fromLocationId"
               label="Taken from which place?"
-              candidates={locations.map((l) => ({ value: l.id, title: l.code, detail: `${l.qty} ${uom} here`, code: l.code, codes: [l.code] }))}
+              candidates={locations.map((l) => ({ value: l.id, title: l.code, detail: `${fmtLotQty(l.qty, uom)} here`, code: l.code, codes: [l.code] }))}
               hideWhenSingle
               onlyCandidates
               search={false}

@@ -61,6 +61,19 @@ export default async function WeighPage({ params, searchParams }: { params: Prom
           </Banner>
         </div>
       )}
+      {/* ADR-110 C12 (walk P8): every weighing is done and the weighing STEP waits for the second person's check, which
+          is given on the step screen. Say so here, with the one button, instead of leaving the check unreachable. */}
+      {v.step?.status === "awaiting_check" && (
+        <div className="mb-4" data-testid="weigh-step-check">
+          <Banner
+            tone="warn"
+            title="Waiting for the second check of the weighing step"
+            action={<LinkButton href={stepHref(v.step.stepNo)} variant="cta" size="lg">{canCheck ? "Open the check" : "See the check"}</LinkButton>}
+          >
+            All weighings are saved. A second person who did not weigh looks at the step and confirms it{canCheck ? " — you can do it now" : ""}.
+          </Banner>
+        </div>
+      )}
       {!ctx.can("production.dispense_record.create") && !v.blockedReason && (
         <div className="mb-4">
           <Banner tone="neu" title="View only">You can see the weighings but not weigh. Ask the production lead.</Banner>

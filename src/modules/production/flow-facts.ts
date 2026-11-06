@@ -188,7 +188,7 @@ export function nextBatchScreen(f: BatchFlowFacts, now = new Date(), steps?: { s
   if (f.status === "planned" || f.status === "materials_staged") {
     const s = f.currentStep;
     const n = s?.stepNo ?? firstStepNo(steps);
-    return { action: "start", label: s?.status === "awaiting_check" ? `Check ${s.name}` : "Start", href: flowPath(f, `step/${n}`), disabledReason: null, stepNo: n };
+    return { action: "start", label: s?.status === "awaiting_check" ? `Check ${plainWords(s.name)}` : "Start", href: flowPath(f, `step/${n}`), disabledReason: null, stepNo: n };
   }
   if (f.status === "in_process" || f.status === "rework_approved") {
     const s = f.currentStep;
@@ -207,7 +207,8 @@ export function nextBatchScreen(f: BatchFlowFacts, now = new Date(), steps?: { s
         stepNo: s.stepNo,
       };
     }
-    return { action: "step", label: s.name, href: flowPath(f, `step/${s.stepNo}`), disabledReason: null, stepNo: s.stepNo };
+    // ADR-110 C16: the button says the same plain words as the step screen ("clean-area check", not "line clearance").
+    return { action: "step", label: plainWords(s.name), href: flowPath(f, `step/${s.stepNo}`), disabledReason: null, stepNo: s.stepNo };
   }
   if (f.status === "awaiting_qc" || f.status === "quarantined") return { action: "quality_check", label: "Check quality", href: qualityCheckHref(f.batchId), disabledReason: null, stepNo: null };
   return none;

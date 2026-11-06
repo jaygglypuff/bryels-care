@@ -271,8 +271,9 @@ export function ProductionByStage({ oc, all }: { oc: OperationsCenter; all: bool
     <section aria-labelledby="stages-h" className="min-w-0 rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)] sm:p-6">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 id="stages-h" className="font-display text-[17px] font-semibold text-fg">Production by stage</h2>
-        <Link href={all ? "/operations?scope=all" : "/operations"} className="inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text hover:underline">
-          See every step
+        {/* ADR-110 C0: the card opens "How work flows" (every step from Ask to buy to Invoice, with counts). */}
+        <Link href="/operations/flow" className="inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text hover:underline">
+          How work flows
         </Link>
       </div>
       <ul className="divide-y divide-line">

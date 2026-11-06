@@ -180,7 +180,7 @@ export function StepCard(p: Props) {
             </p>
             {(plainWords(step.instruction) !== step.instruction || plainWords(step.name) !== step.name) && (
               <details className="mt-2 text-[13px] text-muted">
-                <summary className="min-h-[44px] cursor-pointer py-2">Exact words of the step setup</summary>
+                <summary className="min-h-[44px] cursor-pointer py-2">Words as written in the recipe steps</summary>
                 <p className="whitespace-pre-line">{step.name}: {step.instruction}</p>
               </details>
             )}

@@ -14,6 +14,7 @@ import { InspectionStatusChip, QaStatusChip, Timeline, fmtLotQty, inspectionWord
 import { CancelInspectionForm, CorrectForm, ResultForm, ReviewForm, SampleForm, SubmitInspectionForm } from "../../w2c-forms";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Quality test" };
 
 export default async function InspectionPage({ params }: { params: Promise<{ inspectionId: string }> }) {
   const ctx = await requireContext();

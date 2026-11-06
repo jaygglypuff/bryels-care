@@ -24,6 +24,8 @@ export const GUIDE_FILES: Record<string, string> = {
   "start.getting_started": "getting-started.md",
   // ADR-075: codes, locations, deleting drafts, To approve, notifications
   "start.everyday_basics": "everyday-basics.md",
+  // ADR-110 C0: the 16 steps from "Ask to buy" to "Invoice" (/operations/flow)
+  "operations.work_flow": "work-flow.md",
   "inventory.receive": "receive.md",
   "inventory.move": "move.md",
   "inventory.count": "count.md",

@@ -279,6 +279,47 @@ export async function updatePurchaseOrder(ctx: AuthContext, poId: string, input:
 
 const basisOf = (po: PoRow) => ({ amount: po.totalAmount });
 
+export type RequestCover =
+  | { covered: true; requestNumbers: string[]; approvedBy: string; approvedAmount: string }
+  | { covered: false; why: "no_request" | "not_all_lines" | "supplier" | "item" | "quantity" | "no_estimate" | "amount" | "approval_steps" | "same_person" };
+
+/**
+ * ADR-110 C15 (owner decision, A-PO-1APP-01): is this order inside what an approved request to buy already approved?
+ * Every live line must come from a request line that was approved (fully, every step), for the same item, the
+ * supplier the request named, no more than the requested quantity; the order total (with tax) must not be above the
+ * approved estimate of those request lines; the request's approval must have at least as many steps as the order's
+ * own approval rule asks for at this amount; and the request's approver must not be the person who made or submits
+ * the order. Anything else follows the normal approval rule. Read only (the caller holds the PO row lock).
+ */
+export async function requestApprovalCover(tx: DbOrTx, organizationId: string, po: PoRow, lines: PoLineRow[], submitterId: string | null = po.submittedBy): Promise<RequestCover> {
+  const live = lines.filter((l) => l.lineStatus !== "cancelled");
+  if (!live.length || live.some((l) => !l.purchaseRequestLineId)) return { covered: false, why: live.some((l) => l.purchaseRequestLineId) ? "not_all_lines" : "no_request" };
+  const prl = await tx
+    .select({ l: purchaseRequestLines, pr: purchaseRequests })
+    .from(purchaseRequestLines)
+    .innerJoin(purchaseRequests, eq(purchaseRequests.id, purchaseRequestLines.purchaseRequestId))
+    .where(and(eq(purchaseRequests.organizationId, organizationId), inArray(purchaseRequestLines.id, live.map((l) => l.purchaseRequestLineId!))));
+  let approved = new Decimal(0);
+  for (const l of live) {
+    const r = prl.find((x) => x.l.id === l.purchaseRequestLineId);
+    if (!r || !["approved", "converted"].includes(r.pr.status) || !r.pr.approvedBy || r.pr.siteId !== po.siteId) return { covered: false, why: "no_request" };
+    if (r.l.materialId !== l.materialId) return { covered: false, why: "item" };
+    if (!r.l.suggestedSupplierId || r.l.suggestedSupplierId !== po.supplierId) return { covered: false, why: "supplier" };
+    if (new Decimal(l.qtyBase).gt(r.l.qtyBase)) return { covered: false, why: "quantity" };
+    if (r.l.estimatedUnitAmount === null) return { covered: false, why: "no_estimate" };
+    approved = approved.plus(new Decimal(r.l.qtyEntered).mul(r.l.estimatedUnitAmount));
+  }
+  if (new Decimal(po.totalAmount).gt(approved.toDecimalPlaces(4))) return { covered: false, why: "amount" };
+  const prs = [...new Map(prl.map((r) => [r.pr.id, r.pr])).values()];
+  if (prs.some((pr) => pr.approvedBy === po.createdBy || pr.approvedBy === po.submittedBy || pr.approvedBy === submitterId)) return { covered: false, why: "same_person" };
+  const poRule = await approvalProgress(tx, organizationId, { recordType: "purchase_order", recordId: po.id, siteId: po.siteId, basis: basisOf(po) });
+  for (const pr of prs) {
+    const prProgress = await approvalProgress(tx, organizationId, { recordType: "purchase_request", recordId: pr.id, siteId: pr.siteId, basis: { amount: pr.estimatedTotalAmount ?? "unbounded" } });
+    if (!prProgress.steps.every((s) => s.done) || prProgress.steps.length < poRule.steps.length) return { covered: false, why: "approval_steps" };
+  }
+  return { covered: true, requestNumbers: prs.map((p) => p.requestNumber).sort(), approvedBy: prs[0].approvedBy!, approvedAmount: money4(approved) };
+}
+
 /** Submits a draft for approval (W04-04 → W04-05); V-ASL is re-checked on every line. */
 export async function submitPurchaseOrder(ctx: AuthContext, input: { purchaseOrderId: string }) {
   return db.transaction(async (tx) => {
@@ -289,10 +330,25 @@ export async function submitPurchaseOrder(ctx: AuthContext, input: { purchaseOrd
     for (const [i, l] of lines.entries()) await assertAslApproved(tx, ctx.organizationId, po.supplierId, l.materialId, `lines.${i}.materialId`);
     await transitionPo(tx, ctx, po, "submitted", { set: { submittedBy: ctx.userId, submittedAt: new Date() } });
     await audit(tx, ctx, { action: "procurement.purchase_order.submitted", entityType: "purchase_order", entityId: po.id, entityNumber: po.poNumber, siteId: po.siteId, after: { status: "submitted", total: po.totalAmount } });
+    // ADR-110 C15: one approval per purchase. Within what the request's approver approved, the order needs no second approval.
+    const cover = await requestApprovalCover(tx, ctx.organizationId, po, lines, ctx.userId);
+    if (cover.covered) {
+      await transitionPo(tx, ctx, po, "approved", { reason: `Approved with request ${cover.requestNumbers.join(", ")}`, set: { approvedBy: cover.approvedBy, approvedAt: new Date(), approvalNote: `Approved with request to buy ${cover.requestNumbers.join(", ")} (one approval per purchase).` } });
+      await audit(tx, ctx, {
+        action: "procurement.purchase_order.approved_by_request",
+        entityType: "purchase_order",
+        entityId: po.id,
+        entityNumber: po.poNumber,
+        siteId: po.siteId,
+        after: { status: "approved", total: po.totalAmount, approvedAmount: cover.approvedAmount, requests: cover.requestNumbers, approvedBy: cover.approvedBy },
+      });
+      await notifyRoles(tx, { roleCodes: ["procurement"], siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_approved", severity: "info", title: `Purchase order ${po.poNumber} approved with request ${cover.requestNumbers.join(", ")}`, body: "Send it to the supplier.", entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
+      return { purchaseOrderId: po.id, status: "approved" as const, steps: 0, approvedByRequest: cover.requestNumbers };
+    }
     const progress = await approvalProgress(tx, ctx.organizationId, { recordType: "purchase_order", recordId: po.id, siteId: po.siteId, basis: basisOf(po) });
     const roles = progress.next?.roleCodes.length ? progress.next.roleCodes : ["site_manager"];
     await notifyRoles(tx, { roleCodes: roles, siteId: po.siteId }, { organizationId: ctx.organizationId, siteId: po.siteId, kind: "purchase_order_submitted", severity: "info", title: `Purchase order ${po.poNumber} waits for approval`, body: `${plural(progress.steps.length, "approval step")} to go.`, entityType: "purchase_order", entityId: po.id, link: `/procurement/orders/${po.id}` });
-    return { purchaseOrderId: po.id, status: "submitted" as const, steps: progress.steps.length };
+    return { purchaseOrderId: po.id, status: "submitted" as const, steps: progress.steps.length, approvedByRequest: null, notCoveredBecause: cover.why };
   });
 }
 
@@ -720,8 +776,13 @@ export async function getPurchaseOrder(ctx: AuthContext, poId: string) {
   const documents = ctx.can("documents.generated_document.view") ? (await documentsForSourceRead(ctx.organizationId, "purchase_order", po.id, ["purchase_order"])).map((d) => ({ id: d.d.id, documentNumber: d.d.documentNumber, status: d.d.status, generatedAt: d.d.generatedAt, generatedByName: d.generatedByName })) : [];
   const excluded = [po.createdBy, po.submittedBy];
   const live = lines.filter((l) => l.l.lineStatus !== "cancelled");
+  // ADR-110 C15: whoever approves (or may approve) an order sees the amount they approve, even without supplier prices.
+  const seeTotal = prices || ctx.canAt("procurement.purchase_order.approve", po.siteId);
+  const byRequest = !!po.approvedAt && decisions.length === 0 && !po.afterTheFact && live.length > 0 && live.every((l) => !!l.prNumber);
   return {
-    po: { ...po, status: po.status as PoStatus, subtotalAmount: prices ? po.subtotalAmount : null, taxAmount: prices ? po.taxAmount : null, totalAmount: prices ? po.totalAmount : null },
+    po: { ...po, status: po.status as PoStatus, subtotalAmount: prices ? po.subtotalAmount : null, taxAmount: prices ? po.taxAmount : null, totalAmount: seeTotal ? po.totalAmount : null },
+    /** ADR-110 C15: approved with its request(s) to buy, without a second approval (request numbers), else null. */
+    approvedByRequest: byRequest ? [...new Set(live.map((l) => l.prNumber!))].sort() : null,
     supplier: { id: supplier.id, code: supplier.code, name: supplier.name, email: supplier.email, qualityStatus: supplier.qualityStatus },
     site,
     warehouse: wh ?? null,
@@ -753,6 +814,7 @@ export async function getPurchaseOrder(ctx: AuthContext, poId: string) {
       shortClose: RECEIVABLE.includes(po.status) && ctx.canAt("procurement.purchase_order.edit", po.siteId),
       print: !!po.generatedDocumentId && ctx.can("documents.generated_document.view") && prices,
       seePrices: prices,
+      seeTotal,
     },
   };
 }
