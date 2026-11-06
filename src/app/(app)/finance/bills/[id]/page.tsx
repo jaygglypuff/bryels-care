@@ -113,22 +113,22 @@ export default async function BillPage({ params, searchParams }: { params: Promi
       {canSubmit ? (
         <NextStepBox text="Next: send it for approval. The system first checks it against the order and the delivery.">{doNow}</NextStepBox>
       ) : b.status === "draft" ? (
-        <NextStep text="This supplier bill is a draft." waitingFor={await waitingFor(ctx, "finance.supplier_bill.submit", null, "to send it for approval", "finance")} />
+        <NextStep text="This supplier bill is a draft." waitingFor={await waitingFor(ctx, "finance.supplier_bill.submit", b.siteId, "to send it for approval", "finance")} />
       ) : b.status === "disputed" ? (
         <NextStepBox
           text="This bill does not match the order or the delivery (see below). Ask the supplier for money back, check again, or accept the difference with a reason."
-          waitingFor={d.canApproveVariance ? undefined : await waitingFor(ctx, "finance.supplier_bill.approve", null, "to accept the difference (not the one who typed or sent it)", "another finance person")}
+          waitingFor={d.canApproveVariance ? undefined : await waitingFor(ctx, "finance.supplier_bill.approve", b.siteId, "to accept the difference", "another finance person", { exclude: [b.createdBy, b.submittedBy], operational: true })}
         >
           {doNow}
         </NextStepBox>
       ) : canDecide ? (
         <NextStepBox text="Next: approve this supplier bill, or send it back with what to change.">{doNow}</NextStepBox>
       ) : b.status === "submitted" ? (
-        <NextStep text="This supplier bill waits for approval." waitingFor={`${(await approvalWaiting(ctx, "finance.supplier_bill.approve", d.progress))}${!b.goodsReceiptId ? " Bills not for a delivery are approved by finance." : ""}`} />
+        <NextStep text="This supplier bill waits for approval." waitingFor={`${(await approvalWaiting(ctx, "finance.supplier_bill.approve", d.progress, { siteId: b.siteId, exclude: [b.createdBy, b.submittedBy], pendingSince: b.submittedAt }))}${!b.goodsReceiptId ? " Bills not for a delivery are approved by finance." : ""}`} />
       ) : canPost ? (
         <NextStepBox text="Next: save it to the books. The day to pay is set from the supplier's terms.">{doNow}</NextStepBox>
       ) : b.status === "approved" ? (
-        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You approved it, so another finance person saves it to the books (above the set amount)." : await waitingFor(ctx, "finance.supplier_bill.post", null, "to save it to the books", "finance")} />
+        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You approved it, so another finance person saves it to the books (above the set amount)." : await waitingFor(ctx, "finance.supplier_bill.post", b.siteId, "to save it to the books", "finance", { exclude: [...(d.progress && !d.progress.posterMayEqualApprover ? d.progress.approvers : [])], operational: true })} />
       ) : canPay ? (
         <NextStep text={`Next: pay ${d.supplier.name}${b.dueDate ? ` by ${fmtDate(b.dueDate)}` : ""}, then save the payment.`} action={{ label: "Record a payment", href: payHref }} />
       ) : (

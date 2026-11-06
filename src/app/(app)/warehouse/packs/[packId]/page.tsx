@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { NextApprover } from "@/ui/next-approver";
+import { packCheckNext } from "@/modules/sales";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -56,7 +58,7 @@ export default async function PackPage({ params, searchParams }: { params: Promi
   ) : checking && ctx.can("inventory.pack.approve") && !v.isPacker ? (
     <NextStep text={`Scan the boxes and check their labels (${v.checkedCount} of ${v.required} done), then verify.`} action={{ label: "Check the boxes", href: "#check" }} />
   ) : checking ? (
-    <NextStep text="Boxed and sent for checking." waitingFor="Waiting for a checker who did not pack these boxes (warehouse lead or QA)." />
+    <NextStep text="Boxed and sent for checking." waitingFor={<NextApprover next={await packCheckNext(ctx, { packId: p.id })} inline />} />
   ) : p.status === "open" ? (
     <NextStep text="Boxing has started." waitingFor="Waiting for the packer to add the boxes." />
   ) : p.status === "cancelled" ? (

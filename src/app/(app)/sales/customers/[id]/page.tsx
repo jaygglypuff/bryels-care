@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { NextApprover } from "@/ui/next-approver";
+import { salesNextActors } from "@/modules/sales";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -80,6 +82,8 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
       <DoNext text="Next: when they order, enter it here." action={{ label: "New order for this customer", href: `/sales/new?customer=${c.id}` }} />
     ) : null;
 
+  // Who approves each requirement waiting for approval, by name and role (ADR-109).
+  const reqNext = new Map(await Promise.all(d.requirements.filter((r) => r.status === "pending_approval").map(async (r) => [r.id, await salesNextActors(ctx, "customer_requirement", r.id).catch(() => null)] as const)));
   return (
     <>
       <PageHeader
@@ -239,7 +243,8 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
                           {r.effectiveTo ? ` to ${fmtDate(r.effectiveTo)}` : ""} · version {r.versionNo}
                         </span>
                       </p>
-                      {r.status === "pending_approval" && <p className="text-[12px] text-muted">Sent by {r.submittedByName ?? "—"}; another person approves (the owner may approve their own).</p>}
+                      {r.status === "pending_approval" && <p className="text-[12px] text-muted">Sent by {r.submittedByName ?? "—"}.</p>}
+                      {r.status === "pending_approval" && <NextApprover next={reqNext.get(r.id)} className="text-[13px]" />}
                       <div className="flex flex-wrap gap-1">
                         {r.status === "draft" && ctx.can("masterdata.customer_requirement.edit") && <RequirementCommand requirementId={r.id} command="submit" label="Send for approval" />}
                         {r.status === "pending_approval" && ctx.can("masterdata.customer_requirement.approve") && mayDecideRule(r) && (

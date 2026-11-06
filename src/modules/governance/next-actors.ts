@@ -56,6 +56,7 @@ export const HANDOFFS = {
   lot_qa: { permission: "quality.disposition.approve", does: "decides if the lot may be used", doBase: "decide if the lot may be used", where: "on Check quality", fallback: "QA", independent: true, prefer: ["qa_qc"] },
   qa_result_correction: { permission: "quality.disposition.approve", does: "approves the corrected result", doBase: "approve the corrected result", where: "on Check quality", fallback: "another QA person", independent: true, prefer: ["qa_qc"] },
   stock_adjustment: { permission: "inventory.adjustment.approve", does: "approves this stock correction", doBase: "approve this stock correction", where: TO_APPROVE, fallback: "the site manager", operational: true, prefer: OFFICE },
+  stock_adjustment_post: { permission: "inventory.adjustment.post", does: "saves it to stock", doBase: "save it to stock", where: "on this stock fix", fallback: "the site manager", operational: true, prefer: OFFICE },
   count_variance: { permission: "inventory.stock_count.approve", does: "approves the count differences", doBase: "approve the count differences", where: TO_APPROVE, fallback: "the site manager", operational: true, prefer: OFFICE },
   purchase_request: { permission: "procurement.purchase_request.approve", does: "approves it", doBase: "approve it", where: TO_APPROVE, fallback: "the site manager", operational: true, prefer: OFFICE },
   purchase_order: { permission: "procurement.purchase_order.approve", does: "approves it", doBase: "approve it", where: TO_APPROVE, fallback: "the site manager", operational: true, prefer: OFFICE },
@@ -93,7 +94,15 @@ export type NextRecord = {
   stepsTotal?: number | null;
   /** A step that names its own permission (approval rules). */
   permission?: Permission | null;
+  /**
+   * Operational records only: false keeps the step roles as configured for the viewer (no owner stand-in on their own
+   * record), as the deciding service does for stock fixes, finance documents and master-data revisions.
+   */
+  roleStandIn?: boolean;
 };
+
+/** A hand-off rule made on the spot (older "Waiting for …" lines): the permission, the words and the same-person rule. */
+export type AdHocHandoff = HandoffRule & { kind: string };
 
 type Candidate = { userId: string; name: string; roles: Map<string, string>; granting: Set<string>; ownerOrgWide: boolean; manager: boolean };
 
@@ -136,8 +145,9 @@ async function candidates(q: DbOrTx, organizationId: string, permission: string,
  * (see `nextActorsSentence` in src/lib/next-actors-words.ts). Never throws for a missing record: an empty list
  * reads "Nobody can do it yet".
  */
-export async function nextActors(ctx: AuthContext, kind: HandoffKind, record: NextRecord, q: DbOrTx = db): Promise<NextActors> {
-  const rule: HandoffRule = HANDOFFS[kind];
+export async function nextActors(ctx: AuthContext, which: HandoffKind | AdHocHandoff, record: NextRecord, q: DbOrTx = db): Promise<NextActors> {
+  const kind = typeof which === "string" ? which : which.kind;
+  const rule: HandoffRule = typeof which === "string" ? HANDOFFS[which] : which;
   const permission = record.permission ?? rule.permission;
   const siteId = record.siteId;
   const excluded = (record.excludeUserIds ?? []).filter((u): u is string => !!u);
@@ -163,7 +173,7 @@ export async function nextActors(ctx: AuthContext, kind: HandoffKind, record: Ne
 
   // The viewer, with the same checks the "To approve" verdicts use (approval-verdict.ts).
   const permOk = siteId ? ctx.canAt(permission, siteId) : ctx.can(permission);
-  const rolesOk = !stepRoles.length || (rule.operational ? ctx.hasAnyRoleAt(stepRoles, siteId, excluded) : ctx.hasAnyRole(stepRoles));
+  const rolesOk = !stepRoles.length || (rule.operational && record.roleStandIn !== false ? ctx.hasAnyRoleAt(stepRoles, siteId, excluded) : ctx.hasAnyRole(stepRoles));
   const mine = excluded.includes(ctx.userId) || prior.includes(ctx.userId);
   const topSelf = !!rule.operational && !rule.independent && ctx.selfApprovesAt(siteId);
   const can = permOk && rolesOk && (!mine || topSelf);
@@ -210,14 +220,14 @@ export function approvalStepRecord(
 export async function notifyNextActors(
   q: DbOrTx,
   ctx: AuthContext,
-  kind: HandoffKind,
+  kind: HandoffKind | AdHocHandoff,
   record: NextRecord,
   n: { title: string; body: string; link: string; entityType: string; entityId: string; dedupeKey: string; severity?: "info" | "warning" },
 ): Promise<string[]> {
   const next = await nextActors(ctx, kind, record, q);
   const to = next.people.map((p) => p.userId);
   if (!to.length) return [];
-  return notifyUsers(q, to, { organizationId: ctx.organizationId, siteId: record.siteId, kind: `handoff.${kind}`, severity: n.severity ?? "info", title: n.title, body: n.body, entityType: n.entityType, entityId: n.entityId, link: n.link, dedupeKey: n.dedupeKey });
+  return notifyUsers(q, to, { organizationId: ctx.organizationId, siteId: record.siteId, kind: `handoff.${typeof kind === "string" ? kind : kind.kind}`, severity: n.severity ?? "info", title: n.title, body: n.body, entityType: n.entityType, entityId: n.entityId, link: n.link, dedupeKey: n.dedupeKey });
 }
 
 /** Ids of the people `nextActors` lists (tests and callers that only need the ids). */

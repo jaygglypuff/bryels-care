@@ -1,4 +1,5 @@
 "use server";
+import { salesNextActors } from "@/modules/sales";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -175,7 +176,9 @@ export async function requirementCommandAction(_: ActionState, fd: FormData): Pr
     else if (cmd === "approve") await approveRequirement(ctx, id, str(fd, "note") || null);
     else if (cmd === "retire") await retireRequirement(ctx, id, reason);
     else await rejectRequirement(ctx, id, reason, { returnToDraft: cmd === "return" });
-    return done({ submit: "Sent for approval.", approve: "Approved: it applies from its effective date.", return: "Returned to draft.", reject: "Rejected.", retire: "Retired: it no longer applies to new orders." }[cmd]);
+    const r = done({ submit: "Sent for approval.", approve: "Approved: it applies from its effective date.", return: "Returned to draft.", reject: "Rejected.", retire: "Retired: it no longer applies to new orders." }[cmd]);
+    // Who approves next, by name and role (ADR-109).
+    return cmd === "submit" ? { ...r!, next: await salesNextActors(ctx, "customer_requirement", id).catch(() => null) } : r;
   } catch (e) {
     return toActionState(e);
   }

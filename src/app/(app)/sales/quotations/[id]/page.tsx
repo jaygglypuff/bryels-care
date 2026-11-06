@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { NextApprover } from "@/ui/next-approver";
+import { salesNextActors } from "@/modules/sales";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -58,7 +60,7 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
       ) : (
         <DoNext
           text={mine ? "You made this offer, so someone else approves the discount." : "The discount needs approval."}
-          waitingFor={`Waiting for ${await whoDoes(ctx, "sales.quote.approve", q.siteId, "the approver")} to approve.`}
+          waitingFor={<NextApprover next={await salesNextActors(ctx, "quote", q.id)} inline />}
         />
       )
     ) : (q.status === "sent" || q.status === "accepted") && canConvert && (q.status === "accepted" || canEdit) ? (

@@ -6,6 +6,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { businessDate, isUuid } from "./crm-support";
+import { notifyNextActors } from "@/modules/governance";
 
 /**
  * Customer requirements and SKU packaging configuration (US-4-02; docs/data-model.md §3.2, §4).
@@ -228,6 +229,15 @@ export async function submitRequirement(ctx: AuthContext, id: string) {
     const now = new Date();
     await tx.update(customerRequirements).set({ status: "pending_approval", submittedBy: ctx.userId, submittedAt: now, updatedBy: ctx.userId, updatedAt: now }).where(eq(customerRequirements.id, id));
     await audit(tx, ctx, { action: "masterdata.customer_requirement.submitted", entityType: "customer_requirement", entityId: id, entityNumber: label(r), siteId: null, before: { status: r.status, versionNo: r.versionNo }, after: { status: "pending_approval", versionNo: r.versionNo } });
+    // Hand-off (ADR-109): the people who approve customer requirements (never the maker or sender; ADR-091 owner excepted).
+    await notifyNextActors(tx, ctx, "customer_requirement", { siteId: null, excludeUserIds: [r.createdBy, ctx.userId] }, {
+      title: `Customer requirement ${label(r)} waits for your approval`,
+      body: `${ctx.displayName} sent it for approval.`,
+      link: `/sales/customers/${r.customerId}`,
+      entityType: "customer_requirement",
+      entityId: id,
+      dedupeKey: `handoff.customer_requirement:${id}:${now.getTime()}`,
+    });
   });
 }
 

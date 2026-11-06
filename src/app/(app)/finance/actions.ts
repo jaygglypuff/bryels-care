@@ -50,6 +50,7 @@ import {
   voidPayment,
   voidSupplierBill,
 } from "@/modules/finance";
+import { financeNext } from "./approval-waiting";
 
 /** Finance server actions (US-6-10..14): thin adapters over src/modules/finance; every rule is in the services. */
 const str = (fd: FormData, k: string) => {
@@ -93,7 +94,7 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
       }
       case "invoice:approve": {
         const r = await approveInvoice(ctx, id, note);
-        message = r.approved ? "Approved: ready to save to the books." : "Your approval is recorded; the next step is still open.";
+        message = r.approved ? "Approved." : "Your approval is recorded.";
         break;
       }
       case "invoice:return":
@@ -118,7 +119,7 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         break;
       case "credit_note:approve": {
         const r = await decideCreditNote(ctx, id, { decision: "approved", note });
-        message = r.approved ? "Approved: ready to save to the books." : "Your approval is recorded; the next step is still open.";
+        message = r.approved ? "Approved." : "Your approval is recorded.";
         break;
       }
       case "credit_note:return":
@@ -142,7 +143,7 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
       }
       case "payment:approve": {
         const r = await decidePayment(ctx, id, { decision: "approved", note });
-        message = r.approved ? "Approved: ready to save to the books." : "Your approval is recorded; the next step is still open.";
+        message = r.approved ? "Approved." : "Your approval is recorded.";
         break;
       }
       case "payment:return":
@@ -166,7 +167,7 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
       }
       case "bill:approve": {
         const r = await decideSupplierBill(ctx, id, { decision: "approved", note });
-        message = r.approved ? "Approved: ready to save to the books." : "Your approval is recorded; the next step is still open.";
+        message = r.approved ? "Approved." : "Your approval is recorded.";
         break;
       }
       case "bill:return":
@@ -198,7 +199,7 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         break;
       case "expense:approve": {
         const r = await decideExpenseClaim(ctx, id, { decision: "approved", note });
-        message = r.status === "approved" ? "Approved: finance saves it to the books next." : "Your approval is recorded; the next step is still open.";
+        message = r.status === "approved" ? "Approved." : "Your approval is recorded.";
         break;
       }
       case "expense:reject":
@@ -221,7 +222,9 @@ export async function financeCommandAction(_: ActionState, fd: FormData): Promis
         throw new DomainError("validation", "Unknown command.");
     }
     refreshCurrentPage();
-    return { ok: true, message };
+    // Who acts next, by name and role (ADR-109): after sending or approving a step, and once approved (who posts it).
+    const next = ["submit", "approve", "approve_variance", "rematch"].includes(command) ? await financeNext(ctx, entity, id) : null;
+    return { ok: true, message, next };
   } catch (e) {
     return toActionState(e);
   }

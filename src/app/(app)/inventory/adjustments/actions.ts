@@ -1,4 +1,6 @@
 "use server";
+import type { NextActors } from "@/lib/next-actors-words";
+import { adjustmentNextActors } from "@/modules/inventory";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq, gt, inArray } from "drizzle-orm";
@@ -140,16 +142,17 @@ export async function findLotsForAdjustmentAction(raw: string): Promise<{ ok: tr
   }
 }
 
-const done = (id: string, message: string): ActionState => {
+const done = (id: string, message: string, next: NextActors | null = null): ActionState => {
   revalidatePath(`/inventory/adjustments/${id}`);
   revalidatePath("/inventory/adjustments");
-  return { ok: true, message };
+  return { ok: true, message, next };
 };
 
 export async function submitAdjustmentAction(id: string): Promise<ActionState> {
   try {
-    const r = await submitAdjustment(await requireContext(), id);
-    return done(id, r.requiresSecondApproval ? "Sent. It is a large change: a site manager and then the owner must approve it." : "Sent to the manager.");
+    const ctx = await requireContext();
+    const r = await submitAdjustment(ctx, id);
+    return done(id, r.requiresSecondApproval ? "Sent. It is a large change: two approvals are needed." : "Sent for approval.", await adjustmentNextActors(ctx, id).catch(() => null));
   } catch (e) {
     return actionError(e);
   }
@@ -157,8 +160,9 @@ export async function submitAdjustmentAction(id: string): Promise<ActionState> {
 
 export async function approveAdjustmentAction(id: string, _p: ActionState, fd: FormData): Promise<ActionState> {
   try {
-    const r = await approveAdjustment(await requireContext(), id, str(fd, "reason") || null);
-    return done(id, r.awaitingSecondStep ? "Approved (step 1). Waiting for the second approval." : "Approved. It can now be saved to stock.");
+    const ctx = await requireContext();
+    const r = await approveAdjustment(ctx, id, str(fd, "reason") || null);
+    return done(id, r.awaitingSecondStep ? "Approved (step 1)." : "Approved.", await adjustmentNextActors(ctx, id).catch(() => null));
   } catch (e) {
     return actionError(e);
   }

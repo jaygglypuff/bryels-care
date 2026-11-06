@@ -31,7 +31,7 @@ export default async function InspectionPlanPage({ params }: { params: Promise<{
   const p = v.plan;
   const today = businessToday();
   const nextPolicy = v.approval.nextStep ? v.approval.policy.find((x) => x.step === v.approval.nextStep!.step) : null;
-  const waiting = p.status === "pending_approval" && !v.approval.canDecide ? await waitingForApprover(ctx, "quality.inspection_plan.approve", nextPolicy, v.approval.policy.length) : null;
+  const waiting = p.status === "pending_approval" && !v.approval.canDecide ? await waitingForApprover(ctx, "quality.inspection_plan.approve", nextPolicy, v.approval.policy.length, { exclude: [p.createdBy, p.submittedBy], prior: v.approval.decisions.map((d) => d.decidedBy), siteId: p.siteId }) : null;
   // UX audit C #10: one "What to do next" per state; the one green button is the form further down.
   const next =
     p.status === "draft" && v.can.edit ? (

@@ -24,10 +24,10 @@ export {
 } from "./approval-rules";
 export { stepVerdict, selfApprovalNote, OWN_REQUEST_REASON, EARLIER_STEP_REASON, type ApprovalVerdict } from "./approval-verdict";
 export { DEFAULT_APPROVAL_RULES, BASE_APPROVE_PERMISSION, CONFIGURABLE_SOD_TYPES, type ApprovalDocumentType, type ApprovalRuleSpec, type ThresholdBasis } from "./default-rules";
-export { listSettingsForAdmin, changeSetting, approveSettingChange, rejectSettingChange, cancelSettingChange, listSettingChangeRequests, type SettingRow } from "./settings-admin";
+export { settingChangeNext, listSettingsForAdmin, changeSetting, approveSettingChange, rejectSettingChange, cancelSettingChange, listSettingChangeRequests, type SettingRow } from "./settings-admin";
 export { listNumberingAdmin, submitNumberingRuleVersion, approveNumberingRuleVersion, rejectNumberingRuleVersion } from "./numbering-admin";
 export { healthCard, backupsCard, variablesCard, recordBackupRun, type HealthCard, type BackupsCard, type VariablesCard } from "./diagnostics";
 export { VARIABLE_ALLOW_LIST, envPresence, type ServiceName } from "./variables";
 export { requireReauthentication, auditDenied } from "./reauth";
-export { nextActors, nextActorIds, notifyNextActors, approvalStepRecord, HANDOFFS, type HandoffKind, type HandoffRule, type NextRecord } from "./next-actors";
+export { nextActors, nextActorIds, notifyNextActors, approvalStepRecord, HANDOFFS, type HandoffKind, type HandoffRule, type NextRecord, type AdHocHandoff } from "./next-actors";
 export { nextActorsSentence, peopleWords, waitingForNames, type NextActors, type NextPerson } from "@/lib/next-actors-words";

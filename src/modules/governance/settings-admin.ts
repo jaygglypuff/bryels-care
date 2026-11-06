@@ -7,7 +7,10 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { SETTINGS, type SettingDefinition, type SettingKey, isSettingKey, listStoredSettings, readStoredSetting, writeStoredSetting } from "@/lib/settings";
-import { canDecideEvaluatedStep, evaluateApprovalRulesAudited } from "./approval-rules";
+import { canDecideEvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited } from "./approval-rules";
+import { type DbOrTx } from "@/db/client";
+import type { NextActors } from "@/lib/next-actors-words";
+import { nextActors, notifyNextActors } from "./next-actors";
 import { auditDenied, requireReauthentication } from "./reauth";
 
 /**
@@ -129,6 +132,15 @@ export async function changeSetting(ctx: AuthContext, raw: z.input<typeof Change
         reason: input.reason,
         before: { value: current?.value ?? null },
         after: { value: input.value ?? null },
+      });
+      // Hand-off (ADR-109): the people who may approve it (never the submitter; the owner for owner-only settings).
+      await notifyNextActors(tx, ctx, "setting_change", await settingChangeRecord(tx, ctx.organizationId, { id: req.id, key, siteId: input.siteId, submittedBy: ctx.userId }), {
+        title: `Setting change waits for your OK: ${def.label}`,
+        body: `${ctx.displayName}: ${input.reason}`,
+        link: "/admin/settings#pending",
+        entityType: "setting_change_request",
+        entityId: req.id,
+        dedupeKey: `handoff.setting_change:${req.id}`,
       });
       return { status: "submitted" as const, requestId: req.id };
     }
@@ -261,4 +273,20 @@ export async function listSettingChangeRequests(ctx: AuthContext, f: { status?: 
       deciderName: x.r.approvedBy ? (name.get(x.r.approvedBy) ?? null) : x.r.rejectedBy ? (name.get(x.r.rejectedBy) ?? null) : null,
       label: isSettingKey(x.r.key) ? (SETTINGS[x.r.key] as SettingDefinition).label : x.r.key,
     }));
+}
+
+/** The `nextActors` record of a setting change request: the owner for owner-only settings, else the rule's step roles. */
+async function settingChangeRecord(q: DbOrTx, organizationId: string, r: { id: string; key: string; siteId: string | null; submittedBy: string | null }) {
+  const def = isSettingKey(r.key) ? (SETTINGS[r.key] as SettingDefinition) : null;
+  const ev = await evaluateApprovalRules(q, organizationId, { documentType: "setting_change_request", siteId: r.siteId });
+  const roleCodes = def?.ownerOnly ? ["owner_director"] : (ev.steps[0]?.roleCodes ?? []);
+  return { siteId: r.siteId, excludeUserIds: [r.submittedBy], roleCodes };
+}
+
+/** Who approves a submitted setting change next, by name and role (ADR-109); null when it is not waiting. */
+export async function settingChangeNext(ctx: AuthContext, requestId: string, q: DbOrTx = db): Promise<NextActors | null> {
+  if (!z.uuid().safeParse(requestId).success) return null;
+  const [r] = await q.select().from(settingChangeRequests).where(and(eq(settingChangeRequests.id, requestId), eq(settingChangeRequests.organizationId, ctx.organizationId))).limit(1);
+  if (!r || r.status !== "submitted" || (r.siteId && !ctx.allowedSiteIds.includes(r.siteId))) return null;
+  return nextActors(ctx, "setting_change", await settingChangeRecord(q, ctx.organizationId, r), q);
 }

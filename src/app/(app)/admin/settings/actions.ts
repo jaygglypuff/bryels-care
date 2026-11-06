@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError, type ActionState, toActionState } from "@/lib/errors";
-import { approveSettingChange, cancelSettingChange, changeSetting, rejectSettingChange } from "@/modules/governance";
+import { approveSettingChange, cancelSettingChange, changeSetting, rejectSettingChange, settingChangeNext } from "@/modules/governance";
 
 /** Thin adapters: parse the form, call the governance service, map the outcome (no rules here). */
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
@@ -36,7 +36,8 @@ export async function changeSettingAction(_prev: ActionState, f: FormData): Prom
     const value = reset ? null : parseValue(str(f, "kind"), String(f.get("value") ?? ""));
     const r = await changeSetting(ctx, { key: str(f, "key"), siteId: str(f, "siteId") || null, value, reason: str(f, "reason") }, String(f.get("password") ?? ""));
     revalidatePath("/admin/settings");
-    return { ok: true, message: r.status === "submitted" ? "Submitted for approval. A second administrator or the owner must approve it before it applies." : `Saved. The change applies from the next request.${r.status === "applied" && r.auditEventId ? ` Audit event ${r.auditEventId}.` : ""}` };
+    if (r.status === "submitted") return { ok: true, message: "Sent for approval. It applies once approved.", next: await settingChangeNext(ctx, r.requestId).catch(() => null) };
+    return { ok: true, message: `Saved. The change applies from the next request.${r.status === "applied" && r.auditEventId ? ` Audit event ${r.auditEventId}.` : ""}` };
   } catch (e) {
     return withField(e);
   }

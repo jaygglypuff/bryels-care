@@ -1,4 +1,6 @@
 import "server-only";
+import { notifyNextActors } from "@/modules/governance";
+import { pickPeople } from "./next-approver";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db, type Tx } from "@/db/client";
@@ -331,6 +333,15 @@ export async function completePick(ctx: AuthContext, pickId: string, input: { sh
       siteId: pick.siteId,
       reason: short.length ? reason : null,
       after: { shipmentNumber: s.shipmentNumber, short },
+    });
+    // Hand-off (ADR-109): the people who may check the boxes (never the picker or a scanner), once per pick.
+    await notifyNextActors(tx, ctx, "pack_check", { siteId: pick.siteId, excludeUserIds: [ctx.userId, ...(await pickPeople(tx, s.id))] }, {
+      title: `Check the boxes of delivery ${s.shipmentNumber}`,
+      body: `${ctx.displayName} took the items off the shelf. Scan every box before it is sent out.`,
+      link: `/sales/packing/${s.id}`,
+      entityType: "shipment",
+      entityId: s.id,
+      dedupeKey: `handoff.pack_check:${pick.id}`,
     });
     return { pickNumber: pick.pickNumber, short, replayed: false };
   });

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { NextApprover } from "@/ui/next-approver";
+import { packCheckNext, salesNextActors } from "@/modules/sales";
 import { PlaceName } from "@/ui/inventory/place-name";
 import { notFound } from "next/navigation";
 import Decimal from "decimal.js";
@@ -91,7 +93,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
       ) : (
         <DoNext
           text={mine ? "You sent this order, so someone else approves it." : "This order needs approval."}
-          waitingFor={`Waiting for ${await whoDoes(ctx, "sales.sales_order.approve", order.siteId, "the approver")} to approve.`}
+          waitingFor={<NextApprover next={await salesNextActors(ctx, "sales_order", order.id)} inline />}
         />
       );
     if (status === "confirmed")
@@ -120,7 +122,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
       return ctx.can("inventory.pack.approve") ? (
         <DoNext text="Next: second check of the box (by someone who did not get it from the shelf)." action={{ label: "Check the box", href: `/sales/packing/${openShipment.id}` }} />
       ) : (
-        <DoNext text="Items are off the shelf." waitingFor={`Waiting for ${await whoDoes(ctx, "inventory.pack.approve", order.siteId, "a checker")} to check the box a second time.`} />
+        <DoNext text="Items are off the shelf." waitingFor={shipments.find((x) => x.status === "picked") ? <NextApprover next={await packCheckNext(ctx, { shipmentId: shipments.find((x) => x.status === "picked")!.id })} inline /> : `Waiting for ${await whoDoes(ctx, "inventory.pack.approve", order.siteId, "a checker")} to check the box a second time.`} />
       );
     if (openShipment?.status === "packed")
       return ctx.can("sales.shipment.post") ? (

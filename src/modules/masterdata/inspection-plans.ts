@@ -9,7 +9,7 @@ import { DomainError } from "@/lib/errors";
 import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { assignMasterCode } from "@/lib/numbering";
 import { CreateInspectionPlanInput, DecisionInput, SaveInspectionPlanDraftInput, parseInput } from "./schemas";
-import { approvalState, assertDraft, assertVersionTransition, businessToday, approvalSodConflict, canDecideStep, effectiveLabel, isIsoDate, recordApprovalDecision, requireAny, supersedeOverlapping } from "./versioning";
+import { approvalState, assertDraft, assertVersionTransition, businessToday, approvalSodConflict, canDecideStep, effectiveLabel, isIsoDate, notifyRevisionApprovers, recordApprovalDecision, requireAny, supersedeOverlapping } from "./versioning";
 
 /**
  * Inspection plans (US-3-03, FR-quality-03 plans). A plan is a QA-controlled list of tests with
@@ -126,6 +126,7 @@ export async function submitInspectionPlan(ctx: AuthContext, planId: string) {
     if (!tests.length) throw new DomainError("validation", "Add at least one test before submitting.");
     await tx.update(inspectionPlans).set({ status: "pending_approval", submittedBy: ctx.userId, submittedAt: new Date() }).where(eq(inspectionPlans.id, p.id));
     await audit(tx, ctx, { action: "quality.inspection_plan.submitted", entityType: "inspection_plan", entityId: p.id, entityNumber: lbl(p.code, p.revisionNo), siteId: null, before: { status: p.status }, after: { status: "pending_approval", revisionNo: p.revisionNo } });
+    await notifyRevisionApprovers(tx, ctx, "inspection_plan", { recordId: p.id, name: `Check plan ${lbl(p.code, p.revisionNo)}`, link: `/masterdata/inspection-plans/${p.id}`, siteId: p.siteId, exclude: [p.createdBy] });
     return { status: "pending_approval" as const };
   });
 }
@@ -140,7 +141,7 @@ export async function decideInspectionPlan(ctx: AuthContext, raw: unknown) {
     const today = businessToday();
     const effectiveFrom = input.effectiveFrom ?? p.effectiveFrom ?? today;
     if (input.decision === "approved" && (!isIsoDate(effectiveFrom) || effectiveFrom < today)) throw new DomainError("validation", "The effective date cannot be in the past.");
-    const d = await recordApprovalDecision(tx, ctx, { recordType: "inspection_plan", recordId: p.id, siteId: p.siteId, excludedUserIds: [p.createdBy, p.submittedBy], decision: input.decision, note: input.note });
+    const d = await recordApprovalDecision(tx, ctx, { recordType: "inspection_plan", recordId: p.id, recordNumber: `Check plan ${lbl(p.code, p.revisionNo)}`, siteId: p.siteId, excludedUserIds: [p.createdBy, p.submittedBy], decision: input.decision, note: input.note });
     const base = { entityType: "inspection_plan", entityId: p.id, entityNumber: name, siteId: p.siteId } as const;
     if (d.rejected) {
       await tx.update(inspectionPlans).set({ status: "rejected", approvalNote: input.note }).where(eq(inspectionPlans.id, p.id));

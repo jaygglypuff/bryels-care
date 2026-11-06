@@ -96,15 +96,15 @@ export default async function CreditNotePage({ params, searchParams }: { params:
       {canSubmit ? (
         <NextStepBox text="Next: send this credit for approval.">{doNow}</NextStepBox>
       ) : c.status === "draft" ? (
-        <NextStep text="This credit is a draft." waitingFor={await waitingFor(ctx, "finance.credit_note.submit", null, "to send it for approval", "finance")} />
+        <NextStep text="This credit is a draft." waitingFor={await waitingFor(ctx, "finance.credit_note.submit", c.siteId, "to send it for approval", "finance")} />
       ) : canDecide ? (
         <NextStepBox text="Next: approve this credit, or send it back with what to change.">{doNow}</NextStepBox>
       ) : c.status === "submitted" ? (
-        <NextStep text="This credit waits for approval." waitingFor={(await approvalWaiting(ctx, "finance.credit_note.approve", d.progress))} />
+        <NextStep text="This credit waits for approval." waitingFor={(await approvalWaiting(ctx, "finance.credit_note.approve", d.progress, { siteId: c.siteId, exclude: [c.createdBy, c.submittedBy], pendingSince: c.submittedAt }))} />
       ) : canIssue ? (
         <NextStepBox text="Next: save it to the books. It gets its number and is taken off the invoice.">{doNow}</NextStepBox>
       ) : c.status === "approved" ? (
-        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You approved it, so another finance person saves it to the books (above the set amount)." : await waitingFor(ctx, "finance.credit_note.post", null, "to save it to the books", "finance")} />
+        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You approved it, so another finance person saves it to the books (above the set amount)." : await waitingFor(ctx, "finance.credit_note.post", c.siteId, "to save it to the books", "finance", { exclude: [...(d.progress && !d.progress.posterMayEqualApprover ? d.progress.approvers : [])], operational: true })} />
       ) : (
         <NextStep text={c.status === "issued" || c.status === "applied" ? "Saved to the books and taken off the invoice. Nothing more to do." : c.status === "voided" ? "Cancelled (kept on record). Nothing more to do." : "Cancelled before it was saved to the books. Nothing more to do."} />
       )}

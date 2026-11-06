@@ -799,6 +799,8 @@ export async function getRecipe(ctx: AuthContext, formulaId: string) {
     /** draft: something can be edited now; waiting: everything open is waiting for approval; approved: nothing open. */
     mode: anyDraft ? "draft" : fPending || rPending ? "waiting" : "approved",
     approvalPolicy,
+    /** Who made or sent the versions waiting for approval (never named as their approver, ADR-109). */
+    pendingBy: [f.open?.createdBy, f.open?.submittedBy, r?.open?.createdBy, r?.open?.submittedBy].filter((x): x is string => !!x),
     locks: { ingredients: fPending, steps: !!rPending },
     draft,
     materialNames: Object.fromEntries(lineMats.map((m) => [m.id, m.name])),

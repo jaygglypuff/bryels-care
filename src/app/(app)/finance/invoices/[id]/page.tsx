@@ -110,15 +110,15 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
       {canSubmit ? (
         <NextStepBox text="Next: check the items and the tax, then send it for approval.">{doNow}</NextStepBox>
       ) : i.status === "draft" ? (
-        <NextStep text="This invoice is a draft." waitingFor={await waitingFor(ctx, "finance.invoice.submit", null, "to send it for approval", "finance")} />
+        <NextStep text="This invoice is a draft." waitingFor={await waitingFor(ctx, "finance.invoice.submit", i.siteId, "to send it for approval", "finance")} />
       ) : canDecide ? (
         <NextStepBox text="Next: approve this invoice, or send it back with what to change.">{doNow}</NextStepBox>
       ) : i.status === "submitted" ? (
-        <NextStep text="This invoice waits for approval." waitingFor={`${(await approvalWaiting(ctx, "finance.invoice.approve", d.progress))} The person who made or sent it cannot approve it.`} />
+        <NextStep text="This invoice waits for approval." waitingFor={`${(await approvalWaiting(ctx, "finance.invoice.approve", d.progress, { siteId: i.siteId, exclude: [i.createdBy, i.submittedBy], pendingSince: i.submittedAt }))} The person who made or sent it cannot approve it.`} />
       ) : canIssue ? (
         <NextStepBox text="Next: save it to the books. It gets its number and the customer's days to pay start.">{doNow}</NextStepBox>
       ) : i.status === "approved" ? (
-        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You approved it, so another finance person saves it to the books (above the set amount)." : await waitingFor(ctx, "finance.invoice.post", null, "to save it to the books", "finance")} />
+        <NextStep text="Approved." waitingFor={d.posterBlocked ? "You approved it, so another finance person saves it to the books (above the set amount)." : await waitingFor(ctx, "finance.invoice.post", i.siteId, "to save it to the books", "finance", { exclude: [...(d.progress && !d.progress.posterMayEqualApprover ? d.progress.approvers : [])], operational: true })} />
       ) : canPay ? (
         <NextStep text={`Next: when ${d.customer.name} pays, save the payment here.${i.overdue ? " This invoice is late." : ""}`} action={{ label: "Record a payment", href: payHref }} />
       ) : open ? (

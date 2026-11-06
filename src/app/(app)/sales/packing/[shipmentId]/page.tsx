@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { NextApprover } from "@/ui/next-approver";
+import { packCheckNext } from "@/modules/sales";
 import { PlaceName } from "@/ui/inventory/place-name";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
@@ -54,9 +56,9 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
     ) : s.status !== "picked" ? (
       <DoNext text="The items are still being taken off the shelf." waitingFor={`Waiting for ${await whoDoes(ctx, "sales.pick.create", s.siteId, "the warehouse")} to finish getting them from the shelf.`} />
     ) : v.isPicker ? (
-      <DoNext text="You took these off the shelf, so someone else does the second check." waitingFor={`Waiting for ${await whoDoes(ctx, "inventory.pack.approve", s.siteId, "a checker")}.`} />
+      <DoNext text="You took these off the shelf, so someone else does the second check." waitingFor={<NextApprover next={await packCheckNext(ctx, { shipmentId: s.id })} inline />} />
     ) : !canVerify ? (
-      <DoNext text="Waiting for the second check of the box." waitingFor={`Waiting for ${await whoDoes(ctx, "inventory.pack.approve", s.siteId, "a checker")}.`} />
+      <DoNext text="Waiting for the second check of the box." waitingFor={<NextApprover next={await packCheckNext(ctx, { shipmentId: s.id })} inline />} />
     ) : unverified.length > 0 ? (
       <DoNext text={`Next: scan each box (${unverified.length} left). A box that is not on the order is refused.`} />
     ) : (
