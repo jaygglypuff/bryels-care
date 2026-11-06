@@ -1,3 +1,4 @@
+import type { NextActors } from "./next-actors-words";
 import { reportErrorInBackground } from "@/lib/log/error-reporter";
 
 /** Typed domain errors mapped to HTTP codes and form messages (architecture §5). */
@@ -47,8 +48,11 @@ export const HTTP_STATUS: Record<ErrorCode, number> = {
   rate_limited: 429,
 };
 
-/** `needs`: the permission a refused step needs, so the form can name who can do it (ADR-073 "who can do this"). */
-export type ActionState = { ok: boolean; message?: string; fieldErrors?: Record<string, string>; needs?: { permission: string; siteId: string | null } } | null;
+/**
+ * `needs`: the permission a refused step needs, so the form can name who can do it (ADR-073 "who can do this").
+ * `next`: after a hand-off, who does the next step by name and role (`nextActors`, docs/NEXT_APPROVER.md).
+ */
+export type ActionState = { ok: boolean; message?: string; fieldErrors?: Record<string, string>; needs?: { permission: string; siteId: string | null }; next?: NextActors | null } | null;
 
 /**
  * The words a person reads: a leading machine tag such as "SEPARATION_OF_DUTIES: " (kept in the thrown

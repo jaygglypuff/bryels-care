@@ -18,6 +18,8 @@ import { convertReservations, expectedLots } from "./staging";
 import { type FormulaSnapshot, WEIGHING_STEP_KINDS, idempotent, lockBatch } from "./shared";
 import { changeLotInTx, lineForLotChange } from "./material-swaps";
 import { offPlanWarning } from "./pick-plan";
+import { notifyNextActors } from "@/modules/governance";
+import { flowHref } from "./flow-paths";
 
 /** Tolerance window at the typed resolution (shared with the weigh card, weigh-window.ts). */
 export { toleranceRange } from "./weigh-window";
@@ -395,7 +397,20 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
           after: { material: material.code, lot: lot.lotNumber, actualQtyG: net.toString(), operator: ctx.displayName, signedOn: "operator_device" },
         });
       }
-      return { dispenseRecordId: rec2.id, materialName: material.name, withinTolerance: within, status, lineTotalG: total.toString(), checked: !!checker };
+      // Hand-off (docs/NEXT_APPROVER.md): a weighing that needs a second person tells the people who can check it, once
+      // per batch weighing step (never the weigher); the checker's Home lists "Check a weighing" (floor-tasks.ts).
+      const needsCheck = !checker && (batch.formulaSnapshot as FormulaSnapshot).lines.find((l) => l.lineNo === bm.lineNo)?.requiresChecker !== false;
+      if (needsCheck) {
+        await notifyNextActors(tx, ctx, "weighing_check", { siteId: batch.siteId, excludeUserIds: [ctx.userId] }, {
+          title: `Check a weighing of batch ${batch.batchNumber}`,
+          body: `${ctx.displayName} weighed ${material.name}. Watch the container and the scale, then confirm it on the Weigh screen.`,
+          link: flowHref({ batchId: batch.id, workOrderId: batch.workOrderId }, "weigh"),
+          entityType: "batch",
+          entityId: batch.id,
+          dedupeKey: `handoff.weighing_check:${batch.id}:${rec.id}`,
+        });
+      }
+      return { dispenseRecordId: rec2.id, materialName: material.name, withinTolerance: within, status, lineTotalG: total.toString(), checked: !!checker, needsCheck, siteId: batch.siteId };
     });
     return result;
   });

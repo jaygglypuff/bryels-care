@@ -7,6 +7,7 @@ import { refreshCurrentPage } from "@/lib/in-place";
 import type { Permission } from "@/lib/permissions";
 import { markLabelJobPrinted } from "@/modules/documents";
 import type { PrintLabelsState } from "@/ui/labels/actions";
+import { floorCheckNext } from "@/modules/production";
 import { approveStepException, batchSiteId, requestMaterialSubstitution, stopForToday, useApprovedAlternative, withdrawMaterialSubstitution, checkDispense, checkStep, confirmPicked, issuePackaging, planBatchBoxes, printBatchLabels, returnLeftOverWrappers, recordDispense, returnDispense, returnStep, selectEquipment, stepDone, submitChecklist } from "@/modules/production";
 import { registerAppHooks } from "@/modules/wiring";
 
@@ -39,6 +40,9 @@ async function signer(ctx: AuthContext, fd: FormData, prefix: "checker" | "appro
 }
 
 export type FlowActionState = (NonNullable<ActionState> & { dispenseRecordId?: string; needsCheck?: boolean }) | null;
+
+/** Who checks next after a hand-off on the floor (docs/NEXT_APPROVER.md); never fails the saved action. */
+const nextCheck = (ctx: AuthContext, kind: "weighing_check" | "step_check" | "start_check", batchId: string) => floorCheckNext(ctx, kind, batchId, ctx.userId).catch(() => null);
 
 /** Materials list: one line (Taken, Not needed, Undo) or "All taken". */
 export async function pickAction(_: ActionState, fd: FormData): Promise<ActionState> {
@@ -84,8 +88,8 @@ export async function weighAction(_: FlowActionState, fd: FormData): Promise<Flo
       idempotencyKey: opt(fd, "idempotencyKey"),
     });
     refreshCurrentPage();
-    const needsCheck = str(fd, "needsCheck") === "1" && !r.checked;
-    return { ok: true, message: needsCheck ? `${r.materialName}: saved. Second check needed.` : `${r.materialName}: saved.`, dispenseRecordId: r.dispenseRecordId, needsCheck };
+    const needsCheck = r.needsCheck;
+    return { ok: true, message: needsCheck ? `${r.materialName}: saved. Second check needed.` : `${r.materialName}: saved.`, dispenseRecordId: r.dispenseRecordId, needsCheck, next: needsCheck ? await nextCheck(ctx, "weighing_check", batchId) : null };
   } catch (e) {
     return toActionState(e);
   }
@@ -123,7 +127,8 @@ export async function checklistCardAction(_: ActionState, fd: FormData): Promise
     const r = await submitChecklist(ctx, { batchId, stepNo, answers, idempotencyKey: opt(fd, "idempotencyKey") }, { checker });
     refreshCurrentPage();
     if (r.blocked) return { ok: false, message: `Saved. This step is not done yet: ${r.blockers.join(" ")}` };
-    return { ok: true, message: r.status === "completed" ? `${answers.length} checks recorded as OK. ${r.name} done.` : `${answers.length} checks saved. Waiting for the second check.` };
+    if (r.status === "completed") return { ok: true, message: `${answers.length} checks recorded as OK. ${r.name} done.` };
+    return { ok: true, message: `${answers.length} checks saved.`, next: await nextCheck(ctx, "start_check", batchId) };
   } catch (e) {
     return toActionState(e);
   }
@@ -141,7 +146,8 @@ export async function stepDoneAction(_: ActionState, fd: FormData): Promise<Acti
     const r = await stepDone(ctx, { batchId, stepNo, readings, notes: opt(fd, "notes"), idempotencyKey: opt(fd, "idempotencyKey") }, { checker });
     refreshCurrentPage();
     if (r.blocked) return { ok: false, message: `Saved. ${r.blockers.map((b) => b.message).join(" ")}` };
-    return { ok: true, message: r.status === "completed" ? `${r.name}: step done.` : `${r.name}: saved. Waiting for the second check.` };
+    if (r.status === "completed") return { ok: true, message: `${r.name}: step done.` };
+    return { ok: true, message: `${r.name}: saved.`, next: await nextCheck(ctx, "step_check", batchId) };
   } catch (e) {
     return toActionState(e);
   }
@@ -360,7 +366,8 @@ export async function askOtherMaterialAction(_: ActionState, fd: FormData): Prom
       idempotencyKey: opt(fd, "idempotencyKey"),
     });
     refreshCurrentPage();
-    return { ok: true, message: `Asked QA to use ${r.substituteName} instead of ${r.materialName}. Weigh the other ingredients meanwhile.` };
+    const next = await floorCheckNext(ctx, "material_substitution", str(fd, "batchId") ?? "", ctx.userId).catch(() => null);
+    return { ok: true, message: `Asked QA to use ${r.substituteName} instead of ${r.materialName}. Weigh the other ingredients meanwhile.`, next };
   } catch (e) {
     return toActionState(e);
   }

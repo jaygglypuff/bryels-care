@@ -3,7 +3,8 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
-import { getSupplierReturn, returnableLots } from "@/modules/procurement";
+import { getSupplierReturn, procurementNextActors, returnableLots } from "@/modules/procurement";
+import { NextApprover } from "@/ui/next-approver";
 import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, PageHeader, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
@@ -15,7 +16,7 @@ import { ScanOrPick } from "@/ui/scan-or-pick";
 import { Forbidden } from "../../../forbidden";
 import { waitingFor } from "../../../waiting-for";
 import { addReturnLineAction, cancelReturnAction, decideReturnAction, postReturnAction, removeReturnLineAction, submitReturnAction } from "../../actions";
-import { Amount, History, SrChip, Steps, SubNav, approverWords, fmtBase, money } from "../../_ui";
+import { Amount, History, SrChip, Steps, SubNav, fmtBase, money } from "../../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -84,7 +85,7 @@ export default async function SupplierReturnPage({ params }: { params: Promise<{
           <ActionForm action={postReturnAction} hidden={{ returnId: sr.id, idempotencyKey: randomUUID() }} submit="The goods left: take them out of stock" variant="cta" confirm="Take every lot on this return out of stock now? This is saved and cannot be edited later." />
         </NextStepBox>
       ) : sr.status === "submitted" ? (
-        <NextStep text="This return waits for approval." waitingFor={await waitingFor(ctx, "procurement.supplier_return.approve", sr.siteId, "to approve it", approverWords(v.progress.next))} />
+        <NextStep text="This return waits for approval." waitingFor={<NextApprover next={await procurementNextActors(ctx, "supplier_return", sr.id)} inline />} />
       ) : sr.status === "approved" ? (
         <NextStep text="Approved." waitingFor={await waitingFor(ctx, "procurement.supplier_return.post", sr.siteId, "to send the goods and save it (not the approver)", "the warehouse or purchasing")} />
       ) : sr.status === "draft" ? (

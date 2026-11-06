@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import Link from "next/link";
-import { batchBoxInfoFor, batchRecordHref, finishHref, getStepCard, nextBatchScreen, type BatchBoxInfo, type StepCardView } from "@/modules/production";
+import { batchBoxInfoFor, batchRecordHref, finishHref, floorCheckNext, getStepCard, nextBatchScreen, type BatchBoxInfo, type StepCardView } from "@/modules/production";
 import { LinkButton } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
 import { Help } from "@/ui/help/help";
@@ -61,6 +61,8 @@ export default async function StepPage({ params, searchParams }: { params: Promi
   const b = v.batch;
   const href = (s: number) => `/production/orders/${workOrderId}/step/${s}?batch=${b.id}`;
   const next = nextBatchScreen(facts);
+  // Who checks this step next, by name and role (never the person who did it; docs/NEXT_APPROVER.md).
+  const checkNext = v.step.status === "awaiting_check" ? await floorCheckNext(ctx, v.step.kind === "line_clearance" ? "start_check" : "step_check", b.id, v.step.record?.conductedById ?? null) : null;
   const nextHref = v.next ? (v.next.kind === "dispensing" || v.next.kind === "weighing" ? `/production/orders/${workOrderId}/weigh?batch=${b.id}` : v.next.kind === "transfer" ? finishHref(b.id) : href(v.next.stepNo)) : null;
   return (
     <div className="mx-auto max-w-5xl pb-24 text-[16px]">
@@ -89,6 +91,7 @@ export default async function StepPage({ params, searchParams }: { params: Promi
         step={v.step}
         canPerform={v.canPerform}
         checkers={v.checkers}
+        checkNext={checkNext}
         approvers={v.approvers}
         passwordRequired={v.passwordRequired}
         nextHref={nextHref}

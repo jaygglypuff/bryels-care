@@ -7,7 +7,8 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime, fmtMoney } from "@/lib/qty";
 import { fmtFriendly } from "@/lib/units";
-import { getAdjustment, type AdjustmentDetail } from "@/modules/inventory/adjustments";
+import { adjustmentNextActors, getAdjustment, type AdjustmentDetail } from "@/modules/inventory/adjustments";
+import { NextApprover } from "@/ui/next-approver";
 import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
@@ -40,7 +41,9 @@ export default async function AdjustmentPage({ params, searchParams }: { params:
     throw e;
   }
   const items = [...new Set(a.lines.map((l) => l.itemName ?? l.newLotItem).filter(Boolean))].join(", ");
-  const waitingFor = a.requiresSecondApproval
+  // Who approves next, by name and role (docs/NEXT_APPROVER.md); the fixed words stay as the fallback.
+  const approvalNext = a.status === "submitted" ? await adjustmentNextActors(ctx, a.id) : null;
+  const waitingFor = approvalNext ? <NextApprover next={approvalNext} inline /> : a.requiresSecondApproval
     ? a.can.awaitingSecondStep
       ? "Waiting for the owner (a different person from the first approver) to give the second OK."
       : "Waiting for a site manager to approve first, then the owner. The person who made it cannot approve it."

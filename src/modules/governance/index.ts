@@ -29,3 +29,5 @@ export { listNumberingAdmin, submitNumberingRuleVersion, approveNumberingRuleVer
 export { healthCard, backupsCard, variablesCard, recordBackupRun, type HealthCard, type BackupsCard, type VariablesCard } from "./diagnostics";
 export { VARIABLE_ALLOW_LIST, envPresence, type ServiceName } from "./variables";
 export { requireReauthentication, auditDenied } from "./reauth";
+export { nextActors, nextActorIds, notifyNextActors, approvalStepRecord, HANDOFFS, type HandoffKind, type HandoffRule, type NextRecord } from "./next-actors";
+export { nextActorsSentence, peopleWords, waitingForNames, type NextActors, type NextPerson } from "@/lib/next-actors-words";

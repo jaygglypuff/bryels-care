@@ -1,7 +1,8 @@
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
-import { getPurchaseRequest } from "@/modules/procurement";
+import { getPurchaseRequest, procurementNextActors } from "@/modules/procurement";
+import { NextApprover } from "@/ui/next-approver";
 import { Card, CardTitle, Dl, EmptyState, Input, LinkButton, PageHeader, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
@@ -12,7 +13,7 @@ import { Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { waitingFor } from "../../../waiting-for";
 import { cancelRequestAction, decideRequestAction, submitRequestAction } from "../../actions";
-import { Amount, History, PrChip, Steps, SubNav, approverWords, money } from "../../_ui";
+import { Amount, History, PrChip, Steps, SubNav, money } from "../../_ui";
 import { DeleteDraftCard } from "../../../delete-draft-button";
 
 export const dynamic = "force-dynamic";
@@ -81,7 +82,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
       ) : r.status === "draft" ? (
         <NextStep text="This request is a draft." waitingFor={`Waiting for ${v.requestedByName} to send it for approval.`} />
       ) : r.status === "submitted" ? (
-        <NextStep text="This request waits for approval." waitingFor={await waitingFor(ctx, "procurement.purchase_request.approve", r.siteId, `to approve it${v.progress.steps.length > 1 && v.progress.next ? ` (step ${v.progress.next.step} of ${v.progress.steps.length})` : ""}`, approverWords(v.progress.next))} />
+        <NextStep text="This request waits for approval." waitingFor={<NextApprover next={await procurementNextActors(ctx, "purchase_request", r.id)} inline />} />
       ) : r.status === "approved" ? (
         <NextStep text="Approved." waitingFor={await waitingFor(ctx, "procurement.purchase_order.create", r.siteId, "to order it from a supplier", "purchasing")} />
       ) : null}

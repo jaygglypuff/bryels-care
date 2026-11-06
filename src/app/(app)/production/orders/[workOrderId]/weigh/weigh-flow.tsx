@@ -10,6 +10,8 @@ import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { Keypad, KeypadField } from "@/ui/keypad";
 import { ScanOrPick } from "@/ui/scan-or-pick";
 import { Chip } from "@/ui/status";
+import { NextApprover } from "@/ui/next-approver";
+import type { NextActors } from "@/lib/next-actors-words";
 import {
   askOtherMaterialAction,
   takeAlternativeAction,
@@ -61,6 +63,8 @@ export function WeighFlow(p: {
   /** ADR-104/106: one-tap reasons for another lot, and the ingredients that may be asked for by name. */
   reasons: { code: string; label: string }[];
   substitutes: { id: string; name: string; baseUom: string }[];
+  /** Who can check a weighing of each weigher (docs/NEXT_APPROVER.md), by weigher's user id. */
+  nextByOperator?: Record<string, NextActors | null>;
 }) {
   const firstOpen = Math.max(
     0,
@@ -137,6 +141,7 @@ export function WeighFlow(p: {
               checkers={p.checkers}
               passwordRequired={p.passwordRequired}
               viewer={p.viewer}
+              next={p.nextByOperator?.[card.waitingForCheck[0].operatorId ?? ""] ?? null}
             />
           ) : card.done ? (
             <p className="rounded-[20px] border border-line bg-surface p-5 text-[17px]">
@@ -537,6 +542,7 @@ function SecondCheck({
   checkers,
   passwordRequired,
   viewer,
+  next,
 }: {
   batchId: string;
   card: Card;
@@ -544,6 +550,7 @@ function SecondCheck({
   checkers: Person[];
   passwordRequired: boolean;
   viewer: { userId: string; displayName: string; canCheck: boolean };
+  next: NextActors | null;
 }) {
   const [state, action] = useInPlaceAction(checkWeighingAction);
   const [ownState, ownAction] = useInPlaceAction(checkWeighingOwnAction);
@@ -606,6 +613,7 @@ function SecondCheck({
               their own phone and confirms it there.
             </p>
           )}
+          <NextApprover next={next} className="mt-3 text-[15px] text-fg" />
           <p className="mt-3 text-[13px] text-muted">
             The second check needs a connection.
           </p>

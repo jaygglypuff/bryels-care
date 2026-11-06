@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
-import { getPurchaseOrder } from "@/modules/procurement";
+import { getPurchaseOrder, procurementNextActors } from "@/modules/procurement";
+import { NextApprover } from "@/ui/next-approver";
 import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, PageHeader, Textarea } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
@@ -41,6 +42,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     throw e;
   }
   const { po, can } = v;
+  // Who approves (or sends) next, by name and role (docs/NEXT_APPROVER.md).
+  const next = await procurementNextActors(ctx, "purchase_order", po.id);
   const linkCls = "inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text hover:underline";
   const waiting = `Waiting for ${approverWords(v.progress.next)} to approve${v.progress.steps.length > 1 && v.progress.next ? ` (step ${v.progress.next.step} of ${v.progress.steps.length})` : ""}.`;
   const canRecordDoc = ["sent", "partially_received", "received"].includes(po.status) && ctx.canAt("procurement.purchase_order.post", po.siteId) && ctx.can("documents.generated_document.create");
@@ -102,7 +105,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         }
       />
       <PageIntro>This screen is for one order to a supplier: what we ordered, who approves it, sending it, and what has arrived.</PageIntro>
-      {sp.sent === "1" && <Banner tone="ok" title="Saved and sent for approval">{waiting}</Banner>}
+      {sp.sent === "1" && <Banner tone="ok" title="Saved and sent for approval">{next ? <NextApprover next={next} inline /> : waiting}</Banner>}
       {sp.sent === "0" && <Banner tone="warn" title="Saved as a draft">It could not be sent for approval yet. Tap “Send for approval” below to see why.</Banner>}
       {sp.saved && <Banner tone="ok" title="Order saved as a draft">Send it for approval when it is ready.</Banner>}
       {(sp.sent || sp.saved) && <div className="mb-4" />}
@@ -138,9 +141,9 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       ) : po.status === "draft" ? (
         <NextStep text="This order is a draft." waitingFor={await waitingFor(ctx, "procurement.purchase_order.submit", po.siteId, "to send it for approval", "purchasing")} />
       ) : po.status === "submitted" ? (
-        <NextStep text="This order waits for approval." waitingFor={await waitingFor(ctx, "procurement.purchase_order.approve", po.siteId, `to approve it${v.progress.steps.length > 1 && v.progress.next ? ` (step ${v.progress.next.step} of ${v.progress.steps.length})` : ""}`, approverWords(v.progress.next))} />
+        <NextStep text="This order waits for approval." waitingFor={next ? <NextApprover next={next} inline /> : waiting} />
       ) : po.status === "approved" ? (
-        <NextStep text="Approved." waitingFor={await waitingFor(ctx, "procurement.purchase_order.post", po.siteId, "to send it to the supplier", "purchasing")} />
+        <NextStep text="Approved." waitingFor={next ? <NextApprover next={next} inline /> : await waitingFor(ctx, "procurement.purchase_order.post", po.siteId, "to send it to the supplier", "purchasing")} />
       ) : po.status === "sent" || po.status === "partially_received" ? (
         <NextStep text={po.status === "sent" ? "Sent to the supplier." : "Part of it has arrived."} waitingFor={`Waiting for the delivery${po.expectedDate ? ` (expected ${fmtDate(po.expectedDate)})` : ""}. The warehouse receives it.`} />
       ) : null}

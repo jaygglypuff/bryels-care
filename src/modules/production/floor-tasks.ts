@@ -34,8 +34,8 @@ import { continueTitle, dayNumber, lastPauses, startedWords } from "./batch-days
  * | rework_approved                               | Redo the steps QA asked for       | production.process_step_record.create|
  *
  * Who: a batch of an order assigned to the user comes first, then batches nobody took (order not
- * assigned, or no order); a batch of an order assigned to someone else is never listed
- * (work_orders.assigned_operator_id). Without the permission the task says who can do it, by first
+ * assigned, or no order); a batch of an order assigned to someone else is listed only for a check the user
+ * can sign now (weighing check, step or start check; work_orders.assigned_operator_id). Without the permission the task says who can do it, by first
  * name or role, never by e-mail address. Requires production.batch.view; current site only.
  */
 
@@ -135,8 +135,6 @@ export async function myFloorTasks(ctx: AuthContext, now: Date = new Date()): Pr
           // waiting for materials: a batch of an approved order, or an older batch made without an order
           and(eq(batches.status, "planned"), or(isNull(batches.workOrderId), inArray(workOrders.status, APPROVED_ORDER))),
         ),
-        // never a batch of an order assigned to someone else
-        or(isNull(workOrders.assignedOperatorId), eq(workOrders.assignedOperatorId, ctx.userId)),
       ),
     )
     .orderBy(asc(batches.batchNumber))
@@ -189,6 +187,9 @@ export async function myFloorTasks(ctx: AuthContext, now: Date = new Date()): Pr
       t.title = toCheck === 1 ? "Check a weighing" : `Check ${toCheck} weighings`;
       canDo = true;
     }
+    // A batch of an order assigned to someone else is not my work, except a check I can sign now (the second person is
+    // never the assignee who weighed or did the step; docs/NEXT_APPROVER.md: "the checker's Home task appears").
+    if (r.assignedOperatorId && r.assignedOperatorId !== ctx.userId && !(t.kind === "check" && canDo)) continue;
     // Waiting (curing, a check by someone else, no permission): the same flow screen, which shows why.
     const ref = { batchId: r.id, workOrderId: r.workOrderId };
     const href = toCheck > 0 ? flowHref(ref, "weigh") : action.kind === "link" ? action.href : r.status === "planned" ? flowHref(ref, "materials") : flowHref(ref, `step/${cur?.stepNo ?? firstStepNo(planned)}`);

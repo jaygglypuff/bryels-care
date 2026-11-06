@@ -1,5 +1,7 @@
 "use client";
 import Link from "next/link";
+import { NextApprover } from "@/ui/next-approver";
+import type { NextActors } from "@/lib/next-actors-words";
 import { AlertTriangle, CheckCircle2, Hourglass, UserCheck, Wrench, XCircle } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import type { StepCardView } from "@/modules/production";
@@ -126,6 +128,8 @@ type Props = {
   step: Step;
   canPerform: boolean;
   checkers: Person[];
+  /** Who can check this step (docs/NEXT_APPROVER.md); null when it does not wait for a check. */
+  checkNext?: NextActors | null;
   approvers: Person[];
   passwordRequired: boolean;
   nextHref: string | null;
@@ -204,9 +208,10 @@ export function StepCard(p: Props) {
           </p>
         )}
         {step.status === "awaiting_check" && (
-          <p className="mt-3 text-[16px] font-semibold text-[var(--warn-fg)]">
+          <div className="mt-3 text-[16px] font-semibold text-[var(--warn-fg)]">
             Waiting for the second check.
-          </p>
+            <NextApprover next={p.checkNext} className="text-[15px] text-fg" />
+          </div>
         )}
       </section>
       <div className="grid min-w-0 content-start gap-4">

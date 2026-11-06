@@ -84,3 +84,4 @@ export { supplierMaterialsKind } from "./import-kind";
 export { purchaseOrderMatchSourceImpl } from "./finance-match"; // W4B three-way match (src/modules/wiring.ts)
 export { procurementReorderSuggestJob } from "./jobs";
 export { purchaseRequestApprovalVerdicts, purchaseOrderApprovalVerdicts, supplierReturnApprovalVerdicts } from "./approval-gates"; // ADR-075 "To approve"
+export { procurementNextActors } from "./next-approver"; // docs/NEXT_APPROVER.md

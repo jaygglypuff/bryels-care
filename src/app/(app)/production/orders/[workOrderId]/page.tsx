@@ -4,6 +4,9 @@ import { notFound, redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
+import { batchQaNext, productionOrderNext } from "@/modules/production";
+import { NextApprover } from "@/ui/next-approver";
+import type { NextActors } from "@/lib/next-actors-words";
 import { assigneeChoices, auditSentence, batchPlanWords, batchRecordHref, continueHref, defectTypes, getProductionOrder, NO_ORDER_SEGMENT, orderStateWord, plainReason, workOrderFormOptions, type DailyLogRow, type ProductionOrderView } from "@/modules/production";
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
@@ -29,7 +32,7 @@ type Tab = (typeof TABS)[number][0];
 const qty = (v: string, uom: string) => (uom === "g" ? fmtMass(v) : fmtQty(v, uom, 1));
 const pcs = (v: string) => fmtQty(v, "", D(v).isInteger() ? 0 : 1);
 
-function NextActionCard({ v, planKey }: { v: ProductionOrderView; planKey: string }) {
+function NextActionCard({ v, planKey, approvalNext }: { v: ProductionOrderView; planKey: string; approvalNext: NextActors | null }) {
   const a = v.nextAction;
   // UX review: an approved order without a batch says why nothing can be done, and whom to ask.
   if (v.noBatchPlanned)
@@ -56,7 +59,9 @@ function NextActionCard({ v, planKey }: { v: ProductionOrderView; planKey: strin
       <div className="flex flex-col gap-2">
         <p className="text-[14px] text-fg-2">{a.hint}</p>
         <ActionButton a={a} approve={<ApproveButton workOrderId={v.detail.workOrder.id} />} />
-        {a.kind === "wait" && !a.who && <p className="text-[13px] text-muted">Nothing to press yet.</p>}
+        {/* Who approves the order, by name and role (docs/NEXT_APPROVER.md). */}
+        {approvalNext && <NextApprover next={approvalNext} />}
+        {a.kind === "wait" && !a.who && !approvalNext && <p className="text-[13px] text-muted">Nothing to press yet.</p>}
       </div>
     </Card>
   );
@@ -143,8 +148,14 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
   const sp = await searchParams;
   const tab: Tab = TABS.some(([k]) => k === sp.tab) ? (sp.tab as Tab) : "today";
   let v: ProductionOrderView;
+  let approvalNext: NextActors | null = null;
+  let finishedQaNext: NextActors | null = null;
   try {
     v = await getProductionOrder(ctx, workOrderId);
+    approvalNext = await productionOrderNext(ctx, workOrderId);
+    const fin = sp.finished ? v.batches.find((b) => b.batchNumber === sp.finished) : null;
+    // Back from Finish: who decides the batch on Check quality (QA only; docs/NEXT_APPROVER.md).
+    finishedQaNext = fin ? await batchQaNext(ctx, fin.id) : null;
   } catch (e) {
     if (e instanceof DomainError && e.code === "not_found") notFound();
     throw e;
@@ -207,7 +218,8 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
         <div className="mb-4">
           {/* ADR-080 G3: back from Finish batch (UX review S6). */}
           <Banner tone="ok" title={`Batch ${sp.finished} finished`}>
-            It is in the hold area, waiting for the quality check.
+            It is in the hold area, waiting for the quality check.{" "}
+            <NextApprover next={finishedQaNext} inline />
           </Banner>
         </div>
       )}
@@ -227,7 +239,7 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
       )}
 
       <div className="mb-4 lg:hidden">
-        <NextActionCard v={v} planKey={planKey} />
+        <NextActionCard v={v} planKey={planKey} approvalNext={approvalNext} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
@@ -370,7 +382,7 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
 
         <aside className="space-y-4">
           <div className="hidden lg:block">
-            <NextActionCard v={v} planKey={planKey} />
+            <NextActionCard v={v} planKey={planKey} approvalNext={approvalNext} />
           </div>
           {v.canAssign && (
             <div className="rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)]">

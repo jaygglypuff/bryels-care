@@ -4,6 +4,7 @@ import { useActionState, useRef, useState, type ComponentProps, type MouseEvent,
 import type { ActionState } from "@/lib/errors";
 import { Button, cx, type ButtonVariant } from "./core";
 import { WhoCanHelp } from "./who-can-help";
+import { NextApprover } from "./next-approver";
 
 export function SubmitButton({ children, pendingText = "Saving…", onClick, ...rest }: ComponentProps<typeof Button> & { pendingText?: string }) {
   const { pending } = useFormStatus();
@@ -42,6 +43,7 @@ export function FormMessage({ state }: { state: ActionState }) {
       )}
     >
       {state.message}
+      {state.ok && state.next && <NextApprover next={state.next} />}
       {!state.ok && state.needs && <WhoCanHelp permission={state.needs.permission} siteId={state.needs.siteId} />}
     </div>
   );

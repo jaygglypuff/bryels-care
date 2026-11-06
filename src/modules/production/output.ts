@@ -1,4 +1,5 @@
 import "server-only";
+import { notifyNextActors } from "@/modules/governance";
 import { and, eq, isNull } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { type Tx, db } from "@/db/client";
@@ -260,6 +261,15 @@ export async function postBatchToQuarantineLocked(
       inspectionId: inspection?.inspectionId ?? null,
       stagingReservationsReleased: stagingReleased,
     },
+  });
+  // Hand-off (docs/NEXT_APPROVER.md): QA decides the batch on Check quality; tell them once per batch.
+  await notifyNextActors(tx, ctx, "batch_qa", { siteId: batch.siteId, excludeUserIds: [] }, {
+    title: `Batch ${batch.batchNumber} waits for your QA decision`,
+    body: `${ctx.displayName} finished the batch (lot ${lotNumber}). Check it and decide if it may be sold.`,
+    link: `/quality/check/${batch.id}`,
+    entityType: "batch",
+    entityId: batch.id,
+    dedupeKey: `handoff.batch_qa:${batch.id}`,
   });
   return { lotNumber, lotId: lot.id, yieldPct: y.yieldPct, consumptionPostings: consumptionCount, expiresOn, location: loc.code, locationId: loc.id, inspectionId: inspection?.inspectionId ?? null };
 }

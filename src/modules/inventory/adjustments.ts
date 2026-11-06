@@ -31,7 +31,7 @@ import { claimIdempotencyKey, stateMachine, storeIdempotentResult } from "./comm
 import { assertLocationsNotFrozen } from "./counts";
 import { looseQty } from "./moves";
 import { getInventorySetting } from "./policy";
-import { type ApprovalEvaluation, type ApprovalVerdict, canDecideEvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited, stepVerdict } from "@/modules/governance";
+import { type ApprovalEvaluation, type ApprovalVerdict, type NextActors, canDecideEvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited, nextActors, notifyNextActors, rolesAllowedNow, stepVerdict } from "@/modules/governance";
 
 /** Value basis of the `stock_adjustment` approval rules; an unknown value counts as above every bound when configured. */
 function adjustmentBasis(total: Decimal.Value, valueUnknown: boolean, unknownNeeds: boolean) {
@@ -213,6 +213,16 @@ export async function submitAdjustment(ctx: AuthContext, id: string) {
       siteId: a.siteId,
       before: { status: a.status },
       after: { status: "submitted", totalValue: total.toString(), valueUnknown, requiresSecondApproval: requiresSecond },
+    });
+    // Hand-off (docs/NEXT_APPROVER.md): the step-1 approvers (never the maker, ADR-091 top roles excepted) are told once per send.
+    const first = ev.steps[0] ?? null;
+    await notifyNextActors(tx, ctx, "stock_adjustment", { siteId: a.siteId, excludeUserIds: [a.createdBy, ctx.userId], roleCodes: first ? rolesAllowedNow(first, new Date()) : [], stepNo: 1, stepsTotal: ev.steps.length }, {
+      title: `Stock fix ${a.adjustmentNumber} waits for your approval`,
+      body: `${ctx.displayName} sent it${valueUnknown ? "" : ` (value ${total.toDecimalPlaces(2).toString()})`}.`,
+      link: `/inventory/adjustments/${a.id}`,
+      entityType: "stock_adjustment",
+      entityId: a.id,
+      dedupeKey: `handoff.stock_adjustment:${a.id}:${Date.now()}`,
     });
     return { requiresSecondApproval: requiresSecond, totalValue: total.toString(), valueUnknown };
   });
@@ -586,4 +596,29 @@ export async function adjustmentApprovalVerdicts(ctx: AuthContext, ids: string[]
     out.set(a.id, { ...v, requestedById: a.submittedBy ?? a.createdBy, requestedByName: by });
   }
   return out;
+}
+
+/**
+ * Who approves a submitted stock correction next, by name and role (docs/NEXT_APPROVER.md): the same step, roles and
+ * same-person rules as `adjustmentApprovalVerdicts` (step 1 the site manager; step 2 the owner when the value needs a
+ * second OK, never the first approver). Null unless submitted and at one of the viewer's sites.
+ */
+export async function adjustmentNextActors(ctx: AuthContext, id: string): Promise<NextActors | null> {
+  if (!isUuid(id)) return null;
+  const [a] = await db.select().from(stockAdjustments).where(and(eq(stockAdjustments.id, id), eq(stockAdjustments.organizationId, ctx.organizationId))).limit(1);
+  if (!a || a.status !== "submitted" || !ctx.allowedSiteIds.includes(a.siteId)) return null;
+  const decisions = await db.select().from(approvalDecisions).where(and(eq(approvalDecisions.recordType, "stock_adjustment"), eq(approvalDecisions.recordId, a.id), eq(approvalDecisions.decision, "approved")));
+  const step = decisions.some((d) => d.step === 1) ? 2 : 1;
+  const unknownNeeds = await getInventorySetting(db, a.organizationId, a.siteId, "inventory.adjustment.unknown_value_requires_second_step");
+  const ev = await evaluateApprovalRules(db, a.organizationId, { documentType: "stock_adjustment", siteId: a.siteId, basis: adjustmentBasis(a.totalValueAmount ?? 0, a.valueUnknown, unknownNeeds) });
+  const open = ev.steps[step - 1] ?? null;
+  const pendingSince = step === 1 ? a.submittedAt : (decisions.find((d) => d.step === 1)?.decidedAt ?? null);
+  return nextActors(ctx, "stock_adjustment", {
+    siteId: a.siteId,
+    excludeUserIds: [a.createdBy, a.submittedBy],
+    priorApproverIds: step === 2 ? decisions.map((d) => d.decidedBy) : [],
+    roleCodes: open ? rolesAllowedNow(open, pendingSince) : [],
+    stepNo: step,
+    stepsTotal: Math.max(ev.steps.length, step),
+  });
 }

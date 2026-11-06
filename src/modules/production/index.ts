@@ -206,3 +206,4 @@ export { changeLotInTx } from "./material-swaps";
 export { largestBatchFor, largestBatchesForForm, MIXING_EQUIPMENT_KINDS, type LargestBatch } from "./batch-plan-facts";
 export { plannedBatchSizesG } from "./work-orders";
 export { batchBoxInfo, batchBoxInfoFor, planBatchBoxes, batchBoxPrintJobs, currentBoxPlan, leftOverWrappers, returnLeftOverWrappers, BOX_LABEL_KIND, type BatchBoxInfo, type PlanBoxesResult, type LeftOverWrapper } from "./batch-boxes";
+export { floorCheckNext, productionOrderNext, batchQaNext } from "./next-approver"; // docs/NEXT_APPROVER.md

@@ -41,6 +41,8 @@ import {
   withdrawAslChange,
 } from "@/modules/procurement";
 import { registerAppHooks } from "@/modules/wiring";
+import { procurementNextActors } from "@/modules/procurement";
+import type { NextActors } from "@/lib/next-actors-words";
 import type { DiscrepancyKind } from "@/modules/inventory";
 import { normalizeUnit, parseQtyText, toBaseQty } from "@/lib/units";
 import { DomainError } from "@/lib/errors";
@@ -93,11 +95,11 @@ function baseText(fd: FormData, field: string): string | null {
   return r.qtyBase.toString();
 }
 
-async function inPlace(fn: () => Promise<string>): Promise<ActionState> {
+async function inPlace(fn: () => Promise<string | { message: string; next: NextActors | null }>): Promise<ActionState> {
   try {
-    const message = await fn();
+    const r = await fn();
     refreshCurrentPage();
-    return { ok: true, message };
+    return typeof r === "string" ? { ok: true, message: r } : { ok: true, message: r.message, next: r.next };
   } catch (e) {
     return toActionState(e);
   }
@@ -187,7 +189,7 @@ export async function submitRequestAction(_p: ActionState, fd: FormData): Promis
   return inPlace(async () => {
     const ctx = await requireContext();
     await submitPurchaseRequest(ctx, { requestId: str(fd, "requestId") });
-    return "Submitted for approval.";
+    return { message: "Sent for approval.", next: await procurementNextActors(ctx, "purchase_request", str(fd, "requestId")) };
   });
 }
 
@@ -196,7 +198,8 @@ export async function decideRequestAction(_p: ActionState, fd: FormData): Promis
     const ctx = await requireContext();
     const d = str(fd, "decision");
     const r = await decidePurchaseRequest(ctx, { requestId: str(fd, "requestId"), decision: d === "reject" ? "reject" : d === "return" ? "return" : "approve", note: opt(fd, "note") });
-    return r.status === "approved" ? "Approved." : r.status === "submitted" ? "Step approved; the next approver is notified." : `Request ${r.status}.`;
+    if (r.status === "submitted") return { message: "Step approved.", next: await procurementNextActors(ctx, "purchase_request", str(fd, "requestId")) };
+    return r.status === "approved" ? "Approved. Purchasing makes a purchase order from it." : `Request ${r.status}.`;
   });
 }
 
@@ -248,7 +251,7 @@ export async function submitOrderAction(_p: ActionState, fd: FormData): Promise<
   return inPlace(async () => {
     const ctx = await requireContext();
     const r = await submitPurchaseOrder(ctx, { purchaseOrderId: str(fd, "purchaseOrderId") });
-    return `Sent for approval: ${plural(r.steps, "approval step")}.`;
+    return { message: `Sent for approval: ${plural(r.steps, "approval step")}.`, next: await procurementNextActors(ctx, "purchase_order", r.purchaseOrderId) };
   });
 }
 
@@ -256,7 +259,8 @@ export async function decideOrderAction(_p: ActionState, fd: FormData): Promise<
   return inPlace(async () => {
     const ctx = await requireContext();
     const r = await decidePurchaseOrder(ctx, { purchaseOrderId: str(fd, "purchaseOrderId"), decision: str(fd, "decision") === "return" ? "return" : "approve", note: opt(fd, "note") });
-    return r.status === "approved" ? "Approved. Procurement can send it." : r.status === "submitted" ? "Step approved; the next approver is notified." : "Returned to draft.";
+    if (r.status === "approved" || r.status === "submitted") return { message: r.status === "approved" ? "Approved." : "Step approved.", next: await procurementNextActors(ctx, "purchase_order", r.purchaseOrderId) };
+    return "Returned to draft.";
   });
 }
 
@@ -387,7 +391,7 @@ export async function submitReturnAction(_p: ActionState, fd: FormData): Promise
   return inPlace(async () => {
     const ctx = await requireContext();
     await submitSupplierReturn(ctx, { returnId: str(fd, "returnId") });
-    return "Submitted for approval.";
+    return { message: "Sent for approval.", next: await procurementNextActors(ctx, "supplier_return", str(fd, "returnId")) };
   });
 }
 
@@ -395,7 +399,8 @@ export async function decideReturnAction(_p: ActionState, fd: FormData): Promise
   return inPlace(async () => {
     const ctx = await requireContext();
     const r = await decideSupplierReturn(ctx, { returnId: str(fd, "returnId"), decision: str(fd, "decision") === "return" ? "return" : "approve", note: opt(fd, "note") });
-    return r.status === "approved" ? "Approved. Post it when the goods leave." : r.status === "submitted" ? "Step approved; the next approver is notified." : "Returned to draft.";
+    if (r.status === "submitted") return { message: "Step approved.", next: await procurementNextActors(ctx, "supplier_return", str(fd, "returnId")) };
+    return r.status === "approved" ? "Approved. Post it when the goods leave." : "Returned to draft.";
   });
 }
 

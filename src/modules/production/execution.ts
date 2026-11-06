@@ -11,6 +11,8 @@ import { executionHooks } from "./execution-hooks";
 import { type FormulaSnapshot, idempotent, isWeighingStep, lockBatch } from "./shared";
 import { transitionBatch } from "./state";
 import { syncWorkOrderProgress } from "./work-orders";
+import { notifyNextActors } from "@/modules/governance";
+import { flowHref } from "./flow-paths";
 
 /**
  * Process step records (W05-06..17, US-3-09..13): the step state machine, prerequisites, start and
@@ -266,6 +268,18 @@ export async function finishStep(
     });
   }
   if (to === "completed") await afterStepCompleted(tx, ctx, batch, step);
+  else {
+    // Hand-off (docs/NEXT_APPROVER.md): the people who can check this step (never the doer) are told once per step cycle.
+    const kind = step.stepKind === "line_clearance" ? "start_check" : "step_check";
+    await notifyNextActors(tx, ctx, kind, { siteId: batch.siteId, excludeUserIds: [ctx.userId] }, {
+      title: `Check ${step.name.toLowerCase()} of batch ${batch.batchNumber}`,
+      body: `${ctx.displayName} did step ${step.stepNo} (${step.name}). Check it on the step screen, or send it back with what to correct.`,
+      link: flowHref({ batchId: batch.id, workOrderId: batch.workOrderId }, `step/${step.stepNo}`),
+      entityType: "batch",
+      entityId: batch.id,
+      dedupeKey: `handoff.${kind}:${rec.id}:${now.toISOString()}`,
+    });
+  }
   return { status: to };
 }
 
