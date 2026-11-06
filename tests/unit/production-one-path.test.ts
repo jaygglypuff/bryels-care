@@ -200,7 +200,11 @@ describe("labels only from the packaging step (A-ONE-02) and plain step words", 
   it("labelPrintBlocker names the first open step before packaging; none once it is reached", async () => {
     const { labelPrintBlocker } = await import("@/modules/production/packaging-flow");
     const rec = (n: number) => ({ stepNo: n, status: "completed" });
-    expect(labelPrintBlocker(STEPS, [rec(1)])).toMatch(/Packaging and labeling.*Finish "Weigh" first/);
+    // Live check 2026-11-06 finding 6: what must happen first and what comes then, never circular.
+    expect(labelPrintBlocker(STEPS, [rec(1)])).toBe('Finish step 2, 3, 4 and 5 first; then you print the labels on step 6 "Packaging and labeling".');
+    expect(labelPrintBlocker(STEPS, [1, 2, 3, 4].map(rec))).toBe('Finish step 5 "Before wrapping check" first; then you print the labels on step 6 "Packaging and labeling".');
+    expect(labelPrintBlocker(STEPS, [rec(1)])).not.toMatch(/^Labels are printed on the step/);
+    expect(labelPrintBlocker(STEPS, [rec(1)], { unitsPerBox: 24, pieceWord: "bars", labelling: "per_box" })).toMatch(/first; then you will pack 24 bars in a box and print one label per box\.$/);
     expect(labelPrintBlocker(STEPS, [1, 2, 3, 4, 5].map(rec))).toBeNull();
     const noPack = STEPS.filter((s) => s.stepKind !== "packaging");
     expect(labelPrintBlocker(noPack, [1, 2, 3].map(rec))).toMatch(/every making step/);

@@ -1,4 +1,5 @@
 "use client";
+import { PlaceName } from "@/ui/inventory/place-name";
 import Link from "next/link";
 import { CheckCircle2, Package, Printer, Tag } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -40,7 +41,7 @@ export function PackagingBox({ batchId, stepNo, packaging, canPerform, done, lab
                   {rows.length ? (
                     rows.map((r, i) => (
                       <p key={i} className="text-fg-2">
-                        {l.materialName} from lot <span className="font-mono font-semibold text-fg">{r.lotNumber}</span>, {l.issued.length ? "recorded" : l.picked === "taken" ? "taken" : "set aside"} · shelf {r.locationCode} · {n(r.qty)} {uomWord(l.uom)}
+                        {l.materialName} from lot <span className="font-mono font-semibold text-fg">{r.lotNumber}</span>, {l.issued.length ? "recorded" : l.picked === "taken" ? "taken" : "set aside"} · on <PlaceName name={r.locationName} code={r.locationCode} /> · {n(r.qty)} {uomWord(l.uom)}
                       </p>
                     ))
                   ) : (

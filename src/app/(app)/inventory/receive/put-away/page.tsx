@@ -10,6 +10,7 @@ import { Card, CardTitle, EmptyState, PageHeader } from "@/ui/core";
 import { Banner } from "@/ui/status";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { LotStatusChip } from "@/ui/inventory/bits";
+import { PlaceName, placeWords } from "@/ui/inventory/place-name";
 import { Forbidden } from "../../../forbidden";
 import { PutAwayForm } from "./put-away-form";
 import { PutAwayLotFinder } from "./lot-finder";
@@ -70,7 +71,8 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
       return {
         value: `/inventory/receive/put-away?lot=${t.lotId}&from=${t.fromLocationId}${t.suggested ? `&to=${t.suggested.id}` : ""}`,
         title: t.itemName || t.itemCode,
-        detail: `${what} at ${t.fromCode} → ${t.suggested ? `${t.suggested.code} (${t.sectionLabel})` : `no free shelf in ${t.sectionLabel}`} · lot ${t.lotNumber}`,
+        // Finding 8 (live check 2026-11-06): names first, the code after it ("QA waiting area (QUA-01) → Oils rack (RM-01)").
+        detail: `${what} at ${placeWords(t.fromName, t.fromCode)} → ${t.suggested ? `${placeWords(t.suggested.name, t.suggested.code)}, ${t.sectionLabel}` : `no free shelf in ${t.sectionLabel}`} · lot ${t.lotNumber}`,
         code: t.lotNumber,
         codes: [t.lotNumber, ...t.boxNumbers, ...(t.supplierLotNumber ? [t.supplierLotNumber.toUpperCase()] : [])],
       };
@@ -139,7 +141,9 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
           </p>
           <p className="mb-3 rounded-[10px] bg-surface-2 px-3 py-2 text-[14px]" data-testid="putaway-suggested-section">
             Belongs in: <strong>{opts.suggestedSectionLabel}</strong>
-            {opts.suggestedCodes.length ? ` · ${opts.suggestedCodes.join(", ")}` : " · no allowed place in that section right now"}
+            {opts.suggestedCodes.length
+              ? <> · {opts.destinations.filter((d) => d.section === opts!.suggestedSection).map((d, i) => <span key={d.id}>{i ? ", " : ""}<PlaceName name={d.name} code={d.code} /></span>)}</>
+              : " · no allowed place in that section right now"}
           </p>
           {opts.lot.qualityStatus === "quarantine" && <Banner tone="warn" title="Waiting for QA check">This lot is not OK to use yet. It can only move between the QA areas. Put it on a shelf after QA says OK.</Banner>}
           {opts.balances.length === 0 ? (

@@ -114,6 +114,7 @@ export default async function StepPage({ params, searchParams }: { params: Promi
                 plan={boxes.plan}
                 canPrint={boxes.canPrint}
                 why={boxes.why}
+                locked={boxes.locked}
                 printHref={boxes.printHref}
               />
               {/* per_piece products also label each piece (ADR-099 panel); piece labels are not counted one by one. */}

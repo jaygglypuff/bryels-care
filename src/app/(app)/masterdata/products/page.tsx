@@ -1,3 +1,4 @@
+import { pieceSizeWords } from "@/lib/piece-size";
 import type { Metadata } from "next";
 import { requireContext } from "@/lib/auth/context";
 import { fmtQty } from "@/lib/qty";
@@ -99,7 +100,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
               title={p.name}
               code={p.code}
               status={p.status !== "active" ? <PlainItemChip status={p.status} /> : undefined}
-              facts={`${familyLabel.get(p.family) ?? p.family} · ${fmtQty(p.unitNetMassG, "g", 0)} a piece · ${shelfText(p.shelfLifeDays)} · ${p.skuCount} way${p.skuCount === 1 ? "" : "s"} to sell`}
+              facts={`${familyLabel.get(p.family) ?? p.family} · ${pieceSizeWords(p)} · ${shelfText(p.shelfLifeDays)} · ${p.skuCount} way${p.skuCount === 1 ? "" : "s"} to sell`}
               aside={<span className="tabular">{fmtQty(p.onHand, "pcs", 0)}<span className="block text-[11px] text-muted">in stock</span></span>}
             />
           ))}

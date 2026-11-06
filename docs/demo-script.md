@@ -59,14 +59,14 @@ A new deploy of the app with new demo data does this by itself the first time it
 |---|---|---|
 | **Acapulco Soap 135 g**, one recipe, one list of steps | approved | — |
 | **Aloe Hand Lotion 250 mL**, one recipe, one list of steps | approved | — |
-| Production order 1, Acapulco Soap | done: QA said OK, 5 boxes (118 bars) on the **Finished goods bay** | — |
+| Production order 1, Acapulco Soap | done: QA said OK, 5 boxes (118 bars; QA kept 2 as samples), box labels printed, on the **Finished goods bay** | — |
 | Production order 2, Aloe Hand Lotion | made, waiting for the **QA check** in the QA waiting area | `qa.nfd@` (scene 2) |
 | Production order 3, Acapulco Soap | in progress: weighed, heated and mixed; next step **Pour into moulds** | `operator.nfd@` (scene 3) |
 | Production order 4, Aloe Hand Lotion | approved, ready for **Get materials** | `operator.nfd@` (scene 5) |
 | Purchase order to Manila Print & Pack (wrappers, bottles) | **sent** to the supplier | — |
 | Purchase order to Laguna Oleo Supply (coconut oil, glycerin) | delivered: the coconut oil is OK and **waits to be put on a shelf**; the glycerin **waits for the QA check** | `warehouse.nfd@` (scene 4), `qa.nfd@` |
 | Customer order from Luntian Wellness Stores (48 soap bars) | 2 boxes set aside: **ready to get from the shelf** | `warehouse.nfd@` (scene 6) |
-| Customer order from Isla Spa Supplies (48 lotion bottles) | confirmed, waiting for lotion that QA said OK | after scene 2 |
+| Customer order from Isla Spa Supplies (48 lotion bottles) | confirmed; production orders 2 and 4 are made for it, so it is **covered by stock that is coming** (94 bottles wait for QA), not short | after scene 2 |
 
 Stock to show "use first": one **Palm Oil** lot expires in about 20 days (it is used first), one
 **Coconut Oil** drum is already opened (part used by the soap batches), and one **Glycerin** lot waits
@@ -97,12 +97,19 @@ so they change from month to month.
 2. Type the test results (pH between 5.0 and 6.5, "Looks right": Conforms). These test names and
    limits are **examples only**; the company's QA sets the real ones.
 3. Tick **I reviewed the batch record** and tap **Pass**. The lotion is now OK to sell and moves to
-   the finished goods bay. The Isla Spa order can now get its bottles.
+   the finished goods bay. The Isla Spa order (this production order was made for it) can now get its bottles.
+4. Before this scene, **How work flows** shows the Isla Spa order as "waiting for stock that is coming:
+   48 waiting for QA" — not red, nothing needs making. Every production order in the demo was made by
+   the planner (Cora) and approved by the site manager (Dino).
 
 ### Scene 3: The operator finishes the soap (3 min). Sign in as `operator.nfd@` (phone size is best)
 
 1. Home shows **Pour into moulds** for the soap batch. Tap it and tap **Step done**.
 2. The next step is **Cure**. The screen shows when the curing is finished (2 days in the demo).
+3. Open step 7 **Wrap and pack** to show what comes: it is locked ("Finish step 4, 5 and 6 first; then you
+   will pack 24 bars in a box and print one label per box"), with the planned boxes and the box label.
+4. **Print the BMR** of this batch: it prints a working copy marked "IN PROGRESS — NOT THE FINAL RECORD"
+   with everything recorded so far. The final record is generated when the batch is done.
    Say: "the system will not let anyone cut the soap before it is hard; ending early needs a
    problem report for QA."
 
@@ -115,7 +122,8 @@ so they change from month to month.
 
 ### Scene 5: Get materials for the lotion (2 min). `operator.nfd@`
 
-1. Open production order 4 (Aloe Hand Lotion). Tap **Get materials**.
+1. Open production order 4 (Aloe Hand Lotion). (If you open **Weigh** first, it says "Start the batch first:
+   get the materials, then do the clean-area check on step 1".) Tap **Get materials**.
 2. The list says which lot to take from which shelf and how much, the one that expires first
    first. Tick them and confirm. The next screen is the start check (**Check the area is clean**).
 

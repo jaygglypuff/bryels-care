@@ -42,6 +42,7 @@ export type FlowCountKey =
   | "so_to_approve"
   | "so_confirmed"
   | "so_short"
+  | "so_coming"
   | "short_no_wo"
   | "wo_to_approve"
   | "batches_to_start"
@@ -162,6 +163,8 @@ export const FLOW_STAGES: readonly FlowStageDef[] = [
       c("so_to_approve", "order waiting for approval", "orders waiting for approval", ["sales.sales_order.view"]),
       c("so_confirmed", "order confirmed, nothing set aside yet", "orders confirmed, nothing set aside yet", ["sales.sales_order.view"]),
       c("so_short", "order short: it needs making", "orders short: they need making", ["sales.sales_order.view"]),
+      // Finding 1 (live check 2026-11-06): stock waiting for QA or being made covers it; nobody has to act.
+      c("so_coming", "order waiting for stock that is coming", "orders waiting for stock that is coming", ["sales.sales_order.view", "production.work_order.view"], "self"),
     ],
   },
   {

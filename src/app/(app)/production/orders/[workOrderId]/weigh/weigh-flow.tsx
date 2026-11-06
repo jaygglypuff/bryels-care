@@ -12,7 +12,7 @@ import { ScanOrPick } from "@/ui/scan-or-pick";
 import { Chip } from "@/ui/status";
 import { NextApprover } from "@/ui/next-approver";
 import { EquipmentWhy } from "../equipment-why";
-import type { NextActors } from "@/lib/next-actors-words";
+import { checkerAfterSave, type NextActors } from "@/lib/next-actors-words";
 import {
   askOtherMaterialAction,
   takeAlternativeAction,
@@ -41,6 +41,8 @@ export function WeighFlow(p: {
   stepNo: number | null;
   stepDone: boolean;
   canWeigh: boolean;
+  /** Why Save is pale and the one button that fixes it (getWeighView.weighBlock; finding 2). */
+  block?: { sentence: string; href: string | null; label: string | null } | null;
   lotConfirm: "last4" | "scan" | "none";
   cards: Card[];
   scales: {
@@ -236,7 +238,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
     (!p.requiresScale || !!scale);
   // Owner's screenshots 2026-11-01: a pale, disabled Save says why, right above it (one reason, the first missing thing).
   const whyNot = !p.canWeigh
-    ? "Your role cannot weigh. Ask an operator."
+    ? (p.block?.sentence ?? "You cannot weigh now.")
     : !lot
       ? null
       : !lotOk
@@ -446,6 +448,16 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
               {!canSave && whyNot && (
                 <p className="text-[15px] font-medium text-fg-2" role="status" data-testid="save-why">
                   {whyNot}
+                </p>
+              )}
+              {!p.canWeigh && p.block?.href && p.block.label && (
+                <Link href={p.block.href} className="inline-flex min-h-[52px] items-center justify-center rounded-full border border-line px-5 text-[16px] font-medium text-fg" data-testid="weigh-block-fix">
+                  {p.block.label}
+                </Link>
+              )}
+              {p.canWeigh && card.needsCheck && p.nextByOperator?.[p.viewer.userId] && (
+                <p className="text-[14px] text-fg-2" data-testid="weigh-next-checker">
+                  {checkerAfterSave(p.nextByOperator[p.viewer.userId]!)}
                 </p>
               )}
               <SubmitButton

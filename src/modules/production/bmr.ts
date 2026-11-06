@@ -5,6 +5,9 @@ import { db, type DbOrTx, type Tx } from "@/db/client";
 import {
   approvalDecisions,
   auditEvents,
+  locations,
+  stockMovements,
+  workOrders,
   batchAmendments,
   batchClosures,
   batchMaterials,
@@ -47,6 +50,8 @@ import { toleranceRange } from "./dispensing";
 import { batchMaterialChanges } from "./material-swaps";
 import { packagingLinesOf } from "./packaging-flow";
 import { auditSentence, batchStateWord, plainReason } from "./record-words";
+import { cap, madeVsBoxedWords, num, outputKindWord, packagingToleranceWords, pct, pct2, placeNamesInText, qty, rangeWords, signedQty, stepKindWord, toleranceWords } from "./bmr-words";
+import { plainRole } from "@/lib/role-words";
 import { type FormulaSnapshot, idempotent } from "./shared";
 
 /**
@@ -62,18 +67,12 @@ import { type FormulaSnapshot, idempotent } from "./shared";
 export const BMR_KIND = "bmr";
 export const PAPER_PAGE_KIND = "bmr_paper_page";
 
-const STATE_LABEL: Record<string, string> = {
-  draft: "DRAFT",
-  planned: "PLANNED (not started)",
-  materials_staged: "MATERIALS STAGED",
-  in_process: "IN PROCESS",
-  awaiting_qc: "AWAITING QC",
-  quarantined: "QUARANTINED (QA review)",
-  released: "RELEASED",
-  rejected: "REJECTED",
-  rework_approved: "REWORK APPROVED",
-  closed: "CLOSED",
-};
+/**
+ * Finding 5 (live check 2026-11-06): a batch still being made prints a working copy of everything recorded so far,
+ * marked with this watermark; it is not stored, has no number and no checksum. "Generate BMR" stays for the record.
+ */
+export const BMR_WORKING_COPY_WATERMARK = "IN PROGRESS — NOT THE FINAL RECORD";
+export const BMR_WORKING_COPY_STATES = ["draft", "planned", "materials_staged", "in_process", "rework_approved"] as const;
 
 /** Watermark word for a batch state (A-RPT-04, docs/reports-and-templates.md §2.6). */
 export function bmrWatermark(status: string, reopenCount = 0): string {
@@ -114,7 +113,7 @@ async function names(q: DbOrTx, ids: (string | null | undefined)[]) {
   return new Map(rows.map((r) => [r.id, r.name]));
 }
 
-type RoleSpan = { userId: string; name: string; from: Date; to: Date | null; revokedAt: Date | null };
+type RoleSpan = { userId: string; name: string; code: string; from: Date; to: Date | null; revokedAt: Date | null };
 
 /**
  * Roles of the signers at the batch site (or organization-wide), so the printed record says "name, role, time"
@@ -125,7 +124,7 @@ async function siteRoles(q: DbOrTx, siteId: string, ids: (string | null | undefi
   const rows: RoleSpan[] = list.length
     ? (
         await q
-          .select({ userId: userSiteAssignments.userId, name: roles.name, from: userSiteAssignments.validFrom, to: userSiteAssignments.validTo, revokedAt: userSiteAssignments.revokedAt, siteId: userSiteAssignments.siteId, orgWide: userSiteAssignments.isOrganizationWide })
+          .select({ userId: userSiteAssignments.userId, name: roles.name, code: roles.code, from: userSiteAssignments.validFrom, to: userSiteAssignments.validTo, revokedAt: userSiteAssignments.revokedAt, siteId: userSiteAssignments.siteId, orgWide: userSiteAssignments.isOrganizationWide })
           .from(userSiteAssignments)
           .innerJoin(roles, eq(roles.id, userSiteAssignments.roleId))
           .where(inArray(userSiteAssignments.userId, list))
@@ -138,7 +137,8 @@ async function siteRoles(q: DbOrTx, siteId: string, ids: (string | null | undefi
     const t = when ? new Date(when) : null;
     const valid = t ? mine.filter((r) => r.from <= t && (!r.to || r.to > t) && (!r.revokedAt || r.revokedAt > t)) : [];
     const pick = valid.length ? valid : mine.filter((r) => !r.revokedAt).length ? mine.filter((r) => !r.revokedAt) : mine;
-    return [...new Set(pick.map((r) => r.name))].sort().join(" / ");
+    // One role word source (finding 7): "Machine operator" as on the Users screen, never the bundle name.
+    return [...new Set(pick.map((r) => plainRole(r.code, r.name)))].sort().join(" / ");
   };
 }
 
@@ -230,6 +230,18 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
     )
     .orderBy(asc(auditEvents.occurredAt));
   const docs = await documentsForSource(q, ctx.organizationId, "batch", batch.id, [BMR_KIND, PAPER_PAGE_KIND]);
+  // Finding 7: "Planned by" is the person who made the production order (the planner), not the approver whose
+  // approval created the batch row. Batches without an order keep their creator.
+  const [wo] = batch.workOrderId ? await q.select({ createdBy: workOrders.createdBy }).from(workOrders).where(eq(workOrders.id, batch.workOrderId)).limit(1) : [];
+  const plannedById = wo?.createdBy ?? batch.createdBy;
+  // Finding 4: samples QA kept out of the good pieces (retained sample movement at Finish).
+  const [samplesRow] = await q
+    .select({ qty: sql<string>`coalesce(sum(${stockMovements.qtyBase}), 0)::text` })
+    .from(stockMovements)
+    .where(and(eq(stockMovements.sourceDocumentType, "batch_retained_sample"), eq(stockMovements.sourceDocumentId, batch.id)));
+  // Finding 3/8: place names, not codes ("QUA-01" → "QA waiting area").
+  const placeRows = await q.select({ code: locations.code, name: locations.name }).from(locations).where(eq(locations.siteId, batch.siteId));
+  const placeName = new Map(placeRows.filter((r) => r.name).map((r) => [r.code, r.name!]));
 
   // W2B / W2C sources (empty and `available: false` until those tables exist).
   const [lc, readings, equipmentUses, yieldRec, outputs, inspections, deviations, packagingRecs] = await Promise.all([
@@ -245,6 +257,7 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
 
   const nm = await names(q, [
     batch.createdBy,
+    plannedById,
     ...disp.flatMap((d) => [d.r.operatorId, d.r.checkerId]),
     ...stepRecs.flatMap((s) => [s.conductedBy, s.checkedBy]),
     ...transitions.map((t) => t.actorId),
@@ -289,7 +302,6 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
   const lines = mats.map((bm) => {
     const s = snapLine(bm);
     const { min, max } = toleranceRange(bm.theoreticalQtyG, bm.tolerancePct, bm.toleranceAbsG);
-    const tol = bm.toleranceAbsG ? `± ${g1(bm.toleranceAbsG)} g` : `± ${fmtQty(bm.tolerancePct, "%", 1)}`;
     const recs = disp.filter((d) => d.r.batchMaterialId === bm.id);
     return {
       phase: s?.phaseCode ?? null,
@@ -298,7 +310,7 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
         name: s?.materialName ?? "Unknown material",
         inci: s?.inciName ?? null,
         code: s?.materialCode ?? "",
-        toleranceText: `${tol} (${g1(min)} – ${g1(max)} g)`,
+        toleranceText: toleranceWords(min, max, bm.toleranceAbsG ? null : bm.tolerancePct, bm.toleranceAbsG ?? null),
         theoreticalText: g1(bm.theoreticalQtyG),
         actualText: recs.length ? g1(bm.dispensedQtyG) : "",
         status: bm.status,
@@ -348,7 +360,7 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
       return {
         stepNo: s.stepNo,
         name: s.name,
-        kindLabel: s.stepKind.replace(/_/g, " "),
+        kindLabel: stepKindWord(s.stepKind),
         mode: (modes.find((m) => m.id === s.routingStepId)?.mode ?? "electronic").replace(/_/g, " "),
         instruction: s.instruction ?? null,
         workInstruction: s.workInstruction ? `${s.workInstruction.code} rev ${s.workInstruction.revisionNo}` : null,
@@ -358,7 +370,7 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
         startText: at(r?.startedAt),
         endText: at(r?.completedAt),
         statusText: r ? (STEP_STATUS_WORD[r.status] ?? r.status.replace(/_/g, " ")) : "Not started",
-        notes: r?.notes ?? null,
+        notes: r?.notes ? placeNamesInText(r.notes, placeName) : null,
       };
     });
 
@@ -379,7 +391,7 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
       id: batch.id,
       number: batch.batchNumber,
       statusCode: batch.status,
-      statusLabel: STATE_LABEL[batch.status] ?? batch.status.toUpperCase(),
+      statusLabel: batchStateWord(batch.status),
       productName: product.name,
       productCode: product.skuCode,
       department: "PRODUCTION",
@@ -391,7 +403,7 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
       startText: batch.startedAt ? fmtDate(batch.startedAt).toUpperCase() : null,
       endText: batch.completedAt ? fmtDate(batch.completedAt).toUpperCase() : null,
       siteCode,
-      createdBy: who(batch.createdBy) ?? "",
+      createdBy: who(plannedById) ?? "",
       snapshotTakenText: fmtDateTime(snap.takenAt ?? batch.createdAt),
       reopenCount,
       closedText: batch.status === "closed" && lastClosure ? fmtDateTime(lastClosure.closedAt) : null,
@@ -414,7 +426,7 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
     steps,
     lineClearance: {
       available: lc.available,
-      rows: lc.rows.map((r) => ({ stepNo: r.stepNo, stepName: r.stepName, itemNo: r.itemNo, text: r.text, answer: r.answer, note: r.note, by: r.answeredBy, at: at(r.answeredAt) })),
+      rows: lc.rows.map((r) => ({ stepNo: r.stepNo, stepName: r.stepName, itemNo: r.itemNo, text: r.text, answer: cap(String(r.answer ?? "").replace(/_/g, " ")), note: r.note, by: r.answeredBy, at: at(r.answeredAt) })),
     },
     parameters: {
       available: readings.available,
@@ -422,8 +434,8 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
         stepNo: r.stepNo,
         parameter: r.parameter,
         uom: r.uom,
-        limits: [r.min ? `min ${r.min}` : null, r.target ? `target ${r.target}` : null, r.max ? `max ${r.max}` : null].filter(Boolean).join(" · ") || "—",
-        value: r.value,
+        limits: rangeWords(r.min, r.target, r.max),
+        value: /^-?\d+(\.\d+)?$/.test(r.value) ? num(r.value, 3) : cap(r.value),
         within: r.within,
         by: r.recordedBy,
         at: at(r.recordedAt),
@@ -433,7 +445,7 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
     },
     equipment: {
       available: equipmentUses.available,
-      rows: equipmentUses.rows.map((e) => ({ stepNo: e.stepNo, code: e.code, name: e.name, calibrationDue: e.calibrationDue, cleaning: e.cleaning, operator: e.operator, at: at(e.startedAt), exception: e.exceptionReason })),
+      rows: equipmentUses.rows.map((e) => ({ stepNo: e.stepNo, code: e.code, name: e.name, calibrationDue: e.calibrationDue && /^\d{4}-\d{2}-\d{2}/.test(e.calibrationDue) ? fmtDate(e.calibrationDue) : e.calibrationDue, cleaning: e.cleaning ? cap(e.cleaning.replace(/_/g, " ")) : e.cleaning, operator: e.operator, at: at(e.startedAt), exception: e.exceptionReason })),
     },
     packaging: {
       available: yieldRec.available || packagingRecs.available,
@@ -441,8 +453,12 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
         // W2B packaging reconciliation: one line per component lot issued to the packaging step.
         ...packagingRecs.rows.map((p) => ({
           label: `${p.material}${p.lot ? ` (${p.lot})` : ""}`,
-          value: `issued ${p.issued}, used ${p.used ?? "—"}, damaged ${p.damaged ?? "—"}, returned ${p.returned ?? "—"} ${p.uom}; variance ${p.variance ?? "—"} (tolerance ${p.tolerance})${p.withinTolerance === false ? " !" : ""}${p.countedBy ? ` · counted by ${p.countedBy}` : ""}`,
+          value: `${qty(p.issued, p.uom, 3)} taken, ${p.used === null ? "—" : num(p.used, 3)} used, ${p.damaged === null ? "—" : num(p.damaged, 3)} damaged, ${p.returned === null ? "—" : num(p.returned, 3)} returned · difference ${p.variance === null ? "—" : signedQty(p.variance, p.uom, 3)} (${packagingToleranceWords(p.tolerance, p.uom)})${p.withinTolerance === false ? " — outside the allowed difference" : ""}${p.countedBy ? ` · counted by ${p.countedBy}` : ""}`,
         })),
+        // Finding 4: why fewer pieces are in boxes than were made.
+        ...(boxPlan.length && batch.actualUnits
+          ? [{ label: "Made and boxed", value: madeVsBoxedWords(batch.actualUnits, boxPlan.reduce((t, r) => t + r.pieces, 0), boxPlan.length, samplesRow?.qty ?? 0, (product.family ?? "").toLowerCase().includes("soap") ? "bars" : "pieces", Decimal.max(new Decimal(batch.actualUnits).minus(samplesRow?.qty ?? 0).minus(boxPlan.reduce((t, r) => t + r.pieces, 0)), 0)) }]
+          : []),
         ...(y && y.labelsIssued !== null
           ? [
             { label: "Labels issued", value: y.labelsIssued === null ? "—" : String(y.labelsIssued) },
@@ -458,7 +474,7 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
       ],
     },
     outputYield: {
-      theoreticalText: `${fmtQty(batch.theoreticalYieldG, "g", 0)} (${fmtQty(snap.theoreticalYieldPct, "%", 1)} of batch size)`,
+      theoreticalText: `${fmtQty(batch.theoreticalYieldG, "g", 0)} (${pct(snap.theoreticalYieldPct)} of batch size)`,
       actualText: batch.actualOutputG ? fmtQty(batch.actualOutputG, "g", 0) : null,
       detailText: batch.actualOutputG ? `(${fmtQty(batch.actualUnits, "pcs", 0)} × ${fmtQty(product.unitNetMassG, "g", 0)}; ${fmtQty(batch.yieldPct, "%", 2)})` : null,
       expiryText: outputLot ? fmtDate(outputLot.expiresOn) : null,
@@ -467,18 +483,21 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
         available: yieldRec.available,
         rows: y
           ? [
-              { label: "Theoretical", value: y.theoretical },
-              { label: "Actual", value: y.actual },
-              { label: "Variance", value: `${y.variance}${y.variancePct ? ` (${y.variancePct} %)` : ""}` },
-              ...(y.yieldPct ? [{ label: "Yield", value: `${y.yieldPct} %${y.limitsText ? ` (limits ${y.limitsText})` : ""}${y.withinLimits === false ? " !" : ""}` }] : []),
-              ...(y.actualUnits ? [{ label: "Units", value: y.actualUnits }] : []),
+              { label: "Theoretical", value: qty(y.theoretical, "g") },
+              { label: "Actual", value: qty(y.actual, "g") },
+              { label: "Difference", value: `${signedQty(y.variance, "g")}${y.variancePct ? ` (${pct2(y.variancePct)})` : ""}` },
+              ...(y.yieldPct ? [{ label: "Yield", value: `${pct(y.yieldPct, 2)}${y.limitsText ? ` (allowed ${y.limitsText})` : ""}${y.withinLimits === false ? " — outside the allowed range" : ""}` }] : []),
+              ...(y.actualUnits ? [{ label: "Pieces", value: qty(y.actualUnits, "pcs", 0) }] : []),
               { label: "Recorded by", value: y.recordedBy ?? "—" },
               { label: "Checked by", value: y.checkedBy ?? "—" },
               ...(y.approvedBy ? [{ label: "Out-of-range yield approved by", value: `${y.approvedBy}${y.approvalReason ? `: ${y.approvalReason}` : ""}` }] : []),
             ]
           : [],
       },
-      outputs: { available: outputs.available, rows: outputs.rows },
+      outputs: {
+        available: outputs.available,
+        rows: outputs.rows.map((o) => ({ kind: outputKindWord(o.kind), item: o.item, qty: o.qtyBase !== null ? qty(o.qtyBase, o.uom, 3) : o.qty, lot: o.lot, location: o.location ? (placeName.get(o.location) ?? o.location) : null })),
+      },
     },
     qc: {
       tests: tests.map((t) => ({ name: t.testName, spec: t.specification, result: t.result, passed: t.passed, testedBy: who(t.testedBy), at: at(t.testedAt) })),
@@ -565,7 +584,7 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
     })),
     audit: [
       // 2026-11 (owner: no raw keys on the printed record): states and events in words (record-words.ts).
-      ...transitions.map((t) => ({ when: t.at, row: { at: fmtDateTime(t.at), actor: who(t.actorId) ?? "", event: `Status: ${t.fromState ? batchStateWord(t.fromState) : "new"} → ${batchStateWord(t.toState)}`, detail: plainReason(t.reason) } })),
+      ...transitions.map((t) => ({ when: t.at, row: { at: fmtDateTime(t.at), actor: who(t.actorId) ?? "", event: t.fromState ? `Status: ${batchStateWord(t.fromState)} → ${batchStateWord(t.toState)}` : `Created → ${batchStateWord(t.toState)}`, detail: plainReason(t.reason) } })),
       ...audits
         .filter((a) => !a.action.startsWith("documents.generated_document"))
         .map((a) => ({ when: a.occurredAt, row: { at: fmtDateTime(a.occurredAt), actor: who(a.actorId) ?? a.actorLabel ?? "system", event: auditSentence({ action: a.action, after: a.after, reason: a.reason }), detail: plainReason(a.reason) } })),
@@ -687,6 +706,7 @@ export async function bmrPrintView(ctx: AuthContext, batchId: string) {
   const current = bmrDocs.find((x) => !x.d.reprintOfId && x.d.status === "ready")?.d ?? null;
   const watermark = bmrWatermark(build.status, build.reopenCount);
   const stale = !current || current.sourceRevisionAt.getTime() !== build.revisionAt.getTime() || current.watermark !== watermark;
+  const workingCopy = (BMR_WORKING_COPY_STATES as readonly string[]).includes(build.status);
   const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, ctx.organizationId)).limit(1);
   const preview =
     resolved && stale
@@ -699,6 +719,7 @@ export async function bmrPrintView(ctx: AuthContext, batchId: string) {
           generatedAt: fmtDateTime(new Date()),
           sourceRevisionAt: build.revisionAt,
           sourceState: build.status,
+          workingCopy: workingCopy ? { documentNumber: "WORKING-COPY", watermark: BMR_WORKING_COPY_WATERMARK } : null,
         })
       : null;
   const templateCode = await getSetting(db, ctx.organizationId, "documents.bmr.template_code", build.siteId);
@@ -710,6 +731,8 @@ export async function bmrPrintView(ctx: AuthContext, batchId: string) {
     current,
     stale,
     preview,
+    /** The batch is still being made: the preview is a printable working copy (watermarked, not stored). */
+    workingCopy: workingCopy && !!preview,
     documents: docs.map(({ d, generatedByName }) => ({ ...d, generatedByName })),
     canGenerate: ctx.can("documents.generated_document.create"),
     canReprint: ctx.can("documents.reprint.create"),

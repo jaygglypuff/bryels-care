@@ -117,3 +117,12 @@ export function waitingForNames(n: NextActors): string | null {
 }
 
 const capital = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+
+/**
+ * Weigh card, before Save (live check 2026-11-06 finding 2): "After you save, Jun or Dino checks it." — the people
+ * who may check this weigher's weighing (never the weigher), first names, max 3.
+ */
+export function checkerAfterSave(n: NextActors): string {
+  const names = waitingForNames(n);
+  return names ? `After you save, ${names} checks it.` : `After you save, ${n.roleWords} checks it. Nobody else here can check it yet.`;
+}

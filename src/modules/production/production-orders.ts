@@ -11,7 +11,8 @@ import { fmtMass, fmtQty } from "@/lib/qty";
 import { getSetting } from "@/lib/settings";
 import { getEffectiveFormulaRevision } from "@/modules/masterdata";
 import { notifyUsers, usersHoldingPermissionAt } from "@/modules/platform/notifications";
-import { freeFinishedStock } from "@/modules/inventory";
+import { siteOrderCover, type SiteOrderCover } from "./order-cover";
+import { comingWords } from "./order-cover-rule";
 import { insertBatch } from "./batches";
 import { listDailyLogs, defectSummary } from "./daily-log";
 import { productionOrderActions, type NextAction } from "./production-order-next";
@@ -638,9 +639,13 @@ export type MakeForLine = {
   productFamily: string;
   ordered: string;
   allocated: string;
+  /** Free stock counted for this line (the set-aside rule, after earlier orders took theirs). */
   freeStock: string;
+  /** Pieces coming for this line: waiting for QA, being made, or in a production order made for it (the order-cover rule). */
   alreadyInProduction: string;
-  /** Pieces still missing: ordered − allocated − free usable stock − pieces already in open production orders for this customer order. */
+  /** "coming: 94 waiting for QA" (empty when nothing is coming). */
+  comingText: string;
+  /** Pieces still missing: ordered − allocated − free stock − stock coming for it (order-cover-rule.ts). */
   missing: string;
   /** Whole batches that cover the missing pieces (null without an approved formula). */
   batchCount: number | null;
@@ -652,7 +657,9 @@ export type MakeForLine = {
  * What is missing on the lines of a customer order, for "Make for this order" (ADR-080 V2-2, ADR-110 C4).
  * Read-only, so `sales.sales_order.view` is enough: sales sees the shortage card and asks the planner; only
  * `production.work_order.create` makes the production order (makeForSalesLine / createProductionOrder). The
- * order must be at a site of the caller (not found otherwise). Free stock follows the set-aside rule (C2).
+ * order must be at a site of the caller (not found otherwise). Free stock follows the set-aside rule (C2); stock
+ * coming (batches waiting for QA, approved production orders) follows the one order-cover rule (order-cover-rule.ts),
+ * the same as "How work flows" and the planner's Home.
  */
 export async function salesOrderShortfalls(ctx: AuthContext, salesOrderId: string): Promise<MakeForLine[]> {
   ctx.require("sales.sales_order.view");
@@ -660,45 +667,42 @@ export async function salesOrderShortfalls(ctx: AuthContext, salesOrderId: strin
   if (!so || !ctx.allowedSiteIds.includes(so.siteId)) throw new DomainError("not_found", "Customer order not found in your sites.");
   ctx.requireSite(so.siteId);
   if (!(MAKE_FOR_SALES_STATUSES as readonly string[]).includes(so.status)) return [];
+  return shortfallsFrom(ctx, await siteOrderCover(db, ctx.organizationId, so.siteId), [so.id]);
+}
+
+/** MakeForLine rows of the given orders out of one site cover (one read for the planner's Home list). */
+async function shortfallsFrom(ctx: AuthContext, cover: SiteOrderCover, orderIds: string[]): Promise<MakeForLine[]> {
   const today = manilaToday();
-  const lines = await db
-    .select({ line: salesOrderLines, product: products })
-    .from(salesOrderLines)
-    .innerJoin(products, eq(products.id, salesOrderLines.productId))
-    .where(eq(salesOrderLines.salesOrderId, so.id))
-    .orderBy(salesOrderLines.lineNo);
+  const wanted = orderIds.map((id) => cover.orders.find((o) => o.orderId === id)).filter((o): o is SiteOrderCover["orders"][number] => !!o);
+  const productIds = [...new Set(wanted.flatMap((o) => o.lines.map((l) => l.productId)))];
+  const prods = productIds.length ? await db.select().from(products).where(inArray(products.id, productIds)) : [];
+  const effs = new Map<string, Awaited<ReturnType<typeof getEffectiveFormulaRevision>> | null>();
   const out: MakeForLine[] = [];
-  for (const { line, product } of lines) {
-    const [a] = await db.execute<{ allocated: string; planned: string }>(sql`
-      select
-        (select coalesce(sum(a.qty_units), 0)::text from stock_allocations a where a.sales_order_line_id = ${line.id} and a.status <> 'released') as allocated,
-        (select coalesce(sum(coalesce(w.target_units, floor(w.qty_planned_base * coalesce(fr.theoretical_yield_pct, 100) / 100 / ${product.unitNetMassG}::numeric))), 0)::text
-           from work_orders w left join formula_revisions fr on fr.id = w.formula_revision_id
-          where w.sales_order_id = ${so.id} and w.product_id = ${product.id} and w.status not in ('cancelled', 'closed')) as planned
-    `);
-    // ADR-110 C2: free stock = the set-aside rule (storage places, released, in date, not set aside or reserved).
-    const free = (await freeFinishedStock(db, so.siteId, [product.id])).reduce((t, c) => t.plus(c.available), new Decimal(0));
-    const ordered = new Decimal(line.qtyUnits);
-    const missing = Decimal.max(ordered.minus(a.allocated).minus(free).minus(a.planned), 0);
-    const eff = await getEffectiveFormulaRevision(ctx, product.id, today).catch(() => null);
-    const per = eff ? unitsFrom(eff.rev.referenceBatchSizeG, eff.rev.theoreticalYieldPct, product.unitNetMassG) : null;
-    out.push({
-      salesOrderId: so.id,
-      salesOrderNumber: so.orderNumber,
-      salesOrderLineId: line.id,
-      lineNo: line.lineNo,
-      productId: product.id,
-      productName: product.name,
-      productFamily: product.family,
-      ordered: ordered.toString(),
-      allocated: new Decimal(a.allocated).toString(),
-      freeStock: free.toString(),
-      alreadyInProduction: new Decimal(a.planned).toString(),
-      missing: missing.toString(),
-      batchCount: eff && missing.gt(0) ? batchesFor(missing, eff.rev.referenceBatchSizeG, eff.rev.theoreticalYieldPct, product.unitNetMassG) : null,
-      unitsPerBatch: per?.toString() ?? null,
-      neededBy: so.requestedDeliveryOn ?? null,
-    });
+  for (const o of wanted) {
+    for (const l of [...o.lines].sort((a, b) => a.lineNo - b.lineNo)) {
+      const product = prods.find((p) => p.id === l.productId)!;
+      if (!effs.has(product.id)) effs.set(product.id, await getEffectiveFormulaRevision(ctx, product.id, today).catch(() => null));
+      const eff = effs.get(product.id) ?? null;
+      const per = eff ? unitsFrom(eff.rev.referenceBatchSizeG, eff.rev.theoreticalYieldPct, product.unitNetMassG) : null;
+      out.push({
+        salesOrderId: o.orderId,
+        salesOrderNumber: o.orderNumber,
+        salesOrderLineId: l.lineId,
+        lineNo: l.lineNo,
+        productId: product.id,
+        productName: product.name,
+        productFamily: product.family,
+        ordered: new Decimal(l.ordered).toString(),
+        allocated: new Decimal(l.allocated).toString(),
+        freeStock: l.fromFree.toString(),
+        alreadyInProduction: l.comingTotal.toString(),
+        comingText: comingWords(l.coming),
+        missing: l.missing.toString(),
+        batchCount: eff && l.missing.gt(0) ? batchesFor(l.missing, eff.rev.referenceBatchSizeG, eff.rev.theoreticalYieldPct, product.unitNetMassG) : null,
+        unitsPerBatch: per?.toString() ?? null,
+        neededBy: o.requestedDeliveryOn ?? null,
+      });
+    }
   }
   return out;
 }
@@ -772,23 +776,18 @@ export async function customerOrdersShort(ctx: AuthContext, opts: { limit?: numb
   ctx.require("production.work_order.create");
   ctx.requireSite(ctx.currentSiteId);
   if (!ctx.can("sales.sales_order.view")) return [];
-  const orders = await db
-    .select({ id: salesOrders.id, customerName: customers.name })
-    .from(salesOrders)
-    .innerJoin(customers, eq(customers.id, salesOrders.customerId))
-    .where(and(eq(salesOrders.organizationId, ctx.organizationId), eq(salesOrders.siteId, ctx.currentSiteId), inArray(salesOrders.status, ["confirmed", "partially_shipped"])))
-    .orderBy(asc(salesOrders.requestedDeliveryOn), asc(salesOrders.orderNumber))
-    .limit(40);
+  const limit = opts.limit ?? 5;
+  // The one order-cover rule (same as "How work flows"): stock waiting for QA or being made is not "short".
+  const cover = await siteOrderCover(db, ctx.organizationId, ctx.currentSiteId);
+  const short = cover.orders.filter((o) => (o.status === "confirmed" || o.status === "partially_shipped") && o.lines.some((l) => l.missing.gt(0)));
   const out: ShortCustomerLine[] = [];
-  for (const o of orders) {
-    for (const line of await salesOrderShortfalls(ctx, o.id)) {
-      if (new Decimal(line.missing).lte(0)) continue;
-      const [n] = await db.select({ id: notifications.id }).from(notifications).where(and(eq(notifications.organizationId, ctx.organizationId), eq(notifications.dedupeKey, askToMakeKey(line.salesOrderLineId, line.missing)))).limit(1);
-      out.push({ ...line, customerName: o.customerName, asked: !!n });
-    }
-    if (out.length >= (opts.limit ?? 5)) break;
+  for (const line of await shortfallsFrom(ctx, cover, short.map((o) => o.orderId))) {
+    if (new Decimal(line.missing).lte(0)) continue;
+    const [n] = await db.select({ id: notifications.id }).from(notifications).where(and(eq(notifications.organizationId, ctx.organizationId), eq(notifications.dedupeKey, askToMakeKey(line.salesOrderLineId, line.missing)))).limit(1);
+    out.push({ ...line, customerName: short.find((o) => o.orderId === line.salesOrderId)!.customerName, asked: !!n });
+    if (out.length >= limit) break;
   }
-  return out.slice(0, opts.limit ?? 5);
+  return out;
 }
 
 /** Open production orders made for a customer order (sales order page: "Being made for this order"). */

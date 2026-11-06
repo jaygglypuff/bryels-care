@@ -1,11 +1,10 @@
 import "server-only";
-import Decimal from "decimal.js";
 import { sql, type SQL } from "drizzle-orm";
 import { db } from "@/db/client";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { lotsToPutAway } from "@/modules/inventory";
-import { availableStock } from "@/modules/sales";
+import { comingWords, siteOrderCover } from "@/modules/production";
 import { FLOW_COUNT_DEFS, FLOW_STAGES, countWords, stageRow, type FlowCount, type FlowCountDef, type FlowCountKey, type FlowStage } from "./work-flow-stages";
 
 /**
@@ -15,8 +14,8 @@ import { FLOW_COUNT_DEFS, FLOW_STAGES, countWords, stageRow, type FlowCount, typ
  * - Site-scoped: the caller's current site only (`ctx.requireSite`); nothing from another site is counted.
  * - Permission-aware: every count needs its own view permissions at the site (FLOW_STAGES); a count the viewer may
  *   not see is not run, and a stage with no visible count is left out.
- * - One query per count. The three customer-order counts that depend on free stock (short, short with no production
- *   order, can now be set aside) share one stock read (`availableStock`, the set-aside rule) and one order-line read.
+ * - One query per count. The four customer-order counts that depend on stock (short, coming, short with no
+ *   production order, can now be set aside) share one read of the order-cover rule (`siteOrderCover`, production).
  * - Each count's items are the same query (`getWorkFlowItems`), so the list behind a number always matches it.
  *
  * Read only; it decides nothing. The screens it links to re-check everything.
@@ -197,7 +196,7 @@ const QUERIES: Partial<Record<FlowCountKey, (q: Q) => SQL>> = {
     where i.organization_id = ${q.org} and i.site_id = ${q.site} and i.status = 'approved'`,
 };
 
-const STOCK_KEYS: readonly FlowCountKey[] = ["so_short", "short_no_wo", "so_can_set_aside"];
+const STOCK_KEYS: readonly FlowCountKey[] = ["so_short", "so_coming", "short_no_wo", "so_can_set_aside"];
 
 /** May the viewer see this count at this site? Every permission of the count, at the site. */
 export function maySeeCount(ctx: AuthContext, def: Pick<FlowCountDef, "permissions">, siteId: string): boolean {
@@ -212,51 +211,36 @@ async function runQuery(build: (q: Q) => SQL, q: Q): Promise<FlowItem[]> {
 }
 
 /**
- * Customer orders against free stock (the set-aside rule: released finished goods on storage shelves, net of what is
- * already set aside or reserved; `availableStock`). Orders are served oldest delivery date first; an order that can
- * be covered in full takes its stock ("can now be set aside"), an order that cannot is "short". One stock read and
- * one order-line read for the three counts.
+ * Customer orders against free stock and stock that is coming: the ONE order-cover rule (production
+ * order-cover-rule.ts, shared with the planner's Home and the order's shortage card). Confirmed orders only (stage
+ * 7 / 8 / 11): an order covered by free stock "can now be set aside"; one covered only with batches waiting for QA
+ * or being made is "coming" (never red: nobody has to act, the stock is on its way); one still missing pieces is
+ * "short: it needs making". One cover read for the four counts.
  */
-async function orderCover(q: Q): Promise<{ short: FlowItem[]; shortNoWo: FlowItem[]; canSetAside: (FlowItem & { productIds: string[] })[] }> {
-  const lines = await db.execute<{ id: string; ref: string; label: string; since: Date | string; product_id: string; need: string; has_wo: boolean; told_short: boolean; told_ready: boolean }>(sql`
-    select so.id, so.order_number as ref, c.name as label, so.status_changed_at as since, l.product_id,
-           (l.qty_units - coalesce((select sum(a.qty_units) from stock_allocations a where a.sales_order_line_id = l.id and a.status in ('open', 'fulfilled')), 0))::text as need,
-           exists (select 1 from work_orders w where w.sales_order_id = so.id and w.status <> 'cancelled') as has_wo,
-           ${toldSql(sql`so.id`, sql`so.status_changed_at`, ["sales_order_confirmed", "sales_order_approved", "sales_order_submitted"])} as told_short,
-           ${toldSql(sql`so.id`, sql`so.status_changed_at`, ["sales_order_confirmed", "sales_order_approved", "sales_order_submitted"])} as told_ready
-    from sales_orders so join customers c on c.id = so.customer_id join sales_order_lines l on l.sales_order_id = so.id
-    where so.organization_id = ${q.org} and so.site_id = ${q.site} and so.status = 'confirmed'
-    order by so.requested_delivery_on asc nulls last, so.created_at asc, so.id, l.line_no`);
-  const products = [...new Set([...lines].map((l) => l.product_id))];
-  const free = new Map<string, Decimal>();
-  if (products.length) for (const s of await availableStock(db, q.site, products)) free.set(s.productId, (free.get(s.productId) ?? new Decimal(0)).plus(s.available));
-  const orders = new Map<string, { item: Omit<FlowItem, "told">; toldShort: boolean; toldReady: boolean; hasWo: boolean; needs: Map<string, Decimal> }>();
-  for (const l of lines) {
-    const need = Decimal.max(new Decimal(l.need), 0);
-    let o = orders.get(l.id);
-    if (!o) {
-      o = { item: { id: l.id, ref: l.ref, label: l.label, since: l.since instanceof Date ? l.since : new Date(l.since), href: `/sales/${l.id}` }, toldShort: !!l.told_short, toldReady: !!l.told_ready, hasWo: !!l.has_wo, needs: new Map() };
-      orders.set(l.id, o);
-    }
-    o.needs.set(l.product_id, (o.needs.get(l.product_id) ?? new Decimal(0)).plus(need));
-  }
-  const short: FlowItem[] = [];
-  const shortNoWo: FlowItem[] = [];
-  const canSetAside: (FlowItem & { productIds: string[] })[] = [];
-  for (const o of orders.values()) {
-    const needed = [...o.needs.entries()].filter(([, n]) => n.gt(0));
-    if (needed.length === 0) continue; // everything already set aside: not this stage
-    const covered = needed.every(([p, n]) => (free.get(p) ?? new Decimal(0)).gte(n));
-    if (covered) {
-      for (const [p, n] of needed) free.set(p, free.get(p)!.minus(n));
-      canSetAside.push({ ...o.item, told: o.toldReady, productIds: needed.map(([p]) => p) });
-    } else {
-      short.push({ ...o.item, told: o.toldShort });
-      if (!o.hasWo) shortNoWo.push({ ...o.item, href: `/production/orders/new?salesOrder=${o.item.id}`, told: o.toldShort });
+type Cover = { short: FlowItem[]; shortNoWo: FlowItem[]; coming: FlowItem[]; canSetAside: (FlowItem & { productIds: string[] })[] };
+async function orderCover(q: Q): Promise<Cover> {
+  const cover = await siteOrderCover(db, q.org, q.site);
+  const confirmed = cover.orders.filter((o) => o.status === "confirmed");
+  const ids = confirmed.map((o) => o.orderId);
+  const facts = ids.length
+    ? await db.execute<{ id: string; has_wo: boolean; told: boolean }>(sql`
+        select so.id, exists (select 1 from work_orders w where w.sales_order_id = so.id and w.status <> 'cancelled') as has_wo,
+               ${toldSql(sql`so.id`, sql`so.status_changed_at`, ["sales_order_confirmed", "sales_order_approved", "sales_order_submitted"])} as told
+          from sales_orders so where so.id in (${sql.join(ids.map((i) => sql`${i}::uuid`), sql`, `)})`)
+    : [];
+  const fact = new Map([...facts].map((f) => [f.id, f]));
+  const out: Cover = { short: [], shortNoWo: [], coming: [], canSetAside: [] };
+  for (const o of confirmed) {
+    const item = { id: o.orderId, ref: o.orderNumber, label: o.customerName, since: o.statusChangedAt, href: `/sales/${o.orderId}`, told: !!fact.get(o.orderId)?.told };
+    if (o.state === "can_set_aside") out.canSetAside.push({ ...item, productIds: o.lines.filter((l) => l.need.gt(0)).map((l) => l.productId) });
+    else if (o.state === "coming") out.coming.push({ ...item, label: `${o.customerName} · ${comingWords(o.lines.flatMap((l) => l.coming))}`, told: true });
+    else if (o.state === "short") {
+      out.short.push(item);
+      if (!fact.get(o.orderId)?.has_wo) out.shortNoWo.push({ ...item, href: `/production/orders/new?salesOrder=${o.orderId}` });
     }
   }
   const bySince = (a: FlowItem, b: FlowItem) => a.since.getTime() - b.since.getTime();
-  return { short: short.sort(bySince), shortNoWo: shortNoWo.sort(bySince), canSetAside: canSetAside.sort(bySince) };
+  return { short: out.short.sort(bySince), shortNoWo: out.shortNoWo.sort(bySince), coming: out.coming.sort(bySince), canSetAside: out.canSetAside.sort(bySince) };
 }
 
 /**
@@ -314,7 +298,7 @@ async function loadItems(ctx: AuthContext, keys: FlowCountKey[]): Promise<Map<Fl
       if (k === "lots_to_put_away") items = await putAwayItems(ctx);
       else if (STOCK_KEYS.includes(k)) {
         const c = await stock();
-        items = k === "so_short" ? c.short : k === "short_no_wo" ? c.shortNoWo : c.canSetAside;
+        items = k === "so_short" ? c.short : k === "so_coming" ? c.coming : k === "short_no_wo" ? c.shortNoWo : c.canSetAside;
       } else items = await runQuery(QUERIES[k]!, q);
       out.set(k, items);
     }),

@@ -11,6 +11,7 @@ import { CHECKER_PERMISSION, type FormulaSnapshot, WEIGHING_STEP_KINDS } from ".
 import { expectedLots } from "./staging";
 import { stepRecords } from "./execution";
 import { plainWords } from "./plain-words";
+import { weighBlockCode, weighBlockWords } from "./weigh-block";
 import { pickPlanForLine } from "./materials-list";
 import { weighProposal } from "./pick-plan";
 import { LOT_CHANGE_REASONS, alternativesForLine, batchMaterialChanges, otherLotOptions, qaDeciderNames, substitutionRequestsOf } from "./material-swaps";
@@ -132,6 +133,20 @@ export async function getWeighView(ctx: AuthContext, batchId: string) {
     checkers: checkers.map((c) => ({ id: c.id, displayName: c.displayName })),
     blockedReason,
     canWeigh: ctx.can("production.dispense_record.create") && b.status === "in_process" && !!step && step.status !== "completed" && !blockedReason,
+    /** Why Save is pale (finding 2): a state reason first (not started, earlier step), the role only last. */
+    weighBlock: (() => {
+      const first = [...ex.steps].sort((x, y) => x.stepNo - y.stepNo)[0] ?? null;
+      const facts = {
+        canCreate: ctx.can("production.dispense_record.create") && ctx.canAt("production.dispense_record.create", b.siteId),
+        batchStatus: b.status,
+        batchNumber: b.batchNumber,
+        hasStep: !!step,
+        stepDone: step?.status === "completed",
+        earlierStep: step && current && current.stepNo < step.stepNo ? { stepNo: current.stepNo, name: current.name } : null,
+      };
+      const code = weighBlockCode(facts);
+      return code ? { code, ...weighBlockWords(code, { ...facts, firstStepName: first ? plainWords(first.name) : null }), buttonStepNo: code === "earlier_step" ? facts.earlierStep!.stepNo : (first?.stepNo ?? null) } : null;
+    })(),
     passwordRequired: await getSetting(db, ctx.organizationId, "production.sign_off.require_password"),
     lotChangeReasons: Object.entries(LOT_CHANGE_REASONS).map(([code, label]) => ({ code, label })),
     changes: changes.map((c) => c.sentence),

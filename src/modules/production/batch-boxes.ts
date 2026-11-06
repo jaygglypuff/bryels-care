@@ -57,7 +57,11 @@ export async function batchBoxInfo(ctx: AuthContext, batch: BatchRow) {
   const jobs = plan.some((r) => r.labelJobId) ? await db.select({ id: labelJobs.id, status: labelJobs.status, voidedAt: labelJobs.voidedAt }).from(labelJobs).where(inArray(labelJobs.id, plan.map((r) => r.labelJobId).filter((x): x is string => !!x))) : [];
   const expected = expectedPieces(batch.plannedSizeG, (batch.formulaSnapshot as FormulaSnapshot).theoreticalYieldPct, p.unitNetMassG).toNumber();
   const packed = plan.reduce((t, r) => t + r.pieces, 0);
-  const stepGate = batch.status === "in_process" && !batch.outputLotNumber ? labelPrintBlocker(sortedSteps(batch.formulaSnapshot as FormulaSnapshot), await stepRecords(db, batch.id)) : null;
+  const pieceWord = (p.family ?? "").toLowerCase().includes("soap") ? "bars" : "pieces";
+  const stepGate =
+    batch.status === "in_process" && !batch.outputLotNumber
+      ? labelPrintBlocker(sortedSteps(batch.formulaSnapshot as FormulaSnapshot), await stepRecords(db, batch.id), { unitsPerBox: p.unitsPerBox, pieceWord, labelling: p.labelling as "per_box" | "per_piece" })
+      : null;
   const allowed = BATCH_LABEL_STATES.includes(batch.status) && !stepGate && !plan.some((r) => r.status === "boxed");
   const template = await boxTemplate(db, ctx.organizationId, batch.siteId);
   const stations = await activeStationsAt(db, ctx.organizationId, batch.siteId);
@@ -80,7 +84,9 @@ export async function batchBoxInfo(ctx: AuthContext, batch: BatchRow) {
   const samples = sampleSetting.enabled ? Number(sampleSetting.units) || 0 : 0;
   const defaultPieces = packed || Math.max((expected || 0) - samples, 0) || expected || 1;
   let preview = null;
-  if (allowed && template && ctx.can("inventory.label_job.view")) {
+  // Finding 6: while the step is locked the operator still sees the label they will print (read only).
+  const locked = !!stepGate && !plan.length;
+  if ((allowed || locked) && template && ctx.can("inventory.label_job.view")) {
     const v = await batchLabelValues(ctx, batch);
     const first = boxSplit(defaultPieces, p.unitsPerBox);
     preview = await labelPreviewOrNull(ctx, {
@@ -92,7 +98,9 @@ export async function batchBoxInfo(ctx: AuthContext, batch: BatchRow) {
   const jobOf = (id: string | null) => jobs.find((j) => j.id === id);
   return {
     labelling: p.labelling as "per_box" | "per_piece",
-    pieceWord: (p.family ?? "").toLowerCase().includes("soap") ? "bars" : "pieces",
+    pieceWord,
+    /** Locked until the earlier steps are done (finding 6): the planned boxes and the preview are shown read only. */
+    locked,
     unitsPerBox: p.unitsPerBox,
     expectedPieces: expected,
     defaultPieces,
