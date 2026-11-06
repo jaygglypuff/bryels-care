@@ -67,7 +67,7 @@ beforeAll(async () => {
 }, 180_000);
 
 describe("QA is told when a delivery is posted", () => {
-  it("an NFD receipt notifies the QA people of NFD once, with plain words and the QA queue link", async () => {
+  it("an NFD receipt notifies the QA people of NFD once per lot, with plain words and the lot link", async () => {
     const input = await receipt(nfd.id, "Laguna Oleo (fictional)");
     const r = await postGoodsReceipt(whNfd, input);
     nfdReceipt = r;
@@ -76,10 +76,11 @@ describe("QA is told when a delivery is posted", () => {
     expect(to).toContain(qaNfdOnlyId);
     expect(to).toContain(qaBothId);
     expect(to).not.toContain(whNfd.userId);
-    expect(new Set(to).size).toBe(to.length);
-    const n = notes[0];
-    expect(n.title).toBe("2 new lots from Laguna Oleo (fictional) wait for the quality check");
-    expect(n.link).toBe("/quality");
+    // C9(b): one message per lot and person, each opening that lot on Check quality.
+    expect(to.filter((x) => x === qaBothId)).toHaveLength(2);
+    const n = notes.find((x) => x.title.startsWith("Coconut Oil"))!;
+    expect(n.title).toMatch(/^Coconut Oil lot \S+ from Laguna Oleo \(fictional\) waits for the quality check$/);
+    expect(n.link).toMatch(/^\/quality\/lots\/[0-9a-f-]{36}$/);
     expect(n.siteId).toBe(nfd.id);
     expect(n.body).toContain(r.receiptNumber);
     // Posting the same form again replays the receipt and sends nothing new.

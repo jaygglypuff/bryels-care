@@ -277,6 +277,21 @@ export async function approveProductionOrder(ctx: AuthContext, workOrderId: stri
           before: { status: from, simpleStatus: "draft" },
           after: { status: "released", simpleStatus: "approved", batches: made.map((b) => b.batchNumber), reservations: released.reservations.length, shortages },
         });
+        // C9(h) / ADR-109: the person the order is assigned to is told it can start ("Get the materials" on their Home).
+        if (wo.assignedOperatorId && wo.assignedOperatorId !== ctx.userId) {
+          await notifyUsers(tx, [wo.assignedOperatorId], {
+            organizationId: ctx.organizationId,
+            siteId: wo.siteId,
+            kind: "handoff.production_order_approved",
+            severity: "info",
+            title: `Production order ${wo.workOrderNumber} approved: you can start`,
+            body: `${ctx.displayName} approved it (${made.length + existing.length} ${made.length + existing.length === 1 ? "batch" : "batches"}). Get the materials first; it is on your Home.`,
+            entityType: "work_order",
+            entityId: wo.id,
+            link: `/production/orders/${wo.id}`,
+            dedupeKey: `handoff.production_order_approved:${wo.id}:${wo.assignedOperatorId}`,
+          });
+        }
         return { workOrderNumber: wo.workOrderNumber, batches: made, reservations: released.reservations.length, shortages };
       });
       return result;

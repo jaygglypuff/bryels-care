@@ -209,7 +209,7 @@ export async function requestResultCorrection(ctx: AuthContext, input: RequestCo
         link: `/quality/check/${batch.id}`,
         dedupeKey: `qa-correction:${req.id}`,
       });
-      return { requestId: req.id, batchNumber: batch.batchNumber };
+      return { requestId: req.id, batchNumber: batch.batchNumber, siteId: batch.siteId };
     });
   });
 }

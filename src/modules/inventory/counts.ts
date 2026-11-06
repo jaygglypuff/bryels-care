@@ -2,7 +2,7 @@ import { isAre, plural } from "@/lib/plural";
 import "server-only";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
-import { db, type Tx } from "@/db/client";
+import { db, type DbOrTx, type Tx } from "@/db/client";
 import {
   COUNT_FROZEN_STATUSES,
   COUNT_KINDS,
@@ -35,7 +35,8 @@ import { qtyInputToBase } from "./units";
 import { isUuid } from "./lots";
 import { claimIdempotencyKey, stateMachine, storeIdempotentResult } from "./command-kit";
 import { getInventorySetting } from "./policy";
-import { type ApprovalVerdict, canDecideEvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited, stepVerdict } from "@/modules/governance";
+import { type ApprovalVerdict, type NextActors, canDecideEvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited, nextActors, rolesAllowedNow, stepVerdict } from "@/modules/governance";
+import { notifyUsers } from "@/modules/platform/notifications";
 
 type CountLineRow = typeof stockCountLines.$inferSelect;
 
@@ -87,7 +88,7 @@ async function lockCount(tx: Tx, ctx: AuthContext, countId: string) {
 }
 
 /** Users who counted (any entry) or are assigned as counters; none of them may approve (SoD). */
-async function countersOf(tx: Tx | typeof db, countId: string): Promise<Set<string>> {
+async function countersOf(tx: DbOrTx, countId: string): Promise<Set<string>> {
   const assigned = await tx.select({ id: stockCountCounters.userId }).from(stockCountCounters).where(eq(stockCountCounters.stockCountId, countId));
   const entered = await tx.select({ id: stockCountEntries.countedBy }).from(stockCountEntries).where(eq(stockCountEntries.stockCountId, countId));
   return new Set([...assigned, ...entered].map((r) => r.id));
@@ -417,6 +418,8 @@ export async function submitCount(ctx: AuthContext, countId: string) {
       before: { status: c.status },
       after: { status: next, lines: lines.length, recounts },
     });
+    // Hand-off (ADR-109): the differences wait for approval; tell the step-1 approvers (never a counter).
+    if (next === "counted") await notifyCountApprovers(tx, ctx, c.id, c.countNumber);
     return { status: next, recounts };
   });
 }
@@ -566,6 +569,8 @@ export async function approveCount(ctx: AuthContext, countId: string, input: App
         before: { status: c.status },
         after: { status: next, step: 1, secondStepRequired: needsSecond },
       });
+      // Hand-off (ADR-109): step 2 approvers, or the people who save the count to stock.
+      await notifyCountApprovers(tx, ctx, c.id, c.countNumber);
       return { status: next };
     }
     // Second step.
@@ -885,4 +890,49 @@ export async function countApprovalVerdicts(ctx: AuthContext, ids: string[]): Pr
     out.set(c.id, v);
   }
   return out;
+}
+
+const COUNT_POST = { kind: "count_post", permission: "inventory.stock_count.post", does: "saves the count to stock", doBase: "save the count to stock", where: "on this count", fallback: "the site manager", operational: true, prefer: ["site_manager", "owner_director"] } as const;
+
+/**
+ * Who acts next on a stock count (ADR-109, docs/NEXT_APPROVER.md): counted → the step-1 approvers of the differences;
+ * waiting for the second OK → the step-2 role, never the first approver; approved → who saves it to stock. Never a
+ * counter (sod.count.approver_not_counter; ADR-091 top roles excepted), step roles as configured (no stand-in).
+ */
+export async function countNextActors(ctx: AuthContext, countId: string, q: DbOrTx = db): Promise<NextActors | null> {
+  if (!isUuid(countId)) return null;
+  const [c] = await q.select().from(stockCounts).where(and(eq(stockCounts.id, countId), eq(stockCounts.organizationId, ctx.organizationId))).limit(1);
+  if (!c || !ctx.allowedSiteIds.includes(c.siteId)) return null;
+  const counters = [...(await countersOf(q, c.id))];
+  if (c.status === "approved") return nextActors(ctx, { ...COUNT_POST, prefer: [...COUNT_POST.prefer] }, { siteId: c.siteId }, q);
+  if (c.status !== "counted" && c.status !== "pending_approval") return null;
+  const lines = await q.select().from(stockCountLines).where(eq(stockCountLines.stockCountId, c.id));
+  if (c.status === "counted" && lines.every((l) => l.isUnlabelled || l.autoApproved || new Decimal(l.varianceQtyBase ?? 0).isZero())) return null;
+  const ev = await evaluateApprovalRules(q, c.organizationId, { documentType: "stock_count_variance", siteId: c.siteId, basis: countVarianceBasis(lines) });
+  const stepNo = c.status === "counted" ? 1 : 2;
+  const step = ev.steps[stepNo - 1] ?? null;
+  const firsts = stepNo === 2 ? await q.select({ by: approvalDecisions.decidedBy }).from(approvalDecisions).where(and(eq(approvalDecisions.recordType, "stock_count"), eq(approvalDecisions.recordId, c.id), eq(approvalDecisions.step, 1), eq(approvalDecisions.decision, "approved"))) : [];
+  return nextActors(
+    ctx,
+    "count_variance",
+    { siteId: c.siteId, excludeUserIds: counters, priorApproverIds: firsts.map((f) => f.by), roleCodes: step ? rolesAllowedNow(step, c.updatedAt) : [], stepNo, stepsTotal: Math.max(ev.steps.length, stepNo), roleStandIn: false },
+    q,
+  );
+}
+
+async function notifyCountApprovers(tx: Tx, ctx: AuthContext, countId: string, countNumber: string) {
+  const next = await countNextActors(ctx, countId, tx);
+  const to = next?.people.map((p) => p.userId) ?? [];
+  if (!next || !to.length) return [];
+  return notifyUsers(tx, to, {
+    organizationId: ctx.organizationId,
+    kind: "handoff.count_variance",
+    severity: "info",
+    title: next.kind === "count_post" ? `Count ${countNumber} approved: save it to stock` : `Count ${countNumber}: differences wait for your approval${next.stepsTotal && next.stepsTotal > 1 ? ` (step ${next.stepNo} of ${next.stepsTotal})` : ""}`,
+    body: `${ctx.displayName} ${next.kind === "count_post" ? "approved the differences" : "sent the count"}.`,
+    entityType: "stock_count",
+    entityId: countId,
+    link: `/inventory/counts/${countId}`,
+    dedupeKey: `handoff.count_variance:${countId}:${next.kind}:${next.stepNo ?? 0}:${Date.now()}`,
+  });
 }

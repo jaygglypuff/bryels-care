@@ -1,4 +1,6 @@
 import { Help } from "@/ui/help/help";
+import { NextApprover } from "@/ui/next-approver";
+import { countNextActors } from "@/modules/inventory";
 import { PlaceName, placeWords } from "@/ui/inventory/place-name";
 import { notFound } from "next/navigation";
 import { randomUUID } from "node:crypto";
@@ -63,6 +65,9 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
   const locked = ["in_progress", "counted", "recount", "pending_approval", "approved"].includes(c.status);
   const canCancel = !["posted", "cancelled"].includes(c.status) && ctx.can("inventory.stock_count.approve");
 
+  // Who approves (or saves) next, by name and role (ADR-109).
+  const approvalNext = ["counted", "pending_approval", "approved"].includes(c.status) ? await countNextActors(ctx, c.id).catch(() => null) : null;
+  const named = approvalNext ? <NextApprover next={approvalNext} inline /> : null;
   const next = (() => {
     switch (c.status) {
       case "planned":
@@ -88,13 +93,13 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
         return canApprove ? (
           <NextStep text={firstStepDone ? "Give the second OK for the differences." : "Check the differences and say why each one happened."} action={{ label: firstStepDone ? "Give second OK" : "Check the differences", href: "#check" }} />
         ) : (
-          <NextStep text="Counted." waitingFor={firstStepDone ? "Waiting for a second manager (site manager or owner) to give the second OK." : "Waiting for a manager who did not count (site manager) to check the differences."} />
+          <NextStep text="Counted." waitingFor={named ?? (firstStepDone ? "Waiting for a second manager (site manager or owner) to give the second OK." : "Waiting for a manager who did not count (site manager) to check the differences.")} />
         );
       case "approved":
         return ctx.can("inventory.stock_count.post") ? (
           <NextStep text="The differences are approved. Save them to stock (button below) to open the shelves again." />
         ) : (
-          <NextStep text="Approved." waitingFor="Waiting for the site manager to save the differences to stock." />
+          <NextStep text="Approved." waitingFor={named ?? "Waiting for the site manager to save the differences to stock."} />
         );
       case "posted":
         return <NextStep text="Saved to stock. The shelves are open again. Nothing more to do." />;

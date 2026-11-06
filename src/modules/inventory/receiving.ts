@@ -606,7 +606,7 @@ async function postInTx(tx: Tx, ctx: AuthContext, gr: typeof goodsReceipts.$infe
   const receiptNumber = await nextNumber(tx, ctx.organizationId, "GR");
   const correlationId = uuidv7();
   const created: { lineNo: number; lotNumber: string; material: string; qty: string; uom: string; location: string; status: string; documentMissing: boolean }[] = [];
-  const forQa: { material: string; status: string; documentMissing: boolean }[] = [];
+  const forQa: { material: string; status: string; documentMissing: boolean; lotId: string; lotNumber: string }[] = [];
   const now = new Date();
   for (const l of lines) {
     const row = rows[l.index];
@@ -677,7 +677,7 @@ async function postInTx(tx: Tx, ctx: AuthContext, gr: typeof goodsReceipts.$infe
       after: { receiptNumber, lineNo, material: l.mat.code, qtyBase: l.qtyBase.toString(), baseUom: l.mat.baseUom, qualityStatus: l.initialQualityStatus, location: l.loc.code },
     });
     created.push({ lineNo, lotNumber, material: l.mat.code, qty: l.qtyBase.toString(), uom: l.mat.baseUom, location: l.loc.code, status: l.initialQualityStatus, documentMissing });
-    forQa.push({ material: l.mat.name, status: l.initialQualityStatus, documentMissing });
+    forQa.push({ material: l.mat.name, status: l.initialQualityStatus, documentMissing, lotId: lot.id, lotNumber });
   }
 
   await tx
@@ -704,26 +704,32 @@ async function postInTx(tx: Tx, ctx: AuthContext, gr: typeof goodsReceipts.$infe
  * QA queue, which lists the oldest received first. Lots released on receipt (A-PROC-10) are not counted;
  * nothing is sent when no lot waits. Runs in the posting transaction; the dedupe key makes a replay silent.
  */
-async function notifyQaOfReceipt(tx: Tx, ctx: AuthContext, gr: typeof goodsReceipts.$inferSelect, receiptNumber: string, lots: { material: string; status: string; documentMissing: boolean }[]) {
+async function notifyQaOfReceipt(tx: Tx, ctx: AuthContext, gr: typeof goodsReceipts.$inferSelect, receiptNumber: string, lots: { material: string; status: string; documentMissing: boolean; lotId: string; lotNumber: string }[]) {
   const waiting = lots.filter((l) => l.status !== "released");
   if (!waiting.length) return [];
   const to = (await usersHoldingPermissionAt(tx, ctx.organizationId, "quality.disposition.approve", gr.siteId)).filter((u) => u !== ctx.userId);
   if (!to.length) return [];
   const n = waiting.length;
   const from = gr.supplierName?.trim() ? ` from ${gr.supplierName.trim()}` : "";
-  const missing = waiting.filter((l) => l.documentMissing).length;
-  return notifyUsers(tx, to, {
-    organizationId: ctx.organizationId,
-    siteId: gr.siteId,
-    kind: "quality.lots.received",
-    severity: "info",
-    title: `${n} new lot${n === 1 ? "" : "s"}${from} wait${n === 1 ? "s" : ""} for the quality check`,
-    body: `Delivery ${receiptNumber} saved to stock by ${ctx.displayName}: ${[...new Set(waiting.map((l) => l.material))].join(", ")}.${missing ? ` ${missing} still without the supplier certificate (CoA).` : ""} They wait for the QA check and nobody may use them until QA says OK.`,
-    entityType: "goods_receipt",
-    entityId: gr.id,
-    link: "/quality",
-    dedupeKey: `goods_receipt.posted.qa:${gr.id}`,
-  });
+    // End-to-end walk C9(b): one message per lot, opening THAT lot on Check quality (not the whole queue).
+  const sent: string[] = [];
+  for (const l of waiting) {
+    sent.push(
+      ...(await notifyUsers(tx, to, {
+        organizationId: ctx.organizationId,
+        siteId: gr.siteId,
+        kind: "quality.lots.received",
+        severity: "info",
+        title: `${l.material} lot ${l.lotNumber}${from} waits for the quality check`,
+        body: `Delivery ${receiptNumber} saved to stock by ${ctx.displayName}${n > 1 ? ` (${n} lots in this delivery)` : ""}.${l.documentMissing ? " Still without the supplier certificate (CoA)." : ""} Nobody may use it until QA says OK.`,
+        entityType: "goods_receipt",
+        entityId: gr.id,
+        link: `/quality/lots/${l.lotId}`,
+        dedupeKey: `goods_receipt.posted.qa:${gr.id}:${l.lotId}`,
+      })),
+    );
+  }
+  return [...new Set(sent)];
 }
 
 /** Posts a draft (W01-06). Double taps and reload-and-repost return the original result; nothing doubles. */

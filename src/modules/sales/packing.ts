@@ -29,7 +29,7 @@ import { nextNumber } from "@/lib/numbering";
 import { D, fmtQty } from "@/lib/qty";
 import { parseScan } from "@/lib/scan/payload";
 import { assertLotUsable, claimIdempotencyKey, storeIdempotentResult } from "@/modules/inventory";
-import { auditDenied, requireReauthentication } from "@/modules/governance";
+import { auditDenied, notifyNextActors, requireReauthentication } from "@/modules/governance";
 import { lockOrder } from "./orders";
 import { customerFulfilmentRequirements, requirementsFromSnapshot } from "./fulfilment-requirements";
 import { ORDER_HEADER_COLUMNS, isUuid, lockShipment, peekShipment, advanceOrder, transitionShipment, type ShipmentRow } from "./fulfilment-state";
@@ -491,6 +491,15 @@ export async function completePacking(ctx: AuthContext, shipmentId: string, inpu
     const doc = await generateBoxingNoteForShipment(tx, ctx, pack.id).catch((e) => {
       if (e instanceof DomainError && e.code === "setup_required") return null;
       throw e;
+    });
+    // C9(g) / ADR-109: the boxes are checked; the people who send deliveries out are told, once per delivery.
+    await notifyNextActors(tx, ctx, "dispatch", { siteId: s.siteId, excludeUserIds: [ctx.userId] }, {
+      title: `Delivery ${s.shipmentNumber} is checked: send it out`,
+      body: `${ctx.displayName} checked ${boxCount} ${boxCount === 1 ? "box" : "boxes"}.`,
+      link: `/sales/shipments/${s.id}`,
+      entityType: "shipment",
+      entityId: s.id,
+      dedupeKey: `handoff.dispatch:${s.id}`,
     });
     const result = { shipmentNumber: s.shipmentNumber ?? "", packNumber: pack.packNumber, packingListNumber: doc?.documentNumber ?? null };
     await storeIdempotentResult(tx, ctx.organizationId, key, body, result);
