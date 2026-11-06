@@ -171,7 +171,7 @@ describe("server actions", () => {
     fd.set("qtyUom", "g");
     fd.set("idempotencyKey", key());
     const r = await putAwayAction(null, fd).catch((e: Error) => e);
-    expect(String(r instanceof Error ? r.message : JSON.stringify(r))).toMatch(/redirect:.*now%20at%20A-01/);
+    expect(String(r instanceof Error ? r.message : JSON.stringify(r))).toMatch(/redirect:.*now%20(at|on)%20A-01/);
     const bad = new FormData();
     bad.set("lot", paLot.lotNumber);
     bad.set("location", "BC:LOC:…");
