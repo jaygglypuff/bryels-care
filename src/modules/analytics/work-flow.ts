@@ -6,7 +6,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { lotsToPutAway } from "@/modules/inventory";
 import { availableStock } from "@/modules/sales";
-import { FLOW_COUNT_DEFS, FLOW_STAGES, countWords, stageRow, type FlowCount, type FlowCountDef, type FlowCountKey, type FlowStage } from "./work-flow-stages";
+import { FLOW_COUNT_DEFS, FLOW_STAGES, countWords, stageRow, withDueWords, type FlowCount, type FlowCountDef, type FlowCountKey, type FlowStage } from "./work-flow-stages";
 
 /**
  * "How work flows" read model (ADR-106 §5, ADR-110 C0; docs/END_TO_END_FLOW.md C0). One row per stage of the 16, each
@@ -34,10 +34,12 @@ export type FlowItem = {
   href: string;
   /** A message (notification) points to this record since it reached this stage. */
   told: boolean;
+  /** Things still coming (stage 3): the expected date ("YYYY-MM-DD"). */
+  dueOn?: string | null;
 };
 
 type Q = { org: string; site: string; today: string };
-type Row = { id: string; ref: string; label: string | null; since: Date | string; href: string; told: boolean };
+type Row = { id: string; ref: string; label: string | null; since: Date | string; href: string; told: boolean; due_on?: string | null };
 
 /** "A message points to the record since it got here" (C0 red rule). `ids` is the SQL of the record id(s). */
 const toldSql = (ids: SQL, since: SQL, notKinds: readonly string[] = []) =>
@@ -77,6 +79,13 @@ const QUERIES: Partial<Record<FlowCountKey, (q: Q) => SQL>> = {
            ${toldSql(sql`po.id`, sql`coalesce(po.approved_at, po.status_changed_at)`)} as told
     from purchase_orders po join suppliers s on s.id = po.supplier_id
     where po.organization_id = ${q.org} and po.site_id = ${q.site} and po.status = 'approved' and not po.after_the_fact`,
+  po_coming: (q) => sql`
+    select po.id, po.po_number as ref, s.name as label, coalesce(po.sent_at, po.status_changed_at) as since, '/inventory/receive?po=' || po.id::text as href,
+           ${toldSql(sql`po.id`, sql`coalesce(po.sent_at, po.status_changed_at)`, ["purchase_order_approved"])} as told,
+           coalesce(po.promised_date, po.expected_date)::text as due_on
+    from purchase_orders po join suppliers s on s.id = po.supplier_id
+    where po.organization_id = ${q.org} and po.site_id = ${q.site} and po.status in ${RECEIVABLE}
+      and (coalesce(po.promised_date, po.expected_date) > ${q.today}::date or coalesce(po.promised_date, po.expected_date) is null)`,
   po_late: (q) => sql`
     select po.id, po.po_number as ref, s.name as label, coalesce(po.promised_date, po.expected_date)::timestamptz as since, '/inventory/receive?po=' || po.id::text as href,
            ${toldSql(sql`po.id`, sql`coalesce(po.sent_at, po.status_changed_at)`, ["purchase_order_approved"])} as told
@@ -204,7 +213,7 @@ export function maySeeCount(ctx: AuthContext, def: Pick<FlowCountDef, "permissio
   return def.permissions.every((p) => ctx.can(p) && ctx.canAt(p, siteId));
 }
 
-const toItem = (r: Row): FlowItem => ({ id: r.id, ref: r.ref, label: r.label ?? "", since: r.since instanceof Date ? r.since : new Date(r.since), href: r.href, told: !!r.told });
+const toItem = (r: Row): FlowItem => ({ id: r.id, ref: r.ref, label: r.label ?? "", since: r.since instanceof Date ? r.since : new Date(r.since), href: r.href, told: !!r.told, ...(r.due_on !== undefined ? { dueOn: r.due_on } : {}) });
 
 async function runQuery(build: (q: Q) => SQL, q: Q): Promise<FlowItem[]> {
   const rows = await db.execute<Row>(sql`select * from (${build(q)}) x order by x.since asc, x.ref asc limit ${FLOW_ITEM_LIMIT + 1}`);
@@ -299,7 +308,8 @@ function summarise(def: FlowCountDef, items: FlowItem[]): FlowCount {
   const capped = items.length > FLOW_ITEM_LIMIT;
   const list = capped ? items.slice(0, FLOW_ITEM_LIMIT) : items;
   const oldest = list.reduce<Date | null>((m, i) => (!m || i.since < m ? i.since : m), null);
-  return { key: def.key, count: list.length, capped, oldestAt: oldest, untold: def.told === "told" ? list.filter((i) => !i.told).length : 0, words: countWords(def, list.length), itemIds: list.map((i) => i.id) };
+  const nextDueOn = list.map((i) => i.dueOn).filter((d): d is string => !!d).sort()[0] ?? null;
+  return { key: def.key, count: list.length, capped, oldestAt: oldest, untold: def.told === "told" ? list.filter((i) => !i.told).length : 0, words: withDueWords(countWords(def, list.length), nextDueOn), nextDueOn, itemIds: list.map((i) => i.id) };
 }
 
 /** Loads the items of the given counts (one query each; the three stock-based counts share orderCover). */

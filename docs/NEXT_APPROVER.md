@@ -74,10 +74,22 @@ after the second slice (2026-11-06). Every message is in-app, links to the exact
 | `approvalNext` / `approvalWaiting` / `financeNext` (`src/app/(app)/finance/approval-waiting.ts`) | finance documents | creator and submitter (claimant on claims), earlier approvers, step roles as configured |
 | `waitingForApprover(..., { exclude, prior })` (`src/app/(app)/masterdata/_eng/waiting.ts`) | recipe, steps, how-to sheet, check plan versions | maker and sender, earlier approvers; a QA step is independent |
 
+### Live check 2026-11-06
+
+- **QA lot page:** while a lot waits for QA, every viewer reads the QA people who decide ("Next: Nina (QA) or Teresa
+  (QA) checks this lot and says OK or not OK — they will see it on Check quality"); a QA person who may decide reads
+  "So can Teresa (QA)." under the "Decide now" step (`getLotDisposition().deciders`, `othersSentence`). The person who
+  received the lot or entered its results is never listed (C14 unchanged).
+- **Sent purchase order:** "Next: Lito (warehouse) or Dino (site manager) receives it when it arrives on 11 Nov — they
+  will see it on Receive a delivery" (`procurementNextActors`, kind `delivery_coming`); the warehouse viewer reads
+  "So can …" under "Receive the delivery".
+- **Refusals** ("You don't have access") name the people who can DO the work: a `.view` permission is read as the
+  entity's create, post, approve, edit or submit permission (`doingPermission`), so a sales person refused a QA check
+  is pointed to QA, not to the owner, the planner and the manager who may only look.
+
 ### Open
 
 - Row 23 (month reopen) and row 26 (delivery proof) still use their own words.
-- The QA lot page "Next" line (row 9) is owned by C14.
 - The step "end early" approval form names approvers only in its picker.
 
 ## Tests
@@ -98,3 +110,5 @@ after the second slice (2026-11-06). Every message is in-app, links to the exact
   - Recipe: QA is told first, never the maker; the QA approver and the maker are not asked at step 2; `waitingForApprover` leaves out the maker.
 - `tests/integration/quality/w2-wiring.test.ts`: complete results tell the second QA person (not the tester); the review tells the tester.
 - `tests/integration/inventory/receipt-qa-notify.test.ts`: one message per lot, opening the lot.
+- `tests/integration/governance/live-check-names.test.ts`: the QA lot names its deciders for every viewer (never another
+  site's QA; that person cannot open the lot), the sent order names who receives it and the date, refusals name doers.

@@ -1,5 +1,5 @@
 import { UserCheck, UsersRound } from "lucide-react";
-import { type NextActors, nextActorsSentence } from "@/lib/next-actors-words";
+import { type NextActors, nextActorsSentence, othersSentence } from "@/lib/next-actors-words";
 import { cx } from "./core";
 
 /**
@@ -9,10 +9,13 @@ import { cx } from "./core";
  *
  * - `inline`: a <span> for the "Waiting for" line of `NextStep` / `NextStepBox` and success banners.
  * - default: a small block for success messages and the batch/step cards on the floor.
+ * - `othersOnly`: under a line that already tells the viewer what to do, only "So can Teresa (QA)." (or the full
+ *   sentence when the viewer cannot do it), so the owner still sees the names.
  */
-export function NextApprover({ next, inline = false, className }: { next: NextActors | null | undefined; inline?: boolean; className?: string }) {
+export function NextApprover({ next, inline = false, othersOnly = false, className }: { next: NextActors | null | undefined; inline?: boolean; othersOnly?: boolean; className?: string }) {
   if (!next) return null;
-  const text = nextActorsSentence(next);
+  const text = othersOnly ? othersSentence(next) : nextActorsSentence(next);
+  if (!text) return null;
   const Icon = next.viewer.can ? UserCheck : UsersRound;
   if (inline)
     return (

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { type RecipeDraft, recipeWizardOptions } from "@/modules/masterdata";
 import { PageIntro } from "@/ui/guide";
+import { PageHeader } from "@/ui/core";
 import { Forbidden } from "../../../forbidden";
 import { RecipeWizard } from "../wizard";
 
@@ -36,12 +37,14 @@ export default async function NewRecipePage({ searchParams }: { searchParams: Pr
   };
   return (
     <div className="flex flex-col gap-3">
-      <div className="mx-auto flex w-full max-w-3xl flex-wrap justify-between gap-2 text-[13px]">
+      {/* Live check 2026-11-06 (desktop): the page H1 at the top, and the wizard uses up to 1200 px with its summary beside it. */}
+      <div className="mx-auto flex w-full max-w-3xl flex-wrap justify-between gap-2 text-[13px] xl:max-w-[1200px]">
         <Link href="/masterdata/recipes" className="inline-flex min-h-[44px] items-center text-primary-text hover:underline">
           ← All recipes
         </Link>
       </div>
-      <div className="mx-auto w-full max-w-3xl">
+      <div className="mx-auto w-full max-w-3xl xl:max-w-[1200px]">
+        <PageHeader title="New recipe" />
         <PageIntro>This screen is for making the recipe of one product in five short screens: which product, how much one batch makes, the ingredients, the steps, then check and send it for approval.</PageIntro>
       </div>
       <RecipeWizard options={options} initial={initial} start={{ kind: "new", ingredientsLabel: "Version 1 (new draft)", stepsLabel: "Version 1 (new draft)", formulaNo: 1, routingNo: 1, locks: { ingredients: false, steps: false } }} />

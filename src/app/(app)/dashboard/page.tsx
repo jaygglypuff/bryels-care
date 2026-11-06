@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
+import { codeLast } from "@/lib/code-last";
+import { plainDatesIn } from "@/lib/plain-date";
 import { fmtDateTime } from "@/lib/qty";
+import { lotsToPutAway, type PutAwayTask } from "@/modules/inventory";
+import { listMyNotifications } from "@/modules/platform";
 import { getOperatorHome, getPlannerNext, getWorkFlowCounts } from "@/modules/analytics";
 import { customerOrdersShort, floorTaskCounts, myFloorTasks, type ShortCustomerLine } from "@/modules/production";
 import { Card, CardTitle, LinkButton, PageHeader } from "@/ui/core";
@@ -10,6 +14,7 @@ import { homeHref } from "../nav";
 import { OperatorHome, TasksToday } from "./operator-home";
 import { OwnerHomePage } from "./owner-home";
 import { PROCUREMENT_LINES, WAREHOUSE_LINES, WorkList } from "./work-list";
+import { putAwaySentence } from "./home-next";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Home" };
@@ -28,7 +33,9 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     // ADR-110 C11/C13: buyers and the warehouse get their work list on Home (the "How work flows" counts).
     const buyer = ctx.can("procurement.purchase_order.create");
     const warehouse = ctx.can("inventory.movement.post") && ctx.can("sales.pick.view");
-    const [tiles, tasks, plan, buying, dispatch, short] = await Promise.all([
+    // Live check 2026-11-06: the warehouse Home names the next lot to put away and its shelf.
+    const putAwayFirst = warehouse && ctx.can("inventory.lot.view");
+    const [tiles, tasks, plan, buying, dispatch, short, putAway, messages] = await Promise.all([
       getOperatorHome(ctx),
       floor ? myFloorTasks(ctx) : Promise.resolve([]),
       planner ? getPlannerNext(ctx) : Promise.resolve(null),
@@ -36,6 +43,9 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       warehouse ? getWorkFlowCounts(ctx, WAREHOUSE_LINES.map((l) => l.key)) : Promise.resolve([]),
       // ADR-110 C4: customer orders short of stock, for the planner.
       planner ? customerOrdersShort(ctx) : Promise.resolve([] as ShortCustomerLine[]),
+      putAwayFirst ? lotsToPutAway(ctx, { limit: 50 }).catch(() => [] as PutAwayTask[]) : Promise.resolve([] as PutAwayTask[]),
+      // The operator's desktop side panel: the newest open messages (the person's own; no permission needed).
+      floor ? listMyNotifications(ctx).then((r) => r.slice(0, 4)).catch(() => []) : Promise.resolve([]),
     ]);
     return (
       <>
@@ -44,10 +54,17 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         {short.length > 0 && <CustomerOrdersShort lines={short} />}
         {plan && <PlannerNext plan={plan} canApprove={ctx.can("production.work_order.approve")} />}
         {buyer && <BuyerNext counts={buying} />}
+        {putAway.length > 0 && <PutAwayNext tasks={putAway} />}
         {buyer && <WorkList title="Your buying work" lines={PROCUREMENT_LINES} counts={buying} testId="procurement-work" />}
         {warehouse && <WorkList title="Orders to send out" lines={WAREHOUSE_LINES} counts={dispatch} testId="warehouse-work" />}
         {floor ? (
-          <TasksToday tasks={tasks} counts={floorTaskCounts(tasks)} tiles={tiles} canDailyCount={ctx.can("production.daily_log.view")} />
+          <TasksToday
+            tasks={tasks}
+            counts={floorTaskCounts(tasks)}
+            tiles={tiles}
+            canDailyCount={ctx.can("production.daily_log.view")}
+            messages={messages.map((m) => ({ id: m.id, title: codeLast(plainDatesIn(m.title)).text, codes: codeLast(m.title).codes.join(" · "), at: m.createdAt }))}
+          />
         ) : (
           <OperatorHome tiles={tiles} siteLabel={ctx.currentSite.code} updated={fmtDateTime(new Date())} />
         )}
@@ -98,6 +115,19 @@ function PlannerNext({ plan, canApprove }: { plan: { toApprove: number; approved
     );
   if (plan.approvedNotStarted > 0) return <NextStep text={`Next: ${orders(plan.approvedNotStarted)} are approved but not started. Check that materials are ready.`} action={{ label: "See the orders", href: "/production/orders" }} />;
   return <NextStep text="Nothing waits for you. Plan the next production order when stock runs low." action={{ label: "New production order", href: "/production/orders/new" }} />;
+}
+
+/** Live check 2026-11-06: the warehouse's next put-away by name (oldest released lot first), not only a count. */
+function PutAwayNext({ tasks }: { tasks: PutAwayTask[] }) {
+  const lots = [...new Map(tasks.map((t) => [t.lotId, t])).values()];
+  const more = lots.length - 1;
+  return (
+    <NextStep
+      text={putAwaySentence(lots[0])}
+      action={{ label: "Put it away", href: "/inventory/receive/put-away" }}
+      waitingFor={more > 0 ? `${more} more ${more === 1 ? "lot waits" : "lots wait"} after this one.` : undefined}
+    />
+  );
 }
 
 /** ADR-110 C11: the buyer's one next step — approved requests to order first, then orders to send, else ask to buy. */

@@ -132,3 +132,19 @@ export function shipmentSteps(status: string): RecordStep[] {
   if (status === "returned") return stoppedAfter(SHIPMENT_STAGES, 3, "Came back");
   return strip(SHIPMENT_STAGES, status);
 }
+
+/**
+ * Shorter words for long stages, used on desktop for steps that are not the current one (live check 2026-11-06: the
+ * customer order strip wrapped "Done" to a second row at 1440 px). The full words stay in the tooltip, for the current
+ * step and for screen readers. Unknown labels are returned unchanged.
+ */
+const SHORT_STEP: Record<string, string> = {
+  "Second check of the box": "Second check",
+  "Proof of delivery": "Proof",
+  "Ready to send out": "Ready",
+  "Undone (kept on record)": "Undone",
+};
+
+export function shortStepLabel(label: string): string {
+  return SHORT_STEP[label] ?? label;
+}

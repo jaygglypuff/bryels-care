@@ -5,7 +5,8 @@ import { fmtDateTime } from "@/lib/qty";
 import { currentHref, isInternalPath, recordHref } from "@/lib/record-links";
 import { type ApprovalRow, myApprovalInbox, refreshActionItems } from "@/modules/action-centre";
 import { registerAppHooks } from "@/modules/wiring";
-import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import Link from "next/link";
+import { Card, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
 import { InlineDecision } from "./forms";
 import { INLINE_DECISIONS } from "./inline";
@@ -27,12 +28,18 @@ function waited(minutes: number) {
   return `${d} days`;
 }
 
-function Row({ a, decidable, first = false }: { a: ApprovalRow; decidable: boolean; /** Round 4 (UX re-audit C #8): only the oldest row gets the green button. */ first?: boolean }) {
-  const href = isInternalPath(a.link) ? currentHref(a.link) : (recordHref(a.entityType, a.entityId) ?? "/action-centre");
+const rowHref = (a: ApprovalRow) => (isInternalPath(a.link) ? currentHref(a.link) : (recordHref(a.entityType, a.entityId) ?? "/action-centre"));
+
+/**
+ * One row. `pick` (desktop ≥ 1280 px, live check 2026-11-06): the decide buttons move to the detail panel beside the
+ * list; the row shows "Show here" and is highlighted when `selected`. Below 1280 px the row keeps its buttons.
+ */
+function Row({ a, decidable, first = false, pick, selected = false }: { a: ApprovalRow; decidable: boolean; /** Round 4 (UX re-audit C #8): only the oldest row gets the green button. */ first?: boolean; pick?: string; selected?: boolean }) {
+  const href = rowHref(a);
   const inline = INLINE_DECISIONS[a.kind];
   const showInline = decidable && !!inline;
   return (
-    <li className="flex flex-col gap-3 py-4 md:flex-row md:items-start md:justify-between">
+    <li className={cx("flex flex-col gap-3 py-4 md:flex-row md:items-start md:justify-between", pick && "xl:-mx-3 xl:rounded-[12px] xl:px-3", pick && selected && "xl:bg-primary-soft")} aria-current={pick && selected ? "true" : undefined}>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <Chip tone={a.severity === "critical" ? "bad" : a.severity === "warning" ? "warn" : "info"}>{a.kindLabel}</Chip>
@@ -61,13 +68,67 @@ function Row({ a, decidable, first = false }: { a: ApprovalRow; decidable: boole
         {!decidable && a.waitingFor &&<p className="mt-1 text-[13px] font-medium text-[var(--warn-fg)]">{a.waitingFor}{a.stepLabel ? ` · step: ${a.stepLabel}` : ""}</p>}
         {decidable && !inline && <p className="mt-1 text-[13px] text-muted">Open the record to decide (it needs more details than a tap).</p>}
       </div>
-      <div className="flex w-full shrink-0 flex-col gap-2 md:w-72 md:items-stretch">
+      <div className={cx("flex w-full shrink-0 flex-col gap-2 md:w-72 md:items-stretch", pick && "xl:hidden")}>
         {showInline && <InlineDecision kind={a.kind} entityId={a.entityId} what={a.what} rejectLabel={inline.reject} primary={first} />}
         <LinkButton href={href} variant={first && decidable && !inline ? "primary" : "secondary"} className="w-full">
           Open
         </LinkButton>
       </div>
+      {pick && (
+        <Link href={pick} scroll={false} className={cx("hidden min-h-[44px] shrink-0 items-center rounded-full border px-4 text-[14px] font-medium xl:inline-flex", selected ? "border-transparent bg-transparent font-semibold text-primary-text" : "border-line bg-surface text-fg hover:bg-surface-2")}>
+          {selected ? "Shown on the right" : "Show here"}
+        </Link>
+      )}
     </li>
+  );
+}
+
+/** Desktop detail panel: everything about the selected item, with Approve / Reject and Open (same controls as the row). */
+function Detail({ a, first }: { a: ApprovalRow; first: boolean }) {
+  const href = rowHref(a);
+  const inline = INLINE_DECISIONS[a.kind];
+  return (
+    <aside aria-label="The selected item" data-testid="approval-detail" className="hidden xl:sticky xl:top-[150px] xl:block">
+      <Card>
+        <div className="flex flex-wrap items-center gap-2">
+          <Chip tone={a.severity === "critical" ? "bad" : a.severity === "warning" ? "warn" : "info"}>{a.kindLabel}</Chip>
+          {a.siteCode && <span className="text-[12px] text-muted">{a.siteCode}</span>}
+        </div>
+        <h2 className="mt-2 text-[18px] font-semibold leading-snug">
+          {a.displayTitle}
+          {a.displayNumber && <span className="ml-1 font-mono text-[12px] font-normal text-muted">{a.displayNumber}</span>}
+        </h2>
+        {a.amountText && <p className="mt-1 text-[18px] font-semibold tabular-nums">{a.amountText}</p>}
+        <dl className="mt-3 flex flex-col gap-2 text-[14px]">
+          {a.why && (
+            <div>
+              <dt className="text-[12px] font-semibold uppercase tracking-wide text-muted">Why it waits</dt>
+              <dd className="break-words text-fg-2">{a.why}</dd>
+            </div>
+          )}
+          {a.detail && (
+            <div>
+              <dt className="text-[12px] font-semibold uppercase tracking-wide text-muted">Details</dt>
+              <dd className="break-words text-fg-2">{a.detail}</dd>
+            </div>
+          )}
+          <div>
+            <dt className="text-[12px] font-semibold uppercase tracking-wide text-muted">Asked</dt>
+            <dd className="text-fg-2">
+              {a.requestedBy.name ? <>by <b>{a.requestedBy.name}</b>{a.requestedBy.at ? <> · {fmtDateTime(a.requestedBy.at)}</> : null} · </> : null}
+              waiting {waited(a.ageMinutes)}
+            </dd>
+          </div>
+        </dl>
+        {a.selfApprovalNote && <p className="mt-2 text-[13px] font-medium text-fg-2">{a.selfApprovalNote}</p>}
+        <div className="mt-4 flex flex-col gap-2">
+          {inline ? <InlineDecision kind={a.kind} entityId={a.entityId} what={a.what} rejectLabel={inline.reject} primary={first} /> : <p className="text-[13px] text-muted">Open the record to decide (it needs more details than a tap).</p>}
+          <LinkButton href={href} variant={first && !inline ? "primary" : "secondary"} className="w-full">
+            Open
+          </LinkButton>
+        </div>
+      </Card>
+    </aside>
   );
 }
 
@@ -78,10 +139,13 @@ function Row({ a, decidable, first = false }: { a: ApprovalRow; decidable: boole
  * their own request) are in a collapsed "Waiting for others" section without decision buttons. The
  * header badge counts exactly the first list (myApprovalCount). Data: src/modules/action-centre/approvals.ts.
  */
-export default async function ApprovalsPage() {
+export default async function ApprovalsPage({ searchParams }: { searchParams: Promise<{ item?: string }> }) {
   const ctx = await requireContext();
+  const sp = await searchParams;
   const refreshed = await refreshActionItems(ctx.organizationId).catch(() => null);
   const { decidable, waiting } = await myApprovalInbox(ctx);
+  // Live check 2026-11-06 (desktop ≥ 1280 px): the list and the selected item side by side (default: the oldest).
+  const selected = decidable.find((a) => a.id === sp.item) ?? decidable[0] ?? null;
   return (
     <div className="space-y-5">
       <PageHeader
@@ -102,6 +166,7 @@ export default async function ApprovalsPage() {
       )}
       {!refreshed && <Banner tone="warn" title="This list may be a few minutes old">It could not be updated just now. Open the page again in a minute.</Banner>}
       {ctx.ownerOverride && <Banner tone="info" title="You can decide everything here">As the owner you may decide any step and your own requests. Each decision is kept in the history of changes.</Banner>}
+      <div className={cx(selected && "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,440px)] xl:items-start xl:gap-5")}>
       <Card>
         {decidable.length === 0 ? (
           <EmptyState title="Nothing waits for your decision">
@@ -112,11 +177,13 @@ export default async function ApprovalsPage() {
         ) : (
           <ul className="divide-y divide-line">
             {decidable.map((a, n) => (
-              <Row key={a.id} a={a} decidable first={n === 0} />
+              <Row key={a.id} a={a} decidable first={n === 0} pick={`/approvals?item=${encodeURIComponent(a.id)}`} selected={a.id === selected?.id} />
             ))}
           </ul>
         )}
       </Card>
+      {selected && <Detail a={selected} first={selected.id === decidable[0]?.id} />}
+      </div>
       {waiting.length > 0 && (
         <details className="rounded-[14px] border border-line bg-surface">
           <summary className="flex min-h-[48px] cursor-pointer items-center justify-between gap-2 px-4 text-[15px] font-medium">

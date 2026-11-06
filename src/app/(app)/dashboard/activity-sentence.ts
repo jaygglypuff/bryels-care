@@ -86,6 +86,15 @@ const EXACT: Record<string, string> = {
   "quality.disposition.rejected": "said not OK to",
   "quality.disposition.expired": "marked out of date",
   "finance.accounting_period.locked": "closed",
+  // Live check 2026-11-06: the audit event names what was done, not the record it is filed under ("Lito Pascual set
+  // aside stock for the customer order", not "made the customer order").
+  "inventory.stock_allocation.created": "set aside stock for",
+  "inventory.stock_allocation.released": "gave back the stock set aside for",
+  "inventory.stock_reservation.created": "reserved stock for",
+  "inventory.stock_reservation.converted": "used the reserved stock for",
+  "inventory.stock_reservation.released": "gave back the reserved stock for",
+  "procurement.purchase_order.receipt_posted": "received goods for",
+  "production.pick_line.confirmed": "got the materials for",
 };
 const VERB: Record<string, string> = {
   created: "made",

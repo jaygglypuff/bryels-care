@@ -1,7 +1,7 @@
 import { Ban, CheckCircle2, Circle, CircleDot } from "lucide-react";
 import type { ReactNode } from "react";
 import { cx } from "./core";
-import type { RecordStep } from "./record-steps";
+import { type RecordStep, shortStepLabel } from "./record-steps";
 import { StatusChip } from "./status";
 
 /**
@@ -103,13 +103,15 @@ const STEP_WORD: Record<RecordStep["state"], string> = { done: "done", current: 
 /** Compact horizontal progress strip: wraps on phones, icon + text per step, never colour alone. */
 export function RecordProgress({ steps }: { steps: RecordStep[] }) {
   return (
-    <ol className="mt-4 flex flex-wrap items-center gap-x-1 gap-y-2" aria-label="Progress">
+    // Desktop (≥ 1024 px, live check 2026-11-06): one row. Steps other than the current one use shorter words
+    // (shortStepLabel, full words in the tooltip) and, if still too long, shrink with an ellipsis; phones wrap as before.
+    <ol className="mt-4 flex flex-wrap items-center gap-x-1 gap-y-2 lg:flex-nowrap" aria-label="Progress">
       {steps.map((s, i) => (
-        <li key={`${i}-${s.label}`} aria-current={s.state === "current" ? "step" : undefined} className="flex min-w-0 items-center gap-1">
-          {i > 0 && <span aria-hidden className={cx("h-px w-3 sm:w-5", s.state === "upcoming" ? "bg-line-strong" : "bg-[var(--ok-fg)]")} />}
+        <li key={`${i}-${s.label}`} aria-current={s.state === "current" ? "step" : undefined} className={cx("flex min-w-0 items-center gap-1", s.state === "current" && "lg:shrink-0")} title={s.label}>
+          {i > 0 && <span aria-hidden className={cx("h-px w-3 shrink-0 sm:w-5 lg:w-3 2xl:w-5", s.state === "upcoming" ? "bg-line-strong" : "bg-[var(--ok-fg)]")} />}
           <span
             className={cx(
-              "inline-flex min-h-[32px] items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] leading-tight",
+              "inline-flex min-h-[32px] min-w-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] leading-tight lg:px-2 2xl:px-2.5",
               s.state === "done" && "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]",
               s.state === "current" && "border-primary bg-primary-soft font-semibold text-fg",
               s.state === "blocked" && "border-[var(--rej-bd)] bg-[var(--rej-bg)] font-semibold text-[var(--rej-fg)]",
@@ -125,7 +127,17 @@ export function RecordProgress({ steps }: { steps: RecordStep[] }) {
             ) : (
               <Circle size={14} aria-hidden className="shrink-0" />
             )}
-            <span className="break-words">{s.label}</span>
+            {s.state === "current" || shortStepLabel(s.label) === s.label ? (
+              <span className="break-words lg:truncate">{s.label}</span>
+            ) : (
+              <>
+                <span className="break-words lg:hidden">{s.label}</span>
+                <span className="hidden truncate lg:inline" aria-hidden>
+                  {shortStepLabel(s.label)}
+                </span>
+                <span className="sr-only hidden lg:inline">{s.label}</span>
+              </>
+            )}
             <span className="sr-only">({STEP_WORD[s.state]})</span>
           </span>
         </li>

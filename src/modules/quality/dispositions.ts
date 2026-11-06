@@ -342,13 +342,19 @@ export async function getLotDisposition(ctx: AuthContext, lotId: string) {
   // shown side by side (values are QA configuration; A-QA-LOTBATCH-01 asks QA whether they should match).
   const keptOut = [...receivers, ...qf.testers];
   const quarantined = ["quarantine", "on_hold"].includes(lot.qualityStatus);
-  const nextQa = quarantined && (isReceiver || isTester) ? await nextActors(ctx, "lot_qa", { siteId: lot.siteId, excludeUserIds: keptOut }) : null;
+  // Live check 2026-11-06: the lot page names the QA people who decide for every viewer (not only the receiver or
+  // tester), so the owner and the warehouse read "Next: Nina (QA) or Teresa (QA) …" and a QA person who may decide
+  // reads "You can … now. So can Teresa (QA)." The people kept out above are never listed.
+  const deciders = quarantined && !pending ? await nextActors(ctx, "lot_qa", { siteId: lot.siteId, excludeUserIds: keptOut }) : null;
+  const nextQa = deciders && (isReceiver || isTester) ? deciders : null;
   const testerMayReleaseBatches = (await getSetting(db, ctx.organizationId, "quality.release.tester_may_release", lot.siteId)) as boolean;
   return {
     lot,
     /** ADR-110 C14: the viewer entered this lot's test results (the lot rule: someone else says OK). */
     isTester,
     nextQa,
+    /** Who decides on this lot (ADR-109 nextActors), for every viewer while it waits for QA; null otherwise. */
+    deciders,
     rules: { lotTesterMayRelease: false, batchTesterMayRelease: testerMayReleaseBatches },
     /** ADR-110 C10: after OK, where the lot waits and the shelf it goes to (null when nothing waits to be put away). */
     putAway: lot.qualityStatus === "released" ? await putAwayHintForLot(db, lot.id) : null,

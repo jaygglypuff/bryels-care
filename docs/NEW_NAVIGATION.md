@@ -92,6 +92,17 @@ floor roles keep only their screens (ADR-083). *IT and system* is for the system
    role guide otherwise); at 1280–1535 px Scan shows the word "Scan", and To approve and Messages show their words
    when the bar has room (one site); with the site selector they stay icons with tooltips (measured: 110 px short).
 
+### Live check rules (desktop Chrome, 2026-11-06)
+
+10. **The desktop tab row is one line at 1280, 1440 and 1920 px.** At most 7 entries (tabs and sub-menus,
+    `DESKTOP_ROW_MAX`, `desktopRow` in `nav.ts`); the rest go into one **More ▾** menu at the end of the row, which
+    lists the left-over tabs first and then each left-over sub-menu under its name (Advanced still folded). Tabs marked
+    `deskMore` leave the row first: *Floor screen (TV)* and *Rejects*. Owner: Operations shows Operations Center, How
+    work flows, Production orders, Today, Check a batch or delivery, Receiving ▾, Quality ▾, More ▾ (Floor screen,
+    Rejects, Packing & dispatch, Maintenance); Management shows Management and six sub-menus, More ▾ (Planning tools,
+    IT and system). More is highlighted when the open page is inside it. Phones and tablets are unchanged (their row
+    scrolls sideways and "More" opens the drawer). Menu words still equal the screen titles; nothing is removed.
+
 ### Where things moved (old group → new place)
 
 | Old group | Now |

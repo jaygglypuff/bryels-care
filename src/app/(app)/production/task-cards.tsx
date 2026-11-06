@@ -47,11 +47,11 @@ export function TaskCard({ t, first = true }: { t: FloorTask; first?: boolean })
   );
 }
 
-export function TaskCards({ tasks, empty }: { tasks: FloorTask[]; empty?: React.ReactNode }) {
+export function TaskCards({ tasks, empty, gridClass = "sm:grid-cols-2 xl:grid-cols-3" }: { tasks: FloorTask[]; empty?: React.ReactNode; /** Columns of the card grid (Home uses two beside its side panel). */ gridClass?: string }) {
   if (tasks.length === 0) return <>{empty ?? null}</>;
   const firstDoable = tasks.find((t) => t.canDo)?.batchId;
   return (
-    <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <ul className={`grid gap-3 ${gridClass}`}>
       {tasks.map((t) => (
         <li key={t.batchId} className="min-w-0">
           <TaskCard t={t} first={t.batchId === firstDoable} />

@@ -108,6 +108,16 @@ export function nextActorsSentence(n: NextActors): string {
   return `Next: ${n.roleWords} ${n.does}${step}. ${NOBODY_YET}`;
 }
 
+/**
+ * Only the other people, for a line whose own words already tell the viewer what to do ("Receive the delivery"):
+ * "So can Lito (warehouse) or Dino (site manager)." when the viewer can do it too, else the full sentence.
+ * Null when the viewer can do it and nobody else can (nothing to add).
+ */
+export function othersSentence(n: NextActors): string | null {
+  if (n.viewer.can) return n.people.length ? `So can ${peopleWords(n.people)}.` : null;
+  return nextActorsSentence(n);
+}
+
 /** The short form for cards ("Waiting for Rhea or Dino"): first names only, max 3. */
 export function waitingForNames(n: NextActors): string | null {
   if (!n.people.length) return null;

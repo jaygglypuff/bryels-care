@@ -1,4 +1,5 @@
 import type { Permission } from "@/lib/permissions";
+import { fmtDayMonth } from "@/lib/qty";
 
 /**
  * "How work flows" (ADR-106 §5, ADR-110 C0; docs/END_TO_END_FLOW.md C0 table): the 16 stages of one order, from
@@ -32,6 +33,7 @@ export type FlowCountKey =
   | "pr_to_order"
   | "po_to_approve"
   | "po_to_send"
+  | "po_coming"
   | "po_late"
   | "po_due_today"
   | "gr_draft"
@@ -118,6 +120,8 @@ export const FLOW_STAGES: readonly FlowStageDef[] = [
     who: "Warehouse",
     button: { label: "Open Receive a delivery", href: "/inventory/receive" },
     counts: [
+      // Live check 2026-11-06: a sent order expected later is shown too ("1 coming (11 Nov)"), not only late and today.
+      c("po_coming", "coming", "coming", ["procurement.purchase_order.view"]),
       c("po_late", "delivery late", "deliveries late", ["procurement.purchase_order.view"]),
       c("po_due_today", "delivery due today", "deliveries due today", ["procurement.purchase_order.view"]),
     ],
@@ -261,6 +265,11 @@ export function countWords(def: Pick<FlowCountDef, "one" | "many">, n: number): 
   return `${n.toLocaleString("en-PH")} ${n === 1 ? def.one : def.many}`;
 }
 
+/** "1 coming (11 Nov)": the count's words with the nearest expected date, when the count has dates. */
+export function withDueWords(words: string, nextDueOn: string | null | undefined): string {
+  return nextDueOn ? `${words} (${fmtDayMonth(nextDueOn)})` : words;
+}
+
 /** The oldest item's age in plain words: "today", "1 day", "5 days" (whole days, never negative). */
 export function ageWords(since: Date | null, now: Date = new Date()): string | null {
   if (!since) return null;
@@ -279,6 +288,8 @@ export type FlowCount = {
   /** Items no message points to (only for "told" counts; 0 for "self"). */
   untold: number;
   words: string;
+  /** The nearest expected date of the items ("YYYY-MM-DD"), for counts of things still coming; else null. */
+  nextDueOn?: string | null;
   /** The records counted (to count a record once per stage when two counts of a stage overlap). */
   itemIds: readonly string[];
 };

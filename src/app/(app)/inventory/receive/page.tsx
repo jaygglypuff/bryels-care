@@ -8,7 +8,7 @@ import { DomainError } from "@/lib/errors";
 import { fmtDate } from "@/lib/qty";
 import { receivingFormData } from "@/modules/inventory/receiving";
 import { expectedReceipts, getPurchaseOrder } from "@/modules/procurement";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
 import { Chip } from "@/ui/status";
 import { PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
@@ -122,7 +122,8 @@ export default async function ReceivePage({ searchParams }: { searchParams: Prom
         {header("which delivery is this?")}
         <Card>
           <CardTitle>Which delivery is it? Tap the supplier</CardTitle>
-          <ul className="grid grid-cols-1 gap-3 md:grid-cols-2" aria-label="Purchase orders to receive">
+          {/* Live check 2026-11-06: one order uses the full width; two or more sit side by side. */}
+          <ul className={cx("grid grid-cols-1 gap-3", orders.length > 1 && "md:grid-cols-2")} aria-label="Purchase orders to receive">
             {orders.map((o) => (
               <li key={o.purchaseOrderId} className="min-w-0">
                 <Link href={`/inventory/receive?po=${o.purchaseOrderId}`} className="flex min-h-[88px] items-center gap-3 rounded-[16px] border border-line p-4 hover:shadow-[var(--shadow-pop)] active:bg-surface-2" data-testid={`receive-po-${o.poNumber}`}>

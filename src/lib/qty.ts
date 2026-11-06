@@ -25,6 +25,15 @@ export function fmtDate(v: string | Date | null | undefined): string {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Manila" });
 }
 
+/** "11 Nov" (a calendar date such as "2026-11-11", or a moment shown in Manila time); "—" when empty. */
+export function fmtDayMonth(v: string | Date | null | undefined): string {
+  if (!v) return "—";
+  const dateOnly = typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const d = typeof v === "string" ? new Date(dateOnly ? `${v}T00:00:00Z` : v) : v;
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: dateOnly ? "UTC" : "Asia/Manila" });
+}
+
 export function fmtDateTime(v: string | Date | null | undefined): string {
   if (!v) return "—";
   const d = typeof v === "string" ? new Date(v) : v;

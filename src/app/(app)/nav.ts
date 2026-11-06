@@ -36,6 +36,11 @@ export type NavItem = {
    * (the QA lead's recall screens, the warehouse's repacking). Keeps the owner's menu short without hiding work.
    */
   foldUnless?: readonly string[];
+  /**
+   * Live check 2026-11-06: on desktop this main tab goes into the "More" menu first when the tab row is too long
+   * (DESKTOP_ROW_MAX). Phones and tablets are unchanged (their row scrolls).
+   */
+  deskMore?: boolean;
 };
 export type NavGroup = { label: string; icon: string; /** One line under the label in the top bar (mockup board). */ description: string; items: NavItem[] };
 export type QuickAction = { label: string; href: string; icon: string; permission?: Permission };
@@ -141,12 +146,12 @@ export const NAV: NavGroup[] = [
       { label: "How work flows", href: "/operations/flow", permission: FLOW_VIEW },
       { label: "Production orders", href: "/production/orders", permission: "production.work_order.view" },
       { label: "Today", href: "/production/today", permission: "production.daily_log.view" },
-      { label: "Rejects", href: "/production/defects", permission: "production.daily_log.view" },
+      { label: "Rejects", href: "/production/defects", permission: "production.daily_log.view", deskMore: true },
       // UX audit R2: one door for QA decisions: finished batches and deliveries waiting for QA, on one screen.
       // The batch-only list /quality/check still opens from there (and each batch's check page).
       { label: "Check a batch or delivery", href: "/quality", permission: "quality.disposition.view" },
       // ADR-084: the full-screen production TV (no menus); floor personas keep it out of their menu (FLOOR_MENU).
-      { label: "Floor screen (TV)", href: "/floor", permission: "production.batch.view" },
+      { label: "Floor screen (TV)", href: "/floor", permission: "production.batch.view", deskMore: true },
       ...inSection("Receiving", [
         { label: "Deliveries coming", href: "/procurement/expected", permission: "procurement.purchase_order.view" },
         { label: "Receive a delivery", href: "/inventory/receive", permission: "procurement.goods_receipt.create" },
@@ -342,7 +347,7 @@ export function productionItems(persona: ProductionPersona): NavItem[] {
   return [
     { label: "Production orders", href: "/production/orders", permission: "production.work_order.view" },
     { label: "Today", href: "/production/today", permission: "production.daily_log.view" },
-    { label: "Rejects", href: "/production/defects", permission: "production.daily_log.view" },
+    { label: "Rejects", href: "/production/defects", permission: "production.daily_log.view", deskMore: true },
   ];
 }
 
@@ -459,6 +464,28 @@ export function groupSections(g: NavGroup): { main: NavItem[]; sections: { name:
   const rank = (n: string) => LAST_SECTIONS.indexOf(n) + 1; // 0 = an ordinary section, kept in menu order
   order.sort((a, b) => rank(a) - rank(b));
   return { main: live.filter((i) => !i.section), sections: order.map((name) => ({ name, items: live.filter((i) => i.section === name) })) };
+}
+
+/** Live check 2026-11-06: at most this many entries (tabs and section menus) in the desktop tab row, then "More ▾". */
+export const DESKTOP_ROW_MAX = 7;
+
+export type NavSection = { name: string; items: NavItem[] };
+export type DesktopRow = { pills: NavItem[]; sections: NavSection[]; more: { items: NavItem[]; sections: NavSection[] } | null };
+
+/**
+ * The desktop tab row of one destination (live check 2026-11-06: Operations had 11 pills and Management 9, which
+ * wrapped to two rows at 1440 and 1920 px). Up to `max` entries are shown; beyond that the row keeps the main tabs
+ * in menu order (tabs marked `deskMore` move out first), then the section menus in order, and puts the rest in one
+ * "More ▾" menu. Every entry stays reachable: pills + sections + more = the destination's tab row. Pure.
+ */
+export function desktopRow(main: readonly NavItem[], sections: readonly NavSection[], max = DESKTOP_ROW_MAX): DesktopRow {
+  if (main.length + sections.length <= max) return { pills: [...main], sections: [...sections], more: null };
+  const kept = main.filter((i) => !i.deskMore);
+  const pills = kept.slice(0, max);
+  const sectionRoom = Math.max(0, max - pills.length);
+  const shownSections = sections.slice(0, sectionRoom);
+  const pillSet = new Set(pills);
+  return { pills, sections: shownSections, more: { items: main.filter((i) => !pillSet.has(i)), sections: sections.slice(sectionRoom) } };
 }
 
 /** One tab of the bottom bar (phone and iPad portrait). `href: null` = the Menu tab, which opens the drawer. */

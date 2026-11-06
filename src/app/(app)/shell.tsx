@@ -6,7 +6,7 @@ import {
   Bell, Boxes, CalendarDays, ChevronDown, ClipboardList, Clock, Cloud, CloudOff, CloudUpload, Database, Factory, FlaskConical, GitBranch, GitMerge, HelpCircle, Home, ListChecks, Menu,
   PackagePlus, ScanLine, ScrollText, Settings, ShieldCheck, ShoppingCart, Truck, Warehouse, Wrench, X,
 } from "lucide-react";
-import { groupHref, groupSections, type NavBadges, type NavGroup, type NavItem, type Tab } from "./nav";
+import { desktopRow, groupHref, groupSections, type NavBadges, type NavGroup, type NavItem, type NavSection, type Tab } from "./nav";
 import { cx } from "@/ui/core";
 import { Logo, LogoMark } from "@/ui/brand";
 import { NavigationProgress } from "@/ui/navigation-progress";
@@ -176,7 +176,8 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
   // Round 4 (UX re-audit C #9): words beside Scan, To approve and Messages at 1280–1535 px where they fit. With the
   // site selector in the bar (people with more than one site) they do not (measured at 1440: 110 px short), so
   // To approve and Messages stay icons with tooltips there; Scan keeps its short word. Chrome audit 2026-11: also at
-  // 1536 px and wider (measured at 1920 for QA: the words pushed "Sales & Customers" out of the menu).
+  // 1536 px and wider (measured at 1920 for QA: the words pushed "Sales & Customers" out of the menu). Live check
+  // 2026-11-06: at 1280–1439 px the words cut "Management" even with one site, so they show from 1440 px.
   const tightTopBar = sites.length > 1;
   const withCount = (label: string, href: string) => (badges[href] ? `${label}, ${badges[href]} open` : label);
 
@@ -285,7 +286,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
                 title="To approve"
               >
                 <ListChecks size={18} aria-hidden />
-                <span className={cx("hidden whitespace-nowrap md:inline", tightTopBar && "xl:hidden")}>To approve</span>
+                <span className={cx("hidden whitespace-nowrap md:inline", tightTopBar ? "xl:hidden" : "xl:hidden min-[1440px]:inline")}>To approve</span>
                 {approvalCount > 0 && (
                   <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full bg-[#c62828] px-1 text-[10px] font-semibold leading-[18px] text-white">{approvalCount > 99 ? "99+" : approvalCount}</span>
                 )}
@@ -293,7 +294,7 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
             )}
             <Link href="/notifications" className={cx("relative flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium text-fg-2 shadow-[var(--shadow-card)] hover:text-fg", pathname.startsWith("/notifications") && "text-primary-text")} aria-label={`Messages, ${unreadCount} unread`} title="Messages">
               <Bell size={18} aria-hidden />
-              <span className={cx("hidden md:inline", tightTopBar && "xl:hidden")}>Messages</span>
+              <span className={cx("hidden md:inline", tightTopBar ? "xl:hidden" : "xl:hidden min-[1440px]:inline")}>Messages</span>
               {unreadCount > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-items-center rounded-full bg-[#c62828] px-1 text-[10px] font-semibold leading-[18px] text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>
               )}
@@ -338,39 +339,62 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
               </Link>
             </li>
           );
+          // Live check 2026-11-06: at most DESKTOP_ROW_MAX entries, the rest in one "More ▾" menu, so the row never wraps.
+          const row = desktopRow(main, sections);
+          const sectionBody = (sec: NavSection) => {
+            const { daily, advanced } = splitAdvanced(sec.items);
+            return (
+              <>
+                <ul>{daily.map(dropItem)}</ul>
+                {advanced.length > 0 && (
+                  <details className="mt-1 border-t border-line pt-1" open={advanced.some((i) => i.href === activeHref)}>
+                    <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between rounded-[10px] px-3 text-[13px] font-medium text-muted hover:bg-surface-2 [&::-webkit-details-marker]:hidden">
+                      Advanced <ChevronDown size={14} aria-hidden />
+                    </summary>
+                    <ul>{advanced.map(dropItem)}</ul>
+                  </details>
+                )}
+              </>
+            );
+          };
+          const menuPill = (key: string, label: string, here: boolean, body: React.ReactNode, testId?: string) => (
+            <li key={key}>
+              {/* keyed by path so an open menu closes after navigating */}
+              <details className="relative" key={pathname} data-testid={testId}>
+                <summary className={cx("flex min-h-[44px] cursor-pointer list-none items-center gap-1 whitespace-nowrap rounded-full border px-3.5 text-[13px] font-medium [&::-webkit-details-marker]:hidden", here ? "border-transparent bg-cta text-white" : "border-line bg-surface text-fg-2 hover:text-fg")}>
+                  {label}
+                  <ChevronDown size={14} aria-hidden />
+                </summary>
+                <div className="absolute left-0 top-12 z-40 max-h-[70vh] w-72 overflow-y-auto rounded-[16px] border border-line bg-surface p-2 shadow-[var(--shadow-pop)]">{body}</div>
+              </details>
+            </li>
+          );
+          const more = row.more;
+          const moreHere = !!more && (more.items.some((i) => i.href === activeHref) || more.sections.some((x) => x.items.some((i) => i.href === activeHref)));
           return (
             <div className="mx-auto hidden max-w-[1480px] px-4 pb-3 sm:px-6 xl:block">
-              <ul className="flex flex-wrap items-center gap-1.5">
+              <ul className="flex flex-wrap items-center gap-1.5" data-testid="desktop-tab-row">
                 <li className="mr-1 hidden text-[13px] text-muted 2xl:block">
                   {activeGroup.description}
                 </li>
-                {main.map(pill)}
-                {sections.map((sec) => {
-                  const here = sec.items.some((i) => i.href === activeHref);
-                  const { daily, advanced } = splitAdvanced(sec.items);
-                  return (
-                    <li key={sec.name}>
-                      {/* keyed by path so an open menu closes after navigating */}
-                      <details className="relative" key={pathname}>
-                        <summary className={cx("flex min-h-[44px] cursor-pointer list-none items-center gap-1 whitespace-nowrap rounded-full border px-3.5 text-[13px] font-medium [&::-webkit-details-marker]:hidden", here ? "border-transparent bg-cta text-white" : "border-line bg-surface text-fg-2 hover:text-fg")}>
-                          {sec.name}
-                          <ChevronDown size={14} aria-hidden />
-                        </summary>
-                        <div className="absolute left-0 top-12 z-40 w-72 rounded-[16px] border border-line bg-surface p-2 shadow-[var(--shadow-pop)]">
-                          <ul>{daily.map(dropItem)}</ul>
-                          {advanced.length > 0 && (
-                            <details className="mt-1 border-t border-line pt-1" open={advanced.some((i) => i.href === activeHref)}>
-                              <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between rounded-[10px] px-3 text-[13px] font-medium text-muted hover:bg-surface-2 [&::-webkit-details-marker]:hidden">
-                                Advanced <ChevronDown size={14} aria-hidden />
-                              </summary>
-                              <ul>{advanced.map(dropItem)}</ul>
-                            </details>
-                          )}
+                {row.pills.map(pill)}
+                {row.sections.map((sec) => menuPill(sec.name, sec.name, sec.items.some((i) => i.href === activeHref), sectionBody(sec)))}
+                {more &&
+                  menuPill(
+                    "__more",
+                    "More",
+                    moreHere,
+                    <>
+                      {more.items.length > 0 && <ul>{more.items.map(dropItem)}</ul>}
+                      {more.sections.map((sec, n) => (
+                        <div key={sec.name} className={cx((n > 0 || more.items.length > 0) && "mt-1 border-t border-line pt-1")}>
+                          <p className="px-3 pb-0.5 pt-2 text-[12px] font-semibold uppercase tracking-wide text-muted">{sec.name}</p>
+                          {sectionBody(sec)}
                         </div>
-                      </details>
-                    </li>
-                  );
-                })}
+                      ))}
+                    </>,
+                    "desktop-more",
+                  )}
               </ul>
             </div>
           );

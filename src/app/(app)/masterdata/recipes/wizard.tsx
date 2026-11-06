@@ -240,7 +240,10 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
     start.kind === "new" ? "Version 1 (new draft)" : start.kind === "version" ? `Version ${start.formulaNo} (new draft)` : `Version ${start.formulaNo} (draft)`;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4">
+    // Live check 2026-11-06 (desktop): up to 1200 px; from 1280 px the recipe so far sits in a panel on the right
+    // (screens 1–4; screen 5 shows the whole summary itself). Phones and tablets: one column as before.
+    <div className={cx("mx-auto w-full max-w-3xl xl:max-w-[1200px]", screen < 5 && "xl:grid xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start xl:gap-6")}>
+    <div className="flex min-w-0 flex-col gap-4">
       {/* progress */}
       <nav aria-label="Recipe steps" className="flex flex-col gap-2">
         <p className="text-[13px] font-medium text-muted">
@@ -251,7 +254,7 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
             const n = i + 1;
             const here = n === screen;
             return (
-              <li key={t} className="flex-1">
+              <li key={t} className="flex-1 xl:flex-auto">
                 <button
                   type="button"
                   onClick={() => go(n)}
@@ -260,7 +263,7 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
                 >
                   {n < screen ? <Check size={16} className="shrink-0" aria-hidden /> : null}
                   {/* Number and title wrap as one centred line (desktop audit 2026-11: "2" sat apart from "How big is one batch?"). */}
-                  <span>
+                  <span className="xl:whitespace-nowrap">
                     {n < screen ? null : <span className="tabular">{n}</span>}
                     <span className="hidden sm:inline">{n < screen ? "" : " "}{t}</span>
                   </span>
@@ -269,9 +272,10 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
             );
           })}
         </ol>
-        <h1 className="font-display text-[26px] font-semibold tracking-tight sm:text-[30px]">
+        {/* The page's H1 is "New recipe" (or the product); each screen's title is its H2. */}
+        <h2 className="font-display text-[26px] font-semibold tracking-tight sm:text-[30px]">
           <span className="text-muted">{screen}.</span> {TITLES[screen - 1]}
-        </h1>
+        </h2>
       </nav>
 
       {banner && (
@@ -415,6 +419,70 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
         </div>
       </div>
     </div>
+      {screen < 5 && (
+        <SoFarPanel
+          productName={product?.name ?? start.productName ?? null}
+          batchText={d.batchBy === "pcs" && pieces && Number(pieces) > 0 ? `${pieces} pieces` : isDecimalText(d.batchKg, 3) && Number(d.batchKg) > 0 ? `${d.batchKg} kg` : null}
+          lines={d.lines.map((l) => matName(l.materialId))}
+          totalText={d.lines.length ? (d.view === "pct" ? percentTotalText(totals) : gramsTotalText(totals)) : null}
+          totalOk={totals.exact}
+          steps={d.steps.map((s) => s.name)}
+          versionLabel={versionLabel}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Desktop side panel (≥ 1280 px): what the recipe holds so far, read from the draft on this screen (nothing saved). */
+function SoFarPanel({ productName, batchText, lines, totalText, totalOk, steps, versionLabel }: { productName: string | null; batchText: string | null; lines: string[]; totalText: string | null; totalOk: boolean; steps: string[]; versionLabel: string }) {
+  const row = (label: string, value: ReactNode) => (
+    <div className="border-t border-line py-2.5 first:border-t-0 first:pt-0">
+      <dt className="text-[12px] font-semibold uppercase tracking-wide text-muted">{label}</dt>
+      <dd className="mt-0.5 text-[14px] text-fg">{value}</dd>
+    </div>
+  );
+  const none = <span className="text-muted">Not yet</span>;
+  return (
+    <aside aria-label="The recipe so far" className="hidden xl:sticky xl:top-[150px] xl:block" data-testid="recipe-so-far">
+      <div className="rounded-[18px] border border-line bg-surface p-4">
+        <h2 className="mb-2 text-[15px] font-semibold">The recipe so far</h2>
+        <p className="mb-3 text-[12px] text-muted">{versionLabel} · not saved yet</p>
+        <dl>
+          {row("Product", productName ?? none)}
+          {row("One batch", batchText ?? none)}
+          {row(
+            `Ingredients (${lines.length})`,
+            lines.length ? (
+              <>
+                <ul className="list-disc pl-4">
+                  {lines.slice(0, 8).map((n, i) => (
+                    <li key={`${i}-${n}`}>{n}</li>
+                  ))}
+                  {lines.length > 8 && <li className="list-none text-muted">and {lines.length - 8} more</li>}
+                </ul>
+                {totalText && <p className={cx("mt-1 text-[13px] font-medium", totalOk ? "text-[var(--ok-fg)]" : "text-[var(--warn-fg)]")}>{totalText}</p>}
+              </>
+            ) : (
+              none
+            ),
+          )}
+          {row(
+            `Steps (${steps.length})`,
+            steps.length ? (
+              <ol className="list-decimal pl-4">
+                {steps.slice(0, 10).map((n, i) => (
+                  <li key={`${i}-${n}`}>{n || "(no name yet)"}</li>
+                ))}
+                {steps.length > 10 && <li className="list-none text-muted">and {steps.length - 10} more</li>}
+              </ol>
+            ) : (
+              none
+            ),
+          )}
+        </dl>
+      </div>
+    </aside>
   );
 }
 

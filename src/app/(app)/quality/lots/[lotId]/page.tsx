@@ -8,7 +8,6 @@ import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/co
 import { Explain, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { RecordNo } from "@/ui/plain-list";
-import { WhoCanHelp } from "@/ui/who-can-help";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { DecisionChip, DeviationStatusChip, InspectionStatusChip, QaStatusChip, Transition, fmtLotQty, statusTone } from "../../_ui";
@@ -17,6 +16,7 @@ import { decideLotAction } from "../../actions";
 import { DecisionForm, type DecisionOption } from "../../decision-form";
 import { Help } from "@/ui/help/help";
 import { NextApprover } from "@/ui/next-approver";
+import { WhoCanHelp } from "@/ui/who-can-help";
 import { QaRules } from "../../qa-rules";
 import { waitingFor } from "../../../waiting-for";
 
@@ -41,7 +41,8 @@ const HINT: Record<string, string> = {
 
 export default async function LotDispositionPage({ params }: { params: Promise<{ lotId: string }> }) {
   const ctx = await requireContext();
-  if (!ctx.can("quality.disposition.view")) return <Forbidden what="QA lot decisions" permission="quality.disposition.view" />;
+  // The refusal names the people who DECIDE on lots (QA), not the people who may only look (live check 2026-11-06).
+  if (!ctx.can("quality.disposition.view")) return <Forbidden what="QA lot decisions" permission="quality.disposition.approve" />;
   const { lotId } = await params;
 
   let v: Awaited<ReturnType<typeof getLotDisposition>>;
@@ -137,15 +138,17 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
       ) : lot.qualityStatus === "released" ? (
         <NextStep text="OK to use. It is on its shelf: it can be used in production now." action={{ label: "Where this lot is stored", href: `/inventory/${lot.id}` }} />
       ) : !v.canDecide ? (
-        ["quarantine", "on_hold"].includes(lot.qualityStatus) ? <NextStep text="Next: a QA person checks this lot and says OK or not OK." waitingFor="Waiting for QA." /> : null
+        // Live check 2026-11-06: name the QA people who decide (ADR-109), not only the role.
+        ["quarantine", "on_hold"].includes(lot.qualityStatus) ? (
+          <NextStep text="This lot waits for the QA check." waitingFor={v.deciders ? <NextApprover next={v.deciders} inline /> : "Waiting for QA."} />
+        ) : null
       ) : options.some((o) => !o.blocker) && ["quarantine", "on_hold", "expired"].includes(lot.qualityStatus) ? (
-        <NextStep text={v.expired || lot.qualityStatus === "expired" ? "Next: this lot is past its use-by date. Say not OK (or stop it)." : "Next: look at the papers and the quality check, then decide OK or not OK."} action={{ label: "Decide now", href: "#decide" }} />
+        <NextStep
+          text={v.expired || lot.qualityStatus === "expired" ? "Next: this lot is past its use-by date. Say not OK (or stop it)." : "Next: look at the papers and the quality check, then decide OK or not OK."}
+          action={{ label: "Decide now", href: "#decide" }}
+          waitingFor={v.deciders ? <NextApprover next={v.deciders} inline othersOnly /> : undefined}
+        />
       ) : null}
-      {!v.canDecide && ["quarantine", "on_hold"].includes(lot.qualityStatus) && (
-        <div className="-mt-2 mb-4">
-          <WhoCanHelp permission="quality.disposition.approve" siteId={lot.siteId} hideEmails lead="QA people who decide: " />
-        </div>
-      )}
 
       <div className="flex flex-col gap-5">
         <Banner tone={statusTone(lot.qualityStatus)} title={banner.title}>
@@ -300,7 +303,8 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
           ) : (
             <div className="text-[13px] text-muted">
               Only a QA person can say OK or not OK.
-              <WhoCanHelp permission="quality.disposition.approve" siteId={lot.siteId} hideEmails />
+              {/* The names are in "What to do next" at the top while the lot waits; the directory otherwise. */}
+              {!v.deciders && <WhoCanHelp permission="quality.disposition.approve" siteId={lot.siteId} hideEmails />}
             </div>
           )}
         </Card>

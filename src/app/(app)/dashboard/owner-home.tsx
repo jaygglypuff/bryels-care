@@ -1,13 +1,15 @@
 import Link from "next/link";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { getOperationsCenter, getOwnerHome } from "@/modules/analytics";
+import { getOperationsCenter, getOwnerHome, getWorkFlowCounts } from "@/modules/analytics";
 import { myApprovalCount } from "@/modules/action-centre";
 import { notInvoicedShipments } from "@/modules/finance";
+import { orderCounts } from "@/modules/sales";
 import { EmptyState, PageHeader, cx } from "@/ui/core";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { homeIntro } from "@/ui/role-names";
 import { HomeCards, NeedsAttention, ProductionByStage, RecentActivity, SalesWeek, attentionItems } from "./simple-home";
+import { firstActionable, salesItems } from "./home-next";
 
 /** The one button of the "What to do next" line, by the attention item it comes from. */
 const NEXT_LABEL: Record<string, string> = {
@@ -20,6 +22,9 @@ const NEXT_LABEL: Record<string, string> = {
   hold: "See what QA stopped",
   expiring: "See what expires",
   invoice: "Make the invoices",
+  so_confirm: "Open the orders",
+  so_short: "See the short orders",
+  so_set_aside: "See the orders",
 };
 
 /**
@@ -46,15 +51,24 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
       );
     throw e;
   }
-  const [oc, approvals, unbilled] = await Promise.all([
+  // Live check 2026-11-06: the sales person's own work (orders to confirm, short orders, orders ready to set aside).
+  const salesDesk = ctx.roleCodes.includes("sales_cs") && ctx.can("sales.sales_order.view") && !all;
+  const [oc, approvals, unbilled, soCounts, soFlow] = await Promise.all([
     getOperationsCenter(ctx, { all }),
     myApprovalCount(ctx).catch(() => 0),
     ctx.can("finance.invoice.view") ? notInvoicedShipments(ctx).catch(() => null) : Promise.resolve(null),
+    salesDesk ? orderCounts(ctx).catch(() => null) : Promise.resolve(null),
+    salesDesk ? getWorkFlowCounts(ctx, ["so_short", "so_can_set_aside"]).catch(() => []) : Promise.resolve([]),
   ]);
   const notBilled = unbilled ? { count: unbilled.count, oldestDays: unbilled.oldestDispatchedAt ? Math.floor((Date.now() - unbilled.oldestDispatchedAt.getTime()) / 86_400_000) : null } : null;
   const qs = all ? "?scope=all" : "";
   const stockHref = `/dashboard/details/stock${qs}`;
-  const items = attentionItems(oc, approvals, home.stock, stockHref, notBilled);
+  const flowN = (k: string) => soFlow.find((c) => c.key === k)?.count ?? 0;
+  const sales = soCounts ? salesItems({ toConfirm: (soCounts.draft ?? 0) + (soCounts.submitted ?? 0), short: flowN("so_short"), canSetAside: flowN("so_can_set_aside") }) : [];
+  const items = [...attentionItems(oc, approvals, home.stock, stockHref, notBilled), ...sales];
+  // "What to do next" is the first line the viewer can act on; everything else stays in "Needs your attention".
+  const next = firstActionable(items, (p) => ctx.can(p as Parameters<typeof ctx.can>[0]));
+  const rest = items.filter((i) => i !== next);
   const pill = (href: string, active: boolean, label: string) => (
     <Link key={label} href={href} aria-current={active ? "page" : undefined} className={cx("flex min-h-[44px] items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium", active ? "bg-cta text-white" : "text-fg-2 hover:bg-surface-2")}>
       {label}
@@ -80,16 +94,23 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
       />
       <PageIntro>{homeIntro(ctx.roleCodes)}</PageIntro>
       {/* UX audit C #1/#2: one "What to do next" line (the most urgent item); the rest stay in "Needs your attention". */}
-      {items.length > 0 ? (
-        <NextStep text={`Next: ${items[0].text}.`} action={{ label: NEXT_LABEL[items[0].key] ?? "Open it", href: items[0].href }} />
+      {next ? (
+        <NextStep text={`Next: ${next.text}.`} action={{ label: NEXT_LABEL[next.key] ?? "Open it", href: next.href }} />
       ) : (
-        <NextStep text="Nothing needs you right now. The numbers below are for today." />
+        <NextStep text={items.length ? "Nothing waits for you to do. Below is what others are working on." : "Nothing needs you right now. The numbers below are for today."} />
       )}
       <HomeCards home={home} approvals={approvals} stockHref={stockHref} batchesHref={`/dashboard/details/batches${qs}`} />
-      {items.length > 1 && <NeedsAttention items={items.slice(1)} />}
-      {(home.salesWeek || oc.stages.length > 0) && (
+      {/* Live check 2026-11-06 (desktop): "Needs your attention" and "Sales this week" stack in the left column beside
+          the taller "Production by stage", so the two columns end close together instead of ~300 px apart. On phones
+          and tablets the order is unchanged: attention, sales, production. */}
+      {(rest.length > 0 || home.salesWeek || oc.stages.length > 0) && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
-          {home.salesWeek && <SalesWeek week={home.salesWeek} scopeLabel={home.scope.label} generatedAt={home.generatedAt} />}
+          {(rest.length > 0 || home.salesWeek) && (
+            <div className="flex min-w-0 flex-col gap-4">
+              {rest.length > 0 && <NeedsAttention items={rest} />}
+              {home.salesWeek && <SalesWeek week={home.salesWeek} scopeLabel={home.scope.label} generatedAt={home.generatedAt} />}
+            </div>
+          )}
           <ProductionByStage oc={oc} all={all} />
         </div>
       )}

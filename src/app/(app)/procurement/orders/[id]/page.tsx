@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { fmtDate, fmtDateTime } from "@/lib/qty";
+import { fmtDate, fmtDateTime, fmtDayMonth } from "@/lib/qty";
 import { getPurchaseOrder, procurementNextActors } from "@/modules/procurement";
 import { NextApprover } from "@/ui/next-approver";
 import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, PageHeader, Textarea } from "@/ui/core";
@@ -113,7 +113,11 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       {(sp.sent || sp.saved) && <div className="mb-4" />}
 
       {can.receive ? (
-        <NextStep text="Next: the delivery is coming. When it arrives, receive it here." action={{ label: "Receive the delivery", href: `/inventory/receive?po=${po.id}` }} />
+        <NextStep
+          text={`Next: the delivery is coming${po.promisedDate || po.expectedDate ? ` (expected ${fmtDayMonth(po.promisedDate ?? po.expectedDate)})` : ""}. When it arrives, receive it here.`}
+          action={{ label: "Receive the delivery", href: `/inventory/receive?po=${po.id}` }}
+          waitingFor={next?.people.length ? <NextApprover next={next} inline othersOnly /> : undefined}
+        />
       ) : can.submit ? (
         <NextStepBox text="Next: send this order for approval.">
           <ActionForm action={submitOrderAction} hidden={{ purchaseOrderId: po.id }} submit="Send for approval" variant="cta">
@@ -152,7 +156,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       ) : po.status === "approved" ? (
         <NextStep text="Approved." waitingFor={next ? <NextApprover next={next} inline /> : await waitingFor(ctx, "procurement.purchase_order.post", po.siteId, "to send it to the supplier", "purchasing")} />
       ) : po.status === "sent" || po.status === "partially_received" ? (
-        <NextStep text={po.status === "sent" ? "Sent to the supplier." : "Part of it has arrived."} waitingFor={`Waiting for the delivery${po.expectedDate ? ` (expected ${fmtDate(po.expectedDate)})` : ""}. The warehouse receives it.`} />
+        <NextStep text={po.status === "sent" ? "Sent to the supplier." : "Part of it has arrived."} waitingFor={next ? <NextApprover next={next} inline /> : `Waiting for the delivery${po.expectedDate ? ` (expected ${fmtDate(po.expectedDate)})` : ""}. The warehouse receives it.`} />
       ) : null}
 
       <SubNav />

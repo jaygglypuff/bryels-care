@@ -142,7 +142,7 @@ items, each opening its own record.
 |---|---|---|---|---|
 | 1 | Ask to buy | Anyone → manager | requests waiting for approval | `/procurement/requests?status=submitted` |
 | 2 | Order from the supplier | Purchasing | approved requests not ordered; POs approved, not sent | `/procurement/orders?status=approved` |
-| 3 | Delivery coming | Warehouse | POs sent, due today / late | `/inventory/receive` |
+| 3 | Delivery coming | Warehouse | POs sent: coming (with the nearest expected date, e.g. "1 coming (11 Nov)"), due today, late | `/inventory/receive` |
 | 4 | Receive and label | Warehouse | receipts not finished; labels not printed | `/inventory/receive` |
 | 5 | QA check of deliveries | QA (two people) | lots waiting; checks waiting for the second QA person | `/quality` (lots section) |
 | 6 | Put away | Warehouse | lots OK in the QA cage or dock | `/inventory/receive/put-away` |

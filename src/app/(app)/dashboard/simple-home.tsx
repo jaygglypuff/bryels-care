@@ -18,8 +18,8 @@ import { salesDayLine } from "./sales-day-line";
  * list it was counted from (src/modules/analytics/owner-home.ts, "one source per label").
  */
 
-/** One line of "Needs your attention": a plain sentence that opens the records behind it. */
-export type AttentionItem = { key: string; text: string; href: string; urgent?: boolean };
+import type { AttentionItem } from "./home-next";
+export type { AttentionItem } from "./home-next";
 
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString("en-PH")} ${n === 1 ? one : many}`;
 

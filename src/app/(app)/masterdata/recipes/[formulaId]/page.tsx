@@ -44,10 +44,13 @@ export default async function RecipePage({ params, searchParams }: { params: Pro
     const st = partLabel(r.versions.routing, wantsNew || !r.versions.routing?.open);
     return (
       <div className="flex flex-col gap-3">
-        <div className="mx-auto flex w-full max-w-3xl flex-wrap justify-between gap-2 text-[13px]">
-          <Link href={`/masterdata/recipes/${r.formula.id}`} className="text-primary-text hover:underline">
+        <div className="mx-auto flex w-full max-w-3xl flex-wrap justify-between gap-2 text-[13px] xl:max-w-[1200px]">
+          <Link href={`/masterdata/recipes/${r.formula.id}`} className="inline-flex min-h-[44px] items-center text-primary-text hover:underline">
             ← Back to the recipe without saving
           </Link>
+        </div>
+        <div className="mx-auto w-full max-w-3xl xl:max-w-[1200px]">
+          <PageHeader title={r.product.name} subtitle={wantsNew ? "New version of the recipe" : "Change the recipe"} />
         </div>
         <RecipeWizard
           options={options}

@@ -169,7 +169,7 @@ function fieldQuestion(code: string, name: string): string | null {
 export function StepCard(p: Props) {
   const { step } = p;
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-start">
       <section
         className="rounded-[20px] border border-line bg-surface p-4 sm:p-5"
         aria-label="What to do"
