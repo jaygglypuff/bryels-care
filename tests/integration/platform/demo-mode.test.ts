@@ -46,7 +46,8 @@ function runScript(file: string, args: string[], env: Record<string, string | un
     const out = execFileSync(process.execPath, ["--import", "tsx", file, ...args], {
       // Empty strings, not undefined: dotenv (scripts load .env) never overrides a variable that is set, so a
       // developer .env with ALLOW_DEMO_SEED=true cannot switch demo mode on behind the test's back.
-      env: { ...process.env, DEMO_MODE: "", ALLOW_DEMO_SEED: "", APP_ENV: "", ...env },
+      // DEMO_PROFILE=full: this file's database is the full seed (tests/support/db.ts); the lite profile has its own test (demo-lite.test.ts).
+      env: { ...process.env, DEMO_MODE: "", ALLOW_DEMO_SEED: "", APP_ENV: "", DEMO_PROFILE: "full", ...env },
       stdio: "pipe",
       encoding: "utf8",
     });

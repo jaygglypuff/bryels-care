@@ -71,3 +71,64 @@ export function realAccountsRefusal(count: number): string {
     "or written over real data. Use a separate, empty database for the demo."
   );
 }
+
+/* ------------------------------------------------------------------ demo profiles and seed version */
+
+/**
+ * Demo profiles (owner request 2026-11-06, see docs/demo-script.md):
+ * - `lite` (default): one site, two products (two recipes, two routings) and a small storyline made
+ *   through the real services (src/db/seed-demo.ts, src/db/seeds/lite.ts);
+ * - `full`: the older large seed (src/db/seed.ts), kept unchanged for the integration tests and for
+ *   anyone who wants every screen filled.
+ */
+export const DEMO_PROFILES = ["lite", "full"] as const;
+export type DemoProfile = (typeof DEMO_PROFILES)[number];
+
+/**
+ * Version of the lite demo data. Raise it whenever the lite seed changes: on the next start
+ * (`pnpm db:demo auto`) a demo database that holds another version (or the old full seed) is wiped
+ * and loaded again, so a deploy gives a fresh demo without anyone pressing "Reset demo data".
+ */
+export const DEMO_SEED_VERSION = "2026-11-06.1";
+
+/** The profile `pnpm db:demo` loads: env `DEMO_PROFILE` (lite | full), default lite; anything else is an error. */
+export function demoProfile(env: Env = process.env): { profile: DemoProfile; error: string | null } {
+  const raw = (env.DEMO_PROFILE ?? "").trim().toLowerCase();
+  if (!raw) return { profile: "lite", error: null };
+  if ((DEMO_PROFILES as readonly string[]).includes(raw)) return { profile: raw as DemoProfile, error: null };
+  return { profile: "lite", error: `DEMO_PROFILE must be lite or full (it is "${env.DEMO_PROFILE}").` };
+}
+
+/** The version a profile writes into its completeness marker (`platform.demo.seeded`). The full seed writes none. */
+export const expectedSeedVersion = (profile: DemoProfile): string | null => (profile === "lite" ? DEMO_SEED_VERSION : null);
+
+/** What the completeness marker says was loaded. A marker without a profile is the full seed (it never wrote one). */
+export function loadedDemo(markerAfter: unknown): { profile: DemoProfile; version: string | null } {
+  const a = (markerAfter ?? {}) as { profile?: unknown; seedVersion?: unknown };
+  const profile = a.profile === "lite" ? "lite" : "full";
+  return { profile, version: typeof a.seedVersion === "string" ? a.seedVersion : null };
+}
+
+export type DemoAutoDecision = { action: "nothing" | "load" | "reload"; reason: string };
+
+/**
+ * Start-up decision of `pnpm db:demo auto` (the guards — demo mode, APP_ENV, real accounts — are checked
+ * before and always win):
+ * - empty database → load;
+ * - an organization without the completeness marker → reload (an interrupted load);
+ * - a marker for another profile or another seed version → reload (a deploy with new demo data);
+ * - otherwise nothing.
+ */
+export function demoAutoDecision(input: { organizations: number; marker: { after: unknown } | null; profile: DemoProfile }): DemoAutoDecision {
+  if (input.organizations === 0) return { action: "load", reason: "Empty database: loading the fictional demo data." };
+  if (!input.marker) return { action: "reload", reason: "Found an interrupted demo load; clearing it and loading again." };
+  const loaded = loadedDemo(input.marker.after);
+  const want = expectedSeedVersion(input.profile);
+  if (loaded.profile !== input.profile) {
+    return { action: "reload", reason: `The database holds the ${loaded.profile} demo data but DEMO_PROFILE is ${input.profile}: clearing everything and loading the ${input.profile} demo.` };
+  }
+  if (loaded.version !== want) {
+    return { action: "reload", reason: `New demo data version (${loaded.version ?? "none"} → ${want ?? "none"}): clearing the old demo data and loading the new version.` };
+  }
+  return { action: "nothing", reason: `Demo data (${input.profile}${want ? `, version ${want}` : ""}) is already loaded; nothing to do (use Reset demo data in the app to start over).` };
+}

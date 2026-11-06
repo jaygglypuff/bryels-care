@@ -24,7 +24,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { postMovement } from "@/modules/inventory/ledger";
-import { lotReleaseBlockers } from "@/modules/inventory";
+import { lotReleaseBlockers, moveBoxesWithLot } from "@/modules/inventory";
 import { deviationBlockerMessages, deviationFacts, deviationsFor } from "./deviations";
 import { batchInspectionFacts, inspectionsFor, lotInspectionFacts } from "./inspections";
 import { liveResults } from "./inspection-rules";
@@ -409,6 +409,8 @@ async function moveLotStock(
       reason: doc.reason,
       idempotencyKey: `disposition:${doc.id}:${b.locationId}`,
     });
+    // The whole balance at that place moved: its boxes of this lot go with it (boxes and balances agree).
+    await moveBoxesWithLot(tx, ctx, { lotId: lot.id, fromLocationId: b.locationId, toLocationId: to.id, reason: doc.reason });
     moved.push({ locationId: b.locationId, qty: b.qty });
   }
   return moved;

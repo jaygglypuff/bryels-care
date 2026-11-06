@@ -613,3 +613,31 @@ export async function boxesAtLocation(ctx: AuthContext, locationId: string) {
   ctx.require("inventory.container.view");
   return listContainers(ctx, { locationId });
 }
+
+/**
+ * Boxes travel with a whole-lot transfer (owner demo 2026-11-06): when a posting moves ALL of a lot's stock
+ * from one place to another (QA release to the finished goods bay, QA reject to the rejected cage), the open
+ * or sealed boxes at the old place that hold only that lot move too, so the boxes and the balances agree.
+ * Boxes with other lots inside stay (their other contents did not move). Returns the box numbers moved.
+ */
+export async function moveBoxesWithLot(tx: Tx, ctx: AuthContext, input: { lotId: string; fromLocationId: string; toLocationId: string; reason: string }): Promise<string[]> {
+  const here = await tx
+    .select({ id: containers.id, number: containers.containerNumber, siteId: containers.siteId })
+    .from(containers)
+    .innerJoin(containerContents, eq(containerContents.containerId, containers.id))
+    .where(and(eq(containerContents.lotId, input.lotId), eq(containers.currentLocationId, input.fromLocationId), inArray(containers.status, [...MOVABLE_BOX_STATUSES])))
+    .for("update", { of: containers });
+  const moved: string[] = [];
+  for (const b of here) {
+    const [other] = await tx
+      .select({ id: containerContents.id })
+      .from(containerContents)
+      .where(and(eq(containerContents.containerId, b.id), sql`${containerContents.lotId} <> ${input.lotId}`, gt(containerContents.qtyBase, "0")))
+      .limit(1);
+    if (other) continue;
+    await tx.update(containers).set({ currentLocationId: input.toLocationId, updatedAt: new Date() }).where(eq(containers.id, b.id));
+    await audit(tx, ctx, { action: "inventory.container.moved", entityType: "container", entityId: b.id, entityNumber: b.number, siteId: b.siteId, reason: input.reason, before: { locationId: input.fromLocationId }, after: { locationId: input.toLocationId, withLot: input.lotId } });
+    moved.push(b.number);
+  }
+  return moved;
+}
