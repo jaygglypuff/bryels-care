@@ -95,7 +95,13 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
   // S6 (ADR-077): an urgent receipt without a PO can get its purchase order afterwards.
   const atf = gr.status === "posted" && !gr.purchaseOrderId ? await poFromReceiptOptions(ctx, gr.id) : null;
   const hidden = { receiptId: gr.id };
-  const canPutAway = gr.status === "posted" && ctx.can("inventory.movement.post");
+  // ADR-110 C10: the stage after receiving is the QA check. While a lot waits for QA, the next step is "leave the sacks
+  // in the QA cage; QA is told" — not "Put away" (only lots QA said OK go to a shelf).
+  const waitingQa = gr.status === "posted" ? gr.lines.filter((l) => l.lotStatus === "quarantine") : [];
+  const releasedLots = gr.status === "posted" ? gr.lines.filter((l) => l.lotStatus === "released") : [];
+  const canPutAway = gr.status === "posted" && ctx.can("inventory.movement.post") && releasedLots.length > 0;
+  const firstWaiting = waitingQa[0];
+  const qaButton = firstWaiting?.lotId && ctx.can("quality.disposition.view") ? <LinkButton href={`/quality/lots/${firstWaiting.lotId}`} variant="cta" size="lg">Open the QA check</LinkButton> : null;
   // Usability test 2026-10-30: printing from the receipt goes straight to the print preview.
   const printLabels = gr.can.printLabels && (
     <ActionForm action={printReceiptLabelsAction} hidden={hidden} submit={`Print labels (${gr.lines.length})`} variant={gr.status === "posted" ? "cta" : "secondary"} pendingText="Making the labels…" className="inline-flex" />
@@ -110,10 +116,12 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
       pendingText="Saving receipt…"
       confirm="Save this receipt? The lots and stock are made now. Mistakes can only be fixed by reversing it."
     />
-  ) : gr.can.printLabels ? (
-    printLabels
+  ) : qaButton ? (
+    qaButton
   ) : canPutAway ? (
     <LinkButton href="/inventory/receive/put-away" variant="cta" size="lg">Put away</LinkButton>
+  ) : waitingQa.length === 0 && gr.can.printLabels ? (
+    printLabels
   ) : undefined;
 
   return (
@@ -134,9 +142,11 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
         next={
           gr.can.post
             ? "Saving makes one lot per item. The lots wait for the QA check. The receipt gets its number."
-            : gr.status === "posted" && gr.can.printLabels
-              ? "Next: stick a label on every container and leave them in the hold area. After QA approves the lot, put it away."
-              : undefined
+            : waitingQa.length > 0
+              ? `Next: leave the ${waitingQa.length === 1 ? "sacks" : "sacks of every item"} in the QA cage, each with its label. QA is told and checks ${waitingQa.length === 1 ? "the lot" : `the ${waitingQa.length} lots`}; then they come back to the warehouse to put away.`
+              : canPutAway
+                ? `Next: QA said OK. Put ${releasedLots.length === 1 ? "the lot" : "the lots"} away on the shelf.`
+                : undefined
         }
         secondary={
           <>
@@ -147,7 +157,7 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
             )}
             <MoreMenu>
               <div className="flex flex-col gap-3">
-                {canPutAway && gr.can.printLabels && <LinkButton href="/inventory/receive/put-away" variant="secondary">Put away</LinkButton>}
+                {gr.can.printLabels && (qaButton || canPutAway) && printLabels}
                 {ctx.can("procurement.goods_receipt.create") && <LinkButton href="/inventory/receive" variant="secondary">Receive another delivery</LinkButton>}
                 <LinkButton href="/inventory/receipts" variant="secondary">All deliveries received</LinkButton>
                 {(gr.can.cancel || gr.can.reverse) && (

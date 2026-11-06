@@ -3,7 +3,7 @@ import { approvedMaterialsFor, convertibleRequestLines, poFormOptions } from "@/
 import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
 import { PlainList, PlainRow } from "@/ui/plain-list";
-import { Chip } from "@/ui/status";
+import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { SubNav } from "../../_ui";
 import { NewOrderWizard, WizardSteps } from "./wizard";
@@ -19,14 +19,20 @@ const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Man
  * lead time come from the supplier terms; the order number is made by the system. The server re-checks every
  * rule (V-ASL, V-UOM, request state) when the order is saved.
  */
-export default async function NewOrderPage({ searchParams }: { searchParams: Promise<{ supplier?: string; q?: string }> }) {
+export default async function NewOrderPage({ searchParams }: { searchParams: Promise<{ supplier?: string; q?: string; request?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("procurement.purchase_order.create")) return <Forbidden what="making purchase orders" permission="procurement.purchase_order.create" />;
-  const { supplier, q } = await searchParams;
+  const { supplier, q, request } = await searchParams;
   const opts = await poFormOptions(ctx);
-  const chosen = opts.suppliers.find((s) => s.id === supplier) ?? null;
+  // ADR-110 C15: "Make the purchase order" on an approved request carries it (?request=): only its lines, and the
+  // supplier the request named is chosen for you. The server still checks every line and the approval rule.
+  const openLines = await convertibleRequestLines(ctx);
+  const fromRequest = request ? openLines.filter((l) => l.requestId === request) : null;
+  const named = fromRequest ? [...new Set(fromRequest.map((l) => l.suggestedSupplierId).filter((x): x is string => !!x))] : [];
+  const supplierId = supplier ?? (named.length === 1 ? named[0] : undefined);
+  const chosen = opts.suppliers.find((s) => s.id === supplierId) ?? null;
   const mats = chosen ? await approvedMaterialsFor(ctx, chosen.id) : [];
-  const prLines = chosen ? (await convertibleRequestLines(ctx)).filter((l) => mats.some((m) => m.materialId === l.materialId)) : [];
+  const prLines = chosen ? (fromRequest ?? openLines).filter((l) => mats.some((m) => m.materialId === l.materialId)) : [];
   const prices = ctx.can("masterdata.supplier_price.view");
   const needle = (q ?? "").trim().toLowerCase();
   const found = needle ? opts.suppliers.filter((s) => s.name.toLowerCase().includes(needle) || s.code.toLowerCase().includes(needle)) : opts.suppliers;
@@ -35,6 +41,17 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
       <PageHeader title="New purchase order" subtitle={`For ${ctx.currentSite.name}`} actions={<LinkButton href="/procurement/orders" variant="secondary">All orders</LinkButton>} />
       <PageIntro>This screen is for ordering from a supplier in four short steps: who, what, when, then check and send. The order number is made for you.</PageIntro>
       <SubNav />
+      {fromRequest && (
+        <div className="mb-4">
+          {fromRequest.length === 0 ? (
+            <Banner tone="warn" title="That request to buy is not waiting to be ordered">It is not approved, is already on a purchase order, or is at another site. Pick the supplier below, or open the request.</Banner>
+          ) : (
+            <Banner tone="info" title={`From request to buy ${fromRequest[0].requestNumber}`}>
+              {chosen ? `Supplier ${chosen.name}, as named on the request.` : "The request names no single supplier: pick one below."} Within the approved supplier, items and amount, the order needs no second approval.
+            </Banner>
+          )}
+        </div>
+      )}
       {!chosen ? (
         <Card>
           <WizardSteps current={1} />
@@ -54,7 +71,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
                 <PlainRow
                   key={s.id}
                   testId="pick-supplier"
-                  href={`/procurement/orders/new?supplier=${s.id}`}
+                  href={`/procurement/orders/new?supplier=${s.id}${fromRequest?.length ? `&request=${request}` : ""}`}
                   title={s.name}
                   code={s.code}
                   status={s.qualityStatus === "approved" ? undefined : <Chip tone="warn">QA still checking</Chip>}

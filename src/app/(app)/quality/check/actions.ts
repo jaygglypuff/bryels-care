@@ -34,10 +34,10 @@ export async function decideQualityCheckAction(_: ActionState, fd: FormData): Pr
     refreshCurrentPage();
     const message =
       r.decision === "pass"
-        ? `Batch ${r.batchNumber} passed. ${r.closed ? "The batch is closed and the batch record is made." : `The batch stays open: ${r.closeBlockers.join(" ")}`}${r.notified ? " The customer order was told." : ""}`
+        ? `Batch ${r.batchNumber} is OK to use. ${r.closed ? "The batch is closed and the batch record is made." : `The batch stays open: ${r.closeBlockers.join(" ")}`}${r.notified ? " The customer order was told." : ""}`
         : r.decision === "not_yet"
           ? `Batch ${r.batchNumber} is on hold. Check again on ${r.checkAgainOn}.`
-          : `Batch ${r.batchNumber} failed. The stock was moved to the rejected area.`;
+          : `Batch ${r.batchNumber} is not OK. The stock was moved to the rejected area.`;
     return { ok: true, message };
   } catch (e) {
     return toActionState(e);

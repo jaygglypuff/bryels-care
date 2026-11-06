@@ -29,8 +29,9 @@ const all = AREAS.flatMap((a) => files(join(ROOT, a)));
 const pages = all.filter((p) => p.endsWith("page.tsx") && !p.endsWith(join("admin", "page.tsx")));
 
 describe("grade-5 home, settings, reports, help and operations screens", () => {
-  it("covers the screens listed in PAGE_REVIEW.md (Home 10, Settings & people 28 + redirect, Reports 12, Help 1, Operations 1)", () => {
-    expect(pages.length).toBe(52);
+  it("covers the screens listed in PAGE_REVIEW.md (Home 10, Settings & people 28 + redirect, Reports 12, Help 1, Operations 3)", () => {
+    // ADR-110 C0: + How work flows and its list of one step (/operations/flow, /operations/flow/[count]).
+    expect(pages.length).toBe(54);
   });
 
   it.each(pages.map((p) => [p.slice(ROOT.length)]))("%s says what the screen is for (PageIntro)", (rel) => {

@@ -18,6 +18,7 @@ import { DeleteDraftCard } from "../../../delete-draft-button";
 import { waitingFor } from "../../../waiting-for";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Purchase order" };
 
 const LINE_WORD: Record<string, string> = { open: "Still coming", received: "All here", short_closed: "Rest not coming", cancelled: "Cancelled" };
 const RECEIPT_WORD: Record<string, string> = { draft: "Not saved yet", posted: "Saved to stock", reversed: "Undone (kept on record)", cancelled: "Cancelled" };
@@ -106,6 +107,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       />
       <PageIntro>This screen is for one order to a supplier: what we ordered, who approves it, sending it, and what has arrived.</PageIntro>
       {sp.sent === "1" && <Banner tone="ok" title="Saved and sent for approval">{next ? <NextApprover next={next} inline /> : waiting}</Banner>}
+      {sp.sent === "approved" && <Banner tone="ok" title="Saved and approved with its request to buy">No second approval is needed. Next: send it to the supplier.</Banner>}
       {sp.sent === "0" && <Banner tone="warn" title="Saved as a draft">It could not be sent for approval yet. Tap “Send for approval” below to see why.</Banner>}
       {sp.saved && <Banner tone="ok" title="Order saved as a draft">Send it for approval when it is ready.</Banner>}
       {(sp.sent || sp.saved) && <div className="mb-4" />}
@@ -115,7 +117,12 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       ) : can.submit ? (
         <NextStepBox text="Next: send this order for approval.">
           <ActionForm action={submitOrderAction} hidden={{ purchaseOrderId: po.id }} submit="Send for approval" variant="cta">
-            <p className="text-[14px] text-fg-2">The manager is told and approves it. To change the items of a draft, cancel it (⋯ More) and make a new order.</p>
+            <p className="text-[14px] text-fg-2">
+              {v.lines.length > 0 && v.lines.every((l) => l.prNumber)
+                ? "Made from an approved request to buy: if the supplier, the items and the amount stay within what was approved, it is approved at once. Otherwise the manager is told and approves it."
+                : "The manager is told and approves it."}{" "}
+              To change the items of a draft, cancel it (⋯ More) and make a new order.
+            </p>
           </ActionForm>
         </NextStepBox>
       ) : can.decide ? (
@@ -151,6 +158,11 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       <SubNav />
       <div className="flex flex-col gap-5">
         {po.isUrgent && <Banner tone="warn" title="Urgent purchase">{po.urgentReason}</Banner>}
+        {v.approvedByRequest && (
+          <Banner tone="ok" title={`Approved with request to buy ${v.approvedByRequest.join(", ")}`}>
+            The supplier, the items and the amount stay within what the manager approved on the request, so this order needs no second approval (one approval per purchase).
+          </Banner>
+        )}
         {po.afterTheFact && (
           <Banner tone="info" title="Made after the goods arrived">
             {po.afterTheFactReason} · from delivery{" "}
@@ -164,7 +176,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         )}
 
         <Card>
-          <CardTitle action={can.seePrices ? <Amount className="text-[18px]">{money(po.totalAmount, po.currency)}</Amount> : undefined}>What we ordered</CardTitle>
+          <CardTitle action={can.seeTotal && po.totalAmount ? <Amount className="text-[18px]">{money(po.totalAmount, po.currency)}</Amount> : undefined}>What we ordered</CardTitle>
           <ul className="flex flex-col divide-y divide-line rounded-[14px] border border-line">
             {v.lines.map((l) => (
               <li key={l.id} className="flex flex-col gap-1 px-3 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4" data-testid="po-line">

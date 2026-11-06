@@ -127,7 +127,7 @@ export async function refreshActionItems(organizationId: string, now: Date = new
           kind: `action.${c.kind}`,
           severity,
           title: c.title,
-          body: `${kind.label}${c.detail ? `: ${c.detail}` : ""}. ${kind.actionLabel} from the action centre.`,
+          body: `${kind.label}${c.detail ? `: ${c.detail}` : ""}. Tap to open it (${kind.actionLabel.toLowerCase()}); it is also in Problems & alerts.`, // ADR-110 C16: no "action centre"
           entityType: c.entityType,
           entityId: c.entityId,
           link: c.link,
@@ -152,7 +152,7 @@ export async function refreshActionItems(organizationId: string, now: Date = new
         kind: `action.${item.kind}.escalated`,
         severity: item.severity === "info" ? "warning" : "critical",
         title: `Escalated: ${item.title}`,
-        body: `Not acknowledged for more than ${rule.escalateAfterHours} h (rule “${rule.name}”). ${item.actionLabel} from the action centre.`,
+        body: `Nobody looked at this for more than ${rule.escalateAfterHours} hours (rule “${rule.name}”). Tap to open it (${item.actionLabel.toLowerCase()}); it is also in Problems & alerts.`,
         entityType: item.entityType,
         entityId: item.entityId,
         link: item.link,

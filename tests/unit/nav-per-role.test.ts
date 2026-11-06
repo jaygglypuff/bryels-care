@@ -334,3 +334,24 @@ describe("a smaller owner menu (round 4, UX re-audit C #6)", () => {
     expect(names).not.toContain("Rules and settings");
   });
 });
+
+describe("ADR-110 C0 and C11: How work flows, and Purchasing in Operations for buyers", () => {
+  it("How work flows is a main entry of Operations for office roles; floor roles keep their short menu", () => {
+    for (const r of ["owner_director", "site_manager", "production_planner", "qa_qc", "sales_cs", "procurement", "finance"]) expect(main(r), r).toContain("How work flows");
+    expect(main("warehouse_operator")).toEqual([]);
+    expect(main("production_operator")).not.toContain("How work flows");
+  });
+
+  it("procurement finds Purchasing in Operations and no longer only under Management", () => {
+    expect(section("procurement", "Operations", "Purchasing")).toEqual(expect.arrayContaining(["Purchasing", "Requests to buy", "Purchase orders"]));
+    expect(section("procurement", "Management", "Purchasing")).toEqual([]);
+    const doors = navOf("procurement").flatMap((g) => g.items.filter((i) => i.href === "/procurement/orders").map(() => g.label));
+    expect(doors).toEqual(["Operations"]); // one door
+  });
+
+  it("everyone else keeps Purchasing under Management", () => {
+    expect(section("owner_director", "Management", "Purchasing")).toContain("Requests to buy");
+    expect(section("owner_director", "Operations", "Purchasing")).toEqual([]);
+    expect(section("site_manager", "Operations", "Purchasing")).toEqual([]);
+  });
+});

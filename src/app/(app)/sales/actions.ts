@@ -1,4 +1,5 @@
 "use server";
+import { plainShortfall, plainShortfallState } from "./shortfall-words";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
@@ -83,13 +84,13 @@ export async function allocateAction(orderId: string, _: ActionState): Promise<A
   try {
     r = await allocateOrder(ctx, orderId);
   } catch (e) {
-    return toActionState(e);
+    return plainShortfallState(toActionState(e));
   }
   revalidatePath("/sales");
   revalidatePath(`/sales/${orderId}`);
   if (r.fullyAllocated) redirect(`/sales/${orderId}?done=allocated`);
   // Partial allocation is saved; the order stays confirmed and the shortfall is reported.
-  return { ok: false, message: describeShortfall(r, `Part of the stock is set aside (${r.created.length} shelf place${r.created.length === 1 ? "" : "s"}).`) };
+  return { ok: false, message: plainShortfall(describeShortfall(r, `Part of the stock is set aside (${r.created.length} shelf place${r.created.length === 1 ? "" : "s"}).`)) };
 }
 
 export async function dispatchAction(orderId: string, _: ActionState, fd: FormData): Promise<ActionState> {

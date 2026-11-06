@@ -136,6 +136,11 @@ export function productionOrderActions(
   const open = perBatch.filter((p) => p.action.kind !== "none");
   if (open.length === 0) return out({ kind: "none", hint: "Nothing to do on this order right now." });
   const stageOf = (id: string) => view.batches.find((b) => b.id === id)!.stage;
+  // ADR-110 C12 (walk P8): a second person's check that waits on a batch comes before starting the next batch — the
+  // check I can sign first, else the waiting check (who does it), so "Next step" never hides it behind batch 2.
+  const isCheck = (a: NextAction) => (a.kind === "link" && a.label.startsWith("Check ") && a.label !== "Check quality") || (a.kind === "wait" && a.title === "Waiting for a check");
+  const checks = open.filter((p) => isCheck(p.action)).sort((a, b) => Number(b.action.kind === "link") - Number(a.action.kind === "link"));
+  if (checks.length > 0) return out(checks[0].action);
   const actionable = open.filter((p) => p.action.kind === "link").sort((a, b) => (URGENCY[stageOf(b.batchId)] ?? 0) - (URGENCY[stageOf(a.batchId)] ?? 0));
   if (actionable.length > 0) return out(actionable[0].action);
   const lead = open.find((p) => p.batchId === view.leadBatchId) ?? open[0];

@@ -161,7 +161,31 @@ The same 16 stages should also be the stepper on each record (the customer order
 and "Proof"), and each stage's screen ends with "Next: <stage n+1>" (C10). The Home "Production by stage" card becomes
 a link to this page.
 
+**Built 6 Nov 2026 (see section (f)).** Buttons as built: stage 2 also counts purchase orders waiting for approval;
+stage 5 opens `/quality#lots`, stage 10 `/quality#batches`; stage 7 also counts orders waiting for approval; stage 8
+opens `/production/orders` (each short order in its list opens `/production/orders/new?salesOrder=…`); stage 9 counts
+batches to start, being made, and waiting for a second person's check; stage 11 opens `/sales?status=confirmed`;
+stages 13–15 open `/sales/dispatch#check|#ready|#proof`.
+
 ---
+
+## (f) Status of the fixes (6 Nov 2026)
+
+Branch `worktree-agent-a74afdca240ffb0c0` (UX/front-end slice of ADR-110). C1–C9 and C20 belong to other engineers.
+
+| ID | Status | What was done |
+|---|---|---|
+| C0 | **Fixed** | `/operations/flow` "How work flows" (Operations menu): the 16 stages of the C0 table with who, counts, oldest age, one button; numbered cards on phones, a table from 1024 px; red with "Nobody was told" when an item waits that no message points to (A-FLOW-01); each number lists its records (`/operations/flow/<count>`). One read model `getWorkFlow` (current site, a count needs its own view permissions, one query per count). Home "Production by stage" links to it. The customer order stepper has "Second check of the box" and "Proof of delivery". Help: `docs/help/work-flow.md`. |
+| C10 | **Fixed** (one part open) | Delivery page after labels: "Next: leave the sacks in the QA cage … QA is told" (+ "Open the QA check" for QA); the print screen itself (`src/app/print/**`) is not changed. Lot OK: "Next: put it away on A-01" (button for the warehouse, else names via who-can-do). Put-away done: next lot or "nothing else waits" (no movement number). Batch QA OK: "Next: SO-… can now be set aside" + "Open SO-…". Proof of delivery: "Finance bills it: open the invoice draft". Sales shortage (3c) is C4. |
+| C11 | **Fixed** | Procurement Home: one next step + "Your buying work" (requests to order, orders to send, deliveries late, due today). Buyers find Purchasing under Operations (not only Management). |
+| C12 | **Fixed** | Weigh screen: "Waiting for the second check of the weighing step" with "Open the check". The order's Next step shows a waiting check (or the check you can sign) before the next batch. |
+| C13 | **Fixed** | Warehouse Home: To get from shelf · To check (needs a different person) · To send out · Proof of delivery missing, with counts and buttons; the misnamed "Send out orders" tile is gone for them. |
+| C14 | **Fixed** (rule flagged) | Lot page: "Next: you entered the results, so another QA person says OK" with names (nextActors, people kept out never listed). Both rules (lot and batch) shown side by side from the configuration on the lot page and Check quality; values unchanged, A-QA-LOTBATCH-01 for QA. |
+| C15 | **Fixed** (owner to confirm) | Server rule `requestApprovalCover` in `submitPurchaseOrder`: inside the approved supplier, items, quantity and amount the order is approved at once (request's approver recorded, audit `approved_by_request`); above the amount, another supplier, no supplier/estimate, more than requested or the approver making the order → normal approval. "Make the purchase order" carries `?request=` and the named supplier. Approvers see the total on the request and the order (A-PO-1APP-01/02). |
+| C16 | **Fixed** (seed texts open) | Shortage message in plain words on screen; "Release is not possible while the lot is released" → "OK to use is not possible: this lot is already OK to use"; "Pass/Fail" → "OK to use/Not OK"; action-centre messages no longer say "from the action centre" (already seeded messages keep the old text until a demo reset); "200000 g" → "200 kg"; step buttons use the plain step names; "Exact words of the step setup" → "Words as written in the recipe steps"; no MOV number after put-away; invoice-draft message "₱35,000.00" and "Invoice draft ready: Isla Spa Supplies, DR-…". |
+| C17 | **Fixed** | Titles: Home, Request to buy, Purchase order, QA check of a lot, Quality test, Check a batch or delivery, How work flows. |
+| C18 | **Fixed** | A lot number typed by hand at pick and second check keeps the counted pieces (`scan-qty.ts`, unit test). |
+| C19 | **Fixed** | Header "123 bars made so far · 1 of 4 batches finished" (or "378 bars expected · 4 batches"); body "1 of 4 finished · 0 of 4 decided by QA". Finish says the stock waits in the QA hold area and moves to the finished-goods shelf when QA says OK. |
 
 ## (d) Taps and screens per role (one order through the whole chain)
 

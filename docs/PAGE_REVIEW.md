@@ -214,11 +214,13 @@ Total screens: 250.
 | `/masterdata/work-instructions/new` | ☑ 2026-10-31 | 2 visible fields (name, text); WI- number, own code folded. |
 | `/masterdata/work-instructions` | ☑ 2026-10-31 | “How-to sheets”: name first, code grey, plain version status; empty state with button. |
 
-## Operations (2)
+## Operations (4)
 
 | Screen | Status | Notes |
 |---|---|---|
 | `/operations` | ☑ 2026-10-31 | Intro; From delivery to dispatch; product first on phone cards; 44 px site switch. |
+| `/operations/flow` | ☑ 2026-11-06 | ADR-110 C0 "How work flows": 16 steps, who, count, oldest age, one button; numbered cards on phones, table from 1024 px; red + "Nobody was told" (not colour only); no sideways scroll at 390. |
+| `/operations/flow/[count]` | ☑ 2026-11-06 | The records behind one number, oldest first, each opens its record; "Nobody told" chip; refused when the role may not see the list. |
 | `/floor` | ☑ 2026-10-31 | TV header says what it is for (vw sizes; a TV, not a phone screen). |
 
 ## Purchasing (17)

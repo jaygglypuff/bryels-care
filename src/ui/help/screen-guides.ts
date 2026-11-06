@@ -6,6 +6,8 @@
  */
 export const SCREEN_GUIDES: readonly (readonly [RegExp, string])[] = [
   [/^\/inventory\/receive\/put-away/, "inventory.putaway"],
+  // ADR-110 C0: How work flows and the list behind each number
+  [/^\/operations\/flow/, "operations.work_flow"],
   [/^\/inventory\/receive/, "inventory.receive"],
   [/^\/inventory\/receipts/, "inventory.receive"],
   [/^\/inventory\/move/, "inventory.move"],

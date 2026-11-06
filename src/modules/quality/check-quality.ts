@@ -65,7 +65,8 @@ import { queueStatusLabel } from "./status-labels";
 
 export type QualityCheckDecision = "pass" | "not_yet" | "fail";
 export const QUALITY_CHECK_DECISIONS: readonly QualityCheckDecision[] = ["pass", "not_yet", "fail"];
-export const QUALITY_CHECK_LABEL: Record<QualityCheckDecision, string> = { pass: "Pass", not_yet: "Not yet", fail: "Fail" };
+// ADR-110 C16: the words on the screen ("OK to use" / "Not yet" / "Not OK"), not "Pass" / "Fail".
+export const QUALITY_CHECK_LABEL: Record<QualityCheckDecision, string> = { pass: "OK to use", not_yet: "Not yet", fail: "Not OK" };
 
 export type QualityCheckInput = {
   batchId: string;
@@ -262,7 +263,7 @@ export async function getQualityCheck(ctx: AuthContext, batchId: string) {
   const expected = unitMass.gt(0) ? new Decimal(batch.theoreticalYieldG ?? 0).div(unitMass).floor().toString() : null;
   return {
     batch: { id: batch.id, number: batch.batchNumber, status: batch.status, siteId: batch.siteId, completedAt: batch.completedAt },
-    product: { name: product.name, family: product.family, uom: product.baseUom },
+    product: { id: product.id, name: product.name, family: product.family, uom: product.baseUom },
     order: wo ? { id: wo.id, number: wo.number, salesOrderId: wo.salesOrderId } : null,
     lot: lot ? { id: lot.id, number: lot.lotNumber, status: lot.qualityStatus, expiresOn: lot.expiresOn, onHand: new Decimal(onHand?.q ?? 0).toString() } : null,
     counts: {

@@ -8,7 +8,7 @@ import { putAwayOptions } from "@/modules/inventory/receiving-putaway";
 import { keywordMatches, type KeywordMatch } from "@/modules/scan";
 import { Card, CardTitle, EmptyState, PageHeader } from "@/ui/core";
 import { Banner } from "@/ui/status";
-import { PageIntro } from "@/ui/guide";
+import { NextStep, PageIntro } from "@/ui/guide";
 import { LotStatusChip } from "@/ui/inventory/bits";
 import { Forbidden } from "../../../forbidden";
 import { PutAwayForm } from "./put-away-form";
@@ -118,6 +118,12 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
       <PageHeader title="Put away" subtitle={ctx.currentSite.name} actions={<Help screen="inventory.putaway" />} />
       <PageIntro>This screen is for taking lots that QA said OK out of the QA area to their shelf. Tap a lot in the list; the shelf is suggested, you only confirm.</PageIntro>
       {moved && <Banner tone="ok" title="Put away">{moved}</Banner>}
+      {/* ADR-110 C10: put-away done says what comes next: the next lot, or nothing left (the stock is ready for production). */}
+      {moved && !opts && (tasks.length > 0 ? (
+        <NextStep text={`Next: ${tasks.length === 1 ? "1 more lot waits" : `${tasks.length} more lots wait`} for a shelf.`} action={{ label: `Put away ${tasks[0].itemName || tasks[0].lotNumber}`, href: taskCandidates[0]?.value ?? "/inventory/receive/put-away" }} />
+      ) : (
+        <NextStep text="Next: nothing else waits for a shelf. The lot can be used for making products now." action={{ label: "Back to Home", href: "/dashboard" }} />
+      ))}
 
       {searching && results}
       {!opts && taskList}

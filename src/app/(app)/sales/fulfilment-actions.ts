@@ -1,4 +1,5 @@
 "use server";
+import { plainShortfall, plainShortfallState } from "./shortfall-words";
 import { plural } from "@/lib/plural";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -72,10 +73,10 @@ export async function allocateOrderAction(_: ActionState, fd: FormData): Promise
     const ctx = await requireContext();
     const r = await allocateOrder(ctx, uuid.parse(str(fd, "orderId")));
     refreshCurrentPage();
-    if (!r.fullyAllocated) return { ok: true, message: describeShortfall(r, "Part of the stock is set aside.") };
+    if (!r.fullyAllocated) return { ok: true, message: plainShortfall(describeShortfall(r, "Part of the stock is set aside.")) };
     return { ok: true, message: `Set aside (oldest expiry first): ${r.created.map((c) => `${c.lotNumber}${c.boxNumber ? ` box ${c.boxNumber}` : " loose"} ${c.qty}`).join(", ")}.` };
   } catch (e) {
-    return toActionState(e);
+    return plainShortfallState(toActionState(e));
   }
 }
 

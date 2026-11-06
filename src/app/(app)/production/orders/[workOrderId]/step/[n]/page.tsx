@@ -95,7 +95,7 @@ export default async function StepPage({ params, searchParams }: { params: Promi
         approvers={v.approvers}
         passwordRequired={v.passwordRequired}
         nextHref={nextHref}
-        nextLabel={v.next ? (v.next.kind === "transfer" ? "Go to Finish" : v.next.kind === "dispensing" || v.next.kind === "weighing" ? "Weigh" : v.next.name) : null}
+        nextLabel={v.next ? (v.next.kind === "transfer" ? "Go to Finish" : v.next.kind === "dispensing" || v.next.kind === "weighing" ? "Weigh" : plainWords(v.next.name)) : null}
         weighHref={`/production/orders/${workOrderId}/weigh?batch=${b.id}`}
         finishHref={finishHref(b.id)}
         fullRecordHref={batchRecordHref(b.id)}

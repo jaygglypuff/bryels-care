@@ -95,7 +95,13 @@ describe("record progress strip", () => {
   });
 
   it("a customer order's steps use grade-5 words (ADR-088): Set aside, Get from shelf, Sent out, Billed, Done", () => {
-    expect(salesOrderSteps("draft").map((s) => s.label)).toEqual(["Draft", "Approval", "Confirmed", "Set aside", "Get from shelf", "Sent out", "Billed", "Done"]);
+    // ADR-110 C0: the order part of the 16 stages of "How work flows", with the second check and proof of delivery.
+    expect(salesOrderSteps("draft").map((s) => s.label)).toEqual(["Draft", "Approval", "Confirmed", "Set aside", "Get from shelf", "Second check of the box", "Send out", "Proof of delivery", "Invoice", "Done"]);
+    expect(salesOrderSteps("picking", { delivery: "picked" }).find((s) => s.state === "current")?.label).toBe("Waiting for the second check");
+    expect(salesOrderSteps("shipped").find((s) => s.state === "current")?.label).toBe("Sent out");
+    const delivered = salesOrderSteps("shipped", { delivery: "delivered" });
+    expect(delivered.find((s) => s.state === "current")?.label).toBe("Delivered");
+    expect(delivered.filter((s) => s.state === "done").map((s) => s.label)).toContain("Send out");
     expect(salesOrderSteps("allocated").find((s) => s.state === "current")?.label).toBe("Set aside");
     expect(salesOrderSteps("picking").find((s) => s.state === "current")?.label).toBe("Getting from shelf");
     expect(salesOrderSteps("invoiced").find((s) => s.state === "current")?.label).toBe("Billed");

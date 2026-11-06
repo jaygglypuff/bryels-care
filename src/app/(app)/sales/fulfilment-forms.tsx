@@ -6,6 +6,7 @@ import { ActionForm } from "@/ui/form";
 import { MoreDetails } from "@/ui/guide";
 import { ScanOrPick, type PickCandidate } from "@/ui/scan-or-pick";
 import type { ScanActionResult, ScanOptions } from "./fulfilment-actions";
+import { scanQty } from "./scan-qty";
 
 /**
  * Client pieces of the W3E fulfilment screens: the shared in-place command form (ADR-043), the scan
@@ -71,7 +72,9 @@ export function ScanPanel({ scan, label, hint, withQty = false, allowManual = fa
         return;
       }
       setOffline(false);
-      const isLot = value.startsWith("BC:LOT:");
+      // ADR-110 C18: a lot number typed by hand keeps the counted pieces too (scan-qty.ts), not only the QR label.
+      const sq = scanQty(value, withQty ? qty : "");
+      const isLot = sq.isLotLabel;
       if (withQty && isLot && !/^\d+(\.\d+)?$/.test(qty.trim())) {
         setResult({ ok: false, tone: "warn", message: "That is a lot label: first type how many loose pieces you counted, then scan the lot label again." });
         return;
@@ -82,11 +85,11 @@ export function ScanPanel({ scan, label, hint, withQty = false, allowManual = fa
       if (!last.current || last.current.payload !== sig) last.current = { payload: sig, key: newKey() };
       const k = last.current.key;
       start(async () => {
-        const r = await scan(value, { qty: isLot ? qty.trim() : null, manualEntryReason: manualReason || null, labelOk: !labelBad }, k);
+        const r = await scan(value, { qty: sq.qty, manualEntryReason: manualReason || null, labelOk: !labelBad }, k);
         setResult(r);
         if (r.ok) {
           last.current = null;
-          if (isLot) setQty("");
+          if (sq.qty) setQty("");
           setManual("");
           setLabelBad(false);
         }
@@ -98,7 +101,7 @@ export function ScanPanel({ scan, label, hint, withQty = false, allowManual = fa
   return (
     <div className="flex min-w-0 flex-col gap-3">
       {withQty && (
-        <Field label="How many loose pieces (only for a lot label)" htmlFor="scan-qty" hint="Leave empty for boxes">
+        <Field label="How many loose pieces (only for a lot, scanned or typed)" htmlFor="scan-qty" hint="Leave empty for boxes">
           <Input id="scan-qty" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 6" />
         </Field>
       )}

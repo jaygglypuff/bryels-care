@@ -2132,3 +2132,17 @@ list, delivery receipt and purchase order). Desktop Chrome fixes: top bar at 192
 delivery page, reports and the recipe wizard tabs use the width. Tests `tests/unit/documents/bmr-v2.test.ts`,
 integration `bmr-closure`. Live data: QA approves a BMR template version on renderer v2; batches pinned to v1 keep the
 old layout. Open: old prints' footers still show codes (needs new layout versions and QA approval).
+
+## ADR-110 as built: How work flows and visible next steps (C0, C10–C19), 2026-11-06
+
+`/operations/flow` reads one model, `getWorkFlow` (`src/modules/analytics/work-flow.ts`, stage words in
+`work-flow-stages.ts`): 16 stages and their counts at the current site, each count one query with its own view
+permissions (a stage the viewer may not see is hidden); a row is red when an item waits at a hand-off and no message
+names it (A-FLOW-01). The same counts drive the procurement and warehouse Home work lists; the customer order stepper
+uses the order part of the 16 stages. Chain screens end with "Next: …" and one button. A purchase order inside an
+approved request's supplier, items, quantity, amount and approval steps is approved at submit by the request's
+approval (`requestApprovalCover`, audit `procurement.purchase_order.approved_by_request`); everything else follows the
+approval rules, and approvers see the total they approve (A-PO-1APP-01/02, owner to confirm). The lot page names the
+other QA person and shows the configured lot and batch rules side by side (A-QA-LOTBATCH-01, QA). No migration or new
+permission. Tests: unit `work-flow`, `scan-qty`, `round-c16-words`; integration `analytics/work-flow`,
+`procurement/adr110-one-approval`. Help: `docs/help/work-flow.md`.

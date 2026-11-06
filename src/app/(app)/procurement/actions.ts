@@ -215,7 +215,7 @@ export async function cancelRequestAction(_p: ActionState, fd: FormData): Promis
 
 export async function createOrderAction(_p: ActionState, fd: FormData): Promise<ActionState> {
   let id: string;
-  let sent: "1" | "0" | null = null;
+  let sent: "1" | "0" | "approved" | null = null;
   try {
     const ctx = await requireContext();
     const r = await createPurchaseOrder(ctx, {
@@ -234,8 +234,8 @@ export async function createOrderAction(_p: ActionState, fd: FormData): Promise<
     // and the order page says so (its button shows the reason).
     if (fd.get("intent") === "submit") {
       try {
-        await submitPurchaseOrder(ctx, { purchaseOrderId: id });
-        sent = "1";
+        const sub = await submitPurchaseOrder(ctx, { purchaseOrderId: id });
+        sent = sub.approvedByRequest ? "approved" : "1";
       } catch {
         sent = "0";
       }
@@ -251,6 +251,8 @@ export async function submitOrderAction(_p: ActionState, fd: FormData): Promise<
   return inPlace(async () => {
     const ctx = await requireContext();
     const r = await submitPurchaseOrder(ctx, { purchaseOrderId: str(fd, "purchaseOrderId") });
+    // ADR-110 C15: inside what the request approved, the order is approved at once (no second approval).
+    if (r.approvedByRequest) return { message: `Approved with request to buy ${r.approvedByRequest.join(", ")}. Next: send it to the supplier.`, next: await procurementNextActors(ctx, "purchase_order", r.purchaseOrderId) };
     return { message: `Sent for approval: ${plural(r.steps, "approval step")}.`, next: await procurementNextActors(ctx, "purchase_order", r.purchaseOrderId) };
   });
 }

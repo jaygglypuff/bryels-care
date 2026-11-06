@@ -16,8 +16,12 @@ import { StartInspectionButton } from "../../w2c-forms";
 import { decideLotAction } from "../../actions";
 import { DecisionForm, type DecisionOption } from "../../decision-form";
 import { Help } from "@/ui/help/help";
+import { NextApprover } from "@/ui/next-approver";
+import { QaRules } from "../../qa-rules";
+import { waitingFor } from "../../../waiting-for";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "QA check of a lot" };
 
 const BANNER: Record<string, { title: string; body: string }> = {
   quarantine: { title: "Waiting for QA check", body: "Nobody can use, set aside or ship this lot until QA says it is OK." },
@@ -113,6 +117,25 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
       <div className="-mt-3 mb-4"><Explain term="lot" /></div>
       {v.pendingBatch ? (
         <NextStep text="This lot gets its OK or not OK together with its batch." action={{ label: "Check the batch", href: `/quality/check/${v.pendingBatch.id}` }} />
+      ) : v.nextQa && v.canDecide ? (
+        // ADR-110 C14: separation of duties — the person who received the lot or entered its results never says OK.
+        <NextStep
+          text={`Next: ${v.isTester ? "you entered the results" : "you received this lot"}, so another QA person says OK to use.`}
+          waitingFor={<NextApprover next={v.nextQa} inline />}
+          action={{ label: "Open the QA list", href: "/quality#lots" }}
+        />
+      ) : lot.qualityStatus === "released" && v.putAway ? (
+        // ADR-110 C10: after OK, the warehouse puts it away (they get a message and a Home line).
+        ctx.can("inventory.movement.post") ? (
+          <NextStep text={`Next: put it away${v.putAway.suggestedCode ? ` on ${v.putAway.suggestedCode}` : ""}. It waits at ${v.putAway.fromCodes.join(", ")}.`} action={{ label: "Open Put away", href: "/inventory/receive/put-away" }} />
+        ) : (
+          <NextStep
+            text={`OK to use. Next: the warehouse puts it away${v.putAway.suggestedCode ? ` on ${v.putAway.suggestedCode}` : ""}; they are told.`}
+            waitingFor={await waitingFor(ctx, "inventory.movement.post", lot.siteId, "to put it away", "the warehouse")}
+          />
+        )
+      ) : lot.qualityStatus === "released" ? (
+        <NextStep text="OK to use. It is on its shelf: it can be used in production now." action={{ label: "Where this lot is stored", href: `/inventory/${lot.id}` }} />
       ) : !v.canDecide ? (
         ["quarantine", "on_hold"].includes(lot.qualityStatus) ? <NextStep text="Next: a QA person checks this lot and says OK or not OK." waitingFor="Waiting for QA." /> : null
       ) : options.some((o) => !o.blocker) && ["quarantine", "on_hold", "expired"].includes(lot.qualityStatus) ? (
@@ -272,6 +295,7 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
                 </div>
               )}
               <DecisionForm action={decideLotAction} hidden={{ lotId: lot.id }} options={options} />
+              <QaRules rules={v.rules} />
             </>
           ) : (
             <div className="text-[13px] text-muted">
@@ -308,3 +332,4 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
     </>
   );
 }
+
