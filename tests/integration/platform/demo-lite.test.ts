@@ -166,6 +166,83 @@ describe("lite profile on an empty database", () => {
   });
 });
 
+describe("live check 2026-11-06: the small demo tells the truth", () => {
+  const ctxs = async () => {
+    const { registerAppHooks } = await import("@/modules/wiring");
+    registerAppHooks();
+    const { buildContextForUser } = await import("@/lib/auth/context");
+    const O = (await demoOrg()).id;
+    const [site] = await db.select().from(sites).where(eq(sites.organizationId, O));
+    const ctx = async (email: string) => (await buildContextForUser((await db.select().from(users).where(eq(users.email, email)))[0].id, site.id))!;
+    return { O, owner: await ctx("owner@bryels-care.test"), planner: await ctx("planner.nfd@bryels-care.test"), sales: await ctx("sales@bryels-care.test"), operator: await ctx("operator.nfd@bryels-care.test") };
+  };
+
+  it("finding 1: the lotion orders are made for Isla Spa by the planner; the order is 'coming', never 'needs making'", { timeout: 60_000 }, async () => {
+    const { O, owner, planner, sales } = await ctxs();
+    const prod = await import("@/modules/production");
+    const { getWorkFlowItems } = await import("@/modules/analytics");
+    const [isla] = await db.select().from(salesOrders).where(and(eq(salesOrders.organizationId, O), eq(salesOrders.status, "confirmed")));
+    const wos = await db.select({ wo: workOrders, product: products.name, by: users.displayName }).from(workOrders).innerJoin(products, eq(products.id, workOrders.productId)).innerJoin(users, eq(users.id, workOrders.createdBy)).where(eq(workOrders.organizationId, O)).orderBy(asc(workOrders.workOrderNumber));
+    expect(wos.filter((x) => x.product.startsWith("Aloe")).map((x) => x.wo.salesOrderId)).toEqual([isla.id, isla.id]);
+    expect(new Set(wos.map((x) => x.by))).toEqual(new Set(["Cora Villamor"]));
+    const [line] = await prod.salesOrderShortfalls(sales, isla.id);
+    expect(line.missing).toBe("0");
+    expect(line.comingText).toBe("coming: 48 waiting for QA");
+    expect((await prod.customerOrdersShort(planner, { limit: 20 })).some((l) => l.salesOrderId === isla.id)).toBe(false);
+    expect((await getWorkFlowItems(owner, "so_short")).items.map((i) => i.id)).not.toContain(isla.id);
+    expect((await getWorkFlowItems(owner, "short_no_wo")).items.map((i) => i.id)).not.toContain(isla.id);
+    expect((await getWorkFlowItems(owner, "so_coming")).items.find((i) => i.id === isla.id)?.label).toBe("Isla Spa Supplies · coming: 48 waiting for QA");
+  });
+
+  it("finding 2: the weigh card of the order not started says to start it, not that the role cannot weigh", { timeout: 60_000 }, async () => {
+    const { O, operator } = await ctxs();
+    const prod = await import("@/modules/production");
+    const [b] = await db.select().from(batches).where(and(eq(batches.organizationId, O), eq(batches.status, "planned")));
+    const v = await prod.getWeighView(operator, b.id);
+    expect(v.weighBlock?.code).toBe("not_picked");
+    expect(v.weighBlock?.sentence).toBe("Start the batch first: get the materials, then do the clean-area check on step 1.");
+  });
+
+  it("finding 4: the released soap's box labels are printed (label service); the BMR explains 120 made vs 118 boxed", { timeout: 60_000 }, async () => {
+    const { O, owner } = await ctxs();
+    const prod = await import("@/modules/production");
+    const [soap] = await db.select().from(batches).where(and(eq(batches.organizationId, O), eq(batches.status, "closed")));
+    const d = (await prod.buildBmrDataset(db, owner, soap.id)).data;
+    expect(d.labelsPrinted?.map((l) => l.status)).toEqual(["Printed", "Printed", "Printed", "Printed", "Printed"]);
+    expect(d.labelsPrinted?.every((l) => l.by === "Rhea Mendoza")).toBe(true);
+    expect(d.packaging.rows.find((r) => r.label === "Made and boxed")?.value).toBe("120 made = 118 in 5 boxes + 2 bars kept by QA as samples");
+    // Findings 3 and 7: words and units, the planner, one role word.
+    expect(d.batch.createdBy).toBe("Cora Villamor");
+    expect(d.batch.statusLabel).toBe("Closed");
+    expect(d.steps[0].conducted?.role).toBe("Machine operator");
+    expect(d.outputYield.outputs.rows[0]).toMatchObject({ kind: "Finished product", qty: "120 pcs", location: "QA waiting area" });
+    expect(d.outputYield.yieldRecord.rows.find((r) => r.label === "Difference")?.value).toMatch(/^−0\.35 g \(0\.00 %\)$/);
+    expect(d.audit[0].event).toBe("Created → Waiting to start");
+    expect(JSON.stringify(d)).not.toMatch(/\d\.\d{6}/);
+  });
+
+  it("finding 6: the soap in progress shows its locked packaging step with the planned boxes and the label preview", { timeout: 60_000 }, async () => {
+    const { O, operator } = await ctxs();
+    const prod = await import("@/modules/production");
+    const [b] = await db.select().from(batches).where(and(eq(batches.organizationId, O), eq(batches.status, "in_process")));
+    const box = await prod.batchBoxInfoFor(operator, b.id);
+    expect(box.locked).toBe(true);
+    expect(box.why).toBe("Finish step 4, 5 and 6 first; then you will pack 24 bars in a box and print one label per box.");
+    expect(box.defaultPieces).toBe(118);
+    expect(box.preview).not.toBeNull();
+  });
+
+  it("finding 7: the lotion is shown by volume (250 mL a bottle)", { timeout: 60_000 }, async () => {
+    const { O, owner } = await ctxs();
+    const md = await import("@/modules/masterdata");
+    const { pieceSizeWords } = await import("@/lib/piece-size");
+    const [lotion] = await db.select().from(products).where(and(eq(products.organizationId, O), eq(products.name, "Aloe Hand Lotion 250 mL")));
+    expect(pieceSizeWords(await md.getProduct(owner, lotion.id))).toBe("250 mL a bottle");
+    const list = await md.listProducts(owner);
+    expect(list.map((p) => pieceSizeWords(p)).sort()).toEqual(["135 g a bar", "250 mL a bottle"]);
+  });
+});
+
 describe("the demo can go on: order 4 gets its materials and is weighed", () => {
   it("Get materials, the start check and one weighing on the scale work at once (clean, calibrated)", { timeout: 120_000 }, async () => {
     const { registerAppHooks } = await import("@/modules/wiring");

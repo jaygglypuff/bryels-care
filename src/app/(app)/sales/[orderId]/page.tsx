@@ -64,7 +64,10 @@ export default async function OrderDetailPage({ params, searchParams }: { params
   const daysLate = orderDaysLate(order, salesBusinessDate());
   // ADR-110 C4: the shortage card for everyone who sees the order (same free-stock rule as set-aside, C2).
   // Planners make the production order; sales asks the planner (a message and a Home line).
-  const toMake: MakeForLine[] = (await salesOrderShortfalls(ctx, order.id).catch(() => [])).filter((l) => D(l.missing).gt(0));
+  // Finding 1 (live check 2026-11-06): the one order-cover rule; stock waiting for QA or being made is "coming", not "needs making".
+  const shortfalls: MakeForLine[] = await salesOrderShortfalls(ctx, order.id).catch(() => []);
+  const toMake = shortfalls.filter((l) => D(l.missing).gt(0));
+  const comingLines = shortfalls.filter((l) => D(l.missing).lte(0) && l.comingText);
   const canMake = ctx.can("production.work_order.create");
   const canAsk = !canMake && ctx.can("sales.sales_order.create");
   const beingMade = ctx.can("production.work_order.view") ? await productionOrdersForSalesOrder(ctx, order.id) : [];
@@ -284,9 +287,18 @@ export default async function OrderDetailPage({ params, searchParams }: { params
             <MaskedNote fields={data._masked} />
           </Card>
 
-          {(toMake.length > 0 || beingMade.length > 0) && (
+          {(toMake.length > 0 || beingMade.length > 0 || comingLines.length > 0) && (
             <Card>
-              <CardTitle>{toMake.length > 0 ? "Not enough stock: it needs making" : "Making it for this order"}</CardTitle>
+              <CardTitle>{toMake.length > 0 ? "Not enough stock: it needs making" : comingLines.length > 0 ? "Stock is coming for this order" : "Making it for this order"}</CardTitle>
+              {comingLines.length > 0 && (
+                <ul className="mb-3 flex flex-col gap-1.5 text-[14px]">
+                  {comingLines.map((l) => (
+                    <li key={l.salesOrderLineId}>
+                      <span className="font-medium">{l.productName}</span>: {l.comingText} <span className="text-fg-2">· nothing needs making</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {toMake.length > 0 && (
                 <ul className="flex flex-col gap-2">
                   {toMake.map((l) => (
@@ -295,7 +307,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                         <p className="font-medium">{l.productName}</p>
                         <p className="text-fg-2">
                           {fmtQty(l.missing, "pcs", 0)} missing · ordered {fmtQty(l.ordered, "", 0)}, free on the shelf {fmtQty(l.freeStock, "", 0)}
-                          {D(l.alreadyInProduction).gt(0) ? `, already being made ${fmtQty(l.alreadyInProduction, "", 0)}` : ""}
+                          {l.comingText ? `, ${l.comingText}` : ""}
                         </p>
                       </div>
                       {canMake ? (

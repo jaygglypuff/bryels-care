@@ -25,14 +25,15 @@
  *   |                                    | (next step: Pour into moulds)                          |
  *   | Aloe Hand Lotion order 2           | approved, ready for "Get materials"                    |
  *   | Customer order Luntian (soap)      | stock set aside: ready to get from the shelf           |
- *   | Customer order Isla Spa (lotion)   | confirmed, waiting for released lotion                 |
+ *   | Customer order Isla Spa (lotion)   | confirmed; both lotion orders are made for it, so it   |
+ *   |                                    | is covered by stock coming (not "short")               |
  *
  * The only shortcut: soap must cure (2 days, a demo value). For the finished soap batch the cure step's
  * start and "ready at" times are moved two days back after it was started through the service, as if the
  * batch had been made two days ago; nothing else is written around the services.
  */
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { hash } from "@node-rs/argon2";
 import Decimal from "decimal.js";
 import { db } from "../client";
@@ -131,6 +132,17 @@ export async function seedLiteDemo(): Promise<string[]> {
   await md.updateProduct(c.owner, lotion.id, { code: null, name: LITE_LOTION, family: "Lotion", unitNetMassG: "255", unitsPerBox: 24, shelfLifeDays: null, shelfLifeMonths: 18, storageConditions: "Store below 30 °C, away from sunlight", labelling: "per_piece" });
   await md.updateProduct(c.owner, soap.id, { code: null, name: LITE_SOAP, family: "Soap", unitNetMassG: "135", unitsPerBox: 24, shelfLifeDays: null, shelfLifeMonths: 24, storageConditions: "Store in a cool, dry place", labelling: "per_box" });
   await addCheckPlans(A, soap.id, lotion.id);
+  // A liquid is sold by volume: the lotion's sellable item says 250 mL (the 255 g stays the product's net mass,
+  // used to turn the batch mass into bottles). Through the same SKU command as Master data › Products.
+  {
+    const [sku] = await db.select().from(s.skus).where(eq(s.skus.productId, lotion.id));
+    const [ml] = await db.select().from(s.uoms).where(and(eq(s.uoms.organizationId, A.orgId), eq(s.uoms.code, "mL")));
+    await md.updateSku(c.planner, sku.id, {
+      productId: sku.productId, code: sku.code, name: sku.name, variantLabel: sku.variantLabel, packFormat: "Bottle", netContentQty: "250", netContentUomId: ml.id,
+      uomBaseId: sku.uomBaseId, unitsPerBox: sku.unitsPerBox, boxesPerPallet: sku.boxesPerPallet, gtin: sku.gtin, shelfLifeDays: sku.shelfLifeDays, retestDays: sku.retestDays,
+      storageConditions: sku.storageConditions, allocationRule: sku.allocationRule as "fefo" | "fifo",
+    });
+  }
 
   const line = (materialId: string, pct: string) => ({ materialId, amount: pct, src: "pct" as const, diffKind: "pct" as const, diff: "1", needsCheck: true, phaseCode: null, scaling: "proportional" as const, isCritical: true });
   const perPiece = (materialId: string) => ({ materialId, perPiece: "1", from: null, keep: md.packagingKeep() });
@@ -255,10 +267,23 @@ export async function seedLiteDemo(): Promise<string[]> {
   }
   notes.push("opening stock received, released and put on the shelves");
 
+  /* ---------------------------------------------------------------- customer orders */
+  // Taken before production so the planner makes the lotion orders FOR the Isla Spa order (work_orders.sales_order_id,
+  // live check 2026-11-06 finding 1); the soap is set aside after QA released it (end of the storyline).
+  const sales = await import("../../modules/sales");
+  const order = async (customer: string, productId: string, qty: string, price: string, inDays: number, po: string) => {
+    const o = await sales.createOrder(c.sales, { customerId: A.customers[customer], customerPoNumber: po, requestedDeliveryOn: manilaDay(inDays), lines: [{ productId, qtyUnits: qty, unitPrice: price }], idempotencyKey: key() });
+    await sales.submitOrder(c.sales, o.id, { idempotencyKey: key() });
+    return o.id;
+  };
+  const soapOrder = await order("Luntian Wellness Stores", soap.id, "48", "70.00", 3, "LWS-PO-4502");
+  const lotionOrder = await order("Isla Spa Supplies", lotion.id, "48", "185.00", 7, "ISS-2240");
+
   /* ---------------------------------------------------------------- production */
   const prod = await import("../../modules/production");
-  const newOrder = async (productId: string) => {
-    const r = await prod.createProductionOrder(c.planner, { productId, plannedStart: manilaDay(0), idempotencyKey: key() });
+  // Cora (the planner) makes every production order, Dino (the site manager) approves it (the demo story).
+  const newOrder = async (productId: string, salesOrderId: string | null = null) => {
+    const r = await prod.createProductionOrder(c.planner, { productId, plannedStart: manilaDay(0), salesOrderId, idempotencyKey: key() });
     const a = await prod.approveProductionOrder(c.manager, r.workOrderId, { idempotencyKey: key() });
     return { workOrderId: r.workOrderId, batchId: a.batches[0].batchId };
   };
@@ -303,7 +328,13 @@ export async function seedLiteDemo(): Promise<string[]> {
             .set({ startedAt: back, earliestCompletionAt: new Date(Date.now() - 60_000) })
             .where(and(eq(s.processStepRecords.batchId, batchId), eq(s.processStepRecords.stepNo, st.stepNo)));
         }
-        if (st.stepKind === "packaging" && opts.boxPieces) await prod.planBatchBoxes(c.operator, { batchId, pieces: opts.boxPieces, idempotencyKey: key() });
+        if (st.stepKind === "packaging" && opts.boxPieces) {
+          await prod.planBatchBoxes(c.operator, { batchId, pieces: opts.boxPieces, idempotencyKey: key() });
+          // The operator prints the box labels at the packing table (the same "Mark printed" as the screen).
+          const jobs = await db.select({ id: s.labelJobs.id }).from(s.labelJobs).where(and(eq(s.labelJobs.entityType, "batch_box"), eq(s.labelJobs.status, "ready"), sql`${s.labelJobs.entityId} in (select id from batch_boxes where batch_id = ${batchId})`));
+          const { markLabelJobPrinted } = await import("../../modules/documents");
+          for (const j of jobs) await markLabelJobPrinted(c.operator, j.id);
+        }
         const r = await prod.stepDone(c.operator, { batchId, stepNo: st.stepNo, readings: readingsFor(st), idempotencyKey: key() }, { checker: c.checker });
         if (r.blocked) throw new Error(`${st.name}: ${r.blockers.map((b) => b.message).join(" ")}`);
       }
@@ -342,7 +373,7 @@ export async function seedLiteDemo(): Promise<string[]> {
   await passQa(soap1.batchId);
   notes.push(`soap ${soapDone.lotNumber}: released by QA; its ${soapDone.boxes.length} boxes moved to the finished goods bay with the release`);
   // 2. Aloe Hand Lotion order 1: made, waiting for the QA check.
-  const lotion1 = await newOrder(lotion.id);
+  const lotion1 = await newOrder(lotion.id, lotionOrder);
   await work(lotion1.batchId);
   const lotionDone = await finish(lotion1.batchId, 24);
   notes.push(`lotion ${lotionDone.lotNumber}: waiting for the QA check`);
@@ -350,7 +381,7 @@ export async function seedLiteDemo(): Promise<string[]> {
   const soap2 = await newOrder(soap.id);
   await work(soap2.batchId, { stopBefore: "Pour into moulds" });
   // 4. Aloe Hand Lotion order 2: approved, ready for Get materials.
-  await newOrder(lotion.id);
+  await newOrder(lotion.id, lotionOrder);
   // Equipment ready for the next batch: a cleaning record after the last use (the scale was used by order 3),
   // calibration due in 60 days (setup), so "Get materials" → weighing of order 4 works at once.
   await cleanAll();
@@ -392,17 +423,9 @@ export async function seedLiteDemo(): Promise<string[]> {
   await quality.decideLot(c.qa, { lotId: newCoconut.id, decision: "release", reason: "Certificate checked; looks and smells right (demo)." });
   notes.push("2 purchase orders: one sent, one delivered (coconut oil waiting to be put away, glycerin waiting for QA)");
 
-  /* ---------------------------------------------------------------- customer orders */
-  const sales = await import("../../modules/sales");
-  const order = async (customer: string, productId: string, qty: string, price: string, inDays: number, po: string) => {
-    const o = await sales.createOrder(c.sales, { customerId: A.customers[customer], customerPoNumber: po, requestedDeliveryOn: manilaDay(inDays), lines: [{ productId, qtyUnits: qty, unitPrice: price }], idempotencyKey: key() });
-    await sales.submitOrder(c.sales, o.id, { idempotencyKey: key() });
-    return o.id;
-  };
-  const soapOrder = await order("Luntian Wellness Stores", soap.id, "48", "70.00", 3, "LWS-PO-4502");
+  /* ---------------------------------------------------------------- set aside the soap */
   await sales.allocateOrder(c.warehouse, soapOrder);
-  await order("Isla Spa Supplies", lotion.id, "48", "185.00", 7, "ISS-2240");
-  notes.push("2 customer orders: soap ready to get from the shelf, lotion waiting for released stock");
+  notes.push("2 customer orders: soap ready to get from the shelf, lotion covered by the lotion batches (waiting for QA, approved)");
 
   // Completeness marker read by `pnpm db:demo auto` (src/db/demo.ts): written last, with the profile and version.
   await db.insert(s.auditEvents).values({ organizationId: A.orgId, actorLabel: "system:demo.seed", action: "platform.demo.seeded", entityType: "organization", entityId: A.orgId, entityNumber: LITE_ORG_NAME, after: { fictional: true, profile: "lite", seedVersion: DEMO_SEED_VERSION } });

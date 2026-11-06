@@ -41,9 +41,13 @@ export default async function WeighPage({ params, searchParams }: { params: Prom
   const title = toCheck.length === 0 ? "Weigh" : weighers.length === 1 ? `Check ${weighers[0]}'s ${toCheck.length === 1 ? "weighing" : "weighings"}` : "Check the weighings";
   const substitutes = v.cards.some((c) => c.canAskOther) ? (await substituteMaterialOptions(ctx)).map((m) => ({ id: m.id, name: m.name, baseUom: m.baseUom })) : [];
   // Who can check each waiting weighing, by name and role (never the weigher; docs/NEXT_APPROVER.md).
-  const weigherIds = [...new Set(v.cards.flatMap((c) => c.waitingForCheck.map((w) => w.operatorId)).filter((x): x is string => !!x))];
+  // The viewer too when they may weigh: "After you save, Jun or Dino checks it" (finding 2; nextActors, call only).
+  const weigherIds = [...new Set([...v.cards.flatMap((c) => c.waitingForCheck.map((w) => w.operatorId)), v.canWeigh && v.cards.some((c) => c.needsCheck && !c.done) ? ctx.userId : null].filter((x): x is string => !!x))];
   const nextByOperator = Object.fromEntries(await Promise.all(weigherIds.map(async (id) => [id, await floorCheckNext(ctx, "weighing_check", b.id, id)] as const)));
   const stepHref = (n: number) => `/production/orders/${workOrderId}/step/${n}?batch=${b.id}`;
+  // Finding 2: the reason Save is pale, with the one button that fixes it (state before role).
+  const wb = v.weighBlock;
+  const blockHref = !wb?.button ? null : wb.button.target === "materials" ? `/production/orders/${workOrderId}/materials?batch=${b.id}` : wb.buttonStepNo ? stepHref(wb.buttonStepNo) : null;
   return (
     <div className="mx-auto max-w-6xl pb-24 text-[16px]">
       <FlowHeader
@@ -56,8 +60,8 @@ export default async function WeighPage({ params, searchParams }: { params: Prom
       <PageIntro>Weigh out each ingredient: check the lot printed on the container, put it on the scale, type the weight and save.</PageIntro>
       {v.blockedReason && (
         <div className="mb-4">
-          <Banner tone="warn" title="You can't weigh now" action={b.status === "materials_staged" || b.status === "planned" ? <LinkButton href={`${orderHref}`} variant="secondary" size="lg">Back to the order</LinkButton> : undefined}>
-            {v.blockedReason}
+          <Banner tone="warn" title="You can't weigh now" action={blockHref && wb?.button ? <LinkButton href={blockHref} variant="cta" size="lg">{wb.button.label}</LinkButton> : b.status === "materials_staged" || b.status === "planned" ? <LinkButton href={`${orderHref}`} variant="secondary" size="lg">Back to the order</LinkButton> : undefined}>
+            {wb && wb.code !== "no_permission" ? wb.sentence : v.blockedReason}
           </Banner>
         </div>
       )}
@@ -84,6 +88,7 @@ export default async function WeighPage({ params, searchParams }: { params: Prom
         stepNo={v.step?.stepNo ?? null}
         stepDone={v.step?.status === "completed"}
         canWeigh={v.canWeigh}
+        block={wb ? { sentence: wb.sentence, href: blockHref, label: wb.button?.label ?? null } : null}
         lotConfirm={v.settings.lotConfirm}
         cards={v.cards}
         scales={v.scales}

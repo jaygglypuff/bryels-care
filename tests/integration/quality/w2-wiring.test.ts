@@ -367,15 +367,16 @@ describe("BMR of an electronically executed batch", () => {
     const { data } = await buildBmrDataset(db, manager, r.batchId);
     expect(data.lineClearance.available).toBe(true);
     expect(data.lineClearance.rows.length).toBeGreaterThan(0);
-    expect(data.lineClearance.rows.every((x) => x.answer === "yes" && x.by)).toBe(true);
+    expect(data.lineClearance.rows.every((x) => x.answer === "Yes" && x.by)).toBe(true);
     expect(data.parameters.rows.length).toBeGreaterThan(0);
     expect(data.parameters.rows.every((x) => x.value !== "")).toBe(true);
     expect(data.equipment.rows.map((e) => e.code)).toEqual(expect.arrayContaining(["SC-01", "MIX-01"]));
-    expect(data.packaging.rows.some((p) => /issued 130/.test(p.value) && /used 124/.test(p.value))).toBe(true);
+    expect(data.packaging.rows.some((p) => /^130 pcs taken, 124 used/.test(p.value))).toBe(true);
     const yr = Object.fromEntries(data.outputYield.yieldRecord.rows.map((x) => [x.label, x.value]));
     expect(yr["Checked by"]).toBe(checker.displayName);
-    expect(yr["Units"]).toMatch(/^62/);
-    expect(data.outputYield.outputs.rows[0]).toMatchObject({ kind: "finished", lot: r.lotNumber, location: "QUA-01" });
+    // Live check 2026-11-06 finding 3: units and words on the printed record.
+    expect(yr["Pieces"]).toMatch(/^62\d? pcs$/);
+    expect(data.outputYield.outputs.rows[0]).toMatchObject({ kind: "Finished product", lot: r.lotNumber, location: "QA waiting cage" });
     expect(data.outputYield.outputs.rows[0].item).not.toBe("");
     expect(data.qc.inspections.rows).toHaveLength(1);
     expect(data.qc.inspections.rows[0].plan).toMatch(/^IP-ACS-FP rev \d+$/);

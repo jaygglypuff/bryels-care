@@ -27,6 +27,17 @@ import type { DocumentMeta, FrozenDataset, Renderer } from "./types";
  * step blocks and signature blocks never split; long tables repeat their header. Body 10 pt, tables 9 pt.
  * Pure and deterministic (no clock, no locale, no Intl): v1 stays registered so documents printed with v1
  * re-render to their recorded checksum; a template moves to v2 only when QA approves a new version.
+ *
+ * Changed in place on 2026-11-06 (live check of the small demo, findings 3–5), the day v2 shipped: v2 was in use
+ * only by the demo profiles, which reset (DEMO_SEED_VERSION raised so stored demo BMRs are generated again), so no
+ * recorded v2 document outside the demo depends on the earlier output. From here the v2 output is frozen
+ * (tests/unit/documents/bmr-v2.test.ts pins its checksum); any later change is a v3. Layout changes:
+ * - No forced page break except before part 7. When part 6 is short (nothing or a few lines), parts 6 and 7 are
+ *   one block that never splits and moves to a new page only when it does not fit, so "Problems and changes" is
+ *   never alone on a page and part 7 is never split; a long part 6 keeps the break before part 7. The appendix
+ *   flows on (no break before the audit trail).
+ * - Part 7's results table has fixed columns; a result word ("Conforms") never wraps.
+ * - A long watermark ("IN PROGRESS — NOT THE FINAL RECORD", the working copy) is set smaller so it fits the page.
  */
 
 type Section = TemplateDefinition["sections"][number];
@@ -104,7 +115,8 @@ function pageCss(def: TemplateDefinition, meta: DocumentMeta, d: BmrData, waterm
 .bmr2 ul.plain li { margin: .6mm 0; break-inside: avoid; }
 .bmr2 .closing { display: grid; grid-template-columns: 24mm 1fr; gap: 4mm; align-items: start; margin-top: 6mm; padding-top: 3mm; border-top: 0.3mm solid #333; font-size: 8pt; color: #333; break-inside: avoid; }
 .bmr2 .closing .qr svg { width: 22mm; height: 22mm; display: block; }
-.bmr2-wm { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font: 800 40pt/1 ${FONT_STACK}; color: rgba(198, 40, 40, .10); white-space: nowrap; pointer-events: none; z-index: 0; }
+.bmr2 td.word { overflow-wrap: normal; word-break: normal; white-space: nowrap; }
+.bmr2-wm { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font: 800 ${(watermark ?? "").length > 20 ? 24 : 40}pt/1 ${FONT_STACK}; color: rgba(198, 40, 40, ${(watermark ?? "").length > 20 ? ".16" : ".10"}); white-space: nowrap; pointer-events: none; z-index: 0; }
 .bmr2-content { position: relative; z-index: 1; }
 @media print {
   html, body { background: #fff !important; }
@@ -384,6 +396,11 @@ ${empty ? none("No problems, corrections or changes recorded.") : ""}
 </section>`;
 }
 
+/** Part 6 fits in a few lines: no problem reports, corrections or reopens, and at most three changes or exceptions. */
+function part6IsShort(d: BmrData): boolean {
+  return !d.deviations.rows.length && !d.amendments.length && !d.reopens.length && (d.materialChanges?.length ?? 0) + d.exceptions.length <= 3;
+}
+
 /* ------------------------------------------------------------------ 7 QA decision */
 
 function part7(def: TemplateDefinition, d: BmrData): SafeHtml {
@@ -397,8 +414,8 @@ function part7(def: TemplateDefinition, d: BmrData): SafeHtml {
 <h3>${label(def, "test_results", "Test Results:")}</h3>
 ${
   q.tests.length
-    ? html`<table class="keep"><thead><tr><th>Test</th><th>Specification</th><th>Result</th><th style="width:10%">Pass?</th><th style="width:24%">Tested by</th></tr></thead><tbody>${q.tests.map(
-        (t) => html`<tr><td>${t.name}</td><td>${t.spec}</td><td><b>${t.result}</b></td><td>${t.passed ? html`<span class="ok">✓ Pass</span>` : html`<span class="flag">✗ Fail</span>`}</td><td>${sig(t.testedBy, null, t.at, false)}</td></tr>`,
+    ? html`<table class="keep"><colgroup><col style="width:22%"/><col style="width:30%"/><col style="width:15%"/><col style="width:10%"/><col style="width:23%"/></colgroup><thead><tr><th>Test</th><th>Specification</th><th>Result</th><th>Pass?</th><th>Tested by</th></tr></thead><tbody>${q.tests.map(
+        (t) => html`<tr><td>${t.name}</td><td>${t.spec}</td><td class="${t.result.length <= 12 ? "word" : ""}"><b>${t.result}</b></td><td class="word">${t.passed ? html`<span class="ok">✓ Pass</span>` : html`<span class="flag">✗ Fail</span>`}</td><td>${sig(t.testedBy, null, t.at, false)}</td></tr>`,
       )}</tbody></table>`
     : none("No results recorded yet.")
 }
@@ -538,18 +555,22 @@ export const bmrRendererV2: Renderer = {
     const d = bmrDataSchema.parse(input.data);
     const meta = input.meta;
     const watermark = def.options?.watermarks === "none" ? null : meta.watermark;
-    const brk = (id: string) => (on(def, id)?.break_before === "page" ? html`<div class="page-break"></div>` : "");
+    // Only part 7 may start a new page (2026-11-06); a short part 6 goes with it as one unsplit block.
+    const qaBreak = on(def, "qc")?.break_before === "page" || on(def, "disposition_signatures")?.break_before === "page";
     const qaOn = !!on(def, "qc") || !!on(def, "disposition_signatures");
+    const sixWithSeven = qaOn && qaBreak && !!on(def, "deviations") && part6IsShort(d);
+    const pageBreak = html`<div class="page-break"></div>`;
     const parts: SafeHtml[] = [
       part1(def, d, meta),
       on(def, "materials") ? part2(def, on(def, "materials")!, d) : html``,
       on(def, "process_steps") || on(def, "checklist") ? part3(def, d) : html``,
       on(def, "packaging_reconciliation") ? part4(d) : html``,
       on(def, "output_yield") ? part5(d) : html``,
-      on(def, "deviations") ? part6(def, d) : html``,
-      qaOn ? html`${brk("qc")}${part7(def, d)}` : html``,
-      on(def, "attachments") ? html`${brk("attachments")}${attachments(d)}` : html``,
-      on(def, "audit_appendix") ? html`${brk("audit_appendix")}${auditAppendix(d)}` : html``,
+      sixWithSeven
+        ? html`<div class="review keep">${part6(def, d)}${part7(def, d)}</div>`
+        : html`${on(def, "deviations") ? part6(def, d) : ""}${qaOn ? html`${qaBreak ? pageBreak : ""}${part7(def, d)}` : ""}`,
+      on(def, "attachments") ? attachments(d) : html``,
+      on(def, "audit_appendix") ? auditAppendix(d) : html``,
     ];
     const body = html`<div class="bmr2 bmr2-screen" data-testid="document" data-renderer="bmr-v2" data-document-number="${meta.documentNumber}" aria-label="Batch Manufacturing Record ${d.batch.number}">
   ${watermark ? html`<div class="bmr2-wm" aria-hidden="true">${watermark}</div>` : ""}

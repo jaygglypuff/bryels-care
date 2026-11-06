@@ -266,14 +266,14 @@ export async function bmrPackagingReconciliations(q: DbOrTx, batchId: string): P
   };
 }
 
-export type BatchOutputRow = { kind: string; item: string; lot: string | null; qty: string; location: string | null };
+export type BatchOutputRow = { kind: string; item: string; lot: string | null; qty: string; location: string | null; qtyBase: string | null; uom: string | null };
 /** W2B: output lines (`batch_outputs`). */
 export async function bmrBatchOutputs(q: DbOrTx, batchId: string): Promise<SourceResult<BatchOutputRow>> {
   const r = await run<Row>(
     q,
     "batch outputs",
     { batch_outputs: ["batch_id", "line_no", "output_kind", "product_id", "material_id", "lot_id", "to_location_id", "qty_base", "base_uom"] },
-    sql`select o.output_kind, coalesce(pr.name, m.name, '') as item, l.lot_number, o.qty_base::text || ' ' || o.base_uom as qty, loc.code as location
+    sql`select o.output_kind, coalesce(pr.name, m.name, '') as item, l.lot_number, o.qty_base::text || ' ' || o.base_uom as qty, o.qty_base::text as qty_base, o.base_uom, loc.code as location
         from batch_outputs o
         left join products pr on pr.id = o.product_id
         left join materials m on m.id = o.material_id
@@ -282,7 +282,7 @@ export async function bmrBatchOutputs(q: DbOrTx, batchId: string): Promise<Sourc
         where o.batch_id = ${batchId}
         order by o.line_no`,
   );
-  return { available: r.available, rows: r.rows.map((x) => ({ kind: String(x.output_kind), item: String(x.item), lot: (x.lot_number as string) ?? null, qty: String(x.qty ?? ""), location: (x.location as string) ?? null })) };
+  return { available: r.available, rows: r.rows.map((x) => ({ kind: String(x.output_kind), item: String(x.item), lot: (x.lot_number as string) ?? null, qty: String(x.qty ?? ""), location: (x.location as string) ?? null, qtyBase: (x.qty_base as string) ?? null, uom: (x.base_uom as string) ?? null })) };
 }
 
 export type InspectionRow = { number: string; plan: string | null; status: string; sampledBy: string | null; reviewedBy: string | null; reviewedAt: Date | null };

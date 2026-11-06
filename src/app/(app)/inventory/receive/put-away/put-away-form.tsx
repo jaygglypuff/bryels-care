@@ -49,7 +49,8 @@ export function PutAwayForm({
   const destCands: PickCandidate[] = ordered.map((d) => ({ value: d.id, title: d.name, detail: `${d.code}${d.sectionLabel ? ` · ${d.sectionLabel}` : ""}${d.suggested ? " · suggested" : ""}`, code: d.code, codes: [d.code] }));
   const fromCands: PickCandidate[] = balances.map((b) => ({ value: b.locationId, title: b.name, detail: `${b.code} · ${b.boxed ? `${b.looseQtyText} not in a box, of ${b.qtyText}` : b.qtyText}`, code: b.code, codes: [b.code] }));
   const fe = state?.fieldErrors ?? {};
-  const toCode = to?.code ?? "";
+  // Finding 8: the place's name on the label and the button, not its code.
+  const toCode = to?.title || to?.code || "";
   return (
     <form action={dispatch} className="space-y-4">
       <input type="hidden" name="lot" value={lotNumber} />

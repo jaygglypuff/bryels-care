@@ -82,7 +82,7 @@ export async function getBatchExecution(ctx: AuthContext, batchId: string) {
     .orderBy(asc(batchMaterials.lineNo));
   const disp = lines.length
     ? await db
-        .select({ d: dispenseRecords, lotNumber: inventoryLots.lotNumber, lotExpiresOn: inventoryLots.expiresOn, locationCode: locations.code })
+        .select({ d: dispenseRecords, lotNumber: inventoryLots.lotNumber, lotExpiresOn: inventoryLots.expiresOn, locationCode: locations.code, locationName: locations.name })
         .from(dispenseRecords)
         .innerJoin(inventoryLots, eq(inventoryLots.id, dispenseRecords.lotId))
         .innerJoin(locations, eq(locations.id, dispenseRecords.fromLocationId))
@@ -205,6 +205,7 @@ export async function getBatchExecution(ctx: AuthContext, batchId: string) {
         lotNumber: d.lotNumber,
         lotExpiresOn: d.lotExpiresOn,
         locationCode: d.locationCode,
+        locationName: d.locationName,
         qtyG: d.d.actualQtyG,
         entered: d.d.enteredQty && d.d.enteredUom ? `${new Decimal(d.d.enteredQty).toString()} ${d.d.enteredUom}` : null,
         tareG: d.d.tareQtyG,

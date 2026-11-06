@@ -28,18 +28,18 @@ const meta: DocumentMeta = {
 };
 
 function data(over: Partial<BmrData> = {}): BmrData {
-  const rec = { lotNumber: "L-2611-00001", supplierLot: "LOS-1", expiryText: "23 Jun 2028", actualText: "3,723.2", withinTolerance: true, scale: "SC-01", operator: "Rhea Mendoza", at: "14 Oct 2026, 09:00", checker: "Jun Dela Cruz", operatorRole: "Production Operator", checkerRole: "Production Operator", checkedAt: "14 Oct 2026, 09:05", exceptionReason: null, struck: false, struckReason: null };
+  const rec = { lotNumber: "L-2611-00001", supplierLot: "LOS-1", expiryText: "23 Jun 2028", actualText: "3,723.2", withinTolerance: true, scale: "SC-01", operator: "Rhea Mendoza", at: "14 Oct 2026, 09:00", checker: "Jun Dela Cruz", operatorRole: "Machine operator", checkerRole: "Machine operator", checkedAt: "14 Oct 2026, 09:05", exceptionReason: null, struck: false, struckReason: null };
   return {
     schema: "bmr/v1",
     batch: { id: "01a197b0-a2fe-7909-a2a6-8b4878cbab41", number: "B-26-0001", statusCode: "closed", statusLabel: "CLOSED", productName: "Acapulco Soap 135 g", productCode: "ACS-135", department: "PRODUCTION", formulaLabel: "F-ACS-01 rev 1", routingLabel: "R-ACS-01 rev 1", inspectionPlanLabel: null, batchSizeText: "17,600 g", plannedStartText: null, startText: "14 OCT 2026", endText: "14 OCT 2026", siteCode: "NFD", createdBy: "Dino Reyes", snapshotTakenText: "13 Oct 2026, 15:00", reopenCount: 0, closedText: "16 Oct 2026, 11:00", lotNumber: "L-2611-00015", revisionText: "16 Oct 2026, 11:00" },
     summary: { stepsDone: 2, stepsTotal: 2, openDeviations: 0, holds: [] },
     materials: { groups: [{ phase: null, lines: [{ lineNo: 1, name: "Coconut Oil", inci: "Cocos Nucifera (Coconut) Oil", code: "MAT-0012", toleranceText: "± 0.5 % (3,704.6 – 3,741.8 g)", theoreticalText: "3,723.2", actualText: "3,723.2", status: "dispensed", records: [rec] }], totalTheoreticalText: "3,723.2", totalActualText: "3,723.2" }], totalTheoreticalText: "3,723.2", totalActualText: "3,723.2", roundingNote: null, toleranceNote: "Tolerances are configuration." },
     steps: [
-      { stepNo: 1, name: "Weigh the ingredients", kindLabel: "dispensing", mode: "electronic", instruction: "One person weighs, a second person checks.", workInstruction: null, readings: null, conducted: { name: "Rhea Mendoza", at: "14 Oct 2026, 09:10", role: "Production Operator" }, checked: { name: "Jun Dela Cruz", at: "14 Oct 2026, 09:12", role: "Production Operator" }, startText: "14 Oct 2026, 08:50", endText: "14 Oct 2026, 09:12", statusText: "Done", notes: null },
-      { stepNo: 2, name: "Heat and mix", kindLabel: "process", mode: "electronic", instruction: null, workInstruction: null, readings: null, conducted: { name: "Rhea Mendoza", at: "14 Oct 2026, 11:00", role: "Production Operator" }, checked: null, startText: "14 Oct 2026, 10:00", endText: "14 Oct 2026, 11:00", statusText: "Done", notes: null },
+      { stepNo: 1, name: "Weigh the ingredients", kindLabel: "dispensing", mode: "electronic", instruction: "One person weighs, a second person checks.", workInstruction: null, readings: null, conducted: { name: "Rhea Mendoza", at: "14 Oct 2026, 09:10", role: "Machine operator" }, checked: { name: "Jun Dela Cruz", at: "14 Oct 2026, 09:12", role: "Machine operator" }, startText: "14 Oct 2026, 08:50", endText: "14 Oct 2026, 09:12", statusText: "Done", notes: null },
+      { stepNo: 2, name: "Heat and mix", kindLabel: "process", mode: "electronic", instruction: null, workInstruction: null, readings: null, conducted: { name: "Rhea Mendoza", at: "14 Oct 2026, 11:00", role: "Machine operator" }, checked: null, startText: "14 Oct 2026, 10:00", endText: "14 Oct 2026, 11:00", statusText: "Done", notes: null },
     ],
     lineClearance: { available: true, rows: [] },
-    parameters: { available: true, rows: [{ stepNo: 2, parameter: "Mix temperature", uom: "°C", limits: "min 45 · max 55", value: "48", within: true, by: "Rhea Mendoza", at: "14 Oct 2026, 10:30", struck: false, struckReason: null }] },
+    parameters: { available: true, rows: [{ stepNo: 2, parameter: "Mix temperature", uom: "°C", limits: "45 – 55", value: "48", within: true, by: "Rhea Mendoza", at: "14 Oct 2026, 10:30", struck: false, struckReason: null }] },
     equipment: { available: true, rows: [{ stepNo: 2, code: "MX-01", name: "Mixer", calibrationDue: "1 Dec 2026", cleaning: "Clean", operator: "Rhea Mendoza", at: "14 Oct 2026, 10:00", exception: null }] },
     packaging: { available: true, rows: [] },
     outputYield: { theoreticalText: "16,720 g (95.0 % of batch size)", actualText: "16,740 g", detailText: "(124 pcs × 135 g; 100.12 %)", expiryText: "13 Oct 2028", outputLot: "L-2611-00015", yieldRecord: { available: true, rows: [] }, outputs: { available: true, rows: [] } },
@@ -64,6 +64,8 @@ function data(over: Partial<BmrData> = {}): BmrData {
 }
 
 const render = (d = data(), def = defaultBmrDefinitionV2()) => renderFrozen(def, "bmr", { meta, data: d });
+/** The pinned v2 output of the fixture above (see "v2 output is frozen"). */
+const V2_CHECKSUM = "0aa09c52686a342fc9d3194a842d08109989068d492049d9221844c66e6fe831";
 
 describe("BMR renderer v2", () => {
   it("is the default for new BMR templates; v1 stays registered so printed BMRs keep their checksum", () => {
@@ -95,11 +97,11 @@ describe("BMR renderer v2", () => {
 
   it("signatures are name + role + time; steps show start, end, readings with units and OK range, machines", () => {
     const body = render().body.value;
-    expect(body).toContain("<b>Rhea Mendoza</b><span class=\"small\">Production Operator · 14 Oct 2026, 09:00</span>");
+    expect(body).toContain("<b>Rhea Mendoza</b><span class=\"small\">Machine operator · 14 Oct 2026, 09:00</span>");
     expect(body).toContain("Teresa Ocampo</b><span class=\"small\">QA/QC</span>");
     expect(body).toContain("14 Oct 2026, 08:50");
     expect(body).toContain("Mix temperature");
-    expect(body).toContain("min 45 · max 55 °C");
+    expect(body).toContain("45 – 55 °C");
     expect(body).toContain("48 °C");
     expect(body).toContain("Mixer");
   });
@@ -132,6 +134,40 @@ describe("BMR renderer v2", () => {
 
   it("is deterministic: same input, same checksum", () => {
     expect(render().checksumSha256).toBe(render().checksumSha256);
+  });
+
+  it("v2 output is frozen from 2026-11-06 (ADR-112): a change to it is a v3, not an edit", () => {
+    // Pinned after the live-check changes (findings 3–5), when v2 was used only by the demo, which reset.
+    expect(render().checksumSha256).toBe(V2_CHECKSUM);
+  });
+
+  it("no forced break but part 7's; a short part 6 and part 7 are one unsplit block, the appendix flows on (finding 4)", () => {
+    const body = render().body.value;
+    expect([...body.matchAll(/class="page-break"/g)].length).toBe(0);
+    const review = body.indexOf('<div class="review keep">');
+    expect(review).toBeGreaterThan(0);
+    expect(review).toBeLessThan(body.indexOf("Problems and changes"));
+    expect(body.indexOf("QA decision and sign-offs")).toBeGreaterThan(review);
+    // A long part 6 stays on its page; the break is before part 7.
+    const many = Array.from({ length: 6 }, (_, i) => `Change ${i + 1}`);
+    const long = render(data({ materialChanges: many })).body.value;
+    expect(long).not.toContain('class="review keep"');
+    const at = long.indexOf('class="page-break"');
+    expect(at).toBeGreaterThan(long.indexOf("Problems and changes"));
+    expect(at).toBeLessThan(long.indexOf("QA decision and sign-offs"));
+  });
+
+  it("a result word like 'Conforms' never wraps in part 7 (fixed columns)", () => {
+    const d = data({ qc: { ...data().qc, tests: [{ name: "Looks right", spec: "Smooth green bar", result: "Conforms", passed: true, testedBy: "Nina Quiambao", at: "15 Oct 2026, 10:00" }] } });
+    const body = render(d).body.value;
+    expect(body).toContain('<td class="word"><b>Conforms</b></td>');
+    expect(render(d).css).toContain("td.word { overflow-wrap: normal; word-break: normal; white-space: nowrap; }");
+  });
+
+  it("the working copy watermark of a batch in progress fits the page (finding 5)", () => {
+    const out = renderFrozen(defaultBmrDefinitionV2(), "bmr", { meta: { ...meta, documentNumber: "WORKING-COPY", watermark: "IN PROGRESS — NOT THE FINAL RECORD" }, data: data() });
+    expect(out.body.value).toContain("IN PROGRESS — NOT THE FINAL RECORD");
+    expect(out.css).toMatch(/\.bmr2-wm \{[^}]*font: 800 24pt/);
   });
 
   it("bmrRunningHeader leaves the lot out until there is one", () => {

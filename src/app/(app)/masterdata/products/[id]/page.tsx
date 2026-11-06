@@ -1,3 +1,4 @@
+import { pieceSizeWords } from "@/lib/piece-size";
 import { db } from "@/db/client";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -55,7 +56,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
         title={p.name}
         subtitle={
           <>
-            {familyLabel} · {fmtQty(p.unitNetMassG, "g", 0)} a piece · {shelfText(p.shelfLifeDays)} · {p.unitsPerBox} in a box, {labellingText(p.labelling)} · <RecordNo>{p.code}</RecordNo> <PlainItemChip status={p.status} />
+            {familyLabel} · {pieceSizeWords(p)} · {shelfText(p.shelfLifeDays)} · {p.unitsPerBox} in a box, {labellingText(p.labelling)} · <RecordNo>{p.code}</RecordNo> <PlainItemChip status={p.status} />
           </>
         }
         actions={

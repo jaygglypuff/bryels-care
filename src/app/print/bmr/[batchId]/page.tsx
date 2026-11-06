@@ -151,6 +151,14 @@ export default async function BmrPrintPage({ params, searchParams }: Props) {
                 </>
               )}
             </p>
+            {view.workingCopy && (
+              <div className="mb-2 flex flex-wrap items-center gap-2" data-testid="bmr-working-copy">
+                <PrintButton label="Print the working copy" />
+                <span className="text-[12px] text-[#5b5951]">
+                  The batch is still being made. The working copy shows everything recorded so far, marked <b>IN PROGRESS — NOT THE FINAL RECORD</b> on every page; it gets no document number and no checksum. Generate the BMR for the record.
+                </span>
+              </div>
+            )}
             {view.canGenerate && view.template ? <GenerateBmrForm batchId={view.batch.id} label={generateLabel} /> : !view.canGenerate ? <p className="text-muted">Your role cannot generate documents; ask a site manager or QA.</p> : null}
           </div>
         )}
@@ -178,6 +186,9 @@ export default async function BmrPrintPage({ params, searchParams }: Props) {
             )}
             <RecordedDocument css={render.css} body={render.body} />
           </div>
+        ) : !requested && view.preview && view.workingCopy ? (
+          // Finding 5: a batch in progress prints a working copy of what is recorded so far (watermarked, not stored).
+          <RecordedDocument className="bmr-working-copy" css={view.preview.css} body={view.preview.body} />
         ) : !requested && view.preview ? (
           <>
             <RecordedDocument className="bmr-preview" css={view.preview.css} body={view.preview.body} />

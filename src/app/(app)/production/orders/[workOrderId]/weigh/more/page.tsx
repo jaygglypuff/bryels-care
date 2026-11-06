@@ -1,3 +1,4 @@
+import { PlaceName } from "@/ui/inventory/place-name";
 import type { Metadata } from "next";
 import { NextApprover } from "@/ui/next-approver";
 import { floorCheckNext } from "@/modules/production";
@@ -83,7 +84,7 @@ export default async function WeighMorePage({ params, searchParams }: { params: 
             {ing.weighings.map((w) => (
               <div key={w.id} className="rounded-[14px] border border-line bg-surface p-3 text-[15px]">
                 <p className={w.voided ? "text-muted line-through" : ""}>
-                  {fmtQty(w.qtyG, "g", 1)} · lot {w.lotNumber} · shelf {w.locationCode} · by {w.operator} · {w.checker ? `checked by ${w.checker}` : "not checked yet"}
+                  {fmtQty(w.qtyG, "g", 1)} · lot {w.lotNumber} · on <PlaceName name={w.locationName} code={w.locationCode} /> · by {w.operator} · {w.checker ? `checked by ${w.checker}` : "not checked yet"}
                 </p>
                 {w.exceptionApprovedBy && <p className="text-[14px] text-[var(--warn-fg)]">Approved by {w.exceptionApprovedBy}: {w.exceptionReason}</p>}
                 {w.voided && <p className="text-[14px] text-muted">Undone by {w.voidedBy}: {w.voidReason}</p>}

@@ -41,6 +41,13 @@ One order goes through 16 steps, from **Ask to buy** to **Invoice**. The **How w
 2. Tap the red number. The list shows each thing with **Nobody told**.
 3. Tell the person who does the step, or open the thing yourself if it is your job.
 
+## Short, or coming?
+
+1. A customer order is **short: it needs making** only when the stock for it is not there and is not coming.
+2. Stock that is **coming** counts: a batch **waiting for QA**, a batch **being made** in an approved production order, and a production order made for this order that waits for approval. A production order made for another customer order does not count.
+3. Such an order shows as **order waiting for stock that is coming**, for example "Isla Spa Supplies · coming: 48 waiting for QA". It is never red: nobody has to act, the stock is on its way.
+4. The planner's Home ("Customer orders short") and the shortage card on the customer order use the same rule.
+
 ## See what waits
 
 1. Tap a number, for example **6 lots waiting for the QA check**.

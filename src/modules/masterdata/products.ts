@@ -118,6 +118,9 @@ export async function listProducts(ctx: AuthContext, f: ProductFilter = {}, limi
       shelfLifeDays: products.shelfLifeDays,
       storageConditions: products.storageConditions,
       skuCount: sql<number>`(select count(*) from ${skus} s where s.product_id = "products"."id" and s.status <> 'discontinued')::int`,
+      /** First sellable item's net content when it is a volume (finding 7: "250 mL a bottle"). */
+      netContentQty: sql<string | null>`(select s.net_content_qty::text from ${skus} s join uoms u on u.id = s.net_content_uom_id where s.product_id = "products"."id" and s.status <> 'discontinued' and lower(u.code) in ('ml', 'l') order by s.created_at limit 1)`,
+      netContentUom: sql<string | null>`(select u.code from ${skus} s join uoms u on u.id = s.net_content_uom_id where s.product_id = "products"."id" and s.status <> 'discontinued' and lower(u.code) in ('ml', 'l') order by s.created_at limit 1)`,
       onHand: sql<string>`coalesce((select sum(b.qty_base) from ${inventoryBalances} b join ${inventoryLots} l on l.id = b.lot_id where l.product_id = "products"."id" and b.site_id in (${sql.join(
         siteIds.map((s) => sql`${s}::uuid`),
         sql`, `,
@@ -142,7 +145,10 @@ export async function getProduct(ctx: AuthContext, productId: string) {
   const [p] = await db.select().from(products).where(and(eq(products.id, productId), eq(products.organizationId, ctx.organizationId))).limit(1);
   if (!p) throw new DomainError("not_found", "Product not found.");
   const skuRows = ctx.can("masterdata.sku.view") ? await listSkus(ctx, { productId: p.id }) : [];
-  return { ...p, code: p.skuCode, skus: skuRows };
+  // Finding 7: a liquid shows its volume ("250 mL a bottle"); the first sellable item with a volume.
+  const [vol] = await db.execute<{ qty: string; uom: string }>(sql`select s.net_content_qty::text as qty, u.code as uom from skus s join uoms u on u.id = s.net_content_uom_id
+    where s.product_id = ${p.id} and s.status <> 'discontinued' and lower(u.code) in ('ml', 'l') order by s.created_at limit 1`);
+  return { ...p, code: p.skuCode, skus: skuRows, netContentQty: vol?.qty ?? null, netContentUom: vol?.uom ?? null };
 }
 
 /** Product families a form offers (editable list `product_family`, Master data › Choice lists; ADR-076). */

@@ -309,11 +309,33 @@ describe("US-3-19 batch closure and controlled reopen/amend", () => {
     // QA-approved paper wording is kept.
     for (const w of ["Product Name:", "Batch Number:", "Batch Formula No.:", "Theoretical Weight/ Volume (g)", "Actual Weigh/ Volume (g)", "Conducted by", "Checked by", "Theoretical Yield:", "Actual Yield:", "Final Disposition:", "Name and Signature of QA:", "Remarks:"]) expect(body, w).toContain(w);
     // Signatures carry the role; the audit trail speaks in words, never stored keys or state codes.
-    expect(body).toMatch(/Production Operator|Site Manager|QA/);
+    // One role word source (live check 2026-11-06 finding 7): the words of the Users screen.
+    expect(body).toMatch(/Machine operator|Site manager|QA/);
+    expect(body).not.toMatch(/Production Operator|Site Manager</);
+    // Finding 3: numbers with units and sensible decimals, states and kinds in words.
+    expect(body).not.toMatch(/\d\.\d{5,}/);
+    expect(body).toContain("Created → ");
+    expect(body).not.toContain("Status: new");
+    expect(body).not.toMatch(/\(dispensing\)|\(line clearance\)|>finished</);
     expect(body).not.toMatch(/production\.batch\.|quality\.disposition\.|materials_staged|in_process|awaiting_qc/);
     expect(out.css).toContain("size: A4 portrait");
     expect(out.css).toContain("break-inside: avoid");
     expect(out.css).toContain("table-header-group");
+  });
+
+  it("a batch in progress prints a working copy: watermarked, not stored, no number; Generate BMR stays (finding 5)", async () => {
+    const before = (await db.select().from(generatedDocuments).where(eq(generatedDocuments.sourceEntityId, inProcess.id))).length;
+    const view = await bmrPrintView(manager, inProcess.id);
+    expect(view.workingCopy).toBe(true);
+    expect(view.preview!.body).toContain("IN PROGRESS — NOT THE FINAL RECORD");
+    expect(view.preview!.body).toContain("WORKING-COPY");
+    expect(view.canGenerate).toBe(true);
+    expect((await db.select().from(generatedDocuments).where(eq(generatedDocuments.sourceEntityId, inProcess.id))).length).toBe(before);
+    // A batch waiting for QA is not "in progress": its preview stays an unprintable preview.
+    expect((await bmrPrintView(manager, awaiting.id)).workingCopy).toBe(false);
+    // Other sites and roles: not found / forbidden.
+    await expectCode(bmrPrintView(managerRvs, inProcess.id), "not_found");
+    await expectCode(bmrPrintView(warehouse, inProcess.id), "forbidden");
   });
 
   it("closures are append-only in the database", async () => {

@@ -2167,3 +2167,23 @@ permission. Tests: unit `work-flow`, `scan-qty`, `round-c16-words`; integration 
 
 Consequences: no migration or new permission; assumptions A-E2E-01..06, A-LBL-SACK-01, A-QA-SAMPLE-01 (QA/owner);
 status with test names in `docs/END_TO_END_FLOW.md`. Demo seed version raised so the live demo reloads on the new rules.
+
+## ADR-113 Live check of the small demo: one "short or coming" rule, weigh reasons, BMR words (2026-11-06)
+
+Status: Accepted (amends ADR-112, follows ADR-110); A-COVER-01 (owner, planner) and A-BMR2-04 (QA) open.
+
+1. One rule for "short or coming" (`src/modules/production/order-cover-rule.ts`) is shared by How work flows (new count
+   `so_coming`, never red), the planner Home and the order's shortage card: free stock, then batches waiting for QA,
+   then batches of approved or in-progress orders, then unapproved orders made for the order; stock made for this order
+   first; stock made for another open order never counts.
+2. The weigh card gets a reason code from the read model (state before role) and names the checker before Save.
+3. New BMRs print units, words and place names; "Planned by" is the production order's planner; role words come from
+   one source (`src/lib/role-words.ts`); part 4 explains made vs boxed; a batch in progress prints a watermarked
+   working copy that is not stored.
+4. Renderer v2 was changed in place on the day it shipped, because only the demo profiles used it (no go-live): the
+   only forced page break is before part 7, a short part 6 stays with part 7, result words never wrap. From now on v2's
+   output is pinned by checksum; further layout changes need v3.
+5. The locked packaging step says what comes first and shows the planned boxes and the label preview; liquids show
+   volume ("250 mL a bottle"); place names come before codes.
+Consequences: the lite seed links the lotion orders to the Isla Spa order and prints its box labels through the label
+service; `DEMO_SEED_VERSION` raised; no migration or permission change.

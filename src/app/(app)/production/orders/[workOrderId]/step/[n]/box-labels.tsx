@@ -20,6 +20,8 @@ export type BoxLabelsProps = {
   plan: { pieces: number; boxes: { boxNo: number; boxCount: number; pieces: number; containerNumber: string; status: string; labelStatus: string | null }[]; printed: boolean; boxed: boolean } | null;
   canPrint: boolean;
   why: string | null;
+  /** Finding 6: locked until the earlier steps are done; the planned boxes and the label preview show read only. */
+  locked?: boolean;
   printHref: string;
 };
 
@@ -55,7 +57,14 @@ export function BoxLabels(p: BoxLabelsProps) {
       </h2>
       {p.face && <LabelPreview kind="box" data={p.face} sentence="Stick one label on each box. Each box label shows its own box number and pieces." />}
       {p.why ? (
-        <p className="text-[15px] text-[var(--warn-fg)]">{p.why}</p>
+        <div className="grid gap-2">
+          <p className="text-[15px] text-[var(--warn-fg)]" data-testid="box-labels-why">{p.why}</p>
+          {p.locked && split && (
+            <p className="text-[15px] text-fg" data-testid="box-split-planned">
+              <b>{boxSplitText(split)}</b> ({n} {p.pieceWord}{p.samples ? `; QA keeps ${p.samples} as samples` : ""}). You print the box labels here when the steps before are done.
+            </p>
+          )}
+        </div>
       ) : (
         <form action={action} className="grid gap-3">
           <input type="hidden" name="batchId" value={p.batchId} />

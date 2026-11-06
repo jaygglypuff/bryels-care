@@ -165,16 +165,27 @@ export async function documentsForSourceRead(organizationId: string, sourceType:
 export function renderPreview(
   resolved: SourceTemplate,
   data: unknown,
-  p: { documentKind: string; watermark: string | null; siteCode: string | null; organizationName: string; generatedByName: string; generatedAt: string; sourceRevisionAt: Date; sourceState: string | null },
+  p: {
+    documentKind: string;
+    watermark: string | null;
+    siteCode: string | null;
+    organizationName: string;
+    generatedByName: string;
+    generatedAt: string;
+    sourceRevisionAt: Date;
+    sourceState: string | null;
+    /** A printable working copy (BMR of a batch in progress): its own number word and the exact watermark. */
+    workingCopy?: { documentNumber: string; watermark: string } | null;
+  },
 ) {
   const meta: DocumentMeta = {
-    documentNumber: "PREVIEW",
+    documentNumber: p.workingCopy?.documentNumber ?? "PREVIEW",
     documentKind: p.documentKind,
     templateCode: resolved.template.code,
     templateName: resolved.template.name,
     templateVersionNo: resolved.version.versionNo,
     definitionChecksum: resolved.version.definitionChecksum,
-    watermark: p.watermark ? `PREVIEW · ${p.watermark}` : "PREVIEW",
+    watermark: p.workingCopy ? p.workingCopy.watermark : p.watermark ? `PREVIEW · ${p.watermark}` : "PREVIEW",
     recordRevisionNo: 0,
     reprintNo: 0,
     reprintOfNumber: null,

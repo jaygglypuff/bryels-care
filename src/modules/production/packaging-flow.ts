@@ -31,7 +31,7 @@ import { plainWords } from "./plain-words";
  *     job path, with the finished lot number and dates frozen on the batch so Finish posts the same.
  */
 
-export type PackagingPlanLot = { lotId: string; lotNumber: string; locationId: string; locationCode: string; qty: string; reservationIds: string[] };
+export type PackagingPlanLot = { lotId: string; lotNumber: string; locationId: string; locationCode: string; /** Finding 8: the shelf's name (code small and grey on screen). */ locationName?: string | null; qty: string; reservationIds: string[] };
 export type PackagingLineView = {
   batchMaterialId: string;
   materialId: string;
@@ -43,7 +43,7 @@ export type PackagingLineView = {
   /** Materials list state of the line. */
   picked: "open" | "taken" | "not_needed";
   /** Already recorded on the packaging step (current rows). */
-  issued: { lotNumber: string; locationCode: string; qty: string }[];
+  issued: { lotNumber: string; locationCode: string; locationName?: string | null; qty: string }[];
   issuedQty: string;
   /** What "Step done" records: the taken lot first, then the other set-aside lots, up to what is still needed. */
   plan: PackagingPlanLot[];
@@ -60,6 +60,12 @@ export async function packagingLinesOf(q: DbOrTx, batch: Pick<BatchRow, "id" | "
   const picks = currentPicks(await q.select().from(batchMaterialPicks).where(eq(batchMaterialPicks.batchId, batch.id)));
   const issuedRows = await currentPackaging(q, batch.id);
   const out: PackagingLineView[] = [];
+  const names = new Map<string, string | null>();
+  // Finding 8 (live check 2026-11-06): shelves by name, not code (by location id, so sites never mix).
+  const nameOf = async (locationId: string) => {
+    if (!names.has(locationId)) names.set(locationId, (await q.select({ name: locations.name }).from(locations).where(eq(locations.id, locationId)).limit(1))[0]?.name ?? null);
+    return names.get(locationId) ?? null;
+  };
   for (const { bm, m } of lines) {
     const pick = picks.get(bm.id);
     const picked = !pick || pick.action === "untaken" ? "open" : (pick.action as "taken" | "not_needed");
@@ -107,7 +113,7 @@ export async function packagingLinesOf(q: DbOrTx, batch: Pick<BatchRow, "id" | "
       if (need.lte(0)) break;
       const take = Decimal.min(need, caps[i]);
       if (take.lte(0)) continue;
-      plan.push({ ...c, qty: take.toString() });
+      plan.push({ ...c, locationName: await nameOf(c.locationId), qty: take.toString() });
       need = need.minus(take);
     }
     out.push({
@@ -118,7 +124,7 @@ export async function packagingLinesOf(q: DbOrTx, batch: Pick<BatchRow, "id" | "
       uom: m.baseUom,
       qty: new Decimal(bm.theoreticalQtyG).toString(),
       picked,
-      issued: issued.map((x) => ({ lotNumber: x.lotNumber, locationCode: x.locationCode, qty: new Decimal(x.r.issuedQty).toString() })),
+      issued: await Promise.all(issued.map(async (x) => ({ lotNumber: x.lotNumber, locationCode: x.locationCode, locationName: await nameOf(x.r.fromLocationId), qty: new Decimal(x.r.issuedQty).toString() }))),
       issuedQty: issuedQty.toString(),
       plan,
     });
@@ -193,15 +199,34 @@ const LABEL_STATES = ["in_process", "awaiting_qc", "quarantined"];
  * batch has reached its packaging step: every step before the first packaging / filling step is done
  * (2026-10-31 audit: the button was live while the batch was still at weighing). A batch without a
  * packaging step may print once every step except Finish is done. Pure: returns the reason, or null.
+ *
+ * Live check 2026-11-06 finding 6: the reason says what must happen first and what comes then, never the
+ * circular "Labels are printed on the step 'Wrap and pack'" while the operator is on that step:
+ * "Finish step 4 and 5 first; then you will pack 24 bars in a box and print one label per box."
  */
-export function labelPrintBlocker(steps: { stepNo: number; stepKind: string; name: string }[], recs: { stepNo: number; status: string }[]): string | null {
+export function labelPrintBlocker(
+  steps: { stepNo: number; stepKind: string; name: string }[],
+  recs: { stepNo: number; status: string }[],
+  pack?: { unitsPerBox: number | null; pieceWord: string; labelling: "per_box" | "per_piece" } | null,
+): string | null {
   const ordered = [...steps].sort((a, z) => a.stepNo - z.stepNo);
   const pk = ordered.find((s) => (RECONCILED_STEP_KINDS as readonly string[]).includes(s.stepKind));
   const before = pk ? ordered.filter((s) => s.stepNo < pk.stepNo) : ordered.filter((s) => s.stepKind !== "transfer");
-  const open = before.find((s) => !["completed", "skipped"].includes(recs.find((r) => r.stepNo === s.stepNo)?.status ?? ""));
-  if (!open) return null;
-  return pk ? `Labels are printed on the step "${plainWords(pk.name)}". Finish "${plainWords(open.name)}" first.` : `Labels are printed when every making step is done. Finish "${plainWords(open.name)}" first.`;
+  const done = (s: { stepNo: number }) => ["completed", "skipped"].includes(recs.find((r) => r.stepNo === s.stepNo)?.status ?? "");
+  const open = before.filter((s) => !done(s));
+  if (!open.length) return null;
+  const nos = open.map((s) => s.stepNo);
+  const which = nos.length === 1 ? `step ${nos[0]} "${plainWords(open[0].name)}"` : `step ${nos.slice(0, -1).join(", ")} and ${nos[nos.length - 1]}`;
+  if (!pk) return `Finish ${which} first; labels are printed when every making step is done.`;
+  const then = !pack
+    ? `then you print the labels on step ${pk.stepNo} "${plainWords(pk.name)}".`
+    : pack.labelling === "per_piece"
+      ? `then you will stick a label on each ${singular(pack.pieceWord)}${pack.unitsPerBox ? `, pack ${pack.unitsPerBox} ${pack.pieceWord} in a box` : ""} and print one label per box.`
+      : `then you will pack ${pack.unitsPerBox ? `${pack.unitsPerBox} ${pack.pieceWord}` : `the ${pack.pieceWord}`} in a box and print one label per box.`;
+  return `Finish ${which} first; ${then}`;
 }
+
+const singular = (w: string) => (w === "bars" ? "bar" : w === "bottles" ? "bottle" : w === "pieces" ? "piece" : w.replace(/s$/, ""));
 
 async function batchLabelTemplate(q: DbOrTx, organizationId: string, siteId: string) {
   const code = (await getSetting(q, organizationId, "production.packaging.batch_label_template", siteId)).trim().toUpperCase();
