@@ -55,7 +55,7 @@ describe("US-1-12 AC2 idle and absolute expiry (clock injected)", () => {
 
   it("privileged session: 1 h idle, 24 h absolute; shared device: 30 min idle", async () => {
     const admin = await userByEmail("admin@bryels-care.test");
-    const t0 = new Date("2026-11-03T00:00:00Z");
+    const t0 = new Date(); // now: the seed's role assignments start today, so a fixed past date would find none
     const { token, session } = await createSessionRecord({ userId: admin.id, now: t0 });
     expect(session.privileged).toBe(true);
     expect(session.expiresAt.getTime() - t0.getTime()).toBe(24 * H);
