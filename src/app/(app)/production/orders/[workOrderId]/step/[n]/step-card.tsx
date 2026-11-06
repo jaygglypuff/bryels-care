@@ -19,6 +19,7 @@ import {
 } from "../../flow-actions";
 import { plainWords } from "@/modules/production/plain-words";
 import { PackagingBox } from "./packaging-box";
+import { EquipmentWhy } from "../../equipment-why";
 
 /**
  * The checker is signed in on THIS device (their own phone or tablet): one tap "Yes, I checked" in their
@@ -273,6 +274,11 @@ function EquipmentBox(p: Props & { equipment: NonNullable<Props["equipment"]> })
       ) : (
         <p className="mt-1 text-[15px] text-muted">Choose what you use before Step done.</p>
       )}
+      {open && equipment.uses.length === 0 && equipment.options.length > 0 && !equipment.options.some((o) => o.usable) && (
+        <div className="mt-3">
+          <EquipmentWhy items={equipment.options} title={`No ${equipment.kind ?? "equipment"} can be used now`} />
+        </div>
+      )}
       {open && p.canPerform && equipment.canChoose && (
         equipment.options.length ? (
           <form action={action} className="mt-3 grid gap-2">
@@ -286,7 +292,7 @@ function EquipmentBox(p: Props & { equipment: NonNullable<Props["equipment"]> })
                     <span className="block font-medium text-fg">{o.name}</span>
                     <span className="block text-[13px] text-muted">
                       {o.code}
-                      {!o.usable && o.blocking.length ? ` · cannot be used: ${o.blocking.join(", ")}` : o.reasons.length ? ` · ${o.reasons.join(", ")}` : ""}
+                      {!o.usable && o.why.length ? ` · cannot be used: ${o.why.join("; ")}` : !o.usable && o.blocking.length ? ` · cannot be used: ${o.blocking.join(", ")}` : o.reasons.length ? ` · ${o.reasons.join(", ")}` : ""}
                     </span>
                   </span>
                 </label>

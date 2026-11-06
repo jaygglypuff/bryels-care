@@ -124,13 +124,18 @@ describe("Make for this order (customer order line short of stock)", () => {
     expect((await productionOrdersForSalesOrder(w.planner, so7.id)).map((x) => x.id)).toContain(r.workOrderId);
   });
 
-  it("sales users with view only, operators, warehouse and QA cannot make for an order (role escalation)", async () => {
-    await expectCode(salesOrderShortfalls(w.sales, so7.id), "forbidden");
+  it("sales users (read only), operators, warehouse and QA cannot make for an order (role escalation)", async () => {
+    // ADR-110 C4: sales may READ the shortage (and ask the planner) but never make the production order.
+    expect(Array.isArray(await salesOrderShortfalls(w.sales, so7.id))).toBe(true);
     await expectCode(makeForSalesLine(w.sales, so7.lineId), "forbidden");
     await expectCode(createProductionOrder(w.sales, { productId: acs, plannedStart: day(0), salesOrderId: so7.id }), "forbidden");
     await expectCode(createProductionOrder(w.operator, { productId: acs, plannedStart: day(0), salesOrderId: so7.id }), "forbidden");
-    await expectCode(salesOrderShortfalls(w.warehouse, so7.id), "forbidden");
-    await expectCode(salesOrderShortfalls(w.qa, so7.id), "forbidden");
+    // Reading the shortage follows sales.sales_order.view (ADR-110 C4); making it stays with the planner.
+    for (const c of [w.warehouse, w.qa]) {
+      if (c.can("sales.sales_order.view")) expect(Array.isArray(await salesOrderShortfalls(c, so7.id))).toBe(true);
+      else await expectCode(salesOrderShortfalls(c, so7.id), "forbidden");
+      await expectCode(makeForSalesLine(c, so7.lineId), "forbidden");
+    }
   });
 
   it("cross-site: another site's customer order is not found; a closed one cannot be made for", async () => {

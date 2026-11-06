@@ -1,8 +1,8 @@
 ---
 key: inventory.putaway
 title: Put away a received lot
-version: 4
-updated_at: 2026-10-31
+version: 5
+updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -38,3 +38,10 @@ Move goods out of the hold area or the dock to the shelf they belong on. When QA
 1. Press **Put away to A-01** once. The lot leaves the list.
 2. Pressing it twice does not move the goods twice.
 3. If you made a mistake, use **Undo** on the move screen within the time shown. After that, ask a site manager to reverse it.
+
+## Boxes
+
+1. Boxes made at Finish move with their lot when QA says OK.
+2. If a lot with boxes is still in the QA area, the list says "2 boxes (96 pcs) + 25 pcs loose".
+3. Leave **How much?** empty: the boxes and the loose pieces go to the shelf together.
+4. A box with two lots in it cannot move with one lot. Split the box first.

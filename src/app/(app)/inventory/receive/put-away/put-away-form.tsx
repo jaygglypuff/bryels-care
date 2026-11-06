@@ -56,7 +56,7 @@ export function PutAwayForm({
       <input type="hidden" name="idempotencyKey" value={key} />
       <ScanOrPick kind="location" name="fromLocationId" label="Take it from which place?" candidates={fromCands} defaultValue={defaultFrom} hideWhenSingle required onlyCandidates search={false} error={fe.fromLocationId} />
       <div className="grid grid-cols-[1fr_auto] items-end gap-2 sm:max-w-sm">
-        <Field label="How much? (optional)" htmlFor="qty" error={fe.qty} hint="Leave empty to move everything from there.">
+        <Field label="How much? (optional)" htmlFor="qty" error={fe.qty} hint="Leave empty to move everything from there, boxes too.">
           <Input id="qty" name="qty" inputMode="decimal" autoComplete="off" />
         </Field>
         {units.length > 1 ? (

@@ -18,7 +18,7 @@ import { salesOrderSteps } from "@/ui/record-steps";
 import { Forbidden } from "../../forbidden";
 import { AllocateForm } from "./order-actions";
 import { FulfilmentPanel } from "./fulfilment-panel"; // W3E
-import { releaseAllocationsAction, startPickAction } from "../fulfilment-actions";
+import { askPlannerToMakeAction, releaseAllocationsAction, startPickAction } from "../fulfilment-actions";
 import { Cmd, ReasonCmd } from "../fulfilment-forms";
 import { ApproveOrderForm, CancelOrderPanel, ReorderForm, ReturnOrderForm, SubmitOrderForm } from "../orders/order-commercial";
 import { LateChip, MaskedNote, Money, salesWord } from "../orders/sales-ui";
@@ -62,8 +62,11 @@ export default async function OrderDetailPage({ params, searchParams }: { params
   const canVoid = ctx.can("sales.sales_order.void") && ["draft", "submitted", "pending_approval", "confirmed", "allocated", "picking", "packed"].includes(status);
   const reasons = order.approvalReasons ?? [];
   const daysLate = orderDaysLate(order, salesBusinessDate());
-  // "Make for this order" on lines short of stock, for people who can create production orders.
-  const toMake: MakeForLine[] = ctx.can("production.work_order.create") ? (await salesOrderShortfalls(ctx, order.id).catch(() => [])).filter((l) => D(l.missing).gt(0)) : [];
+  // ADR-110 C4: the shortage card for everyone who sees the order (same free-stock rule as set-aside, C2).
+  // Planners make the production order; sales asks the planner (a message and a Home line).
+  const toMake: MakeForLine[] = (await salesOrderShortfalls(ctx, order.id).catch(() => [])).filter((l) => D(l.missing).gt(0));
+  const canMake = ctx.can("production.work_order.create");
+  const canAsk = !canMake && ctx.can("sales.sales_order.create");
   const beingMade = ctx.can("production.work_order.view") ? await productionOrdersForSalesOrder(ctx, order.id) : [];
   const warnings = order.warnings ?? [];
   const fulfilment = await fulfilmentForOrder(ctx, order.id);
@@ -283,7 +286,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
 
           {(toMake.length > 0 || beingMade.length > 0) && (
             <Card>
-              <CardTitle>Making it for this order</CardTitle>
+              <CardTitle>{toMake.length > 0 ? "Not enough stock: it needs making" : "Making it for this order"}</CardTitle>
               {toMake.length > 0 && (
                 <ul className="flex flex-col gap-2">
                   {toMake.map((l) => (
@@ -295,7 +298,13 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                           {D(l.alreadyInProduction).gt(0) ? `, already being made ${fmtQty(l.alreadyInProduction, "", 0)}` : ""}
                         </p>
                       </div>
-                      <LinkButton href={`/production/orders/new?salesOrderLine=${l.salesOrderLineId}`} variant="secondary">Make for this order</LinkButton>
+                      {canMake ? (
+                        <LinkButton href={`/production/orders/new?salesOrderLine=${l.salesOrderLineId}`} variant="cta">Make for this order</LinkButton>
+                      ) : canAsk ? (
+                        <Cmd action={askPlannerToMakeAction} fields={{ salesOrderLineId: l.salesOrderLineId }} label={`Ask the planner to make ${Number(l.missing).toLocaleString("en-PH")}`} pending="Asking…" variant="cta" />
+                      ) : (
+                        <span className="text-[14px] text-fg-2">The planner makes a production order for it.</span>
+                      )}
                     </li>
                   ))}
                 </ul>

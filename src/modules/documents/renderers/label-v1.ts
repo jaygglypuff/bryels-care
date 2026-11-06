@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sackLine } from "../sack-quantity";
 import { SCAN_VALUE_RE } from "@/lib/scan/payload";
 import { payloadSymbol } from "../barcode";
 import { html, type SafeHtml } from "../html";
@@ -54,6 +55,8 @@ export const labelDataSchema = z.object({
     packerInitials: text,
     customerMarks: text,
     boxOfText: text,
+    /** ADR-110 C7: the lot came in this many containers; one label per container is numbered "sack n of N". */
+    containerCount: z.number().int().min(1).max(10000).nullable().optional(),
   }),
   /** Test pages only: draw the 50 mm (or 40 mm) scaling ruler for T-01. */
   testPage: z.boolean().optional(),
@@ -140,7 +143,7 @@ const FIELD_ROWS: [LabelFieldKey, string, (e: LabelData["entity"]) => string | n
 ];
 
 function oneLabel(d: LabelData, f: FrozenDataset["meta"], copyNo: number): SafeHtml {
-  const e = d.entity;
+  const e = d.entity.containerCount ? { ...d.entity, quantityText: sackLine(d.entity.quantityText, d.entity.containerCount, copyNo, d.copies) } : d.entity;
   const show = new Set(d.label.fields);
   const { payload, svg } = payloadSymbol(e.payloadType, e.value, d.label.symbology);
   const rows = FIELD_ROWS.filter(([k, , get]) => show.has(k) && get(e)).map(([k, label, get]) => html`<dt>${k === "expiry" && e.expiryLabel ? e.expiryLabel : label}</dt><dd>${get(e)}</dd>`);

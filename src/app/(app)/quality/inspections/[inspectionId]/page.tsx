@@ -139,6 +139,11 @@ export default async function InspectionPage({ params }: { params: Promise<{ ins
 
         <Card>
           <CardTitle action={v.missing.length ? <Chip tone="warn">{v.missing.length} still missing</Chip> : <Chip tone="ok">All typed</Chip>}>Tests and results</CardTitle>
+          {v.can.sampleFirst && canSeeResults && (
+            <p className="mb-3 rounded-[10px] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="sample-first">
+              Record the sample first (above): how much you took and from where. Then type the results here.
+            </p>
+          )}
           {!canSeeResults ? (
             <p className="text-[13px] text-muted">Only QA sees the test results. Status: {inspectionWord(ins.status)}.</p>
           ) : (

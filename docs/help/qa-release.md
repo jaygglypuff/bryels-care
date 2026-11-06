@@ -1,8 +1,8 @@
 ---
 key: quality.release
 title: QA decision (OK to use or not OK)
-version: 2
-updated_at: 2026-10-31
+version: 3
+updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -30,3 +30,9 @@ Only QA decides whether a lot or batch is **OK to use**, **not OK – don't use*
 
 1. Use **⋯ More → Report a problem** on the batch or lot.
 2. On the problem report, **Stop a lot while QA looks into it** stops the lot.
+
+## Sample first
+
+1. On the check of a new lot, record the sample first: how much you took and from where.
+2. Then type the results. Without a sample, the results cannot be saved.
+3. You can add another sample while the check is open, also after all results are in.

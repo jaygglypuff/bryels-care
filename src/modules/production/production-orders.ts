@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, desc, eq, inArray, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "@/db/client";
-import { batches, processStepRecords, productionLines, products, rolePermissions, salesOrderLines, salesOrders, userSiteAssignments, users, workOrders } from "@/db/schema";
+import { batches, customers, notifications, processStepRecords, productionLines, products, rolePermissions, salesOrderLines, salesOrders, userSiteAssignments, users, workOrders } from "@/db/schema";
 import { activeAssignment } from "@/lib/auth/assignments";
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
@@ -10,7 +10,8 @@ import { DomainError } from "@/lib/errors";
 import { fmtMass, fmtQty } from "@/lib/qty";
 import { getSetting } from "@/lib/settings";
 import { getEffectiveFormulaRevision } from "@/modules/masterdata";
-import { notifyUsers } from "@/modules/platform/notifications";
+import { notifyUsers, usersHoldingPermissionAt } from "@/modules/platform/notifications";
+import { freeFinishedStock } from "@/modules/inventory";
 import { insertBatch } from "./batches";
 import { listDailyLogs, defectSummary } from "./daily-log";
 import { productionOrderActions, type NextAction } from "./production-order-next";
@@ -648,12 +649,12 @@ export type MakeForLine = {
 };
 
 /**
- * What is missing on the lines of a customer order, for "Make for this order" (ADR-080 V2-2).
- * Needs `production.work_order.create` and `sales.sales_order.view`; the order must be at a site of
- * the caller (not found otherwise). Read-only.
+ * What is missing on the lines of a customer order, for "Make for this order" (ADR-080 V2-2, ADR-110 C4).
+ * Read-only, so `sales.sales_order.view` is enough: sales sees the shortage card and asks the planner; only
+ * `production.work_order.create` makes the production order (makeForSalesLine / createProductionOrder). The
+ * order must be at a site of the caller (not found otherwise). Free stock follows the set-aside rule (C2).
  */
 export async function salesOrderShortfalls(ctx: AuthContext, salesOrderId: string): Promise<MakeForLine[]> {
-  ctx.require("production.work_order.create");
   ctx.require("sales.sales_order.view");
   const [so] = UUID.test(salesOrderId) ? await db.select().from(salesOrders).where(and(eq(salesOrders.id, salesOrderId), eq(salesOrders.organizationId, ctx.organizationId))).limit(1) : [];
   if (!so || !ctx.allowedSiteIds.includes(so.siteId)) throw new DomainError("not_found", "Customer order not found in your sites.");
@@ -668,22 +669,17 @@ export async function salesOrderShortfalls(ctx: AuthContext, salesOrderId: strin
     .orderBy(salesOrderLines.lineNo);
   const out: MakeForLine[] = [];
   for (const { line, product } of lines) {
-    const [a] = await db.execute<{ allocated: string; free: string; planned: string }>(sql`
+    const [a] = await db.execute<{ allocated: string; planned: string }>(sql`
       select
         (select coalesce(sum(a.qty_units), 0)::text from stock_allocations a where a.sales_order_line_id = ${line.id} and a.status <> 'released') as allocated,
-        (select coalesce(sum(greatest(oh.q - coalesce(al.q, 0), 0)), 0)::text
-           from (select l.id, sum(b.qty_base) as q from inventory_lots l join inventory_balances b on b.lot_id = l.id
-                  where l.product_id = ${product.id} and l.site_id = ${so.siteId} and l.quality_status = 'released'
-                    and (l.expires_on is null or l.expires_on >= ${today}::date) group by l.id) oh
-           left join (select a.lot_id, sum(a.qty_units) as q from stock_allocations a
-                        join sales_order_lines sol on sol.id = a.sales_order_line_id join sales_orders o on o.id = sol.sales_order_id
-                       where a.status = 'open' and o.status in ('confirmed', 'allocated', 'picking', 'packed', 'partially_shipped') group by 1) al on al.lot_id = oh.id) as free,
         (select coalesce(sum(coalesce(w.target_units, floor(w.qty_planned_base * coalesce(fr.theoretical_yield_pct, 100) / 100 / ${product.unitNetMassG}::numeric))), 0)::text
            from work_orders w left join formula_revisions fr on fr.id = w.formula_revision_id
           where w.sales_order_id = ${so.id} and w.product_id = ${product.id} and w.status not in ('cancelled', 'closed')) as planned
     `);
+    // ADR-110 C2: free stock = the set-aside rule (storage places, released, in date, not set aside or reserved).
+    const free = (await freeFinishedStock(db, so.siteId, [product.id])).reduce((t, c) => t.plus(c.available), new Decimal(0));
     const ordered = new Decimal(line.qtyUnits);
-    const missing = Decimal.max(ordered.minus(a.allocated).minus(a.free).minus(a.planned), 0);
+    const missing = Decimal.max(ordered.minus(a.allocated).minus(free).minus(a.planned), 0);
     const eff = await getEffectiveFormulaRevision(ctx, product.id, today).catch(() => null);
     const per = eff ? unitsFrom(eff.rev.referenceBatchSizeG, eff.rev.theoreticalYieldPct, product.unitNetMassG) : null;
     out.push({
@@ -696,7 +692,7 @@ export async function salesOrderShortfalls(ctx: AuthContext, salesOrderId: strin
       productFamily: product.family,
       ordered: ordered.toString(),
       allocated: new Decimal(a.allocated).toString(),
-      freeStock: new Decimal(a.free).toString(),
+      freeStock: free.toString(),
       alreadyInProduction: new Decimal(a.planned).toString(),
       missing: missing.toString(),
       batchCount: eff && missing.gt(0) ? batchesFor(missing, eff.rev.referenceBatchSizeG, eff.rev.theoreticalYieldPct, product.unitNetMassG) : null,
@@ -716,6 +712,83 @@ export async function makeForSalesLine(ctx: AuthContext, salesOrderLineId: strin
   const line = (await salesOrderShortfalls(ctx, l.salesOrderId)).find((x) => x.salesOrderLineId === salesOrderLineId);
   if (!line) throw new DomainError("state", "This customer order no longer needs products made.");
   return line;
+}
+
+/** Dedupe key of "Ask the planner to make …" per customer order line and missing quantity (one message per shortage). */
+export const askToMakeKey = (salesOrderLineId: string, missing: string) => `make-for:${salesOrderLineId}:${missing}`;
+
+/**
+ * ADR-110 C4 "Ask the planner to make 378": sales (sales.sales_order.create at the order's site) tells the people
+ * who create production orders at that site (production.work_order.create) that a customer order line is short.
+ * One in-app message per planner and shortage (dedupe), linking to the pre-filled new production order; audited.
+ * Asking never creates a production order. Refused when nothing is missing.
+ */
+export async function askPlannerToMake(ctx: AuthContext, salesOrderLineId: string) {
+  ctx.require("sales.sales_order.view");
+  ctx.require("sales.sales_order.create");
+  const [l] = UUID.test(salesOrderLineId)
+    ? await db.select({ salesOrderId: salesOrderLines.salesOrderId, siteId: salesOrders.siteId }).from(salesOrderLines).innerJoin(salesOrders, eq(salesOrders.id, salesOrderLines.salesOrderId)).where(and(eq(salesOrderLines.id, salesOrderLineId), eq(salesOrders.organizationId, ctx.organizationId))).limit(1)
+    : [];
+  if (!l || !ctx.allowedSiteIds.includes(l.siteId)) throw new DomainError("not_found", "Customer order line not found in your sites.");
+  ctx.requireAt("sales.sales_order.create", l.siteId);
+  const line = (await salesOrderShortfalls(ctx, l.salesOrderId)).find((x) => x.salesOrderLineId === salesOrderLineId);
+  if (!line || new Decimal(line.missing).lte(0)) throw new DomainError("state", "Nothing is missing on this line any more: stock or a production order covers it.");
+  const [so] = await db.select({ customerName: customers.name }).from(salesOrders).innerJoin(customers, eq(customers.id, salesOrders.customerId)).where(eq(salesOrders.id, l.salesOrderId)).limit(1);
+  const pcs = fmtQty(line.missing, "pcs", 0);
+  return db.transaction(async (tx) => {
+    const planners = (await usersHoldingPermissionAt(tx, ctx.organizationId, "production.work_order.create", l.siteId)).filter((u) => u !== ctx.userId);
+    const told = await notifyUsers(tx, planners, {
+      organizationId: ctx.organizationId,
+      siteId: l.siteId,
+      kind: "production.make_for_order.asked",
+      severity: "warning",
+      title: `Customer order short: make ${pcs} ${line.productName}`,
+      body: `${ctx.displayName} asks: ${line.salesOrderNumber} (${so?.customerName ?? "customer"}) needs ${pcs} more ${line.productName}${line.neededBy ? ` by ${line.neededBy}` : ""}. Make a production order for it.`,
+      entityType: "sales_order",
+      entityId: l.salesOrderId,
+      link: `/production/orders/new?salesOrderLine=${salesOrderLineId}`,
+      dedupeKey: askToMakeKey(salesOrderLineId, line.missing),
+    });
+    await audit(tx, ctx, {
+      action: "sales.sales_order.make_requested",
+      entityType: "sales_order",
+      entityId: l.salesOrderId,
+      entityNumber: line.salesOrderNumber,
+      siteId: l.siteId,
+      after: { lineNo: line.lineNo, product: line.productName, missing: line.missing, told: told.length },
+    });
+    return { told: told.length, alreadyAsked: planners.length > 0 && told.length === 0, planners: planners.length, missing: line.missing, productName: line.productName, salesOrderNumber: line.salesOrderNumber };
+  });
+}
+
+export type ShortCustomerLine = MakeForLine & { customerName: string; asked: boolean };
+
+/**
+ * ADR-110 C4 planner Home "Customer orders short": open customer orders at the current site whose lines still miss
+ * pieces after free stock, set-asides and open production orders for them (same numbers as the order's shortage
+ * card). Needs `production.work_order.create`. At most `limit` lines, the earliest needed-by first.
+ */
+export async function customerOrdersShort(ctx: AuthContext, opts: { limit?: number } = {}): Promise<ShortCustomerLine[]> {
+  ctx.require("production.work_order.create");
+  ctx.requireSite(ctx.currentSiteId);
+  if (!ctx.can("sales.sales_order.view")) return [];
+  const orders = await db
+    .select({ id: salesOrders.id, customerName: customers.name })
+    .from(salesOrders)
+    .innerJoin(customers, eq(customers.id, salesOrders.customerId))
+    .where(and(eq(salesOrders.organizationId, ctx.organizationId), eq(salesOrders.siteId, ctx.currentSiteId), inArray(salesOrders.status, ["confirmed", "partially_shipped"])))
+    .orderBy(asc(salesOrders.requestedDeliveryOn), asc(salesOrders.orderNumber))
+    .limit(40);
+  const out: ShortCustomerLine[] = [];
+  for (const o of orders) {
+    for (const line of await salesOrderShortfalls(ctx, o.id)) {
+      if (new Decimal(line.missing).lte(0)) continue;
+      const [n] = await db.select({ id: notifications.id }).from(notifications).where(and(eq(notifications.organizationId, ctx.organizationId), eq(notifications.dedupeKey, askToMakeKey(line.salesOrderLineId, line.missing)))).limit(1);
+      out.push({ ...line, customerName: o.customerName, asked: !!n });
+    }
+    if (out.length >= (opts.limit ?? 5)) break;
+  }
+  return out.slice(0, opts.limit ?? 5);
 }
 
 /** Open production orders made for a customer order (sales order page: "Being made for this order"). */

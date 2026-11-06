@@ -1,8 +1,8 @@
 ---
 key: sales.fulfilment
 title: Get from shelf, check the boxes, send out
-version: 2
-updated_at: 2026-10-31
+version: 3
+updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -11,7 +11,7 @@ Get each box from the shelf by scanning it. A different person checks the boxes.
 ## Get from shelf
 
 1. Open **Operations → Packing & dispatch → To get from shelf** and press **Get from shelf** on the first order.
-2. Go to the shelf the screen shows. Under **Scan the box label (or the lot label for loose pieces)**, scan each box. A box that is not on the list is refused. Scanning the same box twice counts once.
+2. Go to the shelf the screen shows. Under **Scan the box label (or the lot label for loose pieces)**, scan each box. Boxes made at Finish have their own box label: scan it. You do not need a lot label for them. A box that is not on the list is refused. Scanning the same box twice counts once.
 3. Scanned the wrong box? Press **Undo this scan**.
 4. Press **Finish getting from shelf**. If something is missing, use **Finish with items missing** and say why.
 
@@ -19,8 +19,10 @@ Get each box from the shelf by scanning it. A different person checks the boxes.
 
 1. Open the delivery and scan each box again under **Scan each box (or the lot label with the loose pieces you counted)**.
 2. The person who got the boxes from the shelf cannot check the same delivery.
-3. A box beyond the order is refused. Only a manager can allow it (**Allow it**), with where the customer said so and their password.
-4. Fill in **Boxes on the truck**, then press **Finish the check**.
+3. A box that is not on the pick list is refused. It is not counted. Put it aside. Only a manager can allow one more box (**Allow it**), with where the customer said so and their password.
+4. A box still in the QA cage, or a box for another order, is always refused.
+5. If the screen says "548 of 500 pcs are checked, 48 too many", you cannot finish. Open **Boxes on this delivery and scans** and take the extra box off.
+6. Fill in **Boxes on the truck**, then press **Finish the check**.
 
 ## Send out
 

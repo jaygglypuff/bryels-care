@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
 import { getOperatorHome, getPlannerNext, getWorkFlowCounts } from "@/modules/analytics";
-import { floorTaskCounts, myFloorTasks } from "@/modules/production";
-import { PageHeader } from "@/ui/core";
+import { customerOrdersShort, floorTaskCounts, myFloorTasks, type ShortCustomerLine } from "@/modules/production";
+import { Card, CardTitle, LinkButton, PageHeader } from "@/ui/core";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { homeIntro } from "@/ui/role-names";
 import { homeHref } from "../nav";
@@ -28,17 +28,20 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     // ADR-110 C11/C13: buyers and the warehouse get their work list on Home (the "How work flows" counts).
     const buyer = ctx.can("procurement.purchase_order.create");
     const warehouse = ctx.can("inventory.movement.post") && ctx.can("sales.pick.view");
-    const [tiles, tasks, plan, buying, dispatch] = await Promise.all([
+    const [tiles, tasks, plan, buying, dispatch, short] = await Promise.all([
       getOperatorHome(ctx),
       floor ? myFloorTasks(ctx) : Promise.resolve([]),
       planner ? getPlannerNext(ctx) : Promise.resolve(null),
       buyer ? getWorkFlowCounts(ctx, PROCUREMENT_LINES.map((l) => l.key)) : Promise.resolve([]),
       warehouse ? getWorkFlowCounts(ctx, WAREHOUSE_LINES.map((l) => l.key)) : Promise.resolve([]),
+      // ADR-110 C4: customer orders short of stock, for the planner.
+      planner ? customerOrdersShort(ctx) : Promise.resolve([] as ShortCustomerLine[]),
     ]);
     return (
       <>
         <PageHeader title={`Good day, ${ctx.displayName.split(" ")[0]}`} subtitle={ctx.currentSite.name} />
         <PageIntro>{homeIntro(ctx.roleCodes)}</PageIntro>
+        {short.length > 0 && <CustomerOrdersShort lines={short} />}
         {plan && <PlannerNext plan={plan} canApprove={ctx.can("production.work_order.approve")} />}
         {buyer && <BuyerNext counts={buying} />}
         {buyer && <WorkList title="Your buying work" lines={PROCUREMENT_LINES} counts={buying} testId="procurement-work" />}
@@ -55,6 +58,33 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   // ADR-083: Home answers "what needs me, how are we doing, what is happening" — nothing else (mockup
   // panel 1; owner-home.tsx). The detailed overview is under Management → Reports & analytics.
   return <OwnerHomePage ctx={ctx} scope={sp.scope} />;
+}
+
+/** ADR-110 C4: customer orders that are short of stock, each with "Make it" (the new production order, pre-filled and linked). */
+function CustomerOrdersShort({ lines }: { lines: ShortCustomerLine[] }) {
+  return (
+    <Card className="mb-4">
+      <CardTitle>Customer orders short</CardTitle>
+      <ul className="flex flex-col divide-y divide-line">
+        {lines.map((l) => (
+          <li key={l.salesOrderLineId} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+            <div className="min-w-0 text-[14px]">
+              <p className="font-medium">
+                {l.productName}: {Number(l.missing).toLocaleString("en-PH")} short
+              </p>
+              <p className="text-fg-2">
+                For {l.salesOrderNumber} ({l.customerName}){l.neededBy ? ` · needed by ${l.neededBy}` : ""}
+                {l.asked ? " · sales asked you" : ""}
+              </p>
+            </div>
+            <LinkButton href={`/production/orders/new?salesOrderLine=${l.salesOrderLineId}`} variant="cta">
+              Make it
+            </LinkButton>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
 }
 
 /** The planner's one next step (UX audit 2026-10-31): orders waiting for approval, else approved orders not started, else make a new one. */

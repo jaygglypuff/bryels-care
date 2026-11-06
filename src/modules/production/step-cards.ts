@@ -72,7 +72,7 @@ export async function getStepCard(ctx: AuthContext, batchId: string, stepNo: num
     ? {
         kind: step.equipmentKind ?? null,
         uses: step.equipmentUses.map((u) => ({ code: u.code, name: u.name, reasons: u.reasons, override: !!u.override })),
-        options: (await equipmentOptions(ctx, b.siteId, step.equipmentKind ?? null)).map((o) => ({ id: o.id, code: o.code, name: o.name, usable: o.usable, reasons: o.reasons, blocking: o.blocking })),
+        options: (await equipmentOptions(ctx, b.siteId, step.equipmentKind ?? null)).map((o) => ({ id: o.id, code: o.code, name: o.name, usable: o.usable, reasons: o.reasons, blocking: o.blocking, why: o.why, canRecordCleaning: o.canRecordCleaning, fixHelp: o.fixHelp })),
         canChoose: ctx.can("production.equipment_use.create"),
       }
     : null;

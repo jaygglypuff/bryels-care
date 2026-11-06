@@ -275,7 +275,8 @@ export async function recordSample(ctx: AuthContext, input: RecordSampleInput) {
     const ins = await lockInspection(tx, ctx, input.inspectionId);
     const [dup] = await tx.select().from(inspectionSamples).where(and(eq(inspectionSamples.organizationId, ctx.organizationId), eq(inspectionSamples.idempotencyKey, input.idempotencyKey))).limit(1);
     if (dup) return { sampleId: dup.id, sampleNo: dup.sampleNo, replayed: true };
-    if (!["pending", "in_progress"].includes(ins.status)) throw new DomainError("state", `Inspection ${ins.inspectionNumber} is ${INSPECTION_STATUS_LABEL[ins.status].toLowerCase()}; samples are taken while it is pending or in progress.`);
+    // ADR-110 C8: a sample may be recorded while the check is open, also once every result is in (waiting for review).
+    if (!["pending", "in_progress", "awaiting_review"].includes(ins.status)) throw new DomainError("state", `Inspection ${ins.inspectionNumber} is ${INSPECTION_STATUS_LABEL[ins.status].toLowerCase()}; samples are taken while the check is open.`);
     if (!ins.lotId) throw new DomainError("state", "The batch has no output lot yet; there is nothing to sample.");
     const [lot] = await tx.select().from(inventoryLots).where(eq(inventoryLots.id, ins.lotId)).limit(1);
     if (["on_hold", "recalled"].includes(lot.qualityStatus)) {
@@ -392,6 +393,7 @@ export async function recordInspectionResult(ctx: AuthContext, input: RecordResu
     const ins = await lockInspection(tx, ctx, input.inspectionId);
     return withIdempotency(tx, ctx, input.idempotencyKey ? `test-result:${input.idempotencyKey}` : null, "quality.test_result.record", async () => {
       assertOpenForResults(ins);
+      await assertSampleRecorded(tx, ins);
       const tests = await planTests(tx, ins.inspectionPlanId);
       const t = tests.find((x) => x.id === input.planTestId);
       if (!t) throw new DomainError("validation", "Choose a test of this inspection's plan.", { field: "planTestId" });
@@ -405,6 +407,17 @@ function assertOpenForResults(ins: InspectionRow) {
   if (!(INSPECTION_OPEN_STATUSES as readonly string[]).includes(ins.status)) {
     throw new DomainError("state", `Inspection ${ins.inspectionNumber} is ${INSPECTION_STATUS_LABEL[ins.status].toLowerCase()}; results can no longer be added. Raise a deviation if something is wrong.`);
   }
+}
+
+/**
+ * ADR-110 C8 (walk P5; assumption A-QA-SAMPLE-01 for QA): an incoming-lot check needs a recorded sample before its
+ * results (what was tested must be on record: which lot, how much, from where, by whom). Batch checks use the retained
+ * samples taken at Finish; in-process checks have no lot to sample.
+ */
+export async function assertSampleRecorded(q: DbOrTx, ins: Pick<InspectionRow, "id" | "inspectionKind" | "lotId" | "inspectionNumber">) {
+  if (ins.inspectionKind !== "incoming" || !ins.lotId) return;
+  const [s] = await q.select({ id: inspectionSamples.id }).from(inspectionSamples).where(eq(inspectionSamples.inspectionId, ins.id)).limit(1);
+  if (!s) throw new DomainError("state", `Record the sample first: how much you took and from where. Then enter the results of ${ins.inspectionNumber}.`, { code: "SAMPLE_REQUIRED", field: "qty" });
 }
 
 export type RecordResultsInput = {
@@ -427,6 +440,7 @@ export async function recordInspectionResults(ctx: AuthContext, input: RecordRes
     const ins = await lockInspection(tx, ctx, input.inspectionId);
     return withIdempotency(tx, ctx, input.idempotencyKey ? `test-results:${input.idempotencyKey}` : null, "quality.test_result.record_many", async () => {
       assertOpenForResults(ins);
+      await assertSampleRecorded(tx, ins);
       const tests = await planTests(tx, ins.inspectionPlanId);
       const seen = new Set<string>();
       const fieldErrors: Record<string, string> = {};
@@ -915,8 +929,10 @@ export async function getInspection(ctx: AuthContext, inspectionId: string) {
     missing: missingRequiredTests(tests, liveRows).map((t) => t.name),
     isTester,
     can: {
-      sample: open && ins.status !== "awaiting_review" && !!lot && ctx.can("quality.inspection.create"),
-      record: open && ctx.can("quality.test_result.create"),
+      // ADR-110 C8: the sample form stays while the check is open; results wait for a sample on incoming checks.
+      sample: (open || ins.status === "awaiting_review") && !!lot && ctx.can("quality.inspection.create"),
+      record: open && ctx.can("quality.test_result.create") && !(ins.inspectionKind === "incoming" && !!ins.lotId && samples.length === 0),
+      sampleFirst: open && ins.inspectionKind === "incoming" && !!ins.lotId && samples.length === 0,
       correct: open && ctx.can("quality.test_result.void"),
       submit: ins.status === "in_progress" && ctx.can("quality.inspection.submit"),
       review: ins.status === "awaiting_review" && ctx.can("quality.inspection.approve") && !isTester,

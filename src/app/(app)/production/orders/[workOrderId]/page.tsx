@@ -210,14 +210,15 @@ export default async function ProductionOrderPage({ params, searchParams }: { pa
             <span>{v.assignee ? (v.assignee.id === ctx.userId ? "Assigned to you" : `Assigned to ${v.assignee.name}`) : "Anyone can take it"}</span>
             {d.salesOrder && (
               <span>
-                For customer order{" "}
+                For{" "}
                 {ctx.can("sales.sales_order.view") ? (
                   <Link href={`/sales/${d.salesOrder.id}`} className="underline">
                     {d.salesOrder.number}
                   </Link>
                 ) : (
                   d.salesOrder.number
-                )}
+                )}{" "}
+                ({d.salesOrder.customerName})
               </span>
             )}
           </span>

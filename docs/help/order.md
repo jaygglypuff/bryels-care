@@ -1,8 +1,8 @@
 ---
 key: sales.order
 title: Enter and confirm a customer order
-version: 2
-updated_at: 2026-10-31
+version: 3
+updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -29,3 +29,10 @@ An order goes: draft → confirmed (or waits for an OK) → stock set aside → 
 ## Cancel
 
 1. **Cancel order** (under **⋯ More**) needs a **Reason for cancelling**. Orders already sent out cannot be cancelled; use a customer return.
+
+## Not enough stock
+
+1. When the order is short, the order page shows **Not enough stock: it needs making** with how many are missing.
+2. Press **Ask the planner to make 378** (your number). The planner gets a message and sees the order on their Home.
+3. Only the planner or the manager makes the production order. When it starts, it shows on your order.
+4. Stock in the sending-out bay or in the QA cage is not free stock. Only stock on a shelf that QA said OK counts.

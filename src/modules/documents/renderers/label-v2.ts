@@ -1,4 +1,5 @@
 import { payloadSymbol } from "../barcode";
+import { sackLine } from "../sack-quantity";
 import { html, type SafeHtml } from "../html";
 import type { LabelFieldKey, TemplateDefinition } from "../schemas";
 import { LABEL_DATASETS, labelDataSchema, type LabelData } from "./label-v1";
@@ -110,7 +111,7 @@ const ROWS: [LabelFieldKey, string, (e: LabelData["entity"]) => string | null | 
 ];
 
 function oneLabel(d: LabelData, f: FrozenDataset["meta"], copyNo: number): SafeHtml {
-  const e = d.entity;
+  const e = d.entity.containerCount ? { ...d.entity, quantityText: sackLine(d.entity.quantityText, d.entity.containerCount, copyNo, d.copies) } : d.entity;
   const g = labelGeometry(d.label.mediaWidthMm, d.label.mediaHeightMm);
   const show = new Set(d.label.fields);
   const { payload, svg } = payloadSymbol(e.payloadType, e.value, d.label.symbology);

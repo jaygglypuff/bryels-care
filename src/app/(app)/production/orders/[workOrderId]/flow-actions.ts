@@ -10,6 +10,7 @@ import type { PrintLabelsState } from "@/ui/labels/actions";
 import { floorCheckNext } from "@/modules/production";
 import { approveStepException, batchSiteId, requestMaterialSubstitution, stopForToday, useApprovedAlternative, withdrawMaterialSubstitution, checkDispense, checkStep, confirmPicked, issuePackaging, planBatchBoxes, printBatchLabels, returnLeftOverWrappers, recordDispense, returnDispense, returnStep, selectEquipment, stepDone, submitChecklist } from "@/modules/production";
 import { registerAppHooks } from "@/modules/wiring";
+import { recordServiceRecord } from "@/modules/masterdata";
 
 // Execution ↔ QA hooks (deviations for early ends and out-of-range values); idempotent.
 registerAppHooks();
@@ -30,6 +31,22 @@ const opt = (fd: FormData, k: string) => {
   return v ? v : null;
 };
 const stepNoOf = (fd: FormData) => z.coerce.number().int().min(1).max(999).parse(str(fd, "stepNo"));
+
+/**
+ * ADR-110 C5 "Record cleaning" on the weigh card and the step's equipment choice: the same service and audit as the
+ * equipment page (recordServiceRecord, cleaning · pass; masterdata.equipment.edit at the equipment's site).
+ */
+export async function recordCleaningAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const equipmentId = uuid.parse(str(fd, "equipmentId"));
+    await recordServiceRecord(ctx, { equipmentId, serviceKind: "cleaning", result: "pass", notes: "Cleaning recorded on the floor (weighing or step screen)", idempotencyKey: opt(fd, "idempotencyKey") ?? undefined });
+    refreshCurrentPage();
+    return { ok: true, message: `Cleaning recorded by ${ctx.displayName}. ${opt(fd, "code") ?? "The machine"} can be used now.` };
+  } catch (e) {
+    return toActionState(e);
+  }
+}
 
 /** The second person who signs on this tablet by picking their name (password only when the setting asks). */
 async function signer(ctx: AuthContext, fd: FormData, prefix: "checker" | "approver", permission: Permission, batchId: string): Promise<AuthContext | null> {

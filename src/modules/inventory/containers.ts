@@ -618,14 +618,17 @@ export async function boxesAtLocation(ctx: AuthContext, locationId: string) {
  * Boxes travel with a whole-lot transfer (owner demo 2026-11-06): when a posting moves ALL of a lot's stock
  * from one place to another (QA release to the finished goods bay, QA reject to the rejected cage), the open
  * or sealed boxes at the old place that hold only that lot move too, so the boxes and the balances agree.
- * Boxes with other lots inside stay (their other contents did not move). Returns the box numbers moved.
+ * ADR-110 C3: a box that also holds another lot cannot follow (its other contents did not move) and leaving it
+ * behind would split the box from its own stock, so the whole posting is refused until the box is split. Callers
+ * run it in the transaction of the posting, BEFORE or after it; a refusal rolls both back. Returns the box numbers moved.
  */
 export async function moveBoxesWithLot(tx: Tx, ctx: AuthContext, input: { lotId: string; fromLocationId: string; toLocationId: string; reason: string }): Promise<string[]> {
   const here = await tx
     .select({ id: containers.id, number: containers.containerNumber, siteId: containers.siteId })
     .from(containers)
     .innerJoin(containerContents, eq(containerContents.containerId, containers.id))
-    .where(and(eq(containerContents.lotId, input.lotId), eq(containers.currentLocationId, input.fromLocationId), inArray(containers.status, [...MOVABLE_BOX_STATUSES])))
+    .where(and(eq(containerContents.lotId, input.lotId), gt(containerContents.qtyBase, "0"), eq(containers.currentLocationId, input.fromLocationId), inArray(containers.status, [...MOVABLE_BOX_STATUSES])))
+    .orderBy(asc(containers.id))
     .for("update", { of: containers });
   const moved: string[] = [];
   for (const b of here) {
@@ -634,7 +637,9 @@ export async function moveBoxesWithLot(tx: Tx, ctx: AuthContext, input: { lotId:
       .from(containerContents)
       .where(and(eq(containerContents.containerId, b.id), sql`${containerContents.lotId} <> ${input.lotId}`, gt(containerContents.qtyBase, "0")))
       .limit(1);
-    if (other) continue;
+    if (other) {
+      throw new DomainError("conflict", `Box ${b.number} holds this lot and another lot, so it cannot move with this lot. Split the box first (Boxes › Split), then try again.`, { code: "MIXED_BOX", rule: "BOX", box: b.number });
+    }
     await tx.update(containers).set({ currentLocationId: input.toLocationId, updatedAt: new Date() }).where(eq(containers.id, b.id));
     await audit(tx, ctx, { action: "inventory.container.moved", entityType: "container", entityId: b.id, entityNumber: b.number, siteId: b.siteId, reason: input.reason, before: { locationId: input.fromLocationId }, after: { locationId: input.toLocationId, withLot: input.lotId } });
     moved.push(b.number);

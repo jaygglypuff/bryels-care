@@ -25,6 +25,8 @@ import { DomainError } from "@/lib/errors";
 import type { Permission } from "@/lib/permissions";
 import { getSetting } from "@/lib/settings";
 import { businessToday, deriveAvailability, equipmentAvailability, reasonCodeOptions } from "@/modules/masterdata";
+import { equipmentWhy, fixerWords } from "@/modules/masterdata/equipment-words";
+import { usersWithRoles } from "@/modules/platform/notifications";
 import { type SnapshotStep, type StepRecord, eligibleSigners, routingStepDetails, sortedSteps, stepRecords } from "./execution";
 import { currentChecklistAnswers } from "./line-clearance";
 import { currentPackaging } from "./packaging";
@@ -295,9 +297,22 @@ export async function equipmentOptions(ctx: AuthContext, siteId: string, kind: s
     .orderBy(asc(equipment.code));
   const today = businessToday();
   const out = [];
+  // ADR-110 C5: who fixes calibration / maintenance (site managers at the site, by name) and whether this person
+  // may record the cleaning here (the same service and audit as the equipment page: masterdata.equipment.edit).
+  let fixers: string[] | null = null;
+  const fixerNames = async () => {
+    if (fixers) return fixers;
+    const ids = await usersWithRoles(db, ctx.organizationId, ["site_manager"], siteId);
+    fixers = ids.length ? (await db.select({ name: users.displayName }).from(users).where(inArray(users.id, ids)).orderBy(asc(users.displayName))).map((u) => u.name) : [];
+    return fixers;
+  };
+  const canClean = ctx.canAt("masterdata.equipment.edit", siteId);
   for (const e of rows) {
     const av = deriveAvailability(e, today);
     const full = av.selectable ? null : await equipmentAvailability(ctx, e.id);
+    const why = equipmentWhy(e.code, av.blockingReasons, today);
+    const fixes = [...new Set(why.map((w) => w.fix))];
+    const help = (await Promise.all(fixes.filter((f) => f !== "record_cleaning").map(async (f) => fixerWords(f, f === "qa" ? [] : await fixerNames())))).filter((x): x is string => !!x);
     out.push({
       id: e.id,
       code: e.code,
@@ -309,6 +324,11 @@ export async function equipmentOptions(ctx: AuthContext, siteId: string, kind: s
       viaOverride: !av.selectable && !!full?.override,
       reasons: av.reasons.map((r) => r.detail),
       blocking: av.blockingReasons.map((r) => r.detail),
+      /** Plain sentences: "SC-01 needs cleaning after the last batch". */
+      why: why.map((w) => w.text),
+      /** "Record cleaning" is offered on the floor (cleaning is the only thing blocking it, or one of them). */
+      canRecordCleaning: canClean && why.some((w) => w.fix === "record_cleaning"),
+      fixHelp: help,
     });
   }
   return out;

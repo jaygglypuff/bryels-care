@@ -72,7 +72,7 @@ describe("put-away and status-location rules (US-2-09)", () => {
     expect(r2).toMatchObject({ replayed: true, movementId: r1.movementId });
     expect(await onHand(lot.id, (await loc(nfd.id, "QUA-01")).id)).toBe("1000.000000");
     expect(await onHand(lot.id, (await loc(nfd.id, "RCV")).id)).toBe("0.000000");
-    expect(await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, r1.movementId), eq(auditEvents.action, "inventory.stock_movement.posted")))).toHaveLength(1);
+    expect(await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, r1.movementId!), eq(auditEvents.action, "inventory.stock_movement.posted")))).toHaveLength(1);
   });
 
   it("refuses cross-site lots and locations, and users without inventory.movement.post", async () => {

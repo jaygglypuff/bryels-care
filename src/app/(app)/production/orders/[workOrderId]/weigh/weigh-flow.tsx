@@ -11,6 +11,7 @@ import { Keypad, KeypadField } from "@/ui/keypad";
 import { ScanOrPick } from "@/ui/scan-or-pick";
 import { Chip } from "@/ui/status";
 import { NextApprover } from "@/ui/next-approver";
+import { EquipmentWhy } from "../equipment-why";
 import type { NextActors } from "@/lib/next-actors-words";
 import {
   askOtherMaterialAction,
@@ -48,6 +49,9 @@ export function WeighFlow(p: {
     name: string;
     usable: boolean;
     calibrationDueDate: string | null;
+    why: string[];
+    canRecordCleaning: boolean;
+    fixHelp: string[];
   }[];
   requiresScale: boolean;
   checkers: Person[];
@@ -244,7 +248,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
           : !entered
           ? "Type the weight first."
           : p.requiresScale && !scale
-            ? "Choose the scale under More details first."
+            ? "No scale can be used now. See why above."
             : null;
   return (
     <section
@@ -311,6 +315,11 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
             <li key={t}>{t}</li>
           ))}
         </ul>
+      )}
+      {p.requiresScale && !scale && (
+        <div className="mt-3">
+          <EquipmentWhy items={p.scales} title="No scale can be used now" />
+        </div>
       )}
       <form
         ref={form}

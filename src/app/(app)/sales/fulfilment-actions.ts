@@ -39,6 +39,7 @@ import {
   voidPickLine,
 } from "@/modules/sales";
 import { findContainerByNumber } from "@/modules/inventory";
+import { askPlannerToMake } from "@/modules/production";
 
 /**
  * Server actions of the W3E fulfilment screens (thin adapters: parse, call the service, return
@@ -450,4 +451,23 @@ export async function repackAction(_: ActionState, fd: FormData): Promise<Action
   }
   revalidatePath("/warehouse/packs");
   redirect(`/warehouse/packs/${id}?done=repacked`);
+}
+
+/* ------------------------------------------------------------------ ADR-110 C4: ask the planner to make it */
+
+export async function askPlannerToMakeAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  try {
+    const ctx = await requireContext();
+    const r = await askPlannerToMake(ctx, uuid.parse(str(fd, "salesOrderLineId")));
+    refreshCurrentPage();
+    if (r.planners === 0) return { ok: false, message: "Nobody at this site can make production orders yet. Ask the site manager." };
+    return {
+      ok: true,
+      message: r.alreadyAsked
+        ? `The planner was already told that ${r.salesOrderNumber} needs ${r.missing} ${r.productName}. They see it on their Home.`
+        : `Asked: ${plural(r.told, "planner")} told that ${r.salesOrderNumber} needs ${r.missing} ${r.productName}. Next: the planner makes a production order for it; it shows here when it starts.`,
+    };
+  } catch (e) {
+    return toActionState(e);
+  }
 }

@@ -17,8 +17,8 @@ import { MOVABLE_BOX_STATUSES } from "./moves";
  * unblocked storage location (by code) in the section the item belongs in (sectionForItem, ADR-077),
  * the same rule putAwayOptions uses to list destinations. Locations under an open QA hold are left out
  * on both sides: stock in them may only move to quarantine/hold/rejected, and they refuse stock.
- * Quantities exclude boxed stock (boxed stock moves with its box on the Move screen); a row whose stock
- * is all in boxes is still listed with `boxedQtyBase` so the warehouse is told about it.
+ * Quantities exclude boxed stock; the boxes are listed (`boxNumbers`, `boxedQtyBase`) and put-away moves them with
+ * the lot (ADR-110 C3), so boxes made at Finish are put away as boxes, not loose pieces.
  * Read-only; site-scoped to the caller's current site.
  */
 
@@ -41,6 +41,8 @@ export type PutAwayTask = {
   /** Loose quantity in a friendly unit: 60,000 g → "60 kg"; pieces stay pieces. */
   qtyText: string;
   boxedQtyText: string | null;
+  /** ADR-110 C3: the boxes of the lot at the source place (they move with the lot on put-away). */
+  boxNumbers: string[];
   releasedAt: Date;
   section: LocationSection;
   sectionLabel: string;
@@ -70,6 +72,7 @@ export async function lotsToPutAway(ctx: AuthContext, opts: { limit?: number } =
     location_name: string;
     qty: string;
     boxed: string;
+    box_numbers: string[] | null;
     released_at: Date | string;
   }>(sql`
     with held as (
@@ -77,9 +80,10 @@ export async function lotsToPutAway(ctx: AuthContext, opts: { limit?: number } =
       where h.site_id = ${siteId} and h.status in ('open', 'investigating') and h.location_id is not null
     ),
     boxed as (
-      select cc.lot_id, c.current_location_id as location_id, sum(cc.qty_base) as qty
+      select cc.lot_id, c.current_location_id as location_id, sum(cc.qty_base) as qty,
+             array_agg(c.container_number order by c.container_number) as numbers
       from container_contents cc join containers c on c.id = cc.container_id
-      where c.site_id = ${siteId} and c.status in (${sql.join(
+      where cc.qty_base > 0 and c.site_id = ${siteId} and c.status in (${sql.join(
         MOVABLE_BOX_STATUSES.map((s) => sql`${s}`),
         sql`, `,
       )})
@@ -89,7 +93,7 @@ export async function lotsToPutAway(ctx: AuthContext, opts: { limit?: number } =
            coalesce(m.code, p.sku_code, '') as item_code, coalesce(m.name, p.name, '') as item_name, m.material_kind,
            lot.supplier_lot_number, lot.expires_on::text as expires_on, lot.base_uom,
            l.id as location_id, l.code as location_code, l.name as location_name,
-           b.qty_base::text as qty, coalesce(bx.qty, 0)::text as boxed,
+           b.qty_base::text as qty, coalesce(bx.qty, 0)::text as boxed, bx.numbers as box_numbers,
            coalesce((select max(d.decided_at) from dispositions d
                       where d.subject_type = 'lot' and d.subject_id = lot.id and d.to_status = 'released'), lot.created_at) as released_at
     from inventory_balances b
@@ -146,6 +150,7 @@ export async function lotsToPutAway(ctx: AuthContext, opts: { limit?: number } =
       boxedQtyBase: boxed.toString(),
       qtyText: fmtStock(loose, r.base_uom),
       boxedQtyText: boxed.gt(0) ? fmtStock(boxed, r.base_uom) : null,
+      boxNumbers: r.box_numbers ?? [],
       releasedAt: r.released_at instanceof Date ? r.released_at : new Date(r.released_at),
       section,
       sectionLabel: SECTION_LABELS[section],

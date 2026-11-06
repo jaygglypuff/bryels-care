@@ -13,6 +13,7 @@ import { postMovement } from "./ledger";
 import { allowedDestinationKinds, isUuid } from "./lots";
 import { fmtStock } from "./low-stock";
 import { looseQty } from "./moves";
+import { moveBoxesWithLot } from "./containers";
 import { SECTION_LABELS, SECTION_ORDER, isSection, sectionForItem, sectionSql, type LocationSection } from "@/modules/masterdata";
 
 /**
@@ -101,7 +102,7 @@ export async function putAwayLot(ctx: AuthContext, input: PutAwayInput) {
       .from(stockMovements)
       .where(and(eq(stockMovements.organizationId, ctx.organizationId), eq(stockMovements.idempotencyKey, key)))
       .limit(1);
-    if (dup) return { movementId: dup.id, number: dup.number ?? "", lotNumber: lot.lotNumber, replayed: true, toCode: null as string | null };
+    if (dup) return { movementId: dup.id as string | null, number: dup.number ?? "", lotNumber: lot.lotNumber, replayed: true, toCode: null as string | null, boxes: [] as string[] };
 
     const to = await resolveLocationRef(tx, ctx, lot.siteId, input.locationRef);
     if (!to.isActive) throw new DomainError("validation", `Location ${to.code} is inactive.`, { field: "location" });
@@ -151,13 +152,33 @@ export async function putAwayLot(ctx: AuthContext, input: PutAwayInput) {
     if (heldIds.has(from.locationId) && !["quarantine", "hold", "rejected"].includes(to.kind)) {
       throw new DomainError("blocked_lot", `Stock in ${from.code} is stopped by QA and can only move to a waiting-for-check, stopped-by-QA or rejected place.`, { rule: "V-LOC" });
     }
-    // Boxed stock moves only with its box (same rule as transferStock, W1C): put-away moves the loose part.
+    // ADR-110 C3: with no quantity typed, put-away moves everything from there: the loose pieces AND the boxes of the
+    // lot (one transfer of the whole balance; the boxes follow it, moveBoxesWithLot). A typed quantity moves loose pieces only.
+    const typed = !!(input.qty && String(input.qty).trim());
     const loose = Decimal.min(await looseQty(tx, lot.id, from.locationId), from.qty);
+    const number = await nextNumber(tx, ctx.organizationId, "MOV");
+    if (!typed && new Decimal(from.qty).gt(loose)) {
+      const { movement } = await postMovement(tx, ctx, {
+        movementType: "transfer",
+        lotId: lot.id,
+        fromLocationId: from.locationId,
+        toLocationId: to.id,
+        qtyBase: from.qty,
+        sourceDocumentType: "put_away",
+        sourceDocumentNumber: number,
+        reason: "Put-away",
+        idempotencyKey: key,
+        meta: { fromCode: from.code, toCode: to.code, withBoxes: true, scanned: { lot: input.lotRef.startsWith("BC:"), location: input.locationRef.startsWith("BC:") } },
+      });
+      const boxes = await moveBoxesWithLot(tx, ctx, { lotId: lot.id, fromLocationId: from.locationId, toLocationId: to.id, reason: `Put-away ${number}` });
+      return { movementId: movement.id as string | null, number, lotNumber: lot.lotNumber, replayed: false, toCode: to.code as string | null, boxes };
+    }
+    const boxes: string[] = [];
     if (loose.lte(0)) {
-      throw new DomainError("insufficient_stock", `All of lot ${lot.lotNumber} at ${from.code} is in boxes. Move the boxes instead: scan each box on the Move screen.`, { field: "qty" });
+      throw new DomainError("insufficient_stock", `All of lot ${lot.lotNumber} at ${from.code} is in boxes. Leave "How much?" empty to move the boxes with it.`, { field: "qty" });
     }
     let qty = loose;
-    if (input.qty && String(input.qty).trim()) {
+    if (typed) {
       try {
         qty = putAwayQtyToBase(new Decimal(String(input.qty).trim().replace(/,/g, "")), input.qtyUom, lot.baseUom);
       } catch (e) {
@@ -167,10 +188,9 @@ export async function putAwayLot(ctx: AuthContext, input: PutAwayInput) {
       if (!qty.isFinite() || qty.lte(0)) throw new DomainError("validation", "Quantity must be greater than zero.", { field: "qty" });
       if (lot.baseUom === "pcs" && !qty.isInteger()) throw new DomainError("validation", "This lot is counted in pieces; enter a whole number.", { field: "qty" });
       if (qty.gt(loose)) {
-        throw new DomainError("insufficient_stock", `Only ${fmtStock(loose, lot.baseUom)} of lot ${lot.lotNumber} ${new Decimal(from.qty).gt(loose) ? "is loose (the rest is in boxes)" : "is"} at ${from.code}.`, { field: "qty" });
+        throw new DomainError("insufficient_stock", `Only ${fmtStock(loose, lot.baseUom)} of lot ${lot.lotNumber} ${new Decimal(from.qty).gt(loose) ? "is loose (the rest is in boxes; leave the amount empty to move the boxes too)" : "is"} at ${from.code}.`, { field: "qty" });
       }
     }
-    const number = await nextNumber(tx, ctx.organizationId, "MOV");
     const { movement } = await postMovement(tx, ctx, {
       movementType: "transfer",
       lotId: lot.id,
@@ -183,6 +203,6 @@ export async function putAwayLot(ctx: AuthContext, input: PutAwayInput) {
       idempotencyKey: key,
       meta: { fromCode: from.code, toCode: to.code, scanned: { lot: input.lotRef.startsWith("BC:"), location: input.locationRef.startsWith("BC:") } },
     });
-    return { movementId: movement.id, number, lotNumber: lot.lotNumber, replayed: false, toCode: to.code as string | null };
+    return { movementId: movement.id as string | null, number, lotNumber: lot.lotNumber, replayed: false, toCode: to.code as string | null, boxes };
   });
 }

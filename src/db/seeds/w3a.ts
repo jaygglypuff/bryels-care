@@ -136,9 +136,10 @@ export async function seedW3a(db: Db, opts: W3aSeedOptions = {}) {
       .values({ siteId, lotId, locationId, qtyBase: delta.toString() })
       .onConflictDoUpdate({ target: [s.inventoryBalances.lotId, s.inventoryBalances.locationId], set: { qtyBase: sql`${s.inventoryBalances.qtyBase} + ${delta.toString()}` } });
   };
-  const move = async (m: { siteId: string; type: string; lotId: string; from?: string; to?: string; qty: Decimal; uom: string; doc: [string, string | null, string]; by: string; when: Date; reason?: string; status?: string }) => {
-    if (m.from) await balance(m.siteId, m.lotId, m.from, m.qty.neg());
-    if (m.to) await balance(m.siteId, m.lotId, m.to, m.qty);
+  const move = async (m: { siteId: string; type: string; lotId: string; from?: string; to?: string; qty: Decimal; uom: string; doc: [string, string | null, string]; by: string; when: Date; reason?: string; status?: string; netZero?: boolean }) => {
+    // netZero: the opening lot's receipt and shipments add up to 0 (ADR-110 C2), so its balance row is never touched.
+    if (m.from && !m.netZero) await balance(m.siteId, m.lotId, m.from, m.qty.neg());
+    if (m.to && !m.netZero) await balance(m.siteId, m.lotId, m.to, m.qty);
     const [row] = await db
       .insert(s.stockMovements)
       .values({
@@ -167,24 +168,28 @@ export async function seedW3a(db: Db, opts: W3aSeedOptions = {}) {
     db.insert(s.auditEvents).values({ organizationId: O, siteId, actorId: actor, action, entityType, entityId, entityNumber, occurredAt: when });
 
   // ---------------------------------------------------------------- opening finished-goods stock
-  // The month's finished goods are staged in the dispatch bay (a shipping location), so sales allocation
-  // (storage locations only, FEFO) at the base seed's finished-goods bays behaves exactly as without this seed.
+  // The month's shipments leave from the dispatch bay (a shipping location), so sales allocation (storage locations
+  // only, FEFO) at the base seed's finished-goods bays behaves exactly as without this seed. ADR-110 C2: the opening
+  // lot holds exactly what the month ships from it (posted after the shipments, dated at the opening), so no
+  // unshipped "released" opening stock is left lying in the sending-out bay (the walk found 6,489 pcs there).
   const DISPATCH = "SHP";
   const openingAt = at(startDate, 6);
   const fgLots: Record<string, string> = {};
-  for (const [site, sku, qty] of [
-    [NFD, "ACS-135", 6000],
-    [NFD, "GBS-135", 6000],
-    [RVS, "ACS-135", 5000],
-    [RVS, "AHL-250", 5000],
+  const openingShipped = new Map<string, Decimal>();
+  const openingLots: { site: typeof NFD; lotId: string; key: string }[] = [];
+  for (const [site, sku] of [
+    [NFD, "ACS-135"],
+    [NFD, "GBS-135"],
+    [RVS, "ACS-135"],
+    [RVS, "AHL-250"],
   ] as const) {
     const pr = P(sku);
     const [lot] = await db
       .insert(s.inventoryLots)
       .values({ organizationId: O, siteId: site.id, lotNumber: num("LM", 4), itemKind: "product", productId: pr.id, manufacturedOn: addDays(startDate, -20), expiresOn: addDays(startDate, pr.shelfLifeDays - 20), qualityStatus: "released", baseUom: "pcs", createdBy: site.id === NFD.id ? whN : whR, createdAt: openingAt })
       .returning();
-    await move({ siteId: site.id, type: "receipt", lotId: lot.id, to: L(site.id, DISPATCH), qty: new Decimal(qty), uom: "pcs", doc: ["opening_balance", null, "Opening stock (demo month)"], by: site.id === NFD.id ? whN : whR, when: openingAt, reason: "Opening balance (demo)", status: "released" });
     fgLots[`${site.code}:${sku}`] = lot.id;
+    openingLots.push({ site, lotId: lot.id, key: `${site.code}:${sku}` });
   }
 
   // ---------------------------------------------------------------- receipts (NFD, every third day)
@@ -617,10 +622,17 @@ export async function seedW3a(db: Db, opts: W3aSeedOptions = {}) {
       for (const [k, l] of lines.entries()) {
         const sku = productRows.find((p) => p.id === l.productId)!.skuCode;
         const qty = new Decimal(l.qtyUnits).mul(short && k === 0 ? 0.5 : 1);
-        await move({ siteId: site.id, type: "shipment", lotId: await shipFrom(site, sku), from: L(site.id, DISPATCH), qty, uom: "pcs", doc: ["shipment", sh.id, drNo], by: site.id === NFD.id ? whN : whR, when: dispatchAt, status: "released" });
+        await move({ siteId: site.id, type: "shipment", lotId: await shipFrom(site, sku), from: L(site.id, DISPATCH), qty, uom: "pcs", doc: ["shipment", sh.id, drNo], by: site.id === NFD.id ? whN : whR, when: dispatchAt, status: "released", netZero: true });
+        const lotKey = `${site.code}:${sku}`;
+        openingShipped.set(lotKey, (openingShipped.get(lotKey) ?? new Decimal(0)).plus(qty));
       }
       await audit("sales.shipment.dispatched", "shipment", sh.id, drNo, site.id === NFD.id ? whN : whR, site.id, dispatchAt);
     }
+  }
+  // The opening receipt of each lot = what the month shipped from it (dated at the opening; net zero in the bay).
+  for (const o of openingLots) {
+    const qty = openingShipped.get(o.key) ?? new Decimal(0);
+    if (qty.gt(0)) await move({ siteId: o.site.id, type: "receipt", lotId: o.lotId, to: L(o.site.id, DISPATCH), qty, uom: "pcs", doc: ["opening_balance", null, "Opening stock (demo month)"], by: o.site.id === NFD.id ? whN : whR, when: openingAt, reason: "Opening balance (demo)", status: "released", netZero: true });
   }
 
   // ---------------------------------------------------------------- open action-centre items

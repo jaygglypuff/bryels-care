@@ -64,15 +64,15 @@ export default async function PutAwayPage({ searchParams }: { searchParams: Prom
   const taskCandidates: PickCandidate[] = tasks
     .filter((t) => !opts || t.lotId !== opts.lot.id)
     .map((t) => {
-      const allBoxed = Number(t.qtyBase) === 0;
+      // ADR-110 C3: boxes are put away with their lot (same form), shown as boxes, not loose pieces.
+      const boxes = t.boxNumbers.length;
+      const what = [boxes ? `${boxes === 1 ? "1 box" : `${boxes} boxes`} (${t.boxedQtyText})` : null, Number(t.qtyBase) > 0 ? `${t.qtyText}${boxes ? " loose" : ""}` : null].filter(Boolean).join(" + ");
       return {
-        value: allBoxed
-          ? `/inventory/move?lot=${t.lotId}${t.suggested ? `&to=${t.suggested.id}` : ""}`
-          : `/inventory/receive/put-away?lot=${t.lotId}&from=${t.fromLocationId}${t.suggested ? `&to=${t.suggested.id}` : ""}`,
+        value: `/inventory/receive/put-away?lot=${t.lotId}&from=${t.fromLocationId}${t.suggested ? `&to=${t.suggested.id}` : ""}`,
         title: t.itemName || t.itemCode,
-        detail: `${allBoxed ? `${t.boxedQtyText} in boxes` : t.qtyText} at ${t.fromCode} → ${t.suggested ? `${t.suggested.code} (${t.sectionLabel})` : `no free shelf in ${t.sectionLabel}`} · lot ${t.lotNumber}`,
+        detail: `${what} at ${t.fromCode} → ${t.suggested ? `${t.suggested.code} (${t.sectionLabel})` : `no free shelf in ${t.sectionLabel}`} · lot ${t.lotNumber}`,
         code: t.lotNumber,
-        codes: [t.lotNumber, ...(t.supplierLotNumber ? [t.supplierLotNumber.toUpperCase()] : [])],
+        codes: [t.lotNumber, ...t.boxNumbers, ...(t.supplierLotNumber ? [t.supplierLotNumber.toUpperCase()] : [])],
       };
     });
   const finder =

@@ -28,6 +28,8 @@ export type FinishFormProps = {
   existingScrap: { qty: string; note: string | null }[];
   defectTypes: string[];
   samples: number;
+  /** ADR-110 C6: pieces boxed at the packaging step (labels printed); good = boxed + samples is pre-filled. */
+  boxedPieces?: number | null;
   packaging: { materialId: string; materialName: string; uom: string; taken: string; counted: boolean; used: string; damaged: string; leftOver: string; step: { stepNo: number; used: string | null; damaged: string | null; leftOver: string | null } | null }[];
   rejectApproval: { limit: string | null; existingNeedsApproval: boolean; reportOpen: boolean };
   hold: { id: string; code: string; name: string } | null;
@@ -66,7 +68,9 @@ export function FinishForm(p: FinishFormProps) {
   }, [state]);
   const fromLog = p.log.entries > 0 && Number(p.log.good) > 0;
   const [change, setChange] = useState(!fromLog);
-  const [good, setGood] = useState(fromLog ? String(Number(p.log.good)) : "");
+  // ADR-110 C6: without a daily log, good bars come from the packaging step (boxed + samples QA keeps).
+  const fromStep = !fromLog && !!p.boxedPieces;
+  const [good, setGood] = useState(fromLog ? String(Number(p.log.good)) : fromStep ? String(p.boxedPieces! + p.samples) : "");
   const logRejects = Object.fromEntries(p.log.rejects.map((r) => [r.type, String(Number(r.qty))]));
   const types = [...new Set([...p.defectTypes, ...p.log.rejects.map((r) => r.type)])];
   const [rejects, setRejects] = useState<Record<string, string>>(Object.fromEntries(types.map((t) => [t, logRejects[t] ?? ""])));
@@ -163,7 +167,7 @@ export function FinishForm(p: FinishFormProps) {
           </ul>
         ) : (
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Count id="goodUnits" label={`Good ${p.pieceWord}`} value={good} onChange={setGood} error={fe.goodUnits} hint={fromLog ? `The log says ${Number(p.log.good)}.` : "Nothing was written in the daily log. Count them now."} />
+            <Count id="goodUnits" label={`Good ${p.pieceWord}`} value={good} onChange={setGood} error={fe.goodUnits} hint={fromLog ? `The log says ${Number(p.log.good)}.` : fromStep ? `From the packaging step: ${p.boxedPieces} in boxes + ${p.samples} samples.` : "Nothing was written in the daily log. Count them now."} />
             {p.existingScrap.length > 0 ? (
               <p className="text-[14px] text-muted sm:col-span-2">Rejects already recorded on the batch screen: {rejectTotal}.</p>
             ) : (

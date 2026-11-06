@@ -18,6 +18,7 @@ import {
   routingRevisions,
   routings,
   salesOrders,
+  customers,
   stockReservations,
   userSiteAssignments,
   users,
@@ -100,7 +101,8 @@ export async function getWorkOrder(ctx: AuthContext, workOrderId: string) {
     const today = await getEffectiveFormulaRevision(ctx, wo.productId, manilaToday()).catch(() => null);
     if (today && today.rev.id !== rev.id && today.rev.revisionNo > rev.revisionNo) newerRevision = `${today.formula.code} rev ${today.rev.revisionNo}`;
   }
-  const [so] = wo.salesOrderId ? await db.select({ id: salesOrders.id, number: salesOrders.orderNumber }).from(salesOrders).where(eq(salesOrders.id, wo.salesOrderId)).limit(1) : [];
+  // ADR-110 C4: "For SO-26-00015 (Isla Spa Supplies)" on the production order.
+  const [so] = wo.salesOrderId ? await db.select({ id: salesOrders.id, number: salesOrders.orderNumber, customerName: customers.name }).from(salesOrders).innerJoin(customers, eq(customers.id, salesOrders.customerId)).where(eq(salesOrders.id, wo.salesOrderId)).limit(1) : [];
 
   const bs = await db
     .select({

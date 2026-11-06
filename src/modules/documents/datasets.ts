@@ -1,13 +1,14 @@
 import "server-only";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { batchBoxes, batches, inventoryLots, locations, materials, packBoxes, packs, products, users, warehouses } from "@/db/schema";
+import { batchBoxes, batches, goodsReceiptLines, inventoryLots, locations, materials, packBoxes, packs, products, users, warehouses } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtMass, fmtQty } from "@/lib/qty";
 import { allowedDestinationKinds, getContainer, getLotDetail, LOT_STATUSES } from "@/modules/inventory";
 import type { LabelData } from "./renderers/label-v1";
 import { STATUS_WORD } from "./renderers/shared";
+import { perContainerQuantity } from "./sack-quantity";
 import { isUuid } from "./templates";
 
 /**
@@ -44,6 +45,9 @@ export async function lotLabelEntity(ctx: AuthContext, lotId: string): Promise<L
     appliesTo = m?.kind === "intermediate" ? "wip" : "material";
   }
   const onHand = lot.balances.reduce((a, b) => a.plus(b.qtyBase), D(0));
+  // ADR-110 C7: a lot received in several sacks prints the quantity per sack (even split), or none ("sack 1 of 4").
+  const [grl] = await db.select({ qty: goodsReceiptLines.qtyBase, containers: goodsReceiptLines.containerCount }).from(goodsReceiptLines).where(eq(goodsReceiptLines.lotId, lot.id)).limit(1);
+  const sacks = grl ? perContainerQuantity(grl.qty, grl.containers, onHand) : { perContainer: onHand, containers: 1 };
   const last = lot.movements[0]?.postedAt ?? lot.createdAt;
   const revisionAt = new Date(Math.max(new Date(last).getTime(), new Date(lot.createdAt).getTime()));
   return {
@@ -68,7 +72,8 @@ export async function lotLabelEntity(ctx: AuthContext, lotId: string): Promise<L
       manufacturedOn: lot.manufacturedOn ? fmtDate(lot.manufacturedOn) : null,
       expiresOn: lot.expiresOn ? fmtDate(lot.expiresOn) : "No expiry",
       expiryLabel: "Expiry",
-      quantityText: qtyText(onHand.toString(), lot.baseUom),
+      quantityText: sacks.containers > 1 ? (sacks.perContainer ? `${qtyText(sacks.perContainer.toString(), lot.baseUom)} each` : null) : qtyText(onHand.toString(), lot.baseUom),
+      containerCount: sacks.containers > 1 ? sacks.containers : null,
       storageConditions: lot.storageConditions ?? null,
       batchNumber: lot.batchNumber ?? null,
       statusWord: STATUS_WORD[lot.qualityStatus] ?? lot.qualityStatus.toUpperCase(),

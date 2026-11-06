@@ -204,9 +204,13 @@ export async function countPackagingLocked(tx: Tx, ctx: AuthContext, batch: Batc
  */
 export async function packagingBlockers(q: DbOrTx, batch: BatchRow, step: SnapshotStep, rec: StepRecord | null) {
   if (!(RECONCILED_STEP_KINDS as readonly string[]).includes(step.stepKind)) return [];
-  const rows = rec ? (await currentPackaging(q, batch.id)).filter((x) => x.r.processStepRecordId === rec.id) : [];
+  const all = await currentPackaging(q, batch.id);
+  const rows = rec ? all.filter((x) => x.r.processStepRecordId === rec.id) : [];
   const out: { message: string; exceptionable: boolean }[] = [];
-  if (!rows.length) {
+  // A routing with a filling step AND a packaging step: the first reconciled step records every wrapper and label
+  // taken (once); the later step sees them and is not blocked (walk 2026-11-06). Only a batch with nothing recorded
+  // on any reconciled step, and nothing waiting to be recorded, must scan or tap the wrapper.
+  if (!rows.length && all.length === 0) {
     // ADR-088 §3: wrappers taken at Get materials (set aside for the order) are recorded by "Step done"
     // itself; only when nothing is waiting to be recorded must the lot be scanned or typed.
     const { packagingLinesOf } = await import("./packaging-flow");

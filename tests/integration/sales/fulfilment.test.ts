@@ -248,7 +248,8 @@ describe("US-4-10 pick list and pick scans", () => {
     expect((await scanPackVerification(mgr, shipmentId, { payload: `BC:BOX:${picked[0]}`, idempotencyKey: key() })).outcome).toBe("duplicate");
     await scanPackVerification(mgr, shipmentId, { payload: `BC:LOT:${lotA.lotNumber}`, qty: "6", idempotencyKey: key() });
     const extra = boxes.find((b) => !picked.includes(b.containerNumber))!;
-    await expect(scanPackVerification(mgr, shipmentId, { payload: `BC:BOX:${extra.containerNumber}`, idempotencyKey: key() })).rejects.toMatchObject({ code: "conflict", details: { code: "OVER_SHIPMENT" } });
+    // ADR-110 C1: a box not on the pick list is refused as such (it was OVER_SHIPMENT only once the order was full).
+    await expect(scanPackVerification(mgr, shipmentId, { payload: `BC:BOX:${extra.containerNumber}`, idempotencyKey: key() })).rejects.toMatchObject({ code: "conflict", details: { code: "NOT_ON_PICK_LIST" } });
     const [pack] = await db.select().from(packs).where(eq(packs.shipmentId, shipmentId));
     expect(pack.verificationFailureCount).toBe(1);
     expect((await db.select().from(packVerificationScans).where(and(eq(packVerificationScans.packId, pack.id), eq(packVerificationScans.result, "not_in_pack")))).length).toBe(1);

@@ -43,7 +43,9 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
   const s = v.shipment;
   const canVerify = ctx.can("inventory.pack.approve") && ctx.can("sales.shipment.edit") && s.status === "picked";
   const unverified = v.picked.filter((p) => !p.verified);
-  const lastFailure = v.scans.find((x) => x.result === "not_in_pack" && /Over-shipment/.test(x.note ?? ""));
+  const lastFailure = v.scans[0]?.result === "not_in_pack" && /Over-shipment|Not on the pick list/.test(v.scans[0].note ?? "") ? v.scans[0] : null;
+  // ADR-110 C1: more than ordered on a line blocks "Finish the check" (plain words, never counted silently).
+  const overLines = v.orderLines.filter((l) => Number(l.tooMany) > 0);
   const checking = canVerify && !v.isPicker;
   // UX audit B #10: a delivery that already left shows no "0 of 0 checked" or "still to send" (it contradicted "done").
   const gone = ["dispatched", "delivered", "cancelled", "reversed"].includes(s.status);
@@ -94,7 +96,7 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
       )}
       {lastFailure && (
         <div className="mb-4">
-          <Banner tone="bad" title="More than ordered: refused">{lastFailure.note}</Banner>
+          <Banner tone="bad" title={/Not on the pick list/.test(lastFailure.note ?? "") ? "Not on the pick list: refused" : "More than ordered: refused"}>{lastFailure.note}</Banner>
         </div>
       )}
 
@@ -146,13 +148,14 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
           <CardTitle>What the customer ordered</CardTitle>
           <ul className="flex flex-col gap-2">
             {v.orderLines.map((l) => (
-              <li key={l.id} className="rounded-[12px] border border-line p-3 text-[14px]">
+              <li key={l.id} className={`rounded-[12px] border p-3 text-[14px] ${Number(l.tooMany) > 0 ? "border-[var(--bad-bd)] bg-[var(--bad-bg)]" : "border-line"}`} data-testid="order-line" data-over={Number(l.tooMany) > 0 ? "yes" : "no"}>
                 <div className="flex flex-wrap justify-between gap-2">
                   <span className="font-medium">{l.productName}</span>
-                  <span className="tabular">
+                  <span className={Number(l.tooMany) > 0 ? "tabular font-semibold text-[var(--bad-fg)]" : "tabular"}>
                     checked {q(l.verified)} of {q(l.qty)}
                   </span>
                 </div>
+                {l.overMessage && <p className="mt-1 text-[14px] font-semibold text-[var(--bad-fg)]">{l.overMessage}</p>}
                 <p className="text-[13px] text-fg-2">
                   Taken off the shelf: {q(l.picked)} · Sent before: {q(l.shippedBefore)} · Still to send: {q(l.remaining)} <span className="font-mono text-[12px] text-muted">· {l.sku}</span>
                 </p>
@@ -171,6 +174,11 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
                 <Banner tone="warn" title={`${unverified.length === 1 ? "1 box is" : `${unverified.length} boxes are`} not checked yet`}>Scan them first.</Banner>
               </div>
             )}
+            {overLines.length > 0 ? (
+              <Banner tone="bad" title="More than ordered: you cannot finish yet">
+                {overLines.map((l) => l.overMessage).join(" ")} Open “Boxes on this delivery and scans” and take the extra box off.
+              </Banner>
+            ) : (
             <Cmd action={completePackingAction} fields={{ shipmentId: s.id }} label="Finish the check" pending="Finishing…" variant={unverified.length > 0 ? "secondary" : "cta"} size="lg">
               <Field label="Boxes on the truck" htmlFor="packageCount">
                 <Input id="packageCount" name="packageCount" inputMode="numeric" defaultValue={String(Math.max(new Set(v.lines.map((l) => l.containerId).filter(Boolean)).size, 1))} />
@@ -187,6 +195,7 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
                 </Field>
               </MoreDetails>
             </Cmd>
+            )}
           </Card>
         )}
 
@@ -238,7 +247,7 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
           </Card>
         )}
 
-        <MoreDetails title={`Boxes on this delivery and scans (${v.lines.length})`}>
+        <MoreDetails title={`Boxes on this delivery and scans (${v.lines.length})`} open={overLines.length > 0}>
           {v.lines.length === 0 ? (
             <p className="text-[13px] text-muted">No checked boxes yet.</p>
           ) : (

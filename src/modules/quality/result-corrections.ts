@@ -6,7 +6,7 @@ import { batches, dispositions, inventoryLots, qaResultCorrections, stockMovemen
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
-import { lockLots, postMovement } from "@/modules/inventory";
+import { lockLots, moveBoxesWithLot, postMovement } from "@/modules/inventory";
 import { type ApprovalVerdict } from "@/modules/governance";
 import { notifyUsers, usersHoldingPermissionAt } from "@/modules/platform/notifications";
 import { reopenBatchForQaCorrection } from "@/modules/production";
@@ -289,6 +289,8 @@ export async function decideResultCorrection(ctx: AuthContext, input: DecideCorr
             reversalOfId: m.id,
             idempotencyKey: `qa-correction:${req.id}:${m.id}`,
           });
+          // ADR-110 C3: the boxes that followed the lot go back with it.
+          if (m.fromLocationId && m.toLocationId) await moveBoxesWithLot(tx, ctx, { lotId: lot.id, fromLocationId: m.toLocationId, toLocationId: m.fromLocationId, reason: `QA decision re-opened: ${why}` });
           reversed.push(m.id);
         }
         reopened.lot = lot.lotNumber;

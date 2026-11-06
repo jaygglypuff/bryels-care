@@ -94,6 +94,7 @@ export default async function FinishPage({ params }: { params: Promise<{ batchId
             existingScrap={v.existing.scrap}
             defectTypes={v.defectTypes}
             samples={v.samples.units}
+            boxedPieces={v.boxes.plan && !v.boxes.plan.boxed ? v.boxes.plan.pieces : null}
             packaging={v.packaging}
             rejectApproval={v.rejectApproval}
             hold={v.hold}
@@ -111,6 +112,7 @@ export default async function FinishPage({ params }: { params: Promise<{ batchId
           batchId={v.batch.id}
           unitsPerBox={v.boxes.unitsPerBox}
           defaultPieces={v.boxes.defaultPieces}
+          samples={v.boxes.samples}
           pieceWord={v.boxes.pieceWord}
           face={v.boxes.preview?.options[0]?.face ?? null}
           plan={v.boxes.plan}

@@ -47,6 +47,21 @@ import { generateBoxingNoteForShipment } from "./boxing";
 
 const qtyWord = (v: Decimal.Value, uom: string) => fmtQty(v, uom, uom === "pcs" ? 0 : 3);
 
+/**
+ * ADR-110 C1 (pure): order lines whose checked quantity (sent before + on this delivery) is above the ordered
+ * quantity plus any approved extra, with the words that block "Finish the check" ("548 of 500 pcs: 48 too many").
+ */
+export function overOrderedLines(rows: { id: string; name: string; ordered: Decimal.Value; before: Decimal.Value; here: Decimal.Value; extra?: Decimal.Value }[]) {
+  return rows
+    .map((r) => {
+      const total = D(r.before).plus(r.here);
+      const cap = D(r.ordered).plus(r.extra ?? 0);
+      const tooMany = total.minus(cap);
+      return { lineId: r.id, total, cap, tooMany, message: `${r.name}: ${total.toString()} of ${D(r.ordered).toString()} pcs are checked, ${tooMany.toString()} too many. Take the extra box off before you finish.` };
+    })
+    .filter((r) => r.tooMany.gt(0));
+}
+
 /** Quantity already shipped per order line by dispatched shipments (the ledger postings). */
 export async function shippedByOrderLine(q: Tx | typeof db, orderId: string, excludeShipmentId?: string) {
   const conds = [eq(shipments.salesOrderId, orderId), inArray(shipments.status, ["dispatched", "delivered", "returned"]), isNotNull(shipmentLines.stockMovementId)];
@@ -176,7 +191,7 @@ export async function scanPackVerification(ctx: AuthContext, shipmentId: string,
             await scan("ok", box.id, pl.lotId, pl.qtyBase, null);
             out = { outcome: "verified", message: `Box ${box.containerNumber} verified: ${qtyWord(pl.qtyBase, pl.baseUom)}.`, overShipment: false };
           } else {
-            out = await overShipmentBox(tx, ctx, s, pack.id, box, lines, active, (r) => (failure = { packId: pack.id, siteId: s.siteId, containerId: box.id, payload: input.payload, result: "not_in_pack", note: r }));
+            out = await overShipmentBox(tx, ctx, s, pack.id, box, lines, (r) => (failure = { packId: pack.id, siteId: s.siteId, containerId: box.id, payload: input.payload, result: "not_in_pack", note: r }));
             await scan("ok", box.id, null, null, "Added under an approved over-shipment.");
           }
         }
@@ -247,7 +262,6 @@ async function overShipmentBox(
   _packId: string,
   box: typeof containers.$inferSelect,
   lines: (typeof shipmentLines.$inferSelect)[],
-  active: (typeof pickLines.$inferSelect)[],
   fail: (reason: string) => void,
 ): Promise<VerifyScanResult> {
   const contents = await tx.select().from(containerContents).where(and(eq(containerContents.containerId, box.id), sql`${containerContents.qtyBase} > 0`));
@@ -263,24 +277,36 @@ async function overShipmentBox(
     throw new DomainError("conflict", `Box ${box.containerNumber} holds a product that is not on this order (V-MAT).`, { code: "NOT_FOR_THIS_ORDER", rule: "V-MAT" });
   }
   const qty = D(contents[0].qtyBase);
-  const allocatedHere = active.filter((l) => l.salesOrderLineId === line.id).reduce((a, l) => a.plus(l.qtyBase), new Decimal(0));
   const verifiedHere = lines.filter((l) => l.salesOrderLineId === line.id).reduce((a, l) => a.plus(l.qtyBase), new Decimal(0));
   const shippedBefore = (await shippedByOrderLine(tx, s.salesOrderId, s.id)).get(line.id) ?? new Decimal(0);
-  const overAllocated = verifiedHere.plus(qty).gt(allocatedHere);
-  const overOrdered = shippedBefore.plus(verifiedHere).plus(qty).gt(line.qty);
   const approved = await tx
     .select({ qty: sql<string>`coalesce(sum(${shipmentExceptions.extraQtyBase}), 0)::text` })
     .from(shipmentExceptions)
     .where(and(eq(shipmentExceptions.shipmentId, s.id), eq(shipmentExceptions.kind, "over_shipment"), eq(shipmentExceptions.salesOrderLineId, line.id)));
   const usedOver = lines.filter((l) => l.salesOrderLineId === line.id && l.isOverShipment).reduce((a, l) => a.plus(l.qtyBase), new Decimal(0));
   const headroom = D(approved[0]?.qty ?? 0).minus(usedOver);
-  if ((overAllocated || overOrdered) && headroom.lt(qty)) {
-    fail(`Over-shipment: ${qty.toString()} more than ${overOrdered ? "ordered" : "allocated"}.`);
+  // ADR-110 C1: a box that was not taken off the shelf for this delivery is refused, whatever the count so far,
+  // unless a site manager approved an over-shipment for this order line with room for the whole box.
+  if (headroom.lt(qty)) {
+    const overOrdered = shippedBefore.plus(verifiedHere).plus(qty).gt(line.qty);
+    fail(`Not on the pick list: box ${box.containerNumber} (${qty.toString()}) was not taken off the shelf for this order${D(approved[0]?.qty ?? 0).gt(0) ? "; the approved extra is used up" : ""}.`);
     throw new DomainError(
       "conflict",
-      `OVER_SHIPMENT: box ${box.containerNumber} (${qtyWord(qty, lot.baseUom)}) would ship more than ${overOrdered ? "ordered" : "allocated"} for this line. It was not added. A site manager can approve an over-shipment with the customer's reference.`,
-      { code: "OVER_SHIPMENT", salesOrderLineId: line.id, overOrdered, overAllocated },
+      `Box ${box.containerNumber} is not on the pick list of this order. It was not added. Put it aside and scan the boxes that were taken off the shelf. Sending more than ordered needs a site manager to allow it first.`,
+      { code: "NOT_ON_PICK_LIST", salesOrderLineId: line.id, overOrdered },
     );
+  }
+  // Even with an approval, never past ordered + the approved extra.
+  const cap = D(line.qty).plus(approved[0]?.qty ?? 0);
+  if (shippedBefore.plus(verifiedHere).plus(qty).gt(cap)) {
+    fail(`Over-shipment: ${qty.toString()} more than ordered plus the approved extra.`);
+    throw new DomainError("conflict", `OVER_SHIPMENT: box ${box.containerNumber} (${qtyWord(qty, lot.baseUom)}) would send more than ordered plus the extra the manager allowed. It was not added.`, { code: "OVER_SHIPMENT", salesOrderLineId: line.id });
+  }
+  // A box still waiting in the QA cage (or anywhere but a storage or shipping place) never ships.
+  const [where] = box.currentLocationId ? await tx.select({ kind: locations.kind, code: locations.code, name: locations.name }).from(locations).where(eq(locations.id, box.currentLocationId)).limit(1) : [];
+  if (!where || !["storage", "shipping"].includes(where.kind)) {
+    fail(`Box is in ${where?.code ?? "no place"} (${where?.kind ?? "none"}), not on a shelf.`);
+    throw new DomainError("conflict", `Box ${box.containerNumber} is in ${where?.name ?? "no place"}${where ? ` (${where.code})` : ""}, not on a shelf for sending. It was not added.`, { code: "NOT_FOR_THIS_ORDER", rule: "V-LOC" });
   }
   try {
     assertLotUsable(lot);
@@ -441,6 +467,10 @@ export async function completePacking(ctx: AuthContext, shipmentId: string, inpu
     const before = await shippedByOrderLine(tx, o.id, s.id);
     const thisShip = new Map<string, Decimal>();
     for (const l of lines) thisShip.set(l.salesOrderLineId, (thisShip.get(l.salesOrderLineId) ?? new Decimal(0)).plus(l.qtyBase));
+    // ADR-110 C1: never finish with more than ordered (plus an approved extra) on a line.
+    const extras = await tx.select({ lineId: shipmentExceptions.salesOrderLineId, qty: shipmentExceptions.extraQtyBase }).from(shipmentExceptions).where(and(eq(shipmentExceptions.shipmentId, s.id), eq(shipmentExceptions.kind, "over_shipment")));
+    const over = overOrderedLines(orderLines.map((l) => ({ id: l.id, name: l.sku, ordered: l.qty, before: before.get(l.id) ?? 0, here: thisShip.get(l.id) ?? 0, extra: extras.filter((x) => x.lineId === l.id).reduce((a, x) => a.plus(x.qty ?? 0), new Decimal(0)) })));
+    if (over.length) throw new DomainError("conflict", over.map((o) => o.message).join(" "), { code: "OVER_ORDERED", lines: over.map((o) => o.lineId) });
     const short = orderLines.filter((l) => (before.get(l.id) ?? new Decimal(0)).plus(thisShip.get(l.id) ?? 0).lt(l.qty));
     if (short.length) {
       const full = (await Promise.all(orderLines.map(async (l) => requirementsFromSnapshot(l) ?? (await customerFulfilmentRequirements(tx, o.organizationId, o.customerId, l.productId))))).some((r) => r.fullShipmentRequired);
@@ -563,7 +593,9 @@ export async function getPackingView(ctx: AuthContext, shipmentId: string) {
     orderLines: orderLines.map((l) => {
       const here = lines.filter((x) => x.l.salesOrderLineId === l.id).reduce((a, x) => a.plus(x.l.qtyBase), new Decimal(0));
       const picked = active.filter((x) => x.pl.salesOrderLineId === l.id).reduce((a, x) => a.plus(x.pl.qtyBase), new Decimal(0));
-      return { ...l, shippedBefore: (before.get(l.id) ?? new Decimal(0)).toString(), picked: picked.toString(), verified: here.toString(), remaining: Decimal.max(D(l.qty).minus(before.get(l.id) ?? 0).minus(here), 0).toString() };
+      const extra = exceptions.filter((x) => x.e.kind === "over_shipment" && x.e.salesOrderLineId === l.id).reduce((a, x) => a.plus(x.e.extraQtyBase ?? 0), new Decimal(0));
+      const over = overOrderedLines([{ id: l.id, name: l.productName, ordered: l.qty, before: before.get(l.id) ?? 0, here, extra }])[0] ?? null;
+      return { ...l, shippedBefore: (before.get(l.id) ?? new Decimal(0)).toString(), picked: picked.toString(), verified: here.toString(), remaining: Decimal.max(D(l.qty).minus(before.get(l.id) ?? 0).minus(here), 0).toString(), tooMany: over ? over.tooMany.toString() : "0", overMessage: over?.message ?? null };
     }),
     exceptions: exceptions.map((x) => ({ ...x.e, approvedByName: x.by })),
     pack: pack ?? null,

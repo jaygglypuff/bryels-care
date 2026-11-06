@@ -13,6 +13,8 @@ export type BoxLabelsProps = {
   batchId: string;
   unitsPerBox: number;
   defaultPieces: number;
+  /** ADR-110 C6: retained samples QA keeps; they are not boxed. */
+  samples?: number;
   pieceWord: string;
   face: LabelFaceData | null;
   plan: { pieces: number; boxes: { boxNo: number; boxCount: number; pieces: number; containerNumber: string; status: string; labelStatus: string | null }[]; printed: boolean; boxed: boolean } | null;
@@ -58,8 +60,13 @@ export function BoxLabels(p: BoxLabelsProps) {
         <form action={action} className="grid gap-3">
           <input type="hidden" name="batchId" value={p.batchId} />
           <label className="flex flex-col gap-1 text-[16px] font-medium" htmlFor={`pieces-${p.batchId}`}>
-            How many {p.pieceWord} did you pack?
+            How many {p.pieceWord} go in boxes?
             <Input id={`pieces-${p.batchId}`} name="pieces" inputMode="numeric" pattern="[0-9,]*" value={pieces} onChange={(e) => setPieces(e.target.value)} className="min-h-[56px] text-[18px]" required />
+            {p.samples ? (
+              <span className="text-[14px] font-normal text-fg-2" data-testid="box-samples-hint">
+                QA keeps {p.samples} {p.pieceWord} as samples. Do not box them: count only the {p.pieceWord} for sale.
+              </span>
+            ) : null}
             {state?.fieldErrors?.pieces && <span className="text-[14px] text-[var(--bad-fg)]">{state.fieldErrors.pieces}</span>}
           </label>
           <p className="text-[16px] font-semibold text-fg" role="status" data-testid="box-split">

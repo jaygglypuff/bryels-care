@@ -288,7 +288,20 @@ describe("incoming lot inspection", () => {
     const v0 = await getLotDisposition(qaLead, lot.id);
     expect(v0.decisions.find((d) => d.decision === "release")?.blocker).toMatch(/Inspection INS-/);
     const v = await getInspection(qa, inspectionId);
+    // ADR-110 C8: results need a recorded sample first (the form says so); the sample form stays while the check is open.
+    expect(v.can.record).toBe(false);
+    expect(v.can.sampleFirst).toBe(true);
+    const e = await expectCode(recordInspectionResult(qa, { inspectionId, planTestId: v.tests[0].id, value: "Conforms", conforms: true }), "state");
+    expect(e.details?.code).toBe("SAMPLE_REQUIRED");
+    await expectCode(recordSample(qaRvsOnly, { inspectionId, fromLocationId: qua.id, qty: "200", idempotencyKey: randomUUID() }), "not_found");
+    await expectCode(recordSample(sales, { inspectionId, fromLocationId: qua.id, qty: "200", idempotencyKey: randomUUID() }), "forbidden");
+    await recordSample(qa, { inspectionId, fromLocationId: qua.id, qty: "200", idempotencyKey: randomUUID() });
+    expect((await getInspection(qa, inspectionId)).can.record).toBe(true);
     for (const t of v.tests) await recordInspectionResult(qa, { inspectionId, planTestId: t.id, value: "Conforms", conforms: true });
+    const after = await getInspection(qa, inspectionId);
+    expect(after.inspection.status).toBe("awaiting_review");
+    expect(after.can.sample).toBe(true);
+    await recordSample(qa, { inspectionId, fromLocationId: qua.id, qty: "100", idempotencyKey: randomUUID() });
     await expectCode(decideLot(qaLead, { lotId: lot.id, decision: "release", reason: "CoA reviewed, conforms" }), "state");
     await reviewInspection(qaLead, { inspectionId, decision: "approve" });
     await expectCode(decideLot(qa, { lotId: lot.id, decision: "release", reason: "CoA reviewed, conforms" }), "separation_of_duties");

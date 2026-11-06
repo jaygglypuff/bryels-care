@@ -128,7 +128,7 @@ export async function getWeighView(ctx: AuthContext, batchId: string) {
     totalWeighed: cards.reduce((s, c) => s.plus(c.weighed), new Decimal(0)).toString(),
     totalTarget: cards.reduce((s, c) => s.plus(c.target), new Decimal(0)).toString(),
     settings: { lotConfirm, checkMode },
-    scales: scales.map((s) => ({ id: s.id, code: s.code, name: s.name, usable: s.usable, calibrationDueDate: s.calibrationDueDate })),
+    scales: scales.map((s) => ({ id: s.id, code: s.code, name: s.name, usable: s.usable, calibrationDueDate: s.calibrationDueDate, why: s.why, canRecordCleaning: s.canRecordCleaning, fixHelp: s.fixHelp })),
     checkers: checkers.map((c) => ({ id: c.id, displayName: c.displayName })),
     blockedReason,
     canWeigh: ctx.can("production.dispense_record.create") && b.status === "in_process" && !!step && step.status !== "completed" && !blockedReason,

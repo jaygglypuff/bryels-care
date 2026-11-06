@@ -7,6 +7,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { nextNumber, peekNextNumber } from "@/lib/numbering";
+import { getSetting } from "@/lib/settings";
 import { activeStationsAt, approvedLabelTemplatesFor, createLabelJob, labelPreviewOrNull, voidLabelsForEntityInTx } from "@/modules/documents";
 import { addContent, containerMachine, newBox } from "@/modules/inventory";
 import { postMovement } from "@/modules/inventory/ledger";
@@ -73,7 +74,11 @@ export async function batchBoxInfo(ctx: AuthContext, batch: BatchRow) {
             : !stations.length
               ? "No label printer is set up for this site. Ask the administrator (Management › Rules and settings › Labels and printouts)."
               : null;
-  const defaultPieces = packed || expected || 1;
+  // ADR-110 C6: the retained samples QA keeps are never boxed, so the default to box is expected - samples and the
+  // labels printed here match Finish (which takes the samples out of the good pieces).
+  const sampleSetting = await getSetting(db, ctx.organizationId, "production.output.retained_samples", batch.siteId);
+  const samples = sampleSetting.enabled ? Number(sampleSetting.units) || 0 : 0;
+  const defaultPieces = packed || Math.max((expected || 0) - samples, 0) || expected || 1;
   let preview = null;
   if (allowed && template && ctx.can("inventory.label_job.view")) {
     const v = await batchLabelValues(ctx, batch);
@@ -91,6 +96,8 @@ export async function batchBoxInfo(ctx: AuthContext, batch: BatchRow) {
     unitsPerBox: p.unitsPerBox,
     expectedPieces: expected,
     defaultPieces,
+    /** Retained samples QA keeps (not boxed); Finish's default "Samples kept". */
+    samples,
     plan: plan.length
       ? {
           planNo: plan[0].planNo,

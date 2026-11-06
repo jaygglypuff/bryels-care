@@ -1,8 +1,8 @@
 ---
 key: inventory.labels
 title: Print and scan labels
-version: 2
-updated_at: 2026-11-01
+version: 3
+updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -55,3 +55,9 @@ To keep a copy as a file, pick **Save as PDF** in the print window. The PDF look
 ## Old label layout
 
 If the print screen says **Old label layout — QA can approve the new one in Management › Rules and settings › Labels and printouts**, the label still uses the first layout. It prints and scans as before; QA can approve a new version of the label with the new layout (name biggest, everything inside the label).
+
+## Sack labels and box labels
+
+1. A delivery in 4 sacks prints 4 labels. Each label says how much is in one sack ("50 kg each") and "sack 1 of 4".
+2. If the sacks are not the same, the label has no amount, only "sack 1 of 4". QA checks this rule.
+3. Box labels on the packaging step leave out the samples QA keeps. Do not put the samples in a box.

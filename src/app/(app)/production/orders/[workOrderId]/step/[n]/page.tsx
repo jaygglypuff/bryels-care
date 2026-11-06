@@ -108,6 +108,7 @@ export default async function StepPage({ params, searchParams }: { params: Promi
                 batchId={b.id}
                 unitsPerBox={boxes.unitsPerBox}
                 defaultPieces={boxes.defaultPieces}
+                samples={boxes.samples}
                 pieceWord={boxes.pieceWord}
                 face={boxes.preview?.options[0]?.face ?? null}
                 plan={boxes.plan}

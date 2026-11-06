@@ -1,8 +1,8 @@
 ---
 key: production.weigh
 title: Weigh the ingredients (Weigh screen)
-version: 3
-updated_at: 2026-11-01
+version: 4
+updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -57,3 +57,9 @@ The Weigh screen shows one card per ingredient, in formula order. The card shows
 
 1. The screen shows "5 of 5 weighed" and the total.
 2. Tap **Step done**. Then go to the next step.
+
+## The scale cannot be used
+
+1. The card says why, for example "SC-01 needs cleaning after the last batch".
+2. If it needs cleaning, clean it and press **Record cleaning of SC-01**. This is the same record as on the equipment page.
+3. If the calibration is overdue, you cannot fix it here. The card says who fixes it: maintenance or the site manager.
