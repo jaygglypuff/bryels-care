@@ -181,15 +181,15 @@ describe("saving through the existing services", () => {
     expect(a.lines.map((l) => l.quantityG)).toEqual(["3723.192000", "8687.571200", "5189.236800"]);
   });
 
-  it("percent amounts must add up to exactly 100 %; nothing is written otherwise", async () => {
+  it("percent amounts must add up to exactly 100 % to send; nothing is written otherwise", async () => {
     const pid = await newProduct("Wizard Soap Short");
-    const bad = input(pid);
+    const bad = input(pid, { submit: true });
     bad.lines[2] = { ...bad.lines[2], amount: "26.9843" };
     const e = await expectCode(saveRecipe(planner, bad), "validation");
     expect((e.details?.fieldErrors as Record<string, string>).lines).toMatch(/^Total 97\.5% — add 2\.5% more/);
     expect(await db.select().from(formulas).where(eq(formulas.productId, pid))).toHaveLength(0);
-    // a waiting step needs its time
-    const noWait = input(pid);
+    // a waiting step needs its time to send
+    const noWait = input(pid, { submit: true });
     noWait.steps[5] = { ...noWait.steps[5], waitAmount: "" };
     const w = await expectCode(saveRecipe(planner, noWait), "validation");
     expect(w.details?.fieldErrors).toHaveProperty("steps.5.minDurationMinutes");
@@ -210,6 +210,54 @@ describe("saving through the existing services", () => {
     await expectCode(saveRecipe(planner, bad), "validation");
     expect(await db.select().from(formulas).where(eq(formulas.productId, pid))).toHaveLength(0);
     expect(await db.select().from(routings).where(eq(routings.productId, pid))).toHaveLength(0);
+  });
+});
+
+describe("Save as draft keeps an unfinished recipe (owner bug report 2026-11-06, ADR-116)", () => {
+  it("percent not yet 100 % and a wait without its time are saved as a draft; sending it is refused until fixed", async () => {
+    const pid = await newProduct("Wizard Soap Unfinished");
+    const half = input(pid, { submit: false });
+    half.lines[2] = { ...half.lines[2], amount: "26.9843" }; // total 97.5 %
+    half.steps[5] = { ...half.steps[5], waitAmount: "" }; // cure time not typed yet
+    const r = await saveRecipe(planner, half);
+    expect(r.formula).toMatchObject({ revisionNo: 1, status: "draft" });
+    expect(r.routing).toMatchObject({ revisionNo: 1, status: "draft" });
+    expect(r.message).toMatch(/^Saved as a draft/);
+    // what was typed is what is stored (grams of 17,600 g at the typed percent), and the wizard shows it back
+    const view = await getRecipe(planner, r.formulaId);
+    expect(view!.draft.lines.map((l) => l.amount)).toEqual(["3723.192", "8687.5712", "4749.2368"]);
+    expect(view!.draft.steps[5]).toMatchObject({ stepKind: "curing", waitAmount: "" });
+    // sending it unchanged is refused with the plain reasons, and it stays a draft
+    const send = { ...half, formulaId: r.formulaId, routingId: r.routingId, submit: true };
+    const e = await expectCode(saveRecipe(planner, send), "validation");
+    expect(e.details?.fieldErrors).toHaveProperty("lines");
+    expect(e.details?.fieldErrors).toHaveProperty("steps.5.minDurationMinutes");
+    const [fr] = await db.select().from(formulaRevisions).where(eq(formulaRevisions.id, r.formula.revisionId));
+    expect(fr.status).toBe("draft");
+    // fixed: saved into the same draft and sent
+    const fixed = input(pid, { formulaId: r.formulaId, routingId: r.routingId, submit: true });
+    const s = await saveRecipe(planner, fixed);
+    expect(s.formula).toMatchObject({ revisionNo: 1, status: "pending_approval" });
+    expect(s.routing).toMatchObject({ revisionNo: 1, status: "pending_approval" });
+  });
+
+  it("a draft still needs what the services must store correctly (a chosen ingredient, a step name), with the field to fix", async () => {
+    const pid = await newProduct("Wizard Soap Unfinished Rows");
+    const noName = input(pid, { steps: [{ ...newStep("other"), name: "" }] });
+    const e = await expectCode(saveRecipe(planner, noName), "validation");
+    expect(e.details?.fieldErrors).toHaveProperty("steps.0.name");
+    expect(await db.select().from(formulas).where(eq(formulas.productId, pid))).toHaveLength(0);
+  });
+
+  it("refuses roles that cannot save recipes even for a draft (role escalation), and another organization", async () => {
+    const pid = await newProduct("Wizard Soap Unfinished Roles");
+    const half = input(pid, { submit: false });
+    half.lines[2] = { ...half.lines[2], amount: "26.9843" };
+    await expectCode(saveRecipe(operator, half), "forbidden");
+    await expectCode(saveRecipe(qa, half), "forbidden");
+    const other = new AuthContext(randomUUID(), randomUUID(), "Other", "other@example.test", ["production_planner"], planner.permissions, [{ ...nfd, id: randomUUID() }], randomUUID());
+    await expectCode(saveRecipe(other, half), "not_found");
+    expect(await db.select().from(formulas).where(eq(formulas.productId, pid))).toHaveLength(0);
   });
 });
 

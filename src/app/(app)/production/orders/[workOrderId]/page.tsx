@@ -73,8 +73,17 @@ function NextActionCard({ v, planKey, approvalNext }: { v: ProductionOrderView; 
     <Card>
       <CardTitle>Next step</CardTitle>
       <div className="flex flex-col gap-2">
-        <p className="text-[14px] text-fg-2">{a.hint}</p>
-        <ActionButton a={a} approve={<ApproveButton workOrderId={v.detail.workOrder.id} />} />
+        {v.notReady ? (
+          // ADR-116: approval would refuse; say why and who acts, instead of a button that fails.
+          <p role="status" className="rounded-[12px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="order-not-ready">
+            {v.notReady}
+          </p>
+        ) : (
+          <>
+            <p className="text-[14px] text-fg-2">{a.hint}</p>
+            <ActionButton a={a} approve={<ApproveButton workOrderId={v.detail.workOrder.id} />} />
+          </>
+        )}
         {/* Who approves the order, by name and role (docs/NEXT_APPROVER.md). */}
         {approvalNext && <NextApprover next={approvalNext} />}
         {a.kind === "wait" && !a.who && !approvalNext && <p className="text-[13px] text-muted">Nothing to press yet.</p>}

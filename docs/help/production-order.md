@@ -52,6 +52,7 @@ A production order says what to make, how many and by when. You follow it on one
 2. Approving sets the materials aside and creates the batch. You do not create batches yourself. The recipe in use on that day is kept for this order: a later recipe change does not change it.
 3. If materials are missing, nothing changes and the message says which material and how much is missing. Receive the stock, then press **Approve** again.
 4. The person who created the order cannot approve it. Another person who can approve must do it.
+5. A product can be made only when both its recipe and its steps are approved. Until then it is not in the **What to make** list: it is under **Not ready to make yet**, with who approves it next (for example "This product's steps are waiting for approval by Nina (QA) — it can be made after that.").
 
 ## Make it: always press the big button
 

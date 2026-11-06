@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { requireContext } from "@/lib/auth/context";
-import { type ActionState, toActionState } from "@/lib/errors";
+import { type AuthContext, getContext } from "@/lib/auth/context";
+import { type ActionState, DomainError, toActionState } from "@/lib/errors";
 import { createRecipeIngredient, createRecipePackaging, createRecipeProduct, getRecipeCopy, saveRecipe } from "@/modules/masterdata";
 
 /**
@@ -19,6 +19,17 @@ async function run<T>(fn: () => Promise<{ data: T; message: string }>, paths: st
   } catch (e) {
     return toActionState(e) as WizardResult<T>;
   }
+}
+
+/**
+ * The signed-in person, or a plain refusal. `requireContext` would redirect from inside the action, which `run` turned
+ * into "Something went wrong" (owner bug report 2026-11-06): a person signed out while typing a long recipe is told
+ * what happened, and the wizard keeps what they typed (on this device) for after they sign in again.
+ */
+async function requireContext(): Promise<AuthContext> {
+  const ctx = await getContext();
+  if (!ctx) throw new DomainError("unauthenticated", "You were signed out, so nothing was saved. What you typed is kept on this device: sign in again, open this recipe again and press Save.");
+  return ctx;
 }
 
 export async function saveRecipeAction(payload: unknown) {

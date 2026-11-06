@@ -101,7 +101,11 @@ function RecipeOverview({ r, saved, waiting }: { r: RecipeView; saved?: string; 
       )}
       {saved && (
         <div role="status" className="rounded-[12px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-3 py-2 text-[14px] text-[var(--ok-fg)]">
-          {saved === "sent" ? "Sent for approval. The approvers see it under “To approve”." : "Saved as a draft. Nobody can use it until it is sent and approved."}
+          {saved === "sent"
+            ? "Sent for approval. The approvers see it under “To approve”."
+            : saved === "same"
+              ? "Nothing changed, so nothing new was saved."
+              : "Saved as a draft. Nobody can use it until it is sent and approved."}
         </div>
       )}
       {r.mode === "waiting" && <p className="text-[14px] text-fg-2">{approvalSentence(r.approvalPolicy, "recipe")}</p>}

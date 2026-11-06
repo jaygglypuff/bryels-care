@@ -2282,3 +2282,54 @@ Decisions:
    ADR text changes meaning).
 6. **Migrations.** File 0033 does not exist (journal idx 33 is `0034_…`); the next generated migration is renamed to
    `0037_…` so prefixes stay unique; documented in `docs/data-model.md`.
+
+## ADR-116 Recipe wizard keeps what was typed; a product is offered for production only when its recipe and steps are in use (owner bug report 2026-11-06)
+
+Status: Accepted (bug fix within ADR-089/ADR-094/ADR-074); A-RW-03 changed, A-RW-08 and A-PO-RDY-01 need the owner.
+
+Owner's report: "I was trying to save a recipe in the demo but it fails to save and then restarts again — not even
+saved as a draft. Also, when I successfully saved a recipe and used it for a production order, and then approved it for
+batch, I get a routing error for that product."
+
+Root causes:
+1. **Wizard lost everything on a failed call.** The wizard kept its state only in React memory and awaited the server
+   action without a catch. Any call that did not return a result (connection dropped, the app redeployed while the
+   wizard was open — every deploy changes the server action ids, and the live demo is redeployed often —, a server
+   restart, a 5xx) threw inside a transition; React passed it to the page error boundary ("This page could not be
+   loaded"), and "Try again" re-mounted an empty wizard. Reproduced with Playwright by failing the save request (abort
+   and HTTP 500). A signed-out person got "Something went wrong" (the `requireContext` redirect was caught as an error).
+2. **"Save as draft" refused unfinished recipes.** Server and client applied the send-time promises to drafts: percent
+   amounts not yet 100 % or a wait step without its time refused the draft, and the wizard's Next button blocked
+   reaching "Save as draft" at all while the percent total was not 100 %.
+3. **New order offered half-approved recipes.** A wizard recipe is two versions approved one by one: ingredients
+   (formula) and steps (routing). The New order screen offered every product with an approved formula; approving the
+   order then failed in `planLockedWorkOrder` with "<product> has no approved routing effective on <date>. A routing
+   revision must be approved first (V-REV)." when the steps were still waiting (or not in use on that day).
+
+Decision:
+1. The wizard calls every server action through `safeCall` (`wizard-keep.ts`): a throw becomes a plain message at the
+   top ("Not saved: the app could not reach the server … Nothing you typed is lost"). What was typed is kept in
+   `sessionStorage` per person, wizard kind and recipe, with a fingerprint of the server's starting point, restored after
+   a reload or a new sign-in in the same tab ("We kept what you typed on this device … Start over"), and cleared on a
+   successful save. Session storage only: nothing outlives the browser tab on a shared device. The recipe actions answer
+   a signed-out person in words instead of redirecting from inside the action.
+2. "Save as draft" (`saveRecipe` with `submit: false`, and the client checks) no longer applies the wizard's completeness
+   promises: percent total and wait time are checked when the recipe is sent for approval. What the services must store
+   correctly still applies to drafts (product, batch size, a chosen ingredient, a valid amount, a step name). Screens 2–4
+   offer "Not finished? Save as draft". Failure messages name the screen to fix. "Nothing changed" is no longer shown as
+   "Saved as a draft".
+3. `recipeReadiness` / `productReadiness` (masterdata) say whether a product can be made on a date — BOTH an approved
+   recipe and approved steps in use on that date (V-REV, unchanged) — and otherwise one plain sentence naming who acts
+   next (`nextActors`, the open approval step's people, the same people the approval notification goes to):
+   "This product's steps are waiting for approval by Nina (QA) or Teresa (QA) — it can be made after that." Drafts name
+   the author; approved-but-later versions name the day. Used by: the New order screen (only ready products can be
+   chosen; the others are listed under "Not ready to make yet"; `?product=` shows the reason), `createProductionOrder`
+   (refused with the sentence, nothing written), the draft production order screen (the sentence replaces the Approve
+   button), and the approval / batch creation refusals (`planLockedWorkOrder`, `insertBatch`) instead of the raw
+   routing message. Nothing about who may approve changes.
+
+Consequences: no migration, no seed change (DEMO_SEED_VERSION unchanged). Tests:
+`tests/integration/production/order-recipe-readiness.test.ts`, `tests/integration/masterdata/recipe-wizard.test.ts`
+("Save as draft keeps an unfinished recipe"), `tests/unit/recipe-readiness-words.test.ts`,
+`tests/unit/recipe-wizard-keep.test.ts`. Open: an order created before this change for a product whose steps are still
+waiting stays a draft until they are approved; a copy kept on the device is per tab (a new tab starts empty).

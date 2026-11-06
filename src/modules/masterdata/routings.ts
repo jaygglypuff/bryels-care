@@ -47,7 +47,7 @@ function ruleTypeFor(changeScope: string | null): ApprovalRuleType {
   return changeScope === "sequencing_only" ? "routing_revision_sequencing" : "routing_revision";
 }
 
-function policyFor(q: DbOrTx, organizationId: string, changeScope: string | null) {
+export function policyFor(q: DbOrTx, organizationId: string, changeScope: string | null) {
   return loadApprovalPolicy(q, organizationId, ruleTypeFor(changeScope));
 }
 

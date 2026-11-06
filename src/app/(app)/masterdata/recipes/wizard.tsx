@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { ArrowDown, ArrowUp, Check, ChevronLeft, ChevronRight, Copy, Plus, Search, Trash2, X } from "lucide-react";
 import {
   AREAS_WORDS,
@@ -37,6 +37,7 @@ import { Button, Card, Input, Select, Textarea, cx } from "@/ui/core";
 import { BlockIcon } from "./block-icon";
 import { RecipeSummary, batchPiecesSentence, piecesPerBatch } from "./recipe-summary";
 import { createRecipeIngredientAction, createRecipePackagingAction, createRecipeProductAction, loadRecipeCopyAction, saveRecipeAction } from "./actions";
+import { clearKept, fingerprint, keptKey, keptTime, readKept, safeCall, writeKept } from "./wizard-keep";
 
 type Errors = Record<string, string>;
 type Product = RecipeWizardOptions["products"][number];
@@ -141,6 +142,34 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
   const [materials, setMaterials] = useState<Material[]>(options.materials);
   const [activate, setActivate] = useState(true);
   const [pending, startTransition] = useTransition();
+  /** A copy kept on this device was put back (ADR-116); offers "Start over". */
+  const [restored, setRestored] = useState<string | null>(null);
+  const keep = useMemo(() => ({ key: keptKey(options.draftOwner, start.kind, initial.formulaId), base: fingerprint(initial) }), [options.draftOwner, start.kind, initial]);
+  const ready = useRef(false);
+  const session = () => (typeof window === "undefined" ? null : window.sessionStorage);
+
+  // ADR-116: what was typed survives a failed save, a reload or a sign-in in this tab; put back once, after hydration.
+  useEffect(() => {
+    const k = readKept<WDraft>(session(), keep.key, keep.base);
+    if (k && JSON.stringify(k.draft) !== JSON.stringify({ batchBy: "kg", pieces: "", pieceG: "", packaging: [], ...initial })) {
+      setD(k.draft);
+      setScreen(Math.min(Math.max(k.screen, 1), 5));
+      setRestored(keptTime(k.savedAt));
+    }
+    ready.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keep.key, keep.base]);
+  useEffect(() => {
+    if (ready.current) writeKept(session(), keep.key, keep.base, screen, d);
+  }, [d, screen, keep.key, keep.base]);
+  function startOver() {
+    clearKept(session(), keep.key);
+    setD({ batchBy: "kg", pieces: "", pieceG: "", packaging: [], ...initial } as WDraft);
+    setScreen(start.kind === "new" ? 1 : 2);
+    setErrors({});
+    setBanner(null);
+    setRestored(null);
+  }
 
   const product = products.find((p) => p.id === d.productId) ?? null;
   const matName = (id: string) => materials.find((m) => m.id === id)?.name ?? start.materialNames?.[id] ?? "Choose an item";
@@ -176,7 +205,8 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
         if (!isDecimalText(l.amount, l.src === "pct" ? 4 : 6) || Number(l.amount) <= 0) e[`lines.${i}.quantityG`] = "Type the amount.";
         if (!isDecimalText(l.diff, 6)) e[`lines.${i}.tolerancePct`] = "Type the allowed difference.";
       });
-      if (d.view === "pct" && d.lines.length && !totals.exact) e.lines = `${percentTotalText(totals)}. The amounts must add up to 100%.`;
+      // ADR-116: a draft may be saved before the amounts add up; sending (and moving on with Next) needs 100 %.
+      if (!draft && d.view === "pct" && d.lines.length && !totals.exact) e.lines = `${percentTotalText(totals)}. The amounts must add up to 100%.`;
       d.packaging.forEach((p, i) => {
         if (!p.materialId) e[`packaging.${i}.materialId`] = "Choose the packaging item.";
         if (!p.from && (!isDecimalText(p.perPiece, PER_PIECE_DECIMALS) || Number(p.perPiece) <= 0)) e[`packaging.${i}.perPiece`] = "Type how many go on one piece, like 1.";
@@ -186,7 +216,7 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
     if (n === 4 && !start.locks.steps) {
       d.steps.forEach((s, i) => {
         if (!s.name.trim()) e[`steps.${i}.name`] = "Give the step a name.";
-        if ((s.stepKind === "curing" || s.stepKind === "hold") && !s.waitAmount.trim()) e[`steps.${i}.minDurationMinutes`] = "Type how long to wait.";
+        if (!draft && (s.stepKind === "curing" || s.stepKind === "hold") && !s.waitAmount.trim()) e[`steps.${i}.minDurationMinutes`] = "Type how long to wait.";
       });
     }
     return e;
@@ -210,29 +240,39 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  /** A failure message at the top, with the screen to fix it on (ADR-116: always visible, nothing typed is lost). */
+  function fail(text: string, fe: Errors = {}) {
+    setErrors(fe);
+    const where = Object.keys(fe).map(screenOf);
+    const first = where.length ? Math.min(...where) : 5;
+    setBanner({ ok: false, text: first < 5 && !/\(screen \d/.test(text) ? `${text} (screen ${first}: ${TITLES[first - 1]})` : text });
+    if (first < 5) setScreen(first);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   function save(submit: boolean) {
     for (const k of [1, 2, 3, 4]) {
       const e = check(k, !submit);
       if (Object.keys(e).length) {
         setErrors(e);
         setBanner({ ok: false, text: `${Object.values(e)[0]} (screen ${k}: ${TITLES[k - 1]})` });
+        if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
     }
     setBanner(null);
     startTransition(async () => {
-      const res = await saveRecipeAction({ ...d, submit, activateProduct: submit && activate && product?.status === "draft" && options.can.activateProduct });
+      // ADR-116: a throw (connection, updated app) becomes a plain message; the wizard and what was typed stay.
+      const res = await safeCall(() => saveRecipeAction({ ...d, submit, activateProduct: submit && activate && product?.status === "draft" && options.can.activateProduct }));
       if (!res.ok || !res.data) {
-        const fe = res.fieldErrors ?? {};
-        setErrors(fe);
-        const where = Object.keys(fe).map(screenOf);
-        setBanner({ ok: false, text: res.message ?? "Not saved." });
-        if (where.length && Math.min(...where) < 5) setScreen(Math.min(...where));
+        fail(res.message ?? "Not saved.", res.fieldErrors ?? {});
         return;
       }
       const r = res.data;
+      clearKept(session(), keep.key);
       setBanner({ ok: true, text: res.message ?? "Saved." });
-      router.push(`/masterdata/recipes/${r.formulaId}?saved=${submit ? "sent" : "draft"}`);
+      const changed = r.formula.changed || !!r.routing?.changed;
+      router.push(`/masterdata/recipes/${r.formulaId}?saved=${submit ? "sent" : changed ? "draft" : "same"}`);
     });
   }
 
@@ -278,6 +318,14 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
         </h2>
       </nav>
 
+      {restored !== null && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-[var(--info-bd,var(--line))] bg-[var(--info-bg)] px-3 py-2 text-[14px] text-[var(--info-fg)]" data-testid="wizard-restored">
+          <span>We kept what you typed on this device{restored ? ` (last change ${restored})` : ""}. It is not saved yet: press Save as draft or Send for approval.</span>
+          <Button type="button" variant="ghost" size="sm" onClick={startOver}>
+            Start over
+          </Button>
+        </div>
+      )}
       {banner && (
         <div role={banner.ok ? "status" : "alert"} className={cx("rounded-[12px] border px-3 py-2 text-[14px]", banner.ok ? "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]" : "border-[var(--bad-bd)] bg-[var(--bad-bg)] text-[var(--bad-fg)]")}>
           {banner.text}
@@ -417,6 +465,14 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
             <span className="text-[13px] text-muted">Screen 5 of 5</span>
           )}
         </div>
+        {/* ADR-116: keep an unfinished recipe from any screen (a product and the batch size are needed). */}
+        {screen > 1 && screen < 5 && d.productId && (
+          <div className="mt-1 flex justify-center">
+            <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={() => save(false)} data-testid="save-draft-early">
+              {pending ? "Saving…" : "Not finished? Save as draft"}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
       {screen < 5 && (
@@ -646,7 +702,7 @@ function NewProductForm({ families, onCancel, onCreated }: { families: { code: s
           disabled={pending}
           onClick={() =>
             start(async () => {
-              const r = await createRecipeProductAction(f);
+              const r = await safeCall(() => createRecipeProductAction(f));
               if (!r.ok || !r.data) {
                 setErr(r.fieldErrors ?? {});
                 setMsg(r.message ?? "Not saved.");
@@ -823,7 +879,7 @@ function BatchScreen({
                 }
                 setConfirming(false);
                 start(async () => {
-                  const r = await loadRecipeCopyAction(src);
+                  const r = await safeCall(() => loadRecipeCopyAction(src));
                   if (!r.ok || !r.data) {
                     setMsg(r.message ?? "Could not copy.");
                     return;
@@ -1242,7 +1298,7 @@ function IngredientPicker({
                 disabled={pending || !name.trim()}
                 onClick={() =>
                   start(async () => {
-                    const r = pk ? await createRecipePackagingAction({ name }) : await createRecipeIngredientAction({ name });
+                    const r = await safeCall(() => (pk ? createRecipePackagingAction({ name }) : createRecipeIngredientAction({ name })));
                     if (!r.ok || !r.data) {
                       setMsg(r.message ?? "Not saved.");
                       return;

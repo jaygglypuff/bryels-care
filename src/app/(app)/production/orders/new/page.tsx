@@ -20,7 +20,10 @@ export default async function NewProductionOrderPage({ searchParams }: { searchP
   if (!ctx.can("production.work_order.create")) return <Forbidden what="creating production orders" permission="production.work_order.create" />;
   const sp = await searchParams;
   const opts = await workOrderFormOptions(ctx);
-  const formulas = opts.formulas.filter((f) => f.effectiveRevision);
+  // ADR-116: only products whose recipe AND steps are approved and in use can be chosen; the others are listed below
+  // with the plain reason and who approves next ("This product's recipe is waiting for approval by …").
+  const formulas = opts.formulas.filter((f) => f.effectiveRevision && !f.notReady);
+  const waiting = opts.formulas.filter((f) => f.notReady && !formulas.some((x) => x.productId === f.productId));
   // ADR-104 §4: the largest batch per product (mixer capacity on the routing; null = the recipe's batch size).
   const largest = await largestBatchesForForm(ctx, formulas.map((f) => f.productId), opts.today);
   let prefill: MakeForLine | null = null;
@@ -38,7 +41,8 @@ export default async function NewProductionOrderPage({ searchParams }: { searchP
     }
   }
   const usable = prefill && !prefillError && formulas.some((f) => f.productId === prefill!.productId) ? prefill : null;
-  if (prefill && !prefillError && !usable) prefillError = `${prefill.productName} has no approved formula yet, so it can't be made. Ask the person who looks after formulas.`;
+  if (prefill && !prefillError && !usable) prefillError = waiting.find((f) => f.productId === prefill!.productId)?.notReady ?? `${prefill.productName} has no approved recipe yet, so it can't be made. Ask the person who looks after recipes.`;
+  const askedFor = sp.product ? waiting.find((f) => f.productId === sp.product) : undefined;
   return (
     <div className="mx-auto max-w-2xl">
       <PageHeader title="New production order" subtitle={ctx.currentSite.name} />
@@ -48,9 +52,14 @@ export default async function NewProductionOrderPage({ searchParams }: { searchP
           <Banner tone="warn" title="Can't fill in from the customer order">{prefillError}</Banner>
         </div>
       )}
+      {askedFor && (
+        <div className="mb-4" data-testid="product-not-ready">
+          <Banner tone="warn" title={`${askedFor.productName} can't be made yet`}>{askedFor.notReady}</Banner>
+        </div>
+      )}
       {formulas.length === 0 ? (
-        <EmptyState title="No product is ready to make yet" action={<LinkButton href="/masterdata/formulas" variant="secondary">View formulas</LinkButton>}>
-          A product needs an approved formula before it can be made. Ask the person who looks after formulas.
+        <EmptyState title="No product is ready to make yet" action={<LinkButton href="/masterdata/recipes" variant="secondary">View recipes</LinkButton>}>
+          A product needs an approved recipe and approved steps before it can be made.
         </EmptyState>
       ) : (
         <Card>
@@ -61,6 +70,20 @@ export default async function NewProductionOrderPage({ searchParams }: { searchP
             prefill={usable ? { salesOrderId: usable.salesOrderId, salesOrderNumber: usable.salesOrderNumber, lineNo: usable.lineNo, productId: usable.productId, missing: usable.missing, neededBy: usable.neededBy } : null}
             initialProductId={formulas.find((f) => f.productId === sp.product)?.productId ?? null}
           />
+        </Card>
+      )}
+      {waiting.length > 0 && (
+        <Card className="mt-4">
+          <h2 className="text-[15px] font-semibold">Not ready to make yet</h2>
+          <p className="text-[13px] text-muted">These products can be chosen once their recipe and steps are approved.</p>
+          <ul className="mt-2 flex flex-col divide-y divide-line" data-testid="not-ready-products">
+            {waiting.map((f) => (
+              <li key={f.formulaId} className="py-2.5">
+                <p className="text-[15px] font-medium">{f.productName}</p>
+                <p className="text-[13px] text-fg-2">{f.notReady}</p>
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
     </div>

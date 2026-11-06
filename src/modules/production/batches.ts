@@ -6,7 +6,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
-import { getEffectiveRouting, getInspectionPlan, isEffectiveOn, loadFormulaRevisionForSnapshot } from "@/modules/masterdata";
+import { getEffectiveRouting, getInspectionPlan, isEffectiveOn, loadFormulaRevisionForSnapshot, productReadiness } from "@/modules/masterdata";
 import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
 import { transitionBatch } from "./state";
 import { assertWorkOrderAcceptsBatch, syncWorkOrderProgress } from "./work-orders";
@@ -85,7 +85,9 @@ export async function insertBatch(tx: Tx, ctx: AuthContext, siteId: string, inpu
   }
   const routing = await getEffectiveRouting(ctx, rev.product.id, input.plannedStartOn, { tx });
   if (!routing) {
-    throw new DomainError("validation", `${rev.product.name} has no approved routing effective on ${input.plannedStartOn}. A routing revision must be approved first (V-REV).`, { rule: "V-REV" });
+    // ADR-116: the plain sentence (which part is missing, who acts next) instead of the raw routing message.
+    const ready = await productReadiness(ctx, rev.product.id, input.plannedStartOn, tx);
+    throw new DomainError("validation", ready.sentence ?? `${rev.product.name} has no approved steps for ${input.plannedStartOn}.`, { rule: "V-REV", recipe: ready.recipe.kind, steps: ready.steps.kind });
   }
   const wo = input.workOrderId
     ? await assertWorkOrderAcceptsBatch(tx, ctx, input.workOrderId, { siteId, formulaRevisionId: rev.rev.id, routingRevisionId: routing.rev.id, plannedSizeG, plannedStartOn: input.plannedStartOn })

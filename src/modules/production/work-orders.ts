@@ -10,7 +10,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
 import { getSetting } from "@/lib/settings";
-import { getEffectiveFormulaRevision, getEffectiveRouting } from "@/modules/masterdata";
+import { getEffectiveFormulaRevision, getEffectiveRouting, productReadiness } from "@/modules/masterdata";
 import { idempotent } from "./shared";
 import { transitionBatch } from "./state";
 import { transitionWorkOrder, type WorkOrderStatus } from "./work-orders-state";
@@ -301,17 +301,18 @@ export async function planLockedWorkOrder(tx: Tx, ctx: AuthContext, wo: typeof w
   if (wo.status !== "draft") await transitionWorkOrder(tx, ctx, wo, "planned"); // throws 409 with the state words
   const [product] = await tx.select().from(products).where(eq(products.id, wo.productId)).limit(1);
   const rev = await getEffectiveFormulaRevision(ctx, wo.productId, wo.plannedStart, { tx });
-  if (!rev || rev.formula.id !== wo.formulaId) {
+  const routing = await getEffectiveRouting(ctx, wo.productId, wo.plannedStart, { tx });
+  if (!rev || !routing) {
+    // Owner bug report 2026-11-06 (ADR-116): say in plain words which part is missing and who acts next, instead of
+    // the raw "no approved routing effective" message.
+    const ready = await productReadiness(ctx, wo.productId, wo.plannedStart, tx);
+    const sentence = ready.sentence ?? `${product.name} can't be made on ${wo.plannedStart}: its recipe or steps are not approved for that day.`;
+    throw new DomainError("validation", sentence, { rule: "V-REV", recipe: ready.recipe.kind, steps: ready.steps.kind, fieldErrors: { plannedStart: sentence } });
+  }
+  if (rev.formula.id !== wo.formulaId) {
     throw new DomainError("validation", `No approved formula revision of ${product.name} is effective on ${wo.plannedStart}. Approve a revision or move the planned start (V-REV).`, {
       rule: "V-REV",
       fieldErrors: { plannedStart: "No effective formula revision on this date." },
-    });
-  }
-  const routing = await getEffectiveRouting(ctx, wo.productId, wo.plannedStart, { tx });
-  if (!routing) {
-    throw new DomainError("validation", `${product.name} has no approved routing effective on ${wo.plannedStart}. A routing revision must be approved first (V-REV).`, {
-      rule: "V-REV",
-      fieldErrors: { plannedStart: "No effective routing revision on this date." },
     });
   }
   const now = new Date();

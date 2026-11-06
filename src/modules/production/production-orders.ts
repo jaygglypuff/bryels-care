@@ -9,7 +9,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtMass, fmtQty } from "@/lib/qty";
 import { getSetting } from "@/lib/settings";
-import { getEffectiveFormulaRevision } from "@/modules/masterdata";
+import { getEffectiveFormulaRevision, productReadiness } from "@/modules/masterdata";
 import { notifyUsers, usersHoldingPermissionAt } from "@/modules/platform/notifications";
 import { siteOrderCover, type SiteOrderCover } from "./order-cover";
 import { comingWords } from "./order-cover-rule";
@@ -119,6 +119,12 @@ export async function createProductionOrder(ctx: AuthContext, input: ProductionO
     if (so.siteId !== ctx.currentSiteId) throw new DomainError("validation", "Switch to the customer order's site to make products for it.", { field: "salesOrderId" });
     if (!(MAKE_FOR_SALES_STATUSES as readonly string[]).includes(so.status)) throw new DomainError("state", `Customer order ${so.orderNumber} is ${so.status.replace(/_/g, " ")}; products are made only for open customer orders.`, { field: "salesOrderId" });
     neededBy ??= so.requestedDeliveryOn ?? null;
+  }
+  // ADR-116 (owner bug report 2026-11-06): only a product whose recipe AND steps are approved and in use on the planned
+  // start can be ordered; otherwise the same plain sentence the New order screen shows (who approves next).
+  if (UUID.test(input.productId ?? "") && DATE.test(input.plannedStart ?? "")) {
+    const ready = await productReadiness(ctx, input.productId, input.plannedStart);
+    if (!ready.ready) throw new DomainError("validation", ready.sentence, { field: "productId", fieldErrors: { productId: ready.sentence }, rule: "V-REV", recipe: ready.recipe.kind, steps: ready.steps.kind });
   }
   let count: number | string = input.batchCount === null || input.batchCount === undefined || input.batchCount === "" ? 1 : input.batchCount;
   const typedCount = !(input.batchCount === null || input.batchCount === undefined || input.batchCount === "");
@@ -415,7 +421,12 @@ export async function getProductionOrder(ctx: AuthContext, workOrderId: string, 
   const noBatchPlanned = live.length === 0 && (status === "approved" || status === "in_progress");
   const planBy = noBatchPlanned ? (wo.assignedPlannerId ?? wo.assignedSupervisorId ?? wo.statusChangedBy) : null;
   const [planner] = planBy ? await db.select({ id: users.id, name: users.displayName }).from(users).where(eq(users.id, planBy)).limit(1) : [];
+  // ADR-116: a draft order is approved by fixing the recipe and steps in use on its start day; when one is not approved
+  // (or not in use yet) the screen says so in the same plain sentence the approval would refuse with.
+  const notReady = wo.status === "draft" ? (await productReadiness(ctx, wo.productId, wo.plannedStart)).sentence : null;
   return {
+    /** Draft order whose product can't be made on its start day yet: why, and who approves next (ADR-116). */
+    notReady,
     /** Approved, but no batch exists yet: nothing to do on the floor until someone plans one. */
     noBatchPlanned,
     /** Who to ask to plan the batch (name only, never an e-mail address); null when a batch exists. */

@@ -166,7 +166,11 @@ function renameFields(e: unknown, part: "formula" | "routing"): unknown {
  * revision ids), validated with the services' own schemas. Throws one validation error with every
  * field message found.
  */
-export function prepareRecipe(v: z.output<typeof RecipeSaveInput>, opts: { pieceG?: string | null } = {}) {
+export function prepareRecipe(v: z.output<typeof RecipeSaveInput>, opts: { pieceG?: string | null; draft?: boolean } = {}) {
+  // Owner bug report 2026-11-06 (ADR-116): "Save as draft" keeps an unfinished recipe. The wizard's own completeness
+  // promises (percent adds up to 100 %, a waiting step has its time) are checked when it is sent for approval; what
+  // the services must store correctly (a chosen ingredient, a valid amount, a step name, the batch size) still applies.
+  const draft = opts.draft ?? !v.submit;
   const fe: FieldErrors = {};
   const expected = v.expectedPct.trim();
   const expectedOk = isDecimalText(expected, 2) && new Decimal(expected).gt(0) && new Decimal(expected).lte(100);
@@ -196,14 +200,16 @@ export function prepareRecipe(v: z.output<typeof RecipeSaveInput>, opts: { piece
     const d = l.diff.trim();
     if (!isDecimalText(d, 6)) fe[`lines.${i}.tolerancePct`] = l.diffKind === "pct" ? "Type the allowed difference in percent, like 2." : "Type the allowed difference in grams, like 5.";
   });
-  if (fe.batchKg === undefined && fe.pieces === undefined && fe.pieceG === undefined && isDecimalText(batchKg, BATCH_KG_DECIMALS) && v.view === "pct" && v.lines.length) {
+  if (!draft && fe.batchKg === undefined && fe.pieces === undefined && fe.pieceG === undefined && isDecimalText(batchKg, BATCH_KG_DECIMALS) && v.view === "pct" && v.lines.length) {
     const t = recipeTotals(kgToGrams(batchKg), v.lines);
     if (!t.exact) fe.lines = `${percentTotalText(t)}. The amounts must add up to 100%.`;
   }
   v.steps.forEach((s, i) => {
     if (s.stepKind === "curing" || s.stepKind === "hold") {
       const m = waitToMinutes(s.waitAmount, s.waitUnit);
-      if (m === null) fe[`steps.${i}.minDurationMinutes`] = "Type how long to wait.";
+      if (m === null) {
+        if (!draft) fe[`steps.${i}.minDurationMinutes`] = "Type how long to wait.";
+      }
       else if (Number.isNaN(m) || m > 100_000) fe[`steps.${i}.minDurationMinutes`] = "Type how long to wait as a whole number of minutes, hours, days or weeks (at most 69 days).";
     }
   });
@@ -715,6 +721,8 @@ export async function recipeWizardOptions(ctx: AuthContext) {
     defaultDiffPct: String(diff),
     weighCheck: weighCheck as "all" | "marked" | "none",
     today: businessToday(),
+    /** Whose copy the wizard keeps on this device until saved (ADR-116; the person's own id, never shown). */
+    draftOwner: ctx.userId,
     can: {
       create: ctx.can("masterdata.formula.create") && ctx.can("masterdata.routing.create"),
       edit: ctx.can("masterdata.formula.edit") && ctx.can("masterdata.routing.edit"),

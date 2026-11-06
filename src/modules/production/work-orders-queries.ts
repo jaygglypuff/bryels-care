@@ -28,7 +28,7 @@ import {
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
-import { getEffectiveFormulaRevision } from "@/modules/masterdata";
+import { getEffectiveFormulaRevision, recipeReadiness } from "@/modules/masterdata";
 import { type FormulaSnapshot, manilaToday } from "./shared";
 import { WORK_ORDER_STATUSES } from "./work-orders-state";
 import { stagingKinds, workOrderCandidates, workOrderRequirements } from "./work-orders-reserve";
@@ -223,10 +223,20 @@ export async function workOrderFormOptions(ctx: AuthContext) {
         .where(and(inArray(formulaRevisions.formulaId, fs.map((f) => f.formulaId)), eq(formulaRevisions.status, "approved")))
         .orderBy(desc(formulaRevisions.revisionNo))
     : [];
+  // ADR-116: whether the recipe AND the steps are approved and in use today, and if not, the plain sentence why.
+  const ready = await recipeReadiness(ctx, fs.map((f) => f.productId), today);
   const formulasOut = fs.map((f) => {
     const approved = revs.filter((r) => r.formulaId === f.formulaId);
     const eff = approved.find((r) => r.effectiveFrom && r.effectiveFrom <= today && (!r.effectiveTo || r.effectiveTo > today)) ?? approved[0] ?? null;
-    return { ...f, referenceBatchSizeG: eff?.referenceBatchSizeG ?? null, theoreticalYieldPct: eff?.theoreticalYieldPct ?? null, effectiveRevision: eff ? `rev ${eff.revisionNo}` : null };
+    const r = ready.get(f.productId);
+    return {
+      ...f,
+      referenceBatchSizeG: eff?.referenceBatchSizeG ?? null,
+      theoreticalYieldPct: eff?.theoreticalYieldPct ?? null,
+      effectiveRevision: eff ? `rev ${eff.revisionNo}` : null,
+      /** Null when it can be made today; else why not and who acts next. */
+      notReady: r && !r.ready ? r.sentence : null,
+    };
   });
   const lines = await db.select().from(productionLines).where(and(eq(productionLines.siteId, siteId), eq(productionLines.status, "active"))).orderBy(asc(productionLines.code));
   const supervisors = await db
