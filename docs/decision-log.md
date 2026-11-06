@@ -2064,3 +2064,23 @@ the deciding services re-check everything.
 
 Consequences: `docs/NEXT_APPROVER.md` (inventory and remaining work); tests `tests/unit/next-actors-words.test.ts`,
 `tests/integration/governance/next-actors.test.ts`; no migration.
+
+## ADR-110 One line from purchase to invoice (end-to-end walk, 2026-11-06)
+
+Status: Accepted (owner delegated); C15 and C7 flagged for owner/QA confirmation.
+
+Decision (from `docs/END_TO_END_FLOW.md`, fix list C0–C20):
+- **Data rules first (C1–C8):** the second check of a box refuses any box that is not on the pick list unless an
+  over-shipment approval exists for that line and never counts past the order silently; "free stock" has one
+  definition (the set-aside rule) everywhere, so "Make for this order" appears when the order is short; boxes made at
+  Finish move with their lot when QA says OK, are listed in Put away, are set aside whole first and are picked by
+  scanning the box; equipment that blocks weighing says why and offers the fix on the floor ("Record cleaning");
+  the packaging step already subtracts the retained samples so box labels are right first time; sack labels show the
+  quantity per sack; QA results need a recorded sample first.
+- **Every hand-off is a message and a Home line (C9, with ADR-109)** and every stage screen ends with "Next: …" and one
+  button to the next stage (C10). Procurement and warehouse get their own Home work lists (C11, C13).
+- **One approval per purchase (C15):** an approved request to buy becomes a purchase order without a second approval
+  when the supplier, items and amount stay within what was approved; a purchase order without a request, or above the
+  approved amount, follows the approval rules. Approvers always see the amount they approve.
+- **"How work flows" page (C0):** `/operations/flow`, one row per stage (16 stages, from "Ask to buy" to "Invoice"),
+  each with who, today's count, the oldest item's age and one button; the same stages are the stepper on records.
