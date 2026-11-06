@@ -79,7 +79,7 @@ export function ProductionOrderForm({ formulas, lines, today, prefill, initialPr
           {prefill && <input type="hidden" name="productId" value={productId} />}
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label={`How many ${word}?`} htmlFor="quantityUnits" error={fe.quantityUnits} hint={per ? `One batch makes about ${per}. Empty = one batch.` : "Empty = one batch."}>
-              <Input id="quantityUnits" name="quantityUnits" inputMode="numeric" pattern="[0-9]*" value={pieces} onChange={(e) => setPieces(e.target.value.replace(/[^0-9]/g, ""))} placeholder={per ?? ""} />
+              <Input id="quantityUnits" name="quantityUnits" inputMode="numeric" pattern="[0-9]*" value={pieces} onChange={(e) => setPieces(e.target.value.replace(/[^0-9]/g, ""))} placeholder={per ? `e.g. ${per}` : ""} />
             </Field>
             <Field label="Needed by" htmlFor="neededBy" error={fe.neededBy} hint="Optional. The order shows Late after this day.">
               <Input id="neededBy" name="neededBy" type="date" defaultValue={prefill?.neededBy ?? ""} />

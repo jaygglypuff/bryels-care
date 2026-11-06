@@ -28,11 +28,11 @@ export default async function DefectsPage({ searchParams }: { searchParams: Prom
       <form method="get" className="mb-4 flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-[13px] font-medium">
           From
-          <input type="date" name="from" defaultValue={from} className="min-h-[44px] rounded-[14px] border border-line-strong bg-surface px-3.5 text-[14px]" />
+          <input type="date" name="from" defaultValue={from} className="min-h-[44px] rounded-[8px] border border-line-strong bg-surface px-3.5 text-[14px]" />
         </label>
         <label className="flex flex-col gap-1 text-[13px] font-medium">
           To
-          <input type="date" name="to" defaultValue={to} className="min-h-[44px] rounded-[14px] border border-line-strong bg-surface px-3.5 text-[14px]" />
+          <input type="date" name="to" defaultValue={to} className="min-h-[44px] rounded-[8px] border border-line-strong bg-surface px-3.5 text-[14px]" />
         </label>
         {products.length > 0 && (
           <label className="flex min-w-[180px] flex-col gap-1 text-[13px] font-medium">

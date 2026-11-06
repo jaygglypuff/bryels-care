@@ -173,7 +173,7 @@ export default async function ProductionOrdersPage({ searchParams }: { searchPar
                 <input type="hidden" name="status" value={status} />
                 <label className="flex min-w-[200px] flex-1 flex-col gap-1 text-[13px] font-medium sm:max-w-sm">
                   Search
-                  <input name="q" defaultValue={sp.q ?? ""} placeholder="Order number or product" className="min-h-[44px] rounded-[14px] border border-line-strong bg-surface px-3.5 text-[14px]" />
+                  <input name="q" defaultValue={sp.q ?? ""} placeholder="Order number or product" className="min-h-[44px] rounded-[8px] border border-line-strong bg-surface px-3.5 text-[14px]" />
                 </label>
                 <button className="min-h-[44px] rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2" type="submit">Search</button>
               </form>
