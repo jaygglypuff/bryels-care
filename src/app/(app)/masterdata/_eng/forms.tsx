@@ -79,6 +79,8 @@ export function DecisionForm({
   defaultEffectiveFrom,
   today,
   plain = false,
+  ownerAloneNote = null,
+  approveLabel,
 }: {
   action: Action;
   id: string;
@@ -88,12 +90,20 @@ export function DecisionForm({
   today: string;
   /** Grade-5 words (ADR-088): "Use from", "Say OK", "Not OK". Default keeps the original words for the other screens. */
   plain?: boolean;
+  /** ADR-117: "You can approve this alone because you are the owner (no separate QA review)." — one Approve decides every open step. */
+  ownerAloneNote?: string | null;
+  approveLabel?: string;
 }) {
   const [state, run] = useActionState<ActionState, FormData>(action, null);
   const fe = state?.fieldErrors ?? {};
   return (
     <form action={run} className="flex flex-col gap-3 rounded-[16px] border border-line bg-surface-2/60 p-4">
       <input type="hidden" name="id" value={id} />
+      {ownerAloneNote && (
+        <p className="rounded-[12px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="owner-alone-note">
+          {ownerAloneNote}
+        </p>
+      )}
       <p className="text-[13px] font-medium">Your decision: {stepLabel}</p>
       {isFinal && (
         <Field
@@ -111,7 +121,7 @@ export function DecisionForm({
       <FormMessage state={state} />
       <div className="flex flex-wrap gap-2">
         <SubmitButton name="decision" value="approved" variant="cta" pendingText="Saving…">
-          {plain ? "Say OK" : "Approve"}
+          {approveLabel ?? (plain ? "Say OK" : "Approve")}
         </SubmitButton>
         <SubmitButton name="decision" value="rejected" variant="danger" pendingText="Saving…">
           {plain ? "Not OK" : "Reject"}

@@ -42,7 +42,7 @@ export type AccessDetail = {
  * `readOnly`: set when the read-only maintenance mode applies to this user (US-2-30); mutating
  * permission checks and `assertWritable()` then refuse with `read_only` before any write.
  */
-export type ContextOptions = { actor?: Actor; correlationId?: string | null; session?: SessionInfo | null; access?: AccessDetail; readOnly?: boolean; ownerOverride?: OwnerOverride; selfApproval?: SelfApproval };
+export type ContextOptions = { actor?: Actor; correlationId?: string | null; session?: SessionInfo | null; access?: AccessDetail; readOnly?: boolean; ownerOverride?: OwnerOverride; selfApproval?: SelfApproval; ownerAlone?: OwnerAlone };
 
 /**
  * ADR-073 owner override (setting `governance.owner_override`): the owner holds every permission and
@@ -59,6 +59,15 @@ export type OwnerOverride = { basePermissions: ReadonlySet<string>; used: string
  * them. Quality decisions that release a lot or batch for use never consult this (GMP independence).
  */
 export type SelfApproval = { ownerOrgWide: boolean; managerOrgWide: boolean; managerSiteIds: ReadonlySet<string>; used: string[] };
+
+/**
+ * ADR-117 (owner decision 2026-11-07, setting `approvals.owner_approves_recipes_alone`, default on): present only for
+ * an Owner/Director with an organization-wide assignment while the setting is on. The owner then decides every open
+ * approval step of a recipe, steps or how-to sheet revision alone (QA steps and their own revisions included).
+ * `used` collects the steps decided this way until `audit()` records them (`governance.owner_alone.used`).
+ * Never consulted by inspection plans, QA release, quality checks or any other QA decision.
+ */
+export type OwnerAlone = { used: string[] };
 
 /**
  * The authorization context every service call receives (ADR-005).
@@ -248,6 +257,28 @@ export class AuthContext {
     return roles.length > 0 && !roles.includes("qa_qc") && this.ownerAt(siteId) && requesterIds.some((u) => !!u && u === this.userId);
   }
 
+  /**
+   * ADR-117: true when this person is the owner (organization-wide) and the organization lets the owner approve
+   * recipes, steps and how-to sheets alone. Callers restrict it to those record types (versioning.ts).
+   */
+  get ownerApprovesRecipesAlone(): boolean {
+    return !!this.options.ownerAlone && this.actor.kind === "user";
+  }
+
+  /** ADR-117: remembers a step the owner decided alone; recorded by the next `audit()`. */
+  noteOwnerAlone(step: string): void {
+    const o = this.options.ownerAlone;
+    if (!o) throw new Error("noteOwnerAlone called without the owner-alone rule");
+    if (!o.used.includes(step)) o.used.push(step);
+  }
+
+  /** The owner-alone decisions since the last call, emptied (read by `audit()`). */
+  takeOwnerAlone(): string[] {
+    const o = this.options.ownerAlone;
+    if (!o || o.used.length === 0) return [];
+    return o.used.splice(0, o.used.length);
+  }
+
   /** The own-request approvals since the last call, emptied (read by `audit()`). */
   takeSelfApprovals(): string[] {
     const s = this.options.selfApproval;
@@ -357,10 +388,16 @@ export async function buildContextForUser(userId: string, preferredSiteId?: stri
   if ((top.ownerOrgWide || top.managerOrgWide || top.managerSiteIds.size > 0) && (await getSetting(db, loaded.u.organizationId, "approvals.top_roles_self_approve"))) {
     selfApproval = { ...top, used: [] };
   }
+  // ADR-117: the owner (organization-wide) approves recipes, steps and how-to sheets alone while the setting is on.
+  let ownerAlone: OwnerAlone | undefined;
+  if (top.ownerOrgWide && (await getSetting(db, loaded.u.organizationId, "approvals.owner_approves_recipes_alone"))) {
+    ownerAlone = { used: [] };
+  }
   return new AuthContext(loaded.u.id, loaded.u.organizationId, loaded.u.displayName, loaded.u.email, loaded.roleCodes, perms, loaded.siteRows, current, {
     access,
     ownerOverride,
     selfApproval,
+    ownerAlone,
     ...options,
     readOnly,
   });

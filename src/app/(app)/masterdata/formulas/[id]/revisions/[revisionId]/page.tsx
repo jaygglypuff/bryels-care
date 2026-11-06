@@ -15,6 +15,7 @@ import { DeleteDraftButton } from "../../../../../delete-draft-button";
 import { ApprovalPanel, VerifyBanner } from "../../../../_eng/ui";
 import { PlainVersionChip, useFromText, NEXT_WRAP } from "../../../../_eng/plain";
 import { waitingForApprover } from "../../../../_eng/waiting";
+import { ownerAloneButton, ownerAloneDecisionLine } from "@/lib/owner-alone-words";
 import { FormulaLineEditor } from "./line-editor";
 
 export const metadata: Metadata = { title: "Recipe version (advanced)" };
@@ -83,7 +84,7 @@ export default async function FormulaRevisionPage({ params }: { params: Promise<
         )
       ) : r.status === "pending_approval" ? (
         v.approval.canDecide ? (
-          <NextStep className={NEXT_WRAP} text="Next: check the ingredients and amounts, then say OK or not OK." action={{ label: "Decide", href: "#decide" }} />
+          <NextStep className={NEXT_WRAP} text={v.approval.ownerAloneNote ?? "Next: check the ingredients and amounts, then say OK or not OK."} action={{ label: v.approval.ownerAlone ? "Approve alone" : "Decide", href: "#decide" }} />
         ) : (
           <NextStep className={NEXT_WRAP} text="Sent for approval." waitingFor={waiting ?? "Waiting for approval."} />
         )
@@ -215,7 +216,17 @@ export default async function FormulaRevisionPage({ params }: { params: Promise<
         <section id="decide" className="scroll-mt-20">
           <ApprovalPanel approval={v.approval} status={r.status} what="recipe">
             {v.approval.canDecide && v.approval.nextStep && (
-              <DecisionForm action={decideFormulaAction} id={r.id} stepLabel={`OK ${v.approval.nextStep.step} of ${v.approval.policy.length}, ${v.approval.nextStep.label}`} isFinal={v.approval.nextStep.step === lastStep} defaultEffectiveFrom={r.effectiveFrom} today={today} plain />
+              <DecisionForm
+                action={decideFormulaAction}
+                id={r.id}
+                stepLabel={v.approval.ownerAlone ? ownerAloneDecisionLine(v.approval.policy, v.approval.nextStep.step) : `OK ${v.approval.nextStep.step} of ${v.approval.policy.length}, ${v.approval.nextStep.label}`}
+                isFinal={v.approval.ownerAlone || v.approval.nextStep.step === lastStep}
+                defaultEffectiveFrom={r.effectiveFrom}
+                today={today}
+                plain
+                ownerAloneNote={v.approval.ownerAloneNote}
+                approveLabel={v.approval.ownerAlone ? ownerAloneButton(v.approval.policy.length - v.approval.nextStep.step + 1) : undefined}
+              />
             )}
             {r.status === "pending_approval" && !v.approval.canDecide && (
               <p className="text-[13px] text-muted">You cannot decide this step: it needs another job, or you wrote, sent or already approved this version.</p>

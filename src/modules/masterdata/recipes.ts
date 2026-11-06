@@ -4,11 +4,11 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db/client";
-import { bomLineAlternatives, bomLines, formulaRevisions, formulas, materials, products, routingRevisions, routings, skus, uoms } from "@/db/schema";
+import { approvalDecisions, bomLineAlternatives, bomLines, formulaRevisions, formulas, materials, products, routingRevisions, routings, skus, uoms } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getSetting } from "@/lib/settings";
-import { createFormula, createFormulaRevision, deleteFormulaDraft, saveFormulaRevisionDraft, submitFormulaRevision, withdrawFormulaRevision } from "./formulas";
+import { createFormula, createFormulaRevision, decideFormulaRevisionIn, deleteFormulaDraft, saveFormulaRevisionDraft, submitFormulaRevision, withdrawFormulaRevision } from "./formulas";
 import { createMaterial } from "./materials";
 import { monthsToDays } from "./products-shelf-life";
 import { changeProductStatus, changeSkuStatus, createProduct, createSku, deleteProduct, productFamilies, updateProduct } from "./products";
@@ -41,11 +41,13 @@ import {
   toStepInputs,
   waitToMinutes,
 } from "./recipe-blocks";
-import { createRouting, createRoutingRevision, deleteRoutingDraft, loadRoutingSteps, saveRoutingRevisionDraft, submitRoutingRevision, withdrawRoutingRevision } from "./routings";
+import { createRouting, createRoutingRevision, decideRoutingRevisionIn, deleteRoutingDraft, loadRoutingSteps, policyFor, saveRoutingRevisionDraft, submitRoutingRevision, withdrawRoutingRevision } from "./routings";
 import { AREAS, STEP_KINDS, SaveFormulaDraftInput, SaveRoutingDraftInput, parseInput } from "./schemas";
 import { nextCode } from "./templates";
 import { loadApprovalPolicy } from "./approval-policy";
-import { businessToday, effectiveLabel, requireAny } from "./versioning";
+import { approvalState, businessToday, effectiveLabel, requireAny, revisionDecisionFor } from "./versioning";
+import { OWNER_ALONE_VIEWER_NOTE, ownerAloneApprovedSentence } from "@/lib/owner-alone-words";
+import { users } from "@/db/schema";
 
 /**
  * Guided "New recipe" wizard (ADR-089), server side. A thin orchestrator ON TOP of the existing
@@ -793,6 +795,7 @@ export async function getRecipe(ctx: AuthContext, formulaId: string) {
     routingNotes: rCur?.notes ?? "",
   };
   const approvalPolicy = (await loadApprovalPolicy(db, ctx.organizationId, "formula_revision")).map((x) => ({ step: x.step, roles: x.roles }));
+  const alone = await recipeOwnerAlone(ctx, f, r);
   const fPending = f.open?.status === "pending_approval";
   const rPending = r?.open?.status === "pending_approval";
   const anyDraft = f.open?.status === "draft" || r?.open?.status === "draft";
@@ -810,6 +813,12 @@ export async function getRecipe(ctx: AuthContext, formulaId: string) {
     /** Who made or sent the versions waiting for approval (never named as their approver, ADR-109). */
     pendingBy: [f.open?.createdBy, f.open?.submittedBy, r?.open?.createdBy, r?.open?.submittedBy].filter((x): x is string => !!x),
     locks: { ingredients: fPending, steps: !!rPending },
+    /**
+     * ADR-117: `canApproveAlone` — the viewer is the owner, the setting is on and one "Approve alone" decides every
+     * open step of the waiting recipe and steps; `note` is the approval box sentence. `approvedText` — "Approved by
+     * Ana Villanueva (owner) — no separate QA review" when the version shown was approved by the owner alone.
+     */
+    ownerAlone: alone,
     draft,
     materialNames: Object.fromEntries(lineMats.map((m) => [m.id, m.name])),
     can: {
@@ -819,6 +828,61 @@ export async function getRecipe(ctx: AuthContext, formulaId: string) {
   } as const;
 }
 export type RecipeView = NonNullable<Awaited<ReturnType<typeof getRecipe>>>;
+
+type FState = Awaited<ReturnType<typeof formulaState>>;
+type RState = Awaited<ReturnType<typeof routingState>>;
+
+/** ADR-117: the waiting parts of a recipe the owner can approve alone, and the "approved alone" words of the shown versions. */
+async function recipeOwnerAlone(ctx: AuthContext, f: FState, r: RState) {
+  const waiting: { kind: "recipe" | "steps"; canDecide: boolean; ownerAlone: boolean }[] = [];
+  if (f.open?.status === "pending_approval") {
+    const st = await approvalState(db, ctx.organizationId, "formula_revision", f.open.id);
+    waiting.push({ kind: "recipe", ...revisionDecisionFor(ctx, "formula_revision", st, f.open.status, [f.open.createdBy, f.open.submittedBy]) });
+  }
+  if (r?.open?.status === "pending_approval") {
+    const st = await approvalState(db, ctx.organizationId, "routing_revision", r.open.id, await policyFor(db, ctx.organizationId, r.open.changeScope));
+    waiting.push({ kind: "steps", ...revisionDecisionFor(ctx, "routing_revision", st, r.open.status, [r.open.createdBy, r.open.submittedBy]) });
+  }
+  const canApproveAlone = ctx.ownerApprovesRecipesAlone && waiting.length > 0 && waiting.every((w) => w.canDecide);
+  // The versions shown: approved by the owner alone?
+  const shown = [f.current, r?.current ?? null].filter((x): x is NonNullable<typeof x> => !!x && x.status === "approved" && !!x.approvedBy);
+  let approvedText: string | null = null;
+  if (shown.length) {
+    const rows = await db
+      .select({ by: approvalDecisions.decidedBy, name: users.displayName })
+      .from(approvalDecisions)
+      .innerJoin(users, eq(users.id, approvalDecisions.decidedBy))
+      .where(and(eq(approvalDecisions.organizationId, ctx.organizationId), inArray(approvalDecisions.recordId, shown.map((x) => x.id)), eq(approvalDecisions.ownerAlone, true), eq(approvalDecisions.decision, "approved")))
+      .limit(1);
+    if (rows[0]) approvedText = ownerAloneApprovedSentence(rows[0].name);
+  }
+  return { canApproveAlone, note: canApproveAlone ? OWNER_ALONE_VIEWER_NOTE : null, waitingParts: waiting.map((w) => w.kind), approvedText };
+}
+
+/**
+ * ADR-117 (owner decision 2026-11-07): the owner's one "Approve" on the recipe page. Approves the waiting recipe
+ * (formula) and steps (routing) versions in ONE transaction through the ordinary decide services, which record every
+ * open step as decided by the owner (`ownerAlone` where no ordinary rule allowed it) and make each version approved
+ * from `effectiveFrom` (default today). Refused unless the caller is the owner and the setting is on.
+ */
+export async function approveRecipeAlone(ctx: AuthContext, raw: unknown) {
+  const input = parseInput(z.object({ formulaId: z.string().uuid(), effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).strict(), raw);
+  ctx.require("masterdata.formula.view");
+  ctx.require("masterdata.routing.view");
+  if (!ctx.ownerApprovesRecipesAlone) {
+    throw new DomainError("forbidden", "Only the owner can approve a recipe alone, and only while the setting “The owner may approve recipes and their steps alone” is on.");
+  }
+  const f = await formulaState(ctx, input.formulaId);
+  const r = await routingState(ctx, f.product.id, null);
+  const fOpen = f.open?.status === "pending_approval" ? f.open : null;
+  const rOpen = r?.open?.status === "pending_approval" ? r.open : null;
+  if (!fOpen && !rOpen) throw new DomainError("state", "Nothing of this recipe is waiting for approval.");
+  return db.transaction(async (tx) => {
+    const recipe = fOpen ? await decideFormulaRevisionIn(tx, ctx, { id: fOpen.id, decision: "approved", note: null, effectiveFrom: input.effectiveFrom ?? null }) : null;
+    const steps = rOpen ? await decideRoutingRevisionIn(tx, ctx, { id: rOpen.id, decision: "approved", note: null, effectiveFrom: input.effectiveFrom ?? null }) : null;
+    return { recipe: recipe?.status ?? null, steps: steps?.status ?? null, ownerAlone: !!recipe?.ownerAlone || !!steps?.ownerAlone };
+  });
+}
 
 /** "Copy from another recipe": its ingredients and steps as a fresh wizard draft (nothing is written). */
 export async function getRecipeCopy(ctx: AuthContext, formulaId: string) {

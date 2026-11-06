@@ -21,8 +21,13 @@ export type NextActors = {
   people: NextPerson[];
   /** Role words when nobody holds the role yet ("a site manager", "QA"). */
   roleWords: string;
-  /** The signed-in person may do it too (`selfApproval`: only because ADR-091 lets a top role approve their own record). */
-  viewer: { can: boolean; selfApproval: boolean; note: string | null };
+  /**
+   * The signed-in person may do it too (`selfApproval`: only because ADR-091 lets a top role approve their own record;
+   * `ownerAlone`: only because ADR-117 lets the owner approve a recipe, steps or how-to sheet alone).
+   */
+  viewer: { can: boolean; selfApproval: boolean; note: string | null; ownerAlone?: boolean };
+  /** ADR-117: other people (the owner) who may approve the whole version alone, not among `people`. */
+  ownerAlone?: NextPerson[];
   /** Step position of a record with approval steps ("step 2 of 2"); null when there is one step. */
   stepNo: number | null;
   stepsTotal: number | null;
@@ -104,10 +109,20 @@ export const NOBODY_YET = `Nobody can do it yet: an administrator gives the role
  */
 export function nextActorsSentence(n: NextActors): string {
   const step = stepSuffix(n);
-  if (n.viewer.selfApproval && n.viewer.note) return n.people.length ? `${n.viewer.note} ${capital(peopleWords(n.people))} can do it too.` : n.viewer.note;
+  if ((n.viewer.selfApproval || n.viewer.ownerAlone) && n.viewer.note) return n.people.length ? `${n.viewer.note} ${capital(peopleWords(n.people))} can do it too.` : n.viewer.note;
   if (n.viewer.can) return `You can ${n.doBase}${step} now.${n.people.length ? ` So can ${peopleWords(n.people)}.` : ""}`;
-  if (n.people.length) return `Next: ${peopleWords(n.people)} ${n.does}${step} — they will see it ${n.where}.`;
+  const alone = n.ownerAlone?.length ? ` Or ${peopleWords(n.ownerAlone)} ${n.does} alone.` : "";
+  if (n.people.length) return `Next: ${peopleWords(n.people)} ${n.does}${step} — they will see it ${n.where}.${alone}`;
+  if (alone) return `Next: ${peopleWords(n.ownerAlone!)} ${n.does} alone — they will see it ${n.where}.`;
   return `Next: ${n.roleWords} ${n.does}${step}. ${NOBODY_YET}`;
+}
+
+/** ADR-117: "Nina (QA) or Teresa (QA) — or Ana (owner) alone" — the open step's people, then the owner alone. */
+export function peopleWithOwnerAlone(n: Pick<NextActors, "people" | "ownerAlone">): string {
+  const others = n.people.length ? peopleWords(n.people) : "";
+  const owners = n.ownerAlone?.length ? peopleWords(n.ownerAlone) : "";
+  if (!owners) return others;
+  return others ? `${others} — or ${owners} alone` : `${owners} alone`;
 }
 
 /**

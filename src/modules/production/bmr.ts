@@ -54,6 +54,7 @@ import { cap, madeVsBoxedWords, num, outputKindWord, packagingToleranceWords, pc
 import { plainRole } from "@/lib/role-words";
 import { type FormulaSnapshot, idempotent } from "./shared";
 import { LABELS_MENU_PATH } from "@/lib/menu-paths";
+import { ownerAloneApprovedSentence } from "@/lib/owner-alone-words";
 
 /**
  * BMR generation (US-3-17, US-3-18; docs/reports-and-templates.md §1.3 `bmr/v1`, §2, §2.6).
@@ -384,6 +385,13 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
   const y = yieldRec.rows[0];
   const testers = [...new Set(tests.map((t) => who(t.testedBy)).filter(Boolean))].join(", ");
   const controlledRecord = await getSetting(q, ctx.organizationId, "documents.controlled_record", batch.siteId);
+  // ADR-117: the recipe or steps version this batch uses was approved by the owner alone (no separate QA review).
+  const [alone] = await q
+    .select({ name: users.displayName })
+    .from(approvalDecisions)
+    .innerJoin(users, eq(users.id, approvalDecisions.decidedBy))
+    .where(and(eq(approvalDecisions.organizationId, ctx.organizationId), inArray(approvalDecisions.recordId, [batch.formulaRevisionId, batch.routingRevisionId]), eq(approvalDecisions.ownerAlone, true), eq(approvalDecisions.decision, "approved")))
+    .limit(1);
   const latestDisposition = disposition ? { decidedBy: who(disposition.decidedBy) ?? "", decidedAt: fmtDateTime(disposition.decidedAt), role: roleOf(disposition.decidedBy, disposition.decidedAt) } : null;
 
   const data: BmrData = {
@@ -399,6 +407,7 @@ export async function buildBmrDataset(q: DbOrTx, ctx: AuthContext, batchId: stri
       formulaLabel: `${snap.formulaCode} rev ${snap.revisionNo}`,
       routingLabel: snap.routing ? `${snap.routing.routingCode} rev ${snap.routing.revisionNo}` : null,
       inspectionPlanLabel: snap.inspectionPlan ? `${snap.inspectionPlan.code} rev ${snap.inspectionPlan.revisionNo}` : null,
+      ...(alone ? { recipeApprovalText: ownerAloneApprovedSentence(alone.name) } : {}),
       batchSizeText: fmtQty(batch.plannedSizeG, "g", 0),
       plannedStartText: batch.plannedStartOn ? fmtDate(batch.plannedStartOn) : null,
       startText: batch.startedAt ? fmtDate(batch.startedAt).toUpperCase() : null,

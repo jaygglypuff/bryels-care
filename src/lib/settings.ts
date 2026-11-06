@@ -452,6 +452,27 @@ export const SETTINGS = {
     restricted: true,
     ownerOnly: true,
   },
+  /**
+   * ADR-117 (owner decision 2026-11-07: "If you are the owner, why would you let someone approve it?"). When on, the
+   * Owner/Director (organization-wide assignment) decides every open approval step of a recipe (formula), steps
+   * (routing) or how-to sheet (work instruction) revision in one Approve, QA steps and their own revisions included;
+   * each step is recorded as decided by the owner with `ownerAlone` and the record reads "Approved by <name> (owner) —
+   * no separate QA review". Inspection plans, lot/batch QA release, quality checks and every other QA decision stay
+   * independent; site managers are not affected. GMP risk flagged for the auditor (A-OWNER-ALONE-01). A change is a
+   * request only the owner approves (`ownerOnly`), with re-authentication.
+   */
+  "approvals.owner_approves_recipes_alone": {
+    scopes: ["organization"],
+    schema: z.boolean(),
+    default: true as boolean,
+    assumption: "A-OWNER-ALONE-01",
+    group: "Approvals",
+    label: "The owner may approve recipes and their steps alone (no separate QA review)",
+    description: "GMP auditors usually expect a QA person who did not write the recipe to review it.",
+    requiresApproval: true,
+    restricted: true,
+    ownerOnly: true,
+  },
   /** Alert thresholds evaluated by `platform.alerts_evaluate` (docs/deployment-railway.md §8.3, A-DEP-11). */
   "alerts.worker_heartbeat_max_seconds": { scopes: ["organization"], schema: z.number().int().min(60).max(86_400), default: 300, assumption: "A-DEP-11", group: "Alerts", label: "Worker silent after (seconds)" },
   "alerts.backup_max_age_hours": { scopes: ["organization"], schema: z.number().int().min(1).max(24 * 14), default: 26, assumption: "A-DEP-11", group: "Alerts", label: "Backup older than (hours)" },

@@ -96,7 +96,7 @@ export {
   type EquipmentListRow,
 } from "./equipment";
 export { APPROVAL_POLICIES, ROUTING_SEQUENCING_ONLY_POLICY, loadApprovalPolicy, type ApprovalRecordType, type ApprovalRuleType, type ApprovalStepPolicy } from "./approval-policy";
-export { VERSION_STATUSES, VERSION_TRANSITIONS, canVersionTransition, businessToday, effectiveLabel, type VersionStatus } from "./versioning";
+export { VERSION_STATUSES, VERSION_TRANSITIONS, canVersionTransition, businessToday, effectiveLabel, type VersionStatus, OWNER_ALONE_RECORD_TYPES, OWNER_ALONE_NOTE } from "./versioning";
 export { STEP_KINDS, AREAS, EQUIPMENT_KINDS } from "./schemas";
 
 // Wave 1 W1B: suppliers (US-2-06)
@@ -235,6 +235,7 @@ export {
   recipeWizardOptions,
   getRecipe,
   getRecipeCopy,
+  approveRecipeAlone,
   monthsToDays,
   RecipeSaveInput,
   type RecipeSaveResult,
@@ -244,3 +245,5 @@ export {
 export * from "./recipe-blocks";
 export { recipeReadiness, productReadiness } from "./recipe-readiness";
 export { readiness, readinessSentence, type PartState, type Readiness } from "./recipe-readiness-words";
+// ADR-117: recipe, steps and how-to sheet versions in "To approve" (owner approves alone while the setting is on)
+export { revisionApprovalCandidates, revisionApprovalVerdicts, type RevisionApprovalKind } from "./revision-approvals";

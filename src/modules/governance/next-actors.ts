@@ -10,6 +10,7 @@ import { getSetting } from "@/lib/settings";
 import { notifyUsers } from "@/modules/platform/notifications";
 import { rolesAllowedNow, type EvaluatedStep } from "./approval-rules";
 import { selfApprovalNote } from "./approval-verdict";
+import { OWNER_ALONE_VIEWER_NOTE } from "@/lib/owner-alone-words";
 
 /**
  * Who does the next step of a hand-off (owner request 2026-11-01: "Every approval must indicate who approves next";
@@ -39,6 +40,11 @@ export type HandoffRule = {
   operational?: boolean;
   /** Roles listed first (people at the floor before the owner). */
   prefer?: string[];
+  /**
+   * ADR-117: a recipe, steps or how-to sheet revision — the owner (organization-wide) may approve every open step alone
+   * while `approvals.owner_approves_recipes_alone` is on. Listed apart ("— or Ana (owner) alone").
+   */
+  ownerAlone?: boolean;
 };
 
 const FLOOR = ["production_operator", "site_manager", "production_planner", "qa_qc", "owner_director"];
@@ -75,9 +81,9 @@ export const HANDOFFS = {
   supplier_bill: { permission: "finance.supplier_bill.approve", does: "approves the bill", doBase: "approve the bill", where: TO_APPROVE, fallback: "finance", operational: true, prefer: ["finance", "owner_director"] },
   payment: { permission: "finance.payment_record.approve", does: "approves the payment", doBase: "approve the payment", where: TO_APPROVE, fallback: "finance", operational: true, prefer: ["finance", "owner_director"] },
   credit_note: { permission: "finance.credit_note.approve", does: "approves the credit", doBase: "approve the credit", where: TO_APPROVE, fallback: "finance", operational: true, prefer: ["finance", "owner_director"] },
-  recipe_revision: { permission: "masterdata.formula.approve", does: "approves the recipe", doBase: "approve the recipe", where: TO_APPROVE, fallback: "QA, then the manager", operational: true, prefer: ["qa_qc", "site_manager", "owner_director"] },
-  routing_revision: { permission: "masterdata.routing.approve", does: "approves the steps", doBase: "approve the steps", where: TO_APPROVE, fallback: "QA, then the manager", operational: true, prefer: ["qa_qc", "site_manager", "owner_director"] },
-  work_instruction_revision: { permission: "masterdata.work_instruction.approve", does: "approves the how-to sheet", doBase: "approve the how-to sheet", where: TO_APPROVE, fallback: "QA, then the manager", operational: true, prefer: ["qa_qc", "site_manager", "owner_director"] },
+  recipe_revision: { permission: "masterdata.formula.approve", does: "approves the recipe", doBase: "approve the recipe", where: TO_APPROVE, fallback: "QA, then the manager", operational: true, prefer: ["qa_qc", "site_manager", "owner_director"], ownerAlone: true },
+  routing_revision: { permission: "masterdata.routing.approve", does: "approves the steps", doBase: "approve the steps", where: TO_APPROVE, fallback: "QA, then the manager", operational: true, prefer: ["qa_qc", "site_manager", "owner_director"], ownerAlone: true },
+  work_instruction_revision: { permission: "masterdata.work_instruction.approve", does: "approves the how-to sheet", doBase: "approve the how-to sheet", where: TO_APPROVE, fallback: "QA, then the manager", operational: true, prefer: ["qa_qc", "site_manager", "owner_director"], ownerAlone: true },
   inspection_plan_revision: { permission: "quality.inspection_plan.approve", does: "approves the check plan", doBase: "approve the check plan", where: TO_APPROVE, fallback: "QA", independent: true, prefer: ["qa_qc"] },
   setting_change: { permission: "platform.settings.approve", does: "approves the setting change", doBase: "approve the setting change", where: TO_APPROVE, fallback: "the owner", prefer: ["owner_director"] },
   pick: { permission: "sales.pick.create", does: "gets it from the shelf", doBase: "get it from the shelf", where: "on To get from shelf", fallback: "the warehouse", prefer: ["warehouse_operator"] },
@@ -159,30 +165,39 @@ export async function nextActors(ctx: AuthContext, which: HandoffKind | AdHocHan
   const prior = (record.priorApproverIds ?? []).filter((u): u is string => !!u);
   const stepRoles = [...(record.roleCodes ?? [])];
   const selfApproveOn = !!rule.operational && !!(await getSetting(q, ctx.organizationId, "approvals.top_roles_self_approve"));
+  const ownerAloneOn = !!rule.ownerAlone && !!(await getSetting(q, ctx.organizationId, "approvals.owner_approves_recipes_alone"));
   const rank = (code: string) => {
     const i = (rule.prefer ?? []).indexOf(code);
     return i < 0 ? 50 : i;
   };
 
   const people: (NextPerson & { rank: number })[] = [];
+  const owners: NextPerson[] = [];
   for (const c of await candidates(q, ctx.organizationId, permission, siteId)) {
     if (c.userId === ctx.userId) continue;
     const matching = stepRoles.length ? [...c.roles.keys()].filter((r) => stepRoles.includes(r)) : [...c.granting];
-    if (!matching.length) continue;
     const sameperson = excluded.includes(c.userId) || prior.includes(c.userId);
-    if (sameperson && !(selfApproveOn && !rule.independent && (c.ownerOrgWide || c.manager))) continue;
+    if (!matching.length || (sameperson && !(selfApproveOn && !rule.independent && (c.ownerOrgWide || c.manager)))) {
+      // ADR-117: the owner may still approve the whole version alone.
+      if (ownerAloneOn && c.ownerOrgWide) owners.push({ userId: c.userId, name: c.name, role: personRole("owner_director", c.roles.get("owner_director")) });
+      continue;
+    }
     const best = matching.sort((a, z) => rank(a) - rank(z))[0];
     people.push({ userId: c.userId, name: c.name, role: personRole(best, c.roles.get(best)), rank: rank(best) });
   }
   people.sort((a, z) => a.rank - z.rank || a.name.localeCompare(z.name));
+  owners.sort((a, z) => a.name.localeCompare(z.name));
 
   // The viewer, with the same checks the "To approve" verdicts use (approval-verdict.ts).
   const permOk = siteId ? ctx.canAt(permission, siteId) : ctx.can(permission);
   const rolesOk = !stepRoles.length || (rule.operational && record.roleStandIn !== false ? ctx.hasAnyRoleAt(stepRoles, siteId, excluded) : ctx.hasAnyRole(stepRoles));
   const mine = excluded.includes(ctx.userId) || prior.includes(ctx.userId);
   const topSelf = !!rule.operational && !rule.independent && ctx.selfApprovesAt(siteId);
-  const can = permOk && rolesOk && (!mine || topSelf);
-  const selfApproval = can && mine && topSelf;
+  const ordinary = permOk && rolesOk && (!mine || topSelf);
+  // ADR-117: the owner approves the whole recipe, steps or how-to sheet version alone (the deciding service re-checks).
+  const ownerAlone = !ordinary && permOk && !!rule.ownerAlone && ctx.ownerApprovesRecipesAlone;
+  const can = ordinary || ownerAlone;
+  const selfApproval = ordinary && mine && topSelf;
 
   return {
     kind,
@@ -191,7 +206,8 @@ export async function nextActors(ctx: AuthContext, which: HandoffKind | AdHocHan
     where: rule.where,
     people: people.map(({ rank: _r, ...p }) => p),
     roleWords: roleCodesWords(stepRoles, rule.fallback),
-    viewer: { can, selfApproval, note: selfApproval ? selfApprovalNote(ctx) : null },
+    viewer: { can, selfApproval, note: selfApproval ? selfApprovalNote(ctx) : ownerAlone ? OWNER_ALONE_VIEWER_NOTE : null, ownerAlone },
+    ownerAlone: owners,
     stepNo: record.stepNo ?? null,
     stepsTotal: record.stepsTotal ?? null,
   };

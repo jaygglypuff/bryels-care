@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
-import { getRecipe, recipeWizardOptions, type RecipeView } from "@/modules/masterdata";
+import { getRecipe, productReadiness, recipeWizardOptions, type RecipeView } from "@/modules/masterdata";
 import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
 import { waitingFor } from "../../../waiting-for";
 import { approvalSentence } from "../../_eng/ui";
+import { approveRecipeAloneAction } from "../../_eng/actions";
+import { CommandForm } from "../../_eng/forms";
 import { RecipeSummary } from "../recipe-summary";
 import { RecipeWizard } from "../wizard";
 
@@ -69,8 +71,27 @@ export default async function RecipePage({ params, searchParams }: { params: Pro
       </div>
     );
   }
-  const waiting = r.mode === "waiting" ? await waitingFor(ctx, "masterdata.formula.approve", null, "to approve it", "the approvers", { exclude: r.pendingBy }) : null;
+  // ADR-116/117: the same sentence as the New order screen — who approves next, "— or Ana (owner) alone" when the setting is on.
+  const ready = r.mode === "waiting" ? await productReadiness(ctx, r.product.id).catch(() => null) : null;
+  const waiting = r.mode === "waiting" ? (ready?.sentence ?? (await waitingFor(ctx, "masterdata.formula.approve", null, "to approve it", "the approvers", { exclude: r.pendingBy }))) : null;
   return <RecipeOverview r={r} saved={sp.saved} waiting={waiting} />;
+}
+
+/** ADR-117: the owner's one green Approve for the waiting recipe and steps, with the GMP warning in plain words. */
+function OwnerAloneBox({ r }: { r: RecipeView }) {
+  return (
+    <section aria-label="What to do next" data-testid="owner-alone-box" className="mb-4 flex flex-col gap-3 rounded-[16px] border border-[var(--brand-200)] bg-[var(--brand-50)] p-4">
+      <div>
+        <p className="text-[12px] font-semibold uppercase tracking-wide text-primary-text">What to do next</p>
+        <p className="mt-0.5 text-[16px] font-medium text-fg">{r.ownerAlone.note}</p>
+        <p className="mt-1 text-[14px] text-fg-2">
+          One press approves the {r.ownerAlone.waitingParts.length > 1 ? "recipe and its steps" : r.ownerAlone.waitingParts[0] === "steps" ? "steps" : "recipe"}, every step, from today.
+        </p>
+      </div>
+      <CommandForm action={approveRecipeAloneAction} hidden={{ formulaId: r.formula.id }} label="Approve" pendingText="Approving…" variant="cta" />
+      <p className="text-[13px] text-fg-2">GMP auditors usually expect a QA person who did not write the recipe to review it. The recipe will show “approved by you (owner) — no separate QA review”.</p>
+    </section>
+  );
 }
 
 function RecipeOverview({ r, saved, waiting }: { r: RecipeView; saved?: string; waiting: string | null }) {
@@ -92,6 +113,8 @@ function RecipeOverview({ r, saved, waiting }: { r: RecipeView; saved?: string; 
         <NextStep text="Next: finish the recipe and send it for approval." action={{ label: "Edit recipe", href: `/masterdata/recipes/${r.formula.id}?edit=1` }} />
       ) : r.mode === "draft" ? (
         <NextStep text="This recipe is a draft." waitingFor="Waiting for the person who makes recipes to finish it and send it for approval." />
+      ) : r.mode === "waiting" && r.ownerAlone.canApproveAlone ? (
+        <OwnerAloneBox r={r} />
       ) : r.mode === "waiting" ? (
         <NextStep text="Sent for approval. It can't be changed while it waits." waitingFor={waiting ?? undefined} />
       ) : r.mode === "approved" && r.can.newVersion && r.can.edit ? (
@@ -99,16 +122,23 @@ function RecipeOverview({ r, saved, waiting }: { r: RecipeView; saved?: string; 
       ) : (
         <NextStep text="In use. Nothing to do here." />
       )}
-      {saved && (
+      {saved && !(saved === "sent" && r.mode !== "waiting") && (
         <div role="status" className="rounded-[12px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-3 py-2 text-[14px] text-[var(--ok-fg)]">
           {saved === "sent"
-            ? "Sent for approval. The approvers see it under “To approve”."
+            ? r.ownerAlone.canApproveAlone
+              ? "Sent for approval. As the owner you can approve it alone above, or leave it for QA and a manager under “To approve”."
+              : "Sent for approval. The approvers see it under “To approve”."
             : saved === "same"
               ? "Nothing changed, so nothing new was saved."
               : "Saved as a draft. Nobody can use it until it is sent and approved."}
         </div>
       )}
-      {r.mode === "waiting" && <p className="text-[14px] text-fg-2">{approvalSentence(r.approvalPolicy, "recipe")}</p>}
+      {r.mode === "waiting" && !r.ownerAlone.canApproveAlone && <p className="text-[14px] text-fg-2">{approvalSentence(r.approvalPolicy, "recipe")}</p>}
+      {r.mode !== "waiting" && r.ownerAlone.approvedText && (
+        <p className="rounded-[12px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[14px] text-[var(--warn-fg)]" data-testid="owner-alone-approved">
+          {r.ownerAlone.approvedText}
+        </p>
+      )}
       <Card>
         <RecipeSummary
           productName={r.product.name}

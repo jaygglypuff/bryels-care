@@ -13,6 +13,7 @@ import { DeleteDraftButton } from "../../../delete-draft-button";
 import { ApprovalPanel, VerifyBanner } from "../../_eng/ui";
 import { PlainVersionChip, useFromText, NEXT_WRAP } from "../../_eng/plain";
 import { waitingForApprover } from "../../_eng/waiting";
+import { ownerAloneButton, ownerAloneDecisionLine } from "@/lib/owner-alone-words";
 import { WorkInstructionEditor } from "./editor";
 
 export const metadata: Metadata = { title: "How-to sheet" };
@@ -65,7 +66,18 @@ export default async function WorkInstructionPage({ params }: { params: Promise<
       {r.status !== "draft" && (
         <section id={r.id === open?.id ? "decide" : undefined} className="scroll-mt-20">
           <ApprovalPanel approval={r.approval} status={r.status} what="how-to sheet">
-            {r.canDecide && r.approval.nextStep && <DecisionForm action={decideWorkInstructionAction} id={r.id} stepLabel={r.approval.nextStep.label} isFinal today={today} plain />}
+            {r.canDecide && r.approval.nextStep && (
+              <DecisionForm
+                action={decideWorkInstructionAction}
+                id={r.id}
+                stepLabel={r.ownerAlone ? ownerAloneDecisionLine(r.approval.policy, r.approval.nextStep.step) : r.approval.nextStep.label}
+                isFinal
+                today={today}
+                plain
+                ownerAloneNote={r.ownerAloneNote}
+                approveLabel={r.ownerAlone ? ownerAloneButton(r.approval.policy.length - r.approval.nextStep.step + 1) : undefined}
+              />
+            )}
           </ApprovalPanel>
         </section>
       )}
@@ -98,7 +110,7 @@ export default async function WorkInstructionPage({ params }: { params: Promise<
         )
       ) : open?.status === "pending_approval" ? (
         open.canDecide ? (
-          <NextStep className={NEXT_WRAP} text="Next: read the text, then say OK or not OK." action={{ label: "Decide", href: "#decide" }} />
+          <NextStep className={NEXT_WRAP} text={open.ownerAloneNote ?? "Next: read the text, then say OK or not OK."} action={{ label: open.ownerAlone ? "Approve alone" : "Decide", href: "#decide" }} />
         ) : (
           <NextStep className={NEXT_WRAP} text="Sent for an OK." waitingFor={waiting ?? "Waiting for approval."} />
         )

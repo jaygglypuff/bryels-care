@@ -78,6 +78,8 @@ export const bmrDataSchema = z.object({
     lotNumber: opt.optional(),
     /** Optional (renderer v2): the source revision time in words (meta keeps the ISO value). */
     revisionText: opt.optional(),
+    /** Optional (ADR-117): "Approved by Ana Villanueva (owner) — no separate QA review" when the recipe or steps version was approved by the owner alone. */
+    recipeApprovalText: opt.optional(),
   }),
   summary: z.object({
     stepsDone: z.number().int(),

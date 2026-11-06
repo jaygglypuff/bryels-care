@@ -253,6 +253,20 @@
       "when": 1793529614132,
       "tag": "0036_adr104_custom_sql",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793991775763,
+      "tag": "0037_adr117_owner_alone",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793991798637,
+      "tag": "0038_adr117_custom_sql",
+      "breakpoints": true
     }
   ]
 }

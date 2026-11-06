@@ -163,7 +163,7 @@ function part1(def: TemplateDefinition, d: BmrData, meta: DocumentMeta): SafeHtm
 <h2><span class="no">1</span>Batch identity and recipe version</h2>
 <table class="facts keep"><tbody>
   <tr>${cell(label(def, "product_name", "Product Name:"), b.productName.toUpperCase(), html`<span class="small">Product code ${b.productCode}</span>`)}${cell(label(def, "batch_number", "Batch Number:"), b.number)}${cell("Lot (finished goods):", lot ?? "Not made yet")}${cell(label(def, "batch_size", "Batch Size:"), b.batchSizeText)}</tr>
-  <tr>${cell(label(def, "formula_no", "Batch Formula No.:"), b.formulaLabel, html`<span class="small">Recipe version fixed ${b.snapshotTakenText}</span>`)}${cell("Steps version:", b.routingLabel ?? "—")}${cell("Inspection plan:", b.inspectionPlanLabel ?? "—")}${cell(label(def, "department", "Department:"), b.department, html`<span class="small">Site ${b.siteCode}</span>`)}</tr>
+  <tr>${cell(label(def, "formula_no", "Batch Formula No.:"), b.formulaLabel, html`<span class="small">Recipe version fixed ${b.snapshotTakenText}</span>${b.recipeApprovalText ? html`<span class="small"><b>${b.recipeApprovalText}</b></span>` : ""}`)}${cell("Steps version:", b.routingLabel ?? "—")}${cell("Inspection plan:", b.inspectionPlanLabel ?? "—")}${cell(label(def, "department", "Department:"), b.department, html`<span class="small">Site ${b.siteCode}</span>`)}</tr>
   <tr>${cell(label(def, "start_date", "Start Date:"), b.startText ?? "", !b.startText && b.plannedStartText ? html`<span class="small">Planned ${b.plannedStartText}</span>` : "")}${cell(label(def, "end_date", "End Date:"), b.endText ?? "")}${cell("Status at print:", b.statusLabel)}${cell("Planned by:", b.createdBy)}</tr>
   ${
     showSummary

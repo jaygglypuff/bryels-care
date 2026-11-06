@@ -1,0 +1,2 @@
+ALTER TABLE "approval_decisions" ADD COLUMN "owner_alone" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "approval_decisions" ADD CONSTRAINT "approval_decisions_owner_alone_ck" CHECK (not "approval_decisions"."owner_alone" or "approval_decisions"."record_type" in ('formula_revision', 'routing_revision', 'work_instruction_revision'));

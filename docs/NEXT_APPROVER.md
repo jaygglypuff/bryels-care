@@ -108,6 +108,12 @@ after the second slice (2026-11-06). Every message is in-app, links to the exact
   - Customer requirement: the sender is not named and the approvers are told once.
   - Owner-only setting: only the owner is named and told.
   - Recipe: QA is told first, never the maker; the QA approver and the maker are not asked at step 2; `waitingForApprover` leaves out the maker.
+  - ADR-117 (setting `approvals.owner_approves_recipes_alone`, default on): recipe, steps and how-to sheet lines add the owner
+    after the step's people ("Nina (QA) or Teresa (QA) — or Ana (owner) alone"; `nextActors(...).ownerAlone`); the owner reads
+    "You can approve this alone because you are the owner (no separate QA review)." The owner is not sent an extra message.
+    These versions are now in "To approve" (`approval.formula_revision`, `approval.routing_revision`,
+    `approval.work_instruction_revision`). Tests: `tests/integration/masterdata/owner-alone-recipes.test.ts`,
+    `tests/unit/owner-alone-words.test.ts`.
 - `tests/integration/quality/w2-wiring.test.ts`: complete results tell the second QA person (not the tester); the review tells the tester.
 - `tests/integration/inventory/receipt-qa-notify.test.ts`: one message per lot, opening the lot.
 - `tests/integration/governance/live-check-names.test.ts`: the QA lot names its deciders for every viewer (never another

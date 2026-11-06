@@ -3,13 +3,12 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { users, workInstructionRevisions, workInstructions } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
-import { approverLabel } from "@/lib/auth/self-approval";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { assignMasterCode } from "@/lib/numbering";
 import { assertMayDeleteDraft, assertNeverSubmittedDraft, hardDeleteDraft } from "@/lib/draft-delete";
 import { CreateWorkInstructionInput, DecisionInput, SaveWorkInstructionDraftInput, parseInput } from "./schemas";
-import { approvalState, assertDraft, assertVersionTransition, businessToday, approvalSodConflict, canDecideStep, effectiveLabel, isIsoDate, notifyRevisionApprovers, recordApprovalDecision, supersedeOverlapping } from "./versioning";
+import { approvalState, assertDraft, assertVersionTransition, businessToday, effectiveLabel, isIsoDate, notifyRevisionApprovers, ownerAloneDetail, ownerAloneViewerNote, recordApprovalDecision, revisionApproverName, revisionDecisionFor, supersedeOverlapping } from "./versioning";
 
 /**
  * Work instructions (US-3-02): controlled step text, versioned like formulas. One approval by a
@@ -119,13 +118,18 @@ export async function decideWorkInstructionRevision(ctx: AuthContext, raw: unkno
     const base = { entityType: "work_instruction_revision", entityId: rev.id, entityNumber: name, siteId: null } as const;
     if (d.rejected) {
       await tx.update(workInstructionRevisions).set({ status: "rejected", approvalNote: input.note }).where(eq(workInstructionRevisions.id, rev.id));
-      await audit(tx, ctx, { ...base, action: "masterdata.work_instruction_revision.rejected", reason: input.note, before: { status: rev.status }, after: { status: "rejected", revisionNo: rev.revisionNo } });
+      await audit(tx, ctx, { ...base, action: "masterdata.work_instruction_revision.rejected", reason: input.note, before: { status: rev.status }, after: { status: "rejected", revisionNo: rev.revisionNo, ...ownerAloneDetail(d) } });
       return { status: "rejected" as const };
+    }
+    if (!d.final) {
+      // A rule with more than one step: this step is decided, the next one waits (the version stays pending).
+      await audit(tx, ctx, { ...base, action: "masterdata.work_instruction_revision.reviewed", reason: input.note, after: { status: rev.status, revisionNo: rev.revisionNo, step: d.step.step, stepLabel: d.step.label } });
+      return { status: "pending_approval" as const };
     }
     await supersedeOverlapping(tx, "work_instruction_revisions", sql`work_instruction_id = ${wi.id}`, rev.id, effectiveFrom);
     await tx.update(workInstructionRevisions).set({ status: "approved", approvedBy: ctx.userId, approvedAt: new Date(), approvalNote: input.note, effectiveFrom }).where(eq(workInstructionRevisions.id, rev.id));
-    await audit(tx, ctx, { ...base, action: "masterdata.work_instruction_revision.approved", reason: input.note, before: { status: rev.status, revisionNo: rev.revisionNo }, after: { status: "approved", revisionNo: rev.revisionNo, effectiveFrom } });
-    return { status: "approved" as const, effectiveFrom };
+    await audit(tx, ctx, { ...base, action: "masterdata.work_instruction_revision.approved", reason: input.note, before: { status: rev.status, revisionNo: rev.revisionNo }, after: { status: "approved", revisionNo: rev.revisionNo, effectiveFrom, ...ownerAloneDetail(d) } });
+    return { status: "approved" as const, effectiveFrom, ownerAlone: d.ownerAlone };
   });
 }
 
@@ -152,15 +156,18 @@ export async function getWorkInstruction(ctx: AuthContext, id: string) {
   const revisions = await Promise.all(
     revs.map(async (r) => {
       const approval = await approvalState(db, ctx.organizationId, "work_instruction_revision", r.id);
+      const decision = revisionDecisionFor(ctx, "work_instruction_revision", approval, r.status, [r.createdBy, r.submittedBy]);
       return {
         ...r,
         label: effectiveLabel(r),
         createdByName: r.createdBy ? names.get(r.createdBy) : null,
         submittedByName: r.submittedBy ? names.get(r.submittedBy) : null,
-        approvedByName: r.approvedBy ? approverLabel(names.get(r.approvedBy), r.approvedBy, [r.createdBy, r.submittedBy]) : null,
+        approvedByName: r.approvedBy ? revisionApproverName(names.get(r.approvedBy) ?? null, r.approvedBy, [r.createdBy, r.submittedBy], approval) : null,
         approval,
-        canDecide:
-          r.status === "pending_approval" && canDecideStep(ctx, approval.nextStep) && ![r.createdBy, r.submittedBy].some((u) => approvalSodConflict(ctx, "work_instruction_revision", approval.nextStep, u, null)) && !approval.decisions.some((d) => approvalSodConflict(ctx, "work_instruction_revision", approval.nextStep, d.decidedBy, null)),
+        // ADR-117: the owner may approve every open step alone while the setting is on.
+        canDecide: decision.canDecide,
+        ownerAlone: decision.ownerAlone,
+        ownerAloneNote: ownerAloneViewerNote(decision),
       };
     }),
   );

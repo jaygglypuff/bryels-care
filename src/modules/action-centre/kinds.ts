@@ -53,6 +53,10 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   // Wave 4 W4C: recall case and change control approvals (US-6-18)
   { kind: "approval.recall_case", tab: "approvals", label: "Product recall to approve", severity: "critical", permission: "quality.recall_case.approve", actionLabel: "Open the recall" },
   { kind: "approval.change_control", tab: "approvals", label: "Change request to approve", severity: "info", permission: "quality.change_control.approve", actionLabel: "Open the change request" },
+  // ADR-117: recipe, steps and how-to sheet versions waiting for an OK (sources and verdicts registered in src/modules/wiring.ts)
+  { kind: "approval.formula_revision", tab: "approvals", label: "Recipe to approve", severity: "info", permission: "masterdata.formula.approve", actionLabel: "Open the recipe" },
+  { kind: "approval.routing_revision", tab: "approvals", label: "Recipe steps to approve", severity: "info", permission: "masterdata.routing.approve", actionLabel: "Open the steps" },
+  { kind: "approval.work_instruction_revision", tab: "approvals", label: "How-to sheet to approve", severity: "info", permission: "masterdata.work_instruction.approve", actionLabel: "Open the how-to sheet" },
   // Exceptions
   { kind: "late_work_order", tab: "exceptions", label: "Late production order", severity: "warning", permission: "production.work_order.view", actionLabel: "Open the production order" },
   { kind: "low_stock", tab: "exceptions", label: "Product running low", severity: "warning", permission: "inventory.balance.view", actionLabel: "See the stock" },

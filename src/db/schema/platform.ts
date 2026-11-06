@@ -187,6 +187,11 @@ export const approvalDecisions = pgTable(
     decidedBy: uuid("decided_by").notNull().references(() => users.id),
     decidedAt: timestamp("decided_at", { withTimezone: true }).notNull().defaultNow(),
     note: text("note"),
+    /**
+     * ADR-117: the owner decided this step alone under `approvals.owner_approves_recipes_alone` (recipe, steps and
+     * how-to sheet revisions only): no separate QA review. Completes the step whatever its required count.
+     */
+    ownerAlone: boolean("owner_alone").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [
@@ -195,5 +200,7 @@ export const approvalDecisions = pgTable(
     check("approval_decisions_decision_ck", sql`${t.decision} in ('approved', 'rejected', 'returned')`),
     check("approval_decisions_step_ck", sql`${t.step} >= 1`),
     check("approval_decisions_cycle_ck", sql`${t.cycle} >= 1`),
+    // ADR-117: the owner-alone flag exists only on recipe, steps and how-to sheet revisions (never QA records).
+    check("approval_decisions_owner_alone_ck", sql`not ${t.ownerAlone} or ${t.recordType} in ('formula_revision', 'routing_revision', 'work_instruction_revision')`),
   ],
 );

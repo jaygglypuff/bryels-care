@@ -18,7 +18,7 @@ import {
   resultCorrectionCandidates,
 } from "@/modules/quality";
 import { pmDueCandidates, usageAvailabilityReasons } from "@/modules/maintenance";
-import { registerEquipmentAvailabilityProvider } from "@/modules/masterdata";
+import { registerEquipmentAvailabilityProvider, revisionApprovalCandidates, revisionApprovalVerdicts, type RevisionApprovalKind } from "@/modules/masterdata";
 import { registerActionItemSource, registerApprovalGate } from "@/modules/action-centre";
 import { customersKind, failedImportCandidates, importApprovalCandidates, importWizardStats, registerImportKind } from "@/modules/imports";
 import { registerImportStatsProvider } from "@/modules/platform/diagnostics-phase5";
@@ -195,4 +195,9 @@ export function registerAppHooks() {
   // ADR-104 §3: a decided QA result corrected; a second QA person approves on Check quality.
   registerActionItemSource({ kind: "approval.result_correction", detect: (org) => resultCorrectionCandidates(org) });
   registerApprovalGate("approval.result_correction", resultCorrectionApprovalVerdicts);
+  // ADR-117: recipe, steps and how-to sheet versions in "To approve"; the owner approves them alone while the setting is on.
+  for (const kind of ["approval.formula_revision", "approval.routing_revision", "approval.work_instruction_revision"] as RevisionApprovalKind[]) {
+    registerActionItemSource({ kind, detect: (org) => revisionApprovalCandidates(org, kind) });
+    registerApprovalGate(kind, revisionApprovalVerdicts(kind));
+  }
 }

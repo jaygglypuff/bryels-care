@@ -31,7 +31,13 @@ export async function audit(
   // ADR-088 §2: a top role approving their own operational record. The event it enabled carries `ownRequest: true`.
   // Bookkeeping events written before the decision (rule evaluation, refusals) leave the flag for the decision itself.
   const selfApprovals = NOT_A_DECISION.has(e.action) ? [] : ctx.takeSelfApprovals();
-  const after = selfApprovals.length ? { ...(e.after && typeof e.after === "object" && !Array.isArray(e.after) ? (e.after as object) : e.after === undefined || e.after === null ? {} : { value: e.after }), ownRequest: true } : e.after;
+  // ADR-117: the owner decided recipe/steps/how-to approval steps alone (no separate QA review). Flagged `ownerAlone: true`.
+  const ownerAlone = NOT_A_DECISION.has(e.action) ? [] : ctx.takeOwnerAlone();
+  const asObject = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) ? (v as object) : v === undefined || v === null ? {} : { value: v });
+  const after =
+    selfApprovals.length || ownerAlone.length
+      ? { ...asObject(e.after), ...(selfApprovals.length ? { ownRequest: true } : {}), ...(ownerAlone.length ? { ownerAlone: true } : {}) }
+      : e.after;
   const [row] = await tx.insert(auditEvents).values({
     organizationId: ctx.organizationId,
     siteId: "siteId" in e ? (e.siteId ?? null) : ctx.currentSiteId,
@@ -61,6 +67,23 @@ export async function audit(
       entityNumber: e.entityNumber ?? null,
       reason: "Own request approved by a top role (setting approvals.top_roles_self_approve)",
       after: { forAction: e.action, rules: selfApprovals, roles: ctx.roleCodes.filter((r) => r === "owner_director" || r === "site_manager") },
+      correlationId: e.correlationId ?? ctx.correlationId,
+    });
+  }
+  if (ownerAlone.length) {
+    // Lets the deferred same-person triggers accept the owner as approver of their own recipe, steps or how-to sheet
+    // revision (src/db/sql/adr117.sql: those three tables only; inspection plans and QA tables never read this flag).
+    await tx.execute(sql`select set_config('bc.owner_alone', 'on', true)`);
+    await tx.insert(auditEvents).values({
+      organizationId: ctx.organizationId,
+      siteId: "siteId" in e ? (e.siteId ?? null) : ctx.currentSiteId,
+      actorId: ctx.userId,
+      action: "governance.owner_alone.used",
+      entityType: e.entityType,
+      entityId: e.entityId ?? null,
+      entityNumber: e.entityNumber ?? null,
+      reason: "Owner approved alone (no separate QA review) — setting approvals.owner_approves_recipes_alone",
+      after: { forAction: e.action, steps: ownerAlone, gmpRisk: "No separate QA review (A-OWNER-ALONE-01)" },
       correlationId: e.correlationId ?? ctx.correlationId,
     });
   }

@@ -419,7 +419,8 @@ describe("expense claims, recipes and invoices", () => {
     await settingDefault();
   });
 
-  it("recipe: the QA step stays with QA; the owner then approves their own recipe at the owner step", async () => {
+  it("recipe (ADR-117 owner-alone setting off): the QA step stays with QA; the owner then approves their own recipe at the owner step", async () => {
+    await db.insert(settings).values({ organizationId: kit.orgId, scope: "organization", key: "approvals.owner_approves_recipes_alone", value: false });
     const o = await owner();
     // The owner also holds qa_qc here (beforeAll): the QA step of their own recipe still needs another QA person.
     const ahl = await productId("AHL-250");
@@ -435,6 +436,7 @@ describe("expense claims, recipes and invoices", () => {
     // A site manager is not a top role for organization-level recipes.
     const m = await manager();
     expect(m.selfApprovesAt(null)).toBe(false);
+    await db.delete(settings).where(and(eq(settings.organizationId, kit.orgId), eq(settings.key, "approvals.owner_approves_recipes_alone")));
   });
 
   it("invoice above PHP 100,000: finance decides the finance step; the owner approves the owner step of their own invoice", async () => {

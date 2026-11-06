@@ -5,6 +5,7 @@ import { formulaRevisions, formulas, routingRevisions, routings, users } from "@
 import type { AuthContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { HANDOFFS, nextActors, peopleWords } from "@/modules/governance";
+import { peopleWithOwnerAlone } from "@/lib/next-actors-words";
 import { loadApprovalPolicy } from "./approval-policy";
 import { type PartState, type Readiness, readiness } from "./recipe-readiness-words";
 import { policyFor } from "./routings";
@@ -60,7 +61,9 @@ async function approversWords(ctx: AuthContext, q: DbOrTx, recordType: "formula_
     q,
   ).catch(() => null);
   if (!n) return HANDOFFS[kind].fallback;
-  const others = n.people.length ? peopleWords(n.people) : "";
+  // ADR-117: "Nina (QA) or Teresa (QA) — or Ana (owner) alone"; the owner reads "you alone (you are the owner) or …".
+  const others = peopleWithOwnerAlone(n);
+  if (n.viewer.ownerAlone) return n.people.length ? `you alone (you are the owner) or ${peopleWords(n.people)}` : "you alone (you are the owner)";
   if (n.viewer.can) return others ? `you or ${others}` : "you";
   return others || n.roleWords;
 }

@@ -1,10 +1,9 @@
 import "server-only";
 import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
-import { type DbOrTx, db } from "@/db/client";
+import { type DbOrTx, type Tx, db } from "@/db/client";
 import { bomLineAlternatives, bomLines, formulaRevisions, formulas, materials, products, users } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
-import { approverLabel } from "@/lib/auth/self-approval";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { assignMasterCode } from "@/lib/numbering";
@@ -16,11 +15,14 @@ import {
   assertDraft,
   assertVersionTransition,
   businessToday,
-  approvalSodConflict,
-  canDecideStep,
   effectiveLabel,
   isIsoDate,
+  ownerAloneDecisions,
+  ownerAloneDetail,
+  ownerAloneViewerNote,
   recordApprovalDecision,
+  revisionApproverName,
+  revisionDecisionFor,
   requireAny,
   supersedeOverlapping,
   notifyRevisionApprovers,
@@ -286,7 +288,13 @@ export async function withdrawFormulaRevision(ctx: AuthContext, revisionId: stri
 export async function decideFormulaRevision(ctx: AuthContext, raw: unknown) {
   ctx.require("masterdata.formula.approve");
   const input = parseInput(DecisionInput, raw);
-  return db.transaction(async (tx) => {
+  return db.transaction(async (tx) => decideFormulaRevisionIn(tx, ctx, input));
+}
+
+/** `decideFormulaRevision` inside the caller's transaction (the recipe's "Approve alone" decides both parts in one, ADR-117). */
+export async function decideFormulaRevisionIn(tx: Tx, ctx: AuthContext, input: z.infer<typeof DecisionInput>) {
+  ctx.require("masterdata.formula.approve");
+  {
     const { rev, formula } = await lockRevision(tx, ctx, input.id);
     const name = label(formula.code, rev);
     if (rev.status !== "pending_approval") throw new DomainError("state", `${name} is ${rev.status.replace(/_/g, " ")}; only a revision pending approval can be decided.`);
@@ -307,11 +315,11 @@ export async function decideFormulaRevision(ctx: AuthContext, raw: unknown) {
     if (d.rejected) {
       assertVersionTransition(name, rev.status, "rejected");
       await tx.update(formulaRevisions).set({ status: "rejected", approvalNote: input.note }).where(eq(formulaRevisions.id, rev.id));
-      await audit(tx, ctx, { ...base, action: "masterdata.formula_revision.rejected", reason: input.note, before: { status: rev.status, revisionNo: rev.revisionNo }, after: { status: "rejected", revisionNo: rev.revisionNo, step: d.step.step } });
+      await audit(tx, ctx, { ...base, action: "masterdata.formula_revision.rejected", reason: input.note, before: { status: rev.status, revisionNo: rev.revisionNo }, after: { status: "rejected", revisionNo: rev.revisionNo, step: d.step.step, ...ownerAloneDetail(d) } });
       return { status: "rejected" as const, step: d.step.step };
     }
     if (!d.final) {
-      await audit(tx, ctx, { ...base, action: "masterdata.formula_revision.reviewed", reason: input.note, after: { status: rev.status, revisionNo: rev.revisionNo, step: d.step.step, stepLabel: d.step.label } });
+      await audit(tx, ctx, { ...base, action: "masterdata.formula_revision.reviewed", reason: input.note, after: { status: rev.status, revisionNo: rev.revisionNo, step: d.step.step, stepLabel: d.step.label, ...ownerAloneDetail(d) } });
       return { status: "pending_approval" as const, step: d.step.step };
     }
     assertVersionTransition(name, rev.status, "approved");
@@ -330,12 +338,13 @@ export async function decideFormulaRevision(ctx: AuthContext, raw: unknown) {
         status: "approved",
         revisionNo: rev.revisionNo,
         effectiveFrom,
-        approvers: st.decisions.filter((x) => x.decision === "approved").map((x) => `step ${x.step}: ${x.decidedByName}`),
+        approvers: st.decisions.filter((x) => x.decision === "approved").map((x) => `step ${x.step}: ${x.decidedByName}${x.ownerAlone ? " (owner alone)" : ""}`),
         superseded: closed.map((c) => `revision ${c.revisionNo} until ${effectiveFrom}`),
+        ...ownerAloneDetail(d),
       },
     });
-    return { status: "approved" as const, step: d.step.step, effectiveFrom, superseded: closed };
-  });
+    return { status: "approved" as const, step: d.step.step, effectiveFrom, superseded: closed, ownerAlone: d.ownerAlone };
+  }
 }
 
 /** Retires an approved revision (masterdata.formula.void): never deleted; history keeps pointing at it. */
@@ -522,6 +531,8 @@ export async function getFormula(ctx: AuthContext, formulaId: string) {
   const revisions = await db.select().from(formulaRevisions).where(eq(formulaRevisions.formulaId, f.formula.id)).orderBy(desc(formulaRevisions.revisionNo));
   const names = await userNames(db, revisions.flatMap((r) => [r.createdBy, r.submittedBy, r.approvedBy]));
   const nm = (id: string | null) => (id ? (names.get(id) ?? "Unknown user") : null);
+  // ADR-117: versions approved by the owner alone read "<name> (owner) — no separate QA review".
+  const alone = await ownerAloneDecisions(db, ctx.organizationId, revisions.filter((r) => r.approvedBy).map((r) => r.id));
   return {
     ...f,
     revisions: revisions.map((r) => ({
@@ -530,7 +541,7 @@ export async function getFormula(ctx: AuthContext, formulaId: string) {
       changeSummary: r.changeSummary,
       createdByName: nm(r.createdBy),
       submittedByName: nm(r.submittedBy),
-      approvedByName: approverLabel(nm(r.approvedBy), r.approvedBy, [r.createdBy, r.submittedBy]),
+      approvedByName: revisionApproverName(nm(r.approvedBy), r.approvedBy, [r.createdBy, r.submittedBy], { decisions: alone.filter((d) => d.recordId === r.id) }),
       createdAt: r.createdAt,
     })),
     effectiveRevisionId: revisions.find((r) => effectiveLabel(r, today) === "effective")?.id ?? null,
@@ -600,10 +611,12 @@ export async function getFormulaRevision(ctx: AuthContext, revisionId: string) {
   const names = await userNames(db, [rev.createdBy, rev.submittedBy, rev.approvedBy]);
   const nm = (id: string | null) => (id ? (names.get(id) ?? "Unknown user") : null);
   const excluded = [rev.createdBy, rev.submittedBy];
+  // ADR-117: the owner may approve every open step alone while the setting is on.
+  const decision = revisionDecisionFor(ctx, "formula_revision", approval, rev.status, excluded);
   return {
     formula,
     product: { id: product.id, name: product.name, skuCode: product.skuCode },
-    revision: { ...rev, label: effectiveLabel(rev, today), createdByName: nm(rev.createdBy), submittedByName: nm(rev.submittedBy), approvedByName: approverLabel(nm(rev.approvedBy), rev.approvedBy, [rev.createdBy, rev.submittedBy]) },
+    revision: { ...rev, label: effectiveLabel(rev, today), createdByName: nm(rev.createdBy), submittedByName: nm(rev.submittedBy), approvedByName: revisionApproverName(nm(rev.approvedBy), rev.approvedBy, [rev.createdBy, rev.submittedBy], approval) },
     lines: dtoLines,
     showPercentages: showPct,
     totals: { sumG: total.toString(), referenceBatchSizeG: rev.referenceBatchSizeG, differenceG: total.minus(ref).toString(), packaging },
@@ -612,7 +625,8 @@ export async function getFormulaRevision(ctx: AuthContext, revisionId: string) {
     headerChanges,
     approval: {
       ...approval,
-      canDecide: rev.status === "pending_approval" && canDecideStep(ctx, approval.nextStep) && !excluded.some((u) => approvalSodConflict(ctx, "formula_revision", approval.nextStep, u, null)) && !approval.decisions.some((d) => approvalSodConflict(ctx, "formula_revision", approval.nextStep, d.decidedBy, null)),
+      ...decision,
+      ownerAloneNote: ownerAloneViewerNote(decision),
     },
     can: {
       edit: rev.status === "draft" && ctx.can("masterdata.formula.edit"),

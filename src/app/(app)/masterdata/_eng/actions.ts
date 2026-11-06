@@ -36,6 +36,7 @@ import {
   withdrawFormulaRevision,
   withdrawRoutingRevision,
   installSoapExample,
+  approveRecipeAlone,
 } from "@/modules/masterdata";
 
 /**
@@ -82,8 +83,8 @@ async function run(fn: (ctx: AuthContext) => Promise<string | void>, paths: stri
   }
 }
 
-const DECISION_MSG = (r: { status: string; effectiveFrom?: string }) =>
-  r.status === "approved" ? `Approved${r.effectiveFrom ? `, effective ${r.effectiveFrom}` : ""}.` : r.status === "rejected" ? "Rejected. The author can start a new revision." : "Step approved. Waiting for the next approver.";
+const DECISION_MSG = (r: { status: string; effectiveFrom?: string; ownerAlone?: boolean }) =>
+  r.status === "approved" ? `Approved${r.ownerAlone ? " alone as the owner (no separate QA review)" : ""}${r.effectiveFrom ? `, effective ${r.effectiveFrom}` : ""}.` : r.status === "rejected" ? "Rejected. The author can start a new revision." : "Step approved. Waiting for the next approver.";
 const decisionInput = (fd: FormData) => ({ id: id(fd), decision: str(fd, "decision"), note: opt(fd, "note"), effectiveFrom: opt(fd, "effectiveFrom") });
 
 /* ------------------------------------------------------------------ formulas */
@@ -142,6 +143,14 @@ export async function withdrawFormulaAction(_: ActionState, fd: FormData) {
 }
 export async function decideFormulaAction(_: ActionState, fd: FormData) {
   return run(async (ctx) => DECISION_MSG(await decideFormulaRevision(ctx, decisionInput(fd))), ["/masterdata/formulas"]);
+}
+/** ADR-117: the owner's one Approve on the recipe page (recipe and steps, every open step, one transaction). */
+export async function approveRecipeAloneAction(_: ActionState, fd: FormData) {
+  return run(async (ctx) => {
+    const r = await approveRecipeAlone(ctx, { formulaId: id(fd, "formulaId") });
+    const what = r.recipe && r.steps ? "The recipe and its steps are" : r.recipe ? "The recipe is" : "The steps are";
+    return `${what} approved${r.ownerAlone ? " by you alone (owner, no separate QA review)" : ""}. Batches can use them from today.`;
+  }, ["/masterdata/recipes", "/masterdata/formulas", "/masterdata/routings", "/production", "/approvals"]);
 }
 export async function retireFormulaAction(_: ActionState, fd: FormData) {
   return run(async (ctx) => {

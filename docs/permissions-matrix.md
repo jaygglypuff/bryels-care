@@ -1020,6 +1020,8 @@ release, Check quality, conditional release, QA hold lift, inspection review, di
 output / pack checks, equipment overrides, batch reopen, settings, numbering, tax, period unlock,
 retention, import approval. An owner who also holds `qa_qc` is still refused on these.
 
+**ADR-117 owner approves recipes alone (A-OWNER-ALONE-01, owner decision 2026-11-07; GMP risk).** Setting `approvals.owner_approves_recipes_alone` (organization; default **on**; restricted; `ownerOnly`). While on, an `owner_director` with an organization-wide assignment may decide **every open step** of a formula, routing or work-instruction revision in one "Approve", including steps naming `qa_qc` and their own revisions, provided they hold each step's permission (`masterdata.formula.approve`, `masterdata.routing.approve`, `masterdata.work_instruction.approve`). The steps are recorded as the owner's with `approval_decisions.owner_alone = true` (a CHECK allows the flag on these three record types only); the same-person trigger accepts it through the transaction-local `bc.owner_alone` (migration 0038, never dropped). When one step is open and the ordinary rules (including 5.1.1 above) already let the owner decide it, it is an ordinary decision. Not changed: inspection plans and everything under "Never lifted" above; site managers and QA users; another organization's owner.
+
 ADR-104 (2026-11-01), no new permission string; two QA-only decisions where neither the top-role self-approval nor
 the ADR-073 owner override applies (checked with `ctx.canGenuinelyAt`, i.e. the permission from the person's own roles):
 

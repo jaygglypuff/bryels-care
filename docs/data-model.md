@@ -635,6 +635,7 @@ Types: `num6` = `numeric(18,6)`, `money` = `numeric(18,4)`, `pct` = `numeric(9,4
 | `approval_rule_id`, `step` | uuid / int | yes / no | → approval_rules; default 1 | null rule = base `.approve` permission |
 | `decision` | text | no | ck in (`approved`,`rejected`,`returned`) | |
 | `decided_by`, `decided_at`, `note`, `reauthenticated_at` | uuid / ts / text / ts | no / no / yes / yes | → users; `uq (record_type, record_id, step, decided_by)` | a user decides a step once; restricted actions carry the re-authentication time |
+| `owner_alone` | boolean | no | default false; ck `not owner_alone or record_type in ('formula_revision','routing_revision','work_instruction_revision')` | ADR-117 (migration 0037): the owner decided this step alone under `approvals.owner_approves_recipes_alone` (no separate QA review); the step counts as complete whatever its `required_count` |
 | **`numbering_rules`** · P1 · C · `std +site?` + `ver` | | | | §9 |
 | **`idempotency_keys`** · P1 · T | | | | §1.10, §5.4, §11.4 |
 | **`audit_events`** · P1 · L (partitioned) | | | | §8 |
@@ -3198,6 +3199,12 @@ later step, so a deployment can always be rolled back to the previous version of
 next file from the journal length, so the next `pnpm db:generate` would produce `0036_…` again: **rename the new
 file and its journal `tag` to `0037_<description>` before committing** so file prefixes stay unique, and keep
 `idx` as generated. Check with `ls src/db/migrations` that no prefix appears twice.
+Done that way for ADR-117: `0037_adr117_owner_alone` (idx 36, `approval_decisions.owner_alone`) and `0038_adr117_custom_sql`
+(idx 37, `src/db/sql/adr117.sql`: `bc_sod_distinct()` also honours the transaction-local `bc.owner_alone` on
+`formula_revisions`, `routing_revisions` and `work_instruction_revisions` only); their snapshots are `0037_snapshot.json`
+and `0038_snapshot.json`. The next generated file must be renamed to `0039_<description>` (and its snapshot to
+`0039_snapshot.json`; drizzle-kit writes the snapshot under the journal-length prefix and would overwrite
+`0037_snapshot.json`).
 
 ### 13.1 Toolchain and flow (ADR-003)
 

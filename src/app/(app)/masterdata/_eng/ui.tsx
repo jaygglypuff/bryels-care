@@ -56,8 +56,10 @@ export function approvalSentence(policy: { step: number; roles: string[] }[], wh
 type ApprovalProps = {
   approval: {
     policy: { step: number; label: string; roles: string[] }[];
-    decisions: { step: number; decision: string; decidedByName: string; decidedAt: Date; note: string | null }[];
+    decisions: { step: number; decision: string; decidedByName: string; decidedAt: Date; note: string | null; ownerAlone?: boolean }[];
     nextStep: { step: number; label: string } | null;
+    /** ADR-117: the viewer (the owner) may approve every open step alone. */
+    ownerAlone?: boolean;
   };
   status: string;
   children?: ReactNode;
@@ -72,7 +74,7 @@ export function ApprovalPanel({ approval, status, children, what }: ApprovalProp
       <CardTitle>Approval</CardTitle>
       {(status === "draft" || status === "pending_approval") && (
       <p className="mb-2 text-[14px] text-fg-2" data-testid="approval-sentence">
-        {approvalSentence(approval.policy, what)}
+        {approval.ownerAlone ? `${approvalSentence(approval.policy, what).replace(/ You can't approve your own .*$/, "")} As the owner you may approve it alone.` : approvalSentence(approval.policy, what)}
       </p>
       )}
       <ol className="flex flex-col gap-2">
@@ -87,6 +89,7 @@ export function ApprovalPanel({ approval, status, children, what }: ApprovalProp
                 </p>
                 <p className="text-[12px] text-muted">By {roleWords(p.roles)} (not the person who wrote or sent it)</p>
                 {d?.note && <p className="mt-1 text-[12px] text-fg-2">“{d.note}”</p>}
+                {d?.ownerAlone && <p className="mt-1 text-[12px] font-medium text-[var(--warn-fg)]">Decided by the owner alone — no separate QA review</p>}
               </div>
               {d ? (
                 <Chip tone={d.decision === "approved" ? "ok" : "rej"}>

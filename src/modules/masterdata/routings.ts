@@ -1,5 +1,6 @@
 import "server-only";
 import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import type { z } from "zod";
 import { type DbOrTx, type Tx, db } from "@/db/client";
 import {
   products,
@@ -13,7 +14,6 @@ import {
   workInstructions,
 } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
-import { approverLabel } from "@/lib/auth/self-approval";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { assignMasterCode } from "@/lib/numbering";
@@ -25,11 +25,14 @@ import {
   assertDraft,
   assertVersionTransition,
   businessToday,
-  approvalSodConflict,
-  canDecideStep,
   effectiveLabel,
   isIsoDate,
+  ownerAloneDecisions,
+  ownerAloneDetail,
+  ownerAloneViewerNote,
   recordApprovalDecision,
+  revisionApproverName,
+  revisionDecisionFor,
   requireAny,
   supersedeOverlapping,
   notifyRevisionApprovers,
@@ -306,7 +309,13 @@ export async function withdrawRoutingRevision(ctx: AuthContext, revisionId: stri
 export async function decideRoutingRevision(ctx: AuthContext, raw: unknown) {
   ctx.require("masterdata.routing.approve");
   const input = parseInput(DecisionInput, raw);
-  return db.transaction(async (tx) => {
+  return db.transaction(async (tx) => decideRoutingRevisionIn(tx, ctx, input));
+}
+
+/** `decideRoutingRevision` inside the caller's transaction (the recipe's "Approve alone" decides both parts in one, ADR-117). */
+export async function decideRoutingRevisionIn(tx: Tx, ctx: AuthContext, input: z.infer<typeof DecisionInput>) {
+  ctx.require("masterdata.routing.approve");
+  {
     const { rev, routing } = await lockRevision(tx, ctx, input.id);
     const name = lbl(routing.code, rev.revisionNo);
     if (rev.status !== "pending_approval") throw new DomainError("state", `${name} is ${rev.status.replace(/_/g, " ")}; only a revision pending approval can be decided.`);
@@ -325,11 +334,11 @@ export async function decideRoutingRevision(ctx: AuthContext, raw: unknown) {
     const base = { entityType: "routing_revision", entityId: rev.id, entityNumber: name, siteId: null } as const;
     if (d.rejected) {
       await tx.update(routingRevisions).set({ status: "rejected", approvalNote: input.note }).where(eq(routingRevisions.id, rev.id));
-      await audit(tx, ctx, { ...base, action: "masterdata.routing_revision.rejected", reason: input.note, before: { status: rev.status, revisionNo: rev.revisionNo }, after: { status: "rejected", revisionNo: rev.revisionNo } });
+      await audit(tx, ctx, { ...base, action: "masterdata.routing_revision.rejected", reason: input.note, before: { status: rev.status, revisionNo: rev.revisionNo }, after: { status: "rejected", revisionNo: rev.revisionNo, ...ownerAloneDetail(d) } });
       return { status: "rejected" as const, step: d.step.step };
     }
     if (!d.final) {
-      await audit(tx, ctx, { ...base, action: "masterdata.routing_revision.reviewed", reason: input.note, after: { step: d.step.step, stepLabel: d.step.label, revisionNo: rev.revisionNo } });
+      await audit(tx, ctx, { ...base, action: "masterdata.routing_revision.reviewed", reason: input.note, after: { step: d.step.step, stepLabel: d.step.label, revisionNo: rev.revisionNo, ...ownerAloneDetail(d) } });
       return { status: "pending_approval" as const, step: d.step.step };
     }
     const closed = await supersedeOverlapping(tx, "routing_revisions", sql`routing_id = ${routing.id}`, rev.id, effectiveFrom);
@@ -345,12 +354,13 @@ export async function decideRoutingRevision(ctx: AuthContext, raw: unknown) {
         revisionNo: rev.revisionNo,
         effectiveFrom,
         changeScope: rev.changeScope,
-        approvers: st.decisions.filter((x) => x.decision === "approved").map((x) => `step ${x.step}: ${x.decidedByName}`),
+        approvers: st.decisions.filter((x) => x.decision === "approved").map((x) => `step ${x.step}: ${x.decidedByName}${x.ownerAlone ? " (owner alone)" : ""}`),
         superseded: closed.map((c) => `revision ${c.revisionNo} until ${effectiveFrom}`),
+        ...ownerAloneDetail(d),
       },
     });
-    return { status: "approved" as const, step: d.step.step, effectiveFrom, superseded: closed };
-  });
+    return { status: "approved" as const, step: d.step.step, effectiveFrom, superseded: closed, ownerAlone: d.ownerAlone };
+  }
 }
 
 /** Retires an approved routing revision (approver permission; the catalogue has no routing .void). */
@@ -439,9 +449,16 @@ export async function getRouting(ctx: AuthContext, routingId: string) {
   const revs = await db.select().from(routingRevisions).where(eq(routingRevisions.routingId, r.routing.id)).orderBy(desc(routingRevisions.revisionNo));
   const ids = [...new Set(revs.flatMap((x) => [x.createdBy, x.submittedBy, x.approvedBy]).filter((x): x is string => !!x))];
   const names = ids.length ? new Map((await db.select({ id: users.id, n: users.displayName }).from(users).where(inArray(users.id, ids))).map((u) => [u.id, u.n])) : new Map<string, string>();
+  // ADR-117: versions approved by the owner alone read "<name> (owner) — no separate QA review".
+  const alone = await ownerAloneDecisions(db, ctx.organizationId, revs.filter((x) => x.approvedBy).map((x) => x.id));
   return {
     ...r,
-    revisions: revs.map((x) => ({ ...x, label: effectiveLabel(x), submittedByName: x.submittedBy ? names.get(x.submittedBy) : null, approvedByName: x.approvedBy ? names.get(x.approvedBy) : null })),
+    revisions: revs.map((x) => ({
+      ...x,
+      label: effectiveLabel(x),
+      submittedByName: x.submittedBy ? names.get(x.submittedBy) : null,
+      approvedByName: x.approvedBy ? revisionApproverName(names.get(x.approvedBy) ?? null, x.approvedBy, [x.createdBy, x.submittedBy], { decisions: alone.filter((d) => d.recordId === x.id) }) : null,
+    })),
     canCreateRevision: ctx.can("masterdata.routing.create") && !revs.some((x) => x.status === "draft" || x.status === "pending_approval"),
   };
 }
@@ -462,18 +479,17 @@ export async function getRoutingRevision(ctx: AuthContext, revisionId: string) {
   const names = ids.length ? new Map((await db.select({ id: users.id, n: users.displayName }).from(users).where(inArray(users.id, ids))).map((u) => [u.id, u.n])) : new Map<string, string>();
   const nm = (id: string | null) => (id ? (names.get(id) ?? null) : null);
   const draftScope = r.rev.status === "draft" && r.rev.supersedesId ? computeChangeScope(await loadRoutingSteps(db, r.rev.supersedesId), steps) : null;
+  // ADR-117: the owner may approve every open step alone while the setting is on.
+  const decision = revisionDecisionFor(ctx, "routing_revision", approval, r.rev.status, [r.rev.createdBy, r.rev.submittedBy]);
   return {
     ...r,
-    revision: { ...r.rev, label: effectiveLabel(r.rev), createdByName: nm(r.rev.createdBy), submittedByName: nm(r.rev.submittedBy), approvedByName: approverLabel(nm(r.rev.approvedBy), r.rev.approvedBy, [r.rev.createdBy, r.rev.submittedBy]) },
+    revision: { ...r.rev, label: effectiveLabel(r.rev), createdByName: nm(r.rev.createdBy), submittedByName: nm(r.rev.submittedBy), approvedByName: revisionApproverName(nm(r.rev.approvedBy), r.rev.approvedBy, [r.rev.createdBy, r.rev.submittedBy], approval) },
     steps,
     draftScope,
     approval: {
       ...approval,
-      canDecide:
-        r.rev.status === "pending_approval" &&
-        canDecideStep(ctx, approval.nextStep) &&
-        ![r.rev.createdBy, r.rev.submittedBy].some((u) => approvalSodConflict(ctx, "routing_revision", approval.nextStep, u, null)) &&
-        !approval.decisions.some((d) => approvalSodConflict(ctx, "routing_revision", approval.nextStep, d.decidedBy, null)),
+      ...decision,
+      ownerAloneNote: ownerAloneViewerNote(decision),
     },
     can: {
       edit: r.rev.status === "draft" && ctx.can("masterdata.routing.edit"),

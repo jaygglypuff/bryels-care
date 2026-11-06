@@ -23,13 +23,20 @@ export async function waitingForApprover(
   const qa = step.roles.includes("qa_qc");
   const next = await nextActors(
     ctx,
-    { kind: `revision.${permission}`, permission: permission as Permission, does: verb, doBase: verb, where: TO_APPROVE, fallback: "the approvers", independent: qa, operational: !qa, prefer: ["qa_qc", "site_manager", "owner_director"] },
+    { kind: `revision.${permission}`, permission: permission as Permission, does: verb, doBase: verb, where: TO_APPROVE, fallback: "the approvers", independent: qa, operational: !qa, prefer: ["qa_qc", "site_manager", "owner_director"], ownerAlone: OWNER_ALONE_PERMISSIONS.includes(permission) },
     { siteId: who.siteId ?? null, roleCodes: step.roles, excludeUserIds: who.exclude, priorApproverIds: who.prior, roleStandIn: false },
   ).catch(() => null);
   const people = (next?.people ?? []).slice(0, 3);
-  if (people.length) return `Waiting for ${people.map((p) => `${p.name} (${p.role})`).join(" or ")} ${verb}${of}.`;
+  // ADR-117: the owner may approve the whole version alone ("— or Ana Villanueva (owner) alone").
+  const owners = (next?.ownerAlone ?? []).slice(0, 2);
+  const alone = owners.length ? ` — or ${owners.map((p) => `${p.name} (${p.role})`).join(" or ")} alone` : "";
+  if (people.length) return `Waiting for ${people.map((p) => `${p.name} (${p.role})`).join(" or ")} ${verb}${of}${alone}.`;
+  if (owners.length) return `Waiting for ${owners.map((p) => `${p.name} (${p.role})`).join(" or ")} to approve it alone.`;
   const words = next?.roleWords && next.roleWords !== "the approvers" ? next.roleWords : "someone allowed to approve";
   return `Waiting for ${words} ${verb}${of}.`;
 }
+
+/** ADR-117: recipe, steps and how-to sheet approvals, which the owner may decide alone. */
+const OWNER_ALONE_PERMISSIONS: readonly string[] = ["masterdata.formula.approve", "masterdata.routing.approve", "masterdata.work_instruction.approve"];
 
 const TO_APPROVE = "in To approve";
