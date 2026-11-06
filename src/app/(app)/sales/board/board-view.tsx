@@ -54,7 +54,7 @@ function Card({ c, columns, busy, onMove, onDragStart }: { c: OrderCard; columns
           <span className="sr-only">Move {c.orderNumber} to</span>
           <select
             disabled={busy}
-            className="min-h-[44px] w-full min-w-0 rounded-full border border-line bg-surface px-3 text-[12px]"
+            className="min-h-[44px] w-full min-w-0 rounded-[8px] border border-line bg-surface px-3 text-[12px]"
             defaultValue=""
             onChange={(e) => {
               if (e.target.value) onMove(c, e.target.value);

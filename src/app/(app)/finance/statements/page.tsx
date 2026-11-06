@@ -26,7 +26,7 @@ export default async function StatementsPage({ searchParams }: { searchParams: P
         <>
           <form method="get" role="search" className="mb-3 flex flex-wrap items-center gap-2">
             <label htmlFor="st-q" className="sr-only">Find a customer</label>
-            <input id="st-q" name="q" defaultValue={q ?? ""} placeholder="Type part of the customer's name" autoComplete="off" className="min-h-[44px] min-w-0 flex-1 rounded-[12px] border border-line bg-surface px-3 text-[15px]" />
+            <input id="st-q" name="q" defaultValue={q ?? ""} placeholder="Type part of the customer's name" autoComplete="off" className="min-h-[44px] min-w-0 flex-1 rounded-[8px] border border-line bg-surface px-3 text-[15px]" />
             <button type="submit" className="inline-flex min-h-[44px] items-center rounded-full border border-line px-4 text-[14px] font-medium hover:bg-surface-2">Find</button>
           </form>
           {shown.length === 0 ? (

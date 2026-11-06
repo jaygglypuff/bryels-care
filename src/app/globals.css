@@ -78,6 +78,23 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
   label:has(input[type="radio"]):not([class*="flex"]):not([class*="grid"]):not([class*="block"]) { display: inline-flex; align-items: center; gap: 0.5rem; }
   input[type="checkbox"] + label, input[type="radio"] + label { display: inline-flex; min-height: 44px; align-items: center; cursor: pointer; }
 }
+/* Form fields (owner 2026-11-07: "the rounded type for inputs is not suitable … may spill on mobile or tablets").
+   Fields are plain rectangles with small corners (inputClass in src/ui/core.tsx). iPhone/iPad Safari gives date
+   and time fields a fixed intrinsic width and its own rounded look, so they spilled out of their card: they take
+   the width of their box instead and keep the app's look. Dropdowns get one plain chevron instead of each
+   browser's own control. In the base layer, so a screen's own utilities still win. */
+@layer base {
+  input[type="date"], input[type="datetime-local"], input[type="time"], input[type="month"], input[type="week"] {
+    -webkit-appearance: none; appearance: none; display: block; min-width: 0; max-width: 100%; width: 100%; text-align: left;
+  }
+  input::-webkit-date-and-time-value { text-align: left; margin: 0; }
+  input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.7; cursor: pointer; }
+  select:not([multiple]):not([size]) {
+    -webkit-appearance: none; appearance: none; padding-right: 2.25rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 16px;
+  }
+}
 /* Round 4 (UX re-audit C #9): on phones the line "This screen is for…" comes right under the title, before the
    header buttons (PageHeader in src/ui/core.tsx, PageIntro in src/ui/guide.tsx). Only when the header has buttons
    and a PageIntro follows it: the page column becomes a flex column, the header's two parts take part in it, and

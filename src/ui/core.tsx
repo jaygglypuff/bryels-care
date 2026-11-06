@@ -125,7 +125,7 @@ export function Field({ label, htmlFor, error, hint, children }: { label: string
 }
 
 export const inputClass =
-  "min-h-[44px] w-full rounded-[14px] border border-line-strong bg-surface px-3.5 text-[14px] text-fg placeholder:text-muted focus:border-ring focus:outline-none focus:ring-2 focus:ring-[var(--lime-200)]";
+  "min-h-[44px] w-full min-w-0 rounded-[8px] border border-line-strong bg-surface px-3 text-[15px] text-fg placeholder:text-muted focus:border-ring focus:outline-none focus:ring-2 focus:ring-[var(--lime-200)]";
 
 /** Utility "families" a caller may override on a field (width, height, padding, text size, corners). */
 const FAMILIES: [RegExp, RegExp][] = [
@@ -152,7 +152,7 @@ export function Input(props: ComponentProps<"input">) {
   return <input {...props} className={fieldClass(inputClass, props.className)} />;
 }
 export function Select(props: ComponentProps<"select">) {
-  return <select {...props} className={fieldClass(inputClass, props.className)} />;
+  return <select {...props} className={fieldClass(`${inputClass} pr-9`, props.className)} />;
 }
 export function Textarea(props: ComponentProps<"textarea">) {
   return <textarea {...props} className={fieldClass(`${inputClass} min-h-[80px] py-2`, props.className)} />;
