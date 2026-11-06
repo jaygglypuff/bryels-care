@@ -17,6 +17,7 @@ import { generateForSource, resolveTemplateVersion } from "@/modules/documents";
 import { lockOrder } from "./orders";
 import { openAllocationsForOrder } from "./allocation";
 import { ORDER_HEADER_COLUMNS, isUuid, pickMachine, advanceOrder, transitionShipment } from "./fulfilment-state";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 /**
  * Pick lists and pick scans (US-4-10, W09-06). A pick covers the order's open allocations; each scan
@@ -500,7 +501,7 @@ export async function generatePickList(ctx: AuthContext, pickId: string, input: 
     if (replay) return { id: replay.id, documentNumber: replay.documentNumber };
     const code = await getSetting(tx, ctx.organizationId, "documents.pick_list.template_code", v.pick.siteId);
     const resolved = await resolveTemplateVersion(tx, ctx.organizationId, { templateCode: code, siteId: v.pick.siteId });
-    if (!resolved) throw new DomainError("setup_required", `No approved pick list template (${code}) exists. Ask QA or an administrator to approve one under Management › Rules and settings › Labels and printouts.`);
+    if (!resolved) throw new DomainError("setup_required", `No approved pick list template (${code}) exists. Ask QA or an administrator to approve one under ${LABELS_MENU_PATH}.`);
     const doc = await generateForSource(tx, ctx, {
       resolved,
       documentKind: "pick_list",

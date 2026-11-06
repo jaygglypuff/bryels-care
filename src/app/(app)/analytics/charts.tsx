@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Freshness, KpiScope, KpiTile, PeriodDto } from "@/modules/analytics";
+import type { KpiScope, KpiTile, PeriodDto } from "@/modules/analytics";
 import { Table, Td } from "@/ui/core";
 import { BarList, ColumnChart, Donut, LineChart } from "@/ui/charts/charts";
 import { ChartFrame } from "@/ui/charts/chart-frame";
@@ -133,14 +133,5 @@ export function BreakdownChart({ tile, scope, period, generatedAt, title, subtit
     </Table>
   );
   return <ChartFrame title={title} subtitle={subtitle} chart={chart} table={table} meta={meta(generatedAt, scope, period, tile)} />;
-}
-
-export function FreshnessLine({ freshness }: { freshness: Freshness }) {
-  return (
-    <span>
-      Nightly snapshot {freshness.lastSnapshotAt ? `${hhmm(freshness.lastSnapshotAt)}${freshness.lastBusinessDate ? ` (to ${shortDate(freshness.lastBusinessDate)})` : ""}` : "not run yet"}
-      {freshness.stale && <span className="ml-1 font-medium text-[var(--warn-fg)]">· Stale</span>}
-    </span>
-  );
 }
 

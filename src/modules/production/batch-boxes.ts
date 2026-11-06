@@ -17,6 +17,7 @@ import { currentPackaging } from "./packaging";
 import { BATCH_LABEL_STATES, batchLabelValues, fixLabelLotLocked, labelPrintBlocker } from "./packaging-flow";
 import { expectedPieces } from "./packaging-lines";
 import { type FormulaSnapshot, idempotent, lockBatch } from "./shared";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 /**
  * ADR-104 §2 "Labels: box labels by default". On the packaging step (and Finish) the operator says how many pieces
@@ -74,9 +75,9 @@ export async function batchBoxInfo(ctx: AuthContext, batch: BatchRow) {
         : stepGate
           ? stepGate
           : !template
-            ? "No approved box label is set up for this site. Ask QA (Management › Rules and settings › Labels and printouts)."
+            ? `No approved box label is set up for this site. Ask QA (${LABELS_MENU_PATH}).`
             : !stations.length
-              ? "No label printer is set up for this site. Ask the administrator (Management › Rules and settings › Labels and printouts)."
+              ? `No label printer is set up for this site. Ask the administrator (${LABELS_MENU_PATH}).`
               : null;
   // ADR-110 C6: the retained samples QA keeps are never boxed, so the default to box is expected - samples and the
   // labels printed here match Finish (which takes the samples out of the good pieces).

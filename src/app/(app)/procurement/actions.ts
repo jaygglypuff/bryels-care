@@ -25,7 +25,6 @@ import {
   postSupplierReturn,
   proposeAslChange,
   proposeSupplierMaterial,
-  receiveAgainstPurchaseOrder,
   recordSupplierConfirmation,
   regeneratePoDocument,
   removeSupplierReturnLine,
@@ -43,7 +42,6 @@ import {
 import { registerAppHooks } from "@/modules/wiring";
 import { procurementNextActors } from "@/modules/procurement";
 import type { NextActors } from "@/lib/next-actors-words";
-import type { DiscrepancyKind } from "@/modules/inventory";
 import { normalizeUnit, parseQtyText, toBaseQty } from "@/lib/units";
 import { DomainError } from "@/lib/errors";
 
@@ -320,41 +318,6 @@ export async function cancelOrderAction(_p: ActionState, fd: FormData): Promise<
     await cancelPurchaseOrder(ctx, { purchaseOrderId: str(fd, "purchaseOrderId"), reason: str(fd, "reason") });
     return "Purchase order cancelled.";
   });
-}
-
-/** Receipt against a PO (W01 with a PO): post now, or save a draft (e.g. an over-delivery that needs approval). */
-export async function receivePoAction(_p: ActionState, fd: FormData): Promise<ActionState> {
-  let target: string;
-  try {
-    const ctx = await requireContext();
-    const r = await receiveAgainstPurchaseOrder(ctx, {
-      purchaseOrderId: str(fd, "purchaseOrderId"),
-      supplierDocumentNumber: str(fd, "supplierDocumentNumber"),
-      notes: opt(fd, "notes"),
-      idempotencyKey: str(fd, "idempotencyKey"),
-      intent: str(fd, "intent") === "draft" ? "draft" : "post",
-      lines: rows(fd, "qty").map((l) => ({
-        purchaseOrderLineId: l.purchaseOrderLineId || null,
-        materialId: l.materialId ?? "",
-        qty: l.qty,
-        uom: l.uom || null,
-        supplierLotNumber: l.supplierLotNumber ?? "",
-        brand: l.brand || null,
-        manufacturedOn: l.manufacturedOn || null,
-        expiresOn: l.expiresOn ?? "",
-        containerCount: l.containerCount ? Number(l.containerCount) : null,
-        storageConditionsConfirmed: l.storageConditionsConfirmed === "yes",
-        locationId: l.locationId ?? "",
-        discrepancyKind: (l.discrepancyKind || null) as DiscrepancyKind | null,
-        discrepancyNote: l.discrepancyNote || null,
-      })),
-    });
-    target = `/inventory/receive/${r.receiptId}`;
-  } catch (e) {
-    return toActionState(e);
-  }
-  revalidatePath("/procurement/expected");
-  redirect(target);
 }
 
 /* ------------------------------------------------------------------ supplier returns */

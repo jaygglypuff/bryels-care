@@ -9,7 +9,7 @@ import { OwnerOverview } from "../../dashboard/owner-overview";
 import { Forbidden } from "../../forbidden";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Business overview" };
+export const metadata = { title: "Business overview (detailed)" };
 
 /**
  * The detailed owner overview (ADR-083): every KPI card, the batch journey, near-expiry lots, order
@@ -27,7 +27,7 @@ export default async function BusinessOverviewPage({ searchParams }: { searchPar
     if (e instanceof DomainError && (e.code === "forbidden" || e.code === "not_found"))
       return (
         <>
-          <PageHeader title="Business overview" />
+          <PageHeader title="Business overview (detailed)" />
           <EmptyState title={e.code === "forbidden" ? "You don't have access to the all-sites view" : "This site isn't available to you"} action={<Link href="/analytics/overview" className="font-medium text-primary-text hover:underline">Open your site&apos;s overview</Link>}>
             {e.message}
           </EmptyState>
@@ -39,7 +39,7 @@ export default async function BusinessOverviewPage({ searchParams }: { searchPar
   return (
     <>
       <PageHeader
-        title="Business overview"
+        title="Business overview (detailed)"
         subtitle={`${kpi.scope.label} · ${kpi.period.label}`}
         actions={<ScopePeriodBar basePath="/analytics/overview" scope={kpi.scope} period={kpi.period} sites={ctx.allowedSites} canAll={kpi.canCrossSite} />}
       />

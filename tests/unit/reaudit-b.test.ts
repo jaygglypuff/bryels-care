@@ -102,7 +102,7 @@ describe("labels (#12)", () => {
     expect(isOldLayout(1)).toBe(true);
     expect(isOldLayout(2)).toBe(false);
     expect(isOldLayout(null)).toBe(false);
-    expect(OLD_LAYOUT_NOTE).toMatch(/Rules and settings › Labels and printouts/);
+    expect(OLD_LAYOUT_NOTE).toMatch(/People, rules and settings › Labels and printouts/);
   });
 });
 

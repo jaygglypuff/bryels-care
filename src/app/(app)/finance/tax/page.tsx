@@ -9,6 +9,7 @@ import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { FinanceStatus } from "../finance-ui";
 import { ProposeTaxForm, TaxRowCommand } from "./forms";
+import { SETTINGS_MENU_PATH } from "@/lib/menu-paths";
 
 export const metadata = { title: "Tax rates" };
 
@@ -32,7 +33,7 @@ export default async function TaxPage() {
       {toCheck.length > 0 && <NextStep text={`Next: ${plural(toCheck.length, "rate")} ${waits(toCheck.length)} for your check.`} action={{ label: "Check them", href: `#t-${toCheck[0].id}` }} />}
       <div className="mb-4">
         <Banner tone="info" title={`Used on sales: ${defaults.sales ?? "no tax"} · on buying: ${defaults.purchases ?? "no tax"}`}>
-          Which rate is used by default is a setting{ctx.can("platform.settings.view") ? <> (<Link className="underline" href="/admin/settings">Management › Rules and settings › Settings</Link>, needs a second approver)</> : null}. Rates marked “Made up” are demo examples, not real rates.
+          Which rate is used by default is a setting{ctx.can("platform.settings.view") ? <> (<Link className="underline" href="/admin/settings">{SETTINGS_MENU_PATH}</Link>, needs a second approver)</> : null}. Rates marked “Made up” are demo examples, not real rates.
         </Banner>
       </div>
       <div className={admin ? "grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_440px]" : ""}>

@@ -11,7 +11,7 @@ import { saveLocationAction } from "../_org/actions";
 import { StateChip } from "../_org/ui";
 import { LocationHelp } from "../_org/location-help";
 
-export const metadata = { title: "Locations" };
+export const metadata = { title: "Shelves and areas (set up)" };
 
 type Row = Awaited<ReturnType<typeof listLocations>>[number];
 
@@ -55,7 +55,7 @@ export default async function LocationsPage({ searchParams }: { searchParams: Pr
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Locations"
+        title="Shelves and areas (set up)"
         actions={canCreate && opts.warehouses.length > 0 ? <LinkButton href="#add" variant="cta">+ Add location</LinkButton> : undefined}
       />
       <PageIntro>A location is a place where stock sits at {site.name}: a room, rack, shelf or bin. Tap Edit to rename one.</PageIntro>

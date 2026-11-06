@@ -238,9 +238,3 @@ export async function workOrderFormOptions(ctx: AuthContext) {
     .orderBy(asc(users.displayName));
   return { formulas: formulasOut, lines, supervisors, today };
 }
-
-/** Production lines of the current site (board filter). */
-export async function listProductionLines(ctx: AuthContext, siteId = ctx.currentSiteId) {
-  ctx.requireSite(siteId);
-  return db.select().from(productionLines).where(eq(productionLines.siteId, siteId)).orderBy(asc(productionLines.code));
-}

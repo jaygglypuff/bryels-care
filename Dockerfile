@@ -34,7 +34,9 @@ COPY --from=build /app/next.config.ts ./next.config.ts
 COPY --from=build /app/public ./public
 # Runtime files besides the Next.js build:
 # - src/ and tsconfig.json: the worker, the migrations (src/db/migrations), the seed and the admin
-#   scripts run the TypeScript sources with tsx (a production dependency);
+#   scripts run the TypeScript sources with tsx (a production dependency); the drizzle-kit snapshots
+#   (src/db/migrations/meta/*_snapshot.json) are left out by .dockerignore: the migrator needs only the
+#   .sql files and meta/_journal.json;
 # - scripts/: start.sh, the self-check, reference data, bootstrap;
 # - docs/help: the quick guides the /help pages read at runtime (src/ui/help/guides.ts).
 COPY tsconfig.json ./tsconfig.json

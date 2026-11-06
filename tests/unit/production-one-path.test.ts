@@ -157,13 +157,11 @@ const WORK_LINK_FILES = [
   "src/modules/production/floor-tasks.ts",
   "src/modules/production/flow-facts.ts",
   "src/modules/production/curing.ts",
-  "src/modules/production/board.ts",
   "src/modules/production/step-cards.ts",
   "src/modules/production/weigh-cards.ts",
   "src/modules/production/materials-list.ts",
   "src/modules/inventory/lookup.ts",
   ...walk(path.join(ROOT, "src/app/(app)/production/orders")).map((p) => path.relative(ROOT, p)),
-  "src/app/(app)/production/staging/[batchId]/page.tsx",
   "src/app/(app)/production/work-orders/[workOrderId]/page.tsx",
   "src/app/(app)/quality/inspections/page.tsx",
 ];

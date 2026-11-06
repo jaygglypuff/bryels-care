@@ -80,11 +80,10 @@ export {
   type WorkOrderInput,
 } from "./work-orders";
 export { WORK_ORDER_STATUSES, WORK_ORDER_TRANSITIONS, canWorkOrderTransition, type WorkOrderStatus } from "./work-orders-state";
-export { listWorkOrders, getWorkOrder, workOrderFormOptions, listProductionLines, type WorkOrderListRow, type WorkOrderDetail, type WorkOrderFilter } from "./work-orders-queries";
+export { listWorkOrders, getWorkOrder, workOrderFormOptions, type WorkOrderListRow, type WorkOrderDetail, type WorkOrderFilter } from "./work-orders-queries";
 export { workOrderRequirements, type Shortage } from "./work-orders-reserve";
-export { stageMaterial, approveMaterialSubstitution, releaseBatchStagingReservations, getStagingView, listBatchesToStage, canSeeStaging, type StageInput, type SubstitutionInput, type StagingView } from "./staging";
+export { stageMaterial, releaseBatchStagingReservations, getStagingView, listBatchesToStage, canSeeStaging, type StageInput } from "./staging";
 export { generateBatchSheet, batchSheetData, batchSheets, type BatchSheetKind } from "./staging-documents";
-export { getProductionBoard, moveBoardCard, boardMove, type ProductionBoard, type BoardCard, type BoardColumn, type MoveVerdict, type BoardFilter } from "./board";
 // ADR-074 (S2) + ADR-080 (G1): one production order (work order + batches) with status v2, one next action, one-step approve and a daily log.
 export {
   PRODUCTION_ORDER_STATUSES,

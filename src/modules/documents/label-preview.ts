@@ -11,6 +11,7 @@ import type { LabelData } from "./renderers/label-v1";
 import { renderFrozen } from "./renderers/registry";
 import type { DocumentMeta } from "./renderers/types";
 import { activeStationsAt } from "./stations";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 /**
  * Label preview for the task screens (ADR-099): what the label will look like, rendered by the same label
@@ -116,9 +117,9 @@ export async function labelPreview(
     : e.siteId !== ctx.currentSiteId
       ? `This is at ${place}. Switch site in the top bar to print its label.`
       : stations.length === 0
-        ? `Label printing is not set up for ${place} yet. Ask the administrator (Management › Rules and settings › Labels and printouts).`
+        ? `Label printing is not set up for ${place} yet. Ask the administrator (${LABELS_MENU_PATH}).`
         : options.length === 0
-          ? "No label is approved for this yet. Ask QA (Management › Rules and settings › Labels and printouts)."
+          ? `No label is approved for this yet. Ask QA (${LABELS_MENU_PATH}).`
           : null;
 
   return {

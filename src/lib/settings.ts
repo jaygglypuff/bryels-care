@@ -472,7 +472,7 @@ export const SETTINGS = {
     requiresApproval: true,
   },
   "platform.retention.max_rows_per_target": { scopes: ["organization"], schema: z.number().int().min(100).max(200_000), default: 10_000, assumption: "A-W4F-04", group: "Retention", label: "Rows deleted per target per run", description: "Caps one run so a purge never holds long locks; the next run continues." },
-  // Wave 2 W2A: production planning, work orders, staging and the production board (E-3-03, E-5-07)
+  // Wave 2 W2A: production planning, work orders and staging (E-3-03, E-5-07)
   /** Batches without a work order (legacy/service callers). Off: batches come from work orders (W05-03); tests that need direct creation turn it on explicitly. */
   "production.batch.allow_without_work_order": { scopes: ["organization", "site"], schema: z.boolean(), default: false, assumption: "A-W2A-01", group: "Production", label: "Allow batches without a work order", requiresApproval: true },
   /** Release a work order although some materials could not be reserved (W05-04: default off). */
@@ -497,39 +497,6 @@ export const SETTINGS = {
   "production.staging.reservation_ttl_hours": { scopes: ["organization", "site"], schema: z.number().int().min(1).max(24 * 90), default: 168, assumption: "A-W2A-05", group: "Production", label: "Staged stock reserved for (hours)" },
   /** Optional approval gate on production plans before lines become work orders (A-PROC-30: off by default). */
   "production.production_plan.approval_required": { scopes: ["organization", "site"], schema: z.boolean(), default: false, assumption: "A-PROC-30", group: "Production", label: "Production plans need approval", requiresApproval: true },
-  /** Production board columns (ux-system §9.3 "configurable set", A-UX-12). Each column lists the work order and batch states it shows. */
-  "production.board.columns": {
-    scopes: ["organization", "site"],
-    schema: z
-      .array(
-        z
-          .object({
-            key: z.string().regex(/^[a-z][a-z0-9_]{0,30}$/),
-            title: z.string().min(1).max(40),
-            workOrderStatuses: z.array(z.enum(["draft", "planned", "released", "in_progress", "completed", "closed", "cancelled"])),
-            batchStatuses: z.array(z.enum(["draft", "planned", "materials_staged", "in_process", "awaiting_qc", "quarantined", "released", "rejected", "rework_approved", "closed"])),
-          })
-          .strict(),
-      )
-      .min(1)
-      .max(12),
-    default: [
-      { key: "to_plan", title: "To plan", workOrderStatuses: ["draft"], batchStatuses: [] },
-      { key: "planned", title: "Planned", workOrderStatuses: ["planned"], batchStatuses: ["draft", "planned"] },
-      { key: "ready", title: "Released · to stage", workOrderStatuses: ["released"], batchStatuses: [] },
-      { key: "staged", title: "Materials staged", workOrderStatuses: [], batchStatuses: ["materials_staged"] },
-      { key: "in_process", title: "In process", workOrderStatuses: [], batchStatuses: ["in_process", "rework_approved"] },
-      { key: "awaiting_qc", title: "Awaiting QC", workOrderStatuses: [], batchStatuses: ["awaiting_qc"] },
-      { key: "quarantined", title: "Quarantined", workOrderStatuses: [], batchStatuses: ["quarantined"] },
-      { key: "released", title: "Released", workOrderStatuses: [], batchStatuses: ["released"] },
-    ] as {
-      key: string;
-      title: string;
-      workOrderStatuses: ("draft" | "planned" | "released" | "in_progress" | "completed" | "closed" | "cancelled")[];
-      batchStatuses: ("draft" | "planned" | "materials_staged" | "in_process" | "awaiting_qc" | "quarantined" | "released" | "rejected" | "rework_approved" | "closed")[];
-    }[],
-    assumption: "A-UX-12", group: "Production", label: "Production board columns",
-  },
   // Wave 3 W3D: customers, price lists, quotations and sales orders (US-4-01..US-4-06)
   // (W4B: the former `sales.tax.rate_pct` moved to the reviewed tax configuration; see finance.tax.default_sales_code.)
   /** Customers without a credit limit: auto-confirm (false) or always need credit approval (true) (A-W3D-02). */

@@ -3,15 +3,10 @@ import type { NextActors } from "@/lib/next-actors-words";
 import { adjustmentNextActors } from "@/modules/inventory";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, gt, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "@/db/client";
-import { inventoryBalances, inventoryLots, locations, materials, products } from "@/db/schema";
 import { requireContext } from "@/lib/auth/context";
 import type { ActionState } from "@/lib/errors";
-import { fmtFriendly } from "@/lib/units";
 import { approveAdjustment, cancelAdjustment, createAdjustment, postAdjustment, rejectAdjustment, submitAdjustment } from "@/modules/inventory/adjustments";
-import { keywordMatches } from "@/modules/scan";
 import { actionError, str } from "../_kit/action-state";
 
 const Line = z
@@ -87,60 +82,6 @@ export async function createAdjustmentAction(_p: ActionState, fd: FormData): Pro
 }
 
 export type AdjustmentLotOption = { id: string; lotNumber: string; itemName: string; baseUom: string; detail: string; shelves: { id: string; code: string; qtyBase: string; text: string }[] };
-
-/**
- * "Scan or type the lot" (usability test 2026-10-30): a scanned label (BC:LOT:…), a lot number, its last
- * digits or words of the item name (keywordMatches, ADR-085). Only lots of the current site, each with
- * the shelves that hold it now.
- */
-export async function findLotsForAdjustmentAction(raw: string): Promise<{ ok: true; lots: AdjustmentLotOption[] } | { ok: false; message: string }> {
-  try {
-    const ctx = await requireContext();
-    ctx.require("inventory.adjustment.create");
-    const text = String(raw ?? "").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 100);
-    if (text.length < 2) return { ok: false, message: "Scan the lot label, or type at least 2 letters or digits." };
-    const code = text.toUpperCase().replace(/^BC:LOT:/, "");
-    const exact = await db.select({ id: inventoryLots.id }).from(inventoryLots).where(and(eq(inventoryLots.organizationId, ctx.organizationId), eq(inventoryLots.siteId, ctx.currentSiteId), eq(inventoryLots.lotNumber, code))).limit(1);
-    const ids = exact.length
-      ? [exact[0].id]
-      : (await keywordMatches(ctx, text.replace(/^BC:LOT:/i, "")))
-          .map((m) => m.href.split("/").pop() ?? "")
-          .filter((x) => /^[0-9a-f-]{36}$/i.test(x))
-          .slice(0, 12);
-    if (ids.length === 0) return { ok: false, message: `Nothing matches "${text}" at ${ctx.currentSite.code}. Try the last 4 digits of the lot number, or the item name.` };
-    const lots = await db
-      .select({ id: inventoryLots.id, lotNumber: inventoryLots.lotNumber, baseUom: inventoryLots.baseUom, expiresOn: inventoryLots.expiresOn, mName: materials.name, pName: products.name })
-      .from(inventoryLots)
-      .leftJoin(materials, eq(materials.id, inventoryLots.materialId))
-      .leftJoin(products, eq(products.id, inventoryLots.productId))
-      .where(and(inArray(inventoryLots.id, ids), eq(inventoryLots.siteId, ctx.currentSiteId)));
-    if (lots.length === 0) return { ok: false, message: `Nothing matches "${text}" at ${ctx.currentSite.code}.` };
-    const bals = await db
-      .select({ lotId: inventoryBalances.lotId, id: locations.id, code: locations.code, qty: inventoryBalances.qtyBase })
-      .from(inventoryBalances)
-      .innerJoin(locations, eq(locations.id, inventoryBalances.locationId))
-      .where(and(inArray(inventoryBalances.lotId, lots.map((l) => l.id)), gt(inventoryBalances.qtyBase, "0"), eq(locations.siteId, ctx.currentSiteId)));
-    const out: AdjustmentLotOption[] = lots
-      .map((l) => {
-        const shelves = bals
-          .filter((b) => b.lotId === l.id)
-          .sort((a, b) => a.code.localeCompare(b.code))
-          .map((b) => ({ id: b.id, code: b.code, qtyBase: String(b.qty), text: fmtFriendly(b.qty, l.baseUom) }));
-        return {
-          id: l.id,
-          lotNumber: l.lotNumber,
-          itemName: l.mName ?? l.pName ?? "",
-          baseUom: l.baseUom,
-          shelves,
-          detail: shelves.length ? shelves.map((s) => `${s.text} on ${s.code}`).join(" · ") : "none left on any shelf",
-        };
-      })
-      .sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
-    return { ok: true, lots: out };
-  } catch (e) {
-    return { ok: false, message: actionError(e)?.message ?? "The look-up failed." };
-  }
-}
 
 const done = (id: string, message: string, next: NextActors | null = null): ActionState => {
   revalidatePath(`/inventory/adjustments/${id}`);

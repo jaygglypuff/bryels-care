@@ -1,7 +1,7 @@
 const autoConfirm = require('./auto-confirm.cjs');
 /* W3A e2e (US-5-02, US-5-03, US-5-16): owner overview, area dashboards, KPI records and the trends
- * page on desktop (1440 px) and phone (390 px). Requires a fresh demo seed (pnpm db:reset), which
- * includes the W3A month and its snapshots.
+ * page on desktop (1440 px) and phone (390 px). Demo profile: FULL. Requires a fresh full seed
+ * (pnpm db:reset, then DEMO_PROFILE=full pnpm db:demo reset; plain pnpm db:reset loads the lite demo), which includes the W3A month and its snapshots.
  * Run: BASE_URL=http://localhost:3301 NODE_PATH=$(npm root -g) node tests/e2e/analytics-trends.cjs
  * Fails on assertion errors, error pages, console errors, failed requests and horizontal scrolling on the phone.
  */

@@ -8,6 +8,7 @@ import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { LabelGuide } from "@/ui/labels";
 import { Forbidden } from "../forbidden";
 import { JobStatus, STATE_WORDS } from "./bits";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 export const metadata = { title: "Labels printed" };
 export const dynamic = "force-dynamic";
@@ -62,7 +63,7 @@ export default async function LabelsPrintedPage({ searchParams }: { searchParams
       <LabelGuide />
       <MoreDetails title="Label sizes and printers">
         <p className="text-[14px] text-fg-2">
-          The administrator and QA set these up in <Link href="/admin/templates" className="font-medium text-primary-text underline">Management › Rules and settings › Labels and printouts</Link>.
+          The administrator and QA set these up in <Link href="/admin/templates" className="font-medium text-primary-text underline">{LABELS_MENU_PATH}</Link>.
         </p>
       </MoreDetails>
     </div>

@@ -11,8 +11,11 @@ import { PageIntro } from "@/ui/guide";
 export const metadata: Metadata = { title: "New production order" };
 export const dynamic = "force-dynamic";
 
-/** New order (ADR-080 V2-2). `?salesOrderLine=<id>` = "Make for this order": product, missing pieces and needed-by are prefilled. */
-export default async function NewProductionOrderPage({ searchParams }: { searchParams: Promise<{ salesOrderLine?: string }> }) {
+/**
+ * New order (ADR-080 V2-2). `?salesOrderLine=<id>` = "Make for this order": product, missing pieces and needed-by are
+ * prefilled. `?product=<productId>` (a recipe's "Make a batch") only preselects the product when it can be made.
+ */
+export default async function NewProductionOrderPage({ searchParams }: { searchParams: Promise<{ salesOrderLine?: string; product?: string }> }) {
   const ctx = await requireContext();
   if (!ctx.can("production.work_order.create")) return <Forbidden what="creating production orders" permission="production.work_order.create" />;
   const sp = await searchParams;
@@ -56,6 +59,7 @@ export default async function NewProductionOrderPage({ searchParams }: { searchP
             lines={opts.lines}
             today={opts.today}
             prefill={usable ? { salesOrderId: usable.salesOrderId, salesOrderNumber: usable.salesOrderNumber, lineNo: usable.lineNo, productId: usable.productId, missing: usable.missing, neededBy: usable.neededBy } : null}
+            initialProductId={formulas.find((f) => f.productId === sp.product)?.productId ?? null}
           />
         </Card>
       )}

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { Card, EmptyState, PageHeader } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
-import { buildNav, groupSections } from "../nav";
+import { PEOPLE_SETTINGS, buildNav, groupSections } from "../nav";
 
 export const metadata = { title: "Management" };
 
@@ -13,8 +13,7 @@ const ABOUT: Record<string, string> = {
   Finance: "Supplier bills, closing a month, tax set-up. Customer invoices are under Sales & Customers; expense claims under Home.",
   "Production setup": "Recipes, steps, work instructions, QA test plans and machines.",
   "Master data": "The lists everything else uses: materials, products, places, sites. Suppliers are under Purchasing.",
-  "People & access": "Who can sign in and what each job may do.",
-  "Rules and settings": "Settings, who says OK to what, who gets which message, labels, record numbers, history of changes.",
+  [PEOPLE_SETTINGS]: "Who can sign in, what each job may do, settings, who says OK to what, who gets which message, labels, record numbers, history of changes.",
   "Planning tools": "The production plan for the weeks ahead and the batch records.",
   "IT and system": "For the IT person: who is signed in, sign-in safety, phones and tablets, system health, keeping old records, loading data from spreadsheets.",
 };

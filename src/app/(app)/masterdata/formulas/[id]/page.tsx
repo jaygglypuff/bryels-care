@@ -30,7 +30,8 @@ export default async function FormulaDetail({ params }: { params: Promise<{ id: 
   const canNew = ctx.can("masterdata.formula.create") && !f.openRevisionId;
   const canChange = ctx.can("masterdata.formula.create") && ctx.can("masterdata.formula.edit") && ctx.can("masterdata.routing.create") && ctx.can("masterdata.routing.edit") && ctx.can("masterdata.routing.view");
   const open = f.revisions.find((r) => r.id === f.openRevisionId) ?? null;
-  const showBatch = ctx.can("production.batch.create") && !!f.effectiveRevisionId;
+  // "Make a batch" opens a new production order for this product (approving it creates the batches, ADR-080).
+  const showBatch = ctx.can("production.work_order.create") && !!f.effectiveRevisionId;
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -49,7 +50,7 @@ export default async function FormulaDetail({ params }: { params: Promise<{ id: 
               <MoreMenu>
                 <div className="flex flex-col gap-3">
                   {showBatch && (
-                    <Link href="/production/new" className="inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text underline">
+                    <Link href={`/production/orders/new?product=${f.product.id}`} className="inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text underline">
                       Make a batch
                     </Link>
                   )}

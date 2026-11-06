@@ -3,6 +3,7 @@ import { fmtDateTime } from "@/lib/qty";
 import type { BackupsCard, HealthCard, VariablesCard } from "@/modules/governance";
 import { Card, CardTitle, EmptyState } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
+import { SETTINGS_MENU_PATH } from "@/lib/menu-paths";
 
 const dur = (s: number) => (s < 120 ? `${s}s` : s < 7200 ? `${Math.round(s / 60)} min` : s < 172_800 ? `${Math.round(s / 3600)} h` : `${Math.round(s / 86_400)} d`);
 
@@ -12,7 +13,7 @@ export function OpsCards({ health, backups, variables }: { health: HealthCard; b
     <>
       <Card id="health">
         <CardTitle>Health</CardTitle>
-        {health.readOnlyMode && <Banner tone="warn" title="Read-only maintenance mode is on">Only allow-listed roles can change data. Turn it off in Management › Rules and settings › Settings (the setting “read only” under platform maintenance).</Banner>}
+        {health.readOnlyMode && <Banner tone="warn" title="Read-only maintenance mode is on">Only allow-listed roles can change data. Turn it off in {SETTINGS_MENU_PATH} (the setting “read only” under platform maintenance).</Banner>}
         <ul className="space-y-2 text-[13px]">
           <li className="flex flex-wrap items-center gap-2">
             <Chip tone={health.web.ready ? "ok" : "bad"}>{health.web.ready ? "Web ready" : "Web not ready"}</Chip>

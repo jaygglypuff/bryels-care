@@ -43,7 +43,7 @@ export function SignOffProvider({ requirePassword, children }: { requirePassword
 }
 
 /** Second-person signature on this device: choose the person (and, when required, they type their password). */
-export function CoSign({ prefix, people, title, hint, required = false }: { prefix: "checker" | "approver"; people: Person[]; title: string; hint?: string; required?: boolean }) {
+function CoSign({ prefix, people, title, hint, required = false }: { prefix: "checker" | "approver"; people: Person[]; title: string; hint?: string; required?: boolean }) {
   const [who, setWho] = useState("");
   const needsPassword = useContext(SignOffPassword);
   return (

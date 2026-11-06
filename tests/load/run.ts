@@ -7,7 +7,7 @@
  * Virtual users sign in through the real sign-in server action (staggered so 25 sign-ins stay under the
  * per-address limit of 20/min), then loop over their role's flows with 2–5 s think time:
  *   warehouse (10)  scan look-up (server action) → lot page → stock move (/api/v1 transfer) → movement list
- *   production (5)  production board → batch workspace (weighing screen) → staging list
+ *   production (5)  production orders board → batch record → production orders list
  *   sales (4)       order list → order page → order board
  *   managers (4)    dashboard → analytics → a report run (stock, movements, orders)
  *   QA (2)          QA queue → batch release page
@@ -105,9 +105,9 @@ async function main() {
           await Promise.all(Array.from({ length: 10 }, (_, i) => move(myLots[i % myLots.length], "stock_move_burst")));
         }
       } else if (role === "production") {
-        await c.page("production_board", "/production/board");
+        await c.page("production_board", "/production/orders?view=board");
         await c.page("batch_workspace", `/production/${pick(batches)}`);
-        await c.page("staging_list", "/production/staging");
+        await c.page("production_orders", "/production/orders");
       } else if (role === "sales") {
         await c.page("order_list", "/sales");
         await c.page("order_page", `/sales/${pick(orders)}`);

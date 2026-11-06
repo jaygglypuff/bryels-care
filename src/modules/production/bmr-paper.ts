@@ -13,6 +13,7 @@ import { objectKey, requireStorage, signDownloadUrl, storageFor, validateUpload,
 import { generateForSource, type BmrPaperPageData } from "@/modules/documents";
 import { PAPER_PAGE_KIND, bmrTemplateFor, visibleBatch } from "./bmr";
 import { type FormulaSnapshot, lockBatch } from "./shared";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 /**
  * Hybrid paper record pages (US-3-20; docs/reports-and-templates.md §2.5, A-RPT-06, A-PROC-37).
@@ -79,7 +80,7 @@ export async function issuePaperPage(ctx: AuthContext, input: { batchId: string;
     const resolved = await bmrTemplateFor(tx, ctx, { id: b.id, siteId: b.siteId, createdAt: b.createdAt }, PAPER_PAGE_KIND);
     if (!resolved) {
       const code = await getSetting(tx, ctx.organizationId, "documents.bmr.paper_page_template_code", b.siteId);
-      throw new DomainError("setup_required", `No approved paper page template (${code}) is available. Ask QA to approve one under Management › Rules and settings › Labels and printouts.`);
+      throw new DomainError("setup_required", `No approved paper page template (${code}) is available. Ask QA to approve one under ${LABELS_MENU_PATH}.`);
     }
     const { product, siteCode } = await visibleBatch(tx, ctx, b.id);
     const data: BmrPaperPageData = {

@@ -1,4 +1,5 @@
 import type { Permission } from "@/lib/permissions";
+import { PEOPLE_SETTINGS } from "@/lib/menu-paths";
 
 /**
  * Navigation (ADR-081, docs/NEW_NAVIGATION.md): five destinations — Home, Operations, Inventory,
@@ -52,8 +53,8 @@ export type NavBadges = Partial<Record<string, number>>;
 export const ADVANCED = "Planning tools";
 /** UX audit R2: rarely used admin and IT screens, one sub-menu, for the system admin and the owner only. */
 export const IT_SYSTEM = "IT and system";
-/** Round 4: "People & access" and "Rules and settings" merged into one sub-menu. */
-export const PEOPLE_SETTINGS = "People, rules and settings";
+/** Round 4: "People & access" and "Rules and settings" merged into one sub-menu (the name lives in src/lib/menu-paths.ts, which messages quote). */
+export { PEOPLE_SETTINGS };
 const IT_ROLES: readonly string[] = ["system_admin", "owner_director"];
 /** Round 4: roles that work on the floor and use the floor screens daily (they keep them unfolded). */
 const FLOOR_ROLES: readonly string[] = ["production_operator", "warehouse_operator", "qa_qc"];
@@ -101,10 +102,8 @@ const SETUP_ITEMS: NavItem[] = [
 ];
 
 /**
- * Planning tools (ADR-085). UX audit R2: the superseded production screens (the older order list
- * /production/work-orders, the board on the old statuses /production/board, /production/staging and
- * "make a batch without an order" /production/new) are in no menu; round 1 of the UX audit fixes turns
- * them into redirects to the new flow.
+ * Planning tools (ADR-085). Retired production screens are in no menu; their old addresses redirect to the current
+ * screen (docs/LEGACY_SCREENS.md, ADR-115).
  */
 const ADVANCED_ITEMS: NavItem[] = [
   { label: "Production plan", href: "/production/plan", permission: "production.production_plan.view", section: ADVANCED },
@@ -148,7 +147,6 @@ export const NAV: NavGroup[] = [
       { label: "Today", href: "/production/today", permission: "production.daily_log.view" },
       { label: "Rejects", href: "/production/defects", permission: "production.daily_log.view", deskMore: true },
       // UX audit R2: one door for QA decisions: finished batches and deliveries waiting for QA, on one screen.
-      // The batch-only list /quality/check still opens from there (and each batch's check page).
       { label: "Check a batch or delivery", href: "/quality", permission: "quality.disposition.view" },
       // ADR-084: the full-screen production TV (no menus); floor personas keep it out of their menu (FLOOR_MENU).
       { label: "Floor screen (TV)", href: "/floor", permission: "production.batch.view", deskMore: true },
@@ -242,7 +240,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Management", href: "/management", hub: true },
       ...inSection("Reports & analytics", [
-        { label: "Business overview", href: "/analytics/overview", permission: "analytics.dashboard.view" },
+        { label: "Business overview (detailed)", href: "/analytics/overview", permission: "analytics.dashboard.view" },
         { label: "Reports", href: "/analytics", permission: "analytics.dashboard.view" },
         { label: "Compare over time", href: "/analytics/trends", permission: "analytics.dashboard.view", advanced: true },
         { label: "Lists to download or print", href: "/reports", permission: "analytics.report.view" },
@@ -270,7 +268,7 @@ export const NAV: NavGroup[] = [
       ...inSection("Master data", [
         { label: "Materials", href: "/masterdata/materials", permission: "masterdata.material.view" },
         { label: "Products", href: "/masterdata/products", permission: "masterdata.product.view" },
-        { label: "Locations", href: "/masterdata/locations", permission: "masterdata.location.view" },
+        { label: "Shelves and areas (set up)", href: "/masterdata/locations", permission: "masterdata.location.view" },
         { label: "Sites", href: "/masterdata/sites", permission: "masterdata.site.view", foldUnless: ADMIN },
         { label: "Warehouses", href: "/masterdata/warehouses", permission: "masterdata.warehouse.view", foldUnless: ADMIN },
         { label: "Making areas / lines", href: "/masterdata/lines", permission: "masterdata.production_line.view", foldUnless: ADMIN },

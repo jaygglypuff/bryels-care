@@ -259,6 +259,17 @@ export default async function BatchRecordPage({ params }: Params) {
                 <LinkButton href={`/print/bmr/${batch.id}`} variant="secondary" target="_blank">
                   Print batch record
                 </LinkButton>
+                {/* ADR-115 §1: the paper backups for the floor, formerly on "Lots and sheets"; the print page generates one when needed. */}
+                {ctx.can("documents.generated_document.view") && (
+                  <>
+                    <LinkButton href={`/print/dispensing-sheet/${batch.id}`} variant="secondary">
+                      Print the weighing sheet (paper backup)
+                    </LinkButton>
+                    <LinkButton href={`/print/traveler/${batch.id}`} variant="secondary">
+                      Print the batch traveler
+                    </LinkButton>
+                  </>
+                )}
                 {(ctx.can("production.batch.approve") || ctx.can("production.batch.admin") || ctx.can("quality.disposition.approve")) && (
                   <LinkButton href={`/production/${batch.id}/closure`} variant="secondary">
                     Close the batch and paper pages

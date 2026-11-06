@@ -462,7 +462,7 @@ export const KPIS: KpiDefinition[] = [
   },
   {
     code: "KPI-OPS-05", name: "Open production orders", short: "Open production orders", area: "operations", kind: "asof", aggregate: "sum", unit: "count", label: "actual", refresh: "post", additive: true, better: null,
-    definition: "Work orders planned, released or in progress at the period end.",
+    definition: "Production orders planned, released or in progress at the period end.",
     formula: "COUNT(work orders with status as of T in (planned, released, in_progress))", timeBasis: "as of the period end (work_order_state_transitions)",
     sources: ["work_orders", "work_order_state_transitions"], permissions: ["production.work_order.view"],
     categories: [{ key: "planned", label: "Planned" }, { key: "released", label: "Released" }, { key: "in_progress", label: "In progress" }],
@@ -484,7 +484,7 @@ export const KPIS: KpiDefinition[] = [
   },
   {
     code: "KPI-OPS-14", name: "Late production orders", short: "Late production orders", area: "operations", kind: "asof", aggregate: "sum", unit: "count", label: "actual", refresh: "live", additive: true, better: "down",
-    definition: "Open work orders whose planned end date has passed, as of the period end.",
+    definition: "Open production orders whose planned end date has passed, as of the period end.",
     formula: "COUNT(open work orders with planned_end < as-of date)", timeBasis: "as of the period end",
     sources: ["work_orders.planned_end", "work_order_state_transitions"], permissions: ["production.work_order.view"],
     rows: (p) => openWorkOrders(p, true),

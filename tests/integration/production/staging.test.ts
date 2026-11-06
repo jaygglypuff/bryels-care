@@ -4,7 +4,6 @@ import Decimal from "decimal.js";
 import { db } from "@/db/client";
 import { auditEvents, batchMaterialStagings, batches, inventoryBalances, stockMovements, stockReservations, workOrders } from "@/db/schema";
 import {
-  approveMaterialSubstitution,
   createBatchFromWorkOrder,
   createWorkOrder,
   getStagingView,
@@ -86,31 +85,12 @@ describe("staging by scan (US-3-08, W05-05)", () => {
     await expectCode(getStagingView(w.warehouseRvs, batchId), "not_found");
   });
 
-  it("production.material_substitution_requires_approver: only QA substitutes, and only with the same material", async () => {
-    const view = await getStagingView(w.warehouse, batchId);
-    const palm = view.lines.find((l) => l.materialCode === "MAT-0013")!;
-    const input = { batchId, batchMaterialId: palm.batchMaterialId, substituteLotCode: await LOT("MPC-7731"), reason: "Short-dated lot kept for the trial batch" };
-    await expectCode(approveMaterialSubstitution(w.warehouse, input), "forbidden");
-    await expectCode(approveMaterialSubstitution(w.operator, input), "forbidden");
-    await expectCode(approveMaterialSubstitution(w.qa, { ...input, substituteLotCode: await LOT("LB-7719") }), "blocked_lot");
-    await expectCode(approveMaterialSubstitution(w.qa, { ...input, reason: "no" }), "validation");
-    const r = await approveMaterialSubstitution(w.qa, input);
-    expect(r.lotNumber).toBe((await lotBySupplier("MPC-7731")).lotNumber);
-    expect(r.expectedLots).toContain((await lotBySupplier("LOS-24872")).lotNumber);
-    const au = await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, batchId), eq(auditEvents.action, "production.dispense_record.material_substituted")));
-    expect(au).toHaveLength(1);
-    expect(au[0].reason).toBe(input.reason);
-    // The substitute is now the reserved lot and can be staged.
-    const s = await stageMaterial(w.warehouse, { batchId, lotCode: await LOT("MPC-7731"), toLocationCode: STAGE });
-    expect(new Decimal(s.qty).eq("8687.4")).toBe(true);
-  });
-
   it("a work-order batch cannot start before staging is complete", async () => {
     await expectCode(startBatch(w.operator, batchId), "state");
   });
 
   it("when every ingredient and the wrappers (ADR-088 §3) are staged the batch becomes materials_staged; the signed line clearance starts it and the work order is in progress", async () => {
-    for (const sl of ["LYE-1009", "LB-7712", "GRN-0311", "MPP-901"]) await stageMaterial(w.warehouse, { batchId, lotCode: await LOT(sl), toLocationCode: STAGE });
+    for (const sl of ["LOS-24872", "LYE-1009", "LB-7712", "GRN-0311", "MPP-901"]) await stageMaterial(w.warehouse, { batchId, lotCode: await LOT(sl), toLocationCode: STAGE });
     const [b] = await db.select().from(batches).where(eq(batches.id, batchId));
     expect(b.status).toBe("materials_staged");
     const view = await getStagingView(w.warehouse, batchId);

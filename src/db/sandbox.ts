@@ -1,5 +1,5 @@
 /**
- * Empty sandbox company for the demo environment (ADR-072, docs/getting-started.md).
+ * Empty sandbox company for the demo environment (ADR-072, docs/help/getting-started.md).
  *
  *   pnpm db:sandbox ensure   create the sandbox company when it is missing; otherwise do nothing.
  *                            Runs after `pnpm db:demo auto|reset` in scripts/start.sh and the reset.
@@ -25,6 +25,7 @@ import { DEMO_PASSWORD, NON_DEMO_USER_PREDICATE, SANDBOX_ORG_NAME, SANDBOX_OWNER
 import { ROLE_BUNDLES } from "../lib/permissions";
 import { installReferenceData } from "../modules/masterdata/org-reference";
 import * as s from "./schema";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 const say = (msg: string) => console.log(`[sandbox] ${msg}`);
 
@@ -154,7 +155,7 @@ async function main(): Promise<number> {
           join document_templates nt on nt.organization_id = ${O} and nt.code = dt.code
           where lt.organization_id = ${demoOrg.id} and lt.site_id is null and lt.status = 'approved' and lt.is_active`);
       } else {
-        say("No demo company found to copy print templates from; create them under Management › Rules and settings › Labels and printouts.");
+        say(`No demo company found to copy print templates from; create them under ${LABELS_MENU_PATH}.`);
       }
       await tx.insert(s.printStations).values({ organizationId: O, siteId: site.id, code: "SBX-DESK", name: "Warehouse desk printer", printerName: "Browser print (any printer)", createdBy: admin });
 

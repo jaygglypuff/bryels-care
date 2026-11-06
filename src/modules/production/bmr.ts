@@ -53,6 +53,7 @@ import { auditSentence, batchStateWord, plainReason } from "./record-words";
 import { cap, madeVsBoxedWords, num, outputKindWord, packagingToleranceWords, pct, pct2, placeNamesInText, qty, rangeWords, signedQty, stepKindWord, toleranceWords } from "./bmr-words";
 import { plainRole } from "@/lib/role-words";
 import { type FormulaSnapshot, idempotent } from "./shared";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 /**
  * BMR generation (US-3-17, US-3-18; docs/reports-and-templates.md §1.3 `bmr/v1`, §2, §2.6).
@@ -641,7 +642,7 @@ export async function bmrTemplateFor(q: DbOrTx, ctx: AuthContext, b: { id: strin
 }
 
 function setupMissing(code: string) {
-  return new DomainError("setup_required", `No approved BMR template (${code}) is available. Ask QA to approve one under Management › Rules and settings › Labels and printouts.`);
+  return new DomainError("setup_required", `No approved BMR template (${code}) is available. Ask QA to approve one under ${LABELS_MENU_PATH}.`);
 }
 
 /**

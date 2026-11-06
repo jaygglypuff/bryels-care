@@ -25,7 +25,7 @@ const STATE_LOOK: Record<ItemState, { tone: Tone; icon: ReactNode }> = {
   recalled: { tone: "bad", icon: <AlertTriangle size={13} aria-hidden /> },
 };
 
-export function ItemStateChip({ state }: { state: ItemState }) {
+function ItemStateChip({ state }: { state: ItemState }) {
   const l = STATE_LOOK[state];
   return (
     <Chip tone={l.tone}>

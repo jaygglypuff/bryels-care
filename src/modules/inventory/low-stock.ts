@@ -15,7 +15,7 @@ import { manilaToday } from "./availability";
  *   A-W4A-05, edited under Management › Purchasing › Running low);
  * - finished products: `product_min_stock.min_stock_units` per site × product (A-W2A-06, planning).
  *
- * On hand = USABLE stock only (decision documented in docs/modules/inventory.md "Low stock"): lots with
+ * On hand = USABLE stock only (decision documented in docs/PRD.md assumption A-INV-LOW-01): lots with
  * quality status `released`, not past their expiry date (Asia/Manila business date), quantity > 0 at the
  * site. Stock in quarantine / on hold / waiting for quality is not usable yet and is returned separately as
  * `waitingForQuality` so the screen can say "7,000 pcs more are waiting for quality approval". Reservations

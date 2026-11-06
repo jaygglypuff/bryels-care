@@ -20,6 +20,7 @@ import { DoNext, whoDoes } from "../../next-step";
 import { deliveryContents } from "../../delivery-words";
 import { NextStepBox } from "@/ui/next-step-box";
 import { Help } from "@/ui/help/help";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 export const metadata = { title: "Delivery" };
 
@@ -192,7 +193,7 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
           <Card>
             <CardTitle>Delivery receipt</CardTitle>
             <Cmd action={generateDeliveryReceiptAction} fields={{ shipmentId: s.id }} label="Make the delivery receipt" variant="secondary">
-              <Banner tone="warn" title="No delivery receipt paper yet">The number is given; the paper needs an approved template (Management › Rules and settings › Labels and printouts).</Banner>
+              <Banner tone="warn" title="No delivery receipt paper yet">The number is given; the paper needs an approved template ({LABELS_MENU_PATH}).</Banner>
             </Cmd>
           </Card>
         )}

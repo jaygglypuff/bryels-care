@@ -20,6 +20,7 @@ import { expectedPieces } from "./packaging-lines";
 import { type FormulaSnapshot, lockBatch } from "./shared";
 import { convertReservations, expectedLots } from "./staging";
 import { plainWords } from "./plain-words";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 /**
  * ADR-088 §3, packaging and labels in the flow. The packaging lines of a batch are set aside at approval
@@ -250,9 +251,9 @@ export async function batchLabelInfo(ctx: AuthContext, batch: BatchRow) {
       : stepGate
         ? stepGate
       : !template
-        ? "No approved product label is set up for this site. Ask the site manager (Management › Rules and settings › Labels and printouts)."
+        ? `No approved product label is set up for this site. Ask the site manager (${LABELS_MENU_PATH}).`
         : !stations.length
-          ? "No label printer is set up for this site. Ask the administrator (Management › Rules and settings › Labels and printouts)."
+          ? `No label printer is set up for this site. Ask the administrator (${LABELS_MENU_PATH}).`
           : null;
   return {
     defaultCount: Math.max(1, Math.min(999, pieces.toNumber() || 1)),

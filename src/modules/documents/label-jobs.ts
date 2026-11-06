@@ -17,6 +17,7 @@ import type { FrozenDataset } from "./renderers/types";
 import { createLabelJobInput } from "./schemas";
 import { activeStationsAt } from "./stations";
 import { isUuid } from "./templates";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 /**
  * Label jobs, print station queue and controlled reprint (US-2-12; docs/reports-and-templates.md
@@ -29,7 +30,7 @@ export type LabelJobRow = typeof labelJobs.$inferSelect;
 const LIVE = ["queued", "rendering", "ready", "printed"] as const;
 
 function setupRequired(siteCode: string) {
-  return new DomainError("state", `Label printing isn't set up for ${siteCode} yet. Ask the administrator to add a label printer (Management › Rules and settings › Labels and printouts).`, { setup: "print_station" });
+  return new DomainError("state", `Label printing isn't set up for ${siteCode} yet. Ask the administrator to add a label printer (${LABELS_MENU_PATH}).`, { setup: "print_station" });
 }
 
 async function siteCodeOf(tx: DbOrTx, siteId: string) {

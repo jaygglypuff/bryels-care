@@ -27,7 +27,7 @@ export const LOT_WORDS: Record<LotState, string> = {
 };
 const LOT_TONE: Record<LotState, "ok" | "warn" | "q" | "hold" | "exp" | "bad"> = { ok: "ok", expiring: "warn", waiting: "q", on_hold: "hold", expired: "exp", rejected: "bad", recalled: "bad" };
 
-export function LotWordsChip({ state }: { state: LotState }) {
+function LotWordsChip({ state }: { state: LotState }) {
   return <Chip tone={LOT_TONE[state]}>{LOT_WORDS[state]}</Chip>;
 }
 
@@ -86,7 +86,7 @@ function daysTone(days: number | null): string {
   return "text-fg-2";
 }
 
-export function ExpiryLine({ date, days }: { date: string | null; days: number | null }) {
+function ExpiryLine({ date, days }: { date: string | null; days: number | null }) {
   if (!date) return <span className="text-muted">No expiry date</span>;
   return (
     <span className="whitespace-nowrap">

@@ -1,4 +1,5 @@
 import type { LabelKind } from "@/modules/documents";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 /**
  * Grade-5 words for labels (ADR-099): what the label goes on and when its code is scanned, one sentence each
@@ -29,7 +30,7 @@ export function plainPrinter(name: string | null | undefined): string {
 }
 
 /** Re-audit B #12: shown on print screens while a label still uses the old (v1) layout. */
-export const OLD_LAYOUT_NOTE = "Old label layout — QA can approve the new one in Management › Rules and settings › Labels and printouts.";
+export const OLD_LAYOUT_NOTE = `Old label layout — QA can approve the new one in ${LABELS_MENU_PATH}.`;
 
 /** True when a label was drawn with the old layout (renderer v1). */
 export function isOldLayout(rendererVersion: number | null | undefined): boolean {

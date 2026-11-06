@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { Forbidden } from "@/app/(app)/forbidden";
-import { generateSheetAction } from "@/app/(app)/production/work-orders/actions";
+import { generateSheetAction } from "@/app/(app)/production/[batchId]/sheet-actions";
 import { CommandForm } from "@/app/(app)/production/work-orders/command-form";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -41,7 +41,7 @@ export async function SheetPrint({ batchId, kind, docId }: { batchId: string; ki
             <p className="text-[13px] text-muted">{d ? `${d.template.code} v${d.template.versionNo} · ${d.watermark ?? "no watermark"} · print at 100 % on A4.` : "No sheet has been generated for this batch yet."}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <LinkButton href={`/production/staging/${batchId}`} variant="secondary" size="lg">Back</LinkButton>
+            <LinkButton href={`/production/${batchId}`} variant="secondary" size="lg">Back to the batch record</LinkButton>
             {d && <LinkButton href={`/documents/${d.id}`} variant="secondary" size="lg">Reprint / history</LinkButton>}
             {ok && d?.status === "ready" && <PrintButton />}
           </div>

@@ -5,6 +5,8 @@
  * tests/unit/next-actors-words.test.ts.
  */
 
+import { USERS_MENU_PATH } from "@/lib/menu-paths";
+
 export type NextPerson = { userId: string; name: string; /** Role word as people say it ("site manager", "operator"). */ role: string };
 
 export type NextActors = {
@@ -91,7 +93,7 @@ function stepSuffix(n: Pick<NextActors, "stepNo" | "stepsTotal">): string {
   return n.stepsTotal && n.stepsTotal > 1 && n.stepNo ? ` (step ${n.stepNo} of ${n.stepsTotal})` : "";
 }
 
-export const NOBODY_YET = "Nobody can do it yet: an administrator gives the role under Management › People & access › People who use the app.";
+export const NOBODY_YET = `Nobody can do it yet: an administrator gives the role under ${USERS_MENU_PATH}.`;
 
 /**
  * The one sentence about the next person:

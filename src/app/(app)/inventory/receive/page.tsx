@@ -58,7 +58,7 @@ export default async function ReceivePage({ searchParams }: { searchParams: Prom
       <div className="mx-auto max-w-4xl">
         {header("not set up yet")}
         <EmptyState title="Receiving is not set up for this site">
-          {materials.length === 0 ? "No materials exist yet. Ask the person who sets up materials (Management › Master data › Materials) to add them first." : "This site has no receiving or QA area yet. Ask the system administrator to add one (Management › Master data › Locations)."}
+          {materials.length === 0 ? "No materials exist yet. Ask the person who sets up materials (Management › Master data › Materials) to add them first." : "This site has no receiving or QA area yet. Ask the system administrator to add one: Management › Master data › Shelves and areas (set up)."}
         </EmptyState>
       </div>
     );

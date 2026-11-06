@@ -1,5 +1,4 @@
 import { AlertTriangle, CheckCircle2, Clock, Hourglass } from "lucide-react";
-import Link from "next/link";
 import { D, fmtDate, fmtQty } from "@/lib/qty";
 import { PRODUCTION_ORDER_CHIP, type DefectSummary, type NextAction, type ProductionOrderStatus } from "@/modules/production";
 import { LinkButton, Table, Td, cx } from "@/ui/core";
@@ -85,14 +84,6 @@ export function OrderWarning({ text }: { text: string | null }) {
     <Chip tone="warn">
       <AlertTriangle size={13} aria-hidden /> {text}
     </Chip>
-  );
-}
-
-export function OrderLink({ id, children, className }: { id: string; children: React.ReactNode; className?: string }) {
-  return (
-    <Link href={`/production/orders/${id}`} className={className}>
-      {children}
-    </Link>
   );
 }
 

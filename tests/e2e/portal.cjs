@@ -1,5 +1,6 @@
-/* Customer portal (W4E, US-8-01 / US-8-02) against a running server in demo mode on a fresh seed:
- *   DATABASE_URL=… DEMO_MODE=true pnpm next dev -p 3405   (after migrate + seed)
+/* Customer portal (W4E, US-8-01 / US-8-02) against a running server in demo mode on a fresh seed.
+ * Demo profile: FULL (the portal accounts and customers exist only there; DEMO_PROFILE=full pnpm db:demo reset):
+ *   DATABASE_URL=… DEMO_MODE=true pnpm next dev -p 3405   (after migrate + full seed)
  *   NODE_PATH=$(npm root -g) BASE_URL=http://localhost:3405 node tests/e2e/portal.cjs
  * Checks: the staff "Try the demo" panel offers the portal accounts as a separate "Customer portal"
  * group linking to the portal sign-in; one-click portal sign-in; ordering from the approved catalogue;

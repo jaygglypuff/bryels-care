@@ -130,22 +130,6 @@ export async function lotSourceById(lotId: string): Promise<SourceInfo | null> {
   return lot ? lotSource(lot.lot, lot.mName ?? lot.pName ?? "") : null;
 }
 
-/** Step 3: resolve a scanned destination location (BC:LOC:<code> or typed code) at the current site. */
-export async function lookupDestinationAction(raw: string): Promise<Lookup<{ id: string; code: string; name: string; kind: string }>> {
-  try {
-    const ctx = await requireContext();
-    ctx.require("inventory.movement.post");
-    const code = clean(raw).replace(/^BC:LOC:/, "");
-    if (!code) return { ok: false, message: "Scan the destination location label, or choose it from the list." };
-    const [loc] = await db.select().from(locations).where(and(eq(locations.siteId, ctx.currentSiteId), eq(locations.code, code))).limit(1);
-    if (!loc) return { ok: false, message: `No location ${code} at ${ctx.currentSite.code}.` };
-    if (!loc.isActive) return { ok: false, message: `Location ${code} is inactive.` };
-    return { ok: true, data: { id: loc.id, code: loc.code, name: loc.name, kind: loc.kind } };
-  } catch (e) {
-    return { ok: false, message: actionError(e)?.message ?? "Lookup failed." };
-  }
-}
-
 const MoveSchema = z.object({
   idempotencyKey: z.uuid(),
   source: z.discriminatedUnion("kind", [

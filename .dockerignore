@@ -10,3 +10,6 @@ tests
 docs
 !docs/help
 *.md
+# drizzle-kit snapshots (~47 MB) are only for `pnpm db:generate` on a developer machine; the migrator
+# (src/db/migrate.ts, drizzle-orm readMigrationFiles) reads only meta/_journal.json and the .sql files (ADR-115).
+src/db/migrations/meta/*_snapshot.json

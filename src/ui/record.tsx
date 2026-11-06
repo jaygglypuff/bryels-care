@@ -5,7 +5,7 @@ import { type RecordStep, shortStepLabel } from "./record-steps";
 import { StatusChip } from "./status";
 
 /**
- * Shared record header (slice R3, UX-21; docs/WORKFLOW_ARCHITECTURE.md §5). Server-safe: no hooks,
+ * Shared record header (slice R3, UX-21; docs/archive/WORKFLOW_ARCHITECTURE.md §5). Server-safe: no hooks,
  * no "use client"; interactive children (forms) are passed in as nodes.
  *
  * One layout for purchase order, goods receipt, sales order and shipment pages, modelled on the
@@ -101,7 +101,7 @@ export function RecordHeader({
 const STEP_WORD: Record<RecordStep["state"], string> = { done: "done", current: "current step", blocked: "stopped", upcoming: "not yet" };
 
 /** Compact horizontal progress strip: wraps on phones, icon + text per step, never colour alone. */
-export function RecordProgress({ steps }: { steps: RecordStep[] }) {
+function RecordProgress({ steps }: { steps: RecordStep[] }) {
   return (
     // Desktop (≥ 1024 px, live check 2026-11-06): one row. Steps other than the current one use shorter words
     // (shortStepLabel, full words in the tooltip) and, if still too long, shrink with an ellipsis; phones wrap as before.

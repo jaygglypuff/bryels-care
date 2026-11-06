@@ -24,7 +24,7 @@ const TONE: Record<LocationSection, string> = {
   other: "bg-[var(--neu-bg,#f1f1f4)] text-muted",
 };
 
-export function SectionIcon({ section, size = 20 }: { section: LocationSection; size?: number }) {
+function SectionIcon({ section, size = 20 }: { section: LocationSection; size?: number }) {
   const I = ICON[section];
   return (
     <span className={cx("inline-flex shrink-0 items-center justify-center rounded-[10px] p-2", TONE[section])} aria-hidden>

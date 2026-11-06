@@ -1,5 +1,6 @@
 import { AlertOctagon, CheckCircle2, CircleDashed, Clock, FileClock, Lock, PauseCircle, Wrench, XCircle } from "lucide-react";
 import type { ReactNode } from "react";
+import { roleCodesWords } from "@/lib/next-actors-words";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { Banner, Chip } from "@/ui/status";
 import { Button, Card, CardTitle } from "@/ui/core";
@@ -39,22 +40,10 @@ export function VerifyBanner({ placeholder }: { placeholder?: boolean }) {
   );
 }
 
-/** Plain words for the people of an approval step ("a QA person", "a manager or the owner"). */
-const ROLE_WORDS: Record<string, string> = {
-  qa_qc: "a QA person",
-  site_manager: "a manager",
-  owner_director: "the owner",
-  production_planner: "a planner",
-  finance: "a finance person",
-  procurement: "a buyer",
-  system_admin: "an administrator",
-};
-export function roleWords(roles: string[]): string {
-  if (!roles.length) return "someone allowed to approve";
-  return roles.map((r) => ROLE_WORDS[r] ?? `a ${r.replace(/_/g, " ")}`).join(" or ");
-}
+/** Plain words for the people of an approval step ("QA", "a site manager or the owner"; src/lib/next-actors-words.ts). */
+const roleWords = (roles: string[]) => roleCodesWords(roles, "someone allowed to approve");
 
-/** "Next: a QA person checks it, then a manager or the owner approves. You can't approve your own recipe." */
+/** "Next: QA checks it, then a site manager or the owner approves. You can't approve your own recipe." */
 export function approvalSentence(policy: { step: number; roles: string[] }[], what = "record"): string {
   const steps = [...policy].sort((a, b) => a.step - b.step);
   const own = `You can't approve your own ${what}.`;
@@ -141,16 +130,5 @@ export function EngError({ reset }: { reset: () => void }) {
     <Banner tone="bad" title="This page could not be loaded" action={<Button variant="secondary" onClick={reset}>Try again</Button>}>
       Nothing was changed. If this keeps happening, tell your system administrator.
     </Banner>
-  );
-}
-
-export function EngLoading({ what }: { what: string }) {
-  return (
-    <div aria-busy="true" aria-live="polite" className="flex flex-col gap-4">
-      <span className="sr-only">Loading {what}…</span>
-      <div className="h-8 w-56 animate-pulse rounded-[10px] bg-surface-2" />
-      <div className="h-[120px] animate-pulse rounded-[24px] bg-surface" />
-      <div className="h-[260px] animate-pulse rounded-[24px] bg-surface" />
-    </div>
   );
 }

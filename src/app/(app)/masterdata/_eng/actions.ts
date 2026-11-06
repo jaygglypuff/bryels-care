@@ -20,7 +20,6 @@ import {
   decideInspectionPlan,
   decideRoutingRevision,
   decideWorkInstructionRevision,
-  discardFormulaDraft,
   recordServiceRecord,
   requestEquipmentOverride,
   retireFormulaRevision,
@@ -142,25 +141,13 @@ export async function withdrawFormulaAction(_: ActionState, fd: FormData) {
   }, ["/masterdata/formulas"]);
 }
 export async function decideFormulaAction(_: ActionState, fd: FormData) {
-  return run(async (ctx) => DECISION_MSG(await decideFormulaRevision(ctx, decisionInput(fd))), ["/masterdata/formulas", "/production/new"]);
+  return run(async (ctx) => DECISION_MSG(await decideFormulaRevision(ctx, decisionInput(fd))), ["/masterdata/formulas"]);
 }
 export async function retireFormulaAction(_: ActionState, fd: FormData) {
   return run(async (ctx) => {
     await retireFormulaRevision(ctx, { id: id(fd), reason: str(fd, "reason") ?? "" });
     return "Revision retired. It can no longer be used for new batches.";
-  }, ["/masterdata/formulas", "/production/new"]);
-}
-export async function discardFormulaDraftAction(_: ActionState, fd: FormData): Promise<ActionState> {
-  let target: string;
-  try {
-    const ctx = await requireContext();
-    const r = await discardFormulaDraft(ctx, id(fd));
-    target = r.formulaId ? `/masterdata/formulas/${r.formulaId}` : "/masterdata/formulas";
-  } catch (e) {
-    return toActionState(e);
-  }
-  revalidatePath("/masterdata/formulas");
-  redirect(target);
+  }, ["/masterdata/formulas"]);
 }
 
 /* ------------------------------------------------------------------ routings */
@@ -209,7 +196,7 @@ export async function withdrawRoutingAction(_: ActionState, fd: FormData) {
   }, ["/masterdata/routings"]);
 }
 export async function decideRoutingAction(_: ActionState, fd: FormData) {
-  return run(async (ctx) => DECISION_MSG(await decideRoutingRevision(ctx, decisionInput(fd))), ["/masterdata/routings", "/production/new"]);
+  return run(async (ctx) => DECISION_MSG(await decideRoutingRevision(ctx, decisionInput(fd))), ["/masterdata/routings"]);
 }
 export async function retireRoutingAction(_: ActionState, fd: FormData) {
   return run(async (ctx) => {

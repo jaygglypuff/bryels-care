@@ -33,6 +33,7 @@ import type { JobRunContext } from "@/modules/platform/job-definition";
 import { claimIdempotencyKey, storeIdempotentResult } from "@/modules/inventory";
 import { lockOrder } from "./orders";
 import { CUSTOMER_HEADER_COLUMNS, ORDER_HEADER_COLUMNS, deliveryReceiptMachine, isUuid, lockShipment, peekShipment, transitionShipment, type ShipmentRow } from "./fulfilment-state";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 /**
  * Delivery receipts (US-4-12, US-4-13; docs/reports-and-templates.md §7). The DR number is allocated
@@ -138,7 +139,7 @@ export async function deliveryReceiptData(q: DbOrTx, shipmentId: string, opts: {
 async function renderDr(tx: Tx, ctx: AuthContext, s: ShipmentRow, data: DeliveryReceiptData, watermark: string | null, idempotencyKey?: string | null) {
   const code = await getSetting(tx, ctx.organizationId, "documents.delivery_receipt.template_code", s.siteId);
   const resolved = await resolveTemplateVersion(tx, ctx.organizationId, { templateCode: code, siteId: s.siteId });
-  if (!resolved) throw new DomainError("setup_required", `No approved delivery receipt template (${code}) exists. Ask QA or an administrator to approve one under Management › Rules and settings › Labels and printouts.`);
+  if (!resolved) throw new DomainError("setup_required", `No approved delivery receipt template (${code}) exists. Ask QA or an administrator to approve one under ${LABELS_MENU_PATH}.`);
   return generateForSource(tx, ctx, {
     resolved,
     documentKind: "delivery_receipt",

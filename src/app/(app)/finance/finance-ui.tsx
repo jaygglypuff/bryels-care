@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { AlertOctagon, Ban, BookCheck, CheckCircle2, CircleDashed, Clock, Lock, PauseCircle, Send, Unlock, XCircle } from "lucide-react";
 import { fmtDate, fmtDateTime, fmtMoney } from "@/lib/qty";
-import { Card, CardTitle, Table, Td, cx } from "@/ui/core";
+import { roleCodesWords } from "@/lib/next-actors-words";
+import { cx } from "@/ui/core";
 import { FilterTabs } from "@/ui/plain-list";
 import { Chip } from "@/ui/status";
 
@@ -95,16 +96,8 @@ export function PostingsCard({ postings }: { postings: PostingView[] }) {
   );
 }
 
-const ROLE_WORD: Record<string, string> = { site_manager: "the site manager", owner_director: "the owner", finance: "finance", procurement: "purchasing", sales_cs: "sales" };
-export const roleWords = (codes: string[]) => codes.map((r) => ROLE_WORD[r] ?? r.replace(/_/g, " ")).join(" or ");
-
-/** "Waiting for finance to approve (step 1 of 2)." from the approval progress. */
-export function waitingText(progress: { steps: { step: number }[]; next: { step: number; label: string; roleCodes: string[] } | null } | null | undefined): string {
-  const n = progress?.next;
-  if (!n) return "Waiting for approval.";
-  const who = n.roleCodes.length ? roleWords(n.roleCodes) : n.label;
-  return `Waiting for ${who} to approve${progress!.steps.length > 1 ? ` (step ${n.step} of ${progress!.steps.length})` : ""}.`;
-}
+/** Role words of an approval step from the one source (src/lib/next-actors-words.ts): "a site manager or the owner". */
+const roleWords = (codes: string[]) => roleCodesWords(codes, "the approvers");
 
 type Step = { step: number; label: string; roleCodes: string[]; requiredCount: number; done: boolean; approvals: { name: string; at: Date }[] };
 /** Approval steps and decisions in words; used inside "More details". */
@@ -159,39 +152,6 @@ export function HistoryCard({ history }: { history: { id: string; fromState: str
         ))}
       </ul>
     </div>
-  );
-}
-
-/** A responsive list: cards on phones, a table from `sm` up (no horizontal scroll at 390 px). Kept for other callers. */
-export function ResponsiveList<R>({ rows, head, cells, mobile, rowKey }: { rows: R[]; head: string[]; cells: (r: R) => ReactNode[]; mobile: (r: R) => ReactNode; rowKey: (r: R) => string }) {
-  return (
-    <>
-      <ul className="flex flex-col gap-3 sm:hidden">
-        {rows.map((r) => (
-          <li key={rowKey(r)}>{mobile(r)}</li>
-        ))}
-      </ul>
-      <Table className="hidden sm:block" head={head}>
-        {rows.map((r) => (
-          <tr key={rowKey(r)} className="hover:bg-surface-2">
-            {cells(r).map((c, i) => (
-              <Td key={i}>{c}</Td>
-            ))}
-          </tr>
-        ))}
-      </Table>
-    </>
-  );
-}
-
-/** The "Do it now" card that NextStep's button scrolls to. */
-export function DoNow({ children }: { children: ReactNode }) {
-  return (
-    <Card>
-      <span id="do" className="block scroll-mt-24" />
-      <CardTitle>Do it now</CardTitle>
-      <div className="flex flex-col gap-3">{children}</div>
-    </Card>
   );
 }
 

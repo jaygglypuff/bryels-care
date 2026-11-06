@@ -1,5 +1,5 @@
 /**
- * Progress-strip steps for the shared record header (slice R3, UX-21; docs/WORKFLOW_ARCHITECTURE.md §5).
+ * Progress-strip steps for the shared record header (slice R3, UX-21; docs/archive/WORKFLOW_ARCHITECTURE.md §5).
  *
  * Pure display mapping from a record's status to a short list of stages. No I/O and no JSX so it can
  * be unit tested (tests/unit/record-steps.test.ts). The stages follow the real state machines:

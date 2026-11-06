@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import Decimal from "decimal.js";
 import { Ban, CheckCircle2, CircleDashed, PackageCheck, PauseCircle, Send, Truck, XCircle } from "lucide-react";
 import { PO_STATUS_LABEL, PR_STATUS_LABEL, SR_STATUS_LABEL, type PoStatus, type PrStatus, type SrStatus } from "@/modules/procurement";
+import { roleCodesWords } from "@/lib/next-actors-words";
 import { fmtDateTime } from "@/lib/qty";
 import { cx } from "@/ui/core";
 import { Chip } from "@/ui/status";
@@ -78,20 +79,10 @@ const STATE_WORD: Record<string, string> = {
 };
 export const stateWord = (s: string | null | undefined) => (s ? STATE_WORD[s] ?? s.replace(/_/g, " ") : "—");
 
-/** Who decides the next approval step, in words ("the site manager"). */
-const ROLE_WORD: Record<string, string> = {
-  site_manager: "the site manager",
-  owner_director: "the owner",
-  finance: "finance",
-  procurement: "purchasing",
-  qa_qc: "QA",
-  warehouse_operator: "the warehouse",
-  system_admin: "the administrator",
-};
+/** Who decides the next approval step, in words ("a site manager or the owner"; src/lib/next-actors-words.ts). */
 export function approverWords(next: { label: string; roleCodes: string[] } | null | undefined): string {
   if (!next) return "the approver";
-  if (next.roleCodes.length) return next.roleCodes.map((r) => ROLE_WORD[r] ?? r.replace(/_/g, " ")).join(" or ");
-  return next.label;
+  return roleCodesWords(next.roleCodes, next.label);
 }
 
 /** Base-unit quantity shown in the purchase unit people use (g → kg, mL → L). */

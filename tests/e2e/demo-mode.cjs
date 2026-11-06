@@ -1,4 +1,4 @@
-/* Demo mode (ADR-055) against a running production build.
+/* Demo mode (ADR-055) against a running production build. Demo profile: either (lite is what start.sh loads by default).
  * Demo on : DEMO_MODE=true sh scripts/start.sh on a fresh database, then
  *           NODE_PATH=$(npm root -g) BASE_URL=http://localhost:3401 node tests/e2e/demo-mode.cjs
  *           Checks the "Try the demo" switch, one-click sign-in as two roles, the banner (desktop and

@@ -120,35 +120,3 @@ export function DecisionForm({
     </form>
   );
 }
-
-/**
- * Simple create form around server-rendered fields. Field errors come back in the message
- * ("code: This code is already used.") because the fields are rendered on the server.
- */
-export function CreateForm({ action, children, submitLabel, cancelHref }: { action: Action; children: React.ReactNode; submitLabel: string; cancelHref: string }) {
-  const [state, run] = useActionState<ActionState, FormData>(action, null);
-  const fe = state?.fieldErrors ?? {};
-  return (
-    <form action={run} className="flex flex-col gap-4">
-      {children}
-      {Object.keys(fe).length > 0 && (
-        <ul className="list-disc pl-5 text-[12px] text-[var(--bad-fg)]">
-          {Object.entries(fe).map(([k, v]) => (
-            <li key={k}>
-              {k}: {v}
-            </li>
-          ))}
-        </ul>
-      )}
-      <FormMessage state={state} />
-      <div className="flex flex-wrap gap-2">
-        <SubmitButton variant="cta" pendingText="Creating…">
-          {submitLabel}
-        </SubmitButton>
-        <a href={cancelHref} className="inline-flex min-h-[44px] items-center rounded-full border border-line px-5 text-[14px] font-medium hover:bg-surface-2">
-          Cancel
-        </a>
-      </div>
-    </form>
-  );
-}

@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError, toActionState, type ActionState } from "@/lib/errors";
-import { decideBatch, decideLot } from "@/modules/quality/dispositions";
+import { decideLot } from "@/modules/quality/dispositions";
 import { recordTestResult } from "@/modules/quality/tests";
 import { MIN_REASON_LENGTH } from "@/modules/quality/rules";
 
@@ -37,28 +37,6 @@ export async function decideLotAction(_prev: ActionState, fd: FormData): Promise
     revalidatePath(`/quality/lots/${input.lotId}`);
     const verb = { released: "OK to use", on_hold: "stopped by QA", rejected: "not OK – don't use" }[r.toStatus] ?? r.toStatus;
     return { ok: true, message: `Saved: lot ${r.lotNumber} is ${verb}.${r.movedTo ? ` The stock was moved to ${r.movedTo}.` : ""}` };
-  } catch (e) {
-    return fail(e);
-  }
-}
-
-const BatchDecisionSchema = z.object({
-  batchId: z.string().min(1),
-  decision: z.enum(["release", "reject"], { message: "Choose a decision." }),
-  reason,
-});
-
-export async function decideBatchAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  const ctx = await requireContext();
-  try {
-    const input = BatchDecisionSchema.parse({ batchId: fd.get("batchId"), decision: fd.get("decision") ?? undefined, reason: fd.get("reason") ?? "" });
-    const r = await decideBatch(ctx, input);
-    revalidatePath("/quality");
-    revalidatePath(`/quality/batches/${input.batchId}`);
-    return {
-      ok: true,
-      message: `Saved: batch ${r.batchNumber} is ${r.toStatus === "released" ? "OK to use" : r.toStatus === "rejected" ? "not OK – don't use" : r.toStatus}.${r.movedTo ? ` The products were moved to ${r.movedTo}.` : ""}`,
-    };
   } catch (e) {
     return fail(e);
   }

@@ -38,6 +38,7 @@ import { approvalProgress, canDecide, decisionsOf, recordDecision } from "./appr
 import { assertAslApproved, moqShortfall, priceFor } from "./asl";
 import { PO_STATUS_LABEL, type PoStatus, logCreation, transitionPo, transitionPr } from "./state";
 import { addDaysIso, assertInScope, businessDate, canSeePrices, cleanText, idempotent, isUuid, money4, optDate, optDecimal, parseDecimal, requireReason, toBase } from "./shared";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 /**
  * Purchase orders (US-6-02, US-6-03; docs/data-model.md §6.4, W04-04..09).
@@ -454,7 +455,7 @@ async function poDocumentData(q: DbOrTx, ctx: AuthContext, po: PoRow): Promise<P
 async function renderPoDocument(tx: Tx, ctx: AuthContext, po: PoRow, watermark: string | null) {
   const code = await getSetting(tx, ctx.organizationId, "documents.purchase_order.template_code", po.siteId);
   const resolved = await resolveTemplateVersion(tx, ctx.organizationId, { templateCode: code, siteId: po.siteId });
-  if (!resolved) throw new DomainError("setup_required", `No approved purchase order template (${code}) exists. Ask an administrator to approve one under Management › Rules and settings › Labels and printouts.`);
+  if (!resolved) throw new DomainError("setup_required", `No approved purchase order template (${code}) exists. Ask an administrator to approve one under ${LABELS_MENU_PATH}.`);
   const data = await poDocumentData(tx, ctx, po);
   return generateForSource(tx, ctx, {
     resolved,

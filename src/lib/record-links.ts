@@ -92,6 +92,8 @@ export const SUPERSEDED_LINKS: readonly { from: RegExp; to: (m: RegExpMatchArray
   { from: /^\/masterdata\/suppliers(\?.*)?$/, to: (m) => `/procurement/suppliers${m[1] ?? ""}` },
   { from: /^\/quality\/check\/?$/, to: () => "/quality" },
   { from: /^\/production\/work-orders\/([0-9a-f-]{36})$/i, to: (m) => `/production/orders/${m[1]}` },
+  { from: /^\/production\/board(\?.*)?$/, to: () => "/production/orders?view=board" },
+  { from: /^\/production\/staging\/([0-9a-f-]{36})$/i, to: (m) => `/production/${m[1]}` },
 ];
 
 /** The current screen for a link that may point at a superseded one (unchanged when it does not). */

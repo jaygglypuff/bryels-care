@@ -6,7 +6,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { NEAR_EXPIRY_WINDOW_DAYS, addDays, resolveScope, type DashboardScope } from "./dashboard";
 
 /**
- * Operations Center (ADR-081, docs/WORKFLOW_ARCHITECTURE.md §2): one board for the connected pipeline
+ * Operations Center (ADR-081, docs/archive/WORKFLOW_ARCHITECTURE.md §2): one board for the connected pipeline
  * Expected delivery → Receiving → Inspection → Raw materials → Production → Quality check → Packaging →
  * Finished goods → Customer orders to dispatch. Every count is a live query over posted records in the
  * caller's sites; a stage is only computed when the caller holds the view permission of the module the

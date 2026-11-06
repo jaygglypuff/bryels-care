@@ -1,4 +1,4 @@
-import { AlertOctagon, Ban, CheckCircle2, CircleDashed, PauseCircle, RotateCcw, Search, ShieldCheck } from "lucide-react";
+import { AlertOctagon, Ban, CheckCircle2, CircleDashed, PauseCircle, RotateCcw, ShieldCheck } from "lucide-react";
 import { Chip } from "./status";
 
 /** Status chips for receiving, holds and suppliers (icon + label + colour, never colour alone). */
@@ -12,19 +12,6 @@ export function ReceiptStatusChip({ status }: { status: string }) {
       return <Chip tone="rej"><RotateCcw size={13} /> Undone (kept on record)</Chip>;
     case "cancelled":
       return <Chip tone="neu"><Ban size={13} /> Cancelled</Chip>;
-    default:
-      return <Chip>{status}</Chip>;
-  }
-}
-
-export function HoldStatusChip({ status }: { status: string }) {
-  switch (status) {
-    case "open":
-      return <Chip tone="hold"><PauseCircle size={13} /> Open</Chip>;
-    case "investigating":
-      return <Chip tone="appr"><Search size={13} /> Investigating</Chip>;
-    case "closed":
-      return <Chip tone="neu"><CheckCircle2 size={13} /> Closed</Chip>;
     default:
       return <Chip>{status}</Chip>;
   }

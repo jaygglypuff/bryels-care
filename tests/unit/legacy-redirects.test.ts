@@ -60,6 +60,15 @@ describe("superseded screens redirect to the current one", () => {
     expect(await landing("@/app/(app)/admin/page")).toBe("/admin/users");
   });
 
+  it("/production/board (old statuses) → the board view of the production orders (ADR-115)", async () => {
+    expect(await landing("@/app/(app)/production/board/page")).toBe("/production/orders?view=board");
+    expect(await landing("@/app/(app)/production/board/page", { searchParams: { lineId: ID, from: "2026-11-01" } })).toBe("/production/orders?view=board");
+  });
+
+  it("/production/staging/[batchId] (Lots and sheets) → the batch record, which prints the sheets (ADR-115)", async () => {
+    expect(await landing("@/app/(app)/production/staging/[batchId]/page", { params: { batchId: ID } })).toBe(`/production/${ID}`);
+  });
+
   it("Problems & alerts sends its former decision and message tabs to To approve and Messages", () => {
     // The page reads the database, so its first lines are checked instead of rendering it.
     const src = readFileSync(join(APP, "action-centre", "page.tsx"), "utf8");
@@ -80,6 +89,9 @@ describe("links stored before the change open the current screen (currentHref)",
     ["/masterdata/suppliers", "/procurement/suppliers"],
     ["/masterdata/suppliers?deleted=1", "/procurement/suppliers?deleted=1"],
     [`/production/work-orders/${ID}`, `/production/orders/${ID}`],
+    ["/production/board", "/production/orders?view=board"],
+    ["/production/board?lineId=x", "/production/orders?view=board"],
+    [`/production/staging/${ID}`, `/production/${ID}`],
     ["/quality/check", "/quality"],
   ])("%s → %s", (from, to) => {
     expect(currentHref(from)).toBe(to);
@@ -105,5 +117,7 @@ describe("links stored before the change open the current screen (currentHref)",
     expect(page("quality")).toBe(true);
     expect(page("procurement", "suppliers", "[id]")).toBe(true);
     expect(page("production", "orders", "[workOrderId]")).toBe(true);
+    expect(page("production", "orders")).toBe(true);
+    expect(page("production", "[batchId]")).toBe(true);
   });
 });

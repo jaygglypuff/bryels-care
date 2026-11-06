@@ -6,17 +6,13 @@ import { requireContext } from "@/lib/auth/context";
 import { type ActionState, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
 import {
-  approveMaterialSubstitution,
   approveProductionPlan,
   buildProductionPlan,
   closeProductionPlan,
   convertPlanLine,
   createWorkOrder,
   editWorkOrder,
-  generateBatchSheet,
-  moveBoardCard,
   setMinStock,
-  stageMaterial,
 } from "@/modules/production";
 
 /**
@@ -76,67 +72,6 @@ export async function editWorkOrderAction(_: ActionState, fd: FormData): Promise
 
 // The old order view's commands (plan, release, top-up, create batch, cancel) were removed with the view (ADR-105): the
 // production order page does each of them (Approve, Plan the batch, Set aside new stock, Cancel), see orders/actions.ts.
-
-export type BoardMoveResult = { ok: boolean; message: string };
-
-/** Board drop (also used by the "Move to" menu). Refusals come back as an explanation for the dialog. */
-export async function boardMoveAction(input: { kind: "work_order" | "batch"; id: string; toColumn: string; idempotencyKey: string }): Promise<BoardMoveResult> {
-  try {
-    const ctx = await requireContext();
-    const r = await moveBoardCard(ctx, input);
-    refreshCurrentPage();
-    return { ok: true, message: r.message };
-  } catch (e) {
-    const s = toActionState(e);
-    return { ok: false, message: s?.message ?? "The move was not made." };
-  }
-}
-
-export type StageResult = { ok: boolean; message: string; fieldErrors?: Record<string, string>; batchStaged?: boolean };
-
-export async function stageMaterialAction(input: { batchId: string; lotCode: string; toLocationCode: string; qty?: string; idempotencyKey: string }): Promise<StageResult> {
-  try {
-    const ctx = await requireContext();
-    const r = await stageMaterial(ctx, { ...input, qty: input.qty || null });
-    refreshCurrentPage();
-    return { ok: true, batchStaged: r.batchStaged, message: `Staged ${r.qty} ${r.baseUom} of ${r.materialName} (lot ${r.lotNumber}) at ${r.toLocation}.${r.batchStaged ? " All ingredients are staged: the batch is ready to start." : ""}` };
-  } catch (e) {
-    const s = toActionState(e);
-    return { ok: false, message: s?.message ?? "Not staged.", fieldErrors: s?.fieldErrors };
-  }
-}
-
-export async function substitutionAction(_: ActionState, fd: FormData): Promise<ActionState> {
-  try {
-    const ctx = await requireContext();
-    const batchId = uuid.parse(str(fd, "batchId"));
-    const r = await approveMaterialSubstitution(ctx, {
-      batchId,
-      batchMaterialId: uuid.parse(str(fd, "batchMaterialId")),
-      substituteLotCode: str(fd, "substituteLotCode") ?? "",
-      reason: str(fd, "reason") ?? "",
-      idempotencyKey: str(fd, "idempotencyKey") || null,
-    });
-    refreshCurrentPage();
-    return { ok: true, message: `Substitution approved: lot ${r.lotNumber} at ${r.locationCode} is now reserved (${r.qty}).` };
-  } catch (e) {
-    return toActionState(e);
-  }
-}
-
-export async function generateSheetAction(_: ActionState, fd: FormData): Promise<ActionState> {
-  let target: string;
-  try {
-    const ctx = await requireContext();
-    const batchId = uuid.parse(str(fd, "batchId"));
-    const kind = z.enum(["dispensing_sheet", "traveler"]).parse(str(fd, "kind"));
-    const r = await generateBatchSheet(ctx, { batchId, kind, idempotencyKey: key.parse(str(fd, "idempotencyKey")) });
-    target = `/print/${kind === "traveler" ? "traveler" : "dispensing-sheet"}/${batchId}?doc=${r.id}`;
-  } catch (e) {
-    return toActionState(e);
-  }
-  redirect(target);
-}
 
 export async function buildPlanAction(_: ActionState, fd: FormData): Promise<ActionState> {
   let id: string;

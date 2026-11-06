@@ -69,18 +69,6 @@ export const NewOrderSchema = z.object({
   lines: z.array(OrderLineSchema).min(1, "Add at least one line.").max(50, "At most 50 lines."),
 });
 
-export const DispatchSchema = z.object({
-  carrier: z.string().trim().min(1, "Enter the carrier (e.g. Own truck).").max(80),
-  driverName: z.string().trim().min(1, "Enter the driver's name.").max(80),
-  vehiclePlate: z.string().trim().min(2, "Enter the vehicle plate.").max(20),
-  packageCount: z.coerce.number().int("Whole number.").min(1, "At least 1 package.").max(10000),
-});
-
-export const DeliverySchema = z.object({
-  receivedByName: z.string().trim().min(2, "Enter who received the goods.").max(80),
-  deliveredAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Enter the date and time."),
-});
-
 const emailField = z
   .string()
   .trim()
@@ -88,8 +76,8 @@ const emailField = z
   .transform((v) => (v ? v : null))
   .pipe(z.string().email("Enter a valid email.").nullable());
 
-/** MVP single-line customer form (kept for the legacy action). */
-export const CustomerSchema = z.object({
+/** Customer fields shared by the create and update schemas below. */
+const CustomerSchema = z.object({
   code: z
     .string()
     .trim()

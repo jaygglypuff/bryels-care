@@ -8,6 +8,7 @@ import { type BmrPrintView, bmrPrintTitle, bmrPrintView } from "@/modules/produc
 import { GenerateBmrForm } from "./generate-form";
 import { RecordedDocument } from "../../recorded-document";
 import { PrintButton } from "./print-button";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 /** The tab title is the PDF file name Chrome proposes in "Save as PDF". */
 export async function generateMetadata({ params }: { params: Promise<{ batchId: string }> }): Promise<Metadata> {
@@ -105,7 +106,7 @@ export default async function BmrPrintPage({ params, searchParams }: Props) {
 
         {!view.template && (
           <div role="alert" className="rounded-[12px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
-            <b>BMR printing isn&apos;t set up.</b> No approved BMR template ({view.templateCode}) exists. Ask QA to approve one under Management › Rules and settings › Labels and printouts.
+            <b>BMR printing isn&apos;t set up.</b> No approved BMR template ({view.templateCode}) exists. Ask QA to approve one under {LABELS_MENU_PATH}.
           </div>
         )}
 

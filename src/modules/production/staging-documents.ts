@@ -11,6 +11,7 @@ import { businessToday, deriveAvailability } from "@/modules/masterdata";
 import { toleranceRange } from "./dispensing";
 import type { FormulaSnapshot } from "./shared";
 import { canSeeStaging, getStagingView } from "./staging";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 /**
  * Dispensing sheet and traveler generation (US-3-08, FR-documents-09). Each print is a recorded
@@ -157,7 +158,7 @@ export async function generateBatchSheet(ctx: AuthContext, input: { batchId: str
   const b = view.batch;
   const tpl = await approvedTemplate(input.kind, ctx.organizationId, b.siteId);
   if (!tpl) {
-    throw new DomainError("setup_required", `No approved ${input.kind === "traveler" ? "traveler" : "dispensing sheet"} template exists. Ask QA to approve one under Management › Rules and settings › Labels and printouts.`);
+    throw new DomainError("setup_required", `No approved ${input.kind === "traveler" ? "traveler" : "dispensing sheet"} template exists. Ask QA to approve one under ${LABELS_MENU_PATH}.`);
   }
   const [lastTransition] = await db.select().from(batchStateTransitions).where(eq(batchStateTransitions.batchId, b.id)).orderBy(desc(batchStateTransitions.at)).limit(1);
   const lastStaging = view.lines.flatMap((l) => l.stagings.map((s) => new Date(s.at).getTime()));

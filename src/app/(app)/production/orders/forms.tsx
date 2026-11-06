@@ -35,15 +35,15 @@ function perBatch(f: FormulaOption | undefined, sizeKg: string) {
  * New order (ADR-080 V2-2): pieces first. Visible: what to make, how many, needed by, start date.
  * Batch size, number of batches, line and notes are under "More details". With a customer order
  * ("Make for this order") the product, the missing pieces and the delivery date are prefilled and the
- * order is linked to it.
+ * order is linked to it. `initialProductId` (from a recipe's "Make a batch") only preselects the product.
  */
-export function ProductionOrderForm({ formulas, lines, today, prefill }: { formulas: FormulaOption[]; lines: { id: string; code: string; name: string }[]; today: string; prefill?: MakeForPrefill | null }) {
+export function ProductionOrderForm({ formulas, lines, today, prefill, initialProductId }: { formulas: FormulaOption[]; lines: { id: string; code: string; name: string }[]; today: string; prefill?: MakeForPrefill | null; initialProductId?: string | null }) {
   const products = useMemo(() => {
     const m = new Map<string, FormulaOption>();
     for (const f of formulas) if (!m.has(f.productId)) m.set(f.productId, f);
     return [...m.values()];
   }, [formulas]);
-  const [productId, setProductId] = useState(prefill?.productId ?? products[0]?.productId ?? "");
+  const [productId, setProductId] = useState(prefill?.productId ?? products.find((p) => p.productId === initialProductId)?.productId ?? products[0]?.productId ?? "");
   const current = products.find((p) => p.productId === productId);
   const ref = current?.referenceBatchSizeG;
   const [sizeKg, setSizeKg] = useState(ref ? D(ref).div(1000).toString() : "");

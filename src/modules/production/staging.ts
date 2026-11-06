@@ -25,7 +25,7 @@ import { getSetting } from "@/lib/settings";
 import { assertLotUsable, lockLots, postMovement } from "@/modules/inventory";
 import { idempotent, lockBatch } from "./shared";
 import { transitionBatch } from "./state";
-import { endReservationsForDemand, stagingKinds, workOrderCandidates, type MaterialRequirement } from "./work-orders-reserve";
+import { endReservationsForDemand, stagingKinds } from "./work-orders-reserve";
 
 /**
  * Material staging by scan (US-3-08, docs/process-maps.md W05-05): the warehouse operator picks
@@ -353,126 +353,6 @@ export async function stageInTx(tx: Tx, ctx: AuthContext, b: typeof batches.$inf
   }
 }
 
-export type SubstitutionInput = {
-  batchId: string;
-  batchMaterialId: string;
-  substituteLotCode: string;
-  substituteLocationId?: string | null;
-  expectedLotId?: string | null;
-  reason: string;
-  idempotencyKey?: string | null;
-};
-
-/**
- * Controlled exception CX-MAT (docs/permissions-matrix.md §5.3): a qa_qc user lets staging use
- * another released lot of the same material. Ends the work-order reservation of the expected lot
- * for the quantity the ingredient still needs and reserves the substitute lot instead; records
- * both lots and the reason. A lot of a different material is refused even with this permission.
- */
-export async function approveMaterialSubstitution(ctx: AuthContext, input: SubstitutionInput) {
-  ctx.require("production.material_substitution.approve");
-  const reason = input.reason?.trim() ?? "";
-  if (reason.length < 5) throw new DomainError("validation", "Give the reason for the substitution (at least 5 characters).", { field: "reason" });
-  const lotNumber = scanValue(input.substituteLotCode, "LOT", "substitute lot");
-  return db.transaction(async (tx) => {
-    const b = await lockBatch(tx, ctx, input.batchId);
-    const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.material_substitution.approve", async () => {
-      if (b.status !== "planned") throw new DomainError("state", `Batch ${b.batchNumber} is ${b.status.replace(/_/g, " ")}; substitutions at staging apply to planned batches.`);
-      const wo = await loadWorkOrderForBatch(tx, b);
-      const [line] = await tx
-        .select({ bm: batchMaterials, material: materials })
-        .from(batchMaterials)
-        .innerJoin(materials, eq(materials.id, batchMaterials.materialId))
-        .where(and(eq(batchMaterials.id, input.batchMaterialId), eq(batchMaterials.batchId, b.id)))
-        .limit(1);
-      if (!line) throw new DomainError("not_found", "Ingredient line not found on this batch.");
-      const [found] = await tx
-        .select()
-        .from(inventoryLots)
-        .where(and(eq(inventoryLots.organizationId, ctx.organizationId), eq(inventoryLots.siteId, b.siteId), eq(inventoryLots.lotNumber, lotNumber)))
-        .limit(1);
-      if (!found) throw new DomainError("not_found", `Lot ${lotNumber} was not found at this site.`, { field: "substituteLotCode" });
-      const lockIds = [found.id, ...(input.expectedLotId ? [input.expectedLotId] : [])];
-      const locked = await lockLots(tx, lockIds);
-      const lot = locked.find((l) => l.id === found.id)!;
-      if (lot.itemKind !== "material" || lot.materialId !== line.material.id) {
-        throw new DomainError("blocked_lot", `Lot ${lot.lotNumber} is not ${line.material.name}. A substitution must be the same material; a different material is never allowed.`, { rule: "V-MAT", field: "substituteLotCode" });
-      }
-      assertLotUsable(lot);
-      const staged = (await stagedTotals(tx, b.id)).get(line.bm.id) ?? new Decimal(0);
-      const need = Decimal.max(new Decimal(line.bm.theoreticalQtyG).minus(staged), 0);
-      if (need.lte(0)) throw new DomainError("state", `${line.material.name} is already fully staged.`);
-
-      const req: MaterialRequirement = { materialId: line.material.id, materialCode: line.material.code, materialName: line.material.name, materialKind: line.material.materialKind, baseUom: line.material.baseUom, required: need };
-      const kinds = await stagingKinds(tx, ctx.organizationId, b.siteId);
-      const { candidates } = await workOrderCandidates(tx, wo, req, kinds);
-      const atLot = candidates.filter((c) => c.lotId === lot.id && (!input.substituteLocationId || c.locationId === input.substituteLocationId));
-      const usable = atLot.find((c) => c.eligible && new Decimal(c.available).gte(need));
-      if (!usable) {
-        const why = atLot.find((c) => c.reason)?.reason ?? (atLot.length ? `only ${atLot.map((c) => c.available).join(" + ")} ${lot.baseUom} free` : "no stock in a storage location");
-        throw new DomainError("insufficient_stock", `Lot ${lot.lotNumber} cannot cover ${need.toString()} ${lot.baseUom}: ${why}.`, { field: "substituteLotCode" });
-      }
-      if (input.expectedLotId === lot.id) throw new DomainError("validation", "The substitute must be a different lot from the expected one.");
-
-      // End the expected lot's reservation for the quantity now covered by the substitute.
-      const expected = (await expectedLots(tx, wo.id, line.material.id)).filter((x) => x.r.lotId !== lot.id && (!input.expectedLotId || x.r.lotId === input.expectedLotId));
-      await convertReservations(tx, ctx, expected.map((x) => x.r), need, `Substituted by lot ${lot.lotNumber} (QA): ${reason}`, "released");
-
-      const number = await nextNumber(tx, ctx.organizationId, "RSV");
-      const [rsv] = await tx
-        .insert(stockReservations)
-        .values({
-          organizationId: b.organizationId,
-          siteId: b.siteId,
-          reservationNumber: number,
-          lotId: lot.id,
-          locationId: usable.locationId,
-          qtyBase: need.toString(),
-          baseUom: lot.baseUom,
-          demandType: "work_order",
-          demandId: wo.id,
-          demandReference: `${wo.workOrderNumber} · ${line.material.code} (substitution)`,
-          status: "active",
-          expiresAt: expected[0]?.r.expiresAt ?? sql`now() + interval '7 days'`,
-          createdBy: ctx.userId,
-        })
-        .returning();
-      const expectedLotId = input.expectedLotId ?? expected[0]?.r.lotId ?? null;
-      const [sub] = await tx
-        .insert(batchMaterialSubstitutions)
-        .values({
-          organizationId: b.organizationId,
-          siteId: b.siteId,
-          batchId: b.id,
-          batchMaterialId: line.bm.id,
-          workOrderId: wo.id,
-          materialId: line.material.id,
-          expectedLotId,
-          substituteLotId: lot.id,
-          substituteLocationId: usable.locationId,
-          qtyBase: need.toString(),
-          reason,
-          newReservationId: rsv.id,
-          approvedBy: ctx.userId,
-        })
-        .returning();
-      const expectedNumbers = [...new Set(expected.map((x) => x.lotNumber))];
-      await audit(tx, ctx, {
-        action: "production.dispense_record.material_substituted",
-        entityType: "batch",
-        entityId: b.id,
-        entityNumber: b.batchNumber,
-        siteId: b.siteId,
-        reason,
-        before: { expectedLots: expectedNumbers },
-        after: { substitutionId: sub.id, material: line.material.code, substituteLot: lot.lotNumber, location: usable.locationCode, qty: need.toString(), reservation: number },
-      });
-      return { substitutionId: sub.id, lotNumber: lot.lotNumber, locationCode: usable.locationCode, qty: need.toString(), expectedLots: expectedNumbers };
-    });
-    return result;
-  });
-}
-
 /**
  * Ends the staging reservations of a batch (demand_type = 'batch'), e.g. when execution has
  * consumed the staged stock or the batch is closed. For W2B (execution) and W2D (closure).
@@ -481,7 +361,7 @@ export async function releaseBatchStagingReservations(tx: Tx, ctx: AuthContext, 
   return endReservationsForDemand(tx, ctx, "batch", batchId, "released", reason);
 }
 
-/** Everything the staging screen, the dispensing sheet and the traveler need for one batch. */
+/** Everything the dispensing sheet and the traveler need for one batch (the staging screen itself is retired, ADR-115). */
 export async function getStagingView(ctx: AuthContext, batchId: string) {
   requireStagingAccess(ctx);
   const [row] = await db
@@ -555,10 +435,8 @@ export async function getStagingView(ctx: AuthContext, batchId: string) {
     allStaged: out.length > 0 && out.every((l) => l.isStaged),
     stagingLocations,
     canStage: ctx.can("inventory.movement.post") && b.status === "planned" && !!wo && STAGEABLE_WO.includes(wo.status),
-    canSubstitute: ctx.can("production.material_substitution.approve") && b.status === "planned",
   };
 }
-export type StagingView = Awaited<ReturnType<typeof getStagingView>>;
 
 /** Planned work-order batches of the current site whose materials can be staged now (staging queue). */
 export async function listBatchesToStage(ctx: AuthContext) {

@@ -20,6 +20,7 @@ import { ScanOrPick } from "@/ui/scan-or-pick";
 import { Forbidden } from "../../../forbidden";
 import { addBoxAction, approvePackAction, boxingNoteAction, cancelPackAction, packCheckScanAction, packLabelsAction, removeBoxAction, submitPackAction } from "../../../sales/fulfilment-actions";
 import { Cmd, ReasonCmd, ScanPanel } from "../../../sales/fulfilment-forms";
+import { LABELS_MENU_PATH } from "@/lib/menu-paths";
 
 export const metadata = { title: "Pack" };
 
@@ -161,7 +162,7 @@ export default async function PackPage({ params, searchParams }: { params: Promi
                   )}
                 </div>
               ) : (
-                <Banner tone="warn" title="Box labels are not set up">Ask the system administrator to approve a box label layout (Management › Rules and settings › Labels and printouts).</Banner>
+                <Banner tone="warn" title="Box labels are not set up">Ask the system administrator to approve a box label layout ({LABELS_MENU_PATH}).</Banner>
               )}
             </Card>
           )}

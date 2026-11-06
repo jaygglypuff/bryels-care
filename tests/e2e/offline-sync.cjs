@@ -9,8 +9,9 @@ const autoConfirm = require('./auto-confirm.cjs');
  * production operator signs in on the same device, captures a weighing offline and replays it online.
  * Server state is checked in the database after each replay.
  *
- * Run against a production build (the service worker only exists there) on a fresh seed:
- *   DATABASE_URL=postgres://postgres@localhost:5432/<db> ALLOW_DEMO_SEED=true pnpm db:reset
+ * Demo profile: FULL (the NFD people and lots). Run against a production build (the service worker only exists there)
+ * on a fresh full seed:
+ *   DATABASE_URL=postgres://postgres@localhost:5432/<db> ALLOW_DEMO_SEED=true pnpm db:reset && DEMO_PROFILE=full ALLOW_DEMO_SEED=true pnpm db:demo reset
  *   pnpm build && DATABASE_URL=… APP_ORIGIN=http://localhost:3404 pnpm next start -p 3404
  *   BASE_URL=http://localhost:3404 DATABASE_URL=… NODE_PATH=$(npm root -g) node tests/e2e/offline-sync.cjs
  */

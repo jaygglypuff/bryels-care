@@ -2,8 +2,9 @@ const autoConfirm = require('./auto-confirm.cjs');
 /* In-place action regression check (ADR-043, docs/ux-system.md "Rules: 5.8a").
  * Every action is taken right after a client-side navigation and must show its result AND the
  * re-rendered page within 10 s, with no reload: receipts, counts, adjustments, QA inspection and
- * review, holds, settings, batch weighing, notifications and work orders.
- * Run against a production build on a fresh seed (pnpm db:reset; pnpm build && pnpm start):
+ * review, holds, settings, batch weighing, notifications and production orders.
+ * Demo profile: FULL (two sites, the NFD people and lots it names). Run against a production build on a fresh full
+ * seed (DEMO_PROFILE=full pnpm db:demo reset, or pnpm db:seed on an empty migrated database; pnpm build && pnpm start):
  *   NODE_PATH=$(npm root -g) node tests/e2e/in-place-actions.cjs     (exit 1 on any stale screen)
  */
 const { chromium } = require('playwright');
@@ -269,35 +270,28 @@ async function step(name, fn, u) {
     }
   }, mg);
 
-  // 9. Work order: create (redirect), plan, release (manager), cancel: all in place.
-  await step('work order: plan', async () => {
+  // 9. Production order (ADR-080, ADR-115): create (redirect), approve (manager), Get materials appears, cancel: all in place.
+  let orderUrl = null;
+  await step('production order: create', async () => {
     const p = pl.page;
-    await p.goto(BASE + '/production/work-orders');
+    await p.goto(BASE + '/production/orders');
     await p.getByRole('link', { name: /New production order/ }).first().click();
-    await p.waitForURL(/\/production\/work-orders\/new/);
-    const prodOpt = await p.locator('#productId option', { hasText: 'ACS-135' }).first().innerText();
-    await p.selectOption('#productId', { label: prodOpt });
-    await p.fill('#batchSizeKg', '17.6');
-    await p.fill('#batchCount', '1');
+    await p.waitForURL(/\/production\/orders\/new/);
     await p.fill('#plannedStart', manilaDate(0));
-    await p.fill('#plannedEnd', manilaDate(2));
-    await p.getByRole('button', { name: 'Create production order' }).click();
-    await p.waitForURL(/\/production\/work-orders\/[0-9a-f-]{36}/, { timeout: 30000 });
-    await p.getByRole('button', { name: 'Plan (resolve revisions)' }).click();
-    await fresh(pl, p.getByText('Planned with').first(), 'plan message');
-    await fresh(pl, p.getByText('Planned', { exact: true }).first(), 'plan refresh (status)');
+    await p.getByRole('button', { name: 'Create order' }).click();
+    await p.waitForURL(/\/production\/orders\/[0-9a-f-]{36}/, { timeout: 30000 });
+    orderUrl = p.url().split('?')[0];
   }, pl);
-  await step('work order: release and cancel', async () => {
+  await step('production order: approve, Get materials, cancel', async () => {
+    if (!orderUrl) throw new Error('no order from the previous step');
     const p = mg.page;
-    await p.goto(BASE + '/production/work-orders');
-    const num = (await pl.page.locator('h1').innerText()).trim();
-    await p.getByRole('link', { name: num }).first().click();
-    await p.waitForURL(/\/production\/work-orders\/[0-9a-f-]{36}/);
-    await p.getByRole('button', { name: 'Release and reserve materials' }).click();
-    await fresh(mg, p.getByText('Released.').first(), 'release message');
-    await fresh(mg, p.getByRole('button', { name: /Create batch 1 of 1/ }), 'release refresh');
-    await p.fill('#reason', 'Repro cleanup');
-    await p.getByRole('button', { name: 'Cancel production order' }).click();
+    await p.goto(orderUrl);
+    await p.getByRole('button', { name: 'Approve', exact: true }).click();
+    await fresh(mg, p.getByText(/^Approved\. Materials are set aside/).first(), 'approve message');
+    await fresh(mg, p.getByText('Get materials', { exact: true }).first(), 'approve refresh (next step Get materials)');
+    await p.getByText('Cancel this order', { exact: true }).click();
+    await p.fill('#cancel-reason', 'Repro cleanup');
+    await p.getByRole('button', { name: 'Cancel order' }).click();
     await fresh(mg, p.getByText('Repro cleanup').first(), 'cancel refresh');
   }, mg);
 
