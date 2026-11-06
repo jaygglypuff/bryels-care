@@ -2102,3 +2102,33 @@ lot move with it (`moveBoxesWithLot`, audited).
 Consequences: any lite-seed change must raise `DEMO_SEED_VERSION`; a deploy then resets the shared demo and signs
 everyone out. Open: a routing with both a filling and a packaging step blocks the packaging step
 (`packagingBlockers`); the lotion routing records packaging once, on "Label and pack".
+
+## ADR-109 §2 Every remaining hand-off names who acts next (2026-11-06)
+
+`nextActors` also takes an ad-hoc rule and `roleStandIn: false`, so the hint keeps step roles exactly as the service
+does (stock fixes, finance documents, master-data revisions). The older "Waiting for" helpers (`waitingFor`,
+`approvalNext`/`approvalWaiting`/`financeNext`, `waitingForApprover`) are built on it and apply the same-person rule.
+Record helpers name and message the next people for quotations, customer orders, price lists, customer requirements,
+count differences, stock-fix posting, setting change requests, box checks, master-data revisions, QA corrections and
+the review of test results; stock-fix and finance success messages carry names. End-to-end walk C9 messages: PO sent →
+warehouse ("Delivery coming"), each received lot → QA (opening the lot), second QA → tester, QA pass → warehouse and
+sales ("can now be set aside"), pick → box checker, check → dispatcher, approval → assigned operator. Tests
+`tests/integration/governance/next-actors-families.test.ts` and additions. Open: month reopen and delivery proof keep
+their own words; the step "end early" form names approvers only in its picker.
+
+## ADR-112 The BMR prints in seven parts, made for Chrome (owner 2026-11-06)
+
+Status: Accepted; A-BMR2-01..03 (printed words, signer role, part 7 on its own page) need QA.
+
+Decision: BMR renderer v2 lays out the bmr/v1 dataset (optional fields for roles, step start/end, material changes,
+packaging taken, boxes and labels printed) as an A4 portrait document in seven parts: identity and recipe version,
+dispensing and weighing, procedure, packaging and labels, yield, problems and changes, QA decision and sign-offs on its
+own page, then the paper pages and the audit trail in words. Every page carries company, product, batch, lot and
+"Page x of y" from `@page` margin boxes (Chrome 131+); rows and blocks never split; headers repeat; paper-form field
+names are kept. v1 stays registered so printed BMRs re-render to their checksum; templates move to v2 only when QA
+approves a new version (both demo profiles use v2). Recorded documents are shown inside `.recorded-doc`, which shields
+their tables from app utility classes (fixes misaligned columns on the dispensing sheet, traveler, pick list, packing
+list, delivery receipt and purchase order). Desktop Chrome fixes: top bar at 1920 px, side-panel detail lists, the
+delivery page, reports and the recipe wizard tabs use the width. Tests `tests/unit/documents/bmr-v2.test.ts`,
+integration `bmr-closure`. Live data: QA approves a BMR template version on renderer v2; batches pinned to v1 keep the
+old layout. Open: old prints' footers still show codes (needs new layout versions and QA approval).

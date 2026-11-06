@@ -89,7 +89,7 @@ export type DemoProfile = (typeof DEMO_PROFILES)[number];
  * (`pnpm db:demo auto`) a demo database that holds another version (or the old full seed) is wiped
  * and loaded again, so a deploy gives a fresh demo without anyone pressing "Reset demo data".
  */
-export const DEMO_SEED_VERSION = "2026-11-06.1";
+export const DEMO_SEED_VERSION = "2026-11-06.2";
 
 /** The profile `pnpm db:demo` loads: env `DEMO_PROFILE` (lite | full), default lite; anything else is an error. */
 export function demoProfile(env: Env = process.env): { profile: DemoProfile; error: string | null } {
