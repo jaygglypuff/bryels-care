@@ -1,5 +1,7 @@
 # Operator experience
 
+> **Archived 2026-11-06:** built as ADR-081 and ADR-083 (floor menus), ADR-082 (My work, Your next task) and the production flow v2 (ADR-080, ADR-100, ADR-104 to ADR-106). Kept for history; see `docs/decision-log.md` (archive: ADR-115 §5).
+
 | | |
 |---|---|
 | Status | R1 built: focused menu and tab bar. R3 built: assigned orders, "My work", "Your next task" (ADR-082). Operator UX review fixes built: "Your tasks today" task list, step screen focus (§5) |

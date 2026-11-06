@@ -1,26 +1,28 @@
 ---
 key: production.line_clearance
-title: Line clearance
-version: 1
-updated_at: 2026-10-25
+title: Line clearance (the Start check)
+version: 2
+updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
-Before a step starts, confirm that the area and equipment are clean and that nothing from the previous batch is left. Another person checks it.
+Before a batch starts, check that the area and the machines are clean and that nothing from the last batch is left. This is the **Start check**. It is the first step card of the batch. Another person checks it.
 
-## Answer the checklist
+## Answer the checks
 
-1. Open the batch and the clearance step. Each checklist item comes from the approved routing.
-2. Answer every **Answer item N** truthfully after you look.
-3. If something was not right, write it under **What did you find and do? (required)**.
+1. Open the order and tap the green button (**Start**). The Start check card opens.
+2. Look first. Then tap **Yes** or **No** on every row. The rows come from the approved recipe steps.
+3. If everything is fine, tap **All OK**.
+4. A **No** turns the row red. Write under **What did you find, and what did you do?** Then tap **Save and report a problem**. The step stops until it is fixed and answered again.
 
-## Checker co-signs
+## The second person checks
 
-1. A second person checks the area on your device. Under **Checked by**, they enter their **Name** and type **Their password (typed by them)** themselves.
-2. Never type someone else's password. The checker cannot be the person who did the clearance.
-3. Press **Sign clearance (step N)**.
+1. Under **Checked by (they pick their name)** the checker picks their own name on your tablet. If your company asks for it, they type **Their password** themselves.
+2. Or leave **Checks later from their own tablet**. Their Home then shows **Check start check**. They tap **Yes, I checked it**, or **Something is wrong: send it back** with what to correct.
+3. Never type someone else's password. You can never check your own Start check.
 
-## After clearance
+## After the Start check
 
-1. Signing the weighing-area clearance starts the batch. Weighing and the next steps open.
-2. If an item fails, do not start. Clean again, or raise a deviation from the batch screen.
+1. The batch starts when the Start check is done and checked. Weighing and the next steps open.
+2. If a row says **No**, do not start. Clean again and answer the row again. If it cannot be fixed, call your site manager or QA: they open a problem report.
+3. Some products have a second check before wrapping. It works the same way.

@@ -24,17 +24,48 @@ Prerequisites: Node.js 22, pnpm 10, PostgreSQL 16.
 
 ```bash
 pnpm install
-cp .env.example .env             # set DATABASE_URL to your Postgres database
+cp .env.example .env             # set DATABASE_URL to your Postgres database; keep DEMO_MODE=true
 pnpm db:migrate                  # apply migrations
-pnpm db:seed                     # load the fictional demo data (requires DEMO_MODE=true or ALLOW_DEMO_SEED=true)
+pnpm db:reset                    # wipe and load the small ("lite") demo, the same data as the live demo
 pnpm dev                         # http://localhost:3000
 ```
 
-Demo accounts (password `demo1234`, all fictional): `owner@`, `admin@`, `manager.nfd@`,
-`operator.nfd@`, `checker.nfd@`, `warehouse.nfd@`, `qa.nfd@`, `sales@`, `warehouse.rvs@`,
-`auditor@`, `planner.nfd@` (production planner), `qa.lead@` (second QA approver), `finance@`
-(finance: credit, price list and order approvals) and `sales2@` (second sales user) at
-`bryels-care.test`. Reset the demo data at any time with `pnpm db:reset`.
+### Two demo profiles
+
+The demo data is fictional. The seed refuses to run unless demo mode is on (`DEMO_MODE=true`, or the
+older `ALLOW_DEMO_SEED=true`), never with `APP_ENV=production`, and never while a non-demo account
+exists (ADR-055).
+
+| Profile | What it is | Where it is used | How to load it |
+|---|---|---|---|
+| `lite` (default) | The small demo of `docs/demo-script.md`: one plant (North Fields), two products, a few records each stopped at a different step | The live demo on Railway and local set-up (ADR-115 §3) | `pnpm db:reset`, or `pnpm db:demo reset` (`DEMO_PROFILE` unset or `lite`) |
+| `full` | The older large seed (several sites, many records and users) | The integration tests: `tests/support/db.ts` loads it for `pnpm test` | `DEMO_PROFILE=full pnpm db:demo reset` |
+
+`DEMO_PROFILE` (`lite` or `full`) and `DEMO_SEED_VERSION` (in `src/lib/demo.ts`) decide when a deploy
+reloads the demo by itself; see `docs/deployment-railway.md` §2.4. The owner can also reset from the
+app (green bar, **Reset demo data**).
+
+Demo accounts of the lite profile (password `demo1234`, all fictional, all at `bryels-care.test`;
+the sign-in page also has **Try the demo** with one tap per person). Copied from
+`docs/demo-script.md` §1.1:
+
+| Sign in as | Person (fictional) | Job in the story |
+|---|---|---|
+| `owner@` | Ana Villanueva | Owner: sees everything, Home says what to do next |
+| `manager.nfd@` | Dino Reyes | Site manager: approves production orders and purchase orders |
+| `planner.nfd@` | Cora Villamor | Planner: makes production orders and recipes |
+| `operator.nfd@` | Rhea Mendoza | Operator: makes the batches |
+| `checker.nfd@` | Jun Dela Cruz | Second operator: checks the weighing |
+| `warehouse.nfd@` | Lito Pascual | Warehouse: deliveries, shelves, getting orders from the shelf |
+| `qa.nfd@` | Nina Quiambao | QA: checks materials and batches |
+| `qa.lead@` | Teresa Ocampo | Second QA person (approvals that need two people) |
+| `procurement@` | Joy Navarro | Buying: purchase orders |
+| `sales@` | Mara Santos | Sales: customer orders |
+| `finance@` | Rosa Lim | Finance |
+| `floor.nfd@` | Floor TV North Fields | The TV on the production floor (look only) |
+
+The full profile has more accounts (for example `admin@`, `warehouse.rvs@`, `auditor@`, `sales2@`);
+they are listed in `src/db/seed.ts`.
 
 Production engineering master data (formulas, routings, work instructions, inspection plans,
 equipment) needs SQL that Drizzle cannot express (exclusion constraints on effective dates,
@@ -50,7 +81,8 @@ migration. Its canonical source is `src/db/sql/w1d.sql`; the migration is a verb
 | `pnpm typecheck` | TypeScript strict check |
 | `pnpm test` | Integration tests against a real Postgres (`TEST_DATABASE_URL`, default `postgres://postgres@localhost:5432/bryels_test`) |
 | `pnpm db:generate` | Generate a SQL migration from schema changes (review before committing) |
-| `pnpm db:migrate` / `pnpm db:seed` / `pnpm db:reset` | Apply migrations / load demo data / wipe and reload demo data |
+| `pnpm db:migrate` / `pnpm db:reset` | Apply migrations / wipe and reload the lite demo data (ADR-115 §3) |
+| `pnpm db:demo auto\|reset` | Demo data lifecycle used at start-up and by **Reset demo data**; profile from `DEMO_PROFILE` (`lite` default, `full`) |
 | `pnpm worker` | Background worker (pg-boss): reconciliation, expiry check, reservation expiry, balance rebuilds, document renders; health on `PORT` (default 3001) |
 | `pnpm db:reference` | Installs the reference master data (units g/kg/mg/mL/L/pcs, SI conversions, default reason codes) for every organization that lacks them; idempotent, never overwrites company edits. Runs automatically after the migrations in `scripts/start.sh` (every deploy) and in `pnpm admin:bootstrap`; the demo seed installs it too (ADR-040) |
 | `pnpm admin:bootstrap` | Production first administrator: invited owner + system admin and a one-time link (no demo seed, refuses once anyone is active; `--sync-roles` re-syncs seeded role templates). See "First administrator" below |
@@ -189,12 +221,12 @@ The full production topology (bucket, backups, staging/production separation) is
 | `docs/permissions-matrix.md` | Role × action × site-scope matrix and sensitive-field rules |
 | `docs/security.md` | Threat model, session policy, application controls, audit catalogue, retention |
 | `docs/ux-system.md` | Navigation, responsive behaviour, design tokens, component rules, states, accessibility |
-| `docs/UX_AUDIT.md`, `docs/NEW_NAVIGATION.md`, `docs/WORKFLOW_ARCHITECTURE.md`, `docs/OPERATOR_EXPERIENCE.md`, `docs/OWNER_EXPERIENCE.md`, `docs/REDESIGN_IMPLEMENTATION_PLAN.md` | UX revision (ADR-081): audit, the five-destination navigation, the connected pipeline and Operations Center, role experiences, phased plan |
+| `docs/NEW_NAVIGATION.md` | The five-destination navigation (ADR-081) |
 | `docs/design/style-tile.html` | Static visual direction: tokens, shell, owner dashboard, operator scan screen |
 | `docs/offline-sync.md` | Cached data, command queue, idempotency, conflicts, retry policy |
 | `docs/reports-and-templates.md` | Document templates (BMR, labels, DR, pick list), print specs, revision rules |
 | `docs/testing.md` | Test strategy, invariants, device matrix, acceptance procedures |
-| `docs/demo-script.md` | Presenter's guide for the 15 to 20 minute client demo, with screenshots in `docs/demo/` |
+| `docs/demo-script.md` | Presenter's guide for the client demo on the lite demo data |
 | `docs/deployment-railway.md` | Services, Postgres, storage, secrets, migrations, backups, rollback |
 | `docs/railway-for-dummies.md` | Owner's step-by-step guide: put the demo on Railway from the web dashboard, updates, reset, troubleshooting, going live |
 | `docs/operations-runbook.md` | Routine admin, failed jobs/imports, sync conflicts, incidents, restore |
@@ -205,6 +237,27 @@ The full production topology (bucket, backups, staging/production separation) is
 | `docs/modules/hr-attendance-payroll.md` | HR scope, attendance import design, rule configuration, open questions |
 | `docs/modules/finance.md` | Finance scope decision, costing model, accounting export |
 | `docs/team-charter.md` | The delivery team, responsibilities, RACI, gates and working agreements |
+
+## Documents added after Gate 0 (redesign and go-live)
+
+| Document | Purpose |
+|---|---|
+| `docs/production-flow-v2.md` | The production flow v2 design: production order → Get materials → Weigh → Step → Finish → Check quality (ADR-080; built, see ADR-100, 104, 105, 106, 110) |
+| `docs/END_TO_END_FLOW.md` | The walk of the whole chain from purchase order to boxed, sent and invoiced order (1–6 Nov 2026) and its fix list (ADR-106, ADR-110) |
+| `docs/NEXT_APPROVER.md` | Every hand-off names the next person by name and role (ADR-091) |
+| `docs/SCAN_INPUTS.md` | Every place a lot, box, shelf, batch or item is identified: the one scan-or-pick way |
+| `docs/FLOOR_DISPLAY.md` | The production floor TV screen (ADR-084) |
+| `docs/PAGE_REVIEW.md` | Page-by-page review against the grade-5 standard (ADR-088) |
+| `docs/LEGACY_SCREENS.md` | Every route: kept, merged, redirected or retired; menu edits and their status |
+| `docs/CONSULTANT_REVIEW.md` | The outside consultant review of 2026-10-30: flows, first-time users, floor screen (ADR-081 to ADR-085) |
+| `docs/USABILITY_TEST.md` | Usability test of 2026-10-30 (owner, operator, warehouse helper) and its fixes (ADR-082, ADR-083) |
+| `docs/go-live-checklist.md` | What must be true before real data goes in |
+| `docs/training-plan.md` | Training per role, mapped to the help pages and the SOP register |
+| `docs/offline-acceptance-checklist.md` | Acceptance steps for working without signal |
+| `docs/ux-audit/` | UX audit of the live app (2026-10-31) by area, and later rounds |
+| `docs/reviews/` | QA and UX reviews of the production flow v2 design |
+| `docs/help/` | The in-app help pages shown on `/help` (registered in `src/ui/help/guides.ts`) |
+| `docs/archive/` | Superseded planning documents kept for history (see `docs/archive/README.md`) |
 
 ## Architecture map
 

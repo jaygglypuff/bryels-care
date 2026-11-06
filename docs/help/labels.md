@@ -1,7 +1,7 @@
 ---
 key: inventory.labels
 title: Print and scan labels
-version: 3
+version: 4
 updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
@@ -48,13 +48,13 @@ To keep a copy as a file, pick **Save as PDF** in the print window. The PDF look
 
 ## Something is wrong
 
-- "Label printing is not set up": ask the administrator (**Settings › Labels and printouts**).
+- "Label printing is not set up": ask the administrator (**Management › People, rules and settings › Labels and printouts**).
 - "No label is approved for this yet": ask QA. QA must say OK to a label before it can print.
 - The label is cut off or too small: in the print window choose **Actual size** and the label paper size.
 
 ## Old label layout
 
-If the print screen says **Old label layout — QA can approve the new one in Management › Rules and settings › Labels and printouts**, the label still uses the first layout. It prints and scans as before; QA can approve a new version of the label with the new layout (name biggest, everything inside the label).
+If the print screen says **Old label layout**, the label still uses the first layout. It prints and scans as before; QA can approve a new version of the label with the new layout (name biggest, everything inside the label) in **Management › People, rules and settings › Labels and printouts**.
 
 ## Sack labels and box labels
 

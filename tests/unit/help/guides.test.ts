@@ -19,7 +19,7 @@ describe("quick guides", () => {
   });
 
   it("US-9-08: a quick guide exists for every major flow and names its SOP mapping", () => {
-    const flows = ["inventory.receive", "inventory.putaway", "inventory.move", "inventory.count", "production.work_order", "production.staging", "production.weighing", "production.line_clearance", "quality.release", "production.bmr", "sales.order", "sales.fulfilment", "quality.complaint", "sales.return", "platform.import", "analytics.reports"];
+    const flows = ["inventory.receive", "inventory.putaway", "inventory.move", "inventory.count", "production.production_order", "production.materials_list", "production.weigh", "production.step", "production.line_clearance", "quality.release", "production.bmr", "sales.order", "sales.fulfilment", "quality.complaint", "sales.return", "platform.import", "analytics.reports"];
     for (const k of flows) {
       const g = loadGuide(k);
       expect(g, k).not.toBeNull();

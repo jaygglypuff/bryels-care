@@ -1,8 +1,8 @@
 ---
 key: quality.check
 title: Check quality of a finished batch
-version: 4
-updated_at: 2026-11-01
+version: 5
+updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -10,9 +10,9 @@ QA checks every finished batch before it can be sold. Everything is on one page.
 
 ## Find the batches
 
-1. Open **Quality check** (tab bar) or **Operations → Quality → QA queue**. Under **Batches waiting for QA check** tap the batch (oldest first). You can also press **Check quality** on a production order.
+1. Open **Check a batch or delivery** (bottom bar) or **Operations → Check a batch or delivery**. Under **Batches waiting for QA check** tap the batch (oldest first). You can also press **Check quality** on a production order.
 2. Each card shows the product first, then the batch number in grey and how many were made. **Not yet** means someone said "Not yet" before.
-3. The green box **What to do next** opens the oldest batch. Or tap a card.
+3. The green box at the top opens the oldest batch: press **Check this batch**. Or tap a card.
 
 ## Read the batch
 

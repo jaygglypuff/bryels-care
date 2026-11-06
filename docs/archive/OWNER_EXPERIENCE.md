@@ -1,9 +1,11 @@
 # Owner and management experience
 
+> **Archived 2026-11-06:** built as ADR-081 (Home pipeline, Operations Center, Management landing) and ADR-083 (plain Home); role Homes later changed by ADR-114. Kept for history; see `docs/decision-log.md` (archive: ADR-115 §5).
+
 | | |
 |---|---|
 | Status | R1 built: "Right now" pipeline on Home, Operations Center, Management landing |
-| Read with | `docs/analytics-kpis.md`, ADR-081, `docs/WORKFLOW_ARCHITECTURE.md` |
+| Read with | `docs/analytics-kpis.md`, ADR-081, `docs/archive/WORKFLOW_ARCHITECTURE.md` |
 
 ## 1. The five questions (brief Part II §8) and where they are answered
 

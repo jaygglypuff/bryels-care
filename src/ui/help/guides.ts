@@ -33,11 +33,9 @@ export const GUIDE_FILES: Record<string, string> = {
   "inventory.putaway": "putaway.md",
   // ADR-099: labels printed where the work happens, which label goes where, scanning
   "inventory.labels": "labels.md",
-  // ADR-074: the production order (one order from ordering to done, daily log, defects)
+  // ADR-074: the production order (one order from ordering to done, daily log, defects).
+  // ADR-115: the guides of the retired work order, staging and weighing screens are removed.
   "production.production_order": "production-order.md",
-  "production.work_order": "work-order.md",
-  "production.staging": "staging.md",
-  "production.weighing": "weighing.md",
   "production.line_clearance": "line-clearance.md",
   // ADR-080 stage G2: the production flow v2 operator screens
   "production.materials_list": "materials-list.md",

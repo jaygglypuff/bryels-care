@@ -1,8 +1,8 @@
 ---
 key: production.production_order
 title: Make a product with a production order
-version: 3
-updated_at: 2026-11-01
+version: 4
+updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -28,7 +28,7 @@ A production order says what to make, how many and by when. You follow it on one
 
 ## Create the order
 
-1. Press **New order**.
+1. Press **New production order**.
 2. Choose **What to make**. Type **How many bars?** (or pieces).
 3. The screen says how many one batch makes and the largest batch the mixer takes. Then it offers:
    - **Split into 2 batches** (the usual), for example "2 batches of 1,000 bars".
@@ -41,7 +41,7 @@ A production order says what to make, how many and by when. You follow it on one
 
 ## Make for a customer order
 
-1. Open the customer order (**Sales**). If a line is short, the card **Production for this order** shows how many pieces are missing.
+1. Open the customer order (**Sales**). If a line is short, the card **Not enough stock: it needs making** shows how many pieces are missing.
 2. Press **Make for this order**. The product, the missing pieces and the delivery date are filled in for you.
 3. Check the numbers and press **Create order**. The production order is linked to the customer order.
 4. People who can only look at customer orders do not see this button.
@@ -49,7 +49,7 @@ A production order says what to make, how many and by when. You follow it on one
 ## Approve
 
 1. A manager opens the order and presses **Approve**.
-2. Approving sets the materials aside and creates the batch. You do not create batches yourself.
+2. Approving sets the materials aside and creates the batch. You do not create batches yourself. The recipe in use on that day is kept for this order: a later recipe change does not change it.
 3. If materials are missing, nothing changes and the message says which material and how much is missing. Receive the stock, then press **Approve** again.
 4. The person who created the order cannot approve it. Another person who can approve must do it.
 
@@ -64,9 +64,9 @@ A production order says what to make, how many and by when. You follow it on one
 
 1. Open the order. On the **Today** tab fill in **What happened?**, **Good pieces made** and the **Rejects** by type.
 2. Press **Save to daily log**. You can add more entries during the day.
-3. Made a mistake? Open **Today's count**, press **Correct this entry**, fix the numbers and say why. The old entry stays visible and no longer counts.
+3. Made a mistake? Open the **Daily log** tab, press **Correct this entry**, fix the numbers and say why. The old entry stays visible and no longer counts.
 4. The reject types come from the setting **Reject types for the daily log**. The owner can change the list.
-5. **Operations → Today's count** shows everything written today for all orders of your site.
+5. **Operations → Today** shows everything written today for all orders of your site.
 
 ## Rejects summary
 
@@ -75,4 +75,10 @@ A production order says what to make, how many and by when. You follow it on one
 
 ## Planning tools
 
-The detailed screens (production plan, detailed work orders and board, the full batch record, materials by scan) are under **Management → Planning tools** for planners and the owner. You do not need them for daily work.
+The production plan and the list of all batch records are under **Management → Planning tools** for planners and the owner. You do not need them for daily work.
+
+## Older batches and paper copies
+
+1. Old links to the work order screens and the batch board open the production orders. Old links to "Stage materials" open the batch record.
+2. Paper backup: the paper weighing sheet and the batch traveler print from the batch record (under **⋯ More**).
+3. To stop an order before it is made, open it and press **Cancel order**. Say why. Materials set aside for it become free again.

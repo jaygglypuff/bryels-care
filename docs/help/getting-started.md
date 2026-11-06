@@ -1,8 +1,8 @@
 ---
 key: start.getting_started
 title: Getting started: from an empty company to a shipped order
-version: 4
-updated_at: 2026-10-30
+version: 5
+updated_at: 2026-11-06
 sop: Training guide for the sandbox; not an SOP
 ---
 
@@ -40,7 +40,7 @@ Tip: when a button is missing or a step says it needs someone else, the message 
 
 ## 5. Write the recipe: what goes in and the steps
 
-A recipe tells the workers what to put in one batch and what to do, step by step. Open **Management → Production setup → New recipe (step by step)**. It asks five short questions. Use **Next** and **Back** at the bottom.
+A recipe tells the workers what to put in one batch and what to do, step by step. Open **Management → Production setup → Recipes** and press **New recipe**. It asks five short questions. Use **Next** and **Back** at the bottom.
 
 1. **Which product?** Tap the product. No product yet? Tap **Make a new product**: type the name (for example *Calamansi Soap 135 g*), the size in grams (135), what kind of product it is (Soap is sold as bars), how many go in one box and how many months it stays good. The product and the item you sell are made and made ready in one go. (If you are not allowed to, the screen says who must finish it.) You can skip step 4 of this guide.
 2. **How big is one batch?** Choose how you count it:
@@ -55,45 +55,45 @@ A recipe tells the workers what to put in one batch and what to do, step by step
 5. **Check and save.** Read the summary: the batch in pieces and kilograms, every ingredient in grams and percent, the packaging per piece, every step in order. Press **Save as draft** to finish later, or **Send for approval**. A recipe can be used for production only after someone approves it. After approval it can't be changed; to change it later you open the recipe and press **Make a new version**.
 6. **Approve.** Someone else approves it: by default a QA person checks it, then a manager or the owner approves. You can't approve your own recipe. They open it from **To approve** (or the recipe page → **Ingredients in detail** / **Steps in detail**) and press **Approve**.
 
-The detailed pages (**Products and formulas** and **Steps for each product**, "advanced editing") still work for everything else, such as linking a written work instruction or equipment to a step.
+The detailed pages (**Recipes (advanced)** and **Steps (advanced)**, under **Advanced** in the same menu) still work for everything else, such as linking a written work instruction or equipment to a step.
 
 ## 6. Say what QA checks (inspection plan)
 
-1. Open **Management → Production setup → Quality checks for items** and create a plan for the incoming materials (for example appearance and certificate of analysis) and one for the finished product (for example weight and pH).
+1. Open **Management → Production setup → Quality checks for each item** and create a plan for the incoming materials (for example appearance and certificate of analysis) and one for the finished product (for example weight and pH).
 2. Submit and approve each plan.
 
 ## 7. Buy and receive the materials
 
 1. Optional but realistic: **Management → Purchasing → Purchase orders**, create a purchase order to your supplier, submit and approve it.
-2. Open **Operations → Receiving → Receive materials**. Choose the supplier and the material, type the supplier lot, the amount and the expiry date, and save it to stock. Print the labels when asked.
+2. Open **Operations → Receiving → Receive a delivery**. Choose the supplier and the material, type the supplier lot, the amount and the expiry date, and save it to stock. Print the labels when asked.
 3. The received lot waits for the QA check. Nobody can use it until QA says OK.
 
 ## 8. QA releases the materials
 
-1. Open **Operations → Quality check**. Each new lot waits there.
-2. Open the lot, record the inspection results and choose **Release**. The lot becomes available.
+1. Open **Operations → Check a batch or delivery**. Each new lot waits there.
+2. Open the lot, record the test results and choose **OK to use**. The lot can now be used.
 3. Open **Operations → Receiving → Put away** and move the released lot from the receiving dock to a storage rack (scan the labels or choose the locations).
 
 ## 9. Plan production (production order)
 
-1. Open **Operations → Production orders → New production order**. Choose the product, type **How many (pieces)** and, if you have one, the **Needed by** date. It uses the approved formula and steps.
+1. Open **Operations → Production orders → New production order**. Choose the product, type **How many bars?** (or pieces) and, if you have one, the **Needed by** date. It uses the approved formula and steps.
 2. Open the order and press **Approve**. Approving checks that enough released material exists, sets it aside and creates the batch. If something is short, the screen says what is missing.
 3. Made for a customer? On the customer order press **Make for this order** instead: the product and the missing pieces are filled in.
 
 ## 10. Make the batch
 
 1. On the order, press the big button. It always shows the next step.
-2. **Get materials**: take the materials on the list to the making area (for now by scanning each lot).
-3. **Start**: do the start check (the room and line are clean and empty of the previous product).
+2. **Get materials**: take the materials on the list to the making area and tap **Taken** on each line.
+3. **Start**: do the Start check (the room and line are clean and empty of the previous product). A second person checks it.
 4. **Weigh**: weigh each material against the formula. A second person checks the weighings that need it.
 5. Do each step and type the values asked for (for example a temperature).
 6. **Finish**: record how many good pieces were made. The finished goods go to the hold area and the order shows **Quality check**.
 
 ## 11. QA checks the batch
 
-1. Open **Operations → Quality check**. Review the batch record and the finished-product inspection.
-2. Choose **Release** (pass). The finished goods can now be sold and the order shows **Done**.
-3. On the batch (open the production order, then tap the batch number; or **Management → Planning tools → All batches and their records**), open **Close the batch and paper pages** and close the batch. The final batch record (BMR) can be printed.
+1. Open **Operations → Check a batch or delivery** and press **Check this batch**. Read how the batch went and type the test results.
+2. Choose **OK to use**. The finished goods can now be sold and the order shows **Done**.
+3. On the batch (open the production order, then tap the batch number; or **Management → Planning tools → Batch records**), open **Close the batch and paper pages** and close the batch. The final batch record (BMR) can be printed.
 
 ## 12. Sell and ship
 
@@ -110,8 +110,8 @@ The detailed pages (**Products and formulas** and **Steps for each product**, "a
 ## 14. See it all together
 
 1. **Home → Overview** and **Management → Reports & analytics → Business overview** now show your stock, the batch and the order.
-2. **Operations → Quality → Where it came from and went**: search the batch number to see which material lots went into it and which customer received it.
-3. **Reports** lists the standard reports; each one exports to a spreadsheet.
+2. **Operations → Quality → Where it came from and where it went**: search the batch number to see which material lots went into it and which customer received it.
+3. **Management → Reports & analytics → Lists to download or print** has the standard lists; each one downloads for Excel.
 
 ## Start over
 

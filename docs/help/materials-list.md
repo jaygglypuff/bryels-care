@@ -1,8 +1,8 @@
 ---
 key: production.materials_list
 title: Get the materials for a batch (Materials list)
-version: 2
-updated_at: 2026-10-31
+version: 3
+updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -36,5 +36,7 @@ The Materials list shows every ingredient of the batch: how much, which lot to u
 
 ## Settings your site may use
 
-- **Scan each lot**: the button says **Scan**. Scan the label on the container; a wrong lot is refused. (This replaces the older "Get materials by scanning" screen, which now opens this list.)
-- **Move stock to the production area**: each tick also moves the lot in the stock records. Only the storekeeper can tick then.
+The administrator sets these under **Management → People, rules and settings → Settings** (group Production).
+
+- **Materials list asks to scan each lot**: the button says **Scan**. Scan the label on the container; a wrong lot is refused. (This replaces the older "Get materials by scanning" screen. Old links to it open the batch record.)
+- **Materials list moves stock to the production area**: each tick also moves the lot in the stock records. Only the storekeeper can tick then.

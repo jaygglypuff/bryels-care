@@ -1,8 +1,8 @@
 ---
 key: start.everyday_basics
 title: Everyday basics: codes, locations, deleting drafts, approvals and notifications
-version: 1
-updated_at: 2026-10-30
+version: 2
+updated_at: 2026-11-06
 sop: Training guide; not an SOP
 ---
 
@@ -13,12 +13,12 @@ Five things people ask about most. Each one says where to tap.
 1. When you add a material, product, supplier, customer, location or equipment, you may leave **Code** empty.
 2. The system then gives the next number: **MAT-0001** for materials, **PRD-0001** products, **SUP-0001** suppliers, **CUS-0001** customers, **LOC-0001** locations and **EQP-0001** equipment.
 3. You can still type your own code if your labels already use one. A code that is already taken is skipped by the automatic numbering.
-4. The owner can change the prefix under **Management → IT settings → How record numbers look**.
+4. The owner can change the prefix under **Management → People, rules and settings → How record numbers look**.
 
 ## Adding or changing a location
 
 1. Open **Management → Master data → Locations**. Tap **+ Add location** at the top, pick the warehouse and the type of place, and give it a name. Leave the code empty for an automatic one.
-2. To change a location, tap **Edit** next to it. You can change the name, the type of place, the **Section or zone** it sits in, and whether it can be picked from.
+2. To change a location, tap **Edit** next to it. You can change the name, the type of place, the **Warehouse section** it sits in, and whether it can be picked from.
 3. To stop using a location, open it and use **Switch off (no longer used)**. A location that holds stock must be emptied first.
 4. A **Site** is one address. If your company works from places far apart (for example a factory and a store room in another town), add one Site per address under **Management → Master data → Sites**. Each site has its own warehouses, and each warehouse has its own locations.
 

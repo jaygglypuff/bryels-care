@@ -1,7 +1,7 @@
 ---
 key: quality.release
 title: QA decision (OK to use or not OK)
-version: 3
+version: 4
 updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
@@ -10,7 +10,7 @@ Only QA decides whether a lot or batch is **OK to use**, **not OK – don't use*
 
 ## Find what is waiting
 
-1. Open **QA queue**. The green box **What to do next** opens the oldest batch or delivery waiting for QA check at your site.
+1. Open **Operations → Check a batch or delivery**. The green box at the top opens the oldest batch or delivery waiting for a QA check at your site (**Check this batch** or **Check this delivery**).
 2. The lists show the material or product first; the lot or batch number is small and grey.
 
 ## Check the evidence

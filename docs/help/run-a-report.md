@@ -1,26 +1,29 @@
 ---
 key: analytics.reports
 title: Run, export and schedule a report
-version: 1
-updated_at: 2026-10-25
+version: 2
+updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
-Reports read posted records live, limited to your sites and role. Each report shows its filters, how fresh the data is, and its definitions.
+Lists read saved records live, only for your sites and your role. Each list shows its filters, how fresh the data is, and what each number means.
 
-## Run
+## Show a list
 
-1. Open **Management → Reports & analytics → Lists to download or print**. It lists only the lists your role may see.
-2. Press **Run** on a report. Choose the **Site** and the period, or custom dates with **From** and **To**.
-3. **No rows match these filters**: widen the dates or check the site.
+1. Open **Management → Reports & analytics → Lists to download or print**. It shows only the lists your role may see.
+2. Tap a list. Choose the **Site** and the **Dates**, or your own dates with **From (your own dates)** and **To (your own dates)**.
+3. Press **Show the list**.
+4. **Nothing matches**: try longer dates, another site, or fewer filters.
 
-## Export
+## Print or download
 
-1. Use **CSV**, **Excel** or **Print / PDF**. An export contains the same rows and columns you see. Hidden prices stay hidden.
-2. Spreadsheet cells that start like a formula are made safe, so they open as text.
+1. Press **Print** for a page to print (or save as PDF).
+2. Under **⋯ More**: **Download for Excel** or **Download as CSV**. A download has the same rows and columns you see. Hidden prices stay hidden.
+3. Spreadsheet cells that start like a formula are made safe, so they open as text.
 
-## Schedule
+## Send it by email regularly
 
-1. Press **Schedule** and give it a **Schedule name**, the **Sites**, the **Format**, **How often** and the **Time (Asia/Manila)**.
-2. Recipients get an in-app notice with an email link. Each recipient's access is checked again at every delivery. Anyone who lost access is skipped, and the schedule owner is told.
-3. **Scheduled reports** lists your schedules and their recent deliveries.
+1. On the list, open **⋯ More → Send it by email regularly**.
+2. Fill in **Name of this email**, the **Sites**, the **File type**, **How often** and **What time**. Press **Start sending**.
+3. People get a message in the app with an email link. Each person's access is checked again every time. Anyone who lost access is skipped, and the owner of the email is told.
+4. **Management → Reports & analytics → Lists sent by email** shows your emails and what was sent so far.

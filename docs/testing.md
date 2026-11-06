@@ -847,7 +847,7 @@ the pre-fix build failed every run, the fixed build passes 10 of 10.
 
 | Run | Result | Evidence |
 |---|---|---|
-| 23 Oct 2026 (QA) | Passed from a fresh seed after 8 fixes (listed in the QA report of that date) | 32 screenshots, `bmr.pdf` (2 pages), `delivery-receipt.pdf` (1 page); 12 screenshots kept in `docs/demo/` |
+| 23 Oct 2026 (QA) | Passed from a fresh seed after 8 fixes (listed in the QA report of that date) | 32 screenshots, `bmr.pdf` (2 pages), `delivery-receipt.pdf` (1 page); 12 screenshots were kept in `docs/demo/` (historical: removed 2026-11-06 by ADR-115 §5 because they showed the old screens) |
 
 Follow-up: move the rehearsal script into `tests/e2e/demo-rehearsal.spec.ts` under the
 Playwright configuration of 3.7, so that CI runs it against an ephemeral database.

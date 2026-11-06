@@ -32,9 +32,9 @@ the company's process owner. "Scenario" is what the trainee does alone on stagin
 | T2 | Administration | `owner_director`, `system_admin` | (runbook §2) | invite a fictional user, assign a role and site, reset MFA, read the Diagnostics page, run a retention dry run | 2 h | devops-engineer, operations contact |
 | T3 | Receiving and put-away | `warehouse_operator`, `procurement`, `site_manager` | Receive materials, Put away a received lot | receive two lines of one delivery, print labels, put away one lot after release | 1.5 h on the floor | warehouse-procurement-specialist, warehouse lead |
 | T4 | Moves and counts | `warehouse_operator`, `stock_counter`, `site_manager` | Scan to move, Count | move a box by three scans and undo it, count one zone blind, recount a variance | 1.5 h on the floor | warehouse-procurement-specialist, warehouse lead |
-| T5 | Planning | `production_planner`, `site_manager` | Plan and release a work order, Stage materials | create, plan and release a work order, create a batch, stage it | 1.5 h | manufacturing-process-engineer, production lead |
-| T6 | Batch execution | `production_operator`, `production_planner` | Line clearance, Weigh and dispense an ingredient, Batch record (BMR) | sign a clearance with a checker, weigh five ingredients (one outside tolerance), complete the steps, post to quarantine | 2 × 2 h, one full staging batch | manufacturing-process-engineer, production lead |
-| T7 | QA decisions | `qa_qc` | QA release or rejection, Batch record (BMR), Log and handle a customer complaint | review an inspection, release one batch, reject one lot, raise a deviation, close the BMR, place and release a legal hold (two people) | 2 h | quality-regulatory-specialist, QA process owner |
+| T5 | Planning | `production_planner`, `site_manager` | Make a product with a production order (`production-order.md`), Get the materials for a batch (`materials-list.md`) | create a production order (split into 2 batches), have a second person approve it (materials set aside, batches created), make one for a short customer order with **Make for this order**, then take every line of the Materials list (**Get materials**) | 1.5 h | manufacturing-process-engineer, production lead |
+| T6 | Batch execution | `production_operator`, `production_planner` | Line clearance (the Start check, `line-clearance.md`), Weigh the ingredients (`weigh.md`), Do a step (`step.md`), Finish a batch (`finish.md`), Batch record (`bmr.md`) | from the production order: **Get materials** → **Start** (Start check with a checker) → **Weigh** five ingredients (one outside the OK range, one other lot with a reason) → each **Step** (mix, wait, wrap with box labels) → **Finish** (count, the batch goes to the QA check) | 2 × 2 h, one full staging batch | manufacturing-process-engineer, production lead |
+| T7 | QA decisions | `qa_qc` | Check quality of a finished batch (`check-quality.md`), QA decision (`qa-release.md`), Batch record (BMR), Log and handle a customer complaint | review an inspection, release one batch, reject one lot, raise a deviation, close the BMR, place and release a legal hold (two people) | 2 h | quality-regulatory-specialist, QA process owner |
 | T8 | Orders and fulfilment | `sales_cs`, `warehouse_operator`, `finance` | Enter and confirm a sales order, Pick, pack and dispatch, Receive a customer return | enter and confirm an order, allocate, pick, verify packing as a second person, dispatch, record the signed DR, receive a return | 1.5 h | product-manager, sales lead |
 | T9 | Imports and reports | `system_admin`, `procurement`, `site_manager`, `owner_director` | Import a spreadsheet, Run, export and schedule a report | import a 20-row fictional material file through all five steps, run and export a report, schedule it | 1 h | data-migration persona, operations contact |
 | T10 | Refresher | all | changed guides of the release | read the change notes, redo one scenario | 30 min, yearly and after a flow change | site manager |
@@ -69,10 +69,13 @@ columns. The team then changes the guide's `sop:` line to the SOP number in the 
 | Put away a received lot (`inventory.putaway`) | `docs/help/putaway.md` | W01 | | | | |
 | Scan to move (`inventory.move`) | `docs/help/move.md` | W02 | | | | |
 | Count (`inventory.count`) | `docs/help/count.md` | W03 | | | | |
-| Plan and release a work order (`production.work_order`) | `docs/help/work-order.md` | W05-01..03 | | | | |
-| Stage materials for a batch (`production.staging`) | `docs/help/staging.md` | W05-04..05 | | | | |
-| Line clearance (`production.line_clearance`) | `docs/help/line-clearance.md` | W05-06 | | | | |
-| Weigh and dispense an ingredient (`production.weighing`) | `docs/help/weighing.md` | W05-07..09 | | | | |
+| Make a product with a production order (`production.production_order`) | `docs/help/production-order.md` | W05-01..03 | | | | |
+| Get the materials for a batch (`production.materials_list`) | `docs/help/materials-list.md` | W05-04..05 | | | | |
+| Line clearance: the Start check (`production.line_clearance`) | `docs/help/line-clearance.md` | W05-06 | | | | |
+| Weigh the ingredients (`production.weigh`) | `docs/help/weigh.md` | W05-07..09 | | | | |
+| Do a step (`production.step`) | `docs/help/step.md` | W05-10..15 | | | | |
+| Finish a batch (`production.finish`) | `docs/help/finish.md` | W05-16..17 | | | | |
+| Check quality of a finished batch (`quality.check`) | `docs/help/check-quality.md` | W05-18..19, W06 | | | | |
 | Batch record (BMR), closure and paper pages (`production.bmr`) | `docs/help/bmr.md` | W05-15..17 | | | | |
 | QA release or rejection (`quality.release`) | `docs/help/qa-release.md` | W06 | | | | |
 | Enter and confirm a sales order (`sales.order`) | `docs/help/order.md` | W09-01..05 | | | | |

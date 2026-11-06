@@ -327,6 +327,12 @@ rows. Adoption depends on connection-pool behaviour on Railway and migration com
 reconciling the Phase 0 documents; each amends the ADR in the "Amends" column and is binding for
 the documents and for Phase 1 code.
 
+Status check 2026-11-06 (ADR-115 §5): no later entry accepts ADR-023 on its own. It went to the owner with
+ADR-001 to ADR-014, ADR-019 to ADR-021 at Gate 0 (`docs/gate-0-report.md`, approval checklist); the README
+records Gate 0 as approved and the code follows all seven items (for example item 4 in
+`src/db/schema/offline.ts`, item 6 as the `inventory_balances` CHECK). The status is left as written, like the
+other Gate 0 entries, until the owner's Gate 0 approval is recorded in this log (open item for the principal architect).
+
 | # | Decision | Amends | Where defined |
 |---|---|---|---|
 | 1 | `Pack` (pack verification, box assignment) lives in the `inventory` module; permission strings are `inventory.pack.{view,create,submit,approve}`; `sales.pack.*` is withdrawn | ADR-005 | `docs/permissions-matrix.md`, `docs/data-model.md` |
@@ -920,6 +926,10 @@ separate Railway project with `APP_ENV=production` (`docs/railway-for-dummies.md
 ADR-056 to ADR-070 are reserved for the Wave 4 stream decisions (procurement, finance operations,
 quality system, offline, portal, readiness) that are being written up from the stream notes.
 
+ADR-056 to ADR-070: reserved, never used (checked 2026-11-06, ADR-115 §5). The Wave 4 decisions were recorded as
+assumptions in `docs/PRD.md` and in later ADRs instead; the numbers stay unused so no old reference can point at a
+different decision.
+
 ## ADR-071 Portal-user administration sits with site managers
 
 **Status.** Accepted (Wave 4 integration).
@@ -1387,8 +1397,8 @@ redirect). Items a human GMP consultant must still confirm are listed in the QA 
 
 **Status.** Accepted (2026-10-30). The owner asked to "perform the necessary revision" against the master
 document's Part II–IV (UX restructuring brief and mockup board) on the existing app, without starting
-from scratch. Read with `docs/UX_AUDIT.md`, `docs/NEW_NAVIGATION.md`, `docs/WORKFLOW_ARCHITECTURE.md`
-and `docs/REDESIGN_IMPLEMENTATION_PLAN.md`. Builds on ADR-080 §11 (per-role navigation); supersedes
+from scratch. Read with `docs/archive/UX_AUDIT.md`, `docs/NEW_NAVIGATION.md`, `docs/archive/WORKFLOW_ARCHITECTURE.md`
+and `docs/archive/REDESIGN_IMPLEMENTATION_PLAN.md`. Builds on ADR-080 §11 (per-role navigation); supersedes
 its group list only (Production and Maintenance as separate groups).
 
 **Context.** The audit counted 13 menu groups, 117 menu items and six navigation surfaces; an operator
@@ -1547,6 +1557,35 @@ the production area". Plan: `docs/FLOOR_DISPLAY.md`. Builds on ADR-080 (flow fac
 lifetime (`session.absolute_hours`, default 7 days) and must be signed in again; a revocable signed display
 link per site is the planned follow-up. The planned-pieces figure mixes "made today" with the plan of the
 orders being made (multi-day curing orders inflate it); the owner should confirm the wording after use.
+
+## ADR-085 Plain-word look-up and "Planning tools" (consultant review 2026-10-30)
+
+**Status.** Accepted (2026-10-30; commit "Search lots by plain words and retire \"Older screens\""). Section
+written 2026-11-06 from `docs/CONSULTANT_REVIEW.md` (§2 D, §3 items 2–3, §9 wave 0) and the code that cites it
+(`src/modules/scan/card.ts`, `src/app/(app)/nav.ts`), because about ten places cite ADR-085 and the section was
+missing (ADR-115 §5). It records what was built; it adds no new decision.
+
+**Context.** The consultant review found that a first-time user freezes when look-up needs an exact code
+("coconut" or "Coconut Oil" was refused) and that the menu word "Older screens" meant nothing.
+
+**Decisions.**
+1. **Plain-word lot look-up.** Typed words on Scan or search (and later in Move stock, counts, Fix stock and Put away)
+   are not refused: `keywordMatches(ctx, text)` lists lots at the caller's sites whose lot number, supplier lot, paper
+   number, material or product name or code, or supplier name contains every typed word (2 to 5 words, case does not
+   matter). Order: with stock first, usable, then waiting for QA, then expired / stopped / rejected marked "do not use",
+   each with its shelf ("Did you mean…"). An exact lot number still opens the lot. Read-only, needs
+   `inventory.lot.view`, site-scoped like every look-up.
+2. **"Older screens" becomes Management → Planning tools.** The detailed production screens left Operations and sit in a
+   Management sub-menu with plain labels, for planners and the owner (later reduced to Production plan and Batch
+   records when the old screens became redirects: ADR-100, ADR-102, ADR-115).
+3. Header in words, destination descriptions and the floor-screen plan were delivered in the same wave (wave 0 of the
+   consultant review); the floor screen itself is ADR-084.
+
+**Extended by.** Universal search (owner review 2026-10-30, A-SCAN-02), ADR-088 §3 (lots found by words in the
+warehouse screens, A-G5-I2), ADR-098 (one way to identify stock things).
+
+**Tests.** `tests/integration/scan/keyword-lookup.test.ts`, `tests/integration/scan/scan-card.test.ts`,
+`tests/unit/nav-per-role.test.ts`.
 
 ## ADR-086 No silent hand-offs (consultant review 2026-10-30)
 
@@ -2002,7 +2041,9 @@ Consequences: tests `tests/unit/reaudit-b.test.ts` and extended integration test
 document, reservations-fefo, containers, fulfilment, boxing, label-preview); no migration. Open: the "QUARANTINE"
 word on raw-material labels (QA labelling decision); live data needs a demo reset for shelf names.
 
-## ADR-104 as built: items 2 and 4, and ADR-106 §4 (2026-11-01)
+### ADR-104 as built: items 2 and 4, and ADR-106 §4 (2026-11-01)
+
+Status: Accepted (delivery record of ADR-104 items 2 and 4 and ADR-106 §4; sub-section since the 2026-11-06 numbering clean-up, ADR-115 §5).
 
 Products carry "How do you label it?" (`products.labelling`, default `per_box`). On the packaging step and at Finish,
 "How many pieces did you pack?" splits the pieces into boxes of the product's pieces per box, with one part box for the
@@ -2022,9 +2063,9 @@ Migration 0034; assumptions A-FD-03, A-FD-05, A-FD-06 (QA and regulatory review)
 Open: live carton templates need QA to add "Made"; litre capacities ignored (no density); odd batch sizes give weigh
 targets with many decimals (fix in the weighing work).
 
-## ADR-104 §1, §3, §5 and ADR-106 §1–3 as built (2026-11-01)
+### ADR-104 as built: §1, §3, §5 and ADR-106 §1–3 (2026-11-01)
 
-Status: Accepted; open for QA: A-FD-01, A-FD-02, A-FD-04, A-PL-02.
+Status: Accepted; open for QA: A-FD-01, A-FD-02, A-FD-04, A-PL-02. (Delivery record of ADR-104 and ADR-106; sub-section since ADR-115 §5.)
 
 - **Pick list per lot** (`pickPlan`): Get materials lists, per ingredient, the lots to take in use-first order with
   how much from each, including what stays in an opened container; the weigh card proposes the same lots.
@@ -2103,7 +2144,9 @@ Consequences: any lite-seed change must raise `DEMO_SEED_VERSION`; a deploy then
 everyone out. Open: a routing with both a filling and a packaging step blocks the packaging step
 (`packagingBlockers`); the lotion routing records packaging once, on "Label and pack".
 
-## ADR-109 §2 Every remaining hand-off names who acts next (2026-11-06)
+### ADR-109 §2 Every remaining hand-off names who acts next (2026-11-06)
+
+Status: Accepted (second part of ADR-109; sub-section since ADR-115 §5).
 
 `nextActors` also takes an ad-hoc rule and `roleStandIn: false`, so the hint keeps step roles exactly as the service
 does (stock fixes, finance documents, master-data revisions). The older "Waiting for" helpers (`waitingFor`,
@@ -2133,7 +2176,9 @@ delivery page, reports and the recipe wizard tabs use the width. Tests `tests/un
 integration `bmr-closure`. Live data: QA approves a BMR template version on renderer v2; batches pinned to v1 keep the
 old layout. Open: old prints' footers still show codes (needs new layout versions and QA approval).
 
-## ADR-110 as built: How work flows and visible next steps (C0, C10–C19), 2026-11-06
+### ADR-110 as built: How work flows and visible next steps (C0, C10–C19), 2026-11-06
+
+Status: Accepted (delivery record of ADR-110; sub-section since ADR-115 §5).
 
 `/operations/flow` reads one model, `getWorkFlow` (`src/modules/analytics/work-flow.ts`, stage words in
 `work-flow-stages.ts`): 16 stages and their counts at the current site, each count one query with its own view
@@ -2147,7 +2192,9 @@ other QA person and shows the configured lot and batch rules side by side (A-QA-
 permission. Tests: unit `work-flow`, `scan-qty`, `round-c16-words`; integration `analytics/work-flow`,
 `procurement/adr110-one-approval`. Help: `docs/help/work-flow.md`.
 
-## ADR-110 C1–C8 as built (2026-11-06)
+### ADR-110 C1–C8 as built (2026-11-06)
+
+Status: Accepted (delivery record of ADR-110; sub-section since ADR-115 §5).
 
 - **C1** The second check of a box refuses any box not on the pick list (`NOT_ON_PICK_LIST`) unless an over-shipment
   approval for that line has room for the whole box; it never counts past ordered + approved extra; a box not on a
@@ -2168,7 +2215,7 @@ permission. Tests: unit `work-flow`, `scan-qty`, `round-c16-words`; integration 
 Consequences: no migration or new permission; assumptions A-E2E-01..06, A-LBL-SACK-01, A-QA-SAMPLE-01 (QA/owner);
 status with test names in `docs/END_TO_END_FLOW.md`. Demo seed version raised so the live demo reloads on the new rules.
 
-## ADR-113 Live check of the small demo: one "short or coming" rule, weigh reasons, BMR words (2026-11-06)
+## ADR-113 Live check of the small demo (1): production, BMR, short-or-coming (one "short or coming" rule, weigh reasons, BMR words; 2026-11-06)
 
 Status: Accepted (amends ADR-112, follows ADR-110); A-COVER-01 (owner, planner) and A-BMR2-04 (QA) open.
 
@@ -2188,7 +2235,7 @@ Status: Accepted (amends ADR-112, follows ADR-110); A-COVER-01 (owner, planner) 
 Consequences: the lite seed links the lotion orders to the Isla Spa order and prints its box labels through the label
 service; `DEMO_SEED_VERSION` raised; no migration or permission change.
 
-## ADR-114 Live check of the small demo: names, desktop width, role Homes (2026-11-06)
+## ADR-114 Live check of the small demo (2): names, desktop, Homes (names at every wait, desktop width, role Homes; 2026-11-06)
 
 Status: Accepted.
 
@@ -2204,7 +2251,9 @@ which shelf; operators lose the warehouse quick actions; recent activity takes i
 flows stage 3 counts deliveries coming with the nearest date. No migration or permission change. Tests
 `tests/unit/live-check-1106.test.ts`, `tests/integration/governance/live-check-names.test.ts`.
 
-## ADR-110 C9 addendum: a fully set-aside order tells the pickers (2026-11-06)
+### ADR-110 C9 addendum: a fully set-aside order tells the pickers (2026-11-06)
+
+Status: Accepted (addendum to ADR-110 C9; sub-section since ADR-115 §5).
 
 When an order's stock is fully set aside (`allocateOrder`), the people at that site who may take stock off the shelf
 (`sales.pick.create`, hand-off kind `pick`) get one message per order ("Get order … from the shelf"), never the person

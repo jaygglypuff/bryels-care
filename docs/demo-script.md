@@ -66,7 +66,7 @@ A new deploy of the app with new demo data does this by itself the first time it
 | Purchase order to Manila Print & Pack (wrappers, bottles) | **sent** to the supplier | — |
 | Purchase order to Laguna Oleo Supply (coconut oil, glycerin) | delivered: the coconut oil is OK and **waits to be put on a shelf**; the glycerin **waits for the QA check** | `warehouse.nfd@` (scene 4), `qa.nfd@` |
 | Customer order from Luntian Wellness Stores (48 soap bars) | 2 boxes set aside: **ready to get from the shelf** | `warehouse.nfd@` (scene 6) |
-| Customer order from Isla Spa Supplies (48 lotion bottles) | confirmed; production orders 2 and 4 are made for it, so it is **covered by stock that is coming** (94 bottles wait for QA), not short | after scene 2 |
+| Customer order from Isla Spa Supplies (48 lotion bottles) | confirmed; production orders 2 and 4 are made for it, so it is **covered by stock that is coming**: production order 2 made 94 bottles that wait for QA, and the order needs 48 of them, so it is not short | after scene 2 |
 
 Stock to show "use first": one **Palm Oil** lot expires in about 20 days (it is used first), one
 **Coconut Oil** drum is already opened (part used by the soap batches), and one **Glycerin** lot waits
@@ -96,10 +96,12 @@ so they change from month to month.
 1. Home shows the lotion batch waiting for the check. Open it.
 2. Type the test results (pH between 5.0 and 6.5, "Looks right": Conforms). These test names and
    limits are **examples only**; the company's QA sets the real ones.
-3. Tick **I reviewed the batch record** and tap **Pass**. The lotion is now OK to sell and moves to
+3. Tick **I looked at the batch record and the things that did not go as planned**, tap **OK to use**, then
+   **Yes, OK to use**. The lotion is now OK to sell and moves to
    the finished goods bay. The Isla Spa order (this production order was made for it) can now get its bottles.
 4. Before this scene, **How work flows** shows the Isla Spa order as "waiting for stock that is coming:
-   48 waiting for QA" — not red, nothing needs making. Every production order in the demo was made by
+   48 waiting for QA" — not red, nothing needs making. (94 bottles wait for QA; the screen counts only the 48
+   this order needs.) Every production order in the demo was made by
    the planner (Cora) and approved by the site manager (Dino).
 
 ### Scene 3: The operator finishes the soap (3 min). Sign in as `operator.nfd@` (phone size is best)
@@ -129,7 +131,8 @@ so they change from month to month.
 
 ### Scene 6: Get the customer's soap from the shelf (2 min). `warehouse.nfd@`
 
-1. Open the Luntian Wellness Stores order (**Sales → Orders**, or Home). It is ready to get from the
+1. Open the Luntian Wellness Stores order from Home, or **Operations → Packing & dispatch → To get from shelf**
+   (office people: **Sales & Customers → Customer orders**). It is ready to get from the
    shelf: two boxes on the **Finished goods bay**.
 2. Scan the two box labels (or tap them). The order moves on to the second check of the box.
 
@@ -185,4 +188,4 @@ so they change from month to month.
   changes so the next deploy reloads the demo.
 - Tests: `tests/integration/platform/demo-lite.test.ts` (storyline, version reload, guards),
   `tests/unit/demo-profile.test.ts`.
-- Older screenshots in `docs/demo/` show the full demo, not this one.
+- The old screenshots of the full demo (`docs/demo/*.png`, 23 Oct) were removed on 2026-11-06 (ADR-115 §5): they no longer matched the app.

@@ -1,8 +1,8 @@
 ---
 key: production.step
 title: Do a step (Start check, Mix, Curing, Cut, Wrap)
-version: 4
-updated_at: 2026-11-01
+version: 5
+updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -45,9 +45,9 @@ Each step has its own screen: what to do, up to 3 things to write down, and one 
 6. Wrong number? Type the right number and print again. The old box labels stop working: throw them away.
 7. Some products also need a **label on each piece** (bottles, for example). Only then the screen shows **Label for each piece** too. How many? starts at the pieces you packed. See [Labels](labels.md).
 8. Labels can only be printed from this step on, because printing fixes the lot number and the expiry.
-9. Type **How many wrappers did you use?** and **How many were spoiled?** on the keypad.
-4. Tap **Step done**. The system records the wrapper lot for this batch. Left-over wrappers are counted at Finish.
-5. If no wrappers were on the list (older products), the screen shows the wrappers and labels that are ready to use at your site as big cards: name, lot, shelf and how many. **Tap the one you took** (check the lot number on its box or roll), or tap **Scan** and point the camera (or the handheld scanner) at its label, or **Find by name**. Say how many you took and tap **I took these**. You never type a code.
+9. Type **How many did you use?** and **How many were spoiled?** on the keypad.
+10. Tap **Step done**. The system records the wrapper lot for this batch. Left-over wrappers are counted at Finish.
+11. If no wrappers were on the list (older products), the screen shows the wrappers and labels that are ready to use at your site as big cards: name, lot, shelf and how many. **Tap the one you took** (check the lot number on its box or roll), or tap **Scan** and point the camera (or the handheld scanner) at its label, or **Find by name**. Say how many you took and tap **I took these**. You never type a code.
 
 ## After the last step
 
@@ -64,4 +64,4 @@ Each step has its own screen: what to do, up to 3 things to write down, and one 
 3. Write a short note, for example "oils melted, lye not added yet". Tap **Save and stop for today**.
 4. The batch stays "Being made". Tomorrow your task says "Continue Calamansi Soap B-26-0006 · step 4 · started yesterday" with your note. The TV shows "day 2".
 5. Curing waits by itself: the card says "Curing until Sat 8 Nov".
-6. Write the pieces you packed each day in **Today's count**. Finish adds them up: "Packed over 3 days: 400 + 350 + 250 = 1,000".
+6. Write the pieces you packed each day in the order's daily log (**Today** tab). Finish adds them up: "Packed over 3 days: 400 + 350 + 250 = 1,000".

@@ -1,5 +1,7 @@
 # Redesign implementation plan (brief Part II §17)
 
+> **Archived 2026-11-06:** built as ADR-081 (R1), ADR-082 (R2–R3) and ADR-083 (R5); later rounds as ADR-088 to ADR-114. Kept for history; the current decisions are in `docs/decision-log.md` (archive: ADR-115 §5).
+
 | | |
 |---|---|
 | Status | R1 delivered on branch `claude/optimistic-dijkstra-py0bf2`; R2–R5 proposed |
@@ -9,8 +11,8 @@
 
 | Phase | Content | Status |
 |---|---|---|
-| Audit (brief phase 1) | `docs/UX_AUDIT.md`: 31 findings with evidence | Done |
-| Information architecture (2) | `docs/NEW_NAVIGATION.md`, `docs/WORKFLOW_ARCHITECTURE.md` | Done |
+| Audit (brief phase 1) | `docs/archive/UX_AUDIT.md`: 31 findings with evidence | Done |
+| Information architecture (2) | `docs/NEW_NAVIGATION.md`, `docs/archive/WORKFLOW_ARCHITECTURE.md` | Done |
 | **R1 — navigation, Operations Center, stock by type** (3–4) | Five destinations; section menus; role tab bars; rail removed; `/operations`; Home "Right now"; Inventory tabs Raw/WIP/Finished; `/inventory/wip`; `/management`; app-wide error page; help and messages renamed | **Done** (ADR-081) |
 | R2 — owner polish | Overview links to order hub (UX-09) ✓; "To approve" only for approvers (UX-06, UX-29) ✓; trim overview and labels = page titles (UX-19) next | Partly done (ADR-082) |
 | R3 — operator and record layout | Assignee on production orders ✓ (migration 0029, additive); "Your next task" on Home ✓; shared record header on PO, receipt, sales order, shipment ✓ (UX-21); words (UX-17/18) next | Done except words (ADR-082) |

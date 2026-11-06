@@ -1,8 +1,8 @@
 ---
 key: inventory.receive
 title: Receive a delivery
-version: 5
-updated_at: 2026-10-31
+version: 6
+updated_at: 2026-11-06
 sop: SOP to be mapped by the warehouse lead (US-9-08)
 ---
 
@@ -40,6 +40,6 @@ Use this screen when a supplier delivery arrives. New lots wait for the QA check
 2. The labels page opens and the print window opens by itself. The page shows each label exactly as it prints (for example "Coconut Oil · 4 labels, all like this"). One label for each sack or container (1 when you did not type containers).
 3. In the print window pick the label printer and **Actual size**. Print. Then tap **Yes, they printed** and stick one label on every sack. Leave the goods in the hold area.
 4. Labels came out wrong? Tap **No, print again**. Items that already had labels are named and not printed again; for a lost label open the lot and print it again with a reason.
-5. If label printing is not set up yet, the page says so: ask the administrator (Settings › Labels and printouts). See [Labels](labels.md).
+5. If label printing is not set up yet, the page says so: ask the administrator (**Management › People, rules and settings › Labels and printouts**). See [Labels](labels.md).
 6. When QA releases a lot, you get a message such as "Coconut Oil lot L-2610-00024 is ready — put it on A-01", and the lot appears in **Put away**.
 - Urgent buy with no purchase order: purchasing opens the receipt and taps **Create PO from this receipt**. Nothing is received twice.

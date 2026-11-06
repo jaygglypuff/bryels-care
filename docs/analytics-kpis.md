@@ -163,24 +163,26 @@ WHERE (site_id = ANY($site_ids) OR site_id IS NULL) AND resolved_at IS NULL   --
 GROUP BY 1, 2;
 ```
 
-### 2.2 Operations dashboard (`analytics.dashboard.view`; FR-analytics-02; W05, W12, W13)
+### 2.2 Operations dashboard
+
+Note (ADR-115, 2026-11-06): a "work order" is shown to users as a **production order** (ADR-074, ADR-080); the table `work_orders` keeps its name. The old screens `/production/work-orders` and `/production/board` redirect to `/production/orders`. (`analytics.dashboard.view`; FR-analytics-02; W05, W12, W13)
 
 | Id | Name | Definition and formula | Time basis | Filters | Sources | Refresh | Drill-down | Label | Phase |
 |---|---|---|---|---|---|---|---|---|---|
-| KPI-OPS-01 | Planned vs actual output | Σ `work_orders.qty_planned_base` with `planned_end` in period vs Σ net `output` postings in period, per UOM dimension | `planned_end`; `production_postings.posted_at` | S, P, L | `work_orders`, `production_postings`, `stock_movements` | mv15 | `/production/work-orders?period=&site=` | A | 3 |
+| KPI-OPS-01 | Planned vs actual output | Σ `work_orders.qty_planned_base` with `planned_end` in period vs Σ net `output` postings in period, per UOM dimension | `planned_end`; `production_postings.posted_at` | S, P, L | `work_orders`, `production_postings`, `stock_movements` | mv15 | `/production/orders` | A | 3 |
 | KPI-OPS-02 | Yield % and variance | Σ actual / Σ theoretical of the latest `yield_records` per batch closed in period; variance = 1 − that | `batches.closed_at` | S, P, L | `yield_records`, `batches` | mv15 | `/production/batches?status=closed&period=` | A | 3 |
 | KPI-OPS-03 | Yield loss quantity | Σ (theoretical − actual) over the same batches | `batches.closed_at` | S, P, L | as above | mv15 | same | A | 3 |
 | KPI-OPS-04 | Scrap % and rework % | Σ `scrap` postings / Σ `output` postings; Σ `rework_return` / Σ output | `posted_at` | S, P, L | `production_postings` | mv15 | `/production/batches?has=scrap` | A | 3 |
-| KPI-OPS-05 | Work order status | count of work orders per state (board columns) | as-of | S, P, L | `work_orders.status` | post | `/production/board` | A | 3 |
+| KPI-OPS-05 | Open production orders | count of production orders per state (board columns); shown as "Open production orders" | as-of | S, P, L | `work_orders.status` | post | `/production/orders?view=board` | A | 3 |
 | KPI-OPS-06 | Line utilisation | hours a line had a batch in `in_process` / available hours (setting `production.line_available_hours`, A-KPI-06) | `batch_state_transitions.occurred_at` | S, L | `batch_state_transitions`, `batches`, settings | mv15 | `/production/batches?line=` | A (busy), E (available) | 3 |
 | KPI-OPS-07 | Planned vs actual cycle time per step | avg (completed − started) minutes vs `routing_steps.expected_duration_minutes`, per step kind | `process_step_records.completed_at` | S, P, L | `process_step_records`, `routing_steps` | mv15 | `/production/batches/{id}#steps` | A | 3 |
 | KPI-OPS-08 | Bottleneck step | step with the largest Σ positive overrun minutes in the period (from KPI-OPS-07) | same | S, P, L | same | mv15 | same | A | 3 |
 | KPI-OPS-09 | Downtime hours | Σ downtime per line/equipment with reason | `downtime_events.started_at` | S, L | `downtime_events` | mv15 | `/production/equipment/{id}#downtime` | A | 6+ |
-| KPI-OPS-10 | Schedule adherence | % batches whose `in_process` transition is within ± grace of `work_orders.planned_start` (A-KPI-07); % work orders completed by `planned_end` | transition `occurred_at` | S, P, L | `batch_state_transitions`, `work_orders` | mv15 | `/production/work-orders?late=1` | A | 3 |
+| KPI-OPS-10 | Schedule adherence | % batches whose `in_process` transition is within ± grace of `work_orders.planned_start` (A-KPI-07); % production orders completed by `planned_end` | transition `occurred_at` | S, P, L | `batch_state_transitions`, `work_orders` | mv15 | `/production/orders` | A | 3 |
 | KPI-OPS-11 | Labour coverage per line/shift | present headcount / scheduled headcount (KPI-HR-01 by line) | work date | S, L, D | `attendance_events`, `shift_assignments` | night | `/hr/attendance/summary` | A / E | 6 |
 | KPI-OPS-12 | QC turnaround | same as KPI-QUA-01 (shown on the operations dashboard; one definition, one snapshot) | `reviewed_at` | S, P, M, St | `inspections` | mv15 | `/quality/inspections?period=` | A | 3 |
 | KPI-OPS-13 | Deviations per batch; right-first-time | deviations raised / batches closed; % closed batches with no deviation and no controlled exception (CX-TOL, CX-MAT, CX-CAL, skipped step) | `batches.closed_at` | S, P, L | `deviations`, `dispense_records`, `process_step_records` | mv15 | `/quality/deviations?period=` | A | 3 |
-| KPI-OPS-14 | Late work orders | count with status in (planned, released, in_progress) and `planned_end` < now | as-of | S, P, L | `work_orders` | live | `/production/work-orders?late=1` | A | 3 |
+| KPI-OPS-14 | Late production orders | count of production orders with status in (planned, released, in_progress) and `planned_end` < now | as-of | S, P, L | `work_orders` | live | `/production/orders` (the red **Late** tag) | A | 3 |
 | KPI-OPS-15 | Equipment overdue; batches under equipment exception | `in_service` equipment with `calibration_due_date` < today; batches with a CX-CAL deviation in period | as-of; `deviations.raised_at` | S, L | `equipment`, `deviations`, `equipment_uses` | live | `/production/equipment?overdue=1` | A | 3 |
 | KPI-OPS-16 | Dispensing first-time-in-tolerance | % first (non-superseded, non-voided) dispense records with `is_within_tolerance` | `dispensed_at` | S, P, L, M | `dispense_records` | mv15 | `/production/batches/{id}#dispensing` | A | 3 |
 

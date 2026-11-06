@@ -5,7 +5,7 @@
 | Status | Built in slice R1 (2026-10-30); round 2 of the UX audit fixes (2026-10-31): one door per job, menu words = screen titles, smaller office menu |
 | Code | `src/app/(app)/nav.ts` (model), `src/app/(app)/shell.tsx` (top bar, section menus, phone tab bar, drawer) |
 | Tests | `tests/unit/nav-per-role.test.ts`, `tests/unit/nav-titles.test.ts` |
-| Read with | `docs/UX_AUDIT.md` (why), `docs/WORKFLOW_ARCHITECTURE.md` (what the Operations destination shows) |
+| Read with | `docs/archive/UX_AUDIT.md` (why), `docs/archive/WORKFLOW_ARCHITECTURE.md` (what the Operations destination shows) |
 
 ## 1. Principles
 

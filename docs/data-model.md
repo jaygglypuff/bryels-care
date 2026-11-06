@@ -3192,6 +3192,13 @@ applied in order, once, in every environment, and never edited afterwards. If so
 to be removed, it is first made unused, then the data is copied, then it is removed in a
 later step, so a deployment can always be rolled back to the previous version of the code.
 
+**Migration numbering (ADR-115 §6, checked 2026-11-06).** There is no file `0033_…`: the journal entry with
+`idx` 33 is `0034_adr104_box_labels_batch_plan`, followed by `0035_adr104_floor_decisions` (idx 34) and
+`0036_adr104_custom_sql` (idx 35). Nothing is renumbered (applied migrations are never edited). drizzle-kit names the
+next file from the journal length, so the next `pnpm db:generate` would produce `0036_…` again: **rename the new
+file and its journal `tag` to `0037_<description>` before committing** so file prefixes stay unique, and keep
+`idx` as generated. Check with `ls src/db/migrations` that no prefix appears twice.
+
 ### 13.1 Toolchain and flow (ADR-003)
 
 ```

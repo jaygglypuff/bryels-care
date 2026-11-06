@@ -1,5 +1,7 @@
 # Workflow architecture: the connected pipeline
 
+> **Archived 2026-11-06:** built as ADR-081 (Operations Center, pipeline) and ADR-082 (record header); the connected chain is now ADR-106 and ADR-110 (see `docs/END_TO_END_FLOW.md`). Kept for history; see `docs/decision-log.md` (archive: ADR-115 §5).
+
 | | |
 |---|---|
 | Status | §2 built in slice R1 (ADR-081); §4 and §5 are the proposal for R3–R4 (owner approval needed) |

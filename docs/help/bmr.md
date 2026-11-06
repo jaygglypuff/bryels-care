@@ -1,7 +1,7 @@
 ---
 key: production.bmr
 title: Batch record (BMR), closure and paper pages
-version: 1
+version: 2
 updated_at: 2026-11-06
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
@@ -24,7 +24,7 @@ The batch manufacturing record is built from what was entered during the batch. 
 ## Close the batch
 
 1. The closure page lists anything that blocks closure, for example an open deviation or an unreviewed page.
-2. When nothing blocks, press **Close batch and generate the final BMR**.
+2. When nothing blocks, press **Close the batch and make the final batch record**.
 
 ## Reopen and amend
 

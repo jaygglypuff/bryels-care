@@ -1,6 +1,10 @@
 # Production flow v2: one order, few steps, made for a small soap and lotion plant
 
-**Status.** Proposed design (manufacturing process engineer, 2026-10-30). Not built yet. Nothing in
+**Status.** Accepted as ADR-080; built (see ADR-100, ADR-104, ADR-105, ADR-106 and ADR-110). Updated
+2026-11-06 (ADR-115 §5). The text below is the design as proposed on 2026-10-30 (manufacturing process
+engineer); where the built app differs, the ADRs named above win.
+
+Original status line: Proposed design (manufacturing process engineer, 2026-10-30). Not built yet. Nothing in
 this document changes code. When the owner accepts it, the principal architect records it as
 **ADR-080 "Production flow v2"**, which amends ADR-074 (status mapping, see §3), and the new assumptions
 (`A-PF2-nn`, Appendix D) go into `docs/PRD.md`.

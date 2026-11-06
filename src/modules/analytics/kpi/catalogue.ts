@@ -461,7 +461,7 @@ export const KPIS: KpiDefinition[] = [
     rows: (p) => yieldBase(p, sql`y.theoretical_base - y.actual_base`, sql`null::numeric`, sql`null::text`),
   },
   {
-    code: "KPI-OPS-05", name: "Open work orders", short: "Open work orders", area: "operations", kind: "asof", aggregate: "sum", unit: "count", label: "actual", refresh: "post", additive: true, better: null,
+    code: "KPI-OPS-05", name: "Open production orders", short: "Open production orders", area: "operations", kind: "asof", aggregate: "sum", unit: "count", label: "actual", refresh: "post", additive: true, better: null,
     definition: "Work orders planned, released or in progress at the period end.",
     formula: "COUNT(work orders with status as of T in (planned, released, in_progress))", timeBasis: "as of the period end (work_order_state_transitions)",
     sources: ["work_orders", "work_order_state_transitions"], permissions: ["production.work_order.view"],
@@ -483,7 +483,7 @@ export const KPIS: KpiDefinition[] = [
     rows: (p) => yieldBase(p, rightFirstTime(p), sql`1::numeric`, sql`case when ${rightFirstTime(p)} = 1 then 'right_first_time' else 'exception' end`),
   },
   {
-    code: "KPI-OPS-14", name: "Late work orders", short: "Late work orders", area: "operations", kind: "asof", aggregate: "sum", unit: "count", label: "actual", refresh: "live", additive: true, better: "down",
+    code: "KPI-OPS-14", name: "Late production orders", short: "Late production orders", area: "operations", kind: "asof", aggregate: "sum", unit: "count", label: "actual", refresh: "live", additive: true, better: "down",
     definition: "Open work orders whose planned end date has passed, as of the period end.",
     formula: "COUNT(open work orders with planned_end < as-of date)", timeBasis: "as of the period end",
     sources: ["work_orders.planned_end", "work_order_state_transitions"], permissions: ["production.work_order.view"],

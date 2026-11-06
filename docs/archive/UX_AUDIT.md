@@ -1,5 +1,7 @@
 # UX audit: current state (Part II §2 of the brief)
 
+> **Archived 2026-11-06:** the findings were addressed by ADR-081 to ADR-083 and the later UX audit rounds (`docs/ux-audit/`, ADR-098 and later). Kept for history; see `docs/decision-log.md` (archive: ADR-115 §5).
+
 | | |
 |---|---|
 | Status | Audit complete. Findings addressed in slice R1 are marked in §8 (ADR-081) |
@@ -158,7 +160,7 @@ assigned work and next action.
 | UX-19 | Same thing, different names: menu "Receive materials" vs page title "Receive a delivery" (`inventory/receive/page.tsx:38`); "Scan to move" vs "Move stock" (`warehouse/page.tsx:22`); rail "QA queue" vs tab "Quality check" vs page "QA queue"; group "Home" shown as pill "Overview" (`shell.tsx:153`) next to item "Overview"; "Production orders" vs "My work" vs "Orders". | Medium | all | as cited | Glossary of screen names in `docs/PRD.md`; menu label = page title. |
 | UX-20 | No Operations Center: no screen shows the pipeline Expected -> Receiving -> Inspection -> Available -> Production -> QC -> Packaging -> FG -> Orders -> Dispatch with real counts. Closest are the owner overview batch board (production only) and `/warehouse` section tiles. | High | owner, site_manager, planner | no route; `dashboard/owner-overview.tsx:120-135`; `warehouse/page.tsx` | Build Operations Center from existing state machines (Part II §9); counts from records only. |
 | UX-21 | No common transaction detail layout. Sales order, PO, goods receipt, production order and batch pages each compose `Card`/`Dl`/`Banner` differently; only some show a progress strip; activity history appears on some (shipment, PO, sales order) and not on others (goods receipt, production order). | Medium | all | `sales/[orderId]/page.tsx`, `procurement/orders/[id]/page.tsx`, `inventory/receive/[grId]/page.tsx`, `production/orders/[workOrderId]/page.tsx`, `production/[batchId]/page.tsx` | One `RecordPage` layout: header, progress, current work + one primary action, related, activity (Part II §7). |
-| UX-22 | Workflow continuity is partial: the receipt page links to Put away and labels but not to the inspection; the sales order's next step is text ("start the pick list (Fulfilment)") plus a `FulfilmentPanel`; invoices and payments for an order live only under Finance. There is no workflow-instance record (reference, type, current step, assignee) across modules. | High | warehouse_operator, sales_cs, finance | `inventory/receive/[grId]/page.tsx:97,124`; `sales/[orderId]/page.tsx:25,315`; `src/db/schema/` has no workflow-instance table | Each record shows "Next step" as one button to the next screen; design the workflow read model in `docs/WORKFLOW_ARCHITECTURE.md` before schema work. |
+| UX-22 | Workflow continuity is partial: the receipt page links to Put away and labels but not to the inspection; the sales order's next step is text ("start the pick list (Fulfilment)") plus a `FulfilmentPanel`; invoices and payments for an order live only under Finance. There is no workflow-instance record (reference, type, current step, assignee) across modules. | High | warehouse_operator, sales_cs, finance | `inventory/receive/[grId]/page.tsx:97,124`; `sales/[orderId]/page.tsx:25,315`; `src/db/schema/` has no workflow-instance table | Each record shows "Next step" as one button to the next screen; design the workflow read model in `docs/archive/WORKFLOW_ARCHITECTURE.md` before schema work. |
 | UX-23 | Inventory does not present Raw materials / WIP / Finished goods as first-level choices. ADR-077 sections exist (`raw_materials`, `packaging`, `finished_goods`, `qa_hold`, `production`...) and drive `/warehouse` tiles and `/inventory?section=`, but the Inventory group is 7 tabs by function (lots, locations, boxes, availability, expiry, FEFO, movements). | Medium | warehouse, planner, owner | `nav.ts:47-57`; `src/lib/location-sections.ts`; `warehouse/page.tsx:44` | Inventory = tabs Raw materials / WIP / Finished goods + Scan as primary action; other views as filters. |
 | UX-24 | 28 pages have no error boundary on their path, including high-traffic ones: `/inventory`, `/inventory/scan`, `/inventory/[lotId]`, `/inventory/movements`, `/production`, `/production/[batchId]`, `/sales`, `/sales/[orderId]`, `/sales/new`, `/quality`, `/quality/trace`, `/quality/lots/[lotId]`, `/quality/batches/[batchId]`, `/approvals`, `/action-centre`, `/reports/*` (5), `/documents/[id]`, `/help`, `/masterdata/lists`. No root `(app)/error.tsx`. | Medium | all | `find` result §2.3 | Add `src/app/(app)/error.tsx` (one shared boundary with retry and reference id, `ux-system.md` §6) plus segment boundaries for the pages above. |
 | UX-25 | Some list pages have no explicit empty state: `/production/defects` renders nothing when there are no products (`products.length > 0 &&`), `/finance/periods`, `/warehouse/repack` (no `EmptyState`). 195 files do use `EmptyState`. | Low | finance, operators | `production/defects/page.tsx:35` | Add empty states with the next action. |
@@ -212,8 +214,8 @@ controls found are pending-state submit buttons, empty select prompts and locked
 
 1. Owner reviews this audit (Part II §19: no redesign coding before approval).
 2. `docs/NEW_NAVIGATION.md`: map all 117 menu entries to the five destinations, per role, with redirects.
-3. `docs/WORKFLOW_ARCHITECTURE.md`: pipeline stages and the workflow read model over existing state machines (UX-20, UX-22).
-4. `docs/OPERATOR_EXPERIENCE.md` and `docs/OWNER_EXPERIENCE.md` from findings UX-02, 15, 16, 17 and UX-06, 07, 09, 29.
+3. `docs/archive/WORKFLOW_ARCHITECTURE.md`: pipeline stages and the workflow read model over existing state machines (UX-20, UX-22).
+4. `docs/archive/OPERATOR_EXPERIENCE.md` and `docs/archive/OWNER_EXPERIENCE.md` from findings UX-02, 15, 16, 17 and UX-06, 07, 09, 29.
 5. Quick wins that need no approval of structure but are safe: root `(app)/error.tsx` (UX-24), owner overview links to the order hub (UX-09), label/title alignment (UX-19). Each still needs a ticket and tests.
 
 ## 8. Status after slice R1 (ADR-081)
@@ -231,4 +233,4 @@ controls found are pending-state submit buttons, empty select prompts and locked
 | UX-24 | Partly: app-wide `src/app/(app)/error.tsx` added; segment boundaries remain |
 | UX-27 | Done: rail removed |
 | UX-31 | Done: `ux-system.md` §3 points to `NEW_NAVIGATION.md` |
-| UX-03, 04, 06, 09, 15, 17–19, 21, 22, 26, 29 | Open: see `docs/REDESIGN_IMPLEMENTATION_PLAN.md` R2–R4 |
+| UX-03, 04, 06, 09, 15, 17–19, 21, 22, 26, 29 | Open: see `docs/archive/REDESIGN_IMPLEMENTATION_PLAN.md` R2–R4 |

@@ -15,6 +15,7 @@ consolidating those at the same time. Their routes are listed as "other engineer
 | Status | Meaning |
 |---|---|
 | current | The screen the standard intends for this job (ADR-080…097, `docs/PAGE_REVIEW.md`). |
+| retired → redirect (ADR-115) | Retired in the 2026-11-06 clean-up: the page, its actions and services are removed and only a server redirect stays. |
 | superseded → redirect | An older screen doing the same job as a newer one. The page is now a server `redirect()` to the replacement, so bookmarks, old e-mails and stored message links keep working. |
 | redirect (alias) | Was already a redirect before this pass (old address kept alive). |
 | advanced (kept) | Overlaps a newer screen but still holds a unique capability. Kept, labelled as advanced or reached only from ⋯ More of the current screen, not in floor menus; the reason is recorded. |
@@ -23,15 +24,20 @@ consolidating those at the same time. Their routes are listed as "other engineer
 
 ## Summary
 
+Refreshed 2026-11-06 (ADR-115 §5) after the production consolidation and the clean-up.
+
 | Status | Routes |
 |---|---|
-| current | 222 |
-| other engineer | 46 |
+| current | 227 |
+| other engineer | 38 |
 | advanced (kept) | 14 |
-| redirect (alias) | 5 |
-| superseded → redirect | 3 |
+| superseded → redirect | 8 |
+| redirect (alias) | 6 |
+| retired → redirect (ADR-115) | 2 |
+| current (restricted) | 1 |
 
-Total: 290 page routes (`find src/app -name page.tsx`).
+Total: 296 page routes (`find src/app -name page.tsx | wc -l` = 296 on 2026-11-06, before the ADR-115 code clean-up; the retired routes stay as redirect pages).
+
 
 ## Superseded tabs and links (not separate routes)
 
@@ -52,25 +58,27 @@ change never show an old screen. Unit test: `tests/unit/legacy-redirects.test.ts
 
 ## Menu edits needed in `src/app/(app)/nav.ts` (not edited here)
 
-| # | Edit | Why |
-|---|---|---|
-| N1 | Remove Management → Master data → “Suppliers” (`/masterdata/suppliers`). | Superseded: redirects to Purchasing → “Suppliers we may buy from”, which now has Add a supplier. Keeping it shows the same list twice. |
-| N2 | Remove Management → Finance → “Expense approvals” (`/finance/expenses?status=to_approve`). | Expense claims to approve are in To approve (kind `approval.expense_claim`), with the verdict of who may decide; the filtered list stays reachable from the expense list's tabs. |
-| N3 | Rename Inventory → More stock lists → “FEFO & reservations” to “Which one to use first / set aside”. | Same words as the screen title (ADR-097); FEFO is a banned word. |
-| N4 | Rename Inventory → More stock lists → “Availability” to “Can we deliver?”. | Same words as the screen title (ADR-097). |
-| N5 | Rename Inventory → Counts & labels → “Adjustments” to “Fix stock”. | The screens and the warehouse Home tile say “Fix stock” (ADR-090/097). |
-| N6 | Rename Management → Master data → “Locations” to “Shelves and areas (set up)”. | Inventory already has “Shelves” (`/inventory/locations`, what is on a shelf); two entries both meaning shelves confuse. The master-data page is for setting them up. |
-| N7 | Rename Management → Reports & analytics → “Business overview” to “Business overview (detailed)” and keep it out of floor menus (already). | It is the former owner dashboard; Home is the owner's start (ADR-083). |
-| N8 | Update the `ADVANCED` comment: the production “Planning tools” section is for the production engineer to decide (out of scope here). | — |
-| N9 | Optional: QUICK_ACTIONS “Scan or look up” → “Scan or find”, matching the Scan screen intro. | Plain words. |
-| N10 | Point “Quality check” at `/quality`: Operations main tab, QA bottom tab (`tabsFor`) and QUICK_ACTIONS; then remove Operations → Quality → “QA queue” (same screen twice). | `/quality/check` (batches only) is superseded by the QA queue and redirects; pointing the menu straight at `/quality` avoids the redirect hop. |
+Status checked against `src/app/(app)/nav.ts` on 2026-11-06 (ADR-115 §5).
+
+| # | Edit | Why | Status 2026-11-06 |
+|---|---|---|---|
+| N1 | Remove Management → Master data → “Suppliers” (`/masterdata/suppliers`). | Superseded: redirects to Purchasing → “Suppliers we may buy from”, which now has Add a supplier. Keeping it shows the same list twice. | Done: Master data has no Suppliers entry. |
+| N2 | Remove Management → Finance → “Expense approvals” (`/finance/expenses?status=to_approve`). | Expense claims to approve are in To approve (kind `approval.expense_claim`), with the verdict of who may decide; the filtered list stays reachable from the expense list's tabs. | Done: Finance has no Expense approvals entry. |
+| N3 | Rename Inventory → More stock lists → “FEFO & reservations” to “Which one to use first / set aside”. | Same words as the screen title (ADR-097); FEFO is a banned word. | Done. |
+| N4 | Rename Inventory → More stock lists → “Availability” to “Can we deliver?”. | Same words as the screen title (ADR-097). | Done. |
+| N5 | Rename Inventory → Counts & labels → “Adjustments” to “Fix stock”. | The screens and the warehouse Home tile say “Fix stock” (ADR-090/097). | Done. |
+| N6 | Rename Management → Master data → “Locations” to “Shelves and areas (set up)”. | Inventory already has “Shelves” (`/inventory/locations`, what is on a shelf); two entries both meaning shelves confuse. The master-data page is for setting them up. | **Open**: Management → Master data still says "Locations" (nav.ts). Needs the rename and the screen title together (menu word = H1, `tests/unit/nav-titles.test.ts`). |
+| N7 | Rename Management → Reports & analytics → “Business overview” to “Business overview (detailed)” and keep it out of floor menus (already). | It is the former owner dashboard; Home is the owner's start (ADR-083). | **Open (partly)**: kept out of floor menus (done); the menu word is still "Business overview". |
+| N8 | Update the `ADVANCED` comment: the production “Planning tools” section is for the production engineer to decide (out of scope here). | — | Done: the comment says the old screens redirect; "Planning tools" now holds Production plan and Batch records. Its ADR citation (ADR-085) is wrong (ADR-085 is the plain-word lookup); listed for the code engineer. |
+| N9 | Optional: QUICK_ACTIONS “Scan or look up” → “Scan or find”, matching the Scan screen intro. | Plain words. | Done, worded "Scan or search" (same as the Inventory tab and the Scan screen). |
+| N10 | Point “Quality check” at `/quality`: Operations main tab, QA bottom tab (`tabsFor`) and QUICK_ACTIONS; then remove Operations → Quality → “QA queue” (same screen twice). | `/quality/check` (batches only) is superseded by the QA queue and redirects; pointing the menu straight at `/quality` avoids the redirect hop. | Done: "Check a batch or delivery" opens `/quality` from the Operations tab, the QA bottom tab and the quick links; no "QA queue" entry is left. |
 
 ## Shell/layout edit needed (not edited here)
 
-| # | Edit | Why |
-|---|---|---|
-| L1 | In `src/app/(app)/layout.tsx`, replace the local `openQaCount` with `qaQueueCount(ctx.organizationId, ctx.currentSiteId).total` from `@/modules/quality`. | UX audit: the QA badge said 11 while the list showed 2 batches. The layout counts every lot waiting for the QA check (finished-goods lots too, which are already counted with their batch) and only `awaiting_qc` batches; the QA queue lists material lots waiting, lots stopped by QA and `awaiting_qc`/`quarantined` batches. `qaQueueCount` uses the queue's own rule (one query per count); Home's QA tile already uses it. |
-| L2 | In `src/app/(app)/shell.tsx`, the badge key `"/quality/check"` can go once N10 is done (the `/quality` key stays). | — |
+| # | Edit | Why | Status 2026-11-06 |
+|---|---|---|---|
+| L1 | In `src/app/(app)/layout.tsx`, replace the local `openQaCount` with `qaQueueCount(ctx.organizationId, ctx.currentSiteId).total` from `@/modules/quality`. | UX audit: the QA badge said 11 while the list showed 2 batches. The layout counts every lot waiting for the QA check (finished-goods lots too, which are already counted with their batch) and only `awaiting_qc` batches; the QA queue lists material lots waiting, lots stopped by QA and `awaiting_qc`/`quarantined` batches. `qaQueueCount` uses the queue's own rule (one query per count); Home's QA tile already uses it. | Done: `layout.tsx` uses `qaQueueCount(...).total`. |
+| L2 | In `src/app/(app)/shell.tsx`, the badge key `"/quality/check"` can go once N10 is done (the `/quality` key stays). | — | Done: no `/quality/check` badge key is left in `shell.tsx` or `nav.ts`. |
 
 ## UX audit items handled here (2026-10-31)
 
@@ -93,7 +101,9 @@ change never show an old screen. Unit test: `tests/unit/legacy-redirects.test.ts
 - Help topics with old menu paths rewritten: `docs/help/order.md` (the three-step wizard, Set aside, Let the stock go),
   `import.md`, `run-a-report.md`, `everyday-basics.md` (Messages, I'm on it, To approve, Problems & alerts),
   `getting-started.md` (Add a supplier on the supplier list, Recipes (advanced) example, Business overview, plain words).
-  Production help topics (`work-order.md`, `staging.md`, …) are left to the production engineer.
+  Production help topics (`work-order.md`, `staging.md`, …) were left to the production engineer; on 2026-11-06 (ADR-115 §1)
+  `work-order.md`, `staging.md` and `weighing.md` were removed and their still-true content moved to `production-order.md`,
+  `materials-list.md`, `weigh.md` and `step.md`; `line-clearance.md` now describes the Start check.
 
 ## Old words in messages (part 3)
 
@@ -262,6 +272,8 @@ excluded) and the seeded messages for the banned list, with an explicit allow-li
 | `/notifications` | current | Messages | taps pass through currentHref (notificationHref) | Information only; empty state in plain words. |
 | `/offline` | current | linked from screens | — | Current. |
 | `/operations` | current | menu | — | Current. |
+| `/operations/flow` | current | Operations → How work flows | — | ADR-110 C0: the 16 steps from "Ask to buy" to "Invoice" with today's counts; help `docs/help/work-flow.md`. |
+| `/operations/flow/[count]` | current | linked from How work flows (each number) | — | ADR-110 C0: the records behind one number, oldest first; each row opens its own record. |
 | `/portal` | current | linked from screens | — | Current. |
 | `/portal/account` | current | linked from screens | — | Current. |
 | `/portal/documents` | current | linked from screens | — | Current. |
@@ -281,6 +293,8 @@ excluded) and the seeded messages for the banned list, with an explicit allow-li
 | `/print/documents/[id]` | other engineer | — | — | Owned by the labels/printing engineer (not changed here). |
 | `/print/invoice/[id]` | other engineer | — | — | Owned by the labels/printing engineer (not changed here). |
 | `/print/labels/[jobId]` | other engineer | — | — | Owned by the labels/printing engineer (not changed here). |
+| `/print/labels/batch-boxes/[batchId]` | current | Wrap step → Open the box labels and print | — | ADR-104 §2, ADR-099: box labels of one batch, printed where the work happens. |
+| `/print/labels/pack/[packId]` | current | Boxing → Print N labels | — | ADR-099 (re-audit B N9): box labels of one boxing, printed where the boxing happens. |
 | `/print/labels/receipt/[grId]` | other engineer | — | — | Owned by the labels/printing engineer (not changed here). |
 | `/print/labels/test/[labelTemplateId]` | other engineer | — | — | Owned by the labels/printing engineer (not changed here). |
 | `/print/lot-label/[lotId]` | other engineer | — | — | Owned by the labels/printing engineer (not changed here). |
@@ -309,27 +323,29 @@ excluded) and the seeded messages for the banned list, with an explicit allow-li
 | `/procurement/returns/new` | current | linked from screens | — | Current. |
 | `/procurement/suppliers` | current | The one supplier list | masterdata list redirects here | Gained Add a supplier, CSV, stopped-using toggle, deleted banner. |
 | `/procurement/suppliers/[id]` | current | The supplier page | search, record-links, delivery page, after create | Gained “Change contact details” and the created banner. |
-| `/production` | other engineer | — | — | Owned by the production engineer (not changed here). Planning tools “All batches and their records”; search and scan still open /production/[batchId]. |
+| `/production` | other engineer | — | — | Owned by the production engineer (not changed here). Planning tools “Batch records”; search and scan still open /production/[batchId]. |
 | `/production/[batchId]` | other engineer | — | — | Owned by the production engineer (not changed here). |
 | `/production/[batchId]/closure` | current (restricted) | Batch record ⋯ More (site manager, production admin, QA) | — | Re-audit 2026-11-01: the page and `getClosureView` refuse everyone without `production.batch.approve`, `production.batch.admin` or `quality.disposition.approve` (operators typing the URL get "You don't have access"). Negative test in `tests/integration/production/bmr-closure.test.ts`. |
 | `/production/[batchId]/finish` | other engineer | — | — | Owned by the production engineer (not changed here). |
-| `/production/board` | advanced (kept) | Production orders "Board"; Production › Advanced | — | Kept for the drag moves of planners. Re-audit 2026-11-01: order words in column titles and move labels, cards open `/production/orders/[id]`, phones get one list with status chips. |
+| `/production/board` | retired → redirect (ADR-115) | /production/orders?view=board (the "Board" button of Production orders) | — | ADR-115 §1: retired; server redirect; page, action, service, setting `production.board.columns` and their tests removed (code change in the same clean-up). |
 | `/production/defects` | other engineer | — | — | Owned by the production engineer (not changed here). |
-| `/production/new` | other engineer | — | — | Owned by the production engineer (not changed here). Planning tools “Make a batch without an order”. |
+| `/production/new` | superseded → redirect | /production/orders/new (New production order) | — | Server redirect (UX audit round 1, ADR-102); "make a batch without an order" is no longer offered. |
 | `/production/orders` | other engineer | — | — | Owned by the production engineer (not changed here). |
 | `/production/orders/[workOrderId]` | other engineer | — | — | Owned by the production engineer (not changed here). |
+| `/production/orders/[workOrderId]/continue` | redirect (alias) | the batch's next production screen (Get materials, Start check, Weigh, Step, Finish, Check quality) or its batch record | — | "Continue this batch": used by the board, the scanner, the batch record's next step and old bookmarks. |
 | `/production/orders/[workOrderId]/materials` | other engineer | — | — | Owned by the production engineer (not changed here). |
 | `/production/orders/[workOrderId]/step/[n]` | other engineer | — | — | Owned by the production engineer (not changed here). |
 | `/production/orders/[workOrderId]/weigh` | other engineer | — | — | Owned by the production engineer (not changed here). |
+| `/production/orders/[workOrderId]/weigh/more` | current | Weigh card → More details → Other ways to weigh | — | One path for production work (ADR-100): container weight, a second lot, undo a wrong weighing, approval out of range. |
 | `/production/orders/new` | other engineer | — | — | Owned by the production engineer (not changed here). |
 | `/production/plan` | other engineer | — | — | Owned by the production engineer (not changed here). Planning tools; the “Plan more” / low-stock links now open /production/orders/new. |
 | `/production/plan/[planId]` | other engineer | — | — | Owned by the production engineer (not changed here). |
-| `/production/staging` | other engineer | — | — | Owned by the production engineer (not changed here). Planning tools. |
-| `/production/staging/[batchId]` | other engineer | — | — | Owned by the production engineer (not changed here). |
+| `/production/staging` | superseded → redirect | /production/orders | — | Server redirect (UX audit round 1, ADR-102); Get materials is the Materials list of each batch (ADR-106). |
+| `/production/staging/[batchId]` | retired → redirect (ADR-115) | /production/[batchId] (the batch record) | — | ADR-115 §1: retired; server redirect to the batch record. The old QA lot-substitution path is replaced by ADR-104 §1 (other lot at weighing). The paper weighing sheet and batch traveler print from the batch record (⋯ More). |
 | `/production/today` | other engineer | — | — | Owned by the production engineer (not changed here). |
-| `/production/work-orders` | other engineer | — | — | Owned by the production engineer (not changed here). Planning tools “Production orders, full detail”; links from shared code now point to /production/orders/[id] (record-links, detector, report, KPI drill-down). |
+| `/production/work-orders` | superseded → redirect | /production/orders (query kept) | links from shared code point to /production/orders/[id] | Server redirect (ADR-102, ADR-105). |
 | `/production/work-orders/[workOrderId]` | superseded → redirect | — | `/production/orders/[id]` (`?tab=materials` → Materials, `?tab=batches` → Batches) | Re-audit 2026-11-01 (ADR-105). Its unique capabilities moved to the order page first: **Plan the batch** / "Plan batch n of N" (`createBatchFromWorkOrder`), **Set aside new stock** (was "Reserve again", `reserveWorkOrderShortages`), **Change this draft** (`editWorkOrder`), recipe/steps versions, newer-recipe note, people, use-first and unusable lots, and the order history in words. Plan + release ("resolve revisions") is done by Approve. The old view's commands (`workOrderCommandAction`, `cancelWorkOrderAction`, `next-step.tsx`) were removed. Guard: `tests/unit/production-one-path.test.ts` (no module/page links to `/production/work-orders/`). |
-| `/production/work-orders/new` | other engineer | — | — | Owned by the production engineer (not changed here). Old create; current is /production/orders/new. |
+| `/production/work-orders/new` | superseded → redirect | /production/orders/new | — | Server redirect (ADR-102). |
 | `/quality` | current | QA queue: the one list of what waits for QA | is now the target of the Quality check tab (after N10) and the Operations Center stage | Counts use one rule (`qaQueueCount`) for the list, Home and (after L1) the menu badge. |
 | `/quality/batches/[batchId]` | advanced (kept) | “Full QA review page” in ⋯ More of /quality/check/[batchId]; “OK with conditions” approvals | To approve “batch waits for the QA check”, decision history (dispositions), QA decisions report, deviation, lot, inspection list/detail, recall page → /quality/check/[batchId] | Kept for OK with conditions (request and second-person decision) and the weighing detail; everything else uses the one-page check. |
 | `/quality/bulk` | advanced (kept) | QA queue ⋯ More / Quality menu “Decide many lots at once” | — | QA only; not in floor menus. |

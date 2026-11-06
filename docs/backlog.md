@@ -1,5 +1,7 @@
 # Backlog: epics, user stories and acceptance criteria
 
+> **Note (2026-11-06, ADR-115):** parts of this gate-time document are superseded by ADR-080 to ADR-115 (work order → production order, staging → Get materials, weighing → Weigh, line clearance → Start check, batch board → production orders board, "QA queue" → Check a batch or delivery). The decisions in `docs/decision-log.md` win where they differ; the story ids, flow steps and risk ids here stay valid for traceability.
+
 | Field | Value |
 |---|---|
 | Status | Phase 0 draft for Gate 0 review (`docs/team-charter.md`, G0) |

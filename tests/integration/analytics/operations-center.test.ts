@@ -1,5 +1,5 @@
 /**
- * Operations Center (ADR-081, docs/WORKFLOW_ARCHITECTURE.md §2): the end-to-end pipeline counts come
+ * Operations Center (ADR-081, docs/archive/WORKFLOW_ARCHITECTURE.md §2): the end-to-end pipeline counts come
  * from real records in the caller's sites, each stage needs its own module view permission, and the
  * active batch list never shows another site's batches (cross-site and role negatives).
  */
