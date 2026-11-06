@@ -17,6 +17,7 @@ import {
 } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
+import { notifyNextActors } from "@/modules/governance";
 import { DomainError } from "@/lib/errors";
 import { D, daysUntil, fmtQty } from "@/lib/qty";
 import { lockOrder } from "./orders";
@@ -264,6 +265,17 @@ export async function allocateOrder(ctx: AuthContext, orderId: string): Promise<
     if (result.fullyAllocated) await convertReservationsForDemands(tx, lines.map((l) => l.id));
     const before = o.status;
     if (result.fullyAllocated && o.status === "confirmed") await advanceOrder(tx, ctx, o, "allocated");
+    // Hand-off (ADR-110 C9): the order can be taken off the shelf; tell the people who pick, once per order.
+    if (result.fullyAllocated) {
+      await notifyNextActors(tx, ctx, "pick", { siteId: o.siteId, excludeUserIds: [ctx.userId] }, {
+        title: `Get order ${o.orderNumber} from the shelf`,
+        body: `${ctx.displayName} set aside all the stock for order ${o.orderNumber}. Take it off the shelf for the second check.`,
+        link: "/sales/picking",
+        entityType: "sales_order",
+        entityId: o.id,
+        dedupeKey: `handoff.pick:${o.id}`,
+      });
+    }
     await audit(tx, ctx, {
       action: "inventory.stock_allocation.created",
       entityType: "sales_order",

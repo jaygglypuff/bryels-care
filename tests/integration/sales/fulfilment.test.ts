@@ -156,6 +156,16 @@ describe("US-4-09 allocation by FEFO with boxes and customer rules", () => {
     expect(ev).toHaveLength(1);
   });
 
+  it("a fully set-aside order tells the people who get it from the shelf, once, never the actor or another site (ADR-110 C9)", async () => {
+    const told = await db.select().from(notifications).where(and(eq(notifications.entityId, o1), eq(notifications.kind, "handoff.pick")));
+    expect(told.length).toBeGreaterThan(0);
+    const ids = told.map((n) => n.recipientUserId);
+    expect(ids).not.toContain(wh.userId);
+    expect(ids).not.toContain(whRvs.userId);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(told[0].link).toBe("/sales/picking");
+  });
+
   it("fefo.min_shelf_life_customer: the order line's requirement snapshot (W3D) filters lots; a requirement approved later leaves a submitted order alone", async () => {
     const c = await createCustomer(sales, { code: `T3E-${Date.now().toString(36).toUpperCase()}`, name: "Fictional Shelf Life Buyer", minShelfLifeDays: 0, shipToAddress: "1 Ilang-Ilang St., Santa Rosa, Laguna" });
     expect(await customerFulfilmentRequirements(db, kit.orgId, c.id, productId)).toMatchObject({ source: "customer_default", minRemainingShelfLifeDays: 0, fullShipmentRequired: false });

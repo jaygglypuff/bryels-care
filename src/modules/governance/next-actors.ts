@@ -80,6 +80,7 @@ export const HANDOFFS = {
   work_instruction_revision: { permission: "masterdata.work_instruction.approve", does: "approves the how-to sheet", doBase: "approve the how-to sheet", where: TO_APPROVE, fallback: "QA, then the manager", operational: true, prefer: ["qa_qc", "site_manager", "owner_director"] },
   inspection_plan_revision: { permission: "quality.inspection_plan.approve", does: "approves the check plan", doBase: "approve the check plan", where: TO_APPROVE, fallback: "QA", independent: true, prefer: ["qa_qc"] },
   setting_change: { permission: "platform.settings.approve", does: "approves the setting change", doBase: "approve the setting change", where: TO_APPROVE, fallback: "the owner", prefer: ["owner_director"] },
+  pick: { permission: "sales.pick.create", does: "gets it from the shelf", doBase: "get it from the shelf", where: "on To get from shelf", fallback: "the warehouse", prefer: ["warehouse_operator"] },
   pack_check: { permission: "inventory.pack.approve", does: "checks the box", doBase: "check the box", where: "on Packing", fallback: "the warehouse", independent: true, prefer: ["warehouse_operator", "site_manager"] },
 } satisfies Record<string, HandoffRule>;
 

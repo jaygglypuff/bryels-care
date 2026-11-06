@@ -2203,3 +2203,10 @@ next" on Home is only a step the viewer can do (`firstActionable`); the warehous
 which shelf; operators lose the warehouse quick actions; recent activity takes its verb from the audit event. How work
 flows stage 3 counts deliveries coming with the nearest date. No migration or permission change. Tests
 `tests/unit/live-check-1106.test.ts`, `tests/integration/governance/live-check-names.test.ts`.
+
+## ADR-110 C9 addendum: a fully set-aside order tells the pickers (2026-11-06)
+
+When an order's stock is fully set aside (`allocateOrder`), the people at that site who may take stock off the shelf
+(`sales.pick.create`, hand-off kind `pick`) get one message per order ("Get order … from the shelf"), never the person
+who set it aside. The live check showed "Get from shelf" red on How work flows because nobody was told. Test in
+`tests/integration/sales/fulfilment.test.ts`; demo seed version raised.
