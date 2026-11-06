@@ -2333,3 +2333,27 @@ Consequences: no migration, no seed change (DEMO_SEED_VERSION unchanged). Tests:
 ("Save as draft keeps an unfinished recipe"), `tests/unit/recipe-readiness-words.test.ts`,
 `tests/unit/recipe-wizard-keep.test.ts`. Open: an order created before this change for a product whose steps are still
 waiting stays a draft until they are approved; a copy kept on the device is per tab (a new tab starts empty).
+
+## ADR-117 The owner approves recipes, steps and how-to sheets alone (owner decision 2026-11-07)
+
+Status: Accepted (owner decision); GMP risk flagged under A-OWNER-ALONE-01 for the QA adviser and any auditor.
+
+Owner: "If you are the owner, why would you let someone approve it? Example recipe, production order." Chosen option:
+"Owner approves alone (setting)".
+
+Decision: setting `approvals.owner_approves_recipes_alone` (organization, default on, restricted, `ownerOnly`). While on,
+an `owner_director` with an organization-wide assignment decides every open approval step of a formula, routing or
+work-instruction revision in one "Approve", including steps naming `qa_qc` and their own revisions (holding each
+step's permission). Each step is recorded as the owner's with `approval_decisions.owner_alone = true` (CHECK: these
+three record types only) and the note "Owner approved alone (no separate QA review)"; `audit()` writes
+`governance.owner_alone.used`, flags the decision `ownerAlone: true` and sets the transaction-local `bc.owner_alone`,
+which `bc_sod_distinct()` honours on `formula_revisions`, `routing_revisions` and `work_instruction_revisions` only
+(migration 0038, `src/db/sql/adr117.sql`; no trigger dropped). The recipe page offers one green Approve for the waiting
+recipe and steps (`approveRecipeAlone`). Revision pages, the recipe page and the BMR show "Approved by <name> (owner) —
+no separate QA review". Recipe, steps and how-to sheet versions are action-centre approval kinds, so "To approve" lists
+them. Unchanged: inspection plans, lot/batch QA release, quality checks, holds and every other QA decision; site
+managers; QA users; the ADR-073 owner override. Production orders already worked for the owner alone (ADR-091).
+
+Consequences: migrations 0037 (`approval_decisions.owner_alone`) and 0038 (custom SQL); the next generated migration
+must become 0039. `decideWorkInstructionRevision` now respects multi-step rules. Tests
+`tests/integration/masterdata/owner-alone-recipes.test.ts`, `tests/unit/owner-alone-words.test.ts`.
