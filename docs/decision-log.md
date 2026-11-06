@@ -2084,3 +2084,21 @@ Decision (from `docs/END_TO_END_FLOW.md`, fix list C0–C20):
   approved amount, follows the approval rules. Approvers always see the amount they approve.
 - **"How work flows" page (C0):** `/operations/flow`, one row per stage (16 stages, from "Ask to buy" to "Invoice"),
   each with who, today's count, the oldest item's age and one button; the same stages are the stepper on records.
+
+## ADR-111 Lite demo profile and seed-versioned refresh (extends ADR-055, owner request 2026-11-01)
+
+Status: Accepted; A-DEMO-LITE-01/02 need the owner.
+
+Decision: the demo loads by default a small profile (`DEMO_PROFILE=lite`, `src/db/seed-demo.ts`, `src/db/seeds/lite.ts`):
+one site, two products (Acapulco Soap 135 g, label per box; Aloe Hand Lotion 250 mL, label per piece), one approved
+recipe and routing each, and a storyline made only through domain services (a released and boxed soap batch, a lotion
+batch waiting for QA, a soap batch in progress, a lotion order ready for Get materials, purchase orders sent and
+received, two customer orders). The large seed (`full`) stays for the integration tests. The lite seed records
+`{profile, seedVersion}` in the `platform.demo.seeded` marker; on start `db:demo auto` wipes and reloads once when the
+marker's profile or `DEMO_SEED_VERSION` (constant in `src/lib/demo.ts`) differs from the code's, after the unchanged
+guards (demo mode, `APP_ENV`, no real accounts). When QA releases or rejects a whole lot, the boxes that hold only that
+lot move with it (`moveBoxesWithLot`, audited).
+
+Consequences: any lite-seed change must raise `DEMO_SEED_VERSION`; a deploy then resets the shared demo and signs
+everyone out. Open: a routing with both a filling and a packaging step blocks the packaging step
+(`packagingBlockers`); the lotion routing records packaging once, on "Label and pack".
