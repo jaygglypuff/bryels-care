@@ -2146,3 +2146,24 @@ approval rules, and approvers see the total they approve (A-PO-1APP-01/02, owner
 other QA person and shows the configured lot and batch rules side by side (A-QA-LOTBATCH-01, QA). No migration or new
 permission. Tests: unit `work-flow`, `scan-qty`, `round-c16-words`; integration `analytics/work-flow`,
 `procurement/adr110-one-approval`. Help: `docs/help/work-flow.md`.
+
+## ADR-110 C1–C8 as built (2026-11-06)
+
+- **C1** The second check of a box refuses any box not on the pick list (`NOT_ON_PICK_LIST`) unless an over-shipment
+  approval for that line has room for the whole box; it never counts past ordered + approved extra; a box not on a
+  shelf is refused; `completePacking` refuses `OVER_ORDERED` ("548 of 500 pcs …").
+- **C2** Free finished stock has one definition, `freeFinishedStock` (released, in date, storage places, minus
+  set-asides and reservations), used by set-aside and by `salesOrderShortfalls`.
+- **C3** Built on `moveBoxesWithLot` (refuses mixed-lot boxes); boxes move with QA decisions, re-opened decisions and
+  put-away, and are set aside and picked as boxes (BC:BOX accepted at pick and second check).
+- **C4** Sales reads the shortage and asks the planner (`askPlannerToMake`, deduplicated, audited); the planner's Home
+  lists customer orders short; the production order keeps and shows the customer order.
+- **C5** Equipment blocks are explained in plain words on the weigh and step cards; "Record cleaning" uses the
+  equipment service.
+- **C6** Box labels leave out the retained samples; Finish pre-fills from the packaging step.
+- **C7** Sack labels show the quantity per sack or "Sack n of N" (stored labels unchanged).
+- **C8** Incoming checks need a recorded sample before results (`SAMPLE_REQUIRED`).
+- A filling step that records packaging no longer blocks a later packaging step.
+
+Consequences: no migration or new permission; assumptions A-E2E-01..06, A-LBL-SACK-01, A-QA-SAMPLE-01 (QA/owner);
+status with test names in `docs/END_TO_END_FLOW.md`. Demo seed version raised so the live demo reloads on the new rules.
