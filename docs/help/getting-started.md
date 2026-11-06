@@ -19,7 +19,7 @@ Tip: when a button is missing or a step says it needs someone else, the message 
 ## 1. Check your site and warehouse
 
 1. Open **Management → Master data → Sites**. You should see **SBX Sandbox Plant**. Fill in the address if you like.
-2. Open **Management → Master data → Locations**. The warehouse already has a receiving dock, quarantine, QA hold, rejected, recall, staging, production, storage, finished goods and dispatch locations. Add more racks with **+ Add location** when you need them (leave the code empty and the system gives LOC-0001, LOC-0002 ...). Tap **Edit** next to a location to change it.
+2. Open **Management → Master data → Shelves and areas (set up)**. The warehouse already has a receiving dock, quarantine, QA hold, rejected, recall, staging, production, storage, finished goods and dispatch locations. Add more racks with **+ Add location** when you need them (leave the code empty and the system gives LOC-0001, LOC-0002 ...). Tap **Edit** next to a location to change it.
 3. Optional: **Management → Master data → Making areas / lines** to add your soap or lotion line.
 
 ## 2. Create what you buy (materials)
@@ -109,7 +109,7 @@ The detailed pages (**Recipes (advanced)** and **Steps (advanced)**, under **Adv
 
 ## 14. See it all together
 
-1. **Home → Overview** and **Management → Reports & analytics → Business overview** now show your stock, the batch and the order.
+1. **Home → Overview** and **Management → Reports & analytics → Business overview (detailed)** now show your stock, the batch and the order.
 2. **Operations → Quality → Where it came from and where it went**: search the batch number to see which material lots went into it and which customer received it.
 3. **Management → Reports & analytics → Lists to download or print** has the standard lists; each one downloads for Excel.
 

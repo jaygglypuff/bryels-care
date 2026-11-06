@@ -17,7 +17,7 @@ Five things people ask about most. Each one says where to tap.
 
 ## Adding or changing a location
 
-1. Open **Management → Master data → Locations**. Tap **+ Add location** at the top, pick the warehouse and the type of place, and give it a name. Leave the code empty for an automatic one.
+1. Open **Management → Master data → Shelves and areas (set up)**. Tap **+ Add location** at the top, pick the warehouse and the type of place, and give it a name. Leave the code empty for an automatic one.
 2. To change a location, tap **Edit** next to it. You can change the name, the type of place, the **Warehouse section** it sits in, and whether it can be picked from.
 3. To stop using a location, open it and use **Switch off (no longer used)**. A location that holds stock must be emptied first.
 4. A **Site** is one address. If your company works from places far apart (for example a factory and a store room in another town), add one Site per address under **Management → Master data → Sites**. Each site has its own warehouses, and each warehouse has its own locations.

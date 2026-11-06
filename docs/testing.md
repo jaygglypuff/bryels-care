@@ -47,7 +47,7 @@ A slice is done when all of the following exist in the same change and CI is gre
 6. Loading / empty / error / permission-denied / offline states (`docs/ux-system.md` section 6) covered by the slice's e2e test on desktop and at 360 px.
 7. Documentation updated (`docs/*.md`, README commands, environment variables).
 8. Deployment notes (migration order, new variables, rollback) in the slice report.
-9. The slice report (completed, tested, not completed, known risks, commands run, migrations, variables, next steps) with the verbatim output of `pnpm test`, `pnpm test:integration`, `pnpm test:e2e` and `pnpm lint && pnpm typecheck`.
+9. The slice report (completed, tested, not completed, known risks, commands run, migrations, variables, next steps) with the verbatim output of `pnpm test`, `pnpm test:integration`, `pnpm test:e2e` and `pnpm typecheck` (there is no lint script since ADR-115).
 
 ### 1.3 Evidence rules
 
@@ -477,7 +477,7 @@ merged module lacks a test tagged with it (`@perm inventory.movement.post`).
 | masterdata | `masterdata.restricted_to_sites_hidden` (A-PM-11), `masterdata.formula_percentages_hidden_from_operator` (A-PM-16), `masterdata.revision_child_edit_after_draft_rejected` (trigger `tg_<child>_parent_draft`) | 1, 3 |
 | inventory | `authz.exception.held_stock_issue` (matrix 4.5), `inventory.adjustment_post_requires_approval`, `inventory.lot_edit_cannot_change_status`, `inventory.intersite_transfer_needs_both_sites`, `inventory.operator_movement_types` (A-PM-06 `role_movement_types`), `authz.subscope.warehouse_write` (assignment scoped to warehouse W1: a write at a W2 location of the same site → 404 `NOT_FOUND`, nothing written; W1 succeeds; US-2-29) | 2 |
 | procurement | `procurement.receipt_void_requires_void_permission`, `procurement.discrepancy_approve_not_receiver`, `procurement.asl_blocks_line` (V-ASL), `procurement.po_prices_hidden_from_warehouse` | 2, 6 |
-| production | `authz.exception.over_tolerance`, `production.material_substitution_requires_approver` (wrong material never: `production.wrong_material_never_allowed`), `production.equipment_override_requires_approver` (V-CAL), `production.reopen_requires_two_approvals` (A-PM-07), `production.batch_post_requires_post_permission` | 3 |
+| production | `authz.exception.over_tolerance`, `production.material_substitution_requires_approver` (replaced by the ADR-104 §1 tests in `tests/integration/production/floor-decisions.test.ts`; wrong material never: `production.wrong_material_never_allowed`), `production.equipment_override_requires_approver` (V-CAL), `production.reopen_requires_two_approvals` (A-PM-07), `production.batch_post_requires_post_permission` | 3 |
 | quality | `quality.disposition_only_qa` (owner_director denied, A-PM-08), `quality.conditional_release_two_qa_users`, `quality.hold_lift_not_creator`, `quality.test_result_void_appends` (original row untouched), `quality.recall_two_approvals` (recall cases, Phase 6) | 2, 3, 6 |
 | documents | `documents.signed_url_expires`, `documents.signed_url_user_bound`, `documents.qr_requires_auth`, `documents.reprint_requires_reason`, `documents.generated_scoped_by_source_record` | 2, 3 |
 | sales | `authz.exception.over_shipment`, `sales.pricing_masked_on_pick_pack_dr` (documents never show prices), `sales.order_site_of_fulfilment`, `sales.credit_terms_masked`, `sales.cancel_after_dispatch_rejected` (V-STATE) | 4 |
@@ -860,7 +860,7 @@ Playwright configuration of 3.7, so that CI runs it against an ephemeral databas
 
 | Job | Command | Blocking |
 |---|---|---|
-| `lint` | `pnpm lint` (ESLint incl. boundaries, `no-ledger-mutation`, decimal and security rules), `pnpm format:check` | yes |
+| `lint` | not configured (ADR-115 removed the `lint` script; no ESLint config exists) | no |
 | `typecheck` | `pnpm typecheck` (`tsc --noEmit`, strict) | yes |
 | `unit` | `pnpm test:unit` with coverage thresholds (section 3.2) | yes |
 | `integration` | `pnpm test:integration` against `postgres:16` service container; includes `tests/integration/authz` and `tests/integration/security` | yes |

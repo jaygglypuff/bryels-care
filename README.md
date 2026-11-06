@@ -124,7 +124,7 @@ Environment variables (the full per-service table is `docs/deployment-railway.md
 | `WORKER_HEARTBEAT_STALE_SECONDS` | web | `/api/health/worker` answers 503 after this many seconds without a heartbeat (default 300) |
 
 Custom SQL: after migrating a database that already holds MVP receipts (not a fresh one), run
-`src/db/sql/w1b.sql` once to mark those receipts as posted.
+`docs/archive/sql/w1b.sql` once to mark those receipts as posted.
 
 Background jobs (`docs/architecture.md` §8, ADR-025) run in the worker: `inventory.reconcile`
 (01:00 Asia/Manila), `inventory.expiry_check` (00:15 Asia/Manila: expiry, retest holds and
