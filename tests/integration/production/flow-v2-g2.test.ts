@@ -219,7 +219,17 @@ describe("Materials list with the site settings on (move stock, scan lots)", () 
     expect(r.progress.taken).toBe(1);
     const [pick] = await db.select().from(batchMaterialPicks).where(eq(batchMaterialPicks.batchId, batch2));
     expect(pick.scannedLotCode).toBe(line.lots[0].lotNumber);
+    expect(pick.lotEntryMode).toBe("scan");
     // Undo so the move-stock test below ticks every line itself.
+    await confirmPicked(w.operator, { batchId: batch2, lines: [{ batchMaterialId: line.batchMaterialId, action: "untaken" }], idempotencyKey: key() });
+    // A-SCAN-TYPED-01: the lot number typed off the label (small letters, no dashes) counts and is recorded as typed;
+    // a tap in the list does not count; a typed number of another lot is refused.
+    const tapped = await expectCode(confirmPicked(w.operator, { batchId: batch2, lines: [{ batchMaterialId: line.batchMaterialId, action: "taken", lotCode: line.lots[0].lotNumber, lotVia: "tap" }] }), "validation");
+    expect(tapped.message).toMatch(/Tapping the list does not count/);
+    await expectCode(confirmPicked(w.operator, { batchId: batch2, lines: [{ batchMaterialId: line.batchMaterialId, action: "taken", lotCode: v.lines[1].lots[0].lotNumber, lotVia: "typed" }] }), "blocked_lot");
+    await confirmPicked(w.operator, { batchId: batch2, lines: [{ batchMaterialId: line.batchMaterialId, action: "taken", lotCode: line.lots[0].lotNumber.replace(/-/g, "").toLowerCase(), lotVia: "typed" }], idempotencyKey: key() });
+    const typedPick = (await db.select().from(batchMaterialPicks).where(eq(batchMaterialPicks.batchId, batch2))).find((x) => x.action === "taken" && x.lotEntryMode === "typed");
+    expect(typedPick?.scannedLotCode).toBe(line.lots[0].lotNumber);
     await confirmPicked(w.operator, { batchId: batch2, lines: [{ batchMaterialId: line.batchMaterialId, action: "untaken" }], idempotencyKey: key() });
     await db.delete(settings).where(and(eq(settings.organizationId, w.orgId), eq(settings.key, "production.prepare.scan_lots")));
   });
@@ -280,6 +290,11 @@ describe("Start check and Weigh cards (V2-4)", () => {
     const other = lineIds[1];
     const label = await expectCode(recordDispense(w.operator, { ...base, lotConfirm: `BC:LOT:${other.lotNumber}` }), "blocked_lot");
     expect(label.message).toMatch(new RegExp(`This label says ${other.lotNumber}`));
+    // A-SCAN-TYPED-01: a tap never confirms; a typed number of another lot is refused in plain words.
+    const tap = await expectCode(recordDispense(w.operator, { ...base, lotConfirm: `BC:LOT:${l.lotNumber}`, lotConfirmVia: "tap" }), "validation");
+    expect(tap.message).toMatch(/does not confirm the lot/);
+    const typedWrong = await expectCode(recordDispense(w.operator, { ...base, lotConfirm: other.lotNumber, lotConfirmVia: "typed" }), "blocked_lot");
+    expect(typedWrong.message).toMatch(new RegExp(`That is not lot ${l.lotNumber}`));
     expect(await db.select().from(batchMaterials).where(and(eq(batchMaterials.id, l.id), eq(batchMaterials.status, "pending")))).toHaveLength(1);
   });
 
@@ -300,13 +315,13 @@ describe("Start check and Weigh cards (V2-4)", () => {
     const l = lineIds[0];
     const before = await db.select().from(stockReservations).where(and(eq(stockReservations.demandId, orderId), eq(stockReservations.lotId, l.lotId), eq(stockReservations.status, "active")));
     expect(before.length).toBeGreaterThan(0);
-    const r = await recordDispense(w.operator, { batchId, batchMaterialId: l.id, lotRef: l.lotId, locationRef: l.locationId, lotPreselected: true, lotConfirm: l.lotNumber.slice(-4).toLowerCase(), qty: l.target, equipmentRef: "SC-01", idempotencyKey: key() });
+    const r = await recordDispense(w.operator, { batchId, batchMaterialId: l.id, lotRef: l.lotId, locationRef: l.locationId, lotPreselected: true, lotConfirm: `BC:LOT:${l.lotNumber}`, lotConfirmVia: "typed", qty: l.target, equipmentRef: "SC-01", idempotencyKey: key() });
     expect(r.status).toBe("dispensed");
     expect(r.checked).toBe(false);
     const converted = await db.select().from(stockReservations).where(and(eq(stockReservations.demandId, orderId), eq(stockReservations.lotId, l.lotId), eq(stockReservations.status, "converted")));
     expect(converted.length).toBeGreaterThan(0);
     const [au] = await db.select().from(auditEvents).where(and(eq(auditEvents.entityId, r.dispenseRecordId), eq(auditEvents.action, "production.dispense_record.recorded")));
-    expect((au.after as { lotConfirmed: string }).lotConfirmed).toBe("last4");
+    expect((au.after as { lotConfirmed: string }).lotConfirmed).toBe("typed"); // A-SCAN-TYPED-01: the lot number typed off the label (the screen sends the matched lot)
     const v = await getWeighView(w.operator, batchId);
     const card = v.cards.find((c) => c.batchMaterialId === l.id)!;
     expect(card.done).toBe(true);

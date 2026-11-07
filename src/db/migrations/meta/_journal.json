@@ -267,6 +267,13 @@
       "when": 1793991798637,
       "tag": "0038_adr117_custom_sql",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1794026952281,
+      "tag": "0039_typed_label_codes",
+      "breakpoints": true
     }
   ]
 }

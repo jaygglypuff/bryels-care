@@ -280,13 +280,15 @@ function MoreDetails({
           <input type="hidden" name="batchMaterialId" value={line.id} />
           <input type="hidden" name="pick" value="taken" />
           <div className="min-w-[220px] flex-1">
-            {/* ADR-098: the site asks to scan each label; a tap is not a scan (A-SCAN-11), so only scanning fills it. */}
+            {/* ADR-098: the site asks to read each label: scan it, or type the lot number printed on it (owner 2026-11-08, saved as typed). A tap is not a check (A-SCAN-11). */}
             <ScanOrPick
               kind="lot"
               name="lotCode"
+              viaName="lotVia"
               submit="code"
-              label="Scan the lot label"
-              hint="Camera or handheld scanner."
+              label="Scan the lot label, or type its number"
+              hint="Camera, handheld scanner, or the lot number printed on the label."
+              notListed="That is not the lot to take. Check the label and type it again."
               candidatesLabel="Lot to take"
               candidates={line.lots.map((l) => ({ value: l.lotNumber, title: line.name, detail: `lot ${l.lotNumber} · ${l.place}`, code: l.lotNumber, codes: [l.lotNumber] }))}
               allowTap={false}

@@ -35,6 +35,8 @@ import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
 import { D, fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { parseScan } from "@/lib/scan/payload";
+import { cleanTyped, type PickVia } from "@/lib/scan/pick";
+import { checkEntryMode, findByCode } from "@/lib/scan/code-sql";
 import { getSetting } from "@/lib/settings";
 import {
   addContent,
@@ -358,9 +360,11 @@ async function auditDeniedLocal(ctx: AuthContext, p: PackRow) {
 export type PackScanResult = { result: "ok" | "not_in_pack" | "unknown_box" | "label_mismatch" | "duplicate"; message: string; scanned: number; required: number };
 
 /** W08-04: one checker scan. Results are evidence and never throw for a wrong box (the screen shows it). */
-export async function verifyPackScan(ctx: AuthContext, packId: string, input: { payload: string; labelOk?: boolean; idempotencyKey: string }): Promise<PackScanResult> {
+export async function verifyPackScan(ctx: AuthContext, packId: string, input: { payload: string; labelOk?: boolean; idempotencyKey: string; via?: PickVia | null }): Promise<PackScanResult> {
   ctx.require("inventory.pack.approve");
   if (!input.idempotencyKey || input.idempotencyKey.length < 8) throw new DomainError("validation", "The scan is missing its key. Reload the page and try again.");
+  // A-SCAN-TYPED-01: the boxing check reads each label, by scan or by typing its number; a tap is refused.
+  const entryMode = checkEntryMode(input.via);
   const key = `pack_check:${input.idempotencyKey}`;
   const [replay] = await db.select({ r: packVerificationScans }).from(packVerificationScans).where(and(eq(packVerificationScans.organizationId, ctx.organizationId), eq(packVerificationScans.idempotencyKey, key))).limit(1);
   const p0 = await db.select().from(packs).where(and(eq(packs.id, isUuid(packId) ? packId : "00000000-0000-0000-0000-000000000000"), eq(packs.organizationId, ctx.organizationId))).limit(1);
@@ -375,15 +379,15 @@ export async function verifyPackScan(ctx: AuthContext, packId: string, input: { 
     };
     if (replay) return { result: replay.r.result as PackScanResult["result"], message: "Already recorded.", ...(await progress()) };
     if (p.status !== "open" || !p.submittedAt) throw new DomainError("state", p.status === "open" ? `Pack ${p.packNumber} is still being boxed; the packer submits it for verification first.` : `Pack ${p.packNumber} is ${p.status}.`);
-    const parsed = parseScan(input.payload);
+    const parsed = parseScan(entryMode === "typed" ? cleanTyped(input.payload) : input.payload);
     const value = parsed.kind === "invalid" ? "" : parsed.value;
-    const [box] = value ? await tx.select().from(containers).where(and(eq(containers.organizationId, ctx.organizationId), eq(containers.containerNumber, value), eq(containers.siteId, p.siteId))).limit(1) : [];
+    const [box] = value ? await findByCode(containers.containerNumber, value, (w) => tx.select().from(containers).where(and(eq(containers.organizationId, ctx.organizationId), w, eq(containers.siteId, p.siteId))).limit(2)) : [];
     const boxes = await tx.select().from(packBoxes).where(and(eq(packBoxes.packId, p.id), eq(packBoxes.status, "packed")));
     let result: PackScanResult["result"];
     let message: string;
     if (!box) {
       result = "unknown_box";
-      message = `${value || "That label"} is not a box of this site.`;
+      message = entryMode === "typed" ? "That number is not a box of this pack. Check the label and type it again." : `${value || "That label"} is not a box of this site.`;
     } else if (!boxes.some((b) => b.containerId === box.id)) {
       result = "not_in_pack";
       message = `Box ${box.containerNumber} is not in pack ${p.packNumber}. Set it aside.`;
@@ -395,7 +399,7 @@ export async function verifyPackScan(ctx: AuthContext, packId: string, input: { 
       result = last?.result === "ok" ? "duplicate" : "ok";
       message = result === "duplicate" ? `Box ${box.containerNumber} already checked (counted once).` : `Box ${box.containerNumber} checked.`;
     }
-    await tx.insert(packVerificationScans).values({ organizationId: ctx.organizationId, siteId: p.siteId, packId: p.id, containerId: box?.id ?? null, scanPayload: input.payload.slice(0, 200), scannedBy: ctx.userId, result, note: result === "label_mismatch" ? "Label content does not match" : null, idempotencyKey: key });
+    await tx.insert(packVerificationScans).values({ organizationId: ctx.organizationId, siteId: p.siteId, packId: p.id, containerId: box?.id ?? null, scanPayload: input.payload.slice(0, 200), scannedBy: ctx.userId, result, note: result === "label_mismatch" ? "Label content does not match" : null, idempotencyKey: key, entryMode });
     if (["not_in_pack", "unknown_box", "label_mismatch"].includes(result)) await tx.update(packs).set({ verificationFailureCount: p.verificationFailureCount + 1 }).where(eq(packs.id, p.id));
     return { result, message, ...(await progress()) };
   });

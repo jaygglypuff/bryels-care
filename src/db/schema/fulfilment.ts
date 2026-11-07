@@ -147,11 +147,14 @@ export const packVerificationScans = pgTable(
     result: text("result").notNull(),
     note: text("note"),
     idempotencyKey: text("idempotency_key"),
+    /** How the label was read (A-SCAN-TYPED-01): `scan` (camera, handheld scanner) or `typed` (the printed number typed). A tap never checks. */
+    entryMode: text("entry_mode").notNull().default("scan"),
   },
   (t) => [
     index("pack_verification_scans_pack_idx").on(t.packId, t.scannedAt),
     uniqueIndex("pack_verification_scans_idem_uq").on(t.organizationId, t.idempotencyKey).where(sql`${t.idempotencyKey} is not null`),
     check("ck_pack_verification_scans_result", sql`${t.result} in (${inList(PACK_SCAN_RESULTS)})`),
+    check("ck_pack_verification_scans_mode", sql`${t.entryMode} in ('scan','typed')`),
   ],
 );
 
@@ -226,7 +229,8 @@ export const pickLines = pgTable(
     /** A box is picked once per pick (V-DUP counts a duplicate scan once). */
     uniqueIndex("pick_lines_pick_box_uq").on(t.pickId, t.containerId).where(sql`${t.containerId} is not null and ${t.voidedAt} is null`),
     check("ck_pick_lines_qty", sql`${t.qtyBase} > 0`),
-    check("ck_pick_lines_mode", sql`${t.entryMode} in ('scan','manual')`),
+    /** `typed`: the printed number typed off the label (A-SCAN-TYPED-01); `manual`: tapped in the list, with a reason. */
+    check("ck_pick_lines_mode", sql`${t.entryMode} in ('scan','typed','manual')`),
     check("ck_pick_lines_payload", sql`${t.scanPayload} is not null or ${t.entryMode} = 'manual'`),
     check("ck_pick_lines_manual_reason", sql`${t.entryMode} <> 'manual' or ${t.manualEntryReason} is not null`),
     check("ck_pick_lines_void", sql`(${t.voidedAt} is null) = (${t.voidReason} is null)`),

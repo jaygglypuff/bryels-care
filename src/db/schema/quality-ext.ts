@@ -273,11 +273,14 @@ export const labelVerifications = pgTable(
     verifiedBy: uuid("verified_by").notNull().references(() => users.id),
     verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull().defaultNow(),
     clientSequence: bigint("client_sequence", { mode: "number" }),
+    /** `scan` or `typed` (the printed number typed off the label, A-SCAN-TYPED-01). */
+    entryMode: text("entry_mode").notNull().default("scan"),
   },
   (t) => [
     uniqueIndex("uq_label_verifications_container").on(t.containerId).where(sql`${t.containerId} is not null`),
     uniqueIndex("uq_label_verifications_lot_location").on(t.lotId, t.locationId).where(sql`${t.containerId} is null`),
     index("ix_label_verifications_location").on(t.locationId),
     check("ck_label_verifications_subject", sql`num_nonnulls(${t.containerId}, ${t.lotId}) = 1`),
+    check("ck_label_verifications_mode", sql`${t.entryMode} in ('scan','typed')`),
   ],
 );

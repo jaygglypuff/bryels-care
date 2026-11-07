@@ -1,8 +1,8 @@
 ---
 key: production.weigh
 title: Weigh the ingredients (Weigh screen)
-version: 4
-updated_at: 2026-11-06
+version: 5
+updated_at: 2026-11-08
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -11,7 +11,7 @@ The Weigh screen shows one card per ingredient, in formula order. The card shows
 ## Weigh one ingredient
 
 1. The card says which lots you took at Get materials, in the same order: "from LM-…-0005: 50 kg, then LM-…-0013: 50 kg". Take that container.
-2. Tap **Scan the lot label** and point the camera (or the scanner) at the label on the container. The card says **Label scanned: lot …**. If the label is damaged, tap **Label damaged? Type the last 4 characters instead**.
+2. Tap **Scan the lot label** and point the camera (or the scanner) at the label on the container. Or type the lot number from the label (all of it, or the last 4) in **Or type the number on the lot label**. The card says **Label scanned** or **Lot number typed**.
 3. Weigh. Type the weight in grams on the keypad.
 4. The card shows **OK**, or "Too much by …" / "Too little by …".
 5. Tap **Save** (the big ✓ key on the keypad, or the button under the weight).

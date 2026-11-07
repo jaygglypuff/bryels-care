@@ -62,7 +62,7 @@ export default async function LabelVerificationPage({ searchParams }: { searchPa
               <p className="mb-3 text-[13px] text-muted">
                 {zone.verified} of {zone.total} {zone.total === 1 ? "label" : "labels"} checked, {zone.remaining.length} still to scan.
               </p>
-              {zone.canScan ? <VerifyScanForm locationId={zone.location.id} /> : <Banner tone="info" title="You can look but not scan">Warehouse people scan the labels here.</Banner>}
+              {zone.canScan ? <VerifyScanForm locationId={zone.location.id} expected={zone.remaining.map((i) => ({ value: `${i.kind === "box" ? "BC:BOX" : "BC:LOT"}:${i.number}`, title: i.kind === "box" ? `Box ${i.number}` : i.label, code: i.number, codes: [i.number] }))} /> : <Banner tone="info" title="You can look but not scan">Warehouse people scan the labels here.</Banner>}
             </Card>
             <Card>
               <CardTitle>Still to scan ({zone.remaining.length})</CardTitle>

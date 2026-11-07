@@ -288,12 +288,12 @@ export function Scanner({
           </div>
           {cameraState === "denied" && (
             <p role="alert" className="rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
-              {cameraOnly ? "Camera access is off. Use the handheld scanner, or find it by name." : "Camera access is off. Use the handheld scanner, or type what it is (for example coconut oil)."}
+              {cameraOnly ? "Camera access is off. Use the handheld scanner, or type the number printed on the label." : "Camera access is off. Use the handheld scanner, or type what it is (for example coconut oil)."}
             </p>
           )}
           {cameraState === "unavailable" && (
             <p role="alert" className="rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
-              {cameraOnly ? "The camera could not be opened on this device. Use the handheld scanner, or find it by name." : "The camera could not be opened on this device. Use the handheld scanner, or type what it is (for example coconut oil)."}
+              {cameraOnly ? "The camera could not be opened on this device. Use the handheld scanner, or type the number printed on the label." : "The camera could not be opened on this device. Use the handheld scanner, or type what it is (for example coconut oil)."}
             </p>
           )}
         </div>

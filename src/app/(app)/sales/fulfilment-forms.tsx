@@ -4,9 +4,8 @@ import type { ActionState } from "@/lib/errors";
 import { Button, Field, Input, Select, Textarea, type ButtonVariant } from "@/ui/core";
 import { ActionForm } from "@/ui/form";
 import { MoreDetails } from "@/ui/guide";
-import { ScanOrPick, type PickCandidate } from "@/ui/scan-or-pick";
+import { ScanOrPick, type PickCandidate, type PickVia } from "@/ui/scan-or-pick";
 import type { ScanActionResult, ScanOptions } from "./fulfilment-actions";
-import { scanQty } from "./scan-qty";
 
 /**
  * Client pieces of the W3E fulfilment screens: the shared in-place command form (ADR-043), the scan
@@ -49,62 +48,105 @@ const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? 
 
 type ScanFn = (payload: string, opts: ScanOptions, key: string) => Promise<ScanActionResult>;
 
+const LOT_LABEL = /^BC:LOT:/i;
+
 /**
- * Scan panel (ScanOrPick in emit mode; owner review 2026-10-31: no code text box). The camera button or a
- * handheld scanner sends each label; nothing is typed. `withQty`: a lot label (loose pieces) needs the
- * counted pieces first. `candidates` + `allowManual` (picking): the boxes still to take are listed and
- * can be TAPPED when a label will not scan; a tap is saved as "by hand" with a reason (audited).
- * Without `allowManual` (second check, pack check) the list is not tappable: the checker must scan.
- * `labelCheck`: the checker can mark a box's label as wrong.
+ * Scan panel (ScanOrPick in emit mode). The camera button, a handheld scanner or the number typed off the label
+ * (owner decision 2026-11-08, recorded as typed) sends each label. `withQty`: a LOT label (loose pieces) asks
+ * "How many loose pieces of this lot?" right after it is scanned or typed, then sends both; a box never asks.
+ * `candidates`: the boxes and lots expected (typed last digits are matched against them); `allowManual` (picking):
+ * they can also be TAPPED when a label will not scan; a tap is saved as "by hand" with a reason (audited).
+ * Without `allowManual` (second check, pack check) the list is not tappable: the checker scans or types the label.
+ * `showCandidates={false}`: the page lists them itself (second check). `labelCheck`: mark a box's label as wrong.
  */
-export function ScanPanel({ scan, label, hint, withQty = false, allowManual = false, labelCheck = false, candidates = [] }: { scan: ScanFn; label: string; hint: string; withQty?: boolean; allowManual?: boolean; labelCheck?: boolean; candidates?: PickCandidate[] }) {
+export function ScanPanel({
+  scan,
+  label,
+  hint,
+  withQty = false,
+  allowManual = false,
+  labelCheck = false,
+  candidates = [],
+  showCandidates = true,
+  qtyAction = "Check these pieces",
+}: {
+  scan: ScanFn;
+  label: string;
+  hint: string;
+  withQty?: boolean;
+  allowManual?: boolean;
+  labelCheck?: boolean;
+  candidates?: PickCandidate[];
+  showCandidates?: boolean;
+  /** Button that sends a lot label with the counted pieces. */
+  qtyAction?: string;
+}) {
   const [pending, start] = useTransition();
   const [result, setResult] = useState<ScanActionResult | null>(null);
   const [qty, setQty] = useState("");
+  /** A lot label scanned or typed: waits for the counted loose pieces. */
+  const [lot, setLot] = useState<{ value: string; via: PickVia; name: string } | null>(null);
+  const [qtyError, setQtyError] = useState<string | null>(null);
   const [manual, setManual] = useState("");
   const [labelBad, setLabelBad] = useState(false);
   const [offline, setOffline] = useState(false);
   const last = useRef<{ payload: string; key: string } | null>(null);
-  const onScan = useCallback(
-    (value: string, via: "tap" | "scan") => {
+  const send = useCallback(
+    (value: string, via: PickVia, pieces: string | null) => {
       if (typeof navigator !== "undefined" && navigator.onLine === false) {
         setOffline(true);
         return;
       }
       setOffline(false);
-      // ADR-110 C18: a lot number typed by hand keeps the counted pieces too (scan-qty.ts), not only the QR label.
-      const sq = scanQty(value, withQty ? qty : "");
-      const isLot = sq.isLotLabel;
-      if (withQty && isLot && !/^\d+(\.\d+)?$/.test(qty.trim())) {
-        setResult({ ok: false, tone: "warn", message: "That is a lot label: first type how many loose pieces you counted, then scan the lot label again." });
-        return;
-      }
-      // A tap is never a scan: it is saved as entered by hand, with the reason.
-      const manualReason = via === "tap" ? manual.trim() || "Label would not scan: tapped in the list" : manual.trim();
-      const sig = `${value}|${qty}|${manualReason}|${labelBad}`;
+      // A tap is never a scan: it is saved as entered by hand, with the reason. A typed number is saved as typed.
+      const manualReason = via === "tap" ? manual.trim() || "Label would not scan: tapped in the list" : "";
+      const sig = `${value}|${pieces ?? ""}|${via}|${manualReason}|${labelBad}`;
       if (!last.current || last.current.payload !== sig) last.current = { payload: sig, key: newKey() };
       const k = last.current.key;
       start(async () => {
-        const r = await scan(value, { qty: sq.qty, manualEntryReason: manualReason || null, labelOk: !labelBad }, k);
+        const r = await scan(value, { qty: pieces, manualEntryReason: manualReason || null, labelOk: !labelBad, via }, k);
+        // A lot number that was not in the list: the server says it needs the counted pieces.
+        if (!r.ok && r.code === "NEEDS_QTY" && withQty && !pieces) {
+          setResult(null);
+          setLot({ value, via, name: r.lotNumber ? `lot ${r.lotNumber}` : value.replace(LOT_LABEL, "lot ") });
+          return;
+        }
         setResult(r);
         if (r.ok) {
           last.current = null;
-          if (sq.qty) setQty("");
+          setLot(null);
+          setQty("");
           setManual("");
           setLabelBad(false);
         }
       });
     },
-    [scan, qty, manual, labelBad, withQty],
+    [scan, manual, labelBad, withQty],
   );
+  const onScan = useCallback(
+    (value: string, c: PickCandidate | null, via: PickVia) => {
+      setQtyError(null);
+      if (withQty && LOT_LABEL.test(value)) {
+        // Owner screenshot 2026-11-08: the pieces are asked only after a lot label, never before.
+        setResult(null);
+        setQty("");
+        setLot({ value, via, name: c ? `${c.title} · lot ${value.slice(7)}` : `lot ${value.slice(7)}` });
+        return;
+      }
+      setLot(null);
+      send(value, via, null);
+    },
+    [withQty, send],
+  );
+  const sendPieces = () => {
+    if (!lot) return;
+    if (!/^\d+(\.\d+)?$/.test(qty.trim()) || Number(qty) <= 0) return setQtyError("Type how many loose pieces you counted, for example 6.");
+    setQtyError(null);
+    send(lot.value, lot.via, qty.trim());
+  };
   const tone = result?.tone === "ok" ? "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]" : result?.tone === "warn" ? "border-[var(--warn-bd)] bg-[var(--warn-bg)] text-[var(--warn-fg)]" : "border-[var(--bad-bd)] bg-[var(--bad-bg)] text-[var(--bad-fg)]";
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      {withQty && (
-        <Field label="How many loose pieces (only for a lot, scanned or typed)" htmlFor="scan-qty" hint="Leave empty for boxes">
-          <Input id="scan-qty" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 6" />
-        </Field>
-      )}
       <ScanOrPick
         mode="emit"
         kind="container"
@@ -113,26 +155,63 @@ export function ScanPanel({ scan, label, hint, withQty = false, allowManual = fa
         label={label}
         hint={hint}
         candidates={candidates}
+        showCandidates={showCandidates}
         candidatesLabel={candidates.length ? (allowManual ? "Still to take (tap one only if its label will not scan)" : "Still to check") : undefined}
         allowTap={allowManual}
         search={false}
         pending={pending}
-        onEmit={(v, _c, via) => onScan(v, via)}
+        onEmit={onScan}
       />
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {allowManual && (
-          <Field label="Label will not scan? Say why, then tap it in the list" htmlFor="scan-manual" hint="Saved as entered by hand">
-            <Input id="scan-manual" value={manual} onChange={(e) => setManual(e.target.value)} maxLength={200} placeholder="e.g. Label torn" />
+      {lot && (
+        <div className="flex flex-col gap-2 rounded-[14px] border-2 border-primary bg-primary-soft p-3" data-testid="loose-qty">
+          <p className="text-[14px] text-fg-2">
+            {lot.via === "typed" ? "Typed" : lot.via === "tap" ? "Chosen" : "Scanned"}: <strong className="text-fg">{lot.name}</strong> (loose pieces)
+          </p>
+          <Field label="How many loose pieces of this lot?" htmlFor="scan-qty" error={qtyError ?? undefined}>
+            <Input
+              id="scan-qty"
+              inputMode="numeric"
+              enterKeyHint="done"
+              autoComplete="off"
+              autoFocus
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  sendPieces();
+                }
+              }}
+              placeholder="e.g. 6"
+              className="min-h-[52px] text-[18px]"
+            />
           </Field>
-        )}
-        {labelCheck && (
-          <label className="flex min-h-[44px] items-center gap-2 text-[14px]">
-            <input type="checkbox" checked={labelBad} onChange={(e) => setLabelBad(e.target.checked)} className="h-5 w-5" />
-            The next box has the wrong label
-          </label>
-        )}
-      </div>
-      {offline && <p role="alert" className="rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">No internet. Scans need a connection: scan again when the phone is back online.</p>}
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="cta" size="lg" disabled={pending} onClick={sendPieces} data-testid="loose-qty-send">
+              {pending ? "Checking…" : qtyAction}
+            </Button>
+            <Button type="button" variant="ghost" size="lg" onClick={() => setLot(null)}>
+              Not this lot
+            </Button>
+          </div>
+        </div>
+      )}
+      {(allowManual || labelCheck) && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {allowManual && (
+            <Field label="Label will not scan? Say why, then tap it in the list" htmlFor="scan-manual" hint="Saved as entered by hand">
+              <Input id="scan-manual" value={manual} onChange={(e) => setManual(e.target.value)} maxLength={200} placeholder="e.g. Label torn" />
+            </Field>
+          )}
+          {labelCheck && (
+            <label className="flex min-h-[44px] items-center gap-2 text-[14px]">
+              <input type="checkbox" checked={labelBad} onChange={(e) => setLabelBad(e.target.checked)} className="h-5 w-5" />
+              The next box has the wrong label
+            </label>
+          )}
+        </div>
+      )}
+      {offline && <p role="alert" className="rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">No internet. Checks need a connection: scan or type it again when the phone is back online.</p>}
       {result && (
         <p role={result.ok ? "status" : "alert"} className={`rounded-[10px] border px-3 py-2 text-[14px] ${tone}`} data-testid="scan-result">
           {result.message}

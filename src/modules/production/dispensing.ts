@@ -7,6 +7,7 @@ import { batchMaterials, dispenseRecords, inventoryBalances, inventoryLots, loca
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
+import type { PickVia } from "@/lib/scan/pick";
 import { getSetting } from "@/lib/settings";
 import { assertLotUsable } from "@/modules/inventory/ledger";
 import { assertLocationNotHeld, resolveLotRef } from "@/modules/inventory/holds";
@@ -73,6 +74,8 @@ export type DispenseInput = {
    */
   lotPreselected?: boolean;
   lotConfirm?: string | null;
+  /** How `lotConfirm` was given (A-SCAN-TYPED-01): "scan", "typed" (the lot number on the label, full or last 4) or "tap" (refused). */
+  lotConfirmVia?: PickVia | null;
   /** ADR-106 §3: one-tap reason for weighing from a lot that was not taken at Get materials (and a note for "other"). */
   offPlanReasonCode?: string | null;
   offPlanNote?: string | null;
@@ -85,13 +88,22 @@ const alnum = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
  * Lot confirmation at weighing (ADR-080 §3, UX review B5). Returns how the lot was confirmed for the
  * record. Mismatch → 409 blocked_lot with the expected lot ("This label says …. Use lot …").
  */
-export function confirmLot(mode: "last4" | "scan" | "none", preselected: boolean, lot: { lotNumber: string }, confirm: string | null | undefined): "typed_lot" | "last4" | "scan" | "not_required" {
+export function confirmLot(mode: "last4" | "scan" | "none", preselected: boolean, lot: { lotNumber: string }, confirm: string | null | undefined, via?: PickVia | null): "typed_lot" | "last4" | "scan" | "typed" | "not_required" {
   if (!preselected) return "typed_lot"; // the label itself was scanned or typed into the lot field
   if (mode === "none") return "not_required";
   const c = (confirm ?? "").trim();
   const field = { field: "lotConfirm", rule: "V-MAT" };
+  // A-SCAN-TYPED-01 (owner decision 2026-11-08): reading the container's label is the check, by scan or by typing
+  // the lot number printed on it (full, or its last 4). Tapping a lot in the list does not confirm it.
+  if (via === "tap") throw new DomainError("validation", "Tapping the list does not confirm the lot. Scan the lot label, or type the lot number printed on it.", { ...field, fieldErrors: { lotConfirm: "Scan or type the lot number." } });
   if (!c) {
-    throw new DomainError("validation", mode === "scan" ? `Scan the lot label on the container (lot ${lot.lotNumber}).` : `Type the last 4 characters of the lot number printed on the container label.`, { ...field, fieldErrors: { lotConfirm: mode === "scan" ? "Scan the label." : "Type the last 4." } });
+    throw new DomainError("validation", mode === "scan" ? `Scan the lot label on the container, or type the lot number printed on it (lot ${lot.lotNumber}).` : `Type the last 4 characters of the lot number printed on the container label.`, { ...field, fieldErrors: { lotConfirm: mode === "scan" ? "Scan or type the lot number." : "Type the last 4." } });
+  }
+  if (via === "typed") {
+    const typed = alnum(c.replace(/^BC:LOT:/i, ""));
+    const want = alnum(lot.lotNumber);
+    if (typed === want || (typed.length >= 4 && want.endsWith(typed))) return "typed";
+    throw new DomainError("blocked_lot", `You typed ${c.toUpperCase()}. That is not lot ${lot.lotNumber}. Use lot ${lot.lotNumber}, or choose another lot.`, { ...field, expected: lot.lotNumber, fieldErrors: { lotConfirm: "Wrong lot." } });
   }
   const scanned = c.toUpperCase().startsWith("BC:LOT:") ? c.slice(7) : null;
   if (scanned !== null || mode === "scan") {
@@ -232,7 +244,7 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
       }
       assertLotUsable(lot);
       const lotConfirmMode = await getSetting(tx, ctx.organizationId, "production.weighing.lot_confirm", batch.siteId);
-      const lotConfirmedBy = confirmLot(lotConfirmMode, !!input.lotPreselected, lot, input.lotConfirm);
+      const lotConfirmedBy = confirmLot(lotConfirmMode, !!input.lotPreselected, lot, input.lotConfirm, input.lotConfirmVia);
       const loc = await resolveSourceLocation(tx, ctx, batch.siteId, lot.id, lot.lotNumber, input.locationRef);
       await assertLocationNotHeld(tx, loc);
       await assertStockCovers(tx, lot, loc, net);

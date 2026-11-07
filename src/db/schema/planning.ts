@@ -332,6 +332,8 @@ export const batchMaterialPicks = pgTable(
     lotId: uuid("lot_id").references(() => inventoryLots.id),
     /** Lot label scanned when `production.prepare.scan_lots` is on. */
     scannedLotCode: text("scanned_lot_code"),
+    /** How `scannedLotCode` was given: `scan` or `typed` (the printed lot number typed, A-SCAN-TYPED-01). */
+    lotEntryMode: text("lot_entry_mode"),
     /** Staging transfer posted with the tick when `production.prepare.move_stock` is on. */
     stagingId: uuid("staging_id").references((): AnyPgColumn => batchMaterialStagings.id),
     reason: text("reason"),
@@ -341,6 +343,7 @@ export const batchMaterialPicks = pgTable(
   (t) => [
     index("batch_material_picks_batch_idx").on(t.batchId, t.batchMaterialId, t.pickedAt),
     check("ck_batch_material_picks_action", sql`${t.action} in (${inList(BATCH_MATERIAL_PICK_ACTIONS)})`),
+    check("ck_batch_material_picks_lot_mode", sql`${t.lotEntryMode} is null or ${t.lotEntryMode} in ('scan','typed')`),
     check("ck_batch_material_picks_reason", sql`${t.action} <> 'not_needed' or length(btrim(coalesce(${t.reason}, ''))) >= 3`),
   ],
 );
