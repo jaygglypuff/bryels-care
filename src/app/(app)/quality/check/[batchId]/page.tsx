@@ -9,10 +9,11 @@ import { pieceWord } from "@/modules/production";
 import { correctionRequestsOf, getQualityCheck, QUALITY_CHECK_LABEL, resultHistory, type QualityCheckView } from "@/modules/quality";
 import { db } from "@/db/client";
 import { ResultCorrections } from "../corrections";
-import { Card, CardTitle, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
+import { QuietLine, SummaryGrid } from "@/ui/summary";
 import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Help } from "@/ui/help/help";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -59,18 +60,16 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <PageHeader
-        title={`Check quality: ${v.product.name}`}
-        subtitle={
-          <>
-            Batch <RecordNo>{v.batch.number}</RecordNo>
-            {v.order ? <span className="text-muted"> · order {v.order.number}</span> : null}
-          </>
-        }
+      <RecordHeader
+        typeLabel="Check quality · batch"
+        reference={v.batch.number}
+        title={v.product.name}
+        chip={<Chip tone={v.batch.status === "rejected" ? "rej" : v.batch.status === "released" || v.batch.status === "closed" ? "ok" : v.onHold ? "hold" : "appr"}>{decided ? qaWord(v.batch.status) : v.onHold ? "Not yet" : "Waiting for QA"}</Chip>}
+        meta={[v.order ? ["Order", v.order.number] : null, v.lot ? ["Lot", v.lot.number] : null]}
         actions={
           <>
             <Help screen="quality.check" />
-            <MoreMenu>
+            <MoreMenu compact>
               <div className="flex flex-col gap-2">
                 <LinkButton href={`/print/bmr/${v.batch.id}`} variant="secondary" target="_blank">
                   Batch record (print)
@@ -91,7 +90,6 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
       <PageIntro>
         This screen is for the QA person: look at how this batch went and its tests, then say OK to use, not yet, or not OK.
       </PageIntro>
-      <div className="-mt-3 mb-4"><Explain term="batch_record" label="What is a batch record?" /></div>
       {!decided &&
         (!v.can.decide ? (
           <NextStep text="Next: a QA person checks this batch and says OK or not OK." waitingFor="Waiting for QA (see who below, under Decision)." />
@@ -120,33 +118,31 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
         <div className="space-y-5">
           <Card>
             <CardTitle>This batch</CardTitle>
-            <ul className="space-y-1 text-[15px]">
-              <li>
-                Good {word}: <b>{good ?? "—"}</b>
-                {v.counts.expected ? <span className="text-muted"> (expected {v.counts.expected})</span> : null}
-                {v.counts.yieldPct ? <span className={v.counts.withinRange ? "text-muted" : "font-semibold text-[var(--warn-fg)]"}> · {v.counts.yieldPct} % (OK {v.counts.range})</span> : null}
-              </li>
-              <li>
-                Rejects: <b>{rejectTotal}</b>
-                {v.counts.rejects.length > 0 && <span className="text-muted"> ({v.counts.rejects.map((r) => `${r.what} ${r.qty}`).join(", ")})</span>}
-              </li>
-              <li>
-                Samples kept: <b>{Number(v.counts.samples)}</b> · ready to sell after OK: <b>{sellable ?? "—"}</b>
-              </li>
-              {v.lot && (
-                <li>
-                  Lot <span className="font-mono text-[13px] text-muted">{v.lot.number}</span>
-                  {v.lot.expiresOn ? ` · expires ${fmtDate(v.lot.expiresOn)}` : ""} · in stock {Number(v.lot.onHand)}
-                </li>
-              )}
-            </ul>
+            <SummaryGrid
+              label="This batch"
+              items={[
+                { label: `Good ${word}`, value: good ?? "—", sub: v.counts.expected ? `expected ${v.counts.expected}` : undefined },
+                v.counts.yieldPct ? { label: "Yield", value: v.counts.yieldPct, unit: "%", sub: `OK ${v.counts.range}`, tone: v.counts.withinRange ? "ok" : "warn" } : null,
+                { label: "Rejects", value: rejectTotal, sub: v.counts.rejects.length > 0 ? v.counts.rejects.map((r) => `${r.what} ${r.qty}`).join(", ") : undefined },
+                { label: "Samples kept", value: Number(v.counts.samples) },
+                { label: "To sell after OK", value: sellable ?? "—" },
+                v.lot ? { label: "Lot", value: v.lot.number, sub: `${v.lot.expiresOn ? `expires ${fmtDate(v.lot.expiresOn)} · ` : ""}in stock ${Number(v.lot.onHand)}`, wide: true } : null,
+              ]}
+              footer={
+                v.exceptions.length === 0 ? (
+                  <QuietLine testId="no-exceptions" detail="No weighing or reading outside the limits, no early end of curing, no problem reports, no overrides.">
+                    Nothing left the normal path
+                  </QuietLine>
+                ) : undefined
+              }
+            />
+            <div className="mt-1"><Explain term="batch_record" label="What is a batch record?" /></div>
           </Card>
 
+          {v.exceptions.length > 0 && (
           <Card>
             <CardTitle>Things that did not go as planned</CardTitle>
-            {v.exceptions.length === 0 ? (
-              <p className="text-[15px] text-fg-2">Nothing left the normal path: no weighing or reading outside the limits, no early end of curing, no problem reports, no overrides.</p>
-            ) : (
+            {(
               <ul className="space-y-2" data-testid="exceptions">
                 {v.exceptions.map((x, i) => (
                   <li key={i} className="flex items-start gap-2 text-[15px]">
@@ -157,6 +153,7 @@ export default async function CheckQualityPage({ params }: { params: Promise<{ b
               </ul>
             )}
           </Card>
+          )}
 
           <Card>
             <CardTitle>Tests (quality check)</CardTitle>

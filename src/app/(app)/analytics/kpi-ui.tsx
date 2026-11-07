@@ -135,7 +135,7 @@ export function KpiCard({
             <ArrowRight size={16} className="text-muted transition-transform group-hover:translate-x-0.5" aria-hidden />
           </span>
         </div>
-        <div className="tabular font-display text-[32px] font-semibold leading-[38px] tracking-[-.01em] text-fg">{value}</div>
+        <div className="tabular font-display text-stat tracking-[-.01em] text-fg">{value}</div>
         <div className="flex flex-wrap items-center gap-x-2 text-[13px] font-medium leading-[18px]">
           <DeltaLine tile={tile} previousLabel={period.previousLabel} />
         </div>

@@ -3,10 +3,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getChangeControl } from "@/modules/quality";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Timeline } from "../../_ui";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -37,15 +37,13 @@ export default async function ChangePage({ params, searchParams }: { params: Pro
   const c = v.change;
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        typeLabel="Change request"
+        reference={c.changeNumber}
         title={c.title}
-        subtitle={
-          <>
-            Change request · {c.siteCode ?? "all sites"} · <RecordNo>{c.changeNumber}</RecordNo>
-          </>
-        }
+        siteCode={c.siteCode ?? "all sites"}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               <LinkButton href="/quality/changes" variant="secondary">
                 All change requests

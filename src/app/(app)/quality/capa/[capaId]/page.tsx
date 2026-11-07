@@ -3,10 +3,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getCapa } from "@/modules/quality";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Timeline } from "../../_ui";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -50,15 +50,13 @@ export default async function CapaPage({ params, searchParams }: { params: Promi
   const leadActionId = v.actions.find((a) => a.canComplete || a.canVerify)?.id ?? null;
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/quality/capa", label: "Fix-and-prevent plans" }}
+        typeLabel="Fix-and-prevent plan"
+        reference={c.capaNumber}
         title={c.title}
-        subtitle={
-          <>
-            Fix-and-prevent plan · <RecordNo>{c.capaNumber}</RecordNo>
-          </>
-        }
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               {ctx.can("quality.change_control.create") && (
                 <LinkButton href={`/quality/changes/new?capaId=${c.id}`} variant="secondary">

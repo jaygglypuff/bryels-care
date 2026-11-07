@@ -128,10 +128,11 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
             </LinkButton>
           ) : undefined
         }
-        secondary={
+        back={{ href: "/sales/shipments", label: "Deliveries" }}
+        actions={
           <>
-            <LinkButton href="/sales/shipments" variant="ghost">All deliveries</LinkButton>
-            <MoreMenu>
+            <Help screen="sales.fulfilment" />
+            <MoreMenu compact>
               <div className="flex flex-col gap-3">
                 <LinkButton href={`/sales/${v.order.id}`} variant="secondary">Open the order</LinkButton>
                 {canDraftDr && (
@@ -147,7 +148,6 @@ export default async function ShipmentPage({ params, searchParams }: { params: P
                     <ReasonCmd action={reverseShipmentAction} fields={{ shipmentId: s.id }} label="Undo sending out" placeholder="e.g. Truck broke down at the gate" variant="danger" confirm="Undo sending out? Stock goes back to its shelves and the delivery receipt is cancelled." />
                   </div>
                 )}
-                <Help screen="sales.fulfilment" />
               </div>
             </MoreMenu>
           </>

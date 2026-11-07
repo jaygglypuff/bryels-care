@@ -6,10 +6,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { getQuote, manilaToday } from "@/modules/sales";
-import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { MaskedNote, Money, SalesStatus } from "../../orders/sales-ui";
@@ -77,24 +77,23 @@ export default async function QuotePage({ params, searchParams }: { params: Prom
 
   return (
     <div className="mx-auto max-w-4xl">
-      <PageHeader
-        title={`Price offer for ${d.customer.name}`}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <Link href="/sales/quotations" className="text-primary-text hover:underline">Price offers</Link>
-            <RecordNo>{q.quoteNumber}</RecordNo>
-            <SalesStatus status={q.status} />
-          </span>
+      <RecordHeader
+        back={{ href: "/sales/quotations", label: "Price offers" }}
+        typeLabel="Price offer"
+        reference={q.quoteNumber}
+        title={d.customer.name}
+        chip={<SalesStatus status={q.status} />}
+        secondary={
+          ["sent", "accepted", "converted"].includes(q.status) ? (
+            <LinkButton href={`/print/quotation/${q.id}`} target="_blank" variant="secondary" size="sm">
+              Print
+            </LinkButton>
+          ) : undefined
         }
         actions={
           <>
-            {["sent", "accepted", "converted"].includes(q.status) && (
-              <LinkButton href={`/print/quotation/${q.id}`} target="_blank" variant="secondary">
-                Print
-              </LinkButton>
-            )}
             {(q.status === "draft" && canEdit) || canVoid || canDelete || (q.status === "sent" && canEdit) ? (
-              <MoreMenu>
+              <MoreMenu compact>
                 <div className="flex flex-col gap-3">
                   {q.status === "draft" && canEdit && <LinkButton href={`/sales/quotations/${q.id}/edit`} variant="secondary">Change the draft</LinkButton>}
                   {q.status === "sent" && canEdit && <QuoteCommand quoteId={q.id} command="accept" label="Customer said yes (order later)" />}

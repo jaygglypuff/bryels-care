@@ -54,7 +54,7 @@ export function CustomerPanel({
       </Link>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="font-display text-[22px] font-semibold leading-tight text-fg">{c.name}</h2>
+          <h2 className="font-display text-title text-fg">{c.name}</h2>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-muted">
             <span>Customer since {since}</span>
             <SalesStatus status={c.status} />

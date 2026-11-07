@@ -4,13 +4,13 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { getInvoice, taxCodeOptionsFor } from "@/modules/finance";
-import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { NextStepBox } from "@/ui/next-step-box";
 import { waitingFor } from "../../../waiting-for";
 import { approvalWaiting } from "../../approval-waiting";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { FinanceCommand } from "../../commands";
@@ -61,16 +61,19 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
   );
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/finance/invoices", label: "Invoices" }}
+        typeLabel="Invoice"
+        reference={i.invoiceNumber ?? "No number yet"}
         title={d.customer.name}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            Invoice · <RecordNo>{i.invoiceNumber ?? "no number yet"}</RecordNo> <FinanceStatus status={i.status} />
+        chip={
+          <>
+            <FinanceStatus status={i.status} />
             {i.overdue && <FinanceStatus status="overdue" />}
-          </span>
+          </>
         }
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               {posted && (
                 <LinkButton href={`/print/invoice/${i.id}`} target="_blank" variant="secondary">
@@ -130,7 +133,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
       <div className="flex flex-col gap-4">
 
         <Card>
-          <CardTitle action={<Money value={i.totalAmount} className="text-[20px] font-semibold" />}>What the customer pays</CardTitle>
+          <CardTitle action={<Money value={i.totalAmount} className="text-value" />}>What the customer pays</CardTitle>
           <ul className="flex flex-col divide-y divide-line rounded-[14px] border border-line">
             {d.lines.map((l) => (
               <li key={l.id} className="flex items-start justify-between gap-3 px-3 py-2.5">

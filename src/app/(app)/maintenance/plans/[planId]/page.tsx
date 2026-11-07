@@ -3,10 +3,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getMaintenancePlan } from "@/modules/maintenance";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { DueChip, WoStatusChip } from "../../_ui";
@@ -36,15 +36,14 @@ export default async function PlanPage({ params, searchParams }: { params: Promi
   const p = v.plan;
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/maintenance/plans", label: "Regular maintenance" }}
+        typeLabel="Regular maintenance"
+        reference={p.planNumber}
         title={`${p.equipmentName}: ${p.title}`}
-        subtitle={
-          <>
-            Regular maintenance · {p.siteCode} · <RecordNo>{p.planNumber}</RecordNo>
-          </>
-        }
+        siteCode={p.siteCode}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               <LinkButton href="/maintenance/plans" variant="secondary">
                 All regular maintenance

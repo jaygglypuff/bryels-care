@@ -7,10 +7,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { boxesAtLocation, getContainer, type ContainerDetail } from "@/modules/inventory/containers";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner, Chip } from "@/ui/status";
 import { BOX_STATUS_WORDS, Expiry, LotStatusChip, MovementChip, fmtLotQty, placeWords } from "@/ui/inventory/bits";
 import { Forbidden } from "../../../forbidden";
@@ -72,17 +72,14 @@ export default async function BoxPage({ params, searchParams }: { params: Promis
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <RecordHeader
+        typeLabel="Box"
+        reference={box.containerNumber}
         title={title}
-        subtitle={
-          <span className="flex flex-wrap items-center gap-2">
-            Box <RecordNo>{box.containerNumber}</RecordNo>
-            <Chip tone={box.status === "sealed" ? "ok" : box.status === "open" ? "info" : "neu"}>{BOX_STATUS_WORDS[box.status] ?? box.status}</Chip>
-            {box.locationName ? `on ${box.locationName}` : "no shelf yet"}
-          </span>
-        }
+        chip={<Chip tone={box.status === "sealed" ? "ok" : box.status === "open" ? "info" : "neu"}>{BOX_STATUS_WORDS[box.status] ?? box.status}</Chip>}
+        meta={[box.locationName ? `On ${box.locationName}` : "No shelf yet"]}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-2">
               {rest.map((a) =>
                 a.allowed ? (

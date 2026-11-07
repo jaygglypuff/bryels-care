@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { getRecipe, productReadiness, recipeWizardOptions, type RecipeView } from "@/modules/masterdata";
 import { Card, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { Forbidden } from "../../../forbidden";
 import { waitingFor } from "../../../waiting-for";
@@ -80,10 +81,10 @@ export default async function RecipePage({ params, searchParams }: { params: Pro
 /** ADR-117: the owner's one green Approve for the waiting recipe and steps, with the GMP warning in plain words. */
 function OwnerAloneBox({ r }: { r: RecipeView }) {
   return (
-    <section aria-label="What to do next" data-testid="owner-alone-box" className="mb-4 flex flex-col gap-3 rounded-[16px] border border-[var(--brand-200)] bg-[var(--brand-50)] p-4">
+    <section aria-label="What to do next" data-testid="owner-alone-box" className="mb-4 flex flex-col gap-3 rounded-[16px] border border-[var(--brand-200)] bg-[var(--brand-50)] px-4 py-3">
       <div>
-        <p className="text-[12px] font-semibold uppercase tracking-wide text-primary-text">What to do next</p>
-        <p className="mt-0.5 text-[16px] font-medium text-fg">{r.ownerAlone.note}</p>
+        <p className="text-label font-semibold text-primary-text">What to do next</p>
+        <p className="mt-0.5 text-[15px] font-medium leading-snug text-fg">{r.ownerAlone.note}</p>
         <p className="mt-1 text-[14px] text-fg-2">
           One press approves the {r.ownerAlone.waitingParts.length > 1 ? "recipe and its steps" : r.ownerAlone.waitingParts[0] === "steps" ? "steps" : "recipe"}, every step, from today.
         </p>
@@ -101,12 +102,11 @@ function RecipeOverview({ r, saved, waiting }: { r: RecipeView; saved?: string; 
   const rShown = ro ? (ro.open ?? ro.current) : null;
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4">
-      <Link href="/masterdata/recipes" className="inline-flex min-h-[44px] items-center text-[13px] text-primary-text hover:underline">
-        ← All recipes
-      </Link>
-      <PageHeader
-        title={`Recipe: ${r.product.name}`}
-        subtitle={`${r.formula.code} · ingredients ${word(fShown)} · steps ${ro ? word(rShown) : "none yet"}`}
+      <RecordHeader
+        back={{ href: "/masterdata/recipes", label: "Recipes" }}
+        typeLabel="Recipe"
+        title={r.product.name}
+        meta={[<span key="code" className="font-mono">{r.formula.code}</span>, `ingredients ${word(fShown)}`, `steps ${ro ? word(rShown) : "none yet"}`]}
       />
       <PageIntro>This screen is for one product&apos;s recipe: what goes in, the steps, and which version is in use.</PageIntro>
       {r.mode === "draft" && r.can.edit ? (

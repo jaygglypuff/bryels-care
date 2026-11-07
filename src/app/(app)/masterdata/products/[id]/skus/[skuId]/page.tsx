@@ -3,7 +3,8 @@ import { db } from "@/db/client";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { PRODUCT_TRANSITIONS, getProduct, getSku, uomOptions, type ProductStatus } from "@/modules/masterdata";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { RecordNo } from "@/ui/plain-list";
@@ -46,18 +47,15 @@ export default async function SkuPage({ params, searchParams }: { params: Promis
       <Link href={back} className="inline-flex min-h-[44px] items-center text-[14px] text-primary-text hover:underline">
         ← {product ? product.name : "Back to the product"}
       </Link>
-      <PageHeader
+      <RecordHeader
+        typeLabel="Sellable item"
         title={s.name}
-        subtitle={
-          <>
-            Sellable item{product ? ` of ${product.name}` : ""}
-            {s.variantLabel ? ` · ${s.variantLabel}` : ""} · <RecordNo>{s.code}</RecordNo> <PlainItemChip status={s.status} />
-          </>
-        }
+        chip={<PlainItemChip status={s.status} />}
+        meta={[product ? `of ${product.name}` : null, s.variantLabel, <RecordNo key="code">{s.code}</RecordNo>]}
         actions={
           <>
             {moves.includes("discontinued") && (
-              <MoreMenu>
+              <MoreMenu compact>
                 <ActionForm action={skuStatusAction} submitLabel="No longer sold" variant="danger" hidden={{ _id: s.id, status: "discontinued" }}>
                   <p className="text-[13px] text-muted">Final. Orders and stock that already have it keep it.</p>
                   <TextField name="reason" label="Why?" />

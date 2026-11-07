@@ -17,7 +17,7 @@ export function PortalFrame({ children, below }: { children: ReactNode; below?: 
         </div>
         <div className="relative mt-auto max-w-[460px]">
           <p className="text-[13px] font-semibold uppercase tracking-[0.18em] text-white/75">Customer portal</p>
-          <p className="mt-2 font-display text-[32px] font-semibold leading-tight">Your products, prices, orders and delivery papers in one place.</p>
+          <p className="mt-2 font-display text-title-lg">Your products, prices, orders and delivery papers in one place.</p>
           <ul className="mt-6 grid gap-2 text-[14px] text-white/85">
             <li>• Order from your approved catalogue at your agreed prices</li>
             <li>• Follow every order from review to delivery</li>

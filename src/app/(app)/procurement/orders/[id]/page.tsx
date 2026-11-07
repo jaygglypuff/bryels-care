@@ -4,12 +4,12 @@ import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtDayMonth } from "@/lib/qty";
 import { getPurchaseOrder, procurementNextActors } from "@/modules/procurement";
 import { NextApprover } from "@/ui/next-approver";
-import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, PageHeader, Textarea } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, Textarea } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { ActionForm } from "@/ui/form";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { NextStepBox } from "@/ui/next-step-box";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { cancelOrderAction, closeOrderAction, confirmOrderAction, decideOrderAction, regenerateDocumentAction, sendOrderAction, shortCloseLineAction, submitOrderAction } from "../../actions";
@@ -52,17 +52,16 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const hasMore = can.print || can.confirm || can.close || can.cancel || canRecordDoc;
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/procurement/orders", label: "Purchase orders" }}
+        typeLabel="Purchase order"
+        reference={po.poNumber}
         title={v.supplier.name}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            Purchase order · <RecordNo>{po.poNumber}</RecordNo> <PoChip status={po.status} />
-          </span>
-        }
+        chip={<PoChip status={po.status} />}
         actions={
           <>
             {hasMore && (
-              <MoreMenu>
+              <MoreMenu compact>
                 <div className="flex flex-col gap-3">
                   {can.print && (
                     <a className={linkCls} href={`/print/purchase-order/${po.id}`}>

@@ -15,7 +15,7 @@ export default async function VerifyPage() {
         <VerifyForm />
       ) : (
         <Card>
-          <h1 className="font-display text-[22px] font-semibold">Sign-in step expired</h1>
+          <h1 className="font-display text-title">Sign-in step expired</h1>
           <p className="mt-2 text-[13px] text-muted">For safety the code step lasts 10 minutes.</p>
           <Link href="/sign-in" className="mt-4 inline-block text-[14px] font-medium text-primary-text hover:underline">
             Sign in again

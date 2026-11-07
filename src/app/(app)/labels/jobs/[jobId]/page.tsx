@@ -4,10 +4,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { getLabelJob, labelHistory, reprintReasonOptions, type LabelJobView } from "@/modules/documents";
-import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { recordHref } from "@/app/print/labels/back";
 import { Forbidden } from "../../../forbidden";
@@ -61,16 +61,15 @@ export default async function LabelJobPage({ params, }: { params: Promise<{ jobI
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <PageHeader
-        title={`Label: ${what}`}
-        subtitle={
-          <span className="flex flex-wrap items-center gap-2">
-            <RecordNo>{j.entityNumber}</RecordNo> <JobStatus status={j.status} voided={!!j.voidedAt} />
-            {j.reprintNo ? <span>printed again ({j.reprintNo})</span> : null}
-          </span>
-        }
+      <RecordHeader
+        back={{ href: "/labels", label: "Labels printed" }}
+        typeLabel="Label"
+        reference={j.entityNumber}
+        title={what}
+        chip={<JobStatus status={j.status} voided={!!j.voidedAt} />}
+        meta={[j.reprintNo ? `Printed again (${j.reprintNo})` : null]}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               <LinkButton href={back} variant="secondary">Open what the label is for</LinkButton>
               <LinkButton href="/labels" variant="secondary">Labels printed</LinkButton>

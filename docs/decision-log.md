@@ -2369,3 +2369,31 @@ small plans), only metadata is stored in `email_outbox` (never the body or the k
 change and is shown as failed, `none` stays the default. Set-up: in Brevo, verify the sender domain or address (SPF and
 DKIM records at the domain's DNS) and create an API key; in Railway (web and worker services) set EMAIL_PROVIDER=brevo,
 BREVO_API_KEY and EMAIL_FROM. Test `tests/unit/email-brevo.test.ts`.
+
+## ADR-119 One calm type scale and one record page template (owner 2026-11-08)
+
+Status: Accepted (UX lead; owner to confirm on the live demo). Amends ADR-082 §5 (record header) and ADR-088 §1
+(PageIntro shown compact, wording unchanged).
+
+Owner, with phone screenshots of "Check quality: Aloe Hand Lotion 250 mL": "big fonts but the focus is not on the batch
+number. The summary is ugly too … it is not harmonious."
+
+Decision:
+1. **Type scale as tokens** (`@theme` in `src/app/globals.css`, table in `docs/ux-system.md` §2.8): `text-id` 26→30 px
+   (record identifier), `text-title` 22→26 px (page titles, was 26→32), `text-section` 16→17 px (card titles),
+   body 15 px below 1024 px, `text-meta` 13, `text-label` 12, `text-value` 18 (summary values), `text-stat` 26 (KPI and
+   count numbers, were 26–34), `text-readout` 40 (weigh screen only). No page uses an ad-hoc `text-[NNpx]` above 20 px
+   (print layouts and the keypad excepted). Spacing on an 8 px grid; cards 16/24 padding, radius 16/20 (§2.7).
+2. **One record page template** (`docs/ux-system.md` Rules: 5.2): `RecordHeader` puts the identifier first as the H1
+   (large, dark; `data-testid="record-number"` kept for tests and e2e), the status chip beside it, Help "?" and
+   ⋯ More as compact icon buttons on the same row, the product/customer/supplier name as the subtitle, one meta line,
+   then the progress strip and "What to do next". Setup records keep the name as the H1 (ADR-103/108) with the code in
+   the meta line. `PageIntro` keeps its sentence but shows one line on phones with "more". Summaries use `SummaryGrid`
+   (2 columns on phones, 3–4 when wide; bold numbers with units, one small line under each); "nothing went wrong"
+   becomes one `QuietLine` instead of a card. Applied to the record pages listed in `docs/ux-audit/harmony-review.md`.
+3. Behaviour, permissions, server actions and words are unchanged; only layout and type. No migration, no permission,
+   no new dependency.
+
+Consequences: unit test `round4-ux` (page header margin) and the redirect helpers of the grade-5 tests (now also accept
+`RecordHeader`) were updated; e2e scripts read `record-number`/`record-reference`, which the new header keeps. Open:
+forms are not yet regrouped into titled sections; lists kept their row anatomy; print layouts unchanged (see the review).

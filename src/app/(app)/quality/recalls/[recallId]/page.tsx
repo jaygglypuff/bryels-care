@@ -3,10 +3,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { getRecallCase } from "@/modules/quality";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { QaStatusChip, Timeline, fmtLotQty, qaWord } from "../../_ui";
@@ -55,15 +55,13 @@ export default async function RecallCasePage({ params, searchParams }: { params:
   const hasGaps = lines.some((l) => !l.reconciled);
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/quality/recalls", label: "Product recalls" }}
+        typeLabel={KIND_WORD[c.recallKind] ?? c.kindLabel}
+        reference={c.recallNumber}
         title={c.title}
-        subtitle={
-          <>
-            {KIND_WORD[c.recallKind] ?? c.kindLabel} · <RecordNo>{c.recallNumber}</RecordNo>
-          </>
-        }
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               {v.can.export && (
                 <>

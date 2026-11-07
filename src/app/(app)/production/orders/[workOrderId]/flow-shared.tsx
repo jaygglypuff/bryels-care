@@ -39,9 +39,16 @@ export function FlowHeader({ title, batchNumber, orderHref, progress, actions }:
         <ArrowLeft size={22} aria-hidden />
       </Link>
       <div className="min-w-0 flex-1">
-        <h1 className="font-display text-[24px] font-semibold leading-tight text-fg sm:text-[28px]">{title}</h1>
-        <div className="mt-1 flex flex-wrap items-center gap-2 text-[15px] text-muted">
-          <Chip tone="neu">Batch {batchNumber}</Chip>
+        {/* Harmony pass (2026-11-08): the task verb is the title; the batch number is the one identifier, dark and
+            tabular right under it (no grey chip), so the operator sees which batch at a glance. */}
+        <h1 className="font-display text-title tracking-tight text-fg sm:text-title-lg">{title}</h1>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[15px] text-muted">
+          <span>
+            Batch{" "}
+            <span className="text-[17px] font-semibold text-fg tabular" data-testid="record-number">
+              {batchNumber}
+            </span>
+          </span>
           {progress}
         </div>
       </div>

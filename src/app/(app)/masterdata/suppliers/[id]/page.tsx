@@ -5,7 +5,8 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getSupplier, lookupOptions } from "@/modules/masterdata";
-import { Card, CardTitle, Dl, EmptyState, PageHeader, Table, Td } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, Table, Td } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { ReceiptStatusChip, SupplierStatusChip } from "@/ui/receiving";
 import { Banner, Chip } from "@/ui/status";
@@ -30,13 +31,12 @@ export default async function SupplierPage({ params, searchParams }: { params: P
   }
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/procurement/suppliers", label: "Suppliers we may buy from" }}
+        typeLabel="Supplier"
         title={s.name}
-        subtitle={
-          <>
-            <Link href="/procurement/suppliers" className="text-primary-text hover:underline">Suppliers</Link> · <span className="font-mono text-[12px] text-muted">{s.code}</span> · <SupplierStatusChip status={s.qualityStatus} />
-          </>
-        }
+        chip={<SupplierStatusChip status={s.qualityStatus} />}
+        meta={[<span key="code" className="font-mono">{s.code}</span>]}
       />
       <PageIntro>A company you buy from: who to call, and which materials QA has approved from them.</PageIntro>
       {s.qualityStatus === "new" ? (

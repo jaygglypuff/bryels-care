@@ -182,7 +182,7 @@ function Tile({ title, icon, tone, href, value, children }: { title: string; ico
         <span className="min-w-0 flex-1 text-[14px] font-semibold text-fg">{title}</span>
         <ArrowRight size={16} className="shrink-0 text-muted" aria-hidden />
       </span>
-      <span className="mt-3 block break-words font-display text-[28px] font-semibold leading-none text-fg tabular">{value}</span>
+      <span className="mt-3 block break-words font-display text-stat leading-none text-fg tabular">{value}</span>
       {children && <span className="mt-2 block text-[13px] leading-snug text-fg-2">{children}</span>}
     </Link>
   );

@@ -43,14 +43,14 @@ export default async function HelpPage({ searchParams }: { searchParams: Promise
 
       {guide && (
         <Card id={chosen.key} data-testid="role-guide">
-          <h2 className="mb-2 font-display text-[20px] font-semibold text-fg">{guide.title}</h2>
+          <h2 className="mb-2 font-display text-section text-fg sm:text-section-lg">{guide.title}</h2>
           <GuideView guide={guide} />
         </Card>
       )}
 
       {words && (
         <Card id="start.words">
-          <h2 className="mb-2 font-display text-[20px] font-semibold text-fg">{words.title}</h2>
+          <h2 className="mb-2 font-display text-section text-fg sm:text-section-lg">{words.title}</h2>
           <GuideView guide={words} />
         </Card>
       )}

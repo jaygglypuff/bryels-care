@@ -7,7 +7,7 @@ export function cx(...c: (string | false | null | undefined)[]) {
 
 export function Card({ className, children, ...rest }: ComponentProps<"section">) {
   return (
-    <section className={cx("rounded-[24px] bg-surface p-5 shadow-[var(--shadow-card)] sm:p-6", className)} {...rest}>
+    <section className={cx("rounded-[16px] bg-surface p-4 shadow-[var(--shadow-card)] sm:rounded-[20px] sm:p-6", className)} {...rest}>
       {children}
     </section>
   );
@@ -16,7 +16,7 @@ export function Card({ className, children, ...rest }: ComponentProps<"section">
 export function CardTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <div className="mb-3 flex items-center justify-between gap-3">
-      <h2 className="font-display text-[17px] font-semibold text-fg">{children}</h2>
+      <h2 className="font-display text-section text-fg sm:text-section-lg">{children}</h2>
       {action}
     </div>
   );
@@ -29,10 +29,10 @@ export function CardTitle({ children, action }: { children: ReactNode; action?: 
  */
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
-    <div className={cx("page-header mb-5 flex flex-wrap items-end justify-between gap-3", actions ? "page-header--actions" : null)}>
+    <div className={cx("page-header mb-4 flex flex-wrap items-end justify-between gap-3 sm:mb-6", actions ? "page-header--actions" : null)}>
       <div className="page-title min-w-0 max-w-full">
-        <h1 className="break-words font-display text-[26px] font-semibold tracking-tight text-fg sm:text-[32px]">{title}</h1>
-        {subtitle && <p className="mt-1 text-[13px] text-muted">{subtitle}</p>}
+        <h1 className="break-words font-display text-title tracking-tight text-fg sm:text-title-lg">{title}</h1>
+        {subtitle && <p className="mt-1 text-meta text-fg-2">{subtitle}</p>}
       </div>
       {actions && <div className="page-actions flex flex-wrap gap-2">{actions}</div>}
     </div>
@@ -80,7 +80,7 @@ export function Table({ head, children, className }: { head: ReactNode[]; childr
   return (
     <div className={cx("overflow-x-auto rounded-[16px] border border-line bg-surface", className)}>
       <table className="w-full min-w-[640px] border-collapse text-left text-[13px]">
-        <thead className="bg-surface-2 text-[11px] uppercase tracking-wide text-muted">
+        <thead className="bg-surface-2 text-label text-muted">
           <tr>
             {head.map((h, i) => (
               <th key={i} className="px-3 py-2.5 font-semibold">
@@ -103,8 +103,8 @@ export function Kpi({ label, value, hint, tone = "neutral", href }: { label: str
   const hintColor = tone === "good" ? "text-[var(--ok-fg)]" : tone === "warn" ? "text-[var(--warn-fg)]" : tone === "bad" ? "text-[var(--bad-fg)]" : "text-muted";
   const body = (
     <Card className="h-full transition-shadow hover:shadow-[var(--shadow-pop)]">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</p>
-      <p className="mt-3 font-display text-[34px] font-semibold leading-none text-fg tabular">{value}</p>
+      <p className="text-label text-muted">{label}</p>
+      <p className="mt-2 font-display text-stat text-fg tabular">{value}</p>
       {hint && <p className={cx("mt-2 text-[12px]", hintColor)}>{hint}</p>}
     </Card>
   );
@@ -113,7 +113,7 @@ export function Kpi({ label, value, hint, tone = "neutral", href }: { label: str
 
 export function Field({ label, htmlFor, error, hint, children }: { label: string; htmlFor: string; error?: string; hint?: string; children: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
+    <div className="flex min-w-0 flex-col gap-2">
       <label htmlFor={htmlFor} className="text-[13px] font-medium text-fg">
         {label}
       </label>
@@ -164,11 +164,13 @@ export function Dl({ items }: { items: [string, ReactNode][] }) {
   // tablet keep 2 / 3 columns as before.
   return (
     <div className="lg:@container">
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-2 lg:@xl:grid-cols-3">
+      {/* Harmony pass (2026-11-08): the same label/value anatomy as SummaryGrid (src/ui/summary.tsx), text values in
+          body size. Labels are sentence case in the label role, never shouting capitals. */}
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 lg:grid-cols-2 lg:@xl:grid-cols-3">
         {items.map(([k, v]) => (
           <div key={k} className="min-w-0">
-            <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted">{k}</dt>
-            <dd className="mt-0.5 break-words text-[14px] text-fg tabular">{v}</dd>
+            <dt className="text-label text-muted">{k}</dt>
+            <dd className="mt-1 break-words text-[15px] font-medium leading-snug text-fg tabular">{v}</dd>
           </div>
         ))}
       </dl>

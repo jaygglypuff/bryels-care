@@ -2,7 +2,8 @@ import { db } from "@/db/client";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { MATERIAL_KIND_DEFAULTS, MATERIAL_TRANSITIONS, getMaterial, lookupLabels, materialFormOptions, type MaterialStatus } from "@/modules/masterdata";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { NextStepBox } from "@/ui/next-step-box";
 import { waitingFor } from "../../../waiting-for";
@@ -39,21 +40,12 @@ export default async function MaterialPage({ params, searchParams }: { params: P
   const canSeeStock = ctx.can("inventory.lot.view");
   return (
     <div className="space-y-5">
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/masterdata/materials", label: "Materials" }}
+        typeLabel={KIND_WORDS[m.materialKind] ?? m.materialKind}
         title={m.name}
-        subtitle={
-          <>
-            <span className="font-mono text-[12px] text-muted">{m.code}</span> · {KIND_WORDS[m.materialKind] ?? m.materialKind} · {countWords(m.baseUom)}
-            {categoryLabel ? ` · ${categoryLabel}` : ""}
-            {m.brand ? ` · brand ${m.brand}` : ""}
-            {pack ? ` · one pack holds ${pack}` : ""} · <StateChip status={m.status} />
-          </>
-        }
-        actions={
-          <>
-            <LinkButton href="/masterdata/materials" variant="secondary">All materials</LinkButton>
-          </>
-        }
+        chip={<StateChip status={m.status} />}
+        meta={[<span key="code" className="font-mono">{m.code}</span>, countWords(m.baseUom), categoryLabel, m.brand ? `brand ${m.brand}` : null, pack ? `one pack holds ${pack}` : null]}
       />
       <PageIntro>Everything the system knows about this material. Change a box and press Save.</PageIntro>
       {created === "1" && <Banner tone="ok" title={`${m.name} added as ${m.code}`}>You can now order it, receive it and use it in recipes.</Banner>}

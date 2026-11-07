@@ -112,7 +112,7 @@ export function BigNumber({ label, scope, value, hint, tone = "neu", testId }: {
         {label}
         {scope && <span className="block text-[11px] font-normal text-muted">{scope}</span>}
       </p>
-      <p className="mt-1.5 font-display text-[28px] font-semibold leading-tight text-fg tabular sm:text-[32px]">{value}</p>
+      <p className="mt-1.5 font-display text-stat text-fg tabular">{value}</p>
       {hint && <p className="mt-1 text-[12px] text-fg-2">{hint}</p>}
     </div>
   );

@@ -6,10 +6,10 @@ import { D, fmtDate, fmtDateTime, fmtMass, fmtQty } from "@/lib/qty";
 import { getBatchRelease } from "@/modules/quality/dispositions";
 import { conditionalReleaseState } from "@/modules/quality";
 import { TESTABLE_BATCH_STATUSES } from "@/modules/quality/rules";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton, cx } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { WhoCanHelp } from "@/ui/who-can-help";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -49,17 +49,14 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
 
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        typeLabel="Batch · full QA review"
+        reference={batch.batchNumber}
         title={v.productName}
-        subtitle={
-          <>
-            Batch <RecordNo>{batch.batchNumber}</RecordNo> · full QA review
-          </>
-        }
         actions={
           <>
             <Help screen="quality.release" />
-            <MoreMenu>
+            <MoreMenu compact>
               <div className="flex flex-col gap-2">
                 <LinkButton href={`/print/bmr/${batch.id}`} variant="secondary" target="_blank">
                   Batch record (print)

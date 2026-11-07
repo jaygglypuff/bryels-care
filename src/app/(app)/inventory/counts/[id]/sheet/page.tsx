@@ -33,7 +33,7 @@ export default async function CountSheetPage({ params }: { params: Promise<{ id:
         <PageIntro>This screen is for printing a paper sheet to count on when a phone is not handy. Type the amounts into the count afterwards.</PageIntro>
       </div>
       <div>
-        <h1 className="text-[20px] font-semibold">Count sheet: {c.scope.length <= 3 ? c.scope.map((s) => s.name).join(", ") : `${c.scope.length} shelves`}</h1>
+        <h1 className="text-value">Count sheet: {c.scope.length <= 3 ? c.scope.map((s) => s.name).join(", ") : `${c.scope.length} shelves`}</h1>
         <p className="text-[12px]">{ctx.allowedSites.find((s) => s.id === c.siteId)?.name} · count {c.countNumber} · {c.countKind === "full" ? "everything" : "a few shelves"} · day {fmtDate(c.scheduledFor)} · printed {fmtDateTime(new Date())}</p>
         <p className="text-[12px]">Count everything on each shelf. Write things that are not on this list on the empty lines.</p>
       </div>

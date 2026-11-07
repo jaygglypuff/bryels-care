@@ -19,7 +19,7 @@ export function AuthFrame({ children, below }: { children: ReactNode; below?: Re
           <Logo tagline className="h-16 w-auto" />
         </div>
         <div className="relative mt-auto max-w-[460px]">
-          <p className="font-display text-[34px] font-semibold leading-tight">From raw material to the customer&apos;s shelf, every lot accounted for.</p>
+          <p className="font-display text-title-lg">From raw material to the customer&apos;s shelf, every lot accounted for.</p>
           <ul className="mt-6 grid gap-2 text-[14px] text-white/85">
             <li>• Receive deliveries, print labels and let QA say OK</li>
             <li>• Make each batch step by step, with a second person checking the weighing</li>
