@@ -662,8 +662,9 @@ section('n. proof of delivery: the customer signs on the phone', async () => {
   await page.mouse.up();
   await shot(page, 'proof-of-delivery-phone', { full: true });
   await page.getByRole('button', { name: 'Save proof of delivery' }).click();
-  await expectText(page, 'Delivered. Next: finance bills it.');
-  await expectText(page, 'Rosa Lim (Finance)');
+  // The invoice draft was made at dispatch (ADR-124: the next step follows the invoice and names who sends it).
+  await expectText(page, 'Delivered. Next: finance bills it');
+  await expectText(page, /Rosa \(finance\)/);
   log('proof of delivery saved (Liza Ramos)');
   await close();
 });
@@ -687,6 +688,11 @@ section('o. finance makes and sends the invoice from the delivery', async () => 
   // The small demo has one finance person (Rosa, who sent it), so the owner approves (owner override): the screen
   // must name her, not "Nobody can do it yet".
   await expectText(page, /Next: .*Ana \(owner\)/);
+  // ADR-124: the delivery now follows the invoice: no more "finance bills it" / "Open the invoice draft".
+  await openIslaDelivery(page);
+  await expectText(page, 'Delivered. The invoice is sent for approval.');
+  await expectText(page, /Waiting for Ana \(owner\) to approve the invoice/);
+  await shot(page, 'delivery-invoice-sent');
   await close();
 });
 

@@ -66,6 +66,7 @@ after the second slice (2026-11-06). Every message is in-app, links to the exact
 | 24 | Label reprint | no approval step exists (reprints are audited, not approved) | — | n/a | n/a | n/a |
 | 25 | Second check of the boxes (delivery or warehouse pack) | `inventory.pack.approve`; never the picker, a scanner or the packer (independent) | Packing, Home | ✗ → ✓ when the pick is complete (C9 f) or a pack is sent for checking; then the dispatcher is told when checked (C9 g) | n/a | ~ → ✓ packing page, pack page, order page |
 | 26 | Delivery proof | dispatch, after delivery | Order page | ✓ (existing) | n/a | ~ unchanged |
+| 27 | Billing a delivery (ADR-124) | no invoice: `finance.invoice.create`; draft: `finance.invoice.submit`; sent for approval: row 20 (`nextActors` "invoice", open step roles, creator and sender kept out, owner fallback ADR-122); approved: `finance.invoice.post`, never an approver when the rules forbid it | Delivery page, customer order page | n/a (row 20) | n/a | ✗ → ✓ "Waiting for Ana (owner) to approve the invoice" on the delivery and the order (`billingStepOfShipment`, `billingStepOfOrder`) |
 
 ### The older "Waiting for" helpers now use `nextActors`
 
@@ -115,6 +116,9 @@ after the second slice (2026-11-06). Every message is in-app, links to the exact
     These versions are now in "To approve" (`approval.formula_revision`, `approval.routing_revision`,
     `approval.work_instruction_revision`). Tests: `tests/integration/masterdata/owner-alone-recipes.test.ts`,
     `tests/unit/owner-alone-words.test.ts`.
+- `tests/integration/finance/billing-step.test.ts` (ADR-124): the delivery and the order follow the invoice from draft to
+  saved; sent for approval names the approvers (never the sender); the warehouse sees the stage and the names but no
+  invoice link; never another site's delivery. Words: `tests/unit/billing-step-words.test.ts`.
 - `tests/integration/quality/w2-wiring.test.ts`: complete results tell the second QA person (not the tester); the review tells the tester.
 - `tests/integration/inventory/receipt-qa-notify.test.ts`: one message per lot, opening the lot.
 - `tests/integration/governance/live-check-names.test.ts`: the QA lot names its deciders for every viewer (never another

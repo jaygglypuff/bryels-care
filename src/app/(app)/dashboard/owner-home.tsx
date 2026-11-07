@@ -22,6 +22,7 @@ const NEXT_LABEL: Record<string, string> = {
   hold: "See what QA stopped",
   expiring: "See what expires",
   invoice: "Make the invoices",
+  invoice_save: "Save them to the books",
   so_confirm: "Open the orders",
   so_short: "See the short orders",
   so_set_aside: "See the orders",
@@ -60,7 +61,7 @@ export async function OwnerHomePage({ ctx, scope }: { ctx: AuthContext; scope?: 
     salesDesk ? orderCounts(ctx).catch(() => null) : Promise.resolve(null),
     salesDesk ? getWorkFlowCounts(ctx, ["so_short", "so_can_set_aside"]).catch(() => []) : Promise.resolve([]),
   ]);
-  const notBilled = unbilled ? { count: unbilled.count, oldestDays: unbilled.oldestDispatchedAt ? Math.floor((Date.now() - unbilled.oldestDispatchedAt.getTime()) / 86_400_000) : null } : null;
+  const notBilled = unbilled ? { count: unbilled.count, toMake: unbilled.toMake, waitingApproval: unbilled.waitingApproval, toSave: unbilled.toSave, oldestDays: unbilled.oldestDispatchedAt ? Math.floor((Date.now() - unbilled.oldestDispatchedAt.getTime()) / 86_400_000) : null } : null;
   const qs = all ? "?scope=all" : "";
   const stockHref = `/dashboard/details/stock${qs}`;
   const flowN = (k: string) => soFlow.find((c) => c.key === k)?.count ?? 0;
