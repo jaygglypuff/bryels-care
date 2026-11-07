@@ -120,7 +120,7 @@ export default async function PackPage({ params, searchParams }: { params: Promi
           {checking && ctx.can("inventory.pack.approve") && !v.isPacker && (
             <Card id="check">
               <CardTitle>Checker: scan boxes · {v.checkedCount} of {v.required} ({p.verificationMode === "all" ? "every box" : "sample"})</CardTitle>
-              <ScanPanel scan={packCheckScanAction.bind(null, p.id)} label="Scan each box label" hint="Compare the label with the box contents and the artwork version; tick the box below before scanning a box whose label is wrong." labelCheck />
+              <ScanPanel scan={packCheckScanAction.bind(null, p.id)} label="Scan each box label, or type the number printed on it" hint="Compare the label with the box contents and the artwork version; tick the box below before checking a box whose label is wrong." labelCheck showCandidates={false} candidates={live.filter((b) => !b.checked).map((b) => ({ value: `BC:BOX:${b.number}`, title: `Box ${b.number}`, code: b.number, codes: [b.number] }))} />
             </Card>
           )}
           {checking && v.isPacker && <Banner tone="info" title="Waiting for a checker">You packed these boxes, so someone else checks them.</Banner>}
@@ -195,7 +195,7 @@ export default async function PackPage({ params, searchParams }: { params: Promi
             <CardTitle>Checker scans</CardTitle>
             {v.scans.length === 0 ? <p className="text-[13px] text-fg-2">No scans yet.</p> : (
               <ul className="flex flex-col gap-1 text-[12px]">
-                {v.scans.map((s) => <li key={s.id}>{fmtDateTime(s.scannedAt)} · {s.scannedByName} · {s.boxNumber ?? s.scanPayload} · {s.result.replace(/_/g, " ")}</li>)}
+                {v.scans.map((s) => <li key={s.id}>{fmtDateTime(s.scannedAt)} · {s.scannedByName} · {s.boxNumber ?? s.scanPayload}{s.entryMode === "typed" ? " (typed)" : ""} · {s.result.replace(/_/g, " ")}</li>)}
               </ul>
             )}
           </Card>

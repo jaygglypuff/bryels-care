@@ -8,6 +8,7 @@ import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { SECTION_LABELS, sectionOf, type LocationSection } from "@/lib/location-sections";
 import { parseScan } from "@/lib/scan";
+import { cleanTyped, codeKey, type PickVia } from "@/lib/scan/pick";
 import { getSetting } from "@/lib/settings";
 import { assertLotUsable, lockLots } from "@/modules/inventory";
 import { heldLocations } from "@/modules/inventory/holds";
@@ -239,7 +240,8 @@ export type MaterialsListView = Awaited<ReturnType<typeof getMaterialsList>>;
 export type PickInput = {
   batchId: string;
   /** One tick per line. With `all: true` every open line is ticked Taken and `lines` may be empty. */
-  lines?: { batchMaterialId: string; action: BatchMaterialPickAction; reason?: string | null; lotCode?: string | null }[];
+  /** `lotVia`: how `lotCode` was given ("scan" or "typed": the printed lot number typed, A-SCAN-TYPED-01); "tap" is refused. */
+  lines?: { batchMaterialId: string; action: BatchMaterialPickAction; reason?: string | null; lotCode?: string | null; lotVia?: PickVia | null }[];
   all?: boolean;
   /** Production place the stock moves to when `production.prepare.move_stock` is on (default: the first one). */
   toLocationCode?: string | null;
@@ -281,7 +283,7 @@ export async function confirmPicked(ctx: AuthContext, input: PickInput): Promise
         return !a || a === "untaken" ? "open" : a;
       };
       const todo = input.all
-        ? lines.filter((l) => stateOf(l.bm.id) === "open").map((l) => ({ batchMaterialId: l.bm.id, action: "taken" as const, reason: null, lotCode: null }))
+        ? lines.filter((l) => stateOf(l.bm.id) === "open").map((l) => ({ batchMaterialId: l.bm.id, action: "taken" as const, reason: null, lotCode: null, lotVia: null }))
         : wanted;
       const held = heldMap(await heldLocations(tx, b.siteId));
       let changed = 0;
@@ -293,6 +295,7 @@ export async function confirmPicked(ctx: AuthContext, input: PickInput): Promise
         let lotId: string | null = null;
         let stagingId: string | null = null;
         let scanned: string | null = null;
+        let scannedVia: "scan" | "typed" | null = null;
         if (t.action === "taken") {
           const lots = await lotsFor(tx, b, wo?.id ?? null, line.material.id, held);
           if (wo && !lots.length) {
@@ -311,10 +314,12 @@ export async function confirmPicked(ctx: AuthContext, input: PickInput): Promise
             }
             lotId = reread[0].lotId;
             if (scanLots) {
-              const p = parseScan(t.lotCode ?? "");
+              // A-SCAN-TYPED-01: the label is read by scan or by typing its lot number; a tap is refused (A-SCAN-11).
+              if (t.lotVia === "tap") throw new DomainError("validation", `Tapping the list does not count. Scan the lot label of ${line.material.name}, or type the lot number printed on it.`, { fieldErrors: { [`lot-${line.bm.id}`]: "Scan or type the lot number." } });
+              const p = parseScan(t.lotVia === "typed" ? cleanTyped(t.lotCode ?? "") : (t.lotCode ?? ""));
               const code = p.kind === "typed" && p.type === "LOT" ? p.value : p.kind === "untyped" ? p.value : null;
-              if (!code) throw new DomainError("validation", `Scan the lot label of ${line.material.name}.`, { fieldErrors: { [`lot-${line.bm.id}`]: "Scan the lot label." } });
-              const match = reread.find((l) => l.lotNumber.toUpperCase() === code.toUpperCase());
+              if (!code) throw new DomainError("validation", `Scan the lot label of ${line.material.name}, or type the lot number printed on it.`, { fieldErrors: { [`lot-${line.bm.id}`]: "Scan or type the lot number." } });
+              const match = reread.find((l) => l.lotNumber.toUpperCase() === code.toUpperCase() || codeKey(l.lotNumber) === codeKey(code));
               if (!match) {
                 throw new DomainError("blocked_lot", `This label says ${code.toUpperCase()}. Take lot ${reread.map((l) => l.lotNumber).join(" or ")} for ${line.material.name}.`, {
                   rule: "V-MAT",
@@ -322,7 +327,8 @@ export async function confirmPicked(ctx: AuthContext, input: PickInput): Promise
                 });
               }
               lotId = match.lotId;
-              scanned = code.toUpperCase();
+              scanned = match.lotNumber;
+              scannedVia = t.lotVia === "typed" ? "typed" : "scan";
             }
           }
           if (moveStock && lots.length) {
@@ -353,6 +359,7 @@ export async function confirmPicked(ctx: AuthContext, input: PickInput): Promise
             action: t.action,
             lotId,
             scannedLotCode: scanned,
+            lotEntryMode: scannedVia,
             stagingId,
             reason,
             pickedBy: ctx.userId,
@@ -369,7 +376,7 @@ export async function confirmPicked(ctx: AuthContext, input: PickInput): Promise
           siteId: b.siteId,
           reason,
           before: { state: now },
-          after: { pickId: row.id, material: line.material.code, materialName: line.material.name, state: t.action, lot: lotNumber ?? null, scanned, stockMoved: !!stagingId, moveStock },
+          after: { pickId: row.id, material: line.material.code, materialName: line.material.name, state: t.action, lot: lotNumber ?? null, scanned, scannedVia, stockMoved: !!stagingId, moveStock },
         });
       }
       const progress = pickProgress(lines.map((l) => l.bm.id), current);

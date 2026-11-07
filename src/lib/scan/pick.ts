@@ -17,6 +17,19 @@ import { normalizeScanInput, parseScan, type ScanType } from "./payload";
 export const PICK_KINDS = ["lot", "container", "location", "batch", "item"] as const;
 export type PickKind = (typeof PICK_KINDS)[number];
 
+/**
+ * How a value was given (owner decision 2026-11-08, A-SCAN-TYPED-01): `scan` = camera or handheld scanner,
+ * `typed` = the code printed on the label typed in by a person, `tap` = chosen from a list (or found by name).
+ * Typing reads the physical label, so it counts for verification checks; a tap does not.
+ */
+export const PICK_VIAS = ["scan", "typed", "tap"] as const;
+export type PickVia = (typeof PICK_VIAS)[number];
+
+/** Parses a `via` sent by a form ("scan" | "typed" | "tap"); anything else is null. */
+export function parseVia(v: unknown): PickVia | null {
+  return typeof v === "string" && (PICK_VIAS as readonly string[]).includes(v) ? (v as PickVia) : null;
+}
+
 /** One thing the user can tap. `value` is what the form submits (usually the record id). */
 export type PickCandidate = {
   value: string;
@@ -49,12 +62,12 @@ export const PICK_PAYLOAD_TYPES: Record<PickKind, ScanType[]> = {
 };
 
 /** The user's words for each kind (singular, plural). */
-export const PICK_WORDS: Record<PickKind, { one: string; many: string; label: string }> = {
-  lot: { one: "lot", many: "lots", label: "lot label" },
-  container: { one: "box", many: "boxes", label: "box label" },
-  location: { one: "shelf", many: "shelves", label: "shelf label" },
-  batch: { one: "batch", many: "batches", label: "batch sheet" },
-  item: { one: "item", many: "items", label: "item label" },
+export const PICK_WORDS: Record<PickKind, { one: string; many: string; label: string; example: string }> = {
+  lot: { one: "lot", many: "lots", label: "lot label", example: "L-2611-00016" },
+  container: { one: "box", many: "boxes", label: "box label", example: "BX-00000005" },
+  location: { one: "shelf", many: "shelves", label: "shelf label", example: "A-01" },
+  batch: { one: "batch", many: "batches", label: "batch sheet", example: "B-26-0003" },
+  item: { one: "item", many: "items", label: "item label", example: "MAT-0001" },
 };
 
 const TYPE_WORDS: Record<ScanType, string> = { LOT: "a lot label", BOX: "a box label", LOC: "a shelf label", MAT: "a material label", SKU: "a product label", EQP: "a machine label", DOC: "a document" };
@@ -115,11 +128,71 @@ export function classifyPickInput(kind: PickKind, raw: string, candidates: reado
   return { kind: "words", text };
 }
 
-/** Candidate whose value or one of its label codes equals `value` (case-insensitive). */
+/** Candidate whose value or one of its label codes equals `value` (any case, with or without dashes). */
 export function matchCandidate(candidates: readonly PickCandidate[], value: string): PickCandidate | null {
   const v = normalizeScanInput(value);
   if (!v) return null;
-  return candidates.find((c) => !c.disabledReason && (c.value.toUpperCase() === v || (c.code ?? "").toUpperCase() === v || (c.codes ?? []).some((x) => x.toUpperCase() === v))) ?? null;
+  const k = codeKey(v);
+  const same = (x: string | undefined) => !!x && (x.toUpperCase() === v || (!!k && codeKey(x) === k));
+  return candidates.find((c) => !c.disabledReason && (c.value.toUpperCase() === v || same(c.code) || (c.codes ?? []).some(same))) ?? null;
+}
+
+/**
+ * The comparable form of a code: upper case, letters and digits only, without a `BC:<TYPE>:` prefix.
+ * "bx-0000 0005", "BX00000005" and "BC:BOX:BX-00000005" all give "BX00000005".
+ */
+export function codeKey(raw: string): string {
+  return String(raw ?? "")
+    .toUpperCase()
+    .trim()
+    .replace(/^BC:[A-Z]{3}:/, "")
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+/** Typed text as a code: control characters and spaces out, upper case ("bx 00000005" → "BX00000005"). */
+export function cleanTyped(raw: string): string {
+  return normalizeScanInput(raw).replace(/\s+/g, "");
+}
+
+/** Fewest characters accepted as "the last characters" of a code. */
+export const MIN_TYPED_SUFFIX = 3;
+
+export type TypedMatch = { kind: "one"; candidate: PickCandidate } | { kind: "many"; candidates: PickCandidate[] } | { kind: "none" };
+
+/**
+ * A code typed by a person against the EXPECTED candidates (owner decision 2026-11-08): the whole code (any case,
+ * with or without dashes, with or without the `BC:` prefix) or, when only one candidate ends with them, its last
+ * characters (at least 3: "0005" for BX-00000005, "0016" for L-2611-00016). Only `code` / `codes` are compared
+ * (never the record id). Two candidates ending the same way → "many" (type more).
+ */
+export function matchTypedCode(candidates: readonly PickCandidate[], raw: string, minSuffix = MIN_TYPED_SUFFIX): TypedMatch {
+  const k = codeKey(raw);
+  if (!k) return { kind: "none" };
+  const live = candidates.filter((c) => !c.disabledReason);
+  const keys = (c: PickCandidate) => [c.code, ...(c.codes ?? [])].filter((x): x is string => !!x).map(codeKey);
+  const exact = live.filter((c) => keys(c).includes(k) || codeKey(c.value) === k);
+  if (exact.length === 1) return { kind: "one", candidate: exact[0] };
+  if (exact.length > 1) return { kind: "many", candidates: exact };
+  if (k.length < minSuffix) return { kind: "none" };
+  const tail = live.filter((c) => keys(c).some((x) => x.endsWith(k)));
+  if (tail.length === 1) return { kind: "one", candidate: tail[0] };
+  return tail.length > 1 ? { kind: "many", candidates: tail } : { kind: "none" };
+}
+
+/** Plain refusal for a typed code that is not one of the expected ones. */
+export function notListedMessage(kind: PickKind): string {
+  return `That number is not on this list. Check the ${PICK_WORDS[kind].label} and type it again.`;
+}
+
+/** Plain message when the typed text is words but a number is needed (verification fields). */
+export function typeNumberMessage(kind: PickKind): string {
+  const w = PICK_WORDS[kind];
+  return `Type the number printed on the ${w.label}, for example ${w.example}.`;
+}
+
+/** Plain message when two expected codes end with what was typed. */
+export function ambiguousTypedMessage(typed: string): string {
+  return `More than one ends in ${cleanTyped(typed)}. Type more of the number.`;
 }
 
 /** Candidates whose title, detail or codes contain every typed word (≥ 2 letters), any case. */

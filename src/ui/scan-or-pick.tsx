@@ -2,12 +2,12 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import { Camera, Check, Search, X } from "lucide-react";
 import { resolvePickAction, searchPickAction } from "@/app/(app)/scan-pick-actions";
-import { classifyPickInput, filterCandidates, isScannerBurst, missingMessage, notFoundMessage, PICK_WORDS, submitValue, type PickCandidate, type PickKind } from "@/lib/scan/pick";
+import { ambiguousTypedMessage, classifyPickInput, cleanTyped, filterCandidates, isScannerBurst, matchTypedCode, missingMessage, notFoundMessage, notListedMessage, PICK_WORDS, submitValue, typeNumberMessage, type PickCandidate, type PickKind, type PickVia } from "@/lib/scan/pick";
 import { Button, cx, inputClass } from "./core";
 import { Scanner } from "./scanner";
 import { Chip } from "./status";
 
-export type { PickCandidate, PickKind } from "@/lib/scan/pick";
+export type { PickCandidate, PickKind, PickVia } from "@/lib/scan/pick";
 
 /**
  * ScanOrPick: the one way to say WHICH lot, box, shelf, batch or item anywhere in the app
@@ -17,15 +17,21 @@ export type { PickCandidate, PickKind } from "@/lib/scan/pick";
  *      lot, boxes on this shelf). Tapping fills the value.
  *  (b) a "Scan" button that opens the camera; a handheld (keyboard-wedge) scanner works at any time
  *      without tapping anything: the burst goes to the first field on the page still waiting.
- *  (c) "Find by name": words (coconut oil), never a code box.
+ *  (c) "Type the number" (owner decision 2026-11-08): the code printed on the label, typed (any case, with or
+ *      without dashes, or its last characters when only one expected candidate ends with them); in fields with
+ *      `search` the same box also finds by name (coconut oil). It never opens the phone keyboard by itself.
  *
  * The form value lives in a hidden input `name` and is only ever a tapped/scanned/found candidate's
  * value (or code with submit="code"): the placeholder can never be submitted, and a required field
  * blocks its form with a plain message until something is chosen. Servers still accept a label
  * payload (BC:LOT:…), a plain number or a candidate id, and check site and permission again.
  *
- * mode="emit" (verification panels: picking, second check): every tap/scan is handed to `onEmit`
+ * mode="emit" (verification panels: picking, second check): every tap/scan/typed code is handed to `onEmit`
  * and the field stays ready for the next one; `allowTap={false}` shows the list as a checklist only.
+ *
+ * `via` tells how a value was given: "scan" (camera, handheld scanner), "typed" (the code read off the label and
+ * typed) or "tap" (chosen in a list or found by name). Typing counts for verification checks; a tap does not
+ * (A-SCAN-TYPED-01, A-SCAN-11).
  */
 
 type Base = {
@@ -51,6 +57,10 @@ type Base = {
   alsoAccept?: PickKind[];
   /** Hardware scanner bursts with nothing focused land here (default true). */
   listen?: boolean;
+  /** Show the candidates as a list (default true). False: they are only used to match a scanned or typed code (the page lists them elsewhere). */
+  showCandidates?: boolean;
+  /** Refusal for a typed code that is not one of the candidates (`onlyCandidates`), e.g. "That number is not on this order." */
+  notListed?: string;
   className?: string;
 };
 
@@ -63,13 +73,13 @@ type SelectProps = Base & {
   defaultValue?: string | null;
   /** Controlled: pass null/"" to clear. */
   value?: string | null;
-  /** `via`: "tap" (tapped in the list or found by name) or "scan" (camera, handheld scanner). */
-  onChange?: (value: string | null, candidate: PickCandidate | null, via?: "tap" | "scan") => void;
+  /** `via`: "tap" (tapped in the list or found by name), "scan" (camera, handheld scanner) or "typed" (the label's number typed). */
+  onChange?: (value: string | null, candidate: PickCandidate | null, via?: PickVia) => void;
   required?: boolean;
   multiple?: false;
   /** One candidate: choose it and show it as one line, no question. */
   hideWhenSingle?: boolean;
-  /** Also send how it was chosen ("tap" or "scan") under this name. */
+  /** Also send how it was chosen ("tap", "scan" or "typed") under this name. */
   viaName?: string;
 };
 
@@ -86,7 +96,7 @@ type MultiProps = Base & {
 type EmitProps = Base & {
   mode: "emit";
   /** Every tap or scan. `value` is the candidate's value, or the normalised label payload. */
-  onEmit: (value: string, candidate: PickCandidate | null, via: "tap" | "scan") => void;
+  onEmit: (value: string, candidate: PickCandidate | null, via: PickVia) => void;
   pending?: boolean;
   /** Values already done (shown ticked in the list). */
   done?: string[];
@@ -173,7 +183,7 @@ function CandidateButton({ c, pressed, disabled, onTap, done }: { c: PickCandida
 }
 
 export function ScanOrPick(props: ScanOrPickProps) {
-  const { kind, label, candidates = [], candidatesLabel, hint, error, search = true, allowTap = true, onlyCandidates = false, maxShown = 6, listen = true, className, alsoAccept = NO_KINDS } = props;
+  const { kind, label, candidates = [], candidatesLabel, hint, error, search = true, allowTap = true, onlyCandidates = false, maxShown = 6, listen = true, className, alsoAccept = NO_KINDS, showCandidates = true, notListed } = props;
   const autoId = useId();
   const id = props.id ?? `sop-${autoId.replace(/:/g, "")}`;
   const words = PICK_WORDS[kind];
@@ -195,7 +205,7 @@ export function ScanOrPick(props: ScanOrPickProps) {
   };
   const [chosen, setChosen] = useState<PickCandidate[]>(initial);
   /** How the single value was chosen; forms can send it (`viaName`) so a tap is never recorded as a scan. */
-  const [via, setVia] = useState<"tap" | "scan" | null>(null);
+  const [via, setVia] = useState<PickVia | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   /** Plain status (not an error): "3 found. Tap the right one." */
   const [info, setInfo] = useState<string | null>(null);
@@ -221,7 +231,7 @@ export function ScanOrPick(props: ScanOrPickProps) {
   }, [controlled]);
 
   const notify = useCallback(
-    (next: PickCandidate[], via?: "tap" | "scan") => {
+    (next: PickCandidate[], via?: PickVia) => {
       if (emit) return;
       if (multiple) (props as MultiProps).onChangeMany?.(next);
       else (props as SelectProps).onChange?.(next[0] ? submitValue(next[0], submit) : null, next[0] ?? null, via);
@@ -245,7 +255,7 @@ export function ScanOrPick(props: ScanOrPickProps) {
   }, [candKey]);
 
   const choose = useCallback(
-    (c: PickCandidate, via: "tap" | "scan") => {
+    (c: PickCandidate, via: PickVia) => {
       setMessage(null);
       setFound([]);
       setInfo(null);
@@ -296,6 +306,7 @@ export function ScanOrPick(props: ScanOrPickProps) {
   /** Scanned (camera / hardware) or typed-and-entered text. */
   const handle = useCallback(
     (raw: string, fromScanner: boolean) => {
+      if (!fromScanner) return typedIn(raw);
       const c = classifyPickInput(kind, raw, candidates, fromScanner, alsoAccept);
       if (c.kind === "empty") return setMessage(missingMessage(kind, candidates.length > 0));
       if (c.kind === "refused") return setMessage(c.message);
@@ -319,8 +330,43 @@ export function ScanOrPick(props: ScanOrPickProps) {
         setMessage(r.ok === false && /another|label\b|That is/.test(r.message) ? r.message : notFoundMessage(kind, candidates.length > 0));
       });
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [kind, candidates, choose, runSearch, emit, onlyCandidates, search, props, alsoAccept],
   );
+
+  /**
+   * The code printed on the label, typed by a person (owner decision 2026-11-08): recorded as "typed". The whole
+   * code (any case, with or without dashes or the BC: prefix) or the last characters of one expected candidate.
+   * Words are a name search where the field has one; elsewhere they ask for the number.
+   */
+  function typedIn(raw: string) {
+    const t = cleanTyped(raw);
+    if (!t) return setMessage(`Type the number on the ${words.label} first.`);
+    const c = classifyPickInput(kind, t, candidates, false, alsoAccept);
+    if (c.kind === "refused") return setMessage(c.message);
+    if (c.kind === "candidate") return choose(c.candidate, "typed");
+    if (/\d/.test(t)) {
+      const m = matchTypedCode(candidates, t);
+      if (m.kind === "one") return choose(m.candidate, "typed");
+      if (m.kind === "many") return setMessage(ambiguousTypedMessage(t));
+    }
+    if (c.kind !== "label") return search ? runSearch(raw.trim()) : setMessage(typeNumberMessage(kind));
+    // A number that is not one of the listed ones.
+    if (onlyCandidates) return search && filterCandidates(candidates, raw).length > 0 ? runSearch(raw.trim()) : setMessage(notListed ?? notListedMessage(kind));
+    if (emit) {
+      // The caller resolves it on the server (and refuses a box or lot that is not on the order, in plain words).
+      setMessage(null);
+      setText("");
+      return (props as EmitProps).onEmit(c.payload, null, "typed");
+    }
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return setMessage("No internet. Tap one in the list, or try again when the phone is back online.");
+    start(async () => {
+      const r = await resolvePickAction(kind, c.payload);
+      if (r.ok) return choose(r.candidate, "typed");
+      if (search) return runSearch(raw.trim());
+      setMessage(r.ok === false && /another|label\b|That is/.test(r.message) ? r.message : notFoundMessage(kind, candidates.length > 0));
+    });
+  }
 
   const waiting = emit ? !(props as EmitProps).pending : multiple ? true : chosen.length === 0;
   const waitingRef = useRef(waiting);
@@ -414,7 +460,7 @@ export function ScanOrPick(props: ScanOrPickProps) {
               ))}
             </ul>
           )}
-          {list.length > 0 && (
+          {showCandidates && list.length > 0 && (
             <div>
               {candidatesLabel && <p className="mb-1.5 text-[13px] font-medium text-fg-2">{candidatesLabel}</p>}
               <ul className="flex flex-col gap-2" aria-label={candidatesLabel ?? label}>
@@ -441,48 +487,55 @@ export function ScanOrPick(props: ScanOrPickProps) {
             </div>
           )}
 
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" variant={list.length && allowTap ? "secondary" : "cta"} size="lg" onClick={() => setCamera((v) => !v)} aria-expanded={camera} data-testid="pick-scan" className="sm:w-auto">
-              <Camera size={18} /> {camera ? "Close the camera" : `Scan the ${words.label}`}
-            </Button>
-            {search && (
-              <div role="search" className="flex min-w-0 flex-1 gap-2">
-                <label htmlFor={`${id}-words`} className="sr-only">
-                  Find the {words.one} by name
-                </label>
-                <input
-                  id={`${id}-words`}
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  autoComplete="off"
-                  spellCheck={false}
-                  enterKeyHint="search"
-                  placeholder="Or find by name"
-                  data-testid="pick-search"
-                  onKeyDown={(e) => {
-                    const now = performance.now();
-                    keys.current = [...keys.current.filter((t) => now - t < 600), now];
-                    if (e.key === "Enter" || e.key === "Tab") {
-                      const gaps = keys.current.slice(1, -1).map((t, i) => t - keys.current[i]);
-                      const fromScanner = keys.current.length >= 5 && gaps.every((g) => g < 50);
-                      if (e.key === "Tab" && !fromScanner) return;
-                      e.preventDefault();
-                      keys.current = [];
-                      const t = e.currentTarget.value;
-                      if (t.trim()) handle(t, fromScanner);
-                    }
-                  }}
-                  className={`${inputClass} min-h-[52px] min-w-0 flex-1 text-[16px]`}
-                />
-                <Button type="button" variant="secondary" size="lg" disabled={busy || !text.trim()} onClick={() => handle(text, false)} aria-label={`Find the ${words.one} by name`}>
-                  <Search size={18} />
-                </Button>
-              </div>
-            )}
-          </div>
+          <Button type="button" variant={list.length && allowTap && showCandidates ? "secondary" : "cta"} size="lg" onClick={() => setCamera((v) => !v)} aria-expanded={camera} data-testid="pick-scan" className="w-full sm:w-auto sm:self-start">
+            <Camera size={18} /> {camera ? "Close the camera" : `Scan the ${words.label}`}
+          </Button>
           {camera && (
             <Scanner cameraOnly onClose={() => setCamera(false)} onScan={(v) => handle(v, true)} autoFocus={false} label={`Scan the ${words.label}`} />
           )}
+          {/* Owner decision 2026-11-08: every scan field also takes the number printed on the label, typed. Never
+              focused by itself, so the phone keyboard opens only when the person taps the box. */}
+          <div role={search ? "search" : undefined} className="flex min-w-0 flex-col gap-1">
+            <label htmlFor={`${id}-words`} className="text-[13px] font-medium text-fg-2">
+              {search ? `Or type the number on the ${words.label}, or a name` : `Or type the number on the ${words.label}`}
+            </label>
+            <div className="flex min-w-0 gap-2">
+              <input
+                id={`${id}-words`}
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  if (message) setMessage(null);
+                }}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                inputMode="text"
+                enterKeyHint={search ? "search" : "go"}
+                placeholder={search ? `${words.example} or a name` : words.example}
+                aria-describedby={err ? `${id}-err` : undefined}
+                data-testid="pick-search"
+                onKeyDown={(e) => {
+                  const now = performance.now();
+                  keys.current = [...keys.current.filter((t) => now - t < 600), now];
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    const gaps = keys.current.slice(1, -1).map((t, i) => t - keys.current[i]);
+                    const fromScanner = keys.current.length >= 5 && gaps.every((g) => g < 50);
+                    if (e.key === "Tab" && !fromScanner) return;
+                    // Enter never sends the surrounding form: it checks the typed number.
+                    e.preventDefault();
+                    keys.current = [];
+                    handle(e.currentTarget.value, fromScanner);
+                  }
+                }}
+                className={`${inputClass} min-h-[52px] min-w-0 flex-1 font-mono text-[16px] placeholder:font-sans`}
+              />
+              <Button type="button" variant="secondary" size="lg" disabled={busy || (emit && (props as EmitProps).pending) || !text.trim()} onClick={() => handle(text, false)} aria-label={search ? `Find the ${words.one}` : `Check the typed number`} data-testid="pick-typed-go">
+                {search ? <Search size={18} /> : "OK"}
+              </Button>
+            </div>
+          </div>
           <p className="text-[12px] text-muted">A handheld scanner works any time: just scan the {words.label}.</p>
           {busy && <p className="text-[13px] text-muted" role="status">Looking…</p>}
           {!busy && info && found.length > 0 && <p className="text-[13px] text-fg-2" role="status">{info}</p>}
@@ -498,7 +551,7 @@ export function ScanOrPick(props: ScanOrPickProps) {
         </>
       )}
       {err && (
-        <p role="alert" className="rounded-[10px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] px-3 py-2 text-[14px] text-[var(--bad-fg)]" data-testid="pick-error">
+        <p id={`${id}-err`} role="alert" className="rounded-[10px] border border-[var(--bad-bd)] bg-[var(--bad-bg)] px-3 py-2 text-[14px] text-[var(--bad-fg)]" data-testid="pick-error">
           {err}
         </p>
       )}

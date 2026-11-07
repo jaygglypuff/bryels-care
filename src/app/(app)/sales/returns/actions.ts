@@ -69,7 +69,8 @@ export async function addLineAction(_p: ActionState, fd: FormData): Promise<Acti
       toLocationId: opt(fd, "toLocationId"),
       note: opt(fd, "note"),
       // A box or lot tapped in the list (not scanned) is recorded as entered by hand.
-      manualEntry: fd.get("manualEntry") === "yes" || fd.get("codeVia") === "tap",
+      // A tap or the number typed off the label is entered by hand (A-SCAN-TYPED-01); only a scan is not.
+      manualEntry: fd.get("manualEntry") === "yes" || fd.get("codeVia") === "tap" || fd.get("codeVia") === "typed",
     });
     return `Line ${r.lineNo}: ${r.qty} ${r.uom} of lot ${r.lotNumber}${r.boxNumber ? ` (box ${r.boxNumber})` : ""}.`;
   });

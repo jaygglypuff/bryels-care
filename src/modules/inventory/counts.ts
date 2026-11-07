@@ -1,6 +1,6 @@
 import { isAre, plural } from "@/lib/plural";
 import "server-only";
-import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db, type DbOrTx, type Tx } from "@/db/client";
 import {
@@ -27,6 +27,7 @@ import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { isValidScanValue } from "@/lib/scan/payload";
+import { findByCode } from "@/lib/scan/code-sql";
 import { nextNumber } from "@/lib/numbering";
 import { reasonCodeOptions } from "@/modules/masterdata";
 import { baseOfUnit, parseQtyText } from "@/lib/units";
@@ -254,6 +255,8 @@ export type RecordCountInput = {
   qtyUom?: string | null;
   note?: string | null;
   idempotencyKey: string;
+  /** How the lot was given ("scan", "typed": its number typed off the label, "tap"); kept in the audit (A-SCAN-TYPED-01). */
+  lotVia?: "scan" | "typed" | "tap" | null;
 };
 
 /**
@@ -350,7 +353,7 @@ export async function recordCount(ctx: AuthContext, input: RecordCountInput) {
       entityId: c.id,
       entityNumber: c.countNumber,
       siteId: c.siteId,
-      after: { lineId: line.id, qty: qty.toString(), unexpected: line.isUnexpected, unlabelled: line.isUnlabelled, correction: !!previous },
+      after: { lineId: line.id, qty: qty.toString(), unexpected: line.isUnexpected, unlabelled: line.isUnlabelled, correction: !!previous, lotVia: input.lotId ? (input.lotVia ?? null) : null },
     });
     return { lineId: line.id, entryId: entry.id, previous: previous ? { qty: new Decimal(previous.qty).toString(), byMe: previous.by === ctx.userId } : null, replayed: false };
   });
@@ -846,13 +849,16 @@ export async function findLotForCount(ctx: AuthContext, countId: string, raw: st
   const byId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
   const code = v.toUpperCase().replace(/^BC:LOT:/, "");
   if (!code || (!byId && !isValidScanValue(code))) return null;
-  const [lot] = await db
-    .select({ id: inventoryLots.id, lotNumber: inventoryLots.lotNumber, baseUom: inventoryLots.baseUom, itemName: sql<string>`coalesce(${materials.name}, ${products.name})` })
-    .from(inventoryLots)
-    .leftJoin(materials, eq(materials.id, inventoryLots.materialId))
-    .leftJoin(products, eq(products.id, inventoryLots.productId))
-    .where(and(eq(inventoryLots.organizationId, ctx.organizationId), eq(inventoryLots.siteId, c.siteId), byId ? eq(inventoryLots.id, v) : eq(inventoryLots.lotNumber, code)))
-    .limit(1);
+  const q = (w: SQL) =>
+    db
+      .select({ id: inventoryLots.id, lotNumber: inventoryLots.lotNumber, baseUom: inventoryLots.baseUom, itemName: sql<string>`coalesce(${materials.name}, ${products.name})` })
+      .from(inventoryLots)
+      .leftJoin(materials, eq(materials.id, inventoryLots.materialId))
+      .leftJoin(products, eq(products.id, inventoryLots.productId))
+      .where(and(eq(inventoryLots.organizationId, ctx.organizationId), eq(inventoryLots.siteId, c.siteId), w))
+      .limit(2);
+  // A typed lot number may come without its dashes (A-SCAN-TYPED-01): findByCode tries the exact number first.
+  const [lot] = byId ? await q(eq(inventoryLots.id, v)) : await findByCode(inventoryLots.lotNumber, code, q);
   return lot ?? null;
 }
 

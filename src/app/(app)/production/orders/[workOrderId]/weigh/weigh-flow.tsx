@@ -8,7 +8,7 @@ import type { WeighView } from "@/modules/production";
 import { Button, cx, Input, Select } from "@/ui/core";
 import { FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { Keypad, KeypadField } from "@/ui/keypad";
-import { ScanOrPick } from "@/ui/scan-or-pick";
+import { ScanOrPick, type PickVia } from "@/ui/scan-or-pick";
 import { Chip } from "@/ui/status";
 import { NextApprover } from "@/ui/next-approver";
 import { EquipmentWhy } from "../equipment-why";
@@ -179,9 +179,10 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
   const [lotIdx, setLotIdx] = useState(0);
   const [lotCode, setLotCode] = useState("");
   const [qty, setQty] = useState("");
-  // UX audit 2026-10-31 item 5: the label is scanned with the camera (or a scanner); typing the last 4
-  // stays only as the fallback for a damaged label (the lot confirmation of ADR-080 §3 is kept).
-  const [typeLast4, setTypeLast4] = useState(false);
+  // Owner decision 2026-11-08 (A-SCAN-TYPED-01): the lot on the container is confirmed by scanning its label OR by
+  // typing the lot number printed on it (all of it or the last 4), recorded as typed. A tap in the list is not a
+  // confirmation (ADR-080 §3, A-SCAN-11). Replaces the "Label damaged? Type the last 4" fallback.
+  const [lotVia, setLotVia] = useState<PickVia | null>(null);
   const [scanNote, setScanNote] = useState<string | null>(null);
   const [active, setActive] = useState<"lot" | "qty">("qty");
   // ADR-106 §3 one way to pick: the lots taken at Get materials first; other allowed lots only under "Use another lot".
@@ -193,13 +194,14 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
     ...card.otherLots.map((o) => ({ lotId: o.lotId, lotNumber: o.lotNumber, locationId: o.locationId, place: o.locationName || o.locationCode, expiresOn: o.expiresOn, qty: o.free, offPlan: true, useFirst: o.useFirst })),
   ];
   const takenNumbers = [...new Set(card.lots.map((l) => l.lotNumber))];
-  const onScan = (raw: string) => {
+  const onScan = (raw: string, via: PickVia) => {
     const code = raw.trim().toUpperCase().replace(/^BC:LOT:/, "");
     const alnum = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
     const i = pickable.findIndex((l) => alnum(l.lotNumber) === alnum(code));
     if (i >= 0) {
       setLotIdx(i);
       setLotCode(`BC:LOT:${pickable[i].lotNumber}`);
+      setLotVia(via);
       setScanNote(null);
       if (pickable[i].offPlan) setShowOthers(true);
     } else {
@@ -223,11 +225,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
       : total.gt(card.max)
         ? { kind: "high" as const, by: total.minus(card.max) }
         : { kind: "ok" as const, by: new Decimal(0) };
-  const lotOk =
-    p.lotConfirm === "none" ||
-    (p.lotConfirm === "last4"
-      ? lotCode.length >= 4
-      : lotCode.trim().length > 0);
+  const lotOk = p.lotConfirm === "none" || lotCode.startsWith("BC:LOT:");
   const canSave =
     p.canWeigh &&
     !!lot &&
@@ -242,9 +240,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
     : !lot
       ? null
       : !lotOk
-        ? p.lotConfirm === "last4" && typeLast4
-          ? "Type the last 4 characters of the lot first."
-          : "Scan the lot label first."
+        ? "Scan the lot label, or type the lot number, first."
         : !reasonOk
           ? "Tap why you use another lot first."
           : !entered
@@ -348,23 +344,30 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
           <input type="hidden" name="equipmentRef" value={scale} />
         )}
         <div className="grid gap-3">
-          {p.lotConfirm === "last4" && <input type="hidden" name="lotConfirm" value={lotCode} />}
+          {p.lotConfirm !== "none" && <input type="hidden" name="lotConfirm" value={lotCode} />}
+          {p.lotConfirm !== "none" && lotVia && <input type="hidden" name="lotConfirmVia" value={lotVia} />}
           {(
             <div className="grid gap-2" data-testid="lot-scan">
               {lotCode.startsWith("BC:LOT:") ? (
-                <p className="inline-flex items-center gap-2 text-[16px] font-semibold text-[var(--ok-fg)]">
-                  <CheckCircle2 size={18} aria-hidden /> Label scanned: lot {lotCode.slice(7)}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="inline-flex items-center gap-2 text-[16px] font-semibold text-[var(--ok-fg)]" data-testid="lot-confirmed" data-via={lotVia ?? ""}>
+                    <CheckCircle2 size={18} aria-hidden /> {lotVia === "typed" ? "Lot number typed" : lotVia === "tap" ? "Lot chosen" : "Label scanned"}: lot {lotCode.slice(7)}
+                  </p>
+                  <button type="button" className="min-h-[44px] text-[14px] text-primary-text underline" onClick={() => { setLotCode(""); setLotVia(null); }}>
+                    Not this lot
+                  </button>
+                </div>
               ) : (
-                // ADR-098 ScanOrPick: the set-aside lots are listed, but the confirmation is a SCAN of the
-                // container's label (A-SCAN-11 "a tap is not a scan"; ADR-080 §3 lot confirmation).
+                // ADR-098 ScanOrPick: the set-aside lots are listed, but the confirmation READS the container's label:
+                // a scan, or the lot number typed off it (A-SCAN-TYPED-01). A tap is not a check (A-SCAN-11; ADR-080 §3).
                 <>
                   <ScanOrPick
                     key={`scan-${card.batchMaterialId}-${showOthers ? "all" : "taken"}`}
                     kind="lot"
                     mode="emit"
-                    label="Scan the lot label on the container"
-                    hint="Camera or handheld scanner."
+                    label="Scan the lot label on the container, or type the lot number"
+                    hint="Camera, handheld scanner, or the lot number printed on the label (all of it or the last 4)."
+                    notListed={`That is not a lot of ${card.materialName} you may use here. Check the label and type it again.`}
                     candidatesLabel={showOthers ? "Taken at Get materials first, then other lots" : "Taken at Get materials"}
                     candidates={pickable
                       .filter((l) => showOthers || !l.offPlan)
@@ -372,7 +375,7 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
                     allowTap={p.lotConfirm === "none"}
                     onlyCandidates
                     search={false}
-                    onEmit={(value, c) => onScan(c?.code ?? value)}
+                    onEmit={(value, c, via) => onScan(c?.code ?? value, via)}
                   />
                   {!showOthers && card.otherLots.length > 0 && (
                     <button type="button" className="min-h-[44px] text-left text-[15px] text-primary-text underline" onClick={() => setShowOthers(true)} data-testid="use-another-lot">
@@ -383,25 +386,8 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
               )}
               {scanNote && <p className="text-[14px] text-[var(--bad-fg)]">{scanNote}</p>}
               {fe.lotConfirm && <p className="text-[14px] text-[var(--bad-fg)]">{fe.lotConfirm}</p>}
-              {p.lotConfirm === "last4" && !lotCode.startsWith("BC:LOT:") && (
-                !typeLast4 ? (
-                  <button type="button" className="min-h-[44px] text-left text-[14px] text-primary-text underline" onClick={() => { setTypeLast4(true); setActive("lot"); }}>
-                    Label damaged? Type the last 4 characters instead
-                  </button>
-                ) : (
-                  <KeypadField
-                    id={`lot-${card.batchMaterialId}`}
-                    label="Last 4 of the lot on the label"
-                    value={lotCode}
-                    active={active === "lot"}
-                    onFocus={() => setActive("lot")}
-                    error={null}
-                  />
-                )
-              )}
             </div>
           )}
-          {p.lotConfirm === "scan" && <input type="hidden" name="lotConfirm" value={lotCode} />}
           <KeypadField
             id={`qty-${card.batchMaterialId}`}
             label="Weight"

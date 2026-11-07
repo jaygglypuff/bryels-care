@@ -7,6 +7,8 @@ import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
 import { parseScan } from "@/lib/scan";
+import { cleanTyped, type PickVia } from "@/lib/scan/pick";
+import { checkEntryMode, findByCode } from "@/lib/scan/code-sql";
 import { getSetting } from "@/lib/settings";
 import { assertUuid } from "./shared";
 
@@ -113,12 +115,14 @@ export async function labelVerificationZone(ctx: AuthContext, locationId: string
 export type VerifyOutcome = { status: "verified" | "already"; kind: "box" | "lot"; number: string; verifiedAt: Date; verifiedByName: string | null };
 
 /** Records the first verified scan of a box or loose lot label at the zone; repeats answer "already verified". */
-export async function verifyLabelScan(ctx: AuthContext, input: { locationId: string; scan: string; clientSequence?: number | null }): Promise<VerifyOutcome> {
+export async function verifyLabelScan(ctx: AuthContext, input: { locationId: string; scan: string; clientSequence?: number | null; via?: PickVia | null }): Promise<VerifyOutcome> {
   ctx.require("inventory.container.edit");
   ctx.require("inventory.label_job.view");
+  // A-SCAN-TYPED-01: the label is read by scan or by typing its printed number (recorded as typed); a tap is refused.
+  const entryMode = checkEntryMode(input.via, "scan");
   const loc = await zoneLocation(ctx, input.locationId);
-  const parsed = parseScan(input.scan);
-  if (parsed.kind === "invalid") throw new DomainError("validation", "That is not a box or lot label. Scan the BC:BOX or BC:LOT code.", { field: "scan" });
+  const parsed = parseScan(entryMode === "typed" ? cleanTyped(input.scan) : input.scan);
+  if (parsed.kind === "invalid") throw new DomainError("validation", entryMode === "typed" ? "That is not a box or lot number. Type the number printed on the label." : "That is not a box or lot label. Scan the BC:BOX or BC:LOT code.", { field: "scan" });
   if (parsed.kind === "typed" && parsed.type !== "BOX" && parsed.type !== "LOT") throw new DomainError("validation", "Scan a box (BC:BOX) or lot (BC:LOT) label.", { field: "scan" });
   const value = parsed.value;
   const notHere = () => new DomainError("not_found", `${value} not found at your site.`, { field: "scan" });
@@ -126,7 +130,7 @@ export async function verifyLabelScan(ctx: AuthContext, input: { locationId: str
   return db.transaction(async (tx) => {
     let target: { kind: "box"; id: string; number: string } | { kind: "lot"; id: string; number: string } | null = null;
     if (parsed.kind === "untyped" || parsed.type === "BOX") {
-      const [c] = await tx.select().from(containers).where(and(eq(containers.organizationId, ctx.organizationId), eq(containers.containerNumber, value))).limit(1);
+      const [c] = await findByCode(containers.containerNumber, value, (w) => tx.select().from(containers).where(and(eq(containers.organizationId, ctx.organizationId), w)).limit(2));
       if (c) {
         if (c.siteId !== ctx.currentSiteId || !ctx.allowedSiteIds.includes(c.siteId)) throw notHere();
         if (!LIVE_CONTAINER.includes(c.status)) throw new DomainError("state", `Box ${c.containerNumber} is ${c.status.replace("_", " ")}; it should not be in a zone.`, { field: "scan" });
@@ -138,13 +142,13 @@ export async function verifyLabelScan(ctx: AuthContext, input: { locationId: str
       } else if (parsed.kind === "typed") throw notHere();
     }
     if (!target) {
-      const [l] = await tx.select().from(inventoryLots).where(and(eq(inventoryLots.organizationId, ctx.organizationId), eq(inventoryLots.lotNumber, value))).limit(1);
+      const [l] = await findByCode(inventoryLots.lotNumber, value, (w) => tx.select().from(inventoryLots).where(and(eq(inventoryLots.organizationId, ctx.organizationId), w)).limit(2));
       if (!l || l.siteId !== ctx.currentSiteId || !ctx.allowedSiteIds.includes(l.siteId)) throw notHere();
       const [bal] = await tx.select({ qty: inventoryBalances.qtyBase }).from(inventoryBalances).where(and(eq(inventoryBalances.lotId, l.id), eq(inventoryBalances.locationId, loc.id))).limit(1);
       if (!bal || new Decimal(bal.qty).lte(0)) throw new DomainError("conflict", `Lot ${l.lotNumber} has no stock recorded at ${loc.code}.`, { field: "scan" });
       target = { kind: "lot", id: l.id, number: l.lotNumber };
     }
-    const payload = parsed.kind === "typed" ? parsed.payload : `${target.kind === "box" ? "BC:BOX" : "BC:LOT"}:${value}`;
+    const payload = parsed.kind === "typed" ? parsed.payload : `${target.kind === "box" ? "BC:BOX" : "BC:LOT"}:${target.number}`;
     const inserted = await tx
       .insert(labelVerifications)
       .values({
@@ -156,6 +160,7 @@ export async function verifyLabelScan(ctx: AuthContext, input: { locationId: str
         scanPayload: payload,
         verifiedBy: ctx.userId,
         clientSequence: input.clientSequence ?? null,
+        entryMode,
       })
       .onConflictDoNothing()
       .returning();
@@ -174,7 +179,7 @@ export async function verifyLabelScan(ctx: AuthContext, input: { locationId: str
       entityId: target.id,
       entityNumber: target.number,
       siteId: loc.siteId,
-      after: { location: loc.code, scanPayload: payload },
+      after: { location: loc.code, scanPayload: payload, via: entryMode },
     });
     return { status: "verified", kind: target.kind, number: target.number, verifiedAt: inserted[0].verifiedAt, verifiedByName: ctx.displayName };
   });

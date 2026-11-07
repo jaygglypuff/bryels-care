@@ -1,8 +1,8 @@
 ---
 key: inventory.count
 title: Count stock
-version: 2
-updated_at: 2026-10-30
+version: 3
+updated_at: 2026-11-08
 sop: SOP to be mapped by the warehouse lead (US-9-08)
 ---
 
@@ -16,7 +16,7 @@ Counting checks that the stock in the system matches what is on the shelf. While
 ## Count shelf by shelf
 
 1. Each shelf has its own box, for example **Shelf B-01: scan each sack and type how much**.
-2. Scan the label of each sack, or type the lot number.
+2. Scan the label of each sack, or type the lot number from the label (small letters and no dashes are fine).
 3. Type how much is there and check the unit (**kg** or **g**, **L** or **mL**, **pcs**). You can also type "20 kg". The line under the box shows what will be saved.
 4. If you count without seeing the expected amount, count what is there, not what you think should be there.
 5. Found something without a label? Choose **No label (I found it here)** and say what it is. Do not invent a lot number.

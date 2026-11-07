@@ -11,6 +11,8 @@ import { DomainError } from "@/lib/errors";
 import { nextNumber } from "@/lib/numbering";
 import { D, fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { parseScan } from "@/lib/scan/payload";
+import { cleanTyped, type PickVia } from "@/lib/scan/pick";
+import { findByCode, TYPED_NOT_ON_ORDER } from "@/lib/scan/code-sql";
 import { getSetting } from "@/lib/settings";
 import { assertLocationsNotFrozen, assertLotUsable, claimIdempotencyKey, storeIdempotentResult } from "@/modules/inventory";
 import { generateForSource, resolveTemplateVersion } from "@/modules/documents";
@@ -115,7 +117,8 @@ export async function startPick(ctx: AuthContext, orderId: string, input: { idem
   });
 }
 
-export type PickScanInput = { payload: string; qty?: string | null; idempotencyKey: string; manualEntryReason?: string | null };
+/** `via`: "scan", "typed" (the printed number typed, recorded as typed) or "tap" (chosen in the list: entered by hand, needs a reason). */
+export type PickScanInput = { payload: string; qty?: string | null; idempotencyKey: string; manualEntryReason?: string | null; via?: PickVia | null };
 export type PickScanResult = {
   outcome: "picked" | "duplicate";
   message: string;
@@ -135,12 +138,15 @@ const QTY_RE = /^\d{1,12}(\.\d{1,6})?$/;
 export async function scanPick(ctx: AuthContext, pickId: string, input: PickScanInput): Promise<PickScanResult> {
   ctx.require("sales.pick.create");
   if (!input.idempotencyKey || input.idempotencyKey.length < 8) throw new DomainError("validation", "The scan is missing its key. Reload the page and try again.");
-  const manual = !!input.manualEntryReason?.trim();
-  if (manual && input.manualEntryReason!.trim().length < 3) throw new DomainError("validation", "Say why the label could not be scanned (at least 3 characters).", { field: "manualEntryReason" });
-  const parsed = parseScan(input.payload);
-  if (parsed.kind === "invalid") throw new DomainError("validation", "That is not a box or lot label. Scan the box label (BC:BOX) or the lot label (BC:LOT).", { field: "payload" });
+  // A tap in the list is entered by hand and needs a reason; a typed number is recorded as typed (A-SCAN-TYPED-01).
+  const manual = input.via === "tap" || (input.via !== "typed" && !!input.manualEntryReason?.trim());
+  if (manual && (input.manualEntryReason?.trim().length ?? 0) < 3) throw new DomainError("validation", "Say why the label could not be scanned (at least 3 characters).", { field: "manualEntryReason" });
+  const typed = !manual && input.via === "typed";
+  const entryMode = manual ? "manual" : typed ? "typed" : "scan";
+  const parsed = parseScan(typed ? cleanTyped(input.payload) : input.payload);
+  if (parsed.kind === "invalid") throw new DomainError("validation", typed ? TYPED_NOT_ON_ORDER : "That is not a box or lot label. Scan the box label (BC:BOX) or the lot label (BC:LOT).", { field: "payload" });
   const key = `pick_scan:${input.idempotencyKey}`;
-  const body = { pickId, payload: input.payload, qty: input.qty ?? null, manual };
+  const body = { pickId, payload: input.payload, qty: input.qty ?? null, manual, via: entryMode };
   return db.transaction(async (tx) => {
     const claimed = await claimIdempotencyKey<PickScanResult>(tx, ctx.organizationId, key, "sales.pick.scan", body);
     if (claimed) return { ...claimed.replay, replayed: true };
@@ -157,7 +163,7 @@ export async function scanPick(ctx: AuthContext, pickId: string, input: PickScan
     if (parsed.kind === "typed" && !tryBox && !tryLot) throw new DomainError("validation", `A ${parsed.type} label cannot be picked. Scan the box or lot label.`, { field: "payload" });
 
     const [box] = tryBox
-      ? await tx.select().from(containers).where(and(eq(containers.organizationId, ctx.organizationId), eq(containers.containerNumber, value), eq(containers.siteId, pick.siteId))).limit(1)
+      ? await findByCode(containers.containerNumber, value, (w) => tx.select().from(containers).where(and(eq(containers.organizationId, ctx.organizationId), w, eq(containers.siteId, pick.siteId))).limit(2))
       : [];
     let lineNo = 0;
     const insertLine = async (v: { allocation: (typeof allocs)[number]; qty: Decimal; containerId: string | null; substitutedFor?: string | null }) => {
@@ -184,7 +190,7 @@ export async function scanPick(ctx: AuthContext, pickId: string, input: PickScan
         substitutedForContainerId: v.substitutedFor ?? null,
         pickedBy: ctx.userId,
         scanPayload: manual ? null : input.payload.slice(0, 200),
-        entryMode: manual ? "manual" : "scan",
+        entryMode,
         manualEntryReason: manual ? input.manualEntryReason!.trim() : null,
         idempotencyKey: `${key}:${lineNo}`,
       });
@@ -236,9 +242,9 @@ export async function scanPick(ctx: AuthContext, pickId: string, input: PickScan
       }
     } else {
       const [lot] = tryLot
-        ? await tx.select().from(inventoryLots).where(and(eq(inventoryLots.organizationId, ctx.organizationId), eq(inventoryLots.lotNumber, value), eq(inventoryLots.siteId, pick.siteId))).limit(1)
+        ? await findByCode(inventoryLots.lotNumber, value, (w) => tx.select().from(inventoryLots).where(and(eq(inventoryLots.organizationId, ctx.organizationId), w, eq(inventoryLots.siteId, pick.siteId))).limit(2))
         : [];
-      if (!lot) throw new DomainError("conflict", `${value} is not a box or lot at this site. Check the label and scan again.`, { rule: "V-MAT", code: "NOT_FOR_THIS_ORDER" });
+      if (!lot) throw new DomainError("conflict", typed ? TYPED_NOT_ON_ORDER : `${value} is not a box or lot at this site. Check the label and scan again.`, { rule: "V-MAT", code: "NOT_FOR_THIS_ORDER" });
       const loose = allocs.filter((a) => a.lotId === lot.id && !a.containerId && left(a).gt(0));
       if (loose.length === 0) {
         const boxed = allocs.some((a) => a.lotId === lot.id && a.containerId);
@@ -246,7 +252,7 @@ export async function scanPick(ctx: AuthContext, pickId: string, input: PickScan
       }
       const remaining = loose.reduce((s, a) => s.plus(left(a)), new Decimal(0));
       const raw = (input.qty ?? "").trim();
-      if (!QTY_RE.test(raw) || D(raw).lte(0)) throw new DomainError("validation", `Enter how many units of lot ${lot.lotNumber} you picked (up to ${remaining.toString()}).`, { field: "qty" });
+      if (!QTY_RE.test(raw) || D(raw).lte(0)) throw new DomainError("validation", `Enter how many units of lot ${lot.lotNumber} you picked (up to ${remaining.toString()}).`, { field: "qty", code: "NEEDS_QTY", lotNumber: lot.lotNumber });
       let qty = D(raw);
       if (lot.baseUom === "pcs" && !qty.isInteger()) throw new DomainError("validation", "Whole pieces only.", { field: "qty" });
       if (qty.gt(remaining)) throw new DomainError("conflict", `Only ${remaining.toString()} ${lot.baseUom} of lot ${lot.lotNumber} are set aside loose for this order; ${qty.toString()} is more than that.`, { code: "OVER_PICK" });
@@ -271,7 +277,7 @@ export async function scanPick(ctx: AuthContext, pickId: string, input: PickScan
         entityId: pick.id,
         entityNumber: pick.pickNumber,
         siteId: pick.siteId,
-        after: { payload: manual ? null : input.payload.slice(0, 200), manualEntry: manual, lines: result.lines, substituted: result.substituted },
+        after: { payload: manual ? null : input.payload.slice(0, 200), manualEntry: manual, via: entryMode === "manual" ? "tap" : entryMode, lines: result.lines, substituted: result.substituted },
       });
       if (manual) {
         await audit(tx, ctx, { action: "sales.pick_line.manual_entry", entityType: "pick", entityId: pick.id, entityNumber: pick.pickNumber, siteId: pick.siteId, reason: input.manualEntryReason!.trim(), after: { value } });

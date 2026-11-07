@@ -73,7 +73,8 @@ export async function putAwayOptions(ctx: AuthContext, lotRef: string) {
  * qtyUom: the unit the quantity was typed in. The lot's base unit, or the friendly unit shown on the
  * screen for gram/millilitre lots (kg = 1,000 g, L = 1,000 mL). Any other unit is refused.
  */
-export type PutAwayInput = { lotRef: string; locationRef: string; fromLocationId?: string | null; qty?: string | null; qtyUom?: string | null; idempotencyKey: string };
+/** `locationVia`: how the shelf was given ("scan", "typed": its code typed off the label, "tap"); kept in the movement meta (A-SCAN-TYPED-01). */
+export type PutAwayInput = { lotRef: string; locationRef: string; locationVia?: "scan" | "typed" | "tap" | null; fromLocationId?: string | null; qty?: string | null; qtyUom?: string | null; idempotencyKey: string };
 
 const FRIENDLY_UNITS: Record<string, { base: string; factor: number }> = { kg: { base: "g", factor: 1000 }, L: { base: "mL", factor: 1000 } };
 
@@ -168,7 +169,7 @@ export async function putAwayLot(ctx: AuthContext, input: PutAwayInput) {
         sourceDocumentNumber: number,
         reason: "Put-away",
         idempotencyKey: key,
-        meta: { fromCode: from.code, toCode: to.code, withBoxes: true, scanned: { lot: input.lotRef.startsWith("BC:"), location: input.locationRef.startsWith("BC:") } },
+        meta: { fromCode: from.code, toCode: to.code, withBoxes: true, scanned: { lot: input.lotRef.startsWith("BC:"), location: input.locationRef.startsWith("BC:") || input.locationVia === "scan" }, locationVia: input.locationVia ?? null },
       });
       const boxes = await moveBoxesWithLot(tx, ctx, { lotId: lot.id, fromLocationId: from.locationId, toLocationId: to.id, reason: `Put-away ${number}` });
       return { movementId: movement.id as string | null, number, lotNumber: lot.lotNumber, replayed: false, toCode: to.code as string | null, boxes };
@@ -201,7 +202,7 @@ export async function putAwayLot(ctx: AuthContext, input: PutAwayInput) {
       sourceDocumentNumber: number,
       reason: "Put-away",
       idempotencyKey: key,
-      meta: { fromCode: from.code, toCode: to.code, scanned: { lot: input.lotRef.startsWith("BC:"), location: input.locationRef.startsWith("BC:") } },
+      meta: { fromCode: from.code, toCode: to.code, scanned: { lot: input.lotRef.startsWith("BC:"), location: input.locationRef.startsWith("BC:") || input.locationVia === "scan" }, locationVia: input.locationVia ?? null },
     });
     return { movementId: movement.id as string | null, number, lotNumber: lot.lotNumber, replayed: false, toCode: to.code as string | null, boxes };
   });

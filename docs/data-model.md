@@ -3205,6 +3205,10 @@ Done that way for ADR-117: `0037_adr117_owner_alone` (idx 36, `approval_decision
 and `0038_snapshot.json`. The next generated file must be renamed to `0039_<description>` (and its snapshot to
 `0039_snapshot.json`; drizzle-kit writes the snapshot under the journal-length prefix and would overwrite
 `0037_snapshot.json`).
+Done that way for the typed label codes (owner decision 2026-11-08, A-SCAN-TYPED-01): `0039_typed_label_codes` (idx 38,
+`entry_mode` on `pack_verification_scans` and `label_verifications`, `batch_material_picks.lot_entry_mode`,
+`ck_pick_lines_mode` allows `typed`), snapshot `0039_snapshot.json`. The next generated file must be renamed to
+`0040_<description>` (snapshot `0040_snapshot.json`).
 
 ### 13.1 Toolchain and flow (ADR-003)
 

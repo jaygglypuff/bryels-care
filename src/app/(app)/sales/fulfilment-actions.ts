@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireContext } from "@/lib/auth/context";
+import { parseVia, type PickVia } from "@/lib/scan/pick";
 import { DomainError, type ActionState, toActionState } from "@/lib/errors";
 import { refreshCurrentPage } from "@/lib/in-place";
 import {
@@ -56,12 +57,13 @@ const idem = (fd: FormData) => {
 };
 
 /** Result of a scan action, shown on the scanner card (and the page re-renders with fresh progress). */
-export type ScanActionResult = { ok: boolean; message: string; tone: "ok" | "warn" | "bad"; code?: string };
+export type ScanActionResult = { ok: boolean; message: string; tone: "ok" | "warn" | "bad"; code?: string; lotNumber?: string };
 
 function scanError(e: unknown): ScanActionResult {
   const s = toActionState(e);
   const code = e instanceof DomainError ? ((e.details?.code as string | undefined) ?? e.code) : undefined;
-  return { ok: false, message: s?.message ?? "Something went wrong.", tone: "bad", code };
+  const lotNumber = e instanceof DomainError ? (e.details?.lotNumber as string | undefined) : undefined;
+  return { ok: false, message: s?.message ?? "Something went wrong.", tone: "bad", code, ...(lotNumber ? { lotNumber } : {}) };
 }
 
 /* ------------------------------------------------------------------ allocation and picking */
@@ -89,12 +91,13 @@ export async function startPickAction(_: ActionState, fd: FormData): Promise<Act
   redirect(`/sales/picking/${id}`);
 }
 
-export type ScanOptions = { qty?: string | null; manualEntryReason?: string | null; labelOk?: boolean };
+/** `via`: how the label was given (scan, typed number, tap in the list); the services record it and refuse a tap for checks. */
+export type ScanOptions = { qty?: string | null; manualEntryReason?: string | null; labelOk?: boolean; via?: PickVia | null };
 
 export async function pickScanAction(pickId: string, payload: string, opts: ScanOptions, idempotencyKey: string): Promise<ScanActionResult> {
   try {
     const ctx = await requireContext();
-    const r = await scanPick(ctx, pickId, { payload, qty: opts.qty ?? null, manualEntryReason: opts.manualEntryReason ?? null, idempotencyKey });
+    const r = await scanPick(ctx, pickId, { payload, qty: opts.qty ?? null, manualEntryReason: opts.manualEntryReason ?? null, via: parseVia(opts.via), idempotencyKey });
     refreshCurrentPage();
     return { ok: true, message: r.message, tone: r.outcome === "duplicate" ? "warn" : "ok" };
   } catch (e) {
@@ -153,7 +156,7 @@ export async function generatePickListAction(_: ActionState, fd: FormData): Prom
 export async function verifyScanAction(shipmentId: string, payload: string, opts: ScanOptions, idempotencyKey: string): Promise<ScanActionResult> {
   try {
     const ctx = await requireContext();
-    const r = await scanPackVerification(ctx, shipmentId, { payload, qty: opts.qty ?? null, idempotencyKey });
+    const r = await scanPackVerification(ctx, shipmentId, { payload, qty: opts.qty ?? null, via: parseVia(opts.via), idempotencyKey });
     refreshCurrentPage();
     return { ok: true, message: r.message, tone: r.outcome === "duplicate" ? "warn" : "ok" };
   } catch (e) {
@@ -374,7 +377,7 @@ export async function submitPackAction(_: ActionState, fd: FormData): Promise<Ac
 export async function packCheckScanAction(packId: string, payload: string, opts: ScanOptions, idempotencyKey: string): Promise<ScanActionResult> {
   try {
     const ctx = await requireContext();
-    const r = await verifyPackScan(ctx, packId, { payload, labelOk: opts.labelOk !== false, idempotencyKey });
+    const r = await verifyPackScan(ctx, packId, { payload, labelOk: opts.labelOk !== false, via: parseVia(opts.via), idempotencyKey });
     refreshCurrentPage();
     return { ok: r.result === "ok" || r.result === "duplicate", message: `${r.message} (${r.scanned} of ${r.required} checked)`, tone: r.result === "ok" ? "ok" : r.result === "duplicate" ? "warn" : "bad" };
   } catch (e) {

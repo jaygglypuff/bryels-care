@@ -1,8 +1,8 @@
 ---
 key: inventory.putaway
 title: Put away a received lot
-version: 5
-updated_at: 2026-11-06
+version: 6
+updated_at: 2026-11-08
 sop: Not yet mapped. The QA document controller enters the SOP number in the SOP register (docs/training-plan.md §4)
 ---
 
@@ -24,7 +24,7 @@ Move goods out of the hold area or the dock to the shelf they belong on. When QA
 
 ## Where it goes
 
-1. The suggested shelf is already chosen. To use another place, tap its button, or scan the shelf label (the label on the front edge of the shelf). A shelf without a label: open the shelf, then **⋯ More › Print a label**.
+1. The suggested shelf is already chosen. To use another place, tap its button, scan the shelf label (the label on the front edge of the shelf), or type the shelf code from the label, for example A-01. A shelf without a label: open the shelf, then **⋯ More › Print a label**.
 2. Released stock goes to storage. Quarantine stock only to quarantine or hold areas.
 3. **No allowed location**: there is no open place of the right type. Tell your site manager.
 
