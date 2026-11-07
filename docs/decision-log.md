@@ -2657,3 +2657,29 @@ Open:
 - The "Other ways" weigh form does not send `lotVia` yet, so turning typing off does not reach it.
 - Setting 4 does not cover the order status chip "invoiced" or the owner's Home invoice counts.
 - QA has no settings role in the app, so QA confirms setting 1 outside the app.
+
+## ADR-127 The owner changes settings alone (owner 2026-11-07)
+
+Status: Accepted. Amends the W2F permission exclusion and extends ADR-088 §2 (top roles approve their own requests),
+ADR-117 and ADR-126.
+
+Context: the owner asked to "edit in the settings" the choices of ADR-126, and asked earlier "If you are the owner, why
+would you let someone approve it?". Before this change, the owner held no `platform.settings.admin`; they could only
+approve changes. An owner-only setting also became a request that only the owner could approve, and nobody may approve
+their own request. So a company with one owner could never change it.
+
+Decision:
+1. `owner_director` holds `platform.settings.admin`.
+2. While `approvals.top_roles_self_approve` is on (default), the organization-wide owner's change of a restricted or
+   owner-only setting applies at once.
+   - The owner still re-enters their password.
+   - The change is stored as an applied change request with the note "Own request: the owner changed it alone".
+   - It is audited `platform.setting.changed` and `governance.self_approval.used`.
+3. With that setting off, the owner's change waits for a second person like everyone else's.
+4. Other administrators still submit requests, and site managers still have no settings access.
+5. When the owner can change a setting alone, the Settings screen shows "You can change it alone (with your password)"
+   instead of the approval labels.
+
+Consequences: no migration. The database rule that the approver of a request is not its submitter is unchanged; the
+owner's change records no separate approver. Tests: `tests/integration/governance/owner-changes-settings-alone.test.ts`
+(new), `tests/integration/governance/settings-changes.test.ts` (the owner now administers settings).

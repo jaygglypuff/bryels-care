@@ -112,9 +112,9 @@ describe("direct changes, re-authentication, history", () => {
     expect(list.rows.find((r) => r.key === "inventory.reservation.ttl_hours")?.siteValues).toEqual([{ siteId: kit.nfd.id, siteCode: "NFD", value: 24 }]);
   });
 
-  it("platform.settings_admin_restricted: the owner reads and approves but does not administer settings", async () => {
+  it("platform.settings_admin_restricted: the owner reads, changes (ADR-127) and approves settings; the site manager has no settings access", async () => {
     expect(owner.can("platform.settings.approve")).toBe(true);
-    expect(owner.can("platform.settings.admin")).toBe(false);
+    expect(owner.can("platform.settings.admin")).toBe(true);
     expect(manager.can("platform.settings.view")).toBe(false);
     await expectCode(listSettingsForAdmin(manager), "forbidden");
   });

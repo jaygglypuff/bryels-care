@@ -6,7 +6,7 @@ import { approvalDecisions, settingChangeRequests, sites, users } from "@/db/sch
 import { audit } from "@/lib/audit";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
-import { SETTINGS, type SettingDefinition, type SettingKey, isSettingKey, listStoredSettings, readStoredSetting, writeStoredSetting } from "@/lib/settings";
+import { SETTINGS, type SettingDefinition, type SettingKey, getSetting, isSettingKey, listStoredSettings, readStoredSetting, writeStoredSetting } from "@/lib/settings";
 import { canDecideEvaluatedStep, evaluateApprovalRules, evaluateApprovalRulesAudited } from "./approval-rules";
 import { type DbOrTx } from "@/db/client";
 import type { NextActors } from "@/lib/next-actors-words";
@@ -83,6 +83,11 @@ function requireOwnerFor(ctx: AuthContext, def: SettingDefinition) {
   }
 }
 
+/** ADR-127: the organization-wide owner changes settings that need approval alone (own request) while top roles approve their own requests. */
+export async function ownerChangesSettingsAlone(ctx: AuthContext): Promise<boolean> {
+  return ctx.roleCodes.includes("owner_director") && ctx.isOrganizationWide && ctx.can("platform.settings.admin") && !!(await getSetting(db, ctx.organizationId, "approvals.top_roles_self_approve"));
+}
+
 /** US-1-19 AC3 / US-1-14: change a setting (direct or as a change request). */
 export async function changeSetting(ctx: AuthContext, raw: z.input<typeof ChangeSettingInput>, password: string | null | undefined) {
   ctx.require("platform.settings.admin");
@@ -103,8 +108,24 @@ export async function changeSetting(ctx: AuthContext, raw: z.input<typeof Change
   const current = await readStoredSetting(db, ctx.organizationId, key, input.siteId);
   if (same(current?.value ?? null, input.value ?? null)) throw new DomainError("validation", "The value is unchanged.", { field: "value" });
 
+  // ADR-127 (owner 2026-11-07: "If you are the owner, why would you let someone approve it?"): the organization-wide
+  // owner changes a restricted or owner-only setting alone while top roles approve their own requests
+  // (`approvals.top_roles_self_approve`, ADR-088 §2). Recorded as an own request (`governance.self_approval.used`).
+  const ownerAlone = (def.requiresApproval || def.ownerOnly) && (await ownerChangesSettingsAlone(ctx));
+
   return db.transaction(async (tx) => {
     const scope = input.siteId ? "site" : "organization";
+    if (ownerAlone) {
+      ctx.sodBlocksAt(true, "The owner changed a setting that needs approval alone (own request).", input.siteId);
+      await writeStoredSetting(tx, { organizationId: ctx.organizationId, key, siteId: input.siteId, value: input.value ?? null, updatedBy: ctx.userId });
+      const now = new Date();
+      const [req] = await tx
+        .insert(settingChangeRequests)
+        .values({ organizationId: ctx.organizationId, scope, siteId: input.siteId, key, oldValue: current?.value ?? null, newValue: input.value ?? null, reason: input.reason, requiresApproval: false, status: "applied", submittedBy: ctx.userId, appliedAt: now, approvalNote: "Own request: the owner changed it alone (setting approvals.top_roles_self_approve)." })
+        .returning();
+      const auditEventId = await auditSettingChanged(tx, ctx, { key, siteId: input.siteId, before: current?.value ?? null, after: input.value ?? null, reason: input.reason, requestId: req.id });
+      return { status: "applied" as const, requestId: req.id, auditEventId };
+    }
     if (def.requiresApproval || def.ownerOnly) {
       const [dup] = await tx
         .select({ id: settingChangeRequests.id })

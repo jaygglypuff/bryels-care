@@ -2,7 +2,7 @@ import { isAre, plural } from "@/lib/plural";
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDateTime } from "@/lib/qty";
-import { listSettingChangeRequests, listSettingsForAdmin, settingChangeNext } from "@/modules/governance";
+import { listSettingChangeRequests, listSettingsForAdmin, ownerChangesSettingsAlone, settingChangeNext } from "@/modules/governance";
 import { NextApprover } from "@/ui/next-approver";
 import { Card, CardTitle, EmptyState, PageHeader, cx } from "@/ui/core";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
@@ -56,7 +56,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   if (!ctx.can("platform.settings.view")) return <Forbidden what="system settings" permission="platform.settings.view" />;
   const canAdmin = ctx.can("platform.settings.admin");
   const canApprove = ctx.can("platform.settings.approve");
-  const [{ rows, orphans }, pending, history] = await Promise.all([listSettingsForAdmin(ctx), listSettingChangeRequests(ctx, { status: "submitted" }), listSettingChangeRequests(ctx, { limit: 25 })]);
+  const [{ rows, orphans }, pending, history, alone] = await Promise.all([listSettingsForAdmin(ctx), listSettingChangeRequests(ctx, { status: "submitted" }), listSettingChangeRequests(ctx, { limit: 25 }), ownerChangesSettingsAlone(ctx)]);
   const groups = [...new Set(rows.map((r) => r.def.group))];
   const sp = await searchParams;
   const group = groups.find((g) => slug(g) === sp.group) ?? groups[0];
@@ -126,8 +126,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[15px] font-medium">{r.def.label}</span>
                     {/* ADR-126: say who really decides: owner-only keys need the owner; other restricted keys need the password. */}
-                    {r.def.ownerOnly ? <Chip tone="warn">Only the owner can OK changes</Chip> : r.def.restricted && <Chip tone="warn">Needs your password</Chip>}
-                    {r.def.requiresApproval && <Chip tone="appr">A second person must OK changes</Chip>}
+                    {alone && (r.def.requiresApproval || r.def.ownerOnly) ? (
+                      <Chip tone="ok">You can change it alone (with your password)</Chip>
+                    ) : (
+                      <>
+                        {r.def.ownerOnly ? <Chip tone="warn">Only the owner can OK changes</Chip> : r.def.restricted && <Chip tone="warn">Needs your password</Chip>}
+                        {r.def.requiresApproval && <Chip tone="appr">A second person must OK changes</Chip>}
+                      </>
+                    )}
                     {r.pending > 0 && <Chip tone="info">{r.pending} waiting</Chip>}
                     {r.invalidStored && <Chip tone="bad">Saved value is wrong · starting value used</Chip>}
                   </div>

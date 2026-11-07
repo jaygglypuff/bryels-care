@@ -962,8 +962,9 @@ for (const [role, grants] of Object.entries(W2F_GRANTS)) {
   if (ROLE_BUNDLES[role]) ROLE_BUNDLES[role].permissions = [...new Set([...ROLE_BUNDLES[role].permissions, ...grants])];
 }
 const W2F_EXCLUDE: Record<string, readonly Permission[]> = {
-  // OD: settings v a, numbering_rule v (changes are system_admin work; the owner approves settings).
-  owner_director: ["platform.settings.admin", "platform.numbering_rule.admin"],
+  // OD: numbering_rule v (changes are system_admin work). Settings: the owner changes them too (ADR-127, owner
+  // 2026-11-07: "give me an option I can edit in the settings"), alone while top roles approve their own requests.
+  owner_director: ["platform.numbering_rule.admin"],
   // SM: no settings access at all; approval rules and numbering view only.
   site_manager: ["platform.settings.view", "platform.settings.admin", "platform.settings.approve"],
 };

@@ -472,7 +472,7 @@ aggregate. Order value and shipped value (Estimate) need `financial_kpi.view` un
 | `platform.import_job.{view,create,submit}` | Generic ImportJob wizard (master data, prices); Phase 2 if early go-live after G4 (Q-MIG-13) | N | P5 |
 | `platform.import_job.approve`, `platform.import_job.post`, `platform.import_job.void` | Approve, post and reverse imports; Phase 2 if early go-live after G4 (Q-MIG-13) | S | P5 |
 | `platform.settings.view` | Read system settings | N | P1 |
-| `platform.settings.admin` | Change system settings (session policy, password policy, feature switches); keys flagged `requires_approval` are submitted as `setting_change_requests` instead | R | P1 |
+| `platform.settings.admin` | Change system settings (session policy, password policy, feature switches); keys flagged `requires_approval` are submitted as `setting_change_requests` instead. The organization-wide owner also holds it (ADR-127) and, while `approvals.top_roles_self_approve` is on, changes those keys alone (own request, `governance.self_approval.used`) | R | P1 |
 | `platform.settings.approve` | Approve a `setting_change_request` submitted by another user (S1-03): `owner_director`, or a second `system_admin`; SoD enforced on `setting_change_requests.submitted_by/approved_by` | R | P1 |
 | `platform.approval_rule.view` | Read `approval_rules` | N | P1 |
 | `platform.approval_rule.admin` | Change approval rules and SoD configuration | R | P1 |
@@ -1423,3 +1423,12 @@ Open questions for the owner:
 6. Confirm the approval thresholds table (A-PM-15) and whether thresholds differ per site.
 7. Is there a department supervisor concept for leave/overtime approval below the site
    manager, and should it be a role or a sub-scope?
+
+
+**ADR-127 the owner changes settings (owner 2026-11-07).** `owner_director` now holds `platform.settings.admin` (it was
+excluded in W2F: "changes are system_admin work; the owner approves settings"). While
+`approvals.top_roles_self_approve` is on, the organization-wide owner's change of a restricted or owner-only setting
+applies at once with re-authentication, stored as an applied request with the note "Own request" and audited
+`platform.setting.changed` + `governance.self_approval.used`. Every other administrator still submits a request that a
+second person (the owner for owner-only keys) approves. Site managers still have no settings access. Tests:
+`tests/integration/governance/owner-changes-settings-alone.test.ts`, `tests/integration/governance/settings-changes.test.ts`.
