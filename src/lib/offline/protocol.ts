@@ -232,7 +232,8 @@ export type ReferenceBatch = {
   batchNumber: string;
   status: string;
   productName: string;
-  weighing: { stepNo: number; name: string; requiresEquipment: boolean; equipmentKind: string | null } | null;
+  /** `typedChecks` (ADR-126, setting `scan.typed_code_counts_as_check`): false hides typing the lot number; absent (older cache) = allowed. Replay re-checks it. */
+  weighing: { stepNo: number; name: string; requiresEquipment: boolean; equipmentKind: string | null; typedChecks?: boolean } | null;
   lines: ReferenceBatchLine[];
   scales: { id: string; code: string; name: string }[];
 };

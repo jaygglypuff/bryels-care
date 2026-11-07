@@ -231,7 +231,17 @@ describe("Materials list with the site settings on (move stock, scan lots)", () 
     const typedPick = (await db.select().from(batchMaterialPicks).where(eq(batchMaterialPicks.batchId, batch2))).find((x) => x.action === "taken" && x.lotEntryMode === "typed");
     expect(typedPick?.scannedLotCode).toBe(line.lots[0].lotNumber);
     await confirmPicked(w.operator, { batchId: batch2, lines: [{ batchMaterialId: line.batchMaterialId, action: "untaken" }], idempotencyKey: key() });
-    await db.delete(settings).where(and(eq(settings.organizationId, w.orgId), eq(settings.key, "production.prepare.scan_lots")));
+    // ADR-126: with `scan.typed_code_counts_as_check` off the typed lot number is refused in plain words; a scan still
+    // counts, and the list tells the screen to hide the typing box.
+    await setOrgSetting(w.orgId, "scan.typed_code_counts_as_check", false);
+    expect((await getMaterialsList(w.operator, batch2)).settings.typedChecks).toBe(false);
+    const off = await expectCode(confirmPicked(w.operator, { batchId: batch2, lines: [{ batchMaterialId: line.batchMaterialId, action: "taken", lotCode: line.lots[0].lotNumber, lotVia: "typed" }], idempotencyKey: key() }), "validation");
+    expect(off.message).toBe("This check needs the label scanned. Typing is turned off in Settings.");
+    const scanned = await confirmPicked(w.operator, { batchId: batch2, lines: [{ batchMaterialId: line.batchMaterialId, action: "taken", lotCode: `BC:LOT:${line.lots[0].lotNumber}`, lotVia: "scan" }], idempotencyKey: key() });
+    expect(scanned.progress.taken).toBe(1);
+    await confirmPicked(w.operator, { batchId: batch2, lines: [{ batchMaterialId: line.batchMaterialId, action: "untaken" }], idempotencyKey: key() });
+    await db.delete(settings).where(and(eq(settings.organizationId, w.orgId), inArray(settings.key, ["production.prepare.scan_lots", "scan.typed_code_counts_as_check"])));
+    expect((await getMaterialsList(w.operator, batch2)).settings.typedChecks).toBe(true);
   });
 
   it("move_stock on: only the storekeeper may tick, and each tick posts the staging transfer as before", async () => {

@@ -9,6 +9,8 @@ import { DomainError } from "@/lib/errors";
 import { SECTION_LABELS, sectionOf, type LocationSection } from "@/lib/location-sections";
 import { parseScan } from "@/lib/scan";
 import { cleanTyped, codeKey, type PickVia } from "@/lib/scan/pick";
+import { TYPING_IS_OFF } from "@/lib/scan/code-sql";
+import { typedChecksAllowed } from "@/lib/scan/typed-check";
 import { getSetting } from "@/lib/settings";
 import { assertLotUsable, lockLots } from "@/modules/inventory";
 import { heldLocations } from "@/modules/inventory/holds";
@@ -210,6 +212,8 @@ export async function getMaterialsList(ctx: AuthContext, batchId: string) {
   }
   const moveStock = await getSetting(db, ctx.organizationId, "production.prepare.move_stock", b.siteId);
   const scanLots = await getSetting(db, ctx.organizationId, "production.prepare.scan_lots", b.siteId);
+  // ADR-126: the screen hides "type the number" for the lot check while typed checks are off.
+  const typedChecks = await typedChecksAllowed(db, ctx.organizationId);
   const progress: PickProgress = pickProgress(out.map((l) => l.batchMaterialId), new Map(out.map((l) => [l.batchMaterialId, { action: l.state }])));
   const woOk = !wo || STAGEABLE_WO.includes(wo.status);
   const blockedReason =
@@ -228,7 +232,7 @@ export async function getMaterialsList(ctx: AuthContext, batchId: string) {
     lines: out,
     progress,
     ready: b.status !== "planned" && b.status !== "draft",
-    settings: { moveStock, scanLots },
+    settings: { moveStock, scanLots, typedChecks },
     canTick,
     blockedReason,
     /** Why ticking is not offered to this person (permission), for the lock state. */
@@ -273,6 +277,7 @@ export async function confirmPicked(ctx: AuthContext, input: PickInput): Promise
       if (wo && !STAGEABLE_WO.includes(wo.status)) throw new DomainError("state", `Order ${wo.workOrderNumber} is ${wo.status.replace(/_/g, " ")}. Materials are taken after the order is approved.`);
       const moveStock = await getSetting(tx, ctx.organizationId, "production.prepare.move_stock", b.siteId);
       const scanLots = await getSetting(tx, ctx.organizationId, "production.prepare.scan_lots", b.siteId);
+      const typedChecks = scanLots ? await typedChecksAllowed(tx, ctx.organizationId) : true;
       if (moveStock) ctx.require("inventory.movement.post");
 
       const lines = await loadLines(tx, b);
@@ -316,6 +321,8 @@ export async function confirmPicked(ctx: AuthContext, input: PickInput): Promise
             if (scanLots) {
               // A-SCAN-TYPED-01: the label is read by scan or by typing its lot number; a tap is refused (A-SCAN-11).
               if (t.lotVia === "tap") throw new DomainError("validation", `Tapping the list does not count. Scan the lot label of ${line.material.name}, or type the lot number printed on it.`, { fieldErrors: { [`lot-${line.bm.id}`]: "Scan or type the lot number." } });
+              // ADR-126: with typed checks off only a scan confirms the lot.
+              if (t.lotVia === "typed" && !typedChecks) throw new DomainError("validation", TYPING_IS_OFF, { code: "TYPED_NOT_A_CHECK", fieldErrors: { [`lot-${line.bm.id}`]: "Scan the lot label." } });
               const p = parseScan(t.lotVia === "typed" ? cleanTyped(t.lotCode ?? "") : (t.lotCode ?? ""));
               const code = p.kind === "typed" && p.type === "LOT" ? p.value : p.kind === "untyped" ? p.value : null;
               if (!code) throw new DomainError("validation", `Scan the lot label of ${line.material.name}, or type the lot number printed on it.`, { fieldErrors: { [`lot-${line.bm.id}`]: "Scan or type the lot number." } });

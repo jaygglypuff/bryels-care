@@ -50,6 +50,14 @@ type Props = {
   loadHelp?: (pathname: string) => Promise<FrameHelpResult>;
   /** Master search (owner request 2026-11-08): the top-bar box from 1024 px, Ctrl/⌘+K and "/". Without it, no box. */
   search?: SearchFn;
+  /**
+   * ADR-126 setting `ui.wide_screen_top_bar`: "search" (default) shows the search from 1024 px and the Scan button below
+   * it; "scan" keeps the Scan button at every width (icon only from 1280 px, in the search button's place) and shows a
+   * small round search button at 1024–1279 px only. Ctrl/⌘K and "/" open the search either way.
+   */
+  wideTopBar?: "search" | "scan";
+  /** ADR-126 (`scan.search_open_to_everyone` off and no stock access): no Scan button (the screen would refuse). */
+  showScan?: boolean;
   /** Demo mode (ADR-055): the strip above the top bar; `canReset` adds the owner's reset link. Null outside the demo. */
   demo?: { canReset: boolean; sandbox?: boolean } | null;
   children: React.ReactNode;
@@ -130,7 +138,7 @@ function DrawerSync({ userId }: { userId: string }) {
   );
 }
 
-export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCount, approvalCount = 0, showApprovals = true, switchSite, signOut, loadHelp, search, demo = null, children }: Props) {
+export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCount, approvalCount = 0, showApprovals = true, switchSite, signOut, loadHelp, search, wideTopBar = "search", showScan = true, demo = null, children }: Props) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   useEffect(() => setDrawer(false), [pathname]);
@@ -182,6 +190,8 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
   // 1536 px and wider (measured at 1920 for QA: the words pushed "Sales & Customers" out of the menu). Live check
   // 2026-11-06: at 1280–1439 px the words cut "Management" even with one site, so they show from 1440 px.
   const tightTopBar = sites.length > 1;
+  // ADR-126: the Scan button instead of the search button on big screens (setting ui.wide_screen_top_bar = "scan").
+  const scanFirst = wideTopBar === "scan" && showScan;
   const withCount = (label: string, href: string) => (badges[href] ? `${label}, ${badges[href]} open` : label);
 
   // Round 4 (UX re-audit C N4): the site's NAME, never cut ("North Fields Plant"); the code is in the tooltip only.
@@ -267,19 +277,24 @@ export function Shell({ nav, tabs, user, sites, currentSiteId, qaCount, unreadCo
           </nav>
           <div className="ml-auto flex shrink-0 items-center gap-2 xl:ml-0">
             {sites.length > 1 && <div className="hidden shrink-0 xl:block">{siteSwitcher(false)}</div>}
-            {search && <MasterSearchLauncher search={search} userId={user.id} />}
-            {/* Scan for every role at every width (brief: camera scan entry on mobile). */}
-            <Link
-              href="/inventory/scan"
-              className={cx("flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium text-fg-2 shadow-[var(--shadow-card)] hover:text-fg", pathname.startsWith("/inventory/scan") && "text-primary-text", search && "lg:hidden")}
-              aria-label="Scan or search"
-              title="Scan or search"
-            >
-              <ScanLine size={18} aria-hidden />
-              {/* Chrome audit 2026-11: with the site selector the long word did not fit at ≥ 1536 px either (the menu was cut). */}
-              <span className={cx("md:hidden xl:inline", !tightTopBar && "2xl:hidden")}>Scan</span>
-              <span className={cx("hidden md:inline xl:hidden", !tightTopBar && "2xl:inline")}>Scan or search</span>
-            </Link>
+            {search && <MasterSearchLauncher search={search} userId={user.id} compact={scanFirst} />}
+            {/* Scan for every role at every width (brief: camera scan entry on mobile). ADR-126: from 1024 px only when the
+                setting ui.wide_screen_top_bar is "scan"; from 1280 px it is a round icon in the search button's place
+                (both do not fit beside the owner's menu row, ADR-123). */}
+            {showScan && (
+              <Link
+                href="/inventory/scan"
+                data-testid="top-bar-scan"
+                className={cx("flex h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface px-3 text-[13px] font-medium text-fg-2 shadow-[var(--shadow-card)] hover:text-fg", pathname.startsWith("/inventory/scan") && "text-primary-text", search && !scanFirst && "lg:hidden", scanFirst && "xl:px-0")}
+                aria-label="Scan or search"
+                title="Scan or search"
+              >
+                <ScanLine size={18} aria-hidden />
+                {/* Chrome audit 2026-11: with the site selector the long word did not fit at ≥ 1536 px either (the menu was cut). */}
+                <span className={cx(scanFirst ? "md:hidden" : "md:hidden xl:inline", !scanFirst && !tightTopBar && "2xl:hidden")}>Scan</span>
+                <span className={cx("hidden md:inline xl:hidden", !scanFirst && !tightTopBar && "2xl:inline")}>Scan or search</span>
+              </Link>
+            )}
             <div className="hidden sm:block">
               <SyncChip userId={user.id} />
             </div>

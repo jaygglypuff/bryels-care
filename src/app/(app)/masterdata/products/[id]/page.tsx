@@ -1,3 +1,4 @@
+import { screenPreferences } from "@/modules/governance";
 import { pieceSizeWords } from "@/lib/piece-size";
 import { db } from "@/db/client";
 import { requireContext } from "@/lib/auth/context";
@@ -25,6 +26,7 @@ export const metadata = { title: "Product" };
 
 export default async function ProductPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
+  const { setupFormsFolded } = await screenPreferences(ctx); // ADR-126: setting ui.setup_edit_forms_folded
   if (!ctx.can("masterdata.product.view")) return <Forbidden what="products" permission="masterdata.product.view" />;
   const { id } = await params;
   const { created } = await searchParams;
@@ -143,7 +145,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
 
       {canEdit ? (
         // ADR-123: folded so the next step keeps the one green button; same form, same action.
-        <EditDetails title="Change the basic facts">
+        <EditDetails open={!setupFormsFolded} title="Change the basic facts">
           <ActionForm action={saveProductAction} submitLabel="Save" hidden={{ _id: p.id }}>
             <ProductFields families={families} d={{ ...p, code: p.code }} months={months} />
           </ActionForm>

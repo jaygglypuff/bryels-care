@@ -5,6 +5,7 @@ import { invoices, salesOrders, shipments } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { BILLING_STAGE_ORDER, type BillingStep, billingStageOf } from "@/lib/billing-step-words";
 import { DomainError } from "@/lib/errors";
+import { getSetting } from "@/lib/settings";
 import type { NextActors } from "@/lib/next-actors-words";
 import type { Permission } from "@/lib/permissions";
 import { type AdHocHandoff, approvalStepRecord, nextActors } from "@/modules/governance";
@@ -18,7 +19,8 @@ import { isUuid } from "./shared";
  *
  * - Who may ask: anyone who may see deliveries (`sales.shipment.view`) or invoices (`finance.invoice.view`) at the
  *   delivery's site; another site's delivery is "not found". Viewers who may not open invoices get the stage and the
- *   names but no invoice id or number.
+ *   names but no invoice id or number; with `sales.show_invoice_stage_without_invoice_access` off (ADR-126) they get
+ *   the stage `hidden` only (no names).
  * - Sent for approval: `nextActors("invoice")` with the open step's roles, the creator and the sender kept out and the
  *   earlier approvers (the same record as To approve, `approvalNext` in src/app/(app)/finance/approval-waiting.ts);
  *   the ADR-122 owner fallback applies there. Approved: who saves it to the books (never an approver when the rules
@@ -36,8 +38,11 @@ function requireViewer(ctx: AuthContext) {
 }
 
 async function stepOf(ctx: AuthContext, siteId: string, inv: typeof invoices.$inferSelect | null): Promise<BillingStep> {
-  const stage = billingStageOf(inv?.status);
   const mayOpen = ctx.canAt("finance.invoice.view", siteId);
+  // ADR-126: with `sales.show_invoice_stage_without_invoice_access` off, people who may not open invoices at the site get
+  // no stage and no names (the screen says only "Delivered").
+  if (!mayOpen && !(await getSetting(db, ctx.organizationId, "sales.show_invoice_stage_without_invoice_access"))) return { stage: "hidden", invoice: null, next: null };
+  const stage = billingStageOf(inv?.status);
   const invoice = inv && mayOpen ? { id: inv.id, number: inv.invoiceNumber, status: inv.status } : null;
   let next: NextActors | null = null;
   if (stage === "not_billed") next = await nextActors(ctx, MAKE, { siteId }).catch(() => null);

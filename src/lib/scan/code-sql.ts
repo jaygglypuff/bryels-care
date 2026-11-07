@@ -26,12 +26,18 @@ export async function findByCode<T>(col: AnyColumn, value: string, run: (where: 
 /** Plain refusal when a verification check (second check, boxing check, label check, lot confirmation) is tapped. */
 export const TAP_IS_NOT_A_CHECK = "Tapping the list does not count as a check. Scan the label, or type the number printed on it.";
 
+/** ADR-126: refusal of a typed verification check while `scan.typed_code_counts_as_check` is off. */
+export const TYPING_IS_OFF = "This check needs the label scanned. Typing is turned off in Settings.";
+
 /**
  * How a verification check was read (A-SCAN-TYPED-01): a scan or the printed number typed. A tap from a list is
- * refused (ADR-098, A-SCAN-11). Anything else (older screens that send nothing) is taken as a scan.
+ * refused (ADR-098, A-SCAN-11). Anything else (older screens that send nothing) is taken as a scan. With
+ * `typedAllowed` false (setting `scan.typed_code_counts_as_check` off, ADR-126) a typed number is refused the same way
+ * (`TYPED_NOT_A_CHECK`). Callers read the setting with `typedChecksAllowed` (src/lib/scan/typed-check.ts).
  */
-export function checkEntryMode(via: string | null | undefined, field = "payload"): "scan" | "typed" {
+export function checkEntryMode(via: string | null | undefined, field = "payload", typedAllowed = true): "scan" | "typed" {
   if (via === "tap") throw new DomainError("validation", TAP_IS_NOT_A_CHECK, { field, code: "TAP_NOT_A_CHECK" });
+  if (via === "typed" && !typedAllowed) throw new DomainError("validation", TYPING_IS_OFF, { field, code: "TYPED_NOT_A_CHECK", fieldErrors: { [field]: "Scan the label." } });
   return via === "typed" ? "typed" : "scan";
 }
 

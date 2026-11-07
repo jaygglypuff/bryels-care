@@ -45,6 +45,8 @@ export function WeighFlow(p: {
   /** Why Save is pale and the one button that fixes it (getWeighView.weighBlock; finding 2). */
   block?: { sentence: string; href: string | null; label: string | null } | null;
   lotConfirm: "last4" | "scan" | "none";
+  /** ADR-126 (`scan.typed_code_counts_as_check`): false hides "type the lot number" (the server refuses it too). */
+  typedChecks?: boolean;
   cards: Card[];
   scales: {
     id: string;
@@ -366,8 +368,9 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
                     key={`scan-${card.batchMaterialId}-${showOthers ? "all" : "taken"}`}
                     kind="lot"
                     mode="emit"
-                    label="Scan the lot label on the container, or type the lot number"
-                    hint="Camera, handheld scanner, or the lot number printed on the label (all of it or the last 4)."
+                    label={p.typedChecks === false && p.lotConfirm !== "none" ? "Scan the lot label on the container" : "Scan the lot label on the container, or type the lot number"}
+                    hint={p.typedChecks === false && p.lotConfirm !== "none" ? "Camera or handheld scanner." : "Camera, handheld scanner, or the lot number printed on the label (all of it or the last 4)."}
+                    allowTyping={p.typedChecks !== false || p.lotConfirm === "none"}
                     notListed={`That is not a lot of ${card.materialName} you may use here. Check the label and type it again.`}
                     candidatesLabel={showOthers ? "Taken at Get materials first, then other lots" : "Taken at Get materials"}
                     candidates={pickable

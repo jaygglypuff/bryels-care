@@ -20,6 +20,23 @@ fields with a name search the same box also finds by name). Rules:
 - a wrong number is refused in plain words: "That number is not on this order. Check the label and type it again."
   (picking, second check), "That number is not on this list …" (other fields with only the listed candidates).
 
+**Setting `scan.typed_code_counts_as_check` (ADR-126, default on).** Settings › Scan and search › "A typed label number
+counts as a check". On (today): the rules above. Off: the **verification checks only** take a scan:
+
+| Check | Server (refuses `typed` like `tap`, code `TYPED_NOT_A_CHECK`) | Screen (typing box hidden, `allowTyping={false}`) |
+|---|---|---|
+| Second check of the box (`/sales/packing/[shipmentId]`) | `scanPackVerification` → `checkEntryMode` | `ScanPanel` |
+| Boxing check (`/warehouse/packs/[packId]` Checker) | `verifyPackScan` → `checkEntryMode` | `ScanPanel` |
+| Label check (`/quality/label-verification`) | `verifyLabelScan` → `checkEntryMode` | `VerifyScanForm` |
+| Lot check at weighing (Weigh card) | `recordDispense` → `confirmLot` (a typed number, and a bare "last 4", are refused whatever `production.weighing.lot_confirm` says, unless it is "none") | `WeighCard` |
+| Lot check at weighing, offline (`/offline` Weigh) | replay → `recordDispense` → `checkEntryMode` (read at replay time) | `WeighCapture` (from the cached batch `weighing.typedChecks`) |
+| Lot check at Get materials (`scan_lots` on) | `confirmPicked` | `MaterialsList` |
+
+The refusal reads: "This check needs the label scanned. Typing is turned off in Settings." Nothing is recorded. Put-away,
+counts, moves, finding a box or lot and every other field keep the typing box. A weighing already recorded answers with
+its stored result when its idempotency key is sent again. Who changes it: a change request that only the owner approves
+(restricted, re-authentication); QA should say yes first (A-SCAN-TYPED-01).
+
 | Where the "how" is stored | scan | typed | tap |
 |---|---|---|---|
 | `pick_lines.entry_mode` (+ audit `sales.pick.scanned.via`) | `scan` | `typed` | `manual` (with reason) |

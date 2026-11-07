@@ -16,6 +16,7 @@ import {
   stockReservations,
 } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
+import { typedChecksAllowed } from "@/lib/scan/typed-check";
 import type { ReferenceBatch, ReferenceCount, ReferenceLocation, ReferenceLot, ReferenceMaterial, ReferencePayload } from "../protocol";
 import { findDeviceByKey, touchDevice } from "./devices";
 
@@ -144,6 +145,7 @@ export async function buildReference(ctx: AuthContext, siteId: string, deviceKey
       .from(equipment)
       .where(and(eq(equipment.siteId, siteId), eq(equipment.status, "in_service")))
       .orderBy(asc(equipment.code));
+    const typedChecks = await typedChecksAllowed(db, ctx.organizationId); // ADR-126
     batchesOut = bs.map((b) => {
       const step = [...((b.snap as Snap).steps ?? [])].sort((x, y) => x.stepNo - y.stepNo).find((s) => WEIGHING.includes(s.stepKind));
       return {
@@ -152,7 +154,7 @@ export async function buildReference(ctx: AuthContext, siteId: string, deviceKey
         batchNumber: b.batchNumber,
         status: b.status,
         productName: b.productName,
-        weighing: step ? { stepNo: step.stepNo, name: step.name, requiresEquipment: !!step.requiresEquipment, equipmentKind: step.equipmentKind ?? null } : null,
+        weighing: step ? { stepNo: step.stepNo, name: step.name, requiresEquipment: !!step.requiresEquipment, equipmentKind: step.equipmentKind ?? null, typedChecks } : null,
         lines: lines
           .filter((l) => l.bm.batchId === b.id)
           .map((l) => ({

@@ -30,6 +30,7 @@ import { D, fmtQty } from "@/lib/qty";
 import { parseScan } from "@/lib/scan/payload";
 import { cleanTyped, type PickVia } from "@/lib/scan/pick";
 import { checkEntryMode, findByCode, TYPED_NOT_ON_ORDER } from "@/lib/scan/code-sql";
+import { typedChecksAllowed } from "@/lib/scan/typed-check";
 import { assertLotUsable, claimIdempotencyKey, storeIdempotentResult } from "@/modules/inventory";
 import { auditDenied, notifyNextActors, requireReauthentication } from "@/modules/governance";
 import { lockOrder } from "./orders";
@@ -143,7 +144,7 @@ export async function scanPackVerification(ctx: AuthContext, shipmentId: string,
   ctx.require("sales.shipment.edit");
   if (!input.idempotencyKey || input.idempotencyKey.length < 8) throw new DomainError("validation", "The scan is missing its key. Reload the page and try again.");
   // A-SCAN-TYPED-01: the second check reads the label, by scan or by typing its number; a tap in a list is refused.
-  const entryMode = checkEntryMode(input.via);
+  const entryMode = checkEntryMode(input.via, "payload", await typedChecksAllowed(db, ctx.organizationId));
   const typed = entryMode === "typed";
   const parsed = parseScan(typed ? cleanTyped(input.payload) : input.payload);
   if (parsed.kind === "invalid") throw new DomainError("validation", typed ? TYPED_NOT_ON_ORDER : "That is not a box or lot label. Scan the box label (BC:BOX) or the lot label (BC:LOT).", { field: "payload" });

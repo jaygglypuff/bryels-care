@@ -1,3 +1,4 @@
+import { screenPreferences } from "@/modules/governance";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/db/client";
@@ -20,6 +21,7 @@ export const metadata = { title: "Supplier" };
 
 export default async function SupplierPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
   const ctx = await requireContext();
+  const { setupFormsFolded } = await screenPreferences(ctx); // ADR-126: setting ui.setup_edit_forms_folded
   if (!ctx.can("masterdata.supplier.view")) return <Forbidden what="suppliers" permission="masterdata.supplier.view" />;
   const { id } = await params;
   const { saved } = await searchParams;
@@ -102,7 +104,7 @@ export default async function SupplierPage({ params, searchParams }: { params: P
       )}
       {ctx.can("masterdata.supplier.edit") && (
         // ADR-123: folded so the next step keeps the one green button; same form, same action.
-        <EditDetails>
+        <EditDetails open={!setupFormsFolded}>
           <SupplierForm plain initial={s} categories={await lookupOptions(db, ctx.organizationId, "supplier_category", { keep: s.category })} />
         </EditDetails>
       )}

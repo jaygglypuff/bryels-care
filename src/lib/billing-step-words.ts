@@ -15,7 +15,8 @@ export type BillingStage = "not_billed" | "draft" | "submitted" | "approved" | "
 export const BILLING_STAGE_ORDER: readonly BillingStage[] = ["not_billed", "draft", "submitted", "approved", "billed", "paid"];
 
 export type BillingStep = {
-  stage: BillingStage;
+  /** `hidden` (ADR-126): the viewer may not open invoices and the setting hides the invoice stage from them. */
+  stage: BillingStage | "hidden";
   /** Null when there is no invoice or the viewer may not open invoices at the site (they still see the stage). */
   invoice: { id: string; number: string | null; status: string } | null;
   /** Who does the next billing step (null once it is billed: the customer pays). */
@@ -66,6 +67,8 @@ export function billingStepWords(step: BillingStep, lead = "Delivered."): Billin
   const named = inv?.number ? `Open the invoice ${inv.number}` : "Open the invoice";
   const waitingFor = waitingWords(step.next);
   switch (step.stage) {
+    case "hidden":
+      return { text: lead };
     case "not_billed":
       return { text: `${lead} Next: finance bills it.`, waitingFor: waitingFor ?? "Waiting for finance to make the invoice.", action: step.next?.viewer.can ? { label: "Make the invoice", href: "/finance/invoices" } : undefined };
     case "draft":

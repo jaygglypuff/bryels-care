@@ -4,6 +4,7 @@ import { ROLE_BUNDLES } from "@/lib/permissions";
 import { unreadNotificationCount } from "@/modules/platform";
 import { myApprovalCount } from "@/modules/action-centre";
 import { qaQueueCount } from "@/modules/quality";
+import { screenPreferences } from "@/modules/governance";
 import { getMaintenanceState } from "@/lib/maintenance";
 import { MaintenanceBanner } from "@/ui/maintenance-banner";
 import { isDemoMode, isSandboxEmail } from "@/lib/demo";
@@ -24,6 +25,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const qaCount = ctx.can("quality.disposition.view") ? (await qaQueueCount(ctx.organizationId, ctx.currentSiteId)).total : null; // same rule as the QA list (UX audit)
   const unreadCount = await unreadNotificationCount(ctx);
   const maintenance = await getMaintenanceState(db, ctx.organizationId);
+  // ADR-126: the screen settings (top bar: search or Scan; search open to everyone or stock people only).
+  const prefs = await screenPreferences(ctx);
   return (
     <Shell
       nav={nav}
@@ -37,7 +40,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       showApprovals={approver}
       switchSite={switchSite}
       loadHelp={helpForScreen}
-      search={masterSearchAction}
+      search={prefs.canSearch ? masterSearchAction : undefined}
+      wideTopBar={prefs.wideTopBar}
+      showScan={prefs.canSearch}
       signOut={signOut}
       demo={isDemoMode() ? { canReset: ctx.roleCodes.includes("owner_director"), sandbox: isSandboxEmail(ctx.email) } : null}
     >

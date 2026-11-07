@@ -2,6 +2,8 @@ import { requireContext } from "@/lib/auth/context";
 import { scanRequestOf } from "@/lib/scan/scan-href";
 import { PageHeader } from "@/ui/core";
 import { PageIntro } from "@/ui/guide";
+import { searchAllowed } from "@/modules/scan";
+import { Forbidden } from "../../forbidden";
 import { masterSearchAction } from "../../search-actions";
 import { ScanClient } from "./scan-client";
 import { ScanSearch } from "./scan-search";
@@ -11,10 +13,12 @@ export const metadata = { title: "Scan or search" };
 /**
  * Scan or search (US-2-13, ADR-085) with the master search on top (owner request 2026-11-08): on phones the top-bar
  * Scan button opens this screen. Everyone may search (each result is checked on the server); scanning labels needs
- * stock access (inventory.lot.view).
+ * stock access (inventory.lot.view). ADR-126: with `scan.search_open_to_everyone` off the whole screen needs
+ * inventory.lot.view again (as before ADR-121); the search action and `masterSearch` refuse as well.
  */
 export default async function ScanPage({ searchParams }: { searchParams: Promise<{ code?: string; n?: string; q?: string }> }) {
   const ctx = await requireContext();
+  if (!(await searchAllowed(ctx))) return <Forbidden what="scanning and search" permission="inventory.lot.view" />;
   const sp = await searchParams;
   const canScan = ctx.can("inventory.lot.view");
   // ADR-125: `n` changes on every hand-over, so the same label entered again shows its card again.

@@ -33,6 +33,10 @@ export type SettingDefinition = {
   restricted?: boolean;
   /** ADR-088 §2: every change is a change request (as `requiresApproval`) that only an Owner/Director may approve. */
   ownerOnly?: boolean;
+  /** ADR-126: "Who should change it", one plain sentence shown under the description on the Settings screen. */
+  whoChanges?: string;
+  /** ADR-126: the allowed values of a choice setting, in words (the Settings screen shows a list instead of a text box). */
+  choices?: readonly { value: string; label: string }[];
 };
 
 const MaintenanceSchema = z.object({ enabled: z.boolean(), allowed_role_codes: z.array(z.string().regex(/^[a-z_]+$/)).max(20) }).strict();
@@ -472,6 +476,100 @@ export const SETTINGS = {
     requiresApproval: true,
     restricted: true,
     ownerOnly: true,
+  },
+  // ADR-126 (owner 2026-11-07: "decide which is the best, but give me an option I can edit in the settings"). Each
+  // default is the recommended choice and today's behaviour, so nothing changes until someone changes the setting.
+  /**
+   * A-SCAN-TYPED-01 (ADR-120): typing the number printed on a label counts as reading it for the verification checks
+   * (second check, boxing check, label check, lot confirmation at weighing and Get materials). Off: those checks take
+   * a scan only; the server refuses `typed` like `tap` (`checkEntryMode`, `confirmLot`, materials list; offline replay
+   * included). Put-away, counts and look-ups still take typing. Restricted and owner-only: QA should confirm first.
+   */
+  "scan.typed_code_counts_as_check": {
+    scopes: ["organization"],
+    schema: z.boolean(),
+    default: true as boolean,
+    assumption: "A-SCAN-TYPED-01",
+    group: "Scan and search",
+    label: "A typed label number counts as a check",
+    description:
+      "On (recommended): for the second check, the boxing check, the label check, and the lot check at weighing and Get materials, people may scan the label or type the number printed on it. Off: those checks need the label scanned. Putting away, counting and finding things still take typing.",
+    whoChanges: "The owner, after QA says yes. A typed number is a weaker check than a scan: a person could type it from a list instead of reading the label.",
+    requiresApproval: true,
+    restricted: true,
+    ownerOnly: true,
+  },
+  /**
+   * A-SCAN-15 (ADR-121): from 1024 px the top bar shows the search launcher, and "Scan a label" is inside the search
+   * window (`search`, default). `scan`: the Scan button shows instead; the search stays on Ctrl/⌘K and "/" and, at
+   * 1024–1279 px, a small round search button. From 1280 px the Scan button takes the search button's place (both do
+   * not fit beside the owner's menu row, ADR-123). Screen layout only.
+   */
+  "ui.wide_screen_top_bar": {
+    scopes: ["organization"],
+    schema: z.enum(["search", "scan"]),
+    default: "search" as "search" | "scan",
+    assumption: "A-SCAN-15",
+    group: "Screens",
+    label: "Big screens: search or Scan button in the top bar",
+    description:
+      "Search (recommended): on computers and big tablets the top bar shows the search, and “Scan a label” is inside the search window. Scan: the top bar shows the Scan button instead; the search still opens with Ctrl+K (⌘K on a Mac) or “/”, and with a small search button when there is room.",
+    whoChanges: "The owner or the IT person. Phones always show the Scan button.",
+    choices: [
+      { value: "search", label: "Search (recommended)" },
+      { value: "scan", label: "Scan button" },
+    ],
+  },
+  /**
+   * A-SCAN-15: the Scan or search screen and the master search are open to every signed-in person (each result is
+   * still checked per record type and site). Off: both need `inventory.lot.view` again (the page, the search action and
+   * `masterSearch` refuse; the top-bar launcher is hidden).
+   */
+  "scan.search_open_to_everyone": {
+    scopes: ["organization"],
+    schema: z.boolean(),
+    default: true as boolean,
+    assumption: "A-SCAN-15",
+    group: "Scan and search",
+    label: "Everyone can use the search",
+    description:
+      "On (recommended): everyone who signs in can use the search and the Scan or search screen. They only ever find what their job lets them see. Off: only people who may see stock can use them.",
+    whoChanges: "The owner or the IT person.",
+    requiresApproval: true,
+    restricted: true,
+  },
+  /**
+   * ADR-124 item 1: people without invoice access see the invoice stage and who acts next on a delivery and an order
+   * (no link). Off: they see only "Delivered" / "Sent out to the customer" (no stage, no names): `billingStepOfShipment`
+   * and `billingStepOfOrder` return the stage `hidden` for them.
+   */
+  "sales.show_invoice_stage_without_invoice_access": {
+    scopes: ["organization"],
+    schema: z.boolean(),
+    default: true as boolean,
+    assumption: "A-BILL-STAGE-01",
+    group: "Sales",
+    label: "Show the invoice step to people who cannot open invoices",
+    description:
+      "On (recommended): on a delivery or an order, everyone who may see it also sees where the invoice is (for example “Waiting for Rosa to approve the invoice”), without a link to the invoice. Off: people who cannot open invoices only see “Delivered”.",
+    whoChanges: "The owner or the IT person.",
+    requiresApproval: true,
+    restricted: true,
+  },
+  /**
+   * ADR-123 item 4: setup pages (material, product, supplier, site, shelf/area) fold their edit form under
+   * "Change the details". Off: the form shows open. Screen layout only.
+   */
+  "ui.setup_edit_forms_folded": {
+    scopes: ["organization"],
+    schema: z.boolean(),
+    default: true as boolean,
+    assumption: "A-UI-FOLD-01",
+    group: "Screens",
+    label: "Fold the change form on setup pages",
+    description:
+      "On (recommended): on the page of a material, product, supplier, site or shelf, the form to change it is folded under “Change the details”. Press it to open the form. Off: the form is always open.",
+    whoChanges: "The owner or the IT person.",
   },
   /** Alert thresholds evaluated by `platform.alerts_evaluate` (docs/deployment-railway.md §8.3, A-DEP-11). */
   "alerts.worker_heartbeat_max_seconds": { scopes: ["organization"], schema: z.number().int().min(60).max(86_400), default: 300, assumption: "A-DEP-11", group: "Alerts", label: "Worker silent after (seconds)" },

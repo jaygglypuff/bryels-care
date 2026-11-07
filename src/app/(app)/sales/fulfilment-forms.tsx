@@ -69,6 +69,7 @@ export function ScanPanel({
   candidates = [],
   showCandidates = true,
   qtyAction = "Check these pieces",
+  allowTyping = true,
 }: {
   scan: ScanFn;
   label: string;
@@ -80,6 +81,8 @@ export function ScanPanel({
   showCandidates?: boolean;
   /** Button that sends a lot label with the counted pieces. */
   qtyAction?: string;
+  /** ADR-126: false hides "type the number" (checks while `scan.typed_code_counts_as_check` is off). */
+  allowTyping?: boolean;
 }) {
   const [pending, start] = useTransition();
   const [result, setResult] = useState<ScanActionResult | null>(null);
@@ -158,6 +161,7 @@ export function ScanPanel({
         showCandidates={showCandidates}
         candidatesLabel={candidates.length ? (allowManual ? "Still to take (tap one only if its label will not scan)" : "Still to check") : undefined}
         allowTap={allowManual}
+        allowTyping={allowTyping}
         search={false}
         pending={pending}
         onEmit={onScan}

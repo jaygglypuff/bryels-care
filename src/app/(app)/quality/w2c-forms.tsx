@@ -445,7 +445,7 @@ export function BulkForm({ rows, reasonCodes }: { rows: BulkRow[]; reasonCodes: 
   );
 }
 
-export function VerifyScanForm({ locationId, expected = [] }: { locationId: string; expected?: PickCandidate[] }) {
+export function VerifyScanForm({ locationId, expected = [], allowTyping = true }: { locationId: string; expected?: PickCandidate[]; /** ADR-126: false while typed checks are off in Settings. */ allowTyping?: boolean }) {
   // Each label is checked by reading it: a scan (camera or handheld scanner) or the number printed on it typed
   // (owner decision 2026-11-08, recorded as typed). Never tapped from a list: the list below is a checklist.
   // `expected` (the labels still to check here) lets the last digits of a typed number find the right one.
@@ -460,7 +460,7 @@ export function VerifyScanForm({ locationId, expected = [] }: { locationId: stri
   };
   return (
     <div className="flex flex-col gap-3">
-      <ScanOrPick mode="emit" kind="container" alsoAccept={["lot"]} id="verify-scan" label="Scan a box or lot label, or type its number" hint="Each one is checked against the record. A label you cannot read: print a new one and destroy the old one." candidates={expected} showCandidates={false} allowTap={false} search={false} pending={pending} onEmit={(v, _c, via) => send(v, via)} error={state?.fieldErrors?.scan} />
+      <ScanOrPick mode="emit" kind="container" alsoAccept={["lot"]} id="verify-scan" label={allowTyping ? "Scan a box or lot label, or type its number" : "Scan a box or lot label"} hint="Each one is checked against the record. A label you cannot read: print a new one and destroy the old one." candidates={expected} showCandidates={false} allowTap={false} allowTyping={allowTyping} search={false} pending={pending} onEmit={(v, _c, via) => send(v, via)} error={state?.fieldErrors?.scan} />
       {pending && <p className="text-[13px] text-muted" role="status">Checking…</p>}
       {state?.ok && state.message && (
         <p role="status" className={cx("rounded-[10px] border px-3 py-2 text-[14px] font-medium", state.last?.status === "verified" ? "border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok-fg)]" : "border-[var(--warn-bd)] bg-[var(--warn-bg)] text-[var(--warn-fg)]")}>

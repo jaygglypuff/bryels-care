@@ -61,6 +61,11 @@ type Base = {
   showCandidates?: boolean;
   /** Refusal for a typed code that is not one of the candidates (`onlyCandidates`), e.g. "That number is not on this order." */
   notListed?: string;
+  /**
+   * ADR-126: show the "type the number" box (default true). Verification checks pass false while the setting
+   * `scan.typed_code_counts_as_check` is off; the camera and a handheld scanner still work.
+   */
+  allowTyping?: boolean;
   className?: string;
 };
 
@@ -183,7 +188,7 @@ function CandidateButton({ c, pressed, disabled, onTap, done }: { c: PickCandida
 }
 
 export function ScanOrPick(props: ScanOrPickProps) {
-  const { kind, label, candidates = [], candidatesLabel, hint, error, search = true, allowTap = true, onlyCandidates = false, maxShown = 6, listen = true, className, alsoAccept = NO_KINDS, showCandidates = true, notListed } = props;
+  const { kind, label, candidates = [], candidatesLabel, hint, error, search = true, allowTap = true, onlyCandidates = false, maxShown = 6, listen = true, className, alsoAccept = NO_KINDS, showCandidates = true, notListed, allowTyping = true } = props;
   const autoId = useId();
   const id = props.id ?? `sop-${autoId.replace(/:/g, "")}`;
   const words = PICK_WORDS[kind];
@@ -494,7 +499,9 @@ export function ScanOrPick(props: ScanOrPickProps) {
             <Scanner cameraOnly onClose={() => setCamera(false)} onScan={(v) => handle(v, true)} autoFocus={false} label={`Scan the ${words.label}`} />
           )}
           {/* Owner decision 2026-11-08: every scan field also takes the number printed on the label, typed. Never
-              focused by itself, so the phone keyboard opens only when the person taps the box. */}
+              focused by itself, so the phone keyboard opens only when the person taps the box. ADR-126: a verification
+              check passes allowTyping={false} while `scan.typed_code_counts_as_check` is off (the server refuses it too). */}
+          {allowTyping ? (
           <div role={search ? "search" : undefined} className="flex min-w-0 flex-col gap-1">
             <label htmlFor={`${id}-words`} className="text-[13px] font-medium text-fg-2">
               {search ? `Or type the number on the ${words.label}, or a name` : `Or type the number on the ${words.label}`}
@@ -536,6 +543,11 @@ export function ScanOrPick(props: ScanOrPickProps) {
               </Button>
             </div>
           </div>
+          ) : (
+            <p className="text-[13px] text-fg-2" data-testid="typing-off">
+              This check needs the label scanned. Typing is turned off in Settings.
+            </p>
+          )}
           <p className="text-[12px] text-muted">A handheld scanner works any time: just scan the {words.label}.</p>
           {busy && <p className="text-[13px] text-muted" role="status">Looking…</p>}
           {!busy && info && found.length > 0 && <p className="text-[13px] text-fg-2" role="status">{info}</p>}

@@ -333,7 +333,11 @@ function typingIn(t: EventTarget | null): boolean {
  * The top-bar search box (from 1024 px) and the Ctrl/⌘+K and "/" shortcuts (every width). Opens the search in a
  * dialog over the page. On phones the Scan button in the top bar opens the Scan or search screen instead.
  */
-export function MasterSearchLauncher({ search, userId }: { search: SearchFn; userId: string }) {
+/**
+ * `compact` (ADR-126, setting `ui.wide_screen_top_bar` = "scan"): a small round button at 1024–1279 px only; from 1280 px
+ * the Scan button takes its place and the search opens with Ctrl/⌘K or "/" (still listened to here).
+ */
+export function MasterSearchLauncher({ search, userId, compact = false }: { search: SearchFn; userId: string; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [mac, setMac] = useState(false);
@@ -369,13 +373,17 @@ export function MasterSearchLauncher({ search, userId }: { search: SearchFn; use
         aria-keyshortcuts="Control+K Meta+K /"
         aria-label="Search anything — a screen, a name or a number"
         title="Search anything (Ctrl+K or /)"
-        className="hidden h-11 shrink-0 items-center gap-2 rounded-full border border-line bg-surface px-3 text-left text-[13px] text-muted shadow-[var(--shadow-card)] hover:text-fg lg:flex lg:w-[clamp(240px,30vw,360px)] xl:w-auto xl:min-w-11 xl:justify-center xl:px-3 xl:text-fg-2"
+        className={
+          compact
+            ? "hidden size-11 shrink-0 place-items-center rounded-full border border-line bg-surface text-fg-2 shadow-[var(--shadow-card)] hover:text-fg lg:grid xl:hidden"
+            : "hidden h-11 shrink-0 items-center gap-2 rounded-full border border-line bg-surface px-3 text-left text-[13px] text-muted shadow-[var(--shadow-card)] hover:text-fg lg:flex lg:w-[clamp(240px,30vw,360px)] xl:w-auto xl:min-w-11 xl:justify-center xl:px-3 xl:text-fg-2"
+        }
       >
         <Search size={16} aria-hidden className="shrink-0" />
         {/* From 1280 px the five destinations sit in the same bar and were measured full (live check 2026-11-06): the
             box becomes a round search button, narrower than the Scan button it replaces there; the words are in the dialog. */}
-        <span className="min-w-0 flex-1 truncate xl:hidden">Search anything — a screen, a name or a number</span>
-        <kbd className="hidden shrink-0 rounded-md border border-line px-1.5 py-0.5 text-[11px] lg:inline xl:hidden">{mac ? "⌘K" : "Ctrl K"}</kbd>
+        {!compact && <span className="min-w-0 flex-1 truncate xl:hidden">Search anything — a screen, a name or a number</span>}
+        {!compact && <kbd className="hidden shrink-0 rounded-md border border-line px-1.5 py-0.5 text-[11px] lg:inline xl:hidden">{mac ? "⌘K" : "Ctrl K"}</kbd>}
       </button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-0 sm:p-4 sm:pt-[10vh]" onMouseDown={(e) => e.target === e.currentTarget && close()}>

@@ -1,8 +1,8 @@
 ---
 key: role.owner
 title: Owner – your day in 5 steps
-version: 1
-updated_at: 2026-10-31
+version: 2
+updated_at: 2026-11-07
 sop: Training guide; not an SOP
 ---
 
@@ -21,3 +21,9 @@ You see the whole business. You do not need to do floor work; you decide and you
 - **All my sites** (top of Home and Reports) shows every plant together.
 - QA decides if a lot or batch is OK to use. You cannot do that for QA; this is the cosmetics rule.
 - Changing settings, who says OK to what, and people's jobs is under **Menu → Management**.
+- Five choices you asked to keep are in **Settings**. Each starts on the recommended choice, so nothing changes until you change it:
+  - **Scan and search → A typed label number counts as a check.** On: a checker may type the number printed on a label. Off: the checks need a scan. Ask QA first; only you can say OK to a change.
+  - **Scan and search → Everyone can use the search.** Off: only people who may see stock can search.
+  - **How screens look → Big screens: search or Scan button in the top bar.**
+  - **How screens look → Fold the change form on setup pages.** Off: the form on a material, product, supplier, site or shelf page is always open.
+  - **Sales → Show the invoice step to people who cannot open invoices.** Off: they only see "Delivered".

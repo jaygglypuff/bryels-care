@@ -2,6 +2,8 @@ import "server-only";
 import { sql, type SQL } from "drizzle-orm";
 import { db } from "@/db/client";
 import type { AuthContext } from "@/lib/auth/context";
+import { DomainError } from "@/lib/errors";
+import { getSetting } from "@/lib/settings";
 import type { Permission } from "@/lib/permissions";
 import { fmtDate } from "@/lib/qty";
 import { likeFragment, parseNumberQuery, wantsPartial, type NumberQuery } from "./number-query";
@@ -264,6 +266,23 @@ function toHit(ctx: AuthContext, t: RecordType, r: Row): MasterHit {
   return { type: t.key, icon: t.icon, name, number: r.number, detail, href: t.href(r, ctx), exact: Number(r.rank) === 0 };
 }
 
+/** ADR-126: refusal when the search is limited to people who may see stock. */
+export const SEARCH_NEEDS_STOCK_ACCESS = "The search is only for people who may see stock. Ask your manager if you need it.";
+
+/**
+ * ADR-126: whether this person may use the master search and the Scan or search screen. Open to everyone while
+ * `scan.search_open_to_everyone` is on (default); off, it needs `inventory.lot.view` (as before ADR-121).
+ */
+export async function searchAllowed(ctx: AuthContext): Promise<boolean> {
+  if (ctx.can("inventory.lot.view")) return true;
+  return getSetting(db, ctx.organizationId, "scan.search_open_to_everyone");
+}
+
+/** ADR-126: throws `forbidden` when `searchAllowed` is false (the search action, `masterSearch`, the page). */
+export async function requireSearchAccess(ctx: AuthContext): Promise<void> {
+  if (!(await searchAllowed(ctx))) throw new DomainError("forbidden", SEARCH_NEEDS_STOCK_ACCESS, { permission: "inventory.lot.view", setting: "scan.search_open_to_everyone" });
+}
+
 export type MasterSearchResult = { groups: MasterGroup[]; /** The one record whose number was typed exactly, if there is exactly one. */ exactHref: string | null };
 
 /**
@@ -271,6 +290,7 @@ export type MasterSearchResult = { groups: MasterGroup[]; /** The one record who
  * groups are left out. Text shorter than 2 letters or digits finds nothing.
  */
 export async function masterSearch(ctx: AuthContext, input: string): Promise<MasterSearchResult> {
+  await requireSearchAccess(ctx);
   const raw = String(input ?? "").slice(0, MAX_QUERY_LENGTH).trim();
   const q = parseNumberQuery(raw);
   if (q.compact.length < 2) return { groups: [], exactHref: null };
