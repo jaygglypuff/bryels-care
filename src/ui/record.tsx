@@ -140,11 +140,13 @@ export function RecordHeader({
           {next && (
             <div className="min-w-0 sm:flex-[1_1_16rem]">
               <p className="text-label font-semibold text-primary-text">What to do next</p>
-              <p className="mt-0.5 text-[15px] font-medium leading-snug text-fg">{next}</p>
+              {/* div, not p: callers may pass block content (a warning line, WhoCanHelp) — ADR-123. */}
+              <div className="mt-0.5 text-[15px] font-medium leading-snug text-fg">{next}</div>
               {waitingFor && (
-                <p className="mt-1 flex items-center gap-1.5 text-meta text-fg-2">
-                  <Hourglass size={14} aria-hidden /> {waitingFor}
-                </p>
+                <div className="mt-1 flex items-start gap-1.5 text-meta text-fg-2">
+                  <Hourglass size={14} aria-hidden className="mt-0.5 shrink-0" />
+                  <div className="min-w-0">{waitingFor}</div>
+                </div>
               )}
             </div>
           )}
