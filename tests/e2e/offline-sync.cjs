@@ -190,7 +190,9 @@ async function waitFor(fn, label, timeout = 30000) {
       await dev.locator('[data-testid=ow-lot]').waitFor();
       if (await dev.locator('#ow-loc').count()) await dev.selectOption('#ow-loc', { index: 1 });
       await dev.fill('#ow-qty', String(Number(target.qty)));
-      if (await dev.locator('#ow-scale').count()) await dev.selectOption('#ow-scale', 'SC-01');
+      // ADR-125: the scale is a ScanOrPick field; type its number like the code on the machine.
+      const scalePick = dev.getByTestId('scan-or-pick-ow-scale');
+      if (await scalePick.count()) await scalePick.getByRole('button', { name: /SC-01/ }).click();
       await dev.getByText(/^Within tolerance/).waitFor();
       await dev.getByRole('button', { name: 'Save weighing on this device' }).click();
       await dev.getByText(/^Saved on this device\. It syncs when you are back online/).waitFor();

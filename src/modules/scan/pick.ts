@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, eq, gt, inArray, or, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { db } from "@/db/client";
-import { batches, containerContents, containers, inventoryBalances, inventoryLots, locations, materials, products } from "@/db/schema";
+import { batches, containerContents, containers, equipment, inventoryBalances, inventoryLots, locations, materials, products } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { D, fmtDate } from "@/lib/qty";
@@ -22,6 +22,7 @@ import { searchTerms } from "./search";
  * | location  | signed in at the site    | current site, active places             |
  * | batch     | production.batch.view    | current site                            |
  * | item      | inventory.lot.view       | organisation master data (active)       |
+ * | equipment | masterdata.equipment.view, production.equipment_use.create or a maintenance permission | current site (ADR-125) |
  * A record of another site (even one the caller may see) is "not found here": the operator acts at the
  * current site. The placeholder text, empty input and labels of another kind are refused.
  */
@@ -172,11 +173,29 @@ async function itemCandidates(ctx: AuthContext, text: string | null, code: strin
   return [...m.map((r) => ({ value: r.id, title: r.name, detail: `material ${r.code}`, code: r.code, codes: [r.code] })), ...p.map((r) => ({ value: r.id, title: r.name, detail: `product ${r.code}`, code: r.code, codes: [r.code] }))].slice(0, LIMIT);
 }
 
+const EQUIPMENT_STATUS: Record<string, string> = { in_service: "in service", maintenance: "in maintenance", out_of_service: "out of service" };
+/** Who may look machines up: the people who use them (production steps, weighing) or report and fix them (maintenance). */
+const EQUIPMENT_LOOKUP = ["masterdata.equipment.view", "production.equipment_use.create", "production.dispense_record.create", "maintenance.work_order.view", "maintenance.work_order.create", "maintenance.plan.create"] as const;
+
+/** Machines (mixers, scales, moulds …) of the caller's organisation at the current site (ADR-125). */
+async function equipmentCandidates(ctx: AuthContext, where: SQL[]): Promise<PickCandidate[]> {
+  const rows = await db
+    .select({ id: equipment.id, code: equipment.code, name: equipment.name, kind: equipment.equipmentKind, status: equipment.status })
+    .from(equipment)
+    .where(and(eq(equipment.organizationId, ctx.organizationId), eq(equipment.siteId, ctx.currentSiteId), ...where))
+    .orderBy(equipment.code)
+    .limit(LIMIT);
+  return rows.map((r) => ({ value: r.id, title: r.name, detail: [r.code, r.kind, r.status !== "in_service" ? (EQUIPMENT_STATUS[r.status] ?? r.status.replace(/_/g, " ")) : null].filter(Boolean).join(" · "), code: r.code, codes: [r.code] }));
+}
+
 function guard(ctx: AuthContext, kind: PickKind) {
   ctx.requireSite(ctx.currentSiteId);
   if (kind === "lot" || kind === "item") ctx.require("inventory.lot.view");
   else if (kind === "container") ctx.require("inventory.container.view");
   else if (kind === "batch") ctx.require("production.batch.view");
+  else if (kind === "equipment" && !EQUIPMENT_LOOKUP.some((p) => ctx.canAt(p, ctx.currentSiteId))) {
+    throw new DomainError("forbidden", "You do not have permission to look up machines at this site.", { permission: EQUIPMENT_LOOKUP[0] });
+  }
 }
 
 /** Candidates whose name, number or label code contains every typed word (≥ 2 letters each). */
@@ -200,6 +219,8 @@ export async function findPickCandidates(ctx: AuthContext, kind: PickKind, text:
       return batchCandidates(ctx, words([batches.batchNumber, products.name], t));
     case "item":
       return itemCandidates(ctx, t, null, null);
+    case "equipment":
+      return equipmentCandidates(ctx, words([equipment.code, equipment.name, equipment.equipmentKind], t));
   }
 }
 
@@ -238,6 +259,9 @@ export async function resolvePickRef(ctx: AuthContext, kind: PickKind, raw: stri
     case "item":
       hits = await itemCandidates(ctx, null, code, id);
       break;
+    case "equipment":
+      hits = await equipmentCandidates(ctx, [id ? eq(equipment.id, id) : eq(equipment.code, code!)]);
+      break;
   }
   // A typed number may come without its dashes or in small letters (A-SCAN-TYPED-01): same letters and digits, one record only.
   if (!hits[0] && code && kind !== "item") {
@@ -247,6 +271,7 @@ export async function resolvePickRef(ctx: AuthContext, kind: PickKind, raw: stri
       if (kind === "lot") hits = await lotCandidates(ctx, [loose(inventoryLots.lotNumber)]);
       else if (kind === "container") hits = await containerCandidates(ctx, [loose(containers.containerNumber)]);
       else if (kind === "location") hits = await locationCandidates(ctx, [loose(locations.code)]);
+      else if (kind === "equipment") hits = await equipmentCandidates(ctx, [loose(equipment.code)]);
       else hits = await batchCandidates(ctx, [or(loose(batches.batchNumber), loose(batches.outputLotNumber))!]);
       if (hits.length > 1) hits = [];
     }

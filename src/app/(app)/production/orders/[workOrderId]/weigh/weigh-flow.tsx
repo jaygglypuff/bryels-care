@@ -464,24 +464,24 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
             </summary>
             <div className="grid gap-2 pt-1">
               {p.requiresScale && (
-                <label className="flex flex-col gap-1">
-                  Scale
-                  <Select
-                    value={scale}
-                    onChange={(e) => setScale(e.target.value)}
-                    className="min-h-[48px]"
-                  >
-                    {p.scales.map((s) => (
-                      <option key={s.id} value={s.code} disabled={!s.usable}>
-                        {s.code} · {s.name}
-                        {s.calibrationDueDate
-                          ? ` · check due ${fmtDate(s.calibrationDueDate)}`
-                          : ""}
-                        {!s.usable ? " · cannot be used" : ""}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
+                <ScanOrPick
+                  kind="equipment"
+                  id={`weigh-scale-${card.batchMaterialId}`}
+                  label="Scale"
+                  submit="code"
+                  onlyCandidates
+                  candidatesLabel="Scales at this site"
+                  value={scale || null}
+                  onChange={(v) => setScale(v ?? "")}
+                  candidates={p.scales.map((s) => ({
+                    value: s.id,
+                    title: s.name,
+                    detail: `${s.code}${s.calibrationDueDate ? ` · check due ${fmtDate(s.calibrationDueDate)}` : ""}`,
+                    code: s.code,
+                    codes: [s.code],
+                    disabledReason: s.usable ? undefined : "cannot be used",
+                  }))}
+                />
               )}
               <Link
                 href={`${p.moreHref}&line=${card.batchMaterialId}`}

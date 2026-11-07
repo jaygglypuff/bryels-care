@@ -173,7 +173,7 @@ export function WeighCapture({ siteId, data, queue, onQueued }: { siteId: string
             <ScanOrPick
               mode="emit"
               kind="lot"
-              alsoAccept={["location"]}
+              alsoAccept={["location", "equipment"]}
               id="ow-lot-pick"
               label="Which container are you weighing from?"
               hint="Scan its lot label, or type the lot number printed on it. Tapping the list does not count as a check."
@@ -209,16 +209,19 @@ export function WeighCapture({ siteId, data, queue, onQueued }: { siteId: string
               <Input id="ow-qty" value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal" autoComplete="off" />
             </Field>
             {batch?.weighing?.requiresEquipment && (
-              <Field label="Scale" htmlFor="ow-scale">
-                <Select id="ow-scale" value={scale} onChange={(e) => setScale(e.target.value)}>
-                  <option value="">Choose or scan…</option>
-                  {batch.scales.map((x) => (
-                    <option key={x.id} value={x.code}>
-                      {x.code} · {x.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+              <ScanOrPick
+                kind="equipment"
+                id="ow-scale"
+                label="Scale"
+                submit="code"
+                search={false}
+                onlyCandidates
+                listen={false}
+                candidatesLabel="Scales (as saved on this phone)"
+                value={scale || null}
+                onChange={(v) => setScale(v ?? "")}
+                candidates={batch.scales.map((x) => ({ value: x.id, title: x.name, detail: x.code, code: x.code, codes: [x.code] }))}
+              />
             )}
           </div>
           <label className="mt-2 flex min-h-[44px] items-center gap-2 text-[14px]">
