@@ -6,7 +6,7 @@ import type { ReferenceLot } from "@/lib/offline/protocol";
 import type { OutboxEntry } from "@/lib/offline/store";
 import { parseScan } from "@/lib/scan/payload";
 import { Button, Card, CardTitle, EmptyState, Field, Input, Select } from "@/ui/core";
-import { ScanOrPick } from "@/ui/scan-or-pick";
+import { ScanOrPick, type PickVia } from "@/ui/scan-or-pick";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import type { Ref } from "./workspace";
 
@@ -39,6 +39,8 @@ export function WeighCapture({ siteId, data, queue, onQueued }: { siteId: string
   const [batchId, setBatchId] = useState("");
   const [lineId, setLineId] = useState("");
   const [lotId, setLotId] = useState<string | null>(null);
+  /** How the lot was confirmed (scan or typed; a tap is not a check, ADR-120): dispense audit `lotConfirmed` (ADR-125). */
+  const [lotVia, setLotVia] = useState<PickVia | null>(null);
   const [locationId, setLocationId] = useState("");
   const [qty, setQty] = useState("");
   const [partial, setPartial] = useState(false);
@@ -80,7 +82,7 @@ export function WeighCapture({ siteId, data, queue, onQueued }: { siteId: string
     }
   }
 
-  function onScan(raw: string) {
+  function onScan(raw: string, via: PickVia) {
     setMsg(null);
     const p = parseScan(raw);
     if (p.kind === "invalid") return setMsg({ ok: false, text: "That is not a label of ours. Scan the container's lot label." });
@@ -93,12 +95,14 @@ export function WeighCapture({ siteId, data, queue, onQueued }: { siteId: string
     const found = data.lots.find((l) => l.lotNumber === p.value);
     if (!found) return setMsg({ ok: false, text: `Lot ${p.value} is not in this device's data for this site.` });
     setLotId(found.id);
+    setLotVia(via);
     setLocationId("");
   }
 
   async function save() {
     if (!batch || !line) return setMsg({ ok: false, text: "Choose the batch and the ingredient." });
     if (!lot) return setMsg({ ok: false, text: "Scan the lot." });
+    if (lotVia === "tap") return setMsg({ ok: false, text: "Tapping the list does not count as a check. Scan the label, or type the number printed on it." });
     if (problem) return setMsg({ ok: false, text: problem });
     if (!place) return setMsg({ ok: false, text: places.length ? "Choose the location you take it from." : `Lot ${lot.lotNumber} has no stock at this site (as of the offline data).` });
     if (!net || !check || check.tone !== "ok") return setMsg({ ok: false, text: check?.text ?? "Enter the weight." });
@@ -111,12 +115,13 @@ export function WeighCapture({ siteId, data, queue, onQueued }: { siteId: string
       await syncAgent().enqueue({
         type: "production.dispense_record.create",
         siteId,
-        payload: { batchId: batch.id, batchMaterialId: line.id, lotRef: `BC:LOT:${lot.lotNumber}`, locationRef: `BC:LOC:${locCode(place.locationId)}`, qty: net.toString(), uom: line.baseUom, equipmentRef: scale || null, partial },
+        payload: { batchId: batch.id, batchMaterialId: line.id, lotRef: `BC:LOT:${lot.lotNumber}`, lotVia: lotVia ?? "scan", locationRef: `BC:LOC:${locCode(place.locationId)}`, qty: net.toString(), uom: line.baseUom, equipmentRef: scale || null, partial },
         summary: `Weigh ${batch.batchNumber} · ${line.materialName} · ${net.toString()} ${line.baseUom} from ${lot.lotNumber}`,
       });
       setMsg({ ok: true, text: navigator.onLine ? "Saved. Sending now… The checker signs it online after it syncs." : "Saved on this device. It syncs when you are back online; the checker signs it then." });
       setQty("");
       setLotId(null);
+      setLotVia(null);
       setPartial(false);
       setLineId("");
       await onQueued();
@@ -168,16 +173,17 @@ export function WeighCapture({ siteId, data, queue, onQueued }: { siteId: string
             <ScanOrPick
               mode="emit"
               kind="lot"
-              alsoAccept={["location"]}
+              alsoAccept={["location", "equipment"]}
               id="ow-lot-pick"
               label="Which container are you weighing from?"
-              hint="Scan its lot label, or tap it in the list."
+              hint="Scan its lot label, or type the lot number printed on it. Tapping the list does not count as a check."
               candidates={data.lots
                 .filter((l) => !lotProblem(l, line.materialId, line.materialName, line.reservedLotIds, names) && l.balances.some((b) => new Decimal(b.qty).gt(0)))
                 .map((l) => ({ value: `BC:LOT:${l.lotNumber}`, title: l.itemName ?? l.lotNumber, detail: `lot ${l.lotNumber}${l.expiresOn ? ` · expires ${l.expiresOn}` : ""}`, code: l.lotNumber, codes: [l.lotNumber] }))}
               candidatesLabel="Lots set aside or OK for this ingredient (as saved on this phone)"
               onlyCandidates
-              onEmit={(v) => onScan(v)}
+              allowTap={false}
+              onEmit={(v, _c, via) => onScan(v, via)}
             />
           </div>
           {lot && (
@@ -203,16 +209,19 @@ export function WeighCapture({ siteId, data, queue, onQueued }: { siteId: string
               <Input id="ow-qty" value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal" autoComplete="off" />
             </Field>
             {batch?.weighing?.requiresEquipment && (
-              <Field label="Scale" htmlFor="ow-scale">
-                <Select id="ow-scale" value={scale} onChange={(e) => setScale(e.target.value)}>
-                  <option value="">Choose or scan…</option>
-                  {batch.scales.map((x) => (
-                    <option key={x.id} value={x.code}>
-                      {x.code} · {x.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+              <ScanOrPick
+                kind="equipment"
+                id="ow-scale"
+                label="Scale"
+                submit="code"
+                search={false}
+                onlyCandidates
+                listen={false}
+                candidatesLabel="Scales (as saved on this phone)"
+                value={scale || null}
+                onChange={(v) => setScale(v ?? "")}
+                candidates={batch.scales.map((x) => ({ value: x.id, title: x.name, detail: x.code, code: x.code, codes: [x.code] }))}
+              />
             )}
           </div>
           <label className="mt-2 flex min-h-[44px] items-center gap-2 text-[14px]">

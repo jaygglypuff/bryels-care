@@ -46,6 +46,10 @@ function PrioritySelect({ id, fe, defaultValue = "normal" }: { id: string; fe: R
 
 const eqLabel = (e: Eq) => `${e.name} · ${e.code} (${e.siteCode})`;
 
+/** Machines as ScanOrPick candidates (ADR-125): tap, scan the machine label or type its number (MIX-01, mix01). */
+const eqCandidates = (equipment: Eq[]) =>
+  equipment.map((e) => ({ value: e.id, title: e.name, detail: `${e.code} · ${e.siteCode}${e.status && e.status !== "in_service" ? ` · ${e.status.replace(/_/g, " ")}` : ""}`, code: e.code, codes: [e.code] }));
+
 function PeopleSelect({ id, name, people, label, defaultValue, fe }: { id: string; name: string; people: Person[]; label: string; defaultValue?: string | null; fe: Record<string, string> }) {
   return (
     <Field label={label} htmlFor={id} error={fe[name]}>
@@ -69,18 +73,9 @@ export function CreatePlanForm({ equipment, technicians, preselected, dueSoonDay
     <ActionForm action={createPlanAction} submit="Save" variant="cta">
       {(fe) => (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Which machine?" htmlFor="equipmentId" error={fe.equipmentId}>
-            <Select id="equipmentId" name="equipmentId" required value={eqId} onChange={(e) => setEqId(e.target.value)}>
-              <option value="" disabled>
-                Choose…
-              </option>
-              {equipment.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {eqLabel(e)}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <div className="sm:col-span-2">
+            <ScanOrPick kind="equipment" id="equipmentId" label="Which machine?" name="equipmentId" required onlyCandidates candidates={eqCandidates(equipment)} candidatesLabel="Machines" value={eqId || null} onChange={(v) => setEqId(v ?? "")} error={fe.equipmentId} />
+          </div>
           <Field label="What to do (short)" htmlFor="title" error={fe.title} hint="For example: clean and grease the mixer">
             <Input id="title" name="title" required maxLength={200} />
           </Field>
@@ -208,19 +203,9 @@ export function CreateWorkOrderForm({ equipment, technicians, preselected }: { e
     <ActionForm action={createWorkOrderAction} submit="Send to the technician" variant="cta">
       {(fe) => (
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Which machine?" htmlFor="w-equipmentId" error={fe.equipmentId}>
-            <Select id="w-equipmentId" name="equipmentId" required defaultValue={preselected ?? ""}>
-              <option value="" disabled>
-                Choose…
-              </option>
-              {equipment.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {eqLabel(e)}
-                  {e.status && e.status !== "in_service" ? ` (${e.status.replace(/_/g, " ")})` : ""}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          <div className="sm:col-span-2">
+            <ScanOrPick kind="equipment" id="w-equipmentId" label="Which machine?" name="equipmentId" required onlyCandidates candidates={eqCandidates(equipment)} candidatesLabel="Machines" defaultValue={preselected} error={fe.equipmentId} />
+          </div>
           <Field label="What is wrong?" htmlFor="w-title" error={fe.title} hint="For example: the mixer makes a loud noise">
             <Input id="w-title" name="title" required maxLength={200} />
           </Field>

@@ -14,7 +14,7 @@
  */
 import { normalizeScanInput, parseScan, type ScanType } from "./payload";
 
-export const PICK_KINDS = ["lot", "container", "location", "batch", "item"] as const;
+export const PICK_KINDS = ["lot", "container", "location", "batch", "item", "equipment"] as const;
 export type PickKind = (typeof PICK_KINDS)[number];
 
 /**
@@ -59,6 +59,7 @@ export const PICK_PAYLOAD_TYPES: Record<PickKind, ScanType[]> = {
   location: ["LOC"],
   batch: ["LOT"], // ADR-099: a product label on a bar carries BC:LOT:<the lot the batch will make>
   item: ["MAT", "SKU"],
+  equipment: ["EQP"], // ADR-125: machines and scales; the app prints no BC:EQP label yet (follow-up), the code is typed or tapped
 };
 
 /** The user's words for each kind (singular, plural). */
@@ -68,6 +69,7 @@ export const PICK_WORDS: Record<PickKind, { one: string; many: string; label: st
   location: { one: "shelf", many: "shelves", label: "shelf label", example: "A-01" },
   batch: { one: "batch", many: "batches", label: "batch sheet", example: "B-26-0003" },
   item: { one: "item", many: "items", label: "item label", example: "MAT-0001" },
+  equipment: { one: "machine", many: "machines", label: "machine label", example: "MIX-01" },
 };
 
 const TYPE_WORDS: Record<ScanType, string> = { LOT: "a lot label", BOX: "a box label", LOC: "a shelf label", MAT: "a material label", SKU: "a product label", EQP: "a machine label", DOC: "a document" };

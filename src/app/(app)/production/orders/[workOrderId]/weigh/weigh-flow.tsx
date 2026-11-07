@@ -11,6 +11,7 @@ import { Keypad, KeypadField } from "@/ui/keypad";
 import { ScanOrPick, type PickVia } from "@/ui/scan-or-pick";
 import { Chip } from "@/ui/status";
 import { NextApprover } from "@/ui/next-approver";
+import { useClientKey } from "@/ui/use-client-key";
 import { EquipmentWhy } from "../equipment-why";
 import { checkerAfterSave, type NextActors } from "@/lib/next-actors-words";
 import {
@@ -464,24 +465,24 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
             </summary>
             <div className="grid gap-2 pt-1">
               {p.requiresScale && (
-                <label className="flex flex-col gap-1">
-                  Scale
-                  <Select
-                    value={scale}
-                    onChange={(e) => setScale(e.target.value)}
-                    className="min-h-[48px]"
-                  >
-                    {p.scales.map((s) => (
-                      <option key={s.id} value={s.code} disabled={!s.usable}>
-                        {s.code} · {s.name}
-                        {s.calibrationDueDate
-                          ? ` · check due ${fmtDate(s.calibrationDueDate)}`
-                          : ""}
-                        {!s.usable ? " · cannot be used" : ""}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
+                <ScanOrPick
+                  kind="equipment"
+                  id={`weigh-scale-${card.batchMaterialId}`}
+                  label="Scale"
+                  submit="code"
+                  onlyCandidates
+                  candidatesLabel="Scales at this site"
+                  value={scale || null}
+                  onChange={(v) => setScale(v ?? "")}
+                  candidates={p.scales.map((s) => ({
+                    value: s.id,
+                    title: s.name,
+                    detail: `${s.code}${s.calibrationDueDate ? ` · check due ${fmtDate(s.calibrationDueDate)}` : ""}`,
+                    code: s.code,
+                    codes: [s.code],
+                    disabledReason: s.usable ? undefined : "cannot be used",
+                  }))}
+                />
               )}
               <Link
                 href={`${p.moreHref}&line=${card.batchMaterialId}`}
@@ -740,14 +741,13 @@ function WaitingForQa({ batchId, card }: { batchId: string; card: Card }) {
   );
 }
 
-const formKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now()));
-
 /** ADR-104 §1b: another ingredient — the recipe's approved alternative, or ask QA (never decided on the floor alone). */
 function OtherIngredient({ batchId, card, substitutes }: { batchId: string; card: Card; substitutes: { id: string; name: string; baseUom: string }[] }) {
   const [altState, altAction] = useInPlaceAction(takeAlternativeAction);
   const [askState, askAction] = useInPlaceAction(askOtherMaterialAction);
   const [open, setOpen] = useState(false);
-  const [key] = useState(formKey);
+  // Made after hydration: a key made during render differed between the server HTML and the browser (ADR-125).
+  const key = useClientKey();
   if (!card.alternatives.length && !card.canAskOther && !card.refusedByQa) return null;
   const fe = askState?.fieldErrors ?? {};
   return (
@@ -767,7 +767,7 @@ function OtherIngredient({ batchId, card, substitutes }: { batchId: string; card
               <input type="hidden" name="batchId" value={batchId} />
               <input type="hidden" name="batchMaterialId" value={card.batchMaterialId} />
               <input type="hidden" name="alternativeId" value={a.id} />
-              <input type="hidden" name="idempotencyKey" value={`${key}-${a.id}`} />
+              {key && <input type="hidden" name="idempotencyKey" value={`${key}-${a.id}`} />}
               <SubmitButton variant="secondary" size="lg" pendingText="Changing…" className="w-full justify-start">
                 Use the approved alternative: {a.materialName} ({fmtQty(a.qty, a.baseUom, 1)})
               </SubmitButton>
@@ -785,7 +785,7 @@ function OtherIngredient({ batchId, card, substitutes }: { batchId: string; card
         <form action={askAction} className="mt-2 grid gap-2" data-testid="ask-other-form">
           <input type="hidden" name="batchId" value={batchId} />
           <input type="hidden" name="batchMaterialId" value={card.batchMaterialId} />
-          <input type="hidden" name="idempotencyKey" value={`${key}-ask`} />
+          {key && <input type="hidden" name="idempotencyKey" value={`${key}-ask`} />}
           <p className="text-[14px] text-fg-2">QA must say yes first. It is for this batch only.</p>
           <label className="grid gap-1 text-[15px]">
             What do you want to use?

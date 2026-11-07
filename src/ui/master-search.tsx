@@ -6,6 +6,7 @@ import {
   Banknote, Box, Boxes, Clock, Cog, FileText, FlaskConical, Factory, LayoutGrid, MapPin, Package, Search, ShieldCheck, ShoppingCart, Truck, UserRound, Wrench, X, ScanLine, Building2, Layers,
 } from "lucide-react";
 import type { MasterSearchResponse } from "@/app/(app)/search-actions";
+import { scanCodeHref } from "@/lib/scan/scan-href";
 import type { HitIcon } from "@/modules/scan";
 import { cx } from "./core";
 
@@ -177,7 +178,7 @@ export function MasterSearchPanel({
     if (onLabel) onLabel(raw);
     else {
       onClose?.();
-      router.push(`/inventory/scan?code=${encodeURIComponent(raw)}`);
+      router.push(scanCodeHref(raw, Date.now())); // a new request each time: the same label shows its card again (ADR-125)
     }
   };
 

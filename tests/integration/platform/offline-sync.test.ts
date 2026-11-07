@@ -390,6 +390,80 @@ describe("offline counting and weighing (US-7-04)", () => {
   });
 });
 
+describe("offline captures record how the code was entered (A-SCAN-TYPED-01, ADR-125)", () => {
+  it("a count replay keeps lotVia (scan, typed, tap) in the count audit like the online path; a resend posts once", async () => {
+    const l = await loc(kit.nfd.id, "A-02");
+    const lots = await Promise.all([1, 2, 3].map(() => makeLot(manager.ctx, kit.nfd.id, l.id, "4", { materialCode: "MAT-0061" })));
+    const { countId, location } = await openCount("A-02", [warehouse.ctx.userId]);
+    const vias = ["scan", "typed", "tap"] as const;
+    const cmds = vias.map((via, i) => command(warehouse, "inventory.stock_count.record", { countId, locationId: location.id, lotId: lots[i].id, qty: "4", lotVia: via }));
+    const d = await ok(warehouse, cmds, deviceA);
+    expect(d.results.map((r) => r.status)).toEqual(["applied", "applied", "applied"]);
+    // Lost response: the same commands (same ids and keys) again are answered from the stored results.
+    const again = await ok(warehouse, cmds, deviceA);
+    expect(again.results.map((r) => r.status)).toEqual(["applied", "applied", "applied"]);
+    const entries = await db.select().from(stockCountEntries).where(inArray(stockCountEntries.idempotencyKey, cmds.map((c) => c.idempotencyKey)));
+    expect(entries).toHaveLength(3);
+    const ev = await db.select().from(auditEvents).where(and(eq(auditEvents.action, "inventory.stock_count.line_counted"), eq(auditEvents.actorId, warehouse.ctx.userId)));
+    const forCount = ev.filter((e) => entries.some((x) => x.stockCountLineId === (e.after as { lineId?: string } | null)?.lineId));
+    expect(forCount.map((e) => (e.after as { lotVia: string }).lotVia).sort()).toEqual(["scan", "tap", "typed"]);
+    await cancelCount(manager.ctx, countId, "Test finished");
+  });
+
+  it("an older queued count without lotVia still replays (recorded as null)", async () => {
+    const l = await loc(kit.nfd.id, "PKG-01");
+    const lot = await makeLot(manager.ctx, kit.nfd.id, l.id, "2", { materialCode: "MAT-0061" });
+    const { countId, location } = await openCount("PKG-01", [warehouse.ctx.userId]);
+    const c = command(warehouse, "inventory.stock_count.record", { countId, locationId: location.id, lotId: lot.id, qty: "2" });
+    expect((await ok(warehouse, [c], deviceA)).results[0].status).toBe("applied");
+    // An unknown via value is refused by the payload schema.
+    const bad = command(warehouse, "inventory.stock_count.record", { countId, locationId: location.id, lotId: lot.id, qty: "2", lotVia: "guess" });
+    expect((await ok(warehouse, [bad], deviceA)).results[0].status).toBe("rejected");
+    await cancelCount(manager.ctx, countId, "Test finished");
+  });
+
+  it("a weighing replay records lotConfirmed scan/typed and refuses a tap (checkEntryMode), nothing consumed", async () => {
+    await allowDirectBatches(kit);
+    const opDevice = await registerDevice(operator, manager, ["dispensing"]);
+    const { batchId } = await createBatch(manager.ctx, { formulaRevisionId: await acapulcoRevisionId(), plannedSizeKg: "17.6", plannedStartOn: manilaDay(0) });
+    await startBatch(operator.ctx, batchId);
+    await cleanEquipment(operator.ctx, "SC-01");
+    const [b] = await db.select().from(batches).where(eq(batches.id, batchId));
+    await signChecklist(operator.ctx, checker.ctx, batchId, [...snapshotOf(b).steps].sort((x, y) => x.stepNo - y.stepNo)[0]);
+    const lines = await db.select().from(batchMaterials).where(eq(batchMaterials.batchId, batchId)).orderBy(batchMaterials.lineNo);
+    const coconut = lines[0];
+    const lotNo = (await lotBySupplierLot("LOS-24871")).lotNumber;
+    const before = await db.select({ n: count() }).from(stockMovements);
+
+    const tap = command(operator, "production.dispense_record.create", { batchId, batchMaterialId: coconut.id, lotRef: `BC:LOT:${lotNo}`, lotVia: "tap", qty: "3723.2", equipmentRef: "SC-01" });
+    const d1 = await ok(operator, [tap], opDevice.key);
+    expect(d1.results[0], JSON.stringify(d1.results[0])).toMatchObject({ status: "rejected", reasonCode: "validation_failed" });
+    expect(d1.results[0].errorMessage).toMatch(/Tapping the list does not count/);
+    const [tapRow] = await db.select().from(syncCommands).where(eq(syncCommands.id, tap.id));
+    expect(tapRow.idempotencyKey).toBe(tap.idempotencyKey);
+    expect(await db.select().from(dispenseRecords).where(eq(dispenseRecords.batchMaterialId, coconut.id))).toHaveLength(0);
+    expect((await db.select({ n: count() }).from(stockMovements))[0].n).toBe(before[0].n);
+
+    const typed = command(operator, "production.dispense_record.create", { batchId, batchMaterialId: coconut.id, lotRef: `BC:LOT:${lotNo}`, lotVia: "typed", qty: "3723.2", equipmentRef: "SC-01" });
+    const d2 = await ok(operator, [typed], opDevice.key);
+    expect(d2.results[0], JSON.stringify(d2.results[0])).toMatchObject({ status: "applied" });
+    expect((await ok(operator, [typed], opDevice.key)).results[0].status).toBe("applied");
+    const recs = await db.select().from(dispenseRecords).where(eq(dispenseRecords.batchMaterialId, coconut.id));
+    expect(recs).toHaveLength(1);
+    const [ev] = await db.select().from(auditEvents).where(and(eq(auditEvents.action, "production.dispense_record.recorded"), eq(auditEvents.entityId, recs[0].id)));
+    expect((ev.after as { lotConfirmed: string }).lotConfirmed).toBe("typed");
+
+    const palm = lines[1];
+    const palmLot = (await lotBySupplierLot("MPC-7731")).lotNumber;
+    const scan = command(operator, "production.dispense_record.create", { batchId, batchMaterialId: palm.id, lotRef: `BC:LOT:${palmLot}`, lotVia: "scan", qty: palm.theoreticalQtyG, equipmentRef: "SC-01" });
+    const d3 = await ok(operator, [scan], opDevice.key);
+    expect(d3.results[0], JSON.stringify(d3.results[0])).toMatchObject({ status: "applied" });
+    const [pr] = await db.select().from(dispenseRecords).where(eq(dispenseRecords.batchMaterialId, palm.id));
+    const [ev2] = await db.select().from(auditEvents).where(and(eq(auditEvents.action, "production.dispense_record.recorded"), eq(auditEvents.entityId, pr.id)));
+    expect((ev2.after as { lotConfirmed: string }).lotConfirmed).toBe("scan");
+  });
+});
+
 describe("conflict review queue (US-7-05)", () => {
   async function parkedMove(qty = "100000") {
     const a01 = await loc(kit.nfd.id, "A-01");

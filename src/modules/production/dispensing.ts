@@ -7,6 +7,7 @@ import { batchMaterials, dispenseRecords, inventoryBalances, inventoryLots, loca
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
+import { checkEntryMode } from "@/lib/scan/code-sql";
 import type { PickVia } from "@/lib/scan/pick";
 import { getSetting } from "@/lib/settings";
 import { assertLotUsable } from "@/modules/inventory/ledger";
@@ -77,6 +78,12 @@ export type DispenseInput = {
   lotConfirm?: string | null;
   /** How `lotConfirm` was given (A-SCAN-TYPED-01): "scan", "typed" (the lot number on the label, full or last 4) or "tap" (refused). */
   lotConfirmVia?: PickVia | null;
+  /**
+   * How `lotRef` itself was given when the lot is not preselected (offline weighing, ADR-125): "scan" or "typed" is
+   * recorded as the lot confirmation; "tap" is refused (`checkEntryMode`: a tap is not a check). Absent = older
+   * callers, recorded "typed_lot" as before.
+   */
+  lotVia?: PickVia | null;
   /** ADR-106 §3: one-tap reason for weighing from a lot that was not taken at Get materials (and a note for "other"). */
   offPlanReasonCode?: string | null;
   offPlanNote?: string | null;
@@ -166,6 +173,8 @@ async function resolveSourceLocation(q: DbOrTx, ctx: AuthContext, siteId: string
  */
 export async function recordDispense(ctx: AuthContext, input: DispenseInput, signers: { checker?: AuthContext | null; exceptionApprover?: AuthContext | null } = {}) {
   ctx.require("production.dispense_record.create");
+  // A-SCAN-TYPED-01: a lot tapped in a list is not a lot confirmation (offline replay included, ADR-125).
+  if (!input.lotPreselected && input.lotVia) checkEntryMode(input.lotVia, "lotRef");
   return db.transaction(async (tx) => {
     const batch = await lockBatch(tx, ctx, input.batchId);
     const { result } = await idempotent(tx, ctx, input.idempotencyKey, "production.dispense_record.create", async () => {
@@ -245,7 +254,7 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
       }
       assertLotUsable(lot);
       const lotConfirmMode = await getSetting(tx, ctx.organizationId, "production.weighing.lot_confirm", batch.siteId);
-      const lotConfirmedBy = confirmLot(lotConfirmMode, !!input.lotPreselected, lot, input.lotConfirm, input.lotConfirmVia);
+      const lotConfirmedBy = !input.lotPreselected && input.lotVia ? checkEntryMode(input.lotVia, "lotRef") : confirmLot(lotConfirmMode, !!input.lotPreselected, lot, input.lotConfirm, input.lotConfirmVia);
       const loc = await resolveSourceLocation(tx, ctx, batch.siteId, lot.id, lot.lotNumber, input.locationRef);
       await assertLocationNotHeld(tx, loc);
       await assertStockCovers(tx, lot, loc, net);

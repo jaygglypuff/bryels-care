@@ -399,8 +399,9 @@ async function doStep(op, chk) {
     await allOk.click();
   } else {
     const eq = op.getByTestId('step-equipment');
-    if ((await eq.count()) && (await eq.locator('input[name=equipmentRef]:not([disabled])').count())) {
-      await eq.locator('input[name=equipmentRef]:not([disabled])').first().check();
+    // ADR-125: the equipment is a ScanOrPick field (tap, scan the machine label or type its number).
+    if ((await eq.count()) && (await eq.locator('button[data-testid=pick-option]:not([disabled])').count())) {
+      await eq.locator('button[data-testid=pick-option]:not([disabled])').first().click();
       await eq.getByRole('button', { name: 'Use this equipment' }).click();
       await eq.getByText(/^Using /).waitFor();
     }
