@@ -2419,3 +2419,44 @@ Consequences:
 - `docs/SCAN_INPUTS.md` has a new "Type the code" column.
 - New tests: `tests/unit/scan/typed-codes.test.ts` and `tests/integration/scan/typed-codes.test.ts`.
 - Risk: a checker could type the number from the pick list instead of the label (A-SCAN-TYPED-01).
+
+## ADR-121 Master search: one box for screens, record numbers and names (owner request 2026-11-08)
+
+Status: Accepted by the lead. The owner still needs to confirm A-SCAN-15: the synonym words, the common screens per role,
+and the round search button from 1280 px.
+
+Decision: there is one search. It opens from:
+- the top-bar box, at 1024–1279 px;
+- a round button, from 1280 px. This button also replaces the top-bar Scan button at those widths; "Scan a label" is in
+  the dialog instead;
+- Ctrl/⌘+K, or "/", on any screen.
+
+On phones the Scan button opens "Scan or search", which shows the same search above the scanner.
+
+What it finds:
+- Screens. These come from NAV, filtered by the person's permissions and roles, plus one synonym list
+  (`src/app/(app)/search-screens.ts`).
+- Records. These come from `masterSearch(ctx, q)` (`src/modules/scan/master-search.ts`), a registry of 47 numbered
+  record types.
+
+Access: each record type has its own view permission. It is checked per site with `canAt`; organisation records need
+the permission itself. A type the person cannot view is never queried, and every query is limited to their
+organisation.
+
+Matching:
+- Exact numbers match through the `(organization_id, number)` indexes. Migration 0040 adds the three that were missing.
+  Capitals and dashes do not matter: dashes are rebuilt from the numbering shapes.
+- Last digits use a pattern match, capped at 5 results per type and 30 in total.
+- Words search names.
+
+The search only reads, so it is not audited. Recent items stay in the browser.
+
+This extends ADR-085 and A-SCAN-02 (`searchEverything` is unchanged) and keeps ADR-098. It changes ADR-101's "Scan at
+every width" for 1024 px and wider.
+
+Tests: `tests/unit/search-screens.test.ts`, `tests/unit/scan/master-search-numbers.test.ts`,
+`tests/integration/scan/master-search.test.ts`.
+
+Known issues:
+- The owner's menu row at 1280 px is still 74 px too long; it was 110 px too long before this change.
+- The search has no rate limit. Input is capped at 80 characters and every query has a LIMIT.

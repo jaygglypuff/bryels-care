@@ -52,7 +52,12 @@ export const batches = pgTable(
     createdBy: uuid("created_by").notNull().references(() => users.id),
     createdAt: createdAt(),
   },
-  (t) => [index("batches_site_status_idx").on(t.siteId, t.status), index("batches_work_order_idx").on(t.workOrderId)],
+  (t) => [
+    index("batches_site_status_idx").on(t.siteId, t.status),
+    index("batches_work_order_idx").on(t.workOrderId),
+    // Master search (owner request 2026-11-08): a batch number typed in the search box is an index look-up.
+    index("batches_org_number_idx").on(t.organizationId, t.batchNumber),
+  ],
 );
 
 export const BATCH_BOX_STATUSES = ["planned", "boxed", "replaced"] as const;

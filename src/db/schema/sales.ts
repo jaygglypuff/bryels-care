@@ -77,6 +77,8 @@ export const salesOrders = pgTable(
   },
   (t) => [
     index("so_site_status_idx").on(t.siteId, t.status),
+    // Master search (owner request 2026-11-08): an order number typed in the search box is an index look-up.
+    index("so_org_number_idx").on(t.organizationId, t.orderNumber),
     check("so_source_ck", sql`${t.source} in ('internal','portal') and (${t.source} = 'portal') = (${t.portalUserId} is not null)`),
     index("so_customer_idx").on(t.customerId, t.status),
     check("so_status_ck", sql`${t.status} in (${inList(SALES_ORDER_STATUSES)})`),
