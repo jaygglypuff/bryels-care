@@ -423,6 +423,16 @@ destination): the owner's menu row was 74 px too long at 1280 px and now has 38 
 button stay visible, no page scrolls sideways, and every tab row is one line at 1280, 1366, 1440, 1536 and 1920 px
 for owner, manager, finance, sales, QA, warehouse (one and two sites) and operator.
 
+**Organisation settings for the top bar (ADR-126).** Settings › How screens look and › Scan and search:
+
+| Setting | Default (recommended, today) | Other choice |
+|---|---|---|
+| `ui.wide_screen_top_bar` | `search`: from 1024 px the search (box at 1024–1279 px, round button from 1280 px); "Scan a label" is inside the search window | `scan`: the Scan button stays at every width; at 1024–1279 px a small round search button sits beside it; from 1280 px the Scan button is a round icon in the search button's place (both do not fit beside the owner's menu row). Ctrl/⌘K and "/" open the search either way. `tests/e2e/top-bar-fit.cjs` accepts the Scan button in the search button's place |
+| `scan.search_open_to_everyone` | on: everyone may search; Scan or search is open to all | off: the search, the Scan or search screen and the top-bar Scan button need `inventory.lot.view` (server-enforced in `masterSearch`, the search action and the page) |
+
+**The logo stays the mark at 1280–1535 px; no setting (ADR-126).** The full logo cut the owner's menu row by 74 px, so
+an option to show it is not offered.
+
 ### 3.3 Tablet (768 to 1023 px)
 
 Icon rail 72 px with group icons and tooltips; tap expands to the full 240 px nav as an
@@ -614,7 +624,8 @@ to the input, hint 12 px) and `MoreDetails` for everything not needed on most da
 - **One green button per page.** A next step that jumps to a form further down the same page (`href="#…"`) is an
   outlined button with a down arrow (`NextStep` does this by itself); the form's own button is the green one. Setup
   pages fold their edit form in `EditDetails` ("Change the details", closed) so the next step keeps the green
-  button; other controls that the next step does not point at are outlined.
+  button; other controls that the next step does not point at are outlined. Setting `ui.setup_edit_forms_folded`
+  (ADR-126, default on) — off shows the form open on the material, product, supplier, site and shelf/area pages.
 
 ### Rules: 5.8 Forms and fields
 

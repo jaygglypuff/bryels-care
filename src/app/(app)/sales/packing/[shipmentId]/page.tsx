@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime, fmtQty } from "@/lib/qty";
+import { screenPreferences } from "@/modules/governance";
 import { getPackingView } from "@/modules/sales";
 import { Card, CardTitle, EmptyState, Field, Input, LinkButton, Select } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
@@ -34,6 +35,7 @@ const qWords = (v: string, uom = "pcs") => (uom === "pcs" ? plural(fmtQty(v, "",
  */
 export default async function PackingPage({ params }: { params: Promise<{ shipmentId: string }> }) {
   const ctx = await requireContext();
+  const { typedChecks } = await screenPreferences(ctx); // ADR-126: typing the label number may be turned off for checks
   if (!ctx.can("sales.shipment.view")) return <Forbidden what="shipments" permission="sales.shipment.view" />;
   const { shipmentId } = await params;
   let v: Awaited<ReturnType<typeof getPackingView>>;
@@ -145,11 +147,12 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
 
         {checking && unverified.length > 0 && (
           <Card>
-            <CardTitle>Scan or type the box label</CardTitle>
+            <CardTitle>{typedChecks ? "Scan or type the box label" : "Scan the box label"}</CardTitle>
             <ScanPanel
               scan={verifyScanAction.bind(null, s.id)}
-              label="Scan each box label, or type the number printed on it"
-              hint="For loose pieces, scan or type the lot label, then say how many. A box that is not on the order, or more than ordered, is refused and not added."
+              allowTyping={typedChecks}
+              label={typedChecks ? "Scan each box label, or type the number printed on it" : "Scan each box label"}
+              hint={`For loose pieces, scan the lot label${typedChecks ? " (or type it)" : ""}, then say how many. A box that is not on the order, or more than ordered, is refused and not added.`}
               withQty
               candidates={unverified.map((p) => ({ value: p.boxNumber ? `BC:BOX:${p.boxNumber}` : `BC:LOT:${p.lotNumber}`, title: p.boxNumber ? `Box ${p.boxNumber}` : `Loose pieces`, code: p.boxNumber ?? p.lotNumber, codes: [p.boxNumber ?? p.lotNumber] }))}
               showCandidates={false}

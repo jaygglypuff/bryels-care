@@ -15,6 +15,8 @@ export const metadata = { title: "Settings" };
 export const dynamic = "force-dynamic";
 
 const show = (v: unknown) => (v === null || v === undefined ? "the starting value" : typeof v === "boolean" ? (v ? "On" : "Off") : typeof v === "string" ? v : typeof v === "number" ? v.toLocaleString("en-PH") : JSON.stringify(v));
+/** ADR-126: a choice setting shows its value in words ("Search (recommended)"), never the stored code. */
+const choiceWord = (def: { choices?: readonly { value: string; label: string }[] }, v: unknown) => def.choices?.find((c) => c.value === v)?.label ?? show(v);
 function kindOf(v: unknown): ValueKind {
   return typeof v === "number" ? "number" : typeof v === "boolean" ? "boolean" : typeof v === "string" ? "string" : "json";
 }
@@ -38,6 +40,7 @@ const GROUP_TEXT: Record<string, string> = {
   "Action centre": "Problems and alerts",
   Inventory: "Stock",
   Production: "Making products",
+  Screens: "How screens look",
 };
 const groupText = (g: string) => GROUP_TEXT[g] ?? g;
 const slug = (g: string) => g.toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -122,13 +125,15 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <li key={r.key} className="py-3" data-testid={`setting-${r.key}`}>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[15px] font-medium">{r.def.label}</span>
-                    {r.def.restricted && <Chip tone="warn">Needs the owner&apos;s OK</Chip>}
+                    {/* ADR-126: say who really decides: owner-only keys need the owner; other restricted keys need the password. */}
+                    {r.def.ownerOnly ? <Chip tone="warn">Only the owner can OK changes</Chip> : r.def.restricted && <Chip tone="warn">Needs your password</Chip>}
                     {r.def.requiresApproval && <Chip tone="appr">A second person must OK changes</Chip>}
                     {r.pending > 0 && <Chip tone="info">{r.pending} waiting</Chip>}
                     {r.invalidStored && <Chip tone="bad">Saved value is wrong · starting value used</Chip>}
                   </div>
                   <p className="mt-1 text-[14px] text-fg-2">{sentence(r.def.description, r.organizationValue)}</p>
-                  {r.def.description && kindOf(r.def.default) !== "json" && <p className="text-[13px] text-muted">Now: {show(r.organizationValue)}{!r.organizationStored ? " (starting value)" : ""}</p>}
+                  {r.def.whoChanges && <p className="text-[13px] text-fg-2" data-testid="setting-who">Who should change it: {r.def.whoChanges}</p>}
+                  {r.def.description && kindOf(r.def.default) !== "json" && <p className="text-[13px] text-muted">Now: {choiceWord(r.def, r.organizationValue)}{!r.organizationStored ? " (starting value)" : ""}</p>}
                   {r.siteValues.map((s) => (
                     <p key={s.siteId} className="break-words text-[13px] text-muted">
                       Only at {s.siteCode}: {show(s.value)}
@@ -144,6 +149,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                           current={kindOf(r.def.default) === "json" ? JSON.stringify(r.organizationValue) : String(r.organizationValue)}
                           sites={r.def.scopes.includes("site") ? ctx.allowedSites.map((s) => ({ id: s.id, code: s.code })) : []}
                           requiresApproval={!!r.def.requiresApproval}
+                          choices={r.def.choices ? [...r.def.choices] : undefined}
                         />
                       </details>
                     )}

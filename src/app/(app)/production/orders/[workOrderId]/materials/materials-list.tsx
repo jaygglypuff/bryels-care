@@ -41,6 +41,7 @@ export function MaterialsList({
   lines,
   canTick,
   scanLots,
+  typedChecks = true,
   moveStock,
   allDone,
   notDoneWord = "Not yet",
@@ -49,6 +50,8 @@ export function MaterialsList({
   lines: Line[];
   canTick: boolean;
   scanLots: boolean;
+  /** ADR-126: the lot check takes typing (setting `scan.typed_code_counts_as_check`). */
+  typedChecks?: boolean;
   moveStock: boolean;
   allDone: boolean;
   /** "Not ticked" once the batch is past this list (re-audit N1): nothing left to do, so never "Not yet". */
@@ -84,6 +87,7 @@ export function MaterialsList({
                   line={l}
                   canTick={canTick}
                   scanLots={scanLots}
+                  typedChecks={typedChecks}
                   notDoneWord={notDoneWord}
                 />
               ))}
@@ -108,12 +112,14 @@ function PickRow({
   line,
   canTick,
   scanLots,
+  typedChecks,
   notDoneWord,
 }: {
   batchId: string;
   line: Line;
   canTick: boolean;
   scanLots: boolean;
+  typedChecks: boolean;
   notDoneWord: string;
 }) {
   const [state, action] = useInPlaceAction(pickAction);
@@ -249,6 +255,7 @@ function PickRow({
               batchId={batchId}
               line={line}
               scanLots={scanLots}
+              typedChecks={typedChecks}
               error={fe.lotCode ?? fe[`lot-${line.id}`]}
             />
           )}
@@ -263,11 +270,13 @@ function MoreDetails({
   batchId,
   line,
   scanLots,
+  typedChecks,
   error,
 }: {
   batchId: string;
   line: Line;
   scanLots: boolean;
+  typedChecks: boolean;
   error?: string;
 }) {
   const [state, action] = useInPlaceAction(pickAction);
@@ -286,8 +295,9 @@ function MoreDetails({
               name="lotCode"
               viaName="lotVia"
               submit="code"
-              label="Scan the lot label, or type its number"
-              hint="Camera, handheld scanner, or the lot number printed on the label."
+              label={typedChecks ? "Scan the lot label, or type its number" : "Scan the lot label"}
+              hint={typedChecks ? "Camera, handheld scanner, or the lot number printed on the label." : "Camera or handheld scanner."}
+              allowTyping={typedChecks}
               notListed="That is not the lot to take. Check the label and type it again."
               candidatesLabel="Lot to take"
               candidates={line.lots.map((l) => ({ value: l.lotNumber, title: line.name, detail: `lot ${l.lotNumber} · ${l.place}`, code: l.lotNumber, codes: [l.lotNumber] }))}

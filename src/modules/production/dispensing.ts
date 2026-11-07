@@ -7,7 +7,8 @@ import { batchMaterials, dispenseRecords, inventoryBalances, inventoryLots, loca
 import type { AuthContext } from "@/lib/auth/context";
 import { audit } from "@/lib/audit";
 import { DomainError } from "@/lib/errors";
-import { checkEntryMode } from "@/lib/scan/code-sql";
+import { checkEntryMode, TYPING_IS_OFF } from "@/lib/scan/code-sql";
+import { typedChecksAllowed } from "@/lib/scan/typed-check";
 import type { PickVia } from "@/lib/scan/pick";
 import { getSetting } from "@/lib/settings";
 import { assertLotUsable } from "@/modules/inventory/ledger";
@@ -96,7 +97,7 @@ const alnum = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, "");
  * Lot confirmation at weighing (ADR-080 §3, UX review B5). Returns how the lot was confirmed for the
  * record. Mismatch → 409 blocked_lot with the expected lot ("This label says …. Use lot …").
  */
-export function confirmLot(mode: "last4" | "scan" | "none", preselected: boolean, lot: { lotNumber: string }, confirm: string | null | undefined, via?: PickVia | null): "typed_lot" | "last4" | "scan" | "typed" | "not_required" {
+export function confirmLot(mode: "last4" | "scan" | "none", preselected: boolean, lot: { lotNumber: string }, confirm: string | null | undefined, via?: PickVia | null, typedAllowed = true): "typed_lot" | "last4" | "scan" | "typed" | "not_required" {
   if (!preselected) return "typed_lot"; // the label itself was scanned or typed into the lot field
   if (mode === "none") return "not_required";
   const c = (confirm ?? "").trim();
@@ -105,7 +106,13 @@ export function confirmLot(mode: "last4" | "scan" | "none", preselected: boolean
   // the lot number printed on it (full, or its last 4). Tapping a lot in the list does not confirm it.
   if (via === "tap") throw new DomainError("validation", "Tapping the list does not confirm the lot. Scan the lot label, or type the lot number printed on it.", { ...field, fieldErrors: { lotConfirm: "Scan or type the lot number." } });
   if (!c) {
+    if (!typedAllowed) throw new DomainError("validation", `Scan the lot label on the container (lot ${lot.lotNumber}).`, { ...field, fieldErrors: { lotConfirm: "Scan the lot label." } });
     throw new DomainError("validation", mode === "scan" ? `Scan the lot label on the container, or type the lot number printed on it (lot ${lot.lotNumber}).` : `Type the last 4 characters of the lot number printed on the container label.`, { ...field, fieldErrors: { lotConfirm: mode === "scan" ? "Scan or type the lot number." : "Type the last 4." } });
+  }
+  // ADR-126: with `scan.typed_code_counts_as_check` off only a scan confirms the lot. A typed number is refused, and so
+  // is a bare "last 4" (it can only have been typed), whatever `production.weighing.lot_confirm` says.
+  if (!typedAllowed && (via === "typed" || (via !== "scan" && mode === "last4" && !/^BC:LOT:/i.test(c)))) {
+    throw new DomainError("validation", TYPING_IS_OFF, { ...field, code: "TYPED_NOT_A_CHECK", fieldErrors: { lotConfirm: "Scan the lot label." } });
   }
   if (via === "typed") {
     const typed = alnum(c.replace(/^BC:LOT:/i, ""));
@@ -254,7 +261,10 @@ export async function recordDispense(ctx: AuthContext, input: DispenseInput, sig
       }
       assertLotUsable(lot);
       const lotConfirmMode = await getSetting(tx, ctx.organizationId, "production.weighing.lot_confirm", batch.siteId);
-      const lotConfirmedBy = !input.lotPreselected && input.lotVia ? checkEntryMode(input.lotVia, "lotRef") : confirmLot(lotConfirmMode, !!input.lotPreselected, lot, input.lotConfirm, input.lotConfirmVia);
+      // ADR-126: a typed lot number counts only while `scan.typed_code_counts_as_check` is on (read inside the idempotent
+      // block, so a weighing already recorded still answers with its stored result).
+      const typedAllowed = await typedChecksAllowed(tx, ctx.organizationId);
+      const lotConfirmedBy = !input.lotPreselected && input.lotVia ? checkEntryMode(input.lotVia, "lotRef", typedAllowed) : confirmLot(lotConfirmMode, !!input.lotPreselected, lot, input.lotConfirm, input.lotConfirmVia, typedAllowed);
       const loc = await resolveSourceLocation(tx, ctx, batch.siteId, lot.id, lot.lotNumber, input.locationRef);
       await assertLocationNotHeld(tx, loc);
       await assertStockCovers(tx, lot, loc, net);

@@ -1,3 +1,4 @@
+import { screenPreferences } from "@/modules/governance";
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -15,6 +16,7 @@ export const metadata = { title: "Site" };
 
 export default async function SitePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string }> }) {
   const ctx = await requireContext();
+  const { setupFormsFolded } = await screenPreferences(ctx); // ADR-126: setting ui.setup_edit_forms_folded
   if (!ctx.can("masterdata.site.view")) return <Forbidden what="sites" permission="masterdata.site.view" />;
   const { id } = await params;
   const { saved } = await searchParams;
@@ -46,7 +48,7 @@ export default async function SitePage({ params, searchParams }: { params: Promi
         <NextStep text="This site is set up. Nothing to do now." />
       )}
       {/* ADR-123: the shared fold and titled sections (same form, same action). */}
-      <EditDetails title="Change the name or address">
+      <EditDetails open={!setupFormsFolded} title="Change the name or address">
         {canAdmin ? (
           <ActionForm action={saveSiteAction} submitLabel="Save" hidden={{ _id: site.id }}>
             <FormSection

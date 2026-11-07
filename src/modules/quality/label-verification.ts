@@ -9,6 +9,7 @@ import { DomainError } from "@/lib/errors";
 import { parseScan } from "@/lib/scan";
 import { cleanTyped, type PickVia } from "@/lib/scan/pick";
 import { checkEntryMode, findByCode } from "@/lib/scan/code-sql";
+import { typedChecksAllowed } from "@/lib/scan/typed-check";
 import { getSetting } from "@/lib/settings";
 import { assertUuid } from "./shared";
 
@@ -119,7 +120,7 @@ export async function verifyLabelScan(ctx: AuthContext, input: { locationId: str
   ctx.require("inventory.container.edit");
   ctx.require("inventory.label_job.view");
   // A-SCAN-TYPED-01: the label is read by scan or by typing its printed number (recorded as typed); a tap is refused.
-  const entryMode = checkEntryMode(input.via, "scan");
+  const entryMode = checkEntryMode(input.via, "scan", await typedChecksAllowed(db, ctx.organizationId));
   const loc = await zoneLocation(ctx, input.locationId);
   const parsed = parseScan(entryMode === "typed" ? cleanTyped(input.scan) : input.scan);
   if (parsed.kind === "invalid") throw new DomainError("validation", entryMode === "typed" ? "That is not a box or lot number. Type the number printed on the label." : "That is not a box or lot label. Scan the BC:BOX or BC:LOT code.", { field: "scan" });

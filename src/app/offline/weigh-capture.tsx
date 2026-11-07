@@ -103,6 +103,8 @@ export function WeighCapture({ siteId, data, queue, onQueued }: { siteId: string
     if (!batch || !line) return setMsg({ ok: false, text: "Choose the batch and the ingredient." });
     if (!lot) return setMsg({ ok: false, text: "Scan the lot." });
     if (lotVia === "tap") return setMsg({ ok: false, text: "Tapping the list does not count as a check. Scan the label, or type the number printed on it." });
+    // ADR-126: typing the lot number may be turned off in Settings (the server refuses it again on replay).
+    if (lotVia === "typed" && batch.weighing?.typedChecks === false) return setMsg({ ok: false, text: "This check needs the label scanned. Typing is turned off in Settings." });
     if (problem) return setMsg({ ok: false, text: problem });
     if (!place) return setMsg({ ok: false, text: places.length ? "Choose the location you take it from." : `Lot ${lot.lotNumber} has no stock at this site (as of the offline data).` });
     if (!net || !check || check.tone !== "ok") return setMsg({ ok: false, text: check?.text ?? "Enter the weight." });
@@ -176,7 +178,8 @@ export function WeighCapture({ siteId, data, queue, onQueued }: { siteId: string
               alsoAccept={["location", "equipment"]}
               id="ow-lot-pick"
               label="Which container are you weighing from?"
-              hint="Scan its lot label, or type the lot number printed on it. Tapping the list does not count as a check."
+              hint={batch?.weighing?.typedChecks === false ? "Scan its lot label. Tapping the list does not count as a check." : "Scan its lot label, or type the lot number printed on it. Tapping the list does not count as a check."}
+              allowTyping={batch?.weighing?.typedChecks !== false}
               candidates={data.lots
                 .filter((l) => !lotProblem(l, line.materialId, line.materialName, line.reservedLotIds, names) && l.balances.some((b) => new Decimal(b.qty).gt(0)))
                 .map((l) => ({ value: `BC:LOT:${l.lotNumber}`, title: l.itemName ?? l.lotNumber, detail: `lot ${l.lotNumber}${l.expiresOn ? ` · expires ${l.expiresOn}` : ""}`, code: l.lotNumber, codes: [l.lotNumber] }))}

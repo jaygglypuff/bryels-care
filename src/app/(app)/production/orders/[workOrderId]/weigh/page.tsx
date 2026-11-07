@@ -90,6 +90,7 @@ export default async function WeighPage({ params, searchParams }: { params: Prom
         canWeigh={v.canWeigh}
         block={wb ? { sentence: wb.sentence, href: blockHref, label: wb.button?.label ?? null } : null}
         lotConfirm={v.settings.lotConfirm}
+        typedChecks={v.settings.typedChecks}
         cards={v.cards}
         scales={v.scales}
         requiresScale={!!v.step?.requiresEquipment}

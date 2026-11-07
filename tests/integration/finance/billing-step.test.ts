@@ -5,16 +5,17 @@
  * record as To approve, owner override as in ADR-122); approved → finance saves it to the books; saved → get paid.
  * The same stages are the "How work flows" invoice counts. Scoped like the delivery: never another site's.
  */
-import { beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { invoices } from "@/db/schema";
+import { invoices, settings } from "@/db/schema";
+import { getSetting } from "@/lib/settings";
 import { getWorkFlowItems } from "@/modules/analytics";
 import { approveInvoice, billingStepOfOrder, billingStepOfShipment, issueInvoice, submitInvoice } from "@/modules/finance";
 import { billingStepWords } from "@/lib/billing-step-words";
 import { resetTestDatabase } from "../../support/db";
 import { expectCode } from "../../support/kit";
-import { PW, bundle, loadW4b, shipNfdOrder, stockUp, withPermissions, type W4b } from "../../support/w4b";
+import { PW, bundle, loadW4b, setOrgSetting, shipNfdOrder, stockUp, withPermissions, type W4b } from "../../support/w4b";
 
 let w: W4b;
 let shipmentId: string;
@@ -97,5 +98,38 @@ describe("the delivery's and the order's next step follow the invoice", () => {
     const nobody = withPermissions(w.warehouse, ["inventory.lot.view"], w.warehouse.roleCodes, [w.nfd]);
     await expectCode(billingStepOfShipment(nobody, shipmentId), "forbidden");
     await expectCode(billingStepOfOrder(nobody, orderId), "forbidden");
+  });
+});
+
+describe("ADR-126 setting sales.show_invoice_stage_without_invoice_access", () => {
+  const KEY = "sales.show_invoice_stage_without_invoice_access";
+  afterEach(async () => {
+    await db.delete(settings).where(and(eq(settings.organizationId, w.orgId), eq(settings.key, KEY)));
+  });
+
+  it("on (default): people without invoice access see the stage and the next step, without a link", async () => {
+    expect(await getSetting(db, w.orgId, KEY)).toBe(true);
+    const step = await billingStepOfShipment(w.warehouse, shipmentId);
+    expect(step?.stage).toBe("billed");
+    expect(step!.invoice).toBeNull();
+    expect(billingStepWords(step!).text).toMatch(/Billed\. Next: get paid/);
+  });
+
+  it("off: people without invoice access see only Delivered (no stage, no names); finance still sees everything", async () => {
+    await setOrgSetting(w.orgId, KEY, false);
+    const step = await billingStepOfShipment(w.warehouse, shipmentId);
+    expect(step).toEqual({ stage: "hidden", invoice: null, next: null });
+    expect(billingStepWords(step!)).toEqual({ text: "Delivered." });
+    const order = await billingStepOfOrder(w.warehouse, orderId);
+    expect(order).toMatchObject({ stage: "hidden", invoice: null, next: null });
+    expect(billingStepWords(order!, "Sent out to the customer.")).toEqual({ text: "Sent out to the customer." });
+    // Finance and sales (who hold finance.invoice.view) still see the stage and the invoice.
+    const f = await billingStepOfShipment(w.finance, shipmentId);
+    expect(f?.stage).toBe("billed");
+    expect(f!.invoice?.number).toMatch(/^INV-/);
+    expect((await billingStepOfOrder(w.sales, orderId))?.stage).toBe("billed");
+    // Scoping is unchanged: without delivery or invoice permission it is still refused.
+    const nobody = withPermissions(w.warehouse, ["inventory.lot.view"], w.warehouse.roleCodes, [w.nfd]);
+    await expectCode(billingStepOfShipment(nobody, shipmentId), "forbidden");
   });
 });

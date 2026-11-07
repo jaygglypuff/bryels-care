@@ -37,6 +37,7 @@ import { D, fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { parseScan } from "@/lib/scan/payload";
 import { cleanTyped, type PickVia } from "@/lib/scan/pick";
 import { checkEntryMode, findByCode } from "@/lib/scan/code-sql";
+import { typedChecksAllowed } from "@/lib/scan/typed-check";
 import { getSetting } from "@/lib/settings";
 import {
   addContent,
@@ -364,7 +365,7 @@ export async function verifyPackScan(ctx: AuthContext, packId: string, input: { 
   ctx.require("inventory.pack.approve");
   if (!input.idempotencyKey || input.idempotencyKey.length < 8) throw new DomainError("validation", "The scan is missing its key. Reload the page and try again.");
   // A-SCAN-TYPED-01: the boxing check reads each label, by scan or by typing its number; a tap is refused.
-  const entryMode = checkEntryMode(input.via);
+  const entryMode = checkEntryMode(input.via, "payload", await typedChecksAllowed(db, ctx.organizationId));
   const key = `pack_check:${input.idempotencyKey}`;
   const [replay] = await db.select({ r: packVerificationScans }).from(packVerificationScans).where(and(eq(packVerificationScans.organizationId, ctx.organizationId), eq(packVerificationScans.idempotencyKey, key))).limit(1);
   const p0 = await db.select().from(packs).where(and(eq(packs.id, isUuid(packId) ? packId : "00000000-0000-0000-0000-000000000000"), eq(packs.organizationId, ctx.organizationId))).limit(1);

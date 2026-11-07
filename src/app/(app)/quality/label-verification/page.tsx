@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
+import { screenPreferences } from "@/modules/governance";
 import { labelVerificationLocations, labelVerificationZone } from "@/modules/quality";
 import { Card, CardTitle, EmptyState, PageHeader, cx } from "@/ui/core";
 import { Banner, Chip } from "@/ui/status";
@@ -17,6 +18,7 @@ export default async function LabelVerificationPage({ searchParams }: { searchPa
   if (!ctx.can("inventory.label_job.view")) return <Forbidden what="label verification" permission="inventory.label_job.view" />;
   const { locationId } = await searchParams;
   const zones = await labelVerificationLocations(ctx);
+  const { typedChecks } = await screenPreferences(ctx); // ADR-126
   let zone: Awaited<ReturnType<typeof labelVerificationZone>> | null = null;
   if (locationId) {
     try {
@@ -62,7 +64,7 @@ export default async function LabelVerificationPage({ searchParams }: { searchPa
               <p className="mb-3 text-[13px] text-muted">
                 {zone.verified} of {zone.total} {zone.total === 1 ? "label" : "labels"} checked, {zone.remaining.length} still to scan.
               </p>
-              {zone.canScan ? <VerifyScanForm locationId={zone.location.id} expected={zone.remaining.map((i) => ({ value: `${i.kind === "box" ? "BC:BOX" : "BC:LOT"}:${i.number}`, title: i.kind === "box" ? `Box ${i.number}` : i.label, code: i.number, codes: [i.number] }))} /> : <Banner tone="info" title="You can look but not scan">Warehouse people scan the labels here.</Banner>}
+              {zone.canScan ? <VerifyScanForm locationId={zone.location.id} allowTyping={typedChecks} expected={zone.remaining.map((i) => ({ value: `${i.kind === "box" ? "BC:BOX" : "BC:LOT"}:${i.number}`, title: i.kind === "box" ? `Box ${i.number}` : i.label, code: i.number, codes: [i.number] }))} /> : <Banner tone="info" title="You can look but not scan">Warehouse people scan the labels here.</Banner>}
             </Card>
             <Card>
               <CardTitle>Still to scan ({zone.remaining.length})</CardTitle>

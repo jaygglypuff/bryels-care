@@ -1,3 +1,4 @@
+import { screenPreferences } from "@/modules/governance";
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -20,6 +21,7 @@ const VERB: Record<LocationStatus, string> = { active: "Turn on (in use)", block
 
 export default async function LocationPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
+  const { setupFormsFolded } = await screenPreferences(ctx); // ADR-126: setting ui.setup_edit_forms_folded
   if (!ctx.can("masterdata.location.view")) return <Forbidden what="locations" permission="masterdata.location.view" />;
   const { id } = await params;
   const { created } = await searchParams;
@@ -61,7 +63,7 @@ export default async function LocationPage({ params, searchParams }: { params: P
       </Card>
       {canEdit ? (
         // ADR-123: the shared fold and titled sections (same form, same action); the next step keeps the one green button.
-        <EditDetails title="Change this place">
+        <EditDetails open={!setupFormsFolded} title="Change this place">
           <ActionForm action={saveLocationAction} submitLabel="Save" hidden={{ _id: l.id }}>
             <FormSection
               title="Name and where it is"

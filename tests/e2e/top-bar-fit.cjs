@@ -11,7 +11,8 @@
  * shows):
  *   - the destinations row ("Modules") does not scroll: scrollWidth <= clientWidth, and every entry's box lies
  *     inside the row (nothing cut);
- *   - the site selector (people with more than one site) and the master search button are visible;
+ *   - the site selector (people with more than one site) and the master search button (or, with the setting
+ *     ui.wide_screen_top_bar = "scan", the Scan button in its place; ADR-126) are visible;
  *   - the page has no sideways scroll;
  *   - the destination's tab row is one line and ends inside the window.
  * Exits 1 when any check fails.
@@ -69,13 +70,14 @@ fs.mkdirSync(OUT, { recursive: true });
           const rowItems = row ? [...row.querySelectorAll(':scope > li')].filter((li) => li.getBoundingClientRect().width > 0) : [];
           const lines = new Set(rowItems.map((li) => { const b = li.getBoundingClientRect(); return Math.round((b.top + b.height / 2) / 12); })).size;
           const rowRight = rowItems.length ? Math.max(...rowItems.map((li) => li.getBoundingClientRect().right)) : 0;
-          return { over: ul.scrollWidth - ul.clientWidth, spare: Math.round(document.querySelector('nav[aria-label=Modules]').getBoundingClientRect().width - ul.scrollWidth), cut, site: shown('[data-testid=site-switch]'), search: shown('[data-testid=master-search-open]'), page: document.documentElement.scrollWidth - innerWidth, lines, rowOut: Math.round(rowRight - innerWidth) };
+          return { over: ul.scrollWidth - ul.clientWidth, spare: Math.round(document.querySelector('nav[aria-label=Modules]').getBoundingClientRect().width - ul.scrollWidth), cut, site: shown('[data-testid=site-switch]'), search: shown('[data-testid=master-search-open]'), scan: shown('[data-testid=top-bar-scan]'), page: document.documentElement.scrollWidth - innerWidth, lines, rowOut: Math.round(rowRight - innerWidth) };
         });
         const bad = [];
         if (m.over > 0) bad.push(`menu row ${m.over} px too long`);
         if (m.cut.length) bad.push(`cut: ${m.cut.join(', ')}`);
         if (m.site === 'hidden') bad.push('site selector hidden');
-        if (m.search !== 'ok') bad.push(`search button ${m.search}`);
+        // ADR-126: with ui.wide_screen_top_bar = "scan" the Scan button takes the search button's place from 1280 px.
+        if (m.search !== 'ok' && m.scan !== 'ok') bad.push(`search button ${m.search}, scan button ${m.scan}`);
         if (m.page > 0) bad.push(`page scrolls sideways ${m.page} px`);
         if (m.lines > 1) bad.push(`tab row has ${m.lines} lines`);
         if (m.rowOut > 0) bad.push(`tab row ends ${m.rowOut} px outside`);

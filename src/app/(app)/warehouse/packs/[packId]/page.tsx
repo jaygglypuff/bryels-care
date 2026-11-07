@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
+import { screenPreferences } from "@/modules/governance";
 import { getPack } from "@/modules/sales";
 import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
@@ -30,6 +31,7 @@ export default async function PackPage({ params, searchParams }: { params: Promi
   if (!ctx.can("inventory.pack.view")) return <Forbidden what="boxing" permission="inventory.pack.view" />;
   const { packId } = await params;
   const { done } = await searchParams;
+  const { typedChecks } = await screenPreferences(ctx); // ADR-126: typing the label number may be turned off for checks
   let v: Awaited<ReturnType<typeof getPack>>;
   try {
     v = await getPack(ctx, packId);
@@ -120,7 +122,7 @@ export default async function PackPage({ params, searchParams }: { params: Promi
           {checking && ctx.can("inventory.pack.approve") && !v.isPacker && (
             <Card id="check">
               <CardTitle>Checker: scan boxes · {v.checkedCount} of {v.required} ({p.verificationMode === "all" ? "every box" : "sample"})</CardTitle>
-              <ScanPanel scan={packCheckScanAction.bind(null, p.id)} label="Scan each box label, or type the number printed on it" hint="Compare the label with the box contents and the artwork version; tick the box below before checking a box whose label is wrong." labelCheck showCandidates={false} candidates={live.filter((b) => !b.checked).map((b) => ({ value: `BC:BOX:${b.number}`, title: `Box ${b.number}`, code: b.number, codes: [b.number] }))} />
+              <ScanPanel scan={packCheckScanAction.bind(null, p.id)} allowTyping={typedChecks} label={typedChecks ? "Scan each box label, or type the number printed on it" : "Scan each box label"} hint="Compare the label with the box contents and the artwork version; tick the box below before checking a box whose label is wrong." labelCheck showCandidates={false} candidates={live.filter((b) => !b.checked).map((b) => ({ value: `BC:BOX:${b.number}`, title: `Box ${b.number}`, code: b.number, codes: [b.number] }))} />
             </Card>
           )}
           {checking && v.isPacker && <Banner tone="info" title="Waiting for a checker">You packed these boxes, so someone else checks them.</Banner>}

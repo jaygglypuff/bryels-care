@@ -83,6 +83,7 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
           batchId={v.batch.id}
           canTick={v.canTick}
           scanLots={v.settings.scanLots}
+          typedChecks={v.settings.typedChecks}
           moveStock={v.settings.moveStock}
           allDone={v.progress.complete || v.ready}
           notDoneWord={summary.lineWord}

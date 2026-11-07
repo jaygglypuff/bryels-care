@@ -1,8 +1,8 @@
 ---
 key: start.everyday_basics
 title: Everyday basics: finding anything, codes, locations, deleting drafts, approvals and notifications
-version: 3
-updated_at: 2026-11-08
+version: 4
+updated_at: 2026-11-07
 sop: Training guide; not an SOP
 ---
 
@@ -21,6 +21,7 @@ Six things people ask about most. Each one says where to tap.
 5. With the box empty you see your recent searches, the records you opened lately (kept on this device only) and a few common screens for your job.
 6. You only see screens and records your role may open, at your sites. If something is missing, ask your manager for access.
 7. A label code (it starts with **BC:**) typed or scanned into the box opens what the label is on, like a scan.
+8. Your company can change two things in **Settings**: the top bar may show **Scan** instead of the search box (then press **Ctrl+K**, **⌘K** or **/** to search), and the search may be only for people who may see stock.
 
 ## Codes are given for you
 

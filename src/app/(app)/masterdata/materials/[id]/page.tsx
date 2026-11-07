@@ -1,3 +1,4 @@
+import { screenPreferences } from "@/modules/governance";
 import { db } from "@/db/client";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
@@ -23,6 +24,7 @@ const VERB: Record<MaterialStatus, string> = { draft: "Back to draft", active: "
 
 export default async function MaterialPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
   const ctx = await requireContext();
+  const { setupFormsFolded } = await screenPreferences(ctx); // ADR-126: setting ui.setup_edit_forms_folded
   if (!ctx.can("masterdata.material.view")) return <Forbidden what="materials" permission="masterdata.material.view" />;
   const { id } = await params;
   const { created } = await searchParams;
@@ -70,7 +72,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
       ))}
       {canEdit ? (
         // ADR-123: the form is folded so the next step keeps the one green button; same form, same action.
-        <EditDetails>
+        <EditDetails open={!setupFormsFolded}>
           <ActionForm action={saveMaterialAction} submitLabel="Save" hidden={{ _id: m.id }}>
             <MaterialFields options={{ ...options, kindDefaults: MATERIAL_KIND_DEFAULTS }} d={m} locked={m.inUse} />
           </ActionForm>

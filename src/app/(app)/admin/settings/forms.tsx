@@ -8,7 +8,7 @@ import { approveSettingChangeAction, cancelSettingChangeAction, changeSettingAct
 export type ValueKind = "number" | "boolean" | "string" | "json";
 
 /** Change one setting (organization or one of the user's sites). Restricted: password required. */
-export function SettingForm({ settingKey, kind, current, sites, requiresApproval }: { settingKey: string; kind: ValueKind; current: string; sites: { id: string; code: string }[]; requiresApproval: boolean }) {
+export function SettingForm({ settingKey, kind, current, sites, requiresApproval, choices }: { settingKey: string; kind: ValueKind; current: string; sites: { id: string; code: string }[]; requiresApproval: boolean; /** ADR-126: a choice setting's values in words (a list instead of a text box). */ choices?: { value: string; label: string }[] }) {
   const [state, action] = useActionState<ActionState, FormData>(changeSettingAction, null);
   const fe = state?.fieldErrors ?? {};
   const id = (k: string) => `${settingKey}-${k}`;
@@ -28,7 +28,13 @@ export function SettingForm({ settingKey, kind, current, sites, requiresApproval
           </Field>
         )}
         <Field label="New value" htmlFor={id("value")} error={fe.value} hint={kind === "json" ? "Technical format (JSON), same shape as now. Ask the IT person if unsure." : undefined}>
-          {kind === "boolean" ? (
+          {choices && choices.length > 0 ? (
+            <Select id={id("value")} name="value" defaultValue={current}>
+              {choices.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </Select>
+          ) : kind === "boolean" ? (
             <Select id={id("value")} name="value" defaultValue={current}>
               <option value="true">On</option>
               <option value="false">Off</option>
