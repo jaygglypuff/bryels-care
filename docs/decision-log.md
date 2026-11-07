@@ -2493,3 +2493,42 @@ Open:
 - On the Isla Spa order the use-first rule set aside the older lotion lot (loose pieces) rather than the boxed new
   batch; correct by FEFO, but the presenter should know the boxes stay on the shelf.
 - After the invoice is sent for approval, the delivery still reads "Next: finance bills it" with "Open invoice draft".
+
+## ADR-125 Scan, offline and search leftovers (2026-11-07)
+
+Status: Accepted (round 4 leftovers). Extends ADR-120, ADR-121, ADR-098 and ADR-018.
+
+Decision:
+1. **Offline captures keep how the lot was entered.** Offline count and weighing commands carry an optional `lotVia`
+   (`scan` | `typed` | `tap`). The server writes it where the online path does: count audit `lotVia`, dispense audit
+   `lotConfirmed`.
+   - On an offline weighing the lot field confirms the lot, so a tap is refused on the phone and again on replay
+     (`checkEntryMode`).
+   - Commands queued without it replay as before. Ids and idempotency keys are unchanged.
+2. **Every machine or scale field is a scan field** (`<ScanOrPick kind="equipment">`). This covers production step
+   equipment (line clearance included), the scale on the online, "other ways" and offline weigh screens, and the machine
+   on maintenance jobs and PM plans.
+   - People can tap the machine, scan a `BC:EQP:` label, or type its number in any case, with or without dashes.
+   - Lookups are limited to the person's organisation and current site.
+   - The app prints no equipment labels yet. Their content needs the owner and was not invented.
+3. **The master search is rate-limited.** It shares the scan look-up limit (`limitScanLookup`). Over the limit it answers
+   in plain words, still shows menu screens, and queries no records. This closes the ADR-121 known issue.
+4. **A repeated label shows its card again.** A label handed to Scan or search carries a request number
+   (`?code=…&n=…`).
+5. **No render-time randomness or runtime month names in hydrated components.**
+   - Idempotency keys come from `useClientKey`, after hydration.
+   - `fmtDate`, `fmtDayMonth` and `fmtDateTime` spell month names themselves ("Sept"), so printed output is unchanged.
+
+Tests:
+- `tests/integration/platform/offline-sync.test.ts`
+- `tests/integration/scan/equipment-pick.test.ts`
+- `tests/integration/scan/master-search-limit.test.ts`
+- `tests/integration/production/execution-controls.test.ts`
+- `tests/unit/scan/scan-href.test.ts`
+- `tests/unit/client-key.test.ts`
+- `tests/unit/date-format-stable.test.ts`
+
+No migration. New assumption: A-SCAN-16 (search and scan share one 120-a-minute budget per person).
+
+Known issues: the `useState(() => crypto.randomUUID())` hidden-key pattern remains in other forms (quality holds, admin
+templates, put-away, closure, documents, BMR).
