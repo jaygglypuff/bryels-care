@@ -377,7 +377,7 @@ describe("second-person check mode all | marked | none (frozen per line)", () =>
     await recordDispense(w.operator, { batchId: id, batchMaterialId: ls[1].id, lotRef: palm.id, lotPreselected: true, lotConfirm: palm.lotNumber.slice(-4), qty: "500" });
     const marked = await recordDispense(w.operator, { batchId: id, batchMaterialId: ls[0].id, lotRef: coconut.id, lotPreselected: true, lotConfirm: coconut.lotNumber.slice(-4), qty: "1000" });
     const e = await expectCode(completeStep(w.operator, { batchId: id, stepNo: 2 }), "state");
-    expect(e.message).toMatch(/1 weighing\(s\) still need the checker/);
+    expect(e.message).toMatch(/1 weighing still needs the checker/);
     await checkDispense(checker, { dispenseRecordId: marked.dispenseRecordId, signedOn: "operator_device" });
     const r = await completeStep(w.operator, { batchId: id, stepNo: 2, idempotencyKey: key() });
     expect(r.status).toBe("completed");

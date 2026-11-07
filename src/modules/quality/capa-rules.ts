@@ -5,6 +5,7 @@
  */
 
 import type { CAPA_ACTION_STATUSES, CAPA_SOURCES, CAPA_STATUSES, CHANGE_CONTROL_ENTITY_TYPES, CHANGE_CONTROL_STATUSES, RECALL_CASE_STATUSES, RECALL_KINDS } from "@/db/schema";
+import { isAre } from "@/lib/plural";
 
 export type CapaStatus = (typeof CAPA_STATUSES)[number];
 export type CapaSource = (typeof CAPA_SOURCES)[number];
@@ -69,7 +70,7 @@ export function capaSubmitBlockers(c: { status: string; rootCause: string | null
   const live = actions.filter((a) => a.status !== "cancelled");
   if (live.length === 0) out.push("Add at least one action.");
   const unverified = live.filter((a) => a.status !== "verified");
-  if (unverified.length) out.push(`Action(s) ${unverified.map((a) => a.actionNo).join(", ")} are not verified yet.`);
+  if (unverified.length) out.push(`${unverified.length === 1 ? "Action" : "Actions"} ${unverified.map((a) => a.actionNo).join(", ")} ${isAre(unverified.length)} not verified yet.`);
   return out;
 }
 

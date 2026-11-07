@@ -12,6 +12,7 @@ import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { LotPickerNav } from "../lot-picker-nav";
 import { QaStatusChip, fmtLotQty } from "../_ui";
+import { isAre, plural } from "@/lib/plural";
 
 export const dynamic = "force-dynamic";
 
@@ -137,7 +138,7 @@ export default async function RecallPage({ searchParams }: { searchParams: Promi
               </p>
             </Card>
             {r.depthLimitHit && <Banner tone="warn" title="The list is too long to show in full">Some parts were cut. Look again from one of the last lots shown.</Banner>}
-            {r.hiddenCount > 0 && <Banner tone="warn" title={`${r.hiddenCount} linked record(s) are at sites you cannot see`}>They are not shown. Ask someone with access to those sites (or the owner) to look too.</Banner>}
+            {r.hiddenCount > 0 && <Banner tone="warn" title={`${plural(r.hiddenCount, "linked record")} ${isAre(r.hiddenCount)} at sites you cannot see`}>They are not shown. Ask someone with access to those sites (or the owner) to look too.</Banner>}
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <Kpi label="Customers" value={r.customers.length} />

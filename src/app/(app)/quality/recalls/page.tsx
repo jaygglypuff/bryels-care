@@ -6,6 +6,7 @@ import { PageIntro } from "@/ui/guide";
 import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Forbidden } from "../../forbidden";
 import { RecallStatusChip } from "../capa/_ui";
+import { plural } from "@/lib/plural";
 
 const KIND_WORD: Record<string, string> = { recall: "Product recall", withdrawal: "Take off the shelves (withdrawal)", mock: "Practice recall (drill)" };
 
@@ -49,7 +50,7 @@ export default async function RecallCasesPage({ searchParams }: { searchParams: 
                 status={<RecallStatusChip status={r.status} />}
                 facts={
                   <>
-                    {KIND_WORD[r.kind] ?? r.kindLabel} · {r.lots} lot(s) · {r.notified} of {r.customers} customer(s) told · {r.openedByName}, {fmtDateTime(r.openedAt)}
+                    {KIND_WORD[r.kind] ?? r.kindLabel} · {plural(r.lots, "lot")} · {r.notified} of {plural(r.customers, "customer")} told · {r.openedByName}, {fmtDateTime(r.openedAt)}
                   </>
                 }
               />

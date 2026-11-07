@@ -80,6 +80,10 @@ export function LineChart({ series, labels, fmt, ariaLabel, height = 200, max: f
   const y = (v: number) => H - bottom - (Math.max(0, v) / max) * (H - top - bottom);
   const ticks = [0, max / 2, max];
   const labelEvery = Math.max(1, Math.ceil(n / 8));
+  // Invisible tap target around each linked dot (round 4 leftover): 88 units tall is >= 44 px once the 640-unit chart is
+  // drawn 320 px wide or more; as wide as the gap to the next dot (capped at 88) so neighbours never cover each other.
+  const HIT = 88;
+  const hitW = n <= 1 ? HIT : Math.min(HIT, (W - left - right) / (n - 1));
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label={ariaLabel}>
       {ticks.map((t) => (
@@ -125,7 +129,7 @@ export function LineChart({ series, labels, fmt, ariaLabel, height = 200, max: f
               return href ? (
                 <Link key={i} href={href} aria-label={`${s.label}, ${labels[i]}: ${fmt(v)}. Open the records`}>
                   {title}
-                  <circle cx={x(i)} cy={y(v)} r={10} fill="transparent" />
+                  <rect data-testid="chart-hit" x={x(i) - hitW / 2} y={y(v) - HIT / 2} width={hitW} height={HIT} fill="transparent" />
                   {dot}
                 </Link>
               ) : (

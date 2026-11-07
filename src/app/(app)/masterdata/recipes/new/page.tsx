@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { type RecipeDraft, recipeWizardOptions } from "@/modules/masterdata";
-import { PageIntro } from "@/ui/guide";
 import { PageHeader } from "@/ui/core";
 import { Forbidden } from "../../../forbidden";
 import { RecipeWizard } from "../wizard";
@@ -45,9 +44,13 @@ export default async function NewRecipePage({ searchParams }: { searchParams: Pr
       </div>
       <div className="mx-auto w-full max-w-3xl xl:max-w-[1200px]">
         <PageHeader title="New recipe" />
-        <PageIntro>This screen is for making the recipe of one product in five short screens: which product, how much one batch makes, the ingredients, the steps, then check and send it for approval.</PageIntro>
       </div>
-      <RecipeWizard options={options} initial={initial} start={{ kind: "new", ingredientsLabel: "Version 1 (new draft)", stepsLabel: "Version 1 (new draft)", formulaNo: 1, routingNo: 1, locks: { ingredients: false, steps: false } }} />
+      {/* Round 4 leftover: the progress bar first, then this intro in small type (inside the wizard). */}
+      <RecipeWizard
+        options={options}
+        initial={initial}
+        intro="This screen is for making the recipe of one product in five short screens: which product, how much one batch makes, the ingredients, the steps, then check and send it for approval."
+        start={{ kind: "new", ingredientsLabel: "Version 1 (new draft)", stepsLabel: "Version 1 (new draft)", formulaNo: 1, routingNo: 1, locks: { ingredients: false, steps: false } }} />
     </div>
   );
 }

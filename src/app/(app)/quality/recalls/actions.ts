@@ -18,6 +18,7 @@ import {
   submitRecallCase,
   updateRecallCase,
 } from "@/modules/quality";
+import { plural } from "@/lib/plural";
 
 /* Recall case server actions (US-6-18): thin adapters; the service checks permission, state, SoD and re-authentication. */
 
@@ -65,7 +66,7 @@ export async function refreshScopeAction(_p: ActionState, fd: FormData): Promise
   return inPlace(async () => {
     const ctx = await requireContext();
     const r = await refreshRecallScope(ctx, { recallCaseId: str(fd, "recallCaseId") });
-    return `Scope refreshed: ${r.lots} lot(s), ${r.boxes} box(es), ${r.customers} customer(s).`;
+    return `Scope refreshed: ${plural(r.lots, "lot")}, ${plural(r.boxes, "box")}, ${plural(r.customers, "customer")}.`;
   });
 }
 
@@ -98,7 +99,7 @@ export async function markRecalledAction(_p: ActionState, fd: FormData): Promise
     const ctx = await requireContext();
     const r = await markRecallCaseLots(ctx, { recallCaseId: str(fd, "recallCaseId"), password: opt(fd, "password") });
     const failed = r.outcomes.filter((o) => o.outcome === "failed" || o.outcome === "other_site");
-    return `${r.recalled} lot(s) marked recalled; shipments of them are now blocked.${failed.length ? ` Not marked: ${failed.map((o) => `${o.lotNumber} (${o.message})`).join("; ")}.` : ""}`;
+    return `${plural(r.recalled, "lot")} marked recalled; shipments of them are now blocked.${failed.length ? ` Not marked: ${failed.map((o) => `${o.lotNumber} (${o.message})`).join("; ")}.` : ""}`;
   });
 }
 
@@ -139,7 +140,7 @@ export async function closeRecallAction(_p: ActionState, fd: FormData): Promise<
   return inPlace(async () => {
     const ctx = await requireContext();
     const r = await closeRecallCase(ctx, { recallCaseId: str(fd, "recallCaseId"), closureReport: str(fd, "closureReport"), reconciliationExplanation: opt(fd, "reconciliationExplanation"), password: opt(fd, "password") });
-    return r.unreconciled ? `Case closed with ${r.unreconciled} explained gap(s).` : "Case closed; every line reconciled.";
+    return r.unreconciled ? `Case closed with ${plural(r.unreconciled, "explained gap")}.` : "Case closed; every line reconciled.";
   });
 }
 

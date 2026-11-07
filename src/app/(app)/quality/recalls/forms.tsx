@@ -16,6 +16,7 @@ import {
   submitRecallAction,
   updateRecallAction,
 } from "./actions";
+import { plural } from "@/lib/plural";
 
 function PasswordField({ fe, id }: { fe: Record<string, string>; id: string }) {
   return (
@@ -116,7 +117,7 @@ export function DecideRecallForm({ recallCaseId, stepLabel }: { recallCaseId: st
 
 export function MarkRecalledForm({ recallCaseId, count }: { recallCaseId: string; count: number }) {
   return (
-    <ActionForm action={markRecalledAction} hidden={{ recallCaseId }} submit={`Stop ${count} lot(s): recalled`} variant="danger" confirm="Mark every lot in this recall as recalled? Nobody can set aside, pick, pack or ship it afterwards.">
+    <ActionForm action={markRecalledAction} hidden={{ recallCaseId }} submit={`Stop ${plural(count, "lot")}: recalled`} variant="danger" confirm="Mark every lot in this recall as recalled? Nobody can set aside, pick, pack or ship it afterwards.">
       {(fe) => <PasswordField fe={fe} id="rc-mark-password" />}
     </ActionForm>
   );

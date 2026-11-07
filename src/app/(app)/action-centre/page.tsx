@@ -47,7 +47,8 @@ type SP = { tab?: string; kind?: string; group?: string; acked?: string };
 /** The button word from the current catalogue: items opened before a rename keep their stored word ("Open CAPA"). */
 const buttonWord = (i: ActionItemView) => ACTION_KINDS.find((k) => k.kind === i.kind)?.actionLabel ?? i.actionLabel;
 
-function ItemRow({ i }: { i: ActionItemView }) {
+/** `first`: only the first row's button is green, the others secondary (one next step per screen, like To approve). */
+function ItemRow({ i, first = false }: { i: ActionItemView; first?: boolean }) {
   const title = codeLast(plainDatesIn(i.title));
   const sev = SEV[i.severity as keyof typeof SEV] ?? SEV.info;
   return (
@@ -67,7 +68,7 @@ function ItemRow({ i }: { i: ActionItemView }) {
         {i.acknowledgementNote && <p className="mt-0.5 text-[12px] text-muted">Note: {i.acknowledgementNote}</p>}
       </div>
       <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-start">
-        <LinkButton href={isInternalPath(i.link) ? currentHref(i.link) : (recordHref(i.entityType, i.entityId) ?? "/action-centre")} size="sm">{buttonWord(i)}</LinkButton>
+        <LinkButton href={isInternalPath(i.link) ? currentHref(i.link) : (recordHref(i.entityType, i.entityId) ?? "/action-centre")} variant={first ? "primary" : "secondary"} size="sm">{buttonWord(i)}</LinkButton>
         {!i.acknowledgedAt && <AcknowledgeForm id={i.id} />}
       </div>
     </li>
@@ -113,6 +114,8 @@ export default async function ActionCentrePage({ searchParams }: { searchParams:
   const groups: [string, ActionItemView[]][] = bySite
     ? ([...ctx.allowedSites.map((s) => [`${s.code} · ${s.name}`, items.filter((i) => i.siteId === s.id)]), ["Organization", items.filter((i) => !i.siteId)]] as [string, ActionItemView[]][]).filter(([, l]) => l.length > 0)
     : [["", items]];
+  // Round 4 leftover: one green button on the screen, on the first row shown (like To approve).
+  const firstId = groups[0]?.[1][0]?.id;
 
   return (
     <div className="space-y-5">
@@ -175,7 +178,7 @@ export default async function ActionCentrePage({ searchParams }: { searchParams:
                 {label && <h2 className="mt-2 font-display text-[15px] font-semibold">{label} · {list.length}</h2>}
                 <ul className="divide-y divide-line">
                   {list.map((i) => (
-                    <ItemRow key={i.id} i={i} />
+                    <ItemRow key={i.id} i={i} first={i.id === firstId} />
                   ))}
                 </ul>
               </section>

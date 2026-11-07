@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Button, Field, Input } from "@/ui/core";
 import { ActionForm, FormMessage, SubmitButton, useInPlaceAction } from "@/ui/form";
 import { decideApprovalAction } from "./actions";
@@ -10,16 +10,20 @@ const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? 
  * Approve and Reject / Send back on one row of "To approve" (ADR-075). Approve is two taps inside the
  * page (no browser popup): the first shows "Approve ₱350.00 expense claim from Tess?" with
  * [Yes, approve] and [Cancel]. The server re-checks permission, site, step and same-person rules.
+ * From 1280 px the same item also shows in the side panel (the row copy is hidden by CSS), so every id here
+ * comes from `useId()`: the two copies never share a field id, and each control names the item it decides.
  */
 export function InlineDecision({ kind, entityId, what, rejectLabel, primary = true }: { kind: string; entityId: string; what: string; rejectLabel: string; /** Round 4: only the first row's Approve is green (one next step). */ primary?: boolean }) {
   const [asking, setAsking] = useState(false);
   const [state, dispatch] = useInPlaceAction(decideApprovalAction);
   // One key per row: a double tap or a retry of "Yes, approve" returns the first result (production orders).
   const [idempotencyKey] = useState(newKey);
+  const uid = useId();
+  const noteId = `note-${entityId}-${uid}`;
   return (
     <div className="flex w-full flex-col gap-2 md:w-72">
       {!asking ? (
-        <Button type="button" variant={primary ? "primary" : "secondary"} className="w-full" onClick={() => setAsking(true)} data-testid="approve-button">
+        <Button type="button" variant={primary ? "primary" : "secondary"} className="w-full" onClick={() => setAsking(true)} data-testid="approve-button" aria-label={`Approve ${what}`}>
           Approve
         </Button>
       ) : (
@@ -47,8 +51,8 @@ export function InlineDecision({ kind, entityId, what, rejectLabel, primary = tr
           <summary className="min-h-[44px] cursor-pointer text-[14px] leading-[44px] text-primary-text">{rejectLabel}…</summary>
           <ActionForm action={decideApprovalAction} hidden={{ kind, entityId, decision: "reject" }} submit={rejectLabel} pending="Saving…" variant="danger" className="mt-2 flex flex-col gap-2" messageBelow>
             {(fe) => (
-              <Field label="Why?" htmlFor={`note-${entityId}`} error={fe.note}>
-                <Input id={`note-${entityId}`} name="note" required minLength={3} maxLength={500} placeholder="Tell the person what to change" />
+              <Field label="Why?" htmlFor={noteId} error={fe.note}>
+                <Input id={noteId} name="note" required minLength={3} maxLength={500} placeholder="Tell the person what to change" />
               </Field>
             )}
           </ActionForm>

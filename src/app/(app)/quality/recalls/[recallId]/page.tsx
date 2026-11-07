@@ -24,6 +24,7 @@ import {
   StartRecoveryForm,
   SubmitRecallForm,
 } from "../forms";
+import { isAre, plural } from "@/lib/plural";
 
 export const dynamic = "force-dynamic";
 
@@ -99,7 +100,7 @@ export default async function RecallCasePage({ params, searchParams }: { params:
       ) : c.status === "notifying" ? (
         v.can.startRecovery ? <NextStep text="Every customer is told. Next: start getting the products back." action={{ label: "Start getting them back", href: "#customers" }} /> : v.can.notify ? <NextStep text="Next: tell each customer below and write down how." action={{ label: "Tell customers", href: "#customers" }} /> : <NextStep text="Customers are being told." waitingFor="Waiting for QA." />
       ) : c.status === "recovering" ? (
-        v.can.close ? <NextStep text="Next: write the final report and close the recall." action={{ label: "Close the recall", href: "#closure" }} /> : <NextStep text="Products are coming back." waitingFor={v.pendingLotCount > 0 ? `${v.pendingLotCount} lot(s) are not stopped yet (maybe at another site).` : "Waiting for QA to close it."} />
+        v.can.close ? <NextStep text="Next: write the final report and close the recall." action={{ label: "Close the recall", href: "#closure" }} /> : <NextStep text="Products are coming back." waitingFor={v.pendingLotCount > 0 ? `${plural(v.pendingLotCount, "lot")} ${isAre(v.pendingLotCount)} not stopped yet (maybe at another site).` : "Waiting for QA to close it."} />
       ) : null}
 
       <div className="flex flex-col gap-5">
@@ -107,7 +108,7 @@ export default async function RecallCasePage({ params, searchParams }: { params:
         {c.recallKind === "mock" && <Banner tone="info" title="Practice recall (drill)">No stock is stopped. Customers on the list are contacted only as practice.</Banner>}
         {(v.hiddenLots > 0 || v.hiddenLines > 0 || c.hiddenAtOpening > 0) && (
           <Banner tone="warn" title="Part of this recall is at sites you cannot see">
-            {v.hiddenLots} lot(s) and {v.hiddenLines} customer line(s) are not shown{c.hiddenAtOpening ? `; ${c.hiddenAtOpening} linked record(s) were at sites the starter could not see` : ""}.
+            {plural(v.hiddenLots, "lot")} and {plural(v.hiddenLines, "customer line")} are not shown{c.hiddenAtOpening ? `; ${plural(c.hiddenAtOpening, "linked record")} ${c.hiddenAtOpening === 1 ? "was" : "were"} at sites the starter could not see` : ""}.
           </Banner>
         )}
 
@@ -295,7 +296,7 @@ export default async function RecallCasePage({ params, searchParams }: { params:
           )}
           {c.closureReport && <p className="mt-3 whitespace-pre-wrap text-[14px]">Final report: {c.closureReport}</p>}
           {c.reconciliationExplanation && <p className="mt-2 whitespace-pre-wrap text-[13px] text-fg-2">Why amounts do not add up: {c.reconciliationExplanation}</p>}
-          {c.status === "recovering" && v.pendingLotCount > 0 && <p className="mt-3 text-[13px] text-muted">{v.pendingLotCount} lot(s) are not stopped yet (some may be at another site); closing waits for them.</p>}
+          {c.status === "recovering" && v.pendingLotCount > 0 && <p className="mt-3 text-[13px] text-muted">{plural(v.pendingLotCount, "lot")} {isAre(v.pendingLotCount)} not stopped yet (some may be at another site); closing waits for them.</p>}
           {v.can.close && (
             <div className="mt-4 border-t border-line pt-4">
               <CloseRecallForm recallCaseId={c.id} hasGaps={hasGaps} />

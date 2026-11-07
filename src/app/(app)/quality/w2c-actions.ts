@@ -32,6 +32,7 @@ import {
   type ReviewDecision,
 } from "@/modules/quality";
 import { registerAppHooks } from "@/modules/wiring";
+import { plural } from "@/lib/plural";
 
 // Execution ↔ QA hooks (idempotent; also registered at server start in src/instrumentation.ts).
 registerAppHooks();
@@ -278,7 +279,7 @@ export async function bulkDispositionAction(_p: BulkState, fd: FormData): Promis
     });
     // Lots are decided one by one; refresh whenever at least one decision was recorded.
     if (r.done > 0) refreshCurrentPage();
-    return { ok: r.failed === 0, message: `${r.done} of ${r.total} lot(s) decided${r.failed ? `; ${r.failed} refused (see the list)` : ""}. Reference ${r.correlationId}.`, outcomes: r.outcomes, correlationId: r.correlationId };
+    return { ok: r.failed === 0, message: `${r.done} of ${plural(r.total, "lot")} decided${r.failed ? `; ${r.failed} refused (see the list)` : ""}. Reference ${r.correlationId}.`, outcomes: r.outcomes, correlationId: r.correlationId };
   } catch (e) {
     return toActionState(e);
   }

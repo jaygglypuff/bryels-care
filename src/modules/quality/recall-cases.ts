@@ -32,6 +32,7 @@ import { decideLot } from "./dispositions";
 import { recallScope, type RecallMode, type RecallQuery } from "./recall";
 import { canDecideQualityStep, qualityApprovalProgress, recordQualityDecision } from "./recall-cases-approvals";
 import { assertUuid, isUuid, optionalText, reasonText, requiredText } from "./shared";
+import { isAre, plural } from "@/lib/plural";
 
 /**
  * Recall / withdrawal / mock recall cases (US-6-18, FR-quality-08, process map W07-08..W07-10,
@@ -461,7 +462,7 @@ export async function startRecallRecovery(ctx: AuthContext, input: { recallCaseI
   return db.transaction(async (tx) => {
     const c = await lockCase(tx, ctx, input.recallCaseId);
     const pending = await tx.select({ n: sql<number>`count(distinct ${recallCaseCustomers.customerId})::int` }).from(recallCaseCustomers).where(and(eq(recallCaseCustomers.recallCaseId, c.id), isNull(recallCaseCustomers.notifiedAt)));
-    if (Number(pending[0]?.n ?? 0) > 0) throw new DomainError("state", `${pending[0].n} customer(s) on the list are not notified yet.`);
+    if (Number(pending[0]?.n ?? 0) > 0) throw new DomainError("state", `${plural(pending[0].n, "customer")} on the list ${isAre(pending[0].n)} not notified yet.`);
     await move(tx, ctx, c, "recovering", null, { recoveryStartedAt: new Date() });
     await audit(tx, ctx, { action: "quality.recall_case.recovery_started", entityType: "recall_case", entityId: c.id, entityNumber: c.recallNumber, siteId: null, before: { status: "notifying" }, after: { status: "recovering" } });
     return { status: "recovering" as const };
@@ -529,11 +530,11 @@ export async function closeRecallCase(ctx: AuthContext, input: { recallCaseId: s
     const c = await lockCase(tx, ctx, input.recallCaseId);
     if (c.status !== "recovering") throw new DomainError("state", `Recall case ${c.recallNumber} is ${c.status}; start recovery before closing.`);
     const pendingLots = await tx.select({ n: inventoryLots.lotNumber }).from(recallCaseLots).innerJoin(inventoryLots, eq(inventoryLots.id, recallCaseLots.lotId)).where(and(eq(recallCaseLots.recallCaseId, c.id), eq(recallCaseLots.outcome, "pending")));
-    if (pendingLots.length) throw new DomainError("state", `Lot(s) ${pendingLots.map((p) => p.n).join(", ")} are not marked yet (some may be at another site).`);
+    if (pendingLots.length) throw new DomainError("state", `${pendingLots.length === 1 ? "Lot" : "Lots"} ${pendingLots.map((p) => p.n).join(", ")} ${isAre(pendingLots.length)} not marked yet (some may be at another site).`);
     const lines = await reconciliation(tx, c.id);
     const gaps = lines.filter((l) => !l.reconciled);
     if (gaps.length && (!explanation || explanation.length < 5)) {
-      throw new DomainError("validation", `${gaps.length} line(s) are not reconciled (shipped − returned − accounted ≠ 0). Explain the gap to close the case.`, { field: "reconciliationExplanation" });
+      throw new DomainError("validation", `${plural(gaps.length, "line")} ${isAre(gaps.length)} not reconciled (shipped − returned − accounted ≠ 0). Explain the gap to close the case.`, { field: "reconciliationExplanation" });
     }
     for (const l of lines) await tx.update(recallCaseCustomers).set({ qtyReturnedBase: l.qtyReturnedLive }).where(eq(recallCaseCustomers.id, l.id));
     const totals = summarize(lines);

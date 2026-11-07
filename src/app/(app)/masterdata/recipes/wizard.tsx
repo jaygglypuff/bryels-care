@@ -132,7 +132,8 @@ export type WizardStart = {
  * Next, plain words. Nothing here decides a rule: "Save as draft" and "Send for approval" call the
  * recipe service, which saves through the existing formula and routing services.
  */
-export function RecipeWizard({ options, initial, start }: { options: RecipeWizardOptions; initial: RecipeDraft; start: WizardStart }) {
+/** `intro` (round 4 leftover): one short line under the progress bar, so the steps come first on every screen. */
+export function RecipeWizard({ options, initial, start, intro }: { options: RecipeWizardOptions; initial: RecipeDraft; start: WizardStart; intro?: ReactNode }) {
   const router = useRouter();
   const [d, setD] = useState<WDraft>(() => ({ batchBy: "kg", pieces: "", pieceG: "", packaging: [], ...initial }) as WDraft);
   const [screen, setScreen] = useState(start.kind === "new" ? 1 : 2);
@@ -312,6 +313,7 @@ export function RecipeWizard({ options, initial, start }: { options: RecipeWizar
             );
           })}
         </ol>
+        {intro && <p className="max-w-[70ch] text-[13px] leading-snug text-fg-2" data-testid="wizard-intro">{intro}</p>}
         {/* The page's H1 is "New recipe" (or the product); each screen's title is its H2. */}
         <h2 className="font-display text-[26px] font-semibold tracking-tight sm:text-[30px]">
           <span className="text-muted">{screen}.</span> {TITLES[screen - 1]}

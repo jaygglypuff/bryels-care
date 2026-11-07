@@ -8,6 +8,7 @@ import { FilterTabs, PlainList, PlainRow } from "@/ui/plain-list";
 import { Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { CapaStatusChip, exportLinkCls } from "./_ui";
+import { plural } from "@/lib/plural";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +66,7 @@ export default async function CapaListPage({ searchParams }: { searchParams: Pro
                 }
                 facts={
                   <>
-                    {r.ownerName} · {r.dueDate ? `by ${fmtDate(r.dueDate)}` : "no date"} · {r.openActions} thing(s) to do{r.overdueActions > 0 ? `, ${r.overdueActions} late` : ""} · from {r.sourceLabel === "Deviation" ? "problem report" : r.sourceLabel.toLowerCase()} {r.sourceReference ?? ""}
+                    {r.ownerName} · {r.dueDate ? `by ${fmtDate(r.dueDate)}` : "no date"} · {plural(r.openActions, "thing")} to do{r.overdueActions > 0 ? `, ${r.overdueActions} late` : ""} · from {r.sourceLabel === "Deviation" ? "problem report" : r.sourceLabel.toLowerCase()} {r.sourceReference ?? ""}
                   </>
                 }
               />

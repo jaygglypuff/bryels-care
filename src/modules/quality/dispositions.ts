@@ -46,6 +46,7 @@ import {
   type BatchDecision,
   type LotDecision,
 } from "./rules";
+import { pluralWord } from "@/lib/plural";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const operator = alias(users, "operator_user");
@@ -270,7 +271,7 @@ async function lotQualityFacts(q: Tx | typeof db, lotId: string) {
     if (i.status === "rejected") blockers.push(`Inspection ${i.number} was rejected by QA review.`);
     else if (i.status !== "approved") blockers.push(`Inspection ${i.number} is ${i.status.replace(/_/g, " ")}; a second QA user must review and approve it before release.`);
     const failed = f.failed.filter((x) => !dev.permittedResultIds.has(x.resultId));
-    if (failed.length) blockers.push(`Failed test(s) ${failed.map((x) => x.testName).join(", ")} on inspection ${i.number} need an OOS deviation closed with the conclusion that release may proceed.`);
+    if (failed.length) blockers.push(`Failed ${pluralWord(failed.length, "test")} ${failed.map((x) => x.testName).join(", ")} on inspection ${i.number} need an OOS deviation closed with the conclusion that release may proceed.`);
   }
   blockers.push(...deviationBlockerMessages(dev));
   return { blockers, testers: new Set(insp.flatMap((f) => f.testerIds)) };
@@ -578,7 +579,7 @@ export async function batchFacts(
     else if (insp.inspection.status === "rejected") extra.push(`Inspection ${insp.inspection.number} was rejected by QA review.`);
     // A conditional release (W06 exception path) is the one decision that may precede a complete, reviewed inspection.
     else if (insp.inspection.status !== "approved" && !opts.conditional) extra.push(`Inspection ${insp.inspection.number} is ${insp.inspection.status.replace(/_/g, " ")}; a second QA user must review and approve it before release.`);
-    if (insp.inspection && insp.missing.length && !opts.conditional) extra.push(`Required test(s) without a result: ${insp.missing.join(", ")}.`);
+    if (insp.inspection && insp.missing.length && !opts.conditional) extra.push(`Required ${pluralWord(insp.missing.length, "test")} without a result: ${insp.missing.join(", ")}.`);
   }
   extra.push(...deviationBlockerMessages(dev));
   // W2D (data-model §6.2): every paper page reviewed or voided before the batch leaves QA.

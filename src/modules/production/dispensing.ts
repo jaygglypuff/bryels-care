@@ -24,6 +24,7 @@ import { flowHref } from "./flow-paths";
 /** Tolerance window at the typed resolution (shared with the weigh card, weigh-window.ts). */
 export { toleranceRange } from "./weigh-window";
 import { toleranceRange } from "./weigh-window";
+import { plural } from "@/lib/plural";
 
 /** Physical unit factors to the base unit (not business configuration; ADR-010). */
 const TO_BASE: Record<string, Record<string, string>> = { g: { g: "1", kg: "1000", mg: "0.001" }, mL: { mL: "1", L: "1000" }, pcs: { pcs: "1" } };
@@ -562,7 +563,7 @@ export async function dispensingBlockers(q: DbOrTx, batch: BatchRow): Promise<st
     .where(eq(batchMaterials.batchId, batch.id));
   const out: string[] = [];
   const open = lines.filter((l) => l.bm.status === "pending" || l.bm.status === "partial");
-  if (open.length) out.push(`${open.length} ingredient(s) still need to be weighed: ${open.map((l) => l.name).join(", ")}.`);
+  if (open.length) out.push(`${plural(open.length, "ingredient")} still ${open.length === 1 ? "needs" : "need"} to be weighed: ${open.map((l) => l.name).join(", ")}.`);
   const ids = lines.map((l) => l.bm.id);
   if (ids.length) {
     const unchecked = await q
@@ -574,7 +575,7 @@ export async function dispensingBlockers(q: DbOrTx, batch: BatchRow): Promise<st
       const snapLine = snap.lines.find((x) => x.bomLineId === line?.bm.bomLineId);
       return snapLine?.requiresChecker !== false;
     });
-    if (needing.length) out.push(`${needing.length} weighing(s) still need the checker's signature.`);
+    if (needing.length) out.push(`${plural(needing.length, "weighing")} still ${needing.length === 1 ? "needs" : "need"} the checker's signature.`);
   }
   return out;
 }

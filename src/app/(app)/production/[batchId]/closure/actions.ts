@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError, toActionState, type ActionState } from "@/lib/errors";
 import { closeBatch, decideReopen, issuePaperPage, recordAmendment, requestReopen, reviewPaperRecord, voidPaperPage, withdrawReopen } from "@/modules/production";
+import { plural } from "@/lib/plural";
 
 /** Server actions of the batch closure page (US-3-19, US-3-20). Thin: the services check everything. */
 
@@ -33,7 +34,7 @@ export async function closeBatchAction(_p: ActionState, f: FormData): Promise<Ac
     const ctx = await requireContext();
     const r = await closeBatch(ctx, { batchId: str(f, "batchId"), note: str(f, "note") || null, idempotencyKey: str(f, "idempotencyKey") });
     revalidatePath(path(f));
-    return { ok: true, message: `Batch closed. Final BMR ${r.documentNumber} (${r.watermark}) is ready to print${r.reservationsReleased ? `; ${r.reservationsReleased} reservation(s) released` : ""}.` };
+    return { ok: true, message: `Batch closed. Final BMR ${r.documentNumber} (${r.watermark}) is ready to print${r.reservationsReleased ? `; ${plural(r.reservationsReleased, "reservation")} released` : ""}.` };
   } catch (e) {
     return fail(e);
   }
