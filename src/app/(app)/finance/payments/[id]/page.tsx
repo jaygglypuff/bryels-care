@@ -4,13 +4,13 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { PAYMENT_METHOD_LABEL, getPayment } from "@/modules/finance";
-import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { NextStepBox } from "@/ui/next-step-box";
 import { waitingFor } from "../../../waiting-for";
 import { approvalWaiting } from "../../approval-waiting";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { FinanceCommand } from "../../commands";
@@ -55,15 +55,14 @@ export default async function PaymentPage({ params, searchParams }: { params: Pr
   );
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/finance/payments", label: "Payments" }}
+        typeLabel={inbound ? "Money in" : "Money out"}
+        reference={p.paymentNumber}
         title={d.counterpartyName}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            {inbound ? "Money in" : "Money out"} · <RecordNo>{p.paymentNumber}</RecordNo> <FinanceStatus status={p.status} />
-          </span>
-        }
+        chip={<FinanceStatus status={p.status} />}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               <LinkButton href="/finance/payments" variant="secondary">
                 All payments
@@ -107,7 +106,7 @@ export default async function PaymentPage({ params, searchParams }: { params: Pr
       )}
       <div className="flex flex-col gap-4">
         <Card>
-          <CardTitle action={<Money value={p.amount} className="text-[20px] font-semibold" />}>{done ? "What it paid" : "What it will pay"}</CardTitle>
+          <CardTitle action={<Money value={p.amount} className="text-value" />}>{done ? "What it paid" : "What it will pay"}</CardTitle>
           <p className="mb-2 text-[14px] text-fg-2">
             {fmtDate(p.paidOn)} · {PAYMENT_METHOD_LABEL[p.method as keyof typeof PAYMENT_METHOD_LABEL] ?? p.method}
           </p>

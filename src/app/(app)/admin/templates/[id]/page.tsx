@@ -3,7 +3,8 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { getTemplate, type TemplateDetail } from "@/modules/documents";
-import { Card, CardTitle, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Banner, Chip } from "@/ui/status";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { RecordNo } from "@/ui/plain-list";
@@ -33,12 +34,13 @@ export default async function TemplatePage({ params }: { params: Promise<{ id: s
   const effective = t.versions.find((v) => v.status === "approved");
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/admin/templates", label: "Back" }}
+        typeLabel={t.templateKind.replace(/_/g, " ")}
         title={t.name}
-        subtitle={<>{t.templateKind.replace(/_/g, " ")} · <RecordNo>{t.code}</RecordNo></>}
-        actions={
+        meta={[<RecordNo key="code">{t.code}</RecordNo>]}
+        secondary={
           <>
-            <LinkButton href="/admin/templates" variant="secondary">Back</LinkButton>
             {!open && ctx.can("documents.template.edit") && <VersionOp templateId={t.id} op="new_draft" label="Start a new version" variant="cta" />}
           </>
         }

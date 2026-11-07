@@ -3,7 +3,8 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { D } from "@/lib/qty";
 import { businessToday, getInspectionPlanDetail } from "@/modules/masterdata";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton, Table, Td } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Explain, NextStep, PageIntro } from "@/ui/guide";
 import { waitingForApprover } from "../../_eng/waiting";
 import { Forbidden } from "../../../forbidden";
@@ -51,15 +52,13 @@ export default async function InspectionPlanPage({ params }: { params: Promise<{
         <Link href="/masterdata/inspection-plans" className="text-[13px] text-primary-text hover:underline">
           ← Quality checks
         </Link>
-        <PageHeader
+        <RecordHeader
+          back={{ href: "/masterdata/inspection-plans", label: "Quality checks for each item" }}
+          typeLabel="Quality checks for an item"
           title={p.name.replace(/\s*\(PLACEHOLDER\)\s*/i, " ").trim()}
-          subtitle={<>{v.appliesTo} · version {p.revisionNo} · <span className="font-mono text-[12px] text-muted">{p.code}</span></>}
-          actions={
-            <>
-              <VersionChip status={p.status} label={p.label} />
-              {v.can.newRevision && <CommandForm action={newInspectionPlanRevisionAction} hidden={{ id: p.id }} label="Start a new version" variant="secondary" />}
-            </>
-          }
+          chip={<VersionChip status={p.status} label={p.label} />}
+          meta={[v.appliesTo, `version ${p.revisionNo}`, <span key="code" className="font-mono">{p.code}</span>]}
+          secondary={v.can.newRevision ? <CommandForm action={newInspectionPlanRevisionAction} hidden={{ id: p.id }} label="Start a new version" variant="secondary" /> : undefined}
         />
       </div>
       <PageIntro>

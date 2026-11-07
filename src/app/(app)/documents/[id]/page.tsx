@@ -5,7 +5,8 @@ import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { getGeneratedDocument, pdfSetupMessage, reprintReasonOptions, type GeneratedDocumentDetail } from "@/modules/documents";
 import { NextStep, PageIntro } from "@/ui/guide";
-import { Card, CardTitle, Dl, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { DocReprintForm, DocVoidForm, DownloadPdfForm } from "../forms";
@@ -39,13 +40,10 @@ export default async function DocumentPage({ params, searchParams }: { params: P
   const root = d.chain.find((c) => c.reprintNo === 0);
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <PageHeader
-        title={d.documentKind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())}
-        subtitle={
-          <>
-            Layout version {d.template.versionNo} · record change {d.recordRevisionNo} · <span className="font-mono text-[12px] text-muted">{d.documentNumber}</span>
-          </>
-        }
+      <RecordHeader
+        typeLabel={d.documentKind.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())}
+        reference={d.documentNumber}
+        meta={[`Layout version ${d.template.versionNo}`, `record change ${d.recordRevisionNo}`]}
       />
       <PageIntro>This screen is for one printed page made by the system (for example a batch record or delivery paper): which record it belongs to, every printed copy, the PDF, and printing it again with a reason.</PageIntro>
       {/* UX audit C #10: one next step; printing is the green button only while the paper may be used. */}

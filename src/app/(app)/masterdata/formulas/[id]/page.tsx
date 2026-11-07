@@ -3,7 +3,8 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { D, fmtDate, fmtQty } from "@/lib/qty";
 import { getFormula } from "@/modules/masterdata";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Explain, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { PlainList, PlainRow, RecordNo } from "@/ui/plain-list";
@@ -38,16 +39,14 @@ export default async function FormulaDetail({ params }: { params: Promise<{ id: 
         <Link href="/masterdata/formulas" className="inline-flex min-h-[44px] items-center text-[14px] text-primary-text hover:underline">
           ← All recipes (advanced)
         </Link>
-        <PageHeader
-          title={`Recipe for ${f.product.name}`}
-          subtitle={
-            <>
-              Recipe (advanced) · <RecordNo>{f.formula.code}</RecordNo>
-            </>
-          }
+        <RecordHeader
+          back={{ href: "/masterdata/formulas", label: "Recipes (advanced)" }}
+          typeLabel="Recipe (advanced)"
+          reference={f.formula.code}
+          title={f.product.name}
           actions={
             canNew || showBatch ? (
-              <MoreMenu>
+              <MoreMenu compact>
                 <div className="flex flex-col gap-3">
                   {showBatch && (
                     <Link href={`/production/orders/new?product=${f.product.id}`} className="inline-flex min-h-[44px] items-center text-[14px] font-medium text-primary-text underline">

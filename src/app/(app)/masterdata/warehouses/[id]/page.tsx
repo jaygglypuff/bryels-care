@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { LOCATION_KIND_LABELS, SPECIAL_ROLE_KIND, SPECIAL_ROLE_LABELS, WAREHOUSE_KINDS, WAREHOUSE_KIND_LABELS, getWarehouse, type LocationKind, type SpecialRole } from "@/modules/masterdata";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { waitingFor } from "../../../waiting-for";
 import { Banner } from "@/ui/status";
@@ -31,7 +32,7 @@ export default async function WarehousePage({ params, searchParams }: { params: 
   const canDesignate = ctx.can("masterdata.location.admin");
   return (
     <div className="space-y-5">
-      <PageHeader title={w.name} subtitle={<><span className="font-mono text-[12px] text-muted">{w.siteCode} · {w.code}</span> · {WAREHOUSE_KIND_LABELS[w.warehouseKind as keyof typeof WAREHOUSE_KIND_LABELS]} · <ActiveChip active={w.isActive} /></>} actions={<LinkButton href="/masterdata/warehouses" variant="secondary">All warehouses</LinkButton>} />
+      <RecordHeader back={{ href: "/masterdata/warehouses", label: "Warehouses" }} typeLabel={WAREHOUSE_KIND_LABELS[w.warehouseKind as keyof typeof WAREHOUSE_KIND_LABELS] ?? "Warehouse"} siteCode={w.siteCode} title={w.name} chip={<ActiveChip active={w.isActive} />} meta={[<span key="code" className="font-mono">{w.code}</span>]} />
       <PageIntro>The places inside this warehouse, and which place is used for deliveries, QA checks, rejected stock and recalls.</PageIntro>
       {created === "1" && <Banner tone="ok" title="Warehouse added">Next: add its places (shelves, rooms), then choose the special places below.</Banner>}
       {w.missing.length > 0 ? (

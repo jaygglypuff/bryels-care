@@ -3,10 +3,11 @@ import Decimal from "decimal.js";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { getLocationDetail } from "@/modules/inventory/lots-admin";
-import { EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { PlainList, PlainRow, RecordNo } from "@/ui/plain-list";
+import { PlainList, PlainRow } from "@/ui/plain-list";
 import { Banner, Chip } from "@/ui/status";
 import { Expiry, LocationKindChip, LotStatusChip, fmtLotQty } from "@/ui/inventory/bits";
 import { Forbidden } from "../../../forbidden";
@@ -28,15 +29,21 @@ export default async function LocationPage({ params }: { params: Promise<{ id: s
   const canMove = ctx.can("inventory.movement.post") && d.siteId === ctx.currentSiteId && d.isActive && !d.frozenBy;
   return (
     <div className="space-y-4">
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/inventory/locations", label: "Shelves" }}
+        typeLabel="Shelf"
+        reference={d.code}
         title={d.name}
-        subtitle={
-          <span className="flex flex-wrap items-center gap-2">
-            Shelf <RecordNo>{d.code}</RecordNo> {d.kind !== "storage" && <LocationKindChip kind={d.kind} />} {!d.isActive && <Chip>Not used any more</Chip>}
-          </span>
+        chip={
+          d.kind !== "storage" || !d.isActive ? (
+            <>
+              {d.kind !== "storage" && <LocationKindChip kind={d.kind} />}
+              {!d.isActive && <Chip>Not used any more</Chip>}
+            </>
+          ) : undefined
         }
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-2">
               <LinkButton href="/inventory/locations" variant="secondary">All shelves</LinkButton>
               <LinkButton href={`/inventory?loc=${d.id}`} variant="secondary">This shelf in the stock list</LinkButton>

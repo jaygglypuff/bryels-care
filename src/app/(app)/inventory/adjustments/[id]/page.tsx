@@ -9,10 +9,10 @@ import { fmtDateTime, fmtMoney } from "@/lib/qty";
 import { fmtFriendly } from "@/lib/units";
 import { adjustmentNextActors, getAdjustment, type AdjustmentDetail } from "@/modules/inventory/adjustments";
 import { NextApprover } from "@/ui/next-approver";
-import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { CommandForm } from "../../_kit/forms";
@@ -66,15 +66,15 @@ export default async function AdjustmentPage({ params, searchParams }: { params:
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title={`Fix stock: ${items || adjustmentReasonWords(a.reasonCode)}`}
-        subtitle={
-          <span className="flex flex-wrap items-center gap-2">
-            <RecordNo>{a.adjustmentNumber}</RecordNo> <AdjustmentStatusChip status={a.status} /> {adjustmentReasonWords(a.reasonCode)}
-          </span>
-        }
+      <RecordHeader
+        back={{ href: "/inventory/adjustments", label: "Fix stock" }}
+        typeLabel="Fix stock"
+        reference={a.adjustmentNumber}
+        title={items || adjustmentReasonWords(a.reasonCode)}
+        chip={<AdjustmentStatusChip status={a.status} />}
+        meta={[items ? adjustmentReasonWords(a.reasonCode) : null]}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               {a.can.cancel && (
                 <div>

@@ -6,10 +6,11 @@ import { DomainError } from "@/lib/errors";
 import { D, fmtDate, fmtDateTime } from "@/lib/qty";
 import { EXPIRY_WARN_DAYS, getLotDetail, isPastExpiry, moveDestinations, type LotDetail } from "@/modules/inventory/lots";
 import { listContainers } from "@/modules/inventory/containers";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { PlainList, PlainRow, RecordNo } from "@/ui/plain-list";
+import { PlainList, PlainRow } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Expiry, LocationKindChip, LotStatusChip, fmtLotQty } from "@/ui/inventory/bits";
 import { MovementList } from "@/ui/inventory/movement-list";
@@ -114,16 +115,14 @@ export default async function LotPage({ params, searchParams }: { params: Promis
 
   return (
     <div className="space-y-4">
-      <PageHeader
+      <RecordHeader
+        typeLabel="Lot"
+        reference={lot.lotNumber}
         title={lot.itemName}
-        subtitle={
-          <span className="flex flex-wrap items-center gap-2">
-            <span>Lot</span> <RecordNo>{lot.lotNumber}</RecordNo> <LotStatusChip status={lot.qualityStatus} expiresOn={lot.expiresOn} className="px-3 py-1 text-[13px]" />
-          </span>
-        }
+        chip={<LotStatusChip status={lot.qualityStatus} expiresOn={lot.expiresOn} />}
         actions={
           more.length > 0 ? (
-            <MoreMenu>
+            <MoreMenu compact>
               <div className="flex flex-col gap-2">
                 {more.map((a) => (
                   <LinkButton key={a.key} href={a.href} variant="secondary" data-testid={a.key === "item" ? "lot-item-link" : undefined}>
@@ -156,7 +155,7 @@ export default async function LotPage({ params, searchParams }: { params: Promis
       <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
         <Card>
           <CardTitle>How much and where</CardTitle>
-          <p className="mb-3 text-[28px] font-semibold tabular leading-none" data-testid="lot-on-hand">{fmtLotQty(onHand.toString(), lot.baseUom)}</p>
+          <p className="mb-3 text-stat tabular leading-none" data-testid="lot-on-hand">{fmtLotQty(onHand.toString(), lot.baseUom)}</p>
           {lot.balances.length === 0 ? (
             <EmptyState title="No stock left">All of this lot was used, sent out or moved away.</EmptyState>
           ) : (

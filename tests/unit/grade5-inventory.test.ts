@@ -22,7 +22,7 @@ function files(dir: string, out: string[] = []): string[] {
 const all = [...files(join(ROOT, "inventory")), ...files(join(ROOT, "labels")), ...files(join(ROOT, "warehouse"))];
 const pages = all.filter((p) => p.endsWith("page.tsx"));
 /** Pages that only redirect (an old address kept working) have nothing to explain. */
-const isRedirect = (src: string) => /redirect\(/.test(src) && !/<PageHeader/.test(src);
+const isRedirect = (src: string) => /redirect\(/.test(src) && !/<(PageHeader|RecordHeader)/.test(src);
 
 describe("grade-5 inventory and warehouse screens", () => {
   it("covers the 38 screens listed in PAGE_REVIEW.md", () => {

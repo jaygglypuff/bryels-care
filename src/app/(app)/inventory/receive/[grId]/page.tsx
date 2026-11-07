@@ -148,14 +148,17 @@ export default async function ReceiptPage({ params, searchParams }: { params: Pr
                 ? `Next: QA said OK. Put ${releasedLots.length === 1 ? "the lot" : "the lots"} away on the shelf.`
                 : undefined
         }
+        back={{ href: "/inventory/receipts", label: "Deliveries received" }}
         secondary={
+          gr.can.edit ? (
+            <LinkButton href={`/inventory/receive/${gr.id}/edit`} variant="secondary" size="sm">
+              <Pencil size={16} /> Change it
+            </LinkButton>
+          ) : undefined
+        }
+        actions={
           <>
-            {gr.can.edit && (
-              <LinkButton href={`/inventory/receive/${gr.id}/edit`} variant="secondary">
-                <Pencil size={16} /> Change it
-              </LinkButton>
-            )}
-            <MoreMenu>
+            <MoreMenu compact>
               <div className="flex flex-col gap-3">
                 {gr.can.printLabels && (qaButton || canPutAway) && printLabels}
                 {ctx.can("procurement.goods_receipt.create") && <LinkButton href="/inventory/receive" variant="secondary">Receive another delivery</LinkButton>}

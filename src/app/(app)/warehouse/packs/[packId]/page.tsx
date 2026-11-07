@@ -6,11 +6,11 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { getPack } from "@/modules/sales";
-import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { LotStatusChip } from "@/ui/inventory/bits";
 import { LABEL_KIND_WORDS, labelCountWords, LabelPreview } from "@/ui/labels";
 import { labelPreviewOrNull } from "@/modules/documents";
@@ -69,15 +69,15 @@ export default async function PackPage({ params, searchParams }: { params: Promi
   );
   return (
     <div className="space-y-4">
-      <PageHeader
-        title={`Boxing: ${v.productName}`}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <RecordNo>{p.packNumber}</RecordNo> <StatusChip status={p.status} label={checking ? "Waiting for the check" : p.status === "open" ? "Boxing now" : undefined} /> {cfg.sourceText ?? ""}
-          </span>
-        }
+      <RecordHeader
+        back={{ href: "/warehouse/packs", label: "Boxing" }}
+        typeLabel="Boxing"
+        reference={p.packNumber}
+        title={v.productName}
+        chip={<StatusChip status={p.status} label={checking ? "Waiting for the check" : p.status === "open" ? "Boxing now" : undefined} />}
+        meta={[cfg.sourceText ?? null]}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               <LinkButton href="/warehouse/packs" variant="secondary">All boxing jobs</LinkButton>
               {canNote && <Cmd action={boxingNoteAction} fields={{ packId: p.id }} label={note ? "Make the boxing note again" : "Make the boxing note"} variant="secondary" />}

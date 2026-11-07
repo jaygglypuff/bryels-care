@@ -3,7 +3,8 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { LOCATION_KINDS, LOCATION_KIND_LABELS, LOCATION_TRANSITIONS, SPECIAL_ROLE_LABELS, getLocation, locationFormOptions, type LocationKind, type LocationStatus, type SpecialRole } from "@/modules/masterdata";
 import { LOCATION_SECTIONS, SECTION_LABELS, isSection } from "@/lib/location-sections";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -35,7 +36,7 @@ export default async function LocationPage({ params, searchParams }: { params: P
   const moves = (LOCATION_TRANSITIONS[l.status as LocationStatus] ?? []).filter((s) => (s === "inactive" || l.status === "inactive" ? canAdmin : canEdit));
   return (
     <div className="space-y-5">
-      <PageHeader title={l.name} subtitle={<><span className="font-mono text-[12px] text-muted">{l.code}</span> · {l.warehouse.name} · {LOCATION_KIND_LABELS[l.kind as LocationKind] ?? l.kind} · <StateChip status={l.status} /></>} actions={<>{canEdit && <LinkButton href="#edit" variant="secondary">Edit location</LinkButton>}<LinkButton href={`/masterdata/locations?warehouse=${l.warehouseId}`} variant="secondary">All locations</LinkButton></>} />
+      <RecordHeader back={{ href: `/masterdata/locations?warehouse=${l.warehouseId}`, label: "Shelves and areas (set up)" }} typeLabel={LOCATION_KIND_LABELS[l.kind as LocationKind] ?? l.kind} title={l.name} chip={<StateChip status={l.status} />} meta={[<span key="code" className="font-mono">{l.code}</span>, l.warehouse.name]} secondary={canEdit ? <LinkButton href="#edit" variant="secondary" size="sm">Edit location</LinkButton> : undefined} />
       <PageIntro>One place where stock sits. Rename it, move it inside a bigger place, or switch it off.</PageIntro>
       {l.status === "active" ? (
         <NextStep text={l.lotsInStock > 0 ? `In use: ${l.lotsInStock} ${l.lotsInStock === 1 ? "lot is" : "lots are"} here. See what is on it.` : "In use and empty. Stock can be moved here."} action={ctx.can("inventory.lot.view") ? { label: "See this shelf", href: `/inventory/locations/${l.id}` } : undefined} />

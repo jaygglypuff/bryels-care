@@ -139,7 +139,7 @@ export function OrderForm({ catalogue, addresses, today, prefill }: { catalogue:
           <p className="text-[13px] text-muted">
             {count} product{count === 1 ? "" : "s"} · estimated before tax
           </p>
-          <p className="mt-1 font-display text-[28px] font-semibold tabular">{fmt(total, currency)}</p>
+          <p className="mt-1 font-display text-stat tabular">{fmt(total, currency)}</p>
           <p className="mb-3 mt-1 text-[12px] text-muted">Prices come from your approved price list. Bryel&apos;s Care checks every order; you see its status under My orders.</p>
           <FormMessage state={state} />
           <div className="mt-3">

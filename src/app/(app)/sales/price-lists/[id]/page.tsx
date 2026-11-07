@@ -7,10 +7,10 @@ import { approverLabel } from "@/lib/auth/self-approval";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { getPriceList, manilaToday } from "@/modules/sales";
-import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { Money, SalesStatus } from "../../orders/sales-ui";
@@ -66,18 +66,15 @@ export default async function PriceListPage({ params, searchParams }: { params: 
 
   return (
     <div className="mx-auto max-w-4xl">
-      <PageHeader
-        title={`Prices for ${who}`}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <Link href="/sales/price-lists" className="text-primary-text hover:underline">Prices</Link>
-            <RecordNo>{`${pl.code} v${pl.versionNo}`}</RecordNo>
-            <SalesStatus status={effective ? "effective" : pl.status} />
-          </span>
-        }
+      <RecordHeader
+        back={{ href: "/sales/price-lists", label: "Prices" }}
+        typeLabel="Prices"
+        reference={`${pl.code} v${pl.versionNo}`}
+        title={`For ${who}`}
+        chip={<SalesStatus status={effective ? "effective" : pl.status} />}
         actions={
           (pl.status === "draft" && canEdit) || (pl.status === "approved" && (canEdit || ctx.can("sales.price_list.approve"))) ? (
-            <MoreMenu>
+            <MoreMenu compact>
               <div className="flex flex-col gap-3">
                 {pl.status === "draft" && canEdit && <LinkButton href={`/sales/price-lists/${pl.id}/edit`} variant="secondary">Change the draft</LinkButton>}
                 {pl.status === "draft" && canEdit && <DeleteDraftButton kind="price_list" id={pl.id} what="these draft prices" />}

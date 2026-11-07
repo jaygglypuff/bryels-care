@@ -4,13 +4,13 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { getSupplierBill } from "@/modules/finance";
-import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { NextStepBox } from "@/ui/next-step-box";
 import { waitingFor } from "../../../waiting-for";
 import { approvalWaiting } from "../../approval-waiting";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { FinanceCommand } from "../../commands";
@@ -70,15 +70,14 @@ export default async function BillPage({ params, searchParams }: { params: Promi
   );
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/finance/bills", label: "Supplier bills" }}
+        typeLabel={isCredit ? "Money back from supplier" : "Supplier bill"}
+        reference={b.billNumber}
         title={d.supplier.name}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            {isCredit ? "Money back from supplier" : "Supplier bill"} · <RecordNo>{b.billNumber}</RecordNo> <FinanceStatus status={b.status} />
-          </span>
-        }
+        chip={<FinanceStatus status={b.status} />}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               <LinkButton href="/finance/bills" variant="secondary">
                 All supplier bills
@@ -152,7 +151,7 @@ export default async function BillPage({ params, searchParams }: { params: Promi
         )}
 
         <Card>
-          <CardTitle action={<Money value={b.totalAmount} className="text-[20px] font-semibold" />}>What they charge</CardTitle>
+          <CardTitle action={<Money value={b.totalAmount} className="text-value" />}>What they charge</CardTitle>
           <p className="mb-2 text-[14px] text-fg-2">
             Checked against the order and the delivery:
           </p>

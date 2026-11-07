@@ -59,7 +59,7 @@ export function ScanResultCard({ card, onScanAgain }: { card: ScanCard; onScanAg
     <Card data-testid="scan-result" data-outcome="found" data-entity={card.entity} aria-live="polite" className="space-y-4">
       <div>
         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{card.caption}{card.siteCode ? ` · ${card.siteCode}` : ""}</p>
-        <p className="mt-1 break-all font-mono text-[24px] font-semibold leading-tight text-fg">{card.identifier}</p>
+        <p className="mt-1 break-all text-id tracking-tight text-fg tabular">{card.identifier}</p>
         <p className="mt-1 text-[15px] text-fg">{card.title}</p>
         {card.subtitle && <p className="text-[13px] text-muted">{card.subtitle}</p>}
         <div className="mt-2 flex flex-wrap items-center gap-2">

@@ -3,10 +3,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getComplaint } from "@/modules/quality";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { QaStatusChip, Timeline } from "../../_ui";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -40,17 +40,15 @@ export default async function ComplaintPage({ params, searchParams }: { params: 
   const linkCls = "inline-flex min-h-[44px] items-center rounded-full border border-line bg-surface px-5 text-[14px] font-medium hover:bg-surface-2";
   return (
     <>
-      <PageHeader
-        title={`Complaint from ${c.customerName}`}
-        subtitle={
-          <>
-            {c.categoryLabel} · <RecordNo>{c.complaintNumber}</RecordNo>
-          </>
-        }
+      <RecordHeader
+        back={{ href: "/quality/complaints", label: "Customer complaints" }}
+        typeLabel={`Complaint · ${c.categoryLabel}`}
+        reference={c.complaintNumber}
+        title={`From ${c.customerName}`}
         actions={
           <>
             <Help screen="quality.complaint" />
-            <MoreMenu>
+            <MoreMenu compact>
               <div className="flex flex-col gap-2">
                 {v.can.trace && (
                   <LinkButton href={`/quality/recall?complaintId=${c.id}`} variant="secondary">

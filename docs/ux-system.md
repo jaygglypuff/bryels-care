@@ -180,6 +180,22 @@ stacked segments, area fills at 10 to 12 % opacity. Text never wears a series co
 360 px, 24 at 768 px+, 32 at 1280 px+. Gap between cards: 12 on phone, 16 on desktop. Form
 field stack: 16. Section stack: 32 (desktop) / 24 (phone).
 
+**As built (harmony pass, ADR-119, 2026-11-08): an 8 px grid.** Every gap and padding a page
+chooses is a multiple of 8 (4 only inside a component, e.g. label to value).
+
+| Use | Phone | ≥ 640 px | Where it lives |
+|---|---|---|---|
+| Card padding | 16 | 24 | `Card` (`p-4 sm:p-6`), radius 16 / 20 |
+| Gap between cards and sections | 16 | 16–24 | page column `space-y-4` / `gap-4`; never 20 |
+| Header to first block | 16 | 24 | `PageHeader` / `RecordHeader` bottom margin (`mb-4 sm:mb-6`) |
+| Label to field, field to hint | 8 | 8 | `Field` (`gap-2`) |
+| Field to field | 16 | 16 | form stacks (`gap-4`) |
+| Summary grid | 16 row / 16 column | same | `SummaryGrid`, `Dl` |
+| "What to do next" box | 12 / 16 | same | `NextStep`, `NextStepBox`, `RecordHeader` next |
+
+Page widths: forms `max-w-2xl` (672 px); a record without a side column `max-w-3xl`–`max-w-4xl`;
+a record with a side column `max-w-6xl`; lists and boards the full content width (ADR-114).
+
 ### 2.8 Type scale
 
 Inter (variable) via `next/font` with the fallback stack
@@ -203,6 +219,28 @@ Inter (variable) via `next/font` with the fallback stack
 
 Operator mode (`data-density="operator"`): body 16/24, body-strong 16/24, buttons 18/24,
 data-lg 24/28, hero 44/48. Minimum text size anywhere: 12 px; 13 px in operator mode.
+
+**As built (harmony pass, ADR-119, 2026-11-08).** Owner: "big fonts but the focus is not on the batch
+number … it is not harmonious." The scale is now a set of Tailwind tokens (`@theme` in
+`src/app/globals.css`); pages use the token, never an ad-hoc `text-[NNpx]` above 20 px
+(print layouts and the on-screen keypad excepted).
+
+| Token (class) | Size / line | Weight | Use |
+|---|---|---|---|
+| `text-id` → `sm:text-id-lg` | 26/32 → 30/36 | 600, Inter, tight tracking | the record identifier, the hero of a record page ("B-26-0002"); the scan result identifier |
+| `text-title` → `sm:text-title-lg` | 22/28 → 26/32 | 600, display font | page title of lists, forms and Homes; name hero of setup records; floor task title ("Weigh") |
+| `text-subtitle` | 16/22 (17 from 640 px) | 500 | the name under an identifier (product, customer, supplier) |
+| `text-section` → `sm:text-section-lg` | 16/22 → 17/24 | 600 | card and section titles (`CardTitle`) |
+| `text-body` (base) | 15/22 below 1024 px, 14 from 1024 px (dense desktop) | 400 | body text, NextStep sentence (15), field input text (15) |
+| `text-meta` | 13/18 | 400 | meta line, hints, row facts |
+| `text-label` | 12/16 | 500 | summary labels, table headers, eyebrows; sentence case (eyebrow uppercase with 0.04em) |
+| `text-value` | 18/24 | 600, tabular | values in `SummaryGrid`, money totals on finance cards |
+| `text-stat` | 26/30 | 600, tabular | KPI and count numbers on Homes, boards and pipelines |
+| `text-readout` | 40/44 | 600, tabular | the live scale reading on the weigh screen only |
+
+Rules: one H1 per screen; on a record page the H1 is the identifier (or the name for setup
+records). Nothing on a screen is larger than the H1 except the weigh readout. Codes in lists stay
+small mono grey (`RecordNo`); the identifier in a record header is dark Inter, not mono.
 
 ### 2.9 Radii
 
@@ -486,7 +524,7 @@ number of the component they expand.
 | # | Component | Variants | Key rules |
 |---|---|---|---|
 | 5.1 | App shell | desktop nav, tablet rail, phone tabs, operator density | role- and permission-filtered; remembers collapse state; site in URL |
-| 5.2 | Page header | title, context line, state chip, actions, breadcrumb (desktop) | one primary action; secondary actions overflow into a menu after two |
+| 5.2 | Page header and record header | `PageHeader` (lists, forms, Homes); `RecordHeader` (every page about one record, see Rules: 5.2) | one primary action; secondary actions overflow into ⋯ More; Help "?" and ⋯ More are compact icon buttons on the identifier row |
 | 5.3 | Site switcher | pill (desktop), chip (phone), "All sites" for org-wide roles | switching re-scopes lists and clears unsaved filters with a confirm if a form is dirty |
 | 5.4 | Global search | command palette, results grouped by entity, scan-payload aware | results limited to allowed sites; shows "n hidden by scope" never the hidden rows |
 | 5.5 | Action centre | panel with tabs Approvals / Exceptions / Alerts / Sync | each item: icon, title, record number, site, age, primary action; acknowledges with audit. As built (W3B): full page `/action-centre` (Home group), kind filter chips, "Group by site" for multi-site users (the §9.15 Exceptions page), acknowledged items stay listed below the others until their record resolves; the bell still opens `/notifications` |
@@ -511,6 +549,50 @@ number of the component they expand.
 | 5.23 | Buttons | primary, cta (dark), secondary, ghost, destructive, icon, operator (large) | one cta per page; destructive never as the default focused button |
 | 5.24 | Bottom sheet / drawer / dialog | phone sheets, tablet/desktop dialogs and side panels | sheets for pickers and "More"; dialogs for confirm and short forms; side panel for detail on xl |
 | 5.25 | Numeric keypad | optional on-screen keypad for weights and counts | shown when the device has no physical keypad in operator mode; large keys 56 px |
+| 5.26 | Summary grid and quiet line | `SummaryGrid` (label/value pairs), `QuietLine` ("nothing went wrong") | see Rules: 5.2 |
+
+### Rules: 5.2 Record page template (harmony pass, ADR-119)
+
+Every page about one record (batch, production order, purchase request/order, delivery received,
+lot, item, customer order, delivery, pick, second check, boxing, return, invoice, bill, payment,
+credit, expense claim, QA lot/check/problem/fix-and-prevent/complaint/recall/hold, repair job,
+regular maintenance, setup records, label job, count, stock fix, box, shelf, statement, import,
+document) opens with the same blocks in the same order:
+
+1. **`RecordHeader`** (`src/ui/record.tsx`):
+   - `back` — one small text link to the list ("‹ Customer orders"; the list's own title).
+   - eyebrow — `typeLabel` and `siteCode` in the label role, uppercase ("BATCH RECORD · NFD").
+   - hero row — `reference` (the identifier: large, dark Inter, `data-testid="record-number"`)
+     with the status chip (`status`/`statusLabel` or the module's `chip`) beside it; `actions` on
+     the right of the same row at every width: `<Help screen="…" />` and `<MoreMenu compact>` (44 px
+     round icon buttons on phones, "More" in words from 640 px). No row of big buttons.
+   - `title` — the name it is about (product, customer, supplier) in the subtitle role.
+   - `meta` — one small line: `[label, value]` pairs or plain facts, joined by "·".
+   - `secondary` — rare extra links as small buttons ("Change the draft", "Print").
+   - `steps` — the progress strip from the state machine (ADR-082 §5); on phones a compact "Step 3 of 10: Confirmed · then set aside" line with a thin bar, the pills from 640 px.
+   - `next` / `primary` / `waitingFor` — the "What to do next" box with the one green button.
+   - Setup records (materials, products, suppliers, customers, equipment, sites…) leave `reference`
+     out: the **name** is the H1 and the code goes in `meta` (ADR-103/108 names before codes).
+2. **`PageIntro`** — "This screen is for …", 14 px, one line on phones (two from 640 px) with
+   "more" when longer (`src/ui/intro-clamp.tsx`); the sentence is kept whole (ADR-088).
+3. **`NextStep` / `NextStepBox`** — directly under the header, compact (12/16 padding, 15 px).
+4. **Summary** — `SummaryGrid` (`src/ui/summary.tsx`): label (12 px) over value (18 px bold, unit
+   smaller) with one small line under it ("expected 96", "OK 95–102 %"); 2 columns on phones,
+   3 from a 28rem box, 4 from a 42rem box (container query). A value outside its range gets an
+   icon and a word (never colour alone). `Dl` uses the same anatomy for text values.
+5. **"Nothing went wrong"** sections are one `QuietLine` ("✓ Nothing left the normal path", with
+   "what was checked" to open the full sentence), not a card. A card appears only when there is
+   something to look at.
+6. Cards with the work (tests, decision, lines) follow; rare and destructive actions stay in ⋯ More.
+
+Floor screens (weigh, steps, get materials, more) keep `FlowHeader`: the task verb is the title
+(`text-title`) and the batch number is dark, tabular and 17 px right under it.
+
+Lists keep `PlainList`/`PlainRow`: the name or what it is first (15 px semibold), the status chip,
+one line of facts (13 px) with the record number small and mono at the end.
+
+Forms keep `PageHeader` (the verb as title, e.g. "New purchase order"), `Field` (label 13 px, 8 px
+to the input, hint 12 px) and `MoreDetails` for everything not needed on most days.
 
 ### Rules: 5.8 Forms and fields
 

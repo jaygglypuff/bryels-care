@@ -7,10 +7,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime, fmtQty } from "@/lib/qty";
 import { getPackingView } from "@/modules/sales";
-import { Card, CardTitle, EmptyState, Field, Input, LinkButton, PageHeader, Select } from "@/ui/core";
+import { Card, CardTitle, EmptyState, Field, Input, LinkButton, Select } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { approveExceptionAction, completePackingAction, removeShipmentLineAction, verifyScanAction } from "../../fulfilment-actions";
@@ -69,17 +69,14 @@ export default async function PackingPage({ params }: { params: Promise<{ shipme
 
   return (
     <div className="mx-auto max-w-2xl">
-      <PageHeader
-        title={`Second check: ${v.customerName}`}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <ShipChip status={s.status} />
-            <RecordNo>{s.shipmentNumber ?? ""}</RecordNo>
-            <span className="font-mono text-[12px] text-muted">{v.order.orderNumber}</span>
-          </span>
-        }
+      <RecordHeader
+        typeLabel="Second check"
+        reference={s.shipmentNumber ?? ""}
+        title={v.customerName}
+        chip={<ShipChip status={s.status} />}
+        meta={[["Order", v.order.orderNumber]]}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-2">
               <LinkButton href={`/sales/shipments/${s.id}`} variant="secondary">Open the delivery</LinkButton>
               <Help screen="sales.fulfilment" />

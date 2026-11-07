@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { LINE_TRANSITIONS, getLine, lineFormOptions, listEquipment } from "@/modules/masterdata";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { waitingFor } from "../../../waiting-for";
 import { Banner } from "@/ui/status";
@@ -39,7 +40,7 @@ export default async function LinePage({ params, searchParams }: { params: Promi
   const moves = LINE_TRANSITIONS[line.status as keyof typeof LINE_TRANSITIONS] ?? [];
   return (
     <div className="space-y-5">
-      <PageHeader title={line.name} subtitle={<><span className="font-mono text-[12px] text-muted">{line.code}</span> · {line.department ? line.department.name : "No team"} · <StateChip status={line.status} /></>} actions={<LinkButton href="/masterdata/lines" variant="secondary">All making areas</LinkButton>} />
+      <RecordHeader back={{ href: "/masterdata/lines", label: "Making areas / lines" }} typeLabel="Making area" title={line.name} chip={<StateChip status={line.status} />} meta={[<span key="code" className="font-mono">{line.code}</span>, line.department ? line.department.name : "No team"]} />
       <PageIntro>Where batches are made, and the machines (scales, mixers, moulds) that belong here.</PageIntro>
       {created === "1" && <Banner tone="ok" title="Making area added">Next: add its machines below.</Banner>}
       {line.status === "down" ? (

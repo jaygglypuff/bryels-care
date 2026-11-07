@@ -3,7 +3,8 @@ import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { getSupplier } from "@/modules/masterdata";
 import { aslMaterialOptions, listSupplierMaterials } from "@/modules/procurement";
-import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, PageHeader, Select } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, Field, Input, LinkButton, Select } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { ActionForm } from "@/ui/form";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { RecordNo } from "@/ui/plain-list";
@@ -44,19 +45,13 @@ export default async function SupplierAslPage({ params, searchParams }: { params
   const canOrder = ctx.can("procurement.purchase_order.create") && approved.length > 0 && s.qualityStatus !== "suspended";
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/procurement/suppliers", label: "Suppliers we may buy from" }}
+        typeLabel="Supplier"
         title={s.name}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            Supplier · <RecordNo>{s.code}</RecordNo> <SupplierChip status={s.qualityStatus} />
-          </span>
-        }
-        actions={
-          <>
-            {ctx.can("masterdata.supplier.edit") && <LinkButton href={`/masterdata/suppliers/${s.id}`} variant="secondary">Change name, contact or address</LinkButton>}
-            <LinkButton href="/procurement/suppliers" variant="secondary">All suppliers</LinkButton>
-          </>
-        }
+        chip={<SupplierChip status={s.qualityStatus} />}
+        meta={[<RecordNo key="code">{s.code}</RecordNo>]}
+        secondary={ctx.can("masterdata.supplier.edit") ? <LinkButton href={`/masterdata/suppliers/${s.id}`} variant="secondary" size="sm">Change name, contact or address</LinkButton> : undefined}
       />
       <PageIntro>This screen is for one supplier: which items we may buy from them, their prices and delivery times, and QA&apos;s yes or no on new items.</PageIntro>
       {toDecide.length > 0 ? (

@@ -52,12 +52,29 @@
   --font-sans: var(--font);
   --font-display: var(--font-display);
   --font-mono: var(--mono);
-  --radius-card: 24px;
+  --radius-card: 20px;
+  /* Type scale (docs/ux-system.md §2.8, harmony pass 2026-11-08). Pages use these names, never text-[NNpx] above 20 px.
+     `text-id` is the record identifier (the hero of a record page); `text-title` the page title of lists and forms. */
+  --text-id: 26px; --text-id--line-height: 32px; --text-id--font-weight: 600;
+  --text-id-lg: 30px; --text-id-lg--line-height: 36px; --text-id-lg--font-weight: 600;
+  --text-title: 22px; --text-title--line-height: 28px; --text-title--font-weight: 600;
+  --text-title-lg: 26px; --text-title-lg--line-height: 32px; --text-title-lg--font-weight: 600;
+  --text-subtitle: 16px; --text-subtitle--line-height: 22px; --text-subtitle--font-weight: 500;
+  --text-section: 16px; --text-section--line-height: 22px; --text-section--font-weight: 600;
+  --text-section-lg: 17px; --text-section-lg--line-height: 24px; --text-section-lg--font-weight: 600;
+  --text-body: 15px; --text-body--line-height: 22px;
+  --text-meta: 13px; --text-meta--line-height: 18px;
+  --text-label: 12px; --text-label--line-height: 16px; --text-label--font-weight: 500;
+  --text-value: 18px; --text-value--line-height: 24px; --text-value--font-weight: 600;
+  --text-stat: 26px; --text-stat--line-height: 30px; --text-stat--font-weight: 600;
+  --text-readout: 40px; --text-readout--line-height: 44px; --text-readout--font-weight: 600;
 }
 
 html, body { background: var(--bg); color: var(--fg); font-family: var(--font); }
-body { font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
-h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0.01em; }
+body { font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+@media (min-width: 1024px) { body { font-size: 14px; } } /* body 15 on phones and tablets, 14 on desktop (ux-system §2.8) */
+@layer base { h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.01em; } }
+.font-display { letter-spacing: -0.01em; }
 .scroll-x-hidden { scrollbar-width: none; }
 .scroll-x-hidden::-webkit-scrollbar { display: none; }
 .tabular { font-variant-numeric: tabular-nums; }

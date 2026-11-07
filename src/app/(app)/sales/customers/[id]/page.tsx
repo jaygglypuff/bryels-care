@@ -6,7 +6,8 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime } from "@/lib/qty";
 import { CUSTOMER_TRANSITIONS, customerSegmentLabels, customerSegmentOptions, formatAddress, getCustomer360, manilaToday, requirementFormOptions, type CustomerStatus } from "@/modules/sales";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { PlainList, PlainRow, RecordNo } from "@/ui/plain-list";
@@ -86,18 +87,19 @@ export default async function CustomerDetailPage({ params, searchParams }: { par
   const reqNext = new Map(await Promise.all(d.requirements.filter((r) => r.status === "pending_approval").map(async (r) => [r.id, await salesNextActors(ctx, "customer_requirement", r.id).catch(() => null)] as const)));
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/sales/customers", label: "Customers" }}
+        typeLabel="Customer"
         title={c.name}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <Link href="/sales/customers" className="text-primary-text hover:underline">Customers</Link>
-            <RecordNo>{c.code}</RecordNo>
+        chip={
+          <>
             <SalesStatus status={c.status} />
             {c.segment && <Chip tone="neu">{segLabels.get(c.segment) ?? c.segment}</Chip>}
-          </span>
+          </>
         }
+        meta={[<RecordNo key="code">{c.code}</RecordNo>]}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               {canQuote && c.status !== "prospect" && <LinkButton href={`/sales/quotations/new?customer=${c.id}`} variant="secondary">Make a price offer</LinkButton>}
               {canOrder && c.status === "prospect" && <LinkButton href={`/sales/new?customer=${c.id}`} variant="secondary">New order</LinkButton>}

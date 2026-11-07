@@ -5,10 +5,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { REVERSIBLE_MOVEMENT_TYPES, correctionLocations, documentHref, getMovementDetail } from "@/modules/inventory";
-import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { LotStatusChip, MOVEMENT_LABEL, MovementChip, fmtLotQty, placeWords } from "@/ui/inventory/bits";
 import { MovementList } from "@/ui/inventory/movement-list";
 import { Banner, Chip } from "@/ui/status";
@@ -46,15 +46,14 @@ export default async function MovementPage({ params, searchParams }: { params: P
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title={`${what}: ${d.itemName ?? `lot ${d.lotNumber}`}`}
-        subtitle={
-          <>
-            <MovementChip type={m.movementType} /> {fmtLotQty(m.qtyBase, m.baseUom)} · {fmtDateTime(m.postedAt)} · <RecordNo>{d.lotNumber}</RecordNo>
-          </>
-        }
+      <RecordHeader
+        typeLabel={what}
+        reference={d.lotNumber}
+        title={d.itemName ?? `Lot ${d.lotNumber}`}
+        chip={<MovementChip type={m.movementType} />}
+        meta={[fmtLotQty(m.qtyBase, m.baseUom), fmtDateTime(m.postedAt)]}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-2">
               <LinkButton href={`/inventory/${m.lotId}`} variant="secondary">Open this lot</LinkButton>
               <LinkButton href={`/inventory/stock-card/${m.lotId}`} variant="secondary">History of this lot</LinkButton>

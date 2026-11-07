@@ -3,7 +3,8 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { DEFAULT_LABEL_FIELDS, getLabelTemplate, LABEL_DATASET_FOR, LABEL_FIELD_KEYS, labelLayoutTemplates } from "@/modules/documents";
-import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Banner, Chip } from "@/ui/status";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { RecordNo } from "@/ui/plain-list";
@@ -30,12 +31,13 @@ export default async function LabelTemplatePage({ params }: { params: Promise<{ 
   const layouts = canEdit ? await labelLayoutTemplates(ctx) : [];
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/admin/templates", label: "Back" }}
+        typeLabel="Label layout"
         title={t.name}
-        subtitle={<RecordNo>{t.code}</RecordNo>}
-        actions={
+        meta={[<RecordNo key="code">{t.code}</RecordNo>]}
+        secondary={
           <>
-            <LinkButton href="/admin/templates" variant="secondary">Back</LinkButton>
             <LinkButton href={`/print/labels/test/${t.id}`} target="_blank" variant="secondary">Print a test label</LinkButton>
           </>
         }

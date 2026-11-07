@@ -32,7 +32,7 @@ export default async function PortalDocumentPage({ params }: { params: Promise<{
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{d.kindLabel} · customer copy</p>
-            <h1 className="font-display text-[22px] font-semibold sm:text-[26px]">{d.title}</h1>
+            <h1 className="font-display text-title sm:text-title-lg">{d.title}</h1>
             {d.statusLabel && <Chip tone="neu">{d.statusLabel}</Chip>}
           </div>
           <Logo className="h-10 w-auto" />

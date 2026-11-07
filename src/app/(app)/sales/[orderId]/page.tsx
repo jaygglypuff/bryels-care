@@ -165,15 +165,18 @@ export default async function OrderDetailPage({ params, searchParams }: { params
           // ADR-110 C0: the delivery tells "waiting for the second check" and "proof of delivery saved".
           delivery: shipments.some((x) => x.status === "picked") ? "picked" : shipments.length > 0 && shipments.filter((x) => !["cancelled", "reversed"].includes(x.status)).every((x) => x.status === "delivered") ? "delivered" : null,
         })}
+        back={{ href: "/sales", label: "Customer orders" }}
         secondary={
+          canEditDraft ? (
+            <LinkButton href={`/sales/orders/${order.id}/edit`} variant="secondary" size="sm">
+              Change the draft
+            </LinkButton>
+          ) : undefined
+        }
+        actions={
           <>
-            {canEditDraft && (
-              <LinkButton href={`/sales/orders/${order.id}/edit`} variant="secondary">
-                Change the draft
-              </LinkButton>
-            )}
-            <LinkButton href="/sales" variant="ghost">All orders</LinkButton>
-            <MoreMenu>
+            <Help screen="sales.order" />
+            <MoreMenu compact>
               <div className="flex flex-col gap-3">
                 {canReorder && (
                   <div>
@@ -199,7 +202,7 @@ export default async function OrderDetailPage({ params, searchParams }: { params
                     <DeleteDraftButton kind="sales_order" id={order.id} what="this customer order" />
                   </div>
                 )}
-                <Help screen="sales.order" />
+                {!canReorder && !releasable && !canVoid && !canDeleteDraft && <p className="text-[14px] text-fg-2">Nothing else to do on this order.</p>}
               </div>
             </MoreMenu>
           </>

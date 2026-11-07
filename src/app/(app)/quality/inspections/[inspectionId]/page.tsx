@@ -3,10 +3,10 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDateTime } from "@/lib/qty";
 import { getInspection } from "@/modules/quality";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, cx } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton, cx } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { WhoCanHelp } from "@/ui/who-can-help";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -39,15 +39,14 @@ export default async function InspectionPage({ params }: { params: Promise<{ ins
 
   return (
     <>
-      <PageHeader
-        title={`Quality check: ${v.lot?.itemName ?? v.plan.name}`}
-        subtitle={
-          <>
-            {v.batch ? `Batch ${v.batch.batchNumber}` : `Delivery ${v.lot?.lotNumber ?? ""}`} · <RecordNo>{ins.inspectionNumber}</RecordNo>
-          </>
-        }
+      <RecordHeader
+        back={{ href: "/quality/inspections", label: "Quality tests" }}
+        typeLabel="Quality check"
+        reference={ins.inspectionNumber}
+        title={v.lot?.itemName ?? v.plan.name}
+        meta={[v.batch ? ["Batch", v.batch.batchNumber] : ["Delivery", v.lot?.lotNumber ?? ""]]}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-2">
               <LinkButton href={subjectHref} variant="secondary">
                 {v.batch ? "QA decision for this batch" : "QA decision for this lot"}

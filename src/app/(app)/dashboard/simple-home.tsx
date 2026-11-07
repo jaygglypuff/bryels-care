@@ -119,7 +119,7 @@ function HomeCard({ title, icon, tone, value, href, children, label }: { title: 
         </span>
         <span className="min-w-0 text-[13px] font-semibold leading-tight text-fg">{title}</span>
       </span>
-      <span className="mt-3 block break-words font-display text-[26px] font-semibold leading-none text-fg tabular sm:text-[30px]">{value}</span>
+      <span className="mt-3 block break-words font-display text-stat leading-none text-fg tabular">{value}</span>
       {children && <span className="mt-2 block text-[12.5px] leading-snug text-fg-2">{children}</span>}
     </Link>
   );

@@ -8,7 +8,7 @@ export function PortalSignInForm({ notice, email }: { notice?: string | null; em
   const [state, action] = useActionState(portalSignIn, null);
   return (
     <Card>
-      <h1 className="font-display text-[26px] font-semibold">Customer portal</h1>
+      <h1 className="font-display text-title sm:text-title-lg">Customer portal</h1>
       <p className="mb-5 mt-1 text-[13px] text-muted">Sign in with the email Bryel&apos;s Care invited. Staff accounts do not work here.</p>
       {notice && (
         <p role="status" className="mb-4 rounded-[10px] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-3 py-2 text-[13px] text-[var(--ok-fg)]">

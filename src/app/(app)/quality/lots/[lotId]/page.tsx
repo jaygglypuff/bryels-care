@@ -4,10 +4,10 @@ import { DomainError } from "@/lib/errors";
 import { daysUntil, fmtDate, fmtDateTime } from "@/lib/qty";
 import { getLotDisposition } from "@/modules/quality/dispositions";
 import { issueDownloadUrl, listLotDocuments } from "@/modules/inventory/receiving-documents";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Explain, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { DecisionChip, DeviationStatusChip, InspectionStatusChip, QaStatusChip, Transition, fmtLotQty, statusTone } from "../../_ui";
@@ -79,17 +79,14 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
 
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        typeLabel={lot.itemKind === "material" ? "Delivery (material lot)" : "Finished product lot"}
+        reference={lot.lotNumber}
         title={v.itemName}
-        subtitle={
-          <>
-            {lot.itemKind === "material" ? "Delivery (material lot)" : "Finished product lot"} <RecordNo>{lot.lotNumber}</RecordNo>
-          </>
-        }
         actions={
           <>
             <Help screen="quality.release" />
-            <MoreMenu>
+            <MoreMenu compact>
               <div className="flex flex-col gap-2">
                 <LinkButton href={`/inventory/${lot.id}`} variant="secondary">
                   Where this lot is stored

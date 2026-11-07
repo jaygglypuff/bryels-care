@@ -3,13 +3,13 @@ import { requireContext } from "@/lib/auth/context";
 import { DomainError } from "@/lib/errors";
 import { fmtDate, fmtDateTime, fmtMoney } from "@/lib/qty";
 import { EXPENSE_STATUS_LABEL, getExpenseClaim } from "@/modules/finance";
-import { Card, CardTitle, Dl, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { NextStepBox } from "@/ui/next-step-box";
 import { waitingFor } from "../../../waiting-for";
 import { approvalWaiting } from "../../approval-waiting";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { FinanceCommand } from "../../commands";
@@ -59,15 +59,14 @@ export default async function ExpensePage({ params, searchParams }: { params: Pr
   );
   return (
     <>
-      <PageHeader
+      <RecordHeader
+        back={{ href: "/finance/expenses", label: "Expense claims" }}
+        typeLabel="Expense claim"
+        reference={c.claimNumber}
         title={claimant}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            Expense claim · <RecordNo>{c.claimNumber}</RecordNo> <FinanceStatus status={c.status} label={CLAIM_WORD[c.status] ?? EXPENSE_STATUS_LABEL[c.status]} />
-          </span>
-        }
+        chip={<FinanceStatus status={c.status} label={CLAIM_WORD[c.status] ?? EXPENSE_STATUS_LABEL[c.status]} />}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               <LinkButton href="/finance/expenses" variant="secondary">
                 All claims
@@ -120,7 +119,7 @@ export default async function ExpensePage({ params, searchParams }: { params: Pr
       )}
       <div className="flex flex-col gap-4">
         <Card>
-          <CardTitle action={<Money value={c.amount} className="text-[20px] font-semibold" />}>What was spent</CardTitle>
+          <CardTitle action={<Money value={c.amount} className="text-value" />}>What was spent</CardTitle>
           <p className="mb-3 text-[15px]">{c.description}</p>
           <Dl
             items={[

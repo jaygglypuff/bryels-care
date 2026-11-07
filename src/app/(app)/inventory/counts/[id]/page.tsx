@@ -13,10 +13,10 @@ import { fmtFriendly } from "@/lib/units";
 import { db } from "@/db/client";
 import { reasonCodeOptions } from "@/modules/masterdata";
 import { getCount, type CountDetail } from "@/modules/inventory/counts";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
-import { RecordNo } from "@/ui/plain-list";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
 import { CommandForm } from "../../_kit/forms";
@@ -118,15 +118,15 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title={`Count: ${shelves || "shelves"}`}
-        subtitle={
-          <span className="flex flex-wrap items-center gap-2">
-            <RecordNo>{c.countNumber}</RecordNo> <CountStatusChip status={c.status} /> {c.isBlind ? "counters do not see the expected amount" : "expected amounts shown"}
-          </span>
-        }
+      <RecordHeader
+        back={{ href: "/inventory/counts", label: "Stock counts" }}
+        typeLabel="Count"
+        reference={c.countNumber}
+        title={shelves || "Shelves"}
+        chip={<CountStatusChip status={c.status} />}
+        meta={[c.isBlind ? "Counters do not see the expected amount" : "Expected amounts shown"]}
         actions={
-          <MoreMenu>
+          <MoreMenu compact>
             <div className="flex flex-col gap-3">
               <LinkButton href={`/inventory/counts/${c.id}/sheet`} variant="secondary" target="_blank">Paper count sheet</LinkButton>
               <Help screen="inventory.count" />
@@ -153,7 +153,7 @@ export default async function CountPage({ params }: { params: Promise<{ id: stri
 
       <Card>
         <CardTitle>How far are we?</CardTitle>
-        <p className="font-display text-[24px] font-semibold tabular">
+        <p className="font-display text-title tabular">
           {c.progress.linesCounted} of {c.progress.lines} counted
         </p>
         <div className="mt-2 h-4 w-full overflow-hidden rounded-full bg-surface-2" role="progressbar" aria-label="Count progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} data-testid="count-progress">

@@ -9,7 +9,7 @@ export function VerifyForm() {
   const [state, action] = useActionState(verifyCode, null);
   return (
     <Card>
-      <h1 className="font-display text-[24px] font-semibold">Enter your code</h1>
+      <h1 className="font-display text-title">Enter your code</h1>
       <p className="mb-5 mt-1 text-[13px] text-muted">Open your authenticator app and type the 6-digit code for Bryel&apos;s Care. Lost your phone? Use one of your recovery codes.</p>
       <form action={action} className="flex flex-col gap-4">
         <Field label="Code" htmlFor="code" error={state?.fieldErrors?.code}>

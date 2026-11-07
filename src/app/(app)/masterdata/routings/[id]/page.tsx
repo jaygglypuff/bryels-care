@@ -3,7 +3,8 @@ import Link from "next/link";
 import { requireContext } from "@/lib/auth/context";
 import { fmtDate } from "@/lib/qty";
 import { getRouting, listFormulas } from "@/modules/masterdata";
-import { Card, CardTitle, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Explain, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { PlainList, PlainRow, RecordNo } from "@/ui/plain-list";
@@ -37,16 +38,14 @@ export default async function RoutingDetail({ params }: { params: Promise<{ id: 
         <Link href="/masterdata/routings" className="inline-flex min-h-[44px] items-center text-[14px] text-primary-text hover:underline">
           ← All steps (advanced)
         </Link>
-        <PageHeader
-          title={`Steps for ${r.product.name}`}
-          subtitle={
-            <>
-              Steps (advanced) · <RecordNo>{r.routing.code}</RecordNo>
-            </>
-          }
+        <RecordHeader
+          back={{ href: "/masterdata/routings", label: "Steps (advanced)" }}
+          typeLabel="Steps (advanced)"
+          reference={r.routing.code}
+          title={r.product.name}
           actions={
             r.canCreateRevision ? (
-              <MoreMenu>
+              <MoreMenu compact>
                 <CommandForm action={newRoutingRevisionAction} hidden={{ routingId: r.routing.id }} label="Start a new version here (advanced)" variant="secondary" />
               </MoreMenu>
             ) : undefined

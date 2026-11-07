@@ -27,7 +27,7 @@ export function PipelineStrip({ stages, compact = false }: { stages: PipelineSta
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
                     {idx + 1}. {s.label}
                   </span>
-                  <span className="mt-1.5 block font-display text-[28px] font-semibold leading-none text-fg tabular">{s.count.toLocaleString("en-PH")}</span>
+                  <span className="mt-1.5 block font-display text-stat leading-none text-fg tabular">{s.count.toLocaleString("en-PH")}</span>
                 </span>
                 <ChevronRight size={16} className="mt-0.5 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" aria-hidden />
               </Link>

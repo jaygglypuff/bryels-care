@@ -4,7 +4,8 @@ import { requireContext } from "@/lib/auth/context";
 import { D, fmtDate, fmtDateTime, fmtQty } from "@/lib/qty";
 import { businessToday, formulaFormOptions, getFormulaRevision } from "@/modules/masterdata";
 import { Banner } from "@/ui/status";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
 import { Explain, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { RecordNo } from "@/ui/plain-list";
@@ -52,16 +53,15 @@ export default async function FormulaRevisionPage({ params }: { params: Promise<
         <Link href={`/masterdata/formulas/${v.formula.id}`} className="inline-flex min-h-[44px] items-center text-[14px] text-primary-text hover:underline">
           ← Recipe for {v.product.name}
         </Link>
-        <PageHeader
-          title={`Version ${r.revisionNo} of the recipe for ${v.product.name}`}
-          subtitle={
-            <>
-              Recipe (advanced) · <RecordNo>{v.formula.code}</RecordNo> <PlainVersionChip status={r.status} label={r.label} />
-            </>
-          }
+        <RecordHeader
+          back={{ href: `/masterdata/formulas/${v.formula.id}`, label: "Back to the recipe" }}
+          typeLabel={`Recipe (advanced) · ${v.formula.code}`}
+          reference={`Version ${r.revisionNo}`}
+          title={`Recipe for ${v.product.name}`}
+          chip={<PlainVersionChip status={r.status} label={r.label} />}
           actions={
             hasMore ? (
-              <MoreMenu>
+              <MoreMenu compact>
                 <div className="flex flex-col gap-3">
                   {v.can.withdraw && <CommandForm action={withdrawFormulaAction} hidden={{ id: r.id }} label="Take it back to change it" variant="secondary" />}
                   {v.can.edit && !r.submittedAt && <DeleteDraftButton kind="formula_revision" id={r.id} what="this draft version and its ingredients (approved versions are not touched; a recipe with no other version is removed too)" />}

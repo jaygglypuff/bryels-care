@@ -259,12 +259,12 @@ function WeighCard(p: Parameters<typeof WeighFlow>[0] & { card: Card }) {
       data-testid="weigh-card"
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h2 className="text-[24px] font-semibold text-fg">
+        <h2 className="text-title text-fg">
           {card.materialName}
         </h2>
         {card.needsCheck && <Chip tone="warn">Second check</Chip>}
       </div>
-      <p className="mt-1 font-display text-[40px] font-semibold leading-none tabular text-fg sm:text-[44px]">
+      <p className="mt-1 font-display text-readout leading-none tabular text-fg">
         {g(card.target)}
       </p>
       <p className="mt-1 text-[16px] text-muted">
@@ -582,7 +582,7 @@ function SecondCheck({
   if (viewer.canCheck && viewer.userId !== weighing.operatorId)
     return (
       <section className="grid gap-3 rounded-[20px] border-2 border-[var(--warn-bd)] bg-surface p-5" data-testid="own-weigh-check" aria-label={`Check ${firstName(weighing.operator)}'s weighing`}>
-        <h2 className="text-[22px] font-semibold text-fg">Check {firstName(weighing.operator)}&apos;s weighing</h2>
+        <h2 className="text-title text-fg">Check {firstName(weighing.operator)}&apos;s weighing</h2>
         <p className="text-[17px] text-fg">
           {viewer.displayName}, did you watch {weighing.operator} weigh {g(weighing.qtyG)} of {card.materialName}, lot {weighing.lotNumber}?
         </p>
@@ -606,7 +606,7 @@ function SecondCheck({
     >
       {!who ? (
         <>
-          <h2 className="flex items-center gap-2 text-[22px] font-semibold text-fg">
+          <h2 className="flex items-center gap-2 text-title text-fg">
             <UserCheck size={24} aria-hidden /> Second check needed
           </h2>
           <p className="mt-1 text-[16px] text-muted">
@@ -644,7 +644,7 @@ function SecondCheck({
           <input type="hidden" name="batchId" value={batchId} />
           <input type="hidden" name="dispenseRecordId" value={weighing.id} />
           <input type="hidden" name="checkerId" value={who.id} />
-          <h2 className="text-[22px] font-semibold text-fg">
+          <h2 className="text-title text-fg">
             {who.displayName}, you watched {g(weighing.qtyG)} of{" "}
             {card.materialName}, lot {weighing.lotNumber}?
           </h2>
@@ -686,7 +686,7 @@ function WeighSummary(p: Parameters<typeof WeighFlow>[0]) {
       className="rounded-[20px] border border-line bg-surface p-5"
       data-testid="weigh-summary"
     >
-      <h2 className="flex items-center gap-2 text-[22px] font-semibold text-fg">
+      <h2 className="flex items-center gap-2 text-title text-fg">
         <CheckCircle2 size={24} className="text-[var(--ok-fg)]" aria-hidden />{" "}
         {p.cards.length} of {p.cards.length} weighed
       </h2>
@@ -734,7 +734,7 @@ function WaitingForQa({ batchId, card }: { batchId: string; card: Card }) {
   const [state, action] = useInPlaceAction(withdrawAskAction);
   return (
     <section className="rounded-[20px] border-2 border-[var(--warn-bd)] bg-[var(--warn-bg)] p-4 sm:p-5" data-testid="waiting-for-qa">
-      <h2 className="text-[22px] font-semibold text-fg">{card.materialName}</h2>
+      <h2 className="text-title text-fg">{card.materialName}</h2>
       <p className="mt-2 text-[18px] font-semibold">Waiting for QA{w.qaNames ? ` (${w.qaNames})` : ""} to say yes</p>
       <p className="mt-1 text-[16px]">
         {w.mine ? "You" : w.by} asked to use {fmtQty(w.qty, w.uom, 1)} of {w.substituteName} instead. Why: {w.reason}

@@ -75,7 +75,7 @@ export default async function KpiRecordsPage({ params, searchParams }: { params:
         )}
         <Card>
           <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <p className="tabular font-display text-[30px] font-semibold text-fg">{totalLine(r)}</p>
+            <p className="tabular font-display text-stat text-fg">{totalLine(r)}</p>
             <ValueLabelChip label={r.def.label} />
           </div>
           <p className="mt-1 text-[13px] text-fg-2">{plainNote(r.def.definition)}</p>

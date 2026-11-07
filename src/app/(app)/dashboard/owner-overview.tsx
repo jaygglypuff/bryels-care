@@ -473,7 +473,7 @@ export function OwnerOverview({ data, kpi, canAudit }: { data: OwnerDashboard; k
         <Card aria-labelledby="board-h" id="board" className="min-w-0">
           <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 id="board-h" className="font-display text-[20px] font-semibold text-fg">
+              <h2 id="board-h" className="font-display text-section text-fg sm:text-section-lg">
                 Batch journey
               </h2>
               <p className="mt-0.5 text-[12px] text-muted">From plan to QA release, live. Dark card = the next action waiting on QA.</p>

@@ -27,7 +27,9 @@ import {
   plainWords,
   type RecordLabels,
 } from "@/modules/production";
-import { Card, CardTitle, Dl, EmptyState, LinkButton, PageHeader, Table, Td, cx } from "@/ui/core";
+import { Card, CardTitle, Dl, EmptyState, LinkButton, Table, Td, cx } from "@/ui/core";
+import { RecordHeader } from "@/ui/record";
+import { MoreMenu } from "@/ui/more-menu";
 import { Banner, Chip, StatusChip } from "@/ui/status";
 import { Forbidden } from "../../forbidden";
 import { DecideScrapForm, ReasonForm } from "./exec-forms";
@@ -239,23 +241,17 @@ export default async function BatchRecordPage({ params }: Params) {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <Link href="/production" className="inline-flex min-h-[44px] items-center text-[14px] text-primary-text hover:underline">
-          ← Batch records
-        </Link>
-        <PageHeader
-          title={`Batch record: ${product.name}`}
-          subtitle={
-            <span className="flex flex-wrap items-center gap-2">
-              <StatusChip status={batch.status} label={batchStateWord(batch.status)} />
-              <span>{[`Batch ${batch.batchNumber}`, site?.name, progressLabel(batch.status, ex.stepsCompleted, total)].filter(Boolean).join(" · ")}</span>
-            </span>
-          }
+        <RecordHeader
+          back={{ href: "/production", label: "Batch records" }}
+          typeLabel="Batch record"
+          reference={batch.batchNumber}
+          title={product.name}
+          status={batch.status}
+          statusLabel={batchStateWord(batch.status)}
+          meta={[site?.name, progressLabel(batch.status, ex.stepsCompleted, total)]}
           actions={
-            <details className="relative" data-testid="batch-more-menu">
-              <summary className="inline-flex min-h-[44px] cursor-pointer list-none items-center gap-1 rounded-full border border-line bg-surface px-4 text-[14px] font-medium text-fg hover:bg-surface-2 [&::-webkit-details-marker]:hidden" aria-label="More actions">
-                <span aria-hidden>⋯</span> More
-              </summary>
-              <div className="absolute right-0 z-20 mt-1.5 flex w-[min(280px,calc(100vw-2rem))] flex-col gap-1.5 rounded-[14px] border border-line bg-surface p-2 shadow-[0_8px_24px_rgba(28,27,24,.14)]">
+            <MoreMenu compact className="batch-more-menu">
+              <div className="flex flex-col gap-2">
                 <LinkButton href={`/print/bmr/${batch.id}`} variant="secondary" target="_blank">
                   Print batch record
                 </LinkButton>
@@ -281,7 +277,7 @@ export default async function BatchRecordPage({ params }: Params) {
                   </LinkButton>
                 )}
               </div>
-            </details>
+            </MoreMenu>
           }
         />
         <PageIntro>What happened in this batch: every step, who did and checked it, the numbers written, the materials weighed, wrappers, labels and the result. The work itself is done on the production screens.</PageIntro>
