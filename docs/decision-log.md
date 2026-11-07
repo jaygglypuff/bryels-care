@@ -2397,3 +2397,25 @@ Decision:
 Consequences: unit test `round4-ux` (page header margin) and the redirect helpers of the grade-5 tests (now also accept
 `RecordHeader`) were updated; e2e scripts read `record-number`/`record-reference`, which the new header keeps. Open:
 forms are not yet regrouped into titled sections; lists kept their row anatomy; print layouts unchanged (see the review).
+
+## ADR-120 Typing the code printed on a label counts as reading it (owner 2026-11-08)
+
+Status: Accepted by the owner; A-SCAN-TYPED-01 needs QA to confirm. Supersedes in part the ADR-098 sentence
+"Verification scans … cannot be tapped" and the ADR-100/105/106 rule "type the last 4 only for a damaged label".
+
+Decision: every field that asks to scan a lot, box, shelf, batch or item also accepts the number printed on its label,
+typed in. Case does not matter, and the number can be typed with or without dashes or the `BC:` prefix. Typing only the
+last 3 or more characters works when exactly one expected item ends with them. The typing box sits under the Scan button
+and never opens the keyboard on its own. A typed entry is saved as `typed`, in the same record a scan would write:
+`pick_lines.entry_mode`, `pack_verification_scans.entry_mode`, `label_verifications.entry_mode`,
+`batch_material_picks.lot_entry_mode`, dispense `lotConfirmed`, put-away `meta.locationVia`, count `lotVia`
+(migration 0039). Typing counts for the verification checks (second check, boxing check, label verification, and lot
+confirmation at weighing and Get materials), because the person reads the real label. Picking from a list still does
+not count, and the server refuses it. The server matches a typed number exactly first, then ignoring case, dashes and
+spaces. If two records would match, it matches neither. A wrong number gets a plain refusal.
+
+Consequences:
+- The second-check screen lists the boxes first, and asks how many loose pieces only after a lot label is scanned or typed.
+- `docs/SCAN_INPUTS.md` has a new "Type the code" column.
+- New tests: `tests/unit/scan/typed-codes.test.ts` and `tests/integration/scan/typed-codes.test.ts`.
+- Risk: a checker could type the number from the pick list instead of the label (A-SCAN-TYPED-01).
