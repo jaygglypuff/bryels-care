@@ -11,11 +11,15 @@ import {
   goodsReceipts,
   inventoryLots,
   materials,
+  pickLines,
+  picks,
   products,
+  salesOrderLines,
   salesOrders,
   shipmentLines,
   shipments,
   sites,
+  stockAllocations,
   stockMovements,
 } from "@/db/schema";
 import type { AuthContext } from "@/lib/auth/context";
@@ -76,12 +80,36 @@ export type AffectedCustomer = {
   dispatchedAt: Date;
 };
 
+/**
+ * ADR-124 item 3: stock of a traced lot (or of a lot made from it) that waits for a customer order but has not left:
+ * `set_aside` = an open allocation not yet taken off the shelf; `picked` = taken off the shelf (pick lines not voided)
+ * for a delivery that is not sent out yet. Once it is sent out it is an `AffectedCustomer`.
+ */
+export type PendingOrder = {
+  stage: "set_aside" | "picked";
+  /** "Set aside for order SO-26-00004 (Luntian Wellness Stores)" / "Taken off the shelf for order …". */
+  words: string;
+  customerId: string;
+  customerName: string;
+  orderId: string;
+  orderNumber: string;
+  shipmentId: string | null;
+  lotId: string;
+  lotNumber: string;
+  productName: string;
+  qty: string;
+  uom: string;
+  since: Date | null;
+};
+
 export type TraceResult = {
   query: { lotNumber?: string; batchNumber?: string; supplierLot?: string };
   root: TraceNode | null;
   reverse: TraceNode[];
   forward: TraceNode[];
   affectedCustomers: AffectedCustomer[];
+  /** ADR-124: set aside or taken off the shelf for an order, not sent yet (listed apart from the customers who got it). */
+  pendingOrders: PendingOrder[];
   hiddenCount: number;
   /** When the trace was read (it reflects the ledger at that moment). */
   asOf: Date;
@@ -109,7 +137,9 @@ class Tracer {
   private originLot = new Map<string, string | null>();
   private siteCodes = new Map<string, string>();
   readonly customers: AffectedCustomer[] = [];
+  readonly pending: PendingOrder[] = [];
   private seenShipLine = new Set<string>();
+  private seenPendingLot = new Set<string>();
 
   constructor(private ctx: AuthContext) {}
 
@@ -335,6 +365,64 @@ class Tracer {
     return nodes;
   }
 
+  /**
+   * ADR-124: orders this lot is set aside for or taken off the shelf for, not sent out yet. Taken off the shelf = pick
+   * lines not voided, of a pick not cancelled, whose delivery is still draft / picked / packed. Set aside = what is left
+   * of an open allocation after those pick lines. Orders at sites the viewer may not see are counted as hidden.
+   */
+  async pendingOf(lot: TraceNode): Promise<void> {
+    if (this.seenPendingLot.has(lot.id)) return;
+    this.seenPendingLot.add(lot.id);
+    const live = sql`${pickLines.voidedAt} is null and ${picks.status} <> 'cancelled' and ${shipments.status} in ('draft', 'picked', 'packed')`;
+    const picked = await db
+      .select({
+        shipmentId: shipments.id,
+        siteId: salesOrders.siteId,
+        orderId: salesOrders.id,
+        orderNumber: salesOrders.orderNumber,
+        customerId: customers.id,
+        customerName: customers.name,
+        qty: sql<string>`sum(${pickLines.qtyBase})::text`,
+        since: sql<Date | null>`max(${pickLines.scannedAt})`.mapWith(pickLines.scannedAt),
+      })
+      .from(pickLines)
+      .innerJoin(picks, eq(picks.id, pickLines.pickId))
+      .innerJoin(shipments, eq(shipments.id, picks.shipmentId))
+      .innerJoin(salesOrders, eq(salesOrders.id, picks.salesOrderId))
+      .innerJoin(customers, eq(customers.id, salesOrders.customerId))
+      .where(and(eq(pickLines.lotId, lot.id), eq(pickLines.organizationId, this.ctx.organizationId), live))
+      .groupBy(shipments.id, salesOrders.id, customers.id);
+    const setAside = await db
+      .select({
+        siteId: salesOrders.siteId,
+        orderId: salesOrders.id,
+        orderNumber: salesOrders.orderNumber,
+        customerId: customers.id,
+        customerName: customers.name,
+        qty: sql<string>`sum(greatest(0, ${stockAllocations.qtyUnits} - coalesce((
+          select sum(pl.qty_base) from pick_lines pl join picks p on p.id = pl.pick_id join shipments s on s.id = p.shipment_id
+          where pl.allocation_id = ${stockAllocations.id} and pl.voided_at is null and p.status <> 'cancelled' and s.status in ('draft', 'picked', 'packed')), 0)))::text`,
+        since: sql<Date | null>`min(${stockAllocations.createdAt})`.mapWith(stockAllocations.createdAt),
+      })
+      .from(stockAllocations)
+      .innerJoin(salesOrderLines, eq(salesOrderLines.id, stockAllocations.salesOrderLineId))
+      .innerJoin(salesOrders, eq(salesOrders.id, salesOrderLines.salesOrderId))
+      .innerJoin(customers, eq(customers.id, salesOrders.customerId))
+      .where(and(eq(stockAllocations.lotId, lot.id), eq(stockAllocations.status, "open"), eq(salesOrders.organizationId, this.ctx.organizationId)))
+      .groupBy(salesOrders.id, customers.id);
+    const add = (stage: PendingOrder["stage"], r: { siteId: string; orderId: string; orderNumber: string; customerId: string; customerName: string; qty: string; since: Date | null; shipmentId?: string }) => {
+      if (!this.allowed.includes(r.siteId)) {
+        this.hidden++;
+        return;
+      }
+      if (!(Number(r.qty) > 0)) return;
+      const words = `${stage === "set_aside" ? "Set aside" : "Taken off the shelf"} for order ${r.orderNumber} (${r.customerName})`;
+      this.pending.push({ stage, words, customerId: r.customerId, customerName: r.customerName, orderId: r.orderId, orderNumber: r.orderNumber, shipmentId: r.shipmentId ?? null, lotId: lot.id, lotNumber: lot.number, productName: lot.label, qty: r.qty, uom: lot.uom ?? "", since: r.since });
+    };
+    for (const r of setAside) add("set_aside", r);
+    for (const r of picked) add("picked", r);
+  }
+
   /** Where the lot went: consuming batches -> their output lots -> ... and shipments of this lot. */
   async forwardOfLot(lot: TraceNode, depth: number, path: Set<string>): Promise<TraceNode[]> {
     if (path.has(lot.id) || this.tooDeep(depth)) return [];
@@ -351,6 +439,7 @@ class Tracer {
       out.push(b);
     }
     out.push(...(await this.shipmentNodes(lot)));
+    await this.pendingOf(lot);
     // W3F: lots re-lotted from this one (inter-site transfer, customer return) with the quantity received into them.
     const relots = await db.select({ id: inventoryLots.id }).from(inventoryLots).where(and(eq(inventoryLots.originLotId, lot.id), eq(inventoryLots.organizationId, this.ctx.organizationId)));
     for (const r of relots) {
@@ -426,7 +515,7 @@ export async function traceGenealogy(ctx: AuthContext, q: { lotNumber?: string; 
   const siteCodes = ctx.allowedSites.map((s) => s.code);
   const t = new Tracer(ctx);
   await t.init();
-  const empty: TraceResult = { query: { lotNumber, batchNumber, supplierLot }, root: null, reverse: [], forward: [], affectedCustomers: [], hiddenCount: 0, asOf, maxDepth: t.maxDepth, depthLimitHit: false, siteCodes };
+  const empty: TraceResult = { query: { lotNumber, batchNumber, supplierLot }, root: null, reverse: [], forward: [], affectedCustomers: [], pendingOrders: [], hiddenCount: 0, asOf, maxDepth: t.maxDepth, depthLimitHit: false, siteCodes };
   if (!lotNumber && !batchNumber && !supplierLot) return empty;
 
   let root: TraceNode | null = null;
@@ -481,12 +570,14 @@ export async function traceGenealogy(ctx: AuthContext, q: { lotNumber?: string; 
       entityType: root.kind === "lot" ? "inventory_lot" : root.kind === "batch" ? "batch" : "supplier_lot",
       entityId: root.kind === "supplier_lot" ? null : root.id,
       entityNumber: root.number,
-      after: { direction: root.kind === "supplier_lot" ? "forward" : "both", affectedCustomers: t.customers.length, hiddenCount: t.hidden, maxDepth: t.maxDepth, depthLimitHit: t.depthLimitHit, sites: siteCodes, asOf: asOf.toISOString() },
+      after: { direction: root.kind === "supplier_lot" ? "forward" : "both", affectedCustomers: t.customers.length, pendingOrders: t.pending.length, hiddenCount: t.hidden, maxDepth: t.maxDepth, depthLimitHit: t.depthLimitHit, sites: siteCodes, asOf: asOf.toISOString() },
     });
   }
 
   const affectedCustomers = [...t.customers].sort((a, b) => a.dispatchedAt.getTime() - b.dispatchedAt.getTime());
-  return { query: { lotNumber, batchNumber, supplierLot }, root, reverse, forward, affectedCustomers, hiddenCount: t.hidden, asOf, maxDepth: t.maxDepth, depthLimitHit: t.depthLimitHit, siteCodes };
+  // Picked first (closest to leaving), then set aside; oldest first within each.
+  const pendingOrders = [...t.pending].sort((a, b) => (a.stage === b.stage ? (a.since?.getTime() ?? 0) - (b.since?.getTime() ?? 0) : a.stage === "picked" ? -1 : 1));
+  return { query: { lotNumber, batchNumber, supplierLot }, root, reverse, forward, affectedCustomers, pendingOrders, hiddenCount: t.hidden, asOf, maxDepth: t.maxDepth, depthLimitHit: t.depthLimitHit, siteCodes };
 }
 
 export type TraceRow = {

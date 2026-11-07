@@ -757,9 +757,10 @@ section('r. the warehouse gets the Luntian soap from the shelf by scanning its t
 section('s. QA traces the soap lot back to its supplier lots and forward to the customer (scene 7)', async () => {
   const { page, close } = await asUser(who('qa.nfd'));
   assert(facts.soapLot && facts.islaLot, 'the soap lot (scene 6) and the lotion lot sent to Isla Spa (section k)');
-  // Back: the soap lot to its batch and supplier lots. It is taken off the shelf but not sent yet: no customer.
+  // Back: the soap lot to its batch and supplier lots. It is taken off the shelf but not sent yet: no customer, but the
+  // trace names the order it waits for (ADR-124).
   await go(page, '/quality/trace?q=' + encodeURIComponent(facts.soapLot));
-  for (const t of ['Where it came from', 'Coconut Oil', 'Palm Oil', 'Laguna Oleo Supply', 'No customer has received this']) await expectText(page, t);
+  for (const t of ['Where it came from', 'Coconut Oil', 'Palm Oil', 'Laguna Oleo Supply', 'No customer has received this', 'Waiting to be sent to a customer', /Taken off the shelf for order SO-\d{2}-\d{5} \(Luntian Wellness Stores\)/]) await expectText(page, t);
   await shot(page, 'trace-soap-lot', { full: true });
   // Forward: the lotion lot sent out today names the customer, the order and the delivery receipt.
   await go(page, '/quality/trace?q=' + encodeURIComponent(facts.islaLot));

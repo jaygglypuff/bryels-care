@@ -59,14 +59,14 @@ A new deploy of the app with new demo data does this by itself the first time it
 |---|---|---|
 | **Acapulco Soap 135 g**, one recipe, one list of steps | approved | — |
 | **Aloe Hand Lotion 250 mL**, one recipe, one list of steps | approved | — |
-| Production order 1, Acapulco Soap | done: QA said OK, 5 boxes (118 bars; QA kept 2 as samples), box labels printed, on the **Finished goods bay** | — |
-| Production order 2, Aloe Hand Lotion | made, waiting for the **QA check** in the QA waiting area | `qa.nfd@` (scene 2) |
+| Production order 1, Acapulco Soap | done: QA said OK; 120 made, 2 kept as samples, 118 to sell, in 5 boxes (4 of 24 and 1 of 22), box labels printed, on the **Finished goods bay** | — |
+| Production order 2, Aloe Hand Lotion | made, waiting for the **QA check** in the QA waiting area: 96 made, 2 kept as samples, 94 to sell | `qa.nfd@` (scene 2) |
 | Production order 3, Acapulco Soap | in progress: weighed, heated and mixed; next step **Pour into moulds** | `operator.nfd@` (scene 3) |
 | Production order 4, Aloe Hand Lotion | approved, ready for **Get materials** | `operator.nfd@` (scene 5) |
 | Purchase order to Manila Print & Pack (wrappers, bottles) | **sent** to the supplier | — |
 | Purchase order to Laguna Oleo Supply (coconut oil, glycerin) | delivered: the coconut oil is OK and **waits to be put on a shelf**; the glycerin **waits for the QA check** | `warehouse.nfd@` (scene 4), `qa.nfd@` |
 | Customer order from Luntian Wellness Stores (48 soap bars) | 2 boxes set aside: **ready to get from the shelf** | `warehouse.nfd@` (scene 6) |
-| Customer order from Isla Spa Supplies (48 lotion bottles) | confirmed; production orders 2 and 4 are made for it, so it is **covered by stock that is coming**: production order 2 made 94 bottles that wait for QA, and the order needs 48 of them, so it is not short | after scene 2 |
+| Customer order from Isla Spa Supplies (48 lotion bottles) | confirmed; production orders 2 and 4 are made for it, so it is **covered by stock that is coming**: production order 2 made 96 bottles (2 kept as samples, 94 to sell) that wait for QA, and the order needs 48 of them, so it is not short | after scene 2 |
 
 Stock to show "use first": one **Palm Oil** lot expires in about 20 days (it is used first), one
 **Coconut Oil** drum is already opened (part used by the soap batches), and one **Glycerin** lot waits
@@ -100,9 +100,17 @@ so they change from month to month.
    **Yes, OK to use**. The lotion is now OK to sell and moves to
    the finished goods bay. The Isla Spa order (this production order was made for it) can now get its bottles.
 4. Before this scene, **How work flows** shows the Isla Spa order as "waiting for stock that is coming:
-   48 waiting for QA" — not red, nothing needs making. (94 bottles wait for QA; the screen counts only the 48
-   this order needs.) Every production order in the demo was made by
+   48 waiting for QA" — not red, nothing needs making. (96 made, 2 kept as samples, 94 to sell wait for QA;
+   the screen counts only the 48 this order needs.) Every production order in the demo was made by
    the planner (Cora) and approved by the site manager (Dino).
+5. **Presenter note (which lot is set aside):** when the Isla Spa order gets its stock set aside after the
+   full rehearsal, the system takes the lotion of production order 2 (loose bottles), not the new boxed batch
+   of production order 4, although both have the same use-by date. This is the company's "use first" rule
+   (FEFO, `allocation_rules`, A-PRD-16): what expires first goes first; on the same use-by date, the one made
+   first, then the one that came into stock first (FIFO), then the lot number (`compareCandidates` in
+   `src/modules/inventory/reservations.ts`). Inside a lot, whole boxes go before loose pieces (ADR-050). So the
+   new boxes stay on the shelf. That is correct, not a fault; if the audience asks, say "the oldest stock
+   leaves first".
 
 ### Scene 3: The operator finishes the soap (3 min). Sign in as `operator.nfd@` (phone size is best)
 
@@ -139,10 +147,13 @@ so they change from month to month.
 ### Scene 7: Where did it come from? (1 min). `qa.nfd@` or `owner@`
 
 1. Open the soap lot of production order 1 (scan a box label or search its lot number).
-2. Show the trace: the coconut oil, palm oil and wrapper lots that went into it. The soap is not sent
-   out yet, so the trace says "No customer has received this" (it does not list orders it is only set
-   aside for). To show the way forward to a customer, trace a lot that was sent out: after the full
-   rehearsal, the lotion lot sent to Isla Spa Supplies lists the customer, the order and the delivery receipt.
+2. Show the trace: the coconut oil, palm oil and wrapper lots that went into it.
+3. Show the way forward. The soap is not sent out yet, so **Waiting to be sent to a customer** names the
+   order: "Set aside for order SO-… (Luntian Wellness Stores)" before scene 6, or "Taken off the shelf for
+   order SO-… (Luntian Wellness Stores)" after it. **Customers who got it** still says "No customer has
+   received this". Say: "if QA stops this lot now, we know which order to hold, before it leaves."
+4. To show a lot that did leave, trace the lotion lot sent to Isla Spa Supplies (after the full
+   rehearsal): it reads "Sent to Isla Spa Supplies on <date>" with the order and the delivery receipt.
 
 ### Scene 8: The owner sees what happened (1 min). `owner@`
 
