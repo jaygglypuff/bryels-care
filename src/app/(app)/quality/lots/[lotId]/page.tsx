@@ -6,7 +6,7 @@ import { getLotDisposition } from "@/modules/quality/dispositions";
 import { issueDownloadUrl, listLotDocuments } from "@/modules/inventory/receiving-documents";
 import { Card, CardTitle, Dl, EmptyState, LinkButton } from "@/ui/core";
 import { RecordHeader } from "@/ui/record";
-import { Explain, NextStep, PageIntro } from "@/ui/guide";
+import { Explain, MoreDetails, NextStep, PageIntro } from "@/ui/guide";
 import { MoreMenu } from "@/ui/more-menu";
 import { Banner, Chip } from "@/ui/status";
 import { Forbidden } from "../../../forbidden";
@@ -292,7 +292,15 @@ export default async function LotDispositionPage({ params }: { params: Promise<{
                   </Banner>
                 </div>
               )}
-              <DecisionForm action={decideLotAction} hidden={{ lotId: lot.id }} options={options} />
+              {lot.qualityStatus === "released" ? (
+                // ADR-123: an OK lot's next step is elsewhere (put away, or nothing); stopping it is rare, so it is folded
+                // and the page keeps one green button. Same form, same choices.
+                <MoreDetails title="Stop it or say not OK">
+                  <DecisionForm action={decideLotAction} hidden={{ lotId: lot.id }} options={options} />
+                </MoreDetails>
+              ) : (
+                <DecisionForm action={decideLotAction} hidden={{ lotId: lot.id }} options={options} />
+              )}
               <QaRules rules={v.rules} />
             </>
           ) : (

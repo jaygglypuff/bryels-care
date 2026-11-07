@@ -28,7 +28,7 @@ function Toggle({ label, children, variant = "secondary" }: { label: string; chi
 
 export function EnablePortalForm({ customerId, sites }: { customerId: string; sites: { id: string; code: string; name: string }[] }) {
   return (
-    <ActionForm action={enablePortalAction} hidden={{ customerId }} submit="Turn on the customer portal" pending="Turning on…" variant="cta">
+    <ActionForm action={enablePortalAction} hidden={{ customerId }} submit="Turn on the customer portal" pending="Turning on…" variant="secondary">
       {(fe) => (
         <div className="grid grid-cols-1 gap-3">
           <Field label="Site that fulfils portal orders" htmlFor="pa-site" error={fe.siteId}>

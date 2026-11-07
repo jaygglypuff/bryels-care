@@ -43,6 +43,10 @@ export default async function SupplierAslPage({ params, searchParams }: { params
   const toDecide = canDecide ? rows.filter((r) => r.pending && r.pending.proposedBy !== ctx.userId) : [];
   const approved = rows.filter((r) => r.isApproved);
   const canOrder = ctx.can("procurement.purchase_order.create") && approved.length > 0 && s.qualityStatus !== "suspended";
+  // ADR-123 one green button: green only for the control the next step points at (the first suggestion to decide, or
+  // the suggest form when nothing may be bought yet); the same controls elsewhere on the page are outlined.
+  const greenDecideId = toDecide[0]?.id ?? null;
+  const suggestIsNext = toDecide.length === 0 && !canOrder && canPropose && approved.length === 0;
   return (
     <>
       <RecordHeader
@@ -114,7 +118,7 @@ export default async function SupplierAslPage({ params, searchParams }: { params
                       </p>
                       {canDecide && r.pending.proposedBy !== ctx.userId && (
                         <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                          <ActionForm action={decideChangeAction} hidden={{ changeId: r.pending.id, decision: "approved" }} submit={r.pending.action === "suspend" ? "Yes, stop buying" : "Yes, we may buy it"} variant="cta">
+                          <ActionForm action={decideChangeAction} hidden={{ changeId: r.pending.id, decision: "approved" }} submit={r.pending.action === "suspend" ? "Yes, stop buying" : "Yes, we may buy it"} variant={r.id === greenDecideId ? "cta" : "secondary"}>
                             <Input name="note" placeholder="What you checked (you can skip this)" aria-label="What you checked" />
                           </ActionForm>
                           <ActionForm action={decideChangeAction} hidden={{ changeId: r.pending.id, decision: "rejected" }} submit="No" variant="secondary">
@@ -217,7 +221,7 @@ export default async function SupplierAslPage({ params, searchParams }: { params
           <Card>
             <span id="suggest" className="block scroll-mt-24" />
             <CardTitle>Suggest an item for this supplier</CardTitle>
-            <ActionForm action={proposePairAction} hidden={{ supplierId: s.id }} submit="Send to QA" variant="cta">
+            <ActionForm action={proposePairAction} hidden={{ supplierId: s.id }} submit="Send to QA" variant={suggestIsNext ? "cta" : "secondary"}>
               <Field label="Item" htmlFor="materialId">
                 <Select id="materialId" name="materialId" required defaultValue="">
                   <option value="" disabled>
