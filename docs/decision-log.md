@@ -2357,3 +2357,15 @@ managers; QA users; the ADR-073 owner override. Production orders already worked
 Consequences: migrations 0037 (`approval_decisions.owner_alone`) and 0038 (custom SQL); the next generated migration
 must become 0039. `decideWorkInstructionRevision` now respects multi-step rules. Tests
 `tests/integration/masterdata/owner-alone-recipes.test.ts`, `tests/unit/owner-alone-words.test.ts`.
+
+## ADR-118 Email through Brevo (owner 2026-11-08)
+
+Status: Accepted (owner: "set up an email using Brevo for now").
+
+Decision: the email adapter (`src/lib/email`) gains `EMAIL_PROVIDER=brevo`: Brevo's HTTPS transactional API
+(`POST https://api.brevo.com/v3/smtp/email`, header `api-key: BREVO_API_KEY`), sender from `EMAIL_FROM`
+(`Name <address>` or `address`), plain-text body. Same rules as Resend: HTTPS not SMTP (Railway blocks outbound SMTP on
+small plans), only metadata is stored in `email_outbox` (never the body or the key), a failed send never rolls back the
+change and is shown as failed, `none` stays the default. Set-up: in Brevo, verify the sender domain or address (SPF and
+DKIM records at the domain's DNS) and create an API key; in Railway (web and worker services) set EMAIL_PROVIDER=brevo,
+BREVO_API_KEY and EMAIL_FROM. Test `tests/unit/email-brevo.test.ts`.

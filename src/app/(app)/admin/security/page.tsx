@@ -39,7 +39,7 @@ export default async function SecurityPage() {
       <div className="mb-4 flex flex-col gap-3">
         {!o.email.ready && (
           <Banner tone="warn" title="Email does not work yet">
-            {o.email.problem} Set EMAIL_PROVIDER=resend with RESEND_API_KEY and EMAIL_FROM on the server (docs/deployment-railway.md).
+            {o.email.problem} Set EMAIL_PROVIDER=brevo with BREVO_API_KEY and EMAIL_FROM on the server (docs/deployment-railway.md §5).
           </Banner>
         )}
         {!o.encryptionKeyConfigured && (
