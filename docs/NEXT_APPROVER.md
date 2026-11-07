@@ -26,6 +26,7 @@ Sentences:
 | Others can act | "Next: Dino (site manager) approves it (step 1 of 2) — they will see it in To approve." |
 | ADR-091 own record, top role | "You can approve this yourself because you are the owner." (+ "Dino (site manager) can do it too.") |
 | Viewer can act | "You can check this weighing now. So can Jun (operator)." |
+| Nobody in the step's role, owner override on (ADR-122) | "Next: Ana (owner) approves the invoice — they will see it in To approve." Not for independent checks (floor checks, QA decisions). |
 | Nobody yet | "Next: a site manager approves it. Nobody can do it yet: an administrator gives the role under Management › People & access › People who use the app." |
 
 Role words: owner, site manager, operator, warehouse, QA, sales, finance, purchasing, planner, IT. A custom role uses its own name in lower case.

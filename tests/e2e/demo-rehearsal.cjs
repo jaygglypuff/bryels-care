@@ -1,26 +1,29 @@
 /* Client-demo rehearsal on the SMALL (lite) demo (ADR-111, docs/demo-script.md), end to end in a browser.
  *
- * Run against a dev server or a production build loaded with a fresh lite demo:
+ * Run against a server (a production build is steadier than `next dev`) loaded with a fresh lite demo, with
+ * FILE_STORAGE set (the proof-of-delivery signature is stored as a file):
  *   DATABASE_URL=… DATABASE_MIGRATION_URL=… DEMO_MODE=true pnpm -s tsx src/db/demo.ts reset
  *   BASE=http://localhost:3547 node tests/e2e/demo-rehearsal.cjs
- * Options: SHOTS_DIR (screenshots, default <tmp>/demo-rehearsal), CHROMIUM (browser path), HEADED=1.
+ * Options: SHOTS_DIR (screenshots, default <tmp>/demo-rehearsal), CHROMIUM (browser path), HEADED=1,
+ * STEP_TIMEOUT (ms per wait, default 120000 for a dev server's first compile), ONLY=d,e (single sections; each
+ * finds its records on the screens), UNTIL=k (stop after a section).
  * Playwright is taken from the project, else from the global npm root (no NODE_PATH needed).
  *
  * The storyline (scenes of docs/demo-script.md, then the lotion order carried to the invoice):
- *   a. Owner Home: "What to do next".
+ *   a. Owner Home: "What to do next" (scene 1).
  *   b. QA checks the lotion batch waiting for QA (scene 2).
  *   c. Operator: soap "Pour into moulds" done; the cure waits (scene 3).
- *   d. Warehouse puts the coconut oil away (scene 4).
+ *   d. Warehouse puts the coconut oil away by scanning its lot label (scene 4).
  *   e. Operator: Get materials for the lotion order (scene 5), then the clean-area start check.
- *   f. Weigh: each lot confirmed by scanning its label payload (BC:LOT:…), the checker confirms on their own session.
- *   g. The making steps with their readings.
- *   h. Packaging: box plan and box labels printed in place, then the last steps.
+ *   f. Weigh (each lot confirmed by scanning its label payload BC:LOT:…; Jun confirms on his own session), the making
+ *      steps with their readings, packaging with the box labels and the labels for each bottle printed in place.
  *   i. Finish: good pieces and the packaging count.
- *   j. QA: Check quality, OK to use.
- *   k. Sales/warehouse: set aside the Isla Spa order; get it from the shelf by scanning the box labels.
- *   l. Second check of the boxes (another person), send out, proof of delivery.
- *   m. Finance: the invoice from the delivery.
- *   n. Scene 6 (Luntian soap from the shelf), scene 7 (trace), scene 8 (owner Home again).
+ *   j. QA: Check quality of the new batch, OK to use.
+ *   k. The Isla Spa order is set aside (use first) and taken off the shelf by scanning the lot label + count.
+ *   l. Second check by another person (Dino).  m. Send out.  n. Proof of delivery (signature on the phone).
+ *   o. Finance sends the invoice for approval.  p. The owner approves it on To approve.  q. Finance saves it to the books.
+ *   r. Scene 6: the Luntian soap taken off the shelf by scanning its two box labels.
+ *   s. Scene 7: trace back (soap lot → supplier lots) and forward (lotion lot → Isla Spa).  t. Scene 8: owner Home.
  * Fails loudly on assertion errors, error pages, page errors and failed requests (HTTP >= 400).
  */
 const fs = require('fs');
@@ -377,7 +380,9 @@ async function weighAll(op, chk) {
     (facts.weighed ??= []).push(`${name} ${grams} g ${lot}`);
   }
   // Everything weighed: the summary's Step done closes the weighing step.
-  await op.getByTestId('weigh-summary').getByRole('button', { name: 'Step done' }).click();
+  // (When the step was already closed, the summary shows "Next step" instead.)
+  const stepDone = op.getByTestId('weigh-summary').getByRole('button', { name: 'Step done' });
+  if (await stepDone.count()) await stepDone.click();
   await op.waitForLoadState('networkidle').catch(() => {});
   await op.waitForTimeout(500);
   await secondCheck(op, chk, weighUrl, 'the weighing step');
@@ -413,6 +418,11 @@ async function doStep(op, chk) {
   log('  step done:', title);
 }
 
+/** After "Yes, they printed": the saved note, or (the page re-read on the server) "Printed by …" on the label page. */
+async function printedOk(op) {
+  await op.getByTestId('printed-ok').or(op.getByText(/^Printed by .*\d{2}:\d{2}\.$/)).first().waitFor();
+}
+
 /** Packaging step: the box plan, "Print N box labels", the print page and "Yes, they printed" (ADR-104 §2, ADR-108). */
 async function boxLabels(op) {
   const box = op.getByTestId('box-labels');
@@ -425,12 +435,12 @@ async function boxLabels(op) {
     await box.getByTestId('open-box-labels').waitFor();
   }
   const open = box.getByTestId('open-box-labels');
-  if (await open.count()) {
+  if ((await open.count()) && !/^See /.test((await open.innerText()).trim())) { // "See the box labels": printed before
     await open.click();
     await waitUrl(op, /\/print\/labels\//);
     await shot(op, 'box-labels-print');
     await op.getByRole('button', { name: /^Yes, (it|they) printed$/ }).click();
-    await op.getByTestId('printed-ok').waitFor();
+    await printedOk(op);
     await op.goto(back);
     await ok(op);
     log('  box labels printed:', facts.boxSplit);
@@ -443,14 +453,14 @@ async function boxLabels(op) {
     await waitUrl(op, /\/print\/labels\//);
     await shot(op, 'piece-labels-print');
     await op.getByRole('button', { name: /^Yes, (it|they) printed$/ }).click();
-    await op.getByTestId('printed-ok').waitFor();
+    await printedOk(op);
     await op.goto(back);
     await ok(op);
     log('  labels for each bottle printed:', facts.pieceLabels);
   }
 }
 
-section('f. weigh by scanning the lot labels; the checker confirms on his own session; the steps; packaging', async () => {
+section('f. weigh by scanning lot labels (Jun checks on his own session), the steps, box and bottle labels', async () => {
   const op = await asUser(who('operator.nfd'), PHONE);
   const chk = await asUser(who('checker.nfd'), PHONE);
   await findLotionBatch(op.page);
@@ -587,7 +597,7 @@ async function openIslaDelivery(page) {
 }
 
 // ---------------------------------------------------------------- l. Second check, send out, proof of delivery
-section('l. a second person checks; send out; proof of delivery', async () => {
+section('l. a second person (Dino, not the picker) checks the delivery', async () => {
   const { page, close } = await asUser(who('manager.nfd'));
   await openIslaDelivery(page);
   await page.getByRole('link', { name: 'Check the box' }).click();
@@ -624,7 +634,7 @@ section('l. a second person checks; send out; proof of delivery', async () => {
 });
 
 // ---------------------------------------------------------------- m. Send out, proof of delivery
-section('m. the warehouse sends it out; proof of delivery', async () => {
+section('m. the warehouse sends it out', async () => {
   const { page, close } = await asUser(who('warehouse.nfd'));
   await openIslaDelivery(page);
   await page.fill('#driverName', 'Ramon Cruz');
