@@ -52,6 +52,7 @@ export default async function BatchReleasePage({ params }: { params: Promise<{ b
       <RecordHeader
         typeLabel="Batch · full QA review"
         reference={batch.batchNumber}
+        chip={<QaStatusChip status={batch.status} />}
         title={v.productName}
         actions={
           <>

@@ -45,6 +45,7 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
         reference={w.workOrderNumber}
         title={`${v.equipment.name}: ${w.title}`}
         siteCode={v.equipment.siteCode}
+        chip={<WoStatusChip status={w.status} />}
         actions={
           <MoreMenu compact>
             <div className="flex flex-col gap-3">
@@ -83,7 +84,7 @@ export default async function WorkOrderPage({ params, searchParams }: { params: 
       <div className="flex flex-col gap-5">
         {sp.created && <Banner tone="ok" title="Sent to the technician">{w.reportedDown ? "Nobody can use the machine until the job is done." : "The technician starts it when the work begins."}</Banner>}
         <Card>
-          <CardTitle action={<WoStatusChip status={w.status} />}>The job</CardTitle>
+          <CardTitle>The job</CardTitle>
           {w.description && <p className="mb-4 whitespace-pre-wrap text-[14px]">{w.description}</p>}
           <Dl
             items={[

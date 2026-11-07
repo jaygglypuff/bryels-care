@@ -40,6 +40,7 @@ export default async function PlanPage({ params, searchParams }: { params: Promi
         back={{ href: "/maintenance/plans", label: "Regular maintenance" }}
         typeLabel="Regular maintenance"
         reference={p.planNumber}
+        chip={p.status === "active" ? <DueChip state={p.dueState} /> : <Chip tone="neu">{p.status === "paused" ? "Paused" : "No longer used"}</Chip>}
         title={`${p.equipmentName}: ${p.title}`}
         siteCode={p.siteCode}
         actions={
@@ -66,7 +67,7 @@ export default async function PlanPage({ params, searchParams }: { params: Promi
         {sp.created && <Banner tone="ok" title="Regular maintenance saved">{p.triggerKind === "time" ? "The machine's next maintenance date follows this." : "Use is counted from production from now on."}</Banner>}
         {p.dueState === "overdue" && <Banner tone="bad" title="This maintenance is late">The machine shows “maintenance due”; if its rule says “block”, production cannot choose it until the maintenance is done.</Banner>}
         <Card>
-          <CardTitle action={p.status === "active" ? <DueChip state={p.dueState} /> : <Chip tone="neu">{p.status === "paused" ? "Paused" : "No longer used"}</Chip>}>What and how often</CardTitle>
+          <CardTitle>What and how often</CardTitle>
           <Dl
             items={[
               ["Machine", <Link key="e" className="text-primary-text hover:underline" href={`/masterdata/equipment/${p.equipmentId}`}>{p.equipmentName} <span className="font-mono text-[12px] text-muted">{p.equipmentCode}</span></Link>],

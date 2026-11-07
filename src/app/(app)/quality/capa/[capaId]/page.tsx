@@ -54,6 +54,7 @@ export default async function CapaPage({ params, searchParams }: { params: Promi
         back={{ href: "/quality/capa", label: "Fix-and-prevent plans" }}
         typeLabel="Fix-and-prevent plan"
         reference={c.capaNumber}
+        chip={<CapaStatusChip status={c.status} />}
         title={c.title}
         actions={
           <MoreMenu compact>
@@ -98,7 +99,7 @@ export default async function CapaPage({ params, searchParams }: { params: Promi
       <div className="flex flex-col gap-5">
         {sp.opened && <Banner tone="ok" title="Plan started">{c.ownerName} was told. Add what to do, who does it and by when.</Banner>}
         <Card>
-          <CardTitle action={<CapaStatusChip status={c.status} />}>The problem</CardTitle>
+          <CardTitle>The problem</CardTitle>
           <p className="mb-4 whitespace-pre-wrap text-[14px]">{c.problemStatement}</p>
           <Dl
             items={[

@@ -43,6 +43,7 @@ export default async function InspectionPage({ params }: { params: Promise<{ ins
         back={{ href: "/quality/inspections", label: "Quality tests" }}
         typeLabel="Quality check"
         reference={ins.inspectionNumber}
+        chip={<InspectionStatusChip status={ins.status} outcome={ins.outcome} />}
         title={v.lot?.itemName ?? v.plan.name}
         meta={[v.batch ? ["Batch", v.batch.batchNumber] : ["Delivery", v.lot?.lotNumber ?? ""]]}
         actions={
@@ -94,7 +95,7 @@ export default async function InspectionPage({ params }: { params: Promise<{ ins
           </Banner>
         )}
         <Card>
-          <CardTitle action={<InspectionStatusChip status={ins.status} outcome={ins.outcome} />}>About this check</CardTitle>
+          <CardTitle>About this check</CardTitle>
           <Dl
             items={[
               ["Lot", v.lot ? <span key="l" className="inline-flex flex-wrap items-center gap-2"><span className="font-mono text-[13px]">{v.lot.lotNumber}</span> <QaStatusChip status={v.lot.qualityStatus} /></span> : "—"],

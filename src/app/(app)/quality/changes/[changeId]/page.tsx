@@ -40,6 +40,7 @@ export default async function ChangePage({ params, searchParams }: { params: Pro
       <RecordHeader
         typeLabel="Change request"
         reference={c.changeNumber}
+        chip={<ChangeStatusChip status={c.status} />}
         title={c.title}
         siteCode={c.siteCode ?? "all sites"}
         actions={
@@ -83,7 +84,7 @@ export default async function ChangePage({ params, searchParams }: { params: Pro
       <div className="flex flex-col gap-5">
         {sp.created && <Banner tone="ok" title="Change request saved">Now write what it affects and how risky it is, then send it for approval.</Banner>}
         <Card>
-          <CardTitle action={<ChangeStatusChip status={c.status} />}>What should change</CardTitle>
+          <CardTitle>What should change</CardTitle>
           <p className="mb-2 whitespace-pre-wrap text-[14px]">{c.description}</p>
           <p className="mb-4 whitespace-pre-wrap text-[13px] text-fg-2">Why: {c.justification}</p>
           <Dl

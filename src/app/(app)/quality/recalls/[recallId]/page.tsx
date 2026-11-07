@@ -60,6 +60,7 @@ export default async function RecallCasePage({ params, searchParams }: { params:
         back={{ href: "/quality/recalls", label: "Product recalls" }}
         typeLabel={KIND_WORD[c.recallKind] ?? c.kindLabel}
         reference={c.recallNumber}
+        chip={<RecallStatusChip status={c.status} />}
         title={c.title}
         actions={
           <MoreMenu compact>
@@ -112,7 +113,7 @@ export default async function RecallCasePage({ params, searchParams }: { params:
 
         <Card>
           <span id="case" className="block scroll-mt-24" />
-          <CardTitle action={<RecallStatusChip status={c.status} />}>Why it must come back</CardTitle>
+          <CardTitle>Why it must come back</CardTitle>
           <p className="mb-4 whitespace-pre-wrap text-[14px]">{c.description}</p>
           <Dl
             items={[

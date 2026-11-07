@@ -43,6 +43,7 @@ export default async function DeviationPage({ params, searchParams }: { params: 
         back={{ href: "/quality/deviations", label: "Problem reports" }}
         typeLabel="Problem report"
         reference={d.deviationNumber}
+        chip={<DeviationStatusChip status={d.status} />}
         title={v.batch ? `Batch ${v.batch.number}` : v.lot ? `Lot ${v.lot.number}` : d.sourceLabel}
         actions={
           <MoreMenu compact>
@@ -82,7 +83,7 @@ export default async function DeviationPage({ params, searchParams }: { params: 
       <div className="flex flex-col gap-5">
         {sp.opened && <Banner tone="ok" title="Problem report sent">QA has been told. While it is open, its batch and lot cannot be made OK to use.</Banner>}
         <Card>
-          <CardTitle action={<DeviationStatusChip status={d.status} />}>What happened</CardTitle>
+          <CardTitle>What happened</CardTitle>
           <p className="mb-4 whitespace-pre-wrap text-[14px]">{d.description}</p>
           <Dl
             items={[
