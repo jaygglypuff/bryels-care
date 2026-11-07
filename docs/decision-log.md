@@ -2611,3 +2611,49 @@ No migration. New assumption: A-SCAN-16 (search and scan share one 120-a-minute 
 
 Known issues: the `useState(() => crypto.randomUUID())` hidden-key pattern remains in other forms (quality holds, admin
 templates, put-away, closure, documents, BMR).
+
+## ADR-126 Six open choices become owner-editable settings (owner 2026-11-07)
+
+Status: Accepted (owner: "decide which is the best, but give me an option I can edit in the settings"). Extends ADR-117
+(settings pattern), ADR-120, ADR-121, ADR-123 and ADR-124.
+
+Decision: five organisation settings in the existing catalogue (`src/lib/settings.ts`), which means the existing
+Settings screen, governance change requests and audit. Each defaults to the recommended choice, which is today's
+behaviour. Every rule is enforced in the services; screens only hide what the server would refuse.
+
+1. **`scan.typed_code_counts_as_check`** (default on; restricted, `ownerOnly`; QA confirms first, A-SCAN-TYPED-01).
+   - Off: the second check, the boxing check, the label check, and lot confirmation at weighing and Get materials
+     accept only a scan.
+   - `checkEntryMode`, `confirmLot` and `confirmPicked` refuse `typed` the same way they refuse `tap`, online and on
+     offline replay (`TYPED_NOT_A_CHECK`). A bare "last 4" is refused too.
+   - The typing box is hidden for these checks only.
+2. **`ui.wide_screen_top_bar`** (`search` by default, or `scan`).
+   - `scan`: the Scan button stays at every width.
+   - From 1280 px the Scan button is a round icon in the search button's place, because the owner's menu row has no
+     room for both.
+   - Ctrl/⌘K and "/" still open the search.
+3. **`scan.search_open_to_everyone`** (default on; restricted, needs a second person's approval). Off: the search and
+   `/inventory/scan` need `inventory.lot.view`.
+4. **`sales.show_invoice_stage_without_invoice_access`** (default on; restricted, needs a second person's approval).
+   Off: people without `finance.invoice.view` read only "Delivered." or "Sent out to the customer.".
+5. **`ui.setup_edit_forms_folded`** (default on). Off: the material, product, supplier, site and shelf/area pages show
+   their edit form open.
+6. **No setting for the full logo at 1280–1535 px.** With the full logo the owner's menu row was 74 px too long, so the
+   logo mark stays.
+
+The Settings screen shows "Who should change it" for each setting, and a list for choice settings. Its chips now say
+who decides: "Only the owner can OK changes" or "Needs your password".
+
+Consequences: no migration and no seed change.
+
+Tests:
+- `tests/integration/scan/typed-check-setting.test.ts`
+- `tests/integration/scan/search-access-setting.test.ts`
+- `tests/integration/finance/billing-step.test.ts`
+- `tests/integration/production/flow-v2-g2.test.ts`
+- `tests/unit/settings-adr126.test.ts`
+
+Open:
+- The "Other ways" weigh form does not send `lotVia` yet, so turning typing off does not reach it.
+- Setting 4 does not cover the order status chip "invoiced" or the owner's Home invoice counts.
+- QA has no settings role in the app, so QA confirms setting 1 outside the app.
