@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import type { ScanCard } from "@/modules/scan";
 import { Card } from "@/ui/core";
 import { Scanner } from "@/ui/scanner";
@@ -8,7 +8,8 @@ import { scanCardAction } from "./actions";
 
 type Recent = { payload: string; summary: string; at: string };
 
-export function ScanClient() {
+/** `code`: a label handed over by the master search (?code=BC:…), resolved once on arrival. */
+export function ScanClient({ code = null }: { code?: string | null }) {
   const [card, setCard] = useState<ScanCard | null>(null);
   const [recent, setRecent] = useState<Recent[]>([]);
   const [pending, start] = useTransition();
@@ -31,10 +32,15 @@ export function ScanClient() {
     });
   }, []);
 
+  useEffect(() => {
+    if (code) onScan(code);
+  }, [code, onScan]);
+
   return (
     <div className="space-y-4">
       <Card>
-        <Scanner onScan={onScan} pending={pending} label="Scan the label, or type what it is" placeholder="e.g. coconut oil" keepCase />
+        {/* The search box above keeps the cursor (master search); tap here or pick Camera to scan. */}
+        <Scanner onScan={onScan} pending={pending} autoFocus={false} label="Scan the label, or type what it is" placeholder="e.g. coconut oil" keepCase />
         {offline && (
           <p role="alert" className="mt-3 rounded-[10px] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-fg)]">
             You&apos;re offline. Look-ups need a connection; scan again when you&apos;re back online.

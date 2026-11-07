@@ -10,6 +10,7 @@ import { isDemoMode, isSandboxEmail } from "@/lib/demo";
 import { buildNav, isApprover, tabsFor } from "./nav";
 import { Shell } from "./shell";
 import { helpForScreen, signOut, switchSite } from "./actions";
+import { masterSearchAction } from "./search-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       showApprovals={approver}
       switchSite={switchSite}
       loadHelp={helpForScreen}
+      search={masterSearchAction}
       signOut={signOut}
       demo={isDemoMode() ? { canReset: ctx.roleCodes.includes("owner_director"), sandbox: isSandboxEmail(ctx.email) } : null}
     >

@@ -3205,6 +3205,11 @@ Done that way for ADR-117: `0037_adr117_owner_alone` (idx 36, `approval_decision
 and `0038_snapshot.json`. The next generated file must be renamed to `0039_<description>` (and its snapshot to
 `0039_snapshot.json`; drizzle-kit writes the snapshot under the journal-length prefix and would overwrite
 `0037_snapshot.json`).
+Done that way for the master search (owner request 2026-11-08): `0039_master_search_indexes` (idx 38, snapshot
+`0039_snapshot.json`) adds plain b-tree indexes `batches (organization_id, batch_number)`, `sales_orders
+(organization_id, order_number)` and `stock_movements (organization_id, source_document_number)`, the three numbers the
+search looks up that had no index (every other number column already had a unique `(organization_id, number)` index).
+The next generated file must be renamed to `0040_<description>` (snapshot `0040_snapshot.json`).
 
 ### 13.1 Toolchain and flow (ADR-003)
 
