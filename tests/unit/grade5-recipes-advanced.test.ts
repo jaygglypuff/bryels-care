@@ -44,7 +44,8 @@ describe("grade-5 recipe advanced-editing screens", () => {
       expect(src, p).not.toMatch(/label="(Code|SKU code|Formula code|Routing code|Instruction code)"/);
       if (/name="code"/.test(src)) {
         const at = src.indexOf('name="code"');
-        expect(src.lastIndexOf("<MoreDetails", at), `${p}: the code field sits under More details`).toBeGreaterThan(-1);
+        // ADR-123: a FormSection's folded `more={…}` counts as More details.
+        expect(Math.max(src.lastIndexOf("<MoreDetails", at), src.lastIndexOf("more={", at)), `${p}: the code field sits under More details`).toBeGreaterThan(-1);
         expect(src.slice(at - 200, at + 400), p).toMatch(/optional|The system gives one/);
       }
     }
